@@ -1,0 +1,932 @@
+# German (de-DE) interaction model template for the Alexa skill.
+#
+# JF-316 milestone 3: golden master. Faithful transcription of the
+# hand-grown model_de-DE.json (60 intents, 426 samples);
+# `python3 scripts/generate_interaction_model.py de-DE` reproduces it
+# byte-identically. Every sample is verbatim in the committed order:
+# plain transcription over compression (the milestone-2 decision; no
+# vocabulary section).
+#
+# Run: python3 scripts/generate_interaction_model.py de-DE
+#
+# Invariants carried by this file:
+# - de-DE is the only templated locale with CUSTOM loop intents:
+#   LoopAllOffIntent / LoopAllOnIntent / RepeatSingleOnIntent sit
+#   where the other locales declare AMAZON.LoopOnIntent /
+#   AMAZON.LoopOffIntent / LoopSongOnIntent, and LoopSongOnIntent
+#   itself (6 German samples) sits LATE, after PlayBookIntent and
+#   before ShowMoreIntent. 60 intents vs the en/es families' 59; the
+#   AMAZON.Loop* built-ins are not declared at all here.
+# - musician slots are the BUILT-IN AMAZON.Musician everywhere (the
+#   JellyfinArtist swap landed only in en-* + it-IT): languageModel
+#   intents and the dialog section both. Hence 8 types, no
+#   JellyfinArtist type, and NO JF-415 static seed (the validator's
+#   en-family seed-equality warning does not apply to this locale).
+# - modelConfiguration (fallbackIntentSensitivity LOW) IS present,
+#   after types. The es family has none; en-GB has it too.
+# - No `prompts` section (dialog carries no elicitation prompts);
+#   dialog roster = en-GB's 7 intents, with AMAZON.Musician types.
+# - Key order is load-bearing for byte-identity: intents mix
+#   name/samples/slots and name/slots/samples orders (16 / 21) plus
+#   10 name/samples-only and 13 bare; type values mix value-only
+#   (Mood / SeriesName / AudiobookTitle), id-first (MediaType /
+#   MediaInfoType / Decade / LibraryQueryType), and the BrowseCategory
+#   JF-461 ids recorded value-first with id after (künstler /
+#   alben / lieder), exactly as committed.
+# - Seven intents carry an explicit empty `slots: []` (the same seven
+#   as the en family: ClearQueue, ListQueue, TurnRadioOn/Off,
+#   LearnMyVoice, WhoAmI, ShowMore).
+# - Vocabulary reality, not to be normalized: PlayArtistSongs carries
+#   the der/die/das gendered-article variants (Spiele/Spiel/Gib/Mach
+#   and Zu spielen/Zu hören forms); samples MIX transliterated
+#   ue-forms (hinzugefuegte, kuerzlich, gefaellt, moechte, uber) with
+#   real umlauts (kürzlich, zufällige, nächste), exactly as
+#   committed; MediaType values are capitalized (Medien / Video /
+#   Audio).
+# - The Mood type and the slotted-only PlayMoodMusic samples are
+#   OWNED HERE (JF-316 milestone 3 mood consolidation):
+#   generate_mood_slot.py no longer writes this locale (its de-DE
+#   LOCALE_MOODS entry is deleted); a mood-word change is a template
+#   edit + regen. The committed 14-value block with inflection
+#   synonyms (JF-399) transcribes that former table; resolve targets
+#   live in PlayMoodMusicIntentHandler (LocalizedMoodMap, C#).
+# - SeriesName is localized (Haus des Geldes for Money Heist).
+# - Every PlayAlbum carrier names the media (anti-pattern #11; the
+#   bare "Spiele {album}" carrier was trimmed by JF-459).
+# - AMAZON.StopIntent has NO custom samples; the it-IT "ferma"
+#   samples are a JF-402 it-IT-only exception.
+invocationName: jellyfin player
+intents:
+  - name: QueryRecentlyAddedIntent
+    samples:
+      - was ist neu
+      - was wurde kürzlich hinzugefügt
+      - zeige mir die Neuzugänge
+      - gibt es etwas Neues
+      - was ist neu in meiner Bibliothek
+      - die neuesten Elemente
+      - zuletzt hinzugefügte Inhalte
+  - name: FollowMeIntent
+    samples:
+      - folge mir
+      - weiterhören
+      - Wiedergabe fortsetzen
+      - Wiedergabe übernehmen
+      - weiter abspielen
+      - musik mitnehmen
+  - AMAZON.CancelIntent
+  - AMAZON.HelpIntent
+  - AMAZON.StopIntent
+  - AMAZON.FallbackIntent
+  - AMAZON.PauseIntent
+  - AMAZON.ResumeIntent
+  - AMAZON.NextIntent
+  - AMAZON.PreviousIntent
+  - AMAZON.YesIntent
+  - AMAZON.NoIntent
+  - name: LoopAllOffIntent
+    samples:
+      - Wiederholung aus
+      - Schleife aus
+  - name: LoopAllOnIntent
+    samples:
+      - Wiederholung an
+      - Schleife an
+  - name: RepeatSingleOnIntent
+    samples:
+      - Lied wiederholen
+      - Titel wiederholen
+      - Video wiederholen
+      - Das wiederholen
+  - AMAZON.ShuffleOnIntent
+  - AMAZON.ShuffleOffIntent
+  - AMAZON.StartOverIntent
+  - name: PlayChannelIntent
+    samples:
+      - Kanal {channel}
+      - Spiele Radio {channel}
+      - Radio {channel}
+    slots:
+      - name: channel
+        type: AMAZON.SearchQuery
+  - name: PlaySongIntent
+    samples:
+      - Spiele {song}
+      - Spiele das Lied {song}
+      - Spiele Lied {song}
+      - Spiele {song} von {musician}
+      - Spiele das Lied {song} von {musician}
+      - Spiele Lied {song} von {musician}
+      - Höre {song}
+      - Höre das Lied {song}
+      - Höre {song} von {musician}
+      - Höre das Lied {song} von {musician}
+      - Gib {song} wieder
+      - Gib das Lied {song} wieder
+      - Gib {song} von {musician} wieder
+      - Mach {song} an
+      - Ich möchte {song} hören
+      - Spiele den Titel {song}
+      - Spiele den Titel {song} von {musician}
+      - Lass uns {song} hören
+      - Starte {song}
+      - Spiele das Stück {song}
+      - Kannst du {song} spielen
+    slots:
+      - name: song
+        type: AMAZON.MusicRecording
+      - name: musician
+        type: AMAZON.Musician
+  - name: PlayAlbumIntent
+    samples:
+      - Spiele das Album {album}
+      - Spiele Album {album}
+      - Spiele das Album {album} von {musician}
+      - Spiele Album {album} von {musician}
+      - Höre das Album {album}
+      - Höre das Album {album} von {musician}
+      - Gib das Album {album} wieder
+      - Spiele die Platte {album}
+      - Spiele die Platte {album} von {musician}
+      - ein Album von {musician}
+      - Spiele ein Album von {musician}
+      - Höre ein Album von {musician}
+    slots:
+      - name: album
+        type: AMAZON.MusicRecording
+      - name: musician
+        type: AMAZON.Musician
+  - name: PlayVideoIntent
+    samples:
+      - Spiele das Video {title}
+      - Ich möchte {title} sehen
+      - Lass uns {title} schauen
+      - Ich will {title} anschauen
+      - Zeig mir {title}
+      - Kannst du {title} zeigen
+      - '{title} ansehen'
+      - ich möchte mir {title} ansehen
+      - Spiele den Film {title}
+      - Zu spielen den Film {title}
+      - Ich möchte den Film {title} sehen
+      - Suche nach dem Film {title}
+    slots:
+      - name: title
+        type: AMAZON.SearchQuery
+  - name: PlayArtistSongsIntent
+    samples:
+      - Spiele Lieder von {musician}
+      - Spiele Musik von {musician}
+      - Spiele Titel von {musician}
+      - Spiele Songs von {musician}
+      - Spiele {musician}
+      - Spiele etwas von {musician}
+      - Höre {musician}
+      - Höre Lieder von {musician}
+      - Höre Musik von {musician}
+      - Höre Titel von {musician}
+      - Gib {musician} wieder
+      - Gib Lieder von {musician} wieder
+      - Gib Musik von {musician} wieder
+      - Mach {musician} an
+      - Lass uns {musician} hören
+      - Ich möchte {musician} hören
+      - Ich will {musician} hören
+      - Starte {musician}
+      - Spiele {musician} Musik
+      - Schalte {musician} ein
+      - Starte Musik von {musician}
+      - Gib etwas von {musician} wieder
+      - Spiele die {musician}
+      - Spiel die {musician}
+      - Gib die {musician}
+      - Mach die {musician}
+      - Spiele der {musician}
+      - Spiel der {musician}
+      - Gib der {musician}
+      - Mach der {musician}
+      - Spiele das {musician}
+      - Spiel das {musician}
+      - Gib das {musician}
+      - Mach das {musician}
+      - Zu spielen die {musician}
+      - Zu spielen der {musician}
+      - Zu spielen das {musician}
+      - Zu hören die {musician}
+      - Zu hören der {musician}
+      - Zu hören das {musician}
+    slots:
+      - name: musician
+        type: AMAZON.Musician
+  - name: PlayLastAddedIntent
+    samples:
+      - Spiele neu hinzugefuegte {media_type}
+      - Spiele kuerzlich hinzugefuegte {media_type}
+      - Spiele neue Medien
+    slots:
+      - name: media_type
+        type: MediaType
+  - name: PlayRandomIntent
+    samples:
+      - Spiele zufällige {media_type}
+      - Spiele eine zufällige {media_type}
+      - Zufällige {media_type} abspielen
+      - Spiele etwas zufälliges
+      - Spiele zufällige {media_type} aus {genre}
+      - Überrasche mich mit {media_type}
+    slots:
+      - name: media_type
+        type: MediaType
+      - name: genre
+        type: AMAZON.Genre
+  - name: PlayByGenreIntent
+    samples:
+      - Spiele {genre} Musik
+      - Spiele {genre}
+      - Spiele etwas {genre}
+      - Ich möchte {genre} hören
+      - Spiele mir {genre} Musik
+    slots:
+      - name: genre
+        type: AMAZON.Genre
+  - name: ContinueWatchingIntent
+    samples:
+      - Weiter schauen
+      - Weiter hören
+      - Mach da weiter wo ich war
+      - Weiter
+  - name: GoToChapterIntent
+    samples:
+      - Nächstes Kapitel
+      - Vorheriges Kapitel
+      - Gehe zu Kapitel {chapter_number}
+      - Springe zu Kapitel {chapter_number}
+      - Ein Kapitel vor
+      - Ein Kapitel zurück
+    slots:
+      - name: chapter_number
+        type: AMAZON.NUMBER
+  - name: PlayPlaylistIntent
+    samples:
+      - Spiele die Playlist {playlist}
+      - Spiele meine Playlist {playlist}
+      - Spiele Playlist {playlist}
+      - Playlist {playlist} abspielen
+      - Die Playlist {playlist} abspielen
+      - Meine Playlist {playlist} abspielen
+      - Starte die Playlist {playlist}
+      - Starte Playlist {playlist}
+      - Lege die Playlist {playlist} auf
+      - Die Playlist {playlist} starten
+      - Playlist {playlist} starten
+    slots:
+      - name: playlist
+        type: AMAZON.SearchQuery
+  - name: PlayFavoritesIntent
+    samples:
+      - Spiele meine Lieblings {media_type}
+      - Spiele meine {media_type} Favoriten
+      - Spiele meine Favoriten
+      - spiele favoriten von {username}
+      - spiele die favoriten von {username}
+      - höre favoriten von {username}
+      - spiele lieblings {media_type} von {username}
+      - spiele lieblingslieder von {username}
+    slots:
+      - name: media_type
+        type: MediaType
+      - name: username
+        type: AMAZON.Person
+  - name: MarkFavoriteIntent
+    samples:
+      - Das gefaellt mir
+      - Das Video gefaellt mir
+      - Das Lied gefaellt mir
+      - Die Musik gefaellt mir
+      - Fuege das Video zu meinen Favoriten hinzu
+      - Fuege das Lied zu meinen Favoriten hinzu
+  - name: UnmarkFavoriteIntent
+    samples:
+      - Das gefaellt mir nicht
+      - Das Video gefaellt mir nicht
+      - Das Lied gefaellt mir nicht
+      - Die Musik gefaellt mir nicht
+      - Entferne das Video aus meinen Favoriten
+      - Entferne das Lied aus meinen Favoriten
+  - name: MediaInfoIntent
+    slots:
+      - name: media_info_type
+        type: MediaInfoType
+    samples:
+      - Was ist der {media_info_type}
+      - Was ist die {media_info_type}
+      - Sag mir den {media_info_type}
+      - Sag mir die {media_info_type}
+      - Welcher {media_info_type} ist das
+      - Welche {media_info_type} ist das
+      - Was läuft gerade
+      - Was spielt gerade
+      - Wie heißt das Lied
+      - Wer singt das
+      - Von wem ist das
+      - Welches Album ist das
+      - Welches Jahr ist das
+      - Wann wurde das veröffentlicht
+      - Wie lange dauert das
+      - Welches Genre ist das
+      - Erzähl mir von dem Künstler
+      - Infos über den Künstler
+      - Welches Lied läuft gerade
+      - Wie heißt der Titel
+      - Welche Band ist das
+      - Wer hat das Lied gemacht
+      - Sag mir den Albumnamen
+      - Wann kam das Album raus
+      - Welches Genre hat das Lied
+      - Gib mir Infos zu diesem Titel
+      - Nenne mir den Künstler
+      - Von welchem Album ist das
+      - welche Staffel ist das
+      - welche Saison ist das
+      - welche Folge ist das
+      - welche Episode ist das
+      - welche Serie ist das
+      - wer hat das Regie geführt
+      - wer ist der Regisseur
+      - wer spielt da mit
+      - wer ist der Autor
+      - wer hat das geschrieben
+      - wer ist der Sprecher
+      - wer liest das
+      - wie ist die Bewertung
+      - welche Bewertung hat das
+      - wie viele Sterne hat das
+      - wer ist die Besetzung
+  - name: InProgressMediaListIntent
+    samples:
+      - was höre ich gerade
+      - was schaue ich gerade
+      - was ist in bearbeitung
+      - zeige meinen fortschritt
+      - was habe ich angefangen
+  - name: PlayEpisodeIntent
+    slots:
+      - name: series_name
+        type: SeriesName
+      - name: season_number
+        type: AMAZON.NUMBER
+      - name: episode_number
+        type: AMAZON.NUMBER
+    samples:
+      - spiele staffel {season_number} folge {episode_number} von {series_name}
+      - spiele {series_name} staffel {season_number} folge {episode_number}
+      - schau staffel {season_number} folge {episode_number} von {series_name}
+      - Zu spielen staffel {season_number} folge {episode_number} von {series_name}
+      - Zu schauen staffel {season_number} folge {episode_number} von {series_name}
+  - name: PlayNextEpisodeIntent
+    slots:
+      - name: series_name
+        type: SeriesName
+    samples:
+      - spiele die nächste folge von {series_name}
+      - spiele die nächste folge der serie {series_name}
+      - schau die nächste folge von {series_name}
+      - spiele die neueste folge von {series_name}
+      - schau {series_name} weiter
+      - Zu spielen die nächste folge von {series_name}
+      - Zu spielen die nächste folge der serie {series_name}
+      - Zu schauen die nächste folge von {series_name}
+      - Zu spielen die neueste folge von {series_name}
+  - name: BrowseLibraryIntent
+    slots:
+      - name: browse_category
+        type: BrowseCategory
+    samples:
+      - '{browse_category}'
+      - nur {browse_category}
+      - ich möchte {browse_category}
+      - durchsuche {browse_category}
+      - zeige mir {browse_category}
+      - liste {browse_category}
+      - welche {browse_category} habe ich
+      - welche {browse_category} gibt es
+  - name: RecommendIntent
+    slots:
+      - name: media_type
+        type: MediaType
+    samples:
+      - empfehle etwas
+      - empfehle musik
+      - empfehle einen film
+      - schlage etwas vor
+      - spiele etwas das mir gefällt
+      - empfehle {media_type}
+      - schlage {media_type} vor
+  - name: SleepTimerIntent
+    slots:
+      - name: duration_minutes
+        type: AMAZON.NUMBER
+    samples:
+      - stoppe in {duration_minutes} minuten
+      - schlaf-timer {duration_minutes} minuten
+      - stoppe nach {duration_minutes} minuten
+      - ausschalten in {duration_minutes} minuten
+  - name: SetReminderIntent
+    slots:
+      - name: duration_minutes
+        type: AMAZON.NUMBER
+      - name: reminder_time
+        type: AMAZON.TIME
+    samples:
+      - erinnere mich in {duration_minutes} minuten
+      - stelle eine erinnerung für {duration_minutes} minuten
+      - erinnere mich um {reminder_time}
+      - setze eine erinnerung auf {reminder_time}
+  - name: PlayMoodMusicIntent
+    slots:
+      - name: mood
+        type: Mood
+    samples:
+      - spiele {mood} musik
+      - spiele etwas {mood}
+      - ich möchte {mood} musik
+      - spiele mir etwas {mood}
+  - name: PlayPodcastIntent
+    samples:
+      - Spiele den Podcast {podcast_name}
+      - Spiele Podcast {podcast_name}
+      - Höre den Podcast {podcast_name}
+      - Höre Podcast {podcast_name}
+      - Spiele die neueste Folge von {podcast_name}
+      - Starte den Podcast {podcast_name}
+      - Ich möchte den Podcast {podcast_name} hören
+      - Spiele {podcast_name} Podcast
+      - Öffne {podcast_name} Podcast
+      - Spiele die letzte Folge von {podcast_name}
+      - Höre die neueste Folge von {podcast_name}
+      - Setze den Podcast {podcast_name} fort
+      - Spiele mir einen Podcast vor {podcast_name}
+      - Ich höre gerne den Podcast {podcast_name}
+      - Mach mit dem Podcast {podcast_name} weiter
+      - Starte den neuesten Podcast {podcast_name}
+      - Spiele die aktuelle Folge von {podcast_name}
+      - Weiter mit dem Podcast {podcast_name}
+      - Lass uns den Podcast {podcast_name} hören
+    slots:
+      - name: podcast_name
+        type: AMAZON.SearchQuery
+  - name: SearchMediaIntent
+    slots:
+      - name: query
+        type: AMAZON.SearchQuery
+    samples:
+      - Suche nach einem Film {query}
+      - Suche nach einem Video {query}
+      - Suche nach einer Serie {query}
+      - Suche nach Inhalt {query}
+      - Finde einen Film {query}
+      - Finde einen Inhalt {query}
+      - Finde ein Video {query}
+      - Suche einen Film {query}
+      - Suche einen Inhalt {query}
+      - Hast du einen Film {query}
+      - Hast du einen Inhalt {query}
+      - Ich möchte einen Film finden {query}
+      - Ich möchte einen Inhalt finden {query}
+      - Kannst du einen Film finden {query}
+      - Kannst du einen Inhalt finden {query}
+      - Finde mir einen Film {query}
+      - Finde mir einen Inhalt {query}
+      - Suche {query} in der Mediathek
+      - Suche in meiner Mediathek nach {query}
+      - Durchsuche die Mediathek nach {query}
+      - Suche in der Bibliothek nach {query}
+      - Finde {query} in meiner Bibliothek
+      - Gibt es {query} in der Mediathek
+      - Ich suche {query} in meiner Sammlung
+      - Prüfe ob {query} vorhanden ist
+      - Hast du {query} in der Bibliothek
+  - name: AddToQueueIntent
+    slots:
+      - name: song
+        type: AMAZON.MusicRecording
+      - name: musician
+        type: AMAZON.Musician
+    samples:
+      - Füge {song} zur Wiedergabeliste hinzu
+      - Füge {song} von {musician} zur Wiedergabeliste hinzu
+      - Setze {song} auf die Warteschlange
+      - Setze {song} von {musician} auf die Warteschlange
+      - Stelle {song} hinten an
+      - Füge {song} hinzu
+      - Nimm {song} in die Warteschlange auf
+      - Nimm {song} von {musician} in die Warteschlange auf
+  - name: PlayNextIntent
+    slots:
+      - name: song
+        type: AMAZON.MusicRecording
+      - name: musician
+        type: AMAZON.Musician
+    samples:
+      - Spiele {song} als Nächstes
+      - Spiele {song} von {musician} als Nächstes
+      - Spiele {song} danach
+      - Spiele {song} von {musician} danach
+      - Ich möchte {song} als Nächstes hören
+      - Setze {song} als Nächstes
+  - name: ClearQueueIntent
+    slots: []
+    samples:
+      - Lösche meine Warteschlange
+      - Lösche die Warteschlange
+      - Leere meine Warteschlange
+      - Leere die Warteschlange
+      - Entferne alles aus der Warteschlange
+      - Lösche meine Playlist
+  - name: ListQueueIntent
+    slots: []
+    samples:
+      - Was ist in meiner Warteschlange
+      - Was steht als Nächstes an
+      - Was kommt als Nächstes
+      - Zeige meine Warteschlange
+      - Zeige die Warteschlange
+      - Was wird als Nächstes gespielt
+      - Liste meine Warteschlange auf
+  - name: PlayRadioIntent
+    slots:
+      - name: station
+        type: AMAZON.SearchQuery
+    samples:
+      - Spiele Radio
+      - Starte Radio
+      - Spiele den Radiomodus
+      - Spiele ähnliche Musik
+      - Spiele ähnliche Lieder
+      - Starte einen Radiosender
+      - Weiter mit ähnlicher Musik
+      - Spiele Lieder wie dieses
+      - Spiele den Radiosender {station}
+  - name: TurnRadioOnIntent
+    slots: []
+    samples:
+      - Schalte den Radiomodus ein
+      - Aktiviere den Radiomodus
+      - Radiomodus an
+      - Schalte Radio ein
+      - Aktiviere Radio
+  - name: TurnRadioOffIntent
+    slots: []
+    samples:
+      - Schalte den Radiomodus aus
+      - Deaktiviere den Radiomodus
+      - Radiomodus aus
+      - Schalte Radio aus
+      - Deaktiviere Radio
+      - Stoppe den Radiomodus
+  - name: LearnMyVoiceIntent
+    slots: []
+    samples:
+      - Lerne meine Stimme
+      - Erkenne meine Stimme
+      - Verknüpfe meine Stimme
+      - Das ist meine Stimme
+      - Erkenne mich
+      - Richte mein Stimmprofil ein
+      - Assoziiere meine Stimme
+  - name: WhoAmIIntent
+    slots: []
+    samples:
+      - Wer bin ich
+      - Welches Konto ist das
+      - Welches Konto benutze ich
+      - Wer spricht
+      - Welches Profil ist aktiv
+      - Bin ich erkannt
+  - name: QueryArtistLibraryIntent
+    slots:
+      - name: musician
+        type: AMAZON.Musician
+      - name: query_type
+        type: LibraryQueryType
+    samples:
+      - Welche Titel haben wir von {musician}
+      - Welche Lieder haben wir von {musician}
+      - Welche Alben haben wir von {musician}
+      - Was haben wir von {musician}
+      - Zeige Titel von {musician}
+      - Zeige Alben von {musician}
+      - Liste Titel von {musician} auf
+      - Liste Alben von {musician} auf
+      - Welche {query_type} haben wir von {musician}
+      - Zeige {query_type} von {musician}
+      - Welche Titel gibt es von {musician}
+      - Welche Alben gibt es von {musician}
+  - name: PlayByDecadeIntent
+    slots:
+      - name: decade
+        type: Decade
+      - name: genre
+        type: AMAZON.Genre
+    samples:
+      - Spiele Lieder aus den {decade}
+      - Spiele Titel aus den {decade}
+      - Spiele Hits aus den {decade}
+      - Spiele Musik aus den {decade}
+      - Spiele {decade} Hits
+      - Spiele {decade} Lieder
+      - Spiele {genre} aus den {decade}
+      - Spiele {genre} Lieder aus den {decade}
+      - Ich möchte {decade} Musik hören
+      - Spiele etwas aus den {decade}
+      - Höre {decade} Musik
+      - Gib mir {decade} Lieder
+      - Mische {decade} Musik
+  - name: PlayBookIntent
+    slots:
+      - name: book
+        type: AudiobookTitle
+    samples:
+      - spiele {book}
+      - spiele das buch {book}
+      - spiele hörbuch {book}
+      - hör {book}
+      - hör das buch {book}
+  - name: LoopSongOnIntent
+    samples:
+      - Wiederhole dieses Lied
+      - Wiederhole diesen Song
+      - Wiederhole diesen Titel
+      - Loop dieses Lied
+      - Wiederhole endlos
+      - Spiele dieses Lied in Schleife
+  - name: ShowMoreIntent
+    samples:
+      - zeig mehr
+      - noch mehr
+      - weiter
+      - nächste seite
+      - mehr ergebnisse
+      - was gibt es noch
+      - mehr
+      - zeige mehr
+    slots: []
+  - name: FindSongIntent
+    samples:
+      - finde ein lied
+      - hilf mir ein lied zu finden
+      - suche ein lied
+      - ich suche ein lied
+      - finde ein lied namens {titleKeywords}
+      - suche ein lied namens {titleKeywords}
+      - ich will ein lied finden
+      - ich moechte ein lied finden
+      - ich will ein lied finden namens {titleKeywords}
+      - ich moechte ein lied namens {titleKeywords} finden
+      - finde ein lied das {titleKeywords} heisst
+      - suche ein lied das {titleKeywords} heisst
+      - finde ein lied mit {titleKeywords} im titel
+      - ich suche ein lied namens {titleKeywords}
+      - hilf mir ein lied namens {titleKeywords} zu finden
+      - ein lied uber {titleKeywords} finden
+    slots:
+      - name: titleKeywords
+        type: AMAZON.SearchQuery
+  - name: FindSongByArtistIntent
+    samples:
+      - finde ein lied von {musician}
+      - hilf mir ein lied zu finden von {musician}
+      - suche ein lied von {musician}
+      - ich suche ein lied von {musician}
+    slots:
+      - name: musician
+        type: AMAZON.Musician
+  - name: ShufflePlayIntent
+    samples:
+      - spiele die Playlist {playlist} in zufälliger Reihenfolge
+      - mische die Playlist {playlist}
+      - spiele die Playlist {playlist} im Zufallsmodus
+    slots:
+      - name: playlist
+        type: AMAZON.SearchQuery
+types:
+  Mood:
+    values:
+      - value: entspannend
+        synonyms: [entspannt, entspannende, entspannendes]
+      - value: beruhigend
+        synonyms: [beruhigende, beruhigendes]
+      - value: beschwingt
+        synonyms: [beschwingte, beschwingtes]
+      - value: energisch
+        synonyms: [energische, energisches]
+      - value: fokus
+      - value: romantisch
+        synonyms: [romantische, romantisches]
+      - value: fröhlich
+        synonyms: [glücklich, fröhliche, fröhliches]
+      - value: traurig
+        synonyms: [traurige, trauriges]
+      - value: feier
+        synonyms: [party, feierliche, feierliches]
+      - value: training
+        synonyms: [training]
+      - value: morgens
+        synonyms: [morgentliche]
+      - value: abend
+        synonyms: [abends, abendliche]
+      - value: abendessen
+      - value: schlafen
+        synonyms: [einschlafen]
+  MediaType:
+    values:
+      - id: media
+        value: Medien
+        synonyms: [Inhalte]
+      - id: video
+        value: Video
+        synonyms: [Clips, Episoden, Clip, Filme, Episode, Film]
+      - id: audio
+        value: Audio
+        synonyms: [Lied, Lieder, Musik, Titel]
+  BrowseCategory:
+    values:
+      - value: künstler
+        id: artists
+      - value: alben
+        synonyms: [platten, platte, album]
+        id: albums
+      - value: filme
+      - value: lieder
+        synonyms: [song, songs, titel, lied]
+        id: songs
+      - value: genres
+      - value: serien
+      - value: bücher
+  SeriesName:
+    values:
+      - value: Breaking Bad
+      - value: Game of Thrones
+      - value: Stranger Things
+      - value: Haus des Geldes
+      - value: Peaky Blinders
+      - value: The Walking Dead
+      - value: Dark
+      - value: Sherlock
+      - value: Better Call Saul
+      - value: Dexter
+  MediaInfoType:
+    values:
+      - id: title
+        value: Titel
+        synonyms: [Lied, Song, Name]
+      - id: album
+        value: Album
+        synonyms: [Platte]
+      - id: artist
+        value: Künstler
+        synonyms: [Sänger, Band, Musiker]
+      - id: year
+        value: Jahr
+        synonyms: [Erscheinungsjahr]
+      - id: duration
+        value: Dauer
+        synonyms: [Länge, Spieldauer]
+      - id: genre
+        value: Genre
+        synonyms: [Stil, Musikrichtung]
+      - id: biography
+        value: Biografie
+        synonyms: [Bio, über den Künstler]
+      - id: director
+        value: Regisseur
+        synonyms: [Regisseurin, Regie, Filmemacher]
+      - id: cast
+        value: Besetzung
+        synonyms: [Schauspieler, Darsteller, Besetzung]
+      - id: season
+        value: Staffel
+        synonyms: [Saison, Staffelnummer]
+      - id: episode
+        value: Folge
+        synonyms: [Episodennummer, Episode]
+      - id: series
+        value: Serie
+        synonyms: [Show, Fernsehserie, TV-Serie]
+      - id: author
+        value: Autor
+        synonyms: [Schriftsteller, Verfasser]
+      - id: narrator
+        value: Sprecher
+        synonyms: [Erzähler, Vorleser, Sprecherin]
+      - id: rating
+        value: Bewertung
+        synonyms: [Note, Sternebewertung, Punktzahl]
+  Decade:
+    values:
+      - id: 50s
+        value: 50er
+        synonyms: [fünfziger, die 50er, fünfziger Jahre, 1950er]
+      - id: 60s
+        value: 60er
+        synonyms: [sechziger, die 60er, sechziger Jahre, 1960er]
+      - id: 70s
+        value: 70er
+        synonyms: [siebziger, die 70er, siebziger Jahre, 1970er]
+      - id: 80s
+        value: 80er
+        synonyms: [achtziger, die 80er, achtziger Jahre, 1980er]
+      - id: 90s
+        value: 90er
+        synonyms: [neunziger, die 90er, neunziger Jahre, 1990er]
+      - id: 2000s
+        value: 2000er
+        synonyms: [zweitausender, die 2000er, zweitausender Jahre]
+      - id: 2010s
+        value: 2010er
+        synonyms: [die 2010er]
+      - id: 2020s
+        value: 2020er
+        synonyms: [die 2020er, zwanziger]
+  LibraryQueryType:
+    values:
+      - id: tracks
+        value: Titel
+        synonyms: [Lieder, Songs, Lied, Song]
+      - id: albums
+        value: Alben
+        synonyms: [Platten, Platte, Album]
+  AudiobookTitle:
+    values:
+      - value: Hörbuch
+        synonyms: []
+modelConfiguration:
+  fallbackIntentSensitivity:
+    level: LOW
+dialog:
+  intents:
+    - name: FindSongIntent
+      confirmationRequired: false
+      slots:
+        - name: titleKeywords
+          type: AMAZON.SearchQuery
+          confirmationRequired: false
+          elicitationRequired: false
+    - name: FindSongByArtistIntent
+      confirmationRequired: false
+      slots:
+        - name: musician
+          type: AMAZON.Musician
+          confirmationRequired: false
+          elicitationRequired: false
+    - name: ShufflePlayIntent
+      confirmationRequired: false
+      slots:
+        - name: playlist
+          type: AMAZON.SearchQuery
+          confirmationRequired: false
+          elicitationRequired: false
+    - name: PlayEpisodeIntent
+      confirmationRequired: false
+      slots:
+        - name: series_name
+          type: SeriesName
+          confirmationRequired: false
+          elicitationRequired: false
+        - name: season_number
+          type: AMAZON.NUMBER
+          confirmationRequired: false
+          elicitationRequired: false
+        - name: episode_number
+          type: AMAZON.NUMBER
+          confirmationRequired: false
+          elicitationRequired: false
+    - name: PlaySongIntent
+      confirmationRequired: false
+      slots:
+        - name: song
+          type: AMAZON.MusicRecording
+          confirmationRequired: false
+          elicitationRequired: false
+        - name: musician
+          type: AMAZON.Musician
+          confirmationRequired: false
+          elicitationRequired: false
+    - name: PlayAlbumIntent
+      confirmationRequired: false
+      slots:
+        - name: album
+          type: AMAZON.MusicRecording
+          confirmationRequired: false
+          elicitationRequired: false
+        - name: musician
+          type: AMAZON.Musician
+          confirmationRequired: false
+          elicitationRequired: false
+    - name: PlayRadioIntent
+      confirmationRequired: false
+      slots:
+        - name: station
+          type: AMAZON.SearchQuery
+          confirmationRequired: false
+          elicitationRequired: false
