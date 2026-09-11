@@ -113,8 +113,30 @@ explicit_intents:
       - Suona {title}
       - Metti {title}
       - Pleia {title}
-      - Di riprodurre {title}
-      - Di suonare {title}
+      # JF-541 (2026-09-11): the bare INFINITIVE pair 'Di riprodurre {title}' /
+      # 'Di suonare {title}' is REMOVED. JF-504 already proved them inert for
+      # pure movie titles ('di riprodurre ada' -> no selection, 'di riprodurre
+      # il film ada' -> FallbackIntent), so they deliver no video routing; on
+      # the catalog-supplied deployed model they only swallow infinitive
+      # music/album phrases into the free-text title (probe 2/2: 'Di suonare
+      # musica dei maneskin' -> PlayVideoIntent title='musica dei maneskin',
+      # 'Di suonare disco thriller' -> title='disco thriller'; the anchored
+      # twin 'Di suonare musica dei pink floyd' correctly wins
+      # PlayArtistSongsIntent, so the steal fires when the artist lacks a
+      # catalog anchor). With them gone the verbatim PlayArtistSongs
+      # '{infinitive} {media_noun} {artist_article} {musician}' and PlayAlbum
+      # '{infinitive} {album_noun} {album}' products get the race back. The
+      # bare IMPERATIVE quartet above stays: JF-436/JF-470 show it is dead
+      # weight on Suona/Metti/Pleia (never selected) and no JF-541 failure
+      # routes through it; removing uncondemned samples shifts statistics we
+      # cannot verify from here. Same-family sibling on PlayByGenreIntent
+      # (Di riprodurre {genre}) KEPT: its genre captures are recovered
+      # handler-side by TryEntityFallbackAsync (the JF-463 recovery) and no
+      # JF-541 probe condemns it; uncovered candidates of this family live on
+      # pt-BR's PlayVideoIntent (assistir/mostrar {title}, the JF-459 trim
+      # never covered PlayVideoIntent). The fixture entries that flip on this
+      # removal after the phase-2 redeploy: disco thriller and the musica dei
+      # shapes (pinned in fixtures/it-IT.yaml).
       - voglio guardare {title}
       - fai vedere {title}
       - fammi vedere {title}
