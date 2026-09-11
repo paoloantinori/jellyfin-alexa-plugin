@@ -279,6 +279,13 @@ public class LibrarySyncService
 
         CatalogPayload payload = CatalogPayload.FromItems(catalogType, itemTuples, PhoneticSynonymGenerator.GenerateSynonyms, locale);
 
+        // JF-541 phase 2: merge the committed models' static seed values into the
+        // upload. The catalog supplier replaces the static type block at deploy
+        // time (CatalogManager.InjectCatalogReferences), so without this the seed
+        // titles absent from the library (Thriller, Queen, ...) vanish from the
+        // deployed model. Library entries win on collision; no-op for seed-less types.
+        CatalogSeedEnrichment.MergeInto(payload, catalogType, PhoneticSynonymGenerator.GenerateSynonyms, locale, _logger);
+
         if (payload.Values.Count >= MaxCatalogValues)
         {
             _logger.LogWarning(
