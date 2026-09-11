@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Alexa.NET.Management;
 using Alexa.NET.Management.Manifest;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Manifest;
@@ -41,5 +42,39 @@ public class ManifestSkillTests
 
         Assert.Null(obj["manifest"]?["publishingInformation"]?["smallIconUri"]);
         Assert.Null(obj["manifest"]?["publishingInformation"]?["largeIconUri"]);
+    }
+
+    [Fact]
+    public void Manifest_DeclaresEveryInteractionModelLocale()
+    {
+        var manifestSkill = new ManifestSkill(
+            "Jellyfin.Plugin.AlexaSkill.Alexa.Manifest.manifest.json",
+            "https://example.com",
+            SslCertificateType.Wildcard);
+
+        // Discover the supported locales the same way production code does:
+        // the embedded model_*.json resources of the plugin assembly.
+        var modelLocales = global::Jellyfin.Plugin.AlexaSkill.Util.GetLocalInteractionModels()
+            .Select(model => model.Item1);
+
+        Assert.NotEmpty(modelLocales);
+
+        var locales = manifestSkill.Manifest.PublishingInformation?.Locales;
+        Assert.NotNull(locales);
+
+        Assert.All(modelLocales, locale => Assert.Contains(locale, locales.Keys));
+
+        Assert.All(locales, entry =>
+        {
+            string locale = entry.Key;
+            Assert.False(string.IsNullOrWhiteSpace(entry.Value.Name), $"{locale}: name must not be empty");
+            Assert.False(string.IsNullOrWhiteSpace(entry.Value.Summary), $"{locale}: summary must not be empty");
+            Assert.False(string.IsNullOrWhiteSpace(entry.Value.Description), $"{locale}: description must not be empty");
+            Assert.NotEmpty(entry.Value.ExamplePhrases);
+            Assert.EndsWith(
+                "\n\nSource: https://github.com/infinityofspace/jellyfin-alexa-plugin",
+                entry.Value.Description,
+                StringComparison.Ordinal);
+        });
     }
 }

@@ -64,6 +64,16 @@
 			"distributionCountries": [],
 			"isAvailableWorldwide": true,
 			"locales": {
+				"ar-SA": {
+					"name": "Jellyfin",
+					"summary": "شغّل الوسائط من خادم Jellyfin الخاص بك",
+					"examplePhrases": [
+						"أليكسا اطلب من jellyfin تشغيل موسيقاي المفضلة",
+						"أليكسا اطلب من jellyfin تشغيل أغاني الفنان",
+						"أليكسا اطلب من jellyfin تشغيل قائمة تشغيل أفضل الموسيقى"
+					],
+					"description": "شغّل الوسائط من خادم Jellyfin الخاص بك.\n\nSource: https://github.com/infinityofspace/jellyfin-alexa-plugin"
+				},
 				"de-DE": {
 					"name": "Jellyfin",
 					"summary": "Medien von deinem Jellyfin-Server abspielen",
@@ -174,6 +184,16 @@
 					],
 					"description": "Lisez les medias de votre serveur Jellyfin.\n\nSource: https://github.com/infinityofspace/jellyfin-alexa-plugin"
 				},
+				"hi-IN": {
+					"name": "Jellyfin",
+					"summary": "अपने Jellyfin सर्वर से मीडिया चलाएं",
+					"examplePhrases": [
+						"Alexa jellyfin से मेरा पसंदीदा संगीत चलाने को कहें",
+						"Alexa jellyfin से किसी कलाकार के गाने चलाने को कहें",
+						"Alexa jellyfin से मेरी प्लेलिस्ट बेस्ट संगीत चलाने को कहें"
+					],
+					"description": "अपने Jellyfin सर्वर से मीडिया चलाएं।\n\nSource: https://github.com/infinityofspace/jellyfin-alexa-plugin"
+				},
 				"it-IT": {
 					"name": "Jellyfin",
 					"summary": "Riproduci i contenuti dal tuo server Jellyfin",
@@ -183,6 +203,36 @@
 						"Alexa chiedi a jellyfin di riprodurre la mia playlist Miglior Musica"
 					],
 					"description": "Riproduci i contenuti dal tuo server Jellyfin.\n\nSource: https://github.com/infinityofspace/jellyfin-alexa-plugin"
+				},
+				"ja-JP": {
+					"name": "Jellyfin",
+					"summary": "Jellyfinサーバーのメディアを再生します",
+					"examplePhrases": [
+						"アレクサ、jellyfin でお気に入りの音楽を再生して",
+						"アレクサ、jellyfin でアーティストの曲を再生して",
+						"アレクサ、jellyfin でプレイリストのベストミュージックを再生して"
+					],
+					"description": "Jellyfinサーバーのメディアを再生します。\n\nSource: https://github.com/infinityofspace/jellyfin-alexa-plugin"
+				},
+				"nl-NL": {
+					"name": "Jellyfin",
+					"summary": "Speel media af van je Jellyfin-server",
+					"examplePhrases": [
+						"Alexa vraag jellyfin om mijn favoriete muziek af te spelen",
+						"Alexa vraag jellyfin om nummers van Artiest af te spelen",
+						"Alexa vraag jellyfin om mijn afspeellijst Beste Muziek af te spelen"
+					],
+					"description": "Speel media af van je Jellyfin-server.\n\nSource: https://github.com/infinityofspace/jellyfin-alexa-plugin"
+				},
+				"pt-BR": {
+					"name": "Jellyfin",
+					"summary": "Reproduza mídias do seu servidor Jellyfin",
+					"examplePhrases": [
+						"Alexa peça ao jellyfin para tocar minhas músicas favoritas",
+						"Alexa peça ao jellyfin para tocar músicas de Artista",
+						"Alexa peça ao jellyfin para tocar minha playlist Melhor Música"
+					],
+					"description": "Reproduza mídias do seu servidor Jellyfin.\n\nSource: https://github.com/infinityofspace/jellyfin-alexa-plugin"
 				}
 			},
 			"testingInstructions": "Say 'Alexa ask jellyfin play my favorite music' or 'Alexa ask jellyfin what's playing'"
