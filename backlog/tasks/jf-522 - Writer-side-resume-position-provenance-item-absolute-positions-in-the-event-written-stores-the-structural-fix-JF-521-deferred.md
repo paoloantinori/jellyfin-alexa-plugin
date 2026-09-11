@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-08 00:36'
+updated_date: '2026-09-11 05:14'
 labels:
   - resume
   - transcoding
@@ -35,6 +36,12 @@ This is the long-term structural fix; JF-521's equality gate remains correct reg
 - [ ] #4 The JF-521 equality gate and the OffsetIsStreamRelative flag become removable only if ALL sources turn item-absolute (incl. Amazon's AudioPlayer context offset, which is stream-relative by platform contract and CANNOT be fixed - so the flag likely survives; state the endgame explicitly)
 - [ ] #5 Full suite green; /simplify + code-review high gates before merge
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+METHOD DISCIPLINE (2026-09-11, from the TDD question): characterization-first, not classic TDD (the audit may not change observable behavior). Phase 1 = read-only provenance mapping + characterization tests pinning the CURRENT writer/reader provenance chain at every store (green on arrival, they are the regression net for the migration); Phase 2 = the writer-side migration in small steps, suite green with zero expectation edits at each; red-green only for new invariants (e.g. 'position written is item-absolute at every store' as an explicit pin where it newly holds).
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

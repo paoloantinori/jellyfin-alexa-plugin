@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-07-12 14:58'
-updated_date: '2026-07-13 20:17'
+updated_date: '2026-09-11 05:14'
 labels:
   - refactor
   - maintainability
@@ -37,6 +37,12 @@ Related: BaseHandler currently forces the singleton stateless-by-luck constraint
 - [ ] #5 New collaborators have direct unit tests
 - [ ] #6 Handlers consume collaborators via constructor injection (readonly fields)
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+METHOD DISCIPLINE (2026-09-11, from the TDD question): this is a characterization-first refactor, NOT classic TDD - behavior must not change, so tests are written against CURRENT behavior and are green on arrival. Per extraction step: (1) census the behaviors of the member(s) about to move; identify thin coverage in the ~3610-test suite (BaseHandler is tested mostly indirectly through handler tests); (2) write characterization tests for the gaps FIRST, green on the current code; (3) extract the collaborator; (4) suite stays green with ZERO expectation edits; (5) red-green applies ONLY to new invariants the refactor introduces (the JF-539 Times.Once precedent: graft the new test onto pre-refactor code and watch it fail). No big-bang decomposition: one collaborator per dispatch, one merge per gate.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

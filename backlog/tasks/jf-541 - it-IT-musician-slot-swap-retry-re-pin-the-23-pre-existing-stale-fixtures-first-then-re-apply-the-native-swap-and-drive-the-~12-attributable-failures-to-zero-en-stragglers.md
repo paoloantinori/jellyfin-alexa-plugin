@@ -4,9 +4,10 @@ title: >-
   it-IT musician-slot swap retry: re-pin the 23 pre-existing stale fixtures
   first, then re-apply the native swap and drive the ~12 attributable failures
   to zero (+ en stragglers)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-11 02:03'
+updated_date: '2026-09-11 09:33'
 labels:
   - nlu
   - interaction-model
@@ -45,3 +46,9 @@ SCOPE WHEN TAKEN: (1) re-pin the ~23 pre-existing stale it-IT fixtures FIRST (pr
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+PHASE 1 COMPLETE (2026-09-11, merge 92539e42; task stays In Progress for phase 2). GROUND TRUTH (worker-established, changes the framing): the deployed and committed it-IT models are byte-identical in samples and slot types - the failures are entity-weighting drift under the LIVE CATALOGS (AlbumName v745, 880 values, contains NONE of the static seed albums; JellyfinArtist v739 lacks some in-library artists). Landed: 3 fixture re-pins (star wars x2 -> PlaySongIntent/song, the JF-470 steal gone under catalogs; DSOTM -> PlayAlbumIntent/album, the right intent), the dead seed-ER comment corrected, and the PlayVideoIntent bare-infinitive-carrier trim (Di riprodurre/Di suonare {title}) - DEPLOYED on the rolled-back base + catalog-rebound + probe-verified: 'Di suonare musica dei maneskin' now -> PlayArtistSongsIntent with the slot filled. Honest ledger of the trim: it ALSO flipped 'Di riprodurre l'ultimo episodio di stranger things' to a deterministic PlayByGenre steal (the verbatim episode sample exists and lost the statistical race) - phase-2 leftover. 9 model-bug leftovers documented for phase 2 (matrix pair, thriller family x4, musica family x2, stranger episodio): sample-level fixes are EXHAUSTED for them (worker's evidence-backed pushback); the real levers are (a) CATALOG ENRICHMENT - merge the static seed albums into the CatalogPayload upload so famous-but-not-in-library titles anchor (fixes the headline 'Riproduci album thriller' -> no-intent), and (b) the musica family needs an accept-and-repin or a phase-2 experiment decision (trimming PlaySong's 'Suona {song} dei {musician}' would break the working 'Suona comfortably numb dei pink floyd'). Suite evidence: the worktree run's NLU subset = the 9 documented + 2 throttle-flaky ('Musica energica', 'Riproduci film casuali' - passed in every earlier run, flaked under ~5h of continuous SMAPI use); its e2e flood is SMAPI throttling (literal 'SMAPI error' failures), not routing. PHASE 2 GATE: needs a fresh SMAPI quota window; re-apply the native swap on this re-pinned baseline + the catalog-enrichment C# change.
+<!-- SECTION:NOTES:END -->
