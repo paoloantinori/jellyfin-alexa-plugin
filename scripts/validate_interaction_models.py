@@ -712,10 +712,16 @@ def lint_voice_commands_rows(
 ) -> list[str] | None:
     """WARNING lint: VOICE_COMMANDS.md rows drifting from the models (JF-513.1 item 7).
 
-    The hand-maintained utterance table went stale twice (PR #15 orphaned the
-    English rows; JF-459 orphaned 11 more; JF-475 documented a phantom row) and
-    only the PlayAlbum-specific warning check #10 guards any of it. The warning
-    shapes, per locale:
+    The utterance table's locale sections are EMITTED by
+    scripts/generate_voice_reference.py (JF-548) and byte-checked by its --check,
+    so this lint's live signal is the title-mapping shape (below): it maps a row
+    title back to an intent INDEPENDENTLY of the generator's forward mapping, so
+    it catches a generate_voice_reference.py title regression that byte-equality
+    --check is blind to. Keep _row_intent_candidates the exact inverse of the
+    generator's intent_display_title. The remaining shapes can only fire on a
+    hand-edited table or a generator bug that --check misses, and stay as cheap
+    tripwires. (The table went stale twice in its hand-maintained era: PR #15
+    orphaned the English rows, JF-459 eleven more, JF-475 a phantom row.)
     - a row lists an utterance the model no longer carries (stale mirror);
     - a custom intent with samples has no row at all (coverage gap, the JF-494
       class);
@@ -723,8 +729,9 @@ def lint_voice_commands_rows(
     - a row survives an intent whose samples list has emptied (retirement);
     - a row or heading shape the parser cannot attribute (pipes inside cells,
       unpaired backticks, rows before the first heading, duplicate headings).
-    Deliberately NOT warned: partial rows (the table lists a curated selection
-    of each intent's samples, per its own header) and count mismatches.
+    Deliberately NOT warned: partial rows (the table shows a capped, diverse
+    selection per its own header; the complete lists live in the by-locale
+    reference) and count mismatches.
     The row-title convention is PascalCase words plus "Intent" (the reverse of
     camelCase splitting), a second convention parallel to the generator's
     GROUPS labels; a title that stops mapping warns loudly rather than

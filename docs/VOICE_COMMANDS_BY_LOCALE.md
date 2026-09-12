@@ -1105,7 +1105,7 @@ Complete phrase list (362 phrases across 59 commands):
 
 **Built-in commands, no custom phrases in this language** (Help, Cancel, Fallback, Yes, No): Alexa understands these natively; say them the usual way.
 
-### <a id="en-au"></a>English (en-AU)
+### <a id="en-au"></a>English - Australia (en-AU)
 
 Default invocation name: **"jellyfin player"**. A custom invocation name set in the plugin settings replaces this default in every locale.
 
@@ -1763,7 +1763,7 @@ Complete phrase list (450 phrases across 59 commands):
 
 **Built-in commands, no custom phrases in this language** (Help, Cancel, Fallback, Yes, No): Alexa understands these natively; say them the usual way.
 
-### <a id="en-ca"></a>English (en-CA)
+### <a id="en-ca"></a>English - Canada (en-CA)
 
 Default invocation name: **"jellyfin player"**. A custom invocation name set in the plugin settings replaces this default in every locale.
 
@@ -2414,7 +2414,7 @@ Complete phrase list (443 phrases across 59 commands):
 
 **Built-in commands, no custom phrases in this language** (Help, Cancel, Fallback, Yes, No): Alexa understands these natively; say them the usual way.
 
-### <a id="en-gb"></a>English (en-GB)
+### <a id="en-gb"></a>English - UK (en-GB)
 
 Default invocation name: **"jellyfin player"**. A custom invocation name set in the plugin settings replaces this default in every locale.
 
@@ -3161,7 +3161,7 @@ Complete phrase list (539 phrases across 59 commands):
 
 **Built-in commands, no custom phrases in this language** (Help, Cancel, Fallback, Yes, No): Alexa understands these natively; say them the usual way.
 
-### <a id="en-in"></a>English (en-IN)
+### <a id="en-in"></a>English - India (en-IN)
 
 Default invocation name: **"jellyfin player"**. A custom invocation name set in the plugin settings replaces this default in every locale.
 
@@ -3813,7 +3813,7 @@ Complete phrase list (444 phrases across 59 commands):
 
 **Built-in commands, no custom phrases in this language** (Help, Cancel, Fallback, Yes, No): Alexa understands these natively; say them the usual way.
 
-### <a id="en-us"></a>English (en-US)
+### <a id="en-us"></a>English - US (en-US)
 
 Default invocation name: **"jellyfin player"**. A custom invocation name set in the plugin settings replaces this default in every locale.
 
@@ -4588,7 +4588,7 @@ Complete phrase list (554 phrases across 61 commands):
 
 **Built-in commands, no custom phrases in this language** (Help, Cancel, Fallback, Yes, No): Alexa understands these natively; say them the usual way.
 
-### <a id="fr-ca"></a>French (fr-CA)
+### <a id="fr-ca"></a>French - Canada (fr-CA)
 
 Default invocation name: **"jellyfin player"**. A custom invocation name set in the plugin settings replaces this default in every locale.
 
@@ -9195,7 +9195,7 @@ Complete phrase list (303 phrases across 59 commands):
 
 **Built-in commands, no custom phrases in this language** (Help, Cancel, Fallback, Yes, No): Alexa understands these natively; say them the usual way.
 
-### <a id="pt-br"></a>Portuguese (pt-BR)
+### <a id="pt-br"></a>Portuguese - Brazil (pt-BR)
 
 Default invocation name: **"jellyfin player"**. A custom invocation name set in the plugin settings replaces this default in every locale.
 
@@ -10389,7 +10389,7 @@ Complete phrase list (402 phrases across 59 commands):
 
 **Built-in commands, no custom phrases in this language** (Help, Cancel, Fallback, Yes, No): Alexa understands these natively; say them the usual way.
 
-### <a id="es-mx"></a>Spanish (es-MX)
+### <a id="es-mx"></a>Spanish - Mexico (es-MX)
 
 Default invocation name: **"jellyfin player"**. A custom invocation name set in the plugin settings replaces this default in every locale.
 
@@ -10993,7 +10993,7 @@ Complete phrase list (396 phrases across 59 commands):
 
 **Built-in commands, no custom phrases in this language** (Help, Cancel, Fallback, Yes, No): Alexa understands these natively; say them the usual way.
 
-### <a id="es-us"></a>Spanish (es-US)
+### <a id="es-us"></a>Spanish - US (es-US)
 
 Default invocation name: **"jellyfin player"**. A custom invocation name set in the plugin settings replaces this default in every locale.
 

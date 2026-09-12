@@ -12,8 +12,16 @@ The appendix maps every group heading and command label back to the intent
 name in the model for maintainers.
 
 Usage:
-  python3 scripts/generate_voice_reference.py           # (re)write the doc
-  python3 scripts/generate_voice_reference.py --check   # exit 1 if stale
+  python3 scripts/generate_voice_reference.py           # (re)write both docs
+  python3 scripts/generate_voice_reference.py --check   # exit 1 if either is stale
+
+The generator owns TWO mirrors (JF-548): docs/VOICE_COMMANDS_BY_LOCALE.md
+(every sample of every intent) and VOICE_COMMANDS.md (the quick-reference
+table; each locale section is EMITTED with a deterministic cap of
+VOICE_COMMANDS_MAX_SAMPLES samples per intent, in model order, alphabetically
+by intent title; the prose above the first locale section is hand-maintained
+and preserved verbatim). The validate_interaction_models.py Phase 6 lint stays
+as the semantic guard for the table.
 
 Determinism: output depends only on the model JSONs (no timestamps), so
 running twice produces no diff. CI runs --check in the validate-models job
@@ -29,8 +37,14 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 MODELS_DIR = REPO / "Jellyfin.Plugin.AlexaSkill" / "Alexa" / "InteractionModel"
 OUT_PATH = REPO / "docs" / "VOICE_COMMANDS_BY_LOCALE.md"
+TABLE_PATH = REPO / "VOICE_COMMANDS.md"
 
-# Locale display order: by language name, mirroring VOICE_COMMANDS.md.
+# Quick-reference cap (JF-548): samples per intent in VOICE_COMMANDS.md, model
+# order. The complete lists live in docs/VOICE_COMMANDS_BY_LOCALE.md.
+VOICE_COMMANDS_MAX_SAMPLES = 6
+
+# Locale display order for the BY-LOCALE doc: by language name. VOICE_COMMANDS.md
+# is emitted in locale-code order instead (its pre-generator convention).
 LOCALE_ORDER = [
     "ar-SA", "nl-NL", "en-AU", "en-CA", "en-GB", "en-IN", "en-US",
     "fr-CA", "fr-FR", "de-DE", "hi-IN", "it-IT", "ja-JP", "pt-BR",
@@ -515,7 +529,7 @@ def render_sample(sample, hints):
 
 
 def invocation_note(locale):
-    name = LOCALE_INVOCATION_NAMES.get(locale, DEFAULT_INVOCATION_NAME)
+    name = invocation_name(locale)
     return (
         f'Default invocation name: **"{name}"**. A custom invocation name set in the '
         "plugin settings replaces this default in every locale."
@@ -524,7 +538,7 @@ def invocation_note(locale):
 
 def oneshot_note(locale):
     lang = locale[:2]
-    name = LOCALE_INVOCATION_NAMES.get(locale, DEFAULT_INVOCATION_NAME)
+    name = invocation_name(locale)
     example = ONESHOT_EXAMPLES.get(lang)
     if example:
         return (
@@ -549,7 +563,7 @@ def locale_section(locale, lm):
     lang = locale[:2]
     hints = SLOT_HINTS[lang]
     lines = []
-    lines.append(f'### <a id="{locale.lower()}"></a>{LANGUAGE_NAMES[lang]} ({locale})')
+    lines.append(section_heading(locale))
     lines.append("")
     lines.append(invocation_note(locale))
     lines.append("")
@@ -678,12 +692,129 @@ def generate(models):
     return "\n".join(parts).rstrip("\n") + "\n"
 
 
+SECTION_RE = re.compile(r'^### <a id="([a-z]{2}-[a-z]{2})"></a>', re.MULTILINE)
+
+
+def invocation_name(locale: str) -> str:
+    return LOCALE_INVOCATION_NAMES.get(locale, DEFAULT_INVOCATION_NAME)
+
+
+# Regional display names for VOICE_COMMANDS.md section headings (the hand table
+# carried them; the base-language LANGUAGE_NAMES map alone would collapse
+# "English - Australia (en-AU)" to "English (en-AU)" across 11 locales).
+LOCALE_DISPLAY_NAMES = {
+    "en-AU": "English - Australia", "en-CA": "English - Canada",
+    "en-GB": "English - UK", "en-IN": "English - India", "en-US": "English - US",
+    "es-MX": "Spanish - Mexico", "es-US": "Spanish - US",
+    "fr-CA": "French - Canada", "pt-BR": "Portuguese - Brazil",
+    "zh-CN": "Chinese", "ar-SA": "Arabic",
+}
+
+def section_heading(locale: str) -> str:
+    display = LOCALE_DISPLAY_NAMES.get(locale, LANGUAGE_NAMES[locale.split("-")[0]])
+    return f'### <a id="{locale.lower()}"></a>{display} ({locale})'
+
+
+# Slot-name regex: reuse the existing SLOT_IN_SAMPLE_RE (allows digits) so a
+# digit-bearing slot never misclassifies its samples as static in the
+# selection signature.
+
+
+def select_quick_ref_samples(samples, cap):
+    """Deterministic curation: the first sample of each distinct slot SIGNATURE
+    (the ordered slot names a sample carries, 'static' for slotless forms)
+    before repeats, capped, then filled with the next unused samples in model
+    order. Model order alone correlates with authoring order, not usefulness:
+    en-US FindSong's first six are all static openers and the slotted working
+    forms never showed (JF-548 review)."""
+    picked, seen = [], set()
+    for sample in samples:
+        sig = tuple(SLOT_IN_SAMPLE_RE.findall(sample)) or ("static",)
+        if sig in seen:
+            continue
+        seen.add(sig)
+        picked.append(sample)
+        if len(picked) == cap:
+            return picked
+    for sample in samples:
+        if sample not in picked:
+            picked.append(sample)
+            if len(picked) == cap:
+                break
+    return picked
+
+
+def intent_display_title(intent_name: str) -> str:
+    """AddToQueueIntent -> 'Add To Queue' (the table's row-title convention; the
+    validate_interaction_models.py Phase 6 lint maps it back with the exact
+    reverse)."""
+    base = intent_name[:-6] if intent_name.endswith("Intent") else intent_name
+    words = re.findall(r"[A-Z][a-z0-9]*", base)
+    return " ".join(w.capitalize() for w in words)
+
+
+def generate_table_sections(models) -> str:
+    """The VOICE_COMMANDS.md locale sections, one per locale in locale-code
+    order (the file's existing convention), rows alphabetical by title,
+    samples capped at VOICE_COMMANDS_MAX_SAMPLES in model order."""
+    sections = []
+    for locale in sorted(models):
+        lm = models[locale]
+        rows = []
+        for intent in lm["intents"]:
+            name = intent["name"]
+            if name.startswith("AMAZON.") or not intent.get("samples"):
+                continue
+            title = intent_display_title(name)
+            samples = select_quick_ref_samples(intent["samples"], VOICE_COMMANDS_MAX_SAMPLES)
+            cell = " · ".join(f"`{sample}`" for sample in samples)
+            rows.append((title, f"| {title} | {cell} |"))
+        rows.sort(key=lambda r: r[0].lower())
+        body = "\n".join(row for _, row in rows)
+        sections.append(
+            f"{section_heading(locale)}\n\n"
+            f'Invocation name: **"{invocation_name(locale)}"**\n\n'
+            "| Intent | Utterances |\n"
+            "|--------|------------|\n"
+            f"{body}"
+        )
+    return "\n\n".join(sections) + "\n"
+
+
+def generate_table(models) -> str:
+    """Full VOICE_COMMANDS.md content: the hand-maintained prose above the first
+    locale section, then the emitted sections."""
+    if not TABLE_PATH.exists():
+        raise SystemExit(
+            f"{TABLE_PATH} does not exist; the hand-maintained prose above the "
+            "locale sections cannot be regenerated - restore the file from git "
+            "and re-run"
+        )
+    current = TABLE_PATH.read_text(encoding="utf-8")
+    # The splice point must be an EXACT emitted heading line, not just any
+    # locale-shaped anchor: a quick-jump anchor a maintainer adds to the hand
+    # prose must not silently truncate everything above the real first section.
+    first = None
+    for locale in sorted(LOCALE_ORDER):
+        heading = section_heading(locale)
+        pos = current.find(heading + "\n")
+        if pos != -1 and (first is None or pos < first[0]):
+            first = (pos, heading)
+    if first is None:
+        raise SystemExit(
+            f"{TABLE_PATH} has no emitted locale section heading to emit below; "
+            "the layout is unrecognised (check mode: nothing was written)"
+        )
+    header = current[: first[0]].rstrip("\n") + "\n\n"
+    return header + generate_table_sections(models)
+
+
 def main():
     parser = argparse.ArgumentParser(description=(__doc__ or "Generate the voice command reference.").splitlines()[0])
     parser.add_argument(
         "--check",
         action="store_true",
-        help="do not write; exit 1 if docs/VOICE_COMMANDS_BY_LOCALE.md differs from the models",
+        help="do not write; exit 1 if docs/VOICE_COMMANDS_BY_LOCALE.md or VOICE_COMMANDS.md differs from the models",
     )
     args = parser.parse_args()
 
@@ -692,26 +823,52 @@ def main():
     validate_slot_hints(models)
     content = generate(models)
 
+    stale = []
+    missing = []
     if args.check:
-        if not OUT_PATH.exists():
-            print(f"STALE: {OUT_PATH} does not exist; run the generator")
+        for path, expected in ((OUT_PATH, content),):
+            if not path.exists():
+                missing.append(path)
+            elif path.read_text(encoding="utf-8") != expected:
+                stale.append(path)
+        if TABLE_PATH.exists():
+            if TABLE_PATH.read_text(encoding="utf-8") != generate_table(models):
+                stale.append(TABLE_PATH)
+        else:
+            missing.append(TABLE_PATH)
+        for path in missing:
+            if path == TABLE_PATH:
+                print(
+                    f"MISSING: {path}; restore it from git (the hand-maintained "
+                    "prose above the locale sections cannot be regenerated) and "
+                    "re-run the generator"
+                )
+            else:
+                print(
+                    f"MISSING: {path} does not exist; run the generator"
+                )
+        if stale:
+            for path in stale:
+                print(
+                    f"STALE: {path} differs from what the current models generate; "
+                    "run scripts/generate_voice_reference.py and commit the result"
+                )
+        if missing or stale:
             return 1
-        current = OUT_PATH.read_text(encoding="utf-8")
-        if current != content:
-            print(
-                f"STALE: {OUT_PATH} differs from what the current models generate; "
-                "run scripts/generate_voice_reference.py and commit the result"
-            )
-            return 1
-        print(f"OK: {OUT_PATH} matches the current models")
+        print(f"OK: {OUT_PATH} and {TABLE_PATH} match the current models")
         return 0
 
+    table = generate_table(models)
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     OUT_PATH.write_text(content, encoding="utf-8")
+    TABLE_PATH.write_text(table, encoding="utf-8")
     total = sum(
         len(i.get("samples", []) or []) for lm in models.values() for i in lm["intents"]
     )
-    print(f"Wrote {OUT_PATH} ({len(content.splitlines())} lines, {total} phrases)")
+    print(
+        f"Wrote {OUT_PATH} ({len(content.splitlines())} lines, {total} phrases) "
+        f"and {TABLE_PATH} ({len(table.splitlines())} lines)"
+    )
     return 0
 
 
