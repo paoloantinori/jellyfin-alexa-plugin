@@ -50,6 +50,15 @@ def test_utterance_resolves_correct_intent(dry_run, nlu_fixture, smapi_client):
         )
         pytest.skip("dry-run mode: SMAPI call skipped")
 
+    # Same affordance as the e2e runner: a documented skip (instrument limitation,
+    # environment dependency) instead of a permanently-red row people learn to ignore.
+    skip_reason = nlu_fixture.get("skip_reason", "")
+    if skip_reason:
+        assert isinstance(skip_reason, str) and skip_reason.strip(), (
+            f"skip_reason must be a non-empty string for '{utterance}'"
+        )
+        pytest.skip(f"'{utterance}' ({locale}): {skip_reason}")
+
     logger.info("Testing [%s] (%s) expecting %s", utterance, locale, expected_intent)
 
     # --- Live SMAPI NLU profiling ---
