@@ -4,10 +4,10 @@ title: >-
   Consolidate the three LWA token-refresh implementations onto
   SmapiTokenRefresher and gate sibling long SMAPI ops (unfiled JF-544 /simplify
   promise)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-12 07:53'
-updated_date: '2026-09-12 09:05'
+updated_date: '2026-09-12 10:10'
 labels: []
 dependencies: []
 references:
@@ -39,16 +39,28 @@ Also verified uncovered by any 401/refresh defense (same JF-544 incident class s
 - [ ] #5 A unit test pins the never-throws contract of RefreshAsync on the LWA HTTP failure path (e.g. handler throwing / returning error) so the contract cannot silently regress
 <!-- AC:END -->
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+RESOLVED 2026-09-12 (commits 2bcbf96e + 8061a3a2): all five ACs met. AC1: AlexaUtil delegates, no second RefreshDeviceToken producer site (LWAController's initial issuance and ProactiveEventClient's client_credentials grant are different lifecycles, correctly outside). AC2: SkillStartup delegates with its policy preserved AND the reviewer proved the null-return tightening was moot (ParseTokenResponse never returns null; dead branch + nullable signature removed). AC3: the doc now says mechanism + policy wrappers. AC4: deploy+restore gated and 401-recovering. AC5: never-throws pinned on 3 HTTP failure modes. Gates: /simplify 4-angle (real logger, dead-null cleanup, comment fixes) + code-review high (10 findings: 4 applied in the review-fix commit, 4 filed as JF-547 items 3-6, 2 pre-existing low/dead-code notes); suite 3663/3663. NOT deployed live (repo-only consolidation; the deployed JF-544 build already carries the sync-side defenses; this rides the next deploy).
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Consolidated the three LWA token-refresh implementations onto SmapiTokenRefresher: AlexaUtil.RefreshAndRetry (request path) and SkillStartup's restart recovery now delegate the mechanical refresh/persist to the one mechanism, each keeping its own policy (throw-on-failure for the request path with a real logger so the invalid_grant body reaches the logs; de-authorization for restart recovery, which the review verified is behavior-preserved since the old code already de-authed on every reachable failure and the null return was dead code, now removed along with the dishonest Task<DeviceToken?> signature). ModelDeploymentManager's custom-model deploy AND restore path (restore delegates to deploy) gained a pre-deploy refresh gate (10-min budget, 5x the worst-case operation, moved after the pure-local validations so rejected requests do not rotate the token for nothing) and a one-shot 401 PUT retry with client recreation carrying the concurrent-rotation guard. Five new tests pin the never-throws contract on three HTTP failure modes via the new LwaClient test seam (the JF-366 pattern), the rotate-and-persist happy path, and the no-credentials short-circuit (now at Warning, since restart recovery de-auths on it). Review residuals filed as JF-547 items 3-6 (the third 401-copy consolidation, the cancellation-swallow class, the request-path persist contract decision, the log-level reroute).
+<!-- SECTION:FINAL_SUMMARY:END -->
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress
+- [x] #6 NLU test fixtures updated if interaction model changed
+- [x] #7 E2E test added for new intent or handler logic
+- [x] #8 Locale response strings added to all 17 locales
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
