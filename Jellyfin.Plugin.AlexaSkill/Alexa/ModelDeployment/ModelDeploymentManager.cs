@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using global::Alexa.NET.Management;
 using global::Alexa.NET.Management.Api;
 using global::Alexa.NET.Management.Skills;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
 using Jellyfin.Plugin.AlexaSkill.Alexa.InteractionModel;
 using Jellyfin.Plugin.AlexaSkill.Entities;
 using Microsoft.Extensions.Logging;
@@ -281,6 +282,17 @@ public class ModelDeploymentManager
             {
                 string message = $"SMAPI restriction violations: {string.Join("; ", restrictionErrors)}";
                 _logger.LogWarning("Pre-flight validation failed for locale {Locale}: {Errors}", locale, message);
+                return new ModelDeploymentResult(false, message, string.Empty);
+            }
+
+            // JF-543: a catalog-wired model (valueSupplier/valueCatalog on a slot type)
+            // cannot build in some locales (see CatalogManager.CatalogWiringUnsupportedLocales
+            // for the live-bisection evidence). This endpoint takes the locale verbatim
+            // from the request, so it is an ungated ingress for exactly that shape.
+            if (!CatalogManager.IsCatalogWiringSupported(locale) && modelJson.Contains("valueCatalog", StringComparison.Ordinal))
+            {
+                const string message = "Refusing to deploy a catalog-wired model to a locale where Amazon's full build rejects it (JF-543).";
+                _logger.LogWarning("Pre-flight validation failed for locale {Locale}: {Error}", locale, message);
                 return new ModelDeploymentResult(false, message, string.Empty);
             }
 

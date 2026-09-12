@@ -95,6 +95,42 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
+    /// JF-543: a locale whose Amazon-side full build cannot host catalog wiring is
+    /// excluded from the sync entirely - no catalog uploads, no model GET/PUT, no
+    /// build polling. Config lists ar-SA (it-IT is always seeded as the base locale);
+    /// with the filter, traffic is exactly the it-IT-only shape.
+    /// </summary>
+    [Fact]
+    public async Task SyncUserLibraryAsync_ExcludesCatalogWiringUnsupportedLocale_FromAllTraffic()
+    {
+        Plugin.Instance!.Configuration.CatalogSyncLocales = "ar-SA";
+        try
+        {
+            SetupLibraryWithSeries("Adolescence");
+            var user = CreateUser();
+            var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+
+            var result = await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
+
+            Assert.True(result.Success);
+            Assert.DoesNotContain(
+                _smapiHandler.Requests,
+                r => r.Url.Contains("/locales/ar-SA", StringComparison.Ordinal));
+            Assert.Contains(
+                _smapiHandler.Requests,
+                r => r.Method == HttpMethod.Put && r.Url.EndsWith("/locales/it-IT", StringComparison.Ordinal));
+
+            // One leg's worth of uploads (the catalog-version count an it-IT-only
+            // sync produces): ar-SA contributed nothing.
+            Assert.Equal(1, _smapiHandler.VersionUploadsFor(SeriesCatalogId));
+        }
+        finally
+        {
+            Plugin.Instance!.Configuration.CatalogSyncLocales = string.Empty;
+        }
+    }
+
+    /// <summary>
     /// A single series-only sync must create the series catalog ("Jellyfin Series"),
     /// persist its ID on the user, upload a catalog version, and inject the
     /// catalog-backed SeriesName type into the interaction model (replacing the

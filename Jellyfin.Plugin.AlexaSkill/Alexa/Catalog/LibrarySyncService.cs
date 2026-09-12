@@ -83,7 +83,23 @@ public class LibrarySyncService
 
         // Determine which locales to sync
         string syncLocalesConfig = Plugin.Instance?.Configuration?.CatalogSyncLocales ?? string.Empty;
-        IReadOnlyList<string> locales = await ResolveSyncLocalesAsync(syncLocalesConfig, accessToken, skillId, cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<string> resolvedLocales = await ResolveSyncLocalesAsync(syncLocalesConfig, accessToken, skillId, cancellationToken).ConfigureAwait(false);
+
+        // JF-543: locales whose Amazon-side full build cannot host catalog-backed slot
+        // types (evidence in CatalogManager.CatalogWiringUnsupportedLocales). Skipping
+        // the whole leg: the catalog uploads and the model injection are worthless when
+        // the resulting model cannot build, and each failed build leaves the locale's
+        // live model FAILED until manually restored.
+        var unsupported = resolvedLocales.Where(l => !CatalogManager.IsCatalogWiringSupported(l)).ToList();
+        List<string> locales = resolvedLocales
+            .Where(l => CatalogManager.IsCatalogWiringSupported(l))
+            .ToList();
+        if (unsupported.Count > 0)
+        {
+            _logger.LogInformation(
+                "Catalog sync excludes {Locales}: Amazon's full build fails for catalog-wired models in these locales (JF-543). New syncs leave their live models untouched; a model already left FAILED by a pre-fix sync needs a one-time rebuild (Rebuild models, or the next version bump) to return to the embedded model",
+                string.Join(", ", unsupported));
+        }
 
         _logger.LogInformation("Catalog sync for user {UserId}: {LocaleCount} locales ({Locales})",
             user.Id, locales.Count, string.Join(", ", locales));

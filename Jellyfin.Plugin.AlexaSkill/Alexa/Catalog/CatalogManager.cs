@@ -30,6 +30,26 @@ public class CatalogManager
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<CatalogManager> _logger;
 
+    /// <summary>
+    /// Locales where Amazon's asynchronous FULL build fails whenever the model carries a
+    /// catalog-backed slot type, with NO error detail (only LANGUAGE_MODEL_FULL_BUILD
+    /// FAILED; dialog and NFI steps succeed). The failure rate scales with the referenced
+    /// catalog's value count, the same payload builds reliably in every other locale, and
+    /// the locale's own embedded model builds reliably. Live bisection 2026-09-12 (JF-543):
+    /// ar-SA + artist catalog (1135 values) = 0/7 builds; + album catalog (895) = 1/5;
+    /// + series catalog (138) = 3/3; de-DE + the identical artist-catalog definition = 3/3.
+    /// Until Amazon fixes the ar-SA trainer, catalog wiring stays off there: the locale
+    /// keeps its embedded model with AMAZON.Musician slots, which builds and serves
+    /// normally. Re-probe before removing a locale from this set.
+    /// </summary>
+    internal static readonly HashSet<string> CatalogWiringUnsupportedLocales =
+        new(StringComparer.OrdinalIgnoreCase) { "ar-SA" };
+
+    /// <summary>Whether the locale's model can carry catalog-backed slot types on this
+    /// platform today (see <see cref="CatalogWiringUnsupportedLocales"/> for evidence).</summary>
+    internal static bool IsCatalogWiringSupported(string locale) =>
+        !CatalogWiringUnsupportedLocales.Contains(locale);
+
     internal static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -447,6 +467,18 @@ public class CatalogManager
         if (string.IsNullOrEmpty(artistCatalogId) && string.IsNullOrEmpty(albumCatalogId) && string.IsNullOrEmpty(seriesCatalogId))
         {
             _logger.LogInformation("No catalogs to inject into interaction model, skipping update");
+            return new CatalogModelUpdateResult("Skipped", null, 0, 0);
+        }
+
+        // JF-543 choke point: Amazon's full build fails for catalog-wired models in
+        // some locales (see CatalogWiringUnsupportedLocales). LibrarySyncService
+        // filters these locales before the per-leg uploads; this guard is the second
+        // layer so a future caller cannot re-introduce wiring with the suite green.
+        if (!IsCatalogWiringSupported(locale))
+        {
+            _logger.LogWarning(
+                "Refusing to catalog-wire {Locale}: Amazon's full build fails for catalog-backed models there (JF-543); the locale keeps its embedded model",
+                locale);
             return new CatalogModelUpdateResult("Skipped", null, 0, 0);
         }
 
