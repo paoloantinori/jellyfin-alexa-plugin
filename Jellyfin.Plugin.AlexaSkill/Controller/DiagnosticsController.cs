@@ -6,6 +6,8 @@ using Jellyfin.Plugin.AlexaSkill.Diagnostics;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+using Jellyfin.Plugin.AlexaSkill.Lwa;
+
 namespace Jellyfin.Plugin.AlexaSkill.Controller;
 
 /// <summary>
@@ -50,8 +52,7 @@ public class DiagnosticsController : ControllerBase
                 ? DateTimeOffset.FromUnixTimeSeconds(u.SmapiDeviceToken.ExpireTimestamp).UtcDateTime
                 : (DateTime?)null,
             SmapiTokenExpired = u.SmapiDeviceToken != null
-                && u.SmapiDeviceToken.ExpireTimestamp > 0
-                && DateTimeOffset.FromUnixTimeSeconds(u.SmapiDeviceToken.ExpireTimestamp) < DateTimeOffset.UtcNow,
+                && SmapiTokenRefresher.RemainingLifetime(u) < TimeSpan.Zero,
             SmapiRefreshTokenPresent = !string.IsNullOrEmpty(u.SmapiRefreshToken)
         }).ToList();
 
@@ -187,8 +188,7 @@ public class DiagnosticsController : ControllerBase
 
         bool anyTokenExpired = config.Users.Any(u =>
             u.SmapiDeviceToken != null
-            && u.SmapiDeviceToken.ExpireTimestamp > 0
-            && DateTimeOffset.FromUnixTimeSeconds(u.SmapiDeviceToken.ExpireTimestamp) < DateTimeOffset.UtcNow);
+            && SmapiTokenRefresher.RemainingLifetime(u) < TimeSpan.Zero);
 
         return anyTokenExpired ? "Degraded" : "Healthy";
     }
