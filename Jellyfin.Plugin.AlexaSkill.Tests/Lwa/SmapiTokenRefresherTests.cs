@@ -135,7 +135,7 @@ public class SmapiTokenRefresherTests : IDisposable
 
         // The whole point (JF-544/JF-545): this must return false, never throw, so a
         // recovery path cannot be aborted by the refresh itself.
-        bool refreshed = await SmapiTokenRefresher.RefreshAsync(user, NullLogger.Instance).ConfigureAwait(false);
+        bool refreshed = await SmapiTokenRefresher.RefreshAsync(user, NullLogger.Instance);
 
         Assert.False(refreshed);
         Assert.Equal("access-token-1", user.SmapiDeviceToken!.AccessToken);
@@ -151,7 +151,7 @@ public class SmapiTokenRefresherTests : IDisposable
         var user = CreateUser();
 
         var logger = new RecordingLogger();
-        bool refreshed = await SmapiTokenRefresher.RefreshAsync(user, logger).ConfigureAwait(false);
+        bool refreshed = await SmapiTokenRefresher.RefreshAsync(user, logger);
 
         Assert.True(refreshed, string.Join("\n", logger.Lines));
         Assert.Equal("fresh-access", user.SmapiDeviceToken!.AccessToken);
@@ -168,7 +168,7 @@ public class SmapiTokenRefresherTests : IDisposable
         {
             var user = CreateUser();
 
-            bool refreshed = await SmapiTokenRefresher.RefreshAsync(user, NullLogger.Instance).ConfigureAwait(false);
+            bool refreshed = await SmapiTokenRefresher.RefreshAsync(user, NullLogger.Instance);
 
             Assert.False(refreshed);
             Assert.Equal("access-token-1", user.SmapiDeviceToken!.AccessToken);
