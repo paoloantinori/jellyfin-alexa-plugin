@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-09 13:34'
-updated_date: '2026-09-10 06:16'
+updated_date: '2026-09-12 02:18'
 labels:
   - toolchain
   - tech-debt
@@ -38,6 +38,8 @@ Simplify the developer toolchain now that the dual-target build is proven under 
 Batch coordination (2026-09-09): this task composes with JF-307 Phase-2 (landed, merge af820dbb) and JF-530 (drop the 10.11 support line - a SEPARATE decision Paolo has NOT taken yet; do NOT conflate). What this task is NOT: it does not remove the net9.0 TFM from the csprojs (the shipping line stays net9.0), does not touch the Condition'd refs, and does not change what users receive. It only simplifies the DEVELOPER machine + CI installs per the finding that SDK 10 alone builds both TFMs (spike-verified: 0 warnings both TFMs under warnaserror). The 9.0.x RUNTIME stays installed locally for net9.0 test execution; if setup-dotnet cannot install a runtime-only on CI, the 9.0.x SDK stays in CI (document why).
 
 Pre-batch inventory (2026-09-10, captured for AC#5): system SDK = 9.0.120 via rpm dotnet-sdk-9.0-9.0.120-1.fc44.x86_64 (+ dotnet-templates-9.0 same version); runtime 9.0.19 via rpms dotnet-runtime-9.0 / dotnet-hostfxr-9.0 / dotnet-apphost-pack-9.0 / dotnet-targeting-pack-9.0; SDK 10.0.400 user-local at ~/.dotnet-jf307 (not rpm). Fedora plan: dnf remove the sdk+templates rpms WITHOUT letting it cascade the runtime (check dnf's removal set first; --noautoremove or rpm -e the exact packages if needed); rollback = dnf install dotnet-sdk-9.0 (pin 9.0.120 if repo carries it). After removal, /usr/lib64/dotnet has runtime-9 only and the SDK10 PATH export becomes the only build recipe - the CLAUDE.md system-SDK net9 recipe gets deleted, not updated. RUN SOLO: no other worker may be building when the SDK disappears.
+
+BLOCKED 2026-09-12 ~02:50 (night run): the uninstall needs root and no passwordless sudo exists (pkexec would prompt a sleeping user). TRANSACTION ANALYSIS CAPTURED for the morning: plain `dnf remove dotnet-sdk-9.0 dotnet-templates-9.0` cascades to 10 packages / 411 MiB INCLUDING the 9.0.x runtime set (aspnetcore-runtime-9.0, aspnetcore-targeting-pack-9.0, and friends) - the pinned plan's surgical path is confirmed necessary. MORNING RECIPE (one command + verify): `sudo rpm -e dotnet-sdk-9.0-9.0.120-1.fc44 dotnet-templates-9.0-9.0.120-1.fc44` (exact nvra; keeps runtime 9.0.19 + targeting pack), then `dotnet --list-sdks` (10.x only via the ~/.dotnet-jf307 PATH export) and `dotnet --list-runtimes` (9.x + 10.x both present), then the full suite on both TFMs (net9.0 via the SDK-10 build + 9.x runtime; the net9 targeting-pack rpm stays so SDK 10 can build the TFM). THEN the docs half (AC#3): delete the CLAUDE.md system-SDK-9 recipe (the deploy skill's Key Facts note already points at SDK 10), update the jf307 findings doc. Rollback stays as pinned: `sudo dnf install dotnet-sdk-9.0-9.0.120-1.fc44` (repo: updates).
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
