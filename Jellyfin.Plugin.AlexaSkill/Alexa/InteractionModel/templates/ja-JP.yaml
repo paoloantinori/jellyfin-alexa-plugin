@@ -1,7 +1,10 @@
 # Japanese (Japan) interaction model template for the Alexa skill.
 #
 # JF-316 milestone 5 (final): golden master. Faithful transcription of
-# the hand-grown model_ja-JP.json (59 intents, 286 samples);
+# the hand-grown model_ja-JP.json (59 intents, 303 samples after the JF-399
+# PlaySong/PlayPlaylist enrichment 2026-09-12, which also deduplicated the
+# two identical '{musician} を流して' PlayArtistSongsIntent samples that the
+# glued-slot fix had made literal twins);
 # `python3 scripts/generate_interaction_model.py ja-JP` reproduces it
 # byte-identically. Every sample is verbatim in the committed order:
 # plain transcription over compression (the milestone-2 decision; no
@@ -127,6 +130,18 @@ intents:
       - '{song} を聞きたい'
       - ストリーム {song}
       - '{musician} のストリーム {song}'
+      - 曲 {song} を聴かせて
+      - '{musician} の曲 {song} を聴かせて'
+      - '{musician} の {song} を流して'
+      - '{musician} の曲 {song} を流して'
+      - '{song} を聞きたいです'
+      - '{musician} の {song} を聞きたい'
+      - '{musician} の曲 {song} を聞きたい'
+      - '{song} をかけて'
+      - '{musician} の {song} をかけて'
+      - 曲 {song} をスタートして
+      - '曲 {song} お願いします'
+      - 曲 {song} を聞きたい
     slots:
       - name: song
         type: AMAZON.MusicRecording
@@ -164,7 +179,6 @@ intents:
       - '{musician} のトラックを再生して'
       - '{musician} を聴かせて'
       - '{musician} の曲を聴かせて'
-      - '{musician} を流して'
       - '{musician} を聞きたい'
       - '{musician} をシャッフルして'
       - '{musician} を再生して'
@@ -254,6 +268,12 @@ intents:
       - プレイリスト {playlist} をスタートして
       - プレイリスト {playlist} を聴かせて
       - プレイリスト {playlist} を聞きたい
+      - マイプレイリスト {playlist} を再生して
+      - 私のプレイリスト {playlist} を流して
+      - プレイリスト {playlist} をかけて
+      - '{playlist} プレイリストを再生して'
+      - プレイリスト {playlist} を聞きたいです
+      - プレイリスト {playlist} お願いします
     slots:
       - name: playlist
         type: AMAZON.SearchQuery

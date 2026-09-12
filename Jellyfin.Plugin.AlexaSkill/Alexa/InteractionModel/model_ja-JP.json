@@ -101,7 +101,19 @@
           "{song} を流して",
           "{song} を聞きたい",
           "ストリーム {song}",
-          "{musician} のストリーム {song}"
+          "{musician} のストリーム {song}",
+          "曲 {song} を聴かせて",
+          "{musician} の曲 {song} を聴かせて",
+          "{musician} の {song} を流して",
+          "{musician} の曲 {song} を流して",
+          "{song} を聞きたいです",
+          "{musician} の {song} を聞きたい",
+          "{musician} の曲 {song} を聞きたい",
+          "{song} をかけて",
+          "{musician} の {song} をかけて",
+          "曲 {song} をスタートして",
+          "曲 {song} お願いします",
+          "曲 {song} を聞きたい"
         ],
         "slots": [
           {
@@ -161,7 +173,6 @@
           "{musician} のトラックを再生して",
           "{musician} を聴かせて",
           "{musician} の曲を聴かせて",
-          "{musician} を流して",
           "{musician} を聞きたい",
           "{musician} をシャッフルして",
           "{musician} を再生して",
@@ -295,7 +306,13 @@
           "プレイリスト {playlist} を流して",
           "プレイリスト {playlist} をスタートして",
           "プレイリスト {playlist} を聴かせて",
-          "プレイリスト {playlist} を聞きたい"
+          "プレイリスト {playlist} を聞きたい",
+          "マイプレイリスト {playlist} を再生して",
+          "私のプレイリスト {playlist} を流して",
+          "プレイリスト {playlist} をかけて",
+          "{playlist} プレイリストを再生して",
+          "プレイリスト {playlist} を聞きたいです",
+          "プレイリスト {playlist} お願いします"
         ],
         "slots": [
           {

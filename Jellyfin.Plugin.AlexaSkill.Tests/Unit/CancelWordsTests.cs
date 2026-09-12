@@ -51,9 +51,22 @@ public class CancelWordsTests
     [InlineData("cancel", "hi-IN", true)] // probed 2026-09-03: routes to AMAZON.CancelIntent (twice, stable)
     [InlineData("إيقاف", "ar-SA", true)]
     [InlineData("stop", "ar-SA", true)]
+    // ja-JP probed 2026-09-12 on the first-ever BUILT model (JF-513 + JF-513.1 item 2):
+    // とめて/止めて/止まって/ストップ -> StopIntent, やめて -> CancelIntent.
+    [InlineData("とめて", "ja-JP", true)]
+    [InlineData("止めて", "ja-JP", true)]
+    [InlineData("止まって", "ja-JP", true)]
+    [InlineData("ストップ", "ja-JP", true)]
+    [InlineData("やめて", "ja-JP", true)]
+    [InlineData("stop", "ja-JP", true)]
     [InlineData("ferma", "it-IT", true)]
     [InlineData("annulla", "it-IT", true)]
     [InlineData("basta", "it-IT", true)]
+    // A locale with no vetted set falls back to the English words: all 17 known
+    // locales have sets since the 2026-09-12 ja-JP re-vet, so the fallback is only
+    // reachable for an unknown future locale (the WordsFor safety net).
+    [InlineData("stop", "xx-XX", true)]
+    [InlineData("cancel", "xx-XX", true)]
     public void IsCancelWord_VettedLocaleWord_IsCancel(string word, string locale, bool expected)
     {
         Assert.Equal(expected, CancelWords.IsCancelWord(word, locale));
@@ -67,10 +80,10 @@ public class CancelWordsTests
     [InlineData("alto", "es-US")]
     [InlineData("detén", "es-US")] // routes in es-ES/es-MX only
     [InlineData("توقف", "ar-SA")]
-    // "cancel" vetting (2026-09-03, twice each, stable): the pre-JF-444 shared set
-    // carried it everywhere, but a bare "cancel" does NOT route to Stop/Cancel in 9 of
-    // the 10 own-set non-English locales (it routes in hi-IN only, and stays in the
-    // en-* and it-IT legacy sets).
+    // "cancel" vetting (2026-09-03, twice each, stable; ja-JP 2026-09-12): the
+    // pre-JF-444 shared set carried it everywhere, but a bare "cancel" does NOT route
+    // to Stop/Cancel in 10 of the 11 own-set non-English locales (it routes in hi-IN
+    // only, and stays in the en-* and it-IT legacy sets).
     [InlineData("cancel", "de-DE")]
     [InlineData("cancel", "fr-FR")]
     [InlineData("cancel", "fr-CA")]
@@ -80,25 +93,19 @@ public class CancelWordsTests
     [InlineData("cancel", "pt-BR")]
     [InlineData("cancel", "nl-NL")]
     [InlineData("cancel", "ar-SA")]
+    [InlineData("cancel", "ja-JP")]
     // Cross-locale leakage: a word vetted for one locale must not leak into another.
     [InlineData("basta", "en-US")]
     [InlineData("ferma", "de-DE")]
     [InlineData("abbrechen", "fr-FR")]
     [InlineData("annulla", "pt-BR")]
+    [InlineData("ferma", "ja-JP")]
+    // Through the fallback path: an entry-less locale gets the English words only,
+    // never a foreign set.
+    [InlineData("ferma", "xx-XX")]
     public void IsCancelWord_ExcludedOrForeignWord_IsNotCancel(string word, string locale)
     {
         Assert.False(CancelWords.IsCancelWord(word, locale));
-    }
-
-    [Fact]
-    public void IsCancelWord_UndeployedLocale_FallsBackToEnglishSet()
-    {
-        // ja-JP has no deployed model on the live skill (profile-nlu/get-interaction-model
-        // return 400), so nothing could be vetted for it; it falls back to the English set
-        // ("stop" routed in every deployable locale probed).
-        Assert.True(CancelWords.IsCancelWord("stop", "ja-JP"));
-        Assert.True(CancelWords.IsCancelWord("cancel", "ja-JP"));
-        Assert.False(CancelWords.IsCancelWord("ferma", "ja-JP"));
     }
 
     [Theory]
@@ -263,7 +270,7 @@ public class CancelWordsTests
     [InlineData("fermare")]  // probe: NO_SELECTION
     [InlineData("arresta")]  // probe: NO_SELECTION
     [InlineData("stop")]     // no it-IT probe row in the table
-    [InlineData("cancel")]   // no it-IT probe row (NO_SELECTION in all 9 probed non-English locales)
+    [InlineData("cancel")]   // no it-IT probe row (NO_SELECTION in all 10 probed non-English locales)
     public void IsForceRoutedCancelCapture_StartedLegacyWordWithoutProbeRow_IsFalse(string word)
     {
         var request = BuildMisrouteRequest(word);

@@ -1,7 +1,8 @@
 # Hindi (India) interaction model template for the Alexa skill.
 #
 # JF-316 milestone 5 (final): golden master. Faithful transcription of
-# the hand-grown model_hi-IN.json (59 intents, 314 samples);
+# the hand-grown model_hi-IN.json (59 intents, 322 samples after the JF-399
+# PlaySong enrichment 2026-09-12);
 # `python3 scripts/generate_interaction_model.py hi-IN` reproduces it
 # byte-identically. Every sample is verbatim in the committed order:
 # plain transcription over compression (the milestone-2 decision; no
@@ -129,6 +130,14 @@ intents:
       - '{song} शुरू करो'
       - ट्रैक {song} चलाओ
       - '{musician} का ट्रैक {song} चलाओ'
+      - गाना {song} लगाओ
+      - '{musician} का गाना {song} लगाओ'
+      - '{song} बजाओ'
+      - गाना {song} बजाओ
+      - '{musician} का {song} बजाओ'
+      - '{song} सुनाओ'
+      - '{musician} का {song} सुनाओ'
+      - मैं {musician} का {song} सुनना चाहता हूँ
     slots:
       - name: song
         type: AMAZON.MusicRecording

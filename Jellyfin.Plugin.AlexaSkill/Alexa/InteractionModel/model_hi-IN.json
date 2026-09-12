@@ -106,7 +106,15 @@
           "क्या तुम {song} चला सकते हो",
           "{song} शुरू करो",
           "ट्रैक {song} चलाओ",
-          "{musician} का ट्रैक {song} चलाओ"
+          "{musician} का ट्रैक {song} चलाओ",
+          "गाना {song} लगाओ",
+          "{musician} का गाना {song} लगाओ",
+          "{song} बजाओ",
+          "गाना {song} बजाओ",
+          "{musician} का {song} बजाओ",
+          "{song} सुनाओ",
+          "{musician} का {song} सुनाओ",
+          "मैं {musician} का {song} सुनना चाहता हूँ"
         ],
         "slots": [
           {

@@ -53,22 +53,28 @@ internal static class CancelWords
     //   es-US   cancela       AMAZON.CancelIntent     it-IT   fermo        ShowMoreIntent
     //   es-US   stop          AMAZON.StopIntent       en-US   stop         AMAZON.StopIntent
     //   en-GB   stop          AMAZON.StopIntent       en-US   cancel       AMAZON.CancelIntent
+    //   ja-JP   とめて         AMAZON.StopIntent       ja-JP   止めて        AMAZON.StopIntent
+    //   ja-JP   止まって       AMAZON.StopIntent       ja-JP   ストップ       AMAZON.StopIntent
+    //   ja-JP   やめて         AMAZON.CancelIntent     ja-JP   stop         AMAZON.StopIntent
     //
     // Exclusions (probed, did NOT route, confirmed stable on re-probe; deliberately NOT
     // added even though they are common imperatives): es-* "alto" (NO_SELECTION in
     // es-ES/es-MX/es-US); es-US "detén" (routes in es-ES/es-MX only, so it stays out of
     // the es-US set); ar-SA "توقف" (NO_SELECTION twice; "إيقاف" carries the meaning);
-    // "cancel" in 9 of the 10 own-set non-English locales (NO_SELECTION twice each in
-    // de-DE, fr-FR, fr-CA, es-ES, es-MX, es-US, pt-BR, nl-NL and ar-SA, probed
-    // 2026-09-03 because the pre-JF-444 shared set had carried "cancel" everywhere; the
-    // drop stands as vetted there). hi-IN is the 10th: "cancel" DID route there
+    // "cancel" is excluded in 10 of the 11 own-set non-English locales (NO_SELECTION twice
+    // each in de-DE, fr-FR, fr-CA, es-ES, es-MX, es-US, pt-BR, nl-NL, ar-SA - probed
+    // 2026-09-03 - and ja-JP, probed 2026-09-12; the pre-JF-444 shared set had carried
+    // "cancel" everywhere). hi-IN is the one exception: "cancel" DID route there
     // (AMAZON.CancelIntent, twice) and was added.
     //
-    // Excluded locale: ja-JP has NO deployed model on the live skill (profile-nlu and
-    // get-interaction-model both return HTTP 400; ja-JP is absent from manifest.json's
-    // 12 locales), so probes cannot vet any Japanese word. ja-JP therefore has no
-    // locale entry and falls through to the English fallback set; when a ja-JP model is
-    // deployed, re-vet (candidates: とめて/ストップ) before adding an entry.
+    // ja-JP re-vetted 2026-09-12 (JF-513.1 item 2), after the JF-513 manifest redeploy
+    // finally gave the locale a BUILT model (it had never built before: the fullwidth ？
+    // and glued-slot samples). Word-by-intent results are the ja-JP rows above (とめて
+    // and ストップ stable on re-probe); "cancel" joins the 10-locale exclusion norm.
+    // FIRST ATTEMPT SAME NIGHT WAS WRONG: an extractor bug read the profile-nlu
+    // response's selectedIntent as result.intent, so every probe looked like
+    // NO_SELECTION and the exclusion was briefly re-documented on false evidence;
+    // corrected within the hour. Lesson: the probe tool's field is selectedIntent.
     //
     // it-IT keeps the pre-JF-444 legacy set (six it-IT template StopIntent samples per
     // the JF-402 deliberate exception, plus the other Italian imperatives from the
@@ -122,13 +128,20 @@ internal static class CancelWords
     private static readonly HashSet<string> HindiWords = new(StringComparer.OrdinalIgnoreCase)
     {
         // "cancel" probed 2026-09-03: routes to AMAZON.CancelIntent on the deployed
-        // hi-IN model (twice, stable), unlike the 9 other own-set locales.
+        // hi-IN model (twice, stable), unlike the 10 other own-set locales.
         "रोको", "बंद करो", "stop", "cancel",
     };
 
     private static readonly HashSet<string> ArabicWords = new(StringComparer.OrdinalIgnoreCase)
     {
         "إيقاف", "stop",
+    };
+
+    private static readonly HashSet<string> JapaneseWords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        // Probed 2026-09-12 on the first-ever BUILT ja-JP model (JF-513). "cancel"
+        // NO_SELECTION there, so it is not here.
+        "とめて", "止めて", "止まって", "ストップ", "やめて", "stop",
     };
 
     private static readonly Dictionary<string, HashSet<string>> WordsByLocale = new(StringComparer.OrdinalIgnoreCase)
@@ -153,14 +166,17 @@ internal static class CancelWords
         ["nl-NL"] = DutchWords,
         ["hi-IN"] = HindiWords,
         ["ar-SA"] = ArabicWords,
+        ["ja-JP"] = JapaneseWords,
     };
 
     /// <summary>
     /// Whether the captured slot text is exactly a stop/cancel word in the request's
     /// locale (trimmed, whole-value match only: a keyword phrase merely containing
     /// "stop" is a legitimate search, e.g. a song titled "Don't Stop Believin'").
-    /// Locales with no vetted entry (today ja-JP) fall back to the English set: "stop"
-    /// routed to a built-in in every deployable locale probed.
+    /// Locales with no vetted entry (none today: every locale has a set, though not
+    /// all are directly probe-backed - see the en-* inheritance and it-IT legacy
+    /// carve-outs above) fall back to the English set: "stop" routed to a built-in
+    /// in every deployable locale probed.
     /// </summary>
     /// <param name="slotValue">The raw captured slot value.</param>
     /// <param name="locale">The request locale (e.g. "de-DE").</param>
@@ -234,7 +250,7 @@ internal static class CancelWords
     // routed intent (ferma, annulla, basta, cancella, annullare, stoppa). The legacy
     // single-token words WITHOUT a routing row stay out of the fresh regime:
     // "fermare"/"arresta" (NO_SELECTION), "fermo" (ShowMoreIntent), "stop"/"cancel"
-    // (no it-IT probe row; "cancel" was NO_SELECTION in all 9 probed non-English
+    // (no it-IT probe row; "cancel" was NO_SELECTION in all 10 probed non-English
     // locales).
     private static readonly HashSet<string> ItalianProbedBareWords = new(StringComparer.OrdinalIgnoreCase)
     {
