@@ -16,8 +16,8 @@ Usage:
   python3 scripts/generate_voice_reference.py --check   # exit 1 if stale
 
 Determinism: output depends only on the model JSONs (no timestamps), so
-running twice produces no diff. CI can wire --check later; nothing is wired
-by this script.
+running twice produces no diff. CI runs --check in the validate-models job
+and in release-build (wired 2026-09-12, JF-513.1).
 """
 
 import argparse

@@ -70,6 +70,9 @@ jobs:
       - name: Validate interaction models
         run: python3 scripts/validate_interaction_models.py
 
+      - name: Check generated voice-reference doc freshness
+        run: python3 scripts/generate_voice_reference.py --check
+
   validate-locales:
     runs-on: ubuntu-latest
     steps:

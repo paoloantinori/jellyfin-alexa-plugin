@@ -21,8 +21,13 @@ advisory and a false positive here must not break it):
     matches no current sample of that intent in that locale (heuristic; caught
     the JF-459 case where a fixture referenced a deleted sample and only a
     manual profile-nlu probe noticed). Guards the fixtures mirror only; the
-    other sample mirrors (VOICE_COMMANDS.md, docs/, docs-site/) stay manual
-    (CLAUDE.md anti-pattern #11 lists them all).
+    remaining sample mirrors (docs/, docs-site/) stay manual (CLAUDE.md
+    anti-pattern #11 lists them all).
+  - VOICE_COMMANDS.md row drift (JF-513.1 item 7): every hand-maintained row
+    must map to a model intent and list only utterances the model still
+    carries, every custom intent with samples must have a row, and every md
+    section must correspond to a model file. Partial rows are the table's
+    documented convention and are not warned.
   - BrowseCategory id drift (JF-468): every locale must carry the English
     canonical ids artists/albums/songs on the shared concept values, and
     every locale other than it-IT must carry no ids beyond those three.
@@ -639,6 +644,134 @@ def check_template_regen_equality() -> list[str] | None:
     return warnings
 
 
+VOICE_COMMANDS_PATH = Path(__file__).resolve().parent.parent / "VOICE_COMMANDS.md"
+
+
+def _voice_commands_sections(
+    md_text: str,
+) -> tuple[dict[str, list[tuple[str, list[str]]]], list[tuple[str, str]]]:
+    """Parse VOICE_COMMANDS.md into ({locale: [(row title, [samples])]}, malformed rows)."""
+    sections: dict[str, list[tuple[str, list[str]]]] = {}
+    malformed_rows: list[tuple[str, str]] = []
+    current: str | None = None
+    for line in md_text.splitlines():
+        m = re.match(r'### <a id="[a-z-]+"></a>.*\(([a-zA-Z]{2}-[A-Za-z]{2})\)', line)
+        if m:
+            current = m.group(1)
+            if current in sections:
+                malformed_rows.append(
+                    (current, "duplicate locale heading: earlier rows re-wiped")
+                )
+            sections[current] = []
+            continue
+        if line.startswith("|") and "`" in line:
+            parts = [p.strip() for p in line.strip().strip("|").split("|")]
+            malformed = len(parts) != 2 or not parts[0]
+            if malformed:
+                # A pipe inside a cell or an odd row shape: name it instead of
+                # silently dropping the row from linting.
+                target = current if current else "<before any locale heading>"
+                malformed_rows.append((target, line.strip()[:60]))
+                continue
+            if current is None:
+                malformed_rows.append(("<before any locale heading>", line.strip()[:60]))
+                continue
+            cell = parts[1]
+            if cell.count("`") % 2:
+                malformed_rows.append((current, "unpaired backticks: " + line.strip()[:50]))
+                continue
+            sections[current].append((parts[0], re.findall(r"`([^`]*)`", cell)))
+    return sections, malformed_rows
+
+
+def _row_intent_candidates(title: str) -> list[str]:
+    pascal = "".join(w.capitalize() for w in title.split())
+    return [pascal + "Intent", "AMAZON." + pascal + "Intent"]
+
+
+def lint_voice_commands_rows(
+    all_models: dict[str, dict], md_path: Path = VOICE_COMMANDS_PATH
+) -> list[str] | None:
+    """WARNING lint: VOICE_COMMANDS.md rows drifting from the models (JF-513.1 item 7).
+
+    The hand-maintained utterance table went stale twice (PR #15 orphaned the
+    English rows; JF-459 orphaned 11 more; JF-475 documented a phantom row) and
+    only the PlayAlbum-specific warning check #10 guards any of it. The warning
+    shapes, per locale:
+    - a row lists an utterance the model no longer carries (stale mirror);
+    - a custom intent with samples has no row at all (coverage gap, the JF-494
+      class);
+    - a row title maps to no intent in the model (renamed intent or typo);
+    - a row survives an intent whose samples list has emptied (retirement);
+    - a row or heading shape the parser cannot attribute (pipes inside cells,
+      unpaired backticks, rows before the first heading, duplicate headings).
+    Deliberately NOT warned: partial rows (the table lists a curated selection
+    of each intent's samples, per its own header) and count mismatches.
+    The row-title convention is PascalCase words plus "Intent" (the reverse of
+    camelCase splitting), a second convention parallel to the generator's
+    GROUPS labels; a title that stops mapping warns loudly rather than
+    silently.
+
+    Returns None when the markdown file is absent.
+    """
+    if not md_path.exists():
+        return None
+    md_text = md_path.read_text()
+    sections, malformed_rows = _voice_commands_sections(md_text)
+    warnings: list[str] = []
+    for where, note in malformed_rows:
+        warnings.append(f"  [{where}] unparseable VOICE_COMMANDS row: {note}")
+    for locale in sorted(set(sections) - set(all_models)):
+        warnings.append(
+            f"  [{locale}] VOICE_COMMANDS.md section has no model file (phantom locale)"
+        )
+    for locale, lm in sorted(all_models.items()):
+        by_name = {
+            i.get("name"): i.get("samples", [])
+            for i in lm["intents"]
+            if i.get("name")
+        }
+        rows = sections.get(locale)
+        if rows is None:
+            warnings.append(
+                f"  [{locale}] no VOICE_COMMANDS.md section (missing mirror section)"
+            )
+            continue
+        for title, samples in rows:
+            candidates = [c for c in _row_intent_candidates(title) if c in by_name]
+            if not candidates:
+                warnings.append(
+                    f"  [{locale}] VOICE_COMMANDS row '{title}' maps to no model "
+                    f"intent (renamed intent or typo'd title)"
+                )
+                continue
+            name = candidates[0]
+            model_samples = by_name[name]
+            if samples and not model_samples:
+                warnings.append(
+                    f"  [{locale}] '{title}' row lists utterances but intent "
+                    f"{name} carries no samples anymore (retired intent?)"
+                )
+                continue
+            stale = [s for s in samples if s not in model_samples]
+            if stale:
+                warnings.append(
+                    f"  [{locale}] '{title}' row lists utterances absent from the "
+                    f"model: {stale[0]}"
+                    + (f" (+{len(stale) - 1} more)" if len(stale) > 1 else "")
+                )
+        row_titles = [t for t, _ in rows]
+        for name, model_samples in by_name.items():
+            if name.startswith("AMAZON.") or not model_samples:
+                continue
+            if not any(name in _row_intent_candidates(t) for t in row_titles):
+                warnings.append(
+                    f"  [{locale}] intent {name} has {len(model_samples)} samples "
+                    f"but no VOICE_COMMANDS row"
+                )
+    return warnings
+
+
 def main() -> int:
     verbose = "--verbose" in sys.argv[1:]
     model_files = sorted(MODELS_DIR.glob("model_*.json"))
@@ -727,6 +860,20 @@ def main() -> int:
                 print(f"  WARN: {w}")
         else:
             print("  Every templated locale regenerates its committed model byte-identically")
+
+    # Phase 6: VOICE_COMMANDS.md row-vs-model lint (JF-513.1 item 7 warning check)
+    if all_models:
+        print("\nVOICE_COMMANDS row lint:")
+        vc_warnings = lint_voice_commands_rows(all_models)
+        if vc_warnings is None:
+            pass  # file absent: skip silently
+        else:
+            all_warnings.extend(vc_warnings)
+            if vc_warnings:
+                for w in vc_warnings:
+                    print(f"  WARN: {w}")
+            else:
+                print("  Every row maps to a model intent and lists only live utterances")
 
     # Summary
     print(f"\n{'='*60}")
