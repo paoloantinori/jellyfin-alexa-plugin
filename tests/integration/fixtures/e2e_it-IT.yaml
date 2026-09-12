@@ -19,6 +19,17 @@ tests:
       media_type: {}
     expected_response_type: any
 
+  # JF-549 pin: a PlayEpisode one-shot without a resolvable series must ASK with
+  # the mic open (Dialog.ElicitSlot + open session + reprompt), never a dead-mic Tell.
+  - utterance: "riprodurre la stagione uno episodio tre"
+    expected_intent: PlayEpisodeIntent
+    expected_slots: {}
+    expected_response_type: directive
+    expected_directive_type: "Dialog.ElicitSlot"
+    expected_speech_contains: "serie"
+    expected_reprompt: true
+    expected_end_session: false
+
   # --- Playback controls ---
   # JF-488 (2026-09-04, default ON since 2026-09-05): with PauseKeepsSession
   # the pause response SPEAKS ('Pausa.') and carries a reprompt with the

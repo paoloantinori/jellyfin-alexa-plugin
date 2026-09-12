@@ -544,6 +544,65 @@ def lint_browse_category_ids(all_models: dict[str, dict]) -> list[str]:
     return warnings
 
 
+# JF-549: PlayEpisodeIntent one-shot (infinitive) carrier prefixes per locale.
+# A locale is listed here only when its model ALREADY carries a one-shot carrier
+# family; locales without one (es-*, pt-BR, nl-NL, ar-SA, hi-IN, ja-JP) are out of
+# scope (their wrapper routing is tracked in the JF-551 probe task).
+PLAY_EPISODE_ONESHOT_PREFIXES = {
+    "it-IT": "Di ",
+    "de-DE": "Zu ",
+    "fr-FR": "De ",
+    "fr-CA": "De ",
+    "en-US": "to ",
+    "en-GB": "to ",
+    "en-AU": "to ",
+    "en-CA": "to ",
+    "en-IN": "to ",
+}
+
+
+def _series_first(sample: str) -> bool:
+    """Whether the sample places {series_name} before both number slots."""
+    i = sample.find("{series_name}")
+    if i < 0:
+        return False
+    return all(
+        sample.find(t) > i
+        for t in ("{season_number}", "{episode_number}")
+        if t in sample
+    )
+
+
+def lint_play_episode_one_shot_order(all_models: dict[str, dict]) -> list[str]:
+    """WARNING lint: PlayEpisodeIntent one-shot samples must exist in BOTH word orders.
+
+    JF-549 (live 2026-09-12): the one-shot wrapper presents the infinitive with the
+    series up front, and a locale whose one-shot samples exist only in the
+    series-LAST order fills season/episode but drops series_name. Every locale that
+    carries a one-shot carrier family at all must have a series-first one too.
+    """
+    warnings: list[str] = []
+    for locale, lm in sorted(all_models.items()):
+        intent = intent_by_name(lm, "PlayEpisodeIntent")
+        if intent is None:
+            continue  # a missing intent is a cross-locale error elsewhere
+        prefix = PLAY_EPISODE_ONESHOT_PREFIXES.get(locale)
+        if not prefix:
+            continue
+        one_shot = [s for s in intent.get("samples", []) if s.startswith(prefix)]
+        if not any(_series_first(s) for s in one_shot):
+            state = (
+                f"has no one-shot samples at all (expected carriers starting with '{prefix}')"
+                if not one_shot
+                else "one-shot samples exist only in the series-LAST order"
+            )
+            warnings.append(
+                f"  [{locale}] PlayEpisodeIntent {state}; the one-shot wrapper "
+                f"presents the series FIRST and the slot is dropped (JF-549)"
+            )
+    return warnings
+
+
 def _first_divergence(expected: str, actual: str) -> str:
     """First differing line pair between two serialized models, for warnings."""
     exp_lines = expected.splitlines()
@@ -899,6 +958,17 @@ def main() -> int:
                     print(f"  WARN: {w}")
             else:
                 print("  Every row maps to a model intent and lists only live utterances")
+
+    # Phase 7: PlayEpisodeIntent one-shot word-order lint (JF-549 warning check)
+    if all_models:
+        print("\nPlayEpisode one-shot order lint:")
+        order_warnings = lint_play_episode_one_shot_order(all_models)
+        all_warnings.extend(order_warnings)
+        if order_warnings:
+            for w in order_warnings:
+                print(f"  WARN: {w}")
+        else:
+            print("  Every one-shot carrier family carries both word orders (series-first and series-last)")
 
     # Summary
     print(f"\n{'='*60}")

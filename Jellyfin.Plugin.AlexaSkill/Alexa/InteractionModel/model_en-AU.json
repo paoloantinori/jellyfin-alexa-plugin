@@ -479,7 +479,9 @@
           "watch season {season_number} episode {episode_number} of {series_name}",
           "watch {series_name} season {season_number} episode {episode_number}",
           "to play season {season_number} episode {episode_number} of {series_name}",
-          "to watch season {season_number} episode {episode_number} of {series_name}"
+          "to watch season {season_number} episode {episode_number} of {series_name}",
+          "to play {series_name} season {season_number} episode {episode_number}",
+          "to watch {series_name} season {season_number} episode {episode_number}"
         ]
       },
       {

@@ -458,7 +458,9 @@
           "joue {series_name} saison {season_number} épisode {episode_number}",
           "regarde la saison {season_number} épisode {episode_number} de {series_name}",
           "De jouer la saison {season_number} épisode {episode_number} de {series_name}",
-          "De regarder la saison {season_number} épisode {episode_number} de {series_name}"
+          "De regarder la saison {season_number} épisode {episode_number} de {series_name}",
+          "De jouer {series_name} saison {season_number} épisode {episode_number}",
+          "De regarder {series_name} saison {season_number} épisode {episode_number}"
         ]
       },
       {

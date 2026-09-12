@@ -381,6 +381,22 @@ tests:
       season_number: {}
       episode_number: {}
 
+  # JF-549: series-FIRST infinitive order (the one-shot shape the device sends);
+  # before the fix this order filled season/episode but DROPPED series_name.
+  - utterance: "Di riprodurre breaking bad stagione uno episodio tre"
+    expected_intent: PlayEpisodeIntent
+    expected_slots:
+      series_name: {}
+      season_number: {}
+      episode_number: {}
+
+  - utterance: "riprodurre breaking bad stagione uno episodio tre"
+    expected_intent: PlayEpisodeIntent
+    expected_slots:
+      series_name: {}
+      season_number: {}
+      episode_number: {}
+
   # -------------------------------------------------------------------------
   # 14. BrowseLibraryIntent (browse_category)
   # -------------------------------------------------------------------------

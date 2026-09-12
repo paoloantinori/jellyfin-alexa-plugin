@@ -384,6 +384,9 @@ intents:
       - schau staffel {season_number} folge {episode_number} von {series_name}
       - Zu spielen staffel {season_number} folge {episode_number} von {series_name}
       - Zu schauen staffel {season_number} folge {episode_number} von {series_name}
+      # JF-549: series-first one-shot twins (series-last alone dropped series_name; it-IT live 2026-09-12).
+      - Zu spielen {series_name} staffel {season_number} folge {episode_number}
+      - Zu schauen {series_name} staffel {season_number} folge {episode_number}
   - name: PlayNextEpisodeIntent
     slots:
       - name: series_name

@@ -356,6 +356,16 @@ tests:
       season_number: {}
       episode_number: {}
 
+  # JF-549: series-first one-shot order (the series-last form alone drops
+  # series_name, it-IT live 2026-09-12). The "to play" carrier sits outside
+  # PlaySong's bare "play {song}" theft region documented above.
+  - utterance: "To play breaking bad season one episode three"
+    expected_intent: PlayEpisodeIntent
+    expected_slots:
+      series_name: {}
+      season_number: {}
+      episode_number: {}
+
   # 2026-09-08 live probe (JF-523 matrix): this bare episode phrasing is claimed by PlaySongIntent's free-text 'play {song}' carrier on this marketplace (the en-GB/en-AU/en-US free-text theft; it-IT/en-IN serve it). In-skill invocation context (e2e) still routes PlayEpisodeIntent correctly (JF-298 divergence; e2e pinned separately). Pinned to the observed winner to guard against further drift.
   - utterance: "Play stranger things season two episode one"
     expected_intent: PlaySongIntent

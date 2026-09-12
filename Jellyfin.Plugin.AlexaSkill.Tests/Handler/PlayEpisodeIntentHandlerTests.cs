@@ -144,8 +144,13 @@ public class PlayEpisodeIntentHandlerTests : PluginTestBase
         Assert.False(handler.CanHandle(request));
     }
 
+    /// <summary>
+    /// JF-549 (live incident 2026-09-12; full story in PlayEpisodeIntentHandler):
+    /// the empty-series_name response must ELICIT series_name (Dialog.ElicitSlot,
+    /// open session, reprompt), never a Tell-shaped question with the mic closed.
+    /// </summary>
     [Fact]
-    public async Task HandleAsync_MissingSeriesName_ReturnsPrompt()
+    public async Task HandleAsync_MissingSeriesName_ElicitsSeriesNameWithOpenSession()
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest(seasonNumber: "4", episodeNumber: "10");
@@ -156,7 +161,45 @@ public class PlayEpisodeIntentHandlerTests : PluginTestBase
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
         Assert.NotNull(response);
+        TestHelpers.AssertSessionOpen(response, "a question must keep the session open or the mic never listens");
+
+        var elicit = response.Response.Directives?.FirstOrDefault(d => d.Type == "Dialog.ElicitSlot") as ElicitSlotDirective;
+        Assert.NotNull(elicit);
+        Assert.Equal("series_name", elicit.SlotToElicit);
+        Assert.Equal(IntentNames.PlayEpisode, elicit.UpdatedIntent.Name);
+        // Amazon rejects a partial updatedIntent (live INVALID_RESPONSE 2026-08-28):
+        // every PlayEpisode slot must be declared.
+        Assert.Equal(
+            new[] { "series_name", "season_number", "episode_number" }.OrderBy(s => s),
+            elicit.UpdatedIntent.Slots.Keys.OrderBy(s => s));
+
+        Assert.NotNull(response.Response.Reprompt);
+        Assert.Contains("series", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-549 elicitation-trap escape hatch: while the series elicit is open, Alexa
+    /// captures the next utterance INTO the slot, so a bare "stop" arrives as
+    /// series_name="stop" with dialogState IN_PROGRESS (the FindSong trap regime,
+    /// live 2026-08-28). That must cancel, not search for a series named "stop".
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_CancelWordCapturedDuringOpenElicit_EndsSession()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(seriesName: "stop", dialogState: "IN_PROGRESS");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.True(response.Response.ShouldEndSession, "a cancel must end the session");
         response.Tells();
+        Assert.DoesNotContain(response.Response.Directives ?? new List<IDirective>(), d => d.Type == "Dialog.ElicitSlot");
+        // The hatch must not have run a search: no library interaction observed.
+        _libraryManagerMock.VerifyNoOtherCalls();
     }
 
     [Fact]
@@ -402,6 +445,8 @@ public class PlayEpisodeIntentHandlerTests : PluginTestBase
     [Fact]
     public async Task HandleAsync_DialogStarted_ElicitsSeriesName()
     {
+        // JF-549: a fresh STARTED request with no slots elicits series_name the same
+        // way as a COMPLETED miss (the elicit is manual-dialog, never Delegate).
         var handler = CreateHandler();
         var request = CreateIntentRequest(dialogState: "STARTED");
         var context = CreateContext();
@@ -411,7 +456,8 @@ public class PlayEpisodeIntentHandlerTests : PluginTestBase
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
         Assert.NotNull(response);
-        Assert.True(response.Response.ShouldEndSession);
+        Assert.False(response.Response.ShouldEndSession);
+        Assert.Contains(response.Response.Directives ?? new List<IDirective>(), d => d.Type == "Dialog.ElicitSlot");
         Assert.DoesNotContain(response.Response.Directives ?? new List<IDirective>(), d => d.Type == "Dialog.Delegate");
     }
 

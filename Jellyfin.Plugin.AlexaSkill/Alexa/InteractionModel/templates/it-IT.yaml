@@ -1042,6 +1042,9 @@ templates:
       # ("chiedi a mia collezione di mettere la stagione 1 episodio 1 di X").
       - "{imperative} la stagione {season_number} episodio {episode_number} di {series_name}"
       - "{infinitive} la stagione {season_number} episodio {episode_number} di {series_name}"
+      # JF-549: series-FIRST infinitive twin; the one-shot wrapper presents the
+      # series up front and the series-last forms alone dropped series_name (live 2026-09-12).
+      - "{infinitive} {series_name} stagione {season_number} episodio {episode_number}"
     slots:
       - name: series_name
         type: SeriesName

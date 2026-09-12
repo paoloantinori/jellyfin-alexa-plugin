@@ -473,6 +473,9 @@ intents:
       - watch {series_name} season {season_number} episode {episode_number}
       - to play season {season_number} episode {episode_number} of {series_name}
       - to watch season {season_number} episode {episode_number} of {series_name}
+      # JF-549: series-first one-shot twins (series-last alone dropped series_name; it-IT live 2026-09-12).
+      - to play {series_name} season {season_number} episode {episode_number}
+      - to watch {series_name} season {season_number} episode {episode_number}
   - name: PlayNextEpisodeIntent
     slots:
       - name: series_name
