@@ -26,3 +26,13 @@ tests:
     expected_intent: SetReminderIntent
     expected_slots:
       reminder_time: {}
+
+  # ------------------------------------------------------------------------
+  # JF-399 English-inertia resolution (2026-09-12): FindSong/FindSongByArtist
+  # translated to Arabic; probe-verified. PlayBook carriers are stolen by
+  # PlayVideoIntent/PlayArtistSongsIntent (JF-406 class) - no PlayBook entry
+  # assertable yet.
+  # ------------------------------------------------------------------------
+  - utterance: "ابحث عن أغنية"
+    expected_intent: FindSongIntent
+    expected_slots: {}

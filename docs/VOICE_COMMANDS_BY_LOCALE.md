@@ -224,14 +224,14 @@ Complete phrase list (300 phrases across 59 commands):
 
 **Play an audiobook**
 
-- `play <عنوان الكتاب الصوتي>`
-- `play the book <عنوان الكتاب الصوتي>`
-- `play audiobook <عنوان الكتاب الصوتي>`
-- `play the audiobook <عنوان الكتاب الصوتي>`
-- `listen to <عنوان الكتاب الصوتي>`
-- `listen to the book <عنوان الكتاب الصوتي>`
-- `listen to audiobook <عنوان الكتاب الصوتي>`
-- `listen to the audiobook <عنوان الكتاب الصوتي>`
+- `شغل <عنوان الكتاب الصوتي>`
+- `شغل الكتاب <عنوان الكتاب الصوتي>`
+- `شغل الكتاب الصوتي <عنوان الكتاب الصوتي>`
+- `استمع إلى <عنوان الكتاب الصوتي>`
+- `استمع إلى الكتاب <عنوان الكتاب الصوتي>`
+- `استمع إلى الكتاب الصوتي <عنوان الكتاب الصوتي>`
+- `أريد الاستماع إلى <عنوان الكتاب الصوتي>`
+- `شغل الكتاب المسموع <عنوان الكتاب الصوتي>`
 
 #### Radio and live TV
 
@@ -286,25 +286,25 @@ Complete phrase list (300 phrases across 59 commands):
 
 **Find a song (multi-turn conversation)**
 
-- `find a song`
-- `help me find a song`
-- `search for a song`
-- `I'm looking for a song`
-- `I need to find a song`
-- `find me a song`
-- `help me search for a song`
-- `I want to find a song`
-- `find a song called <كلمات من عنوان الأغنية>`
-- `search for a song called <كلمات من عنوان الأغنية>`
-- `find a song about <كلمات من عنوان الأغنية>`
-- `I'm looking for a song called <كلمات من عنوان الأغنية>`
+- `ابحث عن أغنية`
+- `ساعدني في البحث عن أغنية`
+- `ابحث لي عن أغنية`
+- `أبحث عن أغنية`
+- `أريد أن أجد أغنية`
+- `أحتاج أن أجد أغنية`
+- `ساعدني في العثور على أغنية`
+- `أريد البحث عن أغنية`
+- `ابحث عن أغنية اسمها <كلمات من عنوان الأغنية>`
+- `ابحث عن أغنية عن <كلمات من عنوان الأغنية>`
+- `أبحث عن أغنية اسمها <كلمات من عنوان الأغنية>`
+- `اعثر على أغنية`
 
 **Find a song by an artist**
 
-- `find a song by <اسم الفنان>`
-- `help me find a song by <اسم الفنان>`
-- `search for a song by <اسم الفنان>`
-- `I'm looking for a song by <اسم الفنان>`
+- `ابحث عن أغنية لـ <اسم الفنان>`
+- `ساعدني في البحث عن أغنية لـ <اسم الفنان>`
+- `اعثر على أغنية لـ <اسم الفنان>`
+- `أبحث عن أغنية لـ <اسم الفنان>`
 
 #### Queue and repeat
 
@@ -766,14 +766,14 @@ Complete phrase list (362 phrases across 59 commands):
 
 **Play an audiobook**
 
-- `play <titel van het luisterboek>`
-- `play the book <titel van het luisterboek>`
-- `play audiobook <titel van het luisterboek>`
-- `play the audiobook <titel van het luisterboek>`
-- `listen to <titel van het luisterboek>`
-- `listen to the book <titel van het luisterboek>`
-- `listen to audiobook <titel van het luisterboek>`
-- `listen to the audiobook <titel van het luisterboek>`
+- `speel <titel van het luisterboek>`
+- `speel het boek <titel van het luisterboek>`
+- `speel luisterboek <titel van het luisterboek>`
+- `speel het luisterboek <titel van het luisterboek>`
+- `luister naar <titel van het luisterboek>`
+- `luister naar het boek <titel van het luisterboek>`
+- `luister naar luisterboek <titel van het luisterboek>`
+- `luister naar het luisterboek <titel van het luisterboek>`
 
 #### Radio and live TV
 
@@ -838,25 +838,25 @@ Complete phrase list (362 phrases across 59 commands):
 
 **Find a song (multi-turn conversation)**
 
-- `find a song`
-- `help me find a song`
-- `search for a song`
-- `I'm looking for a song`
-- `I need to find a song`
-- `find me a song`
-- `help me search for a song`
-- `I want to find a song`
-- `find a song called <woorden uit de songtitel>`
-- `search for a song called <woorden uit de songtitel>`
-- `find a song about <woorden uit de songtitel>`
-- `I'm looking for a song called <woorden uit de songtitel>`
+- `vind een nummer`
+- `help me een nummer te vinden`
+- `zoek een nummer`
+- `ik zoek een nummer`
+- `ik moet een nummer vinden`
+- `vind me een nummer`
+- `help me een nummer te zoeken`
+- `ik wil een nummer vinden`
+- `vind een nummer genaamd <woorden uit de songtitel>`
+- `zoek een nummer genaamd <woorden uit de songtitel>`
+- `vind een nummer over <woorden uit de songtitel>`
+- `ik zoek een nummer genaamd <woorden uit de songtitel>`
 
 **Find a song by an artist**
 
-- `find a song by <naam van de artiest>`
-- `help me find a song by <naam van de artiest>`
-- `search for a song by <naam van de artiest>`
-- `I'm looking for a song by <naam van de artiest>`
+- `vind een nummer van <naam van de artiest>`
+- `help me een nummer te vinden van <naam van de artiest>`
+- `zoek een nummer van <naam van de artiest>`
+- `ik zoek een nummer van <naam van de artiest>`
 
 #### Queue and repeat
 
@@ -6707,14 +6707,14 @@ Complete phrase list (322 phrases across 59 commands):
 
 **Play an audiobook**
 
-- `play <ऑडियोबुक का नाम>`
-- `play the book <ऑडियोबुक का नाम>`
-- `play audiobook <ऑडियोबुक का नाम>`
-- `play the audiobook <ऑडियोबुक का नाम>`
-- `listen to <ऑडियोबुक का नाम>`
-- `listen to the book <ऑडियोबुक का नाम>`
-- `listen to audiobook <ऑडियोबुक का नाम>`
-- `listen to the audiobook <ऑडियोबुक का नाम>`
+- `<ऑडियोबुक का नाम> चलाओ`
+- `किताब <ऑडियोबुक का नाम> चलाओ`
+- `ऑडियोबुक <ऑडियोबुक का नाम> चलाओ`
+- `<ऑडियोबुक का नाम> सुनो`
+- `किताब <ऑडियोबुक का नाम> सुनो`
+- `ऑडियोबुक <ऑडियोबुक का नाम> सुनो`
+- `मैं <ऑडियोबुक का नाम> सुनना चाहता हूँ`
+- `ऑडियोबुक <ऑडियोबुक का नाम> सुनाओ`
 
 #### Radio and live TV
 
@@ -6773,25 +6773,25 @@ Complete phrase list (322 phrases across 59 commands):
 
 **Find a song (multi-turn conversation)**
 
-- `find a song`
-- `help me find a song`
-- `search for a song`
-- `I'm looking for a song`
-- `I need to find a song`
-- `find me a song`
-- `help me search for a song`
-- `I want to find a song`
-- `find a song called <गाने के नाम के शब्द>`
-- `search for a song called <गाने के नाम के शब्द>`
-- `find a song about <गाने के नाम के शब्द>`
-- `I'm looking for a song called <गाने के नाम के शब्द>`
+- `गाना खोजो`
+- `मेरे गाना खोजने में मदद करो`
+- `गाना खोजना है`
+- `मैं गाना खोज रहा हूँ`
+- `मुझे गाना खोजना है`
+- `मेरे लिए गाना खोजो`
+- `मैं गाना खोजना चाहता हूँ`
+- `<गाने के नाम के शब्द> नाम का गाना खोजो`
+- `<गाने के नाम के शब्द> वाला गाना खोजो`
+- `<गाने के नाम के शब्द> नाम का गाना खोज रहा हूँ`
+- `गाना ढूंढो`
+- `एक गाना खोजो`
 
 **Find a song by an artist**
 
-- `find a song by <कलाकार का नाम>`
-- `help me find a song by <कलाकार का नाम>`
-- `search for a song by <कलाकार का नाम>`
-- `I'm looking for a song by <कलाकार का नाम>`
+- `<कलाकार का नाम> का गाना खोजो`
+- `<कलाकार का नाम> का गाना खोजने में मदद करो`
+- `<कलाकार का नाम> का गाना ढूंढो`
+- `मैं <कलाकार का नाम> का गाना खोज रहा हूँ`
 
 #### Queue and repeat
 
@@ -8882,14 +8882,14 @@ Complete phrase list (303 phrases across 59 commands):
 
 **Play an audiobook**
 
-- `play <オーディオブック名>`
-- `play the book <オーディオブック名>`
-- `play audiobook <オーディオブック名>`
-- `play the audiobook <オーディオブック名>`
-- `listen to <オーディオブック名>`
-- `listen to the book <オーディオブック名>`
-- `listen to audiobook <オーディオブック名>`
-- `listen to the audiobook <オーディオブック名>`
+- `<オーディオブック名> を再生して`
+- `本 <オーディオブック名> を再生して`
+- `オーディオブック <オーディオブック名> を再生して`
+- `<オーディオブック名> を聴かせて`
+- `本 <オーディオブック名> を聴かせて`
+- `オーディオブック <オーディオブック名> を聴かせて`
+- `<オーディオブック名> を聞きたい`
+- `オーディオブック <オーディオブック名> を聞きたい`
 
 #### Radio and live TV
 
@@ -8943,25 +8943,25 @@ Complete phrase list (303 phrases across 59 commands):
 
 **Find a song (multi-turn conversation)**
 
-- `find a song`
-- `help me find a song`
-- `search for a song`
-- `I'm looking for a song`
-- `I need to find a song`
-- `find me a song`
-- `help me search for a song`
-- `I want to find a song`
-- `find a song called <曲名のキーワード>`
-- `search for a song called <曲名のキーワード>`
-- `find a song about <曲名のキーワード>`
-- `I'm looking for a song called <曲名のキーワード>`
+- `曲を探して`
+- `曲を探すのを手伝って`
+- `曲を検索して`
+- `曲を探しているの`
+- `曲を見つけたいの`
+- `曲を探してちょうだい`
+- `曲を検索するのを手伝って`
+- `曲が見つけたい`
+- `<曲名のキーワード> という曲を探して`
+- `<曲名のキーワード> という曲を検索して`
+- `<曲名のキーワード> についての曲を探して`
+- `<曲名のキーワード> という曲を探しているの`
 
 **Find a song by an artist**
 
-- `find a song by <アーティスト名>`
-- `help me find a song by <アーティスト名>`
-- `search for a song by <アーティスト名>`
-- `I'm looking for a song by <アーティスト名>`
+- `<アーティスト名> の曲を探して`
+- `<アーティスト名> の曲を探すのを手伝って`
+- `<アーティスト名> の曲を検索して`
+- `<アーティスト名> の曲を探しているの`
 
 #### Queue and repeat
 

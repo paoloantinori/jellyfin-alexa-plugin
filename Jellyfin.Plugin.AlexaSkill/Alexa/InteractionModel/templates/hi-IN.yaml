@@ -25,14 +25,11 @@
 #   (म्यूज़िक, सीज़न, रेटिंग, ज़ class); NO ZWJ/U+200D or ZWNJ/U+200C
 #   anywhere, so no conjunct depends on joiners; NO danda (।)
 #   punctuation (samples carry no sentence-final marks at all).
-# - English inertia, NOT a market decision: exactly 24 samples are
-#   pure English. PlayBookIntent is entirely English (8 samples), and
-#   FindSongIntent (12) + FindSongByArtistIntent (4) are byte-identical
-#   to es-US's English sets (the 036f7eae copy-inertia; JF-399 tracks
-#   the open question). The Decade VALUES are also English inertia
-#   (50s ... 2020s untranslated, ASCII digits, numeric synonyms).
-#   Transcribed as committed; do not "clean up" here without a product
-#   decision.
+# - English inertia MOSTLY RESOLVED 2026-09-12 (JF-399 executable half):
+#   the former 24 pure-English samples (PlayBook 8, FindSong 12,
+#   FindSongByArtist 4) are now native Hindi. The Decade VALUES remain
+#   English-with-Devanagari-synonyms: swapping value/synonym needs
+#   handler-side decade-resolution work first (the open sub-item).
 # - The 9-type roster and order match pt-BR's: Mood, LibraryQueryType,
 #   MediaType, BrowseCategory, SeriesName, TimePeriod, MediaInfoType,
 #   Decade, AudiobookTitle. SeriesName carries 8 values with 'Money
@@ -561,14 +558,14 @@ intents:
       - name: book
         type: AudiobookTitle
     samples:
-      - play {book}
-      - play the book {book}
-      - play audiobook {book}
-      - play the audiobook {book}
-      - listen to {book}
-      - listen to the book {book}
-      - listen to audiobook {book}
-      - listen to the audiobook {book}
+      - '{book} चलाओ'
+      - 'किताब {book} चलाओ'
+      - 'ऑडियोबुक {book} चलाओ'
+      - '{book} सुनो'
+      - 'किताब {book} सुनो'
+      - 'ऑडियोबुक {book} सुनो'
+      - 'मैं {book} सुनना चाहता हूँ'
+      - 'ऑडियोबुक {book} सुनाओ'
   - name: ShowMoreIntent
     samples:
       - और दिखाओ
@@ -581,27 +578,27 @@ intents:
     slots: []
   - name: FindSongIntent
     samples:
-      - find a song
-      - help me find a song
-      - search for a song
-      - I'm looking for a song
-      - I need to find a song
-      - find me a song
-      - help me search for a song
-      - I want to find a song
-      - find a song called {titleKeywords}
-      - search for a song called {titleKeywords}
-      - find a song about {titleKeywords}
-      - I'm looking for a song called {titleKeywords}
+      - गाना खोजो
+      - मेरे गाना खोजने में मदद करो
+      - गाना खोजना है
+      - मैं गाना खोज रहा हूँ
+      - मुझे गाना खोजना है
+      - मेरे लिए गाना खोजो
+      - मैं गाना खोजना चाहता हूँ
+      - '{titleKeywords} नाम का गाना खोजो'
+      - '{titleKeywords} वाला गाना खोजो'
+      - '{titleKeywords} नाम का गाना खोज रहा हूँ'
+      - गाना ढूंढो
+      - एक गाना खोजो
     slots:
       - name: titleKeywords
         type: AMAZON.SearchQuery
   - name: FindSongByArtistIntent
     samples:
-      - find a song by {musician}
-      - help me find a song by {musician}
-      - search for a song by {musician}
-      - I'm looking for a song by {musician}
+      - '{musician} का गाना खोजो'
+      - '{musician} का गाना खोजने में मदद करो'
+      - '{musician} का गाना ढूंढो'
+      - 'मैं {musician} का गाना खोज रहा हूँ'
     slots:
       - name: musician
         type: AMAZON.Musician

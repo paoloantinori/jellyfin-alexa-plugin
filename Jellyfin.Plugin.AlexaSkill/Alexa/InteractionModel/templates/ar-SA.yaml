@@ -26,12 +26,9 @@
 #   ٍ (U+064D, 7), shadda ّ (U+0651, 2). Slot refs sit at logical
 #   positions inside RTL text (شغل موسيقى {mood}); the file stores
 #   logical order exactly as committed.
-# - English inertia, NOT a market decision: exactly 24 samples are
-#   pure English. PlayBookIntent is entirely English (8 samples), and
-#   FindSongIntent (12) + FindSongByArtistIntent (4) are byte-identical
-#   to es-US's English sets (the 036f7eae copy-inertia; JF-399 tracks
-#   the open question). Transcribed as committed; do not "clean up"
-#   here without a product decision.
+# - English inertia RESOLVED 2026-09-12 (JF-399 executable half): the
+#   former 24 pure-English samples (PlayBook 8, FindSong 12,
+#   FindSongByArtist 4) are now native Arabic.
 # - The 9-type roster and order match pt-BR's: Mood, LibraryQueryType,
 #   MediaType, BrowseCategory, SeriesName, TimePeriod, MediaInfoType,
 #   Decade, AudiobookTitle. SeriesName carries 8 values with 'Money
@@ -539,14 +536,14 @@ intents:
       - name: book
         type: AudiobookTitle
     samples:
-      - play {book}
-      - play the book {book}
-      - play audiobook {book}
-      - play the audiobook {book}
-      - listen to {book}
-      - listen to the book {book}
-      - listen to audiobook {book}
-      - listen to the audiobook {book}
+      - 'شغل {book}'
+      - 'شغل الكتاب {book}'
+      - 'شغل الكتاب الصوتي {book}'
+      - 'استمع إلى {book}'
+      - 'استمع إلى الكتاب {book}'
+      - 'استمع إلى الكتاب الصوتي {book}'
+      - 'أريد الاستماع إلى {book}'
+      - 'شغل الكتاب المسموع {book}'
   - name: ShowMoreIntent
     samples:
       - أظهر المزيد
@@ -559,27 +556,27 @@ intents:
     slots: []
   - name: FindSongIntent
     samples:
-      - find a song
-      - help me find a song
-      - search for a song
-      - I'm looking for a song
-      - I need to find a song
-      - find me a song
-      - help me search for a song
-      - I want to find a song
-      - find a song called {titleKeywords}
-      - search for a song called {titleKeywords}
-      - find a song about {titleKeywords}
-      - I'm looking for a song called {titleKeywords}
+      - ابحث عن أغنية
+      - ساعدني في البحث عن أغنية
+      - ابحث لي عن أغنية
+      - أبحث عن أغنية
+      - أريد أن أجد أغنية
+      - أحتاج أن أجد أغنية
+      - ساعدني في العثور على أغنية
+      - أريد البحث عن أغنية
+      - 'ابحث عن أغنية اسمها {titleKeywords}'
+      - 'ابحث عن أغنية عن {titleKeywords}'
+      - 'أبحث عن أغنية اسمها {titleKeywords}'
+      - اعثر على أغنية
     slots:
       - name: titleKeywords
         type: AMAZON.SearchQuery
   - name: FindSongByArtistIntent
     samples:
-      - find a song by {musician}
-      - help me find a song by {musician}
-      - search for a song by {musician}
-      - I'm looking for a song by {musician}
+      - 'ابحث عن أغنية لـ {musician}'
+      - 'ساعدني في البحث عن أغنية لـ {musician}'
+      - 'اعثر على أغنية لـ {musician}'
+      - 'أبحث عن أغنية لـ {musician}'
     slots:
       - name: musician
         type: AMAZON.Musician

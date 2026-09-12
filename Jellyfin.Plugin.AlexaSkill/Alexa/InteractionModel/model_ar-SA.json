@@ -721,14 +721,14 @@
           }
         ],
         "samples": [
-          "play {book}",
-          "play the book {book}",
-          "play audiobook {book}",
-          "play the audiobook {book}",
-          "listen to {book}",
-          "listen to the book {book}",
-          "listen to audiobook {book}",
-          "listen to the audiobook {book}"
+          "شغل {book}",
+          "شغل الكتاب {book}",
+          "شغل الكتاب الصوتي {book}",
+          "استمع إلى {book}",
+          "استمع إلى الكتاب {book}",
+          "استمع إلى الكتاب الصوتي {book}",
+          "أريد الاستماع إلى {book}",
+          "شغل الكتاب المسموع {book}"
         ]
       },
       {
@@ -747,18 +747,18 @@
       {
         "name": "FindSongIntent",
         "samples": [
-          "find a song",
-          "help me find a song",
-          "search for a song",
-          "I'm looking for a song",
-          "I need to find a song",
-          "find me a song",
-          "help me search for a song",
-          "I want to find a song",
-          "find a song called {titleKeywords}",
-          "search for a song called {titleKeywords}",
-          "find a song about {titleKeywords}",
-          "I'm looking for a song called {titleKeywords}"
+          "ابحث عن أغنية",
+          "ساعدني في البحث عن أغنية",
+          "ابحث لي عن أغنية",
+          "أبحث عن أغنية",
+          "أريد أن أجد أغنية",
+          "أحتاج أن أجد أغنية",
+          "ساعدني في العثور على أغنية",
+          "أريد البحث عن أغنية",
+          "ابحث عن أغنية اسمها {titleKeywords}",
+          "ابحث عن أغنية عن {titleKeywords}",
+          "أبحث عن أغنية اسمها {titleKeywords}",
+          "اعثر على أغنية"
         ],
         "slots": [
           {
@@ -770,10 +770,10 @@
       {
         "name": "FindSongByArtistIntent",
         "samples": [
-          "find a song by {musician}",
-          "help me find a song by {musician}",
-          "search for a song by {musician}",
-          "I'm looking for a song by {musician}"
+          "ابحث عن أغنية لـ {musician}",
+          "ساعدني في البحث عن أغنية لـ {musician}",
+          "اعثر على أغنية لـ {musician}",
+          "أبحث عن أغنية لـ {musician}"
         ],
         "slots": [
           {

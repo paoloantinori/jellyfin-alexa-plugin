@@ -724,14 +724,14 @@
           }
         ],
         "samples": [
-          "play {book}",
-          "play the book {book}",
-          "play audiobook {book}",
-          "play the audiobook {book}",
-          "listen to {book}",
-          "listen to the book {book}",
-          "listen to audiobook {book}",
-          "listen to the audiobook {book}"
+          "{book} を再生して",
+          "本 {book} を再生して",
+          "オーディオブック {book} を再生して",
+          "{book} を聴かせて",
+          "本 {book} を聴かせて",
+          "オーディオブック {book} を聴かせて",
+          "{book} を聞きたい",
+          "オーディオブック {book} を聞きたい"
         ]
       },
       {
@@ -751,18 +751,18 @@
       {
         "name": "FindSongIntent",
         "samples": [
-          "find a song",
-          "help me find a song",
-          "search for a song",
-          "I'm looking for a song",
-          "I need to find a song",
-          "find me a song",
-          "help me search for a song",
-          "I want to find a song",
-          "find a song called {titleKeywords}",
-          "search for a song called {titleKeywords}",
-          "find a song about {titleKeywords}",
-          "I'm looking for a song called {titleKeywords}"
+          "曲を探して",
+          "曲を探すのを手伝って",
+          "曲を検索して",
+          "曲を探しているの",
+          "曲を見つけたいの",
+          "曲を探してちょうだい",
+          "曲を検索するのを手伝って",
+          "曲が見つけたい",
+          "{titleKeywords} という曲を探して",
+          "{titleKeywords} という曲を検索して",
+          "{titleKeywords} についての曲を探して",
+          "{titleKeywords} という曲を探しているの"
         ],
         "slots": [
           {
@@ -774,10 +774,10 @@
       {
         "name": "FindSongByArtistIntent",
         "samples": [
-          "find a song by {musician}",
-          "help me find a song by {musician}",
-          "search for a song by {musician}",
-          "I'm looking for a song by {musician}"
+          "{musician} の曲を探して",
+          "{musician} の曲を探すのを手伝って",
+          "{musician} の曲を検索して",
+          "{musician} の曲を探しているの"
         ],
         "slots": [
           {

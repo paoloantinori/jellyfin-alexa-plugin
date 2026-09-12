@@ -27,8 +27,8 @@ Invocation name: **"jellyfin player"**
 | Browse Library | `{browse_category}` · `تصفح {browse_category}` · `أرني {browse_category}` · `أعرض {browse_category}` · `ما {browse_category} لدي` · `ما {browse_category} الموجودة` |
 | Clear Queue | `امسح قائمة الانتظار` · `أفرغ قائمة الانتظار` · `أزل كل شيء من قائمة الانتظار` |
 | Continue Watching | `أكمل المشاهدة` · `أكمل الاستماع` · `أكمل من حيث توقفت` · `ما كنت أشاهده` · `أكمل` |
-| Find Song | `find a song` · `find a song called {titleKeywords}` · `help me find a song` · `search for a song` · `I'm looking for a song` · `I need to find a song` |
-| Find Song By Artist | `find a song by {musician}` · `help me find a song by {musician}` · `search for a song by {musician}` · `I'm looking for a song by {musician}` |
+| Find Song | `ابحث عن أغنية` · `ابحث عن أغنية اسمها {titleKeywords}` · `ساعدني في البحث عن أغنية` · `ابحث لي عن أغنية` · `أبحث عن أغنية` · `أريد أن أجد أغنية` |
+| Find Song By Artist | `ابحث عن أغنية لـ {musician}` · `ساعدني في البحث عن أغنية لـ {musician}` · `اعثر على أغنية لـ {musician}` · `أبحث عن أغنية لـ {musician}` |
 | Follow Me | `تابعني` · `استمر في التشغيل` · `انقل التشغيل` |
 | Go To Chapter | `الفصل التالي` · `اذهب إلى الفصل {chapter_number}` · `الفصل السابق` · `انتقل إلى الفصل {chapter_number}` · `تخطى فصلاً` |
 | In Progress Media List | `ماذا كنت أستمع` · `ماذا كنت أشاهد` · `ما الذي قيد التقدم` · `أظهر تقدمي` · `ما كنت ألعب` · `ما الذي بدأته` |
@@ -39,7 +39,7 @@ Invocation name: **"jellyfin player"**
 | Media Info | `ما اسم الأغنية` · `ما {media_info_type} هذا` · `ما اسم الفيديو` · `ما الذي يشغل الآن` · `أخبرني عن {media_info_type}` · `من يغني هذا` |
 | Play Album | `شغل الألبوم {album}` · `شغل الألبوم {album} لـ {musician}` · `شغل ألبوم {musician}` · `شغل ألبوم {album}` · `شغل ألبوم {album} لـ {musician}` · `استمع إلى الألبوم {album}` |
 | Play Artist Songs | `شغل أغاني {musician}` · `شغل موسيقى {musician}` · `شغل أغانٍ لـ {musician}` · `استمع إلى {musician}` · `استمع إلى أغاني {musician}` · `استمع إلى موسيقى {musician}` |
-| Play Book | `play {book}` · `play the book {book}` · `play audiobook {book}` · `play the audiobook {book}` · `listen to {book}` · `listen to the book {book}` |
+| Play Book | `شغل {book}` · `شغل الكتاب {book}` · `شغل الكتاب الصوتي {book}` · `استمع إلى {book}` · `استمع إلى الكتاب {book}` · `استمع إلى الكتاب الصوتي {book}` |
 | Play By Decade | `شغل أغانٍ من {decade}` · `شغل {genre} من {decade}` · `شغل أغاني {decade}` · `شغل موسيقى {decade}` · `شغل أفضل {decade}` · `أريد سماع موسيقى {decade}` |
 | Play By Genre | `شغل موسيقى {genre}` · `شغل أغاني {genre}` · `شغل {genre}` · `أريد الاستماع إلى {genre}` · `أعطني موسيقى {genre}` · `هل يمكنك تشغيل {genre}` |
 | Play Channel | `شغل القناة {channel}` · `شغل الراديو {channel}` |
@@ -650,8 +650,8 @@ Invocation name: **"jellyfin player"**
 | Browse Library | `{browse_category}` · `{browse_category} ब्राउज़ करो` · `मुझे {browse_category} दिखाओ` · `{browse_category} की लिस्ट दो` · `मेरे पास कौन से {browse_category} हैं` · `क्या {browse_category} हैं` |
 | Clear Queue | `कतार साफ़ करो` · `कतार खाली करो` · `कतार से सब हटाओ` |
 | Continue Watching | `देखना जारी रखो` · `सुनना जारी रखो` · `जहाँ छोड़ा था वहाँ से फिर से शुरू करो` · `मैं क्या देख रहा था` · `जारी रखो` · `जारी` |
-| Find Song | `find a song` · `find a song called {titleKeywords}` · `help me find a song` · `search for a song` · `I'm looking for a song` · `I need to find a song` |
-| Find Song By Artist | `find a song by {musician}` · `help me find a song by {musician}` · `search for a song by {musician}` · `I'm looking for a song by {musician}` |
+| Find Song | `गाना खोजो` · `{titleKeywords} नाम का गाना खोजो` · `मेरे गाना खोजने में मदद करो` · `गाना खोजना है` · `मैं गाना खोज रहा हूँ` · `मुझे गाना खोजना है` |
+| Find Song By Artist | `{musician} का गाना खोजो` · `{musician} का गाना खोजने में मदद करो` · `{musician} का गाना ढूंढो` · `मैं {musician} का गाना खोज रहा हूँ` |
 | Follow Me | `मेरे साथ आओ` · `चलाना जारी रखो` · `जहां छोड़ा थे वहां से शुरू करो` |
 | Go To Chapter | `अगला चैप्टर` · `चैप्टर {chapter_number} पर जाओ` · `पिछला चैप्टर` · `चैप्टर {chapter_number} पर स्किप करो` · `एक चैप्टर आगे जाओ` · `एक चैप्टर पीछे जाओ` |
 | In Progress Media List | `मैं क्या सुन रहा हूँ` · `मैं क्या देख रहा हूँ` · `क्या प्रगति पर है` · `मेरी प्रगति दिखाओ` · `मैं क्या चला रहा था` · `मेरी प्रगति पर मीडिया दिखाओ` |
@@ -662,7 +662,7 @@ Invocation name: **"jellyfin player"**
 | Media Info | `गाने का नाम क्या है` · `यह {media_info_type} क्या है` · `वीडियो का नाम क्या है` · `म्यूज़िक का नाम क्या है` · `गाने का शीर्षक क्या है` · `अभी क्या चल रहा है` |
 | Play Album | `एल्बम {album} चलाओ` · `एल्बम {album} {musician} का चलाओ` · `{musician} का एल्बम चलाओ` · `एल्बम {album} सुनो` · `{musician} का एल्बम सुनो` |
 | Play Artist Songs | `{musician} के गाने चलाओ` · `{musician} की म्यूज़िक चलाओ` · `{musician} के ट्रैक चलाओ` · `{musician} सुनो` · `{musician} के गाने सुनो` · `{musician} की म्यूज़िक सुनो` |
-| Play Book | `play {book}` · `play the book {book}` · `play audiobook {book}` · `play the audiobook {book}` · `listen to {book}` · `listen to the book {book}` |
+| Play Book | `{book} चलाओ` · `किताब {book} चलाओ` · `ऑडियोबुक {book} चलाओ` · `{book} सुनो` · `किताब {book} सुनो` · `ऑडियोबुक {book} सुनो` |
 | Play By Decade | `{decade} के गाने चलाओ` · `{genre} {decade} से चलाओ` · `{decade} के ट्रैक चलाओ` · `{decade} की म्यूज़िक चलाओ` · `{decade} हिट्स चलाओ` · `मैं {decade} म्यूज़िक सुनना चाहता हूँ` |
 | Play By Genre | `{genre} म्यूज़िक चलाओ` · `{genre} गाने चलाओ` · `मुझे {genre} म्यूज़िक चलाओ` · `मैं {genre} सुनना चाहता हूँ` · `{genre} चलाओ` · `मुझे {genre} म्यूज़िक दो` |
 | Play Channel | `चैनल {channel} चलाओ` · `रेडियो {channel} चलाओ` |
@@ -755,8 +755,8 @@ Invocation name: **"jellyfin player"**
 | Browse Library | `{browse_category}` · `{browse_category} をブラウズして` · `{browse_category} を見せて` · `{browse_category} のリスト` · `どんな {browse_category} がある` · `{browse_category} は何がある` |
 | Clear Queue | `キューをクリアして` · `キューを空にして` · `キューから全部消して` |
 | Continue Watching | `続きを見て` · `続きを聴いて` · `途中から再開して` · `何を見てたっけ` · `続き` |
-| Find Song | `find a song` · `find a song called {titleKeywords}` · `help me find a song` · `search for a song` · `I'm looking for a song` · `I need to find a song` |
-| Find Song By Artist | `find a song by {musician}` · `help me find a song by {musician}` · `search for a song by {musician}` · `I'm looking for a song by {musician}` |
+| Find Song | `曲を探して` · `{titleKeywords} という曲を探して` · `曲を探すのを手伝って` · `曲を検索して` · `曲を探しているの` · `曲を見つけたいの` |
+| Find Song By Artist | `{musician} の曲を探して` · `{musician} の曲を探すのを手伝って` · `{musician} の曲を検索して` · `{musician} の曲を探しているの` |
 | Follow Me | `ついてきて` · `再生を続けて` · `続きから再生` · `再生を引き継ぐ` |
 | Go To Chapter | `次のチャプター` · `チャプター {chapter_number} へ行って` · `前のチャプター` · `チャプター {chapter_number} へスキップして` · `チャプターをスキップして` |
 | In Progress Media List | `何聴いてたっけ` · `何見てたっけ` · `進行中のものは` · `進捗を見せて` · `何再生してたっけ` · `開始したものは何` |
@@ -767,7 +767,7 @@ Invocation name: **"jellyfin player"**
 | Media Info | `曲の名前は何` · `{media_info_type} は何` · `ビデオの名前は何` · `音楽の名前は何` · `曲のタイトルは何` · `今何が再生中` |
 | Play Album | `アルバム {album} を再生して` · `アルバム {album} {musician} を再生して` · `{musician} のアルバムを再生して` · `{musician} のアルバムを聴かせて` |
 | Play Artist Songs | `{musician} の曲を再生して` · `{musician} の音楽を再生して` · `{musician} のトラックを再生して` · `{musician} を聴かせて` · `{musician} の曲を聴かせて` · `{musician} を聞きたい` |
-| Play Book | `play {book}` · `play the book {book}` · `play audiobook {book}` · `play the audiobook {book}` · `listen to {book}` · `listen to the book {book}` |
+| Play Book | `{book} を再生して` · `本 {book} を再生して` · `オーディオブック {book} を再生して` · `{book} を聴かせて` · `本 {book} を聴かせて` · `オーディオブック {book} を聴かせて` |
 | Play By Decade | `{decade} の曲を再生して` · `{genre} の {decade} を再生して` · `{decade} の音楽を再生して` · `{decade} のヒットを再生して` · `{decade} の音楽を聴きたい` · `{decade} の曲を聴かせて` |
 | Play By Genre | `{genre} の音楽を再生して` · `{genre} の曲を再生して` · `{genre} を再生して` · `{genre} を聴きたい` · `{genre} の音楽を流して` · `{genre} のストリーム` |
 | Play Channel | `チャンネル {channel} を再生して` · `ラジオ {channel} を再生して` |
@@ -806,8 +806,8 @@ Invocation name: **"jellyfin player"**
 | Browse Library | `{browse_category}` · `alleen {browse_category}` · `ik wil {browse_category}` · `browse {browse_category}` · `laat {browse_category} zien` · `lijst {browse_category}` |
 | Clear Queue | `wis mijn wachtrij` · `wis de wachtrij` · `leeg mijn wachtrij` · `leeg de wachtrij` · `verwijder alles uit mijn wachtrij` |
 | Continue Watching | `verder kijken` · `verder luisteren` · `hervat waar ik was gebleven` · `wat was ik aan het kijken` · `doorgaan` · `verder gaan` |
-| Find Song | `find a song` · `find a song called {titleKeywords}` · `help me find a song` · `search for a song` · `I'm looking for a song` · `I need to find a song` |
-| Find Song By Artist | `find a song by {musician}` · `help me find a song by {musician}` · `search for a song by {musician}` · `I'm looking for a song by {musician}` |
+| Find Song | `vind een nummer` · `vind een nummer genaamd {titleKeywords}` · `help me een nummer te vinden` · `zoek een nummer` · `ik zoek een nummer` · `ik moet een nummer vinden` |
+| Find Song By Artist | `vind een nummer van {musician}` · `help me een nummer te vinden van {musician}` · `zoek een nummer van {musician}` · `ik zoek een nummer van {musician}` |
 | Follow Me | `volg me` · `verder met afspelen` · `neem het over` · `doorgaan met luisteren` |
 | Go To Chapter | `volgend hoofdstuk` · `ga naar hoofdstuk {chapter_number}` · `vorig hoofdstuk` · `spring naar hoofdstuk {chapter_number}` · `een hoofdstuk vooruit` · `een hoofdstuk terug` |
 | In Progress Media List | `waar was ik naar aan het luisteren` · `waar was ik naar aan het kijken` · `wat is in behandeling` · `laat mijn voortgang zien` · `wat was ik aan het afspelen` · `wat heb ik gestart` |
@@ -818,7 +818,7 @@ Invocation name: **"jellyfin player"**
 | Media Info | `hoe heet dit nummer` · `wat is de {media_info_type} hiervan` · `hoe heet de video` · `hoe heet de muziek` · `wat is de titel van het nummer` · `wat speelt er nu` |
 | Play Album | `speel het album {album}` · `speel het album {album} van {musician}` · `een album van {musician}` · `speel album {album}` · `luister naar het album {album}` · `speel een album van {musician}` |
 | Play Artist Songs | `speel nummers van {musician}` · `speel muziek van {musician}` · `speel tracks van {musician}` · `speel liedjes van {musician}` · `luister naar {musician}` · `luister naar nummers van {musician}` |
-| Play Book | `play {book}` · `play the book {book}` · `play audiobook {book}` · `play the audiobook {book}` · `listen to {book}` · `listen to the book {book}` |
+| Play Book | `speel {book}` · `speel het boek {book}` · `speel luisterboek {book}` · `speel het luisterboek {book}` · `luister naar {book}` · `luister naar het boek {book}` |
 | Play By Decade | `speel nummers uit de {decade}` · `speel {genre} uit de {decade}` · `speel hits uit de {decade}` · `speel muziek uit de {decade}` · `speel {decade} hits` · `speel {decade} nummers` |
 | Play By Genre | `speel wat {genre} muziek` · `speel {genre} nummers` · `speel {genre} muziek` · `speel me wat {genre}` · `ik wil naar {genre} luisteren` · `speel {genre}` |
 | Play Channel | `speel kanaal {channel}` · `speel radio {channel}` |

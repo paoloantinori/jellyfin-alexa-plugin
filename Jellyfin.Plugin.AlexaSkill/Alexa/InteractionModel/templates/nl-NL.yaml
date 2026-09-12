@@ -22,11 +22,9 @@
 #   unaccented: media, genre, serie). LibraryQueryType (tracks /
 #   albums) and MediaType (media / video / audio) values are English
 #   cognates as committed, not translated.
-# - ENGLISH INERTIA (JF-399, the 036f7eae copy-in class): nl carries
-#   the same 24 pure-English samples as ja/hi/ar and es-US - PlayBook
-#   fully English (8) and FindSong (12) + FindSongByArtist (4)
-#   byte-equal to es-US English sets. Transcribed as committed; do
-#   not translate without the JF-399 routing decision.
+# - English inertia RESOLVED 2026-09-12 (JF-399 executable half): the
+#   former 24 pure-English samples (PlayBook 8, FindSong 12,
+#   FindSongByArtist 4) are now native Dutch.
 # - The 9-type roster and order match pt-BR's: Mood, LibraryQueryType,
 #   MediaType, BrowseCategory, SeriesName, TimePeriod, MediaInfoType,
 #   Decade, AudiobookTitle. SeriesName carries 8 values with 'Money
@@ -597,14 +595,14 @@ intents:
       - name: book
         type: AudiobookTitle
     samples:
-      - play {book}
-      - play the book {book}
-      - play audiobook {book}
-      - play the audiobook {book}
-      - listen to {book}
-      - listen to the book {book}
-      - listen to audiobook {book}
-      - listen to the audiobook {book}
+      - 'speel {book}'
+      - 'speel het boek {book}'
+      - 'speel luisterboek {book}'
+      - 'speel het luisterboek {book}'
+      - 'luister naar {book}'
+      - 'luister naar het boek {book}'
+      - 'luister naar luisterboek {book}'
+      - 'luister naar het luisterboek {book}'
   - name: ShowMoreIntent
     samples:
       - toon meer
@@ -618,27 +616,27 @@ intents:
     slots: []
   - name: FindSongIntent
     samples:
-      - find a song
-      - help me find a song
-      - search for a song
-      - I'm looking for a song
-      - I need to find a song
-      - find me a song
-      - help me search for a song
-      - I want to find a song
-      - find a song called {titleKeywords}
-      - search for a song called {titleKeywords}
-      - find a song about {titleKeywords}
-      - I'm looking for a song called {titleKeywords}
+      - vind een nummer
+      - help me een nummer te vinden
+      - zoek een nummer
+      - ik zoek een nummer
+      - ik moet een nummer vinden
+      - vind me een nummer
+      - help me een nummer te zoeken
+      - ik wil een nummer vinden
+      - 'vind een nummer genaamd {titleKeywords}'
+      - 'zoek een nummer genaamd {titleKeywords}'
+      - 'vind een nummer over {titleKeywords}'
+      - 'ik zoek een nummer genaamd {titleKeywords}'
     slots:
       - name: titleKeywords
         type: AMAZON.SearchQuery
   - name: FindSongByArtistIntent
     samples:
-      - find a song by {musician}
-      - help me find a song by {musician}
-      - search for a song by {musician}
-      - I'm looking for a song by {musician}
+      - 'vind een nummer van {musician}'
+      - 'help me een nummer te vinden van {musician}'
+      - 'zoek een nummer van {musician}'
+      - 'ik zoek een nummer van {musician}'
     slots:
       - name: musician
         type: AMAZON.Musician

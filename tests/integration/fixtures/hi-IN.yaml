@@ -29,3 +29,17 @@ tests:
     expected_intent: SetReminderIntent
     expected_slots:
       reminder_time: {}
+
+  # ------------------------------------------------------------------------
+  # JF-399 English-inertia resolution (2026-09-12): FindSong/FindSongByArtist/
+  # PlayBook translated to Hindi; probe-verified. PlayBook divergence: the
+  # slotless opener routes, but carriers with a real title are stolen by
+  # PlayArtistSongsIntent (JF-406 class).
+  # ------------------------------------------------------------------------
+  - utterance: "गाना खोजो"
+    expected_intent: FindSongIntent
+    expected_slots: {}
+
+  - utterance: "ऑडियोबुक सुनो"
+    expected_intent: PlayBookIntent
+    expected_slots: {}

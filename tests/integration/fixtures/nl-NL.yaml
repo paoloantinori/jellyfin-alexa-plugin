@@ -32,3 +32,28 @@ tests:
     expected_intent: SetReminderIntent
     expected_slots:
       reminder_time: {}
+
+  # ------------------------------------------------------------------------
+  # JF-399 English-inertia resolution (2026-09-12): FindSong/FindSongByArtist/
+  # PlayBook translated to Dutch; probe-verified before asserting.
+  # ------------------------------------------------------------------------
+  - utterance: "vind een nummer"
+    expected_intent: FindSongIntent
+    expected_slots: {}
+
+  - utterance: "vind een nummer genaamd imagining"
+    expected_intent: FindSongIntent
+    expected_slots:
+      titleKeywords: {}
+
+  - utterance: "vind een nummer van queen"
+    expected_intent: FindSongByArtistIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "luister naar luisterboek een kunstenaar"
+    expected_intent: PlayBookIntent
+    expected_slots: {}
+    # DIVERGENCE (documented, JF-406 class): the speel-form PlayBook carrier
+    # ('speel het luisterboek X') is stolen by PlayArtistSongsIntent with a
+    # garbage musician capture; only the luister-naar carrier routes.

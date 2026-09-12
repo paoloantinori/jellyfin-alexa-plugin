@@ -744,14 +744,14 @@
           }
         ],
         "samples": [
-          "play {book}",
-          "play the book {book}",
-          "play audiobook {book}",
-          "play the audiobook {book}",
-          "listen to {book}",
-          "listen to the book {book}",
-          "listen to audiobook {book}",
-          "listen to the audiobook {book}"
+          "{book} चलाओ",
+          "किताब {book} चलाओ",
+          "ऑडियोबुक {book} चलाओ",
+          "{book} सुनो",
+          "किताब {book} सुनो",
+          "ऑडियोबुक {book} सुनो",
+          "मैं {book} सुनना चाहता हूँ",
+          "ऑडियोबुक {book} सुनाओ"
         ]
       },
       {
@@ -770,18 +770,18 @@
       {
         "name": "FindSongIntent",
         "samples": [
-          "find a song",
-          "help me find a song",
-          "search for a song",
-          "I'm looking for a song",
-          "I need to find a song",
-          "find me a song",
-          "help me search for a song",
-          "I want to find a song",
-          "find a song called {titleKeywords}",
-          "search for a song called {titleKeywords}",
-          "find a song about {titleKeywords}",
-          "I'm looking for a song called {titleKeywords}"
+          "गाना खोजो",
+          "मेरे गाना खोजने में मदद करो",
+          "गाना खोजना है",
+          "मैं गाना खोज रहा हूँ",
+          "मुझे गाना खोजना है",
+          "मेरे लिए गाना खोजो",
+          "मैं गाना खोजना चाहता हूँ",
+          "{titleKeywords} नाम का गाना खोजो",
+          "{titleKeywords} वाला गाना खोजो",
+          "{titleKeywords} नाम का गाना खोज रहा हूँ",
+          "गाना ढूंढो",
+          "एक गाना खोजो"
         ],
         "slots": [
           {
@@ -793,10 +793,10 @@
       {
         "name": "FindSongByArtistIntent",
         "samples": [
-          "find a song by {musician}",
-          "help me find a song by {musician}",
-          "search for a song by {musician}",
-          "I'm looking for a song by {musician}"
+          "{musician} का गाना खोजो",
+          "{musician} का गाना खोजने में मदद करो",
+          "{musician} का गाना ढूंढो",
+          "मैं {musician} का गाना खोज रहा हूँ"
         ],
         "slots": [
           {

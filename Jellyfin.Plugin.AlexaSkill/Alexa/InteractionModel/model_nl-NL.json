@@ -783,14 +783,14 @@
           }
         ],
         "samples": [
-          "play {book}",
-          "play the book {book}",
-          "play audiobook {book}",
-          "play the audiobook {book}",
-          "listen to {book}",
-          "listen to the book {book}",
-          "listen to audiobook {book}",
-          "listen to the audiobook {book}"
+          "speel {book}",
+          "speel het boek {book}",
+          "speel luisterboek {book}",
+          "speel het luisterboek {book}",
+          "luister naar {book}",
+          "luister naar het boek {book}",
+          "luister naar luisterboek {book}",
+          "luister naar het luisterboek {book}"
         ]
       },
       {
@@ -810,18 +810,18 @@
       {
         "name": "FindSongIntent",
         "samples": [
-          "find a song",
-          "help me find a song",
-          "search for a song",
-          "I'm looking for a song",
-          "I need to find a song",
-          "find me a song",
-          "help me search for a song",
-          "I want to find a song",
-          "find a song called {titleKeywords}",
-          "search for a song called {titleKeywords}",
-          "find a song about {titleKeywords}",
-          "I'm looking for a song called {titleKeywords}"
+          "vind een nummer",
+          "help me een nummer te vinden",
+          "zoek een nummer",
+          "ik zoek een nummer",
+          "ik moet een nummer vinden",
+          "vind me een nummer",
+          "help me een nummer te zoeken",
+          "ik wil een nummer vinden",
+          "vind een nummer genaamd {titleKeywords}",
+          "zoek een nummer genaamd {titleKeywords}",
+          "vind een nummer over {titleKeywords}",
+          "ik zoek een nummer genaamd {titleKeywords}"
         ],
         "slots": [
           {
@@ -833,10 +833,10 @@
       {
         "name": "FindSongByArtistIntent",
         "samples": [
-          "find a song by {musician}",
-          "help me find a song by {musician}",
-          "search for a song by {musician}",
-          "I'm looking for a song by {musician}"
+          "vind een nummer van {musician}",
+          "help me een nummer te vinden van {musician}",
+          "zoek een nummer van {musician}",
+          "ik zoek een nummer van {musician}"
         ],
         "slots": [
           {

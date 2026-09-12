@@ -66,3 +66,19 @@ tests:
     expected_intent: SleepTimerIntent
     expected_slots:
       duration_minutes: {}
+
+  # ------------------------------------------------------------------------
+  # JF-399 English-inertia resolution (2026-09-12): FindSong/FindSongByArtist
+  # translated to Japanese; probe-verified. PlayBook was translated too but
+  # ALL its carriers are stolen by PlayVideoIntent/PlaySongIntent free-form
+  # slots (the same ja steal documented in the header above) - no PlayBook
+  # entry is assertable until that competition is addressed.
+  # ------------------------------------------------------------------------
+  - utterance: "曲を探して"
+    expected_intent: FindSongIntent
+    expected_slots: {}
+
+  - utterance: "クイーン の曲を探して"
+    expected_intent: FindSongByArtistIntent
+    expected_slots:
+      musician: {}

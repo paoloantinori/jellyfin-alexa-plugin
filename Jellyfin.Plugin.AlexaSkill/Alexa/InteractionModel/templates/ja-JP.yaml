@@ -32,12 +32,9 @@
 #   never U+3000; a slot glued to a particle with no space
 #   ({musician}を再生) is rejected as InvalidSample, which is why the
 #   four bare-artist forms carry the space.
-# - English inertia, NOT a market decision: exactly 24 samples are
-#   pure English. PlayBookIntent is entirely English (8 samples), and
-#   FindSongIntent (12) + FindSongByArtistIntent (4) are byte-identical
-#   to es-US's English sets (the 036f7eae copy-inertia; JF-399 tracks
-#   the open question). Transcribed as committed; do not "clean up"
-#   here without a product decision.
+# - English inertia RESOLVED 2026-09-12 (JF-399 executable half): the
+#   former 24 pure-English samples (PlayBook 8, FindSong 12,
+#   FindSongByArtist 4) are now native Japanese.
 # - The 9-type roster and order match pt-BR's: Mood, LibraryQueryType,
 #   MediaType, BrowseCategory, SeriesName, TimePeriod, MediaInfoType,
 #   Decade, AudiobookTitle. SeriesName carries 8 values with 'Money
@@ -546,14 +543,14 @@ intents:
       - name: book
         type: AudiobookTitle
     samples:
-      - play {book}
-      - play the book {book}
-      - play audiobook {book}
-      - play the audiobook {book}
-      - listen to {book}
-      - listen to the book {book}
-      - listen to audiobook {book}
-      - listen to the audiobook {book}
+      - '{book} を再生して'
+      - '本 {book} を再生して'
+      - 'オーディオブック {book} を再生して'
+      - '{book} を聴かせて'
+      - '本 {book} を聴かせて'
+      - 'オーディオブック {book} を聴かせて'
+      - '{book} を聞きたい'
+      - 'オーディオブック {book} を聞きたい'
   - name: ShowMoreIntent
     samples:
       - もっと見せて
@@ -567,27 +564,27 @@ intents:
     slots: []
   - name: FindSongIntent
     samples:
-      - find a song
-      - help me find a song
-      - search for a song
-      - I'm looking for a song
-      - I need to find a song
-      - find me a song
-      - help me search for a song
-      - I want to find a song
-      - find a song called {titleKeywords}
-      - search for a song called {titleKeywords}
-      - find a song about {titleKeywords}
-      - I'm looking for a song called {titleKeywords}
+      - 曲を探して
+      - 曲を探すのを手伝って
+      - 曲を検索して
+      - 曲を探しているの
+      - 曲を見つけたいの
+      - 曲を探してちょうだい
+      - 曲を検索するのを手伝って
+      - 曲が見つけたい
+      - '{titleKeywords} という曲を探して'
+      - '{titleKeywords} という曲を検索して'
+      - '{titleKeywords} についての曲を探して'
+      - '{titleKeywords} という曲を探しているの'
     slots:
       - name: titleKeywords
         type: AMAZON.SearchQuery
   - name: FindSongByArtistIntent
     samples:
-      - find a song by {musician}
-      - help me find a song by {musician}
-      - search for a song by {musician}
-      - I'm looking for a song by {musician}
+      - '{musician} の曲を探して'
+      - '{musician} の曲を探すのを手伝って'
+      - '{musician} の曲を検索して'
+      - '{musician} の曲を探しているの'
     slots:
       - name: musician
         type: AMAZON.Musician
