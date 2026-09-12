@@ -4,9 +4,10 @@ title: >-
   Consolidate the three LWA token-refresh implementations onto
   SmapiTokenRefresher and gate sibling long SMAPI ops (unfiled JF-544 /simplify
   promise)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-12 07:53'
+updated_date: '2026-09-12 09:05'
 labels: []
 dependencies: []
 references:

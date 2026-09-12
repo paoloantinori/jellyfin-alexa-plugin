@@ -17,6 +17,10 @@ public static class LwaClient
     private static ILogger Logger => Plugin.Instance?.LoggerFactory.CreateLogger(nameof(LwaClient))
         ?? LoggerFactory.Create(b => { }).CreateLogger(nameof(LwaClient));
 
+    /// <summary>The same per-call logger the refresh path itself uses, for wrappers
+    /// that need a real (non-null) logger outside a DI context (JF-545).</summary>
+    internal static ILogger RefreshLogger => Logger;
+
     /// <summary>
     /// Create a device authorization request to LWA.
     /// </summary>
@@ -164,13 +168,20 @@ public static class LwaClient
     }
 
     /// <summary>
+    /// Test seam (JF-545, the JF-366 pattern): when set, RefreshDeviceToken uses this
+    /// factory instead of Plugin.HttpClient so unit tests can serve/throw HTTP without
+    /// the network. Production never sets it.
+    /// </summary>
+    internal static Func<HttpClient>? HttpClientOverrideForTests;
+
+    /// <summary>
     /// Refreshes the access token.
     /// </summary>
     /// <param name="deviceToken">The current device token containing the refresh token.</param>
     /// <param name="clientId">LWA client id.</param>
     /// <param name="clientSecret">LWA client secret.</param>
     /// <returns>A refreshed device token.</returns>
-    public static async Task<DeviceToken?> RefreshDeviceToken(DeviceToken deviceToken, string clientId, string clientSecret)
+    public static async Task<DeviceToken> RefreshDeviceToken(DeviceToken deviceToken, string clientId, string clientSecret)
     {
         string url = "https://api.amazon.com/auth/o2/token";
         var formUrlEncodedContent = new FormUrlEncodedContent(new Dictionary<string, string>()
@@ -181,11 +192,13 @@ public static class LwaClient
             { "client_secret", clientSecret }
         });
 
+        HttpClient http = HttpClientOverrideForTests?.Invoke() ?? Plugin.HttpClient;
+
         // 15s bounds the RETRY CHAIN (JF-544: a wedged endpoint must not stall a sync's
         // recovery path for minutes); a single hung request is still bounded by the
         // HttpClient default timeout.
         HttpResponseMessage response = await RetryHelper.ExecuteWithRetryAsync(
-            () => Plugin.HttpClient.PostAsync(url, formUrlEncodedContent),
+            () => http.PostAsync(url, formUrlEncodedContent),
             Logger,
             "LwaRefreshToken",
             timeoutMs: 15_000).ConfigureAwait(false);

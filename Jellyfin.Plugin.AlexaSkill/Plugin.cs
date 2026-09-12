@@ -144,6 +144,13 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     public ILoggerFactory LoggerFactory { get; private set; }
 
     /// <summary>
+    /// Test seam (JF-545, the JF-366 pattern): swaps the logger factory. Production
+    /// never calls it; unit tests use it when the shared test Plugin.Instance carries
+    /// a factory another suite disposed (LwaClient.Logger reads it per call).
+    /// </summary>
+    internal void SetLoggerFactoryForTests(ILoggerFactory loggerFactory) => LoggerFactory = loggerFactory;
+
+    /// <summary>
     /// Gets the LWA authorization request handler.
     /// </summary>
     public LwaAuthorizationRequestHandler LwaAuthorizationRequestHandler { get; } =

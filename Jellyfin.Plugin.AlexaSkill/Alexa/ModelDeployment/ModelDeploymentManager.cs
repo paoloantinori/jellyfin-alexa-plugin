@@ -12,6 +12,7 @@ using global::Alexa.NET.Management;
 using global::Alexa.NET.Management.Api;
 using global::Alexa.NET.Management.Skills;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
+using Jellyfin.Plugin.AlexaSkill.Lwa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.InteractionModel;
 using Jellyfin.Plugin.AlexaSkill.Entities;
 using Microsoft.Extensions.Logging;
@@ -24,6 +25,12 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.ModelDeployment;
 /// </summary>
 public class ModelDeploymentManager
 {
+    /// <summary>
+    /// JF-545: a custom-model deploy (PUT + build poll) runs a few minutes; the token
+    /// must outlive the operation, so refresh when less than this remains.
+    /// </summary>
+    private const int DeployTokenBudgetMinutes = 10;
+
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<ModelDeploymentManager> _logger;
 
@@ -265,7 +272,22 @@ public class ModelDeploymentManager
             return new ModelDeploymentResult(false, "User has no SMAPI device token.", string.Empty);
         }
 
-        var smapi = user.SmapiManagement;
+        // JF-545: a single-locale deploy with its build poll runs a few minutes; make
+        // sure the ~1h token comfortably outlives it (a mid-op 401 previously failed
+        // the deployment). Non-fatal on failure: the deploy may still fit the remainder.
+        TimeSpan tokenRemaining = SmapiTokenRefresher.RemainingLifetime(user);
+        if (tokenRemaining < TimeSpan.FromMinutes(DeployTokenBudgetMinutes))
+        {
+            _logger.LogInformation(
+                "Refreshing SMAPI token before custom-model deploy: {Minutes:F0} min remaining < {Budget} min budget (JF-545)",
+                tokenRemaining.TotalMinutes, DeployTokenBudgetMinutes);
+            if (!await SmapiTokenRefresher.RefreshAsync(user, _logger).ConfigureAwait(false))
+            {
+                _logger.LogWarning("Pre-deploy token refresh failed for user {UserId}; proceeding with the current token", user.Id);
+            }
+        }
+
+        SmapiManagement? smapi = user.SmapiManagement;
         if (smapi == null)
         {
             return new ModelDeploymentResult(false, "Failed to create SMAPI management instance.", string.Empty);
@@ -304,8 +326,28 @@ public class ModelDeploymentManager
             var (intentCount, sampleCount) = InteractionModelPutAudit.Count(interactionModel);
             InteractionModelPutAudit.LogModelPut(_logger, auditSource, locale, skillId, intentCount, sampleCount);
 
-            await smapi.InteractionModel.Update(skillId, SkillStage.Development, locale, interactionModel)
-                .ConfigureAwait(false);
+            // JF-545: recover an expired-token 401 on the PUT by refreshing once and
+            // re-creating the client (user.SmapiManagement rebuilds from the CURRENT
+            // token), so the rest of the deploy polls with a live client.
+            async Task PutAsync(SmapiManagement client) =>
+                await client.InteractionModel.Update(skillId, SkillStage.Development, locale, interactionModel)
+                    .ConfigureAwait(false);
+
+            try
+            {
+                await PutAsync(smapi).ConfigureAwait(false);
+            }
+            catch (Refit.ApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                _logger.LogWarning("SMAPI 401 deploying locale {Locale}: refreshing token and retrying once (JF-545)", locale);
+                if (!await SmapiTokenRefresher.RefreshAsync(user, _logger).ConfigureAwait(false))
+                {
+                    throw;
+                }
+
+                smapi = user.SmapiManagement!;
+                await PutAsync(smapi).ConfigureAwait(false);
+            }
 
             _logger.LogInformation(
                 "Interaction model update submitted for skill {SkillId} locale {Locale}, waiting for build",

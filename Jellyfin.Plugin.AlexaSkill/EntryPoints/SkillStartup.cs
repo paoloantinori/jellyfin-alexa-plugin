@@ -126,28 +126,22 @@ public class SkillStartup : IHostedService, IDisposable
 
                 try
                 {
-                    // Restart recovery: reconstruct in-memory token from persisted refresh token
+                    // Restart recovery: reconstruct in-memory token from persisted refresh token.
+                    // JF-545: the mechanical refresh/persist is SmapiTokenRefresher's; the
+                    // de-authorization policy below is restart recovery's own: any refresh
+                    // failure (network, HTTP error, unparseable body) means this user needs
+                    // re-linking. NOTE: the refresher's bool conflates transient and
+                    // permanent failures, so a transient blip also de-auths (tracked).
                     if (user.SmapiDeviceToken == null && !string.IsNullOrEmpty(user.SmapiRefreshToken))
                     {
                         _logger.LogInformation("Recovering SMAPI token for user {UserId} from persisted refresh token", user.Id);
-                        try
+                        if (await SmapiTokenRefresher.RefreshAsync(user, _logger).ConfigureAwait(false))
                         {
-                            DeviceToken? tokenResult = await LwaClient.RefreshDeviceToken(
-                                new DeviceToken(user.SmapiRefreshToken, user.SmapiRefreshToken, "Bearer", 0),
-                                configuration.LwaClientId,
-                                configuration.LwaClientSecret).ConfigureAwait(false);
-
-                            if (tokenResult != null)
-                            {
-                                user.SmapiDeviceToken = tokenResult;
-                                user.SmapiRefreshToken = tokenResult.RefreshToken;
-                                Plugin.Instance.SaveConfiguration();
-                                _logger.LogInformation("SMAPI token recovered for user {UserId}", user.Id);
-                            }
+                            _logger.LogInformation("SMAPI token recovered for user {UserId}", user.Id);
                         }
-                        catch (Exception ex)
+                        else
                         {
-                            _logger.LogError(ex, "Failed to recover SMAPI token for user {UserId}. Re-authorization required.", user.Id);
+                            _logger.LogError("Failed to recover SMAPI token for user {UserId}. Re-authorization required.", user.Id);
                             user.SmapiRefreshToken = null;
                             if (user.UserSkill != null)
                             {

@@ -41,18 +41,15 @@ public static class AlexaUtil
             throw originalEx;
         }
 
-        DeviceToken? token = await LwaClient.RefreshDeviceToken(
-            user.SmapiDeviceToken,
-            Plugin.Instance!.Configuration.LwaClientId,
-            Plugin.Instance!.Configuration.LwaClientSecret).ConfigureAwait(false);
-        if (token == null)
+        // JF-545: the one shared refresh mechanism (SmapiTokenRefresher); this wrapper
+        // keeps the request-path throw-on-failure contract: a failed refresh must fail
+        // the request, not swallow into a stale retry. A real logger, not Null: the
+        // refresher's warning carries LWA's status and body (the invalid_grant evidence
+        // a re-link investigation needs).
+        if (!await SmapiTokenRefresher.RefreshAsync(user, LwaClient.RefreshLogger).ConfigureAwait(false))
         {
             throw new UnauthorizedAccessException("Failed to refresh token");
         }
-
-        user.SmapiDeviceToken = token;
-        user.SmapiRefreshToken = token.RefreshToken;
-        Plugin.Instance.SaveConfiguration();
 
         return await func().ConfigureAwait(false);
     }

@@ -6,10 +6,13 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.AlexaSkill.Lwa;
 
 /// <summary>
-/// The one LWA device-token refresh implementation (JF-544). TokenRefreshTask's
-/// periodic sweep and long-running SMAPI operations both call it: a catalog sync
-/// spans 30-45 minutes against ~1h access tokens, so an operation that can outlive
-/// its token must refresh up front and on 401 instead of trusting the sweep's
+/// The one LWA device-token refresh MECHANISM (JF-544/JF-545): the only place that
+/// calls LwaClient.RefreshDeviceToken and persists the rotation. Callers layer their
+/// own policy on top: TokenRefreshTask's periodic sweep (skip while fresh), the
+/// catalog sync's pre-sync gate and per-leg 401 retry, the restart-recovery
+/// de-authorization policy in SkillStartup, and AlexaUtil.CallAsync's request-path
+/// throw-on-failure. A long-running operation (a sync spans 30-45 min against ~1h
+/// access tokens) must refresh up front and on 401 instead of trusting the sweep's
 /// safety margin.
 /// </summary>
 internal static class SmapiTokenRefresher
@@ -40,7 +43,7 @@ internal static class SmapiTokenRefresher
             return false;
         }
 
-        DeviceToken? tokenResult;
+        DeviceToken tokenResult;
         try
         {
             tokenResult = await LwaClient.RefreshDeviceToken(
@@ -54,12 +57,8 @@ internal static class SmapiTokenRefresher
             return false;
         }
 
-        if (tokenResult == null)
-        {
-            logger.LogWarning("Token refresh returned no token for user {UserId}", user.Id);
-            return false;
-        }
-
+        // ParseTokenResponse never returns null (it throws on an unparseable body),
+        // so the old null check was dead; the catch below owns every failure shape.
         user.SmapiDeviceToken = tokenResult;
         user.SmapiRefreshToken = tokenResult.RefreshToken;
 
