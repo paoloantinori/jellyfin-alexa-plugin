@@ -748,12 +748,15 @@ public class CatalogManager
         await Task.Delay(500, cancellationToken).ConfigureAwait(false);
 
         int delay = 500;
-        // 90 iterations with the 2s backoff cap is a ~150-170s budget: a full 12-locale
-        // sync queues FOUR serialized SMAPI builds per locale (3 catalog versions + the
-        // model build), so a locale's model build legitimately settles at ~80s+ of
-        // queue; the previous 30-iteration budget (~57s) landed TIMEOUT on every locale
-        // and the canary never fired (live evidence 2026-09-06: 80-85s per locale with
-        // zero errors, the waits genuinely working).
+        // 90 iterations with the 2s backoff cap is a ~150-170s budget: a full sync
+        // queues FOUR serialized SMAPI builds per locale (3 catalog versions + the
+        // model build), so a locale's model build legitimately settles deep in the
+        // queue; the previous 30-iteration budget (~57s) landed TIMEOUT on every
+        // locale and the canary never fired (live evidence 2026-09-06: 80-85s per
+        // locale at 12 locales). The budget also held at 17 locales / 68 queued
+        // builds after JF-513 (live 2026-09-12: 79-132s per locale, zero TIMEOUTs
+        // across the full sync), so it is sized on the serialized-queue depth, not
+        // the locale count.
         for (int i = 0; i < 90; i++)
         {
             string? state = await TryGetLocaleModelStatusAsync(
