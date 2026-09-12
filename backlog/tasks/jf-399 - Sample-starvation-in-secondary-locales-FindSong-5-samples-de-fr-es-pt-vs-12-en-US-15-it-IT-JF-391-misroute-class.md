@@ -6,7 +6,7 @@ title: >-
 status: In Progress
 assignee: []
 created_date: '2026-08-23 05:56'
-updated_date: '2026-09-12 00:11'
+updated_date: '2026-09-12 15:24'
 labels:
   - nlu
   - interaction-model
@@ -62,4 +62,8 @@ JF-316 final-milestone gate (2026-09-11): the English-inertia class is WIDER tha
 Bonus landed same night: JF-513.1 item 2 (CancelWords ja-JP re-vet) resolved - JapaneseWords set added (とめて/止めて/止まって/ストップ/やめて/stop) with probe evidence; 'cancel' joins the 10-locale exclusion norm. En-route findings filed in JF-513.1 items 5-7.
 
 STILL OPEN in this task: (a) the en-US scope note (523 samples vs 1250 it-IT; whether PlaySong 38 / PlayArtistSongs 34 deserve the it-IT carrier-noun expansion), (b) the English-inertia translation decision (5 locales x PlayBook/FindSong + hi-IN Decade values, consolidated open question from JF-316), (c) residuals already moved to JF-405. The task stays In Progress for (a)+(b); both are judgment calls that benefit from a fresh session.
+
+2026-09-12 EXECUTABLE HALF DONE (commit c9f07328, deployed, live-verified): the English-inertia samples in nl-NL/ja-JP/hi-IN/ar-SA are translated to native Dutch/Japanese/Hindi/Arabic (PlayBook 8 + FindSong 12 + FindSongByArtist 4 per locale, each using its own established vocabulary). Live verification: 4/4 model rebuilds SUCCEEDED, profile-nlu confirms openers route + slotted forms fill; NLU fixtures extended, live slices green (nl 4/4 new, ja 13/13, hi 6/6, ar 4/4). Documented divergences (JF-406 class, in the fixtures): ja PlayBook carriers all stolen by PlayVideo/PlaySong free-form slots; nl speel-form and hi/ar titled PlayBook carriers stolen by PlayArtistSongs. hi-IN Decade values stay English-with-Devanagari-synonyms (swap needs handler-side decade-resolution work; noted in the template header). BONUS pre-existing finding documented+skipped with evidence: de-DE 'spiele staffel X folge Y von Z' leaves episode_number EMPTY on the live model (word AND digit forms; season+series fill) - German PlayEpisode carrier needs model work.
+
+REMAINING in this task: (a) the en-US scope decision (carrier-noun expansion of PlaySong 38/PlayArtistSongs 34 toward the it-IT density), (b) the es-US market decision (Spanish FindSong or English-in-es-US; JF-406 tracks the routing side), (c) the hi-IN Decade value/synonym swap after handler work. All product calls.
 <!-- SECTION:NOTES:END -->
