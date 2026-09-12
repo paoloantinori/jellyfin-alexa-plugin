@@ -27,12 +27,12 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
 /// </summary>
 public class LibrarySyncService
 {
-        /// <summary>
-        /// JF-544: a 17-locale sync runs 30-45 min against ~1h LWA access tokens, so the
-        /// sync must not start on a token with less than this much life left; the
-        /// TokenRefreshTask safety margin (30 min) protects short ops, not this one.
-        /// </summary>
-        private const int SyncTokenBudgetMinutes = 45;
+    /// <summary>
+    /// JF-544: a 17-locale sync runs 30-45 min against ~1h LWA access tokens, so the
+    /// sync must not start on a token with less than this much life left; the
+    /// TokenRefreshTask safety margin (30 min) protects short ops, not this one.
+    /// </summary>
+    private const int SyncTokenBudgetMinutes = 45;
 
     private const int MaxCatalogValues = 50000;
     private const string DevelopmentStage = "development";
@@ -104,8 +104,7 @@ public class LibrarySyncService
         string vendorId = user.VendorId;
         string skillId = user.UserSkill!.SkillId!;
 
-        // Determine which locales to sync. JF-544: the CURRENT token, not a
-        // start-of-sync snapshot, so the pre-sync refresh above is what this call uses.
+        // Determine which locales to sync (with the token the pre-sync gate left us).
         string syncLocalesConfig = Plugin.Instance?.Configuration?.CatalogSyncLocales ?? string.Empty;
         IReadOnlyList<string> resolvedLocales = await ResolveSyncLocalesAsync(
             syncLocalesConfig, user.SmapiDeviceToken.AccessToken, skillId, cancellationToken).ConfigureAwait(false);
@@ -149,24 +148,24 @@ public class LibrarySyncService
         int localesSucceeded = 0;
         int localesFailed = 0;
 
-        // JF-544: the leg body takes the CURRENT token at call time, not a
-        // start-of-sync snapshot; catalog version creation and the model PUT are both
-        // safe to re-submit, which the one-shot 401 retry below relies on.
-        async Task RunLegAsync(string locale, string token)
+        // JF-544: every SMAPI call in the leg reads the CURRENT token (see the
+        // per-attempt re-read below); catalog version creation and the model PUT are
+        // both safe to re-submit, which the one-shot 401 retry relies on.
+        async Task RunLegAsync(string locale)
         {
             // Create/update catalogs with locale-specific phonetic synonyms
             var artistResult = await SyncCatalogForLocaleAsync(
-                user, token, vendorId, CatalogType.Artist, artistItems,
+                user, user.SmapiDeviceToken.AccessToken, vendorId, CatalogType.Artist, artistItems,
                 user.ArtistCatalogId, "Jellyfin Artists", "Artist catalog synced from Jellyfin library",
                 locale, cancellationToken).ConfigureAwait(false);
 
             var albumResult = await SyncCatalogForLocaleAsync(
-                user, token, vendorId, CatalogType.Album, albumItems,
+                user, user.SmapiDeviceToken.AccessToken, vendorId, CatalogType.Album, albumItems,
                 user.AlbumCatalogId, "Jellyfin Albums", "Album catalog synced from Jellyfin library",
                 locale, cancellationToken).ConfigureAwait(false);
 
             var seriesResult = await SyncCatalogForLocaleAsync(
-                user, token, vendorId, CatalogType.Series, seriesItems,
+                user, user.SmapiDeviceToken.AccessToken, vendorId, CatalogType.Series, seriesItems,
                 user.SeriesCatalogId, "Jellyfin Series", "Series catalog synced from Jellyfin library",
                 locale, cancellationToken).ConfigureAwait(false);
 
@@ -179,7 +178,7 @@ public class LibrarySyncService
                 // stale "1" fallback version; leaving the id null instead preserves
                 // whatever catalog reference the live model already carries.
                 var modelUpdate = await _catalogManager.UpdateInteractionModelAsync(
-                    token,
+                    user.SmapiDeviceToken.AccessToken,
                     skillId,
                     DevelopmentStage,
                     locale,
@@ -207,9 +206,7 @@ public class LibrarySyncService
             {
                 try
                 {
-                    // JF-544: the CURRENT token per attempt picks up any rotation by
-                    // TokenRefreshTask instead of dying on the start-of-sync snapshot.
-                    await RunLegAsync(locale, user.SmapiDeviceToken.AccessToken).ConfigureAwait(false);
+                    await RunLegAsync(locale).ConfigureAwait(false);
                     legSucceeded = true;
                     break;
                 }
@@ -502,7 +499,7 @@ public class LibrarySyncService
             _logger.LogDebug("GetActiveLocalesAsync: {Count} active locales: {Locales}", locales.Count, string.Join(", ", locales));
             return locales;
         }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized)
         {
             // JF-544: a 401 here means the token is dead; degrading to it-IT would
             // run one locale, stamp the sync successful, and gate the other locales

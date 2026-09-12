@@ -24,7 +24,8 @@ internal static class SmapiTokenRefresher
     /// </summary>
     public static async Task<bool> RefreshAsync(Entities.User user, ILogger logger)
     {
-        var config = Plugin.Instance?.Configuration;
+        var plugin = Plugin.Instance;
+        var config = plugin?.Configuration;
         if (config == null
             || string.IsNullOrWhiteSpace(config.LwaClientId)
             || string.IsNullOrWhiteSpace(config.LwaClientSecret))
@@ -68,7 +69,7 @@ internal static class SmapiTokenRefresher
         // can lag the rotation (re-link risk if the process dies before a later save).
         try
         {
-            Plugin.Instance!.SaveConfiguration();
+            plugin!.SaveConfiguration();
         }
         catch (Exception ex)
         {

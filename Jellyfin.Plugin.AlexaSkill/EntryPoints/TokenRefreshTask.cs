@@ -94,31 +94,20 @@ public class TokenRefreshTask : IScheduledTask
                 continue;
             }
 
-            try
+            // JF-544: one shared refresh implementation; it persists per refresh and
+            // never throws (SaveConfiguration included), so no catch is needed here -
+            // a failure path that ever starts throwing should surface loudly.
+            if (await SmapiTokenRefresher.RefreshAsync(user, _logger).ConfigureAwait(false))
             {
-                // JF-544: one shared refresh implementation; it persists per refresh
-                // and never throws.
-                if (await SmapiTokenRefresher.RefreshAsync(user, _logger).ConfigureAwait(false))
-                {
-                    refreshed++;
-                }
-                else
-                {
-                    failed++;
-                }
+                refreshed++;
             }
-            catch (Exception ex)
+            else
             {
                 failed++;
-                _logger.LogWarning(ex, "Failed to refresh token for user {UserId}", user.Id);
             }
         }
 
-        if (refreshed > 0 || failed > 0)
-        {
-            // JF-544: persistence happens per refresh inside SmapiTokenRefresher.
-            _logger.LogInformation("Token refresh complete: {Refreshed} refreshed, {Failed} failed", refreshed, failed);
-        }
+        _logger.LogDebug("Token refresh sweep complete: {Refreshed} refreshed, {Failed} failed", refreshed, failed);
 
         progress.Report(1.0);
     }

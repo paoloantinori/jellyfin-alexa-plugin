@@ -181,6 +181,9 @@ public static class LwaClient
             { "client_secret", clientSecret }
         });
 
+        // 15s bounds the RETRY CHAIN (JF-544: a wedged endpoint must not stall a sync's
+        // recovery path for minutes); a single hung request is still bounded by the
+        // HttpClient default timeout.
         HttpResponseMessage response = await RetryHelper.ExecuteWithRetryAsync(
             () => Plugin.HttpClient.PostAsync(url, formUrlEncodedContent),
             Logger,
