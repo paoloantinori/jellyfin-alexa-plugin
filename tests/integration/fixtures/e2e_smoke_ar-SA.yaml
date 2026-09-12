@@ -1,0 +1,25 @@
+# JF-511/512 smoke suite (option b) for ar-SA: two-step shape (locale open verb
+# verified live during JF-513; step 2 is the bare in-session command). Carriers are
+# the locale's own PlayFavorites/PlayVideo samples; assertions mirror e2e_smoke_de-DE.
+# Seeded 2026-09-12, live-verified before asserting.
+locale: ar-SA
+invocation_name: jellyfin player
+open_utterance: "open jellyfin player"
+tests:
+  # (a) favorites play: the audio pin -> AudioPlayer.Play, session ends.
+  - utterance: "شغل أغاني المفضلة"
+    expected_intent: PlayFavoritesIntent
+    expected_slots: {}
+    expected_response_type: directive
+    expected_directive_type: "AudioPlayer.Play"
+    expected_end_session: true
+    expected_stream_url_contains: "/Audio/"
+
+  # (c) localized not-found via the video path (SearchQuery title fills in-session).
+  - utterance: "شغل الفيديو xyzzyfoo"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {}
+    expected_response_type: speech
+    expected_speech_contains: "لم أجد أي فيديو بعنوان xyzzyfoo"
+    expected_end_session: true

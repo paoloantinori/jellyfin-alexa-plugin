@@ -1,0 +1,68 @@
+locale: ja-JP
+invocation_name: jellyfin player
+tests:
+  # JF-400 completion: ja-JP was the last locale without an NLU fixture (vendor-disabled
+  # until JF-513 declared it in the manifest). Seeded 2026-09-12, every entry
+  # probe-verified against the live model BEFORE asserting (the JF-400 program rule).
+  #
+  # DOCUMENTED DIVERGENCE (the JF-406 class, found while seeding): the artist path is
+  # systematically stolen in ja-JP. Every carrier that is a verbatim PlayArtistSongs
+  # sample loses the statistical race to PlayVideoIntent's free-form '{title}
+  # を再生して' or to PlayByGenreIntent: 'クイーン の曲を再生して' -> PlayVideoIntent
+  # title='クイーンの曲'; 'クイーン を再生して' -> PlayVideoIntent title='クイーン';
+  # 'クイーン の音楽/トラックを再生して' -> PlayVideoIntent; 'ビートルズ の曲を聴かせて'
+  # and 'クイーン の曲を流して' -> PlayByGenreIntent genre=<artist>. Only carries that
+  # NAME the media noun survive (曲/アルバム/プレイリスト prefixes), which is why this
+  # fixture asserts song/album/playlist but no musician slot. The media-noun-named
+  # carriers are the intended ASR shape (anti-pattern #11's ja analog).
+
+  - utterance: "イマジン を再生して"
+    expected_intent: PlaySongIntent
+    expected_slots:
+      song: {}
+
+  - utterance: "アルバム スリラー を再生して"
+    expected_intent: PlayAlbumIntent
+    expected_slots:
+      album: {}
+
+  - utterance: "プレイリスト ドライブ を再生して"
+    expected_intent: PlayPlaylistIntent
+    expected_slots:
+      playlist: {}
+
+  - utterance: "お気に入りの曲を再生して"
+    expected_intent: PlayFavoritesIntent
+    expected_slots: {}
+
+  - utterance: "ランダムに何か再生して"
+    expected_intent: PlayRandomIntent
+    expected_slots: {}
+
+  - utterance: "新着はある"
+    expected_intent: QueryRecentlyAddedIntent
+    expected_slots: {}
+
+  - utterance: "この曲をループして"
+    expected_intent: LoopSongOnIntent
+    expected_slots: {}
+
+  - utterance: "今何が再生中"
+    expected_intent: MediaInfoIntent
+    expected_slots: {}
+
+  - utterance: "次のチャプター"
+    expected_intent: GoToChapterIntent
+    expected_slots: {}
+
+  - utterance: "続きを見て"
+    expected_intent: ContinueWatchingIntent
+    expected_slots: {}
+
+  # Slot-fill note (probe-verified): digit forms ('10 分後に止めて', '10分後に止めて')
+  # route to SleepTimerIntent but leave duration_minutes EMPTY; the kanji number word
+  # ('十分後に止めて') fills it ('10'). Assert the filling form.
+  - utterance: "十分後に止めて"
+    expected_intent: SleepTimerIntent
+    expected_slots:
+      duration_minutes: {}
