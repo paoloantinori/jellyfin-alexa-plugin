@@ -83,28 +83,28 @@ public class TokenRefreshTask : IScheduledTask
             // tokens live ~1h; the old blind refresh on a 6h interval left the token
             // expired ~83% of the time, breaking SMAPI management ops (catalog sync,
             // invocation-name redeploy). JF-333.
-            if (user.SmapiDeviceToken != null && user.SmapiDeviceToken.ExpireTimestamp > 0)
+            TimeSpan remaining = SmapiTokenRefresher.RemainingLifetime(user);
+            if (remaining > TimeSpan.FromMinutes(TokenSafetyMarginMinutes))
             {
-                DateTimeOffset expiry = DateTimeOffset.FromUnixTimeSeconds(user.SmapiDeviceToken.ExpireTimestamp);
-                if (expiry - DateTimeOffset.UtcNow > TimeSpan.FromMinutes(TokenSafetyMarginMinutes))
-                {
-                    continue; // still fresh
-                }
+                // JF-544: the skip used to be silent, which made mid-sync 401 incidents
+                // unreconstructible from logs.
+                _logger.LogDebug(
+                    "Skipping token refresh for user {UserId}: {Minutes:F0} min remaining (> {Margin} min margin)",
+                    user.Id, remaining.TotalMinutes, TokenSafetyMarginMinutes);
+                continue;
             }
 
             try
             {
-                DeviceToken? tokenResult = await LwaClient.RefreshDeviceToken(
-                    new DeviceToken(user.SmapiRefreshToken, user.SmapiRefreshToken, "Bearer", 0),
-                    config.LwaClientId,
-                    config.LwaClientSecret).ConfigureAwait(false);
-
-                if (tokenResult != null)
+                // JF-544: one shared refresh implementation; it persists per refresh
+                // and never throws.
+                if (await SmapiTokenRefresher.RefreshAsync(user, _logger).ConfigureAwait(false))
                 {
-                    user.SmapiDeviceToken = tokenResult;
-                    user.SmapiRefreshToken = tokenResult.RefreshToken;
                     refreshed++;
-                    _logger.LogDebug("Refreshed token for user {UserId}", user.Id);
+                }
+                else
+                {
+                    failed++;
                 }
             }
             catch (Exception ex)
@@ -116,7 +116,7 @@ public class TokenRefreshTask : IScheduledTask
 
         if (refreshed > 0 || failed > 0)
         {
-            Plugin.Instance.SaveConfiguration();
+            // JF-544: persistence happens per refresh inside SmapiTokenRefresher.
             _logger.LogInformation("Token refresh complete: {Refreshed} refreshed, {Failed} failed", refreshed, failed);
         }
 

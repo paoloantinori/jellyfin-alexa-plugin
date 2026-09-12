@@ -3,6 +3,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -25,6 +27,13 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
 /// </summary>
 public class LibrarySyncService
 {
+        /// <summary>
+        /// JF-544: a 17-locale sync runs 30-45 min against ~1h LWA access tokens, so the
+        /// sync must not start on a token with less than this much life left; the
+        /// TokenRefreshTask safety margin (30 min) protects short ops, not this one.
+        /// </summary>
+        private const int SyncTokenBudgetMinutes = 45;
+
     private const int MaxCatalogValues = 50000;
     private const string DevelopmentStage = "development";
     private const string DefaultLocale = "it-IT";
@@ -77,6 +86,21 @@ public class LibrarySyncService
             return result;
         }
 
+        // JF-544: refresh up front unless comfortably more than the whole-sync budget
+        // remains (unknown expiry also refreshes; a failed refresh is not fatal, the
+        // per-leg re-read and 401 retry below are the second and third lines of defense).
+        TimeSpan tokenRemaining = SmapiTokenRefresher.RemainingLifetime(user);
+        if (tokenRemaining < TimeSpan.FromMinutes(SyncTokenBudgetMinutes))
+        {
+            _logger.LogInformation(
+                "Refreshing SMAPI token before catalog sync: {Minutes:F0} min remaining < {Budget} min sync budget (JF-544)",
+                tokenRemaining.TotalMinutes, SyncTokenBudgetMinutes);
+            if (!await SmapiTokenRefresher.RefreshAsync(user, _logger).ConfigureAwait(false))
+            {
+                _logger.LogWarning("Pre-sync token refresh failed for user {UserId}; proceeding with the current token", user.Id);
+            }
+        }
+
         string accessToken = user.SmapiDeviceToken.AccessToken;
         string vendorId = user.VendorId;
         string skillId = user.UserSkill!.SkillId!;
@@ -124,62 +148,98 @@ public class LibrarySyncService
         int localesSucceeded = 0;
         int localesFailed = 0;
 
+        // JF-544: the leg body takes the CURRENT token at call time, not a
+        // start-of-sync snapshot; catalog version creation and the model PUT are both
+        // safe to re-submit, which the one-shot 401 retry below relies on.
+        async Task RunLegAsync(string locale, string token)
+        {
+            // Create/update catalogs with locale-specific phonetic synonyms
+            var artistResult = await SyncCatalogForLocaleAsync(
+                user, token, vendorId, CatalogType.Artist, artistItems,
+                user.ArtistCatalogId, "Jellyfin Artists", "Artist catalog synced from Jellyfin library",
+                locale, cancellationToken).ConfigureAwait(false);
+
+            var albumResult = await SyncCatalogForLocaleAsync(
+                user, token, vendorId, CatalogType.Album, albumItems,
+                user.AlbumCatalogId, "Jellyfin Albums", "Album catalog synced from Jellyfin library",
+                locale, cancellationToken).ConfigureAwait(false);
+
+            var seriesResult = await SyncCatalogForLocaleAsync(
+                user, token, vendorId, CatalogType.Series, seriesItems,
+                user.SeriesCatalogId, "Jellyfin Series", "Series catalog synced from Jellyfin library",
+                locale, cancellationToken).ConfigureAwait(false);
+
+            // Update this locale's interaction model with the catalog references
+            if (artistResult.Version != null || albumResult.Version != null || seriesResult.Version != null)
+            {
+                // JF-495: forward a catalog id ONLY together with the version minted
+                // in THIS run. Forwarding a stored id with a null version (e.g. that
+                // entity type had zero items this run) made the injection pin the
+                // stale "1" fallback version; leaving the id null instead preserves
+                // whatever catalog reference the live model already carries.
+                var modelUpdate = await _catalogManager.UpdateInteractionModelAsync(
+                    token,
+                    skillId,
+                    DevelopmentStage,
+                    locale,
+                    artistResult.Version != null ? user.ArtistCatalogId : null,
+                    albumResult.Version != null ? user.AlbumCatalogId : null,
+                    seriesResult.Version != null ? user.SeriesCatalogId : null,
+                    artistResult.Version,
+                    albumResult.Version,
+                    seriesResult.Version,
+                    cancellationToken).ConfigureAwait(false);
+
+                // JF-495: catalog-sync model PUTs must appear in the per-locale
+                // status ledger, not just ModelDeploymentManager deployments.
+                RecordModelUpdateInLedger(locale, modelUpdate);
+            }
+        }
+
         foreach (string locale in locales)
         {
             var localeSw = System.Diagnostics.Stopwatch.StartNew();
+            Exception? legError = null;
+            var legSucceeded = false;
 
-            try
+            for (int attempt = 1; attempt <= 2; attempt++)
             {
-                // Create/update catalogs with locale-specific phonetic synonyms
-                var artistResult = await SyncCatalogForLocaleAsync(
-                    user, accessToken, vendorId, CatalogType.Artist, artistItems,
-                    user.ArtistCatalogId, "Jellyfin Artists", "Artist catalog synced from Jellyfin library",
-                    locale, cancellationToken).ConfigureAwait(false);
-
-                var albumResult = await SyncCatalogForLocaleAsync(
-                    user, accessToken, vendorId, CatalogType.Album, albumItems,
-                    user.AlbumCatalogId, "Jellyfin Albums", "Album catalog synced from Jellyfin library",
-                    locale, cancellationToken).ConfigureAwait(false);
-
-                var seriesResult = await SyncCatalogForLocaleAsync(
-                    user, accessToken, vendorId, CatalogType.Series, seriesItems,
-                    user.SeriesCatalogId, "Jellyfin Series", "Series catalog synced from Jellyfin library",
-                    locale, cancellationToken).ConfigureAwait(false);
-
-                // Update this locale's interaction model with the catalog references
-                if (artistResult.Version != null || albumResult.Version != null || seriesResult.Version != null)
+                try
                 {
-                    // JF-495: forward a catalog id ONLY together with the version minted
-                    // in THIS run. Forwarding a stored id with a null version (e.g. that
-                    // entity type had zero items this run) made the injection pin the
-                    // stale "1" fallback version; leaving the id null instead preserves
-                    // whatever catalog reference the live model already carries.
-                    var modelUpdate = await _catalogManager.UpdateInteractionModelAsync(
-                        accessToken,
-                        skillId,
-                        DevelopmentStage,
-                        locale,
-                        artistResult.Version != null ? user.ArtistCatalogId : null,
-                        albumResult.Version != null ? user.AlbumCatalogId : null,
-                        seriesResult.Version != null ? user.SeriesCatalogId : null,
-                        artistResult.Version,
-                        albumResult.Version,
-                        seriesResult.Version,
-                        cancellationToken).ConfigureAwait(false);
-
-                    // JF-495: catalog-sync model PUTs must appear in the per-locale
-                    // status ledger, not just ModelDeploymentManager deployments.
-                    RecordModelUpdateInLedger(locale, modelUpdate);
+                    // JF-544: the CURRENT token per attempt picks up any rotation by
+                    // TokenRefreshTask instead of dying on the start-of-sync snapshot.
+                    await RunLegAsync(locale, user.SmapiDeviceToken.AccessToken).ConfigureAwait(false);
+                    legSucceeded = true;
+                    break;
                 }
+                catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized && attempt == 1)
+                {
+                    legError = ex;
+                    _logger.LogWarning(
+                        "SMAPI 401 during catalog sync locale {Locale}: refreshing token and retrying the leg once (JF-544)",
+                        locale);
+                    if (!await SmapiTokenRefresher.RefreshAsync(user, _logger).ConfigureAwait(false))
+                    {
+                        break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    legError = ex;
+                    break;
+                }
+            }
 
+            if (legSucceeded)
+            {
                 localesSucceeded++;
                 _logger.LogInformation("Catalog sync locale {Locale} completed in {ElapsedMs}ms for user {UserId}",
                     locale, localeSw.ElapsedMilliseconds, user.Id);
             }
-            catch (Exception ex)
+            else
             {
                 localesFailed++;
-                _logger.LogWarning(ex, "Catalog sync failed for locale {Locale}, user {UserId} — continuing with next locale",
+                _logger.LogWarning(legError, "Catalog sync failed for locale {Locale}, user {UserId}; continuing with next locale",
                     locale, user.Id);
             }
 

@@ -131,6 +131,50 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
+    /// JF-544: an expired token at sync start with no LWA credentials configured (the
+    /// pre-sync refresh cannot run) must NOT abort the sync; it proceeds with the
+    /// current token and the leg runs normally.
+    /// </summary>
+    [Fact]
+    public async Task SyncUserLibraryAsync_ExpiredToken_NoLwaCredentials_ProceedsWithLegs()
+    {
+        SetupLibraryWithSeries("Adolescence");
+        var user = CreateUser();
+        // Expired well before now.
+        user.SmapiDeviceToken = new DeviceToken(
+            "expired-token", "refresh-token", "Bearer", DateTimeOffset.UtcNow.AddHours(-2).ToUnixTimeSeconds());
+        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+
+        var result = await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.Contains(
+            _smapiHandler.Requests,
+            r => r.Method == HttpMethod.Put && r.Url.EndsWith("/locales/it-IT", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// JF-544: a 401 mid-sync (token dies during the leg) with no refresh available
+    /// fails the leg after exactly ONE attempt (no retry loop) and surfaces the
+    /// failure per-locale instead of hanging or retrying forever.
+    /// </summary>
+    [Fact]
+    public async Task SyncUserLibraryAsync_MidSync401_NoRefreshAvailable_FailsLegAfterSingleAttempt()
+    {
+        SetupLibraryWithSeries("Adolescence");
+        var user = CreateUser();
+        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+        _smapiHandler.FailVersionUploadsWith401Times = 1;
+
+        var result = await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
+
+        // it-IT is the only locale; its single upload 401s, the retry is skipped
+        // because SmapiTokenRefresher has no LWA credentials, so the sync fails.
+        Assert.False(result.Success);
+        Assert.Equal(1, _smapiHandler.VersionUpload401sServed);
+    }
+
+    /// <summary>
     /// A single series-only sync must create the series catalog ("Jellyfin Series"),
     /// persist its ID on the user, upload a catalog version, and inject the
     /// catalog-backed SeriesName type into the interaction model (replacing the
@@ -330,6 +374,14 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
         /// <summary>When true, model PUTs answer 202 + a pollable update-request location (JF-495).</summary>
         public bool TrackModelBuild { get; set; }
 
+        /// <summary>
+        /// JF-544: when positive, the next N catalog-version POSTs answer 401
+        /// ("Token is invalid/expired."), simulating a token dying mid-sync.
+        /// </summary>
+        public int FailVersionUploadsWith401Times { get; set; }
+
+        public int VersionUpload401sServed { get; private set; }
+
         public List<(HttpMethod Method, string Url, string? Body)> Requests { get; } = new();
 
         public int CatalogCreationCount =>
@@ -366,6 +418,16 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
 
             if (request.Method == HttpMethod.Post && url.EndsWith("/versions", StringComparison.Ordinal))
             {
+                if (FailVersionUploadsWith401Times > 0)
+                {
+                    FailVersionUploadsWith401Times--;
+                    VersionUpload401sServed++;
+                    return new HttpResponseMessage(HttpStatusCode.Unauthorized)
+                    {
+                        Content = new StringContent("{\"message\":\"Token is invalid/expired.\"}", Encoding.UTF8, "application/json")
+                    };
+                }
+
                 // 202 Accepted with a poll location, mirroring SMAPI's async build.
                 return new HttpResponseMessage(HttpStatusCode.Accepted)
                 {

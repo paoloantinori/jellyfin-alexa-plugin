@@ -1,0 +1,80 @@
+#nullable enable
+using System;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+
+namespace Jellyfin.Plugin.AlexaSkill.Lwa;
+
+/// <summary>
+/// The one LWA device-token refresh implementation (JF-544). TokenRefreshTask's
+/// periodic sweep and long-running SMAPI operations both call it: a catalog sync
+/// spans 30-45 minutes against ~1h access tokens, so an operation that can outlive
+/// its token must refresh up front and on 401 instead of trusting the sweep's
+/// safety margin.
+/// </summary>
+internal static class SmapiTokenRefresher
+{
+    /// <summary>
+    /// Refreshes the user's device token in place and persists the configuration.
+    /// Returns false (with the reason logged at Debug/Warning) when LWA credentials
+    /// or the refresh token are missing or the refresh call fails or throws; the
+    /// caller decides whether that is fatal. Never throwing is part of the contract:
+    /// long-running callers use this INSIDE their recovery path, where a thrown LWA
+    /// failure would abort the very operation the refresh was meant to save (JF-544).
+    /// </summary>
+    public static async Task<bool> RefreshAsync(Entities.User user, ILogger logger)
+    {
+        var config = Plugin.Instance?.Configuration;
+        if (config == null
+            || string.IsNullOrWhiteSpace(config.LwaClientId)
+            || string.IsNullOrWhiteSpace(config.LwaClientSecret))
+        {
+            logger.LogDebug("LWA credentials not configured; cannot refresh token for user {UserId}", user.Id);
+            return false;
+        }
+
+        if (string.IsNullOrEmpty(user.SmapiRefreshToken))
+        {
+            logger.LogDebug("No refresh token for user {UserId}; cannot refresh", user.Id);
+            return false;
+        }
+
+        DeviceToken? tokenResult;
+        try
+        {
+            tokenResult = await LwaClient.RefreshDeviceToken(
+                new DeviceToken(user.SmapiRefreshToken, user.SmapiRefreshToken, "Bearer", 0),
+                config.LwaClientId,
+                config.LwaClientSecret).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Token refresh request failed for user {UserId}", user.Id);
+            return false;
+        }
+
+        if (tokenResult == null)
+        {
+            logger.LogWarning("Token refresh returned no token for user {UserId}", user.Id);
+            return false;
+        }
+
+        user.SmapiDeviceToken = tokenResult;
+        user.SmapiRefreshToken = tokenResult.RefreshToken;
+        Plugin.Instance!.SaveConfiguration();
+        logger.LogDebug("Refreshed SMAPI token for user {UserId}", user.Id);
+        return true;
+    }
+
+    /// <summary>Remaining access-token lifetime; an unknown expiry reads as zero
+    /// so callers err toward refreshing.</summary>
+    public static TimeSpan RemainingLifetime(Entities.User user)
+    {
+        if (user.SmapiDeviceToken == null || user.SmapiDeviceToken.ExpireTimestamp <= 0)
+        {
+            return TimeSpan.Zero;
+        }
+
+        return DateTimeOffset.FromUnixTimeSeconds(user.SmapiDeviceToken.ExpireTimestamp) - DateTimeOffset.UtcNow;
+    }
+}
