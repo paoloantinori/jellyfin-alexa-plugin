@@ -272,27 +272,6 @@ public class ModelDeploymentManager
             return new ModelDeploymentResult(false, "User has no SMAPI device token.", string.Empty);
         }
 
-        // JF-545: a single-locale deploy with its build poll runs a few minutes; make
-        // sure the ~1h token comfortably outlives it (a mid-op 401 previously failed
-        // the deployment). Non-fatal on failure: the deploy may still fit the remainder.
-        TimeSpan tokenRemaining = SmapiTokenRefresher.RemainingLifetime(user);
-        if (tokenRemaining < TimeSpan.FromMinutes(DeployTokenBudgetMinutes))
-        {
-            _logger.LogInformation(
-                "Refreshing SMAPI token before custom-model deploy: {Minutes:F0} min remaining < {Budget} min budget (JF-545)",
-                tokenRemaining.TotalMinutes, DeployTokenBudgetMinutes);
-            if (!await SmapiTokenRefresher.RefreshAsync(user, _logger).ConfigureAwait(false))
-            {
-                _logger.LogWarning("Pre-deploy token refresh failed for user {UserId}; proceeding with the current token", user.Id);
-            }
-        }
-
-        SmapiManagement? smapi = user.SmapiManagement;
-        if (smapi == null)
-        {
-            return new ModelDeploymentResult(false, "Failed to create SMAPI management instance.", string.Empty);
-        }
-
         _logger.LogInformation(
             "Deploying custom interaction model for skill {SkillId} locale {Locale}",
             skillId, locale);
@@ -318,6 +297,27 @@ public class ModelDeploymentManager
                 return new ModelDeploymentResult(false, message, string.Empty);
             }
 
+        // JF-545: a single-locale deploy with its build poll runs a few minutes; make
+        // sure the ~1h token comfortably outlives it (a mid-op 401 previously failed
+        // the deployment). Non-fatal on failure: the deploy may still fit the remainder.
+        TimeSpan tokenRemaining = SmapiTokenRefresher.RemainingLifetime(user);
+        if (tokenRemaining < TimeSpan.FromMinutes(DeployTokenBudgetMinutes))
+        {
+            _logger.LogInformation(
+                "Refreshing SMAPI token before custom-model deploy: {Minutes:F0} min remaining < {Budget} min budget (JF-545)",
+                tokenRemaining.TotalMinutes, DeployTokenBudgetMinutes);
+            if (!await SmapiTokenRefresher.RefreshAsync(user, _logger).ConfigureAwait(false))
+            {
+                _logger.LogWarning("Pre-deploy token refresh failed for user {UserId}; proceeding with the current token", user.Id);
+            }
+        }
+
+        SmapiManagement? smapi = user.SmapiManagement;
+        if (smapi == null)
+        {
+            return new ModelDeploymentResult(false, "Failed to create SMAPI management instance.", string.Empty);
+        }
+
             // Parse the provided JSON and create a SkillInteractionModel.
             // The model JSON should contain the "interactionModel" envelope that SMAPI expects.
             var interactionModel = CreateSkillInteractionModel(modelJson, locale);
@@ -340,8 +340,12 @@ public class ModelDeploymentManager
             catch (Refit.ApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
             {
                 _logger.LogWarning("SMAPI 401 deploying locale {Locale}: refreshing token and retrying once (JF-545)", locale);
-                if (!await SmapiTokenRefresher.RefreshAsync(user, _logger).ConfigureAwait(false))
+                string tokenBeforeRefresh = user.SmapiDeviceToken!.AccessToken;
+                if (!await SmapiTokenRefresher.RefreshAsync(user, _logger).ConfigureAwait(false)
+                    && tokenBeforeRefresh == user.SmapiDeviceToken.AccessToken)
                 {
+                    // Our refresh failed AND nothing rotated the token meanwhile (the
+                    // 20-min sweep may have); a retry would re-send the same dead token.
                     throw;
                 }
 

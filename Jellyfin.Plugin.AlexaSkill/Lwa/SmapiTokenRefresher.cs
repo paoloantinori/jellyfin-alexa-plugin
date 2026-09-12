@@ -33,7 +33,10 @@ internal static class SmapiTokenRefresher
             || string.IsNullOrWhiteSpace(config.LwaClientId)
             || string.IsNullOrWhiteSpace(config.LwaClientSecret))
         {
-            logger.LogDebug("LWA credentials not configured; cannot refresh token for user {UserId}", user.Id);
+            // Warning, not Debug: restart recovery DE-AUTHS the user on this path
+            // (SkillStartup nulls the refresh token), so the operator must see why
+            // at the default log level (JF-545 review).
+            logger.LogWarning("LWA credentials not configured; cannot refresh token for user {UserId}", user.Id);
             return false;
         }
 

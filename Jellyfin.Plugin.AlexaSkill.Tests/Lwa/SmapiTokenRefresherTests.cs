@@ -98,6 +98,13 @@ public class SmapiTokenRefresherTests : IDisposable
     public void Dispose()
     {
         LwaClient.HttpClientOverrideForTests = null;
+        // The Plugin collection is shared; do not leave our credentials and logger
+        // factory on the instance for whichever suite runs next (JF-545 review).
+        if (Plugin.Instance != null)
+        {
+            Plugin.Instance.Configuration.LwaClientId = string.Empty;
+            Plugin.Instance.Configuration.LwaClientSecret = string.Empty;
+        }
     }
 
     private sealed class RecordingLogger : ILogger

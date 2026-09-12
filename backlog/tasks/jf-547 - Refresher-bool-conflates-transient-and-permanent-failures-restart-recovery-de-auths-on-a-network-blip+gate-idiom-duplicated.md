@@ -31,3 +31,13 @@ Filed from the JF-545 /simplify pass (2026-09-12), two residuals the consolidati
 - [ ] Locale response strings added to all 17 locales
 - [ ] /simplify passed (no blocking cleanups remaining)
 - [ ] /code-review high passed (no blocking findings remaining or findings applied/tracked)
+
+RESIDUALS JOINED from the JF-545 code-review (2026-09-12, all verified; the mechanical ones - the retry's concurrent-rotation guard, the gate-after-pre-flight move, the credentials-miss log level, the test state restore - were applied in the review-fix commit):
+
+3. THREE 401-RECOVERY COPIES: the SMAPI 401-refresh-retry policy now exists in three divergent shapes (AlexaUtil.CallAsync's Refit two-arm, LibrarySyncService's HttpRequestException leg-retry with the rotation guard, ModelDeploymentManager's Refit PUT-retry that now ALSO has the guard). They already disagree on failed-refresh semantics. Fix shape: one shared recovery helper (or route the deploy PUT through CallAsync with a closure re-reading user.SmapiManagement); the transient/permanent split in item 1 must land in ONE place, not three.
+
+4. DeployCustomModelAsync's outer catch (Exception) swallows OperationCanceledException, so the controller's TimeoutException-to-504 arm is unreachable for the deploy/restore phases (a 5-min CTS cancellation reads as a generic failed-deploy 500; the fetch phase's arm is dead too - cancellation there surfaces as TaskCanceledException). Fix shape: rethrow OperationCanceledException/TaskCanceledException from the catch (or catch them first).
+
+5. REQUEST-PATH PERSIST CONTRACT: CallAsync's refresh now persists best-effort (SmapiTokenRefresher swallows save failures) where the old inline code failed the request on a save failure. The displaced-failure window (on-disk refresh token stale after a restart -> forced re-link) is commented in the refresher but is a real caller-visible change on the request path. Decide: accept (document) or fail-loud on the request path specifically.
+
+6. LOG-LEVEL REROUTE: transport-class refresh failures on the startup path now surface as UnauthorizedAccessException -> SkillStartup's Warning arm ('skill sync deferred', message-only) instead of the old Error arm with the stack. Operators grepping Error for startup SMAPI outages no longer see refresh failures; the evidence lives in the LwaClient-category Warning. Accept or re-route.
