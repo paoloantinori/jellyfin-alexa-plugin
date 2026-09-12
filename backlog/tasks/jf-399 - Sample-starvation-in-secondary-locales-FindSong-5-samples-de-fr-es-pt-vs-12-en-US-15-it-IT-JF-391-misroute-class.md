@@ -6,7 +6,7 @@ title: >-
 status: In Progress
 assignee: []
 created_date: '2026-08-23 05:56'
-updated_date: '2026-09-11 17:44'
+updated_date: '2026-09-12 00:11'
 labels:
   - nlu
   - interaction-model
@@ -56,4 +56,10 @@ BLOCKER for the ja-JP/hi-IN (and nl/pt/ar) portion: those locales are NOT active
 JF-316 milestone-3 archaeology (2026-09-11, gate-verified): es-US was NEVER in this task's starved-locale scope, but its FindSongIntent (12) and FindSongByArtistIntent (4) sample sets have been ENGLISH, byte-equal to en-GB's, since the intent's birth commit (036f7eae) - silent inertia, not a market decision, no NLU fixture covers es-US FindSong in either language, no prior doc mentions it. Now documented for the first time in templates/es-US.yaml's header. OPEN QUESTION for this task's scope review: does es-US FindSong deserve Spanish samples (a routing-decision + fixture), or is English-in-es-US acceptable for that marketplace? Note JF-406 tracks es-US routing divergences more broadly.
 
 JF-316 final-milestone gate (2026-09-11): the English-inertia class is WIDER than the es-US finding - nl-NL carries the same 24 pure-English samples (PlayBook fully English 8 + FindSong 12 + FindSongByArtist 4, byte-equal to es-US's sets), as do ja-JP, hi-IN, and ar-SA. All four headers now cite this task. ALSO new inertia recorded: hi-IN's Decade TYPE VALUES are untranslated English (50s..2020s, ASCII digits, numeric synonyms; Devanagari synonyms like पचासवां दशक mitigate recall) - same 036f7eae copy-inertia provenance class, header-only until now. The consolidated open question: a translation pass for the English-inertia surfaces (5 locales x PlayBook/FindSong + hi-IN Decade values) with the routing decision per marketplace.
+
+2026-09-12 night run: the ja/hi portion is DONE and live-verified (unblocked by JF-513's manifest redeploy, which also made ja-JP buildable for the first time). PlaySongIntent ja-JP 10 -> 22 and hi-IN 14 -> 22 (mid-tier parity; en-US 38 and it-IT 80 remain ahead as references), PlayPlaylistIntent ja-JP 5 -> 11. All new samples use the locales' established vocabulary; the one verbless form was noun-qualified per review (曲 {song} お願いします); the duplicate PlayArtistSongs twin created by the JF-513 glued-slot fix was removed. Live: rebuild endpoint SUCCEEDED for both locales, profile-nlu confirms the new carriers route with correct slot fills (ja をかけて/をスタートして/マイプレイリスト再生して, hi बजाओ/सुनाओ/मैं...सुनना चाहता हूँ). NOTE for future probes: the profile-nlu response field is selectedIntent, NOT result.intent - a broken extractor produced false all-NO_SELECTION readings for an hour tonight before the spot-check caught it (recorded in CancelWords.cs).
+
+Bonus landed same night: JF-513.1 item 2 (CancelWords ja-JP re-vet) resolved - JapaneseWords set added (とめて/止めて/止まって/ストップ/やめて/stop) with probe evidence; 'cancel' joins the 10-locale exclusion norm. En-route findings filed in JF-513.1 items 5-7.
+
+STILL OPEN in this task: (a) the en-US scope note (523 samples vs 1250 it-IT; whether PlaySong 38 / PlayArtistSongs 34 deserve the it-IT carrier-noun expansion), (b) the English-inertia translation decision (5 locales x PlayBook/FindSong + hi-IN Decade values, consolidated open question from JF-316), (c) residuals already moved to JF-405. The task stays In Progress for (a)+(b); both are judgment calls that benefit from a fresh session.
 <!-- SECTION:NOTES:END -->
