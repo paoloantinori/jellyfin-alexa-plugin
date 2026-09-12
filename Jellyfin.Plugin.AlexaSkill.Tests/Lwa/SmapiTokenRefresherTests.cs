@@ -160,6 +160,37 @@ public class SmapiTokenRefresherTests : IDisposable
     }
 
     [Fact]
+    public async Task EnsureLifetimeBudgetAsync_FreshToken_NoRefreshCall()
+    {
+        SetTestLwaCredentials();
+        LwaClient.HttpClientOverrideForTests = () => throw new InvalidOperationException(
+            "gate must not refresh when comfortably inside the budget");
+
+        var user = CreateUser();
+        user.SmapiDeviceToken = new DeviceToken(
+            "fresh", "refresh-token-1", "Bearer", DateTimeOffset.UtcNow.AddMinutes(50).ToUnixTimeSeconds());
+
+        // Must complete without hitting the (throwing) client.
+        await SmapiTokenRefresher.EnsureLifetimeBudgetAsync(user, 10, "test op", NullLogger.Instance);
+    }
+
+    [Fact]
+    public async Task EnsureLifetimeBudgetAsync_NearExpiry_RefreshesAndProceeds()
+    {
+        LwaClient.HttpClientOverrideForTests = () => new HttpClient(new HappyHandler());
+        SetTestLwaCredentials();
+        UseLiveLoggerFactory();
+
+        var user = CreateUser();
+        user.SmapiDeviceToken = new DeviceToken(
+            "almost-dead", "refresh-token-1", "Bearer", DateTimeOffset.UtcNow.AddMinutes(5).ToUnixTimeSeconds());
+
+        await SmapiTokenRefresher.EnsureLifetimeBudgetAsync(user, 10, "test op", NullLogger.Instance);
+
+        Assert.Equal("fresh-access", user.SmapiDeviceToken.AccessToken);
+    }
+
+    [Fact]
     public async Task RefreshAsync_NoLwaCredentials_ReturnsFalse()
     {
         SetTestLwaCredentials();

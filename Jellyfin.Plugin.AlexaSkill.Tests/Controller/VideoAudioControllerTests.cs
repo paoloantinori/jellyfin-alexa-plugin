@@ -20,6 +20,8 @@ using Moq;
 using Xunit;
 using static Jellyfin.Plugin.AlexaSkill.Tests.Unit.TestHelpers;
 
+using Jellyfin.Plugin.AlexaSkill.Tests;
+
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Controller;
 
 /// <summary>
@@ -437,7 +439,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         using var loggerFactory = LoggerFactory.Create(b =>
         {
             b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(new CaptureLoggerProvider(logRecords));
+            b.AddProvider(TestCaptureLogger.Into(logRecords));
         });
         var controller = CreateController(audioItem.Id.ToString(), loggerFactory);
         controller.FfmpegPath = fakeFfmpegPath;
@@ -478,7 +480,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         using var loggerFactory = LoggerFactory.Create(b =>
         {
             b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(new CaptureLoggerProvider(logRecords));
+            b.AddProvider(TestCaptureLogger.Into(logRecords));
         });
         var controller = CreateController(audioItem.Id.ToString(), loggerFactory);
         controller.FfmpegPath = fakeFfmpegPath;
@@ -1224,7 +1226,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         using var loggerFactory = LoggerFactory.Create(b =>
         {
             b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(new CaptureLoggerProvider(logRecords));
+            b.AddProvider(TestCaptureLogger.Into(logRecords));
         });
 
         var controller = new VideoAudioController(
@@ -1258,38 +1260,6 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// Capture logger provider so tests can assert on Debug log output (same shape as
     /// SkillResponseLoggingTests' CaptureLoggerProvider).
     /// </summary>
-    private class CaptureLoggerProvider : ILoggerProvider
-    {
-        private readonly List<(LogLevel Level, string Message)> _records;
-
-        public CaptureLoggerProvider(List<(LogLevel Level, string Message)> records)
-        {
-            _records = records;
-        }
-
-        public ILogger CreateLogger(string categoryName) => new CaptureLogger(_records);
-
-        public void Dispose() { }
-    }
-
-    private class CaptureLogger : ILogger
-    {
-        private readonly List<(LogLevel Level, string Message)> _records;
-
-        public CaptureLogger(List<(LogLevel Level, string Message)> records)
-        {
-            _records = records;
-        }
-
-        IDisposable? ILogger.BeginScope<TState>(TState state) => null;
-
-        bool ILogger.IsEnabled(LogLevel logLevel) => true;
-
-        void ILogger.Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-        {
-            _records.Add((logLevel, formatter(state, exception)));
-        }
-    }
 
     // ========== VideoAudioCache HLS Tests ==========
 
@@ -2511,7 +2481,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         using var loggerFactory = LoggerFactory.Create(b =>
         {
             b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(new CaptureLoggerProvider(logRecords));
+            b.AddProvider(TestCaptureLogger.Into(logRecords));
         });
 
         int originalCap = _config.VideoAudioCacheSizeMB;
@@ -2578,7 +2548,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         using var loggerFactory = LoggerFactory.Create(b =>
         {
             b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(new CaptureLoggerProvider(logRecords));
+            b.AddProvider(TestCaptureLogger.Into(logRecords));
         });
 
         var controller = CreateEpisodeController(mediaSourceManager, episode.Id.ToString(), fakeFfmpegPath, loggerFactory);
@@ -2632,7 +2602,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         using var loggerFactory = LoggerFactory.Create(b =>
         {
             b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(new CaptureLoggerProvider(logRecords));
+            b.AddProvider(TestCaptureLogger.Into(logRecords));
         });
 
         int originalCap = _config.VideoAudioCacheSizeMB;

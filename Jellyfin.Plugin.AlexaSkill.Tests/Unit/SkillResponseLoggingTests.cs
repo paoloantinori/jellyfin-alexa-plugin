@@ -148,7 +148,7 @@ public class SkillResponseLoggingTests
         var loggerFactory = LoggerFactory.Create(builder =>
         {
             builder.SetMinimumLevel(LogLevel.Trace);
-            builder.AddProvider(new CaptureLoggerProvider(logRecords));
+            builder.AddProvider(TestCaptureLogger.Into(logRecords));
         });
 
         var counters = new RequestCounters();
@@ -202,41 +202,5 @@ public class SkillResponseLoggingTests
         Assert.True(json.Length < 1024,
             $"Expected Tell response under 1KB but got {json.Length} bytes");
         Assert.Equal(1, counters.ResponseSizeSmall);
-    }
-
-    private class CaptureLoggerProvider : ILoggerProvider
-    {
-        private readonly List<(LogLevel Level, string Message)> _records;
-
-        public CaptureLoggerProvider(List<(LogLevel Level, string Message)> records)
-        {
-            _records = records;
-        }
-
-        public ILogger CreateLogger(string categoryName)
-        {
-            return new CaptureLogger(_records);
-        }
-
-        public void Dispose() { }
-    }
-
-    private class CaptureLogger : ILogger
-    {
-        private readonly List<(LogLevel Level, string Message)> _records;
-
-        public CaptureLogger(List<(LogLevel Level, string Message)> records)
-        {
-            _records = records;
-        }
-
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-        {
-            _records.Add((logLevel, formatter(state, exception)));
-        }
     }
 }
