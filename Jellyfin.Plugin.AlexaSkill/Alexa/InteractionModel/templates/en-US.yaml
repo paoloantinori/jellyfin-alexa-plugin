@@ -92,6 +92,8 @@ intents:
       - loop this song
       - loop this song forever
       - Repeat this song forever
+      - repeat the song
+      - repeat this song
   - AMAZON.ShuffleOnIntent
   - AMAZON.ShuffleOffIntent
   - AMAZON.StartOverIntent

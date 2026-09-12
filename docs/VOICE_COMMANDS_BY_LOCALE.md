@@ -1141,7 +1141,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (448 phrases across 59 commands):
+Complete phrase list (450 phrases across 59 commands):
 
 #### Play music
 
@@ -1526,6 +1526,8 @@ Complete phrase list (448 phrases across 59 commands):
 - `loop this song`
 - `loop this song forever`
 - `Repeat this song forever`
+- `repeat the song`
+- `repeat this song`
 
 #### Favorites
 
@@ -1797,7 +1799,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (441 phrases across 59 commands):
+Complete phrase list (443 phrases across 59 commands):
 
 #### Play music
 
@@ -2179,6 +2181,8 @@ Complete phrase list (441 phrases across 59 commands):
 - `loop this song`
 - `loop this song forever`
 - `Repeat this song forever`
+- `repeat the song`
+- `repeat this song`
 
 #### Favorites
 
@@ -2446,7 +2450,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (537 phrases across 59 commands):
+Complete phrase list (539 phrases across 59 commands):
 
 #### Play music
 
@@ -2905,6 +2909,8 @@ Complete phrase list (537 phrases across 59 commands):
 - `loop this song`
 - `loop this song forever`
 - `Repeat this song forever`
+- `repeat the song`
+- `repeat this song`
 
 #### Favorites
 
@@ -3191,7 +3197,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (442 phrases across 59 commands):
+Complete phrase list (444 phrases across 59 commands):
 
 #### Play music
 
@@ -3572,6 +3578,8 @@ Complete phrase list (442 phrases across 59 commands):
 - `loop this song`
 - `loop this song forever`
 - `Repeat this song forever`
+- `repeat the song`
+- `repeat this song`
 
 #### Favorites
 
@@ -3848,7 +3856,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (552 phrases across 61 commands):
+Complete phrase list (554 phrases across 61 commands):
 
 #### Play music
 
@@ -4295,6 +4303,8 @@ Complete phrase list (552 phrases across 61 commands):
 - `loop this song`
 - `loop this song forever`
 - `Repeat this song forever`
+- `repeat the song`
+- `repeat this song`
 
 #### Favorites
 
