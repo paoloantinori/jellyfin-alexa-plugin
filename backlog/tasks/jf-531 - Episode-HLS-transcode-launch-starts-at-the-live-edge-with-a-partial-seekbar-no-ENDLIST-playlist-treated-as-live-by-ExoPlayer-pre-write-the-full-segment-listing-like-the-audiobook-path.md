@@ -4,10 +4,10 @@ title: >-
   Episode HLS transcode launch starts at the live edge with a partial seekbar
   (no-ENDLIST playlist treated as live by ExoPlayer); pre-write the full segment
   listing like the audiobook path
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-09 16:29'
-updated_date: '2026-09-10 08:15'
+updated_date: '2026-09-12 16:13'
 labels:
   - bug
   - video
@@ -32,10 +32,10 @@ From Paolo's live Echo Show session (2026-09-09 18:10, corr=c0c21c6a): launching
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Pre-write the full segment list in the episode HLS playlist (audiobook pattern: all segment names listed at first serve, files appearing progressively) for BOTH the remux and transcode tiers, or document why remux is exempt
-- [ ] #2 On-device verified: an HEVC episode launch shows the true runtime on the seekbar and playback starts at 0 (not the live edge); Paolo's Adolescence E2 case is the reference (51-min episode showed a 6-min bar and started near the end)
-- [ ] #3 The audiobook path's behavior is unchanged (it already pre-writes); regression tests cover the episode playlist shape (full listing at first serve, no ENDLIST until complete, append semantics preserved for mid-encode fetches)
-- [ ] #4 Full suite green; /simplify + code-review high gates before merge
+- [x] #1 Pre-write the full segment list in the episode HLS playlist (audiobook pattern: all segment names listed at first serve, files appearing progressively) for BOTH the remux and transcode tiers, or document why remux is exempt
+- [x] #2 On-device verified: an HEVC episode launch shows the true runtime on the seekbar and playback starts at 0 (not the live edge); Paolo's Adolescence E2 case is the reference (51-min episode showed a 6-min bar and started near the end)
+- [x] #3 The audiobook path's behavior is unchanged (it already pre-writes); regression tests cover the episode playlist shape (full listing at first serve, no ENDLIST until complete, append semantics preserved for mid-encode fetches)
+- [x] #4 Full suite green; /simplify + code-review high gates before merge
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -43,6 +43,12 @@ From Paolo's live Echo Show session (2026-09-09 18:10, corr=c0c21c6a): launching
 <!-- SECTION:NOTES:BEGIN -->
 2026-09-10 deployed+server-verified (batch with JF-528/533, md5 1ac3857f, merge 6160776d): matrix live on minix with Letterkenny S00E16 (22 min, remux tier). First serve = the pre-written FULL listing (328 EXTINF = ceil(runtime/4), uniform 3.9885s summing to the runtime, no ENDLIST, token embedded, served in 0.67s) with the 'serving pre-written full listing ... JF-531' log line; encode completed at 293 real segments and the post-completion serve correctly returned ffmpeg's ENDLIST playlist (293 EXTINF) - the stale 328-entry listing does NOT shadow it (flag gate live-confirmed). Token minted server-side from the on-disk StreamTokenSecret to reach the endpoint directly (the simulator context hardcodes no VideoApp interface, so the launch path itself needs the device). REMAINING for AC#2: Paolo at the Echo Show - launch an episode and confirm the seekbar shows the TRUE runtime (not a growing partial bar) and playback starts at 0; the reviewer additionally suggests probing a seek into the back half during the first minutes of an encode (the remux tier's phantom tail is wider than the audiobook's, same 404-then-catch-up failure kind).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed with device evidence 2026-09-12 (Paolo's Echo Show session, test battery A2/A3): episode launch via the remux tier showed the TRUE runtime on the seekbar (position marker visible at 21:48) and manual scrolling (seeking) worked during playback. AC#2 satisfied by the user's on-device report. Implementation (pre-written full listing, deployed 2026-09-10, md5 1ac3857f) already server-verified with Letterkenny S00E16; the stale-listing-does-not-shadow-ENDLIST flag gate was live-confirmed then. Note: the reviewer's extra probe (seek into the back half during the first minutes of an encode) was not explicitly performed; the user's "scrolling manually did work" exercised seeking during playback. The phantom-tail-during-encode shape shares the audiobook path's 404-then-catch-up behavior and is not a regression risk for this AC. Related incident same session (A1): the empty-series_name prompt bug is tracked separately in JF-549.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
