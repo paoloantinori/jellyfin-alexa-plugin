@@ -87,19 +87,10 @@ public class LibrarySyncService
         }
 
         // JF-544: refresh up front unless comfortably more than the whole-sync budget
-        // remains (unknown expiry also refreshes; a failed refresh is not fatal, the
-        // per-leg re-read and 401 retry below are the second and third lines of defense).
-        TimeSpan tokenRemaining = SmapiTokenRefresher.RemainingLifetime(user);
-        if (tokenRemaining < TimeSpan.FromMinutes(SyncTokenBudgetMinutes))
-        {
-            _logger.LogInformation(
-                "Refreshing SMAPI token before catalog sync: {Minutes:F0} min remaining < {Budget} min sync budget (JF-544)",
-                tokenRemaining.TotalMinutes, SyncTokenBudgetMinutes);
-            if (!await SmapiTokenRefresher.RefreshAsync(user, _logger).ConfigureAwait(false))
-            {
-                _logger.LogWarning("Pre-sync token refresh failed for user {UserId}; proceeding with the current token", user.Id);
-            }
-        }
+        // remains; the per-leg re-read and 401 retry below are the second and third
+        // lines of defense.
+        await SmapiTokenRefresher.EnsureLifetimeBudgetAsync(
+            user, SyncTokenBudgetMinutes, "catalog sync", _logger).ConfigureAwait(false);
 
         string vendorId = user.VendorId;
         string skillId = user.UserSkill!.SkillId!;

@@ -82,6 +82,35 @@ internal static class SmapiTokenRefresher
         return true;
     }
 
+    /// <summary>
+    /// JF-547 gate idiom, single definition: long-running SMAPI operations refresh
+    /// up front unless comfortably more than their whole duration remains (unknown
+    /// expiry also refreshes). A failed refresh is non-fatal and logged; callers
+    /// keep their own per-attempt defenses (401 retry, sweep rotation).
+    /// </summary>
+    /// <param name="budgetMinutes">The operation's expected duration; the token must
+    /// outlive it plus the sweep margin.</param>
+    /// <param name="opName">For the log line, e.g. "catalog sync" or "custom-model deploy".</param>
+    public static async Task EnsureLifetimeBudgetAsync(
+        Entities.User user, int budgetMinutes, string opName, ILogger logger)
+    {
+        TimeSpan remaining = RemainingLifetime(user);
+        if (remaining >= TimeSpan.FromMinutes(budgetMinutes))
+        {
+            return;
+        }
+
+        logger.LogInformation(
+            "Refreshing SMAPI token before {Op}: {Minutes:F0} min remaining < {Budget} min budget (JF-544)",
+            opName, remaining.TotalMinutes, budgetMinutes);
+        if (!await RefreshAsync(user, logger).ConfigureAwait(false))
+        {
+            logger.LogWarning(
+                "Pre-{Op} token refresh failed for user {UserId}; proceeding with the current token",
+                opName, user.Id);
+        }
+    }
+
     /// <summary>Remaining access-token lifetime; an unknown expiry reads as zero
     /// so callers err toward refreshing.</summary>
     public static TimeSpan RemainingLifetime(Entities.User user)

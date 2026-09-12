@@ -297,20 +297,10 @@ public class ModelDeploymentManager
                 return new ModelDeploymentResult(false, message, string.Empty);
             }
 
-        // JF-545: a single-locale deploy with its build poll runs a few minutes; make
-        // sure the ~1h token comfortably outlives it (a mid-op 401 previously failed
-        // the deployment). Non-fatal on failure: the deploy may still fit the remainder.
-        TimeSpan tokenRemaining = SmapiTokenRefresher.RemainingLifetime(user);
-        if (tokenRemaining < TimeSpan.FromMinutes(DeployTokenBudgetMinutes))
-        {
-            _logger.LogInformation(
-                "Refreshing SMAPI token before custom-model deploy: {Minutes:F0} min remaining < {Budget} min budget (JF-545)",
-                tokenRemaining.TotalMinutes, DeployTokenBudgetMinutes);
-            if (!await SmapiTokenRefresher.RefreshAsync(user, _logger).ConfigureAwait(false))
-            {
-                _logger.LogWarning("Pre-deploy token refresh failed for user {UserId}; proceeding with the current token", user.Id);
-            }
-        }
+        // JF-545: a single-locale deploy with its build poll runs a few minutes; the
+        // token must comfortably outlive it (a mid-op 401 previously failed the deploy).
+        await SmapiTokenRefresher.EnsureLifetimeBudgetAsync(
+            user, DeployTokenBudgetMinutes, "custom-model deploy", _logger).ConfigureAwait(false);
 
         SmapiManagement? smapi = user.SmapiManagement;
         if (smapi == null)
@@ -375,6 +365,12 @@ public class ModelDeploymentManager
                 succeeded,
                 succeeded ? "Deployment successful." : $"Model build {status}.",
                 status);
+        }
+        catch (OperationCanceledException)
+        {
+            // JF-547 item 4: the controller's CTS-to-504 arm must stay reachable;
+            // converting cancellation into a failed result masked timeouts.
+            throw;
         }
         catch (Exception ex)
         {
