@@ -40,12 +40,14 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
     private readonly FakeSmapiHandler _smapiHandler;
     private readonly ILoggerFactory _loggerFactory;
     private readonly LibrarySyncService _service;
+    private readonly List<string> _logCapture;
 
     public LibrarySyncServiceSeriesTests()
     {
         _libraryManagerMock = new Mock<ILibraryManager>();
         _smapiHandler = new FakeSmapiHandler(SeriesCatalogId);
-        _loggerFactory = LoggerFactory.Create(b => { });
+        _logCapture = new List<string>();
+        _loggerFactory = LoggerFactory.Create(b => b.AddProvider(new CapturingProvider(_logCapture)));
 
         var catalogManager = new CatalogManager(
             new StubHttpClientFactory(() => new HttpClient(_smapiHandler)),
@@ -172,6 +174,40 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
         // because SmapiTokenRefresher has no LWA credentials, so the sync fails.
         Assert.False(result.Success);
         Assert.Equal(1, _smapiHandler.VersionUpload401sServed);
+
+        // The discriminating signal: the 401 must land in the retry filter (which
+        // then finds no refresh available), not in the generic catch. A refactor that
+        // makes CatalogManager throw a typed exception instead of HttpRequestException
+        // would silently kill the retry while keeping this test green without this.
+        Assert.Contains(_logCapture, l => l.Contains("refreshing token and retrying the leg once (JF-544)", StringComparison.Ordinal));
+    }
+
+    private sealed class CapturingProvider : ILoggerProvider
+    {
+        private readonly List<string> _sink;
+
+        public CapturingProvider(List<string> sink) => _sink = sink;
+
+        public ILogger CreateLogger(string categoryName) => new CapturingLogger(_sink);
+
+        public void Dispose()
+        {
+        }
+
+        private sealed class CapturingLogger : ILogger
+        {
+            private readonly List<string> _sink;
+
+            public CapturingLogger(List<string> sink) => _sink = sink;
+
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public void Log<TState>(
+                LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+                => _sink.Add(formatter(state, exception));
+        }
     }
 
     /// <summary>

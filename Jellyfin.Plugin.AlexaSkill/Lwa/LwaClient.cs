@@ -184,7 +184,8 @@ public static class LwaClient
         HttpResponseMessage response = await RetryHelper.ExecuteWithRetryAsync(
             () => Plugin.HttpClient.PostAsync(url, formUrlEncodedContent),
             Logger,
-            "LwaRefreshToken").ConfigureAwait(false);
+            "LwaRefreshToken",
+            timeoutMs: 15_000).ConfigureAwait(false);
 
         string content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 

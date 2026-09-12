@@ -101,13 +101,14 @@ public class LibrarySyncService
             }
         }
 
-        string accessToken = user.SmapiDeviceToken.AccessToken;
         string vendorId = user.VendorId;
         string skillId = user.UserSkill!.SkillId!;
 
-        // Determine which locales to sync
+        // Determine which locales to sync. JF-544: the CURRENT token, not a
+        // start-of-sync snapshot, so the pre-sync refresh above is what this call uses.
         string syncLocalesConfig = Plugin.Instance?.Configuration?.CatalogSyncLocales ?? string.Empty;
-        IReadOnlyList<string> resolvedLocales = await ResolveSyncLocalesAsync(syncLocalesConfig, accessToken, skillId, cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<string> resolvedLocales = await ResolveSyncLocalesAsync(
+            syncLocalesConfig, user.SmapiDeviceToken.AccessToken, skillId, cancellationToken).ConfigureAwait(false);
 
         // JF-543: locales whose Amazon-side full build cannot host catalog-backed slot
         // types (evidence in CatalogManager.CatalogWiringUnsupportedLocales). Skipping
@@ -218,8 +219,14 @@ public class LibrarySyncService
                     _logger.LogWarning(
                         "SMAPI 401 during catalog sync locale {Locale}: refreshing token and retrying the leg once (JF-544)",
                         locale);
-                    if (!await SmapiTokenRefresher.RefreshAsync(user, _logger).ConfigureAwait(false))
+                    string tokenBeforeRefresh = user.SmapiDeviceToken.AccessToken;
+                    if (!await SmapiTokenRefresher.RefreshAsync(user, _logger).ConfigureAwait(false)
+                        && tokenBeforeRefresh == user.SmapiDeviceToken.AccessToken)
                     {
+                        // Our refresh failed AND nothing rotated the token meanwhile;
+                        // a retry would re-send the same dead token. If the 20-min sweep
+                        // DID rotate it while our call failed transiently, fall through
+                        // and let attempt 2 use the fresh one.
                         break;
                     }
                 }
@@ -494,6 +501,14 @@ public class LibrarySyncService
 
             _logger.LogDebug("GetActiveLocalesAsync: {Count} active locales: {Locales}", locales.Count, string.Join(", ", locales));
             return locales;
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            // JF-544: a 401 here means the token is dead; degrading to it-IT would
+            // run one locale, stamp the sync successful, and gate the other locales
+            // out for the full 12h window. Fail loudly instead.
+            _logger.LogWarning(ex, "GetActiveLocalesAsync got 401: token expired; failing the sync instead of silently syncing it-IT only (JF-544)");
+            throw;
         }
         catch (Exception ex)
         {

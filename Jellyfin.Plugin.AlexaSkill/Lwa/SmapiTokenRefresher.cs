@@ -61,7 +61,20 @@ internal static class SmapiTokenRefresher
 
         user.SmapiDeviceToken = tokenResult;
         user.SmapiRefreshToken = tokenResult.RefreshToken;
-        Plugin.Instance!.SaveConfiguration();
+
+        // Best-effort persist (the repo's own precedent: Plugin.cs wraps this same
+        // call): the token IS fresh in memory, so a failed save neither aborts the
+        // caller nor fails the refresh; it is loud because the on-disk refresh token
+        // can lag the rotation (re-link risk if the process dies before a later save).
+        try
+        {
+            Plugin.Instance!.SaveConfiguration();
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Token rotated for user {UserId} but persisting the config failed; continuing with the in-memory token", user.Id);
+        }
+
         logger.LogDebug("Refreshed SMAPI token for user {UserId}", user.Id);
         return true;
     }
