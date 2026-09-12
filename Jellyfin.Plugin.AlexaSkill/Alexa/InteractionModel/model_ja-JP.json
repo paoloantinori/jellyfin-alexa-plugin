@@ -1468,32 +1468,6 @@
           "value": "どのエピソードを見たいですか？"
         }
       ]
-    },
-    {
-      "id": "Elicit.SongName",
-      "variations": [
-        {
-          "type": "PlainText",
-          "value": "どの曲を聴きたいですか？"
-        },
-        {
-          "type": "PlainText",
-          "value": "曲は？"
-        }
-      ]
-    },
-    {
-      "id": "Elicit.AlbumName",
-      "variations": [
-        {
-          "type": "PlainText",
-          "value": "どのアルバムを聴きたいですか？"
-        },
-        {
-          "type": "PlainText",
-          "value": "アルバム名は？"
-        }
-      ]
     }
   ]
 }

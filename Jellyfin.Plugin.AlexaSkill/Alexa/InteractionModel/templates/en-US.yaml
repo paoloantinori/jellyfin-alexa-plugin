@@ -1058,15 +1058,3 @@ prompts:
         value: Which episode number?
       - type: PlainText
         value: What episode would you like to watch?
-  - id: Elicit.SongName
-    variations:
-      - type: PlainText
-        value: What song would you like to hear?
-      - type: PlainText
-        value: Which song?
-  - id: Elicit.AlbumName
-    variations:
-      - type: PlainText
-        value: Which album would you like to hear?
-      - type: PlainText
-        value: What's the album name?

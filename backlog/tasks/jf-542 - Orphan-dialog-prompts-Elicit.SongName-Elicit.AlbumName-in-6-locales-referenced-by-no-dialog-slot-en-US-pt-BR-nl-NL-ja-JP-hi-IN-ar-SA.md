@@ -3,9 +3,10 @@ id: JF-542
 title: >-
   Orphan dialog prompts Elicit.SongName / Elicit.AlbumName in 6 locales:
   referenced by no dialog slot (en-US, pt-BR, nl-NL, ja-JP, hi-IN, ar-SA)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-11 16:44'
+updated_date: '2026-09-12 02:16'
 labels:
   - interaction-model
   - cleanup
@@ -31,6 +32,12 @@ Six committed interaction models define prompts Elicit.SongName and Elicit.Album
 - [ ] #4 The pt-BR template header's orphan-prompt note (Jellyfin.Plugin.AlexaSkill/Alexa/InteractionModel/templates/pt-BR.yaml, the 'committed reality' bullet) is updated or removed in the same change so it cannot go stale against a cleaned model.
 - [ ] #5 No handler code change is required: confirmed no code path sends Dialog.ElicitSlot relying on Elicit.SongName / Elicit.AlbumName prompt ids.
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+RESOLVED 2026-09-12 night run. DECISION (AC#1): DROP the orphan definitions in all six locales. Reasoning: they are inert on SMAPI (Amazon ignores unreferenced prompt definitions; the models built with them for months), the plugin's elicitation is code-driven (JF-96.1 self-managed design: ElicitSlotDirective carries its own ResponseStrings ssml, never these ids - verified by grep, AC#5), and wiring them to dialog slots would change dialog semantics to serve nothing. EXECUTION (AC#2): edited the six YAML templates (en-US, pt-BR, nl-NL, ja-JP, hi-IN, ar-SA - ALL locales are templated since JF-316 completed, so the task text's 'hand-maintained' split was stale), regenerated; the 3 wired PlayEpisode prompts stay. AC#3: validators PASS, regen byte-identical. AC#4: the golden-master header notes in all five non-en templates updated to record the drop (they previously said do-not-clean-up-in-a-transcription). Measured end state: ZERO orphan prompts across all 17 models (was 2x6). ENCODED THE LESSON: warning check 10a in validate_interaction_models.py flags any future orphan dialog prompt. Committed, not yet deployed (repo-only unit; the deployed models' inert orphans are harmless until the next model push).
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

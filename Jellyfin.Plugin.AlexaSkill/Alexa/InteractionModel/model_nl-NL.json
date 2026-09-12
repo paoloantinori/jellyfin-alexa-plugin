@@ -1558,32 +1558,6 @@
           "value": "Welke aflevering wil je kijken?"
         }
       ]
-    },
-    {
-      "id": "Elicit.SongName",
-      "variations": [
-        {
-          "type": "PlainText",
-          "value": "Welk nummer wil je horen?"
-        },
-        {
-          "type": "PlainText",
-          "value": "Welk nummer?"
-        }
-      ]
-    },
-    {
-      "id": "Elicit.AlbumName",
-      "variations": [
-        {
-          "type": "PlainText",
-          "value": "Welk album wil je horen?"
-        },
-        {
-          "type": "PlainText",
-          "value": "Hoe heet het album?"
-        }
-      ]
     }
   ]
 }

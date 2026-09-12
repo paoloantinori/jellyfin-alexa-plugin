@@ -1496,32 +1496,6 @@
           "value": "कौन सा एपिसोड देखना चाहेंगे?"
         }
       ]
-    },
-    {
-      "id": "Elicit.SongName",
-      "variations": [
-        {
-          "type": "PlainText",
-          "value": "कौन सा गाना सुनना चाहेंगे?"
-        },
-        {
-          "type": "PlainText",
-          "value": "कौन सा गाना?"
-        }
-      ]
-    },
-    {
-      "id": "Elicit.AlbumName",
-      "variations": [
-        {
-          "type": "PlainText",
-          "value": "कौन सा एल्बम सुनना चाहेंगे?"
-        },
-        {
-          "type": "PlainText",
-          "value": "एल्बम का नाम क्या है?"
-        }
-      ]
     }
   ]
 }

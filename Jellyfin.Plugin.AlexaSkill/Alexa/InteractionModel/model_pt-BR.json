@@ -1586,32 +1586,6 @@
           "value": "Qual episódio você gostaria de assistir?"
         }
       ]
-    },
-    {
-      "id": "Elicit.SongName",
-      "variations": [
-        {
-          "type": "PlainText",
-          "value": "Qual música você gostaria de ouvir?"
-        },
-        {
-          "type": "PlainText",
-          "value": "Qual música?"
-        }
-      ]
-    },
-    {
-      "id": "Elicit.AlbumName",
-      "variations": [
-        {
-          "type": "PlainText",
-          "value": "Qual álbum você gostaria de ouvir?"
-        },
-        {
-          "type": "PlainText",
-          "value": "Qual é o nome do álbum?"
-        }
-      ]
     }
   ]
 }

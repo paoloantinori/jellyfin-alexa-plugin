@@ -1469,32 +1469,6 @@
           "value": "أي حلقة تريد مشاهدتها؟"
         }
       ]
-    },
-    {
-      "id": "Elicit.SongName",
-      "variations": [
-        {
-          "type": "PlainText",
-          "value": "أي أغنية تريد سماعها؟"
-        },
-        {
-          "type": "PlainText",
-          "value": "أي أغنية؟"
-        }
-      ]
-    },
-    {
-      "id": "Elicit.AlbumName",
-      "variations": [
-        {
-          "type": "PlainText",
-          "value": "أي ألبوم تريد سماعه؟"
-        },
-        {
-          "type": "PlainText",
-          "value": "ما اسم الألبوم؟"
-        }
-      ]
     }
   ]
 }

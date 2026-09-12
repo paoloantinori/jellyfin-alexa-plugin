@@ -46,10 +46,11 @@
 #   trio).
 # - dialog roster and order are IDENTICAL to en-US's (PlayEpisode
 #   first, its three slots elicitationRequired:true with Elicit.*
-#   prompts); the 5-entry prompts section matches en-US's shape
-#   including the committed reality that Elicit.SongName and
-#   Elicit.AlbumName are referenced by NO dialog slot (orphan
-#   prompts, JF-542; do not "clean them up" in a transcription).
+#   prompts). The two orphan prompt definitions the golden master
+#   transcribed (Elicit.SongName / Elicit.AlbumName, referenced by no
+#   dialog slot) were dropped in the JF-542 cleanup (2026-09-12):
+#   inert on SMAPI, and the code-driven ElicitSlot flow uses
+#   ResponseStrings text, never these ids.
 # - Key order is load-bearing for byte-identity: 13 name/samples-only,
 #   15 bare, 19 name/samples/slots, 12 name/slots/samples. Only
 #   ShowMoreIntent carries `slots: []`; the other 13 sample-bearing
@@ -828,15 +829,3 @@ prompts:
         value: أي رقم حلقة؟
       - type: PlainText
         value: أي حلقة تريد مشاهدتها؟
-  - id: Elicit.SongName
-    variations:
-      - type: PlainText
-        value: أي أغنية تريد سماعها؟
-      - type: PlainText
-        value: أي أغنية؟
-  - id: Elicit.AlbumName
-    variations:
-      - type: PlainText
-        value: أي ألبوم تريد سماعه؟
-      - type: PlainText
-        value: ما اسم الألبوم؟

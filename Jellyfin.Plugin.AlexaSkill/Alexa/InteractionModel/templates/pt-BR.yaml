@@ -30,11 +30,11 @@
 #   beyond La Casa de Papel).
 # - dialog roster and order are IDENTICAL to en-US's (PlayEpisode
 #   first, its three slots elicitationRequired:true with Elicit.*
-#   prompts), and the 5-entry prompts section matches en-US's shape
-#   including the committed reality that Elicit.SongName and
-#   Elicit.AlbumName are referenced by NO dialog slot (orphan
-#   prompts; do not "clean them up" as part of a transcription
-#   milestone).
+#   prompts). The two orphan prompt definitions the golden master
+#   transcribed (Elicit.SongName / Elicit.AlbumName, referenced by no
+#   dialog slot) were dropped in the JF-542 cleanup (2026-09-12):
+#   inert on SMAPI, and the code-driven ElicitSlot flow uses
+#   ResponseStrings text, never these ids.
 # - NO modelConfiguration; musician slots are the BUILT-IN
 #   AMAZON.Musician everywhere (no JellyfinArtist type, no JF-415
 #   seed).
@@ -901,15 +901,3 @@ prompts:
         value: Qual número do episódio?
       - type: PlainText
         value: Qual episódio você gostaria de assistir?
-  - id: Elicit.SongName
-    variations:
-      - type: PlainText
-        value: Qual música você gostaria de ouvir?
-      - type: PlainText
-        value: Qual música?
-  - id: Elicit.AlbumName
-    variations:
-      - type: PlainText
-        value: Qual álbum você gostaria de ouvir?
-      - type: PlainText
-        value: Qual é o nome do álbum?

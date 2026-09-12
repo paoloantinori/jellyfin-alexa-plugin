@@ -277,6 +277,24 @@ def validate_single_model(locale: str, lm: dict) -> tuple[list[str], list[str]]:
                 f"for English and German locales (de-DE)"
             )
 
+    # 10a. Orphan dialog prompts (WARNING, JF-542): a prompt definition no
+    # dialog slot references is inert on SMAPI (Alexa ignores it) and the
+    # code-driven ElicitSlot flow reads ResponseStrings text, never these
+    # ids - dead weight and a cross-locale shape drift.
+    prompt_ids = [p.get("id") for p in (lm.get("prompts") or [])]
+    if prompt_ids:
+        referenced = set()
+        for dialog_intent in lm.get("dialog", {}).get("intents", []):
+            for slot in dialog_intent.get("slots", []):
+                elicitation = (slot.get("prompts") or {}).get("elicitation")
+                if elicitation:
+                    referenced.add(elicitation)
+        for pid in prompt_ids:
+            if pid not in referenced:
+                warnings.append(
+                    f"{prefix} orphan dialog prompt '{pid}' (no slot references it; JF-542)"
+                )
+
     # 10. Bare album carriers (WARNING, CLAUDE.md anti-pattern #11): a
     # PlayAlbumIntent sample whose carrier (placeholders stripped) does not name
     # the media makes PlayAlbumIntent greedily compete with PlaySongIntent on
