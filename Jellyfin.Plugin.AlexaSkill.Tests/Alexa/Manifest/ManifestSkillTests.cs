@@ -50,8 +50,7 @@ public class ManifestSkillTests
 
         // Discover the supported locales the same way production code does:
         // the embedded model_*.json resources of the plugin assembly.
-        var modelLocales = global::Jellyfin.Plugin.AlexaSkill.Util.GetLocalInteractionModels()
-            .Select(model => model.Item1);
+        var modelLocales = TestLocales.AllLocales();
 
         Assert.NotEmpty(modelLocales);
 
@@ -66,11 +65,7 @@ public class ManifestSkillTests
 
         // The response-string resources must cover the same set too, else a
         // locale silently falls back to en-US strings at runtime.
-        var responseStringLocales = typeof(global::Jellyfin.Plugin.AlexaSkill.Util).Assembly
-            .GetManifestResourceNames()
-            .Where(name => name.StartsWith("Jellyfin.Plugin.AlexaSkill.Alexa.Locale.", StringComparison.Ordinal)
-                && name.EndsWith(".json", StringComparison.Ordinal))
-            .Select(name => name.Split('.')[^2]);
+        var responseStringLocales = TestLocales.ResponseStringLocales();
 
         Assert.Equal(
             modelLocales.OrderBy(locale => locale, StringComparer.Ordinal),

@@ -12,13 +12,6 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 /// </summary>
 public class LocaleStringsTests
 {
-    private static readonly string[] AllLocales =
-    {
-        "ar-SA", "de-DE", "en-AU", "en-CA", "en-GB", "en-IN", "en-US",
-        "es-ES", "es-MX", "es-US", "fr-CA", "fr-FR", "hi-IN", "it-IT",
-        "ja-JP", "nl-NL", "pt-BR"
-    };
-
     /// <summary>
     /// Separator characters that survive SSML tag-stripping in the Alexa app's
     /// speech transcript: Western comma/period/exclamation, Arabic comma, Japanese
@@ -89,7 +82,7 @@ public class LocaleStringsTests
     public static TheoryData<string> AllLocalesData()
     {
         var data = new TheoryData<string>();
-        foreach (string locale in AllLocales)
+        foreach (string locale in TestLocales.AllLocales())
         {
             data.Add(locale);
         }

@@ -32,16 +32,8 @@ public class MusicianSlotTypeTests
     private const string CatalogBackedType = "JellyfinArtist";
     private const string BuiltInType = "AMAZON.Musician";
 
-    public static IEnumerable<object[]> AllLocales()
-    {
-        foreach (var model in Util.GetLocalInteractionModels())
-        {
-            yield return new object[] { model.Item1, model.Item2 };
-        }
-    }
-
     [Theory]
-    [MemberData(nameof(AllLocales))]
+    [MemberData(nameof(TestLocales.LocalesWithResourcePaths), MemberType = typeof(TestLocales))]
     public void MusicianSlotType_MatchesLocaleArchitecture(string locale, string resourcePath)
     {
         bool catalogBacked = CatalogSlotTypes.CatalogBackedMusicianLocales.Contains(locale);
@@ -109,7 +101,7 @@ public class MusicianSlotTypeTests
         // Every locale NOT in the set resolves to the built-in, and
         // no model outside the set declares JellyfinArtist (an inert-type smell).
         var swappedInModels = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var model in Util.GetLocalInteractionModels())
+        foreach (var model in TestLocales.Models())
         {
             JObject root = LoadModel(model.Item2);
             bool usesJellyfinArtist = root["languageModel"]!["intents"]!

@@ -14,9 +14,7 @@ public class SkillInteractionModelMoodInjectionTests
 {
     private static SkillInteractionModel LoadItItModel()
     {
-        var models = Util.GetLocalInteractionModels();
-        var it = models.First(m => m.Item1 == "it-IT");
-        return new SkillInteractionModel(it.Item1, it.Item2, "mia collezione");
+        return new SkillInteractionModel("it-IT", TestLocales.ResourcePath("it-IT"), "mia collezione");
     }
 
     [Fact]

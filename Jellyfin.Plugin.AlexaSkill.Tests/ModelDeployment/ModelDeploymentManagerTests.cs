@@ -594,28 +594,20 @@ public class ModelDeploymentManagerTests
 
     // --- GetDefaultModelJson: all supported locales ---
 
-    public static IEnumerable<object[]> AllModelLocales()
-    {
-        foreach (var model in Util.GetLocalInteractionModels())
-        {
-            yield return new object[] { model.Item1 };
-        }
-    }
-
     public static IEnumerable<object[]> NonEnglishGermanLocales()
     {
-        foreach (var model in Util.GetLocalInteractionModels())
+        foreach (var locale in TestLocales.AllLocales())
         {
-            if (!model.Item1.StartsWith("en-", StringComparison.OrdinalIgnoreCase)
-                && !model.Item1.Equals("de-DE", StringComparison.OrdinalIgnoreCase))
+            if (!locale.StartsWith("en-", StringComparison.OrdinalIgnoreCase)
+                && !locale.Equals("de-DE", StringComparison.OrdinalIgnoreCase))
             {
-                yield return new object[] { model.Item1 };
+                yield return new object[] { locale };
             }
         }
     }
 
     [Theory]
-    [MemberData(nameof(AllModelLocales))]
+    [MemberData(nameof(TestLocales.LocaleRows), MemberType = typeof(TestLocales))]
     public void GetDefaultModelJson_AllSupportedLocales_ReturnsValidModel(string locale)
     {
         string? json = _sut.GetDefaultModelJson(locale);

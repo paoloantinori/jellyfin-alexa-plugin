@@ -105,7 +105,7 @@ public class SlotMappingsTests
     private static HashSet<string> ExtractSlotCanonicalValues(string slotTypeName)
     {
         var values = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var model in Util.GetLocalInteractionModels())
+        foreach (var model in TestLocales.Models())
         {
             var assembly = typeof(Util).Assembly;
             using var stream = assembly.GetManifestResourceStream(model.Item2)!;

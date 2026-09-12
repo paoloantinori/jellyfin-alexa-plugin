@@ -20,16 +20,8 @@ public class InteractionModelTests
         ["MarkFavoriteIntent", "UnmarkFavoriteIntent", "MediaInfoIntent",
          "LoopSongOnIntent", "RepeatSingleOnIntent", "LoopAllOnIntent", "LoopAllOffIntent"];
 
-    public static IEnumerable<object[]> AllLocales()
-    {
-        foreach (var model in Util.GetLocalInteractionModels())
-        {
-            yield return new object[] { model.Item1, model.Item2 };
-        }
-    }
-
     [Theory]
-    [MemberData(nameof(AllLocales))]
+    [MemberData(nameof(TestLocales.LocalesWithResourcePaths), MemberType = typeof(TestLocales))]
     public void CustomIntentsWithSlots_HaveMinimumSamples(string locale, string resourcePath)
     {
         var (languageModel, intentSamples) = LoadIntentSamples(resourcePath);
@@ -45,7 +37,7 @@ public class InteractionModelTests
     }
 
     [Theory]
-    [MemberData(nameof(AllLocales))]
+    [MemberData(nameof(TestLocales.LocalesWithResourcePaths), MemberType = typeof(TestLocales))]
     public void SingleSampleIntents_HaveAtLeastOneSample(string locale, string resourcePath)
     {
         var (languageModel, intentSamples) = LoadIntentSamples(resourcePath);
@@ -61,7 +53,7 @@ public class InteractionModelTests
     }
 
     [Theory]
-    [MemberData(nameof(AllLocales))]
+    [MemberData(nameof(TestLocales.LocalesWithResourcePaths), MemberType = typeof(TestLocales))]
     public void CustomIntentsWithoutSlots_HaveMinimumSamples(string locale, string resourcePath)
     {
         var (languageModel, intentSamples) = LoadIntentSamples(resourcePath);
@@ -77,7 +69,7 @@ public class InteractionModelTests
     }
 
     [Theory]
-    [MemberData(nameof(AllLocales))]
+    [MemberData(nameof(TestLocales.LocalesWithResourcePaths), MemberType = typeof(TestLocales))]
     public void AllSamples_AreNonEmpty(string locale, string resourcePath)
     {
         var (languageModel, intentSamples) = LoadIntentSamples(resourcePath);
@@ -93,7 +85,7 @@ public class InteractionModelTests
     }
 
     [Theory]
-    [MemberData(nameof(AllLocales))]
+    [MemberData(nameof(TestLocales.LocalesWithResourcePaths), MemberType = typeof(TestLocales))]
     public void PlayFavoritesIntent_HasUtteranceWithoutSlot(string locale, string resourcePath)
     {
         Assert.False(string.IsNullOrEmpty(locale));

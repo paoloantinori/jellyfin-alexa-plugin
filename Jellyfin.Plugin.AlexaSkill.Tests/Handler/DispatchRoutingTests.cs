@@ -338,7 +338,7 @@ public class DispatchRoutingTests : PluginTestBase
     /// (locale, intent name) for every intent declared in every embedded locale
     /// interaction model, via the same manifest enumeration production uses.
     /// Memoized once per test-assembly run: the embedded models are immutable at
-    /// test runtime, and each full pass parses all 17 JSONs (~722KB of
+    /// test runtime, and each full pass parses every embedded model JSON (the full
     /// LINQ-to-JSON DOM), which three consumers were each repeating.
     /// </summary>
     private static readonly IReadOnlyList<(string Locale, string IntentName)> ModelIntents = LoadModelIntents();
@@ -348,7 +348,7 @@ public class DispatchRoutingTests : PluginTestBase
         var results = new List<(string Locale, string IntentName)>();
         var assembly = typeof(global::Jellyfin.Plugin.AlexaSkill.Util).Assembly;
 
-        foreach (Tuple<string, string> model in global::Jellyfin.Plugin.AlexaSkill.Util.GetLocalInteractionModels())
+        foreach (Tuple<string, string> model in TestLocales.Models())
         {
             using Stream? stream = assembly.GetManifestResourceStream(model.Item2);
             Assert.NotNull(stream);

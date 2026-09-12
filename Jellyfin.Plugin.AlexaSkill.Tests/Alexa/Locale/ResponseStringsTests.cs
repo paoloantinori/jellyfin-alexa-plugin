@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Xunit;
 
@@ -79,23 +81,7 @@ public class ResponseStringsTests
     }
 
     [Theory]
-    [InlineData("ar-SA")]
-    [InlineData("de-DE")]
-    [InlineData("en-AU")]
-    [InlineData("en-CA")]
-    [InlineData("en-GB")]
-    [InlineData("en-IN")]
-    [InlineData("en-US")]
-    [InlineData("es-ES")]
-    [InlineData("es-MX")]
-    [InlineData("es-US")]
-    [InlineData("fr-CA")]
-    [InlineData("fr-FR")]
-    [InlineData("hi-IN")]
-    [InlineData("it-IT")]
-    [InlineData("ja-JP")]
-    [InlineData("nl-NL")]
-    [InlineData("pt-BR")]
+    [MemberData(nameof(TestLocales.LocaleRows), MemberType = typeof(TestLocales))]
     public void Get_AllKeysPresent(string locale)
     {
         foreach (string key in AllExpectedKeys)
@@ -106,11 +92,14 @@ public class ResponseStringsTests
         }
     }
 
+    public static IEnumerable<object[]> EnglishVariantLocales() =>
+        TestLocales.AllLocales()
+            .Where(locale => locale.StartsWith("en-", StringComparison.OrdinalIgnoreCase)
+                && !locale.Equals("en-US", StringComparison.OrdinalIgnoreCase))
+            .Select(locale => new object[] { locale });
+
     [Theory]
-    [InlineData("en-AU")]
-    [InlineData("en-CA")]
-    [InlineData("en-GB")]
-    [InlineData("en-IN")]
+    [MemberData(nameof(EnglishVariantLocales))]
     public void Get_EnglishVariants_MatchEnUs(string locale)
     {
         foreach (string key in AllExpectedKeys)
@@ -124,7 +113,7 @@ public class ResponseStringsTests
     [Fact]
     public void Get_NonEnglishLocales_ReturnDifferentStringsFromEnUs()
     {
-        string[] nonEnglishLocales = new[] { "ar-SA", "de-DE", "es-ES", "fr-FR", "hi-IN", "it-IT", "ja-JP", "nl-NL", "pt-BR" };
+        string[] nonEnglishLocales = TestLocales.NonEnglishLocales().ToArray();
         foreach (string locale in nonEnglishLocales)
         {
             Assert.NotEqual(

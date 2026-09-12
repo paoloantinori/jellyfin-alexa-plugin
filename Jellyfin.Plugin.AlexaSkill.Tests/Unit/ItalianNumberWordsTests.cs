@@ -49,10 +49,7 @@ public class ItalianNumberWordsTests
     public void EveryItalianNumberSlotValue_Parses()
     {
         var assembly = typeof(global::Jellyfin.Plugin.AlexaSkill.Util).Assembly;
-        var model = global::Jellyfin.Plugin.AlexaSkill.Util.GetLocalInteractionModels()
-            .First(m => m.Item1 == "it-IT");
-
-        using var stream = assembly.GetManifestResourceStream(model.Item2);
+        using var stream = assembly.GetManifestResourceStream(TestLocales.ResourcePath("it-IT"));
         Assert.NotNull(stream);
         using var reader = new StreamReader(stream!);
         var root = JObject.Parse(reader.ReadToEnd());
