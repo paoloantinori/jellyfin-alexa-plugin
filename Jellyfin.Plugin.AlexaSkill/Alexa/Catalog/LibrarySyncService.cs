@@ -418,8 +418,10 @@ public class LibrarySyncService
 
     /// <summary>
     /// Resolve which locales to sync based on the config string.
-    /// - Empty: it-IT only (default).
-    /// - "*": all active locales (from SMAPI manifest).
+    /// - "*": all active locales (from SMAPI manifest; the CONFIG default for
+    ///   CatalogSyncLocales is "*", with the JF-543 ar-SA exclusion applied by
+    ///   the caller).
+    /// - Empty: it-IT only.
     /// - "de-DE,en-US,...": it-IT + the listed locales.
     /// </summary>
     internal async Task<IReadOnlyList<string>> ResolveSyncLocalesAsync(
