@@ -637,17 +637,49 @@ def check_elicit_dialog_registration(all_models: dict[str, dict]) -> tuple[list[
         )
     )
 
-    # Elicit targets: BuildDialogElicitResponse(... , IntentNames.X, ...) call sites
-    # plus raw ElicitSlotDirective constructions naming an intent constant.
-    targets = set(
-        intent_constants.get(m)
-        for m in _re.findall(r"BuildDialogElicitResponse\([^;]*?IntentNames\.(\w+)", handler_src, _re.S)
-    )
-    targets |= set(
-        intent_constants.get(m)
-        for m in _re.findall(r"ElicitSlotDirective\([^;]*?IntentNames\.(\w+)", handler_src, _re.S)
-    )
-    targets.discard(None)
+    # Elicit targets: every builder call site naming an IntentNames.* constant.
+    # Three surfaces (JF-556): BuildDialogElicitResponse (the JF-549/550 sweep
+    # helper), raw ElicitSlotDirective constructions, and BuildElicitSlotResponse
+    # (FindSong's ElicitAnswer and PlayRadio's BuildStationElicit funnel through
+    # it - the intent that hit anti-pattern #9 live on 2026-08-21 must not be
+    # able to lose its registration with this checker green).
+    # A call span may reference several IntentNames.* tokens (e.g. FindSong's
+    # BuildElicitSlotResponse(IntentNames.Slots.TitleKeywords, IntentNames.
+    # FindSongIntent, ...)); keep every token that resolves to an intent
+    # constant and ignore the rest (nested classes like IntentNames.Slots).
+    targets = set()
+    for builder in ("BuildDialogElicitResponse", "ElicitSlotDirective", "BuildElicitSlotResponse"):
+        for span in _re.findall(builder + r"\([^;]*?\);", handler_src, _re.S):
+            for token in _re.findall(r"IntentNames\.(\w+)", span):
+                resolved = intent_constants.get(token)
+                if resolved:
+                    targets.add(resolved)
+    errors: list[str] = []
+    warnings: list[str] = []
+    # JF-556 item 2: the C# allSlotNames list (inline string form, the JF-550
+    # sweep shape) must match the model's slot set for that intent - Amazon
+    # rejects a partial updatedIntent. Only inline-string lists are checkable;
+    # callers passing variables (FindSong/PlayRadio) are skipped here.
+    for intent_token, slots_span in _re.findall(
+        r"BuildDialogElicitResponse\(\s*[^,]+,\s*[^,]+,\s*[^,]+,\s*IntentNames\.(\w+),\s*([^;]*?)\)\s*;",
+        handler_src,
+        _re.S,
+    ):
+        intent = intent_constants.get(intent_token)
+        if not intent:
+            continue
+        slots = _re.findall(r'"(\w+)"', slots_span)
+        if not slots:
+            continue  # variable or params-form; not statically resolvable
+        # one sample locale suffices: slot names are uniform across locales
+        # (verified by the cross-locale checks); use the first parsed model.
+        first_lm = next(iter(all_models.values()))
+        model_slots = {s["name"] for s in (intent_by_name(first_lm, intent) or {}).get("slots", [])}
+        if model_slots and set(slots) != model_slots:
+            errors.append(
+                f"  [code] BuildDialogElicitResponse for {intent} passes allSlotNames {sorted(slots)} "
+                f"but the model declares {sorted(model_slots)} (Amazon rejects a partial updatedIntent)"
+            )
     if not targets:
         return [], []
 
@@ -658,8 +690,6 @@ def check_elicit_dialog_registration(all_models: dict[str, dict]) -> tuple[list[
         with open(model_path, encoding="utf-8") as fh:
             envelope[model_path.name[6:-5]] = json.load(fh)
 
-    errors: list[str] = []
-    warnings: list[str] = []
     for locale, doc in sorted(envelope.items()):
         lm = doc.get("interactionModel", doc).get("languageModel", doc.get("languageModel"))
         dialog = {i.get("name"): i for i in doc.get("interactionModel", doc).get("dialog", {}).get("intents", [])}
