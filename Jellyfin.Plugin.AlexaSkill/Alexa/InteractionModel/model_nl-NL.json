@@ -512,6 +512,10 @@
           {
             "name": "browse_category",
             "type": "BrowseCategory"
+          },
+          {
+            "name": "filter",
+            "type": "AMAZON.SearchQuery"
           }
         ],
         "samples": [
@@ -522,7 +526,9 @@
           "laat {browse_category} zien",
           "lijst {browse_category}",
           "welke {browse_category} heb ik",
-          "welke {browse_category} zijn er"
+          "welke {browse_category} zijn er",
+          "browse genres {filter}",
+          "laat genres {filter} zien"
         ]
       },
       {
@@ -1635,6 +1641,12 @@
           {
             "name": "browse_category",
             "type": "BrowseCategory",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          },
+          {
+            "name": "filter",
+            "type": "AMAZON.SearchQuery",
             "confirmationRequired": false,
             "elicitationRequired": false
           }

@@ -526,6 +526,10 @@
           {
             "name": "browse_category",
             "type": "BrowseCategory"
+          },
+          {
+            "name": "filter",
+            "type": "AMAZON.SearchQuery"
           }
         ],
         "samples": [
@@ -536,7 +540,9 @@
           "mostrar {browse_category}",
           "listar {browse_category}",
           "quais {browse_category} eu tenho",
-          "quais {browse_category} existem"
+          "quais {browse_category} existem",
+          "navegar gêneros {filter}",
+          "mostrar gêneros {filter}"
         ]
       },
       {
@@ -1663,6 +1669,12 @@
           {
             "name": "browse_category",
             "type": "BrowseCategory",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          },
+          {
+            "name": "filter",
+            "type": "AMAZON.SearchQuery",
             "confirmationRequired": false,
             "elicitationRequired": false
           }

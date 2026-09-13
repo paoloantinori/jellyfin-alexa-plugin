@@ -499,6 +499,10 @@
           {
             "name": "browse_category",
             "type": "BrowseCategory"
+          },
+          {
+            "name": "filter",
+            "type": "AMAZON.SearchQuery"
           }
         ],
         "samples": [
@@ -509,7 +513,9 @@
           "zeige mir {browse_category}",
           "liste {browse_category}",
           "welche {browse_category} habe ich",
-          "welche {browse_category} gibt es"
+          "welche {browse_category} gibt es",
+          "durchsuche genres {filter}",
+          "zeige mir genres {filter}"
         ]
       },
       {
@@ -1747,6 +1753,12 @@
           {
             "name": "browse_category",
             "type": "BrowseCategory",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          },
+          {
+            "name": "filter",
+            "type": "AMAZON.SearchQuery",
             "confirmationRequired": false,
             "elicitationRequired": false
           }

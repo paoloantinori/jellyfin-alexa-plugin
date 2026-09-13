@@ -477,6 +477,10 @@
           {
             "name": "browse_category",
             "type": "BrowseCategory"
+          },
+          {
+            "name": "filter",
+            "type": "AMAZON.SearchQuery"
           }
         ],
         "samples": [
@@ -485,7 +489,9 @@
           "{browse_category} を見せて",
           "{browse_category} のリスト",
           "どんな {browse_category} がある",
-          "{browse_category} は何がある"
+          "{browse_category} は何がある",
+          "ジャンル {filter} をブラウズして",
+          "ジャンル {filter} を見せて"
         ]
       },
       {
@@ -1545,6 +1551,12 @@
           {
             "name": "browse_category",
             "type": "BrowseCategory",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          },
+          {
+            "name": "filter",
+            "type": "AMAZON.SearchQuery",
             "confirmationRequired": false,
             "elicitationRequired": false
           }

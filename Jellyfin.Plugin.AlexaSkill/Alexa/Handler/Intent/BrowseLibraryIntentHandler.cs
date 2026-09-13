@@ -113,9 +113,25 @@ public class BrowseLibraryIntentHandler : BaseHandler
 
         if (string.IsNullOrWhiteSpace(browseCategory))
         {
-            Logger.LogDebug("BrowseLibrary: returning Ask (missing category)");
-            string prompt = ResponseStrings.Get("DidNotCatchBrowseCategory", locale);
-            return ResponseBuilder.Ask(prompt, new Reprompt(prompt));
+            if (string.IsNullOrWhiteSpace(filter))
+            {
+                Logger.LogDebug("BrowseLibrary: returning Ask (missing category)");
+                string prompt = ResponseStrings.Get("DidNotCatchBrowseCategory", locale);
+                return ResponseBuilder.Ask(prompt, new Reprompt(prompt));
+            }
+
+            // JF-557: the genre-filter carriers ("browse genres {filter}", "mostra
+            // i generi {filter}", ...) name the category LITERALLY, so the request
+            // arrives with only the filter filled. A present filter IS a genre
+            // browse; route it to the genre path instead of asking for a category.
+            Logger.LogDebug("BrowseLibrary: filter-only request, genre browse for '{Filter}'", filter);
+            var (filterUser, filterUserError) = ResolveJellyfinUser(_userManager, session.UserId, locale);
+            if (filterUserError != null)
+            {
+                return filterUserError;
+            }
+
+            return await HandleGenresQuery(intentRequest, filter, locale, filterUser!, context, user, cancellationToken).ConfigureAwait(false);
         }
 
         RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)));
@@ -304,7 +320,7 @@ public class BrowseLibraryIntentHandler : BaseHandler
     {
         if (string.IsNullOrWhiteSpace(filter))
         {
-            return BuildDialogElicitResponse("DidNotCatchBrowseCategory", locale, "browse_category", IntentNames.BrowseLibrary, "browse_category");
+            return BuildDialogElicitResponse("DidNotCatchBrowseCategory", locale, "browse_category", IntentNames.BrowseLibrary, "browse_category", "filter");
         }
 
         // JF-466: both browsable kinds are disabled by content access. An empty

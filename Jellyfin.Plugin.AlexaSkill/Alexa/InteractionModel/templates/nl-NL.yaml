@@ -412,6 +412,12 @@ intents:
     slots:
       - name: browse_category
         type: BrowseCategory
+      # JF-557: the genre filter. AMAZON.SearchQuery coexists with the
+      # browse_category slot ONLY because no single sample carries both
+      # (anti-pattern #2); the genre carriers below name the category
+      # literally.
+      - name: filter
+        type: AMAZON.SearchQuery
     samples:
       - '{browse_category}'
       - alleen {browse_category}
@@ -421,6 +427,9 @@ intents:
       - lijst {browse_category}
       - welke {browse_category} heb ik
       - welke {browse_category} zijn er
+      # JF-557: genre-filter carriers (literal category + free-text filter).
+      - browse genres {filter}
+      - laat genres {filter} zien
   - name: RecommendIntent
     slots:
       - name: media_type
@@ -941,6 +950,10 @@ dialog:
       slots:
         - name: browse_category
           type: BrowseCategory
+          confirmationRequired: false
+          elicitationRequired: false
+        - name: filter
+          type: AMAZON.SearchQuery
           confirmationRequired: false
           elicitationRequired: false
     - name: PlayMoodMusicIntent

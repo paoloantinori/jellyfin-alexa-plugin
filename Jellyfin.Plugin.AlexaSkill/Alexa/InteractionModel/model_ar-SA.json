@@ -475,6 +475,10 @@
           {
             "name": "browse_category",
             "type": "BrowseCategory"
+          },
+          {
+            "name": "filter",
+            "type": "AMAZON.SearchQuery"
           }
         ],
         "samples": [
@@ -483,7 +487,9 @@
           "أرني {browse_category}",
           "أعرض {browse_category}",
           "ما {browse_category} لدي",
-          "ما {browse_category} الموجودة"
+          "ما {browse_category} الموجودة",
+          "تصفح أنواع {filter}",
+          "أرني أنواع {filter}"
         ]
       },
       {
@@ -1546,6 +1552,12 @@
           {
             "name": "browse_category",
             "type": "BrowseCategory",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          },
+          {
+            "name": "filter",
+            "type": "AMAZON.SearchQuery",
             "confirmationRequired": false,
             "elicitationRequired": false
           }

@@ -492,6 +492,10 @@
           {
             "name": "browse_category",
             "type": "BrowseCategory"
+          },
+          {
+            "name": "filter",
+            "type": "AMAZON.SearchQuery"
           }
         ],
         "samples": [
@@ -500,7 +504,9 @@
           "मुझे {browse_category} दिखाओ",
           "{browse_category} की लिस्ट दो",
           "मेरे पास कौन से {browse_category} हैं",
-          "क्या {browse_category} हैं"
+          "क्या {browse_category} हैं",
+          "शैलियाँ {filter} ब्राउज़ करो",
+          "मुझे शैलियाँ {filter} दिखाओ"
         ]
       },
       {
@@ -1573,6 +1579,12 @@
           {
             "name": "browse_category",
             "type": "BrowseCategory",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          },
+          {
+            "name": "filter",
+            "type": "AMAZON.SearchQuery",
             "confirmationRequired": false,
             "elicitationRequired": false
           }

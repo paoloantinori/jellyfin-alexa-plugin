@@ -18,6 +18,7 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
 using Moq;
+using Alexa.NET.Assertions;
 using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
@@ -100,6 +101,59 @@ public class BrowseLibraryIntentHandlerTests : PluginTestBase
     {
         _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
             .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+    }
+
+    /// <summary>
+    /// JF-557 carrier shape: the genre-filter samples name the category literally,
+    /// so the request arrives with browse_category EMPTY and only the filter
+    /// filled; that must run the genre query, not the category Ask.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_FilterOnly_CarrierShape_RunsGenreQuery()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(category: null, filter: "rock");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.Genres != null && q.Genres.Contains("rock"))))
+            .Returns(new List<MediaBrowser.Controller.Entities.BaseItem>());
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        _libraryManagerMock.Verify(
+            l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.Genres != null && q.Genres.Contains("rock"))),
+            Times.Once);
+    }
+
+    /// <summary>
+    /// JF-557: the genre filter slot is now declared in the models; with a filter
+    /// present the genre path must QUERY by genre instead of eliciting.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_GenresWithFilter_QueriesByGenre()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(category: "genres", filter: "rock");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
+            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.Genres != null && q.Genres.Contains("rock"))))
+            .Returns(new List<MediaBrowser.Controller.Entities.BaseItem>());
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        response.Tells(); // no items -> NoBrowseResults tell, NOT the category elicit
+        _libraryManagerMock.Verify(
+            l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.Genres != null && q.Genres.Contains("rock"))),
+            Times.Once);
     }
 
     [Fact]

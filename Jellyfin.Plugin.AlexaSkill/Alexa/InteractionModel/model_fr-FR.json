@@ -500,6 +500,10 @@
           {
             "name": "browse_category",
             "type": "BrowseCategory"
+          },
+          {
+            "name": "filter",
+            "type": "AMAZON.SearchQuery"
           }
         ],
         "samples": [
@@ -510,7 +514,9 @@
           "montre-moi {browse_category}",
           "lister {browse_category}",
           "quels {browse_category} ai-je",
-          "quels {browse_category} y a-t-il"
+          "quels {browse_category} y a-t-il",
+          "parcourir genres {filter}",
+          "montre-moi genres {filter}"
         ]
       },
       {
@@ -1708,6 +1714,12 @@
           {
             "name": "browse_category",
             "type": "BrowseCategory",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          },
+          {
+            "name": "filter",
+            "type": "AMAZON.SearchQuery",
             "confirmationRequired": false,
             "elicitationRequired": false
           }
