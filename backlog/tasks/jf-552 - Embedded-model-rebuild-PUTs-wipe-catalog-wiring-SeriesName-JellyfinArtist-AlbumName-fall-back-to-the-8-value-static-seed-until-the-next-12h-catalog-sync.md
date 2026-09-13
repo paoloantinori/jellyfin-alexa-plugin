@@ -4,10 +4,10 @@ title: >-
   Embedded-model rebuild PUTs wipe catalog wiring
   (SeriesName/JellyfinArtist/AlbumName fall back to the 8-value static seed
   until the next 12h catalog sync)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-12 22:38'
-updated_date: '2026-09-13 09:33'
+updated_date: '2026-09-13 10:01'
 labels:
   - bug
   - catalog
@@ -37,9 +37,9 @@ Fix shape: factor the type-injection logic the catalog sync uses so BuildSkillIn
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Live verification: after a rebuild, profile-nlu resolves a non-seed catalog series (e.g. Adolescence) into series_name immediately, without waiting for the next catalog sync
-- [ ] #2 A rebuild/redeploy (custom-model/rebuild endpoint, invocation-name save, SkillStartup push, LWA linking, CreateSkillAsync - all funnel through SmapiManagement.UpdateInteractionModelsAsync) PUTs models whose catalog-backed slot types carry the valueSupplier PRESERVED FROM THE LIVE MODEL's wiring (GET live -> graft), not the static seed
-- [ ] #3 Unit tests: the graft path with a wired live model produces valueSupplier.valueCatalog.catalogId set and no static seed alongside (CatalogWiringGraftTests + SmapiManagementWiringTests through the client seam); JF-543 locales skip the GET entirely
+- [x] #1 Live verification: after a rebuild, profile-nlu resolves a non-seed catalog series (e.g. Adolescence) into series_name immediately, without waiting for the next catalog sync
+- [x] #2 A rebuild/redeploy (custom-model/rebuild endpoint, invocation-name save, SkillStartup push, LWA linking, CreateSkillAsync - all funnel through SmapiManagement.UpdateInteractionModelsAsync) PUTs models whose catalog-backed slot types carry the valueSupplier PRESERVED FROM THE LIVE MODEL's wiring (GET live -> graft), not the static seed
+- [x] #3 Unit tests: the graft path with a wired live model produces valueSupplier.valueCatalog.catalogId set and no static seed alongside (CatalogWiringGraftTests + SmapiManagementWiringTests through the client seam); JF-543 locales skip the GET entirely
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -59,6 +59,12 @@ IMPLEMENTATION (as landed):
 4. Custom-URL/restore path (ModelDeploymentManager) stays typed/unwired: documented residual, tracked in JF-554 together with the raw-PUT transport consolidation (settle-wait for the graft GET, shared service, handler lifetimes, test handler fakes).
 5. Deploy + live AC#3: rebuild it-IT -> immediately profile-nlu 'riproduci Adolescence stagione uno episodio due' must still fill series_name (no catalog sync in between).
 <!-- SECTION:PLAN:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+DEPLOYED and CLOSED 2026-09-13 12:00. Implementation: the raw model PUT at the SmapiManagement.UpdateInteractionModelsAsync choke point (covers custom-model/rebuild, invocation-name save, SkillStartup push, LWA linking, CreateSkillAsync) now serializes the built model, GETs the live envelope, grafts its catalog wiring via CatalogWiringGraft (delegating to the single static InjectCatalogReferences), and PUTs raw via Plugin.HttpClient with a per-call Func test seam; JF-543 locales skip the GET; the wiring GET returns null only on 404 and throws otherwise (JF-555, fixed in-diff: transient 429/5xx feed the RetryHelper instead of silently PUTting unwired). LIVE VERIFICATION (AC#1): profile-nlu 'riproduci Adolescence stagione uno episodio due' filled series_name BEFORE the rebuild (wired from the 01:08 sync), the it-IT rebuild SUCCEEDED with the graft log firing ('Preserving live catalog wiring on rebuild for it-IT: artist=6590add1..., album=620e99b0..., series=1640b472...' + 'Injecting 3 catalog references'), and the SAME probe STILL filled series='adolescence' AFTER the rebuild with NO catalog sync in between - the exact moment that degraded to the static seed the night this was filed (2026-09-13 00:33). Post-rebuild get-interaction-model: SeriesName WIRED, no static seed alongside, and the JF-549 series-first samples preserved (8 incl. 5 infinitive). Unit tests: CatalogWiringGraftTests + SmapiManagementWiringTests through the client seam (graft, no-live-model, ar-SA skips GET, transient GET throws, PUT failure surfaces body); suite 3686/3686 both TFMs; CI green. Residuals tracked: JF-554 (transport consolidation: settle-wait for the graft GET, ModelDeploymentManager typed-PUT restore path, retry classification on permanent 4xx, test handler fakes).
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
