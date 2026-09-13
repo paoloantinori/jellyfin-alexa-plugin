@@ -68,6 +68,22 @@ public class InteractionModelRedeployer : IInteractionModelRedeployer
             .Where(r => deployedLocales.Contains(r.Key))
             .ToDictionary(r => r.Key, r => r.Value, StringComparer.Ordinal);
 
+        // JF-513.2: a deployed locale that never appeared in the status map (or
+        // stayed IN_PROGRESS past the poll budget) is silently ABSENT, and
+        // All() on the survivors passes vacuously - the endpoint answered
+        // success=true while models never built (the exact JF-513 class).
+        // Every deployed locale gets an entry; missing ones fail as NEVER_BUILT.
+        foreach (string locale in deployedLocales)
+        {
+            if (!deployedResults.ContainsKey(locale))
+            {
+                _logger.LogWarning(
+                    "Locale {Locale} was submitted but its build never reached a terminal state within the poll budget; marking NEVER_BUILT (JF-513.2)",
+                    locale);
+                deployedResults[locale] = new ModelLocaleBuildResult(false, "NEVER_BUILT", null);
+            }
+        }
+
         // JF-495 post-deploy canary: for every locale whose build SUCCEEDED, GET the
         // model back and verify the live intent/sample counts match what was PUT.
         // A mismatch means something replaced the model after (or racing) this

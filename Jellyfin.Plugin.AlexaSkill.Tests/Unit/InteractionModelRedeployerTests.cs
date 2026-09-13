@@ -69,10 +69,36 @@ public class InteractionModelRedeployerTests : PluginTestBase
     }
 
     /// <summary>
-    /// An all-locales (null filter) rebuild reports every locale in the poll status.
+    /// JF-513.2: a deployed locale that never appears in the poll status must be
+    /// marked NEVER_BUILT and fail the result - previously it was silently absent
+    /// and All() passed vacuously (success=true while a model never built).
     /// </summary>
     [Fact]
-    public async Task AllLocalesRebuild_ReportsAllLocales()
+    public async Task NeverAppearingLocale_FailsAsNeverBuilt()
+    {
+        // it-IT is deployed but absent from the poll status; en-US reports SUCCEEDED.
+        var user = CreateUserWithFakeSmapi(BuildStatus(new (string, SkillStatusState)[]
+        {
+            ("en-US", SkillStatusState.SUCCEEDED)
+        }));
+
+        var redeployer = new InteractionModelRedeployer(_loggerFactory.CreateLogger<InteractionModelRedeployer>());
+        var result = await redeployer.RedeployAsync(user, string.Empty, CancellationToken.None, "it-IT");
+
+        Assert.False(result.Success);
+        Assert.True(result.Locales.ContainsKey("it-IT"));
+        Assert.Equal("NEVER_BUILT", result.Locales["it-IT"].Status);
+        Assert.Equal(0, result.SucceededCount);
+    }
+
+    /// <summary>
+    /// An all-locales (null filter) rebuild deploys every embedded locale (17). With a
+    /// partial poll status (only 2 reported), the JF-513.2 semantics mark the 15
+    /// never-appearing locales NEVER_BUILT and the result FAILS - previously they
+    /// were silently absent and All() passed vacuously.
+    /// </summary>
+    [Fact]
+    public async Task AllLocalesRebuild_PartialStatus_FailsNeverBuilt()
     {
         var user = CreateUserWithFakeSmapi(BuildStatus(new (string, SkillStatusState)[]
         {
@@ -83,10 +109,12 @@ public class InteractionModelRedeployerTests : PluginTestBase
         var redeployer = new InteractionModelRedeployer(_loggerFactory.CreateLogger<InteractionModelRedeployer>());
         var result = await redeployer.RedeployAsync(user, string.Empty, CancellationToken.None, localeFilter: null);
 
-        Assert.True(result.Success);
-        Assert.Equal(2, result.Locales.Count);
-        Assert.True(result.Locales.ContainsKey("en-US"));
-        Assert.True(result.Locales.ContainsKey("de-DE"));
+        Assert.False(result.Success);
+        Assert.Equal(17, result.Locales.Count);
+        Assert.True(result.Locales["en-US"].Success);
+        Assert.True(result.Locales["de-DE"].Success);
+        Assert.Equal("NEVER_BUILT", result.Locales["it-IT"].Status);
+        Assert.Equal(2, result.SucceededCount);
     }
 
     /// <summary>
