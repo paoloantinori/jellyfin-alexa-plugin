@@ -142,6 +142,19 @@ public class SmapiManagementWiringTests : IDisposable
 
             if (request.Method == HttpMethod.Get)
             {
+                // The settle-wait (JF-554 AC#3) reads the skill-status URL before
+                // the model GET; route by URL so each answers its real shape.
+                if (request.RequestUri!.AbsolutePath.EndsWith("/status", StringComparison.Ordinal))
+                {
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent(
+                            "{\"manifest\":{\"lastUpdateRequest\":{\"status\":\"SUCCEEDED\"}}}",
+                            Encoding.UTF8,
+                            "application/json")
+                    };
+                }
+
                 GetCount++;
                 return new HttpResponseMessage(GetStatusCode)
                 {

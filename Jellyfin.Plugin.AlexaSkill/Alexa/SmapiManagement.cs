@@ -235,6 +235,9 @@ public class SmapiManagement : ManagementApi
     /// invisibly); throwing feeds the RetryHelper wrapper, which retries the
     /// whole GET+PUT, and a persistent failure lands the locale in
     /// failedLocales with its old wired model left intact (JF-555).
+    /// JF-554 AC#3: the read is preceded by the JF-495 settle-wait, so a
+    /// concurrently-pending catalog-sync build cannot make the graft pin the
+    /// previous sync's catalog version.
     /// </summary>
     /// <param name="skillId">The skill.</param>
     /// <param name="locale">The locale.</param>
@@ -242,6 +245,8 @@ public class SmapiManagement : ManagementApi
     internal async Task<string?> GetLiveModelJsonAsync(string skillId, string locale)
     {
         HttpClient client = RawModelClientOverrideForTests?.Invoke() ?? Plugin.HttpClient;
+        await Catalog.CatalogManager.WaitForLocaleBuildToSettleAsync(
+            _accessToken, client, skillId, locale, _logger, CancellationToken.None).ConfigureAwait(false);
         using var getRequest = Catalog.CatalogManager.CreateAuthorizedGet(
             Catalog.CatalogManager.LocaleModelUrl(skillId, "development", locale), _accessToken);
 

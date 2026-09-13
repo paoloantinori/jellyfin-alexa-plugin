@@ -490,7 +490,7 @@ public class CatalogManager
         // rebuild (or any other writer) submitted a model moments ago, its build may
         // still be IN_PROGRESS and the GET would return the last SUCCEEDED (stale)
         // content; PUTting that content back redeploys yesterday's model.
-        await WaitForLocaleBuildToSettleAsync(accessToken, client, skillId, locale, cancellationToken).ConfigureAwait(false);
+        await WaitForLocaleBuildToSettleAsync(accessToken, client, skillId, locale, _logger, cancellationToken).ConfigureAwait(false);
 
         _logger.LogInformation("Fetching interaction model for skill {SkillId} locale {Locale}", skillId, locale);
 
@@ -694,11 +694,12 @@ public class CatalogManager
     /// endpoint. Returns null when the status cannot be read (endpoint failure)
     /// or the locale has no reported status; failures are logged as warnings.
     /// </summary>
-    private async Task<string?> TryGetLocaleModelStatusAsync(
+    internal static async Task<string?> TryGetLocaleModelStatusAsync(
         string accessToken,
         HttpClient client,
         string skillId,
         string locale,
+        ILogger logger,
         CancellationToken cancellationToken)
     {
         try
@@ -714,21 +715,21 @@ public class CatalogManager
             // EnsureSuccessAsync log an ERR for it.
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
-                _logger.LogDebug(
+                logger.LogDebug(
                     "Skill status for skill {SkillId} locale {Locale} returned 404 (no readable status); treating as no reported status (JF-502)",
                     skillId,
                     locale);
                 return null;
             }
 
-            await EnsureSuccessAsync(response, cancellationToken).ConfigureAwait(false);
+            await EnsureSuccessSharedAsync(response, logger, cancellationToken).ConfigureAwait(false);
 
             string json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             return ExtractLocaleModelStatus(json, locale);
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or TimeoutException)
         {
-            _logger.LogWarning(ex,
+            logger.LogWarning(ex,
                 "Could not read skill status for skill {SkillId} locale {Locale} (JF-495)",
                 skillId, locale);
             return null;
@@ -740,24 +741,25 @@ public class CatalogManager
     /// (JF-495 GET-race guard). Best-effort: when the status cannot be read the
     /// wait is skipped rather than failing the sync.
     /// </summary>
-    private async Task WaitForLocaleBuildToSettleAsync(
+    internal static async Task WaitForLocaleBuildToSettleAsync(
         string accessToken,
         HttpClient client,
         string skillId,
         string locale,
+        ILogger logger,
         CancellationToken cancellationToken)
     {
         int delay = 500;
         for (int i = 0; i < 30; i++)
         {
             string? state = await TryGetLocaleModelStatusAsync(
-                accessToken, client, skillId, locale, cancellationToken).ConfigureAwait(false);
+                accessToken, client, skillId, locale, logger, cancellationToken).ConfigureAwait(false);
             if (state is null || state != "IN_PROGRESS")
             {
                 return;
             }
 
-            _logger.LogInformation(
+            logger.LogInformation(
                 "Waiting for pending interaction model build ({State}) to settle before GET-modify-PUT for skill {SkillId} locale {Locale} (JF-495)",
                 state, skillId, locale);
 
@@ -765,7 +767,7 @@ public class CatalogManager
             delay = Math.Min(delay * 2, 2000);
         }
 
-        _logger.LogWarning(
+        logger.LogWarning(
             "Interaction model build for skill {SkillId} locale {Locale} is still IN_PROGRESS after the settle budget; proceeding with GET-modify-PUT anyway (JF-495)",
             skillId, locale);
     }
@@ -805,7 +807,7 @@ public class CatalogManager
         for (int i = 0; i < 90; i++)
         {
             string? state = await TryGetLocaleModelStatusAsync(
-                accessToken, client, skillId, locale, cancellationToken).ConfigureAwait(false);
+                accessToken, client, skillId, locale, _logger, cancellationToken).ConfigureAwait(false);
 
             if (state == "SUCCEEDED" || state == "FAILED")
             {
@@ -1244,7 +1246,14 @@ public class CatalogManager
     /// </summary>
     /// <param name="response">The HTTP response message.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    private async Task EnsureSuccessAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    private Task EnsureSuccessAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+        => EnsureSuccessSharedAsync(response, _logger, cancellationToken);
+
+    /// <summary>
+    /// The shared success gate for raw SMAPI responses (instance callers above and
+    /// the transport helpers that carry their own logger, JF-554).
+    /// </summary>
+    internal static async Task EnsureSuccessSharedAsync(HttpResponseMessage response, ILogger logger, CancellationToken cancellationToken)
     {
         if (response.IsSuccessStatusCode)
         {
@@ -1252,7 +1261,7 @@ public class CatalogManager
         }
 
         string errorBody = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        _logger.LogError(
+        logger.LogError(
             "SMAPI request failed: {StatusCode} {ReasonPhrase}. Body: {Body}",
             (int)response.StatusCode,
             response.ReasonPhrase,
