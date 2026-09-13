@@ -160,7 +160,12 @@ intents:
     samples:
       - ビデオ {title} を再生して
       - 動画 {title} を流して
-      - '{title} を再生して'
+      # JF-551: the BARE '{title} を再生して' is REMOVED (JF-459 class). It stole
+      # both episode-addressing orders from PlayEpisodeIntent ('{series} のシーズン
+      # N エピソード M を再生して' and the series-last twin lost to the free-text
+      # title, profile-nlu 2026-09-13, 2/2 probes). The anchored video carriers
+      # above and below remain; the song-family bare '{song} を再生して' stays
+      # (different slot type, no recorded steal).
       - '{title} を見たい'
       - '{title} を見せて'
       - 映画 {title} を再生して

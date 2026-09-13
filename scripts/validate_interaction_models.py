@@ -251,12 +251,36 @@ def validate_single_model(locale: str, lm: dict) -> tuple[list[str], list[str]]:
                     f"undefined slot type '{slot_type}'"
                 )
 
-        # 6. AMAZON.SearchQuery coexistence violation
+        # 6. AMAZON.SearchQuery coexistence violation (JF-557 refinement: SAMPLE-level
+        # error, intent-level warning). SMAPI's enforced constraint is that no single
+        # utterance combines SearchQuery with another slot; the intent-level
+        # prohibition this check used to enforce is NOT what SMAPI rejects today -
+        # live 2026-09-13: BrowseLibraryIntent carries filter (SearchQuery) +
+        # browse_category in all 17 locales and every build SUCCEEDED (JF-550/JF-557
+        # batches). The historical 9+ incidents were sample-level combinations.
+        # The intent-level shape still warns: it is unusual and worth a look.
         if has_search_query and other_slots:
-            errors.append(
-                f"{prefix} Intent '{name}': AMAZON.SearchQuery cannot coexist "
-                f"with other slots ({other_slots})"
+            warnings.append(
+                f"{prefix} Intent '{name}': AMAZON.SearchQuery coexists with other "
+                f"slots ({other_slots}) at INTENT level; legal only while no single "
+                f"sample combines them (check below enforces that)"
             )
+        if has_search_query:
+            sq_slots = {
+                s["name"]
+                for s in slots
+                if isinstance(s, dict) and s.get("type") == "AMAZON.SearchQuery"
+            }
+            for sample in intent.get("samples", []):
+                placeholders = {
+                    p.strip("{}") for p in SLOT_PLACEHOLDER_RE.findall(sample)
+                }
+                if len(placeholders) > 1 and placeholders & sq_slots:
+                    errors.append(
+                        f"{prefix} Intent '{name}': sample '{sample}' combines "
+                        f"AMAZON.SearchQuery with another slot (SMAPI rejects the build)"
+                    )
+                    break
 
     # 7. Required custom intents check (only for intents present in ALL other locales)
     # Handled by cross-locale validation below; per-locale only checks structural issues
