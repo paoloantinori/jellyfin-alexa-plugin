@@ -4,10 +4,10 @@ title: >-
   Dead-mic question sweep: 10+ handlers still Tell question-shaped DidNotCatch*
   strings with shouldEndSession=true (same class as JF-549); hoist the shared
   cancel-hatch leg and rename FindSongCancelled
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-12 16:55'
-updated_date: '2026-09-13 11:20'
+updated_date: '2026-09-13 12:05'
 labels:
   - bug
   - reliability
@@ -42,11 +42,11 @@ Fix shape per site: the shared BuildDialogElicitResponse (BaseHandler), which re
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Every listed handler's empty-slot branch returns BuildDialogElicitResponse (Dialog.ElicitSlot + ShouldEndSession=false + reprompt), never ResponseBuilder.Tell with a question string
-- [ ] #2 Every converted intent is registered in dialog.intents in ALL 17 locale templates (anti-pattern #9) with elicitationRequired:false
-- [ ] #3 Every converted handler carries the elicitation-trap cancel hatch (hoist the shared IN_PROGRESS leg into a BaseHandler helper; FindSong keeps its wider session-state-gated hatch)
-- [ ] #4 The FindSongCancelled locale key is renamed to a flow-neutral key (e.g. FlowCancelled) in all 17 locale files with all call sites updated in the same change
-- [ ] #5 Unit tests pin the elicit shape for each converted handler (mirroring PlayEpisodeIntentHandlerTests JF-549 tests)
+- [x] #1 Every listed handler's empty-slot branch returns BuildDialogElicitResponse (Dialog.ElicitSlot + ShouldEndSession=false + reprompt), never ResponseBuilder.Tell with a question string
+- [x] #2 Every converted intent is registered in dialog.intents in ALL 17 locale templates (anti-pattern #9) with elicitationRequired:false
+- [x] #3 Every converted handler carries the elicitation-trap cancel hatch (hoist the shared IN_PROGRESS leg into a BaseHandler helper; FindSong keeps its wider session-state-gated hatch)
+- [x] #4 The FindSongCancelled locale key is renamed to a flow-neutral key (e.g. FlowCancelled) in all 17 locale files with all call sites updated in the same change
+- [x] #5 Unit tests pin the elicit shape for each converted handler (mirroring PlayEpisodeIntentHandlerTests JF-549 tests)
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -56,6 +56,12 @@ PATTERN CODIFIED (2026-09-13, user directive): the site list is now produced mec
 
 REVIEW ROUND 1 (high effort, 2026-09-13, uncommitted diff): one must-fix before commit. BrowseLibraryIntentHandler.cs:299 - the cancel hatch sits INSIDE HandleGenresQuery, which is unreachable as a hatch: entering HandleGenresQuery requires browse_category to be a genre-category key (genres/generi/géneros/gêneros/أنواع/शैलियाँ/ジャンル) while the hatch requires a slot value from the CancelWords vocabulary, and the two sets are disjoint (only slot is browse_category). The browse_category elicit this branch opens re-enters through HandleAsync, which has NO hatch: a captured 'ferma'/'stop' answer lands in the unrecognized-category ResponseBuilder.Ask branch (line ~130) and re-asks in a loop instead of FlowCancelled. Fix: hoist the BuildCancelDuringOpenElicit call to HandleAsync entry (above the empty-category Ask at line ~105), same shape as the other 12 sites. Everything else verified clean: allSlotNames parity vs model slot sets for all 15 BuildDialogElicitResponse sites + FindSong/PlayRadio; SetReminder 3-shape collapse equivalent, creation path untouched; params change source-compatible; models byte-identical to templates (md5 en-US); languageModel unchanged everywhere (dialog-only diff, prompts removed only in the 6 legacy locales with exactly the 3 Elicit.* ids); validator Phase 8 green; 3696/3696 tests both TFMs; dead-mic detector 0 remaining sites. Cosmetic: 3 test files have joined lines (two statements on one line) at PlayArtistSongsIntentHandlerTests.cs:778, PlayNextEpisodeIntentHandlerTests.cs:185, PlayPodcastIntentHandlerTests.cs:133 - fix in passing.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+COMPLETED and DEPLOYED 2026-09-13 13:30-14:05. All 13 dead-mic Tell-question sites converted to BuildDialogElicitResponse elicits (mic open + reprompt): PlayNextEpisode, PlayPodcast, SleepTimer, SetReminder x3 (collapsed to one reminder-null elicit), AddToQueue, PlayNext, QueryArtistLibrary, PlayArtistSongs, BrowseLibrary (genres), PlayMoodMusic, PlayPlaylist + ShufflePlay (caller-side, naming the invoking intent); BaseHandler's shared playlist Tell removed (contract documented). All converted intents carry BuildCancelDuringOpenElicit (hoisted to BaseHandler, 4 inline hatches collapsed; BrowseLibrary's hoisted to HandleAsync entry per code-review - the in-branch placement was unreachable because a cancel word never resolves as a genre category). Dialog registration: 11 intents added to dialog.intents in all 17 templates (elicitationRequired:false), 6 legacy PlayEpisode blocks normalized (elicitationRequired:true + dangling Elicit.* prompt refs dropped); validator Phase 8 now machine-checks elicit-target dialog registration + slot parity (negative-tested). FindSongCancelled renamed FlowCancelled across 17 locales + call sites. Tests: 10 new DeadMicSweepElicitTests + TestHelpers.AssertElicitsSlot (8 copies collapsed) + 4 updated pins + BuildDialogElicitResponse now params string[] (13 hoisted arrays deleted). Detector: 0 live sites (was 13/10 files). LIVE: DLL deployed (md5 ed5ee504 verified active, config intact), all 17 locale models rebuilt SUCCEEDED, live it-IT model carries 18 dialog entries incl. all 11 new, SeriesName catalog wiring preserved through the rebuild (JF-552 graft), e2e 7 passed + 1 documented skip (the bare empty-name playlist form routes BrowseLibrary/Fallback - routing data recorded in JF-557). Suite 3696/3696 both TFMs; CI green. Follow-ups filed from reviews: JF-556 (Phase 8 blind spots: BuildElicitSlotResponse callers, allSlotNames parity, CI advisory), JF-557 (BrowseLibrary filter slot undeclared - genre path dead end).
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
