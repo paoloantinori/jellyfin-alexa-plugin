@@ -376,7 +376,7 @@ public abstract class BaseHandler
                     .Select(i => i.Item);
     }
 
-    private protected PluginConfiguration _config;
+    private protected readonly PluginConfiguration _config;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="BaseHandler"/> class.

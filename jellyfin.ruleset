@@ -95,6 +95,8 @@
         <Rule Id="CA2016" Action="Error" />
         <!-- error on CA2254: Template should be a static expression -->
         <Rule Id="CA2254" Action="Error" />
+        <!-- error on CA2007: ConfigureAwait(false) on every await (JF-343) -->
+        <Rule Id="CA2007" Action="Error" />
 
         <!-- disable warning CA1002: Change List to Collection -->
         <Rule Id="CA1002" Action="None" />
