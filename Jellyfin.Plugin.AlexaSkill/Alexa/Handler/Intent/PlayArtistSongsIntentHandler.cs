@@ -171,6 +171,9 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
         string? musician = intentRequest.Intent.Slots?.TryGetValue("musician", out var musicianSlot) == true ? musicianSlot.Value : null;
+        // JF-426: strip a leading Italian article Amazon failed to strip for an
+        // out-of-catalog artist ("suona i 24 grana" arrived raw as 'i 24 grana').
+        musician = musician is null ? null : Util.ArtistSearch.StripLeadingArticle(musician, locale);
 
         Logger.LogDebug("PlayArtistSongs: entered, locale={Locale}", locale);
 

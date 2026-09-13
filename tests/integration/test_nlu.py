@@ -87,12 +87,22 @@ def test_utterance_resolves_correct_intent(dry_run, nlu_fixture, smapi_client):
             f"  resolved slots: {sorted(resolved_slots.keys())}"
         )
 
-        # {} means "any non-empty value" — catch unfilled slots
+        # {} means "any non-empty value"; catches unfilled slots
         if isinstance(expected_val, dict) and not expected_val:
             resolved_val = resolved_slots[slot_name].get("value", "")
             assert resolved_val, (
                 f"Slot '{slot_name}' resolved empty for '{utterance}' ({locale}):\n"
                 f"  NLU matched intent but did not fill the slot"
+            )
+
+        # {value: "..."} pins the EXACT resolved value (JF-426: article-stripping
+        # drift must fail the suite, not just fill/non-fill).
+        if isinstance(expected_val, dict) and isinstance(expected_val.get("value"), str):
+            resolved_val = resolved_slots[slot_name].get("value", "")
+            assert resolved_val == expected_val["value"], (
+                f"Slot '{slot_name}' value drift for '{utterance}' ({locale}):\n"
+                f"  expected: {expected_val['value']!r}\n"
+                f"  resolved: {resolved_val!r}"
             )
 
     logger.info(

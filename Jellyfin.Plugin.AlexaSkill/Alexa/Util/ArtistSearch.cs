@@ -24,6 +24,52 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 internal static class ArtistSearch
 {
     /// <summary>
+    /// JF-426: the Italian nominative articles the it-IT model's article-carrying
+    /// samples ("Suona i {musician}") can deliver RAW in the slot when the artist is
+    /// not in Amazon's catalog (live probe 2026-09-13: "suona i 24 grana" arrived as
+    /// musician='i 24 grana' while in-catalog artists get the article stripped
+    /// Amazon-side). A leading article poisons every search tier (Contains/StartsWith
+    /// all fail), so it is stripped HERE, at the single artist-entry choke point.
+    /// Same six articles as KeywordMatcher.StopWords["it"] (the tokenizer twin; the
+    /// it-IT YAML vocabulary comment cross-references this set).
+    /// </summary>
+    private static readonly string[] ItalianLeadingArticles = { "il", "lo", "la", "i", "gli", "le" };
+
+    /// <summary>
+    /// Strips ONE leading Italian nominative article from a raw musician slot value
+    /// (only for it-IT requests; other locales never carry these articles). Returns
+    /// the value unchanged when no article leads.
+    /// </summary>
+    /// <param name="musician">The raw slot value.</param>
+    /// <param name="locale">The request locale.</param>
+    /// <returns>The value without a leading article, or unchanged.</returns>
+    internal static string StripLeadingArticle(string musician, string locale)
+    {
+        if (!string.Equals(locale, "it-IT", StringComparison.OrdinalIgnoreCase))
+        {
+            return musician;
+        }
+
+        string trimmed = musician.TrimStart();
+        int space = trimmed.IndexOf(' ');
+        if (space <= 0)
+        {
+            return musician;
+        }
+
+        string first = trimmed[..space];
+        foreach (string article in ItalianLeadingArticles)
+        {
+            if (string.Equals(first, article, StringComparison.OrdinalIgnoreCase))
+            {
+                return trimmed[(space + 1)..].TrimStart();
+            }
+        }
+
+        return musician;
+    }
+
+    /// <summary>
     /// JF-381 tier-1 containment gate: a candidate name longer than the query by more
     /// than this many characters is a coincidental substring ("cup" in "Porcupine Tree"),
     /// not an intended match; the fuzzy/phonetic tiers handle the accent drift instead.

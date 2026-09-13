@@ -94,6 +94,8 @@ public class PlayAlbumIntentHandler : BaseHandler
 
         string? album = intentRequest.Intent.Slots?.TryGetValue("album", out var albumSlot) == true ? albumSlot.Value : null;
         string? musician = intentRequest.Intent.Slots?.TryGetValue("musician", out var musicianSlot) == true ? musicianSlot.Value : null;
+        // JF-426: strip a leading Italian article Amazon failed to strip (see PlayArtistSongs).
+        musician = musician is null ? null : Util.ArtistSearch.StripLeadingArticle(musician, locale);
 
         Logger.LogDebug("PlayAlbum: entered, locale={Locale}", locale);
 

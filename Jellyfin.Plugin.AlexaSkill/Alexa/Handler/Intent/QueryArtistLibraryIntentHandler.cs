@@ -82,6 +82,12 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
             if (intentRequest.Intent.Slots.TryGetValue("musician", out Slot? musicianSlot))
             {
                 musician = musicianSlot.Value;
+                // JF-426: strip a leading Italian article Amazon failed to strip
+                // (see PlayArtistSongs).
+                if (musician != null)
+                {
+                    musician = Util.ArtistSearch.StripLeadingArticle(musician, locale);
+                }
             }
 
             if (intentRequest.Intent.Slots.TryGetValue("query_type", out Slot? queryTypeSlot))

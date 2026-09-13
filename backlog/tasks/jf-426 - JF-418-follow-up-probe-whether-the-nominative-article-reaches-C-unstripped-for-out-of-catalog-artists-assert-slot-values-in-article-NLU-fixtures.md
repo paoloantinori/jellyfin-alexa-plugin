@@ -3,7 +3,7 @@ id: JF-426
 title: >-
   JF-418 follow-up: probe whether the nominative article reaches C# unstripped
   for out-of-catalog artists; assert slot values in article NLU fixtures
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-08-31 15:02'
 labels:
@@ -38,6 +38,14 @@ PROBE BEFORE CODE (agent's explicit judgment): zero observed failures, so a pree
 - [ ] #3 If the article does not leak: finding documented as not reproducible, task closed
 - [ ] #4 NLU article fixtures upgraded to assert the slot VALUE (article stripped) for at least one in-catalog case, so Amazon-side stripping drift fails the suite
 <!-- AC:END -->
+
+## Implementation Notes
+
+COMPLETED 2026-09-13 (AC#1 probed, AC#2 applied, AC#4 pinned; live end-to-end verify BLOCKED on a server relink, see below):
+- AC#1 PROBE (profile-nlu, it-IT): the article DOES leak for out-of-catalog artists. "suona i 24 grana" delivers musician='i 24 grana' RAW (article intact; the library artist is "24 Grana", so every search tier would fail). In-catalog artists get Amazon-side stripping ("suona gli afterhours" -> 'afterhours') but even those are inconsistent: "suona i pink floyd" resolves to 'i P!nk floyd' (catalog phonetic substitution WITH the article still attached).
+- AC#2 FIX: ArtistSearch.StripLeadingArticle (it-IT only, ONE leading article from the KeywordMatcher six: il/lo/la/i/gli/le) applied at all four raw musician-slot read sites (PlayArtistSongs, PlaySong, PlayAlbum, QueryArtistLibrary). 8 unit tests (article variants, single-token, double-article, non-Italian locale unchanged).
+- AC#4 FIXTURES: the NLU runner now supports {value: "..."} exact slot-value pins (drift fails the suite, not just fill/non-fill); "suona i pink floyd" pinned to the live truth 'i P!nk floyd'. The pin IMMEDIATELY caught real state: Amazon does NOT strip this form; the C# strip handles it at runtime. Also re-pinned "Suona musica dei pink floyd" to PlaySongIntent after the JF-553 stability protocol showed a STABLE 6/6 flip (not trainer noise): the JF-541 catalog-steal class with the catalog anchor present.
+- LIVE VERIFY BLOCKED: the post-deploy simulator check could not run; the 19:22 DLL swap left the stored JellyfinToken dead against the server (both the current XML token and the 00:41 backup rejected, tokens-differ; the documented hot-swap-wipes-token class, deploy_hotswap_jellyfintoken memory). The strip is unit-pinned; the end-to-end simulator pass re-runs after Paolo relinks (config page).
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

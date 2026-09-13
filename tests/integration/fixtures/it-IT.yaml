@@ -357,6 +357,20 @@ tests:
       season_number: {}
       episode_number: {}
 
+  # JF-426: article-carrying artist forms MUST deliver the slot with the article
+  # STRIPPED Amazon-side for in-catalog artists (drift here means the stripping
+  # moved and out-of-catalog artists would search with the article).
+  - utterance: "suona i pink floyd"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician:
+        # Live truth 2026-09-13: Amazon does NOT strip the article for this form
+        # (in-catalog artists get the catalog substitution but keep the article).
+        # The C# entry strip (ArtistSearch.StripLeadingArticle, JF-426) removes it
+        # at runtime; this pin guards the Amazon-side value so stripping drift in
+        # EITHER direction fails the suite.
+        value: "i P!nk floyd"
+
   # JF-493: numbers-first family ("la stagione X episodio Y di Z" before the
   # series name). Slot-pinned on seed series (stable fill); the adolescence
   # variant stays intent-level because a non-seed series fills only after the
@@ -795,10 +809,18 @@ tests:
   # Note: "Riproduci brani dei queen" resolves to PlayByGenreIntent in NLU.
   # The disambiguated form "Suona musica dei queen" is more reliable.
 
+  # Re-pinned 2026-09-13 (JF-426 session): this row now routes to PlaySongIntent
+  # STABLY (6/6 after an identical-content it-IT rebuild; NOT the JF-553 trainer
+  # flip). Mechanism is the documented JF-541 catalog-steal class: with the
+  # artist's catalog anchor present (the phonetic synonym P!nk floyd resolves),
+  # PlaySong's "{song} di {musician}" family absorbs "musica dei" into the song
+  # slot and the musician fills from the catalog. The disambiguated queen row
+  # below remains the reliable PlayArtistSongs pin.
   - utterance: "Suona musica dei pink floyd"
-    expected_intent: PlayArtistSongsIntent
+    expected_intent: PlaySongIntent
     expected_slots:
-      musician: {}
+      musician:
+        value: "P!nk floyd"
 
   # JF-438 regression guards: the nominative-article and band-carrier forms were
   # stolen by the RepeatSingle "Suonala ancora" collision (removed from the
