@@ -7,6 +7,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-12 16:55'
+updated_date: '2026-09-13 08:43'
 labels:
   - bug
   - reliability
@@ -14,8 +15,8 @@ labels:
 dependencies: []
 references:
   - JF-549
-  - Jellyfin.Plugin.AlexaSkill/Alexa/Handler/BaseHandler.cs
-  - Jellyfin.Plugin.AlexaSkill/Alexa/Util/CancelWords.cs
+  - scripts/validate_question_responses.py
+  - .claude/skills/dead-mic-sweep/SKILL.md
 priority: medium
 ---
 
@@ -47,6 +48,12 @@ Fix shape per site: the shared BuildDialogElicitResponse (BaseHandler), which re
 - [ ] #4 The FindSongCancelled locale key is renamed to a flow-neutral key (e.g. FlowCancelled) in all 17 locale files with all call sites updated in the same change
 - [ ] #5 Unit tests pin the elicit shape for each converted handler (mirroring PlayEpisodeIntentHandlerTests JF-549 tests)
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+PATTERN CODIFIED (2026-09-13, user directive): the site list is now produced mechanically by scripts/validate_question_responses.py (dead-mic detector: question-shaped locale keys crossed against Tell sites) and the fix procedure is the .claude/skills/dead-mic-sweep skill. First run reproduces this task's hand-made enumeration exactly: 13 sites across 10 files (BaseHandler:4974; AddToQueue:84; PlayNext:85; QueryArtistLibrary:98; PlayArtistSongs:179; PlayNextEpisode:79; PlayPodcast:71; BrowseLibrary:298; PlayMoodMusic:409; SleepTimer:79; SetReminder:77,101,107). When the sweep completes, consider promoting --strict into the CI validate job so the class cannot re-enter.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
