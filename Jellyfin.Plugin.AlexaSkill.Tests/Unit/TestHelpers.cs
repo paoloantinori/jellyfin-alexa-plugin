@@ -217,6 +217,23 @@ internal static class TestHelpers
     }
 
     /// <summary>
+    /// Asserts the elicit-response shape (JF-549/JF-550): open session, a
+    /// Dialog.ElicitSlot directive targeting the given slot of the given intent,
+    /// and a reprompt. The one shared assertion for every dead-mic sweep pin
+    /// (was eight per-file copies).
+    /// </summary>
+    internal static void AssertElicitsSlot(SkillResponse response, string slotToElicit, string intentName)
+    {
+        AssertSessionOpen(response, "a question must keep the session open or the mic never listens");
+        global::Xunit.Assert.NotNull(response.Response.Reprompt);
+        var elicit = response.Response.Directives?.FirstOrDefault(d => d.Type == "Dialog.ElicitSlot")
+            as Jellyfin.Plugin.AlexaSkill.Alexa.Directive.ElicitSlotDirective;
+        global::Xunit.Assert.NotNull(elicit);
+        global::Xunit.Assert.Equal(slotToElicit, elicit!.SlotToElicit);
+        global::Xunit.Assert.Equal(intentName, elicit.UpdatedIntent.Name);
+    }
+
+    /// <summary>
     /// Mints <c>&lt;suffix&gt;-&lt;guid&gt;</c> under the temp path, creates it, and
     /// registers it with PluginTempDirCleanup for deletion at process exit
     /// (JF-453/JF-486). Test code minting GUID temp dirs MUST go through this

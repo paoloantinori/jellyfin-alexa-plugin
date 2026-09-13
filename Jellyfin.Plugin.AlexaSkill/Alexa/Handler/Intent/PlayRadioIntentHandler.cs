@@ -71,19 +71,11 @@ public class PlayRadioIntentHandler : BaseHandler
         intentRequest.Intent.Slots?.TryGetValue(IntentNames.Slots.Station, out stationSlot);
         string? station = stationSlot?.Value;
 
-        // Escape hatch from the elicitation trap (shared CancelWords helpers, same shape
-        // as PlaySong/PlayAlbum): while the station Dialog.ElicitSlot below is open, a
-        // stop/cancel word gets captured into the station slot (dialogState
-        // IN_PROGRESS) instead of routing to AMAZON.Stop/CancelIntent, and answering it
-        // with the nothing-playing Tell recreates the out-of-context reply JF-472 fixes.
-        // Gated on IN_PROGRESS deliberately (JF-445): this elicit persists no session
-        // state, so a fresh full-utterance request whose slot happens to be a cancel
-        // word keeps today's behavior.
-        if (Util.CancelWords.IsDialogInProgress(intentRequest)
-            && Util.CancelWords.AnySlotIsCancelWord(intentRequest, locale))
+        // Elicitation-trap cancel hatch; the shared leg and its rationale live in
+        // BaseHandler.BuildCancelDuringOpenElicit (JF-550).
+        if (BuildCancelDuringOpenElicit(intentRequest, locale, "PlayRadio") is { } elicitCancel)
         {
-            Logger.LogInformation("PlayRadio: captured cancel word during open station elicit (station='{Station}'), ending flow", station);
-            return ResponseBuilder.Tell(ResponseStrings.Get("FindSongCancelled", locale));
+            return elicitCancel;
         }
 
         // JF-480: PAUSED is a third state the JF-472 model missed. The plugin's pause

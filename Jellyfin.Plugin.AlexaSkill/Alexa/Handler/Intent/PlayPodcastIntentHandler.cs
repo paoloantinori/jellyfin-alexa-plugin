@@ -66,9 +66,15 @@ public class PlayPodcastIntentHandler : BaseHandler
             ? nameSlot.Value
             : null;
 
+        // JF-550 (dead-mic sweep; JF-549 class).
+        if (BuildCancelDuringOpenElicit(intentRequest, locale, "PlayPodcast") is { } elicitCancel)
+        {
+            return elicitCancel;
+        }
+
         if (string.IsNullOrWhiteSpace(podcastName))
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchPodcastName", locale));
+            return BuildDialogElicitResponse("DidNotCatchPodcastName", locale, "podcast_name", IntentNames.PlayPodcast, "podcast_name");
         }
 
         RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingPodcast", locale)));

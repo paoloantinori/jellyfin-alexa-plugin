@@ -542,7 +542,7 @@ Test fixtures that use entity names (album/song/genre) must have those names in 
 }
 ```
 
-**Detection**: If a handler uses `ElicitSlotDirective`, verify the intent appears in `dialog.intents` in the model JSON:
+**Detection**: machine-checked since JF-550: `python3 scripts/validate_interaction_models.py` Phase 8 (elicit dialog registration) cross-references every `BuildDialogElicitResponse`/`ElicitSlotDirective` call site's target intent against `dialog.intents` in ALL 17 models and fails on a missing entry or slot drift. For a quick manual look:
 ```bash
 python3 -c "import json; d=json.load(open('model_it-IT.json')); m=d.get('interactionModel',d); print([i['name'] for i in m.get('dialog',{}).get('intents',[])])"
 ```

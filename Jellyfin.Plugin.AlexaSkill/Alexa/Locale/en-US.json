@@ -254,7 +254,7 @@
   "FindSongTooVague": "I need more specific words to search. Try again with a few words from the title.",
   "FindSongInvalidPick": "I didn't catch that. Please say the number or the title of the song.",
   "FindSongDisambigAbandoned": "No problem. Just ask me again whenever you want to find a song.",
-  "FindSongCancelled": "Okay, I've stopped searching.",
+  "FlowCancelled": "Okay, I've stopped searching.",
   "SkillWarmingUp": "I'm still getting ready. Please try again in a minute.",
   "PauseSessionSpeech": "Paused.",
   "PauseSessionReprompt": "Tell me whenever you want to resume."

@@ -153,7 +153,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
 
         Assert.True(response.Response.ShouldEndSession != false, "cancel word during open flow must end the session");
         var speech = (response.Response.OutputSpeech as PlainTextOutputSpeech)?.Text ?? string.Empty;
-        Assert.False(string.IsNullOrWhiteSpace(speech), "cancel response must speak the FindSongCancelled string");
+        Assert.False(string.IsNullOrWhiteSpace(speech), "cancel response must speak the FlowCancelled string");
         Assert.True(response.Response.Directives?.Any(d => d.Type == "Dialog.ElicitSlot") != true, "cancel word must not re-elicit");
     }
 
@@ -223,7 +223,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
 
         SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, attrs, CancellationToken.None);
 
-        string cancelled = Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("FindSongCancelled", "it-IT");
+        string cancelled = Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("FlowCancelled", "it-IT");
         Assert.Equal(cancelled, TestHelpers.GetSpeechText(response));
         Assert.True(response.Response.ShouldEndSession != false, "musician-slot cancel word must end the session");
         Assert.True(response.Response.Directives?.Any(d => d.Type == "Dialog.ElicitSlot") != true, "musician-slot cancel word must not re-elicit");
@@ -258,7 +258,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
 
         SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, attrs, CancellationToken.None);
 
-        string cancelled = Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("FindSongCancelled", "it-IT");
+        string cancelled = Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("FlowCancelled", "it-IT");
         Assert.Equal(cancelled, TestHelpers.GetSpeechText(response));
         Assert.True(response.Response.ShouldEndSession != false, "STARTED sibling misroute with a bare cancel word must end the session");
         Assert.True(response.Response.Directives?.Any(d => d.Type == "Dialog.ElicitSlot") != true, "STARTED sibling misroute must not re-elicit");
@@ -289,7 +289,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
 
         SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, attrs, CancellationToken.None);
 
-        string cancelled = Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("FindSongCancelled", "it-IT");
+        string cancelled = Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("FlowCancelled", "it-IT");
         Assert.NotEqual(cancelled, TestHelpers.GetSpeechText(response));
         Assert.False(response.Response.ShouldEndSession != false, "multi-word musician during open flow must keep the flow alive (artist search path)");
     }
@@ -326,7 +326,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
 
         SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, attrs, CancellationToken.None);
 
-        string cancelled = Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("FindSongCancelled", "it-IT");
+        string cancelled = Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("FlowCancelled", "it-IT");
         Assert.Equal(cancelled, TestHelpers.GetSpeechText(response));
         Assert.True(response.Response.ShouldEndSession != false, "the pinned sacrifice must end the session (one-turn recovery)");
         Assert.True(response.Response.Directives?.Any(d => d.Type == "Dialog.ElicitSlot") != true, "the pinned sacrifice must not re-elicit");
@@ -356,7 +356,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
 
         SkillResponse response = await _handler.HandleAsync(request, _fx.CreateContext(), user, session, null, CancellationToken.None);
 
-        string cancelled = Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("FindSongCancelled", "it-IT");
+        string cancelled = Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("FlowCancelled", "it-IT");
         Assert.NotEqual(cancelled, TestHelpers.GetSpeechText(response));
         Assert.False(response.Response.ShouldEndSession, "first invocation must continue the flow (keywords elicit), not cancel");
         var sessionData = ReadSessionData(response);

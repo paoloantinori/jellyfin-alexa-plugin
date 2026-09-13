@@ -603,6 +603,85 @@ def lint_play_episode_one_shot_order(all_models: dict[str, dict]) -> list[str]:
     return warnings
 
 
+
+def check_elicit_dialog_registration(all_models: dict[str, dict]) -> tuple[list[str], list[str]]:
+    """ERROR check: every intent the plugin elicits must be dialog-registered.
+
+    The model-side half of the dead-mic pattern (JF-550): the handler emits a
+    Dialog.ElicitSlot, and Amazon SILENTLY drops the directive unless the target
+    intent appears in the model's dialog.intents (anti-pattern #9). Unit tests
+    cannot see this (they assert what the plugin SENDS, not what Amazon keeps),
+    so this check cross-references the elicit call sites in the handler source
+    against every locale's dialog section. Slot parity between the dialog entry
+    and the languageModel intent is asserted too: SMAPI rejects MismatchedSlotType
+    shapes at build time, and silent drift would surface only per-locale at deploy.
+    """
+    import glob as _glob
+    import os as _os
+    import re as _re
+
+    repo_root = Path(__file__).resolve().parent.parent
+    handler_files = [
+        p
+        for p in _glob.glob(
+            str(repo_root / "Jellyfin.Plugin.AlexaSkill" / "Alexa" / "Handler" / "**" / "*.cs"),
+            recursive=True,
+        )
+        if f"{_os.sep}bin{_os.sep}" not in p and f"{_os.sep}obj{_os.sep}" not in p
+    ]
+    handler_src = "\n".join(open(p, encoding="utf-8").read() for p in handler_files)
+    intent_constants = dict(
+        _re.findall(
+            r'public const string (\w+) = "([\w.]+)"',
+            (repo_root / "Jellyfin.Plugin.AlexaSkill" / "Alexa" / "IntentNames.cs").read_text(encoding="utf-8"),
+        )
+    )
+
+    # Elicit targets: BuildDialogElicitResponse(... , IntentNames.X, ...) call sites
+    # plus raw ElicitSlotDirective constructions naming an intent constant.
+    targets = set(
+        intent_constants.get(m)
+        for m in _re.findall(r"BuildDialogElicitResponse\([^;]*?IntentNames\.(\w+)", handler_src, _re.S)
+    )
+    targets |= set(
+        intent_constants.get(m)
+        for m in _re.findall(r"ElicitSlotDirective\([^;]*?IntentNames\.(\w+)", handler_src, _re.S)
+    )
+    targets.discard(None)
+    if not targets:
+        return [], []
+
+    # all_models carries languageModels only; the dialog section is its sibling in
+    # the envelope, so re-read the raw files for this check.
+    envelope: dict[str, dict] = {}
+    for model_path in sorted(MODELS_DIR.glob("model_*.json")):
+        with open(model_path, encoding="utf-8") as fh:
+            envelope[model_path.name[6:-5]] = json.load(fh)
+
+    errors: list[str] = []
+    warnings: list[str] = []
+    for locale, doc in sorted(envelope.items()):
+        lm = doc.get("interactionModel", doc).get("languageModel", doc.get("languageModel"))
+        dialog = {i.get("name"): i for i in doc.get("interactionModel", doc).get("dialog", {}).get("intents", [])}
+        lm_slots = {
+            i["name"]: {s["name"] for s in (i.get("slots") or [])}
+            for i in lm["intents"]
+        }
+        for intent in sorted(targets):
+            entry = dialog.get(intent)
+            if entry is None:
+                errors.append(
+                    f"  [{locale}] intent {intent} is elicited by handler code but missing from dialog.intents (Amazon silently drops the directive; anti-pattern #9)"
+                )
+                continue
+            dlg_slots = {s.get("name") for s in (entry.get("slots") or [])}
+            if intent in lm_slots and dlg_slots != lm_slots[intent]:
+                errors.append(
+                    f"  [{locale}] dialog entry for {intent} lists slots {sorted(dlg_slots)} but the languageModel intent declares {sorted(lm_slots[intent])} (MismatchedSlotType at build)"
+                )
+    return errors, warnings
+
+
 def _first_divergence(expected: str, actual: str) -> str:
     """First differing line pair between two serialized models, for warnings."""
     exp_lines = expected.splitlines()
@@ -969,6 +1048,17 @@ def main() -> int:
                 print(f"  WARN: {w}")
         else:
             print("  Every one-shot carrier family carries both word orders (series-first and series-last)")
+
+    # Phase 8: elicit-target dialog registration (JF-550 error check)
+    if all_models:
+        print("\nElicit dialog registration:")
+        reg_errors, _ = check_elicit_dialog_registration(all_models)
+        all_errors.extend(reg_errors)
+        if reg_errors:
+            for e in reg_errors:
+                print(f"  ERROR: {e}")
+        else:
+            print("  Every handler-elicited intent is dialog-registered with slot parity in all locales")
 
     # Summary
     print(f"\n{'='*60}")

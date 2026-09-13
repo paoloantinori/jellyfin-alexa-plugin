@@ -92,10 +92,16 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
 
         Logger.LogDebug("QueryArtistLibrary: entered, locale={Locale}, musician={Musician}, queryType={QueryType}", locale, musician, queryType);
 
+        // JF-550 (dead-mic sweep; JF-549 class).
+        if (BuildCancelDuringOpenElicit(intentRequest, locale, "QueryArtistLibrary") is { } elicitCancel)
+        {
+            return elicitCancel;
+        }
+
         if (string.IsNullOrWhiteSpace(musician))
         {
-            Logger.LogDebug("QueryArtistLibrary: missing musician slot, returning Tell");
-            return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchArtistName", locale));
+            Logger.LogDebug("QueryArtistLibrary: missing musician slot, eliciting");
+            return BuildDialogElicitResponse("DidNotCatchArtistName", locale, "musician", IntentNames.QueryArtistLibrary, "musician", "query_type");
         }
 
         // Layer-1 gate (GuardIndexReady): before the "searching" progressive response.

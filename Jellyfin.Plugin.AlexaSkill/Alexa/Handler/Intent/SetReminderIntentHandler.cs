@@ -72,17 +72,23 @@ public class SetReminderIntentHandler : BaseHandler
         string? durationText = GetSlotValue(intentRequest, "duration_minutes");
         string? timeText = GetSlotValue(intentRequest, "reminder_time");
 
+        // JF-550 (dead-mic sweep; JF-549 class).
+        if (BuildCancelDuringOpenElicit(intentRequest, locale, "SetReminder") is { } elicitCancel)
+        {
+            return elicitCancel;
+        }
+
         if (string.IsNullOrEmpty(durationText) && string.IsNullOrEmpty(timeText))
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchReminderTime", locale));
+            return BuildDialogElicitResponse("DidNotCatchReminderTime", locale, "reminder_time", IntentNames.SetReminder, "duration_minutes", "reminder_time");
         }
 
         string spokenText = !string.IsNullOrEmpty(message)
             ? message
             : ResponseStrings.Get("ReminderDefaultMessage", locale);
 
+        Reminder? reminder = null;
         int? relativeMinutes = null;
-        Reminder reminder;
         try
         {
             // duration_minutes is AMAZON.NUMBER in 16 locales ("30") but the custom
@@ -96,15 +102,17 @@ public class SetReminderIntentHandler : BaseHandler
             {
                 reminder = BuildAbsoluteReminder(timeText, spokenText, locale);
             }
-            else
-            {
-                return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchReminderTime", locale));
-            }
         }
         catch (FormatException ex)
         {
             Logger.LogDebug(ex, "SetReminderIntent: invalid time format '{Time}'", timeText);
-            return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchReminderTime", locale));
+        }
+
+        if (reminder is null)
+        {
+            // One elicit for every no-time shape: both slots empty, an unparseable
+            // duration, or an invalid time string (JF-550 dead-mic sweep).
+            return BuildDialogElicitResponse("DidNotCatchReminderTime", locale, "reminder_time", IntentNames.SetReminder, "duration_minutes", "reminder_time");
         }
 
         try

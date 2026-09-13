@@ -84,6 +84,15 @@ public class BrowseLibraryIntentHandler : BaseHandler
         string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
 
+        // Elicitation-trap cancel hatch (JF-550; review fix: it MUST live here, at
+        // entry, not inside HandleGenresQuery - the browse_category elicit's
+        // captured answer re-enters through THIS method, and a cancel word never
+        // resolves as a genre category, so the old placement was unreachable).
+        if (BuildCancelDuringOpenElicit(intentRequest, locale, "BrowseLibrary") is { } elicitCancel)
+        {
+            return elicitCancel;
+        }
+
         string? browseCategory = null;
         string? filter = null;
 
@@ -124,7 +133,7 @@ public class BrowseLibraryIntentHandler : BaseHandler
         if (SlotMappings.IsGenreCategory(normalized))
         {
             Logger.LogDebug("BrowseLibrary: resolved as genre query, filter={Filter}", filter);
-            return await HandleGenresQuery(filter, locale, resolvedUser, context, user, cancellationToken).ConfigureAwait(false);
+            return await HandleGenresQuery(intentRequest, filter, locale, resolvedUser, context, user, cancellationToken).ConfigureAwait(false);
         }
 
         if (!SlotMappings.BrowseCategoryToItemKind.TryGetValue(normalized, out BaseItemKind? itemKind) || !itemKind.HasValue)
@@ -291,11 +300,11 @@ public class BrowseLibraryIntentHandler : BaseHandler
     /// <param name="locale">The locale for localized responses.</param>
     /// <param name="jellyfinUser">The Jellyfin user for the query.</param>
     /// <returns>A skill response.</returns>
-    private async Task<SkillResponse> HandleGenresQuery(string? filter, string locale, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Context context, Entities.User user, CancellationToken cancellationToken)
+    private async Task<SkillResponse> HandleGenresQuery(IntentRequest intentRequest, string? filter, string locale, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Context context, Entities.User user, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(filter))
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchBrowseCategory", locale));
+            return BuildDialogElicitResponse("DidNotCatchBrowseCategory", locale, "browse_category", IntentNames.BrowseLibrary, "browse_category");
         }
 
         // JF-466: both browsable kinds are disabled by content access. An empty

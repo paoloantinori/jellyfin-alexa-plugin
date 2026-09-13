@@ -1,7 +1,6 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
@@ -74,9 +73,16 @@ public class PlayNextEpisodeIntentHandler : BaseHandler
 
         string? seriesName = intentRequest.Intent.Slots?.TryGetValue("series_name", out var seriesSlot) == true ? seriesSlot.Value : null;
 
+        // JF-550 (dead-mic sweep; JF-549 class): the empty-slot prompt elicits
+        // with the mic open, and a captured cancel word ends the flow.
+        if (BuildCancelDuringOpenElicit(intentRequest, locale, "PlayNextEpisode") is { } elicitCancel)
+        {
+            return elicitCancel;
+        }
+
         if (string.IsNullOrWhiteSpace(seriesName))
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchSeriesName", locale));
+            return BuildDialogElicitResponse("DidNotCatchSeriesName", locale, "series_name", IntentNames.PlayNextEpisode, "series_name");
         }
 
         // Media-type gate after the slot prompt and before any query (the JF-467

@@ -80,9 +80,15 @@ public class PlayNextIntentHandler : BaseHandler
 
         Logger.LogDebug("PlayNext: entered, song={SongQuery}, musician={MusicianQuery}", songQuery, musicianQuery);
 
+        // JF-550 (dead-mic sweep; JF-549 class).
+        if (BuildCancelDuringOpenElicit(intentRequest, locale, "PlayNext") is { } elicitCancel)
+        {
+            return elicitCancel;
+        }
+
         if (string.IsNullOrWhiteSpace(songQuery))
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchQueueItem", locale));
+            return BuildDialogElicitResponse("DidNotCatchQueueItem", locale, "song", IntentNames.PlayNext, "song", "musician");
         }
 
         // Per-path routing (gate = GuardIndexReady): the song gate first (the

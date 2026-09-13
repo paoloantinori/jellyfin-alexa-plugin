@@ -1188,12 +1188,38 @@ public abstract class BaseHandler
         string locale,
         string slotToElicit,
         string intentName,
-        string[] allSlotNames)
+        params string[] allSlotNames)
         => BuildElicitSlotResponse(
             intentName,
             slotToElicit,
             allSlotNames,
             ResponseStrings.Get(promptKey, locale));
+
+    /// <summary>
+    /// The shared elicitation-trap cancel hatch (JF-550 hoist; the regime FindSong
+    /// hit live 2026-08-28): while a Dialog.ElicitSlot is open, Alexa captures the
+    /// user's next utterance INTO the elicited slot instead of routing it, so a
+    /// bare stop/cancel word arrives as a slot value with dialogState IN_PROGRESS.
+    /// That is a cancel, not a search for an item named "stop"/"ferma". Returns
+    /// the session-ending cancel response when that shape is present, else null.
+    /// FindSong keeps its own wider hatch (session-state-gated with the
+    /// force-route disjuncts, JF-445); every other elicit-opening handler uses
+    /// this one.
+    /// </summary>
+    /// <param name="intentRequest">The incoming intent request.</param>
+    /// <param name="locale">The request locale, for the cancel vocabulary.</param>
+    /// <param name="handlerTag">Handler name for the log line.</param>
+    /// <returns>The cancel Tell, or null when no cancel was captured.</returns>
+    protected SkillResponse? BuildCancelDuringOpenElicit(IntentRequest intentRequest, string locale, string handlerTag)
+    {
+        if (Util.CancelWords.IsDialogInProgress(intentRequest) && Util.CancelWords.AnySlotIsCancelWord(intentRequest, locale))
+        {
+            Logger.LogInformation("{Handler}: captured cancel word during open elicit, ending flow", handlerTag);
+            return ResponseBuilder.Tell(ResponseStrings.Get("FlowCancelled", locale));
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// Build an AudioPlayer response with cover art metadata.
@@ -4942,7 +4968,7 @@ public abstract class BaseHandler
     /// <param name="libraryManager">Library manager for querying playlists and items.</param>
     /// <param name="userManager">User manager for resolving the Jellyfin user.</param>
     /// <param name="queueManager">Optional per-device queue manager for crash recovery and shuffle.</param>
-    /// <param name="playlistName">The playlist name to search for.</param>
+    /// <param name="playlistName">The playlist name to search for. MUST be non-empty: the callers own the empty-name elicit (JF-550) because it must name the invoking intent, and this builder serves both PlayPlaylistIntent and ShufflePlayIntent.</param>
     /// <param name="context">The Alexa context.</param>
     /// <param name="user">The plugin user.</param>
     /// <param name="session">The Jellyfin session.</param>
@@ -4968,11 +4994,6 @@ public abstract class BaseHandler
         // shuffle flag distinguishes the calling path (follow-on logs keep the
         // "PlayPlaylist:" prefix as the shared method body is identical).
         Logger.LogDebug("BuildPlaylistPlayResponseAsync: entered, locale={Locale}, shuffle={Shuffle}", locale, shuffle);
-
-        if (string.IsNullOrWhiteSpace(playlistName))
-        {
-            return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchPlaylistName", locale));
-        }
 
         Logger.LogDebug("Play playlist: {0}", playlistName);
 

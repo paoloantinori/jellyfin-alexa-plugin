@@ -404,9 +404,17 @@ public class PlayMoodMusicIntentHandler : BaseHandler
             mood = moodSlot.Value;
         }
 
+        // JF-550 (dead-mic sweep; JF-549 class). Stays BEFORE the JF-467 music
+        // gate and the warming gate: the open elicit must cancel and prompt
+        // without waiting on indexes or disabled-feature checks.
+        if (BuildCancelDuringOpenElicit(intentRequest, locale, "PlayMoodMusic") is { } elicitCancel)
+        {
+            return elicitCancel;
+        }
+
         if (string.IsNullOrWhiteSpace(mood))
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchMood", locale));
+            return BuildDialogElicitResponse("DidNotCatchMood", locale, "mood", IntentNames.PlayMoodMusic, "mood");
         }
 
         // JF-467: primary-path music gate (shared contract on IfMediaTypeDisabled).

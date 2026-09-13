@@ -773,10 +773,7 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
-        Assert.NotNull(response);
-        string speech = TestHelpers.GetSpeechText(response);
-        Assert.Contains("artist", speech, StringComparison.OrdinalIgnoreCase);
-        Assert.True(response.Response.ShouldEndSession);
+        TestHelpers.AssertElicitsSlot(response, "musician", IntentNames.PlayArtistSongs);        Assert.Contains("artist", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

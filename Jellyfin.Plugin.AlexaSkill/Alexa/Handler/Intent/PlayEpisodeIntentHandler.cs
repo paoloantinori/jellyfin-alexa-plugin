@@ -31,13 +31,6 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// </summary>
 public class PlayEpisodeIntentHandler : BaseHandler
 {
-    /// <summary>
-    /// Every PlayEpisodeIntent slot, for the series_name elicit's updatedIntent
-    /// (Amazon rejects a partial one; hoisted because a constant array argument
-    /// fires CA1861 and these slots have no IntentNames.Slots constants).
-    /// </summary>
-    private static readonly string[] AllSlotNames = { "series_name", "season_number", "episode_number" };
-
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
     private readonly IUserDataManager _userDataManager;
@@ -79,15 +72,11 @@ public class PlayEpisodeIntentHandler : BaseHandler
 
         string? seriesName = intentRequest.Intent.Slots?.TryGetValue("series_name", out var seriesSlot) == true ? seriesSlot.Value : null;
 
-        // Escape hatch from the elicitation trap (JF-549, same regime FindSong hit live
-        // 2026-08-28): while the series_name elicit below is open, Alexa captures the
-        // user's next utterance INTO the slot instead of routing it, so a bare
-        // stop/cancel word arrives as series_name="stop"/"ferma" with dialogState
-        // IN_PROGRESS. That is a cancel, not a search for a series named "ferma".
-        if (Util.CancelWords.IsDialogInProgress(intentRequest) && Util.CancelWords.AnySlotIsCancelWord(intentRequest, locale))
+        // Escape hatch from the elicitation trap (JF-549; the shared hoisted leg
+        // lives in BuildCancelDuringOpenElicit, JF-550).
+        if (BuildCancelDuringOpenElicit(intentRequest, locale, "PlayEpisode") is { } elicitCancel)
         {
-            Logger.LogInformation("PlayEpisode: cancel during open series elicit, ending flow");
-            return ResponseBuilder.Tell(ResponseStrings.Get("FindSongCancelled", locale));
+            return elicitCancel;
         }
 
         if (string.IsNullOrWhiteSpace(seriesName))
@@ -104,7 +93,7 @@ public class PlayEpisodeIntentHandler : BaseHandler
                 locale,
                 "series_name",
                 IntentNames.PlayEpisode,
-                AllSlotNames);
+                "series_name", "season_number", "episode_number");
         }
 
         string? seasonRaw = intentRequest.Intent.Slots?.TryGetValue("season_number", out var seasonSlot) == true ? seasonSlot.Value : null;

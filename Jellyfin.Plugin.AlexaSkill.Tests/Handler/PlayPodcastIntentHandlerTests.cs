@@ -130,9 +130,7 @@ public class PlayPodcastIntentHandlerTests : PluginTestBase
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
-        Assert.NotNull(response);
-        response.Tells();
-    }
+        TestHelpers.AssertElicitsSlot(response, "podcast_name", IntentNames.PlayPodcast);    }
 
     [Fact]
     public async Task HandleAsync_PodcastNotFound_ReturnsNotFound()
@@ -312,7 +310,10 @@ public class PlayPodcastIntentHandlerTests : PluginTestBase
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
         Assert.NotNull(response);
-        Assert.True(response.Response.ShouldEndSession);
+        TestHelpers.AssertSessionOpen(response, "a question must keep the session open or the mic never listens");
+        var elicit = response.Response.Directives?.FirstOrDefault(d => d.Type == "Dialog.ElicitSlot") as Jellyfin.Plugin.AlexaSkill.Alexa.Directive.ElicitSlotDirective;
+        Assert.NotNull(elicit);
+        Assert.Equal("podcast_name", elicit!.SlotToElicit);
         Assert.DoesNotContain(response.Response.Directives ?? new List<IDirective>(), d => d.Type == "Dialog.Delegate");
     }
 

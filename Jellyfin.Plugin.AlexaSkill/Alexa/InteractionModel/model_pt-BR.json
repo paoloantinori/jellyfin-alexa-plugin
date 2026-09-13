@@ -1436,28 +1436,19 @@
             "name": "series_name",
             "type": "SeriesName",
             "confirmationRequired": false,
-            "elicitationRequired": true,
-            "prompts": {
-              "elicitation": "Elicit.SeriesName"
-            }
+            "elicitationRequired": false
           },
           {
             "name": "season_number",
             "type": "AMAZON.NUMBER",
             "confirmationRequired": false,
-            "elicitationRequired": true,
-            "prompts": {
-              "elicitation": "Elicit.SeasonNumber"
-            }
+            "elicitationRequired": false
           },
           {
             "name": "episode_number",
             "type": "AMAZON.NUMBER",
             "confirmationRequired": false,
-            "elicitationRequired": true,
-            "prompts": {
-              "elicitation": "Elicit.EpisodeNumber"
-            }
+            "elicitationRequired": false
           }
         ]
       },
@@ -1544,48 +1535,163 @@
             "elicitationRequired": false
           }
         ]
+      },
+      {
+        "name": "PlayNextEpisodeIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "series_name",
+            "type": "SeriesName",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
+      {
+        "name": "PlayPodcastIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "podcast_name",
+            "type": "AMAZON.SearchQuery",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
+      {
+        "name": "SleepTimerIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "duration_minutes",
+            "type": "AMAZON.NUMBER",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
+      {
+        "name": "SetReminderIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "duration_minutes",
+            "type": "AMAZON.NUMBER",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          },
+          {
+            "name": "reminder_time",
+            "type": "AMAZON.TIME",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
+      {
+        "name": "AddToQueueIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          },
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
+      {
+        "name": "PlayNextIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          },
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
+      {
+        "name": "QueryArtistLibraryIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          },
+          {
+            "name": "query_type",
+            "type": "LibraryQueryType",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
+      {
+        "name": "PlayArtistSongsIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
+      {
+        "name": "BrowseLibraryIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "browse_category",
+            "type": "BrowseCategory",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
+      {
+        "name": "PlayMoodMusicIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "mood",
+            "type": "Mood",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
+      {
+        "name": "PlayPlaylistIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "playlist",
+            "type": "AMAZON.SearchQuery",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
       }
     ]
-  },
-  "prompts": [
-    {
-      "id": "Elicit.SeriesName",
-      "variations": [
-        {
-          "type": "PlainText",
-          "value": "Qual série você gostaria de assistir?"
-        },
-        {
-          "type": "PlainText",
-          "value": "Qual é o nome da série?"
-        }
-      ]
-    },
-    {
-      "id": "Elicit.SeasonNumber",
-      "variations": [
-        {
-          "type": "PlainText",
-          "value": "Qual temporada?"
-        },
-        {
-          "type": "PlainText",
-          "value": "Qual número da temporada?"
-        }
-      ]
-    },
-    {
-      "id": "Elicit.EpisodeNumber",
-      "variations": [
-        {
-          "type": "PlainText",
-          "value": "Qual número do episódio?"
-        },
-        {
-          "type": "PlainText",
-          "value": "Qual episódio você gostaria de assistir?"
-        }
-      ]
-    }
-  ]
+  }
 }

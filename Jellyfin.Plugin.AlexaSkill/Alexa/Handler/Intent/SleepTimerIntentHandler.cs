@@ -73,10 +73,16 @@ public class SleepTimerIntentHandler : BaseHandler
 
         Logger.LogDebug("SleepTimer: entered, durationSlot={DurationSlot}", durationSlot);
 
+        // JF-550 (dead-mic sweep; JF-549 class).
+        if (BuildCancelDuringOpenElicit(intentRequest, locale, "SleepTimer") is { } elicitCancel)
+        {
+            return Task.FromResult(elicitCancel);
+        }
+
         if (string.IsNullOrEmpty(durationSlot) || !int.TryParse(durationSlot, NumberStyles.Integer, CultureInfo.InvariantCulture, out int durationMinutes))
         {
-            Logger.LogDebug("SleepTimer: invalid duration, returning Tell");
-            return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchSleepTimer", locale)));
+            Logger.LogDebug("SleepTimer: invalid duration, eliciting");
+            return Task.FromResult(BuildDialogElicitResponse("DidNotCatchSleepTimer", locale, "duration_minutes", IntentNames.SleepTimer, "duration_minutes"));
         }
 
         // Nothing currently playing.

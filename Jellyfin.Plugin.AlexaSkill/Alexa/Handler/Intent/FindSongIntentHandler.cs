@@ -151,7 +151,7 @@ public class FindSongIntentHandler : BaseHandler
                 || Util.CancelWords.IsForceRoutedCancelCapture(intentRequest, locale, IntentNames.Slots.TitleKeywords))
             {
                 Logger.LogInformation("FindSong: cancel during open flow (intent={Intent}, dialogState={DialogState}), ending flow", intentRequest.Intent.Name, intentRequest.DialogState);
-                return ResponseBuilder.Tell(ResponseStrings.Get("FindSongCancelled", locale));
+                return ResponseBuilder.Tell(ResponseStrings.Get("FlowCancelled", locale));
             }
         }
 

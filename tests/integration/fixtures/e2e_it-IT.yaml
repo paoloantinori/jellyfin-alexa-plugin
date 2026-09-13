@@ -30,6 +30,17 @@ tests:
     expected_reprompt: true
     expected_end_session: false
 
+  # JF-550 sweep pin: an empty-name playlist request elicits with the mic open
+  # (Dialog.ElicitSlot on playlist), same class as the JF-549 PlayEpisode pin.
+  - utterance: "riprodurre la playlist"
+    expected_intent: PlayPlaylistIntent
+    expected_slots: {}
+    expected_response_type: directive
+    expected_directive_type: "Dialog.ElicitSlot"
+    expected_speech_contains: "playlist"
+    expected_reprompt: true
+    expected_end_session: false
+
   # --- Playback controls ---
   # JF-488 (2026-09-04, default ON since 2026-09-05): with PauseKeepsSession
   # the pause response SPEAKS ('Pausa.') and carries a reprompt with the

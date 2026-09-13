@@ -7,7 +7,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-12 16:55'
-updated_date: '2026-09-13 08:43'
+updated_date: '2026-09-13 11:20'
 labels:
   - bug
   - reliability
@@ -53,6 +53,8 @@ Fix shape per site: the shared BuildDialogElicitResponse (BaseHandler), which re
 
 <!-- SECTION:NOTES:BEGIN -->
 PATTERN CODIFIED (2026-09-13, user directive): the site list is now produced mechanically by scripts/validate_question_responses.py (dead-mic detector: question-shaped locale keys crossed against Tell sites) and the fix procedure is the .claude/skills/dead-mic-sweep skill. First run reproduces this task's hand-made enumeration exactly: 13 sites across 10 files (BaseHandler:4974; AddToQueue:84; PlayNext:85; QueryArtistLibrary:98; PlayArtistSongs:179; PlayNextEpisode:79; PlayPodcast:71; BrowseLibrary:298; PlayMoodMusic:409; SleepTimer:79; SetReminder:77,101,107). When the sweep completes, consider promoting --strict into the CI validate job so the class cannot re-enter.
+
+REVIEW ROUND 1 (high effort, 2026-09-13, uncommitted diff): one must-fix before commit. BrowseLibraryIntentHandler.cs:299 - the cancel hatch sits INSIDE HandleGenresQuery, which is unreachable as a hatch: entering HandleGenresQuery requires browse_category to be a genre-category key (genres/generi/géneros/gêneros/أنواع/शैलियाँ/ジャンル) while the hatch requires a slot value from the CancelWords vocabulary, and the two sets are disjoint (only slot is browse_category). The browse_category elicit this branch opens re-enters through HandleAsync, which has NO hatch: a captured 'ferma'/'stop' answer lands in the unrecognized-category ResponseBuilder.Ask branch (line ~130) and re-asks in a loop instead of FlowCancelled. Fix: hoist the BuildCancelDuringOpenElicit call to HandleAsync entry (above the empty-category Ask at line ~105), same shape as the other 12 sites. Everything else verified clean: allSlotNames parity vs model slot sets for all 15 BuildDialogElicitResponse sites + FindSong/PlayRadio; SetReminder 3-shape collapse equivalent, creation path untouched; params change source-compatible; models byte-identical to templates (md5 en-US); languageModel unchanged everywhere (dialog-only diff, prompts removed only in the 6 legacy locales with exactly the 3 Elicit.* ids); validator Phase 8 green; 3696/3696 tests both TFMs; dead-mic detector 0 remaining sites. Cosmetic: 3 test files have joined lines (two statements on one line) at PlayArtistSongsIntentHandlerTests.cs:778, PlayNextEpisodeIntentHandlerTests.cs:185, PlayPodcastIntentHandlerTests.cs:133 - fix in passing.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done

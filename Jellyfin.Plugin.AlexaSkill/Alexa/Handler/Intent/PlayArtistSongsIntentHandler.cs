@@ -174,9 +174,15 @@ public class PlayArtistSongsIntentHandler : BaseHandler
 
         Logger.LogDebug("PlayArtistSongs: entered, locale={Locale}", locale);
 
+        // JF-550 (dead-mic sweep; JF-549 class).
+        if (BuildCancelDuringOpenElicit(intentRequest, locale, "PlayArtistSongs") is { } elicitCancel)
+        {
+            return elicitCancel;
+        }
+
         if (string.IsNullOrWhiteSpace(musician))
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchArtistName", locale));
+            return BuildDialogElicitResponse("DidNotCatchArtistName", locale, "musician", IntentNames.PlayArtistSongs, "musician");
         }
 
         // JF-467: primary-path music gate (shared contract on IfMediaTypeDisabled).

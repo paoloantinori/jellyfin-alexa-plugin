@@ -182,9 +182,7 @@ public class PlayNextEpisodeIntentHandlerTests : PluginTestBase
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
-        Assert.NotNull(response);
-        response.Tells();
-    }
+        TestHelpers.AssertElicitsSlot(response, "series_name", IntentNames.PlayNextEpisode);    }
 
     [Fact]
     public async Task HandleAsync_SeriesNotFound_ReturnsNotFound()

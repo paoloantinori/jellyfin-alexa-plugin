@@ -1580,6 +1580,162 @@
             "elicitationRequired": false
           }
         ]
+      },
+      {
+        "name": "PlayNextEpisodeIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "series_name",
+            "type": "SeriesName",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
+      {
+        "name": "PlayPodcastIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "podcast_name",
+            "type": "AMAZON.SearchQuery",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
+      {
+        "name": "SleepTimerIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "duration_minutes",
+            "type": "AMAZON.NUMBER",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
+      {
+        "name": "SetReminderIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "duration_minutes",
+            "type": "AMAZON.NUMBER",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          },
+          {
+            "name": "reminder_time",
+            "type": "AMAZON.TIME",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
+      {
+        "name": "AddToQueueIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          },
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
+      {
+        "name": "PlayNextIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          },
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
+      {
+        "name": "QueryArtistLibraryIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          },
+          {
+            "name": "query_type",
+            "type": "LibraryQueryType",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
+      {
+        "name": "PlayArtistSongsIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "musician",
+            "type": "AMAZON.Musician",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
+      {
+        "name": "BrowseLibraryIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "browse_category",
+            "type": "BrowseCategory",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
+      {
+        "name": "PlayMoodMusicIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "mood",
+            "type": "Mood",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
+      {
+        "name": "PlayPlaylistIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "playlist",
+            "type": "AMAZON.SearchQuery",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
       }
     ]
   }

@@ -97,23 +97,11 @@ public class PlayAlbumIntentHandler : BaseHandler
 
         Logger.LogDebug("PlayAlbum: entered, locale={Locale}", locale);
 
-        // Escape hatch from the elicitation trap (shared CancelWords helpers): while OUR
-        // album Dialog.ElicitSlot is open, a stop/cancel word gets captured into
-        // a slot (dialogState IN_PROGRESS) instead of routing to AMAZON.Stop/Cancel. ANY
-        // slot counts (shared AnySlotIsCancelWord), not just album/musician. Gated on
-        // IN_PROGRESS deliberately (JF-445): unlike FindSong, this elicit persists NO
-        // session state ("the dialog lives Amazon-side"), so there is no open-flow marker
-        // to distinguish a STARTED sibling misroute from a fresh legitimate search, and no
-        // force-route delivers sibling requests here (the FindSongSessionData override is
-        // the only one). A first-invocation search for an album actually titled "Stop", or
-        // for the artist "Basta", must still run. Runs BEFORE the warming gate so an open
-        // flow still cancels during the cold-start window (JF-419.2 contract, review
-        // round 2).
-        if (Util.CancelWords.IsDialogInProgress(intentRequest)
-            && Util.CancelWords.AnySlotIsCancelWord(intentRequest, locale))
+        // Elicitation-trap cancel hatch; the shared leg and its rationale live in
+        // BaseHandler.BuildCancelDuringOpenElicit (JF-550).
+        if (BuildCancelDuringOpenElicit(intentRequest, locale, "PlayAlbum") is { } elicitCancel)
         {
-            Logger.LogInformation("PlayAlbum: captured cancel word during open elicit (album='{Album}'), ending flow", album);
-            return ResponseBuilder.Tell(ResponseStrings.Get("FindSongCancelled", locale));
+            return elicitCancel;
         }
 
         // Layer-1 gate (GuardIndexReady), deliberately coarse: album paths have no

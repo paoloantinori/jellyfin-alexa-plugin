@@ -35,7 +35,10 @@ line: `// dead-mic-ok: <reason>`; the reason is echoed in the report.
    2026-08-28).
 2. Register the intent in `dialog.intents` (with `elicitationRequired: false` on the
    slots) in ALL 17 locale templates, or Alexa SILENTLY drops the directive (repo
-   anti-pattern #9). Regenerate the models.
+   anti-pattern #9). Regenerate the models. The registration is machine-checked:
+   `python3 scripts/validate_interaction_models.py` Phase 8 fails when any
+   handler-elicited intent misses a dialog entry (or its slots drift from the
+   languageModel) in any locale.
 3. Add the cancel-word hatch for the open elicit: while an elicit is open, Alexa
    captures the next utterance INTO the slot, so a bare "stop"/"ferma" arrives as a
    slot value with dialogState IN_PROGRESS (`CancelWords.IsDialogInProgress` +

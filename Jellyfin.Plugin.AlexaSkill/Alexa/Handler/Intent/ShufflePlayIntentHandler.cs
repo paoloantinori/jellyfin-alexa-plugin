@@ -68,6 +68,20 @@ public class ShufflePlayIntentHandler : BaseHandler
         string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
         string? playlistName = intentRequest.Intent.Slots?.TryGetValue("playlist", out var playlistSlot) == true ? playlistSlot.Value : null;
+        // JF-550 (dead-mic sweep; JF-549 class): the empty-playlist prompt elicits
+        // with the mic open (this caller's intent; the shared builder serves both
+        // PlayPlaylistIntent and ShufflePlayIntent, so the elicit must name the
+        // invoking one), and a captured cancel word ends the flow.
+        if (BuildCancelDuringOpenElicit(intentRequest, locale, "ShufflePlay") is { } elicitCancel)
+        {
+            return Task.FromResult(elicitCancel);
+        }
+
+        if (string.IsNullOrWhiteSpace(playlistName))
+        {
+            return Task.FromResult(BuildDialogElicitResponse("DidNotCatchPlaylistName", locale, "playlist", IntentNames.ShufflePlay, "playlist"));
+        }
+
         return BuildPlaylistPlayResponseAsync(
             _libraryManager, _userManager, _queueManager,
             playlistName ?? string.Empty, context, user, session, locale,
