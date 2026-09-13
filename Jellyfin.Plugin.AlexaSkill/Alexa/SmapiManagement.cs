@@ -152,7 +152,7 @@ public class SmapiManagement : ManagementApi
                 await RetryHelper.ExecuteWithRetryAsync(
                     async () =>
                     {
-                        await this.InteractionModel.Update(skillId, SkillStage.Development, interactionModel.Locale, interactionModel).ConfigureAwait(false);
+                        await PutLocaleModelPreservingWiringAsync(skillId, interactionModel.Locale, interactionModel).ConfigureAwait(false);
                         return (object?)null;
                     },
                     _logger,
@@ -170,6 +170,96 @@ public class SmapiManagement : ManagementApi
         }
 
         return failedLocales;
+    }
+
+    /// <summary>
+    /// Test seam (JF-366 pattern, as LwaClient.HttpClientOverrideForTests): when
+    /// set, the raw model PUT/GET below uses the returned client instead of the
+    /// shared one, so the wiring-preservation composition is testable without
+    /// SMAPI. Evaluated per call, so each test can install its own handler.
+    /// </summary>
+    internal static Func<HttpClient>? RawModelClientOverrideForTests;
+
+    /// <summary>
+    /// PUTs one locale's interaction model as raw JSON, preserving the live
+    /// model's catalog wiring (JF-552). The typed InteractionModel.Update cannot
+    /// carry valueSupplier/valueCatalog (see CatalogWiring for the probed
+    /// evidence), so every embedded-model PUT through this class used to
+    /// downgrade catalog-backed slot types to the static seed until the next
+    /// catalog sync. The graft re-applies the wiring the GET finds; a locale with
+    /// no live wiring (first deploy, or never synced) PUTs unchanged. The
+    /// extracted version can lag one sync if the GET races a catalog-sync build;
+    /// catalog content is immutable per version, so that pins yesterday's values
+    /// at worst.
+    /// </summary>
+    /// <param name="skillId">The skill being updated.</param>
+    /// <param name="locale">The locale of the model.</param>
+    /// <param name="model">The freshly built model to PUT.</param>
+    /// <returns>A task representing the raw PUT.</returns>
+    internal async Task PutLocaleModelPreservingWiringAsync(string skillId, string locale, SkillInteractionModel model)
+    {
+        string modelJson = Newtonsoft.Json.JsonConvert.SerializeObject(model);
+
+        Catalog.CatalogWiring? wiring = null;
+        if (Catalog.CatalogManager.IsCatalogWiringSupported(locale))
+        {
+            // No swallow here (JF-555): GetLiveModelJsonAsync returns null only for
+            // "no live model" (404); every other GET failure must propagate so the
+            // RetryHelper retries the whole GET+PUT and a persistent failure lands
+            // the locale in failedLocales with its wired model left intact, instead
+            // of silently PUTting unwired.
+            wiring = Catalog.CatalogWiringGraft.ExtractWiring(await GetLiveModelJsonAsync(skillId, locale).ConfigureAwait(false));
+        }
+
+        string putJson = Catalog.CatalogWiringGraft.Apply(modelJson, locale, wiring, _logger);
+
+        HttpClient client = RawModelClientOverrideForTests?.Invoke() ?? Plugin.HttpClient;
+        using var putRequest = new HttpRequestMessage(HttpMethod.Put, Catalog.CatalogManager.LocaleModelUrl(skillId, "development", locale));
+        putRequest.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _accessToken);
+        putRequest.Content = new StringContent(putJson, System.Text.Encoding.UTF8, "application/json");
+
+        using var putResponse = await client.SendAsync(putRequest).ConfigureAwait(false);
+        if (!putResponse.IsSuccessStatusCode)
+        {
+            string body = await putResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+            throw new HttpRequestException(
+                $"SMAPI interaction-model PUT for locale {locale} failed: {(int)putResponse.StatusCode} {putResponse.ReasonPhrase}. Body: {body}");
+        }
+    }
+
+    /// <summary>
+    /// GETs the locale's live interaction-model envelope. Null means "no live
+    /// model exists" (404: first deploy). Any OTHER non-success status throws:
+    /// a transient 429/5xx on this GET must NOT silently degrade the PUT to
+    /// unwired (that reintroduces the JF-552 regression until the next sync,
+    /// invisibly); throwing feeds the RetryHelper wrapper, which retries the
+    /// whole GET+PUT, and a persistent failure lands the locale in
+    /// failedLocales with its old wired model left intact (JF-555).
+    /// </summary>
+    /// <param name="skillId">The skill.</param>
+    /// <param name="locale">The locale.</param>
+    /// <returns>The live model JSON, or null when none exists yet.</returns>
+    internal async Task<string?> GetLiveModelJsonAsync(string skillId, string locale)
+    {
+        HttpClient client = RawModelClientOverrideForTests?.Invoke() ?? Plugin.HttpClient;
+        using var getRequest = Catalog.CatalogManager.CreateAuthorizedGet(
+            Catalog.CatalogManager.LocaleModelUrl(skillId, "development", locale), _accessToken);
+
+        using var getResponse = await client.SendAsync(getRequest).ConfigureAwait(false);
+        if (getResponse.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            _logger.LogDebug("No live model for locale {Locale} (404); nothing to graft", locale);
+            return null;
+        }
+
+        if (!getResponse.IsSuccessStatusCode)
+        {
+            string body = await getResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
+            throw new HttpRequestException(
+                $"SMAPI interaction-model GET for locale {locale} failed: {(int)getResponse.StatusCode} {getResponse.ReasonPhrase}. Body: {body}");
+        }
+
+        return await getResponse.Content.ReadAsStringAsync().ConfigureAwait(false);
     }
 
     /// <summary>

@@ -7,6 +7,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-12 22:38'
+updated_date: '2026-09-13 09:33'
 labels:
   - bug
   - catalog
@@ -36,10 +37,28 @@ Fix shape: factor the type-injection logic the catalog sync uses so BuildSkillIn
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A rebuild/redeploy (custom-model/rebuild endpoint and invocation-name save) PUTs models whose catalog-backed slot types (SeriesName in it-IT, JellyfinArtist, AlbumName where wired) carry the valueSupplier from the user's persisted catalog ids, not the static seed
-- [ ] #2 Unit test: BuildSkillInteractionModels (or the redeployer path) with a user carrying SeriesCatalogId/ArtistCatalogId produces a model with valueSupplier.valueCatalog.catalogId set and no static seed values alongside
-- [ ] #3 Live verification: after a rebuild, profile-nlu resolves a non-seed catalog series (e.g. Adolescence) into series_name immediately, without waiting for the next catalog sync
+- [ ] #1 Live verification: after a rebuild, profile-nlu resolves a non-seed catalog series (e.g. Adolescence) into series_name immediately, without waiting for the next catalog sync
+- [ ] #2 A rebuild/redeploy (custom-model/rebuild endpoint, invocation-name save, SkillStartup push, LWA linking, CreateSkillAsync - all funnel through SmapiManagement.UpdateInteractionModelsAsync) PUTs models whose catalog-backed slot types carry the valueSupplier PRESERVED FROM THE LIVE MODEL's wiring (GET live -> graft), not the static seed
+- [ ] #3 Unit tests: the graft path with a wired live model produces valueSupplier.valueCatalog.catalogId set and no static seed alongside (CatalogWiringGraftTests + SmapiManagementWiringTests through the client seam); JF-543 locales skip the GET entirely
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+DESIGN (locked 2026-09-13 after probes; /simplify-amended):
+
+FACTS (probed on the shipped artifacts):
+- Alexa.NET.Management 5.10.0 typed SkillInteraction CANNOT carry valueSupplier/valueCatalog: reflection shows SlotType.ValueSupplier has only a Type property, and a Newtonsoft round-trip of a wired envelope DROPS the catalog block (why the sync uses raw PUTs).
+- Our SkillInteractionModel : SkillInteractionContainer serializes directly to the SMAPI envelope {"interactionModel":{"languageModel":...}} including types (probed).
+- ALL five embedded-model writer flows (custom-model/rebuild, invocation-name save, SkillStartup version push, LWA account-linking, CreateSkillAsync) funnel through SmapiManagement.UpdateSkillAsync -> UpdateInteractionModelsAsync (single choke point).
+
+IMPLEMENTATION (as landed):
+1. CatalogManager.InjectCatalogReferences (+ helpers) static with ILogger param; new LocaleModelUrl single owner; CreateAuthorizedGet internal.
+2. CatalogWiring record + CatalogWiringGraft.ExtractWiring/Apply (pure JSON; JF-543 guard; delegates to the ONE injection implementation).
+3. SmapiManagement.PutLocaleModelPreservingWiringAsync: serialize -> JF-543 pre-guard -> GET live (GetLiveModelJsonAsync, null-tolerant) -> graft -> raw PUT via Plugin.HttpClient with a per-call Func test seam (RawModelClientOverrideForTests, LwaClient pattern). Audit line + RetryHelper + failedLocales bookkeeping unchanged.
+4. Custom-URL/restore path (ModelDeploymentManager) stays typed/unwired: documented residual, tracked in JF-554 together with the raw-PUT transport consolidation (settle-wait for the graft GET, shared service, handler lifetimes, test handler fakes).
+5. Deploy + live AC#3: rebuild it-IT -> immediately profile-nlu 'riproduci Adolescence stagione uno episodio due' must still fill series_name (no catalog sync in between).
+<!-- SECTION:PLAN:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

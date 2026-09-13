@@ -14,6 +14,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.AlexaSkill.Alexa.InteractionModel;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
 
@@ -25,7 +26,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
 /// </summary>
 public class CatalogManager
 {
-    private const string SmapiEndpoint = "https://api.amazonalexa.com";
+    internal const string SmapiEndpoint = "https://api.amazonalexa.com";
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<CatalogManager> _logger;
@@ -483,7 +484,7 @@ public class CatalogManager
         }
 
         var client = _httpClientFactory.CreateClient("AlexaSkill");
-        string modelUrl = $"{SmapiEndpoint}/v1/skills/{skillId}/stages/{stage}/interactionModel/locales/{locale}";
+        string modelUrl = LocaleModelUrl(skillId, stage, locale);
 
         // JF-495: serialize against concurrently-pending builds BEFORE the GET. When a
         // rebuild (or any other writer) submitted a model moments ago, its build may
@@ -501,7 +502,7 @@ public class CatalogManager
 
         string modelJson = await getResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
-        string modifiedJson = InjectCatalogReferences(modelJson, artistCatalogId, albumCatalogId, seriesCatalogId, artistCatalogVersion, albumCatalogVersion, seriesCatalogVersion);
+        string modifiedJson = InjectCatalogReferences(modelJson, artistCatalogId, albumCatalogId, seriesCatalogId, artistCatalogVersion, albumCatalogVersion, seriesCatalogVersion, _logger);
 
         // JF-495: greppable audit line before the PUT.
         var (putIntents, putSamples) = InteractionModelPutAudit.CountFromJson(modifiedJson);
@@ -654,9 +655,21 @@ public class CatalogManager
     }
 
     /// <summary>
+    /// Builds the stage-scoped locale interaction-model URL. Single owner of the
+    /// string so the sync leg, the raw PUT, and the graft GET cannot drift apart
+    /// (same rule as <see cref="SkillStatusUrl"/>, JF-497).
+    /// </summary>
+    /// <param name="skillId">The skill id.</param>
+    /// <param name="stage">The stage, e.g. "development".</param>
+    /// <param name="locale">The locale.</param>
+    /// <returns>The absolute URL.</returns>
+    internal static string LocaleModelUrl(string skillId, string stage, string locale)
+        => $"{SmapiEndpoint}/v1/skills/{skillId}/stages/{stage}/interactionModel/locales/{locale}";
+
+    /// <summary>
     /// Builds a bearer-authorized GET request for a SMAPI URL.
     /// </summary>
-    private static HttpRequestMessage CreateAuthorizedGet(string url, string accessToken)
+    internal static HttpRequestMessage CreateAuthorizedGet(string url, string accessToken)
     {
         var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
@@ -860,8 +873,9 @@ public class CatalogManager
     /// <param name="albumCatalogVersion">The album catalog version.</param>
     /// <param name="seriesCatalogVersion">The series catalog version.</param>
     /// <returns>The modified interaction model JSON string.</returns>
-    internal string InjectCatalogReferences(string modelJson, string? artistCatalogId, string? albumCatalogId, string? seriesCatalogId, string? artistCatalogVersion, string? albumCatalogVersion, string? seriesCatalogVersion)
+    internal static string InjectCatalogReferences(string modelJson, string? artistCatalogId, string? albumCatalogId, string? seriesCatalogId, string? artistCatalogVersion, string? albumCatalogVersion, string? seriesCatalogVersion, ILogger? logger = null)
     {
+        logger ??= NullLogger.Instance;
         JsonNode? root = JsonNode.Parse(modelJson);
         if (root == null)
         {
@@ -871,7 +885,7 @@ public class CatalogManager
         var lmNode = root["interactionModel"]?["languageModel"] as JsonObject;
         if (lmNode == null)
         {
-            _logger.LogWarning("Interaction model has unexpected structure, skipping catalog injection");
+            logger.LogWarning("Interaction model has unexpected structure, skipping catalog injection");
             return modelJson;
         }
 
@@ -885,14 +899,14 @@ public class CatalogManager
         var catalogMappings = new List<(string CatalogId, string Version, string SlotTypeName, string? ReplacesType)>();
         if (!string.IsNullOrEmpty(artistCatalogId))
         {
-            catalogMappings.Add((artistCatalogId!, ResolveCatalogVersion(artistCatalogVersion, CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Artist], artistCatalogId),
+            catalogMappings.Add((artistCatalogId!, ResolveCatalogVersion(artistCatalogVersion, CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Artist], artistCatalogId, logger),
                 CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Artist],
                 CatalogSlotTypes.Names[CatalogType.Artist]));
         }
 
         if (!string.IsNullOrEmpty(albumCatalogId))
         {
-            catalogMappings.Add((albumCatalogId!, ResolveCatalogVersion(albumCatalogVersion, CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Album], albumCatalogId),
+            catalogMappings.Add((albumCatalogId!, ResolveCatalogVersion(albumCatalogVersion, CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Album], albumCatalogId, logger),
                 CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Album],
                 null));
         }
@@ -902,14 +916,14 @@ public class CatalogManager
             // No ReplacesType: every locale model already declares SeriesName
             // (static seed) and slots reference it directly, so the injection
             // replaces the type definition in place without re-typing slots.
-            catalogMappings.Add((seriesCatalogId!, ResolveCatalogVersion(seriesCatalogVersion, CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Series], seriesCatalogId),
+            catalogMappings.Add((seriesCatalogId!, ResolveCatalogVersion(seriesCatalogVersion, CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Series], seriesCatalogId, logger),
                 CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Series],
                 null));
         }
 
-        WarnOnCrossTypeCatalogIds(artistCatalogId, albumCatalogId, seriesCatalogId);
+        WarnOnCrossTypeCatalogIds(artistCatalogId, albumCatalogId, seriesCatalogId, logger);
 
-        _logger.LogInformation(
+        logger.LogInformation(
             "Injecting {Count} catalog references into interaction model ({SlotTypes})",
             catalogMappings.Count,
             string.Join(", ", catalogMappings.Select(m => m.SlotTypeName)));
@@ -935,7 +949,7 @@ public class CatalogManager
 
             if (existingIndex >= 0)
             {
-                _logger.LogInformation(
+                logger.LogInformation(
                     "Replacing slot type {SlotTypeName} (index {Index}) with catalog {CatalogId}",
                     slotTypeName,
                     existingIndex,
@@ -944,7 +958,7 @@ public class CatalogManager
             }
             else
             {
-                _logger.LogInformation(
+                logger.LogInformation(
                     "Adding new catalog-backed slot type {SlotTypeName} with catalog {CatalogId}",
                     slotTypeName,
                     catalogId);
@@ -953,12 +967,12 @@ public class CatalogManager
 
             if (replacesType != null)
             {
-                UpdateIntentSlotTypes(lmNode, replacesType, slotTypeName);
+                UpdateIntentSlotTypes(lmNode, replacesType, slotTypeName, logger);
                 // The dialog model also declares per-intent slot types; they MUST match
                 // the interaction model or SMAPI rejects the build with MismatchedSlotType
                 // (e.g. FindSongByArtistIntent.musician stayed AMAZON.Musician). JF-332.
                 var dialogNode = root["interactionModel"]?["dialog"] as JsonObject;
-                UpdateDialogSlotTypes(dialogNode, replacesType, slotTypeName);
+                UpdateDialogSlotTypes(dialogNode, replacesType, slotTypeName, logger);
             }
         }
 
@@ -973,14 +987,14 @@ public class CatalogManager
     /// reports SUCCEEDED. Version "1" is ambiguous (it is also a real first
     /// version), so this warns rather than rejects.
     /// </summary>
-    private string ResolveCatalogVersion(string? catalogVersion, string slotTypeName, string catalogId)
+    private static string ResolveCatalogVersion(string? catalogVersion, string slotTypeName, string catalogId, ILogger logger)
     {
         if (!string.IsNullOrWhiteSpace(catalogVersion))
         {
             return catalogVersion!;
         }
 
-        _logger.LogWarning(
+        logger.LogWarning(
             "Catalog version for slot type {SlotTypeName} on catalog {CatalogId} is null or empty; pinning the stale fallback version \"1\". If this catalog has newer (or purged) versions the model may reference a version Amazon cannot resolve (JF-495)",
             slotTypeName, catalogId);
         return "1";
@@ -991,7 +1005,7 @@ public class CatalogManager
     /// (JF-495): one slot type would then be backed by another type's catalog
     /// (e.g. the artist catalog feeding AlbumName), corrupting slot resolution.
     /// </summary>
-    private void WarnOnCrossTypeCatalogIds(string? artistCatalogId, string? albumCatalogId, string? seriesCatalogId)
+    private static void WarnOnCrossTypeCatalogIds(string? artistCatalogId, string? albumCatalogId, string? seriesCatalogId, ILogger logger)
     {
         var supplied = new[]
         {
@@ -1007,7 +1021,7 @@ public class CatalogManager
                 if (!string.IsNullOrEmpty(supplied[i].Id)
                     && string.Equals(supplied[i].Id, supplied[j].Id, StringComparison.Ordinal))
                 {
-                    _logger.LogWarning(
+                    logger.LogWarning(
                         "Catalog {CatalogId} is referenced for both the {TypeA} and {TypeB} slot types; one slot type is pointing at another type's catalog (JF-495)",
                         supplied[i].Id, supplied[i].Type, supplied[j].Type);
                 }
@@ -1022,10 +1036,11 @@ public class CatalogManager
     /// <param name="languageModel">The language model JSON object to update.</param>
     /// <param name="oldType">The old slot type name to replace.</param>
     /// <param name="newType">The new slot type name to use.</param>
-    internal void UpdateIntentSlotTypes(JsonObject languageModel, string oldType, string newType)
+    internal static void UpdateIntentSlotTypes(JsonObject languageModel, string oldType, string newType, ILogger? logger = null)
     {
+        logger ??= NullLogger.Instance;
         int updatedCount = UpdateSlotTypesInIntents(languageModel["intents"] as JsonArray, oldType, newType);
-        _logger.LogInformation(
+        logger.LogInformation(
             "Updated {Count} intent slot references from {OldType} to {NewType}",
             updatedCount,
             oldType,
@@ -1040,12 +1055,12 @@ public class CatalogManager
     /// <param name="dialog">The dialog model JSON object, or null if absent.</param>
     /// <param name="oldType">The old slot type name to replace.</param>
     /// <param name="newType">The new slot type name to use.</param>
-    internal void UpdateDialogSlotTypes(JsonObject? dialog, string oldType, string newType)
+    internal static void UpdateDialogSlotTypes(JsonObject? dialog, string oldType, string newType, ILogger logger)
     {
         int updatedCount = UpdateSlotTypesInIntents(dialog?["intents"] as JsonArray, oldType, newType);
         if (updatedCount > 0)
         {
-            _logger.LogInformation(
+            logger.LogInformation(
                 "Updated {Count} dialog slot references from {OldType} to {NewType}",
                 updatedCount,
                 oldType,

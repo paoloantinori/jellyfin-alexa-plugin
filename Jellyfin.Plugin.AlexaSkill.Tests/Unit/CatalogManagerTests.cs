@@ -33,7 +33,7 @@ public class CatalogManagerTests
     {
         string model = BuildInteractionModelJson();
 
-        string result = _manager.InjectCatalogReferences(model, "artist-cat-1", null, null, "3", null, null);
+        string result = CatalogManager.InjectCatalogReferences(model, "artist-cat-1", null, null, "3", null, null, _loggerMock.Object);
 
         using var resultDoc = JsonDocument.Parse(result);
         var types = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
@@ -51,7 +51,7 @@ public class CatalogManagerTests
     {
         string model = BuildInteractionModelJson();
 
-        string result = _manager.InjectCatalogReferences(model, null, "album-cat-2", null, null, "5", null);
+        string result = CatalogManager.InjectCatalogReferences(model, null, "album-cat-2", null, null, "5", null, _loggerMock.Object);
 
         using var resultDoc = JsonDocument.Parse(result);
         var types = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
@@ -72,7 +72,7 @@ public class CatalogManagerTests
             ("SeriesName", "{\"type\":\"PLAIN_TEXT\",\"values\":[{\"name\":{\"value\":\"Breaking Bad\"}}]}")
         });
 
-        string result = _manager.InjectCatalogReferences(model, null, null, "series-cat-9", null, null, "4");
+        string result = CatalogManager.InjectCatalogReferences(model, null, null, "series-cat-9", null, null, "4", _loggerMock.Object);
 
         using var resultDoc = JsonDocument.Parse(result);
         var types = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
@@ -93,7 +93,7 @@ public class CatalogManagerTests
             existingTypes: new[] { ("SeriesName", "{\"type\":\"PLAIN_TEXT\",\"values\":[{\"name\":{\"value\":\"Dark\"}}]}") },
             intents: new[] { ("PlayEpisodeIntent", new[] { ("series_name", "SeriesName") }) });
 
-        string result = _manager.InjectCatalogReferences(model, null, null, "series-cat-9", null, null, "1");
+        string result = CatalogManager.InjectCatalogReferences(model, null, null, "series-cat-9", null, null, "1", _loggerMock.Object);
 
         using var resultDoc = JsonDocument.Parse(result);
         var intents = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("intents");
@@ -105,7 +105,7 @@ public class CatalogManagerTests
     {
         string model = BuildInteractionModelJson();
 
-        string result = _manager.InjectCatalogReferences(model, "artist-1", "album-1", null, "v1", "v2", null);
+        string result = CatalogManager.InjectCatalogReferences(model, "artist-1", "album-1", null, "v1", "v2", null, _loggerMock.Object);
 
         using var resultDoc = JsonDocument.Parse(result);
         var types = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
@@ -123,7 +123,7 @@ public class CatalogManagerTests
             ("JellyfinArtist", "{\"type\":\"PLAIN_TEXT\",\"values\":[{\"name\":{\"value\":\"OldArtist\",\"synonyms\":[]}}]}")
         });
 
-        string result = _manager.InjectCatalogReferences(model, "new-artist-cat", null, null, "2", null, null);
+        string result = CatalogManager.InjectCatalogReferences(model, "new-artist-cat", null, null, "2", null, null, _loggerMock.Object);
 
         using var resultDoc = JsonDocument.Parse(result);
         var types = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
@@ -142,7 +142,7 @@ public class CatalogManagerTests
             ("JellyfinArtist", "{\"type\":\"PLAIN_TEXT\",\"values\":[]}")
         });
 
-        string result = _manager.InjectCatalogReferences(model, "cat-1", "cat-2", null, "1", "1", null);
+        string result = CatalogManager.InjectCatalogReferences(model, "cat-1", "cat-2", null, "1", "1", null, _loggerMock.Object);
 
         using var resultDoc = JsonDocument.Parse(result);
         var types = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
@@ -160,7 +160,7 @@ public class CatalogManagerTests
             existingTypes: new[] { ("AMAZON.Musician", "{\"type\":\"PLAIN_TEXT\",\"values\":[]}") },
             intents: new[] { ("PlayMusicIntent", new[] { ("artist", "AMAZON.Musician") }) });
 
-        string result = _manager.InjectCatalogReferences(model, "artist-cat", null, null, "1", null, null);
+        string result = CatalogManager.InjectCatalogReferences(model, "artist-cat", null, null, "1", null, null, _loggerMock.Object);
 
         using var resultDoc = JsonDocument.Parse(result);
         var intents = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("intents");
@@ -189,7 +189,7 @@ public class CatalogManagerTests
         }
         """;
 
-        string result = _manager.InjectCatalogReferences(model, "artist-cat", null, null, "2", null, null);
+        string result = CatalogManager.InjectCatalogReferences(model, "artist-cat", null, null, "2", null, null, _loggerMock.Object);
 
         using var resultDoc = JsonDocument.Parse(result);
         var im = resultDoc.RootElement.GetProperty("interactionModel");
@@ -243,7 +243,7 @@ public class CatalogManagerTests
         }
         """;
 
-        string result = _manager.InjectCatalogReferences(model, "artist-cat-7", null, null, "638", null, null);
+        string result = CatalogManager.InjectCatalogReferences(model, "artist-cat-7", null, null, "638", null, null, _loggerMock.Object);
 
         using var resultDoc = JsonDocument.Parse(result);
         var im = resultDoc.RootElement.GetProperty("interactionModel");
@@ -308,7 +308,7 @@ public class CatalogManagerTests
         string model = BuildInteractionModelJson(
             intents: new[] { ("PlayAlbumIntent", new[] { ("album", "AlbumName") }) });
 
-        string result = _manager.InjectCatalogReferences(model, null, "album-cat", null, null, "1", null);
+        string result = CatalogManager.InjectCatalogReferences(model, null, "album-cat", null, null, "1", null, _loggerMock.Object);
 
         using var resultDoc = JsonDocument.Parse(result);
         var intents = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("intents");
@@ -321,7 +321,7 @@ public class CatalogManagerTests
     {
         string model = BuildInteractionModelJson();
 
-        string result = _manager.InjectCatalogReferences(model, null, null, null, null, null, null);
+        string result = CatalogManager.InjectCatalogReferences(model, null, null, null, null, null, null, _loggerMock.Object);
 
         Assert.Equal(model, result);
     }
@@ -331,7 +331,7 @@ public class CatalogManagerTests
     {
         string model = BuildInteractionModelJson();
 
-        string result = _manager.InjectCatalogReferences(model, "cat-1", null, null, null, null, null);
+        string result = CatalogManager.InjectCatalogReferences(model, "cat-1", null, null, null, null, null, _loggerMock.Object);
 
         using var resultDoc = JsonDocument.Parse(result);
         var catalog = resultDoc.RootElement.GetProperty("interactionModel")
@@ -346,7 +346,7 @@ public class CatalogManagerTests
     {
         string model = """{"interactionModel":{"languageModel":{"invocationName":"test","intents":[]}}}""";
 
-        string result = _manager.InjectCatalogReferences(model, "cat-1", "cat-2", null, "1", "2", null);
+        string result = CatalogManager.InjectCatalogReferences(model, "cat-1", "cat-2", null, "1", "2", null, _loggerMock.Object);
 
         using var resultDoc = JsonDocument.Parse(result);
         var types = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
@@ -359,7 +359,7 @@ public class CatalogManagerTests
     {
         string model = """{"notAnInteractionModel":true}""";
 
-        string result = _manager.InjectCatalogReferences(model, "cat-1", null, null, "1", null, null);
+        string result = CatalogManager.InjectCatalogReferences(model, "cat-1", null, null, "1", null, null, _loggerMock.Object);
 
         Assert.Equal(model, result);
     }
@@ -371,7 +371,7 @@ public class CatalogManagerTests
         // fallback; the injection must warn so the pin is visible in the logs.
         string model = BuildInteractionModelJson();
 
-        _manager.InjectCatalogReferences(model, "artist-cat-1", null, null, null, null, null);
+        CatalogManager.InjectCatalogReferences(model, "artist-cat-1", null, null, null, null, null, _loggerMock.Object);
 
         _loggerMock.Verify(
             l => l.Log(
@@ -392,7 +392,7 @@ public class CatalogManagerTests
         // another type's catalog; the injection must warn naming both types.
         string model = BuildInteractionModelJson();
 
-        _manager.InjectCatalogReferences(model, "shared-cat", "shared-cat", null, "3", "3", null);
+        CatalogManager.InjectCatalogReferences(model, "shared-cat", "shared-cat", null, "3", "3", null, _loggerMock.Object);
 
         _loggerMock.Verify(
             l => l.Log(
@@ -934,7 +934,7 @@ public class CatalogManagerTests
             }
         };
 
-        _manager.UpdateIntentSlotTypes(languageModel, "AMAZON.Musician", "JellyfinArtist");
+        CatalogManager.UpdateIntentSlotTypes(languageModel, "AMAZON.Musician", "JellyfinArtist");
 
         var slots = languageModel["intents"]![0]!["slots"]!.AsArray();
         Assert.Equal("JellyfinArtist", slots[0]!["type"]!.GetValue<string>());
@@ -967,7 +967,7 @@ public class CatalogManagerTests
             }
         };
 
-        _manager.UpdateIntentSlotTypes(languageModel, "AMAZON.Musician", "JellyfinArtist");
+        CatalogManager.UpdateIntentSlotTypes(languageModel, "AMAZON.Musician", "JellyfinArtist");
 
         foreach (var intent in languageModel["intents"]!.AsArray())
         {
@@ -993,7 +993,7 @@ public class CatalogManagerTests
             }
         };
 
-        _manager.UpdateIntentSlotTypes(languageModel, "AMAZON.Musician", "JellyfinArtist");
+        CatalogManager.UpdateIntentSlotTypes(languageModel, "AMAZON.Musician", "JellyfinArtist");
 
         Assert.Equal("AMAZON.MusicRecording", languageModel["intents"]![0]!["slots"]![0]!["type"]!.GetValue<string>());
     }
@@ -1003,7 +1003,7 @@ public class CatalogManagerTests
     {
         var languageModel = new JsonObject { ["intents"] = new JsonArray() };
 
-        _manager.UpdateIntentSlotTypes(languageModel, "AMAZON.Musician", "JellyfinArtist");
+        CatalogManager.UpdateIntentSlotTypes(languageModel, "AMAZON.Musician", "JellyfinArtist");
 
         Assert.Empty(languageModel["intents"]!.AsArray());
     }
@@ -1013,7 +1013,7 @@ public class CatalogManagerTests
     {
         var languageModel = new JsonObject();
 
-        _manager.UpdateIntentSlotTypes(languageModel, "AMAZON.Musician", "JellyfinArtist");
+        CatalogManager.UpdateIntentSlotTypes(languageModel, "AMAZON.Musician", "JellyfinArtist");
 
         Assert.Null(languageModel["intents"]);
     }
@@ -1029,7 +1029,7 @@ public class CatalogManagerTests
             }
         };
 
-        _manager.UpdateIntentSlotTypes(languageModel, "AMAZON.Musician", "JellyfinArtist");
+        CatalogManager.UpdateIntentSlotTypes(languageModel, "AMAZON.Musician", "JellyfinArtist");
 
         Assert.Null(languageModel["intents"]![0]!["slots"]);
     }
