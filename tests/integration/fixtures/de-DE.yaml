@@ -266,9 +266,14 @@ tests:
       series_name: {}
       season_number: {}
       episode_number: {}
-    skip_reason: >
-      episode_number resolves empty on the live model for both word and digit
-      forms (probe-verified 2026-09-12); re-enable when the German carrier fills.
+    skip_reason: >-
+      JF-553 bisect verdict 2026-09-13: Amazon NLU trainer nondeterminism across
+      rebuilds of IDENTICAL model content (wired de-DE measured 0/10 filled, then
+      1/1 filled after an equivalent rebuild; the unwired model was 10/10
+      consistent, so catalog density contributes pressure but is not determinative;
+      the JF-549 Zu samples are refuted as the cause: 0/10 with and without). The
+      stable verb is "schau" (fills in both states); "spiele" flips. Re-enable when
+      a stable window is confirmed or the carrier is reworked.
 
   - utterance: "spiele stranger things staffel zwei folge eins"
     expected_intent: PlayEpisodeIntent

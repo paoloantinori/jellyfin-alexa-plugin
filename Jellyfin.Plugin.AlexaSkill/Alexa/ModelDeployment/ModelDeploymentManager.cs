@@ -462,15 +462,29 @@ public class ModelDeploymentManager
     /// <param name="modelJson">The raw model JSON string.</param>
     /// <param name="locale">The locale for the model.</param>
     /// <returns>A populated <see cref="SkillInteractionModel"/>.</returns>
+    /// <summary>Test seam for <see cref="CreateSkillInteractionModel"/> (InternalsVisibleTo route; keeps the private surface honest).</summary>
+    internal SkillInteractionModel ValidateAndCreateForTest(string modelJson, string locale)
+        => CreateSkillInteractionModel(modelJson, locale);
+
     private static SkillInteractionModel CreateSkillInteractionModel(string modelJson, string locale)
     {
-        // Ensure the JSON has the "interactionModel" envelope that SkillInteraction expects.
+        // Ensure the JSON has the "interactionModel" envelope that SMAPI expects...
         string wrappedJson = EnsureInteractionModelEnvelope(modelJson);
+
+        // ...but SkillInteraction binds the INNER model (languageModel/dialog), not
+        // the envelope. Deserializing the wrapped JSON produced an EMPTY
+        // interaction (intents=0), so the custom-URL deploy and restore endpoints
+        // PUT empty models and Amazon rejected every build (live 2026-09-13:
+        // source=CustomUrl/Restore intents=0 samples=0 -> FAILED). Unwrap first.
+        using var envelopeDoc = JsonDocument.Parse(wrappedJson);
+        string innerJson = envelopeDoc.RootElement.TryGetProperty("interactionModel", out var inner)
+            ? inner.GetRawText()
+            : wrappedJson;
 
         // Deserialize directly from the JSON string instead of using the
         // SkillInteractionModel(locale, resourcePath, invocationName) constructor,
         // which relies on embedded resource streams and will not work with arbitrary JSON.
-        var skillInteraction = Newtonsoft.Json.JsonConvert.DeserializeObject<SkillInteraction>(wrappedJson);
+        var skillInteraction = Newtonsoft.Json.JsonConvert.DeserializeObject<SkillInteraction>(innerJson);
         if (skillInteraction == null)
         {
             throw new InvalidOperationException("Failed to deserialize interaction model JSON.");
