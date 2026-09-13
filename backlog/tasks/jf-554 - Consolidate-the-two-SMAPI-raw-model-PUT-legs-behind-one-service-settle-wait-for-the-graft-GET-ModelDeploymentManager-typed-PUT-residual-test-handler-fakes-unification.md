@@ -4,7 +4,7 @@ title: >-
   Consolidate the two SMAPI raw model-PUT legs behind one service (settle-wait
   for the graft GET, ModelDeploymentManager typed-PUT residual, test handler
   fakes unification)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-13 09:34'
 labels:
