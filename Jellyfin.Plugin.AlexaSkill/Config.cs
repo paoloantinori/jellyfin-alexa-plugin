@@ -29,6 +29,24 @@ public static class Config
     public static readonly IReadOnlyDictionary<string, string> LocaleInvocationNames = new Dictionary<string, string>()
     {
         ["it-IT"] = "mia collezione",
+        // JF-558: native "my collection" names for the locales where the English
+        // "jellyfin player" proved unreliable under local ASR (live probes
+        // 2026-09-13: es/pt/hi/ar one-shot never resolves, de 1-of-4; it-IT's
+        // native name is the working precedent). fr-FR/fr-CA carry "mon serveur"
+        // USER-VERIFIED on a real Echo (issue #6: "jellyfin player" not understood,
+        // "ma collection" ASR-mangled, "mon serveur" worked). Explicit per-user
+        // names still override everything (JF-300 semantics).
+        ["de-DE"] = "meine sammlung",
+        ["es-ES"] = "mi colección",
+        ["es-MX"] = "mi colección",
+        ["es-US"] = "mi colección",
+        ["fr-FR"] = "mon serveur",
+        ["fr-CA"] = "mon serveur",
+        ["pt-BR"] = "minha coleção",
+        ["nl-NL"] = "mijn collectie",
+        ["hi-IN"] = "मेरा संग्रह",
+        ["ar-SA"] = "مجموعتي الصوتية",
+        ["ja-JP"] = "マイコレクション",
     };
 
     /// <summary>

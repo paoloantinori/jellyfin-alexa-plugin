@@ -48,6 +48,14 @@ CORROBORATION from the wild: issue #6 (French user) empirically tested all three
 
 Reserved-word/length rule check: all candidates pass (no reserved words; 2+ words everywhere except ar-SA primary and the ja compound, which carry alternatives). ROLLBACK: names are runtime config (LocaleInvocationNames); a bad pick is a config edit, no code deploy. STAGED ROLLOUT: de-DE first (build + open-verb probe + one-shot probe), then the rest in one batch once the pattern proves.
 
+## Implementation (LANDED 2026-09-13 21:00-21:45)
+
+Config.LocaleInvocationNames extended with the 11 native defaults (de "meine sammlung" LOWERCASE, es x3 "mi colección", fr x2 "mon serveur", pt "minha coleção", nl "mijn collectie", hi "मेरा संग्रह", ar "مجموعتي الصوتية", ja "マイコレクション"). Paolo's requirement GUARANTEED by the existing JF-300 semantics (test-pinned in JF558_LocaleDefaults_ResolveAndExplicitStillWins): a non-empty UserSkill.InvocationName overrides EVERY locale default, so users with an explicit name are untouched; the deployment user has '' stored (verified) so defaults apply.
+
+LIVE STATE: 17/17 locale models rebuilt and verified live via get-interaction-model: every locale carries its designed name (12 native + 5 en-* "jellyfin player"). ONE build failure during rollout: de-DE "meine Sammlung" REJECTED by Amazon with InvalidCharInInvocationName (invocation names must be all-lowercase; the capital S) - fixed to "meine sammlung", rebuilt SUCCEEDED. A lowercase-guard test now pins every entry (JF558_LocaleDefaults_AreAllLowercase).
+
+SIMULATOR VERIFICATION BLOCKED (Amazon-side): the invocation probes fail for ALL locales INCLUDING the known-good it-IT control ("apri mia collezione", working on real devices for months) - simulate-skill is not resolving invocations for any locale at this hour (even the JF-551-era favorites controls fail). The consideredIntents for "ouvre mon serveur" DID show LaunchRequest as the first candidate, so the name is registered; final selection is what flakes. DEVICE VERIFICATION REMAINS: the definitive test is a real Echo in fr/de/es saying "Alexa, ouvre mon serveur" / "öffne meine sammlung" / "abre mi colección" - Paolo's action. Suite 3711/3711 both TFMs; rollback = clear LocaleInvocationNames entries or set an explicit user name (config, no code).
+
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [ ] #1 A per-locale native invocation name proposal (draft names for es-ES/es-MX/es-US/pt-BR/nl-NL/de-DE/fr-FR/fr-CA/hi-IN/ar-SA/ja-JP respecting Amazon invocation-name rules) reviewed and decided by Paolo

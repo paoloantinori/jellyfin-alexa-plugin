@@ -23,6 +23,49 @@ public class InvocationNameDefaultsTests : PluginTestBase
 
     // ---------- Config.EffectiveInvocationName (pure resolution logic) ----------
 
+    /// <summary>
+    /// JF-558: the JF-558 locale-default table (native names where the English
+    /// invocation proved unreliable) resolves, explicit user names still win over
+    /// every default, and en-* falls through to the global "jellyfin player".
+    /// </summary>
+    [Fact]
+    public void JF558_LocaleDefaults_ResolveAndExplicitStillWins()
+    {
+        // the 11 new locale defaults resolve
+        Assert.Equal("meine sammlung", Config.EffectiveInvocationName("de-DE", string.Empty));
+        Assert.Equal("mi colección", Config.EffectiveInvocationName("es-ES", string.Empty));
+        Assert.Equal("mon serveur", Config.EffectiveInvocationName("fr-FR", string.Empty));
+        Assert.Equal("mon serveur", Config.EffectiveInvocationName("fr-CA", string.Empty));
+        Assert.Equal("minha coleção", Config.EffectiveInvocationName("pt-BR", string.Empty));
+        Assert.Equal("mijn collectie", Config.EffectiveInvocationName("nl-NL", string.Empty));
+        Assert.Equal("मेरा संग्रह", Config.EffectiveInvocationName("hi-IN", string.Empty));
+        Assert.Equal("مجموعتي الصوتية", Config.EffectiveInvocationName("ar-SA", string.Empty));
+        Assert.Equal("マイコレクション", Config.EffectiveInvocationName("ja-JP", string.Empty));
+
+        // an explicit user name STILL overrides every locale default (the
+        // requirement: users with an explicit invocation are untouched)
+        Assert.Equal("il mio nome", Config.EffectiveInvocationName("de-DE", "il mio nome"));
+        Assert.Equal("mon serveur perso", Config.EffectiveInvocationName("fr-FR", "mon serveur perso"));
+
+        // en-* falls through to the global default (unchanged)
+        Assert.Equal(Config.InvocationName, Config.EffectiveInvocationName("en-US", string.Empty));
+    }
+
+    /// <summary>
+    /// JF-558 live lesson: Amazon rejects any uppercase letter in an invocation
+    /// name (de-DE "meine Sammlung" build FAILED with InvalidCharInInvocationName;
+    /// the lowercase retry built). Every locale default must be all-lowercase.
+    /// </summary>
+    [Fact]
+    public void JF558_LocaleDefaults_AreAllLowercase()
+    {
+        foreach (var kvp in Config.LocaleInvocationNames)
+        {
+            Assert.False(kvp.Value.Any(char.IsUpper), $"locale {kvp.Key} name '{kvp.Value}' must be all lowercase (Amazon InvalidCharInInvocationName)");
+            Assert.Equal(kvp.Value.Trim(), kvp.Value);
+        }
+    }
+
     [Fact]
     public void EffectiveInvocationName_Empty_FallsBackToLocaleDefault()
     {
@@ -45,8 +88,13 @@ public class InvocationNameDefaultsTests : PluginTestBase
     public void EffectiveInvocationName_Empty_FallsBackToGlobalDefault_ForOtherLocales()
     {
         Assert.Equal(DefaultName, Config.EffectiveInvocationName("en-US", string.Empty));
-        Assert.Equal(DefaultName, Config.EffectiveInvocationName("de-DE", null));
-        Assert.Equal(DefaultName, Config.EffectiveInvocationName("fr-FR", "  "));
+        Assert.Equal(DefaultName, Config.EffectiveInvocationName("en-GB", null));
+
+        // JF-558: de-DE and fr-FR now carry locale defaults; only whitespace
+        // (an effectively-empty stored name) still resolves them to their locale
+        // entry, which is the intended "no explicit name" behavior.
+        Assert.Equal("meine sammlung", Config.EffectiveInvocationName("de-DE", null));
+        Assert.Equal("mon serveur", Config.EffectiveInvocationName("fr-FR", "  "));
     }
 
     [Fact]
