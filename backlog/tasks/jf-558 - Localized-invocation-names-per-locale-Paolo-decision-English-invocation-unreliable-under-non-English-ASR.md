@@ -35,7 +35,7 @@ PATTERN: every locale gets the native "my collection" phrase, the exact pattern 
 |---|---|---|---|
 | de-DE | meine Sammlung | meine Mediathek | possessive already in the model's own samples ("meine Favoriten"); Mediathek is the standard German media-app label (Amazon's own) |
 | es-ES/es-MX/es-US | mi colección | mi biblioteca | "mi colección" already appears in the es models' own samples; direct it-IT twin |
-| fr-FR/fr-CA | ma collection | ma médiathèque | "ma collection" already in the fr samples; médiathèque is the standard French media-library label |
+| fr-FR/fr-CA | mon serveur | ma collection | USER-VERIFIED on a real Echo (issue #6, French user): "jellyfin player" not understood, "ma collection" mangled by ASR, "mon serveur" worked - the best name they found; Paolo already endorsed adopting it in that thread |
 | pt-BR | minha coleção | minha biblioteca | possessive pattern from the model's own "meus favoritos" |
 | nl-NL | mijn collectie | mijn verzameling | possessive from "mijn favorieten"; collectie is the common NL media-app label |
 | hi-IN | मेरा संग्रह | मेरी कलेक्शन | standard "my collection"; the Hinglish alternative is the common media-app register |
@@ -43,6 +43,8 @@ PATTERN: every locale gets the native "my collection" phrase, the exact pattern 
 | ja-JP | マイコレクション | マイライブラリ | the katakana "my collection" is THE standard label in Japanese media apps |
 | en-* | jellyfin player (unchanged) | - | works today |
 | it-IT | mia collezione (unchanged) | - | the working precedent |
+
+CORROBORATION from the wild: issue #6 (French user) empirically tested all three French candidates on-device - the primary "mon serveur" is THEIR finding, not a guess; the same user reported ASR trouble with "ma collection" (demoted to alternative). Issue #18 (German user, same era): "Everytime its just reverting back to spotify when i ask about a song... Sometimes its working sometimes not" - an independent on-device account of the exact invocation-layer unreliability the JF-551 probe campaign measured in de-DE (worked 1 of 4).
 
 Reserved-word/length rule check: all candidates pass (no reserved words; 2+ words everywhere except ar-SA primary and the ja compound, which carry alternatives). ROLLBACK: names are runtime config (LocaleInvocationNames); a bad pick is a config edit, no code deploy. STAGED ROLLOUT: de-DE first (build + open-verb probe + one-shot probe), then the rest in one batch once the pattern proves.
 
