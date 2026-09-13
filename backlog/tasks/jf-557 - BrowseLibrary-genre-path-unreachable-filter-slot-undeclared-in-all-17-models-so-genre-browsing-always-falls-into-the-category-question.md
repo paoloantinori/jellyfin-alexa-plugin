@@ -3,7 +3,7 @@ id: JF-557
 title: >-
   BrowseLibrary genre path unreachable: filter slot undeclared in all 17 models,
   so genre browsing always falls into the category question
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-13 11:21'
 updated_date: '2026-09-13 11:36'
