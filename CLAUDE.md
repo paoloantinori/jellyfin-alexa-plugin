@@ -444,17 +444,18 @@ grep -rn '"[A-Z][a-z].*"' model_*.json | grep -v '{' | grep samples
 
 ### 2. AMAZON.SearchQuery Coexistence (9+ incidents)
 
-**`AMAZON.SearchQuery` CANNOT coexist with ANY other slot type in the same intent.** SMAPI rejects the model build. Use custom slot types instead.
+**`AMAZON.SearchQuery` CANNOT be combined with another slot in the same SAMPLE (utterance).** SMAPI rejects the model build. The historical incidents were all sample-level combinations. REFINED 2026-09-13 (JF-557): SearchQuery CAN coexist with other slots at the INTENT level while no single sample combines them - BrowseLibraryIntent has carried `filter` (SearchQuery) + `browse_category` in all 17 locales with every SMAPI build SUCCEEDED (JF-550/JF-557 batches, live-verified). Keep new combos intent-level-minimal and let the checker guard the samples.
 
 ```
-# ❌ WRONG — two different slot types, one is SearchQuery
-"slots": [{"name": "media_type", "type": "MediaType"}, {"name": "query", "type": "AMAZON.SearchQuery"}]
+# ❌ WRONG — one SAMPLE carries two slots, one is SearchQuery
+"play {media_type} {query}"   # media_type + query(SearchQuery) in one utterance
 
-# ✅ RIGHT — use custom types for all slots
-"slots": [{"name": "media_type", "type": "MediaType"}, {"name": "time_period", "type": "TimePeriod"}]
+# ✅ RIGHT — SearchQuery samples carry only the SearchQuery slot; other slots get their own samples
+"browse genres {filter}"      # literal category + SearchQuery filter, one slot in the sample
+"browse {browse_category}"    # the other slot, its own sample
 ```
 
-**Detection**: Already caught by `validate_interaction_models.py` check #6.
+**Detection**: `validate_interaction_models.py` check #6 (sample-level combination = error; intent-level coexistence = warning).
 
 ### 3. NLU Intent Competition (9+ incidents)
 
