@@ -1247,7 +1247,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         ActionResult result = await controller.GetSegment(itemIdStr, "seg_0100.ts");
 
         Assert.IsType<NotFoundObjectResult>(result);
-        var missLogs = logRecords
+        var missLogs = TestCaptureLogger.Snapshot(logRecords)
             .Where(r => r.Message.Contains("GetSegment miss", StringComparison.Ordinal))
             .ToList();
         Assert.True(missLogs.Count > 0, "a GetSegment miss must be logged");
@@ -2502,7 +2502,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             Assert.Equal("libx264", tokens[Array.IndexOf(tokens, "-c:v") + 1]);
 
             // The oversize warning fired with item, estimate, and cap.
-            var warnings = logRecords
+            var warnings = TestCaptureLogger.Snapshot(logRecords)
                 .Where(r => r.Level == LogLevel.Warning && r.Message.Contains("cannot be retained", StringComparison.Ordinal))
                 .ToList();
             Assert.Single(warnings);
@@ -2556,10 +2556,14 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         ActionResult result = await controller.StreamHlsEpisode(episode.Id.ToString());
 
         Assert.IsType<ContentResult>(result);
+        // The encode keeps logging from its background poll thread after the
+        // awaited call returns; enumerate a lock-consistent snapshot (CI flake
+        // 2026-09-13: "Collection was modified").
+        var finalRecords = TestCaptureLogger.Snapshot(logRecords);
         Assert.DoesNotContain(
-            logRecords,
+            finalRecords,
             r => r.Message.Contains("cannot be retained", StringComparison.Ordinal));
-        var decisions = logRecords
+        var decisions = finalRecords
             .Where(r => r.Message.Contains("cacheable", StringComparison.Ordinal))
             .ToList();
         Assert.Single(decisions);
@@ -2617,7 +2621,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             var content = Assert.IsType<ContentResult>(result);
             Assert.Contains("seg_0000.ts?token=", content.Content, StringComparison.Ordinal);
             Assert.DoesNotContain(
-                logRecords,
+                TestCaptureLogger.Snapshot(logRecords),
                 r => r.Message.Contains("cannot be retained", StringComparison.Ordinal));
         }
         finally

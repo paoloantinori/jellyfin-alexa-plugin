@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests;
@@ -15,6 +16,19 @@ internal static class TestCaptureLogger
 {
     /// <summary>Creates a provider writing into the given list.</summary>
     internal static CaptureLoggerProvider Into(List<(LogLevel Level, string Message)> records) => new(records);
+
+    /// <summary>
+    /// A lock-consistent copy of the captured records. Tests whose handler logs
+    /// from background threads (ffmpeg encode paths) must enumerate a snapshot,
+    /// never the live list.
+    /// </summary>
+    internal static List<(LogLevel Level, string Message)> Snapshot(List<(LogLevel Level, string Message)> records)
+    {
+        lock (records)
+        {
+            return records.ToList();
+        }
+    }
 }
 
 internal sealed class CaptureLoggerProvider : ILoggerProvider
@@ -41,5 +55,13 @@ internal sealed class CaptureLogger : ILogger
     public bool IsEnabled(LogLevel logLevel) => true;
 
     public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-        => _records.Add((logLevel, formatter(state, exception)));
+    {
+        // Background threads (ffmpeg encode polls, fire-and-forget tasks) log while
+        // the test enumerates; Add must be synchronized or a concurrent grow throws
+        // "Collection was modified" in the test's LINQ (live CI flake 2026-09-13).
+        lock (_records)
+        {
+            _records.Add((logLevel, formatter(state, exception)));
+        }
+    }
 }
