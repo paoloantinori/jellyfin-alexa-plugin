@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-13 11:21'
+updated_date: '2026-09-13 11:36'
 labels:
   - bug
   - interaction-model
@@ -36,3 +37,9 @@ Found during the JF-550 review (2026-09-13), pre-existing and out of that sweep'
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+ROUTING ADDENDUM (2026-09-13, JF-550 live probes): the it-IT bare empty-name playlist one-shot ('riprodurre la playlist', simulate-skill) routes to BrowseLibraryIntent with browse_category resolving ER_SUCCESS to the it-IT 'playlist' browse concept, and the final selection falls to FallbackIntent - it never reaches PlayPlaylistIntent, so the playlist elicit cannot fire via this phrasing (every PlayPlaylistIntent carrier anchors on {playlist} itself). Same shape for SleepTimerIntent: all four it-IT carriers embed {duration_minutes}, so no slot-less routing exists. Empty-primary-slot arrivals for the swept intents are therefore mostly the elicit's own IN_PROGRESS answering turns plus rare partial matches (the JF-549 PlayEpisode incident was the anchor-slot case: numbers filled, series empty). Kept as routing-competition context for this task's filter-slot fix.
+<!-- SECTION:NOTES:END -->

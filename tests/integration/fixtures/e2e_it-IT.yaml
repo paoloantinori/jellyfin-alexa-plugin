@@ -30,16 +30,22 @@ tests:
     expected_reprompt: true
     expected_end_session: false
 
-  # JF-550 sweep pin: an empty-name playlist request elicits with the mic open
-  # (Dialog.ElicitSlot on playlist), same class as the JF-549 PlayEpisode pin.
+  # JF-550 sweep pin attempt, SKIPPED: the bare empty-name playlist form cannot
+  # reach PlayPlaylistIntent at the utterance layer - simulate-skill 2026-09-13
+  # routes "riprodurre la playlist" to BrowseLibraryIntent (browse_category
+  # resolves ER_SUCCESS to the it-IT "playlist" browse concept) and the selection
+  # falls to FallbackIntent; every PlayPlaylistIntent carrier anchors on {playlist}
+  # itself, so no slot-less form exists (same for SleepTimer's {duration_minutes}
+  # carriers, probed the same day). The elicit shape is unit-pinned
+  # (DeadMicSweepElicitTests) and dialog-registration is machine-checked
+  # (validator Phase 8); the JF-549 PlayEpisode pin above remains the
+  # platform-level elicit proof (its numbers anchor routing while series stays
+  # empty). Routing-competition data recorded in JF-557's notes.
   - utterance: "riprodurre la playlist"
     expected_intent: PlayPlaylistIntent
     expected_slots: {}
-    expected_response_type: directive
-    expected_directive_type: "Dialog.ElicitSlot"
-    expected_speech_contains: "playlist"
-    expected_reprompt: true
-    expected_end_session: false
+    expected_response_type: any
+    skip_reason: "bare empty-name playlist form routes to BrowseLibrary/Fallback (live simulate 2026-09-13), never PlayPlaylistIntent; elicit unit-pinned + Phase 8-guarded"
 
   # --- Playback controls ---
   # JF-488 (2026-09-04, default ON since 2026-09-05): with PauseKeepsSession
