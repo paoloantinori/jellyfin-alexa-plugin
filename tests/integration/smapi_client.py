@@ -80,6 +80,15 @@ class SmapiClient:
         self.delay = delay
         self.invocation_name = invocation_name
 
+    # One-shot wrapper status (live probes 2026-09-13, JF-551; see the
+    # locale-routing-probe skill): it-IT and en-* wrappers function. de-DE "sag
+    # {inv} {payload}" functioned once of four (English invocation name is
+    # marginally recognized under non-English ASR). nl-NL and ja-JP invocations
+    # reach the skill but payload routing under the wrapper was not stable.
+    # NO working one-shot composition found for es-ES/es-MX/es-US, pt-BR,
+    # hi-IN, ar-SA - even favorites-payload controls failed (invocation layer,
+    # not the payload). For in-session testing in those locales use the e2e
+    # smoke two-step convention (locale open verb, then the bare command).
     INVOCATION_PREFIX: dict[str, str] = {
         "en-US": "ask {inv} to ",
         "en-GB": "ask {inv} to ",

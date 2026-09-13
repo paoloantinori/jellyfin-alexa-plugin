@@ -7,15 +7,16 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-12 16:55'
+updated_date: '2026-09-13 13:26'
 labels:
   - interaction-model
   - nlu
   - coverage
 dependencies: []
 references:
-  - JF-549
-  - JF-513
-  - scripts/validate_interaction_models.py
+  - JF-557
+  - tests/integration/smapi_client.py
+  - .claude/skills/locale-routing-probe/SKILL.md
 priority: medium
 ---
 
@@ -33,6 +34,12 @@ Work: for each of the 8 locales, probe the natural one-shot wrapper form via pro
 - [ ] #2 If families are added: templates regenerate cleanly, the validator Phase 7 table is extended (or the table is derived from template vocabulary), NLU fixtures pin the new forms
 - [ ] #3 The decision per locale (probe-passes-as-is vs family-added) is recorded in the task notes
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+PROBE RESULTS 2026-09-13 (the AC#1 probe half is COMPLETE; recorded here because the findings reframe the task): MODEL-SIDE - nl-NL/ar-SA/hi-IN PASS (the natural bare imperative series-first form routes PlayEpisodeIntent with series_name='breaking bad' filled); es-ES/es-MX NO-SELECT on series-first while the series-LAST form routes+fills (order-dependent selection quality, sample family already present - not fixable by adding the infinitive twin: a 'reproducir {series} temporada...' series-first addition was live-tested on the deployed models and FAILED to route cleanly (Fallback on es-ES/es-MX, polluted series='reproducir breaking bad' on es-US) and was REVERTED); es-US and pt-BR steal BOTH episode orders to PlayNextIntent (queue bare-carrier competition); ja-JP steals both orders to PlayVideoIntent. INVOCATION-SIDE (the bigger finding): the one-shot wrapper layer is BROKEN in all 8 locales with the English invocation name 'jellyfin player' - even favorites-payload controls (verbatim samples) fail in es-ES/es-MX/es-US/pt-BR/hi-IN/ar-SA via simulate-skill, de-DE 'sag X ...' worked once of four (unreliable), nl-NL/ja-JP invocations reach the skill but wrapped payload routing is unstable. it-IT works consistently BECAUSE its invocation name is native ('mia collezione'). The JF-511/512 smoke for the 5 new locales used the two-step open-verb convention ('abre jellyfin player' + bare in-session command), never the one-shot wrapper - which is why it passed. CONSEQUENCE: adding infinitive sample families (the original fix shape) cannot fix the one-shot in these locales while the invocation layer fails first. The REAL fix is per-locale localized invocation names (it-IT precedent; the plumbing exists: Config.LocaleInvocationNames) - a product/naming decision for Paolo per locale, THEN the payload families become testable. Verified compositions recorded in SmapiClient.INVOCATION_PREFIX + the locale-routing-probe skill.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
