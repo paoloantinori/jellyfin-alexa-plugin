@@ -3,9 +3,10 @@ id: JF-560
 title: >-
   Experiment: declare Alexa.SeekController on the skill and probe whether a
   custom skill receives seek directives
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-14 15:03'
+updated_date: '2026-09-14 18:04'
 labels:
   - research
   - alexa-platform
@@ -34,3 +35,17 @@ Research lead (claudedocs/research_echo-show-avs-protocol_2026-09-14.md, finding
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-09-14 19:55 experiment executed as a clean A/B via raw SMAPI (ask CLI hides 400 bodies; the CLI's stored token needed a refresh first; manifest shape fixed using our production manifest's category STREAMING_SERVICE). Pre-research (claudedocs/research_github-device-api-msapi_2026-09-14.md) predicted this outcome: enum closed in every Amazon-generated artifact; the probe closed the last unknown (server-side enforcement).
+
+2026-09-14 20:00 /simplify (adapted, no code diff): consistency agent PASS - the two probe manifests differ only in the interface entry; no secrets; no code. Recorded for the Done gate.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+CLOSED negative, definitively and cheaply (2026-09-14, A/B probe via SMAPI create-skill-for-vendor): the manifest interface enum IS enforced server-side. Control manifest with only AUDIO_PLAYER was accepted (HTTP 202, throwaway skill amzn1.ask.skill.484cc39b-4106-4b8a-9108-2a090072f950, never enabled); the identical manifest plus {"type":"ALEXA_SEEK_CONTROLLER"} was rejected with INVALID_ENUM_VALUE naming $.manifest.apis.custom.interfaces[1].type (consistency-checked: the two manifests differ ONLY in that entry). Alexa.SeekController/PlaybackController are smart-home discovery-declared device APIs and cannot be declared on a custom skill, so no seek directives can ever arrive to this skill through them. The seek mechanism for non-partner skills remains the offset-republish pattern (confirmed independently by ma-alexa-music-skill), which this plugin already implements for audiobook resume. The throwaway control skill is left dev-stage (deletion is banned by project policy); harmless, never enabled. Evidence: /tmp/jf560_control_manifest.json, /tmp/jf560_probe_manifest.json.
+<!-- SECTION:FINAL_SUMMARY:END -->
