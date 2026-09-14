@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - zai
 created_date: '2026-07-25 18:07'
-updated_date: '2026-09-14 12:29'
+updated_date: '2026-09-14 12:59'
 labels:
   - enhancement
   - phonetic
@@ -54,6 +54,8 @@ Stage-0 shape: velar-stop family in PhoneticSynonymGenerator (GetVelarStopVarian
 AC status: #1 done (rules + bounds), #2 done (cap 5, attestation-ordered: c-form and drifts before q-forms), #3 done (Koop emits cup/coop/cop; Bianchi/Beatles/Adele/Beyonce empty). #4 (live catalog re-sync + on-device 'suona koop') PENDING Paolo: needs DLL deploy + catalog re-sync, then device check.
 
 2026-09-14 (Paolo, to fold into the generative build when it starts): the variant set must explicitly cover the CORRECT-pronunciation case, not just L1-mangled speech. A user who says an English name perfectly is still heard by a locale-built ASR that cannot write English sounds, so the correct rendering lands as a LOCAL spelling anyway (Koop -> cup AND coop from a correct-ish pronunciation; one Italian ear, two renderings - not two accents). The PHOIBLE-derived substitution data serves both directions (speaker can't say it / listener can't hear it - same sound-inventory gap). Make 'correct pronunciation, foreign ear' an explicit acceptance test on a sample of names when the composite is built, so alias sets are checked against both kinds of rendering rather than by accident. Paolo deferred this with the rest of the redesign: 'keep that in the backlog for now, we will get to that'.
+
+2026-09-14 15:00 AC#4 FIRST HALF VERIFIED ON AMAZON GROUND TRUTH (forced early at Paolo's request: backed up the plugin XML, removed the LastCatalogSync element so the 12h gate read never-synced, restarted; sync succeeded 1133 artists / 886 albums / 138 series across 16 locales; the it-IT model PUT pinned artist catalog 6590add1 version 904 from its own leg - per-locale version pinning is why later locale legs minting 905-909 do NOT overwrite the it-IT value set). Evidence: ask smapi profile-nlu it-IT, utterance 'suona la band cup' -> PlayArtistSongsIntent, musician slot ER_SUCCESS_MATCH -> 'Koop' (id jellyfin_artist_9c6c9122ab59d67f60435c54c15252b8); 'suona la band coop' -> same match; control 'suona la band xyzzyfoo' -> no intent, no catch-all. REMAINING: on-device spot check (real ASR + speaker) at Paolo's convenience: 'suona koop' / 'suona cup' / 'suona coop'.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
