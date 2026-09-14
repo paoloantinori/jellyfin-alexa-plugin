@@ -4526,6 +4526,34 @@ public abstract class BaseHandler
             return null;
         }
 
+        // JF-382 surface 3: a coincidental containment (a short common-word artist name
+        // riding the containment/phonetic-floor score exemption inside the slot text)
+        // must not auto-play silently. The downgrade reuses the JF-363 yes/no offer ask
+        // (its decline speaks the media-type not-found) whenever the caller wired that
+        // machinery (notFoundMediaType) and suggestions are not Off; callers without the
+        // band (FindSong re-prompts for the title, PlayMoodMusic speaks NotFoundMood)
+        // have no artist yes/no contract, so they get the clean miss (null) and fall
+        // through to their own not-found. DEVIATION, deliberate: an AutoServe user (who
+        // opted into silent auto-play for GENUINE offers) also gets the ask here - the
+        // prompt is still a no-silent-substitution outcome and "yes" plays; and an Off
+        // user with a STRICT-bar (>=85) coincidental match now gets the clean miss
+        // instead of the old silent auto-play (pinned by tests).
+        if (Util.ArtistSearch.IsCoincidentalContainmentMatch(cleaned, bestItem!.Name, locale))
+        {
+            if (notFoundMediaType != null && GetCrossMediaArtistSuggestion(user) != CrossMediaArtistSuggestion.Off)
+            {
+                Logger.LogInformation(
+                    "{Label}: artist fallback match '{ArtistName}' for query='{Query}' is coincidental-containment, downgrading to the offer ask (JF-382)",
+                    logLabel, bestItem.Name, cleaned);
+                return BuildCrossMediaArtistOfferAsk(slotText, bestItem, locale, notFoundMediaType);
+            }
+
+            Logger.LogInformation(
+                "{Label}: artist fallback match '{ArtistName}' for query='{Query}' is coincidental-containment with no offer machinery, treating as a miss (JF-382)",
+                logLabel, bestItem.Name, cleaned);
+            return null;
+        }
+
         return await BuildArtistSongsResponseAsync(
             bestItem!.Id,
             bestItem.Name,

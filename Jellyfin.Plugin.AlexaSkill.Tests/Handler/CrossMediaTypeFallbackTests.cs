@@ -1263,5 +1263,104 @@ public class CrossMediaTypeFallbackTests : PluginTestBase
         Assert.DoesNotContain("Lamb", speech);
         Assert.True(session.NowPlayingQueue == null || session.NowPlayingQueue.Count == 0);
     }
+
+    // ============================================================
+    // JF-382: coincidental-containment downgrade in TryEntityFallbackAsync.
+    // A match that reaches the STRICT bar via the containment/phonetic floor but
+    // carries the JF-377 coincidental shape (every occurrence embedded in another
+    // word, or minority word coverage) must not auto-play. The caller HAS the
+    // yes/no machinery (the JF-363 offer ask, whose decline speaks the media-type
+    // not-found), so Confirm/AutoServe get the ask; Off keeps its clean miss.
+    // ============================================================
+
+    [Fact]
+    public async Task JF382_PlaySong_CoincidentalContainment_StrictScore_DowngradesToOfferAsk()
+    {
+        // Artist "O" rides the containment floor (PartialRatio containment = 90, above
+        // the 85 strict cross-media bar) for the query "cup oko": every 'o' occurrence
+        // is embedded inside "oko" (JF-408/JF-478 shape). Previously this auto-played;
+        // now the JF-363 offer ask stands in and "yes" still plays the artist.
+        var artistId = Guid.NewGuid();
+        SetupSongMissArtistSubStrict("cup oko", "O", artistId, new Audio { Name = "Ode", Id = Guid.NewGuid() });
+
+        _fx.Config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.Confirm;
+
+        var handler = CreateSongHandler();
+        var session = _fx.CreateSession();
+        var response = await handler.HandleAsync(
+            CreateSongIntent("cup oko"), _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
+
+        Assert.True(response.Response?.ShouldEndSession != true, "a coincidental containment must prompt, not auto-play");
+        Assert.True(response.Response?.Directives == null || response.Response.Directives.Count == 0, "no playback directive may be issued");
+        Assert.Equal("artist", response.SessionAttributes?["disambig_type"]);
+        Assert.Equal("cup oko", response.SessionAttributes?["crossmedia_notfound_query"]);
+        Assert.True(session.NowPlayingQueue == null || session.NowPlayingQueue.Count == 0, "no songs may be enqueued");
+    }
+
+    [Fact]
+    public async Task JF382_PlaySong_CoincidentalContainment_Off_ReturnsCleanNotFound()
+    {
+        // Off keeps its no-suggestions contract: the downgrade falls to the clean miss
+        // (null) and the caller speaks its own song not-found. No offer, no play.
+        var artistId = Guid.NewGuid();
+        SetupSongMissArtistSubStrict("cup oko", "O", artistId, new Audio { Name = "Ode", Id = Guid.NewGuid() });
+
+        _fx.Config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.Off;
+
+        var handler = CreateSongHandler();
+        var session = _fx.CreateSession();
+        var response = await handler.HandleAsync(
+            CreateSongIntent("cup oko"), _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
+
+        Assert.True(response.Response?.ShouldEndSession);
+        Assert.True(response.Response?.Directives == null || response.Response.Directives.Count == 0);
+        Assert.True(session.NowPlayingQueue == null || session.NowPlayingQueue.Count == 0);
+    }
+
+    [Fact]
+    public async Task JF382_PlaySong_CoincidentalContainment_AutoServe_StillPrompts()
+    {
+        // AutoServe deviation (JF-382, deliberate): AutoServe opted into silent
+        // auto-play for GENUINE offers, but a coincidental shape gets the ask anyway
+        // (no silent substitution; "yes" still plays the artist). Same assertions as
+        // the Confirm test, different config.
+        var artistId = Guid.NewGuid();
+        SetupSongMissArtistSubStrict("cup oko", "O", artistId, new Audio { Name = "Ode", Id = Guid.NewGuid() });
+
+        _fx.Config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.AutoServe;
+
+        var handler = CreateSongHandler();
+        var session = _fx.CreateSession();
+        var response = await handler.HandleAsync(
+            CreateSongIntent("cup oko"), _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
+
+        Assert.True(response.Response?.ShouldEndSession != true, "a coincidental containment must prompt, not auto-play");
+        Assert.True(response.Response?.Directives == null || response.Response.Directives.Count == 0, "no playback directive may be issued");
+        Assert.Equal("artist", response.SessionAttributes?["disambig_type"]);
+        Assert.Equal("cup oko", response.SessionAttributes?["crossmedia_notfound_query"]);
+        Assert.True(session.NowPlayingQueue == null || session.NowPlayingQueue.Count == 0, "no songs may be enqueued");
+    }
+
+    [Fact]
+    public async Task JF382_PlaySong_GenuineWholeWordMatch_StillPlays()
+    {
+        // No-regression: the same query with the whole-word artist "Cup" (a real
+        // containment occurrence, not embedded) is NOT coincidental and keeps
+        // auto-playing with the FoundArtistInstead announcement.
+        var artistId = Guid.NewGuid();
+        SetupSongMissArtistSubStrict("cup oko", "Cup", artistId, new Audio { Name = "Cup Song", Id = Guid.NewGuid() });
+
+        var handler = CreateSongHandler();
+        var session = _fx.CreateSession();
+        var response = await handler.HandleAsync(
+            CreateSongIntent("cup oko"), _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
+
+        Assert.NotNull(response.Response?.Directives);
+        Assert.NotEmpty(response.Response.Directives);
+        Assert.NotNull(session.NowPlayingQueue);
+        Assert.Single(session.NowPlayingQueue);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Cup", speech);
+    }
 }
 

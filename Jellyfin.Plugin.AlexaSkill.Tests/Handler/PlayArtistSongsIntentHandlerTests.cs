@@ -181,6 +181,82 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         Assert.Equal("Sugar Free Jazz", metadata.Title); // Soul Coughing's song, not Soul's
     }
 
+    // --- JF-382: coincidental-containment downgrade at the FINAL-pick surfaces ---
+    // The JF-377 entry gate above only sees a single match coming out of the tier
+    // chain. When the count>1 disambiguation branch narrows to ONE pick (here via
+    // HandleFuzzyMiss's FuzzyMatchBehavior.AutoPlay auto-accept, and symmetrically
+    // Fast mode's fastAutoPlay pick, both converging right before the new gate), a
+    // coincidental containment could still auto-play. It must downgrade to the
+    // JF-377 yes/no prompt instead.
+
+    /// <summary>
+    /// JF-382: "miles davis live" with single-word artists "Miles" and "Davis" in the
+    /// library. Tier 1.5 returns the word-coverage TIE (count 2), and an AutoPlay-mode
+    /// user's HandleFuzzyMiss auto-accept (containment score 90) previously narrowed to
+    /// "Miles" and played it silently. "miles" covers one of three content words, the
+    /// exact JF-377 coincidental shape. Must downgrade to the yes/no prompt.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_WordCoverageTie_AutoPlayBehavior_CoincidentalPick_PromptsInsteadOfPlaying()
+    {
+        var miles = new MusicArtist { Name = "Miles", Id = Guid.NewGuid() };
+        var davis = new MusicArtist { Name = "Davis", Id = Guid.NewGuid() };
+        var allArtists = new List<BaseItem> { miles, davis };
+
+        _artistIndexMock.Setup(i => i.IsReady).Returns(true);
+        _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>())).Returns(allArtists);
+        _fx.SetupUserMock();
+        SetupSongResult(new Audio { Name = "Blue Moods", Id = Guid.NewGuid() });
+
+        var handler = CreateHandler(_artistIndexMock.Object);
+        var request = CreateIntentRequest(musician: "miles davis live");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        user.FuzzyMatchBehavior = FuzzyMatchBehavior.AutoPlay;
+        var session = _fx.CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.True(response.Response?.ShouldEndSession != true, "a coincidental final pick must prompt, not auto-play");
+        Assert.True(response.Response?.Directives == null || response.Response.Directives.Count == 0, "no playback directive may be issued");
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Miles", speech);
+        Assert.Equal("artist", response.SessionAttributes?["disambig_type"]);
+        Assert.True(session.NowPlayingQueue == null || session.NowPlayingQueue.Count == 0, "no songs may be enqueued");
+    }
+
+    /// <summary>
+    /// JF-382 no-regression: the same word-coverage tie under the DEFAULT Confirm
+    /// behavior already went to the "did you mean" prompt via HandleFuzzyMiss; the new
+    /// gate must not change that (still a prompt, no play). A genuine full-coverage
+    /// match on the same query keeps auto-playing, pinned by
+    /// HandleAsync_MilesDavisLiveQuery_PlaysMilesDavis_NeverMiles.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_WordCoverageTie_ConfirmBehavior_StillPrompts_NoPlay()
+    {
+        var miles = new MusicArtist { Name = "Miles", Id = Guid.NewGuid() };
+        var davis = new MusicArtist { Name = "Davis", Id = Guid.NewGuid() };
+        var allArtists = new List<BaseItem> { miles, davis };
+
+        _artistIndexMock.Setup(i => i.IsReady).Returns(true);
+        _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>())).Returns(allArtists);
+        _fx.SetupUserMock();
+        SetupSongResult(new Audio { Name = "Blue Moods", Id = Guid.NewGuid() });
+
+        var handler = CreateHandler(_artistIndexMock.Object);
+        var request = CreateIntentRequest(musician: "miles davis live");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.True(response.Response?.ShouldEndSession != true);
+        Assert.True(response.Response?.Directives == null || response.Response.Directives.Count == 0);
+        Assert.True(session.NowPlayingQueue == null || session.NowPlayingQueue.Count == 0);
+    }
+
     // --- JF-439: inverse cross-media fallback (artist not-found -> song search) ---
 
     /// <summary>

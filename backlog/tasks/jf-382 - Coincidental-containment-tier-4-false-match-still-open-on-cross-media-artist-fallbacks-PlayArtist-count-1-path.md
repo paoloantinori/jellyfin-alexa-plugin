@@ -3,10 +3,10 @@ id: JF-382
 title: >-
   Coincidental-containment tier-4 false-match still open on cross-media artist
   fallbacks + PlayArtist count>1 path
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-07-27 04:18'
-updated_date: '2026-08-31 15:04'
+updated_date: '2026-09-14 19:42'
 labels:
   - bug
   - artist-search

@@ -515,14 +515,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         if (artists.Count == 1
             && ArtistSearch.IsCoincidentalContainmentMatch(musician, artists[0].Name, locale))
         {
-            Logger.LogInformation(
-                "PlayArtistSongs: single match='{Match}' for query='{Query}' is coincidental-containment, downgrading to disambiguation (JF-377)",
-                artists[0].Name, musician);
-            var matches = new List<(Guid Id, string Name, string? ArtUrl)>
-            {
-                (artists[0].Id, artists[0].Name, GetImageUrl(artists[0].Id.ToString("N"), user))
-            };
-            return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeArtist, locale, context);
+            return AskCoincidentalContainment(artists[0], musician, locale, context, user);
         }
 
         // JF-420: when the single match is a containment shape (artist name is a substring
@@ -663,6 +656,18 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             }
 
             Logger.LogDebug("PlayArtistSongs: fast auto-play picked '{Name}'", artists[0].Name);
+        }
+
+        // JF-382: this single gate covers the two surfaces the JF-377 entry gate above
+        // cannot see, because the final single pick is made AFTER it: (1) Fast mode's
+        // fastAutoPlay best pick and (2) Thorough count>1's HandleFuzzyMiss auto-accept
+        // (score >= ContainmentScore). Same downgrade as JF-377 (AskFirstMatch, never
+        // reject): the shape is string-indistinguishable from a real artist inside a
+        // carrier phrase, so the yes/no prompt is the only no-regression behavior.
+        if (artists.Count == 1
+            && ArtistSearch.IsCoincidentalContainmentMatch(musician, artists[0].Name, locale))
+        {
+            return AskCoincidentalContainment(artists[0], musician, locale, context, user);
         }
 
         string matchedArtistName = artists[0].Name;
@@ -870,4 +875,22 @@ public class PlayArtistSongsIntentHandler : BaseHandler
     /// <returns>The filtered list.</returns>
     private static List<BaseItem> FilterContainmentBand(IReadOnlyList<BaseItem> artists, string musician)
         => artists.Where(a => Util.ArtistSearch.PassesContainmentBand(a.Name, musician)).ToList();
+
+    /// <summary>
+    /// The JF-377/JF-382 downgrade response: a single-candidate yes/no ask for an
+    /// artist that matched only as a coincidental containment inside the query text.
+    /// Shared by the entry gate and the final-pick end-gate so the ask construction
+    /// (art lookup, attribute shape) lives once.
+    /// </summary>
+    private SkillResponse AskCoincidentalContainment(BaseItem artist, string musician, string locale, Context context, Entities.User user)
+    {
+        Logger.LogInformation(
+            "PlayArtistSongs: match='{Match}' for query='{Query}' is coincidental-containment, downgrading to disambiguation",
+            artist.Name, musician);
+        var matches = new List<(Guid Id, string Name, string? ArtUrl)>
+        {
+            (artist.Id, artist.Name, GetImageUrl(artist.Id.ToString("N"), user))
+        };
+        return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeArtist, locale, context);
+    }
 }
