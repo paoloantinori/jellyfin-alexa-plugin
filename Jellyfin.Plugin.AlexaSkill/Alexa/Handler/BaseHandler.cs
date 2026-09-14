@@ -4088,31 +4088,6 @@ public abstract class BaseHandler
     }
 
     /// <summary>
-    /// The cross-media substitution announcement with the artist name wrapped in the
-    /// first-party &lt;w role='amazon:musicArtist'&gt; SSML role (stolen 2026-09-14 from an
-    /// Amazon Music TTS capture in the developer console; the role is NOT in the public
-    /// custom-skill SSML reference, so acceptance through the Alexa TTS pipeline must
-    /// be re-verified on a live channel whenever the role value changes). Every {0}
-    /// occurrence in the localized template is wrapped; the artist name is XML-escaped.
-    /// Returns the sentence prefixed with &lt;speak&gt; so ApplyAnnouncement routes it
-    /// to SsmlOutputSpeech.
-    /// </summary>
-    internal static string BuildArtistAnnouncementSsml(string textKey, string locale, string artistName)
-        => $"<speak>{ResponseStrings.Get(textKey, locale, $"<w role='amazon:musicArtist'>{EscapeXml(artistName)}</w>")}</speak>";
-
-    /// <summary>
-    /// XML-escapes a plain-text sentence and swaps every occurrence of the artist
-    /// name (in its escaped form) with the role-wrapped version. A sentence that
-    /// does not contain the name degrades to the plain escaped sentence.
-    /// </summary>
-    internal static string WrapArtistInSentence(string sentence, string artistName)
-        => EscapeXml(sentence).Replace(EscapeXml(artistName), BuildArtistRoleTag(artistName));
-
-    /// <summary>The role-wrapped, XML-escaped artist name used by both wrappers.</summary>
-    internal static string BuildArtistRoleTag(string artistName)
-        => $"<w role='amazon:musicArtist'>{EscapeXml(artistName)}</w>";
-
-    /// <summary>
     /// Overrides a play response's speech with the given announcement (JF-345: the
     /// ONE override site; was a triplicated 3-liner across the artist/album/song play
     /// builders). No-op for a null/whitespace announcement.
@@ -4123,11 +4098,7 @@ public abstract class BaseHandler
     {
         if (!string.IsNullOrWhiteSpace(announcement))
         {
-            // <speak>-prefixed announcements are pre-built SSML (e.g. the music-artist
-            // role wrapper); everything else stays plain text, unescaped.
-            response.Response.OutputSpeech = announcement.StartsWith("<speak>", StringComparison.Ordinal)
-                ? new SsmlOutputSpeech { Ssml = announcement }
-                : new PlainTextOutputSpeech { Text = announcement };
+            response.Response.OutputSpeech = new PlainTextOutputSpeech { Text = announcement };
         }
     }
 
@@ -4529,7 +4500,7 @@ public abstract class BaseHandler
             // playing instead of what was asked) is opt-out; the substitution itself
             // always plays. Same flag as the song-to-album cascade's announcement.
             announcement: _config.AnnounceCrossMediaSubstitution
-                ? BuildArtistAnnouncementSsml("FoundArtistInstead", locale, bestItem.Name)
+                ? ResponseStrings.Get("FoundArtistInstead", locale, bestItem.Name)
                 : null,
             cancellationToken).ConfigureAwait(false);
     }
