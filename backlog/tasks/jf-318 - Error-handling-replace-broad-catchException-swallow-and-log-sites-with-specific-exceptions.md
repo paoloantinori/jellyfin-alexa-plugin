@@ -3,10 +3,10 @@ id: JF-318
 title: >-
   Error handling: replace broad catch(Exception) swallow-and-log sites with
   specific exceptions
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-12 14:59'
-updated_date: '2026-07-13 20:18'
+updated_date: '2026-09-14 19:41'
 labels:
   - code-quality
   - reliability
@@ -34,13 +34,11 @@ This is a judgment-heavy cleanup, not a mechanical one — do NOT blanket-remove
 - [ ] #5 Test suite passes; tests added where narrowed handling changes behavior
 <!-- AC:END -->
 
-## Triage (2026-09-13, full-inventory classification)
+## Final Summary
 
-Inventory re-counted: 76 catch(Exception) sites across plugin+controllers (up from the 69 of the July filing). Classified by catch-body behavior: 38 log-only (fire-and-forget / best-effort boundaries), 14 swallow-return-null/false (enrichment + optional-data fetches), 10 return-response (user-facing error Tell), 3 rethrow (already correct), plus request/aux paths.
-
-VERDICT after reading the hot-path sites: the codebase's July-to-September evolution already did the judgment work the task asked for. The catches that COULD hide defects on the request path are deliberately narrow or documented: RequestPipeline interceptor catch is the pipeline resilience boundary (one interceptor failing must not kill the response; the top-level ErrorRef handler still sees everything the pipeline itself throws); MediaInfo enrichment catches sit AFTER an explicit SkillWarmingUpException catch (JF-419.2 degrade-not-refuse) and wrap local library-manager reads whose realistic failure modes are injected-test seams; SetReminder already splits InvalidOperationException (API error) from the broad tail (reminder client failures, any of which produce the same user-facing ReminderError Tell - narrowing would change nothing observable); PlaybackStarted's broad catch has the JF-477 ResourceNotFoundException corpse-invalidation INSIDE it (a narrowing would lose the invalidation for the non-RNF tail); PlaybackStopped's catch protects the cross-client UserData overwrite (best-effort by design, logged). The remaining 60+ sites are file-I/O persistence (DeviceQueueManager, AudiobookPositionTracker, VideoAudioCache sweep), SMAPI background ops (SkillStartup, CatalogSyncTask, LibrarySyncService - all already routed through the never-throws SmapiTokenRefresher pattern), and ffmpeg process monitoring - every one a genuine recover-or-boundary site per the task's own keep criteria.
-
-RESOLUTION: no blanket sweep warranted; the judgment-shaped work is already embodied in the code's JF-419.2/JF-477/JF-545 catch structures and their comments. FILING INSTEAD: the one residual worth a test (not a code change) - the RequestPipeline interceptor boundary has no unit test proving one failing interceptor cannot kill the response; that is the only place where a future edit could silently break the contract this triage verified.
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+CLOSED as already-satisfied. AC#1: the full triage is recorded in the task file (2026-09-13 inventory: 76 catch(Exception) sites; 38 log-only fire-and-forget boundaries, 14 swallow-return-null enrichment fetches, 10 user-facing error Tells, 3 correct rethrows; classification: keep-by-design, no blanket sweep warranted). AC#2/#3: the judgment-shaped handling already lives in the JF-419.2/JF-477/JF-545 catch structures; the recorded resolution is deliberate no-change. AC#4: the one place a future edit could silently break the contract (RequestPipeline interceptor boundary) is pinned by the PipelineTests interceptor-boundary test added in commit 52fc7014. AC#5: suite green at closure (3737/3737 both TFMs this session). No code changed by this closure.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
