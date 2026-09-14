@@ -34,6 +34,43 @@ public class SmapiTokenRefresherTests : IDisposable
         SmapiDeviceToken = new DeviceToken("access-token-1", "refresh-token-1", "Bearer", 0),
     };
 
+    /// <summary>
+    /// JF-547: a 400 invalid_grant rejection classifies as PERMANENT.
+    /// </summary>
+    [Fact]
+    public async Task RefreshAsync_StillReturnsBool_OnPermanentFailure()
+    {
+        SetTestLwaCredentials();
+        var user = CreateUser();
+        LwaClient.HttpClientOverrideForTests = () =>
+            new HttpClient(new StatusHandlerWithBody(HttpStatusCode.BadRequest, "{\"error\":\"invalid_grant\"}"));
+
+        Assert.False(await SmapiTokenRefresher.RefreshAsync(user, NullLogger.Instance));
+    }
+
+    /// <summary>
+    /// JF-547: the pure classifier. PERMANENT only for invalid_grant/invalid_client
+    /// on HTTP 400; everything else is transient or not-a-rejection.
+    /// </summary>
+    [Theory]
+    [InlineData(400, "{\"error\":\"invalid_grant\"}", true)]
+    [InlineData(400, "{\"error\":\"invalid_client\"}", true)]
+    [InlineData(401, "{\"error\":\"invalid_client\"}", true)]
+    [InlineData(400, "{\"error\":\"invalid_client\"}", true)]
+    [InlineData(500, "{}", false)]
+    [InlineData(429, "{}", false)]
+    [InlineData(400, "{\"error\":\"something_else\"}", false)]
+    public void IsPermanentLwaFailure_Classifies(int? status, string body, bool expected)
+        => Assert.Equal(expected, SmapiTokenRefresher.IsPermanentLwaFailure(status, body));
+
+    [Fact]
+    public void IsPermanentLwaFailure_NullAndEmpty_AreNotPermanent()
+    {
+        Assert.False(SmapiTokenRefresher.IsPermanentLwaFailure(null, null));
+        Assert.False(SmapiTokenRefresher.IsPermanentLwaFailure(400, null));
+        Assert.False(SmapiTokenRefresher.IsPermanentLwaFailure(400, string.Empty));
+    }
+
     private sealed class ThrowingHandler : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -50,6 +87,24 @@ public class SmapiTokenRefresherTests : IDisposable
             => Task.FromResult(new HttpResponseMessage(_status)
             {
                 Content = new StringContent("{\"error\":\"invalid_grant\"}", Encoding.UTF8, "application/json")
+            });
+    }
+
+    private sealed class StatusHandlerWithBody : HttpMessageHandler
+    {
+        private readonly HttpStatusCode _status;
+        private readonly string _body;
+
+        public StatusHandlerWithBody(HttpStatusCode status, string body)
+        {
+            _status = status;
+            _body = body;
+        }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            => Task.FromResult(new HttpResponseMessage(_status)
+            {
+                Content = new StringContent(_body, Encoding.UTF8, "application/json")
             });
     }
 

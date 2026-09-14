@@ -207,8 +207,13 @@ public static class LwaClient
 
         if (!response.IsSuccessStatusCode)
         {
-            throw new HttpRequestException(
-                $"Token refresh failed with status {response.StatusCode}: {content}");
+            // JF-547: a typed exception carries the HTTP status so the refresher can
+            // classify permanent (invalid_grant/invalid_client, 4xx) vs transient
+            // (429/5xx) failures; a plain HttpRequestException loses that signal.
+            throw new LwaTokenRefreshException(
+                $"Token refresh failed with status {response.StatusCode}: {content}",
+                (int)response.StatusCode,
+                content);
         }
 
         Dictionary<string, string>? json = JsonConvert.DeserializeObject<Dictionary<string, string>>(content);
@@ -236,4 +241,32 @@ public static class LwaClient
 
         throw new JsonException("Could not parse token response: " + rawContent);
     }
+}
+
+/// <summary>
+/// JF-547: LWA token-refresh failure carrying the HTTP status code and response
+/// body, so callers can classify permanent failures (invalid_grant / invalid_client:
+/// the grant is dead, re-link required) from transient ones (429/5xx/network: retry
+/// later). Derives from HttpRequestException so existing catch sites keep compiling.
+/// </summary>
+public class LwaTokenRefreshException : HttpRequestException
+{
+    /// <summary>
+    /// Initializes a new instance of the <see cref="LwaTokenRefreshException"/> class
+    /// with the failing status and body. The base
+    /// <see cref="HttpRequestException.StatusCode"/> carries the HTTP status; the
+    /// body is kept here because the OAuth error code (invalid_grant, ...) lives
+    /// in it and classification depends on it.
+    /// </summary>
+    /// <param name="message">The full failure message.</param>
+    /// <param name="statusCode">The HTTP status code Amazon returned.</param>
+    /// <param name="body">The response body Amazon returned.</param>
+    public LwaTokenRefreshException(string message, int statusCode, string body)
+        : base(message, inner: null, statusCode: (System.Net.HttpStatusCode)statusCode)
+    {
+        Body = body ?? string.Empty;
+    }
+
+    /// <summary>Gets the response body Amazon returned (the OAuth error code lives here).</summary>
+    public string Body { get; }
 }

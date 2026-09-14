@@ -17,6 +17,107 @@ namespace Jellyfin.Plugin.AlexaSkill.Lwa;
 internal static class SmapiTokenRefresher
 {
     /// <summary>
+    /// Why a refresh failed (JF-547): restart recovery may de-auth the user only on
+    /// <see cref="Permanent"/>; transient network/HTTP failures keep the refresh
+    /// token alive so the next sweep retries.
+    /// </summary>
+    public enum RefreshOutcome
+    {
+        /// <summary>The refresh succeeded.</summary>
+        Success,
+
+        /// <summary>LWA credentials or the refresh token are missing: nothing to try.</summary>
+        NotConfigured,
+
+        /// <summary>Amazon rejected the grant/client: dead, re-link required.</summary>
+        Permanent,
+
+        /// <summary>Network/timeout/5xx: worth retrying on a later sweep.</summary>
+        Transient,
+    }
+
+    /// <summary>
+    /// JF-547: refresh with failure classification. Same contract as
+    /// <see cref="RefreshAsync"/>, but the outcome distinguishes PERMANENT failures
+    /// (Amazon rejected the grant or client: invalid_grant / invalid_client - the
+    /// refresh token is dead and only a re-link fixes it) from TRANSIENT ones
+    /// (network, 429, 5xx: a later sweep can succeed). Restart recovery de-auths
+    /// only on Permanent.
+    /// </summary>
+    public static async Task<(bool Success, RefreshOutcome Outcome)> TryRefreshAsync(
+        Entities.User user, ILogger logger)
+    {
+        var plugin = Plugin.Instance;
+        var config = plugin?.Configuration;
+        if (config == null
+            || string.IsNullOrWhiteSpace(config.LwaClientId)
+            || string.IsNullOrWhiteSpace(config.LwaClientSecret))
+        {
+            // Not-configured is permanent-ish (the operator must configure LWA) but
+            // it is NOT a dead grant: de-authing would not help and the next boot
+            // after configuration would recover, so classify it its own way and let
+            // callers treat it like the old false (they de-auth today; harmless).
+            logger.LogWarning("LWA credentials not configured; cannot refresh token for user {UserId}", user.Id);
+            return (false, RefreshOutcome.NotConfigured);
+        }
+
+        if (string.IsNullOrEmpty(user.SmapiRefreshToken))
+        {
+            logger.LogDebug("No refresh token for user {UserId}; cannot refresh", user.Id);
+            return (false, RefreshOutcome.NotConfigured);
+        }
+
+        DeviceToken tokenResult;
+        try
+        {
+            tokenResult = await LwaClient.RefreshDeviceToken(
+                new DeviceToken(user.SmapiRefreshToken, user.SmapiRefreshToken, "Bearer", 0),
+                config.LwaClientId,
+                config.LwaClientSecret).ConfigureAwait(false);
+        }
+        catch (Lwa.LwaTokenRefreshException ex) when (IsPermanentLwaFailure((int?)ex.StatusCode, ex.Body))
+        {
+            logger.LogWarning(
+                "Token refresh PERMANENTLY failed for user {UserId} ({Status}): the grant is dead, re-link required",
+                user.Id, ex.StatusCode);
+            return (false, RefreshOutcome.Permanent);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Token refresh transiently failed for user {UserId}; a later sweep can retry", user.Id);
+            return (false, RefreshOutcome.Transient);
+        }
+
+        user.SmapiDeviceToken = tokenResult;
+        user.SmapiRefreshToken = tokenResult.RefreshToken;
+
+        try
+        {
+            plugin!.SaveConfiguration();
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Token rotated for user {UserId} but persisting the config failed; continuing with the in-memory token", user.Id);
+        }
+
+        logger.LogDebug("Refreshed SMAPI token for user {UserId}", user.Id);
+        return (true, RefreshOutcome.Success);
+    }
+
+    /// <summary>
+    /// An LWA refresh rejection is PERMANENT only when Amazon says the grant or
+    /// client itself is invalid (invalid_grant / invalid_client, always HTTP 400);
+    /// everything else (429 throttling, 5xx) can succeed on a later attempt.
+    /// Pure so the classification is unit-testable without the HTTP seam.
+    /// </summary>
+    internal static bool IsPermanentLwaFailure(int? statusCode, string body)
+    {
+        _ = statusCode; // informational only: the OAuth error CODE is the signal
+        return (body ?? string.Empty).Contains("invalid_grant", StringComparison.OrdinalIgnoreCase)
+               || (body ?? string.Empty).Contains("invalid_client", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Refreshes the user's device token in place and persists the configuration.
     /// Returns false (with the reason logged at Debug/Warning) when LWA credentials
     /// or the refresh token are missing or the refresh call fails or throws; the

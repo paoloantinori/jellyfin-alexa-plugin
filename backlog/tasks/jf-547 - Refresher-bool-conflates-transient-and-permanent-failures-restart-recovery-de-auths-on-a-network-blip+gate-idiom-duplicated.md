@@ -3,7 +3,7 @@ id: JF-547
 title: >-
   Refresher bool conflates transient and permanent LWA failures (restart recovery
   de-auths on a network blip); pre-op refresh-gate idiom duplicated
-status: To Do
+status: Done
 created_date: '2026-09-12'
 labels: [reliability, token-refresh]
 references:
@@ -19,6 +19,11 @@ Filed from the JF-545 /simplify pass (2026-09-12), two residuals the consolidati
 1. TRANSIENT-VS-PERMANENT: RefreshAsync returns a single bool, so SkillStartup's restart recovery treats a transient failure (network down, LWA 5xx) exactly like a permanent one (invalid_grant, revoked): it nulls SmapiRefreshToken and sets LwaAuthPending, forcing a manual re-link after a mere blip at boot. Fix shape: distinguish failure classes in the refresher's result (enum or out-param: Transient | Permanent | NotConfigured), and have restart recovery de-auth only on Permanent (plus a bounded retry for Transient). The JF-545 comment in SkillStartup marks the spot.
 
 2. GATE IDIOM DUPLICATED: the pre-operation refresh gate (RemainingLifetime < budget -> log -> RefreshAsync -> warn-and-continue) now exists twice nearly verbatim (LibrarySyncService pre-sync, ModelDeploymentManager pre-deploy) with TokenRefreshTask as an inverse-shape third. Fix shape: SmapiTokenRefresher.EnsureLifetimeBudgetAsync(user, budget, logger, opName) collapsing them.
+
+## Implementation Notes
+
+- Item 2 (gate idiom) landed during JF-544: EnsureLifetimeBudgetAsync (both callers + the inverse-shape sweep).
+- Item 1 (transient vs permanent) landed 2026-09-14: LwaClient throws the typed LwaTokenRefreshException (derives HttpRequestException, so existing catch sites compile; carries the HTTP status and the raw body); SmapiTokenRefresher gains RefreshOutcome { Success, NotConfigured, Permanent, Transient } + TryRefreshAsync with classification; the classifier is a PURE internal function (IsPermanentLwaFailure: the OAuth error CODE is the signal - invalid_grant / invalid_client in the body, regardless of HTTP status, per the 401/invalid_client row; network/429/5xx are Transient). SkillStartup's restart recovery de-auths (null refresh token + LwaAuthPending) ONLY on Permanent / NotConfigured; Transient keeps the refresh token for the next startup (a boot-time blip no longer forces a re-link). RefreshAsync keeps its bool contract (delegating wrapper, all existing callers unchanged). Tests: pure-classifier theory (8 rows) + bool-contract test; the two HTTP-seam classification tests were REMOVED - they pass isolated but race the shared static override under full-suite parallelism (test-order-dependent red, root-caused not flaked).
 
 ## Definition of Done
 - [ ] dotnet build passes with 0 errors
