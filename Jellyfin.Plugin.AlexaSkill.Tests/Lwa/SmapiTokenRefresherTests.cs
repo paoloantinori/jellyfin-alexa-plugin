@@ -49,14 +49,13 @@ public class SmapiTokenRefresherTests : IDisposable
     }
 
     /// <summary>
-    /// JF-547: the pure classifier. PERMANENT only for invalid_grant/invalid_client
-    /// on HTTP 400; everything else is transient or not-a-rejection.
+    /// JF-547: the pure classifier. PERMANENT only for the OAuth dead-grant error
+    /// codes (invalid_grant / invalid_client); everything else is transient.
     /// </summary>
     [Theory]
     [InlineData(400, "{\"error\":\"invalid_grant\"}", true)]
     [InlineData(400, "{\"error\":\"invalid_client\"}", true)]
     [InlineData(401, "{\"error\":\"invalid_client\"}", true)]
-    [InlineData(400, "{\"error\":\"invalid_client\"}", true)]
     [InlineData(500, "{}", false)]
     [InlineData(429, "{}", false)]
     [InlineData(400, "{\"error\":\"something_else\"}", false)]
@@ -66,8 +65,8 @@ public class SmapiTokenRefresherTests : IDisposable
     [Fact]
     public void IsPermanentLwaFailure_NullAndEmpty_AreNotPermanent()
     {
-        Assert.False(SmapiTokenRefresher.IsPermanentLwaFailure(null, null));
-        Assert.False(SmapiTokenRefresher.IsPermanentLwaFailure(400, null));
+        Assert.False(SmapiTokenRefresher.IsPermanentLwaFailure(null, null!));
+        Assert.False(SmapiTokenRefresher.IsPermanentLwaFailure(400, null!));
         Assert.False(SmapiTokenRefresher.IsPermanentLwaFailure(400, string.Empty));
     }
 
