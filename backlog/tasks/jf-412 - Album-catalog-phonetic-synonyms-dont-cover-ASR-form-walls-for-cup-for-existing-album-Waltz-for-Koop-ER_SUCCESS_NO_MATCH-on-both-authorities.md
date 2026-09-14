@@ -3,10 +3,10 @@ id: JF-412
 title: >-
   Album catalog phonetic synonyms don't cover ASR form "walls for cup" for
   existing album "Waltz for Koop" (ER_SUCCESS_NO_MATCH on both authorities)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-08-28 15:38'
-updated_date: '2026-09-14 18:28'
+updated_date: '2026-09-14 19:35'
 labels: []
 dependencies: []
 priority: medium
@@ -36,7 +36,15 @@ INVESTIGATION RESULT (AC #1): the gap is STRUCTURAL, not a rule miss. Empirical 
 RECOMMENDED FIX DIRECTION (not implemented this session, needs its own change): album-side phonetic matching in the PlayAlbum fuzzy fallback, mirroring the song pipeline (ScoreWithPhoneticFallback / Double Metaphone): 'cup' and 'Koop' both code KP, 'waltz'/'walls' share the vowel+final-s skeleton. The JF-336 comment already anticipates this ('true phonetic matching would need a precomputed album index, cf. ArtistIndexService'). A bounded album-set phonetic rescore would be smaller than a full index. Extending the synonym generators with ASR-drift rules was evaluated and rejected: whack-a-mole, violates the coverage-vs-precision architecture by chasing transcription noise.
 
 With JF-408's length floor deployed, the catastrophic outcome of this gap (auto-playing 'O') is already mitigated: the miss now falls through to a clean not-found instead of a wrong play. The catalog gap therefore only costs recall (Koop album not reachable by voice in that ASR shape), no longer correctness.
+
+2026-09-14 20:20 implemented + live-verified. NOTE (operational, refined understanding of the hot-swap token family): after a DLL hot-swap + restart, the FIRST simulator call can return the 'collegamento con il tuo server Jellyfin non funziona piu' speech even with JellyfinToken intact on disk; it self-heals within ~2 minutes (startup completing) with NO re-link needed. Today's sequence: same message after the SSML-revert deploy, then Paolo's real invocations worked minutes later; same again tonight, retry after 60s worked. Wait-and-retry before diagnosing a dead link after a deploy.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+CLOSED fixed and live-verified (2026-09-14 evening). Root cause (AC#1, investigation from 2026-08-28 confirmed): the fuzzy album tier aborted WHOLE on an embedded-containment winner; the 2026-09-14 live replay showed the real catalog ranks the degenerate album "O" FIRST at 90 for "walls for cup" (JF-408/478 class, correctly refused) shadowing "Waltz for Koop"/"The Hill for Company" at 61. Fix: BaseHandler.FindBestNonEmbeddedMatch walks FindBestMatchWithScore skipping embedded winners, first eligible above the caller's threshold plays; both album fuzzy paths rewired (direct PlayAlbum threshold 60: incident recovered; cascade stays 90 by design, pinned by test). AC#2: covered query-side (the catalog payload intentionally unchanged; the ASR-drift form "walls for cup" is not enumerable in synonyms, that conclusion stands). AC#3: documented - not a generator-rule miss nor a cap issue; the query-side fuzzy+phonetic layer is the sanctioned fix. AC#4: no slot-type change. Tests: live-shape replay ([O + Waltz] -> plays Waltz), cascade 61-refusal pin, JF-408/478 negatives still green; suite 3737/3738-class green both TFMs (final 3737/3737+2 var by fixture count), Release 0 warnings. Live verify: simulator PlayAlbumIntent album="walls for cup" on the real library -> "Ho trovato l'album The Hill for Company." + AudioPlayer.Play. Deployed (md5 df315867...). Gates: 4-agent simplify + opus code-review CLEAN. Residual: the 61-tie between Hill and Waltz resolves by catalog order (JF-341 class); the announcement names the choice.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
