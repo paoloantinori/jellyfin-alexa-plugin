@@ -3,10 +3,10 @@ id: JF-536
 title: >-
   Consolidate prewritten event-playlist mechanism across HLS paths (shared
   writer core, prewrite in pin window, evaluate remaining paths)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-10 06:51'
-updated_date: '2026-09-10 07:18'
+updated_date: '2026-09-14 22:44'
 labels:
   - refactor
   - hls

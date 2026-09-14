@@ -96,6 +96,16 @@ public class VideoAudioCache
     /// </summary>
     public void Pin(string path) => _pinnedPaths.AddOrUpdate(path, 1, (_, count) => count + 1);
 
+    /// <summary>
+    /// Internal test seam (InternalsVisibleTo): whether <paramref name="path"/> holds
+    /// at least one <see cref="Pin"/> right now. Lets controller-level tests prove a
+    /// newly written file landed INSIDE the pin window (the JF-428/JF-536 ordering:
+    /// the pre-written playlist must never exist unpinned while its encode runs).
+    /// </summary>
+    /// <param name="path">The cache entry path (file or HLS directory).</param>
+    /// <returns>True while any pin is held.</returns>
+    internal bool IsPinned(string path) => _pinnedPaths.ContainsKey(path);
+
     /// <summary>Release one pin taken by <see cref="Pin"/>; the entry becomes evictable when the last pin is released. Unpinning a path that was never pinned is a no-op.</summary>
     public void Unpin(string path)
     {

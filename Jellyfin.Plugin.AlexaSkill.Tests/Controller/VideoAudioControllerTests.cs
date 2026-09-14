@@ -1207,6 +1207,49 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
+    /// JF-536 (on the JF-503 hold): the SINGLE-ITEM path's active-encode flag now
+    /// drives the same hold. The pre-JF-536 exclusion rationale (no flag, live
+    /// playlist only, seconds-long encode) died with the prewrite: the pre-written
+    /// listing lists every segment from first play, and the single-chapter
+    /// audiobooks this path serves encode for minutes, so a seek just past the
+    /// running encode's head must be smoothed exactly like the twins'.
+    /// </summary>
+    [Fact]
+    public async Task GetSegment_NearAheadMiss_ActiveSingleItemEncode_HoldsUntilSegmentAppears()
+    {
+        Guid itemId = Guid.NewGuid();
+        string itemIdStr = itemId.ToString("D");
+
+        string hlsDir = _cache.GetHlsDirectoryPath(itemIdStr, 0);
+        Directory.CreateDirectory(hlsDir);
+        await File.WriteAllTextAsync(Path.Combine(hlsDir, "seg_000.ts"), new string('x', 1024));
+        _cache.RegisterHlsDirectory(itemIdStr, 0);
+
+        VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: true, song: true);
+
+        var controller = CreateController(itemIdStr);
+        controller.SegmentHoldBudget = TimeSpan.FromSeconds(5);
+        controller.SegmentHoldPollInterval = TimeSpan.FromMilliseconds(20);
+
+        string targetPath = Path.Combine(hlsDir, "seg_001.ts");
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(100);
+            await File.WriteAllTextAsync(targetPath, new string('x', 512));
+            await File.WriteAllTextAsync(
+                Path.Combine(hlsDir, "stream.m3u8"),
+                "#EXTM3U\n#EXTINF:4.000,\nseg_001.ts\n");
+        });
+
+        ActionResult result = await controller.GetSegment(itemIdStr, "seg_001.ts");
+
+        var physicalResult = Assert.IsType<PhysicalFileResult>(result);
+        Assert.Equal(targetPath, physicalResult.FileName);
+
+        VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: false, song: true);
+    }
+
+    /// <summary>
     /// JF-503 observability: every GetSegment miss logs at Debug with the requested
     /// segment name and the highest existing segment number, so a device session can
     /// confirm the seek-head mechanism from the logs.
@@ -3505,6 +3548,496 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
         Assert.IsType<ContentResult>(result);
         Assert.False(File.Exists(staleListing), "a stale pre-written listing must not survive a no-runtime encode start");
+    }
+
+    // ========== JF-536: shared prewritten-playlist writer core + pin-window prewrite ==========
+
+    /// <summary>
+    /// JF-536 scope (a): the shared writer core emits the event-playlist header with
+    /// the caller's TARGETDURATION, token-suffixed segment URLs in the caller's
+    /// index-width naming, invariant-culture EXTINF durations, and NO ENDLIST; the
+    /// per-segment discontinuity flag is honored per entry.
+    /// </summary>
+    [Fact]
+    public void WritePrewrittenEventPlaylist_ParameterizedAxes_EmitExactLines()
+    {
+        string continuous = Path.Combine(_tempDir, "core-continuous.m3u8");
+        VideoAudioController.WritePrewrittenEventPlaylist(
+            continuous, "/alexaskill/api/video-audio/ITEM/segments/", new[] { 4.5 }, 6, 3, false, "tok7");
+
+        string content = File.ReadAllText(continuous);
+        string[] lines = content.Split('\n');
+        Assert.Equal("#EXTM3U", lines[0]);
+        Assert.Equal("#EXT-X-VERSION:3", lines[1]);
+        Assert.Equal("#EXT-X-TARGETDURATION:6", lines[2]);
+        Assert.Equal("#EXT-X-MEDIA-SEQUENCE:0", lines[3]);
+        Assert.Equal("#EXTINF:4.500000,", lines[4]);
+        Assert.Equal("/alexaskill/api/video-audio/ITEM/segments/seg_000.ts?token=tok7", lines[5]);
+        Assert.DoesNotContain("#EXT-X-ENDLIST", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("#EXT-X-DISCONTINUITY", content, StringComparison.Ordinal);
+
+        // The audiobook axis: a discontinuity before EVERY segment (chapter-file
+        // boundaries), 4-digit naming, no token means no suffix.
+        string chaptered = Path.Combine(_tempDir, "core-chaptered.m3u8");
+        VideoAudioController.WritePrewrittenEventPlaylist(
+            chaptered, "/base/", new[] { 10.0, 10.0 }, 10, 4, true, null);
+
+        string chapteredContent = File.ReadAllText(chaptered);
+        Assert.Equal(2, chapteredContent.Split("#EXT-X-DISCONTINUITY").Length - 1);
+        Assert.Contains("/base/seg_0000.ts\n", chapteredContent, StringComparison.Ordinal);
+        Assert.Contains("/base/seg_0001.ts\n", chapteredContent, StringComparison.Ordinal);
+        Assert.DoesNotContain("?token=", chapteredContent, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-536 scope (a): the index-width parameter is a MINIMUM width, matching
+    /// ffmpeg's <c>%03d</c> semantics: past the 3-digit cap the index renders wider
+    /// (seg_1000), and IsValidSegmentName accepts both widths, so the single-item
+    /// path's hours-long single-chapter audiobooks keep a servable listing.
+    /// </summary>
+    [Fact]
+    public void WritePrewrittenEventPlaylist_IndexWidthIsMinimum_PastCapRendersWider()
+    {
+        string playlistPath = Path.Combine(_tempDir, "core-index-width.m3u8");
+        VideoAudioController.WritePrewrittenEventPlaylist(
+            playlistPath, "/base/", Enumerable.Repeat(1.0, 1001).ToArray(), 1, 3, false, null);
+
+        string content = File.ReadAllText(playlistPath);
+        Assert.Contains("/base/seg_000.ts\n", content, StringComparison.Ordinal);
+        Assert.Contains("/base/seg_999.ts\n", content, StringComparison.Ordinal);
+        Assert.Contains("/base/seg_1000.ts\n", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("seg_0999.ts", content, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-536 (carrying JF-531's invariant-culture review nit to the audiobook twin
+    /// through the shared core): EXTINF durations must format INVARIANT even under a
+    /// comma-decimal host culture. The pre-core writer interpolated {duration:F6}
+    /// with the current culture, which on an it-IT host rendered "9,250000," and HLS
+    /// parsers read the duration as 9.
+    /// </summary>
+    [Fact]
+    public void WriteAudiobookPlaylist_CommaDecimalHostCulture_ExtInfStaysInvariant()
+    {
+        var originalCulture = System.Globalization.CultureInfo.CurrentCulture;
+        System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("it-IT");
+        try
+        {
+            string playlistPath = Path.Combine(_tempDir, "audiobook-culture.m3u8");
+            var chapters = new List<MediaBrowser.Controller.Entities.BaseItem>
+            {
+                new MediaBrowser.Controller.Entities.Audio.Audio { RunTimeTicks = TimeSpan.FromSeconds(83.25).Ticks }
+            };
+            VideoAudioController.WriteAudiobookPlaylist(playlistPath, "/base/", chapters, token: null);
+
+            string content = File.ReadAllText(playlistPath);
+            string[] extInfLines = content.Split('\n')
+                .Where(l => l.StartsWith("#EXTINF:", StringComparison.Ordinal))
+                .ToArray();
+
+            // ceil(83.25/10) segments, each a dot-decimal F6 duration (no comma anywhere
+            // inside the numeric field; the trailing list separator is the only comma).
+            Assert.Equal(9, extInfLines.Length);
+            Assert.All(extInfLines, l => Assert.Matches(@"^#EXTINF:\d+\.\d+,", l));
+
+            double totalSeconds = extInfLines.Sum(l =>
+                double.Parse(l["#EXTINF:".Length..].TrimEnd(','), System.Globalization.CultureInfo.InvariantCulture));
+            Assert.Equal(83.25, totalSeconds, 6);
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = originalCulture;
+        }
+    }
+
+    /// <summary>
+    /// JF-536 scope (a), audiobook wrapper: per-chapter splitting (each chapter
+    /// ceil-split into 10s segments carrying an equal share), a DISCONTINUITY per
+    /// segment, 4-digit names, the 250s fallback for chapters without a runtime,
+    /// and no ENDLIST.
+    /// </summary>
+    [Fact]
+    public void WriteAudiobookPlaylist_PerChapterSplit_DiscontinuityPerSegment()
+    {
+        string playlistPath = Path.Combine(_tempDir, "audiobook-split.m3u8");
+        var chapters = new List<MediaBrowser.Controller.Entities.BaseItem>
+        {
+            new MediaBrowser.Controller.Entities.Audio.Audio { RunTimeTicks = TimeSpan.FromSeconds(83.25).Ticks },
+            new MediaBrowser.Controller.Entities.Audio.Audio { RunTimeTicks = TimeSpan.FromSeconds(100).Ticks },
+            new MediaBrowser.Controller.Entities.Audio.Audio { RunTimeTicks = null }
+        };
+
+        VideoAudioController.WriteAudiobookPlaylist(playlistPath, "/base/", chapters, "tk");
+
+        string content = File.ReadAllText(playlistPath);
+        string[] extInfLines = content.Split('\n')
+            .Where(l => l.StartsWith("#EXTINF:", StringComparison.Ordinal))
+            .ToArray();
+
+        // ceil(83.25/10)=9, ceil(100/10)=10, the null-runtime fallback 250s -> 25.
+        int expectedSegments = 9 + 10 + 25;
+        Assert.Equal(expectedSegments, extInfLines.Length);
+        Assert.Equal(expectedSegments, content.Split("#EXT-X-DISCONTINUITY").Length - 1);
+        Assert.Contains("#EXT-X-TARGETDURATION:10", content, StringComparison.Ordinal);
+        Assert.Contains("/base/seg_0000.ts?token=tk", content, StringComparison.Ordinal);
+        Assert.Contains($"/base/seg_{expectedSegments - 1:D4}.ts?token=tk", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("#EXT-X-ENDLIST", content, StringComparison.Ordinal);
+
+        double totalSeconds = extInfLines.Sum(l =>
+            double.Parse(l["#EXTINF:".Length..].TrimEnd(','), System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal(83.25 + 100.0 + 250.0, totalSeconds, 6);
+    }
+
+    /// <summary>
+    /// JF-536 scope (c) unit level: the single-item writer (songs + the
+    /// single-chapter audiobooks redirected from the audiobook endpoint) lists
+    /// ceil(runtime/4s) segments in the path's 3-digit naming with a 4s
+    /// TARGETDURATION and no ENDLIST or discontinuities.
+    /// </summary>
+    [Fact]
+    public void WriteVideoAudioPlaylist_FullListing_ThreeDigitNames_SumsToRuntime()
+    {
+        string playlistPath = Path.Combine(_tempDir, "videoaudio-listing.m3u8");
+
+        VideoAudioController.WriteVideoAudioPlaylist(
+            playlistPath, "/alexaskill/api/video-audio/ITEM/segments/", TimeSpan.FromMinutes(45).Ticks, "tk");
+
+        string content = File.ReadAllText(playlistPath);
+        Assert.Contains("#EXT-X-TARGETDURATION:4", content, StringComparison.Ordinal);
+        Assert.Contains("/alexaskill/api/video-audio/ITEM/segments/seg_000.ts?token=tk", content, StringComparison.Ordinal);
+        Assert.Contains("/alexaskill/api/video-audio/ITEM/segments/seg_674.ts?token=tk", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("seg_675", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("#EXT-X-ENDLIST", content, StringComparison.Ordinal);
+        Assert.DoesNotContain("#EXT-X-DISCONTINUITY", content, StringComparison.Ordinal);
+        Assert.Equal(675, VideoAudioController.CountSegmentsInPlaylist(content));
+    }
+
+    /// <summary>
+    /// JF-536 scope (c) endpoint level: on a cache miss the single-item path's FIRST
+    /// serve returns the pre-written FULL listing, not ffmpeg's growing stream.m3u8
+    /// (the live-edge shape the same VideoApp/ExoPlayer consumer showed on the
+    /// episode path, 2026-09-09 corr=c0c21c6a). The runtime here is the long tail
+    /// this path exists to fix: single-chapter-audiobook length.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsVideoAudio_CacheMiss_ServesPrewrittenFullListingNotLiveEdge()
+    {
+        var audioItem = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Long Single Chapter",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromMinutes(45).Ticks
+        };
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(audioItem.Id)).Returns(audioItem);
+
+        string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-jf536-song",
+            "for playlist_path in \"$@\"; do :; done\n" +
+            "playlist_dir=\"$(dirname \"$playlist_path\")\"\n" +
+            "mkdir -p \"$playlist_dir\"\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$playlist_dir/seg_000.ts\" 2>/dev/null\n" +
+            "echo '#EXTM3U' > \"$playlist_path\"\n" +
+            "echo '#EXT-X-VERSION:3' >> \"$playlist_path\"\n" +
+            "echo '#EXTINF:4.000,' >> \"$playlist_path\"\n" +
+            "echo 'seg_000.ts' >> \"$playlist_path\"\n" +
+            "exit 0\n");
+
+        var controller = CreateController(audioItem.Id.ToString(), ffmpegPath: fakeFfmpegPath);
+
+        ActionResult result = await controller.StreamHlsVideoAudio(audioItem.Id.ToString());
+
+        var content = Assert.IsType<ContentResult>(result);
+        Assert.Equal("application/vnd.apple.mpegurl", content.ContentType);
+        Assert.DoesNotContain("#EXT-X-ENDLIST", content.Content, StringComparison.Ordinal);
+        Assert.Contains("seg_000.ts?token=", content.Content, StringComparison.Ordinal);
+        Assert.Contains("seg_674.ts?token=", content.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("seg_675", content.Content, StringComparison.Ordinal);
+        Assert.Equal(675, VideoAudioController.CountSegmentsInPlaylist(content.Content));
+
+        // The pre-written file exists next to ffmpeg's own target, which ffmpeg
+        // still owns (the prewrite never feeds ffmpeg's file).
+        string hlsDir = _cache.GetHlsDirectoryPath(audioItem.Id.ToString(), 0);
+        Assert.True(File.Exists(Path.Combine(hlsDir, "playlist-full.m3u8")), "pre-written listing must exist");
+        Assert.True(File.Exists(Path.Combine(hlsDir, "stream.m3u8")), "ffmpeg keeps writing its own playlist");
+    }
+
+    /// <summary>
+    /// JF-536: once the encode completed (no active flag), the served playlist is
+    /// ffmpeg's COMPLETE one; the pre-written listing that stays on disk must not
+    /// shadow it (the active-flag gate on the pre-written serve path).
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsVideoAudio_EncodeCompleted_ServesEndlistPlaylistNotStalePrewritten()
+    {
+        Guid itemId = Guid.NewGuid();
+        var audioItem = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Done Song",
+            Id = itemId,
+            RunTimeTicks = TimeSpan.FromMinutes(45).Ticks
+        };
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(itemId)).Returns(audioItem);
+
+        // A completed encode leaves BOTH files behind: ffmpeg's ENDLIST playlist and
+        // the pre-written listing (never deleted post-encode, like the twins).
+        string hlsDir = _cache.GetHlsDirectoryPath(itemId.ToString(), 0);
+        Directory.CreateDirectory(hlsDir);
+        await File.WriteAllTextAsync(
+            Path.Combine(hlsDir, "stream.m3u8"),
+            "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:4.000,\nseg_000.ts\n#EXTINF:4.000,\nseg_001.ts\n#EXT-X-ENDLIST\n");
+        VideoAudioController.WriteVideoAudioPlaylist(
+            Path.Combine(hlsDir, "playlist-full.m3u8"),
+            $"/alexaskill/api/video-audio/{itemId}/segments/",
+            TimeSpan.FromMinutes(45).Ticks,
+            token: null);
+
+        var controller = CreateController(itemId.ToString(), ffmpegPath: WriteFakeFfmpeg("fake-ffmpeg-jf536-done", "exit 0\n"));
+
+        ActionResult result = await controller.StreamHlsVideoAudio(itemId.ToString());
+
+        var content = Assert.IsType<ContentResult>(result);
+        Assert.Contains("#EXT-X-ENDLIST", content.Content, StringComparison.Ordinal);
+        Assert.Contains("seg_001.ts?token=", content.Content, StringComparison.Ordinal);
+
+        // NOT the pre-written full listing (its exclusive tail segment is absent).
+        Assert.DoesNotContain("seg_674", content.Content, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-536 mid-encode fetch: while the encode flag is up, a playlist re-fetch (the
+    /// player polls an event playlist) returns the stable full pre-written listing,
+    /// which still includes the segments ffmpeg has already appended to its live one.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsVideoAudio_ActiveEncode_MidEncodeFetchServesStableFullListing()
+    {
+        Guid itemId = Guid.NewGuid();
+        var audioItem = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Encoding Song",
+            Id = itemId,
+            RunTimeTicks = TimeSpan.FromMinutes(45).Ticks
+        };
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(itemId)).Returns(audioItem);
+
+        string hlsDir = _cache.GetHlsDirectoryPath(itemId.ToString(), 0);
+        Directory.CreateDirectory(hlsDir);
+
+        // ffmpeg's live playlist has appended two segments so far.
+        await File.WriteAllTextAsync(
+            Path.Combine(hlsDir, "stream.m3u8"),
+            "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:4.000,\nseg_000.ts\n#EXTINF:4.000,\nseg_001.ts\n");
+        VideoAudioController.WriteVideoAudioPlaylist(
+            Path.Combine(hlsDir, "playlist-full.m3u8"),
+            $"/alexaskill/api/video-audio/{itemId}/segments/",
+            TimeSpan.FromMinutes(45).Ticks,
+            token: null);
+
+        VideoAudioController.SetEncodeActiveForTest(itemId.ToString(), active: true, song: true);
+        try
+        {
+            var controller = CreateController(itemId.ToString(), ffmpegPath: WriteFakeFfmpeg("fake-ffmpeg-jf536-midencode", "exit 0\n"));
+
+            ActionResult result = await controller.StreamHlsVideoAudio(itemId.ToString());
+
+            var content = Assert.IsType<ContentResult>(result);
+            Assert.Contains("seg_000.ts?token=", content.Content, StringComparison.Ordinal);
+            Assert.Contains("seg_001.ts?token=", content.Content, StringComparison.Ordinal);
+            Assert.Contains("seg_674.ts?token=", content.Content, StringComparison.Ordinal);
+            Assert.DoesNotContain("#EXT-X-ENDLIST", content.Content, StringComparison.Ordinal);
+        }
+        finally
+        {
+            VideoAudioController.SetEncodeActiveForTest(itemId.ToString(), active: false, song: true);
+        }
+    }
+
+    /// <summary>
+    /// JF-536 fallback: an item with no runtime cannot have an honest full listing;
+    /// the first serve falls back to ffmpeg's live playlist (the pre-JF-536
+    /// behavior) and no pre-written file is left for the active-encode guard to serve.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsVideoAudio_NoRuntime_ServesLivePlaylistAndWritesNoPrewrittenFile()
+    {
+        var audioItem = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Unprobed Song",
+            Id = Guid.NewGuid()
+        };
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(audioItem.Id)).Returns(audioItem);
+
+        string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-jf536-noruntime",
+            "for playlist_path in \"$@\"; do :; done\n" +
+            "playlist_dir=\"$(dirname \"$playlist_path\")\"\n" +
+            "mkdir -p \"$playlist_dir\"\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$playlist_dir/seg_000.ts\" 2>/dev/null\n" +
+            "echo '#EXTM3U' > \"$playlist_path\"\n" +
+            "echo '#EXTINF:4.000,' >> \"$playlist_path\"\n" +
+            "echo 'seg_000.ts' >> \"$playlist_path\"\n" +
+            "exit 0\n");
+
+        var controller = CreateController(audioItem.Id.ToString(), ffmpegPath: fakeFfmpegPath);
+
+        ActionResult result = await controller.StreamHlsVideoAudio(audioItem.Id.ToString());
+
+        // ffmpeg's own (partial) playlist is served, not a full listing.
+        var content = Assert.IsType<ContentResult>(result);
+        Assert.Contains("seg_000.ts?token=", content.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("seg_674", content.Content, StringComparison.Ordinal);
+
+        string hlsDir = _cache.GetHlsDirectoryPath(audioItem.Id.ToString(), 0);
+        Assert.False(File.Exists(Path.Combine(hlsDir, "playlist-full.m3u8")), "no pre-written listing without a runtime");
+    }
+
+    /// <summary>
+    /// JF-536 scope (d) machinery: hold the ONLY encode-gate slot so the endpoint
+    /// parks inside StartFfmpegProcessGatedAsync AFTER its Pin but BEFORE the
+    /// process starts, then prove the pre-written listing is absent while parked. A
+    /// prewrite emitted before the gated call would be on disk there, exposed to a
+    /// concurrent eviction sweep: the JF-428 creation-to-pin class this task closes.
+    /// <paramref name="play"/> must invoke a controller constructed BEFORE this
+    /// helper narrows the gate (the ctor re-applies the configured capacity).
+    /// </summary>
+    private async Task AssertPrewriteInsidePinWindow(Func<Task<ActionResult>> play, string hlsDir, string prewrittenPath)
+    {
+        VideoAudioController.UpdateEncodeGateCapacity(1);
+        var gate = GateField();
+        await gate.WaitAsync();
+        Task<ActionResult> request = Task.Run(play);
+        try
+        {
+            Assert.True(
+                await WaitUntilAsync(() => _cache.IsPinned(hlsDir), TimeSpan.FromSeconds(10)),
+                "the parked request must have pinned its HLS directory");
+            Assert.False(
+                File.Exists(prewrittenPath),
+                "pre-written listing must not exist before the pin: a concurrent eviction sweep could delete it (JF-428/JF-536)");
+        }
+        finally
+        {
+            // A gate swap mid-test (a controller constructed under a different config
+            // re-applies the configured capacity in its ctor) would silently un-park
+            // the request and turn the assertion above into a race; fail loudly.
+            Assert.Same(gate, GateField());
+            gate.Release();
+            VideoAudioController.UpdateEncodeGateCapacity(2); // restore default
+
+            // The endpoint's own waits are bounded (~20s first-segment poll); cap the
+            // completion so a deadlock fails the test instead of hanging the suite.
+            Task completed = await Task.WhenAny(request, Task.Delay(TimeSpan.FromSeconds(60)));
+            Assert.True(ReferenceEquals(request, completed), "the parked request must complete once the gate frees");
+            ActionResult served = await request;
+            Assert.IsType<ContentResult>(served);
+        }
+
+        Assert.True(File.Exists(prewrittenPath), "the pre-written listing must land once the encode starts");
+    }
+
+    /// <summary>
+    /// JF-536 scope (d), episode path: the pre-write of the full listing happens
+    /// INSIDE the JF-428 pin window (after StartFfmpegProcessGatedAsync pinned the
+    /// HLS directory), never before it.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_PrewriteLandsInsidePinWindow_AfterThePin()
+    {
+        var (episode, mediaSourceManager) = SetupEpisodeForHls("Pin Window S01E01", "h264", TimeSpan.FromMinutes(45));
+        var controller = CreateController(
+            episode.Id.ToString(), null, mediaSourceManager, WriteRecordingFakeFfmpeg("fake-ffmpeg-jf536-pin-episode"));
+
+        string hlsDir = _cache.GetHlsDirectoryPath(episode.Id.ToString(), 0);
+        await AssertPrewriteInsidePinWindow(
+            () => controller.StreamHlsEpisode(episode.Id.ToString()),
+            hlsDir,
+            Path.Combine(hlsDir, "playlist-full.m3u8"));
+    }
+
+    /// <summary>
+    /// JF-536 scope (d), audiobook path: same pin-window invariant on the original
+    /// prewriting path (its prewrite used to sit before the gated call entirely).
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_PrewriteLandsInsidePinWindow_AfterThePin()
+    {
+        Guid parentId = Guid.NewGuid();
+        var parentItem = new MediaBrowser.Controller.Entities.Folder
+        {
+            Name = "Pin Window Book",
+            Id = parentId
+        };
+        var chapter1 = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Chapter 1",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromSeconds(83.25).Ticks
+        };
+        var chapter2 = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Chapter 2",
+            Id = Guid.NewGuid()
+        };
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns(parentItem);
+        _libraryManagerMock.Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Returns(new List<MediaBrowser.Controller.Entities.BaseItem> { chapter1, chapter2 });
+
+        string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-jf536-pin-book",
+            "for playlist_path in \"$@\"; do :; done\n" +
+            "playlist_dir=\"$(dirname \"$playlist_path\")\"\n" +
+            "mkdir -p \"$playlist_dir\"\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$playlist_dir/seg_0000.ts\" 2>/dev/null\n" +
+            "echo '#EXTM3U' > \"$playlist_path\"\n" +
+            "echo '#EXTINF:10.000,' >> \"$playlist_path\"\n" +
+            "echo 'seg_0000.ts' >> \"$playlist_path\"\n" +
+            "exit 0\n");
+
+        var controller = CreateController(parentId.ToString(), ffmpegPath: fakeFfmpegPath);
+
+        string hlsDir = _cache.GetHlsDirectoryPath(parentId.ToString(), 0);
+        await AssertPrewriteInsidePinWindow(
+            () => controller.StreamHlsAudiobook(parentId.ToString()),
+            hlsDir,
+            Path.Combine(hlsDir, "playlist-full.m3u8"));
+    }
+
+    /// <summary>
+    /// JF-536 scope (c)+(d), single-item path: the NEW prewrite honors the same
+    /// pin-window invariant it was born with.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsVideoAudio_PrewriteLandsInsidePinWindow_AfterThePin()
+    {
+        var audioItem = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Pin Window Song",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromMinutes(45).Ticks
+        };
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(audioItem.Id)).Returns(audioItem);
+
+        string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-jf536-pin-song",
+            "for playlist_path in \"$@\"; do :; done\n" +
+            "playlist_dir=\"$(dirname \"$playlist_path\")\"\n" +
+            "mkdir -p \"$playlist_dir\"\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$playlist_dir/seg_000.ts\" 2>/dev/null\n" +
+            "echo '#EXTM3U' > \"$playlist_path\"\n" +
+            "echo '#EXTINF:4.000,' >> \"$playlist_path\"\n" +
+            "echo 'seg_000.ts' >> \"$playlist_path\"\n" +
+            "exit 0\n");
+
+        var controller = CreateController(audioItem.Id.ToString(), ffmpegPath: fakeFfmpegPath);
+
+        string hlsDir = _cache.GetHlsDirectoryPath(audioItem.Id.ToString(), 0);
+        await AssertPrewriteInsidePinWindow(
+            () => controller.StreamHlsVideoAudio(audioItem.Id.ToString()),
+            hlsDir,
+            Path.Combine(hlsDir, "playlist-full.m3u8"));
     }
 
     // ========== JF-515: ffmpeg stderr aggregating drain ==========

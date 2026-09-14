@@ -19,6 +19,10 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 /// </summary>
 public sealed class AudiobookPositionTracker : IDisposable
 {
+    // LOAD-BEARING COUPLING: must move together with the controller's
+    // AudiobookHlsSegmentSeconds and the -hls_time 10 literal in
+    // BuildHlsAudiobookFfmpegArguments (the resume arithmetic assumes the segment
+    // length ffmpeg actually cut audiobook segments at).
     private const int SegmentDurationSeconds = 10;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
