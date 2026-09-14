@@ -2896,7 +2896,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     private static async Task AssertTranscodeSlotReleasedAsync()
     {
         Assert.True(
-            await WaitUntilAsync(() => VideoAudioController.EpisodeTranscodeSlotFree).ConfigureAwait(false),
+            await WaitUntilAsync(() => VideoAudioController.EpisodeTranscodeSlotFree),
             "episode transcode slot was not released after the encodes exited");
     }
 
@@ -3590,5 +3590,478 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     {
         using var process = new Process();
         Assert.Throws<InvalidOperationException>(() => VideoAudioController.SafeExitCode(process));
+    }
+
+    // ========== JF-499: episode HLS lifecycle watch items ==========
+
+    // ---- W1: restart-safe position-tracking gate ----
+
+    /// <summary>
+    /// JF-499 W1: segment fetches keyed by a FOLDER (the audiobook-parent shape the
+    /// resume path reads via GetPositionTicks) still grow the tracker.
+    /// </summary>
+    [Fact]
+    public async Task GetSegment_FolderBackedItem_RecordsPositionTracking()
+    {
+        Guid bookId = Guid.NewGuid();
+        string bookIdStr = bookId.ToString("D");
+        var folder = new MediaBrowser.Controller.Entities.Folder
+        {
+            Name = "A Book",
+            Id = bookId
+        };
+        _libraryManagerMock.Setup(m => m.GetItemById(bookId)).Returns(folder);
+
+        string hlsDir = _cache.GetHlsDirectoryPath(bookIdStr, 0);
+        Directory.CreateDirectory(hlsDir);
+        await File.WriteAllTextAsync(Path.Combine(hlsDir, "seg_0005.ts"), new string('x', 512));
+        _cache.RegisterHlsDirectory(bookIdStr, 0);
+
+        var tracker = new Jellyfin.Plugin.AlexaSkill.Alexa.Playback.AudiobookPositionTracker(
+            CreateRegisteredTempDir("jf499-tracker-folder"),
+            _loggerFactory.CreateLogger<Jellyfin.Plugin.AlexaSkill.Alexa.Playback.AudiobookPositionTracker>());
+        Plugin.Instance!.AudiobookPositionTracker = tracker;
+        try
+        {
+            var controller = CreateController(bookIdStr);
+
+            ActionResult result = await controller.GetSegment(bookIdStr, "seg_0005.ts");
+
+            Assert.IsType<PhysicalFileResult>(result);
+            // The tracker's conservative resume position: (highWaterMark - 1) * 10s.
+            Assert.Equal(4 * 10 * TimeSpan.TicksPerSecond, tracker.GetPositionTicks(bookIdStr));
+        }
+        finally
+        {
+            Plugin.Instance.AudiobookPositionTracker = null;
+            tracker.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// JF-499 W1: after a restart (no encode ever started in this process, so the
+    /// retired process-static skip would be empty), an EPISODE's cached-segment
+    /// fetches must NOT grow the tracker: the gate derives episode-ness from the
+    /// library item, which survives restarts.
+    /// </summary>
+    [Fact]
+    public async Task GetSegment_EpisodeItem_SkipsPositionTracking_RestartSafe()
+    {
+        Guid episodeId = Guid.NewGuid();
+        string episodeIdStr = episodeId.ToString("D");
+        var episode = new MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "Adolescence S01E01",
+            Id = episodeId
+        };
+        _libraryManagerMock.Setup(m => m.GetItemById(episodeId)).Returns(episode);
+
+        string hlsDir = _cache.GetHlsDirectoryPath(episodeIdStr, 0);
+        Directory.CreateDirectory(hlsDir);
+        await File.WriteAllTextAsync(Path.Combine(hlsDir, "seg_0005.ts"), new string('x', 512));
+        _cache.RegisterHlsDirectory(episodeIdStr, 0);
+
+        var tracker = new Jellyfin.Plugin.AlexaSkill.Alexa.Playback.AudiobookPositionTracker(
+            CreateRegisteredTempDir("jf499-tracker-episode"),
+            _loggerFactory.CreateLogger<Jellyfin.Plugin.AlexaSkill.Alexa.Playback.AudiobookPositionTracker>());
+        Plugin.Instance!.AudiobookPositionTracker = tracker;
+        try
+        {
+            var controller = CreateController(episodeIdStr);
+
+            ActionResult result = await controller.GetSegment(episodeIdStr, "seg_0005.ts");
+
+            Assert.IsType<PhysicalFileResult>(result);
+            Assert.Equal(0, tracker.GetPositionTicks(episodeIdStr));
+        }
+        finally
+        {
+            Plugin.Instance.AudiobookPositionTracker = null;
+            tracker.Dispose();
+        }
+    }
+
+    // ---- W2a: evidence-based monitor budget ----
+
+    /// <summary>
+    /// JF-499 W2: the monitor budget bounds time WITHOUT PROGRESS, not total wall
+    /// time. A slow-but-progressing encode (fake ffmpeg keeps touching the encode
+    /// directory well past the 300ms test budget) must be EXTENDED, run to
+    /// completion, and never be declared stalled.
+    /// </summary>
+    [Fact]
+    public async Task MonitorHls_SlowButProgressingEncode_IsExtendedNotKilled()
+    {
+        var (episode, mediaSourceManager) = SetupEpisodeForHls("Slow Nas S01E01", "h264", TimeSpan.FromMinutes(45));
+
+        string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-jf499-slow",
+            "for last_arg in \"$@\"; do :; done\n" +
+            "dir=$(dirname \"$last_arg\")\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0000.ts\" 2>/dev/null\n" +
+            "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:4.000,\\nseg_0000.ts\\n' > \"$last_arg\"\n" +
+            "i=1\n" +
+            "while [ \"$i\" -le 12 ]; do\n" +
+            "  sleep 0.1\n" +
+            "  touch \"$dir/progress.bin\"\n" +
+            "  i=$((i+1))\n" +
+            "done\n" +
+            "printf 'done\\n' > \"$dir/encode-done.txt\"\n" +
+            "exit 0\n");
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Trace);
+            b.AddProvider(TestCaptureLogger.Into(logRecords));
+        });
+
+        var controller = CreateController(episode.Id.ToString(), loggerFactory, mediaSourceManager, fakeFfmpegPath);
+        controller.HlsMonitorStallBudgetOverride = TimeSpan.FromMilliseconds(300);
+
+        ActionResult result = await controller.StreamHlsEpisode(episode.Id.ToString());
+        Assert.IsType<ContentResult>(result);
+
+        string hlsDir = _cache.GetHlsDirectoryPath(episode.Id.ToString(), 0);
+        string doneMarker = Path.Combine(hlsDir, "encode-done.txt");
+
+        Assert.True(
+            await WaitUntilAsync(() => File.Exists(doneMarker), TimeSpan.FromSeconds(20)),
+            "a still-writing encode must run to completion, not be killed by the stall budget");
+        Assert.True(
+            await WaitUntilAsync(
+                () => TestCaptureLogger.Snapshot(logRecords).Any(r => r.Message.Contains("HLS encoding complete", StringComparison.Ordinal)),
+                TimeSpan.FromSeconds(10)),
+            "the monitor must report the encode as complete");
+
+        var snapshot = TestCaptureLogger.Snapshot(logRecords);
+        Assert.DoesNotContain(snapshot, r => r.Message.Contains("HLS encoding STALLED", StringComparison.Ordinal));
+        Assert.Contains(snapshot, r => r.Message.Contains("extending the monitor budget", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// JF-499 W2: a HUNG encode (first segment written, then nothing while the
+    /// process stays alive) is killed after ONE no-progress budget window.
+    /// </summary>
+    [Fact]
+    public async Task MonitorHls_HungEncode_KilledAfterOneStallBudget()
+    {
+        var (episode, mediaSourceManager) = SetupEpisodeForHls("Hung Encode S01E01", "h264", TimeSpan.FromMinutes(45));
+
+        string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-jf499-hung",
+            "for last_arg in \"$@\"; do :; done\n" +
+            "dir=$(dirname \"$last_arg\")\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0000.ts\" 2>/dev/null\n" +
+            "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:4.000,\\nseg_0000.ts\\n' > \"$last_arg\"\n" +
+            "sleep 15\n" +
+            "printf 'done\\n' > \"$dir/encode-done.txt\"\n" +
+            "exit 0\n");
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Trace);
+            b.AddProvider(TestCaptureLogger.Into(logRecords));
+        });
+
+        var controller = CreateController(episode.Id.ToString(), loggerFactory, mediaSourceManager, fakeFfmpegPath);
+        controller.HlsMonitorStallBudgetOverride = TimeSpan.FromMilliseconds(300);
+
+        ActionResult result = await controller.StreamHlsEpisode(episode.Id.ToString());
+        Assert.IsType<ContentResult>(result);
+
+        Assert.True(
+            await WaitUntilAsync(
+                () => TestCaptureLogger.Snapshot(logRecords).Any(r => r.Message.Contains("HLS encoding STALLED", StringComparison.Ordinal)),
+                TimeSpan.FromSeconds(10)),
+            "a hung encode must be declared STALLED and killed");
+
+        string doneMarker = Path.Combine(
+            _cache.GetHlsDirectoryPath(episode.Id.ToString(), 0), "encode-done.txt");
+        Assert.False(File.Exists(doneMarker), "the hung encode must be killed before its sleep finishes");
+    }
+
+    // ---- W2b: resume slice on the episode remux path ----
+
+    /// <summary>
+    /// JF-499 W2: a completed episode cache served with ?start= returns the RESUME
+    /// SLICE (segments from the resume position on, MEDIA-SEQUENCE shifted at the
+    /// 4-second segment arithmetic), not the from-zero playlist.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_CacheHit_WithStart_ServesSlicedPlaylist()
+    {
+        var (episode, mediaSourceManager) = SetupEpisodeForHls("Resumable S01E01", "h264", TimeSpan.FromMinutes(45));
+
+        string hlsDir = _cache.GetHlsDirectoryPath(episode.Id.ToString(), 0);
+        Directory.CreateDirectory(hlsDir);
+        await File.WriteAllTextAsync(
+            Path.Combine(hlsDir, "stream.m3u8"),
+            "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n"
+            + "#EXTINF:4.000,\nseg_0000.ts\n#EXTINF:4.000,\nseg_0001.ts\n#EXTINF:4.000,\nseg_0002.ts\n"
+            + "#EXTINF:4.000,\nseg_0003.ts\n#EXTINF:4.000,\nseg_0004.ts\n#EXTINF:4.000,\nseg_0005.ts\n#EXT-X-ENDLIST\n");
+
+        var controller = CreateController(
+            episode.Id.ToString(), null, mediaSourceManager, WriteRecordingFakeFfmpeg("fake-ffmpeg-jf499-slicecache"));
+
+        ActionResult result = await controller.StreamHlsEpisode(episode.Id.ToString(), 16 * TimeSpan.TicksPerSecond);
+
+        var content = Assert.IsType<ContentResult>(result);
+        Assert.Contains("seg_0004.ts?token=", content.Content, StringComparison.Ordinal);
+        Assert.Contains("seg_0005.ts?token=", content.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("seg_0000", content.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("seg_0003.ts", content.Content, StringComparison.Ordinal);
+        Assert.Contains("#EXT-X-MEDIA-SEQUENCE:4", content.Content, StringComparison.Ordinal);
+        Assert.Contains("#EXT-X-ENDLIST", content.Content, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-499 W2, the watch-item scenario: the SELF-HEAL RE-ENCODE over interrupted
+    /// debris honors ?start=. The served pre-written full listing is sliced at the
+    /// resume position instead of restarting the timeline from 0:00.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_SelfHealReencode_WithStart_ServesSlicedFullListing()
+    {
+        var (episode, mediaSourceManager) = SetupEpisodeForHls("Interrupted S01E01", "h264", TimeSpan.FromMinutes(45));
+
+        // Debris of an interrupted encode: live-looking playlist (no ENDLIST), no
+        // active flag.
+        string hlsDir = _cache.GetHlsDirectoryPath(episode.Id.ToString(), 0);
+        Directory.CreateDirectory(hlsDir);
+        await File.WriteAllTextAsync(
+            Path.Combine(hlsDir, "stream.m3u8"),
+            "#EXTM3U\n#EXTINF:4.000,\nseg_0000.ts\n");
+
+        var controller = CreateController(
+            episode.Id.ToString(), null, mediaSourceManager, WriteRecordingFakeFfmpeg("fake-ffmpeg-jf499-selfheal"));
+
+        ActionResult result = await controller.StreamHlsEpisode(episode.Id.ToString(), 16 * TimeSpan.TicksPerSecond);
+
+        var content = Assert.IsType<ContentResult>(result);
+        // The re-encode's full listing (675 segments for 45min) sliced at 16s / 4s:
+        Assert.Contains("seg_0004.ts?token=", content.Content, StringComparison.Ordinal);
+        Assert.Contains("seg_0674.ts?token=", content.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("seg_0003.ts", content.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("seg_0000", content.Content, StringComparison.Ordinal);
+        Assert.Contains("#EXT-X-MEDIA-SEQUENCE:4", content.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("#EXT-X-ENDLIST", content.Content, StringComparison.Ordinal);
+    }
+
+    // ---- W3: fast-path FileNotFoundException race ----
+
+    /// <summary>
+    /// JF-499 W3: logger provider that deletes a file the first time a message
+    /// containing the trigger is logged. Reproduces the fast-path race
+    /// deterministically: the controller logs "serving cached playlist" between the
+    /// cache-hit FileInfo read and the playlist content read, so deleting the file at
+    /// that log leaves exactly the state a concurrent lock-holder's Cleanup leaves
+    /// behind.
+    /// </summary>
+    private sealed class FileDeletingLoggerProvider : ILoggerProvider
+    {
+        private readonly string _trigger;
+        private readonly string _pathToDelete;
+        private int _fired;
+
+        internal FileDeletingLoggerProvider(string trigger, string pathToDelete)
+        {
+            _trigger = trigger;
+            _pathToDelete = pathToDelete;
+        }
+
+        public ILogger CreateLogger(string categoryName) => new DeletingLogger(this);
+
+        public void Dispose()
+        {
+        }
+
+        private sealed class DeletingLogger : ILogger
+        {
+            private readonly FileDeletingLoggerProvider _owner;
+
+            internal DeletingLogger(FileDeletingLoggerProvider owner) => _owner = owner;
+
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            {
+                string message = formatter(state, exception);
+                if (message.Contains(_owner._trigger, StringComparison.Ordinal)
+                    && Interlocked.CompareExchange(ref _owner._fired, 1, 0) == 0)
+                {
+#pragma warning disable CA3003 // test-created path
+                    File.Delete(_owner._pathToDelete);
+#pragma warning restore CA3003
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// JF-499 W3: when the fast path's cached playlist vanishes between the cache
+    /// read and the serve read, the request falls through to the RE-ENCODE path
+    /// instead of throwing FileNotFoundException (a 500 in flight that only
+    /// self-heals on the Echo's retry).
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_FastPathCacheVanishedAtServe_FallsThroughToReencode()
+    {
+        var (episode, mediaSourceManager) = SetupEpisodeForHls("Vanishing S01E01", "h264", TimeSpan.FromMinutes(45));
+
+        string hlsDir = _cache.GetHlsDirectoryPath(episode.Id.ToString(), 0);
+        Directory.CreateDirectory(hlsDir);
+        string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
+        await File.WriteAllTextAsync(
+            playlistPath,
+            "#EXTM3U\n#EXTINF:4.000,\nseg_0000.ts\n#EXTINF:4.000,\nseg_0001.ts\n#EXT-X-ENDLIST\n");
+
+        using var loggerFactory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Trace);
+            b.AddProvider(new FileDeletingLoggerProvider("serving cached playlist for item", playlistPath));
+        });
+
+        var controller = CreateController(
+            episode.Id.ToString(), loggerFactory, mediaSourceManager, WriteRecordingFakeFfmpeg("fake-ffmpeg-jf499-race"));
+
+        ActionResult result = await controller.StreamHlsEpisode(episode.Id.ToString());
+
+        var content = Assert.IsType<ContentResult>(result);
+        Assert.Contains("seg_0000.ts?token=", content.Content, StringComparison.Ordinal);
+        Assert.True(
+            File.Exists(Path.Combine(hlsDir, "episode-args.txt")),
+            "the re-encode path must have run after the vanished-cache fallthrough");
+    }
+
+    /// <summary>
+    /// JF-499 W3, the audio-variant twin of the same race and fix.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisodeAudio_FastPathCacheVanishedAtServe_FallsThroughToReencode()
+    {
+        var episode = new MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "Vanishing Audio S01E01",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromMinutes(39).Ticks
+        };
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(episode.Id)).Returns(episode);
+
+        string cacheKey = VideoAudioController.EpisodeAudioCacheKey(episode.Id.ToString(), 0);
+        string hlsDir = _cache.GetHlsDirectoryPath(cacheKey, 0);
+        Directory.CreateDirectory(hlsDir);
+        string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
+        await File.WriteAllTextAsync(
+            playlistPath,
+            "#EXTM3U\n#EXTINF:10.000,\nseg_0000.ts\n#EXTINF:10.000,\nseg_0001.ts\n#EXT-X-ENDLIST\n");
+
+        using var loggerFactory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Trace);
+            b.AddProvider(new FileDeletingLoggerProvider("serving cached playlist for item", playlistPath));
+        });
+
+        var controller = CreateController(
+            episode.Id.ToString(), loggerFactory, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf499-race-audio"));
+
+        ActionResult result = await controller.StreamHlsEpisodeAudio(episode.Id.ToString(), 0);
+
+        var content = Assert.IsType<ContentResult>(result);
+        Assert.Contains("seg_0000.ts?token=", content.Content, StringComparison.Ordinal);
+        Assert.True(
+            File.Exists(Path.Combine(hlsDir, "episode-args.txt")),
+            "the re-encode path must have run after the vanished-cache fallthrough");
+    }
+
+    // ---- W4: permission-denied deletes must not surface as 500s ----
+
+    private const UnixFileMode WritableDirMode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+
+    private const UnixFileMode ReadOnlyDirMode = UnixFileMode.UserRead | UnixFileMode.UserExecute;
+
+    /// <summary>
+    /// JF-499 W4 shared shape: run the act inside a directory whose mode denies
+    /// writes (unlink needs write permission on the directory), always restoring the
+    /// mode so the fixture's recursive temp cleanup still works.
+    /// </summary>
+    private static void AssertSurvivesDeniedDirectory(string dir, Action act)
+    {
+#pragma warning disable CA1416, CA3003 // Unix-only test; test-created path
+        File.SetUnixFileMode(dir, ReadOnlyDirMode);
+        try
+        {
+            var ex = Record.Exception(act);
+            Assert.Null(ex);
+        }
+        finally
+        {
+            File.SetUnixFileMode(dir, WritableDirMode);
+        }
+#pragma warning restore CA1416, CA3003
+    }
+
+    /// <summary>
+    /// JF-499 W4: CleanupHlsStub's whole-directory delete on a permission-denied dir
+    /// must be swallowed (Debug log), not propagate out of the playlist fast path.
+    /// </summary>
+    [Fact]
+    public void CleanupHlsStub_DeniedDirectory_DoesNotThrow()
+    {
+        string itemId = Guid.NewGuid().ToString();
+        string hlsDir = _cache.GetHlsDirectoryPath(itemId, 0);
+        Directory.CreateDirectory(hlsDir);
+        File.WriteAllText(Path.Combine(hlsDir, "seg_0000.ts"), "x");
+
+        AssertSurvivesDeniedDirectory(hlsDir, () => _cache.CleanupHlsStub(itemId, 0));
+    }
+
+    /// <summary>
+    /// JF-499 W4: Cleanup (the debris invalidation the episode paths call) must
+    /// swallow UnauthorizedAccessException for both its file and directory deletes.
+    /// </summary>
+    [Fact]
+    public void Cleanup_DeniedDirectory_DoesNotThrow()
+    {
+        string itemId = Guid.NewGuid().ToString();
+        string hlsDir = _cache.GetHlsDirectoryPath(itemId, 0);
+        Directory.CreateDirectory(hlsDir);
+        File.WriteAllText(Path.Combine(hlsDir, "seg_0000.ts"), "x");
+
+        AssertSurvivesDeniedDirectory(hlsDir, () => _cache.Cleanup(itemId));
+    }
+
+    /// <summary>
+    /// JF-499 W4: DeleteStubIfPresent's stub delete inside a write-denied directory
+    /// must be swallowed.
+    /// </summary>
+    [Fact]
+    public void DeleteStubIfPresent_DeniedDirectory_DoesNotThrow()
+    {
+        string itemId = Guid.NewGuid().ToString();
+        string cachePath = _cache.GetCacheFilePath(itemId, 123);
+        Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
+        File.WriteAllText(cachePath, "stub"); // < MinValidFileSize: the stub branch
+
+        AssertSurvivesDeniedDirectory(Path.GetDirectoryName(cachePath)!, () => _cache.DeleteStubIfPresent(itemId, 123));
+    }
+
+    /// <summary>
+    /// JF-499 W4 (and the JF-531 implementation note): the TryDelete helper is
+    /// reachable from play paths (the no-runtime stale-listing delete, the failed
+    /// remux faststart cleanup); a permission-denied path must be swallowed instead
+    /// of 500ing the play.
+    /// </summary>
+    [Fact]
+    public void TryDelete_DeniedDirectory_DoesNotThrow()
+    {
+        string dir = Path.Combine(_tempDir, "jf499-trydelete-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        string target = Path.Combine(dir, "stale.m3u8");
+        File.WriteAllText(target, "#EXTM3U\n");
+
+        AssertSurvivesDeniedDirectory(dir, () => VideoAudioController.TryDelete(target));
     }
 }

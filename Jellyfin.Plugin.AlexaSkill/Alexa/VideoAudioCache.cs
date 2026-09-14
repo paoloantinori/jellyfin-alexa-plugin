@@ -216,7 +216,7 @@ public class VideoAudioCache
             {
                 fi.Delete();
             }
-            catch (IOException ex)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 _logger.LogDebug(ex, "Failed to delete cache stub: {Path}", path);
             }
@@ -318,7 +318,7 @@ public class VideoAudioCache
         {
             _logger.LogWarning("VideoAudio HLS: removing stale directory (no playlist): {Path}", dirPath);
             try { Directory.Delete(dirPath, recursive: true); }
-            catch (IOException ex) { _logger.LogDebug(ex, "Failed to delete stale HLS directory: {Path}", dirPath); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { _logger.LogDebug(ex, "Failed to delete stale HLS directory: {Path}", dirPath); }
             return;
         }
 
@@ -327,7 +327,7 @@ public class VideoAudioCache
         {
             _logger.LogWarning("VideoAudio HLS: removing stub directory (empty playlist): {Path}", dirPath);
             try { Directory.Delete(dirPath, recursive: true); }
-            catch (IOException ex) { _logger.LogDebug(ex, "Failed to delete HLS stub directory: {Path}", dirPath); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { _logger.LogDebug(ex, "Failed to delete HLS stub directory: {Path}", dirPath); }
         }
 #pragma warning restore CA3003
     }
@@ -336,7 +336,8 @@ public class VideoAudioCache
     /// Delete the playlist and segment files of an item's HLS cache directory,
     /// best-effort (JF-498 review I1). Unlike <see cref="CleanupHlsStub"/> (which only
     /// removes directories whose playlist is missing or empty) and <see cref="Cleanup"/>
-    /// (whose recursive directory delete is all-or-nothing and swallows IOExceptions),
+    /// (whose recursive directory delete is all-or-nothing and swallows
+    /// IOException/UnauthorizedAccessException),
     /// this targets the individual FILES of a directory whose non-empty playlist
     /// survived those cleanups (a locked or permission-denied recursive delete): the
     /// episode encode runs ffmpeg with <c>append_list</c>, which would otherwise append
@@ -717,7 +718,7 @@ public class VideoAudioCache
                     _lastAccessUtc.TryRemove(file, out _);
                     deleted++;
                 }
-                catch (IOException ex)
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
                     _logger.LogDebug(ex, "Failed to delete cache file: {Path}", file);
                 }
@@ -732,15 +733,16 @@ public class VideoAudioCache
                     _lastAccessUtc.TryRemove(dir, out _);
                     deleted++;
                 }
-                catch (IOException ex)
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
                     _logger.LogDebug(ex, "Failed to delete HLS cache directory: {Path}", dir);
                 }
             }
         }
-        catch (DirectoryNotFoundException)
+        catch (Exception ex) when (ex is DirectoryNotFoundException or UnauthorizedAccessException)
         {
-            // Already gone — nothing to clean up
+            // Cache root already gone, or read-denied so the enumeration itself
+            // fails (JF-499 W4): nothing can be cleaned up either way.
         }
 
         if (deleted > 0)
@@ -907,8 +909,11 @@ public class VideoAudioCache
         {
             return null;
         }
-        catch (IOException ex)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            // IOException: transient scan failure. UnauthorizedAccessException: a
+            // read-denied cache root must degrade to a cache miss (JF-499 W4), not
+            // 500 a serve path.
             _logger.LogDebug(ex, "Error scanning cache directory for HLS directory lookup");
             return null;
         }

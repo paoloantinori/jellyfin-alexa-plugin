@@ -91,6 +91,20 @@ public class VideoAudioController : ControllerBase
     private const int EpisodeHlsSegmentSeconds = 4;
 
     /// <summary>
+    /// The audiobook HLS segment length in seconds. LOAD-BEARING COUPLING, three
+    /// sites that must move together: (1) this const, the flat-divisor fallback
+    /// passed to <see cref="Alexa.Playback.AudiobookPlaylistBuilder.BuildResumePlaylist"/>
+    /// at the audiobook serve path; (2) the bare <c>-hls_time 10</c> literal in
+    /// <see cref="BuildHlsAudiobookFfmpegArguments"/> (the length ffmpeg actually
+    /// cuts audiobook segments at); (3) the tracker's
+    /// <c>AudiobookPositionTracker.SegmentDurationSeconds</c> (the resume-position
+    /// arithmetic). The audio-only EPISODE path keeps its own separate 10s literal
+    /// in <see cref="BuildEpisodeAudioHlsFfmpegArguments"/> (its timelines never
+    /// intermix with audiobook resume).
+    /// </summary>
+    private const int AudiobookHlsSegmentSeconds = 10;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="VideoAudioController"/> class.
     /// </summary>
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
@@ -517,14 +531,6 @@ public class VideoAudioController : ControllerBase
     private static readonly ConcurrentDictionary<string, bool> _activeEpisodeEncodes = new();
 
     /// <summary>
-    /// Item IDs whose HLS directory was produced by the EPISODE remux path (JF-498).
-    /// <see cref="GetSegment"/> consults it to skip audiobook position tracking: an
-    /// episode's segment requests must not grow keys in
-    /// <c>AudiobookPositionTracker</c> (never read there, but persisted to disk).
-    /// </summary>
-    private static readonly ConcurrentDictionary<string, bool> _episodeHlsItems = new();
-
-    /// <summary>
     /// Attached-picture COVER codecs seen as VIDEO streams in tagged files (JF-500
     /// review R2): an embedded mjpeg/png cover can sit ahead of the real track in
     /// the stream list, and a cover that won the codec pick would misroute the
@@ -547,13 +553,18 @@ public class VideoAudioController : ControllerBase
     /// tiers land in MPEG-TS segments served stream-while-writing like the song
     /// path. Launch sites route here via <c>BaseHandler.GetVideoAppLaunchUrl</c>;
     /// the endpoint re-probes the codecs server-side to pick its own ffmpeg
-    /// arguments (video copy vs transcode, audio copy vs AAC).
+    /// arguments (video copy vs transcode, audio copy vs AAC). Optional
+    /// <c>?start=&lt;ticks&gt;</c> serves a resume-sliced playlist (JF-499 W2; see
+    /// <see cref="ServeEpisodePlaylist"/>).
     /// </summary>
     /// <param name="itemId">The Jellyfin video item ID.</param>
+    /// <param name="startTicks">Optional resume position in .NET ticks (0/absent plays from the start).</param>
     /// <returns>An HLS playlist (.m3u8) file.</returns>
     [HttpGet("episode/{itemId}/stream.m3u8")]
     [AllowAnonymous]
-    public async Task<ActionResult> StreamHlsEpisode([FromRoute] string itemId)
+    public async Task<ActionResult> StreamHlsEpisode(
+        [FromRoute] string itemId,
+        [FromQuery(Name = "start")] long? startTicks = null)
     {
         if (Guid.TryParse(itemId, out _))
         {
@@ -564,7 +575,7 @@ public class VideoAudioController : ControllerBase
             }
         }
 
-        return await StreamHlsEpisodeCore(itemId).ConfigureAwait(false);
+        return await StreamHlsEpisodeCore(itemId, startTicks ?? 0).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -576,9 +587,14 @@ public class VideoAudioController : ControllerBase
     /// re-encode, JF-500). While an encode runs, the served playlist is the
     /// PRE-WRITTEN full listing of <see cref="WriteEpisodePlaylist"/> (JF-531; live-edge
     /// mechanism documented at the prewrite site); once the encode completes, the
-    /// ENDLIST playlist ffmpeg wrote takes over.
+    /// ENDLIST playlist ffmpeg wrote takes over. A positive
+    /// <paramref name="startTicks"/> slices every served playlist at the resume
+    /// position (JF-499 W2, all serve paths honor it like the audiobook endpoint's
+    /// <c>?start=</c>).
     /// </summary>
-    private async Task<ActionResult> StreamHlsEpisodeCore(string itemId)
+    /// <param name="itemId">GUID-validated video item ID.</param>
+    /// <param name="startTicks">Resume position in .NET ticks (0 plays from the start).</param>
+    private async Task<ActionResult> StreamHlsEpisodeCore(string itemId, long startTicks)
     {
         var validation = ValidateVideoAudioRequest(itemId);
         if (validation.Error != null)
@@ -594,27 +610,40 @@ public class VideoAudioController : ControllerBase
         FileInfo? cached = await _cache.GetCachedHlsPlaylist(itemId, artModifiedTicks).ConfigureAwait(false);
         if (cached != null)
         {
-            cached = await ValidateEpisodeCacheAsync(cached, itemId).ConfigureAwait(false);
-            if (cached != null)
-            {
-                // JF-531: while the encode is RUNNING, serve the PRE-WRITTEN full
-                // listing, not ffmpeg's growing stream.m3u8 (mechanism on the
-                // prewrite site below). The flag gate matters: the pre-written file
-                // survives on disk after completion, and a completed cache must
-                // serve ffmpeg's ENDLIST playlist below.
-                if (_activeEpisodeEncodes.ContainsKey(itemId))
+            // JF-499 W3: a concurrent lock-holder can invalidate this cache between
+            // the FileInfo read above and the content reads below (a debris verdict
+            // in ValidateEpisodeCacheAsync Cleans up the whole directory under the
+            // per-item lock). A vanished file must fall through to the re-encode
+            // path instead of surfacing a 500 that only self-heals on the Echo's
+            // playlist retry.
+            ActionResult? fastServed = await TryServeValidatedEpisodeCacheAsync(
+                cached,
+                itemId,
+                "VideoAudio episode HLS",
+                () =>
                 {
-                    ActionResult? prewritten = TryServePrewrittenEpisodePlaylist(itemId, artModifiedTicks);
-                    if (prewritten != null)
+                    // JF-531: while the encode is RUNNING, serve the PRE-WRITTEN full
+                    // listing, not ffmpeg's growing stream.m3u8 (mechanism on the
+                    // prewrite site below). The flag gate matters: the pre-written file
+                    // survives on disk after completion, and a completed cache must
+                    // serve ffmpeg's ENDLIST playlist below.
+                    if (_activeEpisodeEncodes.ContainsKey(itemId))
                     {
-                        return prewritten;
+                        ActionResult? prewritten = TryServePrewrittenEpisodePlaylist(itemId, artModifiedTicks, startTicks);
+                        if (prewritten != null)
+                        {
+                            return prewritten;
+                        }
                     }
-                }
 
-                _logger.LogDebug("VideoAudio episode HLS: serving cached playlist for item {ItemId}", itemId);
+                    _logger.LogDebug("VideoAudio episode HLS: serving cached playlist for item {ItemId}", itemId);
 #pragma warning disable CA3003 // path derived from GUID-validated itemId
-                return ServePlaylistWithToken(cached.FullName);
+                    return ServeEpisodePlaylist(cached.FullName, startTicks);
 #pragma warning restore CA3003
+                }).ConfigureAwait(false);
+            if (fastServed != null)
+            {
+                return fastServed;
             }
         }
 
@@ -635,7 +664,7 @@ public class VideoAudioController : ControllerBase
                     // gate as in the fast path: a completed cache serves the ENDLIST one).
                     if (_activeEpisodeEncodes.ContainsKey(itemId))
                     {
-                        ActionResult? prewritten = TryServePrewrittenEpisodePlaylist(itemId, artModifiedTicks);
+                        ActionResult? prewritten = TryServePrewrittenEpisodePlaylist(itemId, artModifiedTicks, startTicks);
                         if (prewritten != null)
                         {
                             return prewritten;
@@ -644,7 +673,7 @@ public class VideoAudioController : ControllerBase
 
                     _logger.LogDebug("VideoAudio episode HLS: serving playlist generated by concurrent request for item {ItemId}", itemId);
 #pragma warning disable CA3003
-                    return ServePlaylistWithToken(cached.FullName);
+                    return ServeEpisodePlaylist(cached.FullName, startTicks);
 #pragma warning restore CA3003
                 }
             }
@@ -772,7 +801,6 @@ public class VideoAudioController : ControllerBase
             // can then rely on the flag being set, because no playlist file can
             // exist before ffmpeg starts. The monitor clears the flag on exit.
             _activeEpisodeEncodes.TryAdd(itemId, true);
-            _episodeHlsItems.TryAdd(itemId, true);
 
             Process ffmpegProcess;
             try
@@ -860,15 +888,16 @@ public class VideoAudioController : ControllerBase
 
             // Serve the pre-written FULL listing immediately (JF-531). Null only
             // when the prewrite was skipped (no runtime): fall back to ffmpeg's
-            // live partial playlist, the pre-JF-531 behavior.
-            ActionResult? prewrittenServe = TryServePrewrittenEpisodePlaylist(itemId, artModifiedTicks);
+            // live partial playlist, the pre-JF-531 behavior. Both honor the
+            // resume slice (JF-499 W2).
+            ActionResult? prewrittenServe = TryServePrewrittenEpisodePlaylist(itemId, artModifiedTicks, startTicks);
             if (prewrittenServe != null)
             {
                 return prewrittenServe;
             }
 
             _logger.LogDebug("VideoAudio episode HLS: serving partial playlist for item {ItemId}", itemId);
-            return ServePlaylistWithToken(playlistPath);
+            return ServeEpisodePlaylist(playlistPath, startTicks);
 #pragma warning restore CA3003
         }
     }
@@ -908,18 +937,65 @@ public class VideoAudioController : ControllerBase
     }
 
     /// <summary>
+    /// Shared wrapper of the episode fast paths (JF-499 W3): validate a cached
+    /// playlist and serve it, translating the vanish race into a null return. A
+    /// concurrent lock-holder can invalidate the cache between the caller's
+    /// <c>GetCachedHlsPlaylist</c> FileInfo read and the content reads here (a debris
+    /// verdict in <see cref="ValidateEpisodeCacheAsync"/> Cleans up the whole
+    /// directory under the per-item lock; on Windows hosts the dir-gone state maps
+    /// to <see cref="DirectoryNotFoundException"/>, on Linux to
+    /// <see cref="FileNotFoundException"/>). A vanished file must fall through to
+    /// the re-encode path instead of surfacing a 500 that only self-heals on the
+    /// Echo's playlist retry. Null also covers an INVALID cache
+    /// (interrupted-encode debris, cleaned up by validation).
+    /// </summary>
+    /// <param name="cached">The cached playlist file info (stream.m3u8).</param>
+    /// <param name="cacheKey">The encode's cache key (validation, cleanup, logging).</param>
+    /// <param name="logLabel">Log prefix ("VideoAudio episode HLS" / its AUDIO twin).</param>
+    /// <param name="serve">Serves the validated cache: the remux keeps its pre-written
+    /// branch + <see cref="ServeEpisodePlaylist"/>, the audio variant serves via
+    /// <see cref="ServePlaylistWithToken"/>.</param>
+    /// <returns>The served response, or null when the cache is invalid or vanished.</returns>
+    private async Task<ActionResult?> TryServeValidatedEpisodeCacheAsync(
+        FileInfo cached,
+        string cacheKey,
+        string logLabel,
+        Func<ActionResult> serve)
+    {
+        try
+        {
+            FileInfo? valid = await ValidateEpisodeCacheAsync(cached, cacheKey).ConfigureAwait(false);
+            if (valid == null)
+            {
+                return null;
+            }
+
+            return serve();
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
+        {
+            _logger.LogDebug(
+                "{LogLabel}: cached playlist vanished for item {ItemId} (invalidated by a concurrent re-encode?), re-encoding",
+                logLabel, cacheKey);
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Serve the episode encode's pre-written full listing (JF-531) when it exists.
     /// Called on every serve path whose active-encode flag is set (fast path, in-lock
     /// double check, first serve). Returns null when the file is absent (encode with
     /// unknown runtime, or a race before the prewrite landed) so the caller falls
     /// back to serving the live playlist, the pre-JF-531 behavior, rather than
     /// failing the play. Live-edge mechanism: the prewrite site in
-    /// <see cref="StreamHlsEpisodeCore"/>.
+    /// <see cref="StreamHlsEpisodeCore"/>. A positive <paramref name="startTicks"/>
+    /// slices the listing at the resume position (JF-499 W2).
     /// </summary>
     /// <param name="itemId">GUID-validated episode item ID.</param>
     /// <param name="artModifiedTicks">Art ticks of the item's HLS cache directory.</param>
+    /// <param name="startTicks">Resume position in .NET ticks (0 serves unsliced).</param>
     /// <returns>The playlist response, or null when no pre-written listing exists.</returns>
-    private ActionResult? TryServePrewrittenEpisodePlaylist(string itemId, long artModifiedTicks)
+    private ActionResult? TryServePrewrittenEpisodePlaylist(string itemId, long artModifiedTicks, long startTicks)
     {
 #pragma warning disable CA3003 // path derived from GUID-validated itemId
         string prewrittenPath = Path.Combine(
@@ -934,7 +1010,7 @@ public class VideoAudioController : ControllerBase
         _logger.LogDebug(
             "VideoAudio episode HLS: serving pre-written full listing for item {ItemId} (encode in progress, JF-531)",
             itemId);
-        return ServePlaylistWithToken(prewrittenPath);
+        return ServeEpisodePlaylist(prewrittenPath, startTicks);
     }
 
     /// <summary>
@@ -1008,13 +1084,23 @@ public class VideoAudioController : ControllerBase
         FileInfo? cached = await _cache.GetCachedHlsPlaylist(cacheKey, artModifiedTicks).ConfigureAwait(false);
         if (cached != null)
         {
-            cached = await ValidateEpisodeCacheAsync(cached, cacheKey).ConfigureAwait(false);
-            if (cached != null)
-            {
-                _logger.LogDebug("VideoAudio episode AUDIO HLS: serving cached playlist for item {ItemId} (start={StartTicks})", itemId, startTicks);
+            // JF-499 W3 (same race and fix as the remux fast path): a lock-holder's
+            // Cleanup can delete the directory between the FileInfo read and the
+            // content reads; fall through to the re-encode instead of surfacing a 500.
+            ActionResult? fastServed = await TryServeValidatedEpisodeCacheAsync(
+                cached,
+                cacheKey,
+                "VideoAudio episode AUDIO HLS",
+                () =>
+                {
+                    _logger.LogDebug("VideoAudio episode AUDIO HLS: serving cached playlist for item {ItemId} (start={StartTicks})", itemId, startTicks);
 #pragma warning disable CA3003 // path derived from GUID-validated itemId
-                return ServePlaylistWithToken(cached.FullName);
+                    return ServePlaylistWithToken(cached.FullName);
 #pragma warning restore CA3003
+                }).ConfigureAwait(false);
+            if (fastServed != null)
+            {
+                return fastServed;
             }
         }
 
@@ -1535,10 +1621,11 @@ public class VideoAudioController : ControllerBase
 
         // Record audiobook playback progress via the segment request. Anonymous endpoint,
         // so keyed by itemId (the book parent-folder ID for audiobook concat streams).
-        // Best-effort: never fail the segment request over tracking. Episode remux
-        // segments (JF-498) are skipped: their keys are never read by the audiobook
-        // resume path and would only grow the persisted positions file.
-        if (!_episodeHlsItems.ContainsKey(itemId))
+        // Best-effort: never fail the segment request over tracking. The gate is
+        // derived from the ITEM (restart-safe, JF-499 W1): only Folder keys can ever be
+        // read back by the resume path, so leaf items (episodes, songs) are skipped
+        // instead of growing the persisted positions file with dead keys.
+        if (ShouldRecordPositionProgress(itemId))
         {
             RecordSegmentForTracking(itemId, segmentName);
         }
@@ -1594,6 +1681,41 @@ public class VideoAudioController : ControllerBase
         if (TryParseSegmentNumber(segmentName, out int segmentNumber))
         {
             Plugin.Instance?.AudiobookPositionTracker?.RecordSegment(itemId, segmentNumber);
+        }
+    }
+
+    /// <summary>
+    /// JF-499 W1: whether this item's segment fetches may grow the audiobook position
+    /// tracker. Trackable items are Folders (the audiobook parent containers whose
+    /// keys the resume path reads via <c>GetPositionTicks</c>); every leaf item
+    /// (episodes, songs) is skipped because its key is write-only dead weight in the
+    /// persisted positions file. Derived from the library item, so the skip survives
+    /// a restart (the old <c>_episodeHlsItems</c> flag was process-static and cached
+    /// episodes resumed growing the file). Not memoized: the verdict is a durable
+    /// fact, but <c>GetItemById</c> is already an in-memory lookup on the platform
+    /// side (and <see cref="ValidateVideoAudioRequest"/> already calls it unmemoized
+    /// per playlist request), so a plugin-side memo would only duplicate the
+    /// platform's cache.
+    /// </summary>
+    /// <param name="itemId">GUID-validated item ID from the segment URL.</param>
+    /// <returns>True when the item is a container whose positions can be read back.</returns>
+    private bool ShouldRecordPositionProgress(string itemId)
+    {
+        if (!Guid.TryParse(itemId, out Guid itemGuid))
+        {
+            return false;
+        }
+
+        try
+        {
+            return _libraryManager.GetItemById(itemGuid) is MediaBrowser.Controller.Entities.Folder;
+        }
+        catch (Exception ex)
+        {
+            // Best-effort gate, same contract as the tracking itself: never fail the
+            // segment request over it.
+            _logger.LogDebug(ex, "Position-tracking gate: item lookup failed for {ItemId}", itemId);
+            return false;
         }
     }
 
@@ -1789,9 +1911,10 @@ public class VideoAudioController : ControllerBase
                 }
             }
         }
-        catch (DirectoryNotFoundException)
+        catch (Exception ex) when (ex is DirectoryNotFoundException or UnauthorizedAccessException)
         {
-            // Evicted between resolution and enumeration; treat as empty.
+            // Evicted between resolution and enumeration, or read-denied (a chmod'd
+            // cache root must not 500 the serve path, JF-499 W4); treat as empty.
         }
 
         return highest;
@@ -1839,6 +1962,42 @@ public class VideoAudioController : ControllerBase
 #pragma warning restore CA3003
         string rewritten = RewritePlaylistWithToken(content, token);
         return Content(rewritten, "application/vnd.apple.mpegurl");
+    }
+
+    /// <summary>
+    /// Serve an episode playlist honoring an optional resume slice (JF-499 W2): the
+    /// episode twin of <see cref="ServeAudiobookPlaylistAsync"/>. A positive
+    /// <paramref name="startTicks"/> slices the playlist to begin at the resume
+    /// segment (the Echo Show's ExoPlayer ignores <c>#EXT-X-START</c>, so slicing is
+    /// the only mechanism that actually resumes; the seek-bar-becomes-relative
+    /// trade-off is documented on <see cref="Alexa.Playback.AudiobookPlaylistBuilder"/>).
+    /// This is what makes the post-interruption self-heal re-encode resume where the
+    /// user was instead of restarting the timeline from 0:00, when the request
+    /// carries <c>?start=</c>. A non-positive start serves exactly what
+    /// <see cref="ServePlaylistWithToken"/> would.
+    /// </summary>
+    /// <param name="playlistPath">Path of the playlist file to serve.</param>
+    /// <param name="startTicks">Resume position in .NET ticks (0 serves the playlist as-is).</param>
+    /// <returns>The playlist response (sliced + token-rewritten when applicable).</returns>
+    private ActionResult ServeEpisodePlaylist(string playlistPath, long startTicks)
+    {
+        if (startTicks <= 0)
+        {
+            return ServePlaylistWithToken(playlistPath);
+        }
+
+#pragma warning disable CA3003 // path derived from GUID-validated itemId
+        string content = System.IO.File.ReadAllText(playlistPath);
+#pragma warning restore CA3003
+        string sliced = Alexa.Playback.AudiobookPlaylistBuilder.BuildResumePlaylist(
+            content, startTicks, EpisodeHlsSegmentSeconds);
+        string? token = HttpContext.Request.Query["token"];
+        if (!string.IsNullOrEmpty(token))
+        {
+            sliced = RewritePlaylistWithToken(sliced, token);
+        }
+
+        return Content(sliced, "application/vnd.apple.mpegurl");
     }
 
     /// <summary>
@@ -1920,7 +2079,8 @@ public class VideoAudioController : ControllerBase
 #pragma warning disable CA3003 // basePlaylistPath is a validated internal cache file (parentId is GUID-validated upstream)
             string content = await System.IO.File.ReadAllTextAsync(basePlaylistPath).ConfigureAwait(false);
 #pragma warning restore CA3003
-            string resumeContent = Alexa.Playback.AudiobookPlaylistBuilder.BuildResumePlaylist(content, startTicks);
+            string resumeContent = Alexa.Playback.AudiobookPlaylistBuilder.BuildResumePlaylist(
+                content, startTicks, AudiobookHlsSegmentSeconds);
             if (!string.IsNullOrEmpty(token))
             {
                 resumeContent = RewritePlaylistWithToken(resumeContent, token);
@@ -2383,8 +2543,10 @@ public class VideoAudioController : ControllerBase
         // Audio: copy without re-encoding (MP3 remux is instant, no quality loss)
         args.AddRange(["-c:a", "copy"]);
 
-        // HLS-specific flags — 10-second segments required by ExoPlayer (Echo Show).
-        // Longer segments (e.g. 250s) cause buffer stalls after seeking.
+        // HLS-specific flags: 10-second segments required by ExoPlayer (Echo Show).
+        // Longer segments (e.g. 250s) cause buffer stalls after seeking. The value is
+        // coupled to AudiobookHlsSegmentSeconds and AudiobookPositionTracker's
+        // SegmentDurationSeconds (see the const's doc): retune them together.
         args.Add("-hls_time");
         args.Add("10");
         args.Add("-hls_list_size");
@@ -2694,14 +2856,15 @@ public class VideoAudioController : ControllerBase
         => estimatedEncodeBytes > cacheCapMB * 1024L * 1024L;
 
     /// <summary>
-    /// Wall-clock minutes the HLS background monitor waits before killing ffmpeg
-    /// (JF-500 review F1). The remux and audio tiers are I/O-bound and finish
-    /// audiobook-length content in minutes (~21x realtime), so they keep the
-    /// historical 30-minute ceiling unchanged. The video TRANSCODE tier runs at a
-    /// MEASURED 4.40x realtime (minix, 2026-09-08): 30 wall minutes only covers
-    /// ~132 minutes of content, so any longer HEVC movie was hard-killed
-    /// mid-encode, its playlist left without ENDLIST (cache invalidation), and
-    /// every retry churned a fresh multi-GB re-encode. Its timeout therefore
+    /// Minutes the HLS background monitor waits WITHOUT OBSERVED ENCODE PROGRESS
+    /// before killing ffmpeg (JF-500 review F1 sized it; JF-499 W2 changed the
+    /// semantics from a total wall-clock cap to a no-progress window: the monitor
+    /// now extends indefinitely while the encode directory keeps changing, so a
+    /// slow-but-alive NAS-bound remux is no longer killed mid-encode, and this
+    /// number only bounds a genuinely HUNG encode). The remux and audio tiers are
+    /// I/O-bound and finish audiobook-length content in minutes (~21x realtime),
+    /// so they keep the historical 30-minute window unchanged. The video TRANSCODE
+    /// tier runs at a MEASURED 4.40x realtime (minix, 2026-09-08), so its window
     /// scales from the item runtime: half the measured speed (2.0x, the
     /// conservative floor for concurrent-load slowdown) plus 10 minutes of
     /// ffmpeg startup/slack, floored at the 30-minute default for short content.
@@ -2709,11 +2872,17 @@ public class VideoAudioController : ControllerBase
     /// minutes (JF-500 review R4), not the 30-minute default: 30 would still
     /// hard-kill any movie longer than ~132 minutes, while 120 bounds how long a
     /// hung encode may hold its transcode slot before the monitor reclaims it.
+    /// Consequence of the no-progress semantics for the encode slots (JF-500): a
+    /// progressing encode now holds its transcode slot for as long as it keeps
+    /// progressing; the slot bounds the concurrency of active work, not an
+    /// encode's total duration.
     /// </summary>
     /// <param name="videoTranscodeTier">Whether the monitored encode is the
     /// episode video-transcode tier (HEVC re-encode).</param>
     /// <param name="runTimeTicks">The item's runtime, or null/&lt;=0 when unknown.</param>
-    /// <returns>Monitor timeout in minutes.</returns>
+    /// <returns>The no-progress stall budget in minutes (NOT a wall-clock timeout:
+    /// the monitor extends indefinitely while the encode directory keeps
+    /// changing).</returns>
     internal static int HlsMonitorTimeoutMinutes(bool videoTranscodeTier, long? runTimeTicks)
     {
         if (!videoTranscodeTier)
@@ -3523,8 +3692,9 @@ public class VideoAudioController : ControllerBase
 
     /// <summary>
     /// Monitor an HLS ffmpeg process running in the background. Waits for the process
-    /// to exit (with a tier-sized timeout, see <see cref="HlsMonitorTimeoutMinutes"/>),
-    /// logs the outcome, and triggers cache eviction. Disposes the process when done.
+    /// to exit, extending the wait while the encode keeps making observable progress
+    /// (JF-499 W2; see <see cref="WaitForExitOrEncodeStallAsync"/>), logs the outcome,
+    /// and triggers cache eviction. Disposes the process when done.
     /// Unlike <see cref="MonitorFfmpegAndRemuxAsync"/>, there is no remux step: HLS
     /// segments are already seekable individually.
     /// </summary>
@@ -3538,7 +3708,7 @@ public class VideoAudioController : ControllerBase
     /// <see cref="_activeEpisodeEncodes"/>); defaults to the audiobook registry so
     /// existing callers keep their behavior.</param>
     /// <param name="videoTranscodeTier">Whether this encode is the episode
-    /// video-transcode tier (JF-500); only that tier scales its timeout from the
+    /// video-transcode tier (JF-500); only that tier scales its stall budget from the
     /// runtime, the others keep the fixed 30-minute ceiling.</param>
     /// <param name="runTimeTicks">The item's runtime, used only by the transcode tier.</param>
     /// <returns>A task representing the background monitoring operation.</returns>
@@ -3554,14 +3724,25 @@ public class VideoAudioController : ControllerBase
     {
         var activeEncodes = activeEncodesTracker ?? _activeAudiobookEncodes;
         int timeoutMinutes = HlsMonitorTimeoutMinutes(videoTranscodeTier, runTimeTicks);
+        TimeSpan stallBudget = HlsMonitorStallBudgetOverride ?? TimeSpan.FromMinutes(timeoutMinutes);
         try
         {
-            // Tier-sized ceiling: see HlsMonitorTimeoutMinutes (JF-500 review F1)
-            // for the sizing rationale and arithmetic.
-            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromMinutes(timeoutMinutes));
-            await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
+            // Tier-sized NO-PROGRESS budget: see HlsMonitorTimeoutMinutes (JF-500
+            // review F1) for the sizing rationale and arithmetic, and
+            // WaitForExitOrEncodeStallAsync (JF-499 W2) for the progress extension.
+            bool stalled = await WaitForExitOrEncodeStallAsync(process, hlsDir, label, itemId, stallBudget).ConfigureAwait(false);
+            if (stalled)
+            {
+                _logger.LogWarning(
+                    "{Label} HLS encoding STALLED for {ParentId}: no segment-directory progress for {StallBudget} (JF-499), killing",
+                    label, itemId, stallBudget);
+                // entireProcessTree: the hung encode's children (ffmpeg helpers, the
+                // fake-ffmpeg test's sleep) must not outlive the kill.
+                try { process.Kill(entireProcessTree: true); } catch { /* already exited */ }
+                return;
+            }
 
-            // Post-completion diagnostics — gather metrics for structured logging
+            // Post-completion diagnostics: gather metrics for structured logging
             int segmentFileCount = 0;
             int playlistSegmentCount = 0;
             int expectedChapterCount = 0;
@@ -3635,13 +3816,8 @@ public class VideoAudioController : ControllerBase
                     label, itemId, segmentFileCount);
             }
 
-            // Background eviction — don't block
+            // Background eviction: don't block
             _ = Task.Run(() => _cache.EvictIfNeeded(), CancellationToken.None);
-        }
-        catch (OperationCanceledException)
-        {
-            _logger.LogWarning("{Label} HLS encoding TIMED OUT ({TimeoutMinutes} min) for {ParentId}", label, timeoutMinutes, itemId);
-            try { process.Kill(); } catch { /* already exited */ }
         }
         catch (Exception ex)
         {
@@ -3652,6 +3828,94 @@ public class VideoAudioController : ControllerBase
             // Always clear the active encode flag so future requests can start a fresh encode
             activeEncodes.TryRemove(itemId, out _);
             process.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// JF-499 W2 internal test hook: when non-null, replaces the tier-sized
+    /// no-progress stall budget of <see cref="MonitorFfmpegHlsAsync"/> (see
+    /// <see cref="WaitForExitOrEncodeStallAsync"/>) so tests exercise the
+    /// progress-extension loop without waiting wall-clock minutes.
+    /// </summary>
+    internal TimeSpan? HlsMonitorStallBudgetOverride { get; set; }
+
+    /// <summary>
+    /// JF-499 W2: wait for the HLS encode process to exit, EXTENDING the wait while
+    /// the encode keeps making observable progress. The tier-sized budget is a
+    /// NO-PROGRESS window, not a total wall-clock cap: a NAS-bound remux that keeps
+    /// writing segments (however slowly) was killed by the old flat ceiling
+    /// mid-encode, leaving no-ENDLIST debris mid-playback and forcing a from-zero
+    /// re-encode on the self-heal retry. Progress evidence is the latest
+    /// LastWriteTimeUtc across the encode directory: every new segment file and each
+    /// playlist rewrite advances it.
+    /// </summary>
+    /// <param name="process">The ffmpeg process to wait on.</param>
+    /// <param name="hlsDir">The encode's HLS directory (progress evidence source).</param>
+    /// <param name="label">Content label for log messages.</param>
+    /// <param name="itemId">Item ID for log messages.</param>
+    /// <param name="stallBudget">How long to wait without observed progress before declaring a stall.</param>
+    /// <returns>True when the budget elapsed with no progress since the previous
+    /// expiry (a hung encode to kill); false when the process exited.</returns>
+    private async Task<bool> WaitForExitOrEncodeStallAsync(
+        Process process,
+        string hlsDir,
+        string label,
+        string itemId,
+        TimeSpan stallBudget)
+    {
+        DateTime progressMarkUtc = GetLatestWriteTimeUtc(hlsDir);
+        while (true)
+        {
+            using var stallCts = new CancellationTokenSource(stallBudget);
+            try
+            {
+                await process.WaitForExitAsync(stallCts.Token).ConfigureAwait(false);
+                return false;
+            }
+            catch (OperationCanceledException)
+            {
+                DateTime observedUtc = GetLatestWriteTimeUtc(hlsDir);
+                if (observedUtc <= progressMarkUtc)
+                {
+                    return true;
+                }
+
+                progressMarkUtc = observedUtc;
+                _logger.LogInformation(
+                    "{Label} HLS encode for {ItemId} still writing after {StallBudget} without exiting (slow storage?), extending the monitor budget (JF-499)",
+                    label, itemId, stallBudget);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Latest LastWriteTimeUtc across an encode directory's files (MinValue when the
+    /// directory cannot be read): any segment write or playlist rewrite advances it.
+    /// </summary>
+    /// <param name="hlsDir">The encode's HLS directory.</param>
+    /// <returns>The newest file write time, or <see cref="DateTime.MinValue"/> when unreadable.</returns>
+    private static DateTime GetLatestWriteTimeUtc(string hlsDir)
+    {
+        try
+        {
+            DateTime latest = DateTime.MinValue;
+#pragma warning disable CA3003 // hlsDir is the plugin's own cache dir (GUID-validated itemId)
+            foreach (string file in Directory.EnumerateFiles(hlsDir))
+            {
+                DateTime written = System.IO.File.GetLastWriteTimeUtc(file);
+                if (written > latest)
+                {
+                    latest = written;
+                }
+            }
+#pragma warning restore CA3003
+
+            return latest;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Unreadable directory: no progress evidence, so the stall decision stands.
+            return DateTime.MinValue;
         }
     }
 
@@ -3715,7 +3979,14 @@ public class VideoAudioController : ControllerBase
     }
 
 #pragma warning disable CA3003 // path derived from cachePath built from GUID-validated itemId
-    private static void TryDelete(string path)
+    /// <summary>
+    /// Best-effort file delete. Internal for the JF-499 W4 permission-denied test:
+    /// the helper is reachable from play paths (the JF-531 no-runtime stale-listing
+    /// delete, the failed-remux faststart cleanup), so a permission failure must be
+    /// swallowed like an I/O failure instead of surfacing as a 500.
+    /// </summary>
+    /// <param name="path">File path to delete when it exists.</param>
+    internal static void TryDelete(string path)
     {
         try
         {
@@ -3727,6 +3998,10 @@ public class VideoAudioController : ControllerBase
         catch (IOException)
         {
             // Best effort
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Best effort (JF-499 W4): a permission-denied path must not 500 the play
         }
     }
 #pragma warning restore CA3003

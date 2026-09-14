@@ -10,8 +10,6 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 /// </summary>
 public static class AudiobookPlaylistBuilder
 {
-    private const int SegmentDurationSeconds = 10;
-
     /// <summary>
     /// Which resume strategy to use.
     /// <list type="bullet">
@@ -43,8 +41,13 @@ public static class AudiobookPlaylistBuilder
     /// </summary>
     /// <param name="basePlaylist">The full audiobook HLS playlist.</param>
     /// <param name="startTicks">Resume position in .NET ticks (100ns units).</param>
+    /// <param name="segmentDurationSeconds">The nominal segment length the slice
+    /// arithmetic divides by when the playlist carries no parseable
+    /// <c>#EXTINF</c> durations (the flat-divisor FALLBACK; the audiobook path
+    /// passes its 10s const, the episode remux its 4s, JF-499 W2). Ignored by the
+    /// StartHint strategy.</param>
     /// <returns>A playlist configured to resume at the given position.</returns>
-    public static string BuildResumePlaylist(string basePlaylist, long startTicks)
+    public static string BuildResumePlaylist(string basePlaylist, long startTicks, int segmentDurationSeconds)
     {
         if (startTicks <= 0)
         {
@@ -54,7 +57,7 @@ public static class AudiobookPlaylistBuilder
         return ActiveStrategy switch
         {
             ResumeStrategy.StartHint => BuildStartHintPlaylist(basePlaylist, startTicks),
-            ResumeStrategy.Sliced => BuildSlicedPlaylist(basePlaylist, startTicks),
+            ResumeStrategy.Sliced => BuildSlicedPlaylist(basePlaylist, startTicks, segmentDurationSeconds),
             _ => BuildStartHintPlaylist(basePlaylist, startTicks)
         };
     }
@@ -93,15 +96,25 @@ public static class AudiobookPlaylistBuilder
     }
 
     /// <summary>
-    /// Emit a playlist beginning at segment N = floor(startTicks / 10s). Keeps segments
-    /// N..end, sets <c>#EXT-X-MEDIA-SEQUENCE:N</c>, and preserves the header + ENDLIST.
-    /// Loses the ability to seek backward before N, but is guaranteed to resume at N on any
-    /// HLS player (uses the same event-playlist mechanism first-play relies on). This is the
-    /// active strategy because the Echo Show ignores <c>#EXT-X-START</c>.
+    /// Emit a playlist beginning at the resume segment N, resolved by ACCUMULATING
+    /// the playlist's own per-segment <c>#EXTINF</c> durations until the cumulative
+    /// start offset reaches <paramref name="startTicks"/> (JF-499 P2 fix: the
+    /// episode remux is <c>-c:v copy</c> with <c>-hls_time 4</c>, so real segments
+    /// land on the source GOP, 4-10s, and the completed ffmpeg playlist carries the
+    /// ACTUAL per-segment durations; a flat division by the nominal duration lands
+    /// up to ~1.5x too deep). The flat divisor over
+    /// <paramref name="segmentDurationSeconds"/> is kept as the FALLBACK for
+    /// playlists whose durations fail to parse or that carry none.
+    /// Keeps segments N..end, sets <c>#EXT-X-MEDIA-SEQUENCE:N</c>, and preserves the
+    /// header + ENDLIST. Loses the ability to seek backward before N, but is guaranteed
+    /// to resume at N on any HLS player (uses the same event-playlist mechanism
+    /// first-play relies on). This is the active strategy because the Echo Show
+    /// ignores <c>#EXT-X-START</c>.
     /// </summary>
-    internal static string BuildSlicedPlaylist(string basePlaylist, long startTicks)
+    internal static string BuildSlicedPlaylist(string basePlaylist, long startTicks, int segmentDurationSeconds)
     {
-        int startSegment = (int)(startTicks / (TimeSpan.TicksPerSecond * SegmentDurationSeconds));
+        int startSegment = TryResolveStartSegmentByExtinf(basePlaylist, startTicks)
+            ?? (int)(startTicks / (TimeSpan.TicksPerSecond * segmentDurationSeconds));
         if (startSegment <= 0)
         {
             return basePlaylist;
@@ -154,6 +167,85 @@ public static class AudiobookPlaylistBuilder
         }
 
         return output.ToString();
+    }
+
+    /// <summary>
+    /// Resolve the resume segment by accumulating the playlist's own per-segment
+    /// <c>#EXTINF</c> durations: the first segment whose cumulative start offset
+    /// reaches <paramref name="startTicks"/> (JF-499 P2). Returns null when the
+    /// playlist carries no parseable durations, or the position lies beyond its
+    /// total, so the caller falls back to the flat divisor.
+    /// Uses the same segment-URI line predicate as the emitter so indices align.
+    /// </summary>
+    /// <param name="basePlaylist">The full playlist text.</param>
+    /// <param name="startTicks">Resume position in .NET ticks.</param>
+    /// <returns>The resume segment index, or null when accumulation is impossible.</returns>
+    private static int? TryResolveStartSegmentByExtinf(string basePlaylist, long startTicks)
+    {
+        string[] lines = basePlaylist.Split('\n');
+        long cumulativeTicks = 0;
+        int segmentIndex = 0;
+        double? pendingSeconds = null; // buffered #EXTINF awaiting its segment URI line
+
+        foreach (string rawLine in lines)
+        {
+            string line = rawLine.TrimEnd('\r');
+
+            if (!line.StartsWith('#') && line.Length > 0 && line.Contains("seg_", StringComparison.Ordinal))
+            {
+                if (pendingSeconds is not double seconds)
+                {
+                    // A segment without a parseable #EXTINF: the walk cannot be exact.
+                    return null;
+                }
+
+                if (cumulativeTicks >= startTicks)
+                {
+                    return segmentIndex;
+                }
+
+                cumulativeTicks += (long)Math.Round(seconds * TimeSpan.TicksPerSecond);
+                segmentIndex++;
+                pendingSeconds = null;
+                continue;
+            }
+
+            if (line.StartsWith("#EXTINF", StringComparison.Ordinal))
+            {
+                pendingSeconds = TryParseExtInfSeconds(line);
+            }
+        }
+
+        // startTicks lies beyond the playlist's total duration (stale resume value):
+        // fall back to the flat divisor rather than slicing everything away.
+        return null;
+    }
+
+    /// <summary>
+    /// Parse the duration seconds out of an <c>#EXTINF:&lt;duration&gt;[,&lt;title&gt;]</c>
+    /// line, invariant-culture. Returns null on any parse failure.
+    /// </summary>
+    private static double? TryParseExtInfSeconds(string line)
+    {
+        int colon = line.IndexOf(':');
+        if (colon < 0)
+        {
+            return null;
+        }
+
+        int end = line.IndexOf(',', colon + 1);
+        if (end < 0)
+        {
+            end = line.Length;
+        }
+
+        return double.TryParse(
+            line.AsSpan(colon + 1, end - colon - 1),
+            NumberStyles.Float,
+            CultureInfo.InvariantCulture,
+            out double seconds)
+            ? seconds
+            : null;
     }
 
     /// <summary>
