@@ -176,10 +176,16 @@ internal static class TestHelpers
     /// <summary>
     /// The speech text of a response whose OutputSpeech may legitimately be null (a
     /// silent AudioPlayer start): null means no speech at all, which is exactly what
-    /// the announce-off tests want to prove.
+    /// the announce-off tests want to prove. SSML announcements count as speech: the
+    /// markup is stripped so content assertions see the spoken words.
     /// </summary>
     internal static string? GetSpeechTextOrNull(SkillResponse response)
-        => (response.Response?.OutputSpeech as PlainTextOutputSpeech)?.Text;
+        => response.Response?.OutputSpeech switch
+        {
+            PlainTextOutputSpeech plain => plain.Text,
+            SsmlOutputSpeech ssml => GetSpeechText(response),
+            _ => null,
+        };
 
     /// <summary>
     /// Extract speech text from a SkillResponse, handling both plain text and SSML output.
@@ -198,6 +204,8 @@ internal static class TestHelpers
             raw = raw.Replace("</say-as>", string.Empty);
             raw = Regex.Replace(raw, "<prosody[^>]*>", string.Empty);
             raw = raw.Replace("</prosody>", string.Empty);
+            raw = Regex.Replace(raw, "<w[^>]*>", string.Empty);
+            raw = raw.Replace("</w>", string.Empty);
             raw = Regex.Replace(raw, @"\s+", " ").Trim();
             return raw;
         }
