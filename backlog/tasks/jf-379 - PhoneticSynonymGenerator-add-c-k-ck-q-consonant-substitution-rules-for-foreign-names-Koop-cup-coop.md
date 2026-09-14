@@ -7,7 +7,7 @@ status: In Progress
 assignee:
   - zai
 created_date: '2026-07-25 18:07'
-updated_date: '2026-09-14 11:44'
+updated_date: '2026-09-14 12:29'
 labels:
   - enhancement
   - phonetic
@@ -52,6 +52,8 @@ New device-ASR evidence for the phonetic-variant need (2026-09-06, Echo Dot): 's
 Stage-0 shape: velar-stop family in PhoneticSynonymGenerator (GetVelarStopVariants: c/k/q swaps, oo->u/o drifts, QuGlide /kw/ form, ck collapse; soft-c and ch-digraph excluded via IsHardCAt/IsVelarStopAt) wired into ItalianPhoneticSynonyms.Generate ONLY (it-IT evidence; QuGlide is Italian orthography - es/pt need localized glides cu/qu before wiring, do NOT mirror the call site). Per-name cap 5 via PerNameVariantCap const with a provably-full skip guard. 13+2 unit tests in VelarStopVariantTests.cs (TDD red-first); suite 3734/3734 green both TFMs.
 
 AC status: #1 done (rules + bounds), #2 done (cap 5, attestation-ordered: c-form and drifts before q-forms), #3 done (Koop emits cup/coop/cop; Bianchi/Beatles/Adele/Beyonce empty). #4 (live catalog re-sync + on-device 'suona koop') PENDING Paolo: needs DLL deploy + catalog re-sync, then device check.
+
+2026-09-14 (Paolo, to fold into the generative build when it starts): the variant set must explicitly cover the CORRECT-pronunciation case, not just L1-mangled speech. A user who says an English name perfectly is still heard by a locale-built ASR that cannot write English sounds, so the correct rendering lands as a LOCAL spelling anyway (Koop -> cup AND coop from a correct-ish pronunciation; one Italian ear, two renderings - not two accents). The PHOIBLE-derived substitution data serves both directions (speaker can't say it / listener can't hear it - same sound-inventory gap). Make 'correct pronunciation, foreign ear' an explicit acceptance test on a sample of names when the composite is built, so alias sets are checked against both kinds of rendering rather than by accident. Paolo deferred this with the rest of the redesign: 'keep that in the backlog for now, we will get to that'.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
