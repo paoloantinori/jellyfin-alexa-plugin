@@ -3,11 +3,11 @@ id: JF-379
 title: >-
   PhoneticSynonymGenerator: add c/k/ck/q consonant-substitution rules for
   foreign names (Koop->cup/coop)
-status: In Progress
+status: Done
 assignee:
   - zai
 created_date: '2026-07-25 18:07'
-updated_date: '2026-09-14 12:59'
+updated_date: '2026-09-14 13:16'
 labels:
   - enhancement
   - phonetic
@@ -34,10 +34,10 @@ NOTE: distinct from the catalog-injection question (JF-380). This task is about 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Add c/k/ck/q consonant-substitution rules to PhoneticSynonymGenerator.ApplyRomanceTailRules (or a new consonant-variant step) so an English name like 'Koop' emits variants covering ASR's Romance-L1 transcription drift: Coop, Cop, Cup, Quop, Ckop, etc.
-- [ ] #2 Bound the variant count per name (consistent with the existing per-name cap, currently 5) so coverage doesn't explode the catalog/slot size; device-captured forms ordered first
-- [ ] #3 Unit tests: given 'Koop', the generator emits at least one of cup/coop/cop; given a name with no k/c, no spurious variants
-- [ ] #4 Live verify: re-sync catalog, confirm the JellyfinArtist catalog version for 'Koop' includes the new phonetic variants; on-device 'suona koop' resolves (manual)
+- [x] #1 Add c/k/ck/q consonant-substitution rules to PhoneticSynonymGenerator.ApplyRomanceTailRules (or a new consonant-variant step) so an English name like 'Koop' emits variants covering ASR's Romance-L1 transcription drift: Coop, Cop, Cup, Quop, Ckop, etc.
+- [x] #2 Bound the variant count per name (consistent with the existing per-name cap, currently 5) so coverage doesn't explode the catalog/slot size; device-captured forms ordered first
+- [x] #3 Unit tests: given 'Koop', the generator emits at least one of cup/coop/cop; given a name with no k/c, no spurious variants
+- [x] #4 Live verify: re-sync catalog, confirm the JellyfinArtist catalog version for 'Koop' includes the new phonetic variants; on-device 'suona koop' resolves (manual)
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -56,35 +56,26 @@ AC status: #1 done (rules + bounds), #2 done (cap 5, attestation-ordered: c-form
 2026-09-14 (Paolo, to fold into the generative build when it starts): the variant set must explicitly cover the CORRECT-pronunciation case, not just L1-mangled speech. A user who says an English name perfectly is still heard by a locale-built ASR that cannot write English sounds, so the correct rendering lands as a LOCAL spelling anyway (Koop -> cup AND coop from a correct-ish pronunciation; one Italian ear, two renderings - not two accents). The PHOIBLE-derived substitution data serves both directions (speaker can't say it / listener can't hear it - same sound-inventory gap). Make 'correct pronunciation, foreign ear' an explicit acceptance test on a sample of names when the composite is built, so alias sets are checked against both kinds of rendering rather than by accident. Paolo deferred this with the rest of the redesign: 'keep that in the backlog for now, we will get to that'.
 
 2026-09-14 15:00 AC#4 FIRST HALF VERIFIED ON AMAZON GROUND TRUTH (forced early at Paolo's request: backed up the plugin XML, removed the LastCatalogSync element so the 12h gate read never-synced, restarted; sync succeeded 1133 artists / 886 albums / 138 series across 16 locales; the it-IT model PUT pinned artist catalog 6590add1 version 904 from its own leg - per-locale version pinning is why later locale legs minting 905-909 do NOT overwrite the it-IT value set). Evidence: ask smapi profile-nlu it-IT, utterance 'suona la band cup' -> PlayArtistSongsIntent, musician slot ER_SUCCESS_MATCH -> 'Koop' (id jellyfin_artist_9c6c9122ab59d67f60435c54c15252b8); 'suona la band coop' -> same match; control 'suona la band xyzzyfoo' -> no intent, no catch-all. REMAINING: on-device spot check (real ASR + speaker) at Paolo's convenience: 'suona koop' / 'suona cup' / 'suona coop'.
+
+2026-09-14 15:15 AC#4 DEVICE VERIFICATION COMPLETE. On-device it-IT (Echo Show, log-verified): LaunchRequest 15:13:54 (invocation 'mia collezione' working again after enablement propagation settled), then PlayArtistSongsIntent 15:14:28 req=amzn1.echo-api.request.d37237e4 with slot musician spoken value 'cup' resolved by the STATIC catalog authority to 'Koop' (id jellyfin_artist_9c6c9122ab59d67f60435c54c15252b8; the dynamic authority NO_MATCHed, the catalog upload is what matched), then AudioPlayer.PlaybackStarted 15:14:34 (5.9s after the request). This is the filed incident case end to end: ASR heard 'cup', the catalog alias resolved it to Koop, playback started. Task complete: all 4 ACs verified (unit + Amazon ground truth + device).
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-REDESIGNED 2026-07-27 from hand-rolled rules to a data-driven GENERATIVE composite, per maintainer requirement (no per-case hand substitutions; must generalize across languages).
-
-Research (claudedocs/research_jf379_generative_phonetic_libs_2026-07-27.md, exhaustive, primary sources): NO turnkey library GENERATES L1-transfer accent variants. The build is a composite:
-1. Forward English g2p (text -> IPA): Epitran rule engine (MIT, port to C#; Go port exists as reference) + CMUdict (public domain) for English-word coverage. Spot-check: CMUdict contains koop/bush/soul/coughing/pink/floyd/adele/metallica/nirvana; misses novel coinages (radiohead) which fall back to rules.
-2. Per-L1 phonological interference (the core win): a once-curated map from English phonemes to L1-substituted phonemes, DERIVED FROM PHOIBLE 2.0 feature vectors (CC-BY). Replaces per-case hand rules with one feature-distance table per L1.
-3. Inverse orthography (per-L1 IPA -> spelling): necessarily per-L1, small static table.
-
-SCOPE: only the 7 L1s the plugin already has generators for (it/de/es/fr/pt/ja/nl), bounded to the user's catalog vocabulary. NOT all languages.
-
-Design spec: docs/superpowers/specs/2026-07-27-jf379-generative-phonetic-synonyms-design.md (committed 814e93b). Multi-session build; spec captures open decisions for review (CMUdict delivery: full vs trimmed-per-catalog vs rule-only; interference curation method; rollout gating behind a feature flag).
-
-NOT YET IMPLEMENTED. Status remains To Do (designed, awaiting build). Related: JF-381 (query-time Double Metaphone, shipped, fixes the reported Koop/cup defect at the query layer; JF-379 is the catalog-layer one-shot complement).
+Stage-0 velar-stop (c/k/ck/q) phonetic variant family for the Italian catalog generator, shipped in TDD per maintainer directive. Koop now emits Coop/Cup/Cop/Qoop/Quop catalog aliases; soft-c and the ch digraph excluded from drift sites (Bianchi must not drift; Kitchen keeps ch intact); multi-word names compose per-word variants with siblings; per-name cap 5 with provably-full skip guard. 15 unit pins (VelarStopVariantTests), suite 3734 green both TFMs, gates run (simplify 4-agent + code-review high: 2 P3s fixed and red-green pinned: QuGlide uu-doubling, cap test Equal(5)). Deployed to minix (net10.0, md5-verified), catalog re-synced (1133/886/138, it-IT model pins artist catalog v904), verified on Amazon ground truth (profile-nlu 'suona la band cup'/'coop' -> ER_SUCCESS_MATCH -> Koop) and ON DEVICE: spoken 'cup' resolved to Koop via the catalog and playback started (log req amzn1.echo-api.request.d37237e4, 2026-09-14 15:14). Italian-only wiring is deliberate (QuGlide is Italian orthography; es/pt need localized cu/qu glides). The 2026-07-27 generative redesign remains the long-term architecture; deferred notes for it live in the task notes ('correct pronunciation, foreign ear' acceptance case per Paolo).
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
 - [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
 - [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
 - [ ] #6 NLU test fixtures updated if interaction model changed
 - [ ] #7 E2E test added for new intent or handler logic
 - [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining, or findings applied/tracked)
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining, or findings applied/tracked)
 <!-- DOD:END -->

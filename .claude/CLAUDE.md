@@ -57,7 +57,7 @@ For quick handler-level testing without SMAPI/NLU. Runs on minix localhost:
 ```bash
 SSH_OPTS="-F /dev/null -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa"
 ssh $SSH_OPTS pantinor@minix "curl -sf -X POST 'http://localhost:8096/Plugins/AlexaSkill/Simulator/Intent' \
-  -H 'X-Emby-Token: $JELLYFIN_API_KEY' \
+  -H 'Authorization: MediaBrowser Token=\"$JELLYFIN_API_KEY\"' \
   -H 'Content-Type: application/json' \
   -d '{\"intentName\":\"QueryArtistLibraryIntent\",\"slots\":{\"musician\":\"soul coughing\"},\"locale\":\"it-IT\"}'"
 ```

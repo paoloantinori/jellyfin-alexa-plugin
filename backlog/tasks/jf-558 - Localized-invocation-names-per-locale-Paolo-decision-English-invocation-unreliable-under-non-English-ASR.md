@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-13 13:27'
+updated_date: '2026-09-14 13:16'
 labels:
   - product-decision
   - interaction-model
@@ -62,6 +63,12 @@ SIMULATOR VERIFICATION BLOCKED (Amazon-side): the invocation probes fail for ALL
 - [ ] #2 Approved names configured via Config.LocaleInvocationNames, deployed, and the invocation verified live per locale (the e2e smoke two-step + a one-shot form both reach the skill in each renamed locale)
 - [ ] #3 Post-rename: the JF-551 one-shot payload families become testable in the renamed locales; NLU fixtures + e2e smoke updated for the new invocation
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-09-14 15:15 it-IT DEVICE INVOCATION VERIFIED (resolves the pending check for it-IT at least): LaunchRequest sessionNew=True at 15:13:54 log-confirmed after 'Alexa, apri mia collezione'. Operational note from the same session: a set-skill-enablement re-registration (standard post-deploy step) made the invocation SILENT for a few minutes on the Echo while the enablement propagated - zero requests reached the endpoint, skill-side was healthy the whole time (an AlexaSkillEvent was delivered in the same window). If invocation goes suddenly silent after an enablement change, wait ~10 min before diagnosing deeper; the Amazon simulator was also broken that day (known-good it-IT controls fail, same as during the 2026-09-13 verification), so simulate-skill is not a usable fallback for this check. Other locales' native names remain untested on device.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
