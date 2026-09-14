@@ -3,18 +3,16 @@ id: JF-334
 title: >-
   CatalogSlotTypes.Names dynamic-entity targets (AMAZON.Album/Musician) mismatch
   model slot types after catalog sync
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-12 20:04'
-updated_date: '2026-07-13 20:15'
+updated_date: '2026-09-14 20:39'
 labels:
   - dynamic-entities
   - catalog
   - cleanup
   - low-priority
 dependencies: []
-modified_files:
-  - Jellyfin.Plugin.AlexaSkill/Alexa/Catalog/CatalogSlotTypes.cs
 priority: low
 ---
 
@@ -33,6 +31,12 @@ This is now LOW PRIORITY / largely MOOT: the catalog-backed slot types (AlbumNam
 - [ ] #3 Verify the change has real effect (or explicitly document if it's moot because the catalog already carries the full library at turn-1). Cross-language spot-check an English album title spoken by an Italian user.
 - [ ] #4 No regression: catalog sync still succeeds and the model builds; live playback unaffected.
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+CLOSED as MOOT, documented per AC#3's explicit allowance (no code change; the risk/benefit is against a change). Audit (AC#1, confirmed): CatalogSlotTypes.Names targets AMAZON.Album/AMAZON.Musician while post-sync slots use JellyfinArtist (catalog-wired) and AlbumName, so the dynamic-entity layer is inert. Resolution rationale: (a) the catalog carries the user's FULL library at turn-1 (JF-96.2/JF-332), which is the layer dynamic entities were meant to approximate at turn-2+ - the supersedes relationship the task itself notes; (b) live device evidence 2026-09-14 (the Koop on-device resolution) shows BOTH authorities consulted on every musician resolution: the static catalog authority ER_SUCCESS_MATCH (the one that resolved) and the echo-sdk.dynamic authority ER_SUCCESS_NO_MATCH - the dynamic layer is structurally consulted-but-inert, matching no slot; (c) pointing Names at the catalog-wired types is NOT a safe mechanical fix: Dialog.UpdateDynamicEntities updates custom slot types, and whether Amazon lets dynamic values override a catalog-supplied (valueCatalog/valueSupplier-wired) type is undocumented and unverified - an experiment with zero user payoff while the catalog works (AC#4's no-regression concern outweighs). IF per-session personalization beyond the static library is ever wanted (the only thing dynamic entities could still add), file a fresh design task that starts from the platform question in (c). AC#2 intentionally not done (moot); AC#4 unaffected (no change).
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
