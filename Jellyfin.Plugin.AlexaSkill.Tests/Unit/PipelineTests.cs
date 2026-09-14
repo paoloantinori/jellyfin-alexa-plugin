@@ -309,6 +309,47 @@ public class PipelineTests : PluginTestBase
     // RequestPipeline tests
     // =====================================================================
 
+    /// <summary>
+    /// JF-318 triage residual: the response-interceptor loop is the pipeline's
+    /// resilience boundary - a failing interceptor logs and the pipeline continues;
+    /// the handler's response (and every LATER interceptor) survives. A future edit
+    /// that lets the exception propagate would break this contract silently.
+    /// </summary>
+    [Fact]
+    public async Task Pipeline_FailingResponseInterceptor_ResponseSurvives_LaterInterceptorsRun()
+    {
+        var expectedResponse = ResponseBuilder.Tell("handled");
+        var handler = CreateHandler(() => Task.FromResult(expectedResponse));
+
+        var recording = new Mock<IResponseInterceptor>();
+        recording
+            .Setup(i => i.ProcessAsync(It.IsAny<RequestContext>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        // Registration order: [throwing, recording]. Response interceptors run in
+        // REVERSE, so recording runs FIRST and must still have run when the
+        // throwing one (second in reverse) explodes.
+        var throwing = new Mock<IResponseInterceptor>();
+        throwing
+            .Setup(i => i.ProcessAsync(It.IsAny<RequestContext>(), It.IsAny<CancellationToken>()))
+            .Throws(new InvalidOperationException("interceptor exploded"));
+
+        var pipeline = new RequestPipeline(
+            Array.Empty<IRequestInterceptor>(),
+            new[] { throwing.Object, recording.Object },
+            _loggerFactory.CreateLogger<RequestPipeline>());
+
+        var result = await pipeline.ExecuteAsync(
+            handler,
+            CreateSkillRequest(),
+            CreateAuthenticatableContext(),
+            null,
+            CancellationToken.None);
+
+        Assert.Same(expectedResponse, result);
+        recording.Verify(i => i.ProcessAsync(It.IsAny<RequestContext>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
     [Fact]
     public async Task Pipeline_NoInterceptors_HandlerRunsAndResponseReturned()
     {
