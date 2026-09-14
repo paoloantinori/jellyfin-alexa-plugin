@@ -3,10 +3,10 @@ id: JF-382
 title: >-
   Coincidental-containment tier-4 false-match still open on cross-media artist
   fallbacks + PlayArtist count>1 path
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-07-27 04:18'
-updated_date: '2026-09-14 19:42'
+updated_date: '2026-09-14 20:31'
 labels:
   - bug
   - artist-search
@@ -56,3 +56,9 @@ Predicate ArtistSearch.IsCoincidentalContainmentMatch (stop-word-aware, locale p
 
 2. The JF-417 deferral logic + the JF-420 fair-score comparison now exist in BOTH copies of the 4-tier chain (ArtistSearch.SearchAsync and the inline PlayArtistSongs Thorough mode), deepening this task's duplication: any containment/discrimination fix must be written twice until the consolidation happens. When consolidating, fold the dead fallback branch out and keep one copy of both mechanisms.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+CLOSED fixed and verified (2026-09-14 evening, implemented by delegated agent + orchestrator verification). The coincidental-containment false positive no longer auto-plays silently at any of the three surfaces JF-377 left open: (1) PlayArtistSongsIntentHandler Fast-mode fastAutoPlay pick, (2) Thorough count>1 HandleFuzzyMiss auto-accept (an end-gate after the narrowing covers both), (3) BaseHandler.TryEntityFallbackAsync single-match path (downgrades to the JF-363 offer ask when the caller wired it, else clean not-found; FindSong/PlayMoodMusic documented). All downgrades key on the existing stop-word-aware IsCoincidentalContainmentMatch predicate at the auto-play decision points (JF-408 rule respected: FuzzyMatcher untouched). Deliberate deviations pinned by tests: AutoServe users get the ask for coincidental shapes (no silent substitution; yes still plays); Off users with a strict-bar coincidental match get the clean not-found instead of the old silent auto-play. Genuine whole-word matches keep auto-playing. 6 tests added (Confirm, Off, AutoServe, genuine no-regression, 2x PlayArtistSongs shapes); suite 3744/3744 both TFMs, Release 0 warnings. Gates: /simplify four angles (findings applied incl. the AskCoincidentalContainment dedup and the rationale corrections) + code-review high opus CLEAN (invariants 1-5 verified: genuine-match preservation, end-gate placement, cascade 61<90 refusal, no missed callers, test soundness). Note: the implementation's "phonetic boost" rationale was corrected to plain partial-ratio during review (the 3-arg FindBestMatchWithScore has no boost). The JF-417 dead-fallback and duplication notes remain recorded in the task notes for the future consolidation.
+<!-- SECTION:FINAL_SUMMARY:END -->
