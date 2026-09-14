@@ -3,10 +3,10 @@ id: JF-536
 title: >-
   Consolidate prewritten event-playlist mechanism across HLS paths (shared
   writer core, prewrite in pin window, evaluate remaining paths)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-10 06:51'
-updated_date: '2026-09-14 22:44'
+updated_date: '2026-09-14 23:55'
 labels:
   - refactor
   - hls
@@ -53,3 +53,9 @@ GATED on JF-531 AC#2 passing on device (extract before the device proof risks ex
 <!-- SECTION:NOTES:BEGIN -->
 Code-review gate note (2026-09-10, JF-531): when the shared writer core is extracted, carry the invariant-culture EXTINF fix to the audiobook writer too - WriteAudiobookPlaylist (~:2868) still formats {segmentDuration:F6} with current culture; the episode writer got string.Create(InvariantCulture, ...) in JF-531 but the twin carries the latent pattern (comma-decimal host cultures would render '3,999346,' and parsers read duration 3).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+CLOSED complete (2026-09-14 night; gate on JF-531's device proof verified satisfied 2026-09-12 before starting). All four scopes + the folded culture fix: (a) shared writer core WritePrewrittenEventPlaylist + UniformSegmentDurations consumed by both writers (serve layers deliberately separate per the task's documented axes); (b) shared PrewrittenPlaylistFileName constant; (c) song path GAINED the prewrite on the verified VideoApp live-edge exposure class (registry + flag-gated serve + SongHlsSegmentSeconds const with coupling doc + 3-digit naming; no-runtime items keep the live fallback), episode-audio path documented-and-left (no seek surface, no live-edge evidence; later add is constants-only via the core); (d) both prewrites moved inside the JF-428 pin window (audiobook keeps flag-implies-listing/503; prewrite failure kills the process rather than leaking it). The invariant-culture EXTINF fix closes the audiobook writer's comma-decimal bug. Review bonus: the JF-503 near-ahead segment hold now covers the songs registry (a blocking finding - without it a minutes-long book encode's prewritten tail would 404 unheld). 13 tests (pin-window trio proven to catch the old code by temporary revert); suite 3774/3774 both TFMs; Release -warnaserror 0 warnings. Gates: implementer-run three-reviewer simplify pass (1 blocking + 4 nices applied, 5 documented skips) + code-review high (no blocking findings), orchestrator-verified.
+<!-- SECTION:FINAL_SUMMARY:END -->
