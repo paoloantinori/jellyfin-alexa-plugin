@@ -7,7 +7,7 @@ status: Done
 assignee:
   - zai
 created_date: '2026-07-25 18:07'
-updated_date: '2026-09-14 13:16'
+updated_date: '2026-09-14 13:38'
 labels:
   - enhancement
   - phonetic
@@ -58,6 +58,8 @@ AC status: #1 done (rules + bounds), #2 done (cap 5, attestation-ordered: c-form
 2026-09-14 15:00 AC#4 FIRST HALF VERIFIED ON AMAZON GROUND TRUTH (forced early at Paolo's request: backed up the plugin XML, removed the LastCatalogSync element so the 12h gate read never-synced, restarted; sync succeeded 1133 artists / 886 albums / 138 series across 16 locales; the it-IT model PUT pinned artist catalog 6590add1 version 904 from its own leg - per-locale version pinning is why later locale legs minting 905-909 do NOT overwrite the it-IT value set). Evidence: ask smapi profile-nlu it-IT, utterance 'suona la band cup' -> PlayArtistSongsIntent, musician slot ER_SUCCESS_MATCH -> 'Koop' (id jellyfin_artist_9c6c9122ab59d67f60435c54c15252b8); 'suona la band coop' -> same match; control 'suona la band xyzzyfoo' -> no intent, no catch-all. REMAINING: on-device spot check (real ASR + speaker) at Paolo's convenience: 'suona koop' / 'suona cup' / 'suona coop'.
 
 2026-09-14 15:15 AC#4 DEVICE VERIFICATION COMPLETE. On-device it-IT (Echo Show, log-verified): LaunchRequest 15:13:54 (invocation 'mia collezione' working again after enablement propagation settled), then PlayArtistSongsIntent 15:14:28 req=amzn1.echo-api.request.d37237e4 with slot musician spoken value 'cup' resolved by the STATIC catalog authority to 'Koop' (id jellyfin_artist_9c6c9122ab59d67f60435c54c15252b8; the dynamic authority NO_MATCHed, the catalog upload is what matched), then AudioPlayer.PlaybackStarted 15:14:34 (5.9s after the request). This is the filed incident case end to end: ASR heard 'cup', the catalog alias resolved it to Koop, playback started. Task complete: all 4 ACs verified (unit + Amazon ground truth + device).
+
+2026-09-14 15:40 NEW ATTESTED ASR FORM for the generative redesign evidence pile (console session, it-IT): 'Tom Waits' spoken -> transcribed 'tom watis'; JellyfinArtist catalog authority ER_SUCCESS_NO_MATCH (stage-0 velar family does not apply: no velar stop in 'Waits'), yet the request SUCCEEDED via the query-layer phonetic search (PlaySongIntent resolved 'Sins of My Father' by Tom Waits, played correctly) - the JF-381-queries + JF-379-catalog layering working as designed. 'watis' documents the English diphthong /eI/ -> Italian monophthong drift (Waits -> watis), a NEW family beyond velar stops; do NOT hand-roll it now (extend-on-evidence applies, but the right home is the generative composite's interference maps). SkillExecution 457ms, req amzn1.echo-api.request.89a1d48a.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
