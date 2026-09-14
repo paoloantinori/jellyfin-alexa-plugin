@@ -7,7 +7,7 @@ status: Done
 assignee:
   - zai
 created_date: '2026-07-25 18:07'
-updated_date: '2026-09-14 13:38'
+updated_date: '2026-09-14 13:42'
 labels:
   - enhancement
   - phonetic
@@ -60,6 +60,8 @@ AC status: #1 done (rules + bounds), #2 done (cap 5, attestation-ordered: c-form
 2026-09-14 15:15 AC#4 DEVICE VERIFICATION COMPLETE. On-device it-IT (Echo Show, log-verified): LaunchRequest 15:13:54 (invocation 'mia collezione' working again after enablement propagation settled), then PlayArtistSongsIntent 15:14:28 req=amzn1.echo-api.request.d37237e4 with slot musician spoken value 'cup' resolved by the STATIC catalog authority to 'Koop' (id jellyfin_artist_9c6c9122ab59d67f60435c54c15252b8; the dynamic authority NO_MATCHed, the catalog upload is what matched), then AudioPlayer.PlaybackStarted 15:14:34 (5.9s after the request). This is the filed incident case end to end: ASR heard 'cup', the catalog alias resolved it to Koop, playback started. Task complete: all 4 ACs verified (unit + Amazon ground truth + device).
 
 2026-09-14 15:40 NEW ATTESTED ASR FORM for the generative redesign evidence pile (console session, it-IT): 'Tom Waits' spoken -> transcribed 'tom watis'; JellyfinArtist catalog authority ER_SUCCESS_NO_MATCH (stage-0 velar family does not apply: no velar stop in 'Waits'), yet the request SUCCEEDED via the query-layer phonetic search (PlaySongIntent resolved 'Sins of My Father' by Tom Waits, played correctly) - the JF-381-queries + JF-379-catalog layering working as designed. 'watis' documents the English diphthong /eI/ -> Italian monophthong drift (Waits -> watis), a NEW family beyond velar stops; do NOT hand-roll it now (extend-on-evidence applies, but the right home is the generative composite's interference maps). SkillExecution 457ms, req amzn1.echo-api.request.89a1d48a.
+
+2026-09-14 15:45 RETRACTION of the 15:40 note: 'tom watis' was NOT an ASR capture - Paolo typed it in the console test box and it was a keyboard typo ('watis era solo un mio typo! generato battendo con la tastiera'). It is NOT evidence for the generative redesign's /eI/ drift family and must not be cited as an attested form. The layering observation remains valid but trivial: catalog NO_MATCH on a mistyped string, query-layer search still resolved the correct song. Evidence bar for the redesign pile: console-TYPED strings never count; only wake-word VOICE transcriptions do.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
