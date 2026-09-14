@@ -431,10 +431,16 @@ public class SmapiManagement : ManagementApi
     /// <returns>The existing skill ID, or null if no match found.</returns>
     public async Task<string?> FindExistingSkillAsync(ManifestSkill manifestSkill)
     {
-        string expectedName = manifestSkill.Manifest.PublishingInformation?.Locales?.Values.FirstOrDefault()?.Name ?? string.Empty;
+        // JF-513.3: the expected name is pinned to en-US (a stable locale) instead of
+        // FirstOrDefault, which is JSON insertion-order dependent - JF-513 moved ar-SA
+        // to the front, and a future localized ar-SA display name would have matched
+        // nothing in nameByLocale and created a DUPLICATE skill. Matching is against
+        // the en-US entry of nameByLocale below, symmetrically.
+        string expectedName = manifestSkill.Manifest.PublishingInformation?.Locales?
+            .TryGetValue("en-US", out var enInfo) == true ? enInfo.Name ?? string.Empty : string.Empty;
         if (string.IsNullOrEmpty(expectedName))
         {
-            _logger.LogDebug("Cannot search for existing skill: manifest has no publishing name");
+            _logger.LogDebug("Cannot search for existing skill: manifest has no en-US publishing name");
             return null;
         }
 
@@ -469,11 +475,10 @@ public class SmapiManagement : ManagementApi
                     continue;
                 }
 
-                string? skillName = nameByLocale.Values<string>().FirstOrDefault(n => n == expectedName);
-                if (skillName != null)
+                if (nameByLocale!.TryGetValue("en-US", out var enName) && enName?.ToString() == expectedName)
                 {
                     string? skillId = skill["skillId"]?.ToString();
-                    _logger.LogInformation("Found existing skill matching name '{Name}': {SkillId}", expectedName, skillId);
+                    _logger.LogInformation("Found existing skill matching en-US name '{Name}': {SkillId}", expectedName, skillId);
                     return skillId;
                 }
             }

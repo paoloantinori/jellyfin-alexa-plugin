@@ -512,7 +512,7 @@ public class PluginConfiguration : BasePluginConfiguration
         {
             if (Plugin.Instance.ManifestSkill == null)
             {
-                Plugin.Instance.ManifestSkill = new ManifestSkill("Jellyfin.Plugin.AlexaSkill.Alexa.Manifest.manifest.json", serverAddress, sslCertType);
+                Plugin.Instance.ManifestSkill = new ManifestSkill(ManifestSkill.EmbeddedManifestResourcePath, serverAddress, sslCertType);
             }
             else
             {

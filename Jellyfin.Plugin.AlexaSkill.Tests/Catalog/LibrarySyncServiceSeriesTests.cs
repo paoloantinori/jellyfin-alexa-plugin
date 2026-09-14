@@ -183,6 +183,36 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
+    /// JF-513.3 item 2: with CatalogSyncLocales covering two locales whose payload
+    /// is IDENTICAL (no phonetic generator for the second), the second leg must
+    /// skip the version upload and report Version null - the first leg's minted
+    /// version stays referenced and the injection gate treats the leg as no-op.
+    /// The fake serves the same series catalog content for both legs.
+    /// </summary>
+    [Fact]
+    public async Task SyncUserLibraryAsync_IdenticalPayload_SecondLocaleLeg_SkipsVersionUpload()
+    {
+        SetupLibraryWithSeries("Adolescence");
+        var user = CreateUser();
+        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+        Plugin.Instance!.Configuration.CatalogSyncLocales = "ar-SA";
+
+        try
+        {
+            var result = await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
+
+            Assert.True(result.Success);
+            // ar-SA has no phonetic generator, so its Artist payload is byte-identical
+            // to the it-IT one already uploaded this run: one upload, not two.
+            Assert.Equal(1, _smapiHandler.VersionUploadsFor(SeriesCatalogId));
+        }
+        finally
+        {
+            Plugin.Instance!.Configuration.CatalogSyncLocales = string.Empty;
+        }
+    }
+
+    /// <summary>
     /// A single series-only sync must create the series catalog ("Jellyfin Series"),
     /// persist its ID on the user, upload a catalog version, and inject the
     /// catalog-backed SeriesName type into the interaction model (replacing the

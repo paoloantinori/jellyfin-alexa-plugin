@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -142,23 +143,32 @@ public class LibrarySyncService
         // JF-544: every SMAPI call in the leg reads the CURRENT token (see the
         // per-attempt re-read below); catalog version creation and the model PUT are
         // both safe to re-submit, which the one-shot 401 retry relies on.
+        // JF-513.3 (item 2): locale legs whose payload is identical to one already
+        // uploaded this run (ar-SA/hi-IN have no phonetic generator, so their
+        // uploads are byte-identical to a previous leg's) are skipped: SMAPI stores
+        // a new catalog version per upload, so re-minting identical content burns
+        // quota and the 17-locale volume is the growth this item flagged. The
+        // version returned for the skipped type is the last uploaded one for that
+        // catalog, which the model-injection gate below already treats as current.
+        Dictionary<string, string> uploadedPayloadHashes = new(StringComparer.Ordinal);
+
         async Task RunLegAsync(string locale)
         {
             // Create/update catalogs with locale-specific phonetic synonyms
             var artistResult = await SyncCatalogForLocaleAsync(
                 user, user.SmapiDeviceToken.AccessToken, vendorId, CatalogType.Artist, artistItems,
                 user.ArtistCatalogId, "Jellyfin Artists", "Artist catalog synced from Jellyfin library",
-                locale, cancellationToken).ConfigureAwait(false);
+                locale, uploadedPayloadHashes, cancellationToken).ConfigureAwait(false);
 
             var albumResult = await SyncCatalogForLocaleAsync(
                 user, user.SmapiDeviceToken.AccessToken, vendorId, CatalogType.Album, albumItems,
                 user.AlbumCatalogId, "Jellyfin Albums", "Album catalog synced from Jellyfin library",
-                locale, cancellationToken).ConfigureAwait(false);
+                locale, uploadedPayloadHashes, cancellationToken).ConfigureAwait(false);
 
             var seriesResult = await SyncCatalogForLocaleAsync(
                 user, user.SmapiDeviceToken.AccessToken, vendorId, CatalogType.Series, seriesItems,
                 user.SeriesCatalogId, "Jellyfin Series", "Series catalog synced from Jellyfin library",
-                locale, cancellationToken).ConfigureAwait(false);
+                locale, uploadedPayloadHashes, cancellationToken).ConfigureAwait(false);
 
             // Update this locale's interaction model with the catalog references
             if (artistResult.Version != null || albumResult.Version != null || seriesResult.Version != null)
@@ -337,6 +347,7 @@ public class LibrarySyncService
         string catalogName,
         string catalogDescription,
         string locale,
+        Dictionary<string, string> uploadedPayloadHashes,
         CancellationToken cancellationToken)
     {
         if (items.Count == 0)
@@ -396,6 +407,27 @@ public class LibrarySyncService
         }
 
         string payloadJson = JsonSerializer.Serialize(payload, CatalogManager.JsonOptions);
+
+        // JF-513.3: skip the version upload when this exact payload was already
+        // minted in this run (same user/catalog type across locale legs). The last
+        // minted version for this catalog id is the one the live model already
+        // references, so a skip must NOT re-run the model injection either: report
+        // Version null so the caller treats this leg as no-op.
+        string payloadHash = Convert.ToHexString(
+            SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(payloadJson)));
+        string hashKey = $"{catalogType}:{catalogId}";
+        if (uploadedPayloadHashes.TryGetValue(hashKey, out var seenHash) && seenHash == payloadHash)
+        {
+            _logger.LogInformation(
+                "Catalog {Type} payload for user {UserId} locale {Locale} is identical to a payload already uploaded this run; skipping the version upload",
+                catalogType,
+                user.Id,
+                locale);
+            return (payload.Values.Count, null);
+        }
+
+        uploadedPayloadHashes[hashKey] = payloadHash;
+
         string serverAddress = Plugin.Instance!.Configuration.ServerAddress.TrimEnd('/');
 
         // URL factory: re-store the payload on each call so a retry (after a transient

@@ -40,7 +40,7 @@ public class InteractionModelRedeployerTests : PluginTestBase
             cfg => { },
             "alexa-redeployer-test");
         Plugin.Instance!.ManifestSkill = new ManifestSkill(
-            "Jellyfin.Plugin.AlexaSkill.Alexa.Manifest.manifest.json",
+            ManifestSkill.EmbeddedManifestResourcePath,
             "https://example.com",
             global::Alexa.NET.Management.SslCertificateType.Wildcard);
     }

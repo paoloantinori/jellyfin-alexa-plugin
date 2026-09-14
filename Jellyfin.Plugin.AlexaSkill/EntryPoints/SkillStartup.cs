@@ -101,7 +101,7 @@ public class SkillStartup : IHostedService, IDisposable
         ManifestSkill manifestSkill;
         try
         {
-            manifestSkill = new ManifestSkill("Jellyfin.Plugin.AlexaSkill.Alexa.Manifest.manifest.json", configuration.ServerAddress, configuration.SslCertType);
+            manifestSkill = new ManifestSkill(ManifestSkill.EmbeddedManifestResourcePath, configuration.ServerAddress, configuration.SslCertType);
         }
         catch (Exception ex)
         {

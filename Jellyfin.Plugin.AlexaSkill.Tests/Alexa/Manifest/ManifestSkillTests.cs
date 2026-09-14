@@ -11,7 +11,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Alexa.Manifest;
 public class ManifestSkillTests
 {
     private static ManifestSkill CreateSkill() => new(
-        "Jellyfin.Plugin.AlexaSkill.Alexa.Manifest.manifest.json",
+        ManifestSkill.EmbeddedManifestResourcePath,
         "https://example.com",
         SslCertificateType.Wildcard);
 

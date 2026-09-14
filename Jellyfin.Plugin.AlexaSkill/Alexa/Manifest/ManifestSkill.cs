@@ -18,6 +18,14 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Manifest;
 /// </summary>
 public class ManifestSkill : Skill
 {
+    /// <summary>
+    /// JF-513.3: the embedded manifest resource path, hoisted so a resource rename
+    /// is one edit (was hardcoded at five sites: PluginConfiguration, SkillStartup,
+    /// and the manifest tests).
+    /// </summary>
+    public const string EmbeddedManifestResourcePath =
+        "Jellyfin.Plugin.AlexaSkill.Alexa.Manifest.manifest.json";
+
     private static readonly Dictionary<string, Func<CustomApiInterface>> DefaultInterfaceLookup = new()
     {
         { "ALEXA_EXTENSION", () => new ExtensionInterface() },
