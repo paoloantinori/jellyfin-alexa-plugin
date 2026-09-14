@@ -3,7 +3,7 @@ id: JF-546
 title: >-
   JF-544 review follow-ups: indent, stale ResolveSyncLocales doc, redundant
   #nullable, dead catch, DiagnosticsController expiry reuse, accessToken local
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-12 07:54'
 labels: []
@@ -34,6 +34,18 @@ Minor cleanups surfaced by the /code-review high pass of commit a7a55961 (JF-544
 - [ ] #5 DiagnosticsController expiry checks call SmapiTokenRefresher.RemainingLifetime (semantics change for unknown-expiry documented in the diff)
 - [ ] #6 No behavior change beyond the doc/style/dedup edits; full unit suite passes
 <!-- AC:END -->
+
+## Verification (2026-09-14): ALL SIX items already landed in later commits
+
+Each item verified against the current tree (the JF-543/JF-552 rewrites of LibrarySyncService and neighbors absorbed them):
+1. SyncTokenBudgetMinutes block: 4-space member indentation, verified with cat -A.
+2. ResolveSyncLocalesAsync doc: now documents "*" as the CONFIG default and "Empty: it-IT only" as the empty-string behavior (the JF-543 CLAUDE.md correction era).
+3. SmapiTokenRefresher.cs: no "#nullable enable" (file starts with usings).
+4. TokenRefreshTask: the dead catch is GONE - the comment documents the never-throws contract and the code shape matches it (no catch, loud-surface on failure).
+5. DiagnosticsController: both expiry sites (lines ~55 and ~191) route through SmapiTokenRefresher.RemainingLifetime.
+6. accessToken: no class/method-level stale local remains - it exists only as a RunLegAsync parameter (per-leg re-read, the JF-544 fix itself) and method parameters downstream.
+
+No code change needed; closing as absorbed-by-later-work.
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
