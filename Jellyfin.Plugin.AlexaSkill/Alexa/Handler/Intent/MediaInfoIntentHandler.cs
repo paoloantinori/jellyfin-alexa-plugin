@@ -394,7 +394,7 @@ public class MediaInfoIntentHandler : BaseHandler
 
         string enriched = trackDescription + ". " + artistInfo;
         string? enrichedSsml = trackSsml != null
-            ? trackSsml + "<break time=\"300ms\"/>" + EscapeXml(artistInfo)
+            ? trackSsml + "<break time=\"300ms\"/>" + WrapArtistInSentence(artistInfo, item.AlbumArtist)
             : null;
 
         return (enriched, enrichedSsml);

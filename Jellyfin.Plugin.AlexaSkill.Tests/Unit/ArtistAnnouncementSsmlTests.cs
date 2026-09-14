@@ -48,6 +48,22 @@ public class ArtistAnnouncementSsmlTests
     }
 
     [Fact]
+    public void WrapArtistInSentence_EscapesSentence_AndWrapsTheName()
+    {
+        string ssml = BaseHandler.WrapArtistInSentence("Questo è di A&B.", "A&B");
+
+        Assert.Equal("Questo è di <w role='amazon:musicArtist'>A&amp;B</w>.", ssml);
+    }
+
+    [Fact]
+    public void WrapArtistInSentence_NameAbsent_IsAHelpfulNoOp()
+    {
+        string ssml = BaseHandler.WrapArtistInSentence("Nessun nome qui.", "Koop");
+
+        Assert.Equal("Nessun nome qui.", ssml);
+    }
+
+    [Fact]
     public void ApplyAnnouncement_KeepsPlainTextRouting()
     {
         var response = new SkillResponse { Response = new ResponseBody() };

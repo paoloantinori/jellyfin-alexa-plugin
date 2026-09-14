@@ -4101,6 +4101,18 @@ public abstract class BaseHandler
         => $"<speak>{ResponseStrings.Get(textKey, locale, $"<w role='amazon:musicArtist'>{EscapeXml(artistName)}</w>")}</speak>";
 
     /// <summary>
+    /// XML-escapes a plain-text sentence and swaps every occurrence of the artist
+    /// name (in its escaped form) with the role-wrapped version. A sentence that
+    /// does not contain the name degrades to the plain escaped sentence.
+    /// </summary>
+    internal static string WrapArtistInSentence(string sentence, string artistName)
+        => EscapeXml(sentence).Replace(EscapeXml(artistName), BuildArtistRoleTag(artistName));
+
+    /// <summary>The role-wrapped, XML-escaped artist name used by both wrappers.</summary>
+    internal static string BuildArtistRoleTag(string artistName)
+        => $"<w role='amazon:musicArtist'>{EscapeXml(artistName)}</w>";
+
+    /// <summary>
     /// Overrides a play response's speech with the given announcement (JF-345: the
     /// ONE override site; was a triplicated 3-liner across the artist/album/song play
     /// builders). No-op for a null/whitespace announcement.
