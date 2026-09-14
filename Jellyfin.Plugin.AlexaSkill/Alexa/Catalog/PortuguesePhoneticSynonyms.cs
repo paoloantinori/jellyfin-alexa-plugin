@@ -12,7 +12,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
 public static class PortuguesePhoneticSynonyms
 {
     /// <summary>
-    /// Generates up to 3 Portuguese phonetic variant strings for an English name.
+    /// Generates up to 5 Portuguese phonetic variant strings for an English name (the
+    /// per-name cap, raised from 3 in JF-362 to fit the coverage variants).
     /// Returns an empty list for names that are already Portuguese origin or are too short.
     /// </summary>
     /// <param name="name">The artist or album name to generate variants for.</param>

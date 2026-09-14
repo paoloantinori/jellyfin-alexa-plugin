@@ -12,8 +12,16 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
 public static class ItalianPhoneticSynonyms
 {
     /// <summary>
-    /// Generates up to 3 Italian phonetic variant strings for an English name.
-    /// Returns an empty list for names that are already Italian/Latin origin or are too short.
+    /// The per-name catalog-slot cap (JF-362 raised it from 3 to fit the coverage variants;
+    /// device-captured forms are ordered first so they survive the cap).
+    /// </summary>
+    private const int PerNameVariantCap = 5;
+
+    /// <summary>
+    /// Generates up to 5 Italian phonetic variant strings for an English name (the
+    /// per-name cap, raised from 3 in JF-362 to fit the coverage variants; device-captured
+    /// forms are ordered first so they survive the cap). Returns an empty list for names
+    /// that are already Italian/Latin origin or are too short.
     /// </summary>
     /// <param name="name">The artist or album name to generate variants for.</param>
     /// <returns>A list of Italian phonetic variant strings.</returns>
@@ -76,7 +84,18 @@ public static class ItalianPhoneticSynonyms
             PhoneticSynonymGenerator.AddConsonantVariants(results, phoneticAlt);
         }
 
-        return results.Distinct(StringComparer.OrdinalIgnoreCase).Take(5).ToList();
+        // JF-379: velar-stop (c/k/ck/q) variants fire on their OWN condition - a name
+        // like "Koop" has no -tion/-ing transform, but the Romance-L1 /k/ drift is a
+        // transform in its own right (device: Koop heard as BOTH "cup" and "coop").
+        // Names with no velar stop add nothing here. Skipped when the cap is already
+        // provably full: velar variants append last and the in-list Contains keeps
+        // results distinct, so the Take below would discard them anyway.
+        if (results.Count < PerNameVariantCap)
+        {
+            PhoneticSynonymGenerator.AddVelarStopVariants(results, withoutThe);
+        }
+
+        return results.Distinct(StringComparer.OrdinalIgnoreCase).Take(PerNameVariantCap).ToList();
     }
 
     /// <summary>

@@ -3,11 +3,11 @@ id: JF-379
 title: >-
   PhoneticSynonymGenerator: add c/k/ck/q consonant-substitution rules for
   foreign names (Koop->cup/coop)
-status: To Do
+status: In Progress
 assignee:
   - zai
 created_date: '2026-07-25 18:07'
-updated_date: '2026-09-06 15:14'
+updated_date: '2026-09-14 11:44'
 labels:
   - enhancement
   - phonetic
@@ -46,6 +46,12 @@ NOTE: distinct from the catalog-injection question (JF-380). This task is about 
 REOPENED-BY-MISTAKE 2026-08-29: briefly set In Progress based on the stale AC#1 ('add c/k/ck/q rules'); the 2026-07-27 REDESIGN supersedes that AC - data-driven generative composite (Epitran port + PHOBLE interference maps + inverse orthography), explicitly multi-session with open questions awaiting maintainer confirmation ('Confirm the team wants to commit', spec question 4). Reverted to To Do untouched. Before ANY implementation: the open questions in docs/superpowers/specs/2026-07-27-jf379-generative-phonetic-synonyms-design.md need decisions (CMUdict delivery form, replace-vs-alongside transition, rollout flag).
 
 New device-ASR evidence for the phonetic-variant need (2026-09-06, Echo Dot): 'soul coughing' heard as 'i soul coffin' (song slot, corr=61db93dd). The title n-gram search found 100 'soul' candidates, the fuzzy best was an unrelated 'Glory-Of Soul Ignoring' (53), and the disambiguation 'no' ended in a clean not-found; the correct recovery was the ARTIST path, never reached because the title search had candidates. A generative phonetic synonym for 'coughing' emitting 'coffin' (the Romance consonant-doubler already emits exactly this direction: Cofin->Coffin) would have covered the artist-side resolution had the song-miss cascaded; the deeper fix is also letting a low-confidence title disambiguation 'no' cascade to the cross-media artist fallback. Operational note until then: 'suona la band soul coughing' (artist carrier) works.
+
+2026-09-14 STAGE-0 IMPLEMENTED under maintainer directive '379, in tdd, per evitare regressioni' (this session). This supersedes the 2026-08-29 REOPENED-BY-MISTAKE warning: the maintainer explicitly directed implementing JF-379 now, as an incremental rule-family slice (stage 0), NOT the full 2026-07-27 generative composite. The generative redesign (Epitran + PHOIBLE + inverse orthography, spec 814e93b) remains the long-term architecture and its open questions still gate the multi-session build; this slice is a migration/fallback surface the replace-vs-alongside decision must carry.
+
+Stage-0 shape: velar-stop family in PhoneticSynonymGenerator (GetVelarStopVariants: c/k/q swaps, oo->u/o drifts, QuGlide /kw/ form, ck collapse; soft-c and ch-digraph excluded via IsHardCAt/IsVelarStopAt) wired into ItalianPhoneticSynonyms.Generate ONLY (it-IT evidence; QuGlide is Italian orthography - es/pt need localized glides cu/qu before wiring, do NOT mirror the call site). Per-name cap 5 via PerNameVariantCap const with a provably-full skip guard. 13+2 unit tests in VelarStopVariantTests.cs (TDD red-first); suite 3734/3734 green both TFMs.
+
+AC status: #1 done (rules + bounds), #2 done (cap 5, attestation-ordered: c-form and drifts before q-forms), #3 done (Koop emits cup/coop/cop; Bianchi/Beatles/Adele/Beyonce empty). #4 (live catalog re-sync + on-device 'suona koop') PENDING Paolo: needs DLL deploy + catalog re-sync, then device check.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

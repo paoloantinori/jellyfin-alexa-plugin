@@ -224,6 +224,22 @@ public static class PhoneticSynonymGenerator
     }
 
     /// <summary>
+    /// Adds each variant not already present (case-insensitive) into
+    /// <paramref name="results"/>: the one dedup-append idiom shared by the
+    /// coverage-variant families.
+    /// </summary>
+    private static void AppendDistinct(List<string> results, IEnumerable<string> variants)
+    {
+        foreach (string variant in variants)
+        {
+            if (!results.Contains(variant, StringComparer.OrdinalIgnoreCase))
+            {
+                results.Add(variant);
+            }
+        }
+    }
+
+    /// <summary>
     /// Adds each consonant-doubled coverage variant of <paramref name="source"/> into
     /// <paramref name="results"/>, skipping case-insensitive duplicates and empty input.
     /// This is the append-or-skip companion to <see cref="GetRomanceConsonantVariants"/>,
@@ -236,15 +252,204 @@ public static class PhoneticSynonymGenerator
             return;
         }
 
-        foreach (string variant in GetRomanceConsonantVariants(source))
-        {
-            if (!results.Contains(variant, StringComparer.OrdinalIgnoreCase))
-            {
-                results.Add(variant);
-            }
-        }
+        AppendDistinct(results, GetRomanceConsonantVariants(source));
     }
 
     private static bool IsVowel(char c) =>
         c == 'a' || c == 'e' || c == 'i' || c == 'o' || c == 'u' || c == 'è' || c == 'é' || c == 'à' || c == 'ì' || c == 'ò' || c == 'ù';
+
+    // --- JF-379: velar-stop (c/k/ck/q) substitution family ---
+    // Live evidence (2026-07-25, it-IT Echo): "Koop" heard as BOTH "cup" and "coop".
+    // Romance-L1 speakers render foreign /k/ unpredictably across c/k/ck/q, and the
+    // "oo" vowel drifts to /o/ and /u/. Same coverage goal as the doubling rules:
+    // emit the plausible ASR outputs; entity resolution needs one hit.
+    // Wired into ItalianPhoneticSynonyms ONLY for now: the device evidence is it-IT,
+    // and QuGlide's /kw/ spelling is Italian orthography (Spanish writes /kw/ as "cu"
+    // and allows no bare q; Portuguese splits qu/c by vowel) - those locales need
+    // localized glide rules before wiring. Pan-Romance rollout belongs to JF-379's
+    // staged generative plan, not a mirrored call site.
+
+    /// <summary>
+    /// Returns velar-stop coverage variants of a name: for each word containing a
+    /// velar stop (k, q, or a HARD c - one not followed by e/i/y, where c reads /s/),
+    /// the consonant swaps (ck collapses to c and k; k/c/q interchange) plus the
+    /// "oo" vowel drifts (oo to o, oo to u) composed with the c-form, plus the
+    /// Italian "qu" (/kw/) glide form. "Koop" yields Coop, Cup, Cop, Qoop, Quop.
+    /// Each variant is the WHOLE name with only that word changed ("Simon Back" ->
+    /// "Simon Bac", never a bare "Bac"); names with no velar stop yield nothing.
+    /// </summary>
+    /// <param name="name">The transformed (or original) name.</param>
+    /// <returns>Variants covering the Romance-L1 /k/ transcription drift.</returns>
+    internal static List<string> GetVelarStopVariants(string name)
+    {
+        var variants = new List<string>();
+        if (string.IsNullOrWhiteSpace(name)
+            || name.IndexOfAny(VelarStopLetters) < 0)
+        {
+            return variants;
+        }
+
+        string[] words = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        for (int w = 0; w < words.Length; w++)
+        {
+            if (!WordHasVelarStop(words[w]))
+            {
+                continue;
+            }
+
+            string prefix = w == 0 ? string.Empty : string.Join(' ', words, 0, w) + " ";
+            string suffix = w + 1 < words.Length ? " " + string.Join(' ', words, w + 1, words.Length - w - 1) : string.Empty;
+            AppendDistinct(variants, VelarStopWordVariants(words[w]).Select(v => prefix + v + suffix));
+        }
+
+        return variants;
+    }
+
+    private static readonly char[] VelarStopLetters = { 'c', 'C', 'k', 'K', 'q', 'Q' };
+
+    /// <summary>True when the word contains a velar-stop letter (see <see cref="IsVelarStopAt"/>).</summary>
+    private static bool WordHasVelarStop(string word)
+    {
+        for (int i = 0; i < word.Length; i++)
+        {
+            if (IsVelarStopAt(word, i))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>True when the letter at <paramref name="i"/> is a velar-stop drift site: k or q, or a hard c (<see cref="IsHardCAt"/>).</summary>
+    private static bool IsVelarStopAt(string word, int i)
+    {
+        char c = char.ToLowerInvariant(word[i]);
+        return c == 'k' || c == 'q' || (c == 'c' && IsHardCAt(word, i));
+    }
+
+    /// <summary>
+    /// True when the c at <paramref name="i"/> reads /k/: NOT before e/i/y (soft c, /s/)
+    /// and NOT before h. The "ch" digraph is excluded both ways - Italian "ch" is the
+    /// NATIVE /k/ spelling before front vowels ("che"/"chi", so Italian-origin names
+    /// like "Bianchi" must not drift), and English "ch" reads /tʃ/ - either way it is
+    /// not a foreign /k/ drift site.
+    /// </summary>
+    private static bool IsHardCAt(string word, int i)
+        => i + 1 >= word.Length
+           || !(char.ToLowerInvariant(word[i + 1]) is 'e' or 'i' or 'y' or 'h');
+
+    /// <summary>
+    /// The per-word variant set, ordered by ASR attestation: the c-form first (the
+    /// "coop" capture), then its oo-drifts ("cup", "cop"), then the q-form with its
+    /// /kw/ glide ("Qoop"/"Quop" - Italian spells /kw/ as "qu", so /k/ before a
+    /// rounded vowel can land there), then the ck collapse. The k-form itself is
+    /// the input word and is not re-emitted.
+    /// </summary>
+    private static IEnumerable<string> VelarStopWordVariants(string word)
+    {
+        string cForm = SwapVelarStops(word, 'c');
+        if (!string.Equals(cForm, word, StringComparison.OrdinalIgnoreCase))
+        {
+            yield return cForm;
+            yield return DriftOo(cForm, 'u');
+            yield return DriftOo(cForm, 'o');
+        }
+
+        string qForm = SwapVelarStops(word, 'q');
+        if (!string.Equals(qForm, word, StringComparison.OrdinalIgnoreCase))
+        {
+            yield return qForm;
+            yield return QuGlide(qForm);
+        }
+
+        // ck collapses to a single stop: Back -> Bac / Bak.
+        string lower = word.ToLowerInvariant();
+        int ck = lower.IndexOf("ck", StringComparison.Ordinal);
+        if (ck >= 0)
+        {
+            yield return word.Remove(ck + 1, 1);
+            yield return word.Remove(ck, 1);
+        }
+    }
+
+    /// <summary>Replaces every velar-stop letter (k, q, hard c, and both halves of ck) with <paramref name="target"/>.</summary>
+    private static string SwapVelarStops(string word, char target)
+    {
+        var chars = word.ToCharArray();
+        for (int i = 0; i < chars.Length; i++)
+        {
+            char c = char.ToLowerInvariant(chars[i]);
+            bool velar = IsVelarStopAt(word, i);
+            if (velar)
+            {
+                chars[i] = char.IsUpper(chars[i]) ? char.ToUpperInvariant(target) : target;
+            }
+        }
+
+        return new string(chars);
+    }
+
+    /// <summary>
+    /// The Italian "qu" (/kw/) glide form of a q-form word: the vowel run after the
+    /// q keeps only its first vowel, preceded by the u glide ("Qoop" -> "Quop").
+    /// Returns the input unchanged when the q is not followed by a vowel (deduped
+    /// away by the caller).
+    /// </summary>
+    private static string QuGlide(string qForm)
+    {
+        string lower = qForm.ToLowerInvariant();
+        int q = lower.IndexOf('q');
+        if (q < 0 || q + 1 >= qForm.Length || !IsVowel(lower[q + 1]))
+        {
+            return qForm;
+        }
+
+        int runEnd = q + 1;
+        while (runEnd + 1 < qForm.Length && IsVowel(lower[runEnd + 1]))
+        {
+            runEnd++;
+        }
+
+        // A q already followed by "u" carries the glide already (Italian "qu"):
+        // nothing to insert - "Qure"/"Quba" must not become "Quure"/"Quuba".
+        if (lower[q + 1] == 'u')
+        {
+            return qForm;
+        }
+
+        // Keep the run's FIRST vowel after the inserted glide: "Qoop" -> "Quop",
+        // "Qoughing" -> "Quoghing".
+        return qForm[..(q + 1)] + 'u' + qForm[q + 1] + qForm[(runEnd + 1)..];
+    }
+
+    /// <summary>Replaces every "oo" cluster with the single given vowel (the cup/cop drift).</summary>
+    private static string DriftOo(string word, char vowel)
+    {
+        var result = new char[word.Length];
+        int writePos = 0;
+        for (int i = 0; i < word.Length; i++)
+        {
+            if (i + 1 < word.Length
+                && char.ToLowerInvariant(word[i]) == 'o'
+                && char.ToLowerInvariant(word[i + 1]) == 'o')
+            {
+                result[writePos++] = char.IsUpper(word[i]) ? char.ToUpperInvariant(vowel) : vowel;
+                i++;
+            }
+            else
+            {
+                result[writePos++] = word[i];
+            }
+        }
+
+        return new string(result, 0, writePos);
+    }
+
+    /// <summary>
+    /// The append-or-skip companion to <see cref="GetVelarStopVariants"/>, mirroring
+    /// <see cref="AddConsonantVariants"/>: adds each variant not already present.
+    /// </summary>
+    internal static void AddVelarStopVariants(List<string> results, string source)
+        => AppendDistinct(results, GetVelarStopVariants(source));
 }

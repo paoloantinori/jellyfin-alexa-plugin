@@ -240,13 +240,15 @@ public class ItalianPhoneticSynonymsTests
         Assert.DoesNotContain(result, s => s.StartsWith("i ", StringComparison.OrdinalIgnoreCase));
     }
 
-    // --- Max 3 results ---
+    // --- Per-name cap (5 since JF-362) ---
 
     [Fact]
-    public void Generate_ReturnsMaxThreeSynonyms()
+    public void Generate_RespectsPerNameCap()
     {
+        // Exactly 5 pins BOTH the cap and the JF-379 velar wiring: remove or
+        // mis-guard the velar call and this name drops to 3 variants.
         var result = ItalianPhoneticSynonyms.Generate("The Backstreet Boys");
-        Assert.True(result.Count <= 3);
+        Assert.Equal(5, result.Count);
     }
 
     // --- No duplicates ---
