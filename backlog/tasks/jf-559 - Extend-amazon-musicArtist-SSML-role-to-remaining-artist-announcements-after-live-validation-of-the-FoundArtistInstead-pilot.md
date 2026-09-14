@@ -3,9 +3,10 @@ id: JF-559
 title: >-
   Extend amazon:musicArtist SSML role to remaining artist announcements (after
   live validation of the FoundArtistInstead pilot)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-14 14:50'
+updated_date: '2026-09-14 15:48'
 labels:
   - enhancement
   - ssml
@@ -34,3 +35,15 @@ The <w role='amazon:musicArtist'> SSML wrapper (stolen from a first-party TTS ca
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-09-14 17:45 RESOLVED NEGATIVE, pilot reverted (8ec84f22, deployed+md5-verified). The validation experiment cost one live error message and gave the definitive answer with Amazon's own enumeration: the w role whitelist excludes first-party roles. The research report's conclusion is strengthened: the first-party/third-party boundary is enforced at the response validator, not just at undocumented interfaces.
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+CLOSED with a definitive NEGATIVE result (2026-09-14 17:40, live on the Echo Show): the amazon:musicArtist SSML role is NOT usable by third-party skills. Amazon's response validator rejected it with INVALID_RESPONSE 'Invalid SSML Output Speech ... Value amazon:musicArtist invalid on attribute role for element w' (SessionEnded reason=ERROR, req amzn1.echo-api.request.1d6243d9). The w role attribute is whitelisted server-side and the first-party music role is not on the whitelist; only VB/VBD/NN/SENSE_1 are public. The pilot (FoundArtistInstead + MediaInfo artist-info) was fully reverted in commit 8ec84f22 and the healthy build redeployed. Do not retry this role, and treat any other first-party-only SSML (e.g. amazon:domain) with the same expectation: first-party TTS captures are not a source of stealable tricks for custom skills.
+<!-- SECTION:FINAL_SUMMARY:END -->
