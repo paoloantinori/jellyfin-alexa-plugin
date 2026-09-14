@@ -405,4 +405,27 @@ public class PlaySongAlbumFallbackTests : PluginTestBase
         string speech = TestHelpers.GetSpeechText(response);
         Assert.DoesNotContain("album", speech, StringComparison.OrdinalIgnoreCase);
     }
+
+    // JF-412 cascade bar pin: a GENUINE match below the 90 containment-grade bar
+    // (plain partial-ratio 61 for "walls for cup" vs "Waltz for Koop", well above the
+    // 60 the direct album path uses) must still NOT substitute a SONG query. The
+    // deliberate threshold divergence (direct 60 / cascade 90) is what this pins.
+    [Fact]
+    public async Task PlaySong_GenuineSubThresholdAlbumMatch_NotSubstituted()
+    {
+        _fx.SetupUserMock();
+        var album = new MusicAlbum { Name = "Waltz for Koop", Id = Guid.NewGuid() };
+        var queries = new List<InternalItemsQuery>();
+        SetupMissWithAlbums(new List<BaseItem>(), new List<BaseItem> { album }, queries);
+        SetupAlbumTracks(album, new List<BaseItem> { new Audio { Name = "Baby", Id = Guid.NewGuid(), ParentId = album.Id } });
+
+        var handler = CreateSongHandler();
+        var request = CreateSongIntent("walls for cup");
+
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
+
+        Assert.Null(TestHelpers.GetPlayDirective(response));
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.DoesNotContain("Waltz for Koop", speech, StringComparison.OrdinalIgnoreCase);
+    }
 }

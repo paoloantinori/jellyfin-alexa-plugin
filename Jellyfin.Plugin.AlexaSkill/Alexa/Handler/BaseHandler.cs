@@ -110,6 +110,48 @@ public abstract class BaseHandler
     protected const int CrossMediaAlbumThreshold = 90;
 
     /// <summary>
+    /// JF-412: best fuzzy match that is NOT an embedded-containment winner. The single
+    /// match shape (find best, refuse if embedded) aborted the whole tier on a degenerate
+    /// winner: live shape "walls for cup" over the real catalog ranks album "O" first at 90
+    /// (the JF-408/478 incident class, correctly refused) with "Waltz for Koop" next at 61
+    /// (plain partial-ratio; the 3-arg FindBestMatchWithScore carries no phonetic boost),
+    /// above threshold, and the old code answered not-found. The guard must block only the
+    /// embedded candidate: walk the best-match results, skipping every embedded winner, and
+    /// take the first eligible one. The loop is load-bearing: FindBestMatchWithScore keeps
+    /// the maxLenDiff length-band filter and its first-crossing-90 early exit, which
+    /// RankMatches would change. Same-name ties pick arbitrarily (JF-341). Bounded: each
+    /// iteration removes one candidate, and degenerate embedded winners are rare.
+    /// </summary>
+    protected (BaseItem Item, int Score)? FindBestNonEmbeddedMatch(
+        string query, IReadOnlyList<BaseItem> candidates, Func<BaseItem, string> selector, int threshold)
+    {
+        var remaining = new List<BaseItem>(candidates);
+        while (remaining.Count > 0)
+        {
+            var best = FuzzyMatcher.FindBestMatchWithScore(query, remaining, selector);
+            if (best is not { } match || match.Score < threshold)
+            {
+                return null;
+            }
+
+            if (Util.ArtistSearch.IsEmbeddedContainment(query, selector(match.Item)))
+            {
+                // Information, not Debug: the JF-408/478 device correlations (corr=80bb4642)
+                // were read from exactly these refusal lines; keep them visible.
+                Logger.LogInformation(
+                    "Embedded-containment match '{Name}' score={Score} for query='{Query}' skipped (JF-408/478/JF-412), walking down the ranking",
+                    selector(match.Item), match.Score, query);
+                remaining.Remove(match.Item);
+                continue;
+            }
+
+            return match;
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Shared word-count guard for BOTH cross-media fallback gates (artist and album):
     /// tokenizes the slot text with the locale stop-word set and rejects queries whose
     /// content words exceed <see cref="CrossMediaArtistMaxWords"/> (a long query is a
@@ -4759,38 +4801,19 @@ public abstract class BaseHandler
             return null;
         }
 
-        // Single best over the tier's candidates (same decision shape as the artist
-        // gate: a cross-media guess must never disambiguate among multiple guesses;
-        // same-name candidates are picked arbitrarily, the JF-341 class PlayAlbum's
-        // own fuzzy path documents).
-        var best = FuzzyMatcher.FindBestMatchWithScore(query, candidates, a => a.Name);
-        if (best is not { } match)
-        {
-            return null;
-        }
-
+        // Single best with the JF-408/478 embedded-containment guard. JF-412: the guard
+        // blocks only an embedded WINNER, never the whole tier; a substitution below the
+        // 90 containment-grade bar stays refused by design (the incident's 61 for "Waltz
+        // for Koop" does not substitute a song query; the DIRECT album path plays it).
         int threshold = FuzzyMatcher.GetEffectiveThreshold(user, CrossMediaAlbumThreshold);
-        if (match.Score < threshold)
+        var eligible = FindBestNonEmbeddedMatch(query, candidates, a => a.Name!, threshold);
+        if (eligible is not { } match)
         {
             Logger.LogDebug(
-                "{Label}: album fallback score={Score} below threshold={Threshold} for query='{Query}', not substituting",
-                logLabel, match.Score, threshold, query);
+                "{Label}: no album above threshold={Threshold} (or all embedded) for query='{Query}', not substituting",
+                logLabel, threshold, query);
             return null;
         }
-
-        if (Util.ArtistSearch.IsEmbeddedContainment(query, match.Item.Name))
-        {
-            // JF-408: the match exists only inside other words of the query (live
-            // precedent: album "O" via the 'o' in "walls for cup"). JF-478 extended
-            // the shape to word-initial/word-final fragments ("O" via the 'o' of
-            // "of" in "dark side of the moon"). The recall layer returned the
-            // candidate; the substitution decision must not act on it.
-            Logger.LogInformation(
-                "{Label}: album fallback match '{Name}' score={Score} for query='{Query}' is embedded containment, not substituting (JF-408/JF-478)",
-                logLabel, match.Item.Name, match.Score, query);
-            return null;
-        }
-
         Logger.LogInformation(
             "{Label}: album fallback found '{AlbumName}' score={Score} for query='{Query}' (threshold={Threshold})",
             logLabel, match.Item.Name, match.Score, query, threshold);

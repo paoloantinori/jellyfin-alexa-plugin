@@ -585,6 +585,71 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase, IDisposable
     }
 
     [Fact]
+    public async Task HandleAsync_WallsForCup_FuzzyMatchesWaltzForKoop_AutoPlaysWithAnnouncement()
+    {
+        // JF-412 incident replay (live 2026-08-28): album slot "walls for cup" (ASR for
+        // "Waltz for Koop") missed both catalog authorities and the then-fuzzy path.
+        // Plain partial-ratio scores the pair 61 against the default threshold 60 (no
+        // phonetics involved: the 3-arg FindBestMatchWithScore has no boost), so the
+        // DIRECT album path recovers the album and announces the substitution name. The
+        // cross-media cascade deliberately keeps its 90 containment-grade bar: a song
+        // query must not substitute an album at 61.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(album: "walls for cup", locale: "it-IT");
+        _fx.SetupUserMock();
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) => q.SearchTerm == null
+                ? new List<BaseItem>
+                {
+                    new MusicAlbum { Name = "Waltz for Koop", Id = Guid.NewGuid() },
+                    new MusicAlbum { Name = "Abbey Road", Id = Guid.NewGuid() },
+                    new MusicAlbum { Name = "Real Gone", Id = Guid.NewGuid() }
+                }
+                : new List<BaseItem>());
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem> { Items = new[] { new Audio { Name = "Baby", Id = Guid.NewGuid() } }, TotalRecordCount = 1 });
+
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
+        Assert.NotNull(playDirective);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Waltz for Koop", speech, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task HandleAsync_WallsForCup_EmbeddedBestBlocksOnlyItself_PlaysNextEligible()
+    {
+        // JF-412 live replay (2026-09-14, real 886-album catalog, simulator): for
+        // "walls for cup" the degenerate album "O" ranks FIRST at 90 (the JF-408 shape,
+        // correctly refused) and "Waltz for Koop" ties next at 61, above the default
+        // threshold 60. The old code rejected the WHOLE fuzzy tier on the embedded
+        // winner, so the live answer was not-found; the guard must block only the
+        // embedded candidate and let the next eligible match play.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(album: "walls for cup", locale: "it-IT");
+        _fx.SetupUserMock();
+
+        var waltz = new MusicAlbum { Name = "Waltz for Koop", Id = Guid.NewGuid() };
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) => q.SearchTerm == null
+                ? new List<BaseItem> { new MusicAlbum { Name = "O", Id = Guid.NewGuid() }, waltz }
+                : new List<BaseItem>());
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem> { Items = new[] { new Audio { Name = "Baby", Id = Guid.NewGuid() } }, TotalRecordCount = 1 });
+
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
+        Assert.NotNull(playDirective);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Waltz for Koop", speech, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task HandleAsync_WholeWordContainmentFuzzyMatch_StillAutoPlays()
     {
         // JF-478 no-regression mirror (cascade reference class): a short REAL album

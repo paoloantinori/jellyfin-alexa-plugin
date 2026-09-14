@@ -3,10 +3,10 @@ id: JF-412
 title: >-
   Album catalog phonetic synonyms don't cover ASR form "walls for cup" for
   existing album "Waltz for Koop" (ER_SUCCESS_NO_MATCH on both authorities)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-08-28 15:38'
-updated_date: '2026-08-28 16:15'
+updated_date: '2026-09-14 18:28'
 labels: []
 dependencies: []
 priority: medium

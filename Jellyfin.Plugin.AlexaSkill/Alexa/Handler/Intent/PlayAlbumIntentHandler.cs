@@ -499,41 +499,23 @@ public class PlayAlbumIntentHandler : BaseHandler
                 "GetAlbumsPhonetic",
                 cancellationToken).ConfigureAwait(false);
 
-            // FindBestMatchWithScore (single best). NOTE: a multi-match here currently
-            // auto-plays the best via HandleFuzzyMiss (which re-scores + auto-accepts at
-            // >= GetDefaultThreshold); real disambiguation for different-name collisions
-            // (e.g. several "Greatest Hits" by different artists) needs a HandleFuzzyMiss
-            // bypass — tracked in JF-341. RankMatches was tried (b12cf5c) but is inert
-            // here for that reason.
-            var fuzzyMatch = FuzzyMatcher.FindBestMatchWithScore(album, allAlbums, a => a.Name);
-            if (fuzzyMatch.HasValue && fuzzyMatch.Value.Score >= FuzzyMatcher.GetDefaultThreshold(user))
+            // Single best with the JF-408/478 embedded-containment guard. JF-412: the
+            // guard blocks only the embedded WINNER, not the whole tier (live shape:
+            // "walls for cup" over the real catalog ranks "O" first at 90, refused, with
+            // "Waltz for Koop" next at 61, above threshold, previously lost). NOTE: a
+            // multi-match here still auto-plays the best; real disambiguation for
+            // different-name collisions (several "Greatest Hits") is tracked in JF-341.
+            var fuzzyMatch = FindBestNonEmbeddedMatch(album, allAlbums, a => a.Name!, FuzzyMatcher.GetDefaultThreshold(user));
+            if (fuzzyMatch.HasValue)
             {
-                if (Util.ArtistSearch.IsEmbeddedContainment(album, fuzzyMatch.Value.Item.Name))
-                {
-                    // JF-408: the match exists only inside other words of the query (live
-                    // incident: album "O" scored ContainmentScore against "walls for cup",
-                    // ASR for "Waltz for Koop", and auto-played on-device). JF-478 device
-                    // corr=80bb4642 extended the shape: the embedding may be word-INITIAL
-                    // ("O" via the 'o' of "of" in "dark side of the moon") or word-final,
-                    // not only strictly interior; the rejection covers every embedded
-                    // fragment, and falls through to the artist gate / clean not-found
-                    // below. The recall layer must keep returning such candidates; the
-                    // auto-play decision must not act on them.
-                    Logger.LogInformation(
-                        "PlayAlbum: fuzzy fallback match '{Name}' score={Score} for query='{Query}' is embedded containment, not auto-playing (JF-408/JF-478)",
-                        fuzzyMatch.Value.Item.Name, fuzzyMatch.Value.Score, album);
-                }
-                else
-                {
-                    Logger.LogInformation(
-                        "PlayAlbum: fuzzy fallback matched album '{Name}' score={Score} for query='{Query}'",
-                        fuzzyMatch.Value.Item.Name, fuzzyMatch.Value.Score, album);
-                    albums = new List<BaseItem> { fuzzyMatch.Value.Item };
-                    // The exact search missed, so the matched album name may differ from
-                    // what the user said (accents, spelling). Announce it so voice-only
-                    // devices know which album is playing (JF-339).
-                    fuzzyAlbumAnnouncement = ResponseStrings.Get("FoundAlbumInstead", locale, fuzzyMatch.Value.Item.Name);
-                }
+                Logger.LogInformation(
+                    "PlayAlbum: fuzzy fallback matched album '{Name}' score={Score} for query='{Query}'",
+                    fuzzyMatch.Value.Item.Name, fuzzyMatch.Value.Score, album);
+                albums = new List<BaseItem> { fuzzyMatch.Value.Item };
+                // The exact search missed, so the matched album name may differ from
+                // what the user said (accents, spelling). Announce it so voice-only
+                // devices know which album is playing (JF-339).
+                fuzzyAlbumAnnouncement = ResponseStrings.Get("FoundAlbumInstead", locale, fuzzyMatch.Value.Item.Name);
             }
         }
 
