@@ -4,10 +4,10 @@ title: >-
   Episode HLS lifecycle watch items: restart vs _episodeHlsItems, 30-min monitor
   timeout, fast-path FileNotFoundException race, Cleanup missing
   UnauthorizedAccessException
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-05 20:05'
-updated_date: '2026-09-10 07:18'
+updated_date: '2026-09-14 22:38'
 labels:
   - video
   - hls
@@ -43,3 +43,9 @@ Below-bar watch items from the JF-498 formal review (2026-09-05, reviewer-invoke
 <!-- SECTION:NOTES:BEGIN -->
 Code-review gate note (2026-09-10, JF-531): the TryDelete helper (~VideoAudioController.cs:3673) catches IOException only, not UnauthorizedAccessException - now ALSO reachable from the new no-runtime stale-listing delete (JF-531); a permission failure there would 500 the play instead of falling back to the live playlist. Fold into this task's UnauthorizedAccessException sweep when it runs.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+CLOSED fixed and verified (2026-09-14 night, implemented by delegated agent through two API-connection outages, orchestrator-verified, review-hardened). All four watch items + the JF-531 TryDelete note: W1 the process-static _episodeHlsItems registry deleted, tracking gated on the durable Folder fact (memoization removed in review: GetItemById is the platform's LRU); W2a HlsMonitorTimeoutMinutes is now a no-progress stall budget extended by directory-write evidence (slow NAS encodes survive, hung ones die, entireProcessTree kill); W2b StreamHlsEpisode honors ?start= on every serve path with EXTINF-ACCUMULATING slice arithmetic (the review's P2: copy-mode segments land on the source GOP 4-10s, flat division mis-sliced deep resumes ~1.5x; flat fallback kept, uniform+mixed+fallback tests added); W3 shared TryServeValidatedEpisodeCacheAsync catches FileNotFoundException/DirectoryNotFoundException and falls through to re-encode (Windows dir-gone gap closed); W4 UnauthorizedAccessException swept through the delete/cleanup helpers + the enumeration-level catches. 17 tests; suite 3761/3761 both TFMs; Release -warnaserror 0 warnings. Gates: /simplify four-angle (memoization removed, W3 wrapper shared, required params, AudiobookHlsSegmentSeconds const named with coupling doc, hardenings) + code-review high opus (P2 applied). FOLLOW-UPS: JF-565 filed (the ?start= producer - episode resume plumbing via UserData; the W2b machinery is dormant without it); the full three-serve-helper unification deferred (recorded); MonitorFfmpegAndRemuxAsync keeps its flat 5-min kill (out of scope, recorded); stale parentless-AudioBook tracker residue accepted-and-documented (frozen at upgrade, P3).
+<!-- SECTION:FINAL_SUMMARY:END -->
