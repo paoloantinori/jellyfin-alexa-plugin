@@ -200,10 +200,7 @@ public class RecommendIntentHandler : BaseHandler
         // Use VideoApp for movies, AudioPlayer for audio
         if (item is MediaBrowser.Controller.Entities.Movies.Movie)
         {
-            string? recSsml = SpeechBuilder.GetSsml("RecommendPlayingSsml", locale, SpeechBuilder.EscapeXml(item.Name));
-            var outputSpeech = recSsml != null
-                ? (IOutputSpeech)new SsmlOutputSpeech { Ssml = $"<speak>{recSsml}</speak>" }
-                : new PlainTextOutputSpeech(ResponseStrings.Get("RecommendPlaying", locale, item.Name));
+            var outputSpeech = SpeechBuilder.BuildOutputSpeech("RecommendPlayingSsml", "RecommendPlaying", locale, item.Name);
 
             // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
             // JF-501: the announce is spoken progressively (directive-only final response).

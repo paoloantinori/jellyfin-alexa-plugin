@@ -3,6 +3,7 @@ using System.Xml.Linq;
 using Alexa.NET.Assertions;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Xunit;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 
@@ -183,5 +184,56 @@ public class SsmlResponseTests
         Assert.DoesNotContain("&amp;", speech.Text);
         var reprompt = Assert.IsType<PlainTextOutputSpeech>(response.Response.Reprompt.OutputSpeech);
         Assert.Equal("Would you like to continue where you left off?", reprompt.Text);
+    }
+
+    [Fact]
+    public void TellLocalized_SsmlKeyExists_ReturnsSessionEndingSsmlTell_WithEscapedArgs()
+    {
+        var response = SpeechBuilder.TellLocalized("NowPlayingSsml", "NowPlaying", "en-US", "Rock & Roll");
+
+        Assert.True(response.Response.ShouldEndSession ?? false);
+        var speech = Assert.IsType<SsmlOutputSpeech>(response.Response.OutputSpeech);
+        // Same JF-407 contract as AskLocalized: string args are escaped exactly once
+        // ("Rock & Roll" becomes "Rock &amp; Roll", never raw and never double-escaped).
+        Assert.Contains("Rock &amp; Roll", speech.Ssml);
+        Assert.DoesNotContain("Rock & Roll", speech.Ssml);
+        Assert.StartsWith("<speak>", speech.Ssml);
+        XDocument.Parse(speech.Ssml); // throws if the <speak> SSML is not well-formed XML
+    }
+
+    [Fact]
+    public void TellLocalized_MissingSsmlKey_FallsBackToPlainTextWithRawArgs()
+    {
+        var response = SpeechBuilder.TellLocalized(
+            "NonExistentSsmlKey12345", "NowPlaying", "en-US", "Tom & Jerry");
+
+        Assert.True(response.Response.ShouldEndSession ?? false);
+        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        Assert.Contains("Tom & Jerry", speech.Text);
+        Assert.DoesNotContain("&amp;", speech.Text);
+    }
+
+    [Fact]
+    public void BuildOutputSpeech_ByteIdenticalToPreMigrationHandRolledShape()
+    {
+        // JF-315 batch 3 migration proof: the five sites that used to call
+        // GetSsml(key, locale, EscapeXml(argN)...) with a hand-rolled <speak> wrap
+        // and a raw-args plain fallback (PlayBook resume announce x2, FollowMe,
+        // Recommend movie announce, the HandleFuzzyMiss qualifier) produce
+        // byte-identical speech through BuildOutputSpeech, on BOTH branches.
+        var migratedSsmlPath = SpeechBuilder.BuildOutputSpeech(
+            "ResumingBookSsml", "ResumingBook", "en-US", "Tom & Jerry", "Chapter 1");
+        string? ssml = SpeechBuilder.GetSsml(
+            "ResumingBookSsml", "en-US", SpeechBuilder.EscapeXml("Tom & Jerry"), SpeechBuilder.EscapeXml("Chapter 1"));
+        var handRolledSsmlPath = new SsmlOutputSpeech { Ssml = $"<speak>{ssml}</speak>" };
+        Assert.Equal(handRolledSsmlPath.Ssml, Assert.IsType<SsmlOutputSpeech>(migratedSsmlPath).Ssml);
+
+        var migratedPlainPath = SpeechBuilder.BuildOutputSpeech(
+            "NonExistentSsmlKey12345", "ResumingBook", "en-US", "Tom & Jerry", "Chapter 1");
+        var handRolledPlainPath = new PlainTextOutputSpeech
+        {
+            Text = ResponseStrings.Get("ResumingBook", "en-US", "Tom & Jerry", "Chapter 1")
+        };
+        Assert.Equal(handRolledPlainPath.Text, Assert.IsType<PlainTextOutputSpeech>(migratedPlainPath).Text);
     }
 }

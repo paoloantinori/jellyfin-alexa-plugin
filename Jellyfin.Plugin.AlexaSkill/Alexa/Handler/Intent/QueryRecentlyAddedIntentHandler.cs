@@ -173,7 +173,7 @@ public class QueryRecentlyAddedIntentHandler : BaseHandler
 
         var aplItems = items.Take(displayCount).Select(i =>
             new ListDisplayItem(i.Name ?? string.Empty, i.Id.ToString("N"), GetArtistSubtitle(i), GetImageUrl(i.Id.ToString("N"), user))).ToList();
-        TryAttachListDirective(response, context, "Recently Added", aplItems, "recentlyAdded", hasMore: isTruncated);
+        AplDirectiveAttacher.TryAttachListDirective(Logger, response, context, "Recently Added", aplItems, "recentlyAdded", hasMore: isTruncated);
 
         return response;
     }

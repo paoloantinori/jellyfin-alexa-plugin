@@ -153,10 +153,7 @@ public class FollowMeIntentHandler : BaseHandler
             context);
 
         // Replace the default speech with the follow-me announcement
-        string? ssml = SpeechBuilder.GetSsml("FollowMeSuccessSsml", locale, SpeechBuilder.EscapeXml(title));
-        response.Response.OutputSpeech = ssml != null
-            ? new SsmlOutputSpeech { Ssml = $"<speak>{ssml}</speak>" }
-            : new PlainTextOutputSpeech { Text = ResponseStrings.Get("FollowMeSuccess", locale, title) };
+        response.Response.OutputSpeech = SpeechBuilder.BuildOutputSpeech("FollowMeSuccessSsml", "FollowMeSuccess", locale, title);
 
         // Clear the source device's queue so it doesn't keep appearing as "active"
         _queueManager.Clear(sourceDeviceId);

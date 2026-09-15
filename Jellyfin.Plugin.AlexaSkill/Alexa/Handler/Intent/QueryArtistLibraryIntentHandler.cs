@@ -11,6 +11,7 @@ using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Apl;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -266,7 +267,7 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
 
         var aplItems = items.Take(displayCount).Select(i =>
             new Apl.ListDisplayItem(i.Name, i.Id.ToString("N"), artistName, GetImageUrl(i.Id.ToString("N"), user))).ToList();
-        TryAttachCarouselDirective(response, context, artistName, aplItems, "queryArtist", locale: locale);
+        AplDirectiveAttacher.TryAttachCarouselDirective(Logger, response, context, artistName, aplItems, "queryArtist", locale: locale);
 
         return response;
     }

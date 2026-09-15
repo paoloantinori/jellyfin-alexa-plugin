@@ -402,7 +402,7 @@ public class BrowseLibraryIntentHandler : BaseHandler
         string title = char.ToUpper(browseCategory[0], CultureInfo.InvariantCulture) + browseCategory[1..];
         var aplItems = items.Take(displayCount).Select(i =>
             new Apl.ListDisplayItem(i.Name, i.Id.ToString("N"), GetArtistSubtitle(i), GetImageUrl(i.Id.ToString("N"), user))).ToList();
-        TryAttachCarouselDirective(response, context, title, aplItems, locale: locale);
+        AplDirectiveAttacher.TryAttachCarouselDirective(Logger, response, context, title, aplItems, locale: locale);
 
         return response;
     }

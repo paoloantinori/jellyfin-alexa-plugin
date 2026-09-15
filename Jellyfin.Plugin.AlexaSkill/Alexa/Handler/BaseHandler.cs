@@ -3048,10 +3048,8 @@ public abstract class BaseHandler
                 return (FuzzyMissOutcome.SuggestionHandled, playResponse);
             }
 
-            string? ssml = SpeechBuilder.GetSsml("FuzzyAutoPlayAnnouncementSsml", locale, SpeechBuilder.EscapeXml(selector(best)), SpeechBuilder.EscapeXml(query));
-            IOutputSpeech qualifier = ssml != null
-                ? new SsmlOutputSpeech { Ssml = $"<speak>{ssml}</speak>" }
-                : new PlainTextOutputSpeech { Text = ResponseStrings.Get("FuzzyAutoPlayAnnouncement", locale, selector(best), query) };
+            IOutputSpeech qualifier = SpeechBuilder.BuildOutputSpeech(
+                "FuzzyAutoPlayAnnouncementSsml", "FuzzyAutoPlayAnnouncement", locale, selector(best), query);
 
             // JF-538 review finding: when the delegate's launch announce already rode the
             // progressive vehicle (directive-only play response, null OutputSpeech), the old
@@ -3748,98 +3746,12 @@ public abstract class BaseHandler
     }
 
     /// <summary>
-    /// Conditionally attach an APL list directive to a response if the device supports APL.
-    /// </summary>
-    /// <param name="response">The skill response to attach the directive to.</param>
-    /// <param name="context">The Alexa context for APL device detection.</param>
-    /// <param name="title">The title for the APL list.</param>
-    /// <param name="items">The items to display in the list.</param>
-    /// <param name="token">A token identifying the APL directive.</param>
-    /// <param name="action">The action for the APL list items.</param>
-    private protected void TryAttachListDirective(
-        SkillResponse response,
-        Context? context,
-        string title,
-        List<Apl.ListDisplayItem> items,
-        string token,
-        string action = "selectItem",
-        bool hasMore = false)
-    {
-        if (!Apl.AplHelper.VisualsEnabled)
-        {
-            Logger.LogDebug("APL list skipped for '{Token}': visuals disabled in config", token);
-            return;
-        }
-
-        if (!Apl.AplHelper.DeviceSupportsApl(context))
-        {
-            var keys = context?.System?.Device?.SupportedInterfaces?.Keys;
-            Logger.LogDebug("APL list skipped for '{Token}': device does not support APL. Interfaces: {Interfaces}", token, keys != null ? string.Join(", ", keys) : "null");
-            return;
-        }
-
-        var directive = Apl.AplHelper.BuildListDirective(title, items, token, action, context, hasMore);
-        if (directive != null)
-        {
-            response.Response.Directives.Add(directive);
-        }
-        else
-        {
-            Logger.LogWarning("APL BuildListDirective returned null for '{Token}' with {Count} items", token, items.Count);
-        }
-    }
-
-    /// <summary>
-    /// Attach an APL image carousel directive to a response when the device supports APL.
-    /// No-op on non-APL devices or when visuals are disabled.
-    /// </summary>
-    private protected void TryAttachCarouselDirective(
-        SkillResponse response,
-        Context? context,
-        string title,
-        List<Apl.ListDisplayItem> items,
-        string token = "carousel",
-        string locale = "en-US")
-    {
-        if (!Apl.AplHelper.VisualsEnabled)
-        {
-            Logger.LogDebug("APL carousel skipped for '{Token}': visuals disabled in config", token);
-            return;
-        }
-
-        if (!Apl.AplHelper.DeviceSupportsApl(context))
-        {
-            var keys = context?.System?.Device?.SupportedInterfaces?.Keys;
-            Logger.LogDebug("APL carousel skipped for '{Token}': device does not support APL. Interfaces: {Interfaces}", token, keys != null ? string.Join(", ", keys) : "null");
-            return;
-        }
-
-        var directive = Apl.AplHelper.BuildCarouselDirective(title, items, token, context);
-        if (directive != null)
-        {
-            response.Response.Directives.Add(directive);
-
-            // Interactive APL directives require an open session to receive SendEvent callbacks.
-            if (response.Response.ShouldEndSession == true)
-            {
-                response.Response.ShouldEndSession = false;
-                string repromptText = ResponseStrings.Get("CarouselReprompt", locale);
-                if (response.Response.Reprompt == null && !string.IsNullOrEmpty(repromptText))
-                {
-                    response.Response.Reprompt = new Reprompt(repromptText);
-                }
-            }
-        }
-        else
-        {
-            Logger.LogWarning("APL BuildCarouselDirective returned null for '{Token}' with {Count} items", token, items.Count);
-        }
-    }
-
-    /// <summary>
     /// Attach an APL NowPlaying screen directive to a response when the device supports APL.
     /// No-op on non-APL devices, when visuals are disabled, or when the response has no
     /// AudioPlayer directive (e.g. VideoApp path).
+    /// Stays here (JF-315 batch 3): unlike the list/carousel attachers in
+    /// AplDirectiveAttacher, it resolves the cover-art URL via GetImageUrl, which
+    /// reads plugin config (server address + user token), so it is not Logger-only state.
     /// </summary>
     private protected void TryAttachNowPlayingDirective(
         SkillResponse response,

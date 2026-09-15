@@ -284,15 +284,8 @@ public class PlayBookIntentHandler : BaseHandler
 
             if (resuming)
             {
-                string bookName = SpeechBuilder.EscapeXml(books[0].Name);
-                string trackName = SpeechBuilder.EscapeXml(trackItems[startIndex].Name);
-                string? ssml = SpeechBuilder.GetSsml("ResumingBookSsml", locale, bookName, trackName);
-                response.Response.OutputSpeech = ssml != null
-                    ? new SsmlOutputSpeech { Ssml = $"<speak>{ssml}</speak>" }
-                    : new PlainTextOutputSpeech
-                    {
-                        Text = ResponseStrings.Get("ResumingBook", locale, books[0].Name, trackItems[startIndex].Name)
-                    };
+                response.Response.OutputSpeech = SpeechBuilder.BuildOutputSpeech(
+                    "ResumingBookSsml", "ResumingBook", locale, books[0].Name, trackItems[startIndex].Name);
                 response.Response.ShouldEndSession = true;
             }
             else
@@ -314,16 +307,8 @@ public class PlayBookIntentHandler : BaseHandler
         // Add resume announcement when not starting from the beginning
         if (startIndex > 0 || resumeTicks > 0)
         {
-            string bookName = SpeechBuilder.EscapeXml(books[0].Name);
-            string trackName = SpeechBuilder.EscapeXml(trackItems[startIndex].Name);
-            string? ssml = SpeechBuilder.GetSsml("ResumingBookSsml", locale, bookName, trackName);
-
-            standardResponse.Response.OutputSpeech = ssml != null
-                ? new SsmlOutputSpeech { Ssml = $"<speak>{ssml}</speak>" }
-                : new PlainTextOutputSpeech
-                {
-                    Text = ResponseStrings.Get("ResumingBook", locale, books[0].Name, trackItems[startIndex].Name)
-                };
+            standardResponse.Response.OutputSpeech = SpeechBuilder.BuildOutputSpeech(
+                "ResumingBookSsml", "ResumingBook", locale, books[0].Name, trackItems[startIndex].Name);
             standardResponse.Response.ShouldEndSession = true;
         }
 
