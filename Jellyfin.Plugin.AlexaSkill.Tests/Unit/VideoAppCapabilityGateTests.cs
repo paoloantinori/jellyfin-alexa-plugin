@@ -27,7 +27,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 
 /// <summary>
 /// JF-505: every Movie/Episode/live-TV launch site routes through the shared
-/// <c>BaseHandler.BuildVideoAppLaunchResponse</c> chokepoint, so a device without the
+/// <c>PlaybackLaunchBuilder.BuildVideoAppLaunchResponse</c> chokepoint, so a device without the
 /// VideoApp interface (an Echo Dot) gets the localized VideoRequiresScreen Tell instead
 /// of a directive the platform rejects with an audible error (device evidence
 /// 2026-09-06). The audio-content builders (native controls, audiobooks) degrade to the
@@ -59,7 +59,7 @@ public class VideoAppCapabilityGateTests : PluginTestBase
             }
         };
 
-    // ========== Chokepoint: BaseHandler.BuildVideoAppLaunchResponse ==========
+    // ========== Chokepoint: PlaybackLaunchBuilder.BuildVideoAppLaunchResponse ==========
 
     [Fact]
     public void Chokepoint_ScreenlessDevice_NoDirective_VideoRequiresScreenTell()
@@ -195,7 +195,7 @@ public class VideoAppCapabilityGateTests : PluginTestBase
         var chapter = new Audio { Name = "Chapter 3", Id = Guid.NewGuid() };
         long startTicks = TimeSpan.FromMinutes(12).Ticks;
 
-        SkillResponse response = handler.BuildAudiobookResumeResponse(chapter, startTicks, user, TestHelpers.CreateScreenlessContext());
+        SkillResponse response = handler.Launch.BuildAudiobookResumeResponse(chapter, startTicks, user, TestHelpers.CreateScreenlessContext());
 
         var directive = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
         Assert.Empty(response.Response.Directives.OfType<VideoAppLaunchDirective>());
@@ -212,7 +212,7 @@ public class VideoAppCapabilityGateTests : PluginTestBase
         var chapter = new Audio { Name = "Chapter 3", Id = Guid.NewGuid() };
         long startTicks = TimeSpan.FromMinutes(12).Ticks;
 
-        SkillResponse response = handler.BuildAudiobookResumeResponse(chapter, startTicks, user, TestHelpers.CreateContextWithVideoApp());
+        SkillResponse response = handler.Launch.BuildAudiobookResumeResponse(chapter, startTicks, user, TestHelpers.CreateContextWithVideoApp());
 
         var directive = Assert.Single(response.Response.Directives.OfType<VideoAppLaunchDirective>());
         Assert.Contains($"start={startTicks}", directive.VideoItem.Source, StringComparison.Ordinal);

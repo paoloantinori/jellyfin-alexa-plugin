@@ -67,8 +67,8 @@ public class PreviousIntentHandler : BaseHandler
         // JF-564: during a VideoApp-family medium the queue logic below must not run
         // (the shared refusal helper owns the rationale); an empty ledger (Unknown)
         // keeps the music semantics unchanged.
-        PlayingMedium medium = ResolvePlayingMedium(context, _libraryManager, _queueManager);
-        if (BuildVideoAppTransportRefusal(medium, GetLocale(request)) is { } refusal)
+        PlaybackLaunchBuilder.PlayingMedium medium = Launch.ResolvePlayingMedium(context, _libraryManager, _queueManager);
+        if (PlaybackLaunchBuilder.BuildVideoAppTransportRefusal(medium, GetLocale(request)) is { } refusal)
         {
             Logger.LogDebug("PreviousIntent: {Medium} playing, answered by the transport refusal", medium);
             return Task.FromResult(refusal);

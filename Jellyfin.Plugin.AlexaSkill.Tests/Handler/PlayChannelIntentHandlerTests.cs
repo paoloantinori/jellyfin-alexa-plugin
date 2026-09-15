@@ -356,7 +356,7 @@ public class PlayChannelIntentHandlerTests : PluginTestBase
     }
 
     // --- JF-483: PlayChannelIntentHandler and PlayRadioIntentHandler's channel tier
-    // share ONE launch block (BaseHandler.BuildChannelLaunchResponseAsync). These pins
+    // share ONE launch block (PlaybackLaunchBuilder.BuildChannelLaunchResponseAsync). These pins
     // run both paths with identical inputs and assert byte-identical serialized
     // responses, so any future edit that diverges one launch path from the other
     // (a directive change, an announce on one path only, a different Tell) fails here. ---

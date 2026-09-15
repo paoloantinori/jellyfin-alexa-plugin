@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Alexa.NET;
 using Alexa.NET.Request;
+using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
@@ -10,22 +13,30 @@ using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Session;
+using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 
 /// <summary>
-/// The JF-315 batch-4 playback-launch collaborator (extracted from BaseHandler,
-/// 2026-09-15): everything that builds an AUDIO-SHAPED launch for an item - the
-/// stream/image URL vocabulary derived from plugin config, the
-/// <see cref="AudioLaunchSource"/> resolution family (static-vs-transcode routing,
-/// resume rebasing, the launch-scope reads), the AudioPlayer.Play response
+/// The JF-315 playback-launch collaborator (extracted from BaseHandler; batch 4
+/// 2026-09-15, VideoApp launch family batch 5 same day): everything that builds a
+/// launch response for an item - the stream/image URL vocabulary derived from plugin
+/// config, the <see cref="AudioLaunchSource"/> resolution family (static-vs-transcode
+/// routing, resume rebasing, the launch-scope reads), the AudioPlayer.Play response
 /// chokepoint (with its device last-played ledger and launch-scope records,
 /// metadata, seek card, and the gated music announce), the VideoApp-for-audio
 /// response (native controls) including its screenless degradation back to
-/// AudioPlayer, and the APL now-playing attacher that rides play responses.
-/// STATELESS by construction (readonly config + logger only), so the
-/// singleton-handlers constraint BaseHandler documents is preserved.
+/// AudioPlayer, the VideoApp LAUNCH family (the codec-routed movie/episode URL, the
+/// launch response chokepoints with their capability gates, the live-TV channel
+/// launch, the audiobook resume, and the JF-501 progressive announce), the
+/// JF-564 medium classification the transport intents answer from, and the APL
+/// now-playing attacher that rides play responses.
+/// STATELESS by construction (readonly config + logger + the composition-time
+/// progressive-send delegate), so the singleton-handlers constraint BaseHandler
+/// documents is preserved.
 /// COMPOSITION DECISION (the census's ctor-injected design, adapted so the 61
 /// handlers keep compiling without ctor churn): BaseHandler constructs one
 /// instance per handler in its own ctor and exposes it as the protected-internal
@@ -33,25 +44,31 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// get-only property. The per-call <c>queueManager ?? Plugin.Instance?.DeviceQueueManager</c>
 /// idiom is kept verbatim (the queue manager is deliberately parameterized per
 /// call so unit tests stay off the shared plugin instance, JF-522).
-/// The VideoApp LAUNCH family (BuildVideoAppLaunchResponse(Async), the channel
-/// launch, the medium classification, the progressive announce) stays in
-/// BaseHandler for the next batch: those members route through the virtual
-/// SendProgressiveResponse seam that handler test harnesses override.
+/// THE PROGRESSIVE SEAM: the JF-501 progressive announce send stays VIRTUAL on
+/// BaseHandler (SendProgressiveResponse, the test seam ~15 harnesses override to
+/// capture speech); this builder receives the handler's own method as a delegate
+/// at composition time, so every override keeps capturing (see the constructor
+/// for the mechanism). The JF-564 medium classification is transport-answer
+/// policy rather than launch building; it lives here with the launch family it
+/// shares state reads with and may earn its own collaborator in a later batch.
 /// </summary>
 public sealed class PlaybackLaunchBuilder
 {
     private readonly PluginConfiguration _config;
     private readonly ILogger _logger;
+    private readonly Func<Context, Request, string, Task<bool>> _sendProgressiveResponse;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PlaybackLaunchBuilder"/> class.
     /// </summary>
     /// <param name="config">The plugin configuration (server address, token secret, feature toggles).</param>
     /// <param name="logger">The logger (BaseHandler passes its own instance so moved log statements keep their pre-extraction category).</param>
-    public PlaybackLaunchBuilder(PluginConfiguration config, ILogger logger)
+    /// <param name="sendProgressiveResponse">The handler's own <c>SendProgressiveResponse</c> method, wired as a DELEGATE at composition time (JF-315 batch 5). The method stays virtual on BaseHandler because ~15 test harnesses override it to capture progressive speech; passing the method group (rather than re-implementing the send here) keeps every override in the chain: a delegate created from a virtual method dispatches virtually to the most-derived override at invocation time (probe-verified 2026-09-15: a delegate created inside the base constructor still reaches the derived override). The delegate's target is the handler instance itself, so it captures nothing request-scoped; handlers are singleton-lifetime, so the capture pins nothing the handler does not already own.</param>
+    public PlaybackLaunchBuilder(PluginConfiguration config, ILogger logger, Func<Context, Request, string, Task<bool>> sendProgressiveResponse)
     {
         _config = config;
         _logger = logger;
+        _sendProgressiveResponse = sendProgressiveResponse;
     }
 
     /// <summary>
@@ -71,6 +88,527 @@ public sealed class PlaybackLaunchBuilder
     /// <returns>Streamable url of the requested item.</returns>
     public string GetVideoStreamUrl(string itemId, Entities.User user)
         => BuildStreamUrl("Videos/", itemId, user);
+
+    /// <summary>
+    /// Get a resume-aware audiobook HLS URL with a start-position hint. The endpoint reads
+    /// <c>?start=&lt;ticks&gt;</c> and injects <c>#EXT-X-START</c> into the playlist so VideoApp
+    /// can resume at position (VideoApp.Launch has no offset parameter of its own).
+    /// Moved here from BaseHandler (JF-315 batch 5) next to the audiobook concat URL it
+    /// siblings (<see cref="GetAudiobookVideoAudioUrl"/>): both read the same
+    /// config-derived server address and token secret.
+    /// </summary>
+    /// <param name="parentId">Id of the audiobook parent folder.</param>
+    /// <param name="startTicks">Resume position in .NET ticks.</param>
+    /// <returns>URL to the resume-aware audiobook HLS endpoint.</returns>
+    internal string GetAudiobookResumeUrl(string parentId, long startTicks)
+        => new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/audiobook/{parentId}/stream.m3u8?start={startTicks}&token={StreamTokenHelper.Mint(parentId, _config.StreamTokenSecret)}").ToString();
+
+    /// <summary>
+    /// Get the video-audio URL for the EPISODE HLS REMUX (JF-498): video stream copy +
+    /// audio AAC transcode into MPEG-TS segments, for video items whose audio codec has
+    /// no decoder on the Echo Show (eac3/ac3/truehd/dts) so the static stream never
+    /// starts. Serves movies too: it is the one remux endpoint for every Movie/Episode
+    /// launch that <see cref="GetVideoAppLaunchUrl"/> routes here. Segments are served
+    /// by the existing segment endpoint, keyed by the item GUID; the token is the same
+    /// item-scoped HMAC as the other video-audio endpoints (JF-309).
+    /// Moved here from BaseHandler (JF-315 batch 5) beside the audio-only episode URL:
+    /// the VideoApp remux and the AudioPlayer transcode are the two codec-routed
+    /// escape hatches from the static stream.
+    /// </summary>
+    /// <param name="itemId">Id of the video item.</param>
+    /// <returns>URL to the episode remux HLS endpoint.</returns>
+    internal string GetEpisodeVideoAudioUrl(string itemId)
+        => new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/episode/{itemId}/stream.m3u8?token={StreamTokenHelper.Mint(itemId, _config.StreamTokenSecret)}").ToString();
+
+    /// <summary>
+    /// Resolve the static-vs-HLS-remux decision for a VideoApp launch by probing the
+    /// item's media streams (JF-498). Extracted as its own step so the policy itself
+    /// (<see cref="VideoAppStreamPolicy.Decide"/>) stays a pure function.
+    /// Moved here from BaseHandler (JF-315 batch 5), beside <see cref="TryResolveAudioCodec"/>
+    /// (its AudioPlayer-side mirror, the same fail-open media-streams probe).
+    /// </summary>
+    /// <param name="item">The Movie/Episode item about to be launched.</param>
+    /// <returns>The launch decision with a log-ready reason.</returns>
+    private VideoAppStreamDecision ResolveVideoAppStreamDecision(BaseItem item)
+    {
+        try
+        {
+            (string? videoCodec, string? audioCodec) = VideoAppStreamPolicy.ExtractCodecs(item.GetMediaStreams());
+            return VideoAppStreamPolicy.Decide(videoCodec, audioCodec, item.Container);
+        }
+        catch (Exception ex)
+        {
+            // GetMediaStreams() goes through BaseItem's statically injected
+            // MediaSourceManager (null under unit tests) and a database read. Any
+            // failure keeps the static stream: the probe may only ADD the remux
+            // route, never break the launch path.
+            _logger.LogDebug(ex, "VideoApp stream decision: could not read media streams for item {ItemId}; keeping the static stream", item.Id);
+            return VideoAppStreamPolicy.Decide(videoCodec: null, audioCodec: null);
+        }
+    }
+
+    /// <summary>
+    /// Get the VideoApp.Launch source URL for a MOVIE or EPISODE item, routed by codec
+    /// compatibility (JF-498): Echo-decodable sources (h264 video + aac/mp3/... audio)
+    /// keep the static <c>/Videos/{id}/stream?static=true</c> URL; sources whose audio
+    /// has no Echo decoder (eac3/ac3/truehd/dts) get the HLS remux URL instead; sources
+    /// whose VIDEO codec the Echo cannot decode (hevc/av1, JF-500) get the same HLS
+    /// endpoint URL (the endpoint re-probes and re-encodes the video). Every VideoApp
+    /// launch site that launches a Movie or Episode item must go through this helper
+    /// so the routing cannot drift between handlers (live incident 2026-09-05
+    /// corr=d9f848a7: the whole PlayNextEpisode chain was correct and the video never
+    /// started because the static URL served raw EAC3 bytes).
+    /// Moved here from BaseHandler (JF-315 batch 5).
+    /// </summary>
+    /// <param name="item">The Movie/Episode item to launch.</param>
+    /// <param name="user">The user for the static stream URL (api_key).</param>
+    /// <returns>The VideoApp source URL (static or an episode HLS tier).</returns>
+    public string GetVideoAppLaunchUrl(BaseItem item, Entities.User user)
+    {
+        VideoAppStreamDecision decision = ResolveVideoAppStreamDecision(item);
+        _logger.LogDebug("VideoApp launch routing for '{ItemName}' ({ItemId}): {Reason}", item.Name, item.Id, decision.Reason);
+
+        return decision.Route == VideoAppStreamRoute.Static
+            ? GetVideoStreamUrl(item.Id.ToString(), user)
+            : GetEpisodeVideoAudioUrl(item.Id.ToString());
+    }
+
+    /// <summary>
+    /// The ONE classification of "item kinds that ride the VideoApp launch path"
+    /// (JF-505 simplify: the predicate had drifted between the resume-offer gate,
+    /// which included LiveTvChannel, and the ResumeIntent router, which did not).
+    /// Every site deciding whether an item is launched/gated/offered as VIDEO
+    /// consumes this predicate; do not hand-write the type list again.
+    /// Moved here from BaseHandler (JF-315 batch 5).
+    /// </summary>
+    /// <param name="item">The item to classify.</param>
+    /// <returns>True when the item launches via VideoApp on a capable device.</returns>
+    public static bool IsVideoAppLaunchItem(BaseItem? item)
+        => item is MediaBrowser.Controller.Entities.Movies.Movie
+            or MediaBrowser.Controller.Entities.TV.Episode
+            or MediaBrowser.Controller.LiveTv.LiveTvChannel;
+
+    /// <summary>
+    /// The medium a device is most recently known to be playing (JF-564). The transport
+    /// intents that Alexa routes to the skill without the invocation name (pause, stop,
+    /// next, previous) must answer differently per medium: only <see cref="PlayingMedium.Audio"/>
+    /// can honestly be controlled via AudioPlayer directives; the VideoApp family cannot
+    /// (no VideoApp.Stop exists and AudioPlayer.Play mid-video is a misdirect).
+    /// Moved here from BaseHandler (JF-315 batch 5) with the resolver and the refusal.
+    /// </summary>
+    internal enum PlayingMedium
+    {
+        /// <summary>Nothing recorded (cold device, deleted item, or no manager wired):
+        /// callers keep their pre-JF-564 behavior, so a cold handler never changes its
+        /// music semantics.</summary>
+        Unknown,
+
+        /// <summary>The AudioPlayer pipeline owns the item (music, an audio-transcode
+        /// launch of a movie/episode, or a book on the flat audio path): transport
+        /// directives genuinely work.</summary>
+        Audio,
+
+        /// <summary>A Movie/Episode launched via VideoApp.</summary>
+        Video,
+
+        /// <summary>A live TV channel launched via VideoApp.</summary>
+        LiveTv,
+
+        /// <summary>An audiobook riding the VideoApp HLS path (NativeControlsForBooks).</summary>
+        VideoAppAudiobook,
+    }
+
+    /// <summary>
+    /// Whether the medium is one the skill launched via VideoApp.Launch (and therefore
+    /// one it cannot control with AudioPlayer directives).
+    /// </summary>
+    /// <param name="medium">The classified medium.</param>
+    /// <returns>True for Video, LiveTv and VideoAppAudiobook.</returns>
+    internal static bool IsVideoAppMedium(PlayingMedium medium)
+        => medium is PlayingMedium.Video or PlayingMedium.LiveTv or PlayingMedium.VideoAppAudiobook;
+
+    /// <summary>
+    /// Whether the request context reports the stream as actively playing: the
+    /// device's last-reported <c>playerActivity</c> (<c>context.AudioPlayer</c>) is
+    /// PLAYING or BUFFER_UNDERRUN. BUFFER_UNDERRUN counts as playing because it is
+    /// transient mid-playback rebuffering of the still-current stream, not a stopped
+    /// one. Null-tolerant: a context carrying no AudioPlayer object at all reports
+    /// false. Shared by PlayRadio's seed decision (JF-480) and
+    /// PlaybackFinishedEventHandler's hasQueuedNext; ResumeIntentHandler deliberately
+    /// keeps its own narrower PLAYING-only check and must NOT reuse this helper:
+    /// resume should still act on an underrun-stalled stream (restart it), not treat
+    /// it as "already playing, nothing to do".
+    /// Moved here from BaseHandler (JF-315 batch 5) with the medium family it feeds.
+    /// </summary>
+    /// <param name="context">The Alexa request context (may carry no AudioPlayer object).</param>
+    /// <returns>True when the device last reported active playback.</returns>
+    internal static bool IsActivelyPlaying(Context? context)
+    {
+        string? activity = context?.AudioPlayer?.PlayerActivity;
+        return string.Equals(activity, "PLAYING", StringComparison.Ordinal)
+            || string.Equals(activity, "BUFFER_UNDERRUN", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Classify what a device is playing from the JF-563 device last-played ledger plus
+    /// the AudioPlayer token (JF-564). The ledger is the only record a VideoApp launch
+    /// leaves (those launches never touch <c>context.AudioPlayer.Token</c>), and it is
+    /// written by every launch site: the BuildAudioPlayerResponse chokepoint, the
+    /// LastPlayedResponseInterceptor (movie/episode directives) and the VideoApp
+    /// builders (channel, video-audio, audiobook). Classification rules, in order:
+    /// an EMPTY ledger (or an unresolvable item) yields <see cref="PlayingMedium.Unknown"/>
+    /// so a cold handler keeps its existing behavior; a token naming the ledger item
+    /// yields <see cref="PlayingMedium.Audio"/> whatever the item kind (the audio
+    /// pipeline owns it: a Movie can ride the audio-only transcode and a book the flat
+    /// audio path, and on both the transport directives work) and skips the item
+    /// resolve entirely; otherwise the ledger item's kind decides via
+    /// <see cref="IsVideoAppLaunchItem"/> (channel vs other video) and the AudioBook
+    /// test, and any remaining item kind (music) is audio whose token merely moved
+    /// with the queue advance. RepeatIntentHandler keeps its own token-first
+    /// resolution because it needs the resolved item back to restart it.
+    /// Moved here from BaseHandler (JF-315 batch 5).
+    /// </summary>
+    /// <param name="context">The Alexa context (device id for the ledger read, AudioPlayer token).</param>
+    /// <param name="libraryManager">The library manager, to resolve the ledger item id. Null yields Unknown.</param>
+    /// <param name="queueManager">The caller's device queue manager (tests pass theirs); null falls back to <c>Plugin.Instance</c>'s.</param>
+    /// <returns>The classified medium; Unknown when nothing is recorded.</returns>
+    internal PlayingMedium ResolvePlayingMedium(Context? context, ILibraryManager? libraryManager, DeviceQueueManager? queueManager = null)
+    {
+        if (libraryManager == null)
+        {
+            return PlayingMedium.Unknown;
+        }
+
+        string? deviceId = context?.System?.Device?.DeviceID;
+        string? lastPlayedId = deviceId != null
+            ? (queueManager ?? Plugin.Instance?.DeviceQueueManager)?.GetLastPlayedItemId(deviceId)
+            : null;
+        if (!Guid.TryParse(lastPlayedId, out Guid lastPlayedItemId))
+        {
+            return PlayingMedium.Unknown;
+        }
+
+        // Sleep-suffixed tokens still carry the item id (StreamTokenCodec), so the
+        // ownership check survives the composite form. It runs BEFORE the item
+        // resolve: when the audio pipeline owns the ledger item (the modal music
+        // shape), the answer is Audio whatever the kind and the DB read is skipped.
+        if (StreamTokenCodec.TryGetItemId(context?.AudioPlayer?.Token, out Guid tokenItemId)
+            && tokenItemId == lastPlayedItemId)
+        {
+            return PlayingMedium.Audio;
+        }
+
+        BaseItem? item = libraryManager.GetItemById(lastPlayedItemId);
+        if (item == null)
+        {
+            return PlayingMedium.Unknown;
+        }
+
+        // The ONE VideoApp kind predicate (JF-505: "do not hand-write the type list
+        // again"), so a future launch kind added there classifies correctly here
+        // instead of silently falling through to Audio; LiveTvChannel needs its own
+        // medium arm first.
+        if (IsVideoAppLaunchItem(item))
+        {
+            return item is MediaBrowser.Controller.LiveTv.LiveTvChannel
+                ? PlayingMedium.LiveTv
+                : PlayingMedium.Video;
+        }
+
+        if (item is MediaBrowser.Controller.Entities.AudioBook)
+        {
+            return PlayingMedium.VideoAppAudiobook;
+        }
+
+        // Music: RecordLastPlayed pins the user-initiated play while Enqueue-advanced
+        // queues move only the token, so a token mismatch here is the ordinary
+        // queue-advance shape, not displacement (the RepeatIntentHandler precedent).
+        return PlayingMedium.Audio;
+    }
+
+    /// <summary>
+    /// The ONE per-medium answer for the queue-navigation transport intents during a
+    /// VideoApp-family medium (JF-564), shared by the Next and Previous entries so the
+    /// policy cannot drift between the twins. A VideoApp launch (movie/episode/live
+    /// TV/book) does not replace the session's music queue, so the queue-advance logic
+    /// would either return a silent Empty (the video item is not in the queue) or, with
+    /// a stale music queue still pinned to the pre-video track, emit a misdirected
+    /// AudioPlayer.Play mid-video. Video and live TV answer the honest navigate line;
+    /// a VideoApp book keeps the silent Empty (chapter navigation is its own feature).
+    /// Pause is NOT a caller (its response keeps the AudioPlayer.Stop directive and a
+    /// different line); Audio and Unknown return null so the caller keeps its existing
+    /// behavior.
+    /// Moved here from BaseHandler (JF-315 batch 5). The two Tells stay hand-written
+    /// (plain <c>ResponseStrings.Get</c> + <c>ResponseBuilder.Tell</c>): both keys are
+    /// plain-text-only in every locale (no SSml twin), so the SpeechBuilder.TellLocalized
+    /// SSML/plain ternary does not fit and reintroducing a zero-caller helper is banned.
+    /// </summary>
+    /// <param name="medium">The classified playing medium.</param>
+    /// <param name="locale">The request locale, for the honest strings.</param>
+    /// <returns>The transport refusal response, or null when the medium is controllable.</returns>
+    internal static SkillResponse? BuildVideoAppTransportRefusal(PlayingMedium medium, string locale)
+        => medium switch
+        {
+            PlayingMedium.Video => ResponseBuilder.Tell(ResponseStrings.Get("CannotNavigateVideoByVoice", locale)),
+            PlayingMedium.LiveTv => ResponseBuilder.Tell(ResponseStrings.Get("CannotNavigateLiveTvByVoice", locale)),
+            PlayingMedium.VideoAppAudiobook => ResponseBuilder.Empty(),
+            _ => null,
+        };
+
+    /// <summary>
+    /// Build the canonical VideoApp.Launch response (JF-505 shared launch chokepoint).
+    /// Every Movie/Episode/live-TV launch site must build its response through this
+    /// helper so the screenless-device capability gate cannot drift between handlers:
+    /// a VideoApp.Launch sent to a device whose SupportedInterfaces lacks VideoApp (an
+    /// Echo Dot) is rejected by the platform with an audible directive error (device
+    /// evidence 2026-09-06), so without the interface NO directive is emitted and the
+    /// localized <c>VideoRequiresScreen</c> Tell answers instead.
+    /// JF-501: intent-driven launch sites must prefer the progressive-announce variant
+    /// <see cref="BuildVideoAppLaunchResponseAsync"/>; this sync builder is the shape
+    /// for non-intent requests (APL carousel taps), where the announce keeps riding the
+    /// final response. The HandleFuzzyMiss auto-play delegate went async in JF-538, so
+    /// it is no longer bound to this sync shape.
+    /// Moved here from BaseHandler (JF-315 batch 5) beside
+    /// <see cref="BuildVideoAppAudioResponse"/> (its audio-content mirror).
+    /// </summary>
+    /// <param name="context">The Alexa context, for device capability detection.</param>
+    /// <param name="locale">The request locale, for the capability Tell string.</param>
+    /// <param name="sourceUrl">The VideoApp source URL (from <see cref="GetVideoAppLaunchUrl"/> or the live-TV resolver).</param>
+    /// <param name="title">The video item metadata title.</param>
+    /// <param name="outputSpeech">Optional now-playing announce.</param>
+    /// <returns>The VideoApp.Launch response, or the VideoRequiresScreen Tell on a device without the VideoApp interface.</returns>
+    internal SkillResponse BuildVideoAppLaunchResponse(
+        Context? context,
+        string locale,
+        string sourceUrl,
+        string title,
+        IOutputSpeech? outputSpeech = null)
+    {
+        if (!Interface.VideoAppCapabilities.DeviceSupportsVideoApp(context))
+        {
+            _logger.LogDebug(
+                "VideoApp launch of '{Title}' skipped: device {DeviceId} does not support the VideoApp interface",
+                title,
+                context?.System?.Device?.DeviceID ?? "unknown");
+            return ResponseBuilder.Tell(ResponseStrings.Get("VideoRequiresScreen", locale));
+        }
+
+        return new SkillResponse
+        {
+            Version = "1.0",
+            Response = new ResponseBody
+            {
+                // VideoApp.Launch must NOT include shouldEndSession; Alexa rejects it.
+                ShouldEndSession = null,
+                OutputSpeech = outputSpeech,
+                Directives = new List<IDirective>
+                {
+                    new Directive.VideoAppLaunchDirective
+                    {
+                        VideoItem = new Directive.VideoItem
+                        {
+                            Source = sourceUrl,
+                            Metadata = new Directive.VideoItemMetadata
+                            {
+                                Title = title
+                            }
+                        }
+                    }
+                }
+            }
+        };
+    }
+
+    /// <summary>
+    /// JF-501 progressive-announce variant of <see cref="BuildVideoAppLaunchResponse"/>:
+    /// the announce, when the request can carry one, is spoken as an awaited
+    /// progressive response via <see cref="SpeakVideoLaunchAnnounceAsync"/> and the
+    /// returned launch response carries the VideoApp.Launch directive only (no
+    /// OutputSpeech), so the Echo Show player cannot cut the announcement
+    /// mid-sentence when it opens. Every capability and gate of the sync builder is
+    /// preserved: the announce decision runs BEFORE the launch build, so a
+    /// screenless device never hears a progressive announce followed by the
+    /// capability Tell, and a null announce (toggle off) keeps today's silent shape.
+    /// Moved here from BaseHandler (JF-315 batch 5); the progressive send still
+    /// reaches the handler's virtual SendProgressiveResponse through the
+    /// composition-time delegate.
+    /// </summary>
+    /// <param name="context">The Alexa context, for device capability detection.</param>
+    /// <param name="request">The skill request, for the progressive-response vehicle.</param>
+    /// <param name="locale">The request locale, for the capability Tell string.</param>
+    /// <param name="sourceUrl">The VideoApp source URL (from <see cref="GetVideoAppLaunchUrl"/> or the live-TV resolver).</param>
+    /// <param name="title">The video item metadata title.</param>
+    /// <param name="outputSpeech">Optional now-playing announce; spoken progressively when the request type allows, else attached to the final response.</param>
+    /// <returns>The VideoApp.Launch response, or the VideoRequiresScreen Tell on a device without the VideoApp interface.</returns>
+    internal async Task<SkillResponse> BuildVideoAppLaunchResponseAsync(
+        Context? context,
+        Request? request,
+        string locale,
+        string sourceUrl,
+        string title,
+        IOutputSpeech? outputSpeech = null)
+    {
+        outputSpeech = await SpeakVideoLaunchAnnounceAsync(context, request, outputSpeech).ConfigureAwait(false);
+        return BuildVideoAppLaunchResponse(context, locale, sourceUrl, title, outputSpeech);
+    }
+
+    /// <summary>
+    /// Launch a live-TV channel (the shared launch block of PlayChannelIntentHandler
+    /// and PlayRadioIntentHandler's channel tier, extracted by JF-483 so the two paths
+    /// cannot drift: a resolver change or launch-directive fix lands once). Live TV
+    /// must launch via VideoApp.Launch (like movies/episodes) so it plays on Echo Show:
+    /// the AudioPlayer static stream URL used by music playback 500s for a live source.
+    /// The resolver picks the correct URL via Jellyfin's PlaybackInfo (direct-remote HLS
+    /// or the transcode fallback); an unresolvable stream yields the not-available Tell.
+    /// Moved here from BaseHandler (JF-315 batch 5) with the rest of the VideoApp
+    /// launch family.
+    /// </summary>
+    /// <param name="streamResolver">The live-TV stream resolver (PlaybackInfo URL).</param>
+    /// <param name="channel">The LiveTvChannel item to launch.</param>
+    /// <param name="context">The Alexa context (device id for the queue record).</param>
+    /// <param name="request">The skill request (JF-501 progressive announce vehicle).</param>
+    /// <param name="user">The plugin user (stream resolution + announce toggles).</param>
+    /// <param name="session">The Jellyfin session (queue + now-playing).</param>
+    /// <param name="locale">The request locale, for response strings.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The VideoApp.Launch response, or the not-available Tell when the stream cannot be resolved.</returns>
+    internal async Task<SkillResponse> BuildChannelLaunchResponseAsync(
+        ILiveTvStreamResolver streamResolver,
+        BaseItem channel,
+        Context context,
+        Request request,
+        Entities.User user,
+        SessionInfo session,
+        string locale,
+        CancellationToken cancellationToken)
+    {
+        session.NowPlayingQueue = new List<QueueItem> { new() { Id = channel.Id } };
+        session.FullNowPlayingItem = channel;
+
+        // JF-505 simplify: the capability gate runs FIRST, before the stream resolver's
+        // bounded-5s PlaybackInfo round-trip: on a screenless device the whole resolution
+        // would be spent on a launch the shared builder then refuses. Refusing early also
+        // makes the last-played record below unconditional-for-capable-devices (a refused
+        // channel can no longer be recorded and later offered as an unplayable resume).
+        if (!Interface.VideoAppCapabilities.DeviceSupportsVideoApp(context))
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("VideoRequiresScreen", locale));
+        }
+
+        LiveTvStream? stream = await streamResolver.ResolveAsync(channel, user, cancellationToken).ConfigureAwait(false);
+        if (stream is null)
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("MediaTypeNotAvailable", locale));
+        }
+
+        // Record the last-played channel for this device (the resume / continue-watching signal).
+        // Mirrors the chokepoint in BuildAudioPlayerResponse; needed here because the
+        // direct-remote stream URL has no /Videos/ segment for LastPlayedResponseInterceptor to parse.
+        string? deviceId = context?.System?.Device?.DeviceID;
+        if (!string.IsNullOrEmpty(deviceId))
+        {
+            Plugin.Instance?.DeviceQueueManager?.RecordLastPlayed(deviceId, channel.Id.ToString());
+        }
+
+        return await BuildVideoAppLaunchResponseAsync(
+            context,
+            request,
+            locale,
+            stream.Url,
+            channel.Name,
+            SpeechBuilder.BuildNowPlayingSpeech(channel.Name, locale, GetAnnounceNowPlaying(user))).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Build a VideoApp.Launch response for an audiobook RESUME, pointing at the resume-aware
+    /// HLS playlist (<c>?start=&lt;ticks&gt;</c>). The position is encoded in the playlist via
+    /// <c>#EXT-X-START</c>; VideoApp.Launch has no offset parameter, so this keeps the seek bar
+    /// AND resumes at position. Use the book's parent-folder ID for the concat stream.
+    /// JF-505: on a device without the VideoApp interface the directive is rejected by
+    /// the platform; audiobooks are audio, so the builder degrades to the AudioPlayer
+    /// resume (which supports an offset) instead of failing the play.
+    /// Moved here from BaseHandler (JF-315 batch 5) beside
+    /// <see cref="BuildVideoAppAudioResponse"/> (the fresh-play audiobook sibling).
+    /// </summary>
+    /// <param name="item">An audiobook chapter item (its ParentId is the book folder).</param>
+    /// <param name="startTicks">Resume position in .NET ticks.</param>
+    /// <param name="user">The plugin user (fallback audio stream URL on screenless devices).</param>
+    /// <param name="context">The Alexa context, for the JF-505 screenless-device check. Null (or a context without capability data) keeps the VideoApp path.</param>
+    /// <returns>A VideoApp.Launch SkillResponse targeting the resume playlist, or an AudioPlayer resume on a screenless device.</returns>
+    internal SkillResponse BuildAudiobookResumeResponse(
+        MediaBrowser.Controller.Entities.BaseItem item,
+        long startTicks,
+        Entities.User user,
+        Context? context)
+    {
+        if (!Interface.VideoAppCapabilities.DeviceSupportsVideoApp(context))
+        {
+            _logger.LogDebug(
+                "BuildAudiobookResumeResponse: device {DeviceId} has no VideoApp interface, book item {ItemId} degrades to AudioPlayer resume",
+                context?.System?.Device?.DeviceID ?? "unknown", item.Id);
+            // The degrade plays the SINGLE chapter flat, but startTicks may count the
+            // whole-book concat timeline (tracker-first resolution): clamp to the
+            // chapter's runtime (when known) so the directive never carries an offset
+            // past the end of the stream it plays.
+            long clampedTicks = Math.Max(startTicks, 0);
+            long runTimeTicks = item.RunTimeTicks ?? 0;
+            if (runTimeTicks > 0)
+            {
+                clampedTicks = Math.Min(clampedTicks, runTimeTicks);
+            }
+
+            int offsetMs = (int)Math.Min(TimeSpan.FromTicks(clampedTicks).TotalMilliseconds, int.MaxValue);
+            return BuildAudioPlayerResponse(
+                PlayBehavior.ReplaceAll,
+                GetStreamUrl(item.Id.ToString(), user),
+                item.Id.ToString(),
+                item,
+                user,
+                context,
+                offsetMs);
+        }
+
+        // JF-563 review: record the device last-played ledger here (this VideoApp launch
+        // bypasses the BuildAudioPlayerResponse chokepoint that owns the record, and the
+        // response interceptor skips audiobook-concat URLs; see BuildVideoAppAudioResponse).
+        string? ledgerDeviceId = context?.System?.Device?.DeviceID;
+        if (!string.IsNullOrEmpty(ledgerDeviceId))
+        {
+            (Plugin.Instance?.DeviceQueueManager)?.RecordLastPlayed(ledgerDeviceId, item.Id.ToString());
+        }
+
+        Guid parentId = item.ParentId != Guid.Empty ? item.ParentId : item.Id;
+        string videoAudioUrl = GetAudiobookResumeUrl(parentId.ToString(), startTicks);
+
+        _logger.LogDebug(
+            "BuildAudiobookResumeResponse: itemId={ItemId}, parentId={ParentId}, startTicks={Ticks}, url={Url}",
+            item.Id, parentId, startTicks, videoAudioUrl);
+
+        return new SkillResponse
+        {
+            Version = "1.0",
+            Response = new ResponseBody
+            {
+                // VideoApp.Launch must NOT include shouldEndSession.
+                ShouldEndSession = null,
+                Directives = new List<IDirective>
+                {
+                    new Directive.VideoAppLaunchDirective
+                    {
+                        VideoItem = new Directive.VideoItem
+                        {
+                            Source = videoAudioUrl,
+                            Metadata = new Directive.VideoItemMetadata
+                            {
+                                Title = item.Name ?? string.Empty,
+                                Subtitle = GetSubtitle(item)
+                            }
+                        }
+                    }
+                }
+            }
+        };
+    }
 
     private string BuildStreamUrl(string pathSegment, string itemId, Entities.User user)
         => new Uri(new Uri(_config.ServerAddress), $"{pathSegment}{itemId}/stream?static=true&api_key={user.JellyfinToken}").ToString();
@@ -152,8 +690,7 @@ public sealed class PlaybackLaunchBuilder
     /// Attach the gated now-playing announce to a MUSIC play response when the caller passes a
     /// locale and the audio-announce toggle is on. Only music handlers pass announceLocale, so the
     /// gate is <see cref="GetAnnounceAudioPlays"/> (opt-in, default false per JF-352.4), which is
-    /// NOT the video/book GetAnnounceNowPlaying toggle that stays in BaseHandler with the VideoApp
-    /// launch family. When offsetMs &gt; 0 the announce is a
+    /// NOT the video/book <see cref="GetAnnounceNowPlaying"/> toggle. When offsetMs &gt; 0 the announce is a
     /// resume ("Resuming X") rather than a fresh "Now playing X". The OutputSpeech-occupied guard
     /// is idempotency only: callers that set a more specific announcement (e.g. FoundAlbumInstead)
     /// do so AFTER this call and overwrite it themselves.
@@ -194,6 +731,25 @@ public sealed class PlaybackLaunchBuilder
     }
 
     /// <summary>
+    /// Gets the effective "speak the now-playing announce on launch" preference for a user,
+    /// falling back to the global default. Per-user setting (when explicitly set) takes precedence.
+    /// Moved here from BaseHandler (JF-315 batch 5) next to <see cref="GetAnnounceAudioPlays"/>
+    /// (the MUSIC-plays sibling, JF-352.4): both are per-user-override-then-global resolvers
+    /// feeding the same now-playing speech.
+    /// </summary>
+    internal bool GetAnnounceNowPlaying(Entities.User? user)
+    {
+        if (user?.AnnounceNowPlaying is { } userPref)
+        {
+            _logger.LogDebug("AnnounceNowPlaying: user={UserId} on={On} source=PerUser", user.Id, userPref);
+            return userPref;
+        }
+
+        _logger.LogDebug("AnnounceNowPlaying: user={UserId} on={On} source=GlobalDefault", user?.Id, _config.DefaultAnnounceNowPlaying);
+        return _config.DefaultAnnounceNowPlaying;
+    }
+
+    /// <summary>
     /// Gets the effective "play music via VideoApp" preference for a user, falling back to the
     /// global <see cref="Configuration.PluginConfiguration.NativeControlsForAudio"/> default.
     /// Per-user setting (when explicitly set, i.e. non-null) takes precedence. When true, music
@@ -212,6 +768,73 @@ public sealed class PlaybackLaunchBuilder
         bool global = _config.NativeControlsForAudio;
         _logger.LogDebug("VideoAppForAudio: user={UserId} value={Value} source=GlobalDefault", user?.Id, global);
         return global;
+    }
+
+    /// <summary>
+    /// JF-501 delivery vehicle for the video-launch announce: speak it as an awaited
+    /// progressive response AFTER the launch URL is resolved and BEFORE the final launch
+    /// response returns (the send is strictly between the two: the URL is a call argument,
+    /// so it has evaluated by the time the handler reaches this method, and the device only
+    /// plays a progressive response that arrives before the full response), so the final
+    /// VideoApp.Launch response carries the directive only (no OutputSpeech). Device
+    /// evidence (JF-498 verification 2026-09-06): when the announce rides the final
+    /// response, the VideoApp player takes the audio channel before the TTS finishes on
+    /// fast-start HLS routes (~0.6s playlist), cutting the announcement mid-sentence; a
+    /// progressive response is spoken BEFORE the final response reaches the device, so the
+    /// announce completes before the player opens. Amazon contracts this relies on ("Send
+    /// the User a Progressive Response"): progressive responses exist only for
+    /// IntentRequest and LaunchRequest, the speech must be valid SSML wrapped in speak
+    /// tags, and the device only plays a progressive response that arrives before the full
+    /// response, hence the awaited send. A FAILED send (2s timeout, auth rejection,
+    /// network error) falls back to the announce riding the final response, the pre-JF-501
+    /// shape, so a progressive failure can no longer lose the announce. The guard set
+    /// mirrors the launch shapes that cannot use the vehicle and keep the announce on the
+    /// final response instead: a null announce (toggle off; today's silent shape), a
+    /// request type the progressive API cannot serve (UserEvent carousel taps), a null
+    /// context (DeviceSupportsVideoApp fails OPEN on absent capability data, so the null
+    /// case needs its own gate to keep the send from dereferencing it), and a device
+    /// without the VideoApp interface (the launch degrades to a capability Tell or to
+    /// AudioPlayer, whose audio announce has no such cut).
+    /// Moved here from BaseHandler (JF-315 batch 5): the progressive send itself stays
+    /// VIRTUAL on BaseHandler (the JF-501 test seam ~15 harnesses override); this
+    /// builder reaches it through the composition-time delegate (see the constructor).
+    /// </summary>
+    /// <param name="context">The Alexa context (device capability check).</param>
+    /// <param name="request">The skill request; null or a non-intent/launch request keeps the classic final-response announce.</param>
+    /// <param name="announce">The launch announce to speak, or null when the announce toggle is off.</param>
+    /// <returns>The OutputSpeech the final response should carry: null when the announce was
+    /// spoken progressively and the send succeeded; the announce itself when the vehicle was
+    /// unusable or the send failed (it rides the final response).</returns>
+    internal async Task<IOutputSpeech?> SpeakVideoLaunchAnnounceAsync(Context? context, Request? request, IOutputSpeech? announce)
+    {
+        if (announce is null
+            || request is not (IntentRequest or LaunchRequest)
+            || context is null // DeviceSupportsVideoApp fails OPEN on absent capability data; the send would NRE.
+            || !Interface.VideoAppCapabilities.DeviceSupportsVideoApp(context))
+        {
+            return announce;
+        }
+
+        // SSML speech is already speak-wrapped; plain text must be wrapped (and
+        // XML-escaped) per the progressive-response contract, unlike OutputSpeech,
+        // which accepts bare text.
+        string? progressiveSpeech = announce switch
+        {
+            SsmlOutputSpeech ssml => ssml.Ssml,
+            PlainTextOutputSpeech plain when !string.IsNullOrWhiteSpace(plain.Text) => $"<speak>{SpeechBuilder.EscapeXml(plain.Text)}</speak>",
+            _ => null
+        };
+        if (progressiveSpeech is null)
+        {
+            return announce;
+        }
+
+        // Awaited, unlike the fire-and-forget SearchingMedia ping: the device only
+        // plays a progressive response that arrives before the full response. A failed
+        // send falls back to the announce riding the final response (the pre-JF-501
+        // shape) instead of being lost.
+        bool sent = await _sendProgressiveResponse(context, request, progressiveSpeech).ConfigureAwait(false);
+        return sent ? null : announce;
     }
 
     /// <summary>

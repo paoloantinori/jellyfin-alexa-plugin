@@ -104,7 +104,7 @@ public class RepeatIntentHandler : BaseHandler
             lastPlayedItem != null
             && !string.IsNullOrEmpty(token)
             && !string.Equals(token, lastPlayedId, StringComparison.Ordinal)
-            && IsVideoAppLaunchItem(lastPlayedItem);
+            && PlaybackLaunchBuilder.IsVideoAppLaunchItem(lastPlayedItem);
 
         BaseItem? item;
         if (videoDisplacedAudio)

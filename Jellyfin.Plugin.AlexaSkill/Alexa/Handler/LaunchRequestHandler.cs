@@ -376,7 +376,7 @@ public class LaunchRequestHandler : BaseHandler
         // so confirming the offer on a screenless device can never succeed). The shared
         // predicate owns the kind list.
         if (item != null
-            && IsVideoAppLaunchItem(item)
+            && PlaybackLaunchBuilder.IsVideoAppLaunchItem(item)
             && !Interface.VideoAppCapabilities.DeviceSupportsVideoApp(context))
         {
             Logger.LogDebug(

@@ -92,8 +92,8 @@ public class PlaybackFinishedEventHandler : BaseHandler
         // If PlaybackNearlyFinished enqueued a next track, keep the session alive
         // for APL touch events and the upcoming track. PLAYING/BUFFER_UNDERRUN are
         // the two active-playback states, shared with PlayRadio's seed decision via
-        // BaseHandler.IsActivelyPlaying (JF-481).
-        bool hasQueuedNext = IsActivelyPlaying(context);
+        // PlaybackLaunchBuilder.IsActivelyPlaying (JF-481).
+        bool hasQueuedNext = PlaybackLaunchBuilder.IsActivelyPlaying(context);
 
         if (!hasQueuedNext)
         {

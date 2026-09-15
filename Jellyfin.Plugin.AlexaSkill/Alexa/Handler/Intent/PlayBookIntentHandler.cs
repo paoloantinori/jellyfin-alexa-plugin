@@ -279,7 +279,7 @@ public class PlayBookIntentHandler : BaseHandler
 
             bool resuming = startTicks > 0;
             SkillResponse response = resuming
-                ? BuildAudiobookResumeResponse(trackItems[startIndex], startTicks, user, context)
+                ? Launch.BuildAudiobookResumeResponse(trackItems[startIndex], startTicks, user, context)
                 : Launch.BuildVideoAppAudioResponse(itemId, trackItems[startIndex], user, context: context);
 
             if (resuming)
@@ -294,8 +294,8 @@ public class PlayBookIntentHandler : BaseHandler
                 // spoken progressively when the response is a VideoApp launch; a screenless
                 // device degrades to AudioPlayer, where the announce keeps riding the
                 // final response (the audio path has no such cut).
-                response.Response.OutputSpeech = await SpeakVideoLaunchAnnounceAsync(
-                    context, request, SpeechBuilder.BuildNowPlayingSpeech(books[0].Name, locale, GetAnnounceNowPlaying(user))).ConfigureAwait(false);
+                response.Response.OutputSpeech = await Launch.SpeakVideoLaunchAnnounceAsync(
+                    context, request, SpeechBuilder.BuildNowPlayingSpeech(books[0].Name, locale, Launch.GetAnnounceNowPlaying(user))).ConfigureAwait(false);
             }
 
             return response;

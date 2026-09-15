@@ -91,8 +91,8 @@ public class PlayRadioIntentHandler : BaseHandler
         // ("stream was interrupted"), while active playback reports PLAYING.
         // BUFFER_UNDERRUN counts as playing (transient mid-playback rebuffering, the
         // same treatment as PlaybackFinishedEventHandler's hasQueuedNext); both states
-        // live in the shared BaseHandler.IsActivelyPlaying helper (JF-481).
-        bool activelyPlaying = IsActivelyPlaying(context);
+        // live in the shared PlaybackLaunchBuilder.IsActivelyPlaying helper (JF-481).
+        bool activelyPlaying = PlaybackLaunchBuilder.IsActivelyPlaying(context);
 
         // JF-481 item 2a, PROVISIONAL pending the device observation listed in the
         // task: FINISHED is natural queue exhaustion, and with the requester's session
@@ -162,7 +162,7 @@ public class PlayRadioIntentHandler : BaseHandler
             if (channel != null)
             {
                 Logger.LogInformation("PlayRadio: station '{ChannelName}' matched live-TV radio channel {ChannelId}", channel.Name, channel.Id);
-                return await BuildChannelLaunchResponseAsync(_streamResolver, channel, context, request, user, session, locale, cancellationToken).ConfigureAwait(false);
+                return await Launch.BuildChannelLaunchResponseAsync(_streamResolver, channel, context, request, user, session, locale, cancellationToken).ConfigureAwait(false);
             }
 
             // JF-474 review P3-4: natural answers carry carrier nouns and articles
@@ -384,7 +384,7 @@ public class PlayRadioIntentHandler : BaseHandler
         string radioMsg = ResponseStrings.Get("RadioStarted", locale, (queue.Count - 1).ToString(CultureInfo.InvariantCulture));
 
         var response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(first.Id.ToString(), user), first.Id.ToString(), first, user, context);
-        if (GetAnnounceNowPlaying(user))
+        if (Launch.GetAnnounceNowPlaying(user))
         {
             response.Response.OutputSpeech = nowPlayingSsml != null
                 ? (IOutputSpeech)new SsmlOutputSpeech { Ssml = $"<speak>{nowPlayingSsml}. {SpeechBuilder.EscapeXml(radioMsg)}</speak>" }

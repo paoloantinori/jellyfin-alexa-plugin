@@ -232,15 +232,15 @@ public class ResumeIntentHandler : BaseHandler
 
                 // Video items use the VideoApp launch directive (the shared predicate owns
                 // the kind list, JF-505; LiveTvChannel included)
-                if (IsVideoAppLaunchItem(resumeItem))
+                if (PlaybackLaunchBuilder.IsVideoAppLaunchItem(resumeItem))
                 {
                     // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
                     // JF-501: the announce is spoken progressively (directive-only final response).
-                    return await BuildVideoAppLaunchResponseAsync(
+                    return await Launch.BuildVideoAppLaunchResponseAsync(
                         context,
                         request,
                         locale,
-                        GetVideoAppLaunchUrl(resumeItem, user),
+                        Launch.GetVideoAppLaunchUrl(resumeItem, user),
                         resumeItem.Name,
                         new PlainTextOutputSpeech(
                             ResponseStrings.Get("NowPlayingWithPosition", locale, resumeItem.Name, ResumeMath.FormatPosition(resumeTicks)))).ConfigureAwait(false);
@@ -379,12 +379,12 @@ public class ResumeIntentHandler : BaseHandler
             return Launch.BuildVideoAppAudioResponse(item.Id.ToString(), item, user, context: context);
         }
 
-        SkillResponse bookResponse = BuildAudiobookResumeResponse(item, startTicks, user, context);
+        SkillResponse bookResponse = Launch.BuildAudiobookResumeResponse(item, startTicks, user, context);
 
         // JF-501: the announce rides the progressive vehicle on a VideoApp launch (a
         // directive-only final response can have its speech cut); non-intent requests
         // and failed sends keep it on the final response.
-        bookResponse.Response.OutputSpeech = await SpeakVideoLaunchAnnounceAsync(
+        bookResponse.Response.OutputSpeech = await Launch.SpeakVideoLaunchAnnounceAsync(
             context,
             request,
             new PlainTextOutputSpeech(

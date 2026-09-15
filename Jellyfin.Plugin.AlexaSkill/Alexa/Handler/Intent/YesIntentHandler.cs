@@ -219,7 +219,7 @@ public class YesIntentHandler : BaseHandler
                 startTicks = TimeSpan.FromMilliseconds(Math.Min(resumeState.OffsetMs, int.MaxValue)).Ticks;
             }
 
-            SkillResponse response = BuildAudiobookResumeResponse(item, startTicks, user, context);
+            SkillResponse response = Launch.BuildAudiobookResumeResponse(item, startTicks, user, context);
             response.Response.OutputSpeech = _config.ResumeAnnounceTitle
                 ? SpeechBuilder.BuildOutputSpeech("ResumingSsml", "Resuming", locale, item.Name ?? ResponseStrings.Get("UnknownMedia", locale))
                 : SpeechBuilder.BuildOutputSpeech("ResumeBriefSsml", "ResumeBrief", locale);
@@ -364,8 +364,8 @@ public class YesIntentHandler : BaseHandler
             // Fresh-start audiobook via VideoApp: announce the book title. JF-501: spoken
             // progressively when the response is a VideoApp launch; a screenless device
             // degrades to AudioPlayer, where the announce keeps riding the final response.
-            response.Response.OutputSpeech = await SpeakVideoLaunchAnnounceAsync(
-                context, request, SpeechBuilder.BuildNowPlayingSpeech(book.Name, locale, GetAnnounceNowPlaying(user))).ConfigureAwait(false);
+            response.Response.OutputSpeech = await Launch.SpeakVideoLaunchAnnounceAsync(
+                context, request, SpeechBuilder.BuildNowPlayingSpeech(book.Name, locale, Launch.GetAnnounceNowPlaying(user))).ConfigureAwait(false);
             return response;
         }
 
@@ -405,13 +405,13 @@ public class YesIntentHandler : BaseHandler
 
         // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
         // JF-501: the announce is spoken progressively (directive-only final response).
-        return await BuildVideoAppLaunchResponseAsync(
+        return await Launch.BuildVideoAppLaunchResponseAsync(
             context,
             request,
             locale,
-            GetVideoAppLaunchUrl(video, user),
+            Launch.GetVideoAppLaunchUrl(video, user),
             video.Name,
-            SpeechBuilder.BuildNowPlayingSpeech(video.Name, locale, GetAnnounceNowPlaying(user))).ConfigureAwait(false);
+            SpeechBuilder.BuildNowPlayingSpeech(video.Name, locale, Launch.GetAnnounceNowPlaying(user))).ConfigureAwait(false);
     }
 
     private SkillResponse PlayPlaylist(BaseItem playlist, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Entities.User user, SessionInfo session, string locale, Context? context)

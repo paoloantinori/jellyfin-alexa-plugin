@@ -198,12 +198,12 @@ public class AplUserEventHandler : BaseHandler
             }
 
             // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
-            return Task.FromResult(BuildVideoAppLaunchResponse(
+            return Task.FromResult(Launch.BuildVideoAppLaunchResponse(
                 context,
                 locale,
-                GetVideoAppLaunchUrl(item, user),
+                Launch.GetVideoAppLaunchUrl(item, user),
                 item.Name,
-                BuildVideoLaunchSpeech(item, locale, _userDataManager, jellyfinUser, GetAnnounceNowPlaying(user))));
+                BuildVideoLaunchSpeech(item, locale, _userDataManager, jellyfinUser, Launch.GetAnnounceNowPlaying(user))));
         }
 
         // Folder items (audiobooks, music folders, etc.) need to be resolved to their

@@ -109,8 +109,8 @@ public class PauseIntentHandler : BaseHandler
         // told to stop) and ends the session as a Tell: these are IntentRequests, so
         // the JF-299 event-response rules do not apply. An empty ledger (Unknown)
         // falls through to the audio paths below unchanged.
-        PlayingMedium medium = ResolvePlayingMedium(context, _libraryManager, _queueManager);
-        if (IsVideoAppMedium(medium))
+        PlaybackLaunchBuilder.PlayingMedium medium = Launch.ResolvePlayingMedium(context, _libraryManager, _queueManager);
+        if (PlaybackLaunchBuilder.IsVideoAppMedium(medium))
         {
             Logger.LogDebug("PauseIntent: {Medium} playing, speaking the honest cannot-pause line", medium);
             SkillResponse honest = BuildPauseResponse();

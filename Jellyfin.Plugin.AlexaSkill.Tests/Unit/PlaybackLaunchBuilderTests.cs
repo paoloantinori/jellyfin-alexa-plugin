@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using global::Alexa.NET;
 using global::Alexa.NET.Request;
 using global::Alexa.NET.Response;
@@ -39,7 +40,10 @@ public class PlaybackLaunchBuilderTests : PluginTestBase
     public PlaybackLaunchBuilderTests()
     {
         TestHelpers.SetServerAddress(_config, "http://localhost:8096");
-        _launch = new PlaybackLaunchBuilder(_config, _loggerFactory.CreateLogger<PlaybackLaunchBuilder>());
+        // The delegate stands in for BaseHandler.SendProgressiveResponse (the JF-501
+        // virtual seam): a truthful success, matching the audio-launch suite's lack of
+        // progressive-path assertions (no builder member this suite exercises sends one).
+        _launch = new PlaybackLaunchBuilder(_config, _loggerFactory.CreateLogger<PlaybackLaunchBuilder>(), (_, _, _) => Task.FromResult(true));
     }
 
     private static Entities.User CreateUser(string token = "test-token")

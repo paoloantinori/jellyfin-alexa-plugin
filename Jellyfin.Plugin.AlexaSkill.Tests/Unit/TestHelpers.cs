@@ -194,16 +194,18 @@ internal static class TestHelpers
     /// <summary>
     /// JF-562/JF-564: a context whose AudioPlayer carries the given stream token on a
     /// PLAYING device (the token-vs-ledger displacement shape the transport suites
-    /// exercise; previously one private copy per suite).
+    /// exercise; previously one private copy per suite). JF-315 batch 5: the player
+    /// activity is parameterizable (the IsActivelyPlaying theory pins every activity
+    /// state) and the token nullable (activity-only shapes).
     /// </summary>
-    internal static Context CreateContextWithToken(string token, string deviceId = "test-device")
+    internal static Context CreateContextWithToken(string? token, string deviceId = "test-device", string playerActivity = "PLAYING")
     {
         var context = CreateTestContext(deviceId);
         context.AudioPlayer = new PlaybackState
         {
             Token = token,
             OffsetInMilliseconds = 90_000,
-            PlayerActivity = "PLAYING"
+            PlayerActivity = playerActivity
         };
         return context;
     }
@@ -710,5 +712,5 @@ internal sealed class SharedGateProbeHandler : BaseHandler
         string sourceUrl,
         string title,
         IOutputSpeech? outputSpeech = null)
-        => BuildVideoAppLaunchResponse(context, locale, sourceUrl, title, outputSpeech);
+        => Launch.BuildVideoAppLaunchResponse(context, locale, sourceUrl, title, outputSpeech);
 }

@@ -651,7 +651,7 @@ public class VideoAudioController : ControllerBase
     /// video stream copy + audio AAC transcode; sources whose VIDEO codec the Echo
     /// cannot decode (hevc/av1) get an H.264 re-encode instead of the copy. Both
     /// tiers land in MPEG-TS segments served stream-while-writing like the song
-    /// path. Launch sites route here via <c>BaseHandler.GetVideoAppLaunchUrl</c>;
+    /// path. Launch sites route here via <c>PlaybackLaunchBuilder.GetVideoAppLaunchUrl</c>;
     /// the endpoint re-probes the codecs server-side to pick its own ffmpeg
     /// arguments (video copy vs transcode, audio copy vs AAC). Optional
     /// <c>?start=&lt;ticks&gt;</c> serves a resume-sliced playlist (JF-499 W2; see

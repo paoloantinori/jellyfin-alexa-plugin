@@ -170,8 +170,12 @@ public static class SpeechBuilder
     /// <summary>
     /// The now-playing announce shared by every video-launch handler. Wraps
     /// BuildOutputSpeech with the NowPlaying SSML/plain keys; the title is escaped for SSML.
+    /// The announce gate is a REQUIRED parameter (JF-315 batch 5, closing the batch-1
+    /// follow-up): it is a per-user policy resolved by the caller
+    /// (PlaybackLaunchBuilder.GetAnnounceNowPlaying / GetAnnounceAudioPlays), not a
+    /// util default, and no call site relies on the former implicit true.
     /// </summary>
-    public static IOutputSpeech? BuildNowPlayingSpeech(string name, string locale, bool announceOn = true)
+    public static IOutputSpeech? BuildNowPlayingSpeech(string name, string locale, bool announceOn)
         => announceOn ? BuildOutputSpeech("NowPlayingSsml", "NowPlaying", locale, name) : null;
     /// <summary>
     /// Escapes special XML characters in text for safe inclusion in SSML.

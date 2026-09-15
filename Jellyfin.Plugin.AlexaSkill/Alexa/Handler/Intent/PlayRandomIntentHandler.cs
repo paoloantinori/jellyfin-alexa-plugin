@@ -171,13 +171,13 @@ public class PlayRandomIntentHandler : BaseHandler
         {
             // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
             // JF-501: the announce is spoken progressively (directive-only final response).
-            return await BuildVideoAppLaunchResponseAsync(
+            return await Launch.BuildVideoAppLaunchResponseAsync(
                 context,
                 request,
                 locale,
-                GetVideoAppLaunchUrl(firstItem, user),
+                Launch.GetVideoAppLaunchUrl(firstItem, user),
                 firstItem.Name,
-                SpeechBuilder.BuildNowPlayingSpeech(firstItem.Name, locale, GetAnnounceNowPlaying(user))).ConfigureAwait(false);
+                SpeechBuilder.BuildNowPlayingSpeech(firstItem.Name, locale, Launch.GetAnnounceNowPlaying(user))).ConfigureAwait(false);
         }
 
         return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, firstItem, user, context);

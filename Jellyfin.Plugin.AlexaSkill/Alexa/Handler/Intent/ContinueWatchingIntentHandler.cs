@@ -101,11 +101,11 @@ public class ContinueWatchingIntentHandler : BaseHandler
         {
             // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
             // JF-501: the announce is spoken progressively (directive-only final response).
-            return BuildVideoAppLaunchResponseAsync(
+            return Launch.BuildVideoAppLaunchResponseAsync(
                 context,
                 request,
                 locale,
-                GetVideoAppLaunchUrl(resumeItem, user),
+                Launch.GetVideoAppLaunchUrl(resumeItem, user),
                 resumeItem.Name,
                 new PlainTextOutputSpeech(ResponseStrings.Get("NowPlayingWithPosition", locale, resumeItem.Name, ResumeMath.FormatPosition(resumeTicks))));
         }

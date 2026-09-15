@@ -463,13 +463,13 @@ public class SearchMediaIntentHandler : BaseHandler
             // fuzzy QUALIFIER band (score below ContainmentScore) makes HandleFuzzyMiss
             // speak its closest-match qualifier progressively too, keeping the same
             // directive-only contract there (JF-538 review finding).
-            return await BuildVideoAppLaunchResponseAsync(
+            return await Launch.BuildVideoAppLaunchResponseAsync(
                 context,
                 request,
                 locale,
-                GetVideoAppLaunchUrl(item, user),
+                Launch.GetVideoAppLaunchUrl(item, user),
                 item.Name,
-                BuildVideoLaunchSpeech(item, locale, _userDataManager, jellyfinUser, GetAnnounceNowPlaying(user))).ConfigureAwait(false);
+                BuildVideoLaunchSpeech(item, locale, _userDataManager, jellyfinUser, Launch.GetAnnounceNowPlaying(user))).ConfigureAwait(false);
         }
 
         return Launch.BuildAudioPlayerResponse(

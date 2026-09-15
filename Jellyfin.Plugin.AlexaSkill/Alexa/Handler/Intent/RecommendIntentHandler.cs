@@ -204,11 +204,11 @@ public class RecommendIntentHandler : BaseHandler
 
             // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
             // JF-501: the announce is spoken progressively (directive-only final response).
-            return await BuildVideoAppLaunchResponseAsync(
+            return await Launch.BuildVideoAppLaunchResponseAsync(
                 context,
                 request,
                 locale,
-                GetVideoAppLaunchUrl(item, user),
+                Launch.GetVideoAppLaunchUrl(item, user),
                 item.Name,
                 outputSpeech).ConfigureAwait(false);
         }
@@ -216,7 +216,7 @@ public class RecommendIntentHandler : BaseHandler
         // For audio, add NowPlaying speech before the audio directive
         string? nowPlayingSsml = SpeechBuilder.GetSsml("NowPlayingSsml", locale, SpeechBuilder.EscapeXml(item.Name));
         var audioResponse = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, item, user, context);
-        if (nowPlayingSsml != null && GetAnnounceNowPlaying(user))
+        if (nowPlayingSsml != null && Launch.GetAnnounceNowPlaying(user))
         {
             audioResponse.Response.OutputSpeech = new SsmlOutputSpeech { Ssml = $"<speak>{nowPlayingSsml}</speak>" };
         }

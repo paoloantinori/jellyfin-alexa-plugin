@@ -177,12 +177,12 @@ public class PlayEpisodeIntentHandler : BaseHandler
 
         // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
         // JF-501: the announce is spoken progressively (directive-only final response).
-        return await BuildVideoAppLaunchResponseAsync(
+        return await Launch.BuildVideoAppLaunchResponseAsync(
             context,
             request,
             locale,
-            GetVideoAppLaunchUrl(episode, user),
+            Launch.GetVideoAppLaunchUrl(episode, user),
             episode.Name,
-            SpeechBuilder.BuildNowPlayingSpeech(episode.Name, locale, GetAnnounceNowPlaying(user))).ConfigureAwait(false);
+            SpeechBuilder.BuildNowPlayingSpeech(episode.Name, locale, Launch.GetAnnounceNowPlaying(user))).ConfigureAwait(false);
     }
 }

@@ -208,13 +208,13 @@ public class PlayVideoIntentHandler : BaseHandler
         // beginning); the announce only informs the user where they left off.
         // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
         // JF-501: the announce is spoken progressively (directive-only final response).
-        return await BuildVideoAppLaunchResponseAsync(
+        return await Launch.BuildVideoAppLaunchResponseAsync(
             context,
             request,
             locale,
-            GetVideoAppLaunchUrl(video, user),
+            Launch.GetVideoAppLaunchUrl(video, user),
             video.Name,
-            BuildVideoLaunchSpeech(video, locale, resumeTicks, GetAnnounceNowPlaying(user))).ConfigureAwait(false);
+            BuildVideoLaunchSpeech(video, locale, resumeTicks, Launch.GetAnnounceNowPlaying(user))).ConfigureAwait(false);
     }
 
     /// <summary>

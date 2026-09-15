@@ -69,7 +69,7 @@ internal class TestableHandler : BaseHandler
         string sourceUrl,
         string title,
         IOutputSpeech? outputSpeech = null)
-        => BuildVideoAppLaunchResponseAsync(context, request, locale, sourceUrl, title, outputSpeech);
+        => Launch.BuildVideoAppLaunchResponseAsync(context, request, locale, sourceUrl, title, outputSpeech);
 
     /// <summary>
     /// Runs SendProgressiveResponse via the fire-and-forget path and awaits the

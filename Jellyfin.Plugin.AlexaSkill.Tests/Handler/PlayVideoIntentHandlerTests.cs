@@ -495,7 +495,7 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
     // ========== JF-498: codec-routed static-vs-HLS launch source ==========
 
     /// <summary>
-    /// The launch site is wired through BaseHandler.GetVideoAppLaunchUrl: an EAC3
+    /// The launch site is wired through PlaybackLaunchBuilder.GetVideoAppLaunchUrl: an EAC3
     /// movie (the evidenced library shape) launches the HLS REMUX endpoint, not the
     /// static stream the Echo cannot decode.
     /// </summary>

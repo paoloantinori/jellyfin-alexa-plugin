@@ -120,7 +120,7 @@ public class StartOverIntentHandler : BaseHandler
                 return liveTvDisabled;
             }
 
-            return await BuildChannelLaunchResponseAsync(
+            return await Launch.BuildChannelLaunchResponseAsync(
                 _streamResolver, item, context, request, user, session, locale, cancellationToken).ConfigureAwait(false);
         }
 
@@ -156,7 +156,7 @@ public class StartOverIntentHandler : BaseHandler
                 // JF-501: the restart announce rides the progressive vehicle on a VideoApp
                 // launch (same as the movie branch); a screenless device degrades to
                 // AudioPlayer and the announce stays on the final response.
-                response.Response.OutputSpeech = await SpeakVideoLaunchAnnounceAsync(
+                response.Response.OutputSpeech = await Launch.SpeakVideoLaunchAnnounceAsync(
                     context,
                     request,
                     new PlainTextOutputSpeech(ResponseStrings.Get("RestartingContent", locale, item.Name))).ConfigureAwait(false);
@@ -170,11 +170,11 @@ public class StartOverIntentHandler : BaseHandler
         {
             // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
             // JF-501: the announce is spoken progressively (directive-only final response).
-            return await BuildVideoAppLaunchResponseAsync(
+            return await Launch.BuildVideoAppLaunchResponseAsync(
                 context,
                 request,
                 locale,
-                GetVideoAppLaunchUrl(item, user),
+                Launch.GetVideoAppLaunchUrl(item, user),
                 item.Name,
                 new PlainTextOutputSpeech(ResponseStrings.Get("RestartingContent", locale, item.Name))).ConfigureAwait(false);
         }
