@@ -80,7 +80,10 @@ tests:
   # greedy-capture divergence case ("Lis la musique de the beatles", which fr-CA
   # routed to PlayAlbumIntent and fr-FR to PlaySongIntent, profile-nlu 2026-08-23)
   # lost its carrier to the trim; the divergence itself is recorded in the
-  # JF-406 per-locale NLU divergence task.
+  # JF-406 per-locale NLU divergence task. JF-406 re-probe 2026-09-15: the case
+  # has CONVERGED post model rebuild - both fr-CA and fr-FR now route it to
+  # PlaySongIntent (musician='the beatles', song='la musique'), stable, so no
+  # fixture expectation is needed either way.
   - utterance: "Mets le disque abbey road"
     expected_intent: PlayAlbumIntent
     expected_slots:

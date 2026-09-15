@@ -19,6 +19,31 @@ class SmapiRateLimitError(SmapiError):
     """Raised when SMAPI returns a rate-limit or throttling error."""
 
 
+class SmapiServerError(SmapiError):
+    """Raised when SMAPI returns a transient 5xx server error.
+
+    Observed on profile-nlu (JF-406): single 500s fail cases that pass in
+    isolation, so these are retried like rate limits.
+    """
+
+
+# Status phrases and codes SMAPI/ASK CLI surfaces for transient 5xx
+# failures.  Matched against stderr; phrases over bare codes because a
+# bare "500" can appear in unrelated error bodies.
+_SERVER_ERROR_MARKERS = (
+    "internal server error",
+    "service unavailable",
+    "bad gateway",
+    "gateway timeout",
+    "internalservererror",
+    "serviceunavailable",
+    " 500",
+    " 502",
+    " 503",
+    " 504",
+)
+
+
 # Module-level rate-limit state shared across all SmapiClient instances
 # within the same process.  This ensures rate limiting works correctly
 # even though each test creates a fresh SmapiClient.
@@ -47,6 +72,11 @@ def _run_ask(args: list[str]) -> str:
         if "429" in stderr or "throttl" in stderr.lower() or "rate" in stderr.lower():
             raise SmapiRateLimitError(
                 f"SMAPI rate limited (exit {result.returncode}): {stderr[:300]}"
+            )
+        stderr_lower = stderr.lower()
+        if any(marker in stderr_lower for marker in _SERVER_ERROR_MARKERS):
+            raise SmapiServerError(
+                f"SMAPI server error (exit {result.returncode}): {stderr[:300]}"
             )
         raise SmapiError(
             f"ASK CLI failed (exit {result.returncode}): {stderr[:500]}"
@@ -275,17 +305,19 @@ class SmapiClient:
                 ])
                 _last_smapi_call = time.time()
                 return _parse_json_output(output)
-            except SmapiRateLimitError as exc:
+            except (SmapiRateLimitError, SmapiServerError) as exc:
                 backoff = _RATE_LIMIT_BACKOFF_BASE * (attempt + 1)
                 if attempt < _RATE_LIMIT_MAX_RETRIES - 1:
                     logger.warning(
-                        "Rate limited on attempt %d/%d, backing off %.0fs",
-                        attempt + 1, _RATE_LIMIT_MAX_RETRIES, backoff,
+                        "%s on attempt %d/%d, backing off %.0fs",
+                        type(exc).__name__, attempt + 1,
+                        _RATE_LIMIT_MAX_RETRIES, backoff,
                     )
                     time.sleep(backoff)
                     continue
                 raise SmapiError(
-                    f"Rate limited after {_RATE_LIMIT_MAX_RETRIES} attempts"
+                    f"{type(exc).__name__} after "
+                    f"{_RATE_LIMIT_MAX_RETRIES} attempts"
                 ) from exc
         raise SmapiError("Should not reach here")
 

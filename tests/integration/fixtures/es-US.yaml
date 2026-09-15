@@ -14,6 +14,26 @@ tests:
   # the identical utterance shape works on es-ES/es-MX - per-locale NLU divergence
   # with identical models. Only the bare form is asserted here; the divergence is
   # tracked in JF-406.
+  #
+  # JF-406 systematic re-probe (profile-nlu, 2026-09-15, post RepeatIntent model
+  # rebuild; each cell re-probed 3x, stable). es-US diverges from the es-ES truth
+  # on four families, all with byte-identical samples in the committed models, so
+  # the arbitration is Amazon per-locale base-model, not our model:
+  #   "Reproduce el álbum thriller de michael jackson" -> PlaySongIntent
+  #     (song='el album thriller michael jackson')  [es-ES/es-MX: PlayAlbumIntent]
+  #   "Reproduce un álbum de queen" -> PlaySongIntent (song='1 album')
+  #   "Ir al capítulo cinco" -> PlaySongIntent (song='al capitulo 5')
+  #     [es-ES/es-MX: GoToChapterIntent chapter_number=5]
+  #   "reproduce música alegre" -> PlaySongIntent (song='musica alegre')
+  #     [es-ES/es-MX: PlayMoodMusicIntent mood=alegre]
+  # 'muéstrame álbumes' -> AMAZON.FallbackIntent on BOTH es-US and es-MX
+  # (BrowseLibraryIntent on es-ES); the es-US model legitimately lacks the three
+  # leading browse samples es-ES/es-MX carry (template header, JF-316 golden
+  # master), but es-MX fails with the full sample set, so the missing samples are
+  # not the cause. No sample tuning is attempted: the failing carriers are
+  # verbatim model samples already, so only live verification (next deploy
+  # window) could prove a sample addition. Do not assert the divergent utterances
+  # here; this fixture ships only verified-working expectations.
 
   # Routing sanity: a browse phrase must not be stolen by the new album forms
   # (matches the model's own sample "explorar {browse_category}").
