@@ -36,11 +36,18 @@ public class StartOverIntentHandlerTests : PluginTestBase, IDisposable
     private readonly HandlerTestFixture _fx = new HandlerTestFixture("http://localhost:8096");
     private readonly JellyfinUser _jellyfinUser;
     private readonly Guid _sessionUserId;
+    private readonly Mock<global::Jellyfin.Plugin.AlexaSkill.Alexa.Util.ILiveTvStreamResolver> _resolverMock;
 
     public StartOverIntentHandlerTests()
     {
         _jellyfinUser = new JellyfinUser("testuser", "test", "test");
         _sessionUserId = Guid.NewGuid();
+        // By default the resolver returns a direct-remote stream so channel-restart
+        // tests reach the VideoApp.Launch path; individual tests override this.
+        _resolverMock = new Mock<global::Jellyfin.Plugin.AlexaSkill.Alexa.Util.ILiveTvStreamResolver>();
+        _resolverMock
+            .Setup(r => r.ResolveAsync(It.IsAny<BaseItem>(), It.IsAny<Entities.User>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new global::Jellyfin.Plugin.AlexaSkill.Alexa.Util.LiveTvStream("https://remote.example/playlist.m3u8"));
 
         TestHelpers.EnsurePluginInstance(
             _fx.Config,
@@ -60,8 +67,9 @@ public class StartOverIntentHandlerTests : PluginTestBase, IDisposable
         ILibraryManager libraryManager,
         IUserManager userManager,
         IUserDataManager userDataManager,
+        global::Jellyfin.Plugin.AlexaSkill.Alexa.Util.ILiveTvStreamResolver streamResolver,
         ILoggerFactory loggerFactory)
-        : StartOverIntentHandler(sessionManager, config, libraryManager, userManager, userDataManager, loggerFactory)
+        : StartOverIntentHandler(sessionManager, config, libraryManager, userManager, userDataManager, streamResolver, loggerFactory)
     {
         public ProgressiveSpeechCapture Progressive { get; } = new();
 
@@ -77,6 +85,7 @@ public class StartOverIntentHandlerTests : PluginTestBase, IDisposable
             _fx.LibraryManager.Object,
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
+            _resolverMock.Object,
             _fx.LoggerFactory);
     }
 
@@ -605,5 +614,118 @@ public class StartOverIntentHandlerTests : PluginTestBase, IDisposable
         var audioDirective = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
         Assert.Equal(0, audioDirective.AudioItem.Stream.OffsetInMilliseconds);
         Assert.Contains($"/Audio/{chapter.Id}/stream?static=true", audioDirective.AudioItem.Stream.Url, StringComparison.Ordinal);
+    }
+
+    // --- JF-564: StartOver of a live TV channel must REJOIN the live stream via the
+    // same resolver/VideoApp entry PlayChannel uses. The audio branch's static
+    // /Audio/{id}/stream URL returns HTTP 500 for a live source. ---
+
+    private static MediaBrowser.Controller.LiveTv.LiveTvChannel CreateChannel()
+        => new()
+        {
+            Name = "CNN",
+            Id = Guid.NewGuid()
+        };
+
+    [Fact]
+    public async Task HandleAsync_CurrentlyPlayingLiveTvChannel_RejoinsViaVideoAppResolver()
+    {
+        // The entry set is load-bearing: other suites in the collection (e.g.
+        // LiveTvFeatureFlagTests) flip the shared flag false WITHOUT restoring it.
+        // Every test here restores true so the disabled-flag test cannot leak either.
+        Plugin.Instance!.Configuration.LiveTvEnabled = true;
+        try
+        {
+            var handler = CreateHandler();
+            var request = CreateStartOverRequest();
+            var context = _fx.CreateContext();
+            var user = TestHelpers.CreateTestUser();
+
+            var channel = CreateChannel();
+            var session = CreateSessionWithNowPlaying(channel);
+
+            var response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+            Assert.NotNull(response);
+
+            // The rejoin is a VideoApp.Launch carrying the RESOLVER's URL, never the
+            // 500-ing static audio stream.
+            var videoDirective = Assert.IsType<global::Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>(
+                Assert.Single(response.Response.Directives));
+            Assert.Equal("https://remote.example/playlist.m3u8", videoDirective.VideoItem!.Source);
+            Assert.Empty(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+            Assert.Equal("CNN", videoDirective.VideoItem.Metadata?.Title);
+            // VideoApp.Launch must NOT include shouldEndSession.
+            Assert.Null(response.Response.ShouldEndSession);
+
+            // Same launch-block side effects as PlayChannel: the session queue pins the
+            // channel and the launch announces the channel name progressively.
+            Assert.NotNull(session.NowPlayingQueue);
+            Assert.Single(session.NowPlayingQueue);
+            Assert.Equal(channel.Id, session.NowPlayingQueue[0].Id);
+            Assert.True(handler.Progressive.Contains("CNN"), "the rejoin must announce the channel name");
+        }
+        finally
+        {
+            Plugin.Instance!.Configuration.LiveTvEnabled = true;
+        }
+    }
+
+    [Fact]
+    public async Task HandleAsync_CurrentlyPlayingLiveTvChannel_ResolverNull_ReturnsNotAvailableTell()
+    {
+        Plugin.Instance!.Configuration.LiveTvEnabled = true;
+        _resolverMock
+            .Setup(r => r.ResolveAsync(It.IsAny<BaseItem>(), It.IsAny<Entities.User>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((global::Jellyfin.Plugin.AlexaSkill.Alexa.Util.LiveTvStream?)null);
+        try
+        {
+            var handler = CreateHandler();
+            var request = CreateStartOverRequest();
+            var context = _fx.CreateContext();
+            var user = TestHelpers.CreateTestUser();
+
+            var session = CreateSessionWithNowPlaying(CreateChannel());
+
+            var response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+            // Unresolvable stream: the same honest not-available Tell PlayChannel speaks,
+            // and no directive is emitted.
+            Assert.Contains("not available", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+            Assert.True(response.Response.ShouldEndSession);
+            Assert.Empty(response.Response.Directives ?? new List<IDirective>());
+        }
+        finally
+        {
+            Plugin.Instance!.Configuration.LiveTvEnabled = true;
+        }
+    }
+
+    [Fact]
+    public async Task HandleAsync_CurrentlyPlayingLiveTvChannel_LiveTvDisabled_ReturnsFeatureDisabled()
+    {
+        Plugin.Instance!.Configuration.LiveTvEnabled = false;
+        try
+        {
+            var handler = CreateHandler();
+            var request = CreateStartOverRequest();
+            var context = _fx.CreateContext();
+            var user = TestHelpers.CreateTestUser();
+
+            var session = CreateSessionWithNowPlaying(CreateChannel());
+
+            var response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+            Assert.NotNull(response.Response.OutputSpeech);
+            Assert.True(response.Response.ShouldEndSession);
+            Assert.Empty(response.Response.Directives ?? new List<IDirective>());
+            _resolverMock.Verify(
+                r => r.ResolveAsync(It.IsAny<BaseItem>(), It.IsAny<Entities.User>(), It.IsAny<CancellationToken>()),
+                Times.Never);
+        }
+        finally
+        {
+            Plugin.Instance!.Configuration.LiveTvEnabled = true;
+        }
     }
 }

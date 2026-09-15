@@ -5,6 +5,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -19,6 +20,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 public class NextIntentHandler : BaseHandler
 {
     private readonly ILibraryManager _libraryManager;
+    private readonly DeviceQueueManager? _queueManager;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="NextIntentHandler"/> class.
@@ -27,13 +29,16 @@ public class NextIntentHandler : BaseHandler
     /// <param name="config">The plugin configuration.</param>
     /// <param name="libraryManager">The library manager instance.</param>
     /// <param name="loggerFactory">Logger factory instance.</param>
+    /// <param name="queueManager">Optional per-device queue manager (the last-played ledger the JF-564 medium classification reads).</param>
     public NextIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILibraryManager libraryManager,
-        ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
+        ILoggerFactory loggerFactory,
+        DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
+        _queueManager = queueManager;
     }
 
     /// <inheritdoc/>
@@ -57,6 +62,16 @@ public class NextIntentHandler : BaseHandler
     public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         Logger.LogDebug("NextIntent: entered, queueSize={QueueSize}, nowPlaying={NowPlayingId}", session.NowPlayingQueue.Count, session.FullNowPlayingItem?.Id);
+
+        // JF-564: during a VideoApp-family medium the queue logic below must not run
+        // (the shared refusal helper owns the rationale); an empty ledger (Unknown)
+        // keeps the music semantics unchanged.
+        PlayingMedium medium = ResolvePlayingMedium(context, _libraryManager, _queueManager);
+        if (BuildVideoAppTransportRefusal(medium, GetLocale(request)) is { } refusal)
+        {
+            Logger.LogDebug("NextIntent: {Medium} playing, answered by the transport refusal", medium);
+            return Task.FromResult(refusal);
+        }
 
         // check if we have any media in the queue and the is currently something playing
         if (session.NowPlayingQueue.Count == 0 || session.FullNowPlayingItem == null)

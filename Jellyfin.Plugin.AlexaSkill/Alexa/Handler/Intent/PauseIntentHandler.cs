@@ -6,7 +6,9 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
 
@@ -21,17 +23,36 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// speaks a minimal pause word plus a reprompt, JF-488: the silent open session
 /// was closed by the platform with EXCEEDED_MAX_REPROMPTS). Alexa routes
 /// resume to AMAZON.ResumeIntent automatically when audio was recently stopped.
+/// JF-564: during a VideoApp-family medium (video, live TV, a NativeControlsForBooks
+/// audiobook) pause and CANCEL cannot be honored at all (there is no VideoApp.Stop
+/// and the video keeps playing), so instead of the silent no-op stop those cells
+/// speak the honest cannot-pause line (session still ends, AudioPlayer.Stop still
+/// sent for any displaced audio). Stop keeps the docs-mandated silent shape
+/// ("responses to StopIntent must end the session"); an empty ledger (cold device)
+/// keeps the music semantics unchanged.
 /// </summary>
 public class PauseIntentHandler : BaseHandler
 {
+    private readonly ILibraryManager? _libraryManager;
+    private readonly DeviceQueueManager? _queueManager;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="PauseIntentHandler"/> class.
     /// </summary>
     /// <param name="sessionManager">Session manager instance.</param>
     /// <param name="config">The plugin configuration.</param>
     /// <param name="loggerFactory">Logger factory instance.</param>
-    public PauseIntentHandler(ISessionManager sessionManager, PluginConfiguration config, ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
+    /// <param name="libraryManager">The library manager, to resolve the ledger item of the JF-564 medium classification. Null keeps the pre-JF-564 behavior.</param>
+    /// <param name="queueManager">Optional per-device queue manager (the last-played ledger the JF-564 medium classification reads).</param>
+    public PauseIntentHandler(
+        ISessionManager sessionManager,
+        PluginConfiguration config,
+        ILoggerFactory loggerFactory,
+        ILibraryManager? libraryManager = null,
+        DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
     {
+        _libraryManager = libraryManager;
+        _queueManager = queueManager;
     }
 
     /// <inheritdoc/>
@@ -47,10 +68,12 @@ public class PauseIntentHandler : BaseHandler
 
     /// <summary>
     /// Pause or stop currently playing media.
-    /// All paths send AudioPlayer.Stop. Stop/cancel end the session; pause ends it
-    /// unless PauseKeepsSession is on (JF-482), in which case the response also
-    /// speaks a minimal pause word and carries a reprompt (JF-488; the silent open
-    /// session timed out on-device). Pause optionally includes a position card.
+    /// All paths send AudioPlayer.Stop. During a VideoApp-family medium (JF-564)
+    /// pause and cancel speak the honest cannot-pause line with the session ended.
+    /// Otherwise stop/cancel end the session; pause ends it unless PauseKeepsSession
+    /// is on (JF-482), in which case the response also speaks a minimal pause word
+    /// and carries a reprompt (JF-488; the silent open session timed out on-device).
+    /// Pause optionally includes a position card.
     /// </summary>
     /// <param name="request">The skill request which should be handled.</param>
     /// <param name="context">The context of the skill intent request.</param>
@@ -60,19 +83,46 @@ public class PauseIntentHandler : BaseHandler
     /// <returns>A task representing the async operation.</returns>
     public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
-        bool isStopOrCancel = request is IntentRequest ir &&
-            (string.Equals(ir.Intent.Name, IntentNames.AmazonStop, System.StringComparison.Ordinal) ||
-             string.Equals(ir.Intent.Name, IntentNames.AmazonCancel, System.StringComparison.Ordinal));
+        IntentRequest? intentRequest = request as IntentRequest;
+        string? intentName = intentRequest?.Intent?.Name;
+        bool isStop = string.Equals(intentName, IntentNames.AmazonStop, System.StringComparison.Ordinal);
+        bool isCancel = string.Equals(intentName, IntentNames.AmazonCancel, System.StringComparison.Ordinal);
 
         Logger.LogDebug(
-            "PauseIntent: isStopOrCancel={IsStop}, activity={Activity}, offset={OffsetMs}ms",
-            isStopOrCancel, context.AudioPlayer?.PlayerActivity, context.AudioPlayer?.OffsetInMilliseconds);
+            "PauseIntent: isStop={IsStop}, isCancel={IsCancel}, activity={Activity}, offset={OffsetMs}ms",
+            isStop, isCancel, context.AudioPlayer?.PlayerActivity, context.AudioPlayer?.OffsetInMilliseconds);
 
-        // All paths send AudioPlayer.Stop via BuildPauseResponse(). Stop/cancel always
-        // end the session (JF-299 covers them; the JF-482 experiment does not retest them).
-        if (isStopOrCancel)
+        // Stop keeps the docs-mandated silent shape: AudioPlayer.Stop plus a session
+        // end, no speech ("responses to AMAZON.StopIntent must use shouldEndSession
+        // true", the Stop/Session Routing reference).
+        if (isStop)
         {
-            Logger.LogDebug("PauseIntent: STOP/CANCEL — ending session with AudioPlayer.Stop");
+            Logger.LogDebug("PauseIntent: STOP, ending session with AudioPlayer.Stop");
+            return Task.FromResult(BuildPauseResponse());
+        }
+
+        // JF-564: during a VideoApp-family medium pause/cancel cannot be honored (no
+        // VideoApp.Stop exists and the video keeps playing), so the skill says so
+        // instead of the old silent no-op stop. The response keeps the AudioPlayer.Stop
+        // directive (the audio-stop invariant; a displaced audio stream must still be
+        // told to stop) and ends the session as a Tell: these are IntentRequests, so
+        // the JF-299 event-response rules do not apply. An empty ledger (Unknown)
+        // falls through to the audio paths below unchanged.
+        PlayingMedium medium = ResolvePlayingMedium(context, _libraryManager, _queueManager);
+        if (IsVideoAppMedium(medium))
+        {
+            Logger.LogDebug("PauseIntent: {Medium} playing, speaking the honest cannot-pause line", medium);
+            SkillResponse honest = BuildPauseResponse();
+            honest.Response.OutputSpeech = new PlainTextOutputSpeech(
+                ResponseStrings.Get("CannotPauseVideoByVoice", GetLocale(request)));
+            return Task.FromResult(honest);
+        }
+
+        // Cancel on the audio path: silent AudioPlayer.Stop plus session end (JF-299
+        // covers it; the JF-482 experiment does not retest it).
+        if (isCancel)
+        {
+            Logger.LogDebug("PauseIntent: CANCEL, ending session with AudioPlayer.Stop");
             return Task.FromResult(BuildPauseResponse());
         }
 

@@ -68,16 +68,7 @@ public class RepeatIntentHandlerTests : PluginTestBase, IDisposable
     }
 
     private static Context CreateContextWithToken(string token, string deviceId = "test-device")
-    {
-        var context = TestHelpers.CreateTestContext(deviceId);
-        context.AudioPlayer = new PlaybackState
-        {
-            Token = token,
-            OffsetInMilliseconds = 90_000,
-            PlayerActivity = "PLAYING"
-        };
-        return context;
-    }
+        => TestHelpers.CreateContextWithToken(token, deviceId);
 
     private SessionInfo CreateSessionWithNowPlaying(BaseItem item)
     {
@@ -88,12 +79,11 @@ public class RepeatIntentHandlerTests : PluginTestBase, IDisposable
 
     /// <summary>
     /// The honest cannot-repeat answers carry NO AudioPlayer.Play directive (the
-    /// failure shape is a spoken Tell; restarting audio would be the wrong answer).
+    /// failure shape is a spoken Tell; restarting audio would be the wrong answer);
+    /// shared shape promoted to TestHelpers in JF-564.
     /// </summary>
     private static void AssertNoAudioPlayDirective(SkillResponse response)
-        => Assert.DoesNotContain(
-            response.Response.Directives ?? new List<IDirective>(),
-            d => d is AudioPlayerPlayDirective);
+        => TestHelpers.AssertNoAudioPlayDirective(response);
 
     [Fact]
     public void CanHandle_RepeatIntent_ReturnsTrue()

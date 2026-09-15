@@ -799,6 +799,145 @@ public abstract class BaseHandler
             or MediaBrowser.Controller.LiveTv.LiveTvChannel;
 
     /// <summary>
+    /// The medium a device is most recently known to be playing (JF-564). The transport
+    /// intents that Alexa routes to the skill without the invocation name (pause, stop,
+    /// next, previous) must answer differently per medium: only <see cref="Audio"/> can
+    /// honestly be controlled via AudioPlayer directives; the VideoApp family cannot
+    /// (no VideoApp.Stop exists and AudioPlayer.Play mid-video is a misdirect).
+    /// </summary>
+    protected enum PlayingMedium
+    {
+        /// <summary>Nothing recorded (cold device, deleted item, or no manager wired):
+        /// callers keep their pre-JF-564 behavior, so a cold handler never changes its
+        /// music semantics.</summary>
+        Unknown,
+
+        /// <summary>The AudioPlayer pipeline owns the item (music, an audio-transcode
+        /// launch of a movie/episode, or a book on the flat audio path): transport
+        /// directives genuinely work.</summary>
+        Audio,
+
+        /// <summary>A Movie/Episode launched via VideoApp.</summary>
+        Video,
+
+        /// <summary>A live TV channel launched via VideoApp.</summary>
+        LiveTv,
+
+        /// <summary>An audiobook riding the VideoApp HLS path (NativeControlsForBooks).</summary>
+        VideoAppAudiobook,
+    }
+
+    /// <summary>
+    /// Whether the medium is one the skill launched via VideoApp.Launch (and therefore
+    /// one it cannot control with AudioPlayer directives).
+    /// </summary>
+    /// <param name="medium">The classified medium.</param>
+    /// <returns>True for Video, LiveTv and VideoAppAudiobook.</returns>
+    protected static bool IsVideoAppMedium(PlayingMedium medium)
+        => medium is PlayingMedium.Video or PlayingMedium.LiveTv or PlayingMedium.VideoAppAudiobook;
+
+    /// <summary>
+    /// Classify what a device is playing from the JF-563 device last-played ledger plus
+    /// the AudioPlayer token (JF-564). The ledger is the only record a VideoApp launch
+    /// leaves (those launches never touch <c>context.AudioPlayer.Token</c>), and it is
+    /// written by every launch site: the BuildAudioPlayerResponse chokepoint, the
+    /// LastPlayedResponseInterceptor (movie/episode directives) and the VideoApp
+    /// builders (channel, video-audio, audiobook). Classification rules, in order:
+    /// an EMPTY ledger (or an unresolvable item) yields <see cref="PlayingMedium.Unknown"/>
+    /// so a cold handler keeps its existing behavior; a token naming the ledger item
+    /// yields <see cref="PlayingMedium.Audio"/> whatever the item kind (the audio
+    /// pipeline owns it: a Movie can ride the audio-only transcode and a book the flat
+    /// audio path, and on both the transport directives work) and skips the item
+    /// resolve entirely; otherwise the ledger item's kind decides via
+    /// <see cref="IsVideoAppLaunchItem"/> (channel vs other video) and the AudioBook
+    /// test, and any remaining item kind (music) is audio whose token merely moved
+    /// with the queue advance. RepeatIntentHandler keeps its own token-first
+    /// resolution because it needs the resolved item back to restart it.
+    /// </summary>
+    /// <param name="context">The Alexa context (device id for the ledger read, AudioPlayer token).</param>
+    /// <param name="libraryManager">The library manager, to resolve the ledger item id. Null yields Unknown.</param>
+    /// <param name="queueManager">The caller's device queue manager (tests pass theirs); null falls back to <c>Plugin.Instance</c>'s.</param>
+    /// <returns>The classified medium; Unknown when nothing is recorded.</returns>
+    protected PlayingMedium ResolvePlayingMedium(Context? context, ILibraryManager? libraryManager, DeviceQueueManager? queueManager = null)
+    {
+        if (libraryManager == null)
+        {
+            return PlayingMedium.Unknown;
+        }
+
+        string? deviceId = context?.System?.Device?.DeviceID;
+        string? lastPlayedId = deviceId != null
+            ? (queueManager ?? Plugin.Instance?.DeviceQueueManager)?.GetLastPlayedItemId(deviceId)
+            : null;
+        if (!Guid.TryParse(lastPlayedId, out Guid lastPlayedItemId))
+        {
+            return PlayingMedium.Unknown;
+        }
+
+        // Sleep-suffixed tokens still carry the item id (StreamTokenCodec), so the
+        // ownership check survives the composite form. It runs BEFORE the item
+        // resolve: when the audio pipeline owns the ledger item (the modal music
+        // shape), the answer is Audio whatever the kind and the DB read is skipped.
+        if (StreamTokenCodec.TryGetItemId(context?.AudioPlayer?.Token, out Guid tokenItemId)
+            && tokenItemId == lastPlayedItemId)
+        {
+            return PlayingMedium.Audio;
+        }
+
+        BaseItem? item = libraryManager.GetItemById(lastPlayedItemId);
+        if (item == null)
+        {
+            return PlayingMedium.Unknown;
+        }
+
+        // The ONE VideoApp kind predicate (JF-505: "do not hand-write the type list
+        // again"), so a future launch kind added there classifies correctly here
+        // instead of silently falling through to Audio; LiveTvChannel needs its own
+        // medium arm first.
+        if (IsVideoAppLaunchItem(item))
+        {
+            return item is MediaBrowser.Controller.LiveTv.LiveTvChannel
+                ? PlayingMedium.LiveTv
+                : PlayingMedium.Video;
+        }
+
+        if (item is MediaBrowser.Controller.Entities.AudioBook)
+        {
+            return PlayingMedium.VideoAppAudiobook;
+        }
+
+        // Music: RecordLastPlayed pins the user-initiated play while Enqueue-advanced
+        // queues move only the token, so a token mismatch here is the ordinary
+        // queue-advance shape, not displacement (the RepeatIntentHandler precedent).
+        return PlayingMedium.Audio;
+    }
+
+    /// <summary>
+    /// The ONE per-medium answer for the queue-navigation transport intents during a
+    /// VideoApp-family medium (JF-564), shared by the Next and Previous entries so the
+    /// policy cannot drift between the twins. A VideoApp launch (movie/episode/live
+    /// TV/book) does not replace the session's music queue, so the queue-advance logic
+    /// would either return a silent Empty (the video item is not in the queue) or, with
+    /// a stale music queue still pinned to the pre-video track, emit a misdirected
+    /// AudioPlayer.Play mid-video. Video and live TV answer the honest navigate line;
+    /// a VideoApp book keeps the silent Empty (chapter navigation is its own feature).
+    /// Pause is NOT a caller (its response keeps the AudioPlayer.Stop directive and a
+    /// different line); Audio and Unknown return null so the caller keeps its existing
+    /// behavior.
+    /// </summary>
+    /// <param name="medium">The classified playing medium.</param>
+    /// <param name="locale">The request locale, for the honest strings.</param>
+    /// <returns>The transport refusal response, or null when the medium is controllable.</returns>
+    protected static SkillResponse? BuildVideoAppTransportRefusal(PlayingMedium medium, string locale)
+        => medium switch
+        {
+            PlayingMedium.Video => ResponseBuilder.Tell(ResponseStrings.Get("CannotNavigateVideoByVoice", locale)),
+            PlayingMedium.LiveTv => ResponseBuilder.Tell(ResponseStrings.Get("CannotNavigateLiveTvByVoice", locale)),
+            PlayingMedium.VideoAppAudiobook => ResponseBuilder.Empty(),
+            _ => null,
+        };
+
+    /// <summary>
     /// Get the VideoApp.Launch source URL for a MOVIE or EPISODE item, routed by codec
     /// compatibility (JF-498): Echo-decodable sources (h264 video + aac/mp3/... audio)
     /// keep the static <c>/Videos/{id}/stream?static=true</c> URL; sources whose audio

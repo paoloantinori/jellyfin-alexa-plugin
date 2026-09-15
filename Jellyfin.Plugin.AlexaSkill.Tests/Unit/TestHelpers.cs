@@ -27,6 +27,7 @@ using MediaBrowser.Model.Querying;
 using MediaBrowser.Model.Serialization;
 using Microsoft.Extensions.Logging;
 using Moq;
+using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 
@@ -172,6 +173,42 @@ internal static class TestHelpers
     /// </summary>
     internal static AudioPlayerPlayDirective? GetPlayDirective(SkillResponse response)
         => response.Response?.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
+
+    /// <summary>
+    /// JF-562/JF-564: a context whose AudioPlayer carries the given stream token on a
+    /// PLAYING device (the token-vs-ledger displacement shape the transport suites
+    /// exercise; previously one private copy per suite).
+    /// </summary>
+    internal static Context CreateContextWithToken(string token, string deviceId = "test-device")
+    {
+        var context = CreateTestContext(deviceId);
+        context.AudioPlayer = new PlaybackState
+        {
+            Token = token,
+            OffsetInMilliseconds = 90_000,
+            PlayerActivity = "PLAYING"
+        };
+        return context;
+    }
+
+    /// <summary>
+    /// JF-562/JF-564: asserts the response carries NO AudioPlayer.Play directive (the
+    /// honest-refusal shape; a mid-video audio launch is the JF-564 bug class).
+    /// </summary>
+    internal static void AssertNoAudioPlayDirective(SkillResponse response)
+        => Assert.DoesNotContain(
+            response.Response.Directives ?? new List<IDirective>(),
+            d => d is AudioPlayerPlayDirective);
+
+    /// <summary>
+    /// JF-564: asserts the response carries the AudioPlayer.Stop directive (the
+    /// audio-stop invariant every pause/stop/cancel path must keep).
+    /// </summary>
+    internal static void AssertHasAudioPlayerStopDirective(SkillResponse response)
+    {
+        Assert.NotNull(response.Response.Directives);
+        Assert.Contains(response.Response.Directives, d => d is StopDirective);
+    }
 
     /// <summary>
     /// The speech text of a response whose OutputSpeech may legitimately be null (a

@@ -9,6 +9,7 @@ using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -28,6 +29,7 @@ public class StartOverIntentHandler : BaseHandler
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
     private readonly IUserDataManager _userDataManager;
+    private readonly ILiveTvStreamResolver _streamResolver;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="StartOverIntentHandler"/> class.
@@ -37,6 +39,7 @@ public class StartOverIntentHandler : BaseHandler
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
     /// <param name="userDataManager">Instance of the <see cref="IUserDataManager"/> interface.</param>
+    /// <param name="streamResolver">The live-TV stream resolver (PlaybackInfo URL for channel rejoins).</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
     public StartOverIntentHandler(
         ISessionManager sessionManager,
@@ -44,11 +47,13 @@ public class StartOverIntentHandler : BaseHandler
         ILibraryManager libraryManager,
         IUserManager userManager,
         IUserDataManager userDataManager,
+        ILiveTvStreamResolver streamResolver,
         ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
         _userDataManager = userDataManager;
+        _streamResolver = streamResolver;
     }
 
     /// <inheritdoc/>
@@ -99,6 +104,24 @@ public class StartOverIntentHandler : BaseHandler
 
             item = resumeItem;
             Logger.LogInformation("StartOver: found last-played item {ItemName} ({ItemId})", item.Name, item.Id);
+        }
+
+        // Live TV (JF-564): a "restart" of live TV is a rejoin of the live stream.
+        // The static /Audio/{id}/stream endpoint the audio branch below would use
+        // returns HTTP 500 for a live source, so the channel rides the SAME launch
+        // block PlayChannel uses: ILiveTvStreamResolver resolution + VideoApp.Launch,
+        // with the resolver's not-available Tell when the stream cannot be resolved.
+        // Sits above the progress clear: a live source has no resume position, so the
+        // channel must not pay the user-data read/write.
+        if (item is MediaBrowser.Controller.LiveTv.LiveTvChannel)
+        {
+            if (IfFeatureDisabled(c => c.LiveTvEnabled, request) is { } liveTvDisabled)
+            {
+                return liveTvDisabled;
+            }
+
+            return await BuildChannelLaunchResponseAsync(
+                _streamResolver, item, context, request, user, session, locale, cancellationToken).ConfigureAwait(false);
         }
 
         // Clear server-side progress so the item plays from the beginning
