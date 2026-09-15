@@ -112,7 +112,7 @@ public class PlayBookIntentHandler : BaseHandler
 
         if (books.Count == 0)
         {
-            var fuzzy = await SearchItemsFuzzyAsync(book, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.AudioBook }, cancellationToken, "PlayBookFuzzyFallback", locale: locale).ConfigureAwait(false);
+            var fuzzy = await Search.SearchItemsFuzzyAsync(book, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.AudioBook }, cancellationToken, "PlayBookFuzzyFallback", locale: locale).ConfigureAwait(false);
             if (fuzzy != null)
             {
                 books = new List<BaseItem> { fuzzy.Value.Item };
@@ -158,7 +158,7 @@ public class PlayBookIntentHandler : BaseHandler
         }
 
         QueryResult<BaseItem> bookTracks = await RetryAsync(
-            () => SafeGetItemsResult(_libraryManager, new InternalItemsQuery
+            () => Search.SafeGetItemsResult(_libraryManager, new InternalItemsQuery
             {
                 User = jellyfinUser,
                 Recursive = true,

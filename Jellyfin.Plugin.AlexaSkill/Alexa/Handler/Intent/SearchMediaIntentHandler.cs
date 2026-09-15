@@ -145,7 +145,7 @@ public class SearchMediaIntentHandler : BaseHandler
         Guid[]? topParentIds = Util.LibraryFilter.ResolveForUser(user, _libraryManager, Logger);
         bool libraryRestricted = topParentIds != null;
 
-        IReadOnlyList<BaseItem> results = await SearchWithAsrFallbackAsync(query,
+        IReadOnlyList<BaseItem> results = await Search.SearchWithAsrFallbackAsync(query,
             searchTerm => SearchPlayableKindsAsync(searchTerm, jellyfinUser, topParentIds, cancellationToken)).ConfigureAwait(false);
 
         Logger.LogDebug("SearchMedia: Jellyfin returned {ResultCount} results for query='{Query}'", results.Count, query);
@@ -167,10 +167,10 @@ public class SearchMediaIntentHandler : BaseHandler
             // be invisible (JF-456). Each call's ApplyLibraryFilter decides via the
             // kind-aware predicate, no flag at the call site.
             (BaseItemKind[] fuzzyPrimaryTypes, BaseItemKind[]? fuzzySiblingTypes) = KindScopes(libraryRestricted);
-            var fuzzy = await SearchItemsFuzzyAsync(query, jellyfinUser, user, _libraryManager, fuzzyPrimaryTypes, cancellationToken, "SearchMediaFuzzyFallback", locale: locale).ConfigureAwait(false);
+            var fuzzy = await Search.SearchItemsFuzzyAsync(query, jellyfinUser, user, _libraryManager, fuzzyPrimaryTypes, cancellationToken, "SearchMediaFuzzyFallback", locale: locale).ConfigureAwait(false);
             if (fuzzy == null && fuzzySiblingTypes != null)
             {
-                fuzzy = await SearchItemsFuzzyAsync(query, jellyfinUser, user, _libraryManager, fuzzySiblingTypes, cancellationToken, "SearchMediaFuzzyOutOfLibrary", locale: locale).ConfigureAwait(false);
+                fuzzy = await Search.SearchItemsFuzzyAsync(query, jellyfinUser, user, _libraryManager, fuzzySiblingTypes, cancellationToken, "SearchMediaFuzzyOutOfLibrary", locale: locale).ConfigureAwait(false);
             }
 
             if (fuzzy != null)
@@ -211,7 +211,7 @@ public class SearchMediaIntentHandler : BaseHandler
 
         // Disambiguation uses MediaTypeSong; YesIntentHandler will play matches as audio.
         // Mixed-type results (audio + video) are rare for search disambiguation.
-        BaseItem? topMatch = FuzzyMatch(query, deduped, i => i.Name, user);
+        BaseItem? topMatch = Search.FuzzyMatch(query, deduped, i => i.Name, user);
         // JF-526 (JF-508 sibling): this site-level pre-check returns before
         // HandleFuzzyMiss, so the short-query full-coverage gate must be applied here
         // too; a gated miss falls into HandleFuzzyMiss below, whose Confirm mode asks

@@ -327,7 +327,7 @@ public class PlayRadioIntentHandler : BaseHandler
             return channels[0];
         }
 
-        var fuzzy = await SearchItemsFuzzyAsync(
+        var fuzzy = await Search.SearchItemsFuzzyAsync(
             station, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.LiveTvChannel },
             cancellationToken, "PlayRadioStationFuzzyFallback", mediaTypes: new[] { MediaType.Audio }, locale: locale).ConfigureAwait(false);
         return fuzzy?.Item;

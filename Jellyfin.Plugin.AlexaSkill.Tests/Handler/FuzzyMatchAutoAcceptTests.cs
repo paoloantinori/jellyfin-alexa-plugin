@@ -1016,6 +1016,6 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
             BaseItemKind[] itemTypes,
             string locale,
             CancellationToken cancellationToken)
-            => SearchItemsFuzzyAsync(query, jellyfinUser, user, libraryManager, itemTypes, cancellationToken, locale: locale);
+            => Search.SearchItemsFuzzyAsync(query, jellyfinUser, user, libraryManager, itemTypes, cancellationToken, locale: locale);
     }
 }

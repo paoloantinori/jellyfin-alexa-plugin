@@ -633,7 +633,7 @@ public class PlayAlbumIntentHandler : BaseHandler
         {
             // Primary: the ParentId entity-link count (tag spelling irrelevant).
             QueryResult<BaseItem> result = await RetryAsync(
-                () => SafeGetItemsResult(_libraryManager, BuildTrackCountQuery(jellyfinUser, album.Id, byParentId: true)),
+                () => Search.SafeGetItemsResult(_libraryManager, BuildTrackCountQuery(jellyfinUser, album.Id, byParentId: true)),
                 "GetAlbumTrackCountByParentId",
                 cancellationToken).ConfigureAwait(false);
 
@@ -643,7 +643,7 @@ public class PlayAlbumIntentHandler : BaseHandler
                 // ParentId linkage is broken but whose tracks still carry the album's
                 // name tag (JF-338).
                 result = await RetryAsync(
-                    () => SafeGetItemsResult(_libraryManager, BuildTrackCountQuery(jellyfinUser, album.Id, byParentId: false)),
+                    () => Search.SafeGetItemsResult(_libraryManager, BuildTrackCountQuery(jellyfinUser, album.Id, byParentId: false)),
                     "GetAlbumTrackCountByAlbumIds",
                     cancellationToken).ConfigureAwait(false);
             }

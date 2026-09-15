@@ -49,6 +49,7 @@ public abstract class BaseHandler
     /// <summary>
     /// Alexa request timeout budget in milliseconds.
     /// Matches the CancellationTokenSource(TimeSpan.FromSeconds(6)) in AlexaSkillController.
+    /// Passed to the SearchService collaborator at composition (JF-315 batch 6).
     /// </summary>
     private const int AlexaRequestTimeoutMs = 6000;
 
@@ -317,6 +318,20 @@ public abstract class BaseHandler
     protected internal PlaybackLaunchBuilder Launch { get; }
 
     /// <summary>
+    /// The search collaborator (JF-315 batch 6, census cluster E): the library-search
+    /// and fuzzy-RECALL machinery (SafeGetItemsResult, SearchWithAsrFallbackAsync,
+    /// CachedSearchAsync, FuzzyMatch/FuzzyMatchPhonetic, GetArtistSongsAsync,
+    /// SearchItemsFuzzyAsync, GetSearchResponseMode), extracted from this class.
+    /// COMPOSITION, not per-handler injection (the PlaybackLaunchBuilder precedent):
+    /// each handler constructs its own instance here so the 61 handler ctors stay
+    /// untouched; consume it via this inherited get-only property. Stateless (config +
+    /// logger + the passed request budget). The auto-play decision block
+    /// (<see cref="HandleFuzzyMiss"/>) deliberately STAYED here; rationale lives in
+    /// the SearchService class doc.
+    /// </summary>
+    protected internal SearchService Search { get; }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="BaseHandler"/> class.
     /// </summary>
     /// <param name="sessionManager">The session manager instance.</param>
@@ -327,6 +342,7 @@ public abstract class BaseHandler
         SessionManager = sessionManager;
         _config = config;
         Logger = loggerFactory.CreateLogger<BaseHandler>();
+        Search = new SearchService(config, Logger, AlexaRequestTimeoutMs);
         // The method group preserves virtual dispatch to the SendProgressiveResponse
         // overrides (the JF-501 test seam); mechanism documented at the builder's ctor.
         Launch = new PlaybackLaunchBuilder(config, Logger, SendProgressiveResponse);
@@ -1252,329 +1268,6 @@ public abstract class BaseHandler
     }
 
     /// <summary>
-    /// Executes GetItemsResult with a fallback to GetItemList on NullReferenceException.
-    /// Jellyfin's GetItemsResult evaluates dbQuery.Count() after applying query filters
-    /// and ordering. Certain combinations (e.g. ArtistIds + PopularitySort referencing
-    /// User data) cause EF Core's Count() translation to NRE. GetItemList skips the
-    /// Count() step entirely.
-    /// </summary>
-    protected QueryResult<BaseItem> SafeGetItemsResult(ILibraryManager libraryManager, InternalItemsQuery query)
-    {
-        try
-        {
-            return libraryManager.GetItemsResult(query);
-        }
-        catch (NullReferenceException)
-        {
-            // Jellyfin's GetItemsResult evaluates dbQuery.Count() after applying query
-            // filters + ordering. Certain combinations (e.g. ArtistIds + PopularitySort
-            // referencing User data) cause EF Core's Count() translation to NRE.
-            // Fall back to GetItemList which skips the Count() step entirely.
-            Logger.LogWarning("GetItemsResult NRE — falling back to GetItemList");
-            IReadOnlyList<BaseItem> items = libraryManager.GetItemList(query);
-            return new QueryResult<BaseItem>(query.StartIndex ?? 0, items.Count, items);
-        }
-    }
-
-    /// <summary>
-    /// Search using the original query first, then fall back to ASR compound-word
-    /// variants if the feature is enabled and the original returned no results.
-    /// Stops at the first non-empty result set.
-    /// </summary>
-    /// <typeparam name="T">The result item type.</typeparam>
-    /// <param name="query">The original search query from ASR.</param>
-    /// <param name="searchFunc">A function that executes a search for a given query string.</param>
-    /// <returns>Results from the first successful search, or the original empty results.</returns>
-    protected async Task<IReadOnlyList<T>> SearchWithAsrFallbackAsync<T>(
-        string query,
-        Func<string, Task<IReadOnlyList<T>>> searchFunc,
-        SearchResponseMode mode = SearchResponseMode.Thorough)
-    {
-        IReadOnlyList<T> results = await searchFunc(query).ConfigureAwait(false) ?? Array.Empty<T>();
-
-        if (results.Count > 0)
-        {
-            return results;
-        }
-
-        if (!_config.AsrCompoundWordFixEnabled || mode == SearchResponseMode.Fast)
-        {
-            return results;
-        }
-
-        IReadOnlyList<string> variants = AsrVariantGenerator.GenerateAsrVariants(query);
-
-        foreach (string variant in variants)
-        {
-            IReadOnlyList<T> variantResults = await searchFunc(variant).ConfigureAwait(false) ?? Array.Empty<T>();
-
-            if (variantResults.Count > 0)
-            {
-                return variantResults;
-            }
-        }
-
-        return results;
-    }
-
-    /// <summary>
-    /// Execute a library search with caching. On success, results are cached.
-    /// On failure, returns cached results if available.
-    /// </summary>
-    /// <param name="userId">The user ID for cache partitioning.</param>
-    /// <param name="queryKey">Normalized cache key (search term + filters).</param>
-    /// <param name="operation">The library query to execute.</param>
-    /// <param name="operationName">Name for logging.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A tuple of search results and whether they came from cache.</returns>
-    protected async Task<(IReadOnlyList<BaseItem> Results, bool FromCache)> CachedSearchAsync(
-        Guid userId,
-        string queryKey,
-        Func<IReadOnlyList<BaseItem>> operation,
-        string operationName,
-        CancellationToken cancellationToken)
-    {
-        SearchResultCache cache = Plugin.Instance?.SearchCache ?? SearchResultCache.Noop;
-        var counters = Plugin.Instance?.RequestCounters;
-
-        try
-        {
-            IReadOnlyList<BaseItem> results = await RetryAsync(operation, operationName, cancellationToken).ConfigureAwait(false);
-            cache.Put(userId, queryKey, results);
-            counters?.IncrementCacheMiss();
-            return (results, false);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex) when (cache.TryGet(userId, queryKey, out IReadOnlyList<BaseItem>? cached))
-        {
-            Logger.LogWarning(ex, "Library search failed for {Operation}, serving cached results", operationName);
-            counters?.IncrementCacheHit();
-            return (cached!, true);
-        }
-    }
-
-    /// <summary>
-    /// Find the best fuzzy match from a list of items when exact search fails.
-    /// </summary>
-    /// <typeparam name="T">The item type.</typeparam>
-    /// <param name="query">The search query from the user.</param>
-    /// <param name="candidates">Items to match against.</param>
-    /// <param name="selector">Function to extract the comparable string.</param>
-    /// <param name="threshold">Minimum similarity score (0-100).</param>
-    /// <returns>The best matching item, or null.</returns>
-    protected T? FuzzyMatch<T>(string query, IEnumerable<T> candidates, Func<T, string> selector, Entities.User? user = null, int threshold = -1)
-        where T : class
-    {
-        int effectiveThreshold = threshold >= 0 ? threshold : FuzzyMatcher.GetDefaultThreshold(user);
-        var result = FuzzyMatcher.FindBestMatch(query, candidates, selector, effectiveThreshold);
-        Logger.LogDebug("FuzzyMatch: query={Query}, best={BestMatch}, threshold={Threshold}, matched={Matched}",
-            query, result != null ? selector(result) : "(null)", effectiveThreshold, result != null);
-        return result;
-    }
-
-    /// <summary>
-    /// Phonetic-aware fuzzy match: like <see cref="FuzzyMatch{T}"/> but prefers Double
-    /// Metaphone code collisions for cross-language accent drift (e.g. "Koop" heard as
-    /// "cup", both code "KP"). When codes collide AND the candidate is within a length
-    /// band, the score is floored above ContainmentScore so it beats coincidental
-    /// substring matches. JF-381.
-    /// <para>
-    /// JF-448 (review F2) contract: callers whose candidates came from the artist index
-    /// MUST pass the index's pinned view (<see cref="IArtistIndex.CaptureSnapshot"/>) so
-    /// the candidate list and the phonetic codes resolve from the same publish; passing
-    /// the live service re-reads the snapshot field per lookup and a mid-search refresh
-    /// can null a code (the cross-snapshot window this fixes).
-    /// </para>
-    /// </summary>
-    /// <typeparam name="T">The candidate item type.</typeparam>
-    protected T? FuzzyMatchPhonetic<T>(string query, IEnumerable<T> candidates, Func<T, string> selector, Func<T, Guid> idSelector, IArtistIndex? artistIndex, Entities.User? user = null, int threshold = -1)
-        where T : class
-    {
-        if (artistIndex == null)
-        {
-            return FuzzyMatch(query, candidates, selector, user, threshold);
-        }
-
-        int effectiveThreshold = threshold >= 0 ? threshold : FuzzyMatcher.GetDefaultThreshold(user);
-        var result = FuzzyMatcher.FindBestMatch(
-            query,
-            candidates,
-            selector,
-            idSelector,
-            id => artistIndex.TryGetPhoneticCode(id, out var codes) ? codes : null,
-            effectiveThreshold);
-
-        Logger.LogDebug("FuzzyMatchPhonetic: query={Query}, best={BestMatch}, threshold={Threshold}, matched={Matched}",
-            query, result != null ? selector(result) : "(null)", effectiveThreshold, result != null);
-        return result;
-    }
-
-    /// <summary>
-    /// Fetches an artist's (or artists') songs with the shared query shape: ArtistIds +
-    /// IncludeItemTypes=Audio (JF-358: never MediaTypes=Audio) + library filter + retry.
-    /// Single helper for all artist-scoped song fetches (FindSong's keyword search,
-    /// PlaySong's title fallback), so the query shape stays consistent (JF-382 rule:
-    /// no third copy of the artist-search path). Pass <paramref name="nameContains"/>
-    /// for a server-side substring pre-filter, or leave it null for the unfiltered
-    /// (keyword-matcher-scored) form; <paramref name="limit"/> bounds the fetch for
-    /// aggregate artists ("Various Artists" can hold 10k+ tracks).
-    /// </summary>
-    /// <param name="jellyfinUser">The Jellyfin user (for query scoping).</param>
-    /// <param name="user">The plugin user (for the library filter).</param>
-    /// <param name="libraryManager">The library manager.</param>
-    /// <param name="artistIds">The artist IDs to scope to.</param>
-    /// <param name="retryLabel">Label for RetryAsync logging.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <param name="nameContains">Optional server-side NameContains pre-filter.</param>
-    /// <param name="limit">Optional row cap (e.g. 500, like SearchItemsFuzzyAsync).</param>
-    /// <returns>The artist's songs matching the query.</returns>
-    protected async Task<IReadOnlyList<BaseItem>> GetArtistSongsAsync(
-        Jellyfin.Database.Implementations.Entities.User? jellyfinUser,
-        Entities.User user,
-        ILibraryManager libraryManager,
-        Guid[] artistIds,
-        string retryLabel,
-        CancellationToken cancellationToken,
-        string? nameContains = null,
-        int? limit = null)
-    {
-        var query = new InternalItemsQuery
-        {
-            User = jellyfinUser,
-            Recursive = true,
-            ArtistIds = artistIds,
-            IncludeItemTypes = new[] { Jellyfin.Data.Enums.BaseItemKind.Audio },
-            DtoOptions = new DtoOptions(true)
-        };
-        if (nameContains != null)
-        {
-            query.NameContains = nameContains;
-        }
-
-        if (limit.HasValue)
-        {
-            query.Limit = limit.Value;
-        }
-
-        ApplyLibraryFilter(query, user, libraryManager, Logger);
-
-        return await RetryAsync(() => libraryManager.GetItemList(query), retryLabel, cancellationToken).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// Bridges ASR accent/transcription variants (e.g. "caffè" vs "Cafe") that
-    /// Jellyfin's search index doesn't normalize. Cold path only (exact miss).
-    /// JF-337.
-    /// </summary>
-    /// <param name="query">The user-spoken name (slot value).</param>
-    /// <param name="jellyfinUser">The Jellyfin user (for query scoping).</param>
-    /// <param name="user">The plugin user (for threshold + library filter).</param>
-    /// <param name="libraryManager">The library manager.</param>
-    /// <param name="itemTypes">The item types to search (e.g. Audio, MusicAlbum). Queries whose kinds are ALL out-of-library skip the TopParentIds filter (<see cref="Util.LibraryFilter.IsOutOfLibraryKind"/>, JF-456).</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <param name="operationLabel">Label for logging.</param>
-    /// <param name="locale">The request locale, for the JF-508/JF-526 short-query coverage gate on the match return.</param>
-    /// <returns>The best match + score, or null if nothing above threshold.</returns>
-    protected async Task<(BaseItem Item, int Score)?> SearchItemsFuzzyAsync(
-        string query,
-        Jellyfin.Database.Implementations.Entities.User? jellyfinUser,
-        Entities.User user,
-        ILibraryManager libraryManager,
-        BaseItemKind[] itemTypes,
-        CancellationToken cancellationToken,
-        string operationLabel = "FuzzyFallback",
-        Guid[]? artistIds = null,
-        int minQueryLength = 3,
-        MediaType[]? mediaTypes = null,
-        string locale = "en-US")
-    {
-        if (string.IsNullOrWhiteSpace(query) || query.Length < minQueryLength)
-        {
-            return null;
-        }
-
-        var fallbackQuery = new InternalItemsQuery
-        {
-            User = jellyfinUser,
-            Recursive = true,
-            IncludeItemTypes = itemTypes,
-            DtoOptions = new DtoOptions(true),
-            Limit = 500
-        };
-        if (artistIds is { Length: > 0 })
-        {
-            fallbackQuery.ArtistIds = artistIds;
-        }
-
-        if (mediaTypes is { Length: > 0 })
-        {
-            fallbackQuery.MediaTypes = mediaTypes;
-        }
-
-        ApplyLibraryFilter(fallbackQuery, user, libraryManager, Logger);
-
-        IReadOnlyList<BaseItem> allItems = await RetryAsync(
-            () => libraryManager.GetItemList(fallbackQuery),
-            operationLabel,
-            cancellationToken).ConfigureAwait(false);
-
-        if (allItems.Count == 0)
-        {
-            return null;
-        }
-
-        var match = FuzzyMatcher.FindBestMatchWithScore(query, allItems, item => item.Name);
-        // JF-526 (JF-508 sibling): this zero-result fallback feeds callers that
-        // auto-play the returned item (PlayBook/PlayPodcast/PlayVideo/PlayPlaylist/
-        // SearchMedia/SeriesFuzzyFallback), so the short-query full-coverage gate
-        // applies to the match return too. A gated miss returns null, this method's
-        // existing below-threshold outcome: callers speak their own not-found instead
-        // of auto-playing a partial-coverage pick ("soul coffee" -> "Starfish & Coffee").
-        if (match.HasValue && match.Value.Score >= FuzzyMatcher.GetDefaultThreshold(user))
-        {
-            // AutoPlay users are exempt from the coverage gate (they asked to never
-            // be prompted): the same exemption HandleFuzzyMiss's AutoPlay disjunct
-            // and PlayAlbum's guard apply (JF-526 review F1 - policy parity).
-            if (KeywordMatcher.HasFullKeywordCoverage(KeywordMatcher.Tokenize(query, locale), match.Value.Item.Name, locale)
-                || (user?.FuzzyMatchBehavior ?? FuzzyMatchBehavior.Confirm) == FuzzyMatchBehavior.AutoPlay)
-            {
-                Logger.LogInformation(
-                    "{Op}: fuzzy fallback matched '{Name}' score={Score} for query='{Query}'",
-                    operationLabel, match.Value.Item.Name, match.Value.Score, query);
-                return match;
-            }
-
-            // JF-526: the score bar was crossed but the gate withheld the auto-play
-            // (partial keyword coverage on a short query). Logged so triage can tell
-            // a withheld match from a below-threshold one (the JF-508/corr=269e622d class).
-            Logger.LogDebug(
-                "{Op}: coverage gate withheld partial-coverage match '{Name}' score={Score} for query='{Query}'",
-                operationLabel, match.Value.Item.Name, match.Value.Score, query);
-        }
-
-        return null;
-    }
-
-    /// <summary>
-    /// Gets the effective search response mode for a user, falling back to the global default.
-    /// Per-user setting (when explicitly set, i.e. non-null) takes precedence.
-    /// </summary>
-    protected SearchResponseMode GetSearchResponseMode(Entities.User? user)
-    {
-        if (user?.SearchResponseMode.HasValue == true)
-        {
-            Logger.LogDebug("SearchResponseMode: user={UserId} mode={Mode} source=PerUser", user.Id, user.SearchResponseMode.Value);
-            return user.SearchResponseMode.Value;
-        }
-
-        Logger.LogDebug("SearchResponseMode: user={UserId} mode={Mode} source=GlobalDefault", user?.Id, _config.DefaultSearchResponseMode);
-        return _config.DefaultSearchResponseMode;
-    }
-
-    /// <summary>
     /// Gets the effective post-play behavior for a user, falling back to the global default.
     /// Per-user setting (when explicitly set, i.e. non-null) takes precedence.
     /// </summary>
@@ -1684,6 +1377,16 @@ public abstract class BaseHandler
     /// is built; delegates that only record a side effect wrap their null result in
     /// <see cref="Task.FromResult{TResult}"/> and keep the exact shape they had.
     /// </summary>
+    /// <remarks>
+    /// STAY-NOTE (JF-315 batch 6): this member and <see cref="FuzzyMissOutcome"/>
+    /// deliberately did NOT move to SearchService. Full rationale in the
+    /// SearchService class doc (the auto-play DECISION block stays at its decision
+    /// point per the JF-408 fuzzy-recall-vs-judgment-layers memory). The fact unique
+    /// to this site: it is seam-coupled to <see cref="Launch"/>'s progressive
+    /// announce below (SpeakVideoLaunchAnnounceAsync rides the virtual
+    /// SendProgressiveResponse the ~15 test harnesses override), which a
+    /// collaborator move would have to re-thread.
+    /// </remarks>
     /// <typeparam name="T">The item type.</typeparam>
     /// <param name="query">The original search query.</param>
     /// <param name="candidates">The full list of candidate items.</param>
@@ -2280,7 +1983,7 @@ public abstract class BaseHandler
             return (seriesList[0], null);
         }
 
-        var fuzzy = await SearchItemsFuzzyAsync(seriesName, jellyfinUser, user, libraryManager, seriesKinds, cancellationToken, "SeriesFuzzyFallback", locale: locale).ConfigureAwait(false);
+        var fuzzy = await Search.SearchItemsFuzzyAsync(seriesName, jellyfinUser, user, libraryManager, seriesKinds, cancellationToken, "SeriesFuzzyFallback", locale: locale).ConfigureAwait(false);
         if (fuzzy != null)
         {
             return (fuzzy.Value.Item, null);
@@ -2909,7 +2612,7 @@ public abstract class BaseHandler
         }
 
         // JF-446 finding 2: accept through the PHONETIC matcher when the artist index is
-        // available (the same lookup FuzzyMatchPhonetic and ArtistSearch's own tiers use).
+        // available (the same lookup Search.FuzzyMatchPhonetic and ArtistSearch's own tiers use).
         // Threshold rationale: the strict bar stays Math.Max(normal, CrossMediaArtistThreshold)
         // because this is still a cross-media GUESS (the user asked for another media
         // type), so only near-exact or phonetically-colliding matches auto-play. The
@@ -3379,7 +3082,7 @@ public abstract class BaseHandler
         // Remaining tracks will be fetched on demand by PlaybackNearlyFinished.
         Logger.LogDebug("{Label}: querying tracks for album='{AlbumName}' (id={AlbumId})", logLabel, album.Name, album.Id);
         QueryResult<BaseItem> albumResult = await RetryAsync(
-            () => SafeGetItemsResult(libraryManager, new InternalItemsQuery()
+            () => Search.SafeGetItemsResult(libraryManager, new InternalItemsQuery()
             {
                 User = jellyfinUser,
                 Recursive = true,
@@ -3401,7 +3104,7 @@ public abstract class BaseHandler
             // ParentId+Recursive returns 0, AlbumIds returns all tracks. JF-338.
             Logger.LogDebug("{Label}: folder-based track query returned 0, retrying by AlbumIds for '{Name}'", logLabel, album.Name);
             albumResult = await RetryAsync(
-                () => SafeGetItemsResult(libraryManager, new InternalItemsQuery()
+                () => Search.SafeGetItemsResult(libraryManager, new InternalItemsQuery()
                 {
                     User = jellyfinUser,
                     Recursive = true,
@@ -3547,7 +3250,7 @@ public abstract class BaseHandler
         // (code-review P1, JF-455). The track resolver separately filters tracks per user.
         ApplyLibraryFilter(query, user, libraryManager, Logger);
         Logger.LogDebug("PlayPlaylist: querying Jellyfin with searchTerm='{PlaylistName}', types=Playlist", playlistName);
-        QueryResult<BaseItem> playlists = await RetryAsync(() => SafeGetItemsResult(libraryManager, query), "GetPlaylists", cancellationToken).ConfigureAwait(false);
+        QueryResult<BaseItem> playlists = await RetryAsync(() => Search.SafeGetItemsResult(libraryManager, query), "GetPlaylists", cancellationToken).ConfigureAwait(false);
         var visiblePlaylists = playlists.Items.Where(p => p.IsVisible(jellyfinUser)).ToList();
         if (visiblePlaylists.Count != playlists.Items.Count)
         {
@@ -3564,7 +3267,7 @@ public abstract class BaseHandler
 
         if (playlists.TotalRecordCount == 0)
         {
-            var fuzzy = await SearchItemsFuzzyAsync(playlistName, jellyfinUser, user, libraryManager, new[] { BaseItemKind.Playlist }, cancellationToken, "PlayPlaylistFuzzyFallback", locale: locale).ConfigureAwait(false);
+            var fuzzy = await Search.SearchItemsFuzzyAsync(playlistName, jellyfinUser, user, libraryManager, new[] { BaseItemKind.Playlist }, cancellationToken, "PlayPlaylistFuzzyFallback", locale: locale).ConfigureAwait(false);
             if (fuzzy != null)
             {
                 playlists = new QueryResult<BaseItem> { Items = new List<BaseItem> { fuzzy.Value.Item }, TotalRecordCount = 1 };
@@ -3579,7 +3282,7 @@ public abstract class BaseHandler
         if (playlists.TotalRecordCount > 1)
         {
             Logger.LogDebug("PlayPlaylist: {Count} playlists matched, running disambiguation", playlists.TotalRecordCount);
-            BaseItem? topMatch = FuzzyMatch(playlistName, playlists.Items, p => p.Name, user);
+            BaseItem? topMatch = Search.FuzzyMatch(playlistName, playlists.Items, p => p.Name, user);
             // JF-526 (JF-508 sibling): this site-level pre-check returns before
             // HandleFuzzyMiss, so the short-query full-coverage gate must be applied
             // here too; a gated miss falls into HandleFuzzyMiss below, whose Confirm

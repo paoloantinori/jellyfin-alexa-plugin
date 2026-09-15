@@ -234,7 +234,7 @@ public class PlaySongIntentHandler : BaseHandler
                 artistsIds[0], matchedArtistName!, jellyfinUser!, user, session, context, locale, cancellationToken).ConfigureAwait(false);
         }
 
-        IReadOnlyList<BaseItem> songs = await SearchWithAsrFallbackAsync(songQuery,
+        IReadOnlyList<BaseItem> songs = await Search.SearchWithAsrFallbackAsync(songQuery,
             searchTerm =>
             {
                 var q = new InternalItemsQuery()
@@ -267,7 +267,7 @@ public class PlaySongIntentHandler : BaseHandler
         {
             if (artistsIds.Count > 0)
             {
-                IReadOnlyList<BaseItem> artistSongs = await GetArtistSongsAsync(
+                IReadOnlyList<BaseItem> artistSongs = await Search.GetArtistSongsAsync(
                     jellyfinUser, user, _libraryManager, artistsIds.ToArray(),
                     "GetSongsByArtistTitleFallback", cancellationToken,
                     limit: 500).ConfigureAwait(false);

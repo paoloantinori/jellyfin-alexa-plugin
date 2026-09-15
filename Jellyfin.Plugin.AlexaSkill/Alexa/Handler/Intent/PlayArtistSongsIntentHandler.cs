@@ -216,7 +216,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         var tierSw = Stopwatch.StartNew();
         int tierReached = 0;
         string searchSource = "Database";
-        SearchResponseMode mode = GetSearchResponseMode(user);
+        SearchResponseMode mode = Search.GetSearchResponseMode(user);
 
         // Pre-resolve library filter once for the entire request.
         // Used by both the in-memory and database paths, plus the final artist-songs query.
@@ -266,7 +266,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                 {
                     // Fast mode: skip prefix tiers, go straight to fuzzy-all
                     tierSw.Restart();
-                    BaseItem? fuzzy = FuzzyMatchPhonetic(musician, allArtists, a => a.Name, a => a.Id, pinnedIndex, user);
+                    BaseItem? fuzzy = Search.FuzzyMatchPhonetic(musician, allArtists, a => a.Name, a => a.Id, pinnedIndex, user);
                     tierSw.Stop();
                     tierReached = 4;
                     Logger.LogInformation(
@@ -287,7 +287,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                     var prefixCandidates = allArtists
                         .Where(a => a.Name.StartsWith(firstWord, StringComparison.OrdinalIgnoreCase))
                         .ToList();
-                    BaseItem? tier2Match = FuzzyMatchPhonetic(musician, prefixCandidates, a => a.Name, a => a.Id, pinnedIndex, user);
+                    BaseItem? tier2Match = Search.FuzzyMatchPhonetic(musician, prefixCandidates, a => a.Name, a => a.Id, pinnedIndex, user);
                     tierSw.Stop();
                     tierReached = 2;
                     Logger.LogInformation(
@@ -314,7 +314,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                         var fullPrefixCandidates = allArtists
                             .Where(a => a.Name.StartsWith(musician, StringComparison.OrdinalIgnoreCase))
                             .ToList();
-                        BaseItem? tier3Match = FuzzyMatchPhonetic(musician, fullPrefixCandidates, a => a.Name, a => a.Id, pinnedIndex, user);
+                        BaseItem? tier3Match = Search.FuzzyMatchPhonetic(musician, fullPrefixCandidates, a => a.Name, a => a.Id, pinnedIndex, user);
                         tierSw.Stop();
                         tierReached = 3;
                         Logger.LogInformation(
@@ -341,7 +341,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                     {
                         tierSw.Restart();
                         // JF-417 review correction: no exclusion (see ArtistSearch.cs comment)
-                        BaseItem? tier4Match = FuzzyMatchPhonetic(musician, allArtists, a => a.Name, a => a.Id, pinnedIndex, user);
+                        BaseItem? tier4Match = Search.FuzzyMatchPhonetic(musician, allArtists, a => a.Name, a => a.Id, pinnedIndex, user);
                         tierSw.Stop();
                         tierReached = 4;
                         Logger.LogInformation(
@@ -370,7 +370,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             if (mode == SearchResponseMode.Fast)
             {
                 // Fast mode: single SearchTerm query, no fallback tiers, no ASR variants
-                artists = await SearchWithAsrFallbackAsync(musician,
+                artists = await Search.SearchWithAsrFallbackAsync(musician,
                     searchTerm =>
                     {
                         var q = new InternalItemsQuery()
@@ -408,7 +408,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             else
             {
                 // Thorough mode: 4-tier fallback with ASR variants on tier 1
-                artists = await SearchWithAsrFallbackAsync(musician,
+                artists = await Search.SearchWithAsrFallbackAsync(musician,
                     searchTerm =>
                     {
                         var q = new InternalItemsQuery()
@@ -645,7 +645,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         else if (fastAutoPlay)
         {
             // Fast mode: pick the best fuzzy match and auto-play
-            var best = FuzzyMatchPhonetic(musician, artists, a => a.Name, a => a.Id, pinnedIndex, user);
+            var best = Search.FuzzyMatchPhonetic(musician, artists, a => a.Name, a => a.Id, pinnedIndex, user);
             if (best != null)
             {
                 artists = new List<BaseItem> { best };
@@ -838,7 +838,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         // query at the START of a long name is the intended ASR-truncation shape
         // ("crash" -> "Crash Test Dummies"), not a coincidence (code-review 2026-08-29).
         var candidates = applyContainmentBand ? FilterContainmentBand(results, musician) : results;
-        BaseItem? match = FuzzyMatch(musician, candidates, a => a.Name, user);
+        BaseItem? match = Search.FuzzyMatch(musician, candidates, a => a.Name, user);
 
         // JF-457 winner-level album-scope verification via the shared
         // ArtistSearch.KeepIfAlbumScopeAsync (the winner only, one bounded query; a

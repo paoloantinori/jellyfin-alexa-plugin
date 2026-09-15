@@ -411,7 +411,8 @@ public class FuzzyMatchConfigurationTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
-    /// Minimal concrete handler to expose protected FuzzyMatch and HandleFuzzyMiss for testing.
+    /// Minimal concrete handler to expose FuzzyMatch (the Search collaborator's
+    /// public method) and the protected HandleFuzzyMiss for testing.
     /// Maps FuzzyMissOutcome to bool for accessibility: true=SuggestionHandled, false=NotFound.
     /// </summary>
     private class TestFuzzyHandler : BaseHandler
@@ -425,7 +426,7 @@ public class FuzzyMatchConfigurationTests : PluginTestBase, IDisposable
             => Task.FromResult(ResponseBuilder.Tell("test"));
 
         public TestCandidate? TestFuzzyMatch(string query, IEnumerable<TestCandidate> candidates, Func<TestCandidate, string> selector, User? user, int threshold = -1)
-            => FuzzyMatch(query, candidates, selector, user, threshold);
+            => Search.FuzzyMatch(query, candidates, selector, user, threshold);
 
         /// <summary>
         /// Exposes HandleFuzzyMiss for testing. Returns (handled: true=SuggestionHandled, false=NotFound, response).

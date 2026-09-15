@@ -89,7 +89,7 @@ GitHub Actions runs the validation/build pipeline on **push to main**, PRs to ma
 Plugin source lives under `Jellyfin.Plugin.AlexaSkill/` (the C# project root) — all `Alexa/`, `Configuration/`, and `Controller/` paths below are relative to it. Repo-root paths (`docs/`, `tests/`, `scripts/`, `Directory.Build.props`) have no prefix.
 
 - `Jellyfin.Plugin.AlexaSkill/Alexa/Handler/Intent/` - 61 intent handlers (one per intent, inherit `BaseHandler`)
-- `Jellyfin.Plugin.AlexaSkill/Alexa/Handler/BaseHandler.cs` — shared utilities: `FuzzyMatch`, `HandleFuzzyMiss`, `RetryAsync`, stream URLs, library filters
+- `Jellyfin.Plugin.AlexaSkill/Alexa/Handler/BaseHandler.cs` — shared utilities: `HandleFuzzyMiss`, `RetryAsync`, stream URLs, library filters; the search/fuzzy-recall machinery (`FuzzyMatch`, `FuzzyMatchPhonetic`, `SearchItemsFuzzyAsync`, `GetArtistSongsAsync`, ...) lives on the `Search` / SearchService collaborator since JF-315 batch 6
 - `Jellyfin.Plugin.AlexaSkill/Alexa/InteractionModel/` — 17 per-locale interaction model JSONs (`model_*.json`), generated from templates in `Alexa/InteractionModel/templates/`
 - `Jellyfin.Plugin.AlexaSkill/Alexa/Locale/` — Response strings: keys in `ResponseStrings.cs`, values in 17 `<locale>.json` files
 - `Jellyfin.Plugin.AlexaSkill/Alexa/SmapiManagement.cs` — SMAPI wrapper (skill CRUD, account linking, status polling)
@@ -146,7 +146,7 @@ Debug logs should capture: resolved intent/slot/entity names, matched Jellyfin i
 
 Handlers inherit `BaseHandler` and implement `CanHandle()` + `HandleAsync()`. `BaseHandler` provides:
 
-- `FuzzyMatch(query, candidates, selector)` — best-match via FuzzyStrings library with Double Metaphone phonetic pre-filter for improved non-English name matching
+- `Search.FuzzyMatch(query, candidates, selector)` — best-match via FuzzyStrings library with Double Metaphone phonetic pre-filter for improved non-English name matching (on the `Search` / SearchService collaborator since JF-315 batch 6)
 - `HandleFuzzyMiss()` — disambiguation with voice prompts; auto-plays near-exact matches (score >= 90) without qualifier
 - `GetStreamUrl()` / `GetVideoStreamUrl()`: `/Audio|Videos/{id}/stream?static=true` (on the `Launch` / PlaybackLaunchBuilder collaborator since JF-315 batch 4)
 - `RetryAsync(operation, label)` — retry with exponential backoff, 6s timeout budget
@@ -165,7 +165,7 @@ New intents need: handler class + `IntentNames.cs` entry + interaction model sam
 3. `NameStartsWith` full query - prefix with full string
 4. `NameContains` full query - substring match anywhere in name
 
-All tiers go through `FuzzyMatch` (phonetic-aware via `FuzzyMatchPhonetic` in `BaseHandler`, which passes `ArtistIndexService`'s pre-computed Double Metaphone codes) to filter false positives and resolve ASR accent drift (e.g. "Koop" heard as "cup" on an it-IT Echo, both code "KP"). Results are served from the in-memory `ArtistIndexService` when available.
+All tiers go through `FuzzyMatch` (phonetic-aware via `Search.FuzzyMatchPhonetic` on the SearchService collaborator since JF-315 batch 6, which passes `ArtistIndexService`'s pre-computed Double Metaphone codes) to filter false positives and resolve ASR accent drift (e.g. "Koop" heard as "cup" on an it-IT Echo, both code "KP"). Results are served from the in-memory `ArtistIndexService` when available.
 
 **Tier-1 length gate (JF-381, extended 2026-08-29):** the in-memory tier-1 Contains filter (`a.Name.Contains(musician)`) skips candidates whose name is more than 10 chars longer than the query. This prevents coincidental substring matches (e.g. "cup" in "Porcupine Tree") from short-circuiting before the phonetic/fuzzy tiers can find the intended accent-drift match. The phonetic `FuzzyMatchPhonetic` overload floors length-matched code-collision scores above `ContainmentScore` so they beat substring matches. The gate (shared predicate `ArtistSearch.PassesContainmentBand`, single definition) now applies to EVERY containment-shaped candidate source in BOTH search implementations: in-memory tier-1, the database-fallback SearchTerm tier-1, and the NameContains fallbacks. Prefix-shaped tiers (`NameStartsWith`) are deliberately NOT gated: a short query at the start of a long name is the intended ASR-truncation shape ("crash" -> "Crash Test Dummies"). Exception: the inline Fast-mode DB path (single SearchTerm query, no recovery tier) stays ungated, because gating there with no fallback tier turned direct long-name hits into not-founds during the cold-index window.
 
@@ -175,7 +175,7 @@ All tiers go through `FuzzyMatch` (phonetic-aware via `FuzzyMatchPhonetic` in `B
 
 **Coincidental-containment downgrade (JF-377):** when a single tier-4 match is a coincidental substring containment (short common-word name inside a longer query, detected by `ArtistSearch.IsCoincidentalContainmentMatch`), the handler downgrades to a yes/no disambiguation prompt (`DisambiguationHelper.AskFirstMatch`) instead of auto-playing. Real artists still play via "yes"; nonsense resolves to not-found via "no". Bug and regression cases are string-indistinguishable (the JF-377 research), so the prompt is the only no-regression design.
 
-**Duplicated search path (JF-382):** `PlayArtistSongsIntentHandler` still has its own inline 4-tier search (Fast/Thorough/Parallel mode selection), duplicating `ArtistSearch.SearchAsync`. The artist-SONGS query blocks have been consolidated into `BaseHandler.GetArtistSongsAsync` (shared by FindSong artist-scoped, PlaySong title fallback, and future callers), but the 4-tier SEARCH duplication remains. Do not add a third copy of the search; consolidate via JF-382.
+**Duplicated search path (JF-382):** `PlayArtistSongsIntentHandler` still has its own inline 4-tier search (Fast/Thorough/Parallel mode selection), duplicating `ArtistSearch.SearchAsync`. The artist-SONGS query blocks have been consolidated into `SearchService.GetArtistSongsAsync` (the Search collaborator since JF-315 batch 6; shared by FindSong artist-scoped, PlaySong title fallback, and future callers), but the 4-tier SEARCH duplication remains. Do not add a third copy of the search; consolidate via JF-382.
 
 ## Cold-Start Warming Gates (JF-419 family)
 
@@ -258,11 +258,11 @@ The resolver is a DI singleton with a bounded 5s HTTP timeout; `null` → handle
 - **Thorough** (default): full 4-tier fallback chain with disambiguation prompts. Best recall.
 - **Fast**: single query or reduced tiers with auto-play. Fastest response, may miss obscure matches.
 
-In Fast mode, `SearchWithAsrFallbackAsync` skips compound-word retries. Handlers call `GetSearchResponseMode(user)` to resolve the effective mode.
+In Fast mode, `Search.SearchWithAsrFallbackAsync` skips compound-word retries. Handlers call `Search.GetSearchResponseMode(user)` to resolve the effective mode.
 
 ## ASR Compound-Word Fix
 
-When enabled (`AsrCompoundWordFixEnabled`), `SearchWithAsrFallbackAsync` in `BaseHandler` retries the original query with joined/split word variants. For example, "lazy bones" retries as "lazybones". Only triggers when the original query returns no results.
+When enabled (`AsrCompoundWordFixEnabled`), `SearchService.SearchWithAsrFallbackAsync` retries the original query with joined/split word variants. For example, "lazy bones" retries as "lazybones". Only triggers when the original query returns no results.
 
 ## PostPlay Behavior
 

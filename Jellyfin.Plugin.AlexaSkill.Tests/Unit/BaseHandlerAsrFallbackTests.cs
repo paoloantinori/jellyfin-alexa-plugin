@@ -198,7 +198,8 @@ public class BaseHandlerAsrFallbackTests
     }
 
     /// <summary>
-    /// Test handler that exposes the protected SearchWithAsrFallbackAsync method.
+    /// Test handler that exposes SearchWithAsrFallbackAsync (the Search
+    /// collaborator's public method, reached through the handler's composed Search).
     /// </summary>
     private class TestAsrFallbackHandler : BaseHandler
     {
@@ -212,6 +213,6 @@ public class BaseHandlerAsrFallbackTests
 
         public Task<IReadOnlyList<T>> TestSearchWithAsrFallbackAsync<T>(
             string query, Func<string, Task<IReadOnlyList<T>>> searchFunc)
-            => SearchWithAsrFallbackAsync(query, searchFunc);
+            => Search.SearchWithAsrFallbackAsync(query, searchFunc);
     }
 }

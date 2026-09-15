@@ -465,7 +465,7 @@ public class FindSongIntentHandler : BaseHandler
         {
             // Artist-scoped search: use ArtistIds + NameContains filter
             var artistIds = new[] { sessionData.ArtistId.Value };
-            IReadOnlyList<BaseItem> allArtistSongs = await GetArtistSongsAsync(
+            IReadOnlyList<BaseItem> allArtistSongs = await Search.GetArtistSongsAsync(
                 jellyfinUser, user, _libraryManager, artistIds, "GetSongsByArtist", cancellationToken,
                 nameContains: keywordTokens[0]).ConfigureAwait(false);
 
@@ -476,7 +476,7 @@ public class FindSongIntentHandler : BaseHandler
             // KeywordMatcher.Score (with abbreviation canonicalization) decide.
             if (allArtistSongs.Count == 0)
             {
-                allArtistSongs = await GetArtistSongsAsync(
+                allArtistSongs = await Search.GetArtistSongsAsync(
                     jellyfinUser, user, _libraryManager, artistIds, "GetSongsByArtistUnfiltered", cancellationToken,
                     limit: 500).ConfigureAwait(false);
             }
