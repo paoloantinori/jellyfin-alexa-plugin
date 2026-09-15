@@ -3,10 +3,10 @@ id: JF-563
 title: >-
   Resume and StartOver of audiobooks bypass NativeControlsForBooks: flat audio
   stream instead of the VideoApp HLS path
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-14 20:08'
-updated_date: '2026-09-15 04:30'
+updated_date: '2026-09-15 05:48'
 labels:
   - bug
   - audiobook
@@ -34,3 +34,9 @@ Audit 2026-09-14 (matrix intent x medium, code-verified): ResumeIntentHandler an
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+CLOSED complete (2026-09-15). Resume and StartOver of audiobooks now ride the VideoApp HLS path under NativeControlsForBooks, gated at the callers (IsVideoAppLaunchItem untouched - the JF-499 W1 durable-fact split). The audit was half right, corrected by mutation checks: Resume fallback-4 really flat-launched (now the sliced ?start= playlist); StartOver was NOT flat (chokepoint already diverted it) - its real gaps were the stale tracker high-water mark (now cleared for AudioBook regardless of flag) and the silent launch (now explicit + progressive announce). The review's key discovery: the PRIMARY resume path is the session-held tail (FullNowPlayingItem never cleared after VideoApp launches) which restarted from 0; the shared TryBuildNativeControlsBookResumeAsync covers both entry points with a displaced-token guard. 10 tests, 3 mutation checks against pre-fix code; suite 3807/3807 both TFMs; Release 0 warnings. Gates: implementer-run 3-reviewer simplify + dedicated code-review high (0 P1, P2 ledger regression fixed centrally + pinned); every deferred item landed as JF-567 same-turn (bookKey/position chain migration, AudioBook idiom unification, PlayBook ShouldEndSession outlier, screenless chapter-selection, token+cleared-session corner). The VideoApp builders now record the last-played ledger - the foundation for JF-566.
+<!-- SECTION:FINAL_SUMMARY:END -->
