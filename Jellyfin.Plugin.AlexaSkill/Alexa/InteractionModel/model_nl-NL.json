@@ -78,6 +78,9 @@
         "name": "AMAZON.StartOverIntent"
       },
       {
+        "name": "AMAZON.RepeatIntent"
+      },
+      {
         "name": "PlayChannelIntent",
         "samples": [
           "speel kanaal {channel}",

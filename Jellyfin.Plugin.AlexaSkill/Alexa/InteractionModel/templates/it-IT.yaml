@@ -44,9 +44,15 @@ static_intents:
   - AMAZON.PreviousIntent
   - AMAZON.YesIntent
   - AMAZON.NoIntent
+  # JF-562: the Loop* built-ins ride next to the custom LoopAll* vocabulary in
+  # explicit_intents (dual-accept CanHandle per JF-450: whichever name wins
+  # NLU, the same loop mode applies).
+  - AMAZON.LoopOnIntent
+  - AMAZON.LoopOffIntent
   - AMAZON.ShuffleOnIntent
   - AMAZON.ShuffleOffIntent
   - AMAZON.StartOverIntent
+  - AMAZON.RepeatIntent
 
 # Intents with explicit samples (not generated from templates).
 # Each has a "samples" list and optional "slots" list.

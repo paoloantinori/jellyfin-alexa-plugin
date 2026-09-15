@@ -1,7 +1,7 @@
 # French (Canada) interaction model template for the Alexa skill.
 #
 # JF-316 milestone 4: golden master. Faithful transcription of the
-# hand-grown model_fr-CA.json (60 intents, 411 samples);
+# hand-grown model_fr-CA.json (63 intents, 411 samples);
 # `python3 scripts/generate_interaction_model.py fr-CA` reproduces it
 # byte-identically.
 #
@@ -74,9 +74,15 @@ intents:
       - Répète le morceau
       - Répète la vidéo
       - Répète
+  # JF-562: the Loop* built-ins ride next to the custom loop trio above
+  # (dual-accept CanHandle per JF-450: whichever name wins NLU, the same
+  # loop mode applies).
+  - AMAZON.LoopOnIntent
+  - AMAZON.LoopOffIntent
   - AMAZON.ShuffleOnIntent
   - AMAZON.ShuffleOffIntent
   - AMAZON.StartOverIntent
+  - AMAZON.RepeatIntent
   - name: PlayChannelIntent
     samples:
       - Chaîne {channel}

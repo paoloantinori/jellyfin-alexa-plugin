@@ -3,9 +3,10 @@ id: JF-562
 title: >-
   AMAZON.RepeatIntent is an orphan: no handler, no model declaration in 17
   locales; delivered during playback it kills the session
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-14 20:07'
+updated_date: '2026-09-15 02:06'
 labels:
   - bug
   - transport

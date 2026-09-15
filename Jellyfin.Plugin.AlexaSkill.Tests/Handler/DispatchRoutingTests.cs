@@ -161,8 +161,9 @@ public class DispatchRoutingTests : PluginTestBase
         // The one documented exception: PlayIntent's handler stays reachable via the
         // hardware PlaybackController Play button, but the intent NAME is declared in
         // no model (JF-451). SetReminderIntent is declared in all 17 models since
-        // JF-451; AMAZON.RepeatIntent's handler was deleted (now-playing is
-        // MediaInfoIntent's job).
+        // JF-451; AMAZON.RepeatIntent returned in JF-562 (restart-current-track
+        // semantics, replacing the JF-451-deleted now-playing variant) and is
+        // declared in all 17 models again.
         var notInModelAllowlist = new HashSet<string>(
             new[] { "PlayIntent" }, StringComparer.Ordinal);
 

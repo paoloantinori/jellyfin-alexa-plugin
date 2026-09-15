@@ -80,6 +80,9 @@
         "name": "AMAZON.StartOverIntent"
       },
       {
+        "name": "AMAZON.RepeatIntent"
+      },
+      {
         "name": "PlayChannelIntent",
         "samples": [
           "Pon el canal {channel}",

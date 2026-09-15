@@ -1,7 +1,7 @@
 # English (CA) interaction model template for the Alexa skill.
 #
 # JF-316 milestone 2: golden master. Faithful transcription of the
-# hand-grown model_en-CA.json (59 intents, 441 samples);
+# hand-grown model_en-CA.json (60 intents, 441 samples);
 # `python3 scripts/generate_interaction_model.py en-CA` reproduces it
 # byte-identically. Every sample is verbatim in the committed order:
 # this locale's sets do not decompose into en-US's vocabulary
@@ -84,6 +84,7 @@ intents:
   - AMAZON.ShuffleOnIntent
   - AMAZON.ShuffleOffIntent
   - AMAZON.StartOverIntent
+  - AMAZON.RepeatIntent
   - name: PlayChannelIntent
     samples:
       - Play channel {channel}

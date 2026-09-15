@@ -1,7 +1,7 @@
 # Portuguese (Brazil) interaction model template for the Alexa skill.
 #
 # JF-316 milestone 4: golden master. Faithful transcription of the
-# hand-grown model_pt-BR.json (59 intents, 375 samples);
+# hand-grown model_pt-BR.json (60 intents, 375 samples);
 # `python3 scripts/generate_interaction_model.py pt-BR` reproduces it
 # byte-identically. Every sample is verbatim in the committed order:
 # plain transcription over compression (the milestone-2 decision; no
@@ -98,6 +98,7 @@ intents:
   - AMAZON.ShuffleOnIntent
   - AMAZON.ShuffleOffIntent
   - AMAZON.StartOverIntent
+  - AMAZON.RepeatIntent
   - name: PlayChannelIntent
     samples:
       - tocar canal {channel}

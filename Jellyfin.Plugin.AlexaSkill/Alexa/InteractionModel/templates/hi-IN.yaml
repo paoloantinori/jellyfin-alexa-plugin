@@ -1,7 +1,7 @@
 # Hindi (India) interaction model template for the Alexa skill.
 #
 # JF-316 milestone 5 (final): golden master. Faithful transcription of
-# the hand-grown model_hi-IN.json (59 intents, 322 samples after the JF-399
+# the hand-grown model_hi-IN.json (60 intents, 322 samples after the JF-399
 # PlaySong enrichment 2026-09-12);
 # `python3 scripts/generate_interaction_model.py hi-IN` reproduces it
 # byte-identically. Every sample is verbatim in the committed order:
@@ -105,6 +105,7 @@ intents:
   - AMAZON.ShuffleOnIntent
   - AMAZON.ShuffleOffIntent
   - AMAZON.StartOverIntent
+  - AMAZON.RepeatIntent
   - name: PlayChannelIntent
     samples:
       - चैनल {channel} चलाओ

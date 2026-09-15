@@ -43,6 +43,7 @@ Placeholder legend:
 | `<العقد (الثمانينيات)>` | `{decade}` |
 | `<عدد الدقائق>` | `{duration_minutes}` |
 | `<رقم الحلقة>` | `{episode_number}` |
+| `<عامل التصفية (روك، جاز)>` | `{filter}` |
 | `<النوع الموسيقي>` | `{genre}` |
 | `<المعلومة (العنوان، الفنان، الألبوم)>` | `{media_info_type}` |
 | `<نوع الوسائط (موسيقى، فيديو)>` | `{media_type}` |
@@ -62,7 +63,7 @@ Placeholder legend:
 | `<كلمات من عنوان الأغنية>` | `{titleKeywords}` |
 | `<اسم المستخدم>` | `{username}` |
 
-Complete phrase list (300 phrases across 59 commands):
+Complete phrase list (302 phrases across 60 commands):
 
 #### Play music
 
@@ -427,6 +428,8 @@ Complete phrase list (300 phrases across 59 commands):
 - `أعرض <الفئة (فنانون، ألبومات، أفلام)>`
 - `ما <الفئة (فنانون، ألبومات، أفلام)> لدي`
 - `ما <الفئة (فنانون، ألبومات، أفلام)> الموجودة`
+- `تصفح أنواع <عامل التصفية (روك، جاز)>`
+- `أرني أنواع <عامل التصفية (روك، جاز)>`
 
 **Get a recommendation**
 
@@ -493,7 +496,7 @@ Complete phrase list (300 phrases across 59 commands):
 - `استمر في التشغيل`
 - `انقل التشغيل`
 
-**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
+**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
 
 #### Timers and reminders
 
@@ -552,6 +555,7 @@ Placeholder legend:
 | `<decennium (jaren 80)>` | `{decade}` |
 | `<aantal minuten>` | `{duration_minutes}` |
 | `<afleveringsnummer>` | `{episode_number}` |
+| `<filterwoord (rock, jazz)>` | `{filter}` |
 | `<muziekgenre>` | `{genre}` |
 | `<info (titel, artiest, album)>` | `{media_info_type}` |
 | `<mediatype (muziek, video)>` | `{media_type}` |
@@ -571,7 +575,7 @@ Placeholder legend:
 | `<woorden uit de songtitel>` | `{titleKeywords}` |
 | `<gebruikersnaam>` | `{username}` |
 
-Complete phrase list (362 phrases across 59 commands):
+Complete phrase list (364 phrases across 60 commands):
 
 #### Play music
 
@@ -990,6 +994,8 @@ Complete phrase list (362 phrases across 59 commands):
 - `lijst <categorie (artiesten, albums, films)>`
 - `welke <categorie (artiesten, albums, films)> heb ik`
 - `welke <categorie (artiesten, albums, films)> zijn er`
+- `browse genres <filterwoord (rock, jazz)>`
+- `laat genres <filterwoord (rock, jazz)> zien`
 
 **Get a recommendation**
 
@@ -1062,7 +1068,7 @@ Complete phrase list (362 phrases across 59 commands):
 - `neem het over`
 - `doorgaan met luisteren`
 
-**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
+**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
 
 #### Timers and reminders
 
@@ -1123,6 +1129,7 @@ Placeholder legend:
 | `<decade (the 80s)>` | `{decade}` |
 | `<number of minutes>` | `{duration_minutes}` |
 | `<episode number>` | `{episode_number}` |
+| `<filter word (rock, jazz)>` | `{filter}` |
 | `<music genre>` | `{genre}` |
 | `<what to ask (title, artist, album)>` | `{media_info_type}` |
 | `<media type (music, video)>` | `{media_type}` |
@@ -1141,7 +1148,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (452 phrases across 59 commands):
+Complete phrase list (454 phrases across 60 commands):
 
 #### Play music
 
@@ -1642,6 +1649,8 @@ Complete phrase list (452 phrases across 59 commands):
 - `show me <category (artists, albums, movies)>`
 - `list <category (artists, albums, movies)>`
 - `what <category (artists, albums, movies)> do i have`
+- `browse genres <filter word (rock, jazz)>`
+- `show me genres <filter word (rock, jazz)>`
 
 **Get a recommendation**
 
@@ -1720,7 +1729,7 @@ Complete phrase list (452 phrases across 59 commands):
 - `keep playing`
 - `pick up where I left off`
 
-**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
+**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
 
 #### Timers and reminders
 
@@ -1783,6 +1792,7 @@ Placeholder legend:
 | `<decade (the 80s)>` | `{decade}` |
 | `<number of minutes>` | `{duration_minutes}` |
 | `<episode number>` | `{episode_number}` |
+| `<filter word (rock, jazz)>` | `{filter}` |
 | `<music genre>` | `{genre}` |
 | `<what to ask (title, artist, album)>` | `{media_info_type}` |
 | `<media type (music, video)>` | `{media_type}` |
@@ -1801,7 +1811,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (445 phrases across 59 commands):
+Complete phrase list (447 phrases across 60 commands):
 
 #### Play music
 
@@ -2296,6 +2306,8 @@ Complete phrase list (445 phrases across 59 commands):
 - `show me <category (artists, albums, movies)>`
 - `list <category (artists, albums, movies)>`
 - `what <category (artists, albums, movies)> do i have`
+- `browse genres <filter word (rock, jazz)>`
+- `list genres <filter word (rock, jazz)>`
 
 **Get a recommendation**
 
@@ -2373,7 +2385,7 @@ Complete phrase list (445 phrases across 59 commands):
 - `take over playback`
 - `keep playing`
 
-**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
+**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
 
 #### Timers and reminders
 
@@ -2436,6 +2448,7 @@ Placeholder legend:
 | `<decade (the 80s)>` | `{decade}` |
 | `<number of minutes>` | `{duration_minutes}` |
 | `<episode number>` | `{episode_number}` |
+| `<filter word (rock, jazz)>` | `{filter}` |
 | `<music genre>` | `{genre}` |
 | `<what to ask (title, artist, album)>` | `{media_info_type}` |
 | `<media type (music, video)>` | `{media_type}` |
@@ -2454,7 +2467,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (541 phrases across 59 commands):
+Complete phrase list (543 phrases across 60 commands):
 
 #### Play music
 
@@ -3041,6 +3054,8 @@ Complete phrase list (541 phrases across 59 commands):
 - `show me <category (artists, albums, movies)>`
 - `list <category (artists, albums, movies)>`
 - `what <category (artists, albums, movies)> do i have`
+- `browse genres <filter word (rock, jazz)>`
+- `show me genres <filter word (rock, jazz)>`
 
 **Get a recommendation**
 
@@ -3122,7 +3137,7 @@ Complete phrase list (541 phrases across 59 commands):
 - `pick up where I left off`
 - `carry on playing`
 
-**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
+**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
 
 #### Timers and reminders
 
@@ -3185,6 +3200,7 @@ Placeholder legend:
 | `<decade (the 80s)>` | `{decade}` |
 | `<number of minutes>` | `{duration_minutes}` |
 | `<episode number>` | `{episode_number}` |
+| `<filter word (rock, jazz)>` | `{filter}` |
 | `<music genre>` | `{genre}` |
 | `<what to ask (title, artist, album)>` | `{media_info_type}` |
 | `<media type (music, video)>` | `{media_type}` |
@@ -3203,7 +3219,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (446 phrases across 59 commands):
+Complete phrase list (448 phrases across 60 commands):
 
 #### Play music
 
@@ -3700,6 +3716,8 @@ Complete phrase list (446 phrases across 59 commands):
 - `show me <category (artists, albums, movies)>`
 - `list <category (artists, albums, movies)>`
 - `what <category (artists, albums, movies)> do i have`
+- `browse genres <filter word (rock, jazz)>`
+- `show me genres <filter word (rock, jazz)>`
 
 **Get a recommendation**
 
@@ -3776,7 +3794,7 @@ Complete phrase list (446 phrases across 59 commands):
 - `resume from where I left off`
 - `take over playback`
 
-**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
+**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
 
 #### Timers and reminders
 
@@ -3839,6 +3857,7 @@ Placeholder legend:
 | `<decade (the 80s)>` | `{decade}` |
 | `<number of minutes>` | `{duration_minutes}` |
 | `<episode number>` | `{episode_number}` |
+| `<filter word (rock, jazz)>` | `{filter}` |
 | `<music genre>` | `{genre}` |
 | `<what to ask (title, artist, album)>` | `{media_info_type}` |
 | `<media type (music, video)>` | `{media_type}` |
@@ -3864,7 +3883,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (556 phrases across 61 commands):
+Complete phrase list (558 phrases across 62 commands):
 
 #### Play music
 
@@ -4437,6 +4456,8 @@ Complete phrase list (556 phrases across 61 commands):
 - `show me <category (artists, albums, movies)>`
 - `list <category (artists, albums, movies)>`
 - `what <category (artists, albums, movies)> do i have`
+- `browse genres <filter word (rock, jazz)>`
+- `show me genres <filter word (rock, jazz)>`
 
 **Get a recommendation**
 
@@ -4553,7 +4574,7 @@ Complete phrase list (556 phrases across 61 commands):
 - `pick up where I left off`
 - `carry on playing`
 
-**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
+**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
 
 #### Timers and reminders
 
@@ -4616,6 +4637,7 @@ Placeholder legend:
 | `<décennie (les années 80)>` | `{decade}` |
 | `<nombre de minutes>` | `{duration_minutes}` |
 | `<numéro d'épisode>` | `{episode_number}` |
+| `<filtre (rock, jazz)>` | `{filter}` |
 | `<genre musical>` | `{genre}` |
 | `<information (titre, artiste, album)>` | `{media_info_type}` |
 | `<type de média (musique, vidéo)>` | `{media_type}` |
@@ -4634,7 +4656,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (413 phrases across 60 commands):
+Complete phrase list (415 phrases across 63 commands):
 
 #### Play music
 
@@ -5119,6 +5141,8 @@ Complete phrase list (413 phrases across 60 commands):
 - `lister <catégorie (artistes, albums, films)>`
 - `quels <catégorie (artistes, albums, films)> ai-je`
 - `quels <catégorie (artistes, albums, films)> y a-t-il`
+- `parcourir genres <filtre (rock, jazz)>`
+- `montre-moi genres <filtre (rock, jazz)>`
 
 **Get a recommendation**
 
@@ -5185,7 +5209,7 @@ Complete phrase list (413 phrases across 60 commands):
 - `reprendre la lecture`
 - `transférer la lecture`
 
-**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over): Alexa understands these natively; say them the usual way.
+**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
 
 #### Timers and reminders
 
@@ -5246,6 +5270,7 @@ Placeholder legend:
 | `<décennie (les années 80)>` | `{decade}` |
 | `<nombre de minutes>` | `{duration_minutes}` |
 | `<numéro d'épisode>` | `{episode_number}` |
+| `<filtre (rock, jazz)>` | `{filter}` |
 | `<genre musical>` | `{genre}` |
 | `<information (titre, artiste, album)>` | `{media_info_type}` |
 | `<type de média (musique, vidéo)>` | `{media_type}` |
@@ -5264,7 +5289,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (424 phrases across 60 commands):
+Complete phrase list (426 phrases across 63 commands):
 
 #### Play music
 
@@ -5758,6 +5783,8 @@ Complete phrase list (424 phrases across 60 commands):
 - `lister <catégorie (artistes, albums, films)>`
 - `quels <catégorie (artistes, albums, films)> ai-je`
 - `quels <catégorie (artistes, albums, films)> y a-t-il`
+- `parcourir genres <filtre (rock, jazz)>`
+- `montre-moi genres <filtre (rock, jazz)>`
 
 **Get a recommendation**
 
@@ -5826,7 +5853,7 @@ Complete phrase list (424 phrases across 60 commands):
 - `transférer la lecture`
 - `reprendre où j'en étais`
 
-**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over): Alexa understands these natively; say them the usual way.
+**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
 
 #### Timers and reminders
 
@@ -5887,6 +5914,7 @@ Placeholder legend:
 | `<Jahrzehnt (die 80er)>` | `{decade}` |
 | `<Anzahl Minuten>` | `{duration_minutes}` |
 | `<Episodennummer>` | `{episode_number}` |
+| `<Filterwort (Rock, Jazz)>` | `{filter}` |
 | `<Musikgenre>` | `{genre}` |
 | `<gewünschte Info (Titel, Künstler, Album)>` | `{media_info_type}` |
 | `<Medientyp (Musik, Video)>` | `{media_type}` |
@@ -5905,7 +5933,7 @@ Placeholder legend:
 | `<Wörter aus dem Songtitel>` | `{titleKeywords}` |
 | `<Benutzername>` | `{username}` |
 
-Complete phrase list (428 phrases across 60 commands):
+Complete phrase list (430 phrases across 63 commands):
 
 #### Play music
 
@@ -6402,6 +6430,8 @@ Complete phrase list (428 phrases across 60 commands):
 - `liste <Kategorie (Künstler, Alben, Filme)>`
 - `welche <Kategorie (Künstler, Alben, Filme)> habe ich`
 - `welche <Kategorie (Künstler, Alben, Filme)> gibt es`
+- `durchsuche genres <Filterwort (Rock, Jazz)>`
+- `zeige mir genres <Filterwort (Rock, Jazz)>`
 
 **Get a recommendation**
 
@@ -6471,7 +6501,7 @@ Complete phrase list (428 phrases across 60 commands):
 - `weiter abspielen`
 - `musik mitnehmen`
 
-**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over): Alexa understands these natively; say them the usual way.
+**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
 
 #### Timers and reminders
 
@@ -6532,6 +6562,7 @@ Placeholder legend:
 | `<दशक (80 का दशक)>` | `{decade}` |
 | `<मिनट की संख्या>` | `{duration_minutes}` |
 | `<एपिसोड नंबर>` | `{episode_number}` |
+| `<फ़िल्टर (रॉक, जैज़)>` | `{filter}` |
 | `<संगीत शैली>` | `{genre}` |
 | `<जानकारी (शीर्षक, कलाकार, एल्बम)>` | `{media_info_type}` |
 | `<मीडिया प्रकार (म्यूज़िक, वीडियो)>` | `{media_type}` |
@@ -6551,7 +6582,7 @@ Placeholder legend:
 | `<गाने के नाम के शब्द>` | `{titleKeywords}` |
 | `<उपयोगकर्ता का नाम>` | `{username}` |
 
-Complete phrase list (322 phrases across 59 commands):
+Complete phrase list (324 phrases across 60 commands):
 
 #### Play music
 
@@ -6936,6 +6967,8 @@ Complete phrase list (322 phrases across 59 commands):
 - `<श्रेणी (कलाकार, एल्बम, फिल्में)> की लिस्ट दो`
 - `मेरे पास कौन से <श्रेणी (कलाकार, एल्बम, फिल्में)> हैं`
 - `क्या <श्रेणी (कलाकार, एल्बम, फिल्में)> हैं`
+- `शैलियाँ <फ़िल्टर (रॉक, जैज़)> ब्राउज़ करो`
+- `मुझे शैलियाँ <फ़िल्टर (रॉक, जैज़)> दिखाओ`
 
 **Get a recommendation**
 
@@ -7003,7 +7036,7 @@ Complete phrase list (322 phrases across 59 commands):
 - `चलाना जारी रखो`
 - `जहां छोड़ा थे वहां से शुरू करो`
 
-**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
+**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
 
 #### Timers and reminders
 
@@ -7064,6 +7097,7 @@ Placeholder legend:
 | `<ordinale (primo, secondo)>` | `{direction}` |
 | `<numero di minuti>` | `{duration_minutes}` |
 | `<numero dell'episodio>` | `{episode_number}` |
+| `<filtro (rock, jazz)>` | `{filter}` |
 | `<genere musicale>` | `{genre}` |
 | `<informazione (titolo, artista, album)>` | `{media_info_type}` |
 | `<tipo di contenuto (musica, video)>` | `{media_type}` |
@@ -7082,7 +7116,7 @@ Placeholder legend:
 | `<titolo del video o del film>` | `{title}` |
 | `<parole del titolo del brano>` | `{titleKeywords}` |
 
-Complete phrase list (1438 phrases across 60 commands):
+Complete phrase list (1440 phrases across 63 commands):
 
 #### Play music
 
@@ -8569,6 +8603,8 @@ Complete phrase list (1438 phrases across 60 commands):
 - `quali <categoria (artisti, album, film)> ci sono`
 - `che <categoria (artisti, album, film)> ci sono`
 - `che <categoria (artisti, album, film)> abbiamo`
+- `Sfoglia i generi <filtro (rock, jazz)>`
+- `Mostra i generi <filtro (rock, jazz)>`
 
 **Get a recommendation**
 
@@ -8662,7 +8698,7 @@ Complete phrase list (1438 phrases across 60 commands):
 - `ferma la riproduzione`
 - `stop`
 
-**Built-in commands, no custom phrases in this language** (Pause, Resume, Next track, Previous track, Shuffle on, Shuffle off, Start over): Alexa understands these natively; say them the usual way.
+**Built-in commands, no custom phrases in this language** (Pause, Resume, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
 
 #### Timers and reminders
 
@@ -8722,6 +8758,7 @@ Placeholder legend:
 | `<年代 (80年代)>` | `{decade}` |
 | `<分数>` | `{duration_minutes}` |
 | `<エピソード番号>` | `{episode_number}` |
+| `<フィルター（ロック、ジャズ）>` | `{filter}` |
 | `<ジャンル>` | `{genre}` |
 | `<情報の種類 (タイトル、アーティスト、アルバム)>` | `{media_info_type}` |
 | `<メディアの種類 (音楽、ビデオ)>` | `{media_type}` |
@@ -8741,7 +8778,7 @@ Placeholder legend:
 | `<曲名のキーワード>` | `{titleKeywords}` |
 | `<ユーザー名>` | `{username}` |
 
-Complete phrase list (303 phrases across 59 commands):
+Complete phrase list (304 phrases across 60 commands):
 
 #### Play music
 
@@ -8867,7 +8904,6 @@ Complete phrase list (303 phrases across 59 commands):
 
 - `ビデオ <動画または映画のタイトル> を再生して`
 - `動画 <動画または映画のタイトル> を流して`
-- `<動画または映画のタイトル> を再生して`
 - `<動画または映画のタイトル> を見たい`
 - `<動画または映画のタイトル> を見せて`
 - `映画 <動画または映画のタイトル> を再生して`
@@ -9109,6 +9145,8 @@ Complete phrase list (303 phrases across 59 commands):
 - `<カテゴリ (アーティスト、アルバム、映画)> のリスト`
 - `どんな <カテゴリ (アーティスト、アルバム、映画)> がある`
 - `<カテゴリ (アーティスト、アルバム、映画)> は何がある`
+- `ジャンル <フィルター（ロック、ジャズ）> をブラウズして`
+- `ジャンル <フィルター（ロック、ジャズ）> を見せて`
 
 **Get a recommendation**
 
@@ -9174,7 +9212,7 @@ Complete phrase list (303 phrases across 59 commands):
 - `続きから再生`
 - `再生を引き継ぐ`
 
-**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
+**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
 
 #### Timers and reminders
 
@@ -9234,6 +9272,7 @@ Placeholder legend:
 | `<década (anos 80)>` | `{decade}` |
 | `<número de minutos>` | `{duration_minutes}` |
 | `<número do episódio>` | `{episode_number}` |
+| `<filtro (rock, jazz)>` | `{filter}` |
 | `<gênero musical>` | `{genre}` |
 | `<informação (título, artista, álbum)>` | `{media_info_type}` |
 | `<tipo de mídia (música, vídeo)>` | `{media_type}` |
@@ -9253,7 +9292,7 @@ Placeholder legend:
 | `<palavras do título da música>` | `{titleKeywords}` |
 | `<nome do usuário>` | `{username}` |
 
-Complete phrase list (375 phrases across 59 commands):
+Complete phrase list (377 phrases across 60 commands):
 
 #### Play music
 
@@ -9683,6 +9722,8 @@ Complete phrase list (375 phrases across 59 commands):
 - `listar <categoria (artistas, álbuns, filmes)>`
 - `quais <categoria (artistas, álbuns, filmes)> eu tenho`
 - `quais <categoria (artistas, álbuns, filmes)> existem`
+- `navegar gêneros <filtro (rock, jazz)>`
+- `mostrar gêneros <filtro (rock, jazz)>`
 
 **Get a recommendation**
 
@@ -9755,7 +9796,7 @@ Complete phrase list (375 phrases across 59 commands):
 - `retomar a reprodução`
 - `transferir a música`
 
-**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
+**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
 
 #### Timers and reminders
 
@@ -9818,6 +9859,7 @@ Placeholder legend:
 | `<década (los ochenta)>` | `{decade}` |
 | `<número de minutos>` | `{duration_minutes}` |
 | `<número de episodio>` | `{episode_number}` |
+| `<filtro (rock, jazz)>` | `{filter}` |
 | `<género musical>` | `{genre}` |
 | `<dato (título, artista, álbum)>` | `{media_info_type}` |
 | `<tipo de contenido (música, vídeo)>` | `{media_type}` |
@@ -9836,7 +9878,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (402 phrases across 59 commands):
+Complete phrase list (404 phrases across 60 commands):
 
 #### Play music
 
@@ -10299,6 +10341,8 @@ Complete phrase list (402 phrases across 59 commands):
 - `lista <categoría (artistas, álbumes, películas)>`
 - `qué <categoría (artistas, álbumes, películas)> tengo`
 - `qué <categoría (artistas, álbumes, películas)> hay`
+- `explorar géneros <filtro (rock, jazz)>`
+- `muéstrame géneros <filtro (rock, jazz)>`
 
 **Get a recommendation**
 
@@ -10367,7 +10411,7 @@ Complete phrase list (402 phrases across 59 commands):
 - `retomar reproducción`
 - `transferir la música`
 
-**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
+**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
 
 #### Timers and reminders
 
@@ -10428,6 +10472,7 @@ Placeholder legend:
 | `<década (los ochenta)>` | `{decade}` |
 | `<número de minutos>` | `{duration_minutes}` |
 | `<número de episodio>` | `{episode_number}` |
+| `<filtro (rock, jazz)>` | `{filter}` |
 | `<género musical>` | `{genre}` |
 | `<dato (título, artista, álbum)>` | `{media_info_type}` |
 | `<tipo de contenido (música, vídeo)>` | `{media_type}` |
@@ -10446,7 +10491,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (396 phrases across 59 commands):
+Complete phrase list (398 phrases across 60 commands):
 
 #### Play music
 
@@ -10905,6 +10950,8 @@ Complete phrase list (396 phrases across 59 commands):
 - `lista <categoría (artistas, álbumes, películas)>`
 - `qué <categoría (artistas, álbumes, películas)> tengo`
 - `qué <categoría (artistas, álbumes, películas)> hay`
+- `explorar géneros <filtro (rock, jazz)>`
+- `muéstrame géneros <filtro (rock, jazz)>`
 
 **Get a recommendation**
 
@@ -10971,7 +11018,7 @@ Complete phrase list (396 phrases across 59 commands):
 - `seguir escuchando`
 - `retomar reproducción`
 
-**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
+**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
 
 #### Timers and reminders
 
@@ -11032,6 +11079,7 @@ Placeholder legend:
 | `<década (los ochenta)>` | `{decade}` |
 | `<número de minutos>` | `{duration_minutes}` |
 | `<número de episodio>` | `{episode_number}` |
+| `<filtro (rock, jazz)>` | `{filter}` |
 | `<género musical>` | `{genre}` |
 | `<dato (título, artista, álbum)>` | `{media_info_type}` |
 | `<tipo de contenido (música, vídeo)>` | `{media_type}` |
@@ -11050,7 +11098,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (390 phrases across 59 commands):
+Complete phrase list (392 phrases across 60 commands):
 
 #### Play music
 
@@ -11503,6 +11551,8 @@ Complete phrase list (390 phrases across 59 commands):
 - `lista <categoría (artistas, álbumes, películas)>`
 - `qué <categoría (artistas, álbumes, películas)> tengo`
 - `qué <categoría (artistas, álbumes, películas)> hay`
+- `explorar géneros <filtro (rock, jazz)>`
+- `lista géneros <filtro (rock, jazz)>`
 
 **Get a recommendation**
 
@@ -11569,7 +11619,7 @@ Complete phrase list (390 phrases across 59 commands):
 - `seguir escuchando`
 - `retomar reproducción`
 
-**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
+**Built-in commands, no custom phrases in this language** (Pause, Resume, Stop, Next track, Previous track, Shuffle on, Shuffle off, Start over, Repeat, Repeat all on, Repeat all off): Alexa understands these natively; say them the usual way.
 
 #### Timers and reminders
 
@@ -11671,6 +11721,7 @@ The body above is user-facing and never names intents or handlers. This table ma
 | Playback control | Shuffle on | `AMAZON.ShuffleOnIntent` |
 | Playback control | Shuffle off | `AMAZON.ShuffleOffIntent` |
 | Playback control | Start over | `AMAZON.StartOverIntent` |
+| Playback control | Repeat | `AMAZON.RepeatIntent` |
 | Playback control | Repeat all on | `AMAZON.LoopOnIntent` |
 | Playback control | Repeat all off | `AMAZON.LoopOffIntent` |
 | Timers and reminders | Set a sleep timer | `SleepTimerIntent` |

@@ -1,7 +1,7 @@
 # Spanish (Mexico) interaction model template for the Alexa skill.
 #
 # JF-316 milestone 3: golden master. Faithful transcription of the
-# hand-grown model_es-MX.json (59 intents, 396 samples);
+# hand-grown model_es-MX.json (60 intents, 396 samples);
 # `python3 scripts/generate_interaction_model.py es-MX` reproduces it
 # byte-identically.
 #
@@ -64,6 +64,7 @@ intents:
   - AMAZON.ShuffleOnIntent
   - AMAZON.ShuffleOffIntent
   - AMAZON.StartOverIntent
+  - AMAZON.RepeatIntent
   - name: PlayChannelIntent
     samples:
       - Pon el canal {channel}

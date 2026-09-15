@@ -55,16 +55,11 @@ public class FallbackIntentHandler : BaseHandler
     /// <returns>Notification about an error.</returns>
     public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
+        // JF-562: this body only ever sees AMAZON.FallbackIntent (CanHandle is the
+        // gate and every dispatch path goes through it), so the historical
+        // "unsupported built-in" branch was dead code and is gone; a built-in no
+        // handler claims answers CouldNotUnderstand at the controller instead.
         string locale = GetLocale(request);
-        IntentRequest intentRequest = (IntentRequest)request;
-
-        // For unsupported built-in intents, give a specific message
-        if (intentRequest.Intent.Name.StartsWith("AMAZON.", System.StringComparison.Ordinal)
-            && !string.Equals(intentRequest.Intent.Name, IntentNames.AmazonFallback, System.StringComparison.Ordinal))
-        {
-            Logger.LogDebug("FallbackIntent: unsupported built-in intent '{IntentName}', returning UnsupportedIntent", intentRequest.Intent.Name);
-            return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("UnsupportedIntent", locale)));
-        }
 
         Logger.LogDebug("FallbackIntent: unmatched input, returning CouldNotUnderstand");
         return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("CouldNotUnderstand", locale)));

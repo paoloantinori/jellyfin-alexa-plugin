@@ -1615,7 +1615,8 @@ public abstract class BaseHandler
     /// (its mirror case: a VideoApp-shaped launch of audio content degrading to
     /// AudioPlayer) so every audio-shaped launch of a video item benefits; the wired
     /// sites are the resume-yes path, the ResumeIntent tail, the session-queue resume,
-    /// JumpToPosition (absolute target) and the degradation itself.
+    /// JumpToPosition (absolute target), the degradation itself and the RepeatIntent
+    /// music restart (JF-562).
     /// JF-522: the resolve is a PURE decision (no store writes). The launch base it
     /// computes rides out on <see cref="AudioLaunchSource.LaunchBaseMs"/> and is
     /// recorded in the device's launch-SCOPE store only when the caller issues the

@@ -77,6 +77,12 @@
         ]
       },
       {
+        "name": "AMAZON.LoopOnIntent"
+      },
+      {
+        "name": "AMAZON.LoopOffIntent"
+      },
+      {
         "name": "AMAZON.ShuffleOnIntent"
       },
       {
@@ -84,6 +90,9 @@
       },
       {
         "name": "AMAZON.StartOverIntent"
+      },
+      {
+        "name": "AMAZON.RepeatIntent"
       },
       {
         "name": "PlayChannelIntent",

@@ -38,9 +38,12 @@ internal static class IntentNames
     public const string PlayNextEpisode = "PlayNextEpisodeIntent";
 
     // JF-450 loop-mode vocabulary: de-DE, fr-FR, fr-CA and it-IT declare the custom
-    // loop intents instead of the AMAZON.LoopOn/LoopOff built-ins the other locales
-    // use (locale vocabulary: "Ripeti la canzone", "Répète la chanson", "Lied
-    // wiederholen"), so the loop handlers' CanHandle accepts BOTH names per mode:
+    // loop intents (locale vocabulary: "Ripeti la canzone", "Répète la chanson",
+    // "Lied wiederholen"); since JF-562 they ALSO declare the AMAZON.LoopOn/LoopOff
+    // built-ins like every other locale. The loop handlers' CanHandle keeps
+    // accepting BOTH names per mode (do not remove the dual accept: Amazon-side
+    // models built before the JF-562 declarations still deliver only the custom
+    // names, and the built-ins can win NLU in these four locales):
     // LoopAllOnIntent pairs with AMAZON.LoopOnIntent (repeat-all),
     // LoopAllOffIntent with AMAZON.LoopOffIntent (repeat-none), and
     // RepeatSingleOnIntent is the repeat-one sibling of LoopSongOnIntent.
@@ -81,6 +84,7 @@ internal static class IntentNames
     public const string AmazonShuffleOff = "AMAZON.ShuffleOffIntent";
     public const string AmazonShuffleOn = "AMAZON.ShuffleOnIntent";
     public const string AmazonStartOver = "AMAZON.StartOverIntent";
+    public const string AmazonRepeat = "AMAZON.RepeatIntent";
     public const string AmazonYes = "AMAZON.YesIntent";
     public const string AmazonNo = "AMAZON.NoIntent";
 

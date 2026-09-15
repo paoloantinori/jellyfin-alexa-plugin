@@ -34,6 +34,16 @@ tests:
     expected_intent: RepeatSingleOnIntent
     expected_slots: {}
 
+  # JF-562 pin attempt, SKIPPED: fr-FR is the SHARTEST overlap with the newly
+  # declared AMAZON.RepeatIntent (samples []) because RepeatSingleOnIntent
+  # carries the BARE sample "Répète". Whether the bare form flips to the
+  # built-in is live-unprobed (profile-nlu, post-deploy). Probe, then drop
+  # skip_reason and set the real expectation either way.
+  - utterance: "Répète"
+    expected_intent: AMAZON.RepeatIntent
+    expected_slots: {}
+    skip_reason: "bare 'Répète' routing to the newly declared built-in vs RepeatSingleOnIntent is live-unprobed (JF-562); sharpest overlap since the custom intent carries the bare sample"
+
   # -------------------------------------------------------------------------
   # 4. PlayChannelIntent (channel)
   # -------------------------------------------------------------------------

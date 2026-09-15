@@ -1,7 +1,7 @@
 # Japanese (Japan) interaction model template for the Alexa skill.
 #
 # JF-316 milestone 5 (final): golden master. Faithful transcription of
-# the hand-grown model_ja-JP.json (59 intents, 303 samples after the JF-399
+# the hand-grown model_ja-JP.json (60 intents, 303 samples after the JF-399
 # PlaySong/PlayPlaylist enrichment 2026-09-12, which also deduplicated the
 # two identical '{musician} を流して' PlayArtistSongsIntent samples that the
 # glued-slot fix had made literal twins);
@@ -109,6 +109,7 @@ intents:
   - AMAZON.ShuffleOnIntent
   - AMAZON.ShuffleOffIntent
   - AMAZON.StartOverIntent
+  - AMAZON.RepeatIntent
   - name: PlayChannelIntent
     samples:
       - チャンネル {channel} を再生して

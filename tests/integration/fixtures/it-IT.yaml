@@ -44,6 +44,16 @@ tests:
     expected_intent: RepeatSingleOnIntent
     expected_slots: {}
 
+  # JF-562 pin attempt, SKIPPED: AMAZON.RepeatIntent is declared (samples [])
+  # in all 17 models with a RepeatIntentHandler behind it. Whether the bare
+  # "ripeti" resolves to the BUILT-IN or stays with the curated Ripeti family
+  # above is live-unprobed (profile-nlu, post-deploy). Probe, then drop
+  # skip_reason and set the real expectation either way.
+  - utterance: "ripeti"
+    expected_intent: AMAZON.RepeatIntent
+    expected_slots: {}
+    skip_reason: "bare 'ripeti' routing to the newly declared built-in vs RepeatSingleOnIntent is live-unprobed (JF-562)"
+
   # JF-439: the coin-flip state of the musician-shaped title region. Pins the
   # CURRENT routing so a future model edit that re-flips it flags here for
   # triage; the handler fallback serves the song either way (unit-proven in

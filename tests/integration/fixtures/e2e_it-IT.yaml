@@ -68,6 +68,20 @@ tests:
     expected_slots: {}
     expected_response_type: any
 
+  # JF-562 pin attempt, SKIPPED: AMAZON.RepeatIntent is declared (samples []) in
+  # all 17 models with a RepeatIntentHandler behind it (music restarts the
+  # current track; no playback in a fresh simulate session answers
+  # NoMediaPlaying). The ROUTING of the bare "ripeti" one-shot is the unprobed
+  # part: it may resolve to the curated RepeatSingleOnIntent family
+  # ("Ripeti la canzone", JF-438) instead of the built-in. Probe live
+  # (simulate-skill), then drop skip_reason and set the real expectation.
+  - utterance: "ripeti"
+    expected_intent: AMAZON.RepeatIntent
+    expected_slots: {}
+    expected_response_type: any
+    expected_speech_contains: "Nessun contenuto in riproduzione"
+    skip_reason: "bare 'ripeti' one-shot routing to the built-in vs RepeatSingleOnIntent is live-unprobed (JF-562); handler behavior unit-pinned in RepeatIntentHandlerTests"
+
   # --- Play by artist (in-memory index) ---
   # Exact match
   - utterance: "metti una canzone dei soul coughing"

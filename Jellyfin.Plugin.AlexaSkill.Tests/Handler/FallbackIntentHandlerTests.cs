@@ -135,26 +135,6 @@ public class FallbackIntentHandlerTests : PluginTestBase
         Assert.NotNull(response.Response?.OutputSpeech);
     }
 
-    [Fact]
-    public async Task HandleAsync_UnsupportedAmazonIntent_ReturnsUnsupportedMessage()
-    {
-        var handler = CreateHandler();
-        var request = new IntentRequest
-        {
-            Intent = new Intent { Name = "AMAZON.RepeatIntent" },
-            Locale = "en-US",
-            RequestId = "test-req"
-        };
-        var context = CreateContext();
-        var user = CreateUser();
-        var session = CreateSession();
-
-        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
-
-        Assert.NotNull(response);
-        Assert.NotNull(response.Response?.OutputSpeech);
-    }
-
     // ========== JF-397: state-aware fallback re-prompts instead of killing the session ==========
 
     private static IntentRequest FallbackRequest()
