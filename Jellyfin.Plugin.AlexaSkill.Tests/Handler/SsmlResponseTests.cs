@@ -4,6 +4,7 @@ using Alexa.NET.Assertions;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Xunit;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
@@ -12,7 +13,7 @@ public class SsmlResponseTests
     [Fact]
     public void TellSsml_WrapsInSpeakTags()
     {
-        var response = BaseHandler.TellSsml("Hello world");
+        var response = SpeechBuilder.TellSsml("Hello world");
 
         var speech = response.Tells<SsmlOutputSpeech>();
         Assert.Equal("<speak>Hello world</speak>", speech.Ssml);
@@ -21,7 +22,7 @@ public class SsmlResponseTests
     [Fact]
     public void AskSsml_WithStrings_ReturnsOpenSession()
     {
-        var response = BaseHandler.AskSsml("Main prompt", "Reprompt text");
+        var response = SpeechBuilder.AskSsml("Main prompt", "Reprompt text");
 
         var mainSpeech = response.Asks<SsmlOutputSpeech>();
         Assert.Equal("<speak>Main prompt</speak>", mainSpeech.Ssml);
@@ -33,7 +34,7 @@ public class SsmlResponseTests
     public void AskSsml_WithRepromptObject_ReturnsOpenSession()
     {
         var reprompt = new Reprompt("plain text");
-        var response = BaseHandler.AskSsml("SSML prompt", reprompt);
+        var response = SpeechBuilder.AskSsml("SSML prompt", reprompt);
 
         response.Asks<SsmlOutputSpeech>();
         Assert.IsType<PlainTextOutputSpeech>(response.Response.Reprompt.OutputSpeech);
@@ -42,14 +43,14 @@ public class SsmlResponseTests
     [Fact]
     public void GetSsml_ReturnsNull_WhenKeyMissing()
     {
-        string? result = BaseHandler.GetSsml("NonExistentKey12345", "en-US");
+        string? result = SpeechBuilder.GetSsml("NonExistentKey12345", "en-US");
         Assert.Null(result);
     }
 
     [Fact]
     public void GetSsml_ReturnsFormattedSsml_WhenKeyExists()
     {
-        string? result = BaseHandler.GetSsml("NowPlayingSsml", "en-US", "Test Song");
+        string? result = SpeechBuilder.GetSsml("NowPlayingSsml", "en-US", "Test Song");
         Assert.NotNull(result);
         Assert.Contains("Test Song", result);
         Assert.Contains("emphasis", result);
@@ -58,7 +59,7 @@ public class SsmlResponseTests
     [Fact]
     public void GetSsml_TrackByArtistSsml_ContainsBreakTag()
     {
-        string? result = BaseHandler.GetSsml("TrackByArtistSsml", "en-US", "Song", "Artist");
+        string? result = SpeechBuilder.GetSsml("TrackByArtistSsml", "en-US", "Song", "Artist");
         Assert.NotNull(result);
         Assert.Contains("Song", result);
         Assert.Contains("Artist", result);
@@ -68,7 +69,7 @@ public class SsmlResponseTests
     [Fact]
     public void GetSsml_DisambiguatePromptSsml_ContainsEmphasis()
     {
-        string? result = BaseHandler.GetSsml("DisambiguatePromptSsml", "en-US", "Track Name");
+        string? result = SpeechBuilder.GetSsml("DisambiguatePromptSsml", "en-US", "Track Name");
         Assert.NotNull(result);
         Assert.Contains("Track Name", result);
         Assert.Contains("emphasis", result);
@@ -77,7 +78,7 @@ public class SsmlResponseTests
     [Fact]
     public void GetSsml_ItalianLocale_ReturnsSsml()
     {
-        string? result = BaseHandler.GetSsml("NowPlayingSsml", "it-IT", "Brano Test");
+        string? result = SpeechBuilder.GetSsml("NowPlayingSsml", "it-IT", "Brano Test");
         Assert.NotNull(result);
         Assert.Contains("Brano Test", result);
         Assert.Contains("emphasis", result);
@@ -87,7 +88,7 @@ public class SsmlResponseTests
     public void GetSsml_FallsBackToEnUs_WhenLocaleMissing()
     {
         // Locale without SSML keys should fall back to en-US
-        string? result = BaseHandler.GetSsml("NowPlayingSsml", "ja-JP", "Test");
+        string? result = SpeechBuilder.GetSsml("NowPlayingSsml", "ja-JP", "Test");
         Assert.NotNull(result);
         Assert.Contains("Test", result);
     }
@@ -95,7 +96,7 @@ public class SsmlResponseTests
     [Fact]
     public void EscapeXml_AllReservedChars_Escaped()
     {
-        Assert.Equal("a&amp;b&lt;c&gt;d&quot;e&apos;f", BaseHandler.EscapeXml("a&b<c>d\"e'f"));
+        Assert.Equal("a&amp;b&lt;c&gt;d&quot;e&apos;f", SpeechBuilder.EscapeXml("a&b<c>d\"e'f"));
     }
 
     [Fact]
@@ -104,7 +105,7 @@ public class SsmlResponseTests
         // JF-323: a name with SSML-reserved chars must be escaped before interpolation into
         // <speak>, else invalid SSML -> InvalidResponse. Call sites wrap names in EscapeXml.
         string name = "Rock & Roll <Live>";
-        string? ssml = BaseHandler.GetSsml("NowPlayingSsml", "en-US", BaseHandler.EscapeXml(name));
+        string? ssml = SpeechBuilder.GetSsml("NowPlayingSsml", "en-US", SpeechBuilder.EscapeXml(name));
 
         Assert.NotNull(ssml);
         Assert.Contains("Rock &amp; Roll &lt;Live&gt;", ssml);
@@ -116,7 +117,7 @@ public class SsmlResponseTests
     {
         // JF-350: the SSML path escapes reserved chars inside BuildOutputSpeech now
         // (callers pass raw names). Output must be well-formed SSML with "&amp;".
-        var speech = BaseHandler.BuildOutputSpeech("NowPlayingSsml", "NowPlaying", "en-US", "Rock & Roll");
+        var speech = SpeechBuilder.BuildOutputSpeech("NowPlayingSsml", "NowPlaying", "en-US", "Rock & Roll");
 
         var ssml = Assert.IsType<SsmlOutputSpeech>(speech);
         Assert.Contains("Rock &amp; Roll", ssml.Ssml);
@@ -129,7 +130,7 @@ public class SsmlResponseTests
     {
         // JF-350: when the SSML key is missing, the plain-text fallback must keep the RAW
         // arg — the user must hear "&", not the SSML-escaped "&amp;".
-        var speech = BaseHandler.BuildOutputSpeech("NonExistentSsmlKey12345", "NowPlaying", "en-US", "Tom & Jerry");
+        var speech = SpeechBuilder.BuildOutputSpeech("NonExistentSsmlKey12345", "NowPlaying", "en-US", "Tom & Jerry");
 
         var plain = Assert.IsType<PlainTextOutputSpeech>(speech);
         Assert.Contains("Tom & Jerry", plain.Text);
@@ -139,7 +140,7 @@ public class SsmlResponseTests
     [Fact]
     public void BuildNowPlayingSpeech_AnnounceOn_ReturnsSpeech()
     {
-        Assert.NotNull(BaseHandler.BuildNowPlayingSpeech("Test Song", "en-US", announceOn: true));
+        Assert.NotNull(SpeechBuilder.BuildNowPlayingSpeech("Test Song", "en-US", announceOn: true));
     }
 
     [Fact]
@@ -147,6 +148,40 @@ public class SsmlResponseTests
     {
         // When the announce setting is off, the helper suppresses the now-playing announce
         // (returns null -> no OutputSpeech on the launch response).
-        Assert.Null(BaseHandler.BuildNowPlayingSpeech("Test Song", "en-US", announceOn: false));
+        Assert.Null(SpeechBuilder.BuildNowPlayingSpeech("Test Song", "en-US", announceOn: false));
+    }
+
+    [Fact]
+    public void AskLocalized_SsmlKeyExists_ReturnsSsmlPromptWithPlainTextReprompt()
+    {
+        var response = SpeechBuilder.AskLocalized(
+            "ResumePromptSsml", "ResumePrompt", "ResumeReprompt", "en-US", "Rock & Roll");
+
+        Assert.False(response.Response.ShouldEndSession ?? true);
+        var speech = Assert.IsType<SsmlOutputSpeech>(response.Response.OutputSpeech);
+        // The SSML path escapes reserved chars in string args, exactly once
+        // (JF-407 contract): "Rock & Roll" becomes "Rock &amp; Roll", never the
+        // raw ampersand and never a double escape.
+        Assert.Contains("Rock &amp; Roll", speech.Ssml);
+        Assert.DoesNotContain("Rock & Roll", speech.Ssml);
+        Assert.StartsWith("<speak>", speech.Ssml);
+        Assert.True(System.Xml.Linq.XDocument.Parse(speech.Ssml) != null, "SSML must be well-formed XML");
+        var reprompt = Assert.IsType<PlainTextOutputSpeech>(response.Response.Reprompt.OutputSpeech);
+        Assert.Equal("Would you like to continue where you left off?", reprompt.Text);
+    }
+
+    [Fact]
+    public void AskLocalized_MissingSsmlKey_FallsBackToPlainTextWithRawArgs()
+    {
+        var response = SpeechBuilder.AskLocalized(
+            "NonExistentSsmlKey12345", "ResumePrompt", "ResumeReprompt", "en-US", "Tom & Jerry");
+
+        Assert.False(response.Response.ShouldEndSession ?? true);
+        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        // The plaintext path keeps args raw: a real ampersand is spoken, not the entity.
+        Assert.Contains("Tom & Jerry", speech.Text);
+        Assert.DoesNotContain("&amp;", speech.Text);
+        var reprompt = Assert.IsType<PlainTextOutputSpeech>(response.Response.Reprompt.OutputSpeech);
+        Assert.Equal("Would you like to continue where you left off?", reprompt.Text);
     }
 }

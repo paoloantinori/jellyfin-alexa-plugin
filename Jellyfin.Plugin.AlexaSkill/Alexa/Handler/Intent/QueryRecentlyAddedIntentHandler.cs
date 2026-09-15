@@ -20,6 +20,7 @@ using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
@@ -127,7 +128,7 @@ public class QueryRecentlyAddedIntentHandler : BaseHandler
         {
             BaseItem item = items[i];
             string? artist = GetArtistSubtitle(item);
-            string itemName = EscapeXml(item.Name ?? string.Empty);
+            string itemName = SpeechBuilder.EscapeXml(item.Name ?? string.Empty);
 
             string entry;
             if (!string.IsNullOrEmpty(artist))

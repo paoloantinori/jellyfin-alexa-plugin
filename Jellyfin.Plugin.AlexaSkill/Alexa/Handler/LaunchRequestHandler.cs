@@ -17,6 +17,7 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
@@ -385,7 +386,7 @@ public class LaunchRequestHandler : BaseHandler
         }
 
         string title = item?.Name ?? ResponseStrings.Get("UnknownMedia", locale);
-        SkillResponse response = AskLocalized(
+        SkillResponse response = SpeechBuilder.AskLocalized(
             "ResumePromptSsml", "ResumePrompt", "ResumeReprompt", locale, title);
 
         TryAttachResumeOfferScreen(response, item, itemId, user, locale, context);
@@ -452,15 +453,15 @@ public class LaunchRequestHandler : BaseHandler
 
         string welcomeSsmlKey = !string.IsNullOrEmpty(givenName) ? "WelcomePersonalizedSsml" : "WelcomeSsml";
         string? welcomeSsml = !string.IsNullOrEmpty(givenName)
-            ? string.Format(CultureInfo.InvariantCulture, ResponseStrings.Get(welcomeSsmlKey, locale), EscapeXml(givenName!))
-            : GetSsml("WelcomeSsml", locale);
+            ? string.Format(CultureInfo.InvariantCulture, ResponseStrings.Get(welcomeSsmlKey, locale), SpeechBuilder.EscapeXml(givenName!))
+            : SpeechBuilder.GetSsml("WelcomeSsml", locale);
 
-        string? repromptSsml = GetSsml("WelcomeRepromptSsml", locale);
+        string? repromptSsml = SpeechBuilder.GetSsml("WelcomeRepromptSsml", locale);
 
         SkillResponse response;
         if (welcomeSsml != null && repromptSsml != null)
         {
-            response = AskSsml(welcomeSsml, repromptSsml);
+            response = SpeechBuilder.AskSsml(welcomeSsml, repromptSsml);
         }
         else
         {

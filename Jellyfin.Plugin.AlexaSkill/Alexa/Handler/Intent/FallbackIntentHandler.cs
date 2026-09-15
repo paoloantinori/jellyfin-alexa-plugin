@@ -11,6 +11,7 @@ using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
@@ -95,7 +96,7 @@ public class FallbackIntentHandler : BaseHandler
                     && _libraryManager?.GetItemById(itemId) is { Name: not null } item)
                 {
                     Logger.LogDebug("FallbackIntent: active resume offer, re-asking resume prompt");
-                    return Task.FromResult(AskLocalized(
+                    return Task.FromResult(SpeechBuilder.AskLocalized(
                         "ResumePromptSsml", "ResumePrompt", "ResumeReprompt", locale, item.Name));
                 }
             }

@@ -19,6 +19,7 @@ using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Querying;
 using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
@@ -283,9 +284,9 @@ public class PlayBookIntentHandler : BaseHandler
 
             if (resuming)
             {
-                string bookName = EscapeXml(books[0].Name);
-                string trackName = EscapeXml(trackItems[startIndex].Name);
-                string? ssml = GetSsml("ResumingBookSsml", locale, bookName, trackName);
+                string bookName = SpeechBuilder.EscapeXml(books[0].Name);
+                string trackName = SpeechBuilder.EscapeXml(trackItems[startIndex].Name);
+                string? ssml = SpeechBuilder.GetSsml("ResumingBookSsml", locale, bookName, trackName);
                 response.Response.OutputSpeech = ssml != null
                     ? new SsmlOutputSpeech { Ssml = $"<speak>{ssml}</speak>" }
                     : new PlainTextOutputSpeech
@@ -301,7 +302,7 @@ public class PlayBookIntentHandler : BaseHandler
                 // device degrades to AudioPlayer, where the announce keeps riding the
                 // final response (the audio path has no such cut).
                 response.Response.OutputSpeech = await SpeakVideoLaunchAnnounceAsync(
-                    context, request, BuildNowPlayingSpeech(books[0].Name, locale, GetAnnounceNowPlaying(user))).ConfigureAwait(false);
+                    context, request, SpeechBuilder.BuildNowPlayingSpeech(books[0].Name, locale, GetAnnounceNowPlaying(user))).ConfigureAwait(false);
             }
 
             return response;
@@ -313,9 +314,9 @@ public class PlayBookIntentHandler : BaseHandler
         // Add resume announcement when not starting from the beginning
         if (startIndex > 0 || resumeTicks > 0)
         {
-            string bookName = EscapeXml(books[0].Name);
-            string trackName = EscapeXml(trackItems[startIndex].Name);
-            string? ssml = GetSsml("ResumingBookSsml", locale, bookName, trackName);
+            string bookName = SpeechBuilder.EscapeXml(books[0].Name);
+            string trackName = SpeechBuilder.EscapeXml(trackItems[startIndex].Name);
+            string? ssml = SpeechBuilder.GetSsml("ResumingBookSsml", locale, bookName, trackName);
 
             standardResponse.Response.OutputSpeech = ssml != null
                 ? new SsmlOutputSpeech { Ssml = $"<speak>{ssml}</speak>" }

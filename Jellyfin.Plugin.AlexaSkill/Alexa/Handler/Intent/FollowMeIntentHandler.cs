@@ -13,6 +13,7 @@ using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
@@ -152,7 +153,7 @@ public class FollowMeIntentHandler : BaseHandler
             context);
 
         // Replace the default speech with the follow-me announcement
-        string? ssml = GetSsml("FollowMeSuccessSsml", locale, EscapeXml(title));
+        string? ssml = SpeechBuilder.GetSsml("FollowMeSuccessSsml", locale, SpeechBuilder.EscapeXml(title));
         response.Response.OutputSpeech = ssml != null
             ? new SsmlOutputSpeech { Ssml = $"<speak>{ssml}</speak>" }
             : new PlainTextOutputSpeech { Text = ResponseStrings.Get("FollowMeSuccess", locale, title) };

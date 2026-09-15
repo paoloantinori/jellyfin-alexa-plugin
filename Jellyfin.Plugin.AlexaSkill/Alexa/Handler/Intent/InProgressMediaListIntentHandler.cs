@@ -17,6 +17,7 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
@@ -135,7 +136,7 @@ public class InProgressMediaListIntentHandler : BaseHandler
         var voiceDescriptions = new List<string>();
         for (int i = 0; i < voiceCount; i++)
         {
-            voiceDescriptions.Add(ResponseStrings.Get("InProgressItemWithPosition", locale, EscapeXml(inProgressItems[i].Item.Name ?? string.Empty), inProgressItems[i].Position));
+            voiceDescriptions.Add(ResponseStrings.Get("InProgressItemWithPosition", locale, SpeechBuilder.EscapeXml(inProgressItems[i].Item.Name ?? string.Empty), inProgressItems[i].Position));
         }
 
         string voiceListText = string.Join(". ", voiceDescriptions);

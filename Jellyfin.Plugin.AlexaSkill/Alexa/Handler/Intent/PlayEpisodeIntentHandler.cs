@@ -19,6 +19,7 @@ using MediaBrowser.Controller.Session;
 using MediaBrowser.Controller.TV;
 using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
@@ -182,6 +183,6 @@ public class PlayEpisodeIntentHandler : BaseHandler
             locale,
             GetVideoAppLaunchUrl(episode, user),
             episode.Name,
-            BuildNowPlayingSpeech(episode.Name, locale, GetAnnounceNowPlaying(user))).ConfigureAwait(false);
+            SpeechBuilder.BuildNowPlayingSpeech(episode.Name, locale, GetAnnounceNowPlaying(user))).ConfigureAwait(false);
     }
 }

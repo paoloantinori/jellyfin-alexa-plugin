@@ -19,6 +19,7 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
@@ -176,7 +177,7 @@ public class PlayRandomIntentHandler : BaseHandler
                 locale,
                 GetVideoAppLaunchUrl(firstItem, user),
                 firstItem.Name,
-                BuildNowPlayingSpeech(firstItem.Name, locale, GetAnnounceNowPlaying(user))).ConfigureAwait(false);
+                SpeechBuilder.BuildNowPlayingSpeech(firstItem.Name, locale, GetAnnounceNowPlaying(user))).ConfigureAwait(false);
         }
 
         return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, firstItem, user, context);

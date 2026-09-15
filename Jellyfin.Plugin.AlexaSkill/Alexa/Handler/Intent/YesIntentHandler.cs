@@ -18,6 +18,7 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Session;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Microsoft.Extensions.Logging;
 using VideoAppDirective = Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 
@@ -220,8 +221,8 @@ public class YesIntentHandler : BaseHandler
 
             SkillResponse response = BuildAudiobookResumeResponse(item, startTicks, user, context);
             response.Response.OutputSpeech = _config.ResumeAnnounceTitle
-                ? BuildOutputSpeech("ResumingSsml", "Resuming", locale, item.Name ?? ResponseStrings.Get("UnknownMedia", locale))
-                : BuildOutputSpeech("ResumeBriefSsml", "ResumeBrief", locale);
+                ? SpeechBuilder.BuildOutputSpeech("ResumingSsml", "Resuming", locale, item.Name ?? ResponseStrings.Get("UnknownMedia", locale))
+                : SpeechBuilder.BuildOutputSpeech("ResumeBriefSsml", "ResumeBrief", locale);
             return Task.FromResult(response);
         }
 
@@ -260,11 +261,11 @@ public class YesIntentHandler : BaseHandler
         if (_config.ResumeAnnounceTitle)
         {
             string title = item.Name ?? ResponseStrings.Get("UnknownMedia", locale);
-            standardResponse.Response.OutputSpeech = BuildOutputSpeech("ResumingSsml", "Resuming", locale, title);
+            standardResponse.Response.OutputSpeech = SpeechBuilder.BuildOutputSpeech("ResumingSsml", "Resuming", locale, title);
         }
         else
         {
-            standardResponse.Response.OutputSpeech = BuildOutputSpeech("ResumeBriefSsml", "ResumeBrief", locale);
+            standardResponse.Response.OutputSpeech = SpeechBuilder.BuildOutputSpeech("ResumeBriefSsml", "ResumeBrief", locale);
         }
 
         return Task.FromResult(standardResponse);
@@ -364,7 +365,7 @@ public class YesIntentHandler : BaseHandler
             // progressively when the response is a VideoApp launch; a screenless device
             // degrades to AudioPlayer, where the announce keeps riding the final response.
             response.Response.OutputSpeech = await SpeakVideoLaunchAnnounceAsync(
-                context, request, BuildNowPlayingSpeech(book.Name, locale, GetAnnounceNowPlaying(user))).ConfigureAwait(false);
+                context, request, SpeechBuilder.BuildNowPlayingSpeech(book.Name, locale, GetAnnounceNowPlaying(user))).ConfigureAwait(false);
             return response;
         }
 
@@ -410,7 +411,7 @@ public class YesIntentHandler : BaseHandler
             locale,
             GetVideoAppLaunchUrl(video, user),
             video.Name,
-            BuildNowPlayingSpeech(video.Name, locale, GetAnnounceNowPlaying(user))).ConfigureAwait(false);
+            SpeechBuilder.BuildNowPlayingSpeech(video.Name, locale, GetAnnounceNowPlaying(user))).ConfigureAwait(false);
     }
 
     private SkillResponse PlayPlaylist(BaseItem playlist, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Entities.User user, SessionInfo session, string locale, Context? context)

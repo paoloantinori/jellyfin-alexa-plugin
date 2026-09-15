@@ -19,6 +19,7 @@ using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
@@ -368,7 +369,7 @@ public class BrowseLibraryIntentHandler : BaseHandler
         var voiceEntries = new List<string>();
         for (int i = 0; i < voiceCount; i++)
         {
-            voiceEntries.Add(ResponseStrings.Get("BrowseItem", locale, (i + 1).ToString(CultureInfo.InvariantCulture), EscapeXml(items[i].Name ?? string.Empty)));
+            voiceEntries.Add(ResponseStrings.Get("BrowseItem", locale, (i + 1).ToString(CultureInfo.InvariantCulture), SpeechBuilder.EscapeXml(items[i].Name ?? string.Empty)));
         }
 
         string voiceListText = string.Join(". ", voiceEntries);

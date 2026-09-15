@@ -7,6 +7,7 @@ using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using MediaBrowser.Controller.Library;
 using Newtonsoft.Json;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
@@ -137,7 +138,7 @@ internal static class ListPaginationHelper
                 var item = libraryManager.GetItemById(id);
                 if (item != null)
                 {
-                    names.Add(BaseHandler.EscapeXml(item.Name ?? string.Empty));
+                    names.Add(SpeechBuilder.EscapeXml(item.Name ?? string.Empty));
                 }
             }
         }

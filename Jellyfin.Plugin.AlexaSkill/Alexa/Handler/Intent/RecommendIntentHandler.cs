@@ -19,6 +19,7 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
@@ -199,7 +200,7 @@ public class RecommendIntentHandler : BaseHandler
         // Use VideoApp for movies, AudioPlayer for audio
         if (item is MediaBrowser.Controller.Entities.Movies.Movie)
         {
-            string? recSsml = GetSsml("RecommendPlayingSsml", locale, EscapeXml(item.Name));
+            string? recSsml = SpeechBuilder.GetSsml("RecommendPlayingSsml", locale, SpeechBuilder.EscapeXml(item.Name));
             var outputSpeech = recSsml != null
                 ? (IOutputSpeech)new SsmlOutputSpeech { Ssml = $"<speak>{recSsml}</speak>" }
                 : new PlainTextOutputSpeech(ResponseStrings.Get("RecommendPlaying", locale, item.Name));
@@ -216,7 +217,7 @@ public class RecommendIntentHandler : BaseHandler
         }
 
         // For audio, add NowPlaying speech before the audio directive
-        string? nowPlayingSsml = GetSsml("NowPlayingSsml", locale, EscapeXml(item.Name));
+        string? nowPlayingSsml = SpeechBuilder.GetSsml("NowPlayingSsml", locale, SpeechBuilder.EscapeXml(item.Name));
         var audioResponse = BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, item, user, context);
         if (nowPlayingSsml != null && GetAnnounceNowPlaying(user))
         {

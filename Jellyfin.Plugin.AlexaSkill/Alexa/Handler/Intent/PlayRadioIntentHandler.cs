@@ -376,7 +376,7 @@ public class PlayRadioIntentHandler : BaseHandler
         session.NowPlayingQueue = queue;
         RadioModeState.Enable(session.UserId, context.System.Device.DeviceID);
 
-        string? nowPlayingSsml = GetSsml("NowPlayingSsml", locale, EscapeXml(first.Name));
+        string? nowPlayingSsml = SpeechBuilder.GetSsml("NowPlayingSsml", locale, SpeechBuilder.EscapeXml(first.Name));
 
         // JF-484: the announced count is DERIVED here (not a parameter) so both seed
         // paths share one convention: it EXCLUDES <first>, the track that starts
@@ -387,7 +387,7 @@ public class PlayRadioIntentHandler : BaseHandler
         if (GetAnnounceNowPlaying(user))
         {
             response.Response.OutputSpeech = nowPlayingSsml != null
-                ? (IOutputSpeech)new SsmlOutputSpeech { Ssml = $"<speak>{nowPlayingSsml}. {EscapeXml(radioMsg)}</speak>" }
+                ? (IOutputSpeech)new SsmlOutputSpeech { Ssml = $"<speak>{nowPlayingSsml}. {SpeechBuilder.EscapeXml(radioMsg)}</speak>" }
                 : new PlainTextOutputSpeech($"{ResponseStrings.Get("NowPlaying", locale, first.Name)}. {radioMsg}");
         }
 

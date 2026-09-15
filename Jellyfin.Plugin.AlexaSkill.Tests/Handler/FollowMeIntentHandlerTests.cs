@@ -21,6 +21,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
 using AlexaSession = global::Alexa.NET.Request.Session;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
@@ -581,7 +582,7 @@ public class FollowMeIntentHandlerTests : PluginTestBase, IDisposable
         // The title has no XML-reserved characters, so EscapeXml is the identity here.
         var speech = Assert.IsType<SsmlOutputSpeech>(response.Response.OutputSpeech);
         Assert.Equal(
-            $"<speak>{BaseHandler.GetSsml("FollowMeSuccessSsml", "en-US", title)}</speak>",
+            $"<speak>{SpeechBuilder.GetSsml("FollowMeSuccessSsml", "en-US", title)}</speak>",
             speech.Ssml);
         Assert.Contains(title, TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
     }

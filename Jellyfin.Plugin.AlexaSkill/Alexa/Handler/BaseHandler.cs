@@ -1130,7 +1130,7 @@ public abstract class BaseHandler
             locale,
             stream.Url,
             channel.Name,
-            BuildNowPlayingSpeech(channel.Name, locale, GetAnnounceNowPlaying(user))).ConfigureAwait(false);
+            SpeechBuilder.BuildNowPlayingSpeech(channel.Name, locale, GetAnnounceNowPlaying(user))).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -2201,166 +2201,6 @@ public abstract class BaseHandler
     }
 
     /// <summary>
-    /// Build a Tell response using SSML for more natural speech.
-    /// </summary>
-    /// <param name="ssml">SSML content (without the outer speak tags).</param>
-    /// <returns>A SkillResponse with SSML output speech.</returns>
-    public static SkillResponse TellSsml(string ssml)
-    {
-        return new SkillResponse
-        {
-            Version = "1.0",
-            Response = new ResponseBody
-            {
-                ShouldEndSession = true,
-                OutputSpeech = new SsmlOutputSpeech { Ssml = $"<speak>{ssml}</speak>" }
-            }
-        };
-    }
-
-    /// <summary>
-    /// Build an Ask response using SSML for more natural speech, with an SSML reprompt.
-    /// </summary>
-    /// <param name="ssml">SSML content for the main speech (without speak tags).</param>
-    /// <param name="repromptSsml">SSML content for the reprompt (without speak tags).</param>
-    /// <returns>A SkillResponse with SSML output speech and reprompt.</returns>
-    public static SkillResponse AskSsml(string ssml, string repromptSsml)
-    {
-        return new SkillResponse
-        {
-            Version = "1.0",
-            Response = new ResponseBody
-            {
-                ShouldEndSession = false,
-                OutputSpeech = new SsmlOutputSpeech { Ssml = $"<speak>{ssml}</speak>" },
-                Reprompt = new Reprompt { OutputSpeech = new SsmlOutputSpeech { Ssml = $"<speak>{repromptSsml}</speak>" } }
-            }
-        };
-    }
-
-    /// <summary>
-    /// Build an Ask response using SSML for speech and plain text for reprompt.
-    /// </summary>
-    /// <param name="ssml">SSML content for the main speech (without speak tags).</param>
-    /// <param name="reprompt">Plain text reprompt.</param>
-    /// <returns>A SkillResponse with SSML output speech and plain text reprompt.</returns>
-    public static SkillResponse AskSsml(string ssml, Reprompt reprompt)
-    {
-        return new SkillResponse
-        {
-            Version = "1.0",
-            Response = new ResponseBody
-            {
-                ShouldEndSession = false,
-                OutputSpeech = new SsmlOutputSpeech { Ssml = $"<speak>{ssml}</speak>" },
-                Reprompt = reprompt
-            }
-        };
-    }
-
-    /// <summary>
-    /// Try to get an SSML-enhanced string from locale files.
-    /// Returns null if no SSML key exists, allowing fallback to plain text.
-    /// </summary>
-    /// <param name="key">The SSML key (e.g. "NowPlayingSsml").</param>
-    /// <param name="locale">The locale identifier.</param>
-    /// <param name="args">Optional format arguments. String values are interpolated into
-    /// SSML as-is, so callers MUST pre-escape reserved XML chars with EscapeXml (unlike
-    /// BuildOutputSpeech, which escapes internally).</param>
-    /// <returns>The formatted SSML string, or null if the key doesn't exist.</returns>
-    public static string? GetSsml(string key, string locale, params object[] args)
-    {
-        string template = ResponseStrings.Get(key, locale);
-        if (template == key)
-        {
-            return null;
-        }
-
-        return string.Format(System.Globalization.CultureInfo.InvariantCulture, template, args);
-    }
-
-    /// <summary>
-    /// Build an OutputSpeech using SSML with plaintext fallback. Tries the SSML key
-    /// first; falls back to the plain key if SSML is unavailable. Callers pass RAW
-    /// (unescaped) args: the SSML path escapes reserved XML chars here, while the
-    /// plain-text fallback keeps them raw, so an ampersand in a title is spoken as
-    /// a real ampersand rather than the escaped SSML entity.
-    /// </summary>
-    public static IOutputSpeech BuildOutputSpeech(string ssmlKey, string plainKey, string locale, params object[] args)
-    {
-        string? ssml = GetSsml(ssmlKey, locale, EscapeStringArgs(args));
-        if (ssml != null)
-        {
-            return new SsmlOutputSpeech { Ssml = $"<speak>{ssml}</speak>" };
-        }
-
-        return new PlainTextOutputSpeech { Text = ResponseStrings.Get(plainKey, locale, args) };
-    }
-
-    /// <summary>
-    /// Build a session-opening Ask using SSML when available, with a plaintext fallback
-    /// (JF-407 item 3). Consolidates the hand-written GetSsml-then-AskSsml-or-Ask
-    /// pattern that was duplicated across DisambiguationHelper (3x),
-    /// FallbackIntentHandler, LaunchRequestHandler, and BaseHandler (2x), where the
-    /// reprompt-key handling and XML escaping drifted between sites. Args are RAW
-    /// (unescaped): the SSML path escapes them internally, the plaintext path keeps
-    /// them raw. The reprompt is always emitted as PlainText. The one behavior change
-    /// from the sites it replaced (review 2026-08-29): the LaunchRequestHandler resume
-    /// site previously used the AskSsml(string, string) overload, which wrapped the
-    /// reprompt in speak tags (SSML output); this helper emits PlainText, which is
-    /// strictly more robust (the old wrapping would produce INVALID SSML if a future
-    /// localized reprompt contained a raw XML char) but is a wire-format difference.
-    /// The Welcome flow's dual SSML prompt+reprompt stays hand-written in
-    /// LaunchRequestHandler (it is the only site with an SSML reprompt variant).
-    /// </summary>
-    /// <param name="ssmlKey">The ResponseStrings key for the SSML prompt variant.</param>
-    /// <param name="textKey">The ResponseStrings key for the plain-text prompt variant.</param>
-    /// <param name="repromptKey">The ResponseStrings key for the plain-text reprompt.</param>
-    /// <param name="locale">The request locale.</param>
-    /// <param name="args">Format args for both prompt variants (raw, not XML-escaped).</param>
-    /// <returns>A session-opening Ask response.</returns>
-    public static SkillResponse AskLocalized(
-        string ssmlKey, string textKey, string repromptKey, string locale, params object[] args)
-    {
-        string reprompt = ResponseStrings.Get(repromptKey, locale);
-        string? ssml = GetSsml(ssmlKey, locale, EscapeStringArgs(args));
-        if (ssml != null)
-        {
-            return AskSsml(ssml, new Reprompt(reprompt));
-        }
-
-        string prompt = ResponseStrings.Get(textKey, locale, args);
-        return ResponseBuilder.Ask(prompt, new Reprompt(reprompt));
-    }
-
-    /// <summary>
-    /// Escape SSML-reserved chars in string args for safe interpolation into &lt;speak&gt;.
-    /// Non-string args (counts, etc.) pass through unchanged.
-    /// </summary>
-    private static object[] EscapeStringArgs(object[] args)
-    {
-        if (args.Length == 0)
-        {
-            return args;
-        }
-
-        var escaped = new object[args.Length];
-        for (int i = 0; i < args.Length; i++)
-        {
-            escaped[i] = args[i] is string s ? EscapeXml(s) : args[i];
-        }
-
-        return escaped;
-    }
-
-    /// <summary>
-    /// The now-playing announce shared by every video-launch handler. Wraps
-    /// BuildOutputSpeech with the NowPlaying SSML/plain keys; the title is escaped for SSML.
-    /// </summary>
-    public static IOutputSpeech? BuildNowPlayingSpeech(string name, string locale, bool announceOn = true)
-        => announceOn ? BuildOutputSpeech("NowPlayingSsml", "NowPlaying", locale, name) : null;
-
-    /// <summary>
     /// Attach the gated now-playing announce to a MUSIC play response when the caller passes a
     /// locale and the audio-announce toggle is on. Only music handlers pass announceLocale, so the
     /// gate is <see cref="GetAnnounceAudioPlays"/> (opt-in, default false per JF-352.4) — NOT the
@@ -2382,8 +2222,8 @@ public abstract class BaseHandler
         }
 
         response.Response.OutputSpeech = offsetInMilliseconds > 0
-            ? BuildOutputSpeech("ResumingSsml", "Resuming", announceLocale, item.Name)
-            : BuildNowPlayingSpeech(item.Name, announceLocale, announceOn: true);
+            ? SpeechBuilder.BuildOutputSpeech("ResumingSsml", "Resuming", announceLocale, item.Name)
+            : SpeechBuilder.BuildNowPlayingSpeech(item.Name, announceLocale, announceOn: true);
     }
 
     /// <summary>
@@ -2400,7 +2240,7 @@ public abstract class BaseHandler
             return new PlainTextOutputSpeech(ResponseStrings.Get("ResumingVideo", locale, item.Name, FormatPosition(resumeTicks)));
         }
 
-        return BuildNowPlayingSpeech(item.Name, locale, announceOn);
+        return SpeechBuilder.BuildNowPlayingSpeech(item.Name, locale, announceOn);
     }
 
     /// <summary>
@@ -2664,7 +2504,7 @@ public abstract class BaseHandler
         string? progressiveSpeech = announce switch
         {
             SsmlOutputSpeech ssml => ssml.Ssml,
-            PlainTextOutputSpeech plain when !string.IsNullOrWhiteSpace(plain.Text) => $"<speak>{EscapeXml(plain.Text)}</speak>",
+            PlainTextOutputSpeech plain when !string.IsNullOrWhiteSpace(plain.Text) => $"<speak>{SpeechBuilder.EscapeXml(plain.Text)}</speak>",
             _ => null
         };
         if (progressiveSpeech is null)
@@ -3158,7 +2998,7 @@ public abstract class BaseHandler
                 notFoundMediaType);
         }
 
-        SkillResponse response = AskLocalized(
+        SkillResponse response = SpeechBuilder.AskLocalized(
             "CrossMediaArtistOfferSsml", "CrossMediaArtistOffer", "FuzzySuggestionReprompt", locale, query, artist.Name);
 
         var matchInfos = new List<DisambiguationHelper.MatchInfo>
@@ -3354,7 +3194,7 @@ public abstract class BaseHandler
                 return (FuzzyMissOutcome.SuggestionHandled, playResponse);
             }
 
-            string? ssml = GetSsml("FuzzyAutoPlayAnnouncementSsml", locale, EscapeXml(selector(best)), EscapeXml(query));
+            string? ssml = SpeechBuilder.GetSsml("FuzzyAutoPlayAnnouncementSsml", locale, SpeechBuilder.EscapeXml(selector(best)), SpeechBuilder.EscapeXml(query));
             IOutputSpeech qualifier = ssml != null
                 ? new SsmlOutputSpeech { Ssml = $"<speak>{ssml}</speak>" }
                 : new PlainTextOutputSpeech { Text = ResponseStrings.Get("FuzzyAutoPlayAnnouncement", locale, selector(best), query) };
@@ -3386,7 +3226,7 @@ public abstract class BaseHandler
         Logger.LogDebug("HandleFuzzyMiss: query={Query}, best={BestMatch}, score={Score}, candidates={CandidateCount} — disambiguating",
             query, selector(best), score, candidates.Count);
         var matches = matchExtractor(best) ?? new List<(Guid, string)>();
-        SkillResponse response = AskLocalized(
+        SkillResponse response = SpeechBuilder.AskLocalized(
             "FuzzySuggestionPromptSsml", "FuzzySuggestionPrompt", "FuzzySuggestionReprompt", locale, query, selector(best));
 
         var matchInfos = matches.Select(m => new DisambiguationHelper.MatchInfo { Id = m.Id.ToString(), Name = m.Name }).ToList();
@@ -4010,7 +3850,7 @@ public abstract class BaseHandler
         else
         {
             speech = GetAnnounceNowPlaying(user)
-                ? BuildOutputSpeech(
+                ? SpeechBuilder.BuildOutputSpeech(
                     latestFallback ? "PlayingLatestEpisodeSsml" : "PlayingNextEpisodeSsml",
                     latestFallback ? "PlayingLatestEpisode" : "PlayingNextEpisode",
                     locale,
@@ -4109,21 +3949,6 @@ public abstract class BaseHandler
 
         logger?.LogDebug("FindResumeTrackIndex: no resume position found, starting from beginning");
         return (0, 0);
-    }
-
-    /// <summary>
-    /// Escapes special XML characters in text for safe inclusion in SSML.
-    /// </summary>
-    /// <param name="text">The text to escape.</param>
-    /// <returns>The XML-escaped text.</returns>
-    internal static string EscapeXml(string? text)
-    {
-        return (text ?? string.Empty)
-            .Replace("&", "&amp;", StringComparison.Ordinal)
-            .Replace("<", "&lt;", StringComparison.Ordinal)
-            .Replace(">", "&gt;", StringComparison.Ordinal)
-            .Replace("\"", "&quot;", StringComparison.Ordinal)
-            .Replace("'", "&apos;", StringComparison.Ordinal);
     }
 
     /// <summary>

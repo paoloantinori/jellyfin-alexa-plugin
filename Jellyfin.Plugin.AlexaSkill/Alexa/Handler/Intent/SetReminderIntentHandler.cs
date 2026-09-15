@@ -189,7 +189,7 @@ public class SetReminderIntentHandler : BaseHandler
                         new()
                         {
                             Locale = locale,
-                            Ssml = $"<speak>{EscapeXml(spokenText)}</speak>"
+                            Ssml = $"<speak>{SpeechBuilder.EscapeXml(spokenText)}</speak>"
                         }
                     }
                 }
