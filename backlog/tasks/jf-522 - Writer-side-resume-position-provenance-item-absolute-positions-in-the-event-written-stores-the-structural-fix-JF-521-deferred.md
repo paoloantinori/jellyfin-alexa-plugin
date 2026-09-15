@@ -3,10 +3,10 @@ id: JF-522
 title: >-
   Writer-side resume-position provenance: item-absolute positions in the
   event-written stores (the structural fix JF-521 deferred)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-08 00:36'
-updated_date: '2026-09-14 23:59'
+updated_date: '2026-09-15 02:00'
 labels:
   - resume
   - transcoding
@@ -42,6 +42,12 @@ This is the long-term structural fix; JF-521's equality gate remains correct reg
 <!-- SECTION:NOTES:BEGIN -->
 METHOD DISCIPLINE (2026-09-11, from the TDD question): characterization-first, not classic TDD (the audit may not change observable behavior). Phase 1 = read-only provenance mapping + characterization tests pinning the CURRENT writer/reader provenance chain at every store (green on arrival, they are the regression net for the migration); Phase 2 = the writer-side migration in small steps, suite green with zero expectation edits at each; red-green only for new invariants (e.g. 'position written is item-absolute at every store' as an explicit pin where it newly holds).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+CLOSED complete (2026-09-15 night, implemented by delegated agent under characterization-first discipline, orchestrator-verified). The writer-side migration shipped atomically: every event-written store (session PlayState, DeviceQueue.CurrentPositionTicks and ItemPositionState, Jellyfin UserData) now receives ITEM-ABSOLUTE positions composed from a launch-scoped base. Phase 1 delivered the provenance characterization suite (raw provenance + ledger clobber pinned, green on arrival); phase 2 shipped in three green steps (additive scopes, the designed flip of the three base-capable callers + active-scope read + unconditional item-absolute seed, then DELETION of the JF-514 last-resolve ledger and its wrappers). The JF-521 rejection hazards are each solved and pinned: clobber by the pending/active split with promote-at-PlaybackStarted; rolling-deploy by conservative-read-then-self-heal with rollback safety; endgame stated - OffsetIsStreamRelative SURVIVES narrowed to Amazon's context offset (platform contract, unfixable), the equality gate retired (would double-add post-fix). Review folded 3 real fixes (Echo device id for shuffle progress, cross-item recovery-pointer reset, launch-scope locking) and filed 2 outside-diff drafts (APL taps under AlexaDevice; mixed-provenance raw-static skips - both in backlog/drafts/). Net +14 tests; suite 3784/3784 both TFMs; Release -warnaserror clean. Gates: implementer-run 4-agent simplify + 5-agent code-review high, orchestrator-verified and formally recorded.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
