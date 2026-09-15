@@ -167,7 +167,7 @@ public class InProgressMediaListIntentHandler : BaseHandler
         }
 
         var aplItems = inProgressItems.Select(i =>
-            new Apl.ListDisplayItem(i.Item.Name, i.Item.Id.ToString("N"), i.Position, GetImageUrl(i.Item.Id.ToString("N"), user))).ToList();
+            new Apl.ListDisplayItem(i.Item.Name, i.Item.Id.ToString("N"), i.Position, Launch.GetImageUrl(i.Item.Id.ToString("N"), user))).ToList();
         AplDirectiveAttacher.TryAttachListDirective(Logger, response, context, "In Progress", aplItems, "inProgress", hasMore: isTruncated);
 
         return response;

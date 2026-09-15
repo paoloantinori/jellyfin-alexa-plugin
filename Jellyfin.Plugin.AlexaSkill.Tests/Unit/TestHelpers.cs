@@ -119,6 +119,14 @@ internal static class TestHelpers
         };
     }
 
+    /// <summary>
+    /// The ONE Audio factory for play-response suites (name + optional id; the
+    /// JF-315 batch-4 reuse pass hoisted the third private copy here).
+    /// </summary>
+    internal static MediaBrowser.Controller.Entities.Audio.Audio CreateSong(
+        string name = "Test Song", Guid? id = null)
+        => new() { Name = name, Id = id ?? Guid.NewGuid() };
+
     internal static Context CreateContextWithoutApl()
     {
         return new Context

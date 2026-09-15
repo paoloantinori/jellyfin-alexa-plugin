@@ -131,7 +131,7 @@ public class AplUserEventHandler : BaseHandler
                 }
 
                 session.FullNowPlayingItem = nextItem;
-                return Task.FromResult(BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(nextIdStr, user), nextIdStr, nextItem, user, context));
+                return Task.FromResult(Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(nextIdStr, user), nextIdStr, nextItem, user, context));
             }
         }
 
@@ -158,7 +158,7 @@ public class AplUserEventHandler : BaseHandler
                 }
 
                 session.FullNowPlayingItem = prevItem;
-                return Task.FromResult(BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(prevIdStr, user), prevIdStr, prevItem, user, context));
+                return Task.FromResult(Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(prevIdStr, user), prevIdStr, prevItem, user, context));
             }
         }
 
@@ -207,7 +207,7 @@ public class AplUserEventHandler : BaseHandler
         }
 
         // Folder items (audiobooks, music folders, etc.) need to be resolved to their
-        // first audio child. Without this, GetStreamUrl() generates /Audio/{folderId}/stream
+        // first audio child. Without this, Launch.GetStreamUrl() generates /Audio/{folderId}/stream
         // which fails because Folders don't have media sources.
         if (item is Folder folder)
         {
@@ -254,9 +254,9 @@ public class AplUserEventHandler : BaseHandler
 
         int offsetMs = GetResumeOffset(item, session, request);
 
-        var response = BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemIdStr, user), itemIdStr, item, user, context, offsetMs);
+        var response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemIdStr, user), itemIdStr, item, user, context, offsetMs);
 
-        TryAttachNowPlayingDirective(response, item, itemIdStr, user, context);
+        Launch.TryAttachNowPlayingDirective(response, item, itemIdStr, user, context);
 
         return Task.FromResult(response);
     }

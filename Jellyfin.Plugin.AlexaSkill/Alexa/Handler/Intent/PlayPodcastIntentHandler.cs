@@ -147,7 +147,7 @@ public class PlayPodcastIntentHandler : BaseHandler
             else
             {
                 return DisambiguationHelper.AskFirstMatch(
-                    podcasts.Select(p => (p.Id, p.Name, (string?)GetImageUrl(p.Id.ToString("N"), user))).ToList(),
+                    podcasts.Select(p => (p.Id, p.Name, (string?)Launch.GetImageUrl(p.Id.ToString("N"), user))).ToList(),
                     DisambiguationHelper.MediaTypePodcast,
                     locale,
                     context);
@@ -189,6 +189,6 @@ public class PlayPodcastIntentHandler : BaseHandler
         session.NowPlayingQueue = queueItems;
         session.FullNowPlayingItem = episode;
 
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, episode, user, context);
+        return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, episode, user, context);
     }
 }

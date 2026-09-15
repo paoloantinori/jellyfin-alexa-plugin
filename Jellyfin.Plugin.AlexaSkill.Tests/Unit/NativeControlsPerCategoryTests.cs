@@ -48,7 +48,7 @@ public class NativeControlsPerCategoryTests : PluginTestBase
         _config.NativeControlsForBooks = false;
 
         var song = new Audio { Name = "Song", Id = Guid.NewGuid() };
-        var response = _handler.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, "http://x/audio", song.Id.ToString(), song, _user);
+        var response = _handler.Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, "http://x/audio", song.Id.ToString(), song, _user);
 
         Assert.IsType<PluginVideoApp>(FirstDirective(response));
     }
@@ -61,7 +61,7 @@ public class NativeControlsPerCategoryTests : PluginTestBase
         _config.NativeControlsForBooks = true;
 
         var song = new Audio { Name = "Song", Id = Guid.NewGuid() };
-        var response = _handler.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, "http://x/audio", song.Id.ToString(), song, _user);
+        var response = _handler.Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, "http://x/audio", song.Id.ToString(), song, _user);
 
         Assert.IsType<AudioPlayerPlayDirective>(FirstDirective(response));
     }
@@ -73,13 +73,13 @@ public class NativeControlsPerCategoryTests : PluginTestBase
         _config.NativeControlsForBooks = false;
 
         var song = new Audio { Name = "Song", Id = Guid.NewGuid() };
-        var response = _handler.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, "http://x/audio", song.Id.ToString(), song, _user);
+        var response = _handler.Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, "http://x/audio", song.Id.ToString(), song, _user);
 
         Assert.IsType<AudioPlayerPlayDirective>(FirstDirective(response));
     }
 
     /// <summary>
-    /// Minimal BaseHandler subclass exposing the inherited BuildAudioPlayerResponse.
+    /// Minimal BaseHandler subclass; the tests reach BuildAudioPlayerResponse via handler.Launch.
     /// </summary>
     private sealed class TestHandler : BaseHandler
     {

@@ -500,7 +500,7 @@ public class PlayMoodMusicIntentHandler : BaseHandler
 
         string itemId = selected.Id.ToString();
 
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, selected, user, context);
+        return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, selected, user, context);
     }
 
     /// <summary>

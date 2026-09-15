@@ -266,7 +266,7 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
         }
 
         var aplItems = items.Take(displayCount).Select(i =>
-            new Apl.ListDisplayItem(i.Name, i.Id.ToString("N"), artistName, GetImageUrl(i.Id.ToString("N"), user))).ToList();
+            new Apl.ListDisplayItem(i.Name, i.Id.ToString("N"), artistName, Launch.GetImageUrl(i.Id.ToString("N"), user))).ToList();
         AplDirectiveAttacher.TryAttachCarouselDirective(Logger, response, context, artistName, aplItems, "queryArtist", locale: locale);
 
         return response;

@@ -477,7 +477,7 @@ public class AplVisualsFeatureFlagTests : PluginTestBase, IDisposable
             string streamUrl, string itemId,
             MediaBrowser.Controller.Entities.BaseItem item,
             Entities.User user, Context context)
-            => BuildAudioPlayerResponse(playBehavior, streamUrl, itemId, item, user, context);
+            => Launch.BuildAudioPlayerResponse(playBehavior, streamUrl, itemId, item, user, context);
     }
 }
 

@@ -179,7 +179,7 @@ public class VideoAppCapabilityGateTests : PluginTestBase
         var user = new Entities.User { Id = Guid.NewGuid(), JellyfinToken = "tok" };
         var song = new Audio { Name = "Song", Id = Guid.NewGuid() };
 
-        SkillResponse response = handler.BuildVideoAppAudioResponse(song.Id.ToString(), song, user, null, TestHelpers.CreateScreenlessContext());
+        SkillResponse response = handler.Launch.BuildVideoAppAudioResponse(song.Id.ToString(), song, user, null, TestHelpers.CreateScreenlessContext());
 
         var directive = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
         Assert.Empty(response.Response.Directives.OfType<VideoAppLaunchDirective>());
@@ -232,7 +232,7 @@ public class VideoAppCapabilityGateTests : PluginTestBase
         var song = new Audio { Name = "Song", Id = Guid.NewGuid() };
         string rawStream = "http://localhost:8096/Audio/" + song.Id + "/stream?static=true&api_key=tok";
 
-        SkillResponse response = handler.BuildAudioPlayerResponse(
+        SkillResponse response = handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, rawStream, song.Id.ToString(), song, user, TestHelpers.CreateScreenlessContext());
 
         var directive = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());

@@ -139,9 +139,9 @@ public class GoToChapterIntentHandler : BaseHandler
 
         Logger.LogDebug("GoToChapter: navigating to chapter {ChapterIndex} '{ChapterName}' at offset {OffsetMs}ms", targetIndex + 1, chapterName, offsetMs);
 
-        return Task.FromResult<SkillResponse>(BuildAudioPlayerResponse(
+        return Task.FromResult<SkillResponse>(Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll,
-            GetStreamUrl(itemIdStr, user),
+            Launch.GetStreamUrl(itemIdStr, user),
             itemIdStr,
             session.FullNowPlayingItem,
             user,

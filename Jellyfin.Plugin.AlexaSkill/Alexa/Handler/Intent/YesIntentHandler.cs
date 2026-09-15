@@ -230,7 +230,7 @@ public class YesIntentHandler : BaseHandler
         string? deviceId = context?.System?.Device?.DeviceID;
 
         // JF-514/JF-520/JF-522 provenance gate, shared with the ResumeIntent tail via
-        // BaseHandler.ResolveResumedAudioLaunch: the flag tells the helper which
+        // PlaybackLaunchBuilder.ResolveResumedAudioLaunch: the flag tells the helper which
         // timeline the offset counts (true = device-derived/stream-relative ->
         // rebase against the launch-scoped base, or drop to restart when none).
         // The ONLY seed that still flags stream-relative is the AudioPlayer-context
@@ -246,9 +246,9 @@ public class YesIntentHandler : BaseHandler
         // 2026-09-06 corr=f0240020 Dot incident: raw static audio died at 1ms)
         // routes to the audio-only episode HLS transcode with the offset baked
         // into the URL (?start=) and directive offset 0.
-        AudioLaunchSource source = ResolveResumedAudioLaunch(
+        AudioLaunchSource source = Launch.ResolveResumedAudioLaunch(
             item, itemId, user, offsetMs, resumeState.OffsetIsStreamRelative, deviceId, _queueManager, "ResumeConfirmation");
-        SkillResponse standardResponse = BuildAudioPlayerResponse(
+        SkillResponse standardResponse = Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll,
             source,
             itemId,
@@ -312,7 +312,7 @@ public class YesIntentHandler : BaseHandler
         session.NowPlayingQueue = queueItems;
         session.FullNowPlayingItem = albumItems[0];
         string itemId = albumItems[0].Id.ToString();
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, albumItems[0], user, context);
+        return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, albumItems[0], user, context);
     }
 
     /// <summary>
@@ -360,7 +360,7 @@ public class YesIntentHandler : BaseHandler
         // NativeControlsForBooks → VideoApp HLS concat (seek bar)
         if (Plugin.Instance?.Configuration?.NativeControlsForBooks == true)
         {
-            SkillResponse response = BuildVideoAppAudioResponse(itemId, trackItems[0], user, locale, context);
+            SkillResponse response = Launch.BuildVideoAppAudioResponse(itemId, trackItems[0], user, locale, context);
             // Fresh-start audiobook via VideoApp: announce the book title. JF-501: spoken
             // progressively when the response is a VideoApp launch; a screenless device
             // degrades to AudioPlayer, where the announce keeps riding the final response.
@@ -369,7 +369,7 @@ public class YesIntentHandler : BaseHandler
             return response;
         }
 
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, trackItems[0], user, context);
+        return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, trackItems[0], user, context);
     }
 
     private SkillResponse PlayArtist(BaseItem artist, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Entities.User user, SessionInfo session, string locale, Context? context)
@@ -395,7 +395,7 @@ public class YesIntentHandler : BaseHandler
         session.NowPlayingQueue = queueItems;
         session.FullNowPlayingItem = artistItems[0];
         string itemId = artistItems[0].Id.ToString();
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, artistItems[0], user, context);
+        return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, artistItems[0], user, context);
     }
 
     private async Task<SkillResponse> PlayVideo(BaseItem video, Entities.User user, SessionInfo session, string locale, Context context, Request request)
@@ -433,6 +433,6 @@ public class YesIntentHandler : BaseHandler
         session.NowPlayingQueue = queueItems;
         session.FullNowPlayingItem = playlistItems[0];
         string itemId = playlistItems[0].Id.ToString();
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, playlistItems[0], user, context);
+        return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, playlistItems[0], user, context);
     }
 }

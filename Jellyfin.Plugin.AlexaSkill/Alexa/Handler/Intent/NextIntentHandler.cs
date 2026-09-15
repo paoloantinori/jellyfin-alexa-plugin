@@ -5,6 +5,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Entities;
@@ -101,8 +102,8 @@ public class NextIntentHandler : BaseHandler
                 // JF-507: codec-gated audio-launch decision; an EAC3-family video item in
                 // the queue routes to the audio-only transcode instead of dying on the raw
                 // static bytes (JF-505 does not apply: this launch is audio-shaped).
-                AudioLaunchSource source = ResolveAudioLaunchSource(nextItem, item_id, user, 0);
-                return Task.FromResult<SkillResponse>(BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source, item_id, nextItem, user, context));
+                AudioLaunchSource source = Launch.ResolveAudioLaunchSource(nextItem, item_id, user, 0);
+                return Task.FromResult<SkillResponse>(Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source, item_id, nextItem, user, context));
             }
         }
 

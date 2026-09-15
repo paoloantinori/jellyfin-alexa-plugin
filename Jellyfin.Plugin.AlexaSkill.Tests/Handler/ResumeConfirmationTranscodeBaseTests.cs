@@ -28,13 +28,13 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// from the AudioPlayer CONTEXT carries a device-derived offset, which is relative
 /// to the previous playback's OUTPUT timeline; for a transcode-routed item that
 /// timeline starts at the stream's <c>?start=</c> base. Every Movie/Episode resolve
-/// through <c>BaseHandler.ResolveAudioLaunchSource</c> records that launch base in
+/// through <c>PlaybackLaunchBuilder.ResolveAudioLaunchSource</c> records that launch base in
 /// the per-device queue ledger (device+item keyed), and the resume-yes confirm
 /// rebases: minted <c>?start=</c> = recorded base + device offset (item-absolute).
 /// No recorded base falls back to the JF-507 interim rule (drop the offset,
 /// restart at 0); raw-static launches keep the directive offset unchanged.
 /// JF-520: the correction is shared with the ResumeIntent tail via
-/// <c>BaseHandler.ResolveResumedAudioLaunch</c>, and the device-last-played
+/// <c>PlaybackLaunchBuilder.ResolveResumedAudioLaunch</c>, and the device-last-played
 /// (UserData) offer seed classifies its position at seed time: transcode-routed
 /// item + recorded base on the device flags the offer stream-relative too (the
 /// event writers persist the raw device offset into UserData).

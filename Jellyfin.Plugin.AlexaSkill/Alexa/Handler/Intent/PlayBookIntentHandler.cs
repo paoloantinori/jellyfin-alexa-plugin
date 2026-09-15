@@ -151,7 +151,7 @@ public class PlayBookIntentHandler : BaseHandler
             }
             else
             {
-                var matches = books.Take(3).Select(b => (b.Id, b.Name, (string?)GetImageUrl(b.Id.ToString("N"), user))).ToList();
+                var matches = books.Take(3).Select(b => (b.Id, b.Name, (string?)Launch.GetImageUrl(b.Id.ToString("N"), user))).ToList();
                 return DisambiguationHelper.AskFirstMatch(
                     matches, DisambiguationHelper.MediaTypeAlbum, locale, context);
             }
@@ -280,7 +280,7 @@ public class PlayBookIntentHandler : BaseHandler
             bool resuming = startTicks > 0;
             SkillResponse response = resuming
                 ? BuildAudiobookResumeResponse(trackItems[startIndex], startTicks, user, context)
-                : BuildVideoAppAudioResponse(itemId, trackItems[startIndex], user, context: context);
+                : Launch.BuildVideoAppAudioResponse(itemId, trackItems[startIndex], user, context: context);
 
             if (resuming)
             {
@@ -301,8 +301,8 @@ public class PlayBookIntentHandler : BaseHandler
             return response;
         }
 
-        SkillResponse standardResponse = BuildAudioPlayerResponse(
-            PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, trackItems[startIndex], user, context, offsetMs);
+        SkillResponse standardResponse = Launch.BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, trackItems[startIndex], user, context, offsetMs);
 
         // Add resume announcement when not starting from the beginning
         if (startIndex > 0 || resumeTicks > 0)

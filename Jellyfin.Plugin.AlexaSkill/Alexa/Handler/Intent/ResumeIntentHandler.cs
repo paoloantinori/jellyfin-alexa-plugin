@@ -33,7 +33,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// the provenance split: fallback 1 (the AudioPlayer context offset) is written by
 /// AMAZON and counts the previous playback's OUTPUT timeline, stream-relative by
 /// platform contract, so it still goes through the shared rebase in
-/// BaseHandler.ResolveResumedAudioLaunch (JF-514/JF-520: base+offset against the
+/// PlaybackLaunchBuilder.ResolveResumedAudioLaunch (JF-514/JF-520: base+offset against the
 /// launch-scoped base, drop to a 0-restart when none is recorded); fallbacks 2-3
 /// (session PlayState, DeviceQueue.CurrentPositionTicks) are persisted ITEM-ABSOLUTE
 /// by the event writers since the JF-522 writer fix (the stop event composes the
@@ -247,9 +247,9 @@ public class ResumeIntentHandler : BaseHandler
                 }
 
                 // Audio/AudioBook items use AudioPlayer response with offset
-                var audioResponse = BuildAudioPlayerResponse(
+                var audioResponse = Launch.BuildAudioPlayerResponse(
                     PlayBehavior.ReplaceAll,
-                    GetStreamUrl(item_id, user),
+                    Launch.GetStreamUrl(item_id, user),
                     item_id,
                     resumeItem,
                     user,
@@ -291,18 +291,18 @@ public class ResumeIntentHandler : BaseHandler
         // The tail's JF-514 correction, adopted from the offer path (JF-520) and
         // re-scoped by JF-522: the AudioPlayer-context offset (Amazon-written) stays
         // stream-relative forever, so the tail rebases ONLY that one against the
-        // launch-scoped base. BaseHandler.ResolveResumedAudioLaunch owns the shared
+        // launch-scoped base. PlaybackLaunchBuilder.ResolveResumedAudioLaunch owns the shared
         // shape: probe + read the active launch base, rebase base+offset
         // (item-absolute) when one exists, drop to a 0-restart when none does
         // (pre-deploy launch, wiped scope), pass through for raw-static items and
         // item-absolute offsets. The base read lives INSIDE the helper, structurally
         // before the resolve/directive that overwrites it (JF-520; was
         // comment-enforced here in JF-514).
-        AudioLaunchSource source = ResolveResumedAudioLaunch(
+        AudioLaunchSource source = Launch.ResolveResumedAudioLaunch(
             session?.FullNowPlayingItem, item_id!, user, offset, offsetIsStreamRelative,
             context?.System?.Device?.DeviceID, _queueManager, "ResumeIntent");
 
-        var response = BuildAudioPlayerResponse(
+        var response = Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll,
             source,
             item_id!,
@@ -376,7 +376,7 @@ public class ResumeIntentHandler : BaseHandler
         {
             // No position in either source: the same fresh VideoApp launch PlayBook's
             // no-progress path uses (no start slice), kept silent like the flat tail.
-            return BuildVideoAppAudioResponse(item.Id.ToString(), item, user, context: context);
+            return Launch.BuildVideoAppAudioResponse(item.Id.ToString(), item, user, context: context);
         }
 
         SkillResponse bookResponse = BuildAudiobookResumeResponse(item, startTicks, user, context);

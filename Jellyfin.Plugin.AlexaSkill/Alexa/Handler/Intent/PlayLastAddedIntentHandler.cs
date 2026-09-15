@@ -137,6 +137,6 @@ public class PlayLastAddedIntentHandler : BaseHandler
 
         string item_id = prevItem.Id.ToString();
 
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(item_id, user), item_id, prevItem, user, context);
+        return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(item_id, user), item_id, prevItem, user, context);
     }
 }

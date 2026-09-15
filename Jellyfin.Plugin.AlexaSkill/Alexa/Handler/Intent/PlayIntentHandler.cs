@@ -53,14 +53,14 @@ public class PlayIntentHandler : BaseHandler
         {
             string item_id = session.FullNowPlayingItem.Id.ToString();
             Logger.LogDebug("PlayIntent: resuming from FullNowPlayingItem, itemId={ItemId}", item_id);
-            return Task.FromResult<SkillResponse>(BuildAudioPlayerResponse(PlayBehavior.Enqueue, GetStreamUrl(item_id, user), item_id, session.FullNowPlayingItem, user, context));
+            return Task.FromResult<SkillResponse>(Launch.BuildAudioPlayerResponse(PlayBehavior.Enqueue, Launch.GetStreamUrl(item_id, user), item_id, session.FullNowPlayingItem, user, context));
         }
         else if (session.NowPlayingQueue is { Count: > 0 })
         {
             // resume the first item in the queue
             string item_id = session.NowPlayingQueue[0].Id.ToString();
             Logger.LogDebug("PlayIntent: resuming from NowPlayingQueue[0], itemId={ItemId}", item_id);
-            return Task.FromResult<SkillResponse>(BuildAudioPlayerResponse(PlayBehavior.Enqueue, GetStreamUrl(item_id, user), item_id, null, user, context));
+            return Task.FromResult<SkillResponse>(Launch.BuildAudioPlayerResponse(PlayBehavior.Enqueue, Launch.GetStreamUrl(item_id, user), item_id, null, user, context));
         }
 
         Logger.LogDebug("PlayIntent: nothing to play, returning empty response");

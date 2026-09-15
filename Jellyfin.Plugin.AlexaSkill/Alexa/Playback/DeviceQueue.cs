@@ -91,7 +91,7 @@ public sealed class DeviceQueue
     /// <summary>
     /// Gets or sets the item ID of the last user-initiated play on this device.
     /// Recorded at two sites: audio (incl. audiobooks, with chapter precision) in
-    /// <c>BaseHandler.BuildAudioPlayerResponse</c>, and video (movies/episodes) in
+    /// <c>PlaybackLaunchBuilder.BuildAudioPlayerResponse</c>, and video (movies/episodes) in
     /// <c>LastPlayedResponseInterceptor</c> (the response-pipeline chokepoint that catches
     /// VideoApp.Launch plays bypassing BuildAudioPlayerResponse). Unlike
     /// <c>context.AudioPlayer.Token</c>, this is updated by VideoApp.Launch plays too,

@@ -161,7 +161,7 @@ public class ListQueueIntentHandler : BaseHandler
             && Apl.AplHelper.VisualsEnabled)
         {
             var queueItems = resolvedItems.Select(i =>
-                new Apl.QueueDisplayItem { Title = i.Name, Artist = GetArtistSubtitle(i), ArtUrl = GetImageUrl(i.Id.ToString("N"), user) }).ToList();
+                new Apl.QueueDisplayItem { Title = i.Name, Artist = GetArtistSubtitle(i), ArtUrl = Launch.GetImageUrl(i.Id.ToString("N"), user) }).ToList();
             var directive = Apl.AplHelper.BuildQueueDirective(queueItems, context);
             if (directive != null)
             {

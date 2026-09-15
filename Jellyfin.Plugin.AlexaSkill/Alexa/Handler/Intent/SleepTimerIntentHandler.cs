@@ -152,7 +152,7 @@ public class SleepTimerIntentHandler : BaseHandler
                         // in the URL path is unmatchable), and the replay Token is the
                         // CLEAN id string with NO sleep suffix: a cancel replays with
                         // no deadline, so PlaybackNearlyFinished sees nothing to enforce.
-                        Url = GetStreamUrl(itemGuid.ToString(), user),
+                        Url = Launch.GetStreamUrl(itemGuid.ToString(), user),
                         Token = itemGuid.ToString(),
                         OffsetInMilliseconds = offsetInMilliseconds
                     }
@@ -191,7 +191,7 @@ public class SleepTimerIntentHandler : BaseHandler
                     // The canonicalized GUID also feeds the stream URL: during sleep
                     // playback the raw token carries the sleep suffix, which would put a
                     // composite id into the URL path (the same re-arm defect family).
-                    Url = GetStreamUrl(itemGuid.ToString(), user),
+                    Url = Launch.GetStreamUrl(itemGuid.ToString(), user),
                     Token = token,
                     OffsetInMilliseconds = offsetInMilliseconds
                 }

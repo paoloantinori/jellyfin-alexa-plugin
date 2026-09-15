@@ -11,7 +11,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 /// <summary>
 /// Response interceptor that records the last-played item per device for VIDEO content
 /// (movies/TV episodes): the one play path that bypasses
-/// <c>BaseHandler.BuildAudioPlayerResponse</c>. Those handlers build a <c>VideoApp.Launch</c>
+/// <c>PlaybackLaunchBuilder.BuildAudioPlayerResponse</c>. Those handlers build a <c>VideoApp.Launch</c>
 /// directive inline with either a <c>/Videos/{id}/stream</c> source URL (compatible codecs,
 /// served statically) or the episode remux HLS URL
 /// (<c>/alexaskill/api/video-audio/episode/{id}/stream.m3u8</c>, JF-498), so this
@@ -19,7 +19,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 /// </summary>
 /// <remarks>
 /// Audio (incl. audiobooks, with chapter precision) is recorded separately in
-/// <c>BaseHandler.BuildAudioPlayerResponse</c>; this interceptor intentionally only acts on
+/// <c>PlaybackLaunchBuilder.BuildAudioPlayerResponse</c>; this interceptor intentionally only acts on
 /// the two VIDEO source shapes to avoid duplicating that recording and to preserve audiobook
 /// chapter accuracy (the audiobook HLS concat URL carries only the book ID, not the chapter).
 /// </remarks>
@@ -68,7 +68,7 @@ public class LastPlayedResponseInterceptor : IResponseInterceptor
 
         // First VideoApp.Launch directive pointing at a /Videos/ stream = a movie/episode play.
         // (Audio-via-VideoApp and audiobook-concat URLs use /alexaskill/api/video-audio/... and
-        // are recorded with chapter precision by BaseHandler.BuildAudioPlayerResponse instead.)
+        // are recorded with chapter precision by PlaybackLaunchBuilder.BuildAudioPlayerResponse instead.)
         foreach (IDirective directive in context.Response.Response.Directives)
         {
             if (directive is not PluginVideoApp videoDirective)

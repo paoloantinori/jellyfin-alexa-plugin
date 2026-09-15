@@ -187,33 +187,6 @@ public class SsmlResponseTests
     }
 
     [Fact]
-    public void TellLocalized_SsmlKeyExists_ReturnsSessionEndingSsmlTell_WithEscapedArgs()
-    {
-        var response = SpeechBuilder.TellLocalized("NowPlayingSsml", "NowPlaying", "en-US", "Rock & Roll");
-
-        Assert.True(response.Response.ShouldEndSession ?? false);
-        var speech = Assert.IsType<SsmlOutputSpeech>(response.Response.OutputSpeech);
-        // Same JF-407 contract as AskLocalized: string args are escaped exactly once
-        // ("Rock & Roll" becomes "Rock &amp; Roll", never raw and never double-escaped).
-        Assert.Contains("Rock &amp; Roll", speech.Ssml);
-        Assert.DoesNotContain("Rock & Roll", speech.Ssml);
-        Assert.StartsWith("<speak>", speech.Ssml);
-        XDocument.Parse(speech.Ssml); // throws if the <speak> SSML is not well-formed XML
-    }
-
-    [Fact]
-    public void TellLocalized_MissingSsmlKey_FallsBackToPlainTextWithRawArgs()
-    {
-        var response = SpeechBuilder.TellLocalized(
-            "NonExistentSsmlKey12345", "NowPlaying", "en-US", "Tom & Jerry");
-
-        Assert.True(response.Response.ShouldEndSession ?? false);
-        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
-        Assert.Contains("Tom & Jerry", speech.Text);
-        Assert.DoesNotContain("&amp;", speech.Text);
-    }
-
-    [Fact]
     public void BuildOutputSpeech_ByteIdenticalToPreMigrationHandRolledShape()
     {
         // JF-315 batch 3 migration proof: the five sites that used to call

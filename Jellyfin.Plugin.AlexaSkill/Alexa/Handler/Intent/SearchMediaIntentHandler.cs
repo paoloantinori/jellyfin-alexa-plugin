@@ -241,7 +241,7 @@ public class SearchMediaIntentHandler : BaseHandler
         }
 
         var topItems = deduped.Take(3).ToList();
-        var matches = topItems.Select(i => (i.Id, FormatWithTypeLabel(i), (string?)GetImageUrl(i.Id.ToString("N"), user))).ToList();
+        var matches = topItems.Select(i => (i.Id, FormatWithTypeLabel(i), (string?)Launch.GetImageUrl(i.Id.ToString("N"), user))).ToList();
         Logger.LogInformation("Disambiguating top {Count} items: {Items}", topItems.Count, string.Join(", ", topItems.Select(i => i.Name)));
         Logger.LogDebug("SearchMedia: returning disambiguation AskFirstMatch with {Count} choices", topItems.Count);
         SkillResponse response = DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeSong, locale, context);
@@ -472,9 +472,9 @@ public class SearchMediaIntentHandler : BaseHandler
                 BuildVideoLaunchSpeech(item, locale, _userDataManager, jellyfinUser, GetAnnounceNowPlaying(user))).ConfigureAwait(false);
         }
 
-        return BuildAudioPlayerResponse(
+        return Launch.BuildAudioPlayerResponse(
             global::Alexa.NET.Response.Directive.PlayBehavior.ReplaceAll,
-            GetStreamUrl(itemId, user),
+            Launch.GetStreamUrl(itemId, user),
             itemId,
             item,
             user,

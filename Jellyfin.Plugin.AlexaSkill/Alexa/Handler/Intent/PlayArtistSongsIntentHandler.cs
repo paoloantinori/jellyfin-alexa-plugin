@@ -632,7 +632,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             if (missOutcome == FuzzyMissOutcome.NotFound)
             {
                 Logger.LogDebug("PlayArtistSongs: fuzzy miss outcome=NotFound, asking user to disambiguate");
-                var matches = artists.Take(3).Select(a => (a.Id, a.Name, (string?)GetImageUrl(a.Id.ToString("N"), user))).ToList();
+                var matches = artists.Take(3).Select(a => (a.Id, a.Name, (string?)Launch.GetImageUrl(a.Id.ToString("N"), user))).ToList();
                 return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeArtist, locale, context);
             }
 
@@ -769,7 +769,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         Logger.LogDebug(
             "PlayArtistSongs: returning AudioPlayer, itemId={ItemId}, startIndex={StartIndex}, queueSize={QueueSize}, offset=0",
             itemId, startIndex, queueItems.Count);
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, artistsItems[0], user, context, announceLocale: locale);
+        return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, artistsItems[0], user, context, announceLocale: locale);
     }
 
     /// <summary>
@@ -889,7 +889,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             artist.Name, musician);
         var matches = new List<(Guid Id, string Name, string? ArtUrl)>
         {
-            (artist.Id, artist.Name, GetImageUrl(artist.Id.ToString("N"), user))
+            (artist.Id, artist.Name, Launch.GetImageUrl(artist.Id.ToString("N"), user))
         };
         return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeArtist, locale, context);
     }

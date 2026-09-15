@@ -148,29 +148,6 @@ public static class SpeechBuilder
     }
 
     /// <summary>
-    /// Build a session-ending Tell using SSML when available, with a plaintext
-    /// fallback: the Tell sibling of <see cref="AskLocalized"/> (JF-315 batch 3,
-    /// the batch-1b follow-up), composing <see cref="BuildOutputSpeech"/> so the
-    /// key-pair and raw-args contract (args are RAW: the SSML path escapes them
-    /// internally, the plaintext path keeps them raw) lives in exactly one place.
-    /// Census note: no production site matches this contract today. The surviving
-    /// full-Tell GetSsml ternaries (MediaInfoIntentHandler) pass PRE-ESCAPED or
-    /// pre-composed SSML-ready content as their SSML args, which internal
-    /// escaping would double-escape or corrupt, so they stay hand-written; the
-    /// OutputSpeech-shape duplicates consolidated in this batch went to
-    /// BuildOutputSpeech directly. When the cluster-C
-    /// ResponseFactory lands it must either adopt this member or remove it.
-    /// </summary>
-    /// <param name="ssmlKey">The ResponseStrings key for the SSML variant.</param>
-    /// <param name="textKey">The ResponseStrings key for the plain-text variant.</param>
-    /// <param name="locale">The request locale.</param>
-    /// <param name="args">Format args for both variants (raw, not XML-escaped).</param>
-    /// <returns>A session-ending Tell response.</returns>
-    public static SkillResponse TellLocalized(
-        string ssmlKey, string textKey, string locale, params object[] args)
-        => ResponseBuilder.Tell(BuildOutputSpeech(ssmlKey, textKey, locale, args));
-
-    /// <summary>
     /// Escape SSML-reserved chars in string args for safe interpolation into &lt;speak&gt;.
     /// Non-string args (counts, etc.) pass through unchanged.
     /// </summary>

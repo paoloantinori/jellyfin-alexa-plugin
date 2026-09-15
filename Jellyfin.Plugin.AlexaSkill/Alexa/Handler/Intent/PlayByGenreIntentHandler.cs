@@ -165,6 +165,6 @@ public class PlayByGenreIntentHandler : BaseHandler
 
         string itemId = items[0].Id.ToString();
 
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, items[0], user, context);
+        return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, items[0], user, context);
     }
 }

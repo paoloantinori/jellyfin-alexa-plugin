@@ -151,7 +151,7 @@ public class StartOverIntentHandler : BaseHandler
 
             if (Plugin.Instance?.Configuration?.NativeControlsForBooks == true)
             {
-                SkillResponse response = BuildVideoAppAudioResponse(itemId, item, user, context: context);
+                SkillResponse response = Launch.BuildVideoAppAudioResponse(itemId, item, user, context: context);
 
                 // JF-501: the restart announce rides the progressive vehicle on a VideoApp
                 // launch (same as the movie branch); a screenless device degrades to
@@ -179,7 +179,7 @@ public class StartOverIntentHandler : BaseHandler
                 new PlainTextOutputSpeech(ResponseStrings.Get("RestartingContent", locale, item.Name))).ConfigureAwait(false);
         }
 
-        return BuildAudioPlayerResponse(
-            PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, item, user, context);
+        return Launch.BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, item, user, context);
     }
 }

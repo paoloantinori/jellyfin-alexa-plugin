@@ -607,7 +607,7 @@ public class MediaInfoIntentHandler : BaseHandler
             return;
         }
 
-        string imageUrl = GetImageUrl(item.Id.ToString("N"), user);
+        string imageUrl = Launch.GetImageUrl(item.Id.ToString("N"), user);
         var audio = new MediaBrowser.Controller.Entities.Audio.Audio { Name = item.Name ?? string.Empty };
         audio.Artists = !string.IsNullOrEmpty(item.AlbumArtist) ? new List<string> { item.AlbumArtist } : new List<string>();
         audio.Album = item.Album;

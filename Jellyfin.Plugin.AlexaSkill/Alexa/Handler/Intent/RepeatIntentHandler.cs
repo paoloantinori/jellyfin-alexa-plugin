@@ -8,6 +8,7 @@ using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -135,8 +136,8 @@ public class RepeatIntentHandler : BaseHandler
             string id = item.Id.ToString();
             Logger.LogInformation("RepeatIntent: restarting current track '{ItemName}' ({ItemId}) from the beginning", item.Name, id);
 
-            AudioLaunchSource source = ResolveAudioLaunchSource(item, id, user, 0);
-            return Task.FromResult<SkillResponse>(BuildAudioPlayerResponse(
+            AudioLaunchSource source = Launch.ResolveAudioLaunchSource(item, id, user, 0);
+            return Task.FromResult<SkillResponse>(Launch.BuildAudioPlayerResponse(
                 PlayBehavior.ReplaceAll,
                 source,
                 id,

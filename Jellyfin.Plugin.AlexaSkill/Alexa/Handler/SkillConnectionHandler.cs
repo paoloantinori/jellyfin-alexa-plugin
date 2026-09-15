@@ -8,6 +8,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
@@ -157,8 +158,8 @@ public class SkillConnectionHandler : BaseHandler
         // JF-507: codec-gated audio-launch decision; an EAC3-family video item at the
         // head of the favorites queue routes to the audio-only transcode instead of
         // dying on the raw static bytes (JF-505 does not apply: audio-shaped launch).
-        AudioLaunchSource source = ResolveAudioLaunchSource(firstItem, itemId, user, 0);
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source, itemId, firstItem, user, context);
+        AudioLaunchSource source = Launch.ResolveAudioLaunchSource(firstItem, itemId, user, 0);
+        return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source, itemId, firstItem, user, context);
     }
 
     private Task<SkillResponse> HandlePlayMediaTask(LaunchRequest launchRequest, Context context, Entities.User user, SessionInfo session, string locale, CancellationToken cancellationToken)

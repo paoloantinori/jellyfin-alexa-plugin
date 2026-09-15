@@ -25,7 +25,7 @@ using Xunit;
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
 /// <summary>
-/// A minimal concrete handler used to test the <see cref="BaseHandler.BuildAudioPlayerResponse"/> method directly.
+/// A minimal concrete handler used to test PlaybackLaunchBuilder.BuildAudioPlayerResponse (via handler.Launch) directly.
 /// </summary>
 internal class CoverArtTestHandler : BaseHandler
 {
@@ -61,19 +61,16 @@ public class CoverArtTests : PluginTestBase
     private static Entities.User CreateUser(Guid? id = null, string token = "test-token")
         => TestHelpers.CreateTestUser(id, jellyfinToken: token);
 
-    private static Audio CreateSong(string name = "Test Song", Guid? id = null)
-        => new() { Name = name, Id = id ?? Guid.NewGuid() };
-
     [Fact]
     public void BuildAudioPlayerResponse_WithItem_IncludesCoverArt()
     {
         var handler = CreateHandler();
-        var song = CreateSong("My Song");
+        var song = TestHelpers.CreateSong("My Song");
         var user = CreateUser();
         string itemId = song.Id.ToString();
-        string streamUrl = handler.GetStreamUrl(itemId, user);
+        string streamUrl = handler.Launch.GetStreamUrl(itemId, user);
 
-        var response = handler.BuildAudioPlayerResponse(
+        var response = handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
 
         var directive = Assert.IsType<AudioPlayerPlayDirective>(
@@ -93,12 +90,12 @@ public class CoverArtTests : PluginTestBase
     public void BuildAudioPlayerResponse_WithItem_CorrectImageUrl()
     {
         var handler = CreateHandler();
-        var song = CreateSong(id: Guid.Parse("11111111-1111-1111-1111-111111111111"));
+        var song = TestHelpers.CreateSong(id: Guid.Parse("11111111-1111-1111-1111-111111111111"));
         var user = CreateUser(token: "my-api-key");
         string itemId = song.Id.ToString();
-        string streamUrl = handler.GetStreamUrl(itemId, user);
+        string streamUrl = handler.Launch.GetStreamUrl(itemId, user);
 
-        var response = handler.BuildAudioPlayerResponse(
+        var response = handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
 
         var directive = Assert.IsType<AudioPlayerPlayDirective>(
@@ -114,12 +111,12 @@ public class CoverArtTests : PluginTestBase
     public void BuildAudioPlayerResponse_WithItem_SetsStreamUrl()
     {
         var handler = CreateHandler();
-        var song = CreateSong();
+        var song = TestHelpers.CreateSong();
         var user = CreateUser(token: "stream-token");
         string itemId = song.Id.ToString();
-        string streamUrl = handler.GetStreamUrl(itemId, user);
+        string streamUrl = handler.Launch.GetStreamUrl(itemId, user);
 
-        var response = handler.BuildAudioPlayerResponse(
+        var response = handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
 
         var directive = Assert.IsType<AudioPlayerPlayDirective>(
@@ -134,12 +131,12 @@ public class CoverArtTests : PluginTestBase
     public void BuildAudioPlayerResponse_WithOffset_IncludesOffset()
     {
         var handler = CreateHandler();
-        var song = CreateSong();
+        var song = TestHelpers.CreateSong();
         var user = CreateUser();
         string itemId = song.Id.ToString();
-        string streamUrl = handler.GetStreamUrl(itemId, user);
+        string streamUrl = handler.Launch.GetStreamUrl(itemId, user);
 
-        var response = handler.BuildAudioPlayerResponse(
+        var response = handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, streamUrl, itemId, song, user, offsetInMilliseconds: 30000);
 
         var directive = Assert.IsType<AudioPlayerPlayDirective>(
@@ -153,12 +150,12 @@ public class CoverArtTests : PluginTestBase
     public void BuildAudioPlayerResponse_WithZeroOffset_DefaultsToZero()
     {
         var handler = CreateHandler();
-        var song = CreateSong();
+        var song = TestHelpers.CreateSong();
         var user = CreateUser();
         string itemId = song.Id.ToString();
-        string streamUrl = handler.GetStreamUrl(itemId, user);
+        string streamUrl = handler.Launch.GetStreamUrl(itemId, user);
 
-        var response = handler.BuildAudioPlayerResponse(
+        var response = handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
 
         var directive = Assert.IsType<AudioPlayerPlayDirective>(
@@ -174,9 +171,9 @@ public class CoverArtTests : PluginTestBase
         var handler = CreateHandler();
         var user = CreateUser(token: "null-test-token");
         string itemId = Guid.NewGuid().ToString();
-        string streamUrl = handler.GetStreamUrl(itemId, user);
+        string streamUrl = handler.Launch.GetStreamUrl(itemId, user);
 
-        var response = handler.BuildAudioPlayerResponse(
+        var response = handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, streamUrl, itemId, null!, user);
 
         var directive = Assert.IsType<AudioPlayerPlayDirective>(
@@ -193,12 +190,12 @@ public class CoverArtTests : PluginTestBase
     public void BuildAudioPlayerResponse_UsesReplaceAllPlayBehavior()
     {
         var handler = CreateHandler();
-        var song = CreateSong();
+        var song = TestHelpers.CreateSong();
         var user = CreateUser();
         string itemId = song.Id.ToString();
-        string streamUrl = handler.GetStreamUrl(itemId, user);
+        string streamUrl = handler.Launch.GetStreamUrl(itemId, user);
 
-        var response = handler.BuildAudioPlayerResponse(
+        var response = handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
 
         var directive = Assert.IsType<AudioPlayerPlayDirective>(
@@ -212,12 +209,12 @@ public class CoverArtTests : PluginTestBase
     public void BuildAudioPlayerResponse_UsesEnqueuePlayBehavior()
     {
         var handler = CreateHandler();
-        var song = CreateSong();
+        var song = TestHelpers.CreateSong();
         var user = CreateUser();
         string itemId = song.Id.ToString();
-        string streamUrl = handler.GetStreamUrl(itemId, user);
+        string streamUrl = handler.Launch.GetStreamUrl(itemId, user);
 
-        var response = handler.BuildAudioPlayerResponse(
+        var response = handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.Enqueue, streamUrl, itemId, song, user);
 
         var directive = Assert.IsType<AudioPlayerPlayDirective>(
@@ -231,12 +228,12 @@ public class CoverArtTests : PluginTestBase
     public void BuildAudioPlayerResponse_EndsSession()
     {
         var handler = CreateHandler();
-        var song = CreateSong();
+        var song = TestHelpers.CreateSong();
         var user = CreateUser();
         string itemId = song.Id.ToString();
-        string streamUrl = handler.GetStreamUrl(itemId, user);
+        string streamUrl = handler.Launch.GetStreamUrl(itemId, user);
 
-        var response = handler.BuildAudioPlayerResponse(
+        var response = handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
 
         Assert.True(response.Response.ShouldEndSession);
@@ -246,12 +243,12 @@ public class CoverArtTests : PluginTestBase
     public void BuildAudioPlayerResponse_VersionIsSet()
     {
         var handler = CreateHandler();
-        var song = CreateSong();
+        var song = TestHelpers.CreateSong();
         var user = CreateUser();
         string itemId = song.Id.ToString();
-        string streamUrl = handler.GetStreamUrl(itemId, user);
+        string streamUrl = handler.Launch.GetStreamUrl(itemId, user);
 
-        var response = handler.BuildAudioPlayerResponse(
+        var response = handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
 
         Assert.Equal("1.0", response.Version);
@@ -262,12 +259,12 @@ public class CoverArtTests : PluginTestBase
     public void BuildAudioPlayerResponse_SingleDirective()
     {
         var handler = CreateHandler();
-        var song = CreateSong();
+        var song = TestHelpers.CreateSong();
         var user = CreateUser();
         string itemId = song.Id.ToString();
-        string streamUrl = handler.GetStreamUrl(itemId, user);
+        string streamUrl = handler.Launch.GetStreamUrl(itemId, user);
 
-        var response = handler.BuildAudioPlayerResponse(
+        var response = handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
 
         Assert.NotNull(response.Response.Directives);
@@ -279,12 +276,12 @@ public class CoverArtTests : PluginTestBase
     public void BuildAudioPlayerResponse_ArtAndBackgroundImageUseSameUrl()
     {
         var handler = CreateHandler();
-        var song = CreateSong();
+        var song = TestHelpers.CreateSong();
         var user = CreateUser();
         string itemId = song.Id.ToString();
-        string streamUrl = handler.GetStreamUrl(itemId, user);
+        string streamUrl = handler.Launch.GetStreamUrl(itemId, user);
 
-        var response = handler.BuildAudioPlayerResponse(
+        var response = handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
 
         var directive = Assert.IsType<AudioPlayerPlayDirective>(
@@ -301,12 +298,12 @@ public class CoverArtTests : PluginTestBase
     {
         var handler = CreateHandler();
         var songId = Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
-        var song = CreateSong("Song", songId);
+        var song = TestHelpers.CreateSong("Song", songId);
         var user = CreateUser();
         string itemId = song.Id.ToString();
-        string streamUrl = handler.GetStreamUrl(itemId, user);
+        string streamUrl = handler.Launch.GetStreamUrl(itemId, user);
 
-        var response = handler.BuildAudioPlayerResponse(
+        var response = handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
 
         var directive = Assert.IsType<AudioPlayerPlayDirective>(
@@ -321,12 +318,12 @@ public class CoverArtTests : PluginTestBase
     public void BuildAudioPlayerResponse_ImageUrlContainsApiKey()
     {
         var handler = CreateHandler();
-        var song = CreateSong();
+        var song = TestHelpers.CreateSong();
         var user = CreateUser(token: "secret-key-123");
         string itemId = song.Id.ToString();
-        string streamUrl = handler.GetStreamUrl(itemId, user);
+        string streamUrl = handler.Launch.GetStreamUrl(itemId, user);
 
-        var response = handler.BuildAudioPlayerResponse(
+        var response = handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
 
         var directive = Assert.IsType<AudioPlayerPlayDirective>(
@@ -340,12 +337,12 @@ public class CoverArtTests : PluginTestBase
     public void BuildAudioPlayerResponse_WithItem_NameWithSpecialCharacters()
     {
         var handler = CreateHandler();
-        var song = CreateSong("Rock & Roll - Live (Remastered)");
+        var song = TestHelpers.CreateSong("Rock & Roll - Live (Remastered)");
         var user = CreateUser();
         string itemId = song.Id.ToString();
-        string streamUrl = handler.GetStreamUrl(itemId, user);
+        string streamUrl = handler.Launch.GetStreamUrl(itemId, user);
 
-        var response = handler.BuildAudioPlayerResponse(
+        var response = handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
 
         var directive = Assert.IsType<AudioPlayerPlayDirective>(
@@ -359,12 +356,12 @@ public class CoverArtTests : PluginTestBase
     public void BuildAudioPlayerResponse_UsesReplaceEnqueuedPlayBehavior()
     {
         var handler = CreateHandler();
-        var song = CreateSong();
+        var song = TestHelpers.CreateSong();
         var user = CreateUser();
         string itemId = song.Id.ToString();
-        string streamUrl = handler.GetStreamUrl(itemId, user);
+        string streamUrl = handler.Launch.GetStreamUrl(itemId, user);
 
-        var response = handler.BuildAudioPlayerResponse(
+        var response = handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceEnqueued, streamUrl, itemId, song, user);
 
         var directive = Assert.IsType<AudioPlayerPlayDirective>(
@@ -387,9 +384,9 @@ public class CoverArtTests : PluginTestBase
         };
         var user = CreateUser();
         string itemId = song.Id.ToString();
-        string streamUrl = handler.GetStreamUrl(itemId, user);
+        string streamUrl = handler.Launch.GetStreamUrl(itemId, user);
 
-        var response = handler.BuildAudioPlayerResponse(
+        var response = handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
 
         var directive = Assert.IsType<AudioPlayerPlayDirective>(
@@ -412,9 +409,9 @@ public class CoverArtTests : PluginTestBase
         };
         var user = CreateUser();
         string itemId = song.Id.ToString();
-        string streamUrl = handler.GetStreamUrl(itemId, user);
+        string streamUrl = handler.Launch.GetStreamUrl(itemId, user);
 
-        var response = handler.BuildAudioPlayerResponse(
+        var response = handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
 
         var directive = Assert.IsType<AudioPlayerPlayDirective>(
@@ -435,9 +432,9 @@ public class CoverArtTests : PluginTestBase
         };
         var user = CreateUser();
         string itemId = song.Id.ToString();
-        string streamUrl = handler.GetStreamUrl(itemId, user);
+        string streamUrl = handler.Launch.GetStreamUrl(itemId, user);
 
-        var response = handler.BuildAudioPlayerResponse(
+        var response = handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
 
         var directive = Assert.IsType<AudioPlayerPlayDirective>(
@@ -459,9 +456,9 @@ public class CoverArtTests : PluginTestBase
         };
         var user = CreateUser();
         string itemId = episode.Id.ToString();
-        string streamUrl = handler.GetStreamUrl(itemId, user);
+        string streamUrl = handler.Launch.GetStreamUrl(itemId, user);
 
-        var response = handler.BuildAudioPlayerResponse(
+        var response = handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, streamUrl, itemId, episode, user);
 
         var directive = Assert.IsType<AudioPlayerPlayDirective>(
@@ -543,19 +540,16 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
     private static Entities.User CreateUser(string token = "test-token")
         => TestHelpers.CreateTestUser(jellyfinToken: token);
 
-    private static Audio CreateSong(string name = "Test Song", Guid? id = null)
-        => new() { Name = name, Id = id ?? Guid.NewGuid() };
-
     [Fact]
     public void BuildAudioPlayerResponse_NativeControlsOn_UsesVideoAppDirective()
     {
         var handler = CreateHandler();
-        var song = CreateSong("My Song");
+        var song = TestHelpers.CreateSong("My Song");
         var user = CreateUser();
         string itemId = song.Id.ToString();
-        string streamUrl = handler.GetStreamUrl(itemId, user);
+        string streamUrl = handler.Launch.GetStreamUrl(itemId, user);
 
-        var response = handler.BuildAudioPlayerResponse(
+        var response = handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
 
         var directive = Assert.IsType<VideoAppLaunchDirective>(
@@ -573,12 +567,12 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
         // bypass AttachAnnounceIfEnabled. Music announce is gated by AnnounceAudioPlays (opt-in).
         _config.AnnounceAudioPlays = true;
         var handler = CreateHandler();
-        var song = CreateSong("My Song");
+        var song = TestHelpers.CreateSong("My Song");
         var user = CreateUser();
         string itemId = song.Id.ToString();
 
-        var response = handler.BuildAudioPlayerResponse(
-            PlayBehavior.ReplaceAll, handler.GetStreamUrl(itemId, user), itemId, song, user, context: null, announceLocale: "en-US");
+        var response = handler.Launch.BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll, handler.Launch.GetStreamUrl(itemId, user), itemId, song, user, context: null, announceLocale: "en-US");
 
         Assert.IsType<VideoAppLaunchDirective>(Assert.Single(response.Response.Directives));
         Assert.NotNull(response.Response.OutputSpeech);
@@ -590,12 +584,12 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
     {
         _config.AnnounceAudioPlays = false;
         var handler = CreateHandler();
-        var song = CreateSong("My Song");
+        var song = TestHelpers.CreateSong("My Song");
         var user = CreateUser();
         string itemId = song.Id.ToString();
 
-        var response = handler.BuildAudioPlayerResponse(
-            PlayBehavior.ReplaceAll, handler.GetStreamUrl(itemId, user), itemId, song, user, context: null, announceLocale: "en-US");
+        var response = handler.Launch.BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll, handler.Launch.GetStreamUrl(itemId, user), itemId, song, user, context: null, announceLocale: "en-US");
 
         Assert.IsType<VideoAppLaunchDirective>(Assert.Single(response.Response.Directives));
         Assert.Null(response.Response.OutputSpeech);
@@ -610,12 +604,12 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
         _config.AnnounceAudioPlays = true;
         _config.NativeControlsForAudio = false; // force the AudioPlayer branch
         var handler = CreateHandler();
-        var song = CreateSong("My Song");
+        var song = TestHelpers.CreateSong("My Song");
         var user = CreateUser();
         string itemId = song.Id.ToString();
 
-        var response = handler.BuildAudioPlayerResponse(
-            PlayBehavior.ReplaceAll, handler.GetStreamUrl(itemId, user), itemId, song, user, context: null, offsetInMilliseconds: 45000, announceLocale: "en-US");
+        var response = handler.Launch.BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll, handler.Launch.GetStreamUrl(itemId, user), itemId, song, user, context: null, offsetInMilliseconds: 45000, announceLocale: "en-US");
 
         Assert.NotNull(response.Response.OutputSpeech);
         string speech = TestHelpers.GetSpeechText(response);
@@ -628,12 +622,12 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
     public void BuildAudioPlayerResponse_NativeControlsOn_SourceUsesVideoAudioEndpoint()
     {
         var handler = CreateHandler();
-        var song = CreateSong(id: Guid.Parse("22222222-2222-2222-2222-222222222222"));
+        var song = TestHelpers.CreateSong(id: Guid.Parse("22222222-2222-2222-2222-222222222222"));
         var user = CreateUser(token: "my-video-token");
         string itemId = song.Id.ToString();
-        string streamUrl = handler.GetStreamUrl(itemId, user);
+        string streamUrl = handler.Launch.GetStreamUrl(itemId, user);
 
-        var response = handler.BuildAudioPlayerResponse(
+        var response = handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
 
         var directive = Assert.IsType<VideoAppLaunchDirective>(
@@ -649,12 +643,12 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
     public void BuildAudioPlayerResponse_NativeControlsOn_SourceDoesNotUseRawStreamUrl()
     {
         var handler = CreateHandler();
-        var song = CreateSong();
+        var song = TestHelpers.CreateSong();
         var user = CreateUser();
         string itemId = song.Id.ToString();
-        string streamUrl = handler.GetStreamUrl(itemId, user);
+        string streamUrl = handler.Launch.GetStreamUrl(itemId, user);
 
-        var response = handler.BuildAudioPlayerResponse(
+        var response = handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
 
         var directive = Assert.IsType<VideoAppLaunchDirective>(
@@ -672,13 +666,13 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
     public void BuildAudioPlayerResponse_NativeControlsOn_EnqueueStaysAudioPlayer()
     {
         var handler = CreateHandler();
-        var song = CreateSong();
+        var song = TestHelpers.CreateSong();
         var user = CreateUser();
         string itemId = song.Id.ToString();
-        string streamUrl = handler.GetStreamUrl(itemId, user);
+        string streamUrl = handler.Launch.GetStreamUrl(itemId, user);
         var context = TestHelpers.CreateTestContext();
 
-        var response = handler.BuildAudioPlayerResponse(
+        var response = handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.Enqueue, streamUrl, itemId, song, user, context);
 
         // Enqueue should stay as AudioPlayer, not VideoApp
@@ -692,12 +686,12 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
     public void BuildAudioPlayerResponse_NativeControlsOn_WithOffsetStaysAudioPlayer()
     {
         var handler = CreateHandler();
-        var song = CreateSong();
+        var song = TestHelpers.CreateSong();
         var user = CreateUser();
         string itemId = song.Id.ToString();
-        string streamUrl = handler.GetStreamUrl(itemId, user);
+        string streamUrl = handler.Launch.GetStreamUrl(itemId, user);
 
-        var response = handler.BuildAudioPlayerResponse(
+        var response = handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, streamUrl, itemId, song, user, offsetInMilliseconds: 5000);
 
         // Resume with offset should stay as AudioPlayer
@@ -710,12 +704,12 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
     public void BuildAudioPlayerResponse_NativeControlsOn_MetadataHasTitle()
     {
         var handler = CreateHandler();
-        var song = CreateSong("Stairway to Heaven");
+        var song = TestHelpers.CreateSong("Stairway to Heaven");
         var user = CreateUser();
         string itemId = song.Id.ToString();
-        string streamUrl = handler.GetStreamUrl(itemId, user);
+        string streamUrl = handler.Launch.GetStreamUrl(itemId, user);
 
-        var response = handler.BuildAudioPlayerResponse(
+        var response = handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
 
         var directive = Assert.IsType<VideoAppLaunchDirective>(
@@ -739,9 +733,9 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
         };
         var user = CreateUser();
         string itemId = song.Id.ToString();
-        string streamUrl = handler.GetStreamUrl(itemId, user);
+        string streamUrl = handler.Launch.GetStreamUrl(itemId, user);
 
-        var response = handler.BuildAudioPlayerResponse(
+        var response = handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
 
         var directive = Assert.IsType<VideoAppLaunchDirective>(
@@ -771,11 +765,11 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
         var user = CreateUser();
         // Per-type routing requires a typed audio item; an empty name still routes to VideoApp
         // and must surface an empty (not null) title.
-        var song = CreateSong(string.Empty);
+        var song = TestHelpers.CreateSong(string.Empty);
         string itemId = song.Id.ToString();
-        string streamUrl = handler.GetStreamUrl(itemId, user);
+        string streamUrl = handler.Launch.GetStreamUrl(itemId, user);
 
-        var response = handler.BuildAudioPlayerResponse(
+        var response = handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
 
         var directive = Assert.IsType<VideoAppLaunchDirective>(
@@ -794,12 +788,12 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
         //   "shouldEndSession flag is not allowed with LaunchVideoApp.Launch Directive"
         // The field must be null (omitted from JSON), not true or false.
         var handler = CreateHandler();
-        var song = CreateSong("Test Song");
+        var song = TestHelpers.CreateSong("Test Song");
         var user = CreateUser();
         string itemId = song.Id.ToString();
-        string streamUrl = handler.GetStreamUrl(itemId, user);
+        string streamUrl = handler.Launch.GetStreamUrl(itemId, user);
 
-        var response = handler.BuildAudioPlayerResponse(
+        var response = handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
 
         Assert.IsType<VideoAppLaunchDirective>(
@@ -815,12 +809,12 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
     public void BuildAudioPlayerResponse_NativeControlsOn_SongStillUsesVideoApp()
     {
         var handler = CreateHandler();
-        var song = CreateSong("Test Song");
+        var song = TestHelpers.CreateSong("Test Song");
         var user = CreateUser();
         string itemId = song.Id.ToString();
-        string streamUrl = handler.GetStreamUrl(itemId, user);
+        string streamUrl = handler.Launch.GetStreamUrl(itemId, user);
 
-        var response = handler.BuildAudioPlayerResponse(
+        var response = handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, streamUrl, itemId, song, user);
 
         // Songs (Audio type) use VideoApp via single-item HLS
@@ -831,7 +825,7 @@ public class VideoAppAudioTests : PluginTestBase, IDisposable
 }
 
 /// <summary>
-/// Test handler exposing BuildAudioPlayerResponse and GetVideoAudioUrl for VideoApp tests.
+/// Test handler whose Launch collaborator provides BuildAudioPlayerResponse and GetVideoAudioUrl for VideoApp tests.
 /// </summary>
 internal class VideoAppTestHandler : BaseHandler
 {
@@ -846,5 +840,5 @@ internal class VideoAppTestHandler : BaseHandler
         => Task.FromResult(ResponseBuilder.Empty());
 
     public string TestGetVideoAudioUrl(string itemId)
-        => GetVideoAudioUrl(itemId);
+        => Launch.GetVideoAudioUrl(itemId);
 }

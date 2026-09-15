@@ -141,10 +141,10 @@ public class FollowMeIntentHandler : BaseHandler
         // Build the audio response (offset 0 since we don't track per-device playback position
         // through DeviceQueueManager — the offset comes from the AudioPlayer context which is
         // only available on the source device, not here)
-        string streamUrl = GetStreamUrl(currentItemId, user);
+        string streamUrl = Launch.GetStreamUrl(currentItemId, user);
         string title = item.Name ?? ResponseStrings.Get("UnknownMedia", locale);
 
-        SkillResponse response = BuildAudioPlayerResponse(
+        SkillResponse response = Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll,
             streamUrl,
             currentItemId,

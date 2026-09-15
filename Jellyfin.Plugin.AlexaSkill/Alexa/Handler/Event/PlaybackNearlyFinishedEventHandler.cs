@@ -142,7 +142,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
 
                     UpdateRecoveryPointer(deviceId, cachedNextId.ToString(), context, cachedItem.Name);
 
-                    return BuildAudioPlayerResponse(PlayBehavior.Enqueue, cachedUrl, cachedNextId.ToString(), cachedItem, user, context);
+                    return Launch.BuildAudioPlayerResponse(PlayBehavior.Enqueue, cachedUrl, cachedNextId.ToString(), cachedItem, user, context);
                 }
 
                 Logger.LogInformation(
@@ -247,7 +247,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         // queue routes to the audio-only transcode instead of dying on the raw static
         // bytes (JF-505 does not apply: this launch is audio-shaped). Offset 0: a fresh
         // queue advance always plays from the item start.
-        AudioLaunchSource source = ResolveAudioLaunchSource(item, itemId, user, 0);
+        AudioLaunchSource source = Launch.ResolveAudioLaunchSource(item, itemId, user, 0);
 
         Logger.LogInformation(
             "Pre-fetching next track for gapless playback: {ItemName} ({ItemId}), loop={LoopMode}, shuffle={Shuffle} (reshuffledQueue={Reshuffled})",
@@ -257,7 +257,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             resolvedOrder,
             resolvedReshuffled);
 
-        return BuildAudioPlayerResponse(PlayBehavior.Enqueue, source, itemId, item, user, context);
+        return Launch.BuildAudioPlayerResponse(PlayBehavior.Enqueue, source, itemId, item, user, context);
     }
 
     /// <summary>

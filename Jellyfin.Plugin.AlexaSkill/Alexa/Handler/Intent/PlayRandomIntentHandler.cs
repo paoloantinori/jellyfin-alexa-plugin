@@ -180,7 +180,7 @@ public class PlayRandomIntentHandler : BaseHandler
                 SpeechBuilder.BuildNowPlayingSpeech(firstItem.Name, locale, GetAnnounceNowPlaying(user))).ConfigureAwait(false);
         }
 
-        return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, firstItem, user, context);
+        return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, firstItem, user, context);
     }
 
     // JF-466: returns the content-access-filtered kinds for the slot instead of

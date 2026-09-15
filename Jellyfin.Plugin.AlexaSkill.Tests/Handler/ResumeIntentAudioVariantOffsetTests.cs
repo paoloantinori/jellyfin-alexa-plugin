@@ -23,7 +23,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// JF-507 critical-review fix + the JF-520 tail adoption, re-scoped by JF-522.
 /// Only fallback 1 (the AudioPlayer context offset, Amazon-written) is
 /// stream-relative by platform contract: it goes through the shared
-/// BaseHandler.ResolveResumedAudioLaunch rebase (launch-scoped base + offset,
+/// PlaybackLaunchBuilder.ResolveResumedAudioLaunch rebase (launch-scoped base + offset,
 /// drop to a 0-restart when no scope is recorded).
 /// Fallbacks 2-3 (session PlayState.PositionTicks,
 /// DeviceQueue.CurrentPositionTicks) are persisted ITEM-ABSOLUTE since the JF-522

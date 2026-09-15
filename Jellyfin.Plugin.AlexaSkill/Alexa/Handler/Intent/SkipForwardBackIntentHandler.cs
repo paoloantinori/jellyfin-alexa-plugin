@@ -121,9 +121,9 @@ public class SkipForwardBackIntentHandler : BaseHandler
         {
             targetTicks = runtimeTicks;
             int endOffsetMs = (int)TimeSpan.FromTicks(targetTicks).TotalMilliseconds;
-            var endResponse = BuildAudioPlayerResponse(
+            var endResponse = Launch.BuildAudioPlayerResponse(
                 PlayBehavior.ReplaceAll,
-                GetStreamUrl(session.FullNowPlayingItem.Id.ToString(), user),
+                Launch.GetStreamUrl(session.FullNowPlayingItem.Id.ToString(), user),
                 session.FullNowPlayingItem.Id.ToString(),
                 session.FullNowPlayingItem,
                 user,
@@ -142,9 +142,9 @@ public class SkipForwardBackIntentHandler : BaseHandler
         string positionStr = ResumeMath.FormatTimeSpan(TimeSpan.FromTicks(targetTicks), locale);
         string announcementKey = forward ? "SkippedForward" : "SkippedBack";
 
-        var response = BuildAudioPlayerResponse(
+        var response = Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll,
-            GetStreamUrl(session.FullNowPlayingItem.Id.ToString(), user),
+            Launch.GetStreamUrl(session.FullNowPlayingItem.Id.ToString(), user),
             session.FullNowPlayingItem.Id.ToString(),
             session.FullNowPlayingItem,
             user,

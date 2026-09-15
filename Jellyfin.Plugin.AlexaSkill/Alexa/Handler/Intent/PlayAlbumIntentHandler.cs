@@ -373,7 +373,7 @@ public class PlayAlbumIntentHandler : BaseHandler
                     matchedArtist.Name, musician);
                 var matches = new List<(Guid Id, string Name, string? ArtUrl)>
                 {
-                    (matchedArtist.Id, matchedArtist.Name, GetImageUrl(matchedArtist.Id.ToString("N"), user))
+                    (matchedArtist.Id, matchedArtist.Name, Launch.GetImageUrl(matchedArtist.Id.ToString("N"), user))
                 };
                 return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeArtist, locale, context);
             }
@@ -557,7 +557,7 @@ public class PlayAlbumIntentHandler : BaseHandler
             if (distinctNames && user.FuzzyMatchBehavior != FuzzyMatchBehavior.AutoPlay)
             {
                 Logger.LogDebug("PlayAlbum: {Count} distinct-name albums, prompting disambiguation", albums.Count);
-                var matches = albums.Take(3).Select(a => (a.Id, a.Name, (string?)GetImageUrl(a.Id.ToString("N"), user))).ToList();
+                var matches = albums.Take(3).Select(a => (a.Id, a.Name, (string?)Launch.GetImageUrl(a.Id.ToString("N"), user))).ToList();
                 return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeAlbum, locale, context);
             }
 

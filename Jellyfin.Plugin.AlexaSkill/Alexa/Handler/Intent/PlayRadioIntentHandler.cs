@@ -383,7 +383,7 @@ public class PlayRadioIntentHandler : BaseHandler
         // playing now, i.e. it announces the tracks that follow it.
         string radioMsg = ResponseStrings.Get("RadioStarted", locale, (queue.Count - 1).ToString(CultureInfo.InvariantCulture));
 
-        var response = BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(first.Id.ToString(), user), first.Id.ToString(), first, user, context);
+        var response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(first.Id.ToString(), user), first.Id.ToString(), first, user, context);
         if (GetAnnounceNowPlaying(user))
         {
             response.Response.OutputSpeech = nowPlayingSsml != null

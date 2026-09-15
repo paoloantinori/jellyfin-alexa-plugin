@@ -180,7 +180,7 @@ public class PlayNextIntentHandler : BaseHandler
             }
             else
             {
-                var matches = songs.Take(3).Select(s => (s.Id, s.Name, (string?)GetImageUrl(s.Id.ToString("N"), user))).ToList();
+                var matches = songs.Take(3).Select(s => (s.Id, s.Name, (string?)Launch.GetImageUrl(s.Id.ToString("N"), user))).ToList();
                 return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeSong, locale, context);
             }
         }
@@ -197,7 +197,7 @@ public class PlayNextIntentHandler : BaseHandler
         {
             session.FullNowPlayingItem = song;
             string itemId = song.Id.ToString();
-            return BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, song, user, context);
+            return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, song, user, context);
         }
 
         Logger.LogInformation("PlayNext: {SongName} queued to play next", song.Name);

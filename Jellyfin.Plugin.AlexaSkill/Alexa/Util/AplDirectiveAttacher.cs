@@ -14,8 +14,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// design: no handler instance state, the logger arrives as a parameter.
 /// Directive template building itself lives in <see cref="Apl.AplHelper"/>.
 /// Members moved verbatim from BaseHandler; call sites migrated mechanically.
-/// TryAttachNowPlayingDirective stayed in BaseHandler (reads config via
-/// GetImageUrl; see its doc comment there for the full rationale).
+/// TryAttachNowPlayingDirective moved on to PlaybackLaunchBuilder in JF-315
+/// batch 4 (it reads config via GetImageUrl, which needs the builder's state).
 /// </summary>
 internal static class AplDirectiveAttacher
 {

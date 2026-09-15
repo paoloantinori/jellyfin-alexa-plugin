@@ -51,7 +51,7 @@ public class VideoAppForAudioPerUserTests : PluginTestBase
         _config.NativeControlsForAudio = true;
         _user.VideoAppForAudio = false;
 
-        var response = _handler.BuildAudioPlayerResponse(
+        var response = _handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, "http://x/audio", NewSong().Id.ToString(), NewSong(), _user);
 
         Assert.IsType<AudioPlayerPlayDirective>(FirstDirective(response));
@@ -65,7 +65,7 @@ public class VideoAppForAudioPerUserTests : PluginTestBase
 
         var song = NewSong();
         var rawStream = "http://localhost:8096/Audio/" + song.Id + "/stream?static=true&api_key=tok";
-        var response = _handler.BuildAudioPlayerResponse(
+        var response = _handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, rawStream, song.Id.ToString(), song, _user);
 
         var directive = Assert.IsType<AudioPlayerPlayDirective>(FirstDirective(response));
@@ -80,7 +80,7 @@ public class VideoAppForAudioPerUserTests : PluginTestBase
         _config.NativeControlsForAudio = false;
         _user.VideoAppForAudio = true;
 
-        var response = _handler.BuildAudioPlayerResponse(
+        var response = _handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, "http://x/audio", NewSong().Id.ToString(), NewSong(), _user);
 
         Assert.IsType<PluginVideoApp>(FirstDirective(response));
@@ -92,7 +92,7 @@ public class VideoAppForAudioPerUserTests : PluginTestBase
         _config.NativeControlsForAudio = true;
         _user.VideoAppForAudio = null;
 
-        var response = _handler.BuildAudioPlayerResponse(
+        var response = _handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, "http://x/audio", NewSong().Id.ToString(), NewSong(), _user);
 
         Assert.IsType<PluginVideoApp>(FirstDirective(response));
@@ -104,7 +104,7 @@ public class VideoAppForAudioPerUserTests : PluginTestBase
         _config.NativeControlsForAudio = false;
         _user.VideoAppForAudio = null;
 
-        var response = _handler.BuildAudioPlayerResponse(
+        var response = _handler.Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll, "http://x/audio", NewSong().Id.ToString(), NewSong(), _user);
 
         Assert.IsType<AudioPlayerPlayDirective>(FirstDirective(response));
@@ -141,8 +141,8 @@ public class VideoAppForAudioPerUserTests : PluginTestBase
     }
 
     /// <summary>
-    /// Minimal BaseHandler subclass exposing the inherited BuildAudioPlayerResponse and the
-    /// protected GetVideoAppForAudio resolver for direct testing.
+    /// Minimal BaseHandler subclass; the tests reach BuildAudioPlayerResponse via
+    /// handler.Launch and the internal GetVideoAppForAudio resolver via Launch.
     /// </summary>
     private sealed class TestHandler : BaseHandler
     {
@@ -151,7 +151,7 @@ public class VideoAppForAudioPerUserTests : PluginTestBase
         {
         }
 
-        public bool GetVideoAppForAudioAccessible(Entities.User? user) => GetVideoAppForAudio(user);
+        public bool GetVideoAppForAudioAccessible(Entities.User? user) => Launch.GetVideoAppForAudio(user);
 
         public override bool CanHandle(Request request) => false;
         public override Task<SkillResponse> HandleAsync(
