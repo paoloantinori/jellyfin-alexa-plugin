@@ -3,10 +3,10 @@ id: JF-562
 title: >-
   AMAZON.RepeatIntent is an orphan: no handler, no model declaration in 17
   locales; delivered during playback it kills the session
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-14 20:07'
-updated_date: '2026-09-15 02:06'
+updated_date: '2026-09-15 04:22'
 labels:
   - bug
   - transport
@@ -35,3 +35,9 @@ Audit 2026-09-14 (matrix intent x medium): AMAZON.RepeatIntent is one of the ele
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+CLOSED complete (2026-09-15 night). RepeatIntent is no longer an orphan: RepeatIntentHandler (music restarts current track from 0 with the review-hardened video-displacement gate on the stale AudioPlayer.Token; non-Audio mediums get the honest CannotRepeatContent Tell, 17 locales), AMAZON.RepeatIntent declared name-only in all 17 templates and regenerated, and the completeness sweep found+fixed MORE gaps: LoopOn/LoopOff were also missing in it-IT/de-DE/fr-FR/fr-CA (custom trio kept, dual-accept verified) - all ELEVEN transport built-ins now in all 17 models. FallbackIntentHandler's dead UnsupportedIntent branch deleted (dead since 84c3cf40) with its string and stale test; the controller CouldNotUnderstand path is the pinned unclaimed-intent answer. 14 handler tests; generated mirrors regenerated; fixtures skip-pinned for the post-deploy live probes (bare 'ripeti' vs the curated family). Suite 3797/3797 both TFMs; validators PASS (advisory at baseline); Release 0 warnings. Gates: implementer-run 4-agent simplify + 5-reviewer code-review (real stale-token bug fixed + regression test). Residual filed same-turn: JF-566 (repeat mid-VideoApp-audiobook restarts the previous audio track). DEPLOY NOTE: the new declarations need the 17-locale model rebuild after the DLL swap (rebuild endpoint, locale='*').
+<!-- SECTION:FINAL_SUMMARY:END -->
