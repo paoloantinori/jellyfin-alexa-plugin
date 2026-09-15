@@ -256,6 +256,17 @@ internal static class TestHelpers
     }
 
     /// <summary>
+    /// A real <see cref="AudiobookPositionTracker"/> on a registered temp dir (the class
+    /// is sealed, so tests use the real thing). Wire it into
+    /// <c>Plugin.Instance.AudiobookPositionTracker</c> and Dispose it in finally so the
+    /// persist debounce never outlives the test.
+    /// </summary>
+    internal static AudiobookPositionTracker CreatePositionTracker(string nameSuffix)
+        => new(
+            CreateRegisteredTempDir(nameSuffix + "-abt"),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<AudiobookPositionTracker>.Instance);
+
+    /// <summary>
     /// JF-540: the ONE DeviceQueueManager factory on its own registered temp dir
     /// (<paramref name="nameSuffix"/> + "-dq"). The ctor loads every queue_*.json in
     /// its data dir, so a shared root makes each fixture cross-load (and

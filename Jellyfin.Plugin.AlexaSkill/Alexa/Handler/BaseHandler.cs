@@ -1539,6 +1539,19 @@ public abstract class BaseHandler
                 announceLocale);
         }
 
+        // JF-563 review: the device last-played ledger records HERE too. Direct VideoApp
+        // callers bypass the BuildAudioPlayerResponse chokepoint that owns the record,
+        // and the response interceptor deliberately skips audio-via-VideoApp and
+        // audiobook-concat URLs, so without this a VideoApp-launched play would vanish
+        // from the ledger the launch resume-offer reads. Idempotent where the chokepoint
+        // delegation also records (RecordLastPlayed short-circuits an unchanged item);
+        // the screenless degrade above records through the chokepoint as before.
+        string? ledgerDeviceId = context?.System?.Device?.DeviceID;
+        if (!string.IsNullOrEmpty(ledgerDeviceId))
+        {
+            (Plugin.Instance?.DeviceQueueManager)?.RecordLastPlayed(ledgerDeviceId, itemId);
+        }
+
         bool isAudioBook = item != null && item.GetType().Name.Equals("AudioBook", StringComparison.Ordinal);
 
         string videoAudioUrl;
@@ -1912,6 +1925,34 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// The audiobook position-tracker key for a book item: its parent book folder (the
+    /// key the HLS segment requests record under), falling back to the item itself when
+    /// it has no parent. The canonical definition (JF-563): the record path (segment
+    /// URLs keyed by the parentId the playlists embed) and every resume read site must
+    /// agree on the shape, or the lookup silently misses and resume falls to position 0.
+    /// Pre-existing inline copies of this chain (PlayBook, YesIntent, LaunchRequestHandler)
+    /// are tracked for migration in JF-567.
+    /// </summary>
+    /// <param name="bookItem">An audiobook item (chapter or single-file book).</param>
+    /// <returns>The tracker key (GUID "N" format).</returns>
+    protected static string GetAudiobookBookKey(BaseItem bookItem)
+        => (bookItem.ParentId != Guid.Empty ? bookItem.ParentId : bookItem.Id).ToString("N");
+
+    /// <summary>
+    /// The resume start position for a book: the tracker position first (the HLS concat
+    /// timeline the tracker records), the caller's fallback ticks when the tracker is
+    /// cold. JF-563: shared so every resume site resolves the position in PlayBook's
+    /// order (tracker beats server-side progress).
+    /// </summary>
+    /// <param name="bookKey">The tracker key (<see cref="GetAudiobookBookKey"/>).</param>
+    /// <param name="fallbackTicks">The position to use when the tracker holds none.</param>
+    /// <returns>The resume start ticks (0 when neither source has a position).</returns>
+    protected static long GetAudiobookStartTicks(string bookKey, long fallbackTicks)
+        => Plugin.Instance?.AudiobookPositionTracker?.GetPositionTicks(bookKey) is long tracked && tracked > 0
+            ? tracked
+            : fallbackTicks;
+
+    /// <summary>
     /// Build a VideoApp.Launch response for an audiobook RESUME, pointing at the resume-aware
     /// HLS playlist (<c>?start=&lt;ticks&gt;</c>). The position is encoded in the playlist via
     /// <c>#EXT-X-START</c>; VideoApp.Launch has no offset parameter, so this keeps the seek bar
@@ -1936,7 +1977,18 @@ public abstract class BaseHandler
             Logger.LogDebug(
                 "BuildAudiobookResumeResponse: device {DeviceId} has no VideoApp interface, book item {ItemId} degrades to AudioPlayer resume",
                 context?.System?.Device?.DeviceID ?? "unknown", item.Id);
-            int offsetMs = (int)Math.Min(TimeSpan.FromTicks(Math.Max(startTicks, 0)).TotalMilliseconds, int.MaxValue);
+            // The degrade plays the SINGLE chapter flat, but startTicks may count the
+            // whole-book concat timeline (tracker-first resolution): clamp to the
+            // chapter's runtime (when known) so the directive never carries an offset
+            // past the end of the stream it plays.
+            long clampedTicks = Math.Max(startTicks, 0);
+            long runTimeTicks = item.RunTimeTicks ?? 0;
+            if (runTimeTicks > 0)
+            {
+                clampedTicks = Math.Min(clampedTicks, runTimeTicks);
+            }
+
+            int offsetMs = (int)Math.Min(TimeSpan.FromTicks(clampedTicks).TotalMilliseconds, int.MaxValue);
             return BuildAudioPlayerResponse(
                 PlayBehavior.ReplaceAll,
                 GetStreamUrl(item.Id.ToString(), user),
@@ -1945,6 +1997,15 @@ public abstract class BaseHandler
                 user,
                 context,
                 offsetMs);
+        }
+
+        // JF-563 review: record the device last-played ledger here (this VideoApp launch
+        // bypasses the BuildAudioPlayerResponse chokepoint that owns the record, and the
+        // response interceptor skips audiobook-concat URLs; see BuildVideoAppAudioResponse).
+        string? ledgerDeviceId = context?.System?.Device?.DeviceID;
+        if (!string.IsNullOrEmpty(ledgerDeviceId))
+        {
+            (Plugin.Instance?.DeviceQueueManager)?.RecordLastPlayed(ledgerDeviceId, item.Id.ToString());
         }
 
         Guid parentId = item.ParentId != Guid.Empty ? item.ParentId : item.Id;

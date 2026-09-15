@@ -3,9 +3,10 @@ id: JF-563
 title: >-
   Resume and StartOver of audiobooks bypass NativeControlsForBooks: flat audio
   stream instead of the VideoApp HLS path
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-14 20:08'
+updated_date: '2026-09-15 04:30'
 labels:
   - bug
   - audiobook

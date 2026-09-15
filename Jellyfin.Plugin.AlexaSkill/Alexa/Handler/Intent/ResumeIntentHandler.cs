@@ -43,7 +43,12 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// known) is never minted; the raw offset wins.
 /// Fallback 4 is structurally safe: its video branch launches via the VideoApp path
 /// (never resolves an audio launch, never records a base) and its audio branch uses
-/// the raw static URL (audio items never transcode).
+/// the raw static URL (audio items never transcode). The NativeControlsForBooks book
+/// branches (JF-563: fallback-4 AND the tail, via one shared helper) have the same
+/// property: the sliced VideoApp playlist launch never resolves an audio launch or
+/// records a base, the fallback ticks they mint are only ever item-absolute (a book
+/// never transcodes, so its raw-static output timeline IS its item timeline), and a
+/// screenless device degrades to the raw-static AudioPlayer shape.
 /// </summary>
 public class ResumeIntentHandler : BaseHandler
 {
@@ -96,7 +101,7 @@ public class ResumeIntentHandler : BaseHandler
     /// <param name="session">The session instance.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>Skill response with AudioPlayer directive, or error message.</returns>
-    public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
+    public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         string locale = GetLocale(request);
         var intentReq = request as IntentRequest;
@@ -105,7 +110,7 @@ public class ResumeIntentHandler : BaseHandler
         if (string.Equals(context.AudioPlayer?.PlayerActivity, "PLAYING", StringComparison.Ordinal))
         {
             Logger.LogDebug("ResumeIntent: already PLAYING, returning empty");
-            return Task.FromResult<SkillResponse>(ResponseBuilder.Empty());
+            return ResponseBuilder.Empty();
         }
 
         // Prefer AudioPlayer token (survives session cleanup after PlaybackStopped),
@@ -181,13 +186,13 @@ public class ResumeIntentHandler : BaseHandler
             Logger.LogDebug("ResumeIntent: no item_id from context/session, trying server-side progress fallback");
             if (session == null)
             {
-                return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale)));
+                return ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale));
             }
 
             var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, session.UserId, locale);
             if (userError != null)
             {
-                return Task.FromResult<SkillResponse>(userError);
+                return userError;
             }
 
             Entities.User pluginUser = _config.GetUserById(user.Id) ?? user;
@@ -210,20 +215,34 @@ public class ResumeIntentHandler : BaseHandler
                 item_id = resumeItem.Id.ToString();
                 offset = (int)TimeSpan.FromTicks(resumeTicks).TotalMilliseconds;
 
+                // NativeControlsForBooks (JF-563): an audiobook resumes through the same
+                // VideoApp HLS entry PlayBook uses (the sliced ?start= playlist), not the
+                // flat /Audio stream that loses the seek bar the flag exists to provide.
+                // Gated at the caller, NOT in IsVideoAppLaunchItem: the predicate is the
+                // durable movie-shaped kind list whose other callers (the resume offer's
+                // screenless gate, Repeat's displacement classification) must not treat a
+                // book as video, and the flag is mutable config (the JF-499 W1 split).
+                SkillResponse? bookResponse = await TryBuildNativeControlsBookResumeAsync(
+                    resumeItem, resumeTicks, user, context, request, locale).ConfigureAwait(false);
+                if (bookResponse != null)
+                {
+                    return bookResponse;
+                }
+
                 // Video items use the VideoApp launch directive (the shared predicate owns
                 // the kind list, JF-505; LiveTvChannel included)
                 if (IsVideoAppLaunchItem(resumeItem))
                 {
                     // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
                     // JF-501: the announce is spoken progressively (directive-only final response).
-                    return BuildVideoAppLaunchResponseAsync(
+                    return await BuildVideoAppLaunchResponseAsync(
                         context,
                         request,
                         locale,
                         GetVideoAppLaunchUrl(resumeItem, user),
                         resumeItem.Name,
                         new PlainTextOutputSpeech(
-                            ResponseStrings.Get("NowPlayingWithPosition", locale, resumeItem.Name, FormatPosition(resumeTicks))));
+                            ResponseStrings.Get("NowPlayingWithPosition", locale, resumeItem.Name, FormatPosition(resumeTicks)))).ConfigureAwait(false);
                 }
 
                 // Audio/AudioBook items use AudioPlayer response with offset
@@ -246,10 +265,26 @@ public class ResumeIntentHandler : BaseHandler
                     };
                 }
 
-                return Task.FromResult<SkillResponse>(audioResponse);
+                return audioResponse;
             }
 
-            return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale)));
+            return ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale));
+        }
+
+        // JF-563: the same book routing for a session-held book. A VideoApp launch never
+        // sets the AudioPlayer token, so a book resume typically reaches this tail via
+        // FullNowPlayingItem; without this branch it would flat-launch and lose the
+        // sliced-resume seek bar. The token guard keeps a DISPLACED token authoritative
+        // (a different item playing), mirroring the DeviceQueue fallback's discipline.
+        if (string.IsNullOrEmpty(context.AudioPlayer?.Token)
+            || string.Equals(context.AudioPlayer.Token, session?.FullNowPlayingItem?.Id.ToString(), StringComparison.Ordinal))
+        {
+            SkillResponse? bookResponse = await TryBuildNativeControlsBookResumeAsync(
+                session?.FullNowPlayingItem, offset, user, context, request, locale).ConfigureAwait(false);
+            if (bookResponse != null)
+            {
+                return bookResponse;
+            }
         }
 
         // The tail's JF-514 correction, adopted from the offer path (JF-520) and
@@ -295,6 +330,64 @@ public class ResumeIntentHandler : BaseHandler
             }
         }
 
-        return Task.FromResult<SkillResponse>(response);
+        return response;
+    }
+
+    /// <summary>
+    /// JF-563: the NativeControlsForBooks resume of an audiobook, shared by fallback-4
+    /// (server-side progress) and the tail (a session-held book; a VideoApp launch never
+    /// sets the AudioPlayer token, so a book resume usually arrives via
+    /// FullNowPlayingItem). Rides the same sliced VideoApp HLS playlist PlayBook uses,
+    /// tracker position first, the caller's fallback ticks when the tracker is cold.
+    /// Returns null when the item is not a book or the flag is off, so the caller falls
+    /// through to its normal path. On a screenless device both builders degrade to the
+    /// AudioPlayer flat resume, so the flag cannot break the play.
+    /// </summary>
+    /// <param name="item">The book item to resume (chapter or single-file book).</param>
+    /// <param name="fallbackTicks">The caller's best position (server progress or session offset; item-absolute for a book, which never transcodes).</param>
+    /// <param name="user">The user for the stream URL.</param>
+    /// <param name="context">The Alexa context, for the JF-505 screenless-device check.</param>
+    /// <param name="request">The skill request, for the JF-501 progressive announce vehicle.</param>
+    /// <param name="locale">The request locale for response strings.</param>
+    /// <returns>The book resume response, or null when this is not a flag-on book resume.</returns>
+    private async Task<SkillResponse?> TryBuildNativeControlsBookResumeAsync(
+        BaseItem? item,
+        long fallbackTicks,
+        Entities.User user,
+        Context? context,
+        Request? request,
+        string locale)
+    {
+        if (item is not MediaBrowser.Controller.Entities.AudioBook
+            || Plugin.Instance?.Configuration?.NativeControlsForBooks != true)
+        {
+            return null;
+        }
+
+        string bookKey = GetAudiobookBookKey(item);
+        long startTicks = GetAudiobookStartTicks(bookKey, fallbackTicks);
+
+        Logger.LogInformation(
+            "ResumeIntent: audiobook '{BookName}' ({BookKey}) routes to the VideoApp HLS playlist, startTicks={StartTicks} (tracker first, fallback={FallbackTicks})",
+            item.Name, bookKey, startTicks, fallbackTicks);
+
+        if (startTicks <= 0)
+        {
+            // No position in either source: the same fresh VideoApp launch PlayBook's
+            // no-progress path uses (no start slice), kept silent like the flat tail.
+            return BuildVideoAppAudioResponse(item.Id.ToString(), item, user, context: context);
+        }
+
+        SkillResponse bookResponse = BuildAudiobookResumeResponse(item, startTicks, user, context);
+
+        // JF-501: the announce rides the progressive vehicle on a VideoApp launch (a
+        // directive-only final response can have its speech cut); non-intent requests
+        // and failed sends keep it on the final response.
+        bookResponse.Response.OutputSpeech = await SpeakVideoLaunchAnnounceAsync(
+            context,
+            request,
+            new PlainTextOutputSpeech(
+                ResponseStrings.Get("NowPlayingWithPosition", locale, item.Name, FormatPosition(startTicks)))).ConfigureAwait(false);
+        return bookResponse;
     }
 }

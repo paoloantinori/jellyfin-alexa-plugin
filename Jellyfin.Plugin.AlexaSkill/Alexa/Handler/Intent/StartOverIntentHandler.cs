@@ -67,7 +67,7 @@ public class StartOverIntentHandler : BaseHandler
     /// <param name="session">The session instance.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Skill response with playback directive or error message.</returns>
-    public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
+    public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         string locale = GetLocale(request);
         BaseItem? item = session?.FullNowPlayingItem;
@@ -76,14 +76,14 @@ public class StartOverIntentHandler : BaseHandler
 
         if (session == null)
         {
-            return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale)));
+            return ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale));
         }
 
         // Resolve the Jellyfin user for progress clearing
         var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, session.UserId, locale);
         if (userError != null)
         {
-            return Task.FromResult<SkillResponse>(userError);
+            return userError;
         }
 
         // If nothing currently playing, try to find last played item with progress
@@ -94,7 +94,7 @@ public class StartOverIntentHandler : BaseHandler
 
             if (resumeItem == null)
             {
-                return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("NoMediaToRestart", locale)));
+                return ResponseBuilder.Tell(ResponseStrings.Get("NoMediaToRestart", locale));
             }
 
             item = resumeItem;
@@ -111,22 +111,52 @@ public class StartOverIntentHandler : BaseHandler
 
         string itemId = item.Id.ToString();
 
+        // NativeControlsForBooks (JF-563): restart a book from 0 through the same VideoApp
+        // HLS entry PlayBook uses. BuildVideoAppAudioResponse routes a multi-chapter book
+        // to the concat endpoint and a single-chapter one to the per-item endpoint whose
+        // controller re-mints the chapter-scoped token, so no URL is hand-built here.
+        // Gated at the caller, NOT in IsVideoAppLaunchItem: the predicate is the durable
+        // movie-shaped kind list (its other callers must not treat a book as video) and
+        // the flag is mutable config (the JF-499 W1 split; see ResumeIntentHandler).
+        if (item is MediaBrowser.Controller.Entities.AudioBook)
+        {
+            // The tracker's high-water mark never decreases, so the stale position must be
+            // dropped here or the next resume would jump back near where the user just
+            // restarted from. Cleared regardless of the flag (the tracker is only READ
+            // under it), so a flag-off restart cannot leave a stale mark behind either.
+            Plugin.Instance?.AudiobookPositionTracker?.Clear(GetAudiobookBookKey(item));
+
+            if (Plugin.Instance?.Configuration?.NativeControlsForBooks == true)
+            {
+                SkillResponse response = BuildVideoAppAudioResponse(itemId, item, user, context: context);
+
+                // JF-501: the restart announce rides the progressive vehicle on a VideoApp
+                // launch (same as the movie branch); a screenless device degrades to
+                // AudioPlayer and the announce stays on the final response.
+                response.Response.OutputSpeech = await SpeakVideoLaunchAnnounceAsync(
+                    context,
+                    request,
+                    new PlainTextOutputSpeech(ResponseStrings.Get("RestartingContent", locale, item.Name))).ConfigureAwait(false);
+                return response;
+            }
+        }
+
         // Use VideoApp for movies/episodes, AudioPlayer for audio/audiobooks
         if (item is MediaBrowser.Controller.Entities.Movies.Movie
             or MediaBrowser.Controller.Entities.TV.Episode)
         {
             // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
             // JF-501: the announce is spoken progressively (directive-only final response).
-            return BuildVideoAppLaunchResponseAsync(
+            return await BuildVideoAppLaunchResponseAsync(
                 context,
                 request,
                 locale,
                 GetVideoAppLaunchUrl(item, user),
                 item.Name,
-                new PlainTextOutputSpeech(ResponseStrings.Get("RestartingContent", locale, item.Name)));
+                new PlainTextOutputSpeech(ResponseStrings.Get("RestartingContent", locale, item.Name))).ConfigureAwait(false);
         }
 
-        return Task.FromResult<SkillResponse>(BuildAudioPlayerResponse(
-            PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, item, user, context));
+        return BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll, GetStreamUrl(itemId, user), itemId, item, user, context);
     }
 }

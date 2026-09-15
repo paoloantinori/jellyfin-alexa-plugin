@@ -454,4 +454,437 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
         Assert.NotNull(response.Response.Directives);
         Assert.Single(response.Response.Directives);
     }
+
+    /// <summary>
+    /// JF-563: with NativeControlsForBooks on, fallback-4 resumes an audiobook through
+    /// the same sliced VideoApp HLS playlist PlayBook uses (tracker position first), not
+    /// the flat /Audio stream.
+    /// </summary>
+    [Fact]
+    public async Task ServerProgressFallback_AudioBook_NativeControlsOn_ResumesViaSlicedHlsPlaylist()
+    {
+        Plugin.Instance!.Configuration.NativeControlsForBooks = true;
+        var tracker = TestHelpers.CreatePositionTracker("resume-ab");
+        Plugin.Instance.AudiobookPositionTracker = tracker;
+        var ledger = TestHelpers.CreateDeviceQueueManager("resume-ab-ledger");
+        Plugin.Instance.DeviceQueueManager = ledger;
+        try
+        {
+            var handler = CreateHandler();
+            var request = CreateResumeRequest();
+            var context = CreateContextNoAudioPlayer();
+
+            var user = TestHelpers.CreateTestUser();
+            _fx.Config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
+            {
+                Id = user.Id,
+                AnnouncePositionOnResume = false
+            });
+
+            var session = CreateEmptySession();
+
+            Guid bookFolderId = Guid.NewGuid();
+            var chapter = new AudioBook
+            {
+                Name = "Chapter 7",
+                Id = Guid.NewGuid(),
+                ParentId = bookFolderId,
+                Path = "/audiobooks/book/chapter7.mp3"
+            };
+
+            _fx.LibraryManager.Setup(x => x.GetItemList(It.IsAny<InternalItemsQuery>()))
+                .Returns(new List<BaseItem> { chapter });
+
+            // Tracker holds segment 31 (conservative resume position 30 * 10s = 5 min);
+            // server-side progress says 2 min. The tracker must win (PlayBook's order).
+            tracker.RecordSegment(bookFolderId.ToString(), 31);
+            var userData = new UserItemData
+            {
+                Key = "test",
+                PlaybackPositionTicks = TimeSpan.FromMinutes(2).Ticks,
+                Played = false
+            };
+
+            _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<JellyfinUser>(), It.IsAny<BaseItem>()))
+                .Returns(userData);
+
+            var response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+            Assert.NotNull(response);
+
+            var videoDirective = Assert.IsType<global::Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>(
+                Assert.Single(response.Response.Directives));
+            Assert.Empty(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+            Assert.Contains(
+                $"alexaskill/api/video-audio/audiobook/{bookFolderId}/stream.m3u8?start={TimeSpan.FromMinutes(5).Ticks}&token=",
+                videoDirective.VideoItem!.Source,
+                StringComparison.Ordinal);
+
+            // JF-563 review: the VideoApp launch bypasses the AudioPlayer chokepoint, so
+            // the builder must have recorded the device last-played ledger itself.
+            Assert.Equal(chapter.Id.ToString(), ledger.GetLastPlayedItemId("test-device"));
+        }
+        finally
+        {
+            Plugin.Instance.AudiobookPositionTracker = null;
+            tracker.Dispose();
+            Plugin.Instance.DeviceQueueManager = null;
+            ledger.Dispose();
+            Plugin.Instance.Configuration.NativeControlsForBooks = false;
+        }
+    }
+
+    /// <summary>
+    /// JF-563: cold tracker (fresh restart) keeps the sliced launch; the slice falls back
+    /// to the server-side progress ticks, the same fallback PlayBook applies.
+    /// </summary>
+    [Fact]
+    public async Task ServerProgressFallback_AudioBook_NativeControlsOn_ColdTracker_UsesServerProgressAsSlice()
+    {
+        Plugin.Instance!.Configuration.NativeControlsForBooks = true;
+        try
+        {
+            var handler = CreateHandler();
+            var request = CreateResumeRequest();
+            var context = CreateContextNoAudioPlayer();
+
+            var user = TestHelpers.CreateTestUser();
+            _fx.Config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
+            {
+                Id = user.Id,
+                AnnouncePositionOnResume = false
+            });
+
+            var session = CreateEmptySession();
+
+            Guid bookFolderId = Guid.NewGuid();
+            var chapter = new AudioBook
+            {
+                Name = "Chapter 7",
+                Id = Guid.NewGuid(),
+                ParentId = bookFolderId,
+                Path = "/audiobooks/book/chapter7.mp3"
+            };
+
+            _fx.LibraryManager.Setup(x => x.GetItemList(It.IsAny<InternalItemsQuery>()))
+                .Returns(new List<BaseItem> { chapter });
+
+            var userData = new UserItemData
+            {
+                Key = "test",
+                PlaybackPositionTicks = TimeSpan.FromMinutes(5).Ticks,
+                Played = false
+            };
+
+            _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<JellyfinUser>(), It.IsAny<BaseItem>()))
+                .Returns(userData);
+
+            var response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+            Assert.NotNull(response);
+
+            var videoDirective = Assert.IsType<global::Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>(
+                Assert.Single(response.Response.Directives));
+            Assert.Contains(
+                $"alexaskill/api/video-audio/audiobook/{bookFolderId}/stream.m3u8?start={TimeSpan.FromMinutes(5).Ticks}&token=",
+                videoDirective.VideoItem!.Source,
+                StringComparison.Ordinal);
+        }
+        finally
+        {
+            Plugin.Instance.Configuration.NativeControlsForBooks = false;
+        }
+    }
+
+    /// <summary>
+    /// JF-563 flag-off pin: the AudioBook type alone must not flip the path; the flat
+    /// AudioPlayer stream with the progress offset is unchanged.
+    /// </summary>
+    [Fact]
+    public async Task ServerProgressFallback_AudioBook_NativeControlsOff_KeepsFlatAudioStream()
+    {
+        var handler = CreateHandler();
+        var request = CreateResumeRequest();
+        var context = CreateContextNoAudioPlayer();
+
+        var user = TestHelpers.CreateTestUser();
+        _fx.Config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
+        {
+            Id = user.Id,
+            AnnouncePositionOnResume = false
+        });
+
+        var session = CreateEmptySession();
+
+        var chapter = new AudioBook
+        {
+            Name = "Chapter 7",
+            Id = Guid.NewGuid(),
+            ParentId = Guid.NewGuid(),
+            Path = "/audiobooks/book/chapter7.mp3"
+        };
+
+        _fx.LibraryManager.Setup(x => x.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { chapter });
+
+        var userData = new UserItemData
+        {
+            Key = "test",
+            PlaybackPositionTicks = TimeSpan.FromMinutes(5).Ticks,
+            Played = false
+        };
+
+        _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<JellyfinUser>(), It.IsAny<BaseItem>()))
+            .Returns(userData);
+
+        var response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+
+        var audioDirective = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+        Assert.Equal((int)TimeSpan.FromMinutes(5).TotalMilliseconds, audioDirective.AudioItem.Stream.OffsetInMilliseconds);
+        Assert.Contains($"/Audio/{chapter.Id}/stream?static=true", audioDirective.AudioItem.Stream.Url, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-563: the TAIL path (item resolved from the session, the shape a VideoApp book
+    /// launch leaves behind because it never sets the AudioPlayer token) must ride the
+    /// same sliced playlist, not flat-launch the chapter and lose the seek bar.
+    /// </summary>
+    [Fact]
+    public async Task SessionHeldBook_NativeControlsOn_ResumesViaSlicedHlsPlaylist()
+    {
+        Plugin.Instance!.Configuration.NativeControlsForBooks = true;
+        var tracker = TestHelpers.CreatePositionTracker("resume-ab-tail");
+        Plugin.Instance.AudiobookPositionTracker = tracker;
+        try
+        {
+            var handler = CreateHandler();
+            var request = CreateResumeRequest();
+            var context = CreateContextNoAudioPlayer();
+
+            var user = TestHelpers.CreateTestUser();
+            _fx.Config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
+            {
+                Id = user.Id,
+                AnnouncePositionOnResume = false
+            });
+
+            Guid bookFolderId = Guid.NewGuid();
+            var chapter = new AudioBook
+            {
+                Name = "Chapter 3",
+                Id = Guid.NewGuid(),
+                ParentId = bookFolderId,
+                Path = "/audiobooks/book/chapter3.mp3"
+            };
+
+            var session = CreateEmptySession();
+            session.FullNowPlayingItem = chapter;
+
+            tracker.RecordSegment(bookFolderId.ToString(), 61); // conservative position: 60 * 10s = 10 min
+
+            var response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+            Assert.NotNull(response);
+
+            var videoDirective = Assert.IsType<global::Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>(
+                Assert.Single(response.Response.Directives));
+            Assert.Empty(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+            Assert.Contains(
+                $"alexaskill/api/video-audio/audiobook/{bookFolderId}/stream.m3u8?start={TimeSpan.FromMinutes(10).Ticks}&token=",
+                videoDirective.VideoItem!.Source,
+                StringComparison.Ordinal);
+
+            // JF-501: the announce rides the progressive vehicle; the final launch
+            // response carries the directive ONLY.
+            Assert.Null(response.Response.OutputSpeech);
+            Assert.True(handler.Progressive.Contains("Chapter 3"), "progressive announce must speak the chapter title");
+        }
+        finally
+        {
+            Plugin.Instance.AudiobookPositionTracker = null;
+            tracker.Dispose();
+            Plugin.Instance.Configuration.NativeControlsForBooks = false;
+        }
+    }
+
+    /// <summary>
+    /// JF-563 fresh tail shape: a session-held book with NO position anywhere (cold
+    /// tracker, no session progress) launches fresh through the VideoApp HLS entry with
+    /// no start slice instead of flat-launching.
+    /// </summary>
+    [Fact]
+    public async Task SessionHeldBook_NativeControlsOn_NoPosition_LaunchesFreshWithoutSlice()
+    {
+        Plugin.Instance!.Configuration.NativeControlsForBooks = true;
+        try
+        {
+            var handler = CreateHandler();
+            var request = CreateResumeRequest();
+            var context = CreateContextNoAudioPlayer();
+
+            var user = TestHelpers.CreateTestUser();
+            _fx.Config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
+            {
+                Id = user.Id,
+                AnnouncePositionOnResume = false
+            });
+
+            Guid bookFolderId = Guid.NewGuid();
+            var chapter = new AudioBook
+            {
+                Name = "Chapter 3",
+                Id = Guid.NewGuid(),
+                ParentId = bookFolderId,
+                Path = "/audiobooks/book/chapter3.mp3"
+            };
+
+            var session = CreateEmptySession();
+            session.FullNowPlayingItem = chapter;
+
+            var response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+            Assert.NotNull(response);
+
+            var videoDirective = Assert.IsType<global::Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>(
+                Assert.Single(response.Response.Directives));
+            Assert.Contains(
+                $"alexaskill/api/video-audio/audiobook/{bookFolderId}/stream.m3u8?token=",
+                videoDirective.VideoItem!.Source,
+                StringComparison.Ordinal);
+            Assert.DoesNotContain("start=", videoDirective.VideoItem!.Source, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Plugin.Instance.Configuration.NativeControlsForBooks = false;
+        }
+    }
+
+    /// <summary>
+    /// JF-563: a DISPLACED AudioPlayer token (a different item actually playing) stays
+    /// authoritative; the session-held book must not hijack that resume.
+    /// </summary>
+    [Fact]
+    public async Task SessionHeldBook_NativeControlsOn_DisplacedToken_KeepsTokenItemFlat()
+    {
+        Plugin.Instance!.Configuration.NativeControlsForBooks = true;
+        var tracker = TestHelpers.CreatePositionTracker("resume-ab-displaced");
+        Plugin.Instance.AudiobookPositionTracker = tracker;
+        try
+        {
+            var handler = CreateHandler();
+            var request = CreateResumeRequest();
+            var songId = Guid.NewGuid();
+            var context = new Context
+            {
+                System = new global::Alexa.NET.Request.AlexaSystem
+                {
+                    Device = new global::Alexa.NET.Request.Device { DeviceID = "test-device" },
+                    User = new global::Alexa.NET.Request.User { AccessToken = Guid.NewGuid().ToString() },
+                    ApiAccessToken = "test-token",
+                    ApiEndpoint = "https://api.amazonalexa.com"
+                },
+                AudioPlayer = new PlaybackState
+                {
+                    PlayerActivity = "IDLE",
+                    Token = songId.ToString(),
+                    OffsetInMilliseconds = 90_000
+                }
+            };
+
+            var user = TestHelpers.CreateTestUser();
+            _fx.Config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
+            {
+                Id = user.Id,
+                AnnouncePositionOnResume = false
+            });
+
+            Guid bookFolderId = Guid.NewGuid();
+            var chapter = new AudioBook
+            {
+                Name = "Chapter 3",
+                Id = Guid.NewGuid(),
+                ParentId = bookFolderId,
+                Path = "/audiobooks/book/chapter3.mp3"
+            };
+
+            var session = CreateEmptySession();
+            session.FullNowPlayingItem = chapter;
+
+            tracker.RecordSegment(bookFolderId.ToString(), 61);
+
+            var response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+            Assert.NotNull(response);
+
+            // The token's item keeps the flat AudioPlayer path; no VideoApp directive.
+            var audioDirective = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+            Assert.Contains($"/Audio/{songId}/stream?static=true", audioDirective.AudioItem.Stream.Url, StringComparison.Ordinal);
+            Assert.DoesNotContain("audiobook/", audioDirective.AudioItem.Stream.Url, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Plugin.Instance.AudiobookPositionTracker = null;
+            tracker.Dispose();
+            Plugin.Instance.Configuration.NativeControlsForBooks = false;
+        }
+    }
+
+    /// <summary>
+    /// JF-563 review: on a screenless device the book resume degrades to the flat
+    /// AudioPlayer path, and the book-absolute tracker position is CLAMPED to the
+    /// chapter runtime so the directive never carries an offset past the stream it plays.
+    /// </summary>
+    [Fact]
+    public async Task SessionHeldBook_NativeControlsOn_ScreenlessDevice_DegradesToClampedFlatResume()
+    {
+        Plugin.Instance!.Configuration.NativeControlsForBooks = true;
+        var tracker = TestHelpers.CreatePositionTracker("resume-ab-screenless");
+        Plugin.Instance.AudiobookPositionTracker = tracker;
+        try
+        {
+            var handler = CreateHandler();
+            var request = CreateResumeRequest();
+            var context = TestHelpers.CreateScreenlessContext();
+
+            var user = TestHelpers.CreateTestUser();
+            _fx.Config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
+            {
+                Id = user.Id,
+                AnnouncePositionOnResume = false
+            });
+
+            Guid bookFolderId = Guid.NewGuid();
+            var chapter = new AudioBook
+            {
+                Name = "Chapter 3",
+                Id = Guid.NewGuid(),
+                ParentId = bookFolderId,
+                Path = "/audiobooks/book/chapter3.mp3",
+                RunTimeTicks = TimeSpan.FromMinutes(5).Ticks
+            };
+
+            var session = CreateEmptySession();
+            session.FullNowPlayingItem = chapter;
+
+            // Tracker says 10 min on the book timeline; the chapter is only 5 min long.
+            tracker.RecordSegment(bookFolderId.ToString(), 61);
+
+            var response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+            Assert.NotNull(response);
+
+            var audioDirective = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+            Assert.Empty(response.Response.Directives.OfType<global::Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>());
+            Assert.Equal((int)TimeSpan.FromMinutes(5).TotalMilliseconds, audioDirective.AudioItem.Stream.OffsetInMilliseconds);
+            Assert.Contains($"/Audio/{chapter.Id}/stream?static=true", audioDirective.AudioItem.Stream.Url, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Plugin.Instance.AudiobookPositionTracker = null;
+            tracker.Dispose();
+            Plugin.Instance.Configuration.NativeControlsForBooks = false;
+        }
+    }
 }

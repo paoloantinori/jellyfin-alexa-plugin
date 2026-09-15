@@ -434,4 +434,176 @@ public class StartOverIntentHandlerTests : PluginTestBase, IDisposable
         string speech = TestHelpers.GetSpeechText(response);
         Assert.Contains("user not found", speech, StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// JF-563: with NativeControlsForBooks on, StartOver of a book relaunches from 0
+    /// through the same VideoApp HLS concat entry PlayBook uses (no start slice) and
+    /// drops the tracker's high-water position so the next resume cannot jump back.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_CurrentlyPlayingBook_NativeControlsOn_RestartsFromZeroViaHlsConcat()
+    {
+        Plugin.Instance!.Configuration.NativeControlsForBooks = true;
+        var tracker = TestHelpers.CreatePositionTracker("startover-ab");
+        Plugin.Instance.AudiobookPositionTracker = tracker;
+        var ledger = TestHelpers.CreateDeviceQueueManager("startover-ab-ledger");
+        Plugin.Instance.DeviceQueueManager = ledger;
+        try
+        {
+            var handler = CreateHandler();
+            var request = CreateStartOverRequest();
+            var context = _fx.CreateContext();
+            var user = TestHelpers.CreateTestUser();
+
+            Guid bookFolderId = Guid.NewGuid();
+            var chapter = new AudioBook
+            {
+                Name = "Test Book Chapter 7",
+                Id = Guid.NewGuid(),
+                ParentId = bookFolderId,
+                Path = "/audiobooks/book/chapter7.mp3"
+            };
+
+            var session = CreateSessionWithNowPlaying(chapter);
+
+            var userData = new UserItemData
+            {
+                Key = "test",
+                PlaybackPositionTicks = TimeSpan.FromMinutes(42).Ticks,
+                Played = false
+            };
+
+            _fx.UserDataManager.Setup(x => x.GetUserData(_jellyfinUser, chapter))
+                .Returns(userData);
+
+            // A stale tracked position must not survive the restart.
+            tracker.RecordSegment(bookFolderId.ToString(), 250);
+
+            var response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+            Assert.NotNull(response);
+
+            var videoDirective = Assert.IsType<global::Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>(
+                Assert.Single(response.Response.Directives));
+            Assert.Empty(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+            Assert.Contains(
+                $"alexaskill/api/video-audio/audiobook/{bookFolderId}/stream.m3u8?token=",
+                videoDirective.VideoItem!.Source,
+                StringComparison.Ordinal);
+            Assert.DoesNotContain("start=", videoDirective.VideoItem!.Source, StringComparison.Ordinal);
+
+            // Restart from 0: server-side progress AND the tracked high-water mark are gone.
+            _fx.UserDataManager.Verify(
+                x => x.SaveUserData(
+                    _jellyfinUser,
+                    chapter,
+                    It.Is<UserItemData>(d => d.PlaybackPositionTicks == 0),
+                    UserDataSaveReason.PlaybackProgress,
+                    CancellationToken.None),
+                Times.Once);
+            Assert.Equal(0, tracker.GetPositionTicks(bookFolderId.ToString("N")));
+
+            // JF-501: the restart announce rides the progressive-response vehicle; the
+            // final launch response carries the directive ONLY.
+            Assert.Null(response.Response.OutputSpeech);
+            Assert.True(handler.Progressive.Contains("Starting"), "progressive announce must mention restarting");
+            Assert.True(handler.Progressive.Contains("Test Book Chapter 7"), "progressive announce must speak the title");
+
+            // JF-563 review: the VideoApp launch bypasses the AudioPlayer chokepoint, so
+            // the builder must have recorded the device last-played ledger itself.
+            Assert.Equal(chapter.Id.ToString(), ledger.GetLastPlayedItemId("test-device"));
+        }
+        finally
+        {
+            Plugin.Instance.AudiobookPositionTracker = null;
+            tracker.Dispose();
+            Plugin.Instance.DeviceQueueManager = null;
+            ledger.Dispose();
+            Plugin.Instance.Configuration.NativeControlsForBooks = false;
+        }
+    }
+
+    /// <summary>
+    /// JF-563 single-chapter shape: a book item with no parent folder relaunches through
+    /// the per-item video-audio endpoint (the entry whose controller re-mints the
+    /// chapter-scoped token), never a hand-built audiobook concat URL.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_CurrentlyPlayingSingleFileBook_NativeControlsOn_UsesPerItemEndpoint()
+    {
+        Plugin.Instance!.Configuration.NativeControlsForBooks = true;
+        try
+        {
+            var handler = CreateHandler();
+            var request = CreateStartOverRequest();
+            var context = _fx.CreateContext();
+            var user = TestHelpers.CreateTestUser();
+
+            var book = new AudioBook
+            {
+                Name = "Single File Book",
+                Id = Guid.NewGuid(),
+                Path = "/audiobooks/single.mp3"
+            };
+
+            var session = CreateSessionWithNowPlaying(book);
+
+            var response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+            Assert.NotNull(response);
+
+            var videoDirective = Assert.IsType<global::Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>(
+                Assert.Single(response.Response.Directives));
+            Assert.Contains(
+                $"alexaskill/api/video-audio/{book.Id}/stream.m3u8?token=",
+                videoDirective.VideoItem!.Source,
+                StringComparison.Ordinal);
+            Assert.DoesNotContain("audiobook/", videoDirective.VideoItem!.Source, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Plugin.Instance.Configuration.NativeControlsForBooks = false;
+        }
+    }
+
+    /// <summary>
+    /// JF-563 flag-off pin: the AudioBook type alone must not flip the path; the flat
+    /// AudioPlayer restart from 0 is unchanged.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_CurrentlyPlayingBook_NativeControlsOff_KeepsFlatAudioStream()
+    {
+        var handler = CreateHandler();
+        var request = CreateStartOverRequest();
+        var context = _fx.CreateContext();
+        var user = TestHelpers.CreateTestUser();
+
+        var chapter = new AudioBook
+        {
+            Name = "Test Book Chapter 7",
+            Id = Guid.NewGuid(),
+            ParentId = Guid.NewGuid(),
+            Path = "/audiobooks/book/chapter7.mp3"
+        };
+
+        var session = CreateSessionWithNowPlaying(chapter);
+
+        var userData = new UserItemData
+        {
+            Key = "test",
+            PlaybackPositionTicks = TimeSpan.FromMinutes(42).Ticks,
+            Played = false
+        };
+
+        _fx.UserDataManager.Setup(x => x.GetUserData(_jellyfinUser, chapter))
+            .Returns(userData);
+
+        var response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+
+        var audioDirective = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+        Assert.Equal(0, audioDirective.AudioItem.Stream.OffsetInMilliseconds);
+        Assert.Contains($"/Audio/{chapter.Id}/stream?static=true", audioDirective.AudioItem.Stream.Url, StringComparison.Ordinal);
+    }
 }
