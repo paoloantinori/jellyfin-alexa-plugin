@@ -65,17 +65,28 @@ public sealed class DeviceQueue
     public Dictionary<string, long> ItemPositionState { get; set; } = new();
 
     /// <summary>
-    /// Gets or sets per-item audio-transcode launch bases (itemId → milliseconds, JF-514).
-    /// When an audio-shaped launch of a Movie/Episode mints the audio-only HLS
-    /// transcode's <c>?start=</c> seek, that base is recorded here so a later resume on
-    /// the same device can rebase a device-derived (stream-relative) offset into the
-    /// item-absolute position the seek wants. A raw-static launch of the same item
-    /// records base 0: its output timeline IS the item timeline, and the write also
-    /// invalidates any stale transcode base left by an older launch. Keyed device+item,
-    /// so entries never bleed across devices or items; survives queue resets like
-    /// <see cref="ItemPositionState"/>.
+    /// Gets or sets per-item ACTIVE audio-launch bases (itemId ("N" format) →
+    /// milliseconds, JF-522). A LAUNCH-SCOPED record (replacing the JF-514 last-resolve
+    /// ledger, deleted by JF-522): it is written when an <c>AudioPlayer.Play</c>
+    /// DIRECTIVE is issued (the BuildAudioPlayerResponse chokepoint; the sleep-timer
+    /// re-issue, which builds its directive directly, records its base-0 replay
+    /// itself), never by a mere resolve (precompute), so it carries the base of the
+    /// stream the device is actually playing. The playback event writers add it to
+    /// raw device offsets to persist item-absolute positions. Survives queue resets
+    /// like the sibling stores.
     /// </summary>
-    public Dictionary<string, long> AudioTranscodeBaseMs { get; set; } = new();
+    public Dictionary<string, long> ActiveLaunchBaseMs { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets per-item PENDING audio-launch bases (itemId ("N" format) →
+    /// milliseconds, JF-522): enqueued directives whose stream has not started yet. A
+    /// wrapped/repeat-one queue enqueues the SAME item that is still playing; the
+    /// pending entry keeps that enqueue's base separate from the running stream's
+    /// <see cref="ActiveLaunchBaseMs"/> entry until PlaybackStarted promotes it, so
+    /// the running stream's terminal events still compose with the base they were
+    /// launched with (the clobber hazard the JF-521 rejection documented).
+    /// </summary>
+    public Dictionary<string, long> PendingLaunchBaseMs { get; set; } = new();
 
     /// <summary>
     /// Gets or sets the item ID of the last user-initiated play on this device.

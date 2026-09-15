@@ -27,6 +27,16 @@ public sealed class DeviceQueueManager : IDisposable
 
     private readonly ConcurrentDictionary<string, DeviceQueue> _queues = new(StringComparer.Ordinal);
     private readonly KeyedOneShotDebounce _debounce = new(DebounceInterval);
+
+    /// <summary>
+    /// JF-522: the launch-scope maps are the first per-item stores with writers on TWO
+    /// threads (the request pipeline records at directive time; the AudioPlayer event
+    /// thread promotes at PlaybackStarted), so unlike the sibling stores their
+    /// mutations and reads serialize on this lock (the JF-425/JF-447 interleaving
+    /// class: an unsynchronized Dictionary write can throw inside an event handler
+    /// before the keep-alive ack Amazon requires).
+    /// </summary>
+    private readonly object _launchScopeLock = new();
     private readonly string _dataDirectory;
     private readonly ILogger<DeviceQueueManager> _logger;
     private volatile bool _disposed;
@@ -111,102 +121,195 @@ public sealed class DeviceQueueManager : IDisposable
     }
 
     /// <summary>
-    /// Records the item-absolute base (milliseconds) of the last audio-only transcode
-    /// launch minted for an item on a device (JF-514). Written at the
-    /// <c>BaseHandler.ResolveAudioLaunchSource</c> chokepoint every time a Movie/Episode
-    /// resolves an audio-shaped launch: the transcode route records the minted
-    /// <c>?start=</c> base, the raw-static route records 0 (that timeline IS the item
-    /// timeline, and the write invalidates any stale transcode base). Keyed
-    /// device+item so a later resume finds the base of the playback its device-derived
-    /// offset is relative to. Short-circuits when the value is unchanged (the
+    /// JF-522 launch-scope write: records the item-absolute base of the
+    /// <c>AudioPlayer.Play</c> directive just issued for an item on a device. An
+    /// ENQUEUED directive routes to <see cref="DeviceQueue.PendingLaunchBaseMs"/>
+    /// (promoted to active at the item's next PlaybackStarted, keeping the running
+    /// stream's active base intact for wrapped/repeat-one queues); every other
+    /// behavior routes to <see cref="DeviceQueue.ActiveLaunchBaseMs"/> and retires
+    /// any pending entry for the same item (the new stream supersedes it). Keys are
+    /// normalized to "N" format, matching the writer/reader event handlers' codec
+    /// parsing. Short-circuits on an unchanged value (the
     /// <see cref="RecordLastPlayed"/> shape) to avoid persist churn.
     /// </summary>
     /// <param name="deviceId">The Alexa device ID.</param>
-    /// <param name="itemId">The item ID whose launch minted the base.</param>
-    /// <param name="baseMs">The item-absolute base in milliseconds.</param>
-    public void RecordAudioTranscodeBase(string deviceId, string itemId, long baseMs)
+    /// <param name="itemId">The item ID the directive launches (any GUID format).</param>
+    /// <param name="baseMs">The item-absolute launch base in milliseconds (the minted
+    /// <c>?start=</c> on the transcode route, 0 on the raw-static route).</param>
+    /// <param name="enqueued">True when the directive plays <c>Enqueue</c>/<c>ReplaceEnqueued</c>.</param>
+    public void RecordLaunchBase(string deviceId, string itemId, long baseMs, bool enqueued)
     {
-        DeviceQueue queue = GetOrCreateQueue(deviceId);
-
-        if (queue.AudioTranscodeBaseMs.TryGetValue(itemId, out long existing) && existing == baseMs)
+        if (!StreamTokenCodec.TryGetItemId(itemId, out Guid parsedItemId))
         {
             return;
         }
 
-        queue.AudioTranscodeBaseMs[itemId] = baseMs;
-        TrimAudioTranscodeBaseIfNeeded(queue);
+        string key = parsedItemId.ToString("N");
+        lock (_launchScopeLock)
+        {
+            DeviceQueue queue = GetOrCreateQueue(deviceId);
+
+            if (enqueued)
+            {
+                if (queue.PendingLaunchBaseMs.TryGetValue(key, out long existingPending) && existingPending == baseMs)
+                {
+                    return;
+                }
+
+                queue.PendingLaunchBaseMs[key] = baseMs;
+            }
+            else
+            {
+                if (queue.ActiveLaunchBaseMs.TryGetValue(key, out long existingActive) && existingActive == baseMs
+                    && !queue.PendingLaunchBaseMs.ContainsKey(key))
+                {
+                    return;
+                }
+
+                queue.ActiveLaunchBaseMs[key] = baseMs;
+                queue.PendingLaunchBaseMs.Remove(key);
+            }
+
+            TrimLaunchBaseIfNeeded(queue);
+        }
+
         SchedulePersistInternal(deviceId);
 
         _logger.LogDebug(
-            "Recorded audio transcode base for device {DeviceId}: item={ItemId}, base={BaseMs}ms",
+            "Recorded {Scope} launch base for device {DeviceId}: item={ItemId}, base={BaseMs}ms",
+            enqueued ? "pending" : "active", deviceId, itemId, baseMs);
+    }
+
+    /// <summary>
+    /// JF-522: promotes an item's pending (enqueued) launch base to active, called
+    /// when the item's stream starts. No-op without a pending entry (a ReplaceAll
+    /// launch already wrote active at directive time; a pre-deploy enqueue left none,
+    /// and the stale active entry of an older stream of the same item is then left to
+    /// the runtime guard at the writers). Unparsable item IDs are ignored.
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID.</param>
+    /// <param name="itemId">The started item ID (any GUID format; composite stream
+    /// tokens must be codec-parsed by the caller first).</param>
+    public void PromotePendingLaunchBase(string deviceId, string itemId)
+    {
+        if (!StreamTokenCodec.TryGetItemId(itemId, out Guid parsedItemId)
+            || !_queues.TryGetValue(deviceId, out DeviceQueue? queue))
+        {
+            return;
+        }
+
+        string key = parsedItemId.ToString("N");
+        long baseMs;
+        lock (_launchScopeLock)
+        {
+            if (!queue.PendingLaunchBaseMs.Remove(key, out baseMs))
+            {
+                return;
+            }
+
+            queue.ActiveLaunchBaseMs[key] = baseMs;
+        }
+
+        SchedulePersistInternal(deviceId);
+
+        _logger.LogDebug(
+            "Promoted pending launch base to active for device {DeviceId}: item={ItemId}, base={BaseMs}ms",
             deviceId, itemId, baseMs);
     }
 
     /// <summary>
-    /// Bounds the ledger exactly like the sibling ItemPositionState trim (JF-514
-    /// review): over the cap, remove the oldest entries whose item is not in the
-    /// current queue; entries for queued items all stay. Without this, queue_*.json
-    /// (rewritten on every debounced persist) grows without bound on long-lived
-    /// devices. Mirrors PlaybackStoppedEventHandler.TrimItemPositionState.
+    /// JF-522 read side: the ACTIVE launch base for an item on a device (the stream
+    /// most recently started on it, or issued via ReplaceAll), without creating a
+    /// queue entry. Null means no launch scope is recorded (pre-deploy launch, cleared
+    /// queue file): callers treat null as base 0.
     /// </summary>
-    private const int MaxAudioTranscodeBaseEntries = 200;
-
-    private static void TrimAudioTranscodeBaseIfNeeded(DeviceQueue queue)
+    /// <param name="deviceId">The Alexa device ID.</param>
+    /// <param name="itemId">The item ID in any GUID format (normalized to "N").</param>
+    /// <returns>The active launch base in milliseconds, or null when none.</returns>
+    public long? GetActiveLaunchBase(string deviceId, string itemId)
     {
-        if (queue.AudioTranscodeBaseMs.Count <= MaxAudioTranscodeBaseEntries)
+        if (!StreamTokenCodec.TryGetItemId(itemId, out Guid parsedItemId)
+            || !_queues.TryGetValue(deviceId, out DeviceQueue? queue))
+        {
+            return null;
+        }
+
+        lock (_launchScopeLock)
+        {
+            return queue.ActiveLaunchBaseMs.TryGetValue(parsedItemId.ToString("N"), out long baseMs)
+                ? baseMs
+                : null;
+        }
+    }
+
+    /// <summary>
+    /// Bounds both launch-scope dictionaries exactly like the sibling trims
+    /// (JF-514/JF-522): over the cap, remove the oldest entries whose item is not in
+    /// the current queue; entries for queued items all stay.
+    /// </summary>
+    private const int MaxLaunchBaseEntries = 200;
+
+    private static void TrimLaunchBaseIfNeeded(DeviceQueue queue)
+    {
+        if (queue.ActiveLaunchBaseMs.Count <= MaxLaunchBaseEntries
+            && queue.PendingLaunchBaseMs.Count <= MaxLaunchBaseEntries)
         {
             return;
         }
 
         HashSet<string> queuedItems = new(queue.ItemIds, StringComparer.OrdinalIgnoreCase);
-        List<string> keysToRemove = new();
-        foreach (var kvp in queue.AudioTranscodeBaseMs)
+        TrimPositionMap(queue.ActiveLaunchBaseMs, queuedItems, MaxLaunchBaseEntries);
+        TrimPositionMap(queue.PendingLaunchBaseMs, queuedItems, MaxLaunchBaseEntries);
+    }
+
+    /// <summary>
+    /// The ONE per-map eviction policy shared by every bounded position map on a
+    /// device queue (JF-522; previously three inline copies across this class and
+    /// PlaybackStoppedEventHandler): over the cap, remove the oldest entries whose
+    /// item is not queued; entries for queued items all stay. The map's own
+    /// count gate keeps the set construction off the happy path.
+    /// </summary>
+    /// <param name="map">The bounded dictionary.</param>
+    /// <param name="queuedItems">The queued item ids (any key format; compared case-insensitively).</param>
+    /// <param name="cap">The maximum entry count.</param>
+    internal static void TrimPositionMap(Dictionary<string, long> map, IEnumerable<string> queuedItems, int cap)
+    {
+        if (map.Count <= cap)
         {
-            if (!queuedItems.Contains(kvp.Key))
+            return;
+        }
+
+        HashSet<string> queued = queuedItems as HashSet<string> ?? new HashSet<string>(queuedItems, StringComparer.OrdinalIgnoreCase);
+        List<string> keysToRemove = new();
+        foreach (var kvp in map)
+        {
+            if (!queued.Contains(kvp.Key))
             {
                 keysToRemove.Add(kvp.Key);
             }
         }
 
         // Remove oldest non-queued entries until under cap
-        int toRemove = queue.AudioTranscodeBaseMs.Count - MaxAudioTranscodeBaseEntries;
+        int toRemove = map.Count - cap;
         foreach (string key in keysToRemove.Take(toRemove))
         {
-            queue.AudioTranscodeBaseMs.Remove(key);
+            map.Remove(key);
         }
     }
 
     /// <summary>
-    /// JF-521: this device's last-persisted raw playback offset for an item from
-    /// ItemPositionState (the PlaybackStoppedEventHandler write, "N"-format key),
-    /// without creating a queue entry; unparsable item IDs read null.
+    /// Carries the reset-surviving per-item stores (positions and both launch-scope
+    /// maps) from an old queue into its replacement (JF-522: one definition for the
+    /// surviving-store set, so a fourth surviving store is wired once, not per reset
+    /// path).
     /// </summary>
-    /// <param name="deviceId">The Alexa device ID.</param>
-    /// <param name="itemId">The item ID in any GUID format (normalized to "N").</param>
-    /// <returns>The recorded raw offset in ticks, or null when none.</returns>
-    public long? GetItemPositionTicks(string deviceId, string itemId)
+    /// <param name="oldQueue">The queue being replaced (null starts everything empty).</param>
+    /// <param name="queue">The fresh queue to populate.</param>
+    private static void CopySurvivingStores(DeviceQueue? oldQueue, DeviceQueue queue)
     {
-        return Guid.TryParse(itemId, out Guid parsedItemId)
-            && _queues.TryGetValue(deviceId, out DeviceQueue? queue)
-            && queue.ItemPositionState.TryGetValue(parsedItemId.ToString("N"), out long ticks)
-            ? ticks
-            : null;
-    }
-
-    /// <summary>
-    /// Read-side counterpart to <see cref="RecordAudioTranscodeBase"/>: the recorded
-    /// transcode-launch base for an item on a device, without creating a queue entry.
-    /// </summary>
-    /// <param name="deviceId">The Alexa device ID.</param>
-    /// <param name="itemId">The item ID to look up.</param>
-    /// <returns>The recorded base in milliseconds, or null when this device has no
-    /// recorded launch base for the item (a recorded base of 0 is distinct from none).</returns>
-    public long? GetAudioTranscodeBase(string deviceId, string itemId)
-    {
-        return _queues.TryGetValue(deviceId, out DeviceQueue? queue)
-            && queue.AudioTranscodeBaseMs.TryGetValue(itemId, out long baseMs)
-            ? baseMs
-            : null;
+        queue.ItemPositionState = oldQueue?.ItemPositionState ?? new Dictionary<string, long>();
+        queue.ActiveLaunchBaseMs = oldQueue?.ActiveLaunchBaseMs ?? new Dictionary<string, long>();
+        queue.PendingLaunchBaseMs = oldQueue?.PendingLaunchBaseMs ?? new Dictionary<string, long>();
     }
 
     /// <summary>
@@ -219,15 +322,6 @@ public sealed class DeviceQueueManager : IDisposable
     /// <param name="playbackOrder">Playback order: "Default" or "Shuffle".</param>
     public void SetQueue(string deviceId, List<string> itemIds, int currentIndex, string repeatMode = "None", string playbackOrder = "Default")
     {
-        // Preserve ItemPositionState across queue resets (survives audiobook switches)
-        Dictionary<string, long>? existingPositions = null;
-        Dictionary<string, long>? existingTranscodeBases = null;
-        if (_queues.TryGetValue(deviceId, out DeviceQueue? oldQueue))
-        {
-            existingPositions = oldQueue.ItemPositionState;
-            existingTranscodeBases = oldQueue.AudioTranscodeBaseMs;
-        }
-
         var queue = new DeviceQueue
         {
             ItemIds = itemIds,
@@ -235,9 +329,8 @@ public sealed class DeviceQueueManager : IDisposable
             RepeatMode = repeatMode,
             PlaybackOrder = playbackOrder,
             LastModifiedUtc = DateTime.UtcNow,
-            ItemPositionState = existingPositions ?? new Dictionary<string, long>(),
-            AudioTranscodeBaseMs = existingTranscodeBases ?? new Dictionary<string, long>()
         };
+        CopySurvivingStores(_queues.TryGetValue(deviceId, out DeviceQueue? oldQueue) ? oldQueue : null, queue);
 
         _queues[deviceId] = queue;
         SchedulePersistInternal(deviceId);
@@ -263,14 +356,6 @@ public sealed class DeviceQueueManager : IDisposable
     {
         Random random = rng ?? Random.Shared;
 
-        Dictionary<string, long>? existingPositions = null;
-        Dictionary<string, long>? existingTranscodeBases = null;
-        if (_queues.TryGetValue(deviceId, out DeviceQueue? oldQueue))
-        {
-            existingPositions = oldQueue.ItemPositionState;
-            existingTranscodeBases = oldQueue.AudioTranscodeBaseMs;
-        }
-
         List<string> original = new List<string>(itemIds);
         List<string> shuffled = new List<string>(itemIds);
         FisherYates(shuffled, random);
@@ -283,9 +368,8 @@ public sealed class DeviceQueueManager : IDisposable
             RepeatMode = "None",
             PlaybackOrder = "Shuffle",
             LastModifiedUtc = DateTime.UtcNow,
-            ItemPositionState = existingPositions ?? new Dictionary<string, long>(),
-            AudioTranscodeBaseMs = existingTranscodeBases ?? new Dictionary<string, long>()
         };
+        CopySurvivingStores(_queues.TryGetValue(deviceId, out DeviceQueue? oldQueue) ? oldQueue : null, queue);
 
         _queues[deviceId] = queue;
         SchedulePersistInternal(deviceId);

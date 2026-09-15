@@ -25,6 +25,9 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// Saves the last playback position and item to DeviceQueue for resume-after-pause recovery.
 /// Also persists real position to ItemPositionState to bypass Jellyfin's MinAudiobookResume
 /// threshold, and overwrites Jellyfin's UserData for cross-client consistency.
+/// JF-522: every persisted position is ITEM-ABSOLUTE (the stream's launch-scoped base
+/// composed into the raw device offset), so non-skill consumers of these stores see
+/// true item positions.
 /// </summary>
 #pragma warning disable CA1711
 public class PlaybackStoppedEventHandler : BaseHandler
@@ -66,8 +69,6 @@ public class PlaybackStoppedEventHandler : BaseHandler
         AudioPlayerRequest req = (AudioPlayerRequest)request;
         string device = context.GetDeviceId();
 
-        long realPositionTicks = TimeSpan.FromMilliseconds(req.OffsetInMilliseconds).Ticks;
-
         Logger.LogInformation(
             "PlaybackStopped: item={Token}, offset={OffsetMs}ms, playerActivity={Activity}",
             req.Token, req.OffsetInMilliseconds, context.AudioPlayer?.PlayerActivity);
@@ -100,12 +101,23 @@ public class PlaybackStoppedEventHandler : BaseHandler
                 req.Token);
         }
 
-        long positionTicks = isDisplacement ? 0 : realPositionTicks;
-
         // JF-447: composite sleep-timer tokens parse through the shared codec; the raw
         // new Guid(token) threw FormatException on them, killing this handler before the
         // ordering registration and before the response Amazon requires.
         StreamTokenCodec.TryGetItemId(req.Token, out Guid stopItemId);
+
+        // JF-522 writer-side provenance: the raw device offset counts the OUTPUT
+        // timeline of the stream that produced it, which for a transcode-routed launch
+        // starts at the stream's launch base. The launch-SCOPED base (recorded at the
+        // directive chokepoint, promoted at PlaybackStarted) converts it to the
+        // item-absolute position every consumer of these stores expects: the server
+        // PlayState and UserData, DeviceQueue.CurrentPositionTicks, and
+        // ItemPositionState. Displacement stops keep offset 0 below (nothing to
+        // compose); base 0 and absent scopes return the raw ticks unchanged.
+        long realPositionTicks = ComposeEventPositionTicks(
+            device, stopItemId, req.OffsetInMilliseconds, "PlaybackStopped", _queueManager, _libraryManager);
+
+        long positionTicks = isDisplacement ? 0 : realPositionTicks;
 
         // JF-447 review hardening (event-order race): the classification above reads the
         // device's LATEST START, which is only written once PlaybackStarted(new) has been
@@ -233,34 +245,14 @@ public class PlaybackStoppedEventHandler : BaseHandler
         return BuildEndSessionResponse();
     }
 
-    private const int MaxItemPositionStateEntries = 200;
-
     /// <summary>
     /// Evicts entries from ItemPositionState that are not in the current queue
     /// when the dictionary exceeds the cap. This prevents unbounded growth.
+    /// The trim itself is the shared per-map eviction the queue manager owns
+    /// (JF-522: one definition for ItemPositionState and both launch-scope maps).
     /// </summary>
     private static void TrimItemPositionState(DeviceQueue queue)
-    {
-        if (queue.ItemPositionState.Count <= MaxItemPositionStateEntries)
-        {
-            return;
-        }
+        => DeviceQueueManager.TrimPositionMap(queue.ItemPositionState, queue.ItemIds, MaxItemPositionStateEntries);
 
-        HashSet<string> queuedItems = new(queue.ItemIds, StringComparer.OrdinalIgnoreCase);
-        List<string> keysToRemove = new();
-        foreach (var kvp in queue.ItemPositionState)
-        {
-            if (!queuedItems.Contains(kvp.Key))
-            {
-                keysToRemove.Add(kvp.Key);
-            }
-        }
-
-        // Remove oldest non-queued entries until under cap
-        int toRemove = queue.ItemPositionState.Count - MaxItemPositionStateEntries;
-        foreach (string key in keysToRemove.Take(toRemove))
-        {
-            queue.ItemPositionState.Remove(key);
-        }
-    }
+    private const int MaxItemPositionStateEntries = 200;
 }

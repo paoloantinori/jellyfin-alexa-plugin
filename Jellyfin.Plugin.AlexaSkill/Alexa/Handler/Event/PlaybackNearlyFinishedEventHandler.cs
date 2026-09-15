@@ -247,8 +247,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         // queue routes to the audio-only transcode instead of dying on the raw static
         // bytes (JF-505 does not apply: this launch is audio-shaped). Offset 0: a fresh
         // queue advance always plays from the item start.
-        AudioLaunchSource source = ResolveAudioLaunchSource(item, itemId, user, 0, context?.System?.Device?.DeviceID);
-        string audioUrl = source.Url;
+        AudioLaunchSource source = ResolveAudioLaunchSource(item, itemId, user, 0);
 
         Logger.LogInformation(
             "Pre-fetching next track for gapless playback: {ItemName} ({ItemId}), loop={LoopMode}, shuffle={Shuffle} (reshuffledQueue={Reshuffled})",
@@ -258,7 +257,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             resolvedOrder,
             resolvedReshuffled);
 
-        return BuildAudioPlayerResponse(PlayBehavior.Enqueue, audioUrl, itemId, item, user, context);
+        return BuildAudioPlayerResponse(PlayBehavior.Enqueue, source, itemId, item, user, context);
     }
 
     /// <summary>
@@ -449,9 +448,26 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         {
             var queue = _queueManager.GetOrCreateQueue(deviceId);
             queue.CurrentItemId = itemId;
-            if (context.AudioPlayer != null)
+            if (context.AudioPlayer != null
+                && StreamTokenCodec.TryGetItemId(context.AudioPlayer.Token, out Guid finishingItemId)
+                && StreamTokenCodec.TryGetItemId(itemId, out Guid nextItemId)
+                && finishingItemId == nextItemId)
             {
-                queue.CurrentPositionTicks = TimeSpan.FromMilliseconds(context.AudioPlayer.OffsetInMilliseconds).Ticks;
+                // JF-522: the refresh only survives for the SAME item (the wrapped /
+                // repeat-one enqueue, where the pointer genuinely names the finishing
+                // item): the context offset composes with that stream's launch base
+                // and the store's item-absolute contract holds. A DIFFERENT next item
+                // would misattribute the finishing item's position onto it, and the
+                // resume tail now MINTS persisted values instead of dropping them, so
+                // the unknown position resets to 0 (the next stop writes the real one;
+                // a crash-resume in between starts the item from its beginning).
+                queue.CurrentPositionTicks = ComposeEventPositionTicks(
+                    deviceId, finishingItemId, context.AudioPlayer.OffsetInMilliseconds,
+                    "PlaybackNearlyFinished", _queueManager, _libraryManager);
+            }
+            else
+            {
+                queue.CurrentPositionTicks = 0;
             }
         }
         else

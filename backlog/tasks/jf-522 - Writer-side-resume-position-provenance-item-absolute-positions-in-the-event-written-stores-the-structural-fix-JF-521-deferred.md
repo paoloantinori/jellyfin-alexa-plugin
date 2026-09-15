@@ -3,10 +3,10 @@ id: JF-522
 title: >-
   Writer-side resume-position provenance: item-absolute positions in the
   event-written stores (the structural fix JF-521 deferred)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-08 00:36'
-updated_date: '2026-09-11 05:14'
+updated_date: '2026-09-14 23:59'
 labels:
   - resume
   - transcoding

@@ -20,21 +20,18 @@ using Xunit;
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
 /// <summary>
-/// JF-507 critical-review fix + the JF-520 tail adoption. All three fallback offsets
-/// are DEVICE-DERIVED (the AudioPlayer context offset directly;
-/// PlayState.PositionTicks and DeviceQueue.CurrentPositionTicks via the writers at
-/// PlaybackStoppedEventHandler/PlaybackStartedEventHandler, which persist the device
-/// offset without adding the transcode base), so for a transcode-routed item they are
-/// all relative to the previous playback's OUTPUT timeline, which starts at that
-/// stream's seek point. Corrected contract per fallback (JF-520, via the shared
-/// BaseHandler.ResolveResumedAudioLaunch):
-/// - Fallback 1 (AudioPlayer context offset) -> ?start = recorded base + offset
-///   (item-absolute), directive offset 0; NO recorded base -> restart at 0.
-/// - Fallback 2 (session PlayState.PositionTicks) -> same rebase/drop rule.
-/// - Fallback 3 (DeviceQueue.CurrentPositionTicks) -> same rebase/drop rule.
-/// Raw-static launches (audio items, Echo-decodable video) keep the caller's offset
-/// unchanged on every fallback. The rebase mints the new base into the ledger, so
-/// the next resume cycle composes from it.
+/// JF-507 critical-review fix + the JF-520 tail adoption, re-scoped by JF-522.
+/// Only fallback 1 (the AudioPlayer context offset, Amazon-written) is
+/// stream-relative by platform contract: it goes through the shared
+/// BaseHandler.ResolveResumedAudioLaunch rebase (launch-scoped base + offset,
+/// drop to a 0-restart when no scope is recorded).
+/// Fallbacks 2-3 (session PlayState.PositionTicks,
+/// DeviceQueue.CurrentPositionTicks) are persisted ITEM-ABSOLUTE since the JF-522
+/// writer fix (the stop event composes the stream's launch base at write time), so
+/// they pass through unchanged; pre-JF-522 leftovers mint early, never past the
+/// true position. Raw-static launches (audio items, Echo-decodable video) keep the
+/// caller's offset unchanged on every fallback. The resolve mints the new base
+/// into the launch-scope store, so the next resume cycle composes from it.
 /// </summary>
 [Collection("Plugin")]
 public class ResumeIntentAudioVariantOffsetTests : PluginTestBase, IDisposable
@@ -130,7 +127,7 @@ public class ResumeIntentAudioVariantOffsetTests : PluginTestBase, IDisposable
     }
 
     [Fact]
-    public async Task Resume_Eac3Episode_ViaSessionPlayState_DropsDeviceDerivedTicks()
+    public async Task Resume_Eac3Episode_ViaSessionPlayState_MintsItemAbsolutePosition()
     {
         var id = Guid.NewGuid();
         var episode = new TestHelpers.TestEpisodeWithStreams(
@@ -140,10 +137,11 @@ public class ResumeIntentAudioVariantOffsetTests : PluginTestBase, IDisposable
             TestHelpers.TestStream(MediaStreamType.Audio, "eac3"));
         var session = CreateSessionWithNowPlaying(episode);
 
-        // Fallback 2: the persisted play state carries the DEVICE offset in the real
-        // writers' shape (PlaybackStoppedEventHandler), which is output-timeline-
-        // relative for a transcode-routed item; the gate must drop it (restart), not
-        // mint a false ?start=.
+        // Fallback 2 (JF-522 re-pin): the persisted play state carries an ITEM-ABSOLUTE
+        // position under the writer contract (the stop event composes the stream's
+        // launch base at write time), so the tail mints it directly. The raw-regime
+        // version of this test pinned the DROP (the position was output-timeline-
+        // relative and a mint would have been false).
         var context = CreateContext(id.ToString(), 0);
         session.PlayState!.PositionTicks = TimeSpan.FromMinutes(20).Ticks;
 
@@ -155,13 +153,15 @@ public class ResumeIntentAudioVariantOffsetTests : PluginTestBase, IDisposable
             CancellationToken.None);
 
         var directive = SinglePlayDirective(response);
-        Assert.Contains($"/alexaskill/api/video-audio/episode/{id}/audio.m3u8?token=", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
-        Assert.DoesNotContain("?start=", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.Contains(
+            $"?start={TimeSpan.FromMinutes(20).Ticks}&",
+            directive.AudioItem.Stream.Url,
+            StringComparison.Ordinal);
         Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
     }
 
     [Fact]
-    public async Task Resume_Eac3Episode_ViaDeviceQueue_DropsDeviceDerivedTicks()
+    public async Task Resume_Eac3Episode_ViaDeviceQueue_MintsItemAbsolutePosition()
     {
         var id = Guid.NewGuid();
         var episode = new TestHelpers.TestEpisodeWithStreams(
@@ -171,9 +171,9 @@ public class ResumeIntentAudioVariantOffsetTests : PluginTestBase, IDisposable
             TestHelpers.TestStream(MediaStreamType.Audio, "eac3"));
         var session = CreateSessionWithNowPlaying(episode);
 
-        // Fallback 3: context offset 0 (cleared after pause); the DeviceQueue position
-        // is written from the device offset by PlaybackStoppedEventHandler, so it is
-        // output-timeline-relative for a transcode-routed item and must be dropped.
+        // Fallback 3 (JF-522 re-pin): context offset 0 (cleared after pause); the
+        // DeviceQueue position is persisted ITEM-ABSOLUTE by the stop event, so the
+        // tail mints it directly. The raw-regime version pinned the DROP.
         var queue = _queueManager.GetOrCreateQueue("test-device");
         queue.CurrentItemId = id.ToString();
         queue.CurrentPositionTicks = TimeSpan.FromMinutes(20).Ticks;
@@ -188,8 +188,10 @@ public class ResumeIntentAudioVariantOffsetTests : PluginTestBase, IDisposable
             CancellationToken.None);
 
         var directive = SinglePlayDirective(response);
-        Assert.Contains($"/alexaskill/api/video-audio/episode/{id}/audio.m3u8?token=", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
-        Assert.DoesNotContain("?start=", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.Contains(
+            $"?start={TimeSpan.FromMinutes(20).Ticks}&",
+            directive.AudioItem.Stream.Url,
+            StringComparison.Ordinal);
         Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
     }
 
@@ -248,12 +250,13 @@ public class ResumeIntentAudioVariantOffsetTests : PluginTestBase, IDisposable
     // ========== JF-520: the tail adopts the offer path's base+offset rebase ==========
 
     /// <summary>
-    /// JF-520 spec case, tail side: a recorded base B (20:00) plus a device-derived
-    /// context offset O (5:00) mints ?start=B+O (25:00, item-absolute) on the transcode
-    /// URL, directive offset 0, and the resolve records the NEW base (25:00) in the
-    /// ledger so the next resume cycle composes from it (pins the helper's
-    /// read-before-resolve ordering: the minted start and the post-mint ledger base
-    /// agree, i.e. the resolve did not read back its own write).
+    /// JF-520 spec case, tail side (seeding re-pinned by JF-522): the launch-scoped
+    /// base B (20:00) plus a device-derived context offset O (5:00) mints ?start=B+O
+    /// (25:00, item-absolute) on the transcode URL, directive offset 0, and the
+    /// confirm's directive records the NEW base (25:00) in the launch-scope store so
+    /// the next resume cycle composes from it (pins the helper's read-before-record
+    /// ordering: the minted start and the post-directive scope agree, i.e. the
+    /// resolver did not read back its own write).
     /// </summary>
     [Fact]
     public async Task Resume_Eac3Episode_ViaAudioPlayerContext_RebasesAgainstRecordedBase()
@@ -268,7 +271,7 @@ public class ResumeIntentAudioVariantOffsetTests : PluginTestBase, IDisposable
 
         // The previous playback launched at absolute 20:00 via the transcode; the
         // device has counted 5:00 of stream time since.
-        _queueManager.RecordAudioTranscodeBase("test-device", id.ToString(), TimeSpan.FromMinutes(20).Ticks / TimeSpan.TicksPerMillisecond);
+        _queueManager.RecordLaunchBase("test-device", id.ToString(), (long)TimeSpan.FromMinutes(20).TotalMilliseconds, enqueued: false);
         var context = CreateContext(id.ToString(), 300000);
 
         var response = await CreateHandler().HandleAsync(
@@ -285,16 +288,18 @@ public class ResumeIntentAudioVariantOffsetTests : PluginTestBase, IDisposable
             directive.AudioItem.Stream.Url,
             StringComparison.Ordinal);
         Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
-        Assert.Equal(expectedMs, _queueManager.GetAudioTranscodeBase("test-device", id.ToString()));
+        Assert.Equal(expectedMs, _queueManager.GetActiveLaunchBase("test-device", id.ToString()));
     }
 
     /// <summary>
-    /// JF-520, DeviceQueue-sourced item_id path (fallback 3): the queue's item pointer
-    /// feeds the resume, and the rebase composes with it the same way (base+offset
-    /// minted, ledger advanced), proving the tail's adoption is not context-offset-only.
+    /// JF-522, DeviceQueue-sourced item_id path (fallback 3): the queue's item pointer
+    /// feeds the resume, its persisted position is ITEM-ABSOLUTE under the writer
+    /// contract, and the confirm's directive records the minted position as the item's
+    /// new launch base - proving the fallback-3 classification flip is not
+    /// context-offset-only and the chokepoint recording fires on this path too.
     /// </summary>
     [Fact]
-    public async Task Resume_Eac3Episode_ViaDeviceQueue_RebasesAgainstRecordedBase()
+    public async Task Resume_Eac3Episode_ViaDeviceQueue_MintsPositionAndRecordsLaunchBase()
     {
         var id = Guid.NewGuid();
         var episode = new TestHelpers.TestEpisodeWithStreams(
@@ -307,7 +312,6 @@ public class ResumeIntentAudioVariantOffsetTests : PluginTestBase, IDisposable
         var queue = _queueManager.GetOrCreateQueue("test-device");
         queue.CurrentItemId = id.ToString();
         queue.CurrentPositionTicks = TimeSpan.FromMinutes(5).Ticks;
-        _queueManager.RecordAudioTranscodeBase("test-device", id.ToString(), TimeSpan.FromMinutes(20).Ticks / TimeSpan.TicksPerMillisecond);
 
         var context = CreateContext(id.ToString(), 0);
 
@@ -318,13 +322,13 @@ public class ResumeIntentAudioVariantOffsetTests : PluginTestBase, IDisposable
             session,
             CancellationToken.None);
 
-        long expectedMs = (long)TimeSpan.FromMinutes(25).TotalMilliseconds;
+        long expectedMs = (long)TimeSpan.FromMinutes(5).TotalMilliseconds;
         var directive = SinglePlayDirective(response);
         Assert.Contains(
             $"?start={TimeSpan.FromMilliseconds(expectedMs).Ticks}&",
             directive.AudioItem.Stream.Url,
             StringComparison.Ordinal);
         Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
-        Assert.Equal(expectedMs, _queueManager.GetAudioTranscodeBase("test-device", id.ToString()));
+        Assert.Equal(expectedMs, _queueManager.GetActiveLaunchBase("test-device", id.ToString()));
     }
 }

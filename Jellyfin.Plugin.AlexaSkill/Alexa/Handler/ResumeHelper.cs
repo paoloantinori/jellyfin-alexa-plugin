@@ -33,18 +33,18 @@ internal static class ResumeHelper
         public bool UseResumePlaylist { get; set; }
 
         /// <summary>
-        /// True when <see cref="OffsetMs"/> is DEVICE-DERIVED (seeded from the AudioPlayer
-        /// context offset, or from UserData for a transcode-routed item whose position
-        /// tick-equals this device's own last recorded raw offset, JF-520/JF-521) and
-        /// therefore relative to the previous playback's OUTPUT timeline: for a
-        /// transcode-routed item that timeline starts at the stream's <c>?start=</c>
-        /// base, so the Yes-side resume must rebase it (recorded base + offset) before
-        /// minting the next <c>?start=</c>, or drop it when no base is recorded
-        /// (JF-514). False (default, back-compatible: sessions offered before the
-        /// deploy deserialize without it) treats the offset as item-absolute.
-        /// JF-521: the cross-client residual is closed at the seed (the equality check
-        /// above), and the rebase helper hard-clamps any composition that reaches the
-        /// item runtime, so a misclassified flag can no longer mint past the end.
+        /// True when <see cref="OffsetMs"/> is DEVICE-DERIVED from Amazon's AudioPlayer
+        /// context offset and therefore relative to the previous playback's OUTPUT
+        /// timeline: for a transcode-routed item that timeline starts at the stream's
+        /// <c>?start=</c> base, so the Yes-side resume must rebase it (launch-scoped
+        /// base + offset) before minting the next <c>?start=</c>, or drop it when no
+        /// scope is recorded (JF-514). False (default, back-compatible: sessions
+        /// offered before the deploy deserialize without it) treats the offset as
+        /// item-absolute.
+        /// JF-522 ENDGAME: Amazon's context offset stays stream-relative by platform
+        /// contract, so this flag SURVIVES the writer-side migration narrowed to that
+        /// one source (the JF-521 UserData equality gate was retired with the raw
+        /// writers; the rebase helper's runtime clamp remains its backstop).
         /// </summary>
         [JsonProperty("offsetIsStreamRelative")]
         public bool OffsetIsStreamRelative { get; set; }

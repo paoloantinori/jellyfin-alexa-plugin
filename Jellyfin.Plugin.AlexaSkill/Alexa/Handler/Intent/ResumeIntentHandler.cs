@@ -27,26 +27,20 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// 2. Jellyfin session play state
 /// 3. DeviceQueue persisted state (survives device state loss after pause)
 /// 4. Jellyfin server-side progress (queries last played item with resume position)
-/// JF-507 critical review: NONE of the fallback 1-3 offsets may be minted into the
-/// audio-only transcode's ?start= for a transcode-routed item. All three are
-/// DEVICE-DERIVED, so they are relative to the previous playback's OUTPUT timeline,
-/// which for a transcode-routed item starts at that stream's ?start= seek point (the
-/// codec is an item property: whenever the item routes to the transcode NOW, its
-/// prior playback rode the transcode too). The writers (PlaybackStoppedEventHandler,
-/// PlaybackStartedEventHandler) persist the device offset without adding the
-/// transcode base, so the persisted positions are stream-relative as well. JF-514
-/// shipped the stream-relative-to-absolute correction on the OFFER path (the launch
-/// base is recorded per device+item at the ResolveAudioLaunchSource chokepoint and
-/// YesIntentHandler's confirm rebases base+offset) with this tail on an interim
-/// drop-to-restart rule; JF-520 adopted the SAME rebase here via the shared
-/// BaseHandler.ResolveResumedAudioLaunch: a paused-then-resumed transcode-routed
-/// item continues from base+offset instead of restarting at 0 (and the resolve
-/// records the new base, so the next cycle composes), while a stream-relative offset
-/// with NO recorded base still drops to a 0-restart (never mint silently) and
-/// raw-static launches (audio items, Echo-decodable video) keep the caller's offset.
-/// JF-521: a composition that reaches or exceeds the item's runtime (when known) is
-/// never minted; the raw offset wins (a legitimate composition cannot get there, so
-/// that shape means a stale base or a foreign position).
+/// JF-507 critical review: no fallback 1-3 offset may be minted into the audio-only
+/// transcode's ?start= as if it were item-absolute when it is not. JF-522 re-scoped
+/// the provenance split: fallback 1 (the AudioPlayer context offset) is written by
+/// AMAZON and counts the previous playback's OUTPUT timeline, stream-relative by
+/// platform contract, so it still goes through the shared rebase in
+/// BaseHandler.ResolveResumedAudioLaunch (JF-514/JF-520: base+offset against the
+/// launch-scoped base, drop to a 0-restart when none is recorded); fallbacks 2-3
+/// (session PlayState, DeviceQueue.CurrentPositionTicks) are persisted ITEM-ABSOLUTE
+/// by the event writers since the JF-522 writer fix (the stop event composes the
+/// stream's launch base at write time), so they pass through unchanged. Values a
+/// rolling deploy may still carry from the pre-JF-522 raw regime mint early, never
+/// past the true position, and heal on the first post-deploy stop. JF-521: a
+/// stream-relative composition that reaches or exceeds the item's runtime (when
+/// known) is never minted; the raw offset wins.
 /// Fallback 4 is structurally safe: its video branch launches via the VideoApp path
 /// (never resolves an audio launch, never records a base) and its audio branch uses
 /// the raw static URL (audio items never transcode).
@@ -129,32 +123,40 @@ public class ResumeIntentHandler : BaseHandler
             context.AudioPlayer?.OffsetInMilliseconds,
             session?.FullNowPlayingItem?.Id.ToString());
 
+        // JF-522 per-fallback provenance: only fallback 1 (the AudioPlayer context
+        // offset, written by AMAZON) is stream-relative by platform contract. The
+        // plugin-written fallbacks 2-3 (session PlayState, DeviceQueue position) are
+        // persisted ITEM-ABSOLUTE since the JF-522 writer fix, so they pass through
+        // unchanged; the pre-JF-522 values a rolling deploy may still hold are read
+        // conservatively (they mint early, never past the true position).
+        bool offsetIsStreamRelative = false;
+
         if (!string.IsNullOrEmpty(item_id))
         {
             // Fallback 1: Alexa AudioPlayer context (most accurate when device retains state).
             // The device offset is relative to the PREVIOUS playback's output timeline,
             // which for a transcode-routed item starts at that stream's ?start= point.
-            // The tail rebases it against the recorded launch base (JF-520, the same
+            // The tail rebases it against the launch-scoped base (JF-520/JF-522, the same
             // correction the offer/Yes path shipped in JF-514); no base drops it.
             if (context.AudioPlayer != null && context.AudioPlayer.OffsetInMilliseconds > 0)
             {
                 offset = (int)context.AudioPlayer.OffsetInMilliseconds;
+                offsetIsStreamRelative = true;
                 Logger.LogDebug("ResumeIntent: using AudioPlayer context offset={OffsetMs}ms (device-derived, output-timeline-relative)", offset);
             }
-            // Fallback 2: Jellyfin session play state. Written from the device offset
-            // (PlaybackStoppedEventHandler), so it is output-timeline-relative too for
-            // a transcode-routed item; the tail rebases it the same way (JF-520).
+            // Fallback 2: Jellyfin session play state. Persisted item-absolute by the
+            // event writers since JF-522 (launch base composed at write time).
             else if (session?.PlayState != null)
             {
                 offset = (int)TimeSpan.FromTicks(session.PlayState?.PositionTicks ?? 0).TotalMilliseconds;
                 Logger.LogDebug(
-                    "ResumeIntent: using session playState offset={OffsetMs}ms (ticks={Ticks}, device-derived)",
+                    "ResumeIntent: using session playState offset={OffsetMs}ms (ticks={Ticks}, item-absolute since JF-522)",
                     offset, session.PlayState?.PositionTicks);
             }
 
             // Fallback 3: DeviceQueue persisted state (survives after AudioPlayer.Stop clears context).
-            // Same device-derived provenance as fallbacks 1-2 (PlaybackStoppedEventHandler
-            // writes the device offset into CurrentPositionTicks); the tail rebases it (JF-520).
+            // Item-absolute since JF-522 (the stop event composes the launch base into
+            // CurrentPositionTicks).
             if (offset == 0 && _queueManager != null)
             {
                 var queue = _queueManager.GetOrCreateQueue(context.System.Device.DeviceID);
@@ -250,29 +252,28 @@ public class ResumeIntentHandler : BaseHandler
             return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale)));
         }
 
-        // JF-520: the tail's JF-514 correction, adopted from the offer path. EVERY
-        // tail offset (AudioPlayer context, session PlayState, DeviceQueue) is
-        // device-derived and therefore relative to the previous playback's OUTPUT
-        // timeline, which for a transcode-routed item starts at that stream's ?start=
-        // base (the event writers never add the base back), so the tail passes
-        // streamRelative=true UNCONDITIONALLY. BaseHandler.ResolveResumedAudioLaunch
-        // owns the shared shape: probe + read the recorded launch base, rebase
-        // base+offset (item-absolute) when one exists, drop to a 0-restart when none
-        // does (pre-deploy launch, wiped ledger), pass through for raw-static items.
-        // The ledger read lives INSIDE the helper, structurally before the resolve
-        // that overwrites it (JF-520; was comment-enforced here in JF-514).
+        // The tail's JF-514 correction, adopted from the offer path (JF-520) and
+        // re-scoped by JF-522: the AudioPlayer-context offset (Amazon-written) stays
+        // stream-relative forever, so the tail rebases ONLY that one against the
+        // launch-scoped base. BaseHandler.ResolveResumedAudioLaunch owns the shared
+        // shape: probe + read the active launch base, rebase base+offset
+        // (item-absolute) when one exists, drop to a 0-restart when none does
+        // (pre-deploy launch, wiped scope), pass through for raw-static items and
+        // item-absolute offsets. The base read lives INSIDE the helper, structurally
+        // before the resolve/directive that overwrites it (JF-520; was
+        // comment-enforced here in JF-514).
         AudioLaunchSource source = ResolveResumedAudioLaunch(
-            session?.FullNowPlayingItem, item_id!, user, offset, offsetIsStreamRelative: true,
+            session?.FullNowPlayingItem, item_id!, user, offset, offsetIsStreamRelative,
             context?.System?.Device?.DeviceID, _queueManager, "ResumeIntent");
 
         var response = BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll,
-            source.Url,
+            source,
             item_id!,
             session?.FullNowPlayingItem,
             user,
             context,
-            source.OffsetMs);
+            queueManager: _queueManager);
 
         Logger.LogDebug(
             "ResumeIntent: final response itemId={ItemId}, offset={OffsetMs}ms",

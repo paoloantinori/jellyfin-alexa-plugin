@@ -29,6 +29,7 @@ public class PlaybackStartedEventHandler : BaseHandler
 #pragma warning restore CA1711
 {
     private readonly ILibraryManager? _libraryManager;
+    private readonly DeviceQueueManager? _queueManager;
 
     /// <summary>
     /// Server playback-start reports slower than this are logged at WARNING (not DEBUG) so
@@ -43,14 +44,17 @@ public class PlaybackStartedEventHandler : BaseHandler
     /// <param name="sessionManager">Instance of the <see cref="ISessionManager"/> interface.</param>
     /// <param name="config">The plugin configuration.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
-    /// <param name="libraryManager">Optional library manager for PreEnqueueOnStart item lookups.</param>
+    /// <param name="libraryManager">Optional library manager for PreEnqueueOnStart item lookups and the JF-522 runtime guard.</param>
+    /// <param name="queueManager">Optional per-device queue manager holding the JF-522 launch-scope store (pending-base promotion).</param>
     public PlaybackStartedEventHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILoggerFactory loggerFactory,
-        ILibraryManager? libraryManager = null) : base(sessionManager, config, loggerFactory)
+        ILibraryManager? libraryManager = null,
+        DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
+        _queueManager = queueManager;
     }
 
     /// <inheritdoc/>
@@ -95,7 +99,23 @@ public class PlaybackStartedEventHandler : BaseHandler
         // as "no now-playing item") instead of crashing the event.
         StreamTokenCodec.TryGetItemId(req.Token, out Guid startItemId);
 
-        long startTicks = TimeSpan.FromMilliseconds(req.OffsetInMilliseconds).Ticks;
+        // JF-522: this event means the enqueued stream (if any) for the item is now the
+        // one playing, so its PENDING launch base becomes the ACTIVE one the stop/finish
+        // writers compose with (on a wrapped/repeat-one queue the enqueue wrote pending
+        // for the SAME item whose previous stream was still running; only now does the
+        // new base take over). No-op without a pending entry (a ReplaceAll launch wrote
+        // active at directive time).
+        // Composite sleep tokens ("{guid}|sleep:{ticks}") promote through the parsed
+        // id (the scope store keys are bare "N"-format GUIDs).
+        (_queueManager ?? Plugin.Instance?.DeviceQueueManager)?.PromotePendingLaunchBase(
+            deviceId, startItemId != Guid.Empty ? startItemId.ToString() : req.Token);
+
+        // JF-522: the directive offset counts the stream's output timeline (0 for a
+        // transcode launch, whose base is baked into ?start=), so the item-absolute
+        // start position the server report carries is base + offset (read AFTER the
+        // promote, so an enqueued stream's base is the one just promoted).
+        long startTicks = ComposeEventPositionTicks(
+            deviceId, startItemId, req.OffsetInMilliseconds, "PlaybackStarted", _queueManager, _libraryManager);
         PlaybackStartInfo playbackStartInfo = new PlaybackStartInfo
         {
             SessionId = session.Id,
@@ -336,7 +356,7 @@ public class PlaybackStartedEventHandler : BaseHandler
         // JF-507: codec-gated audio-launch decision; an EAC3-family video item in the
         // queue routes to the audio-only transcode instead of dying on the raw static
         // bytes when the cache hit is served (JF-505 does not apply: audio-shaped launch).
-        AudioLaunchSource source = ResolveAudioLaunchSource(item, nextId.ToString(), user, 0, deviceId);
+        AudioLaunchSource source = ResolveAudioLaunchSource(item, nextId.ToString(), user, 0);
         string streamUrl = source.Url;
 
         NextTrackPrecomputeCache.Store(deviceId, currentToken, nextId, item, streamUrl);

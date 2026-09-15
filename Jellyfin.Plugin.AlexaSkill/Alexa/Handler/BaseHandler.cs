@@ -1295,21 +1295,21 @@ public abstract class BaseHandler
     /// <param name="user">The user for building the image URL.</param>
     /// <param name="context">Optional Alexa context for enqueue previous-token tracking.</param>
     /// <param name="offsetInMilliseconds">Resume offset in milliseconds (default 0).</param>
+    /// <param name="announceLocale">Optional locale for the now-playing announce.</param>
+    /// <param name="queueManager">Optional per-device queue manager holding the launch-scope store (JF-522); null falls back to <c>Plugin.Instance</c>'s (pass one explicitly to keep unit tests off the shared plugin instance).</param>
+    /// <param name="launchBaseMs">The item-absolute launch base of the stream this directive plays (<see cref="AudioLaunchSource.LaunchBaseMs"/>; 0 for raw-static/precomputed launches). Recorded at this chokepoint so the playback event writers can persist item-absolute positions (JF-522).</param>
     /// <returns>A SkillResponse containing the AudioPlayer directive.</returns>
-    public SkillResponse BuildAudioPlayerResponse(PlayBehavior playBehavior, string streamUrl, string itemId, MediaBrowser.Controller.Entities.BaseItem? item, Entities.User user, Context? context, int offsetInMilliseconds = 0, string? announceLocale = null)
+    public SkillResponse BuildAudioPlayerResponse(PlayBehavior playBehavior, string streamUrl, string itemId, MediaBrowser.Controller.Entities.BaseItem? item, Entities.User user, Context? context, int offsetInMilliseconds = 0, string? announceLocale = null, DeviceQueueManager? queueManager = null, long launchBaseMs = 0)
     {
         // Record the last user-initiated play for this device (ReplaceAll = a new item starts).
         // This is the universal chokepoint: every play path flows through here, including APL
         // carousel taps and resume confirmations that bypass SetQueue. Captures VideoApp.Launch
         // plays too (which don't update context.AudioPlayer.Token), giving LaunchRequestHandler
         // a reliable device-specific "what did this Echo last play" signal.
-        if (playBehavior == PlayBehavior.ReplaceAll)
+        string? deviceId = context?.System?.Device?.DeviceID;
+        if (playBehavior == PlayBehavior.ReplaceAll && !string.IsNullOrEmpty(deviceId))
         {
-            string? deviceId = context?.System?.Device?.DeviceID;
-            if (!string.IsNullOrEmpty(deviceId))
-            {
-                Plugin.Instance?.DeviceQueueManager?.RecordLastPlayed(deviceId, itemId);
-            }
+            (queueManager ?? Plugin.Instance?.DeviceQueueManager)?.RecordLastPlayed(deviceId, itemId);
         }
 
         // Route initial playback through VideoApp when native controls are enabled for the
@@ -1341,6 +1341,22 @@ public abstract class BaseHandler
             {
                 return BuildVideoAppAudioResponse(itemId, item, user, announceLocale, context);
             }
+        }
+
+        // JF-522 launch-scope capture: the directive below is what actually creates the
+        // device stream, so ITS base is the one the playback event writers must add to
+        // raw device offsets. Recorded AFTER the native-controls delegation (a VideoApp
+        // launch creates no AudioPlayer stream to scope) and split active/pending by
+        // behavior: an Enqueue's stream has not started yet, and on a wrapped/repeat-one
+        // queue it is the SAME item still playing, whose terminal events must keep
+        // composing with the running stream's base until PlaybackStarted promotes.
+        if (!string.IsNullOrEmpty(deviceId))
+        {
+            (queueManager ?? Plugin.Instance?.DeviceQueueManager)?.RecordLaunchBase(
+                deviceId,
+                itemId,
+                launchBaseMs,
+                playBehavior is PlayBehavior.Enqueue or PlayBehavior.ReplaceEnqueued);
         }
 
         Logger.LogDebug("BuildAudioPlayerResponse: itemId={ItemId}, behavior={Behavior}, offsetMs={OffsetMs}, title={Title}, streamUrl={StreamUrl}",
@@ -1450,6 +1466,45 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// JF-522 structural pairing overload for callers holding a resolved
+    /// <see cref="AudioLaunchSource"/>: the directive is built from the source's
+    /// URL/offset/base as one unsplittable triple, so a transcode launch minted with a
+    /// non-zero base can never be recorded into the launch-scope store as base 0 by a
+    /// caller that forgot to thread the value. Callers building a directive from a bare
+    /// URL (plain plays, the precompute cache hit, whose base is genuinely 0) keep the
+    /// string overload.
+    /// </summary>
+    /// <param name="playBehavior">The play behavior (ReplaceAll, Enqueue, ReplaceEnqueued).</param>
+    /// <param name="source">The resolved launch source (URL + directive offset + launch base).</param>
+    /// <param name="itemId">The item ID used as the stream token.</param>
+    /// <param name="item">The media item for metadata (title, art), or null.</param>
+    /// <param name="user">The user for building the image URL.</param>
+    /// <param name="context">Optional Alexa context for enqueue previous-token tracking.</param>
+    /// <param name="announceLocale">Optional locale for the now-playing announce.</param>
+    /// <param name="queueManager">Optional per-device queue manager holding the launch-scope store; null falls back to <c>Plugin.Instance</c>'s.</param>
+    /// <returns>A SkillResponse containing the AudioPlayer directive.</returns>
+    protected SkillResponse BuildAudioPlayerResponse(
+        PlayBehavior playBehavior,
+        AudioLaunchSource source,
+        string itemId,
+        MediaBrowser.Controller.Entities.BaseItem? item,
+        Entities.User user,
+        Context? context,
+        string? announceLocale = null,
+        DeviceQueueManager? queueManager = null)
+        => BuildAudioPlayerResponse(
+            playBehavior,
+            source.Url,
+            itemId,
+            item,
+            user,
+            context,
+            source.OffsetMs,
+            announceLocale,
+            queueManager,
+            source.LaunchBaseMs);
+
+    /// <summary>
     /// Build a VideoApp.Launch response for audio playback using the video-audio
     /// endpoint, which combines album art with audio into a streamable MP4.
     /// Gives native progress bar / scrubber on Echo Show.
@@ -1473,15 +1528,14 @@ public abstract class BaseHandler
             Logger.LogDebug(
                 "BuildVideoAppAudioResponse: device {DeviceId} has no VideoApp interface, item {ItemId} degrades to AudioPlayer",
                 context?.System?.Device?.DeviceID ?? "unknown", itemId);
-            AudioLaunchSource source = ResolveAudioLaunchSource(item, itemId, user, 0, context?.System?.Device?.DeviceID);
+            AudioLaunchSource source = ResolveAudioLaunchSource(item, itemId, user, 0);
             return BuildAudioPlayerResponse(
                 PlayBehavior.ReplaceAll,
-                source.Url,
+                source,
                 itemId,
                 item,
                 user,
                 context,
-                source.OffsetMs,
                 announceLocale);
         }
 
@@ -1534,12 +1588,15 @@ public abstract class BaseHandler
 
     /// <summary>
     /// The resolved stream source of an AUDIO-SHAPED launch (AudioPlayer.Play): the URL
-    /// plus the offset the directive must carry for it (JF-507).
+    /// plus the offset the directive must carry for it (JF-507). The triple is
+    /// unsplittable by design (JF-522): a caller holding a source cannot issue the
+    /// directive without its launch base reaching the launch-scope store - pass the
+    /// whole struct to the AudioLaunchSource overload of BuildAudioPlayerResponse.
     /// </summary>
     /// <param name="Url">The stream URL (raw static or the audio-only episode transcode).</param>
-    /// <param name="OffsetMs">The offsetInMilliseconds the AudioPlayer.Play directive must carry with that URL.</param>
-    /// <param name="RoutedToTranscode">True when the URL is the audio-only episode transcode whose output timeline STARTS at the <c>?start=</c> seek point (the offset moved into the URL, directive offset 0).</param>
-    protected readonly record struct AudioLaunchSource(string Url, int OffsetMs, bool RoutedToTranscode);
+    /// <param name="OffsetMs">The offsetInMilliseconds the AudioPlayer.Play directive must carry with that URL (0 on the transcode route, where the seek lives in the URL).</param>
+    /// <param name="LaunchBaseMs">The item-absolute base of the resolved stream (the minted <c>?start=</c> on the transcode route, 0 on the raw-static route).</param>
+    protected readonly record struct AudioLaunchSource(string Url, int OffsetMs, long LaunchBaseMs);
 
     /// <summary>
     /// JF-507 decision point for every AUDIO-SHAPED launch of an item: which stream URL
@@ -1559,21 +1616,20 @@ public abstract class BaseHandler
     /// AudioPlayer) so every audio-shaped launch of a video item benefits; the wired
     /// sites are the resume-yes path, the ResumeIntent tail, the session-queue resume,
     /// JumpToPosition (absolute target) and the degradation itself.
-    /// JF-514: every Movie/Episode resolution also RECORDS the launch base in the
-    /// device's queue (<paramref name="deviceId"/> + <paramref name="queueManager"/>):
-    /// the transcode route records the minted <c>?start=</c> base, the raw-static route
-    /// records 0, so a later resume can rebase a device-derived (stream-relative)
-    /// offset into the item-absolute position the next <c>?start=</c> wants.
+    /// JF-522: the resolve is a PURE decision (no store writes). The launch base it
+    /// computes rides out on <see cref="AudioLaunchSource.LaunchBaseMs"/> and is
+    /// recorded in the device's launch-SCOPE store only when the caller issues the
+    /// directive (the BuildAudioPlayerResponse chokepoint) - a precompute that never
+    /// directs must not touch the scope the running stream's events compose with
+    /// (the wrapped-queue clobber the JF-521 rejection documented).
     /// </summary>
     /// <param name="item">The item being launched (null keeps the raw static URL).</param>
     /// <param name="itemId">The item ID (stream token and URL path).</param>
     /// <param name="user">The user, for the raw static URL's api_key.</param>
     /// <param name="offsetMs">The resume offset the caller wants (item-relative). MUST be known item-absolute when the caller suspects the item routes to the transcode: a device/stream-relative offset minted into <c>?start=</c> seeks the wrong position (resume callers holding a stream-relative offset go through <see cref="ResolveResumedAudioLaunch"/> instead).</param>
-    /// <param name="deviceId">The Alexa device ID the launch plays on (base-ledger key). Null (caller without device context) skips the ledger write; a later resume then takes the no-base rule.</param>
-    /// <param name="queueManager">The per-device queue manager holding the ledger. Null falls back to <c>Plugin.Instance</c>'s DI instance (the <c>RecordLastPlayed</c> chokepoint idiom); pass one explicitly to keep unit tests off the shared plugin instance.</param>
     /// <param name="knownAudioCodec">A codec the caller already resolved (JF-520: <see cref="ResolveResumedAudioLaunch"/> probes before delegating); null probes here. A legitimately-null fail-open probe result also arrives as null and re-probes - one extra read only in that rare case.</param>
-    /// <returns>The (URL, offset) pair for the AudioPlayer.Play directive; <see cref="AudioLaunchSource.RoutedToTranscode"/> tells the caller which timeline the offset semantics belong to.</returns>
-    protected AudioLaunchSource ResolveAudioLaunchSource(BaseItem? item, string itemId, Entities.User user, int offsetMs, string? deviceId = null, DeviceQueueManager? queueManager = null, string? knownAudioCodec = null)
+    /// <returns>The launch source for the AudioPlayer.Play directive (URL + directive offset + launch base).</returns>
+    protected AudioLaunchSource ResolveAudioLaunchSource(BaseItem? item, string itemId, Entities.User user, int offsetMs, string? knownAudioCodec = null)
     {
         if (item is MediaBrowser.Controller.Entities.Movies.Movie
             or MediaBrowser.Controller.Entities.TV.Episode)
@@ -1585,17 +1641,14 @@ public abstract class BaseHandler
                 Logger.LogDebug(
                     "Audio launch of video item {ItemId}: audio codec '{AudioCodec}' has no Echo decoder, routing to the audio-only HLS transcode (start={StartTicks} ticks)",
                     itemId, audioCodec, startTicks);
-                RecordAudioTranscodeBase(deviceId, queueManager, itemId, offsetMs);
-                return new AudioLaunchSource(GetEpisodeAudioUrl(itemId, startTicks), 0, RoutedToTranscode: true);
+                return new AudioLaunchSource(GetEpisodeAudioUrl(itemId, startTicks), 0, LaunchBaseMs: offsetMs);
             }
-
-            // JF-514: a Movie/Episode riding the RAW STATIC audio URL plays the item
-            // timeline from 0, so the recorded launch base is 0 (this also invalidates
-            // any transcode base an older launch of the same item left behind).
-            RecordAudioTranscodeBase(deviceId, queueManager, itemId, 0);
         }
 
-        return new AudioLaunchSource(GetStreamUrl(itemId, user), offsetMs, RoutedToTranscode: false);
+        // Raw-static route (audio items, Echo-decodable video, and a Movie/Episode
+        // whose codec the Dot plays): the output timeline IS the item timeline, so
+        // the launch base is 0.
+        return new AudioLaunchSource(GetStreamUrl(itemId, user), offsetMs, LaunchBaseMs: 0);
     }
 
     /// <summary>
@@ -1605,28 +1658,35 @@ public abstract class BaseHandler
     /// knows about the offset's timeline: <paramref name="offsetIsStreamRelative"/> true means
     /// device-derived (relative to the previous playback's OUTPUT timeline, which for a
     /// transcode-routed Movie/Episode starts at that stream's <c>?start=</c> base), in which
-    /// case a recorded launch base is ADDED (minted <c>?start=</c> = base + offset, both terms
-    /// item-absolute) and a MISSING base drops the offset to 0 (never mint a stream-relative
-    /// value silently). False means item-absolute: pass through unchanged. Raw-static launches
-    /// keep the caller's offset on every path (the correction is transcode-routed only).
+    /// case the stream's launch-scoped base is ADDED (minted <c>?start=</c> = base + offset,
+    /// both terms item-absolute) and a MISSING scope drops the offset to 0 (never mint a
+    /// stream-relative value silently). False means item-absolute: pass through unchanged.
+    /// Raw-static launches keep the caller's offset on every path (the correction is
+    /// transcode-routed only).
+    /// JF-522: the base read is the LAUNCH-SCOPED store (active at the directive
+    /// chokepoint), not the JF-514 last-resolve ledger it replaces: under that ledger
+    /// a precompute or a wrapped-queue resolve could rewrite the entry for the same
+    /// item mid-playback without any stream change, while the stream-relative offset
+    /// counts the base of the stream that actually played.
     /// JF-521 hard clamp: when the item's runtime is known, a composed base+offset that
     /// reaches or exceeds it is never minted (the raw offset wins); a legitimate
     /// composition cannot get there, so that shape means a stale base or a foreign
     /// position (the JF-520 review's F1 residual and F2 retry walk).
-    /// STRUCTURAL ORDERING (JF-520, was comment-enforced at the callers): the ledger read
-    /// happens INSIDE this helper, immediately before the resolve that overwrites it. Callers
-    /// must not read the launch-base ledger around this call: a read after it would observe
-    /// the base this very resolve just recorded.
+    /// STRUCTURAL ORDERING (JF-520, was comment-enforced at the callers): the base read
+    /// happens INSIDE this helper, before the resolve/directive that overwrites it. Callers
+    /// must not read the launch base around this call: a read after it would observe
+    /// the base this very launch just recorded (deviceId/queueManager feed exactly
+    /// this read).
     /// </summary>
     /// <param name="item">The item to resume (probe + resolve target).</param>
-    /// <param name="itemId">The item ID (ledger key + stream token).</param>
+    /// <param name="itemId">The item ID (launch-scope key + stream token).</param>
     /// <param name="user">The user, for the raw static URL's api_key.</param>
     /// <param name="offsetMs">The caller's resume offset (interpretation per <paramref name="offsetIsStreamRelative"/>).</param>
     /// <param name="offsetIsStreamRelative">True when the offset counts the previous playback's output timeline.</param>
-    /// <param name="deviceId">The Alexa device ID (base-ledger key). Null skips the ledger entirely.</param>
-    /// <param name="queueManager">The per-device queue manager holding the ledger; null falls back to <c>Plugin.Instance</c>'s (tests pass theirs).</param>
+    /// <param name="deviceId">The Alexa device ID (launch-scope key). Null skips the scope entirely.</param>
+    /// <param name="queueManager">The per-device queue manager holding the launch-scope store; null falls back to <c>Plugin.Instance</c>'s (tests pass theirs).</param>
     /// <param name="logLabel">Caller identity for the rebase/drop log lines (the existing provenance-logging style).</param>
-    /// <returns>The resolved launch source; the resolve records the (possibly rebased) launch base.</returns>
+    /// <returns>The resolved launch source; the caller's directive records the (possibly rebased) launch base at the BuildAudioPlayerResponse chokepoint.</returns>
     protected AudioLaunchSource ResolveResumedAudioLaunch(
         BaseItem? item,
         string itemId,
@@ -1641,7 +1701,7 @@ public abstract class BaseHandler
         string? probedCodec = null;
         if (offsetIsStreamRelative && offsetMs > 0 && RoutesToAudioTranscode(item, out probedCodec))
         {
-            long? transcodeBaseMs = GetAudioTranscodeBase(deviceId, itemId, queueManager);
+            long? transcodeBaseMs = GetActiveLaunchBaseMs(deviceId, itemId, queueManager);
             if (transcodeBaseMs.HasValue)
             {
                 long composedMs = Math.Min(transcodeBaseMs.Value + offsetMs, int.MaxValue);
@@ -1651,9 +1711,9 @@ public abstract class BaseHandler
                 // stale base or a foreign position is in play (the JF-520 review's F1/F2
                 // shapes). Never mint it; the caller's raw offset is the more
                 // conservative truth. Also bounds the F2 retry walk (a resolve whose
-                // directive never played advances the ledger while the offset source
-                // stays frozen): once a walk's composition reaches the runtime it clamps
-                // and stops growing.
+                // directive never played advances the launch scope while the offset
+                // source stays frozen): once a walk's composition reaches the runtime it
+                // clamps and stops growing.
                 long? runtimeTicks = item?.RunTimeTicks;
                 if (runtimeTicks is > 0 && composedMs * TimeSpan.TicksPerMillisecond >= runtimeTicks.Value)
                 {
@@ -1682,18 +1742,8 @@ public abstract class BaseHandler
 
         // probedCodec (null on the fail-open path, where the resolve re-probes) saves
         // the resolve's second media-streams DB read (JF-520 simplify finding E1).
-        return ResolveAudioLaunchSource(item, itemId, user, effectiveOffsetMs, deviceId, queueManager, probedCodec);
+        return ResolveAudioLaunchSource(item, itemId, user, effectiveOffsetMs, probedCodec);
     }
-
-    /// <summary>
-    /// Pure routing probe of <see cref="ResolveAudioLaunchSource"/> (JF-514): true when
-    /// the item's audio-shaped launch would mint the audio-only transcode URL. Does NOT
-    /// touch the launch-base ledger (the resolve itself writes it), so a caller that
-    /// must read the PREVIOUS launch's base can probe first and only then resolve.
-    /// </summary>
-    /// <param name="item">The item to probe.</param>
-    /// <returns>True when the Movie/Episode's audio codec has no Echo decoder.</returns>
-    protected bool RoutesToAudioTranscode(BaseItem? item) => RoutesToAudioTranscode(item, out _);
 
     /// <summary>
     /// Same probe, handing back the resolved codec so callers that log it (the
@@ -1713,57 +1763,130 @@ public abstract class BaseHandler
     }
 
     /// <summary>
-    /// JF-514 ledger write behind <see cref="ResolveAudioLaunchSource"/>: records the
-    /// item-absolute base of the launch just resolved for the (device, item) pair, so
-    /// the next resume on that device can rebase its device-derived offset. No-op
-    /// without a device ID; the manager falls back to the DI instance when the caller
-    /// did not inject one (tests pass theirs to stay off the shared plugin instance).
+    /// JF-522 read side of the launch-scope store: the ACTIVE launch base for an item
+    /// on a device (the base of the stream the device is actually playing), or null
+    /// when none is recorded. Wrapper shape mirrors the RecordLastPlayed chokepoint
+    /// idiom (null device reads null; manager falls back to <c>Plugin.Instance</c>'s).
     /// </summary>
-    /// <param name="deviceId">The Alexa device ID, or null to skip the write.</param>
+    /// <param name="deviceId">The Alexa device ID, or null to read null.</param>
+    /// <param name="itemId">The item ID in any GUID format.</param>
     /// <param name="queueManager">The caller's queue manager, or null to use <c>Plugin.Instance</c>'s.</param>
-    /// <param name="itemId">The item ID whose launch minted the base.</param>
-    /// <param name="baseMs">The item-absolute launch base in milliseconds.</param>
-    private void RecordAudioTranscodeBase(string? deviceId, DeviceQueueManager? queueManager, string itemId, long baseMs)
-    {
-        if (string.IsNullOrEmpty(deviceId))
-        {
-            return;
-        }
-
-        (queueManager ?? Plugin.Instance?.DeviceQueueManager)?.RecordAudioTranscodeBase(deviceId, itemId, baseMs);
-    }
-
-    /// <summary>
-    /// Read-side twin of the record helper (JF-514): the recorded launch base for an
-    /// item on a device, or null when none (null device ID reads null, mirroring the
-    /// write side's skip).
-    /// </summary>
-    protected long? GetAudioTranscodeBase(string? deviceId, string itemId, DeviceQueueManager? queueManager = null)
+    /// <returns>The active launch base in milliseconds, or null when none is recorded.</returns>
+    protected long? GetActiveLaunchBaseMs(string? deviceId, string itemId, DeviceQueueManager? queueManager = null)
     {
         if (string.IsNullOrEmpty(deviceId))
         {
             return null;
         }
 
-        return (queueManager ?? Plugin.Instance?.DeviceQueueManager)?.GetAudioTranscodeBase(deviceId, itemId);
+        return (queueManager ?? Plugin.Instance?.DeviceQueueManager)?.GetActiveLaunchBase(deviceId, itemId);
     }
 
     /// <summary>
-    /// JF-521 provenance probe: THIS device's own last-persisted raw playback offset
-    /// for an item (the per-device ItemPositionState), or null when none recorded.
-    /// Wrapper shape mirrors <see cref="GetAudioTranscodeBase"/> (null device reads
-    /// null; manager falls back to <c>Plugin.Instance</c>'s). The tick-equality
-    /// provenance argument lives at its decision site: the device-last-played seed in
-    /// LaunchRequestHandler (JF-521).
+    /// JF-522 writer-side provenance, the ONE raw-to-item-absolute conversion shared by
+    /// every playback-position writer: a device-reported offset counts the OUTPUT
+    /// timeline of the stream that produced it, which for a transcode-routed launch
+    /// starts at the stream's launch base, so the item-absolute position is
+    /// <c>base + raw</c>, including a raw of 0 (a PlaybackStarted for a transcode
+    /// launch carries directive offset 0 while the item genuinely plays from its
+    /// base). Base 0 (raw-static launches, plain plays) and absent scopes (pre-deploy
+    /// launches, cleared queue files) return the raw ticks unchanged: base 0 IS the
+    /// item timeline, and an absent scope has no defensible base to add (persisting
+    /// the raw value there is the conservative, pre-JF-522 behavior).
+    /// Stale-base guard: when the item runtime is known, a composition STRICTLY past
+    /// it is never persisted (the raw offset wins). A legitimate composition can land
+    /// ON the runtime (a finish event reports the full remaining stream), but cannot
+    /// pass it; past-runtime means the base no longer describes the stream that
+    /// produced the offset (a same-item relaunch whose stop arrived late, the sleep
+    /// re-issue corner, a promote that never paired).
     /// </summary>
-    protected long? GetRecordedDeviceOffsetTicks(string? deviceId, string itemId, DeviceQueueManager? queueManager = null)
+    /// <param name="rawTicks">The device-reported offset in .NET ticks (stream-relative; 0 at a transcode stream's start).</param>
+    /// <param name="launchBaseMs">The stream's ACTIVE launch base in milliseconds (0 when none).</param>
+    /// <param name="runtimeTicks">The item's runtime in ticks when known, else null (guard skipped).</param>
+    /// <param name="logLabel">Caller identity for the composition/guard log lines.</param>
+    /// <returns>The item-absolute position in ticks.</returns>
+    protected long ComposeItemAbsolutePosition(long rawTicks, long launchBaseMs, long? runtimeTicks = null, string logLabel = "PlaybackEvent")
     {
-        if (string.IsNullOrEmpty(deviceId))
+        if (launchBaseMs <= 0)
+        {
+            return rawTicks;
+        }
+
+        long baseTicks = launchBaseMs * TimeSpan.TicksPerMillisecond;
+        long composed = rawTicks + baseTicks;
+        if (runtimeTicks is > 0 && composed > runtimeTicks.Value)
+        {
+            Logger.LogInformation(
+                "{Label}: composed item-absolute position of {ComposedTicks} ticks (launch base {BaseMs}ms + raw {RawTicks} ticks) passes the item runtime ({RuntimeTicks} ticks); a legitimate composition cannot, so a stale launch scope is in play; persisting the raw offset as the more conservative truth",
+                logLabel, composed, launchBaseMs, rawTicks, runtimeTicks.Value);
+            return rawTicks;
+        }
+
+        Logger.LogDebug(
+            "{Label}: persisting item-absolute position {ComposedTicks} ticks (launch base {BaseMs}ms + raw {RawTicks} ticks)",
+            logLabel, composed, launchBaseMs, rawTicks);
+        return composed;
+    }
+
+    /// <summary>
+    /// JF-522: the ONE event-writer entry point for converting a device-reported raw
+    /// offset into the item-absolute position - read the stream's ACTIVE launch base,
+    /// look the item runtime up (fail-open, only when a base exists) for the
+    /// stale-base guard, and compose. Every playback-position writer calls this
+    /// instead of hand-assembling the triplet, so the "guard only when a base exists"
+    /// policy and the null-to-0 collapse live in one place. An unparseable item id
+    /// (<see cref="Guid.Empty"/>) keeps the raw ticks (no scope can be recorded for
+    /// it). Callers without a library manager (the mode-change progress reports) skip
+    /// the runtime guard - their positions are transient PlayState writes.
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID (launch-scope key).</param>
+    /// <param name="itemId">The codec-parsed item id the event's token names.</param>
+    /// <param name="rawOffsetMs">The device-reported offset in milliseconds.</param>
+    /// <param name="logLabel">Caller identity for the composition/guard log lines.</param>
+    /// <param name="queueManager">The caller's queue manager, or null to use <c>Plugin.Instance</c>'s.</param>
+    /// <param name="libraryManager">Optional library manager for the runtime guard; null skips it.</param>
+    /// <returns>The item-absolute position in ticks.</returns>
+    protected long ComposeEventPositionTicks(
+        string? deviceId,
+        Guid itemId,
+        long rawOffsetMs,
+        string logLabel,
+        DeviceQueueManager? queueManager = null,
+        ILibraryManager? libraryManager = null)
+    {
+        long launchBaseMs = itemId != Guid.Empty
+            ? GetActiveLaunchBaseMs(deviceId, itemId.ToString(), queueManager) ?? 0
+            : 0;
+        long? runtimeTicks = launchBaseMs > 0 ? TryGetRuntimeTicksForGuard(libraryManager, itemId) : null;
+        return ComposeItemAbsolutePosition(
+            TimeSpan.FromMilliseconds(rawOffsetMs).Ticks, launchBaseMs, runtimeTicks, logLabel);
+    }
+
+    /// <summary>
+    /// Fail-open runtime lookup feeding <see cref="ComposeItemAbsolutePosition"/>'s
+    /// stale-base guard (JF-522): the guard is an advisory bound, so a library-manager
+    /// failure must not kill an event handler before the keep-alive ack Amazon requires
+    /// - it reads null (guard skipped) and logs.
+    /// </summary>
+    /// <param name="libraryManager">The library manager (null reads null).</param>
+    /// <param name="itemId">The item whose runtime to read.</param>
+    /// <returns>The item runtime in ticks, or null when unknown.</returns>
+    protected long? TryGetRuntimeTicksForGuard(ILibraryManager? libraryManager, Guid itemId)
+    {
+        if (libraryManager == null || itemId == Guid.Empty)
         {
             return null;
         }
 
-        return (queueManager ?? Plugin.Instance?.DeviceQueueManager)?.GetItemPositionTicks(deviceId, itemId);
+        try
+        {
+            return libraryManager.GetItemById(itemId)?.RunTimeTicks;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Playback composition guard: runtime lookup failed for item {ItemId}; guard skipped", itemId);
+            return null;
+        }
     }
 
     /// <summary>
@@ -3178,14 +3301,20 @@ public abstract class BaseHandler
     /// handlers, which differ only in the <paramref name="order"/> they report.
     /// </summary>
     /// <param name="session">The Jellyfin session to report on.</param>
+    /// <param name="deviceId">The Alexa device ID (launch-scope key). NOT the session's
+    /// own DeviceId, which is the constant "AlexaDevice" the controller authenticates
+    /// under and never keys a launch scope (review JF-522).</param>
     /// <param name="itemId">The currently-playing item ID.</param>
     /// <param name="offsetMs">The current playback offset in milliseconds.</param>
     /// <param name="order">The playback order to report (Shuffle or Default).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task representing the async progress report.</returns>
-    protected async Task ReportPlaybackProgress(SessionInfo session, Guid itemId, long offsetMs, PlaybackOrder order, CancellationToken cancellationToken)
+    protected async Task ReportPlaybackProgress(SessionInfo session, string deviceId, Guid itemId, long offsetMs, PlaybackOrder order, CancellationToken cancellationToken)
     {
-        long positionTicks = TimeSpan.FromMilliseconds(offsetMs).Ticks;
+        // JF-522: PlayState positions are item-absolute; the context-derived offset the
+        // shuffle handlers pass composes with the playing stream's launch base (0 for
+        // every non-transcode-routed queue, where this is a numeric no-op).
+        long positionTicks = ComposeEventPositionTicks(deviceId, itemId, offsetMs, "PlaybackProgress");
         PlaybackProgressInfo info = new PlaybackProgressInfo
         {
             SessionId = session.Id,
@@ -3225,7 +3354,8 @@ public abstract class BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", GetLocale(request)));
         }
 
-        long positionTicks = TimeSpan.FromMilliseconds(requestState.OffsetInMilliseconds).Ticks;
+        long positionTicks = ComposeEventPositionTicks(
+            context?.System?.Device?.DeviceID, itemId, requestState.OffsetInMilliseconds, "LoopMode");
         PlaybackProgressInfo info = new PlaybackProgressInfo
         {
             SessionId = session.Id,

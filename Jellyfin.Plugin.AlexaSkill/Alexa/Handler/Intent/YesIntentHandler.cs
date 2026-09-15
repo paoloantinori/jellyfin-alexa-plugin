@@ -41,7 +41,7 @@ public class YesIntentHandler : BaseHandler
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
-    /// <param name="queueManager">Optional per-device queue manager (JF-514: the transcode-base ledger behind the resume offset rebase).</param>
+    /// <param name="queueManager">Optional per-device queue manager (JF-514/JF-522: the launch-scope store behind the resume offset rebase and the directive-time base recording).</param>
     public YesIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
@@ -228,21 +228,17 @@ public class YesIntentHandler : BaseHandler
         int offsetMs = (int)Math.Min(resumeState.OffsetMs, int.MaxValue);
         string? deviceId = context?.System?.Device?.DeviceID;
 
-        // JF-514/JF-520 provenance gate, shared with the ResumeIntent tail via
+        // JF-514/JF-520/JF-522 provenance gate, shared with the ResumeIntent tail via
         // BaseHandler.ResolveResumedAudioLaunch: the flag tells the helper which
         // timeline the offset counts (true = device-derived/stream-relative ->
-        // rebase against the recorded launch base, or drop to restart when none).
-        // Offer seeds classify at seed time: the AudioPlayer-context seed flags
-        // stream-relative; JF-521 has the device last-played seed probe the ledger
-        // AND tick-match this device's own last recorded raw offset
-        // too. Seed-binding (rebasing at the offer seed and deleting the flag) was
-        // evaluated for JF-520 and REJECTED: the equivalence premise "nothing mints
-        // a base between offer and confirm" is false - the AudioPlayer event
-        // handlers (PlaybackStarted/PlaybackNearlyFinished) resolve queue items
-        // WITHOUT ending the session, and on a wrapped queue (repeat / one-item)
-        // the resolved next item IS the offered item, clobbering its ledger base
-        // inside the offer window. Keep the flag; keep reading the ledger at
-        // confirm time.
+        // rebase against the launch-scoped base, or drop to restart when none).
+        // The ONLY seed that still flags stream-relative is the AudioPlayer-context
+        // seed (Amazon wrote the offset; stream-relative by platform contract);
+        // the device-last-played seed stopped flagging in JF-522 because the event
+        // writers now persist item-absolute positions. Seed-binding (rebasing at the
+        // offer seed and deleting the flag) stays REJECTED: the flag's remaining
+        // consumer needs confirm-time base reads, and offers can outlive plugin
+        // restarts that change what the base store holds.
         //
         // JF-507: the helper's resolve is the shared codec-gated audio-launch
         // decision. An EAC3-family video item resumed on the audio path (the
@@ -253,12 +249,12 @@ public class YesIntentHandler : BaseHandler
             item, itemId, user, offsetMs, resumeState.OffsetIsStreamRelative, deviceId, _queueManager, "ResumeConfirmation");
         SkillResponse standardResponse = BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll,
-            source.Url,
+            source,
             itemId,
             item,
             user,
             context,
-            source.OffsetMs);
+            queueManager: _queueManager);
 
         // Replace default speech with resume announcement
         if (_config.ResumeAnnounceTitle)

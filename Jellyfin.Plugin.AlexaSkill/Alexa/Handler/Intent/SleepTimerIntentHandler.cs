@@ -106,6 +106,18 @@ public class SleepTimerIntentHandler : BaseHandler
             ? parsed
             : Guid.TryParse(itemId, out Guid bare) ? bare : Guid.Empty;
 
+        // JF-522: the sleep re-issue/replay builds its AudioPlayerPlayDirective directly
+        // (the one production site outside the BuildAudioPlayerResponse chokepoint), so
+        // it must retire the item's launch scope itself: the replay rides the RAW STATIC
+        // URL (base 0, the item timeline), and without this write a transcode-launched
+        // stream's stale base would compose over the replay's offsets at its events
+        // (review JF-522; the double-add is otherwise bounded only by the runtime guard).
+        if (itemGuid != Guid.Empty)
+        {
+            Plugin.Instance?.DeviceQueueManager?.RecordLaunchBase(
+                context.System?.Device?.DeviceID ?? string.Empty, itemGuid.ToString(), 0, enqueued: false);
+        }
+
         int offsetInMilliseconds = 0;
         if (context.AudioPlayer != null && context.AudioPlayer.OffsetInMilliseconds > 0)
         {
