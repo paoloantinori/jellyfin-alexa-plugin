@@ -1,10 +1,10 @@
 ---
 id: JF-247
 title: Extended multi-tier song search chain
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-06-03 18:13'
-updated_date: '2026-07-13 20:17'
+updated_date: '2026-09-15 11:08'
 labels:
   - enhancement
   - search
@@ -41,3 +41,9 @@ This provides comprehensive fallback coverage but adds latency per tier. Should 
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining, or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+CLOSED superseded-by-architecture (2026-09-15). The task (2026-06-03) proposed a multi-tier song search chain mirroring the artist 4-tier fallback, depending on JF-172 and written when the plugin had 12 locales. The shipped PlaySong pipeline already implements and EXCEEDS every proposed tier: SearchTerm exact (tier 1), artist-scoped NameContains (JF-383 fallback), the O(1) n-gram index + phonetic fallback with locale-aware stop-word handling (JF-384/JF-388), the artist cascade (JF-345), and the cross-media fallbacks (JF-363/JF-463 families) - all documented in the CLAUDE.md Song Search Pipeline section. The task's own trade-off note (more tiers = more latency) was the binding constraint the shipped architecture solved with the bounded n-gram index instead of unbounded global scans. No code change; closing prevents a stale proposal from resurrecting a superseded design.
+<!-- SECTION:FINAL_SUMMARY:END -->
