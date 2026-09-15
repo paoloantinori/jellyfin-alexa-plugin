@@ -189,7 +189,7 @@ public class MediaInfoIntentHandler : BaseHandler
         }
 
         var duration = TimeSpan.FromTicks(item.RunTimeTicks.Value);
-        string durationStr = FormatTimeSpan(duration, locale);
+        string durationStr = ResumeMath.FormatTimeSpan(duration, locale);
         string response = ResponseStrings.Get("MediaInfoDuration", locale, durationStr);
         return ResponseBuilder.Tell(response);
     }
@@ -364,7 +364,7 @@ public class MediaInfoIntentHandler : BaseHandler
             description = BuildMediaDescription(item, locale, out descriptionSsml);
         }
 
-        string position = BuildPositionDisplay(session, locale);
+        string position = ResumeMath.BuildPositionDisplay(session, locale);
         var response = string.IsNullOrEmpty(position)
             ? SpeechBuilder.GetSsml("NowPlayingSsml", locale, descriptionSsml ?? SpeechBuilder.EscapeXml(description)) is { } ssml
                 ? SpeechBuilder.TellSsml(ssml)
@@ -652,7 +652,7 @@ public class MediaInfoIntentHandler : BaseHandler
 
             if (progressTicks > 0 && durationTicks > 0)
             {
-                body += $"\n{FormatPosition(progressTicks)} / {FormatPosition(durationTicks)}";
+                body += $"\n{ResumeMath.FormatPosition(progressTicks)} / {ResumeMath.FormatPosition(durationTicks)}";
             }
 
             response.Response.Card = new StandardCard

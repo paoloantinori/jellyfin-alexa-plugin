@@ -113,7 +113,7 @@ public class InProgressMediaListIntentHandler : BaseHandler
                 continue;
             }
 
-            inProgressItems.Add((item, FormatPosition(userData.PlaybackPositionTicks)));
+            inProgressItems.Add((item, ResumeMath.FormatPosition(userData.PlaybackPositionTicks)));
 
             if (inProgressItems.Count >= MaxDisplayItems)
             {

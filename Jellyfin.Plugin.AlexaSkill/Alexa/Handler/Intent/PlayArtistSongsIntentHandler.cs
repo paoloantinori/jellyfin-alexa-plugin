@@ -713,7 +713,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         }
 
         // Single-pass sort + resume detection (avoids duplicate GetUserData calls)
-        var (artistsItems, startIndex, _) = SortAndFindResumeIndex(
+        var (artistsItems, startIndex, _) = ResumeMath.SortAndFindResumeIndex(
             artistItems, jellyfinUser!, _userDataManager, resumePosition: false);
 
         if (startIndex > 0)

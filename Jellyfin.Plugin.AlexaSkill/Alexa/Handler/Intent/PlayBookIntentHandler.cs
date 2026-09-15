@@ -203,7 +203,7 @@ public class PlayBookIntentHandler : BaseHandler
                 dbgData?.Played, dbgData?.PlaybackPositionTicks);
         }
 
-        (int startIndex, long resumeTicks) = FindResumeTrackIndex(
+        (int startIndex, long resumeTicks) = ResumeMath.FindResumeTrackIndex(
             trackItems, jellyfinUser!, _userDataManager, _queueManager, session.DeviceId, resumePosition: true, Logger);
 
         Logger.LogInformation(

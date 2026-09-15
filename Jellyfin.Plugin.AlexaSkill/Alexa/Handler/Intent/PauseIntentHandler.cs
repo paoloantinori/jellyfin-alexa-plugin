@@ -7,6 +7,7 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
@@ -141,7 +142,7 @@ public class PauseIntentHandler : BaseHandler
 
         if (seekEnabled && announcePosition && hasNowPlaying)
         {
-            string positionText = BuildPositionDisplay(session!, locale);
+            string positionText = ResumeMath.BuildPositionDisplay(session!, locale);
             if (!string.IsNullOrEmpty(positionText))
             {
                 response.Response.Card = new StandardCard

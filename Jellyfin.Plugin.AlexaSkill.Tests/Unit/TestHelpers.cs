@@ -48,6 +48,15 @@ internal static class TestHelpers
         };
     }
 
+    /// <summary>
+    /// The ONE Jellyfin-user factory for tests that need a server-side user value
+    /// (start consolidating the ~44 private <c>new("testuser", "test", "test")</c>
+    /// copies here; JF-315 batch 2 created this seam, migrate existing copies in a
+    /// dedicated test-cleanup batch).
+    /// </summary>
+    internal static Jellyfin.Database.Implementations.Entities.User CreateJellyfinUser()
+        => new("testuser", "test", "test");
+
     internal static DeviceToken CreateTestDeviceToken(
         string accessToken = "access",
         string refreshToken = "refresh",

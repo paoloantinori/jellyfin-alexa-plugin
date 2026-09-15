@@ -147,7 +147,7 @@ public class StartOverIntentHandler : BaseHandler
             // dropped here or the next resume would jump back near where the user just
             // restarted from. Cleared regardless of the flag (the tracker is only READ
             // under it), so a flag-off restart cannot leave a stale mark behind either.
-            Plugin.Instance?.AudiobookPositionTracker?.Clear(GetAudiobookBookKey(item));
+            Plugin.Instance?.AudiobookPositionTracker?.Clear(ResumeMath.GetAudiobookBookKey(item));
 
             if (Plugin.Instance?.Configuration?.NativeControlsForBooks == true)
             {

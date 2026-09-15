@@ -10,6 +10,7 @@ using Alexa.NET.Response;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -200,7 +201,7 @@ public class PlayVideoIntentHandler : BaseHandler
         long resumeTicks = userData?.PlaybackPositionTicks ?? 0;
         if (resumeTicks > 0)
         {
-            Logger.LogInformation("PlayVideo: resuming {Title} from {Position}", video.Name, FormatPosition(resumeTicks));
+            Logger.LogInformation("PlayVideo: resuming {Title} from {Position}", video.Name, ResumeMath.FormatPosition(resumeTicks));
         }
 
         // Alexa VideoApp does not support seek/offset natively (the video starts from the

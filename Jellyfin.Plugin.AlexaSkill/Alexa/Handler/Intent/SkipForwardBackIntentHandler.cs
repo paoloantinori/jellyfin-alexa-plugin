@@ -7,6 +7,7 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
@@ -138,7 +139,7 @@ public class SkipForwardBackIntentHandler : BaseHandler
         }
 
         int offsetMs = (int)TimeSpan.FromTicks(targetTicks).TotalMilliseconds;
-        string positionStr = FormatTimeSpan(TimeSpan.FromTicks(targetTicks), locale);
+        string positionStr = ResumeMath.FormatTimeSpan(TimeSpan.FromTicks(targetTicks), locale);
         string announcementKey = forward ? "SkippedForward" : "SkippedBack";
 
         var response = BuildAudioPlayerResponse(

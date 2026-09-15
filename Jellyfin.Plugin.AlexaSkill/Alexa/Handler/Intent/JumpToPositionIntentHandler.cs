@@ -7,6 +7,7 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
@@ -98,13 +99,13 @@ public class JumpToPositionIntentHandler : BaseHandler
         // Past-end check
         if (runtimeTicks > 0 && targetTicks >= runtimeTicks)
         {
-            string runtimeStr = FormatTimeSpan(TimeSpan.FromTicks(runtimeTicks), locale);
+            string runtimeStr = ResumeMath.FormatTimeSpan(TimeSpan.FromTicks(runtimeTicks), locale);
             return Task.FromResult(ResponseBuilder.Tell(
                 ResponseStrings.Get("PositionPastEnd", locale, runtimeStr)));
         }
 
         int offsetMs = (int)TimeSpan.FromTicks(targetTicks).TotalMilliseconds;
-        string positionStr = FormatTimeSpan(TimeSpan.FromTicks(targetTicks), locale);
+        string positionStr = ResumeMath.FormatTimeSpan(TimeSpan.FromTicks(targetTicks), locale);
 
         // JF-507: shared codec-gated audio-launch decision. The jump target is
         // item-absolute, which is exactly the ?start= the transcoded shape wants; an

@@ -23,7 +23,7 @@ priority: low
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-Consolidation follow-up out of the JF-563 review (2026-09-15). JF-563 added BaseHandler.GetAudiobookBookKey(item) and BaseHandler.GetAudiobookStartTicks(bookKey, fallbackTicks) and used them in ResumeIntentHandler/StartOverIntentHandler, but the pre-existing copies of the same chains were left untouched to keep the diff scoped. All items below are mechanical, no behavior change intended:
+Consolidation follow-up out of the JF-563 review (2026-09-15). JF-563 added GetAudiobookBookKey(item) and GetAudiobookStartTicks(bookKey, fallbackTicks) (canonical home since JF-315 batch 2: Alexa/Util/ResumeMath.cs, moved verbatim out of BaseHandler) and used them in ResumeIntentHandler/StartOverIntentHandler, but the pre-existing copies of the same chains were left untouched to keep the diff scoped. All items below are mechanical, no behavior change intended:
 
 1. Book key + tracker-position chain still inlined at pre-existing sites; migrate to the new helpers: PlayBookIntentHandler.cs ~270-277 (bookId ternary + tracker read + resumeTicks fallback), YesIntentHandler.cs ~213-220 (same, fallback = offered offset), LaunchRequestHandler.cs ~253-255 (read-only variant), and the parentId ternary inside BaseHandler.BuildAudiobookResumeResponse (~1950, same resolution without the "N" format). Drift here fails silently (resume falls to position 0), which is why the key shape now has one definition.
 2. Book VideoApp launch composition (AudioBook+flag gate, BuildVideoAppAudioResponse, SpeakVideoLaunchAnnounceAsync announce) is hand-rolled at PlayBookIntentHandler ~286-305, YesIntentHandler ~359-366, and StartOverIntentHandler; consider one shared builder owning the screenless-degradation comment once.

@@ -10,6 +10,7 @@ using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -210,7 +211,7 @@ public class ResumeIntentHandler : BaseHandler
             {
                 Logger.LogInformation(
                     "ResumeIntent: using server-side progress fallback: item={ItemName} ({ItemId}), position={Position}",
-                    resumeItem.Name, resumeItem.Id, FormatPosition(resumeTicks));
+                    resumeItem.Name, resumeItem.Id, ResumeMath.FormatPosition(resumeTicks));
 
                 item_id = resumeItem.Id.ToString();
                 offset = (int)TimeSpan.FromTicks(resumeTicks).TotalMilliseconds;
@@ -242,7 +243,7 @@ public class ResumeIntentHandler : BaseHandler
                         GetVideoAppLaunchUrl(resumeItem, user),
                         resumeItem.Name,
                         new PlainTextOutputSpeech(
-                            ResponseStrings.Get("NowPlayingWithPosition", locale, resumeItem.Name, FormatPosition(resumeTicks)))).ConfigureAwait(false);
+                            ResponseStrings.Get("NowPlayingWithPosition", locale, resumeItem.Name, ResumeMath.FormatPosition(resumeTicks)))).ConfigureAwait(false);
                 }
 
                 // Audio/AudioBook items use AudioPlayer response with offset
@@ -258,7 +259,7 @@ public class ResumeIntentHandler : BaseHandler
                 // Announce resume position if enabled
                 if (offset > 0 && pluginUser.AnnouncePositionOnResume)
                 {
-                    string positionStr = FormatTimeSpan(TimeSpan.FromMilliseconds(offset), locale);
+                    string positionStr = ResumeMath.FormatTimeSpan(TimeSpan.FromMilliseconds(offset), locale);
                     audioResponse.Response.OutputSpeech = new PlainTextOutputSpeech
                     {
                         Text = ResponseStrings.Get("ResumingAtPosition", locale, positionStr)
@@ -322,7 +323,7 @@ public class ResumeIntentHandler : BaseHandler
             Entities.User? pluginUser = _config.GetUserById(user.Id);
             if (pluginUser?.AnnouncePositionOnResume == true)
             {
-                string positionStr = FormatTimeSpan(TimeSpan.FromMilliseconds(source.OffsetMs), locale);
+                string positionStr = ResumeMath.FormatTimeSpan(TimeSpan.FromMilliseconds(source.OffsetMs), locale);
                 response.Response.OutputSpeech = new PlainTextOutputSpeech
                 {
                     Text = ResponseStrings.Get("ResumingAtPosition", locale, positionStr)
@@ -364,8 +365,8 @@ public class ResumeIntentHandler : BaseHandler
             return null;
         }
 
-        string bookKey = GetAudiobookBookKey(item);
-        long startTicks = GetAudiobookStartTicks(bookKey, fallbackTicks);
+        string bookKey = ResumeMath.GetAudiobookBookKey(item);
+        long startTicks = ResumeMath.GetAudiobookStartTicks(bookKey, fallbackTicks);
 
         Logger.LogInformation(
             "ResumeIntent: audiobook '{BookName}' ({BookKey}) routes to the VideoApp HLS playlist, startTicks={StartTicks} (tracker first, fallback={FallbackTicks})",
@@ -387,7 +388,7 @@ public class ResumeIntentHandler : BaseHandler
             context,
             request,
             new PlainTextOutputSpeech(
-                ResponseStrings.Get("NowPlayingWithPosition", locale, item.Name, FormatPosition(startTicks)))).ConfigureAwait(false);
+                ResponseStrings.Get("NowPlayingWithPosition", locale, item.Name, ResumeMath.FormatPosition(startTicks)))).ConfigureAwait(false);
         return bookResponse;
     }
 }
