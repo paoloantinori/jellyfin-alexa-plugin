@@ -4,10 +4,10 @@ title: >-
   Per-locale NLU divergence with identical models: es-US routes
   album/chapter/playlist/browse phrases differently than es-ES (es-MX, fr-CA
   minor cases)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-08-23 10:30'
-updated_date: '2026-09-15 11:04'
+updated_date: '2026-09-15 11:07'
 labels:
   - nlu
   - localization
@@ -56,3 +56,9 @@ DECISION: acceptance + documentation, no sample tuning. The failing carriers ('R
 
 INFRA (from this task's own scope): retry-on-5xx added to tests/integration/smapi_client.py (SmapiServerError classified by stderr markers in _run_ask, retried in profile_nlu alongside rate limits, same 3-attempt backoff); verified offline with mocked subprocess (transient-500 recovery + exhaustion after 3 attempts). NLU dry-run green: 899 fixture entries collect + schema-validate.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+CLOSED investigated-and-resolved (2026-09-15, systematic probe with the models rebuilt same-day, 3x per cell, all stable). VERDICT: the divergences are Amazon per-locale base-model arbitration, NOT our models - accepted and documented (fixtures carry the full probe records). Evidence: es-US misroutes the four album/chapter/mood carriers (PlaySongIntent swallowing them) while es-ES/es-MX route correctly; 'muestrame albumes' falls to FallbackIntent on BOTH es-US and es-MX despite es-MX carrying the full sample set - so the samples are not causal; the August fr-CA divergence HEALED after today's rebuild. Diff verdict: the es-US model's 3 dropped BrowseLibrary samples (the deliberate JF-316 golden master) are not causal. Decision: no sample tuning (the failing carriers are already verbatim samples; tuning is a live-deploy guess). Infra delivered: the task's own retry item - SmapiServerError classification + 3-attempt backoff retry in profile_nlu (verified with a mocked subprocess). The noun-redundant es-US album carriers remain the candidate for a future live-deploy window. fr-CA/fr-FR divergence: healed post-rebuild.
+<!-- SECTION:FINAL_SUMMARY:END -->
