@@ -72,7 +72,9 @@ public class LiveTvStreamResolverTests
         Assert.Contains($"Videos/{channel.Id.ToString("N")}/master.m3u8", result.Url);
         Assert.Contains("MediaSourceId=ms1", result.Url);
         Assert.Contains("LiveStreamId=live-xyz", result.Url);
-        Assert.Contains("api_key=tok", result.Url);
+        // JF-575: the master.m3u8 route rejects lowercase api_key on 12.0.
+        Assert.Contains("ApiKey=tok", result.Url);
+        Assert.DoesNotContain("api_key=", result.Url);
     }
 
     [Fact]
@@ -89,6 +91,9 @@ public class LiveTvStreamResolverTests
         Assert.NotNull(result);
         Assert.Contains("MediaSourceId=ms2", result!.Url);
         Assert.DoesNotContain("LiveStreamId", result.Url);
+        // JF-575: the master.m3u8 route rejects lowercase api_key on 12.0.
+        Assert.Contains("ApiKey=tok", result.Url);
+        Assert.DoesNotContain("api_key=", result.Url);
     }
 
     [Fact]
@@ -108,7 +113,9 @@ public class LiveTvStreamResolverTests
         Assert.Contains($"/Items/{channel.Id.ToString("N")}/PlaybackInfo", url);
         Assert.Contains("IsPlayback=true", url);
         Assert.Contains("AutoOpenLiveStream=true", url);
-        Assert.Contains("api_key=tok", url);
+        // JF-575: capital ApiKey is the only query shape PlaybackInfo accepts on 12.0.
+        Assert.Contains("ApiKey=tok", url);
+        Assert.DoesNotContain("api_key=", url);
     }
 
     [Fact]

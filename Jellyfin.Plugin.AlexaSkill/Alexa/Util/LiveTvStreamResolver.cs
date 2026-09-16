@@ -64,7 +64,9 @@ public class LiveTvStreamResolver : ILiveTvStreamResolver
         string root = server.TrimEnd('/');
         string channelId = channel.Id.ToString("N");
         string url = $"{root}/Items/{channelId}/PlaybackInfo"
-            + $"?UserId={user.Id}&IsPlayback=true&AutoOpenLiveStream=true&api_key={user.JellyfinToken}";
+            // JF-575: capital ApiKey is the ONLY query shape PlaybackInfo accepts on
+            // Jellyfin 12.0 (lowercase api_key is 401 there; 10.11 accepts both).
+            + $"?UserId={user.Id}&IsPlayback=true&AutoOpenLiveStream=true&ApiKey={user.JellyfinToken}";
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(Timeout);
@@ -115,7 +117,10 @@ public class LiveTvStreamResolver : ILiveTvStreamResolver
 
             // Fallback: hardware tuner / transcode path via Jellyfin dynamic HLS master playlist.
             string? liveStreamId = GetOptionalString(ms, "LiveStreamId");
-            string fallback = $"{root}/Videos/{channelId}/master.m3u8?MediaSourceId={Uri.EscapeDataString(mediaSourceId)}&api_key={user.JellyfinToken}";
+            // JF-575: the dynamic-HLS master route REJECTS lowercase api_key on 12.0
+            // (live-probed 401; unlike the plain /Videos/{id}/stream endpoint, which
+            // is auth-open, jellyfin#13984), so it must carry the capital ApiKey.
+            string fallback = $"{root}/Videos/{channelId}/master.m3u8?MediaSourceId={Uri.EscapeDataString(mediaSourceId)}&ApiKey={user.JellyfinToken}";
             if (!string.IsNullOrWhiteSpace(liveStreamId))
             {
                 fallback += $"&LiveStreamId={Uri.EscapeDataString(liveStreamId)}";
