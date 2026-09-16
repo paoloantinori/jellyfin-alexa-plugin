@@ -7,7 +7,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-09-16 17:05'
-updated_date: '2026-09-16 18:14'
+updated_date: '2026-09-16 18:28'
 labels:
   - bug
   - resume
@@ -49,6 +49,8 @@ PRONG B (stop-save self-verification, PlaybackStoppedEventHandler): the dead cro
 TESTS: new suites Jellyfin.Plugin.AlexaSkill.Tests/Handler/ResumeSeedFallbackTests.cs (4) and Handler/StoppedSaveSelfVerificationTests.cs (2). Full suite 3999/3999 passed on BOTH net9.0 and net10.0; dotnet build -c Release 0 warnings 0 errors. Test-only fixups during authoring: UserItemData lives in MediaBrowser.Controller.Entities on this SDK line; SetQueue replaces the queue record and drops LastPlayedItemId, so RecordLastPlayed must follow SetQueue in fixtures.
 
 RISKS / NOT TRACKED HERE: the null-data branch guesses the UserItemData Key (itemId "N"); real Jellyfin keys come from item.GetUserDataKeys() and a wrong key would orphan the write, so live verification should confirm the incident item actually resumes. The VideoApp static-stream launch not starting playback and the missing episode artwork (task description SECONDARY/TERTIARY) are untouched by this change.
+
+CORRECTION (2026-09-16 evening, triggered by a user question that prompted a live re-audit of the identity chain): the 'dead code in production' causal claim in the description and the first final summary is WRONG. Verified live: the plugin config user Id (28dce039-1eeb-44dc-a764-93a5dcb55f60) IS paolo's Jellyfin user id (matches /Users), and AlexaSkillController's AccessToken parse must yield that same Guid for any request to pass the user-resolution gate (BaseHandler falls through to config.GetUserById(userId) and rejects on mismatch; the incident requests were served, so the parse matched). Therefore the pre-JF-581 block's GetUserById(user.Id) DID resolve paolo, and the absent 'Overwrote Jellyfin UserData' debug line is explained by its guard being false at that moment (data.PlaybackPositionTicks was non-zero right after the report, i.e. the SessionManager stop-save plausibly DID land at 18:35:09) - meaning the store's current 0/PlayCount-0 state came from something wiping or never-committing it server-side AFTER or AROUND the save (not isolated: candidates are the zero-runtime .strm UpdatePlayState shape, the IlPost feed plugin resetting episode data, or a later silent save; the start-driven PlayCount increment also never survived, which constrains any hypothesis). What still stands as hard live evidence: we reported 3641180000 ticks at 18:35:09, and every read since returns 0/PlayCount 0; prong A (seed from the plugin-owned ItemPositionState) and prong B (self-verify after the report, direct SaveUserData on mismatch) are the correct defenses regardless of which server-side mechanism loses the write, and prong B's Information line is now the live diagnostic that will name the loss on the next real stop. The session.UserId resolution source remains the better convention (it is what every other handler's ResolveJellyfinUser already uses) but it is a convention improvement, not a dead-code resurrection. The audit also confirmed the three sibling sites using the same form (FavoriteToggleIntentHandler user.Id, PlayFavoritesIntentHandler pluginUser.Id, CatalogSyncTask user.Id) are NOT dead: user.Id is a valid Jellyfin user id in this codebase. No action needed there. The tests' Times.Never pin on GetUserById(pluginUser.Id) keeps its value as a convention pin (resolve from the session) even though the old form was not itself the failure.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
