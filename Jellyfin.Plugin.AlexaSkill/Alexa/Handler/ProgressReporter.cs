@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET;
@@ -30,7 +31,9 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// <see cref="ApplyRepeatModeAsync"/>, <see cref="ReportStopOrderedAsync"/>), the
 /// post-play behavior resolution (<see cref="GetPostPlayBehavior"/>), and the
 /// queue-order mirror (<see cref="MirrorQueueToSession"/>), moved verbatim from
-/// BaseHandler. COMPOSITION, not per-handler injection (the PlaybackLaunchBuilder
+/// BaseHandler, and the JF-574/JF-577 crash-recovery pair
+/// (<see cref="TryRehydrateSessionQueueFromDevice"/> with its
+/// <see cref="ResolveCurrentItemId"/> companion). COMPOSITION, not per-handler injection (the PlaybackLaunchBuilder
 /// batch-4 precedent): BaseHandler constructs one instance as the inherited
 /// <c>Progress</c> property so the 61 handler ctors stay untouched. The real
 /// dependencies are ctor-passed (session manager, config, logger, the Launch
@@ -230,6 +233,113 @@ public sealed class ProgressReporter
         }
 
         session.NowPlayingQueue = rebuilt;
+    }
+
+    /// <summary>
+    /// Companion to <see cref="TryRehydrateSessionQueueFromDevice"/>: resolves the
+    /// current item for a queue-reading consumer. "Current" is the session's
+    /// now-playing item; on the rehydrated (wiped) shape that item is null until
+    /// the next server report, so the coherent token the guard just validated
+    /// stands in for it. Second-adopter window (review finding, JF-577): another
+    /// consumer (ListQueue, PlaybackNearlyFinished) may have rehydrated this
+    /// session's queue earlier in the same wiped session, making leg 1 of the
+    /// guard decline here while the now-playing item is STILL null; a token that
+    /// is a MEMBER of the now-populated queue proves the same coherence the guard
+    /// validates, so it stands in too. A token outside the queue changes nothing:
+    /// non-rehydrated requests keep today's semantics exactly.
+    /// </summary>
+    /// <param name="session">The Jellyfin session (now-playing item first).</param>
+    /// <param name="context">The Alexa context (stream token fallback).</param>
+    /// <param name="rehydrated">Whether the guard rehydrated this session.</param>
+    /// <returns>The current item id, or null when nothing is playing.</returns>
+    public static Guid? ResolveCurrentItemId(SessionInfo session, Context context, bool rehydrated)
+    {
+        if (session.FullNowPlayingItem != null)
+        {
+            return session.FullNowPlayingItem.Id;
+        }
+
+        if (!StreamTokenCodec.TryGetItemId(context.AudioPlayer?.Token, out Guid tokenItemId))
+        {
+            return null;
+        }
+
+        return rehydrated || session.NowPlayingQueue.Any(q => q.Id == tokenItemId)
+            ? tokenItemId
+            : null;
+    }
+
+    /// <summary>
+    /// JF-574 (hoisted JF-577): rehydrates <paramref name="session"/>'s
+    /// <c>NowPlayingQueue</c> from the persisted per-device queue when a restart or a
+    /// mid-playback session re-registration wiped the in-memory queue (the
+    /// crash-recovery path; the device queue file is the only queue store that survives
+    /// a restart). Mirrors through <see cref="MirrorQueueToSession"/> so the queue's
+    /// current order (a physical shuffle included) is what the session carries, and the
+    /// caller's queue read proceeds unchanged on a queue that reflects reality (for
+    /// <c>PlaybackNearlyFinishedEventHandler</c> that includes TRUE exhaustion and
+    /// PostPlay). Called at entry by every session-queue consumer that can instead
+    /// answer from the surviving queue (Next/Previous/ListQueue).
+    /// COHERENCE GUARD, both legs required: (1) the session queue must be EMPTY - a
+    /// non-empty session queue belongs to a live playback (a fresh single-song play
+    /// sets its own one-item queue), so an older persisted queue must never extend
+    /// it; (2) the persisted queue must CONTAIN the item the device is actually
+    /// playing (the AudioPlayer token parsed through the shared codec, so composite
+    /// sleep tokens resolve too): a queue whose members do not include the playing
+    /// item describes a different, older playback session, and rehydrating from it
+    /// would hijack the current playback. Membership, not the persisted
+    /// <c>CurrentIndex</c>/<c>CurrentItemId</c> pointer, is the coherence signal
+    /// because those pointers can lag the token across a restart, while a stream
+    /// playing an item that is a member of the persisted queue proves that queue is
+    /// the one this playback was enqueued from.
+    /// </summary>
+    /// <param name="queueManager">The caller's per-device queue manager, or null (no rehydration).</param>
+    /// <param name="session">The Jellyfin session whose queue to rehydrate.</param>
+    /// <param name="context">The Alexa context (device id and current stream token).</param>
+    /// <param name="logger">The caller's logger for the rehydration decision lines.</param>
+    /// <param name="logLabel">Caller identity prefixing the log lines.</param>
+    /// <returns>True when the session queue was rehydrated from the device queue.</returns>
+    public static bool TryRehydrateSessionQueueFromDevice(
+        DeviceQueueManager? queueManager,
+        SessionInfo session,
+        Context context,
+        ILogger logger,
+        string logLabel)
+    {
+        string? currentToken = context.AudioPlayer?.Token;
+        if (queueManager == null
+            || session.NowPlayingQueue.Count != 0
+            || !StreamTokenCodec.TryGetItemId(currentToken, out Guid currentItemId))
+        {
+            return false;
+        }
+
+        Playback.DeviceQueue? deviceQueue = queueManager.GetQueue(context.GetDeviceId());
+        if (deviceQueue == null || deviceQueue.ItemIds.Count == 0)
+        {
+            return false;
+        }
+
+        // Snapshot the member list: GetQueue returns the live instance and SetQueue
+        // can replace it concurrently (a voice play racing this request), so mirror
+        // from an immutable copy.
+        List<string> queuedIds = deviceQueue.ItemIds.ToList();
+        foreach (string queuedId in queuedIds)
+        {
+            if (Guid.TryParse(queuedId, out Guid parsed) && parsed == currentItemId)
+            {
+                MirrorQueueToSession(deviceQueue, session);
+                logger.LogInformation(
+                    "{Label}: session queue empty (restart or re-registration wiped it) but the persisted device queue coherently contains the playing item; rehydrated {Count} items from the device queue",
+                    logLabel, session.NowPlayingQueue.Count);
+                return true;
+            }
+        }
+
+        logger.LogDebug(
+            "{Label}: session queue empty and a persisted device queue exists, but it does not contain the playing item {ItemId} (stale queue from an older playback); not rehydrating",
+            logLabel, currentItemId);
+        return false;
     }
 
     /// <summary>

@@ -74,8 +74,15 @@ public class PreviousIntentHandler : BaseHandler
             return Task.FromResult(refusal);
         }
 
+        // JF-577: repair a restart/re-registration-wiped session queue before the
+        // queue read (rationale on the shared helper): a coherent persisted device
+        // queue turns the false "no more tracks" below into the real queue.
+        bool rehydrated = ProgressReporter.TryRehydrateSessionQueueFromDevice(
+            _queueManager, session, context, Logger, "PreviousIntent");
+        System.Guid? currentItemId = ProgressReporter.ResolveCurrentItemId(session, context, rehydrated);
+
         // check if we have any media in the queue and there is currently something playing
-        if (session.NowPlayingQueue.Count == 0 || session.FullNowPlayingItem == null)
+        if (session.NowPlayingQueue.Count == 0 || currentItemId == null)
         {
             Logger.LogDebug("PreviousIntent: empty queue or no now-playing item, returning Empty");
             return Task.FromResult<SkillResponse>(ResponseBuilder.Empty());
@@ -84,7 +91,7 @@ public class PreviousIntentHandler : BaseHandler
         // get the previous item in the queue
         for (int i = 1; i < session.NowPlayingQueue.Count; i++)
         {
-            if (session.NowPlayingQueue[i].Id == session.FullNowPlayingItem.Id)
+            if (session.NowPlayingQueue[i].Id == currentItemId)
             {
                 System.Guid prevItemId = session.NowPlayingQueue[i - 1].Id;
                 string item_id = session.NowPlayingQueue[i - 1].Id.ToString();
@@ -95,7 +102,6 @@ public class PreviousIntentHandler : BaseHandler
                     return Task.FromResult<SkillResponse>(ResponseBuilder.Empty());
                 }
 
-                string previousItemId = session.NowPlayingQueue[i - 1].Id.ToString();
                 session.FullNowPlayingItem = prevItem;
 
                 Logger.LogDebug("PreviousIntent: playing previous item '{ItemName}' ({ItemId})", prevItem.Name, prevItemId);

@@ -9,6 +9,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -28,6 +29,7 @@ public class ListQueueIntentHandler : BaseHandler
     private static int MaxDisplayItems => Plugin.Instance?.Configuration?.MaxQueueDisplayItems ?? 10;
 
     private readonly ILibraryManager _libraryManager;
+    private readonly DeviceQueueManager? _queueManager;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ListQueueIntentHandler"/> class.
@@ -36,13 +38,16 @@ public class ListQueueIntentHandler : BaseHandler
     /// <param name="config">The plugin configuration.</param>
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
+    /// <param name="queueManager">Optional per-device queue manager (the JF-577 wiped-queue rehydration source).</param>
     public ListQueueIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILibraryManager libraryManager,
-        ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
+        ILoggerFactory loggerFactory,
+        DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
+        _queueManager = queueManager;
     }
 
     /// <inheritdoc/>
@@ -62,6 +67,12 @@ public class ListQueueIntentHandler : BaseHandler
 
         string locale = GetLocale(request);
         Logger.LogDebug("ListQueue: entered, locale={Locale}, queueSize={QueueSize}", locale, session.NowPlayingQueue.Count);
+
+        // JF-577 (rationale on the shared helper): a coherent persisted device
+        // queue is listed instead of the false empty line. No current-item
+        // fallback here: with no now-playing item the handler lists from the
+        // queue head, its existing populated-queue behavior.
+        ProgressReporter.TryRehydrateSessionQueueFromDevice(_queueManager, session, context, Logger, "ListQueue");
 
         if (session.NowPlayingQueue.Count == 0)
         {

@@ -105,11 +105,11 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             return BuildKeepAliveResponse();
         }
 
-        // JF-574 crash-recovery rehydration (rationale in the method doc): without
-        // this bridge a restart-wiped session queue reads as FALSE queue-exhaustion
-        // and PostPlay AutoPlay replaces the artist queue with radio tracks
-        // (live incident 2026-09-16 07:28, Norah Jones).
-        TryRehydrateSessionQueueFromDevice(session, context);
+        // JF-574 crash-recovery rehydration (rationale in the shared helper's doc,
+        // hoisted JF-577): without this bridge a restart-wiped session queue reads
+        // as FALSE queue-exhaustion and PostPlay AutoPlay replaces the artist queue
+        // with radio tracks (live incident 2026-09-16 07:28, Norah Jones).
+        ProgressReporter.TryRehydrateSessionQueueFromDevice(_queueManager, session, context, Logger, "PlaybackNearlyFinished");
 
         // JF-390 PreEnqueueOnStart (pre-compute): check the cache for a pre-resolved
         // next track (computed by PlaybackStarted when the current track began). On a
@@ -359,69 +359,6 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             ? PlaybackOrder.Shuffle
             : PlaybackOrder.Default;
         return (order, deviceQueue.OriginalItemIds != null);
-    }
-
-    /// <summary>
-    /// JF-574: rehydrates <paramref name="session"/>'s <c>NowPlayingQueue</c> from
-    /// the persisted per-device queue when a restart or a mid-playback session
-    /// re-registration wiped the in-memory queue (the crash-recovery path; the
-    /// device queue file is the only queue store that survives a restart). Mirrors
-    /// through <see cref="ProgressReporter.MirrorQueueToSession"/> so the queue's
-    /// current order (a physical shuffle included) is what the session carries, and
-    /// the normal resolution below - including TRUE exhaustion and PostPlay -
-    /// proceeds unchanged on a queue that reflects reality.
-    /// COHERENCE GUARD, both legs required: (1) the session queue must be EMPTY - a
-    /// non-empty session queue belongs to a live playback (a fresh single-song play
-    /// sets its own one-item queue), so an older persisted queue must never extend
-    /// it; (2) the persisted queue must CONTAIN the item the device is actually
-    /// playing (the AudioPlayer token parsed through the shared codec, so composite
-    /// sleep tokens resolve too): a queue whose members do not include the playing
-    /// item describes a different, older playback session, and rehydrating from it
-    /// would hijack the current playback. Membership, not the persisted
-    /// <c>CurrentIndex</c>/<c>CurrentItemId</c> pointer, is the coherence signal
-    /// because those pointers can lag the token across a restart, while a stream
-    /// playing an item that is a member of the persisted queue proves that queue is
-    /// the one this playback was enqueued from.
-    /// </summary>
-    /// <param name="session">The Jellyfin session whose queue to rehydrate.</param>
-    /// <param name="context">The Alexa context (device id and current stream token).</param>
-    /// <returns>True when the session queue was rehydrated from the device queue.</returns>
-    private bool TryRehydrateSessionQueueFromDevice(SessionInfo session, Context context)
-    {
-        string? currentToken = context.AudioPlayer?.Token;
-        if (_queueManager == null
-            || session.NowPlayingQueue.Count != 0
-            || !StreamTokenCodec.TryGetItemId(currentToken, out Guid currentItemId))
-        {
-            return false;
-        }
-
-        Playback.DeviceQueue? deviceQueue = _queueManager.GetQueue(context.GetDeviceId());
-        if (deviceQueue == null || deviceQueue.ItemIds.Count == 0)
-        {
-            return false;
-        }
-
-        // Snapshot the member list: GetQueue returns the live instance and SetQueue
-        // can replace it concurrently (a voice play racing this event), so mirror
-        // from an immutable copy.
-        List<string> queuedIds = deviceQueue.ItemIds.ToList();
-        foreach (string queuedId in queuedIds)
-        {
-            if (Guid.TryParse(queuedId, out Guid parsed) && parsed == currentItemId)
-            {
-                ProgressReporter.MirrorQueueToSession(deviceQueue, session);
-                Logger.LogInformation(
-                    "PlaybackNearlyFinished: session queue empty (restart or re-registration wiped it) but the persisted device queue coherently contains the playing item; rehydrated {Count} items from the device queue before resolution",
-                    session.NowPlayingQueue.Count);
-                return true;
-            }
-        }
-
-        Logger.LogDebug(
-            "PlaybackNearlyFinished: session queue empty and a persisted device queue exists, but it does not contain the playing item {ItemId} (stale queue from an older playback); not rehydrating",
-            currentItemId);
-        return false;
     }
 
     /// <summary>
