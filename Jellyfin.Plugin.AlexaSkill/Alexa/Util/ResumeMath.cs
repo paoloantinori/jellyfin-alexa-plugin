@@ -12,7 +12,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 
 /// <summary>
 /// Pure resume/position math (JF-315 batch 2): queue resume-index selection, the
-/// audiobook tracker key and start-ticks resolution, and position formatting.
+/// audiobook tracker key and start-ticks resolution, position formatting, and
+/// (batch 10) the favorites-first rating ordering that shares the sort machinery.
 /// Static by design: no handler instance state, every explicit dependency arrives as a
 /// parameter. Members moved verbatim from BaseHandler; call sites migrated
 /// mechanically. Two members are pure modulo an ambient read, kept here
@@ -20,9 +21,11 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// Plugin.Instance audiobook tracker singleton, and the full FindResumeTrackIndex
 /// overload calls GetOrCreateQueue (creates-on-read) on the passed queue manager;
 /// both should be parameterized when the stateful collaborators (JF-315 clusters
-/// H/C) land. The manager-querying resume members (FindLastPlayedItemWithProgress,
-/// ComposeItemAbsolutePosition/ComposeEventPositionTicks, TryGetRuntimeTicksForGuard)
-/// stay in BaseHandler for those batches.
+/// H/C) land. The manager-querying resume members stayed in BaseHandler until
+/// batch 10: FindLastPlayedItemWithProgress remains there (I/O, cluster K/L
+/// residue), while ComposeItemAbsolutePosition/ComposeEventPositionTicks and
+/// TryGetRuntimeTicksForGuard moved to the Handler-namespace ProgressReporter
+/// (queue-state-coupled writers, their cluster-H home).
 /// </summary>
 public static class ResumeMath
 {
@@ -142,6 +145,68 @@ public static class ResumeMath
         return items.OrderByDescending(i => i.Rating ?? double.MinValue)
                     .ThenBy(i => i.Index)
                     .Select(i => i.Item);
+    }
+
+    /// <summary>
+    /// Reorder items so favorites appear first, then by personal rating descending
+    /// within each group (favorites, non-favorites). Items without a rating keep
+    /// their original relative order (stable sort). Moved from BaseHandler (JF-315
+    /// batch 10): it is the ordering half of <see cref="SortAndFindResumeIndex"/>
+    /// and now shares its ONE SortByRating (JF-570 closed this batch: the former
+    /// 3-tuple BaseHandler twin and this 4-tuple were token-identical chains, so
+    /// the caller now builds the 4-tuple it already had the user data for and the
+    /// 3-tuple copy is deleted).
+    /// </summary>
+    /// <param name="items">Items to reorder.</param>
+    /// <param name="user">Jellyfin user for favorite and rating lookup.</param>
+    /// <param name="userDataManager">User data manager for favorite/rating status.</param>
+    /// <returns>Items sorted with favorites first and highest-rated within each group.</returns>
+    public static IReadOnlyList<BaseItem> FavoritesAndRatingsFirst(
+        IReadOnlyList<BaseItem> items,
+        Jellyfin.Database.Implementations.Entities.User user,
+        IUserDataManager userDataManager)
+    {
+        if (items.Count <= 1)
+        {
+            return items;
+        }
+
+        var favorites = new List<(int Index, BaseItem Item, double? Rating, UserItemData? Data)>();
+        var rest = new List<(int Index, BaseItem Item, double? Rating, UserItemData? Data)>(items.Count);
+        bool anyRating = false;
+
+        for (int i = 0; i < items.Count; i++)
+        {
+            BaseItem item = items[i];
+            UserItemData? data = userDataManager.GetUserData(user, item);
+            double? rating = data?.Rating;
+            if (rating.HasValue)
+            {
+                anyRating = true;
+            }
+
+            bool isFavorite = data?.IsFavorite == true;
+
+            var entry = (i, item, rating, data);
+            if (isFavorite)
+            {
+                favorites.Add(entry);
+            }
+            else
+            {
+                rest.Add(entry);
+            }
+        }
+
+        if (!anyRating)
+        {
+            return items;
+        }
+
+        List<BaseItem> result = new List<BaseItem>(items.Count);
+        result.AddRange(SortByRating(favorites));
+        result.AddRange(SortByRating(rest));
+        return result;
     }
 
     /// <summary>

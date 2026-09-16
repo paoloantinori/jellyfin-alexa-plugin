@@ -72,52 +72,9 @@ public class PostPlayUserOverrideTests
 }
 
 /// <summary>
-/// Tests for GetPostPlayBehavior resolution logic: user override → global default.
-/// The resolution is tested inline to avoid Alexa.NET namespace shadowing from the
-/// test project's Alexa/ directory, which prevents creating a BaseHandler subclass.
+/// Note (JF-315 batch 10): the GetPostPlayBehavior RESOLUTION tests that lived here
+/// as a logic mirror ("Mirrors BaseHandler.GetPostPlayBehavior logic") were replaced
+/// by direct facts in ProgressReporterTests when the member moved to
+/// ProgressReporter.GetPostPlayBehavior; the mirror re-implemented the resolution
+/// instead of exercising it, so the direct facts subsume all four shapes.
 /// </summary>
-public class GetPostPlayBehaviorResolutionTests
-{
-    [Fact]
-    public void NullUser_ReturnsGlobalDefault()
-    {
-        var config = new PluginConfiguration { DefaultPostPlayBehavior = PostPlayBehavior.AutoPlay };
-        Assert.Equal(PostPlayBehavior.AutoPlay, Resolve(config, null));
-    }
-
-    [Fact]
-    public void NullOverride_ReturnsGlobalDefault()
-    {
-        var config = new PluginConfiguration { DefaultPostPlayBehavior = PostPlayBehavior.AutoPlay };
-        var user = new User { PostPlayBehavior = null };
-        Assert.Equal(PostPlayBehavior.AutoPlay, Resolve(config, user));
-    }
-
-    [Fact]
-    public void UserOverride_WinsOverGlobal()
-    {
-        var config = new PluginConfiguration { DefaultPostPlayBehavior = PostPlayBehavior.Stop };
-        var user = new User { PostPlayBehavior = PostPlayBehavior.AutoPlay };
-        Assert.Equal(PostPlayBehavior.AutoPlay, Resolve(config, user));
-    }
-
-    [Fact]
-    public void GlobalDefault_WhenNoOverrideAndNoConfig()
-    {
-        var config = new PluginConfiguration();
-        Assert.Equal(PostPlayBehavior.Stop, Resolve(config, null));
-    }
-
-    /// <summary>
-    /// Mirrors BaseHandler.GetPostPlayBehavior logic: user override → global default.
-    /// </summary>
-    private static PostPlayBehavior Resolve(PluginConfiguration config, User? user)
-    {
-        if (user?.PostPlayBehavior is { } userBehavior)
-        {
-            return userBehavior;
-        }
-
-        return config.DefaultPostPlayBehavior;
-    }
-}

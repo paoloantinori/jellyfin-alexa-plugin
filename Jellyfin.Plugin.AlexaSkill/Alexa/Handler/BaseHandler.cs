@@ -19,7 +19,6 @@ using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
-using MediaBrowser.Common.Extensions;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -93,70 +92,6 @@ public abstract class BaseHandler
     /// <param name="songIndex">The song n-gram index the handler's request path uses.</param>
     protected static void GuardIndexReady(ISongNgramIndex? songIndex) => IndexWarmingGate.EnsureReady(songIndex);
 
-    /// <summary>
-    /// Reorder items so favorites appear first, then by personal rating descending
-    /// within each group (favorites, non-favorites). Items without a rating keep
-    /// their original relative order (stable sort).
-    /// </summary>
-    /// <param name="items">Items to reorder.</param>
-    /// <param name="user">Jellyfin user for favorite and rating lookup.</param>
-    /// <param name="userDataManager">User data manager for favorite/rating status.</param>
-    /// <returns>Items sorted with favorites first and highest-rated within each group.</returns>
-    protected static IReadOnlyList<BaseItem> FavoritesAndRatingsFirst(
-        IReadOnlyList<BaseItem> items,
-        Jellyfin.Database.Implementations.Entities.User user,
-        IUserDataManager userDataManager)
-    {
-        if (items.Count <= 1)
-        {
-            return items;
-        }
-
-        var favorites = new List<(int Index, BaseItem Item, double? Rating)>();
-        var rest = new List<(int Index, BaseItem Item, double? Rating)>(items.Count);
-        bool anyRating = false;
-
-        for (int i = 0; i < items.Count; i++)
-        {
-            BaseItem item = items[i];
-            UserItemData? data = userDataManager.GetUserData(user, item);
-            double? rating = data?.Rating;
-            if (rating.HasValue)
-            {
-                anyRating = true;
-            }
-
-            bool isFavorite = data?.IsFavorite == true;
-
-            var entry = (i, item, rating);
-            if (isFavorite)
-            {
-                favorites.Add(entry);
-            }
-            else
-            {
-                rest.Add(entry);
-            }
-        }
-
-        if (!anyRating)
-        {
-            return items;
-        }
-
-        List<BaseItem> result = new List<BaseItem>(items.Count);
-        result.AddRange(SortByRating(favorites));
-        result.AddRange(SortByRating(rest));
-        return result;
-    }
-
-    private static IEnumerable<BaseItem> SortByRating(List<(int Index, BaseItem Item, double? Rating)> items)
-    {
-        return items.OrderByDescending(i => i.Rating ?? double.MinValue)
-                    .ThenBy(i => i.Index)
-                    .Select(i => i.Item);
-    }
-
     private protected readonly PluginConfiguration _config;
 
     /// <summary>
@@ -224,6 +159,34 @@ public abstract class BaseHandler
     protected internal AlbumPlayService AlbumPlay { get; }
 
     /// <summary>
+    /// The playback-progress reporting collaborator (JF-315 batch 10, census cluster
+    /// H): the JF-522 position-composition pair
+    /// (ComposeItemAbsolutePosition/ComposeEventPositionTicks with the fail-open
+    /// runtime guard), the SessionManager progress writers (ReportPlaybackProgress,
+    /// ApplyRepeatModeAsync, ReportStopOrderedAsync), GetPostPlayBehavior, and the
+    /// static MirrorQueueToSession, extracted from this class. COMPOSITION, not
+    /// per-handler injection (the PlaybackLaunchBuilder precedent): each handler
+    /// constructs its own instance here so the 61 handler ctors stay untouched;
+    /// consume it via this inherited get-only property. The real dependencies are
+    /// ctor-passed (this handler's SessionManager, config, logger, and the Launch
+    /// collaborator); stateless beyond those, so the singleton-handler constraint
+    /// is preserved.
+    /// </summary>
+    protected internal ProgressReporter Progress { get; }
+
+    /// <summary>
+    /// The radio-track source collaborator (JF-315 batch 10, census cluster H):
+    /// the item-seeded and genre-seeded similar-track queries
+    /// (FindRadioTracksAsync/FindRadioTracksByGenreAsync) the radio queues are
+    /// built from, extracted from this class. COMPOSITION, not per-handler
+    /// injection (the PlaybackLaunchBuilder precedent); stateless (logger + the
+    /// composition-passed request budget). The Fisher-Yates Shuffle family the
+    /// radio queues consume moved to the static <see cref="Util.Shuffler"/> the
+    /// same batch.
+    /// </summary>
+    protected internal RadioTrackSource Radio { get; }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="BaseHandler"/> class.
     /// </summary>
     /// <param name="sessionManager">The session manager instance.</param>
@@ -246,6 +209,10 @@ public abstract class BaseHandler
             config, Logger, Launch, Search, CrossMedia, AlexaRequestTimeoutMs,
             (query, candidates, selector, matchExtractor, mediaType, locale, autoPlayFunc, user)
                 => HandleFuzzyMiss(query, candidates, selector, matchExtractor, mediaType, locale, autoPlayFunc, user: user));
+        // Progress takes this handler's SessionManager (the progress writers report
+        // through it) and the already-built Launch (launch-base reads).
+        Progress = new ProgressReporter(sessionManager, config, Logger, Launch);
+        Radio = new RadioTrackSource(Logger, AlexaRequestTimeoutMs);
     }
 
     /// <summary>
@@ -759,113 +726,6 @@ public abstract class BaseHandler
     }
 
     /// <summary>
-    /// JF-522 writer-side provenance, the ONE raw-to-item-absolute conversion shared by
-    /// every playback-position writer: a device-reported offset counts the OUTPUT
-    /// timeline of the stream that produced it, which for a transcode-routed launch
-    /// starts at the stream's launch base, so the item-absolute position is
-    /// <c>base + raw</c>, including a raw of 0 (a PlaybackStarted for a transcode
-    /// launch carries directive offset 0 while the item genuinely plays from its
-    /// base). Base 0 (raw-static launches, plain plays) and absent scopes (pre-deploy
-    /// launches, cleared queue files) return the raw ticks unchanged: base 0 IS the
-    /// item timeline, and an absent scope has no defensible base to add (persisting
-    /// the raw value there is the conservative, pre-JF-522 behavior).
-    /// Stale-base guard: when the item runtime is known, a composition STRICTLY past
-    /// it is never persisted (the raw offset wins). A legitimate composition can land
-    /// ON the runtime (a finish event reports the full remaining stream), but cannot
-    /// pass it; past-runtime means the base no longer describes the stream that
-    /// produced the offset (a same-item relaunch whose stop arrived late, the sleep
-    /// re-issue corner, a promote that never paired).
-    /// </summary>
-    /// <param name="rawTicks">The device-reported offset in .NET ticks (stream-relative; 0 at a transcode stream's start).</param>
-    /// <param name="launchBaseMs">The stream's ACTIVE launch base in milliseconds (0 when none).</param>
-    /// <param name="runtimeTicks">The item's runtime in ticks when known, else null (guard skipped).</param>
-    /// <param name="logLabel">Caller identity for the composition/guard log lines.</param>
-    /// <returns>The item-absolute position in ticks.</returns>
-    protected long ComposeItemAbsolutePosition(long rawTicks, long launchBaseMs, long? runtimeTicks = null, string logLabel = "PlaybackEvent")
-    {
-        if (launchBaseMs <= 0)
-        {
-            return rawTicks;
-        }
-
-        long baseTicks = launchBaseMs * TimeSpan.TicksPerMillisecond;
-        long composed = rawTicks + baseTicks;
-        if (runtimeTicks is > 0 && composed > runtimeTicks.Value)
-        {
-            Logger.LogInformation(
-                "{Label}: composed item-absolute position of {ComposedTicks} ticks (launch base {BaseMs}ms + raw {RawTicks} ticks) passes the item runtime ({RuntimeTicks} ticks); a legitimate composition cannot, so a stale launch scope is in play; persisting the raw offset as the more conservative truth",
-                logLabel, composed, launchBaseMs, rawTicks, runtimeTicks.Value);
-            return rawTicks;
-        }
-
-        Logger.LogDebug(
-            "{Label}: persisting item-absolute position {ComposedTicks} ticks (launch base {BaseMs}ms + raw {RawTicks} ticks)",
-            logLabel, composed, launchBaseMs, rawTicks);
-        return composed;
-    }
-
-    /// <summary>
-    /// JF-522: the ONE event-writer entry point for converting a device-reported raw
-    /// offset into the item-absolute position - read the stream's ACTIVE launch base,
-    /// look the item runtime up (fail-open, only when a base exists) for the
-    /// stale-base guard, and compose. Every playback-position writer calls this
-    /// instead of hand-assembling the triplet, so the "guard only when a base exists"
-    /// policy and the null-to-0 collapse live in one place. An unparseable item id
-    /// (<see cref="Guid.Empty"/>) keeps the raw ticks (no scope can be recorded for
-    /// it). Callers without a library manager (the mode-change progress reports) skip
-    /// the runtime guard - their positions are transient PlayState writes.
-    /// </summary>
-    /// <param name="deviceId">The Alexa device ID (launch-scope key).</param>
-    /// <param name="itemId">The codec-parsed item id the event's token names.</param>
-    /// <param name="rawOffsetMs">The device-reported offset in milliseconds.</param>
-    /// <param name="logLabel">Caller identity for the composition/guard log lines.</param>
-    /// <param name="queueManager">The caller's queue manager, or null to use <c>Plugin.Instance</c>'s.</param>
-    /// <param name="libraryManager">Optional library manager for the runtime guard; null skips it.</param>
-    /// <returns>The item-absolute position in ticks.</returns>
-    protected long ComposeEventPositionTicks(
-        string? deviceId,
-        Guid itemId,
-        long rawOffsetMs,
-        string logLabel,
-        DeviceQueueManager? queueManager = null,
-        ILibraryManager? libraryManager = null)
-    {
-        long launchBaseMs = itemId != Guid.Empty
-            ? Launch.GetActiveLaunchBaseMs(deviceId, itemId.ToString(), queueManager) ?? 0
-            : 0;
-        long? runtimeTicks = launchBaseMs > 0 ? TryGetRuntimeTicksForGuard(libraryManager, itemId) : null;
-        return ComposeItemAbsolutePosition(
-            TimeSpan.FromMilliseconds(rawOffsetMs).Ticks, launchBaseMs, runtimeTicks, logLabel);
-    }
-
-    /// <summary>
-    /// Fail-open runtime lookup feeding <see cref="ComposeItemAbsolutePosition"/>'s
-    /// stale-base guard (JF-522): the guard is an advisory bound, so a library-manager
-    /// failure must not kill an event handler before the keep-alive ack Amazon requires
-    /// - it reads null (guard skipped) and logs.
-    /// </summary>
-    /// <param name="libraryManager">The library manager (null reads null).</param>
-    /// <param name="itemId">The item whose runtime to read.</param>
-    /// <returns>The item runtime in ticks, or null when unknown.</returns>
-    protected long? TryGetRuntimeTicksForGuard(ILibraryManager? libraryManager, Guid itemId)
-    {
-        if (libraryManager == null || itemId == Guid.Empty)
-        {
-            return null;
-        }
-
-        try
-        {
-            return libraryManager.GetItemById(itemId)?.RunTimeTicks;
-        }
-        catch (Exception ex)
-        {
-            Logger.LogWarning(ex, "Playback composition guard: runtime lookup failed for item {ItemId}; guard skipped", itemId);
-            return null;
-        }
-    }
-
-    /// <summary>
     /// Extract the locale from the request, defaulting to en-US if not available.
     /// </summary>
     /// <param name="request">The incoming request.</param>
@@ -1060,61 +920,6 @@ public abstract class BaseHandler
     }
 
     /// <summary>
-    /// JF-425/JF-447: the ONE stop-report sequence shared by the stop-shaped event
-    /// handlers (PlaybackStopped/Finished/Failed). Registers the stop for correction
-    /// duty (the displacement classification is folded into RecordStop, so a null
-    /// registration means the stop displaces an already-replaced stream and must not
-    /// correct anything), reports it to the server with the registration completed in a
-    /// finally (a correcting start report waits for it instead of firing a concurrent
-    /// duplicate), and restores the new track's session entry when the stop was a
-    /// displacement (its own server-side write cleared the entry the new track owns).
-    /// Callers that need the displacement flag BEFORE building the stop info (Stopped
-    /// zeroes the saved position) classify early and may pass their own reason.
-    /// </summary>
-    /// <param name="deviceId">The Alexa device ID (per-device ordering key).</param>
-    /// <param name="rawToken">The event's raw stream token, for the displacement classification.</param>
-    /// <param name="stopInfo">The stop report to send (replayed verbatim as the correction).</param>
-    /// <param name="displacementRestoreReason">Reason stamped into the classification and restore logs.</param>
-    /// <returns>A task representing the report and, for a displacement, the restore.</returns>
-    protected async Task ReportStopOrderedAsync(string deviceId, string? rawToken, PlaybackStopInfo stopInfo, string displacementRestoreReason)
-    {
-        Playback.PlaybackReportOrdering.StopRegistration? registration =
-            Playback.PlaybackReportOrdering.RecordStop(deviceId, rawToken, stopInfo);
-
-        bool isDisplacement = registration == null;
-        if (isDisplacement)
-        {
-            Logger.LogDebug(
-                "{Reason}: displacement detected, item={Token} but the device's latest start is a different item; not recording the stop",
-                displacementRestoreReason, rawToken);
-        }
-
-        try
-        {
-            await SessionManager.OnPlaybackStopped(stopInfo).ConfigureAwait(false);
-        }
-        catch (ResourceNotFoundException)
-        {
-            // JF-477: the session no longer exists in the SessionManager (it was removed
-            // while our cached live reference kept pointing at it). Drop the device's
-            // cached entries so the next request refetches (and Jellyfin re-registers)
-            // instead of reusing the corpse, then preserve today's propagation.
-            SessionReferenceCache.InvalidateDevice(deviceId);
-            throw;
-        }
-        finally
-        {
-            registration?.MarkReportCompleted();
-        }
-
-        if (isDisplacement)
-        {
-            await Playback.PlaybackReportOrdering.RestoreCurrentStartAsync(
-                SessionManager, deviceId, Logger, displacementRestoreReason).ConfigureAwait(false);
-        }
-    }
-
-    /// <summary>
     /// Execute a synchronous Jellyfin API call with retry logic and exponential backoff.
     /// </summary>
     /// <typeparam name="T">The return type.</typeparam>
@@ -1125,22 +930,6 @@ public abstract class BaseHandler
     protected Task<T> RetryAsync<T>(Func<T> operation, string operationName, CancellationToken cancellationToken = default)
     {
         return RetryHelper.ExecuteWithRetryAsync(operation, Logger, operationName, cancellationToken: cancellationToken, timeoutMs: AlexaRequestTimeoutMs);
-    }
-
-    /// <summary>
-    /// Gets the effective post-play behavior for a user, falling back to the global default.
-    /// Per-user setting (when explicitly set, i.e. non-null) takes precedence.
-    /// </summary>
-    protected PostPlayBehavior GetPostPlayBehavior(Entities.User? user)
-    {
-        if (user?.PostPlayBehavior is { } userBehavior)
-        {
-            Logger.LogDebug("PostPlayBehavior: user={UserId} mode={Mode} source=PerUser", user.Id, userBehavior);
-            return userBehavior;
-        }
-
-        Logger.LogDebug("PostPlayBehavior: user={UserId} mode={Mode} source=GlobalDefault", user?.Id, _config.DefaultPostPlayBehavior);
-        return _config.DefaultPostPlayBehavior;
     }
 
     /// <summary>
@@ -1309,267 +1098,6 @@ public abstract class BaseHandler
         // JF-398: activating the disambiguation flow supersedes any other flow's state.
         ConversationalFlows.MarkOthersInactive(response, ConversationalFlows.DisambiguationKeys);
         return (FuzzyMissOutcome.SuggestionHandled, response);
-    }
-
-    /// <summary>
-    /// Shuffle a list in place using Fisher-Yates algorithm.
-    /// </summary>
-    /// <typeparam name="T">The element type of the list.</typeparam>
-    /// <param name="list">The list to shuffle.</param>
-    protected static void Shuffle<T>(IList<T> list)
-    {
-        int n = list.Count;
-        for (int i = n - 1; i > 0; i--)
-        {
-            int j = Random.Shared.Next(i + 1);
-            (list[i], list[j]) = (list[j], list[i]);
-        }
-    }
-
-    /// <summary>
-    /// Create a shuffled copy of a read-only list.
-    /// </summary>
-    /// <typeparam name="T">The element type of the list.</typeparam>
-    protected static List<T> ShuffleCopy<T>(IReadOnlyList<T> source)
-    {
-        var copy = source.ToList();
-        Shuffle(copy);
-        return copy;
-    }
-
-    /// <summary>
-    /// Create a shuffled copy of a read-only list truncated to at most
-    /// <paramref name="cap"/> entries. Shuffle happens before the cap, so the kept
-    /// subset is random (the radio queues: a 20-track radio start, a 15-track
-    /// continuation). Caps differ per caller, so the cap is a parameter.
-    /// </summary>
-    /// <typeparam name="T">The element type of the list.</typeparam>
-    /// <param name="source">The list to shuffle and cap.</param>
-    /// <param name="cap">The maximum number of entries to keep.</param>
-    /// <returns>A shuffled list of at most <paramref name="cap"/> entries.</returns>
-    protected static List<T> ShuffleAndCap<T>(IReadOnlyList<T> source, int cap)
-    {
-        List<T> copy = ShuffleCopy(source);
-        if (copy.Count > cap)
-        {
-            copy.RemoveRange(cap, copy.Count - cap);
-        }
-
-        return copy;
-    }
-
-    /// <summary>
-    /// Rebuilds <paramref name="session"/>'s <c>NowPlayingQueue</c> from a
-    /// <see cref="Playback.DeviceQueue"/>'s current (possibly reshuffled) item
-    /// order, preserving <c>PlaylistItemId</c> and other metadata on items that
-    /// already exist. Used by the shuffle handlers so that
-    /// <c>PlaybackNearlyFinishedEventHandler.ResolveNextItemId</c> advances
-    /// through the shuffled order rather than the original one.
-    /// Protected internal (JF-315 batch 8): the AlbumPlayService playlist flow calls
-    /// it; the member itself stays here with its cluster-H family (JF-572's
-    /// consolidation scope), alongside its ShuffleOn/ShuffleOff handler callers.
-    /// </summary>
-    /// <param name="queue">The device queue whose item order to mirror.</param>
-    /// <param name="session">The Jellyfin session whose NowPlayingQueue to rebuild.</param>
-    protected internal static void MirrorQueueToSession(Playback.DeviceQueue queue, SessionInfo session)
-    {
-        if (queue.ItemIds.Count == 0)
-        {
-            return;
-        }
-
-        // Index existing queue items by Id (first occurrence wins) so metadata
-        // (e.g. PlaylistItemId) is retained. Playlists may contain duplicate
-        // tracks, so ToDictionary would throw — use TryAdd instead.
-        var existing = new Dictionary<Guid, QueueItem>();
-        foreach (QueueItem q in session.NowPlayingQueue)
-        {
-            existing.TryAdd(q.Id, q);
-        }
-
-        var deviceIds = new HashSet<Guid>();
-        var rebuilt = new List<QueueItem>(queue.ItemIds.Count);
-        foreach (string id in queue.ItemIds)
-        {
-            if (Guid.TryParse(id, out Guid guid))
-            {
-                deviceIds.Add(guid);
-                rebuilt.Add(existing.TryGetValue(guid, out QueueItem? qi)
-                    ? qi
-                    : new QueueItem { Id = guid });
-            }
-        }
-
-        // Preserve any session items not represented in the device queue (e.g.
-        // progressive-continuation tracks) so the playable queue never shrinks.
-        foreach (QueueItem qi in session.NowPlayingQueue)
-        {
-            if (!deviceIds.Contains(qi.Id))
-            {
-                rebuilt.Add(qi);
-            }
-        }
-
-        session.NowPlayingQueue = rebuilt;
-    }
-
-    /// <summary>
-    /// Reports playback progress to Jellyfin so the session PlayState (and the
-    /// dashboard UI) stays in sync with the plugin's view. Shared by the shuffle
-    /// handlers, which differ only in the <paramref name="order"/> they report.
-    /// </summary>
-    /// <param name="session">The Jellyfin session to report on.</param>
-    /// <param name="deviceId">The Alexa device ID (launch-scope key). NOT the session's
-    /// own DeviceId, which is the constant "AlexaDevice" the controller authenticates
-    /// under and never keys a launch scope (review JF-522).</param>
-    /// <param name="itemId">The currently-playing item ID.</param>
-    /// <param name="offsetMs">The current playback offset in milliseconds.</param>
-    /// <param name="order">The playback order to report (Shuffle or Default).</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A task representing the async progress report.</returns>
-    protected async Task ReportPlaybackProgress(SessionInfo session, string deviceId, Guid itemId, long offsetMs, PlaybackOrder order, CancellationToken cancellationToken)
-    {
-        // JF-522: PlayState positions are item-absolute; the context-derived offset the
-        // shuffle handlers pass composes with the playing stream's launch base (0 for
-        // every non-transcode-routed queue, where this is a numeric no-op).
-        long positionTicks = ComposeEventPositionTicks(deviceId, itemId, offsetMs, "PlaybackProgress");
-        PlaybackProgressInfo info = new PlaybackProgressInfo
-        {
-            SessionId = session.Id,
-            ItemId = itemId,
-            RepeatMode = session.PlayState?.RepeatMode ?? RepeatMode.RepeatNone,
-            PositionTicks = positionTicks,
-            PlaybackOrder = order,
-        };
-
-        await SessionManager.OnPlaybackProgress(info, true).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// Shared body of the loop-mode intents (LoopOn/LoopOff/LoopSongOn, JF-450):
-    /// attaches the given repeat mode to the currently playing item via
-    /// <see cref="SessionManager"/> progress reporting. The intent can arrive from
-    /// an open session with nothing playing: there is no item to attach the mode
-    /// to, so the localized no-media tell is returned instead of throwing.
-    /// </summary>
-    /// <param name="request">The skill request (locale source for the no-media tell).</param>
-    /// <param name="context">The context of the skill intent request (AudioPlayer token).</param>
-    /// <param name="session">The session instance to report progress on.</param>
-    /// <param name="mode">The repeat mode to apply.</param>
-    /// <param name="label">Log label identifying the calling intent.</param>
-    /// <returns>An empty response, or the no-media tell when nothing is playing.</returns>
-    protected async Task<SkillResponse> ApplyRepeatModeAsync(Request request, Context context, SessionInfo session, RepeatMode mode, string label)
-    {
-        PlaybackState? requestState = context.AudioPlayer;
-
-        Logger.LogDebug("{Label}: entered, token={Token}, offset={OffsetMs}ms", label, requestState?.Token, requestState?.OffsetInMilliseconds);
-
-        // The intent can arrive from an open session with nothing playing: there is
-        // no item to attach the repeat mode to. Composite sleep tokens
-        // ("{guid}|sleep:{ticks}") must resolve too; raw Guid.TryParse fails them.
-        if (requestState?.Token == null || !StreamTokenCodec.TryGetItemId(requestState.Token, out Guid itemId))
-        {
-            return ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", GetLocale(request)));
-        }
-
-        long positionTicks = ComposeEventPositionTicks(
-            context?.System?.Device?.DeviceID, itemId, requestState.OffsetInMilliseconds, "LoopMode");
-        PlaybackProgressInfo info = new PlaybackProgressInfo
-        {
-            SessionId = session.Id,
-            ItemId = itemId,
-            PlaybackOrder = session.PlayState.PlaybackOrder,
-            PositionTicks = positionTicks,
-            RepeatMode = mode,
-        };
-
-        await SessionManager.OnPlaybackProgress(info, true).ConfigureAwait(false);
-
-        return ResponseBuilder.Empty();
-    }
-
-    /// <summary>
-    /// Find tracks with genres matching the given audio item.
-    /// Returns deduplicated results excluding the current item.
-    /// </summary>
-    /// <param name="current">The current audio item to match genres from.</param>
-    /// <param name="jellyfinUser">The Jellyfin user for the query.</param>
-    /// <param name="libraryManager">The library manager instance.</param>
-    /// <param name="cancellationToken">Cancellation token for request timeout.</param>
-    /// <returns>A list of similar tracks.</returns>
-    protected async Task<IReadOnlyList<BaseItem>> FindRadioTracksAsync(
-        MediaBrowser.Controller.Entities.Audio.Audio current,
-        Jellyfin.Database.Implementations.Entities.User jellyfinUser,
-        Entities.User user,
-        ILibraryManager libraryManager,
-        CancellationToken cancellationToken)
-        => await FindRadioTracksByGenreAsync(
-            current.Genres ?? Array.Empty<string>(),
-            jellyfinUser,
-            user,
-            libraryManager,
-            cancellationToken,
-            current.Id).ConfigureAwait(false);
-
-    /// <summary>
-    /// Genre-seeded variant of <see cref="FindRadioTracksAsync"/> (JF-474): the identical
-    /// radio-track query, seeded by genre WORDS captured from the station elicit instead
-    /// of a playing item's Genres array. The Genres filter matches the server's cleaned
-    /// genre names exactly (Jellyfin 10.11 BaseItemRepository: ItemValue CleanValue
-    /// equality), so a spoken "jazz" matches the genre "Jazz" while a non-genre word
-    /// matches nothing and the caller falls through to its not-found.
-    /// </summary>
-    /// <param name="genres">The genre names to seed the query from.</param>
-    /// <param name="jellyfinUser">The Jellyfin user for the query.</param>
-    /// <param name="user">The plugin user for library filtering.</param>
-    /// <param name="libraryManager">The library manager instance.</param>
-    /// <param name="cancellationToken">Cancellation token for request timeout.</param>
-    /// <param name="excludeId">Optional item id to exclude from the results (the seeding item).</param>
-    /// <returns>A deduplicated list of tracks in those genres.</returns>
-    protected async Task<IReadOnlyList<BaseItem>> FindRadioTracksByGenreAsync(
-        string[] genres,
-        Jellyfin.Database.Implementations.Entities.User jellyfinUser,
-        Entities.User user,
-        ILibraryManager libraryManager,
-        CancellationToken cancellationToken,
-        Guid? excludeId = null)
-    {
-        var allResults = new List<BaseItem>();
-        var seen = new HashSet<Guid>();
-        if (excludeId.HasValue)
-        {
-            seen.Add(excludeId.Value);
-        }
-
-        if (genres.Length > 0)
-        {
-            var genreQuery = new InternalItemsQuery
-            {
-                User = jellyfinUser,
-                Recursive = true,
-                Genres = genres,
-                IncludeItemTypes = new[] { BaseItemKind.Audio },
-                Limit = 50,
-                OrderBy = new[] { (ItemSortBy.Random, SortOrder.Ascending) },
-                DtoOptions = new DtoOptions(true)
-            };
-            ApplyLibraryFilter(genreQuery, user, libraryManager, Logger);
-
-            IReadOnlyList<BaseItem> byGenre = await RetryAsync(
-                () => libraryManager.GetItemList(genreQuery),
-                "GetRadioGenreTracks",
-                cancellationToken).ConfigureAwait(false);
-
-            foreach (BaseItem item in byGenre)
-            {
-                if (seen.Add(item.Id))
-                {
-                    allResults.Add(item);
-                }
-            }
-        }
-
-        return allResults;
     }
 
     /// <summary>

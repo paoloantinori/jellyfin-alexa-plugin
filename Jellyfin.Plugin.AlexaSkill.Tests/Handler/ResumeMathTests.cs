@@ -428,6 +428,72 @@ public class ResumeMathTests : IDisposable
         Assert.Equal(0, ticks);
     }
 
+    // ---- FavoritesAndRatingsFirst (JF-315 batch 10; joins ResumeMath with the
+    // JF-570 SortByRating consolidation). No direct coverage existed before: these
+    // facts were written green on the pre-move BaseHandler code via a temporary
+    // probe subclass and retargeted to the static home after the move (zero
+    // expectation edits). ----
+
+    [Fact]
+    public void FavoritesAndRatingsFirst_NoRatings_ReturnsTheOriginalInstanceUnsorted()
+    {
+        var t0 = TestHelpers.CreateSong("A");
+        var t1 = TestHelpers.CreateSong("B");
+        StubUserData(t0, new UserItemData { Key = "k", IsFavorite = true }); // favorite but unrated
+        StubUserData(t1, null);
+
+        IReadOnlyList<BaseItem> input = new List<BaseItem> { t0, t1 };
+
+        // No rating anywhere: the passthrough returns the SAME list instance.
+        Assert.Same(input, ResumeMath.FavoritesAndRatingsFirst(input, TestHelpers.CreateJellyfinUser(), _fx.UserDataManager.Object));
+    }
+
+    [Fact]
+    public void FavoritesAndRatingsFirst_SingleItem_PassesThrough()
+    {
+        var t0 = TestHelpers.CreateSong("Only");
+
+        IReadOnlyList<BaseItem> input = new List<BaseItem> { t0 };
+
+        Assert.Same(input, ResumeMath.FavoritesAndRatingsFirst(input, TestHelpers.CreateJellyfinUser(), _fx.UserDataManager.Object));
+    }
+
+    [Fact]
+    public void FavoritesAndRatingsFirst_FavoritesFirst_RatingDescWithinGroups()
+    {
+        var favLow = TestHelpers.CreateSong("favLow");
+        var favHigh = TestHelpers.CreateSong("favHigh");
+        var restLow = TestHelpers.CreateSong("restLow");
+        var restHigh = TestHelpers.CreateSong("restHigh");
+        // Insertion order is the opposite of the expected output on both axes.
+        StubUserData(favLow, new UserItemData { Key = "k", IsFavorite = true, Rating = 3 });
+        StubUserData(favHigh, new UserItemData { Key = "k", IsFavorite = true, Rating = 9 });
+        StubUserData(restLow, new UserItemData { Key = "k", Rating = 4 });
+        StubUserData(restHigh, new UserItemData { Key = "k", Rating = 8 });
+
+        IReadOnlyList<BaseItem> result = ResumeMath.FavoritesAndRatingsFirst(
+            new List<BaseItem> { favLow, favHigh, restLow, restHigh },
+            TestHelpers.CreateJellyfinUser(), _fx.UserDataManager.Object);
+
+        Assert.Equal(new[] { favHigh, favLow, restHigh, restLow }, result);
+    }
+
+    [Fact]
+    public void FavoritesAndRatingsFirst_RatingTies_KeepOriginalRelativeOrder()
+    {
+        var first = TestHelpers.CreateSong("first");
+        var second = TestHelpers.CreateSong("second");
+        StubUserData(first, new UserItemData { Key = "k", Rating = 7 });
+        StubUserData(second, new UserItemData { Key = "k", Rating = 7 });
+
+        // Equal ratings: the stable ThenBy(Index) keeps the original relative order.
+        IReadOnlyList<BaseItem> result = ResumeMath.FavoritesAndRatingsFirst(
+            new List<BaseItem> { first, second },
+            TestHelpers.CreateJellyfinUser(), _fx.UserDataManager.Object);
+
+        Assert.Equal(new[] { first, second }, result);
+    }
+
     /// <summary>
     /// Create/seed/dispose scaffold for the queue-seeded tests (own temp dir per
     /// test per the JF-540 isolation rule).

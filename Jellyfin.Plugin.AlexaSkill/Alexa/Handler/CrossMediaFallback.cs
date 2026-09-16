@@ -358,7 +358,7 @@ public sealed class CrossMediaFallback
         if (_config.ShuffleArtistSongs)
         {
             var shuffled = sortedItems.ToList();
-            Shuffle(shuffled);
+            Shuffler.Shuffle(shuffled);
             sortedItems = shuffled;
             startIndex = 0;
         }
@@ -880,25 +880,4 @@ public sealed class CrossMediaFallback
         return RetryHelper.ExecuteWithRetryAsync(operation, _logger, operationName, cancellationToken: cancellationToken, timeoutMs: _requestTimeoutMs);
     }
 
-    /// <summary>
-    /// Shuffle a list in place using Fisher-Yates algorithm.
-    /// Copied, not moved (JF-315 batch 7): the Shuffle family stays on BaseHandler
-    /// with its cluster-H consumers (ShuffleCopy/ShuffleAndCap, PlayRandom, the radio
-    /// queues); BuildArtistSongsResponseAsync needed it verbatim, so this private twin
-    /// keeps the moved body's call shape. Consolidation belongs to the cluster-H
-    /// extraction (the JF-572 twin-consolidation family).
-    /// </summary>
-    /// <typeparam name="T">The element type of the list.</typeparam>
-    /// <param name="list">The list to shuffle.</param>
-#pragma warning disable CA1859 // IList parameter kept verbatim from the BaseHandler original; the twin's single call site passing List<T> is exactly what cluster-H consolidation will resolve
-    private static void Shuffle<T>(IList<T> list)
-    {
-        int n = list.Count;
-        for (int i = n - 1; i > 0; i--)
-        {
-            int j = Random.Shared.Next(i + 1);
-            (list[i], list[j]) = (list[j], list[i]);
-        }
-    }
-#pragma warning restore CA1859
 }

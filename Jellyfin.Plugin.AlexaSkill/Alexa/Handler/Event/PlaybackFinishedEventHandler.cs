@@ -74,7 +74,7 @@ public class PlaybackFinishedEventHandler : BaseHandler
         {
             SessionId = session.Id,
             ItemId = itemId,
-            PositionTicks = ComposeEventPositionTicks(
+            PositionTicks = Progress.ComposeEventPositionTicks(
                 deviceId, itemId, req.OffsetInMilliseconds, "PlaybackFinished", _queueManager, _libraryManager),
         };
 
@@ -82,7 +82,7 @@ public class PlaybackFinishedEventHandler : BaseHandler
         // report must not resurrect Playing state after this stop clears it); a
         // displacement finish (the OLD stream ending as a newer play displaces it) is
         // not recorded and its write's clearing of the new track's entry is undone.
-        await ReportStopOrderedAsync(
+        await Progress.ReportStopOrderedAsync(
             deviceId, req.Token, playbackStopInfo, "displacement finish cleared the new track's entry").ConfigureAwait(false);
 
         Logger.LogDebug(

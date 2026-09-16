@@ -72,7 +72,7 @@ public class PlaybackFailedEventHandler : BaseHandler
         // report cannot resurrect Playing state after this failure clears it; a
         // displacement failure (the OLD stream failing as a newer play displaces it)
         // is not recorded and its write's clearing of the new track's entry is undone.
-        await ReportStopOrderedAsync(
+        await Progress.ReportStopOrderedAsync(
             deviceId, req.Token, playbackStopInfo, "displacement failure cleared the new track's entry").ConfigureAwait(false);
 
         return BuildKeepAliveResponse();

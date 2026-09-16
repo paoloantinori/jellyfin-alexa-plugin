@@ -3,9 +3,10 @@ id: JF-570
 title: >-
   JF-315 follow-up: unify the twin SortByRating overloads now split across
   BaseHandler (3-tuple) and ResumeMath (4-tuple)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-15 13:17'
+updated_date: '2026-09-16 05:18'
 labels:
   - refactor
   - tech-debt
@@ -41,3 +42,9 @@ Both are the same OrderByDescending(Rating ?? double.MinValue).ThenBy(Index).Sel
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+CLOSED by JF-315 batch 10 (2026-09-16). The twin SortByRating overloads were unified exactly as this task directed: FavoritesAndRatingsFirst moved from BaseHandler to ResumeMath (its twin machinery: it is the ordering half of SortAndFindResumeIndex), now building the 4-tuple (Index, Item, Rating, UserItemData Data) it already held the user data for, and calling the ONE shared 4-tuple ResumeMath.SortByRating; the 3-tuple BaseHandler copy is deleted. The consolidation was provably identity: both overloads' chains were token-identical (OrderByDescending(Rating ?? double.MinValue).ThenBy(Index).Select(Item)), differing only in tuple arity, and the Data element is write-only (no reader anywhere; noted in JF-572 for an eventual drop). Characterization facts (4, green on the pre-move code) pin the observable behavior: no-rating passthrough returns the ORIGINAL list instance, single-item passthrough, favorites-first + rating-desc-within-groups, and stable index-order on rating ties. QueryArtistLibraryIntentHandler re-pointed to ResumeMath.FavoritesAndRatingsFirst. Gates: full suite 3981/3981 both TFMs, Release build 0 warnings, /simplify 4-agent pass, 5-reviewer review-local pass with no findings >=80.
+<!-- SECTION:FINAL_SUMMARY:END -->

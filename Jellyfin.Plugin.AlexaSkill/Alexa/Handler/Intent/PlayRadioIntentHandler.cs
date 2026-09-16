@@ -171,7 +171,7 @@ public class PlayRadioIntentHandler : BaseHandler
             // (the same Tokenize discipline TryEntityFallbackAsync uses for artists).
             string[] contentWords = Util.KeywordMatcher.Tokenize(station!, locale);
             string genreQuery = contentWords.Length > 0 ? string.Join(" ", contentWords) : station!;
-            IReadOnlyList<BaseItem> genreTracks = await FindRadioTracksByGenreAsync(
+            IReadOnlyList<BaseItem> genreTracks = await Radio.FindRadioTracksByGenreAsync(
                 new[] { genreQuery }, jellyfinUser!, user, _libraryManager, cancellationToken).ConfigureAwait(false);
             if (genreTracks.Count > 0)
             {
@@ -196,14 +196,14 @@ public class PlayRadioIntentHandler : BaseHandler
             return seedError;
         }
 
-        IReadOnlyList<BaseItem> similarTracks = await FindRadioTracksAsync(currentAudio, seedUser!, user, _libraryManager, cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<BaseItem> similarTracks = await Radio.FindRadioTracksAsync(currentAudio, seedUser!, user, _libraryManager, cancellationToken).ConfigureAwait(false);
 
         if (similarTracks.Count == 0)
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("RadioNoSimilar", locale));
         }
 
-        List<BaseItem> shuffled = ShuffleAndCap(similarTracks, 20);
+        List<BaseItem> shuffled = Shuffler.ShuffleAndCap(similarTracks, 20);
 
         var queue = new List<QueueItem> { new() { Id = currentAudio.Id } };
         foreach (BaseItem track in shuffled)
@@ -349,7 +349,7 @@ public class PlayRadioIntentHandler : BaseHandler
     private SkillResponse StartGenreRadio(
         string genre, IReadOnlyList<BaseItem> genreTracks, SessionInfo session, Entities.User user, Context context, string locale)
     {
-        List<BaseItem> shuffled = ShuffleAndCap(genreTracks, 20);
+        List<BaseItem> shuffled = Shuffler.ShuffleAndCap(genreTracks, 20);
 
         Logger.LogInformation("PlayRadio: station '{Genre}' resolved as a genre, seeding radio mode with {Count} tracks", genre, shuffled.Count);
 

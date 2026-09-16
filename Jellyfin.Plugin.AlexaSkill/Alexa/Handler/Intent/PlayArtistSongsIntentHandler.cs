@@ -725,7 +725,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
 
         if (_config.ShuffleArtistSongs)
         {
-            artistsItems = ShuffleCopy(artistsItems);
+            artistsItems = Shuffler.ShuffleCopy(artistsItems);
             startIndex = 0;
             Logger.LogDebug("PlayArtistSongs: shuffled {Count} tracks", artistsItems.Count);
         }

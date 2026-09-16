@@ -114,7 +114,7 @@ public class PlaybackStoppedEventHandler : BaseHandler
         // PlayState and UserData, DeviceQueue.CurrentPositionTicks, and
         // ItemPositionState. Displacement stops keep offset 0 below (nothing to
         // compose); base 0 and absent scopes return the raw ticks unchanged.
-        long realPositionTicks = ComposeEventPositionTicks(
+        long realPositionTicks = Progress.ComposeEventPositionTicks(
             device, stopItemId, req.OffsetInMilliseconds, "PlaybackStopped", _queueManager, _libraryManager);
 
         long positionTicks = isDisplacement ? 0 : realPositionTicks;
@@ -161,7 +161,7 @@ public class PlaybackStoppedEventHandler : BaseHandler
         // report is already superseded; a displacement stop never gains correction duty
         // (folded into RecordStop) and its write's clearing of the new track's entry is
         // undone. The displacement flag is classified EARLY above (zeroed position).
-        await ReportStopOrderedAsync(
+        await Progress.ReportStopOrderedAsync(
             device, req.Token, playbackStopInfo, "displacement stop cleared the new track's entry").ConfigureAwait(false);
 
         Logger.LogInformation(

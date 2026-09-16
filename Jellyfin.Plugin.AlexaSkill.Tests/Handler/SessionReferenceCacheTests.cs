@@ -67,9 +67,10 @@ public class SessionReferenceCacheTests : PluginTestBase
             return Task.FromResult(ResponseBuilder.Tell("handled"));
         }
 
-        /// <summary>Exposes the protected stop-report path for the invalidation test.</summary>
+        /// <summary>Exposes the shared stop-report path (the Progress collaborator's
+        /// ReportStopOrderedAsync, JF-315 batch 10) for the invalidation test.</summary>
         public Task CallReportStopOrderedAsync(string deviceId, string? rawToken, PlaybackStopInfo stopInfo)
-            => ReportStopOrderedAsync(deviceId, rawToken, stopInfo, "test stop");
+            => Progress.ReportStopOrderedAsync(deviceId, rawToken, stopInfo, "test stop");
     }
 
     private static IntentRequest CreateIntentRequest()

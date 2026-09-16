@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-15 22:58'
-updated_date: '2026-09-16 00:39'
+updated_date: '2026-09-16 05:14'
 labels: []
 dependencies: []
 references:
@@ -47,3 +47,13 @@ Context you need: the budget is behavior-load-bearing (it is the mechanism that 
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+SCOPE EXTENSION + RESOLUTION (JF-315 batch 10, 2026-09-16): batch 10's RadioTrackSource extraction added a FIFTH identical RetryAsync twin (Alexa/Util/RadioTrackSource.cs, tail); the consolidation must now cover all FIVE wrappers (BaseHandler, SearchService, CrossMediaFallback, AlbumPlayService, RadioTrackSource). RESOLVED by the same batch, no longer in this task's scope: the CrossMediaFallback private Shuffle TWIN is DELETED. The cluster-H Shuffle family (Shuffle/ShuffleCopy/ShuffleAndCap) moved to the static Alexa/Util/Shuffler.cs and CrossMediaFallback's BuildArtistSongsResponseAsync now calls Shuffler.Shuffle (the batch-7 scope-extension note's own pointer to the cluster-H extraction, executed as planned).
+
+BATCH-10 /simplify LEDGER ADDITION (2026-09-16): the shared ResumeMath.SortByRating 4-tuple carries a write-only UserItemData? Data element (pre-existing in SortAndFindResumeIndex since batch 2; FavoritesAndRatingsFirst's JF-570 consolidation now builds the same shape). No reader dereferences .Data anywhere (grep-verified by the altitude review); each loop holds the local it consumes. Dropping the element would be a behavior-neutral 3-line cleanup inside the two methods when next touched; noted here rather than done in the verbatim-move batch.
+
+BATCH-10 /simplify LEDGER ADDITION (2026-09-16): DeviceQueueManager keeps TWO private Fisher-Yates copies (FisherYates(List<string>, Random), rng-injectable for its deterministic tests via SetShuffledQueue's rng parameter, plus ShuffleRemaining's inline tail shuffle, which deliberately pins Random.Shared). They are NOT twins of Shuffler.Shuffle (different contracts) and predate the decomposition; left in place, documented in the Shuffler class doc.
+<!-- SECTION:NOTES:END -->

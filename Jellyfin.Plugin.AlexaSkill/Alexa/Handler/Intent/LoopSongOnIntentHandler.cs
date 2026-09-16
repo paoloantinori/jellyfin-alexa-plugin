@@ -35,7 +35,7 @@ public class LoopSongOnIntentHandler : BaseHandler
 
     /// <summary>
     /// Applies repeat-one to the currently playing item; shared body in
-    /// <see cref="BaseHandler.ApplyRepeatModeAsync"/>.
+    /// <see cref="ProgressReporter.ApplyRepeatModeAsync"/>.
     /// </summary>
     /// <param name="request">The skill request which should be handled.</param>
     /// <param name="context">The context of the skill intent request.</param>
@@ -49,5 +49,5 @@ public class LoopSongOnIntentHandler : BaseHandler
     /// playback-start reports, JF-425). Do not move it to a fire-and-forget task
     /// without registering it there.
     public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
-        => ApplyRepeatModeAsync(request, context, session, RepeatMode.RepeatOne, "LoopSongOn");
+        => Progress.ApplyRepeatModeAsync(request, context, session, RepeatMode.RepeatOne, "LoopSongOn");
 }

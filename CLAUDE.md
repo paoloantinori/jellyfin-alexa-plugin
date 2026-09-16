@@ -268,11 +268,11 @@ When enabled (`AsrCompoundWordFixEnabled`), `SearchService.SearchWithAsrFallback
 
 When a single song finishes and the queue is empty, `PostPlayBehavior` controls what happens next (configurable per-user or globally via `DefaultPostPlayBehavior`):
 - **Stop** (default): silence after queue exhaustion
-- **AutoPlay**: `PlaybackNearlyFinishedEventHandler` detects queue exhaustion, finds similar tracks via `FindRadioTracksAsync`, enqueues the first one, and enables `RadioModeState` for gapless continuation
+- **AutoPlay**: `PlaybackNearlyFinishedEventHandler` detects queue exhaustion, finds similar tracks via the `Radio` collaborator (`RadioTrackSource.FindRadioTracksAsync`, JF-315 batch 10), enqueues the first one, and enables `RadioModeState` for gapless continuation
 
 AutoPlay is handled entirely in `PlaybackNearlyFinished` — it enqueues the next track before the current one ends, so there's no gap and no speech announcement. After the first AutoPlay track, `RadioModeState` handles subsequent transitions via the existing `AutoPopulateRadioTracks()`.
 
-Handlers call `GetPostPlayBehavior(user)` to resolve per-user override → global default (same pattern as `GetSearchResponseMode`).
+Handlers call `Progress.GetPostPlayBehavior(user)` (the `ProgressReporter` collaborator, JF-315 batch 10) to resolve per-user override → global default (same pattern as `GetSearchResponseMode`).
 
 ## Code Conventions
 

@@ -178,7 +178,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             // Clean up continuation state when queue is exhausted
             QueueContinuationStore.Remove(session.UserId, deviceId);
 
-            var postPlayMode = GetPostPlayBehavior(user);
+            var postPlayMode = Progress.GetPostPlayBehavior(user);
 
             // Music PostPlay populate only runs when radio mode is NOT active: radio
             // mode handles its own continuation above, and plain PostPlay is for
@@ -310,7 +310,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
 
         if (continuation.Shuffle)
         {
-            newItems = ShuffleCopy(newItems);
+            newItems = Shuffler.ShuffleCopy(newItems);
         }
 
         foreach (BaseItem item in newItems)
@@ -461,7 +461,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
                 // resume tail now MINTS persisted values instead of dropping them, so
                 // the unknown position resets to 0 (the next stop writes the real one;
                 // a crash-resume in between starts the item from its beginning).
-                queue.CurrentPositionTicks = ComposeEventPositionTicks(
+                queue.CurrentPositionTicks = Progress.ComposeEventPositionTicks(
                     deviceId, finishingItemId, context.AudioPlayer.OffsetInMilliseconds,
                     "PlaybackNearlyFinished", _queueManager, _libraryManager);
             }
@@ -585,7 +585,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         }
 
         Entities.User? pluginUser = _config.GetUserById(session.UserId);
-        IReadOnlyList<BaseItem> similar = await FindRadioTracksAsync(currentAudio, jellyfinUser, pluginUser!, _libraryManager, cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<BaseItem> similar = await Radio.FindRadioTracksAsync(currentAudio, jellyfinUser, pluginUser!, _libraryManager, cancellationToken).ConfigureAwait(false);
 
         if (similar.Count == 0)
         {
@@ -593,7 +593,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             return null;
         }
 
-        List<BaseItem> shuffled = ShuffleAndCap(similar, 15);
+        List<BaseItem> shuffled = Shuffler.ShuffleAndCap(similar, 15);
 
         var queue = new List<QueueItem>(session.NowPlayingQueue);
         var seen = SessionQueue.IdSet(session);
@@ -647,7 +647,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         }
 
         Entities.User? pluginUser = _config.GetUserById(session.UserId);
-        IReadOnlyList<BaseItem> similar = await FindRadioTracksAsync(
+        IReadOnlyList<BaseItem> similar = await Radio.FindRadioTracksAsync(
             currentAudio, jellyfinUser, pluginUser!, _libraryManager, cancellationToken).ConfigureAwait(false);
 
         if (similar.Count == 0)
@@ -656,7 +656,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             return null;
         }
 
-        List<BaseItem> shuffled = ShuffleAndCap(similar, 15);
+        List<BaseItem> shuffled = Shuffler.ShuffleAndCap(similar, 15);
 
         var queue = new List<QueueItem>(session.NowPlayingQueue);
         var seen = SessionQueue.IdSet(session);
@@ -730,7 +730,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         // content gate (JF-466 hard-zero contract) all skip the branch without
         // touching the library, mirroring the intent path. An event response cannot
         // speak, so a disabled configuration just skips the advance.
-        if (GetPostPlayBehavior(user) != PostPlayBehavior.AutoPlay)
+        if (Progress.GetPostPlayBehavior(user) != PostPlayBehavior.AutoPlay)
         {
             return null;
         }

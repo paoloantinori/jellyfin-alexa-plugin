@@ -114,7 +114,7 @@ public class PlaybackStartedEventHandler : BaseHandler
         // transcode launch, whose base is baked into ?start=), so the item-absolute
         // start position the server report carries is base + offset (read AFTER the
         // promote, so an enqueued stream's base is the one just promoted).
-        long startTicks = ComposeEventPositionTicks(
+        long startTicks = Progress.ComposeEventPositionTicks(
             deviceId, startItemId, req.OffsetInMilliseconds, "PlaybackStarted", _queueManager, _libraryManager);
         PlaybackStartInfo playbackStartInfo = new PlaybackStartInfo
         {

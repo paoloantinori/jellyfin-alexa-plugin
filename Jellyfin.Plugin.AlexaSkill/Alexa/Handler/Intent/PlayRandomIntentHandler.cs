@@ -139,7 +139,7 @@ public class PlayRandomIntentHandler : BaseHandler
 
         // Shuffle items
         List<BaseItem> shuffled = items.ToList();
-        Shuffle(shuffled);
+        Shuffler.Shuffle(shuffled);
 
         // For albums, expand the first album to tracks
         if (shuffled[0] is MediaBrowser.Controller.Entities.Audio.MusicAlbum album)
@@ -148,7 +148,7 @@ public class PlayRandomIntentHandler : BaseHandler
             if (tracks.Count > 0)
             {
                 shuffled = tracks.ToList();
-                Shuffle(shuffled);
+                Shuffler.Shuffle(shuffled);
             }
         }
 

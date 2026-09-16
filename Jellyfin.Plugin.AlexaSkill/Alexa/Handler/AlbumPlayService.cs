@@ -746,7 +746,7 @@ public sealed class AlbumPlayService
             queueManager.SetShuffledQueue(deviceId, idList, rng);
             // Mirror the shuffled DeviceQueue order back into the session queue (metadata preserved).
             Playback.DeviceQueue deviceQueue = queueManager.GetOrCreateQueue(deviceId);
-            BaseHandler.MirrorQueueToSession(deviceQueue, session);
+            ProgressReporter.MirrorQueueToSession(deviceQueue, session);
             firstItem = libraryManager.GetItemById(Guid.Parse(deviceQueue.ItemIds[0]));
         }
         else
