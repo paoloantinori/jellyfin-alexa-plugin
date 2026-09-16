@@ -9,12 +9,15 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
+using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
+using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
+using MediaBrowser.Model.Querying;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
@@ -474,6 +477,97 @@ public class LaunchRequestHandler : BaseHandler
         TryAttachWelcomeScreen(response, context, user, session, locale, givenName);
 
         return response;
+    }
+
+    /// <summary>
+    /// Query recently played items from Jellyfin and return them as display items
+    /// suitable for an APL carousel. Deduplicates by name (keeps first = most recent),
+    /// applies per-user library filtering, and respects feature flags for media types.
+    /// Moved here from BaseHandler (JF-315 batch 11): this welcome screen is the
+    /// member's ONE caller, so it lives beside its consumer instead of the
+    /// 61-handler base. Internal (was private protected on the base) for the
+    /// InternalsVisibleTo test seam (the batch-9 BuildVideoLaunchSpeech precedent);
+    /// GetRecentlyPlayedItemsTests targets it directly.
+    /// </summary>
+    /// <param name="jellyfinUser">The Jellyfin user for query context.</param>
+    /// <param name="user">The plugin user for library access and image URL generation.</param>
+    /// <param name="libraryManager">The library manager for querying items.</param>
+    /// <param name="config">Plugin configuration for feature flags and server address.</param>
+    /// <returns>A list of display items (empty, never null).</returns>
+    internal static List<Apl.ListDisplayItem> GetRecentlyPlayedItems(
+        Jellyfin.Database.Implementations.Entities.User jellyfinUser,
+        Entities.User user,
+        ILibraryManager libraryManager,
+        PluginConfiguration config)
+    {
+        var itemTypes = new List<BaseItemKind>();
+        if (config.MusicEnabled)
+        {
+            itemTypes.Add(BaseItemKind.Audio);
+        }
+
+        if (config.VideosEnabled)
+        {
+            itemTypes.Add(BaseItemKind.Movie);
+            itemTypes.Add(BaseItemKind.Episode);
+        }
+
+        if (config.BooksEnabled)
+        {
+            itemTypes.Add(BaseItemKind.AudioBook);
+        }
+
+        if (itemTypes.Count == 0)
+        {
+            return new List<Apl.ListDisplayItem>();
+        }
+
+        var query = new InternalItemsQuery
+        {
+            User = jellyfinUser,
+            Recursive = true,
+            IncludeItemTypes = itemTypes.ToArray(),
+            OrderBy = new[] { (ItemSortBy.DatePlayed, SortOrder.Descending) },
+            Limit = 20,
+            DtoOptions = new DtoOptions(true)
+        };
+
+        ApplyLibraryFilter(query, user, libraryManager);
+
+        IReadOnlyList<BaseItem> recentItems = libraryManager.GetItemList(query) ?? Array.Empty<BaseItem>();
+
+        var results = new List<Apl.ListDisplayItem>();
+        var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (BaseItem item in recentItems)
+        {
+            if (results.Count >= 10)
+            {
+                break;
+            }
+
+            if (string.IsNullOrWhiteSpace(item.Name))
+            {
+                continue;
+            }
+
+            // Deduplicate by name to avoid "Song X" appearing twice
+            if (!seenNames.Add(item.Name))
+            {
+                continue;
+            }
+
+            string subtitle = Apl.AplHelper.GetSubtitle(item);
+            string artUrl = new Uri(new Uri(config.ServerAddress), "Items/" + item.Id + "/Images/Primary?api_key=" + user.JellyfinToken).ToString();
+
+            results.Add(new Apl.ListDisplayItem(
+                item.Name,
+                item.Id.ToString(),
+                subtitle,
+                artUrl));
+        }
+
+        return results;
     }
 
     /// <summary>

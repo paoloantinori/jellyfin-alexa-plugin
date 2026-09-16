@@ -1,18 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-using global::Alexa.NET.Request;
-using global::Alexa.NET.Request.Type;
-using global::Alexa.NET.Response;
 using Jellyfin.Data.Enums;
 using SortOrder = Jellyfin.Database.Implementations.Enums.SortOrder;
-using Jellyfin.Plugin.AlexaSkill.Alexa;
-using Jellyfin.Plugin.AlexaSkill.Alexa.Apl;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
-using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Entities.TV;
@@ -25,28 +17,10 @@ using Xunit;
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
 /// <summary>
-/// Test-only subclass that exposes the private protected static method for testing.
+/// GetRecentlyPlayedItems (JF-176.2, moved to LaunchRequestHandler in JF-315
+/// batch 11 beside its single caller): queried directly through the
+/// InternalsVisibleTo seam; the former BaseHandler probe subclass is gone.
 /// </summary>
-internal class TestBaseHandler : BaseHandler
-{
-    public TestBaseHandler(ISessionManager sessionManager, PluginConfiguration config, ILoggerFactory loggerFactory)
-        : base(sessionManager, config, loggerFactory)
-    {
-    }
-
-    public override bool CanHandle(Request request) => false;
-
-    public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
-        => Task.FromResult(new SkillResponse());
-
-    public static List<ListDisplayItem> CallGetRecentlyPlayedItems(
-        Jellyfin.Database.Implementations.Entities.User jellyfinUser,
-        Entities.User user,
-        ILibraryManager libraryManager,
-        PluginConfiguration config)
-        => GetRecentlyPlayedItems(jellyfinUser, user, libraryManager, config);
-}
-
 public class GetRecentlyPlayedItemsTests
 {
     private readonly Mock<ISessionManager> _sessionManagerMock;
@@ -63,9 +37,6 @@ public class GetRecentlyPlayedItemsTests
         _loggerFactory = LoggerFactory.Create(b => { });
     }
 
-    private static Jellyfin.Database.Implementations.Entities.User CreateJellyfinUser()
-        => new("testuser", "test", "test");
-
     private static Entities.User CreatePluginUser()
         => TestHelpers.CreateTestUser(jellyfinToken: "test-token");
 
@@ -75,8 +46,8 @@ public class GetRecentlyPlayedItemsTests
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem>());
 
-        var result = TestBaseHandler.CallGetRecentlyPlayedItems(
-            CreateJellyfinUser(), CreatePluginUser(), _libraryManagerMock.Object, _config);
+        var result = LaunchRequestHandler.GetRecentlyPlayedItems(
+            TestHelpers.CreateJellyfinUser(), CreatePluginUser(), _libraryManagerMock.Object, _config);
 
         Assert.NotNull(result);
         Assert.Empty(result);
@@ -95,8 +66,8 @@ public class GetRecentlyPlayedItemsTests
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { audio1, audio2 });
 
-        var result = TestBaseHandler.CallGetRecentlyPlayedItems(
-            CreateJellyfinUser(), CreatePluginUser(), _libraryManagerMock.Object, _config);
+        var result = LaunchRequestHandler.GetRecentlyPlayedItems(
+            TestHelpers.CreateJellyfinUser(), CreatePluginUser(), _libraryManagerMock.Object, _config);
 
         Assert.Single(result);
         Assert.Equal(songId1.ToString(), result[0].Id);
@@ -116,8 +87,8 @@ public class GetRecentlyPlayedItemsTests
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(items);
 
-        var result = TestBaseHandler.CallGetRecentlyPlayedItems(
-            CreateJellyfinUser(), CreatePluginUser(), _libraryManagerMock.Object, _config);
+        var result = LaunchRequestHandler.GetRecentlyPlayedItems(
+            TestHelpers.CreateJellyfinUser(), CreatePluginUser(), _libraryManagerMock.Object, _config);
 
         Assert.Equal(10, result.Count);
     }
@@ -131,8 +102,8 @@ public class GetRecentlyPlayedItemsTests
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { audio });
 
-        var result = TestBaseHandler.CallGetRecentlyPlayedItems(
-            CreateJellyfinUser(), CreatePluginUser(), _libraryManagerMock.Object, _config);
+        var result = LaunchRequestHandler.GetRecentlyPlayedItems(
+            TestHelpers.CreateJellyfinUser(), CreatePluginUser(), _libraryManagerMock.Object, _config);
 
         Assert.Single(result);
         Assert.Equal("Test Artist · Test Album", result[0].Subtitle);
@@ -146,8 +117,8 @@ public class GetRecentlyPlayedItemsTests
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { episode });
 
-        var result = TestBaseHandler.CallGetRecentlyPlayedItems(
-            CreateJellyfinUser(), CreatePluginUser(), _libraryManagerMock.Object, _config);
+        var result = LaunchRequestHandler.GetRecentlyPlayedItems(
+            TestHelpers.CreateJellyfinUser(), CreatePluginUser(), _libraryManagerMock.Object, _config);
 
         Assert.Single(result);
         Assert.Equal("Test Series", result[0].Subtitle);
@@ -163,8 +134,8 @@ public class GetRecentlyPlayedItemsTests
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { audio });
 
-        var result = TestBaseHandler.CallGetRecentlyPlayedItems(
-            CreateJellyfinUser(), CreatePluginUser(), _libraryManagerMock.Object, _config);
+        var result = LaunchRequestHandler.GetRecentlyPlayedItems(
+            TestHelpers.CreateJellyfinUser(), CreatePluginUser(), _libraryManagerMock.Object, _config);
 
         Assert.Single(result);
         Assert.Equal("My Song", result[0].Title);
@@ -181,8 +152,8 @@ public class GetRecentlyPlayedItemsTests
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { audio });
 
-        var result = TestBaseHandler.CallGetRecentlyPlayedItems(
-            CreateJellyfinUser(), user, _libraryManagerMock.Object, _config);
+        var result = LaunchRequestHandler.GetRecentlyPlayedItems(
+            TestHelpers.CreateJellyfinUser(), user, _libraryManagerMock.Object, _config);
 
         Assert.Single(result);
         Assert.NotNull(result[0].ArtUrl);
@@ -200,8 +171,8 @@ public class GetRecentlyPlayedItemsTests
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { audio1, audio2 });
 
-        var result = TestBaseHandler.CallGetRecentlyPlayedItems(
-            CreateJellyfinUser(), CreatePluginUser(), _libraryManagerMock.Object, _config);
+        var result = LaunchRequestHandler.GetRecentlyPlayedItems(
+            TestHelpers.CreateJellyfinUser(), CreatePluginUser(), _libraryManagerMock.Object, _config);
 
         Assert.Single(result);
         Assert.Equal("Valid Song", result[0].Title);
@@ -217,8 +188,8 @@ public class GetRecentlyPlayedItemsTests
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { audio1, audio2 });
 
-        var result = TestBaseHandler.CallGetRecentlyPlayedItems(
-            CreateJellyfinUser(), CreatePluginUser(), _libraryManagerMock.Object, _config);
+        var result = LaunchRequestHandler.GetRecentlyPlayedItems(
+            TestHelpers.CreateJellyfinUser(), CreatePluginUser(), _libraryManagerMock.Object, _config);
 
         Assert.Single(result);
         Assert.Equal("Valid Song", result[0].Title);
@@ -231,8 +202,8 @@ public class GetRecentlyPlayedItemsTests
         _config.VideosEnabled = false;
         _config.BooksEnabled = false;
 
-        var result = TestBaseHandler.CallGetRecentlyPlayedItems(
-            CreateJellyfinUser(), CreatePluginUser(), _libraryManagerMock.Object, _config);
+        var result = LaunchRequestHandler.GetRecentlyPlayedItems(
+            TestHelpers.CreateJellyfinUser(), CreatePluginUser(), _libraryManagerMock.Object, _config);
 
         Assert.NotNull(result);
         Assert.Empty(result);
@@ -246,8 +217,8 @@ public class GetRecentlyPlayedItemsTests
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { movie });
 
-        var result = TestBaseHandler.CallGetRecentlyPlayedItems(
-            CreateJellyfinUser(), CreatePluginUser(), _libraryManagerMock.Object, _config);
+        var result = LaunchRequestHandler.GetRecentlyPlayedItems(
+            TestHelpers.CreateJellyfinUser(), CreatePluginUser(), _libraryManagerMock.Object, _config);
 
         Assert.Single(result);
         Assert.Equal(string.Empty, result[0].Subtitle);
@@ -261,8 +232,8 @@ public class GetRecentlyPlayedItemsTests
             .Callback<InternalItemsQuery>(q => capturedQuery = q)
             .Returns(new List<BaseItem>());
 
-        TestBaseHandler.CallGetRecentlyPlayedItems(
-            CreateJellyfinUser(), CreatePluginUser(), _libraryManagerMock.Object, _config);
+        LaunchRequestHandler.GetRecentlyPlayedItems(
+            TestHelpers.CreateJellyfinUser(), CreatePluginUser(), _libraryManagerMock.Object, _config);
 
         Assert.NotNull(capturedQuery);
         Assert.Equal(20, capturedQuery.Limit);
@@ -285,8 +256,8 @@ public class GetRecentlyPlayedItemsTests
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { audio1, audio2 });
 
-        var result = TestBaseHandler.CallGetRecentlyPlayedItems(
-            CreateJellyfinUser(), CreatePluginUser(), _libraryManagerMock.Object, _config);
+        var result = LaunchRequestHandler.GetRecentlyPlayedItems(
+            TestHelpers.CreateJellyfinUser(), CreatePluginUser(), _libraryManagerMock.Object, _config);
 
         Assert.Single(result);
         Assert.Equal(id1.ToString(), result[0].Id);
@@ -298,8 +269,8 @@ public class GetRecentlyPlayedItemsTests
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns((IReadOnlyList<BaseItem>?)null!);
 
-        var result = TestBaseHandler.CallGetRecentlyPlayedItems(
-            CreateJellyfinUser(), CreatePluginUser(), _libraryManagerMock.Object, _config);
+        var result = LaunchRequestHandler.GetRecentlyPlayedItems(
+            TestHelpers.CreateJellyfinUser(), CreatePluginUser(), _libraryManagerMock.Object, _config);
 
         Assert.NotNull(result);
         Assert.Empty(result);
@@ -316,8 +287,8 @@ public class GetRecentlyPlayedItemsTests
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { audio, episode });
 
-        var result = TestBaseHandler.CallGetRecentlyPlayedItems(
-            CreateJellyfinUser(), CreatePluginUser(), _libraryManagerMock.Object, _config);
+        var result = LaunchRequestHandler.GetRecentlyPlayedItems(
+            TestHelpers.CreateJellyfinUser(), CreatePluginUser(), _libraryManagerMock.Object, _config);
 
         Assert.Equal(2, result.Count);
         Assert.Equal("Artist · Album", result[0].Subtitle);

@@ -15,6 +15,9 @@ references:
   - Jellyfin.Plugin.AlexaSkill/Alexa/Util/SearchService.cs
   - Jellyfin.Plugin.AlexaSkill/Controller/AlexaSkillController.cs
   - Jellyfin.Plugin.AlexaSkill/Alexa/Handler/CrossMediaFallback.cs
+  - Jellyfin.Plugin.AlexaSkill/Alexa/Handler/AlbumPlayService.cs
+  - Jellyfin.Plugin.AlexaSkill/Alexa/Util/RadioTrackSource.cs
+  - Jellyfin.Plugin.AlexaSkill/Alexa/Handler/TvNextUpService.cs
 priority: low
 ---
 
@@ -56,4 +59,6 @@ SCOPE EXTENSION + RESOLUTION (JF-315 batch 10, 2026-09-16): batch 10's RadioTrac
 BATCH-10 /simplify LEDGER ADDITION (2026-09-16): the shared ResumeMath.SortByRating 4-tuple carries a write-only UserItemData? Data element (pre-existing in SortAndFindResumeIndex since batch 2; FavoritesAndRatingsFirst's JF-570 consolidation now builds the same shape). No reader dereferences .Data anywhere (grep-verified by the altitude review); each loop holds the local it consumes. Dropping the element would be a behavior-neutral 3-line cleanup inside the two methods when next touched; noted here rather than done in the verbatim-move batch.
 
 BATCH-10 /simplify LEDGER ADDITION (2026-09-16): DeviceQueueManager keeps TWO private Fisher-Yates copies (FisherYates(List<string>, Random), rng-injectable for its deterministic tests via SetShuffledQueue's rng parameter, plus ShuffleRemaining's inline tail shuffle, which deliberately pins Random.Shared). They are NOT twins of Shuffler.Shuffle (different contracts) and predate the decomposition; left in place, documented in the Shuffler class doc.
+
+SCOPE EXTENSION (JF-315 batch 11, 2026-09-16): batch 11's TvNextUpService extraction added a SIXTH identical RetryAsync twin (Alexa/Handler/TvNextUpService.cs, tail); the consolidation must now cover all SIX wrappers (BaseHandler, SearchService, CrossMediaFallback, AlbumPlayService, RadioTrackSource, TvNextUpService). Batch 11 is the FINAL extraction batch of JF-315, so the twin count is now final unless a new collaborator lands before JF-572 executes.
 <!-- SECTION:NOTES:END -->

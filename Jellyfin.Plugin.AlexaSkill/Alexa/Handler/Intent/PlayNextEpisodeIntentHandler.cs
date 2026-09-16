@@ -16,7 +16,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// <summary>
 /// Handler for PlayNextEpisodeIntent (JF-324): "play the next episode of {series}",
 /// "play the latest episode of {series}" and "continue watching {series}". All three
-/// phrasings share the NextUp core in <see cref="BaseHandler.PlayNextUpEpisodeAsync"/>:
+/// phrasings share the NextUp core in <see cref="TvNextUpService.PlayNextUpEpisodeAsync"/>:
 /// the per-user next unwatched (or in-progress) episode, falling back to the most
 /// recently created episode when the series is fully watched.
 /// </summary>
@@ -102,12 +102,12 @@ public class PlayNextEpisodeIntentHandler : BaseHandler
             return userError;
         }
 
-        var (series, seriesError) = await ResolveSeriesForPlaybackAsync(_libraryManager, jellyfinUser!, user, seriesName, locale, cancellationToken).ConfigureAwait(false);
+        var (series, seriesError) = await TvNextUp.ResolveSeriesForPlaybackAsync(_libraryManager, jellyfinUser!, user, seriesName, locale, cancellationToken).ConfigureAwait(false);
         if (seriesError != null || series is null)
         {
             return seriesError!;
         }
 
-        return await PlayNextUpEpisodeAsync(_tvSeriesManager, _libraryManager, _userDataManager, jellyfinUser!, user, session, series, locale, context, request, cancellationToken).ConfigureAwait(false);
+        return await TvNextUp.PlayNextUpEpisodeAsync(_tvSeriesManager, _libraryManager, _userDataManager, jellyfinUser!, user, session, series, locale, context, request, cancellationToken).ConfigureAwait(false);
     }
 }

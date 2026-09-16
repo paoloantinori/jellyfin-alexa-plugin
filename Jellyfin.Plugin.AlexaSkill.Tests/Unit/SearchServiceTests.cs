@@ -7,11 +7,9 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Data.Enums;
-using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
-using Jellyfin.Plugin.AlexaSkill.Diagnostics;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
@@ -25,12 +23,11 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 
 /// <summary>
 /// Characterization tests for the JF-315 cluster-E search/fuzzy members
-/// (SafeGetItemsResult, CachedSearchAsync, GetSearchResponseMode, FuzzyMatchPhonetic,
+/// (SafeGetItemsResult, GetSearchResponseMode, FuzzyMatchPhonetic,
 /// GetArtistSongsAsync, SearchItemsFuzzyAsync), written green against the
 /// pre-extraction BaseHandler code BEFORE the move to SearchService (JF-315 batch 6)
 /// and retargeted to the collaborator after the move. The thin spots pinned here: the
-/// SafeGetItemsResult NRE fallback (previously covered by NO test), the dead
-/// CachedSearchAsync cache-fallback branches (zero coverage anywhere), the
+/// SafeGetItemsResult NRE fallback (previously covered by NO test), the
 /// GetSearchResponseMode per-user/global resolution, the FuzzyMatchPhonetic null-index
 /// degradation, and the exact InternalItemsQuery shapes
 /// GetArtistSongsAsync/SearchItemsFuzzyAsync build (the JF-358
@@ -87,95 +84,6 @@ public class SearchServiceTests : PluginTestBase
         Assert.Equal(7, result.StartIndex);
         Assert.Equal(2, result.TotalRecordCount);
         Assert.Same(items, result.Items);
-    }
-
-    // ---------------------------------------------------------------------
-    // CachedSearchAsync (dead in production today: no callers. Pinned here so
-    // the extraction moves a characterized body, not an untested one.)
-    // ---------------------------------------------------------------------
-
-    [Fact]
-    public async Task CachedSearchAsync_Success_CachesResults_AndCountsMiss()
-    {
-        var search = CreateSearchService(new PluginConfiguration());
-        var (cache, counters, oldCache, oldCounters) = InstallTestCache();
-        try
-        {
-            var items = new List<BaseItem> { TestHelpers.CreateSong("Song") }.AsReadOnly();
-            Guid userId = Guid.NewGuid();
-
-            var (results, fromCache) = await search.CachedSearchAsync(
-                userId, "query-key", () => items, "TestSearch", CancellationToken.None);
-
-            Assert.False(fromCache);
-            Assert.Same(items, results);
-            Assert.Equal(1, counters.CacheMisses);
-            Assert.Equal(0, counters.CacheHits);
-            Assert.True(cache.TryGet(userId, "query-key", out IReadOnlyList<BaseItem>? cached));
-            Assert.Same(items, cached);
-        }
-        finally
-        {
-            RestoreTestCache(oldCache, oldCounters);
-        }
-    }
-
-    [Fact]
-    public async Task CachedSearchAsync_NonTransientFailure_ServesCachedResults_AndCountsHit()
-    {
-        var search = CreateSearchService(new PluginConfiguration());
-        var (cache, counters, oldCache, oldCounters) = InstallTestCache();
-        try
-        {
-            var cachedItems = new List<BaseItem> { TestHelpers.CreateSong("Cached") }.AsReadOnly();
-            Guid userId = Guid.NewGuid();
-            cache.Put(userId, "query-key", cachedItems);
-
-            var (results, fromCache) = await search.CachedSearchAsync(
-                userId,
-                "query-key",
-                () => throw new InvalidOperationException("boom"),
-                "TestSearch",
-                CancellationToken.None);
-
-            Assert.True(fromCache);
-            Assert.Same(cachedItems, results);
-            Assert.Equal(1, counters.CacheHits);
-            Assert.Equal(0, counters.CacheMisses);
-        }
-        finally
-        {
-            RestoreTestCache(oldCache, oldCounters);
-        }
-    }
-
-    [Fact]
-    public async Task CachedSearchAsync_Cancelled_Rethrows_EvenWithCache()
-    {
-        var search = CreateSearchService(new PluginConfiguration());
-        var (cache, _, oldCache, oldCounters) = InstallTestCache();
-        try
-        {
-            var cachedItems = new List<BaseItem> { TestHelpers.CreateSong("Cached") }.AsReadOnly();
-            Guid userId = Guid.NewGuid();
-            cache.Put(userId, "query-key", cachedItems);
-            using var cts = new CancellationTokenSource();
-            cts.Cancel();
-
-            // The OperationCanceledException catch is ordered BEFORE the cache-serve
-            // catch, so cancellation must propagate even when a cached copy exists.
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-                search.CachedSearchAsync(
-                    userId,
-                    "query-key",
-                    () => throw new OperationCanceledException(cts.Token),
-                    "TestSearch",
-                    cts.Token));
-        }
-        finally
-        {
-            RestoreTestCache(oldCache, oldCounters);
-        }
     }
 
     // ---------------------------------------------------------------------
@@ -369,27 +277,6 @@ public class SearchServiceTests : PluginTestBase
 
     private SearchService CreateSearchService(PluginConfiguration config)
         => new(config, _loggerFactory.CreateLogger<SearchServiceTests>(), requestTimeoutMs: 6000);
-
-    private (SearchResultCache Cache, RequestCounters Counters, SearchResultCache OldCache, RequestCounters OldCounters) InstallTestCache()
-    {
-        TestHelpers.EnsurePluginInstance(new PluginConfiguration(), _loggerFactory, _ => { }, "searchservice-tests");
-        SearchResultCache oldCache = Plugin.Instance!.SearchCache;
-        RequestCounters oldCounters = Plugin.Instance.RequestCounters;
-        var cache = new SearchResultCache(_loggerFactory.CreateLogger<SearchResultCache>(), maxEntriesPerUser: 10, expirationMinutes: 30);
-        var counters = new RequestCounters();
-        Plugin.Instance.SearchCache = cache;
-        Plugin.Instance.RequestCounters = counters;
-        return (cache, counters, oldCache, oldCounters);
-    }
-
-    private static void RestoreTestCache(SearchResultCache oldCache, RequestCounters oldCounters)
-    {
-        if (Plugin.Instance != null)
-        {
-            Plugin.Instance.SearchCache = oldCache;
-            Plugin.Instance.RequestCounters = oldCounters;
-        }
-    }
 
     private record TestCandidate(string Name, Guid Id);
 

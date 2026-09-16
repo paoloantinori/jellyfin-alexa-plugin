@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
-using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -16,7 +15,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// <summary>
 /// The JF-315 search collaborator (cluster E, extracted from BaseHandler batch 6):
 /// the library-search and fuzzy-recall machinery: the NRE-safe query executor, the
-/// ASR compound-word fallback wrapper, the cached-search wrapper, the plain and
+/// ASR compound-word fallback wrapper, the plain and
 /// phonetic fuzzy matchers, the shared artist-songs query (the JF-382 "no third
 /// copy" home), the zero-result fuzzy fallback, and the search response-mode
 /// resolution.
@@ -124,49 +123,6 @@ public sealed class SearchService
         }
 
         return results;
-    }
-
-    /// <summary>
-    /// Execute a library search with caching. On success, results are cached.
-    /// On failure, returns cached results if available.
-    /// NOTE (JF-315 batch 6 census): this member has ZERO callers in production
-    /// today (its last call site predates the search-index rework); it moved here
-    /// verbatim per the census, and its deletion is a follow-up decision, not one
-    /// this no-behavior-change batch makes.
-    /// </summary>
-    /// <param name="userId">The user ID for cache partitioning.</param>
-    /// <param name="queryKey">Normalized cache key (search term + filters).</param>
-    /// <param name="operation">The library query to execute.</param>
-    /// <param name="operationName">Name for logging.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A tuple of search results and whether they came from cache.</returns>
-    public async Task<(IReadOnlyList<BaseItem> Results, bool FromCache)> CachedSearchAsync(
-        Guid userId,
-        string queryKey,
-        Func<IReadOnlyList<BaseItem>> operation,
-        string operationName,
-        CancellationToken cancellationToken)
-    {
-        SearchResultCache cache = Plugin.Instance?.SearchCache ?? SearchResultCache.Noop;
-        var counters = Plugin.Instance?.RequestCounters;
-
-        try
-        {
-            IReadOnlyList<BaseItem> results = await RetryAsync(operation, operationName, cancellationToken).ConfigureAwait(false);
-            cache.Put(userId, queryKey, results);
-            counters?.IncrementCacheMiss();
-            return (results, false);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex) when (cache.TryGet(userId, queryKey, out IReadOnlyList<BaseItem>? cached))
-        {
-            _logger.LogWarning(ex, "Library search failed for {Operation}, serving cached results", operationName);
-            counters?.IncrementCacheHit();
-            return (cached!, true);
-        }
     }
 
     /// <summary>
