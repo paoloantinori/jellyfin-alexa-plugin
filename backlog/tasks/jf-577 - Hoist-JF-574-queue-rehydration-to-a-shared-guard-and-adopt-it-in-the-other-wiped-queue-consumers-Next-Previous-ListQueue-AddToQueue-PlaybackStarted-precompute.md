@@ -4,10 +4,10 @@ title: >-
   Hoist JF-574 queue rehydration to a shared guard and adopt it in the other
   wiped-queue consumers (Next/Previous/ListQueue/AddToQueue/PlaybackStarted
   precompute)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-16 11:18'
-updated_date: '2026-09-16 12:55'
+updated_date: '2026-09-16 14:51'
 labels:
   - reliability
   - refactor
@@ -64,3 +64,9 @@ Full suite `dotnet test` (no --no-build): 3988/3988 passed on net9.0 AND net10.0
 
 The guard's exposure on intent paths mirrors the already-shipped NearlyFinished exposure (same legs, same source); ClearQueue wipes the device store too so a cleared queue cannot resurrect. ListQueue on the wiped shape lists the whole rehydrated queue including the playing track (no now-playing item to anchor "upcoming"); accepted as the handler's existing populated-queue behavior. DOD items 9/10 (/simplify, /code-review) intentionally left to the orchestrator's gates per the task instructions.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+DONE (commit bb82a307). The JF-574 rehydration guard is now shared: ProgressReporter.TryRehydrateSessionQueueFromDevice (public static beside MirrorQueueToSession, body verbatim with the two-leg coherence guard and the ItemIds ToList snapshot, log lines parametrized by caller label) plus the ResolveCurrentItemId companion (now-playing item first; codec-parsed token stand-in on the rehydrated shape, AND on the second-adopter window where another consumer already rehydrated the queue while the now-playing item is still null: token membership in the now-populated session queue proves the same coherence; a token outside the queue changes nothing). PlaybackNearlyFinished's private method collapsed to the one-line shared call; PlaybackRestartRehydrationTests stayed 3/3 green unchanged (behavior-neutral lock). Adopters, each red-first: Next (guard after the JF-564 medium refusal, before the queue read; dead previousToken local removed; JF-447 ordering untouched), Previous (same shape; dead previousItemId local removed in cleanup), ListQueue (entry guard, optional DeviceQueueManager ctor param, DI-verified singleton; lists from the queue head, no current-item fallback needed). Deliberate skips with evidence: AddToQueue (writes only the session queue; correct adoption needs a shared both-stores membership writer + null-branch re-scope, filed JF-578) and PlaybackStarted precompute (cache-write only; NearlyFinished owns the visible resolution one event later). APL tap siblings (HandleNext/HandlePrevious) carry the same wiped-queue shape and are NOT yet adopted, filed JF-579 with the adoption-roster-test idea. Tests: QueueRehydrationAdoptionTests, 9 tests (coherent serves-next, stale keeps-empty, boundary last/first keeps-empty per transport adopter, ListQueue rehydrates-lists, and the ListQueue-then-Next second-adopter sequence). Gates: /simplify 4-angle pass applied (resolver companion deduping the twin 16-line blocks, TestHelpers.GetPlayDirective reuse replacing the sixth private copy, handler construction factories, call-site comment trims, census doc naming the rehydrator); code-review high via feature-dev:code-reviewer: 1 minor applied (second-adopter window + sequence test), everything else verified clean (non-rehydrated semantics byte-identical, JF-564 ordering, loop boundaries honest, guard idempotent, response shapes JF-299-compliant, BuildAudioPlayerResponse never calls SetQueue so rehydrated launches keep the persisted queue, DI wiring real). Suite 3989/3989 both TFMs, Release 0 warnings.
+<!-- SECTION:FINAL_SUMMARY:END -->
