@@ -17,9 +17,37 @@ internal static class GenreSimilarityMap
     public const int ExpansionThreshold = 5;
 
     /// <summary>
-    /// Maximum number of total items after expansion (avoids unbounded growth).
+    /// Belt-and-braces cap on the number of genre NAMES after expansion
+    /// (avoids unbounded growth if the similarity map ever grows large).
     /// </summary>
     public const int MaxExpandedResults = 50;
+
+    /// <summary>
+    /// Appends the similar genres of each seed genre after the seeds themselves
+    /// (seed genres stay ranked first), deduplicated case-insensitively and capped
+    /// at <see cref="MaxExpandedResults"/> entries overall.
+    /// </summary>
+    public static string[] ExpandGenres(string[] genres)
+    {
+        var expanded = new List<string>(genres);
+        var present = new HashSet<string>(genres, StringComparer.OrdinalIgnoreCase);
+        foreach (string genre in genres)
+        {
+            foreach (string similar in GetSimilarGenres(genre))
+            {
+                if (present.Add(similar))
+                {
+                    expanded.Add(similar);
+                    if (expanded.Count >= MaxExpandedResults)
+                    {
+                        return expanded.ToArray();
+                    }
+                }
+            }
+        }
+
+        return expanded.ToArray();
+    }
 
     private static readonly Dictionary<string, string[]> _similarityMap = new(StringComparer.OrdinalIgnoreCase)
     {

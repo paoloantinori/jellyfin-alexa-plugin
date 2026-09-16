@@ -1,8 +1,10 @@
 using System;
+using System.Diagnostics;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Music;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Library;
@@ -95,26 +97,14 @@ public sealed class RadioTrackSource
             seen.Add(excludeId.Value);
         }
 
-        if (genres.Length > 0)
+        if (genres.Length == 0)
         {
-            var genreQuery = new InternalItemsQuery
-            {
-                User = jellyfinUser,
-                Recursive = true,
-                Genres = genres,
-                IncludeItemTypes = new[] { BaseItemKind.Audio },
-                Limit = 50,
-                OrderBy = new[] { (ItemSortBy.Random, SortOrder.Ascending) },
-                DtoOptions = new DtoOptions(true)
-            };
-            LibraryFilter.ApplyLibraryFilter(genreQuery, user, libraryManager, _logger);
+            return allResults;
+        }
 
-            IReadOnlyList<BaseItem> byGenre = await RetryAsync(
-                () => libraryManager.GetItemList(genreQuery),
-                "GetRadioGenreTracks",
-                cancellationToken).ConfigureAwait(false);
-
-            foreach (BaseItem item in byGenre)
+        void AddAll(IEnumerable<BaseItem> items)
+        {
+            foreach (BaseItem item in items)
             {
                 if (seen.Add(item.Id))
                 {
@@ -123,7 +113,71 @@ public sealed class RadioTrackSource
             }
         }
 
+        var budget = Stopwatch.StartNew();
+        IReadOnlyList<BaseItem> byGenre = await QueryGenresAsync(
+            genres, jellyfinUser, user, libraryManager,
+            timeoutMs: _requestTimeoutMs, cancellationToken: cancellationToken).ConfigureAwait(false);
+        AddAll(byGenre);
+
+        // JF-576 similarity expansion, only when the primary-genre pool is thin
+        // (<see cref="GenreSimilarityMap.ExpansionThreshold"/>): rich libraries keep
+        // the exact single-genre pool and never pay the extra query (at most ONE
+        // extra GetItemList per radio build). The seed genres lead the EXPANDED
+        // FILTER array (result order is still Jellyfin's Random sort).
+        if (allResults.Count < GenreSimilarityMap.ExpansionThreshold)
+        {
+            // ONE shared Alexa budget across BOTH queries: each RetryAsync call
+            // starts its own stopwatch, so two full budgets back-to-back could
+            // reach ~12s and blow the ~8s response window (review finding). The
+            // expansion gets only the time the primary query left unspent, and
+            // never fires at all when that remainder is under its minimum
+            // operation estimate.
+            int remainingMs = _requestTimeoutMs - (int)budget.ElapsedMilliseconds;
+            if (remainingMs > RetryHelper.DefaultMinOperationMs)
+            {
+                string[] expanded = GenreSimilarityMap.ExpandGenres(genres);
+                if (expanded.Length > genres.Length)
+                {
+                    IReadOnlyList<BaseItem> bySimilarGenre = await QueryGenresAsync(
+                        expanded, jellyfinUser, user, libraryManager,
+                        timeoutMs: remainingMs, cancellationToken: cancellationToken).ConfigureAwait(false);
+                    AddAll(bySimilarGenre);
+                }
+            }
+        }
+
         return allResults;
+    }
+
+    /// <summary>
+    /// Runs the single genre-membership GetItemList query (Limit 50, Random order)
+    /// for the given genre set.
+    /// </summary>
+    private async Task<IReadOnlyList<BaseItem>> QueryGenresAsync(
+        string[] genres,
+        Jellyfin.Database.Implementations.Entities.User jellyfinUser,
+        Entities.User user,
+        ILibraryManager libraryManager,
+        int timeoutMs,
+        CancellationToken cancellationToken)
+    {
+        var genreQuery = new InternalItemsQuery
+        {
+            User = jellyfinUser,
+            Recursive = true,
+            Genres = genres,
+            IncludeItemTypes = new[] { BaseItemKind.Audio },
+            Limit = 50,
+            OrderBy = new[] { (ItemSortBy.Random, SortOrder.Ascending) },
+            DtoOptions = new DtoOptions(true)
+        };
+        LibraryFilter.ApplyLibraryFilter(genreQuery, user, libraryManager, _logger);
+
+        return await RetryAsync(
+            () => libraryManager.GetItemList(genreQuery),
+            "GetRadioGenreTracks",
+            timeoutMs: timeoutMs,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -131,8 +185,8 @@ public sealed class RadioTrackSource
     /// its verbatim call shape; consolidation of the RetryAsync twins across the
     /// collaborators is tracked as JF-572.
     /// </summary>
-    private Task<T> RetryAsync<T>(Func<T> operation, string operationName, CancellationToken cancellationToken = default)
+    private Task<T> RetryAsync<T>(Func<T> operation, string operationName, int timeoutMs = 0, CancellationToken cancellationToken = default)
     {
-        return RetryHelper.ExecuteWithRetryAsync(operation, _logger, operationName, cancellationToken: cancellationToken, timeoutMs: _requestTimeoutMs);
+        return RetryHelper.ExecuteWithRetryAsync(operation, _logger, operationName, cancellationToken: cancellationToken, timeoutMs: timeoutMs > 0 ? timeoutMs : _requestTimeoutMs);
     }
 }

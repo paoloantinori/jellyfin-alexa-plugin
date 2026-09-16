@@ -3,9 +3,10 @@ id: JF-576
 title: >-
   Radio pool is a pure genre-membership random draw: GenreSimilarityMap is dead
   code on FindRadioTracksAsync (JF-126 residual)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-16 11:01'
+updated_date: '2026-09-16 11:51'
 labels:
   - search-quality
   - radio
@@ -32,3 +33,16 @@ Secondary finding from the JF-574 investigation (2026-09-16): the AutoPlay/radio
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:IMPLEMENTATION_NOTES:BEGIN -->
+2026-09-16: WIRE verdict chosen; the wiring was small and behavior-scoped.
+
+- Reading pass: GenreSimilarityMap.GetSimilarGenres/HasSimilarGenres had ZERO production callers (grep over the plugin project: only the map itself and its own test file). FindRadioTracksByGenreAsync confirmed as a single GetItemList (Genres filter, Limit 50, Random); callers confirmed at PlaybackNearlyFinishedEventHandler.cs:657 and :719 (item-seeded) and PlayRadioIntentHandler.cs:174 and :199 (genre-seeded and item-seeded).
+- Design: expansion is CONDITIONAL on thin primary results, which preserves JF-126's small-result-set motivation as the trigger instead of discarding it. Primary seed-genre query runs first, unchanged; only when it returns fewer than GenreSimilarityMap.ExpansionThreshold (5) deduplicated items does exactly ONE extra GetItemList run with the similar genres appended after the seeds (seed genres ranked first, case-insensitive dedup, capped at MaxExpandedResults=50 genres). Rich libraries keep the exact single-genre pool and never pay the second query; the Alexa response-budget risk is bounded to at most two 6s-budgeted retry calls. Admission is still Jellyfin genre membership, so the FuzzyMatcher recall-vs-judgment rule does not apply (pool construction, not admission).
+- TDD: 4 new tests written first and run RED (2 failed on the old single-query behavior), then GREEN after the RadioTrackSource change. Two pre-existing characterization tests (ByGenre_BuildsTheRadioGenreQueryShape, FindRadioTracks_SeedsFromTheItemsGenresAndExcludesTheItemItself) pinned the single-query shape and were updated to the new contract: the former now feeds a rich primary result so it still asserts exactly one query; the latter asserts queries[0].Genres and documents that the thin primary result legitimately fires the expansion query.
+- Evidence: dotnet build (Debug, both TFMs) 0 errors; dotnet test full suite GREEN on BOTH TFMs: net9.0 3980/3980 passed, net10.0 3980/3980 passed; dotnet build -c Release 0 warnings.
+- Files changed: Jellyfin.Plugin.AlexaSkill/Alexa/Util/RadioTrackSource.cs (QueryGenresAsync extraction + conditional expansion + ExpandGenres helper); Jellyfin.Plugin.AlexaSkill.Tests/Unit/RadioTrackSourceTests.cs (4 new tests, 2 characterization updates). Nothing committed; status left In Progress.
+- Known limitation: the map covers 20 broad English genre keys; an unmapped seed genre (e.g. a subgenre string like "vocal jazz") gets no expansion (no second query, pool unchanged). Deliberate: expanding with no data would be a no-op query. Enriching the map is a data task, not a code task.
+<!-- SECTION:IMPLEMENTATION_NOTES:END -->
