@@ -4,10 +4,10 @@ title: >-
   Adopt queue rehydration in AplUserEventHandler HandleNext/HandlePrevious (the
   same wiped-queue shape JF-577 fixed in the intent handlers) + consider an
   adoption-roster test
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-16 14:17'
-updated_date: '2026-09-16 22:54'
+updated_date: '2026-09-16 21:25'
 labels:
   - reliability
   - queue
@@ -61,3 +61,9 @@ Six new tests in QueueRehydrationAdoptionTests (APL section): next and previous 
 
 Behavioral widening beyond the wiped shape, identical to the Next/Previous adoption: on a populated session queue with a null now-playing item, a token that is a queue member now stands in for current (previously the tap answered Empty), which is the same coherence rule the intent adopters shipped. The post-playback tap (screen persists after the queue ends) rehydrates and serves the next member when the token is coherent, matching the intent-handler semantics. JF-578's both-stores writer remains open and is the tracked fix for the two writer-shaped exemptions. DOD items 9/10 (/simplify, /code-review) intentionally left to the orchestrator's gates per the task instructions.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+DONE (commit 9434e11e). ADOPT verdict: Amazon's Request/Response JSON Reference (scraped live) states context.AudioPlayer is included on all customer-initiated requests with token and offset when the skill was the most recently playing audio; the NowPlaying-screen next/previous tap is exactly that, corroborated in-tree by LaunchRequestHandler's same-family read, and the adoption degrades fail-safe to today's behavior without a token. AplUserEventHandler.HandleNext/HandlePrevious now call ProgressReporter.TryRehydrateSessionQueueFromDevice + ResolveCurrentItemId before the queue read (guard after the tap dispatch switch, so pause/selectItem/show-more taps never pay it; no ctor change needed, the handler already held the DeviceQueueManager), mirroring the intent adopters; response shapes and shouldEndSession unchanged; after a mid-playback restart an APL tap now serves the queue's real adjacent track instead of the false Empty. ANTI-FORGETTEN-CONSUMER MECHANISM: new SessionQueueReaderRosterTests, the WarmingGateCoverageTests IL-scan precedent generalized to property-getter readers (Module.ResolveMethod for the cross-assembly memberref; MethodSpec tokens deliberately skipped, both failure classes fail loud): Fact 1 asserts the 13 discovered NowPlayingQueue readers exactly match the roster (ADOPTED: Next, Previous, ListQueue, PlaybackNearlyFinished, AplUserEventHandler; EXEMPT with one-line reasons: PlaybackStarted precompute, AddToQueue + PlayNext both-stores writers per JF-578, LaunchRequest legacy resume offer, Play resume fallback, ClearQueue logging-only, ProgressReporter the guard itself, SessionQueue passive helper); Fact 2 mechanically proves ADOPTED equals the real set of guard callers so the label cannot rot. Tests: 6 red-first APL adoption pins (coherent serves-queued-track observed RED pre-change on both TFMs, stale-queue keeps-Empty, non-empty-session keeps-today, boundary last/first) + the 2 roster facts. Gates: /simplify 2-agent consolidated pass (R1 applied: all four adjacent-item scans now use SessionQueue.IndexOfQueueItem, the helper that exists for exactly this; efficiency+altitude CLEAN; deferred to JF-582: the combined rehydrate-and-resolve helper, the shared adjacent-item serve extraction, and the roster-scanner dedupe with WarmingGateCoverageTests); code-review high via feature-dev:code-reviewer: no blockers or majors, roster completeness verified against a full 105-hit grep, the one minor (the APL branches bypass the JF-507 codec gate and the JF-564 medium refusal their siblings apply, slightly widened by the adoption) filed as JF-582 same-turn. Suite 4009/4009 both TFMs, Release 0 warnings. JF-569 rode the same commit (doc-only): RepeatIntentHandler class doc corrected; the VideoApp ledger recording exists since JF-563, the residual mid-book misclassification is JF-566.
+<!-- SECTION:FINAL_SUMMARY:END -->
