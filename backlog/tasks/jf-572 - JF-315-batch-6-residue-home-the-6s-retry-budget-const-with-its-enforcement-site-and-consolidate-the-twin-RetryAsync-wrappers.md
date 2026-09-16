@@ -3,10 +3,10 @@ id: JF-572
 title: >-
   JF-315 batch-6 residue: home the 6s retry-budget const with its enforcement
   site and consolidate the twin RetryAsync wrappers
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-15 22:58'
-updated_date: '2026-09-16 05:14'
+updated_date: '2026-09-16 15:52'
 labels: []
 dependencies: []
 references:
@@ -61,4 +61,14 @@ BATCH-10 /simplify LEDGER ADDITION (2026-09-16): the shared ResumeMath.SortByRat
 BATCH-10 /simplify LEDGER ADDITION (2026-09-16): DeviceQueueManager keeps TWO private Fisher-Yates copies (FisherYates(List<string>, Random), rng-injectable for its deterministic tests via SetShuffledQueue's rng parameter, plus ShuffleRemaining's inline tail shuffle, which deliberately pins Random.Shared). They are NOT twins of Shuffler.Shuffle (different contracts) and predate the decomposition; left in place, documented in the Shuffler class doc.
 
 SCOPE EXTENSION (JF-315 batch 11, 2026-09-16): batch 11's TvNextUpService extraction added a SIXTH identical RetryAsync twin (Alexa/Handler/TvNextUpService.cs, tail); the consolidation must now cover all SIX wrappers (BaseHandler, SearchService, CrossMediaFallback, AlbumPlayService, RadioTrackSource, TvNextUpService). Batch 11 is the FINAL extraction batch of JF-315, so the twin count is now final unless a new collaborator lands before JF-572 executes.
+
+EXECUTED (2026-09-16, implementation left uncommitted for the orchestrator's gates):
+
+1. CONST HOME. `public const int AlexaRequestTimeoutMs = 6000` now lives on RetryHelper (Alexa/RetryHelper.cs), documented as the single source of the shared request budget and the mechanism keeping slow play-path queries inside Alexa's ~8s window (JF-358/JF-359; Sync_AlwaysTransient_StopsWithinTimeoutBudget pins the invariant). Both ExecuteWithRetryAsync overloads default `timeoutMs` to it, and a NEW shared entry point `RetryHelper.ExecuteWithRequestBudgetAsync<T>(operation, logger, operationName, timeoutMs = AlexaRequestTimeoutMs, cancellationToken)` carries the budget call shape once (non-nullable int budget: a caller cannot silently drop it; the JF-576 remainder override passes an explicit value). BaseHandler's private const is DELETED (no alias): its 5 composition sites and the SessionLookupTimeoutMs doc cref now read `RetryHelper.AlexaRequestTimeoutMs` directly. AlexaSkillController's request CTS is `new CancellationTokenSource(TimeSpan.FromMilliseconds(RetryHelper.AlexaRequestTimeoutMs))` (was FromSeconds(6), line ~399).
+
+2. BEHAVIOR PRESERVATION AT THE NULL SEAM. Defaulting `timeoutMs` from null to 6000 would have silently put the three background callers on the request budget; each now passes an EXPLICIT `timeoutMs: null` with a rationale comment (identical runtime semantics: null stopwatch, no budget check): SmapiManagement InteractionModel.Update (2000ms backoff deploy loop), LwaClient.LwaDeviceAuth, LwaClient.LwaExchangeCode. LwaClient.LwaRefreshToken keeps its explicit 15_000 (JF-544); BaseHandler.StartSessionLookup keeps its explicit per-call timeoutMs (JF-477 2s fast-fail).
+
+3. TWIN CONSOLIDATION. All SIX wrappers are now pure expression-bodied delegations to ExecuteWithRequestBudgetAsync, zero retry/budget logic of their own (census grep: no private wrapper wires a budget into ExecuteWithRetryAsync anymore): BaseHandler.RetryAsync (kept protected: ~65 handler call sites; uses the shared default budget), SearchService/CrossMediaFallback/AlbumPlayService/TvNextUpService.RetryAsync (pass their composition-injected `_requestTimeoutMs`; the ctor seam is preserved so tests can construct with explicit budgets), RadioTrackSource.RetryAsync (the only one keeping a parameter: the JF-576 `timeoutMs > 0 ? timeoutMs : _requestTimeoutMs` override). The composition-time injection into all five collaborators is unchanged and still compiles; ctor param docs updated to name the RetryHelper home.
+
+4. TDD + VERIFICATION. Tests written first (RED: CS0117 missing members), then green: RetryHelperTests gains AlexaRequestTimeoutMs_ValueIs6000, ExecuteWithRetryAsync_TimeoutDefaultsToSharedBudget + ExecuteWithRequestBudgetAsync_TimeoutDefaultsToSharedBudget (reflection on the compiled parameter defaults, both overloads), DefaultBudget_StopsRetries_WithoutExplicitTimeout (behavioral: delay 7000 > 6000 budget stops after 1 attempt, no delay waited), ExecuteWithRequestBudgetAsync_ExplicitBudget_StopsRetries (the override shape); the old NoTimeoutSpecified_RetriesAsBefore became ExplicitNullTimeout_DisablesBudget_RetriesAllAttempts (passes timeoutMs: null) because its premise (omitted timeoutMs = unbounded) is exactly what JF-572 inverted. Full suite: 3994/3994 PASSED on BOTH net9.0 and net10.0 (was 3939 pre-batch-wave; +5 here, rest from the later batches). `dotnet build -c Release`: 0 warnings, 0 errors. No test referenced the private wrapper internals, so no twin-test adjustments were needed.
 <!-- SECTION:NOTES:END -->

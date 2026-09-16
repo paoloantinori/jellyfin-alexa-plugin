@@ -33,6 +33,22 @@ internal static class RetryHelper
     public const int DefaultMinOperationMs = 500;
 
     /// <summary>
+    /// The shared Alexa request timeout budget in milliseconds, single-sourced here
+    /// (JF-572): every retry on the Alexa request path runs under it (the non-null
+    /// default timeoutMs of ExecuteWithRequestBudgetAsync, plus the budget
+    /// composition-passed into the extracted request-path collaborators), and
+    /// AlexaSkillController enforces the same value as its per-request cancellation.
+    /// This is the mechanism that keeps slow play-path queries inside Alexa's ~8s
+    /// response window: a query that keeps throwing transiently stops retrying once
+    /// the budget is exhausted instead of burning 8-12s of backoff and surfacing as
+    /// an on-device INVALID_RESPONSE (JF-358/JF-359; the invariant is pinned by the
+    /// test RetryHelperTests.Sync_AlwaysTransient_StopsWithinTimeoutBudget).
+    /// Background callers that are NOT on the request path (SMAPI model deploys,
+    /// LWA token flows) run unbudgeted by omitting timeoutMs on the raw overloads.
+    /// </summary>
+    public const int AlexaRequestTimeoutMs = 6000;
+
+    /// <summary>
     /// Check if the retry budget is exceeded.
     /// Returns true if budget is exceeded (caller should rethrow the caught exception).
     /// </summary>
@@ -78,7 +94,7 @@ internal static class RetryHelper
     /// <param name="operationName">Descriptive name for logging.</param>
     /// <param name="maxRetries">Maximum retry attempts (default 3).</param>
     /// <param name="initialDelayMs">Initial delay in ms before first retry (default 500).</param>
-    /// <param name="timeoutMs">Optional total timeout budget in ms. Retries are skipped if elapsed + delay + minOperation would exceed this.</param>
+    /// <param name="timeoutMs">Optional total timeout budget in ms; null (the default) disables it. Retries are skipped if elapsed + delay + minOperation would exceed this. Request-path callers must go through <see cref="ExecuteWithRequestBudgetAsync"/>, whose non-nullable default is <see cref="AlexaRequestTimeoutMs"/>.</param>
     /// <param name="minOperationMs">Minimum estimated time for one operation attempt in ms (default 500).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The result of the operation.</returns>
@@ -137,7 +153,7 @@ internal static class RetryHelper
     /// <param name="operationName">Descriptive name for logging.</param>
     /// <param name="maxRetries">Maximum retry attempts (default 3).</param>
     /// <param name="initialDelayMs">Initial delay in ms before first retry (default 500).</param>
-    /// <param name="timeoutMs">Optional total timeout budget in ms. Retries are skipped if elapsed + delay + minOperation would exceed this.</param>
+    /// <param name="timeoutMs">Optional total timeout budget in ms; null (the default) disables it. Retries are skipped if elapsed + delay + minOperation would exceed this. Request-path callers must go through <see cref="ExecuteWithRequestBudgetAsync"/>, whose non-nullable default is <see cref="AlexaRequestTimeoutMs"/>.</param>
     /// <param name="minOperationMs">Minimum estimated time for one operation attempt in ms (default 500).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The result of the operation.</returns>
@@ -184,6 +200,39 @@ internal static class RetryHelper
             }
         }
     }
+
+    /// <summary>
+    /// Execute a synchronous in-process operation with retry under the shared Alexa
+    /// request budget (<see cref="AlexaRequestTimeoutMs"/>). The entry point the
+    /// request path retries through (JF-572): BaseHandler's protected RetryAsync
+    /// delegates here with the shared default; the extracted collaborators
+    /// (SearchService, CrossMediaFallback, AlbumPlayService, RadioTrackSource,
+    /// TvNextUpService) delegate here passing their composition-injected budget.
+    /// The budget is a non-nullable int, so a request-path caller deviating from
+    /// the shared budget must pass an explicit value (the JF-576 radio-expansion
+    /// remainder budget does exactly that); the ExecuteWithRetryAsync overloads
+    /// keep generic omitted-parameter semantics (null = unbounded) for background
+    /// callers, which are not inside Alexa requests and carry no request budget.
+    /// </summary>
+    /// <typeparam name="T">The return type of the operation.</typeparam>
+    /// <param name="operation">The synchronous operation to execute.</param>
+    /// <param name="logger">Logger for retry diagnostics.</param>
+    /// <param name="operationName">Descriptive name for logging.</param>
+    /// <param name="timeoutMs">Total timeout budget in ms, defaulting to the shared Alexa request budget (<see cref="AlexaRequestTimeoutMs"/>).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The result of the operation.</returns>
+    public static Task<T> ExecuteWithRequestBudgetAsync<T>(
+        Func<T> operation,
+        ILogger logger,
+        string operationName,
+        int timeoutMs = AlexaRequestTimeoutMs,
+        CancellationToken cancellationToken = default)
+        => ExecuteWithRetryAsync(
+            operation,
+            logger,
+            operationName,
+            cancellationToken: cancellationToken,
+            timeoutMs: timeoutMs);
 
     /// <summary>
     /// Determine if an exception represents a transient failure worth retrying.

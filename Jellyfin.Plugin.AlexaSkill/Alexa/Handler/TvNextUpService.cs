@@ -57,7 +57,7 @@ public sealed class TvNextUpService
     /// <param name="logger">The logger instance.</param>
     /// <param name="search">The search collaborator (the series fuzzy fallback).</param>
     /// <param name="launch">The playback-launch collaborator (URL building, the launch response, the announce speech).</param>
-    /// <param name="requestTimeoutMs">The Alexa request timeout budget in milliseconds (composition-passed from BaseHandler's const, the batch-6 precedent; see JF-572 for the const's true-home consolidation).</param>
+    /// <param name="requestTimeoutMs">The Alexa request timeout budget in milliseconds (composition-passed <see cref="RetryHelper.AlexaRequestTimeoutMs"/>, the batch-6 precedent; single-sourced on RetryHelper since JF-572).</param>
     public TvNextUpService(ILogger logger, SearchService search, PlaybackLaunchBuilder launch, int requestTimeoutMs)
     {
         _logger = logger;
@@ -288,18 +288,9 @@ public sealed class TvNextUpService
             speech).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Execute a synchronous Jellyfin API call with retry logic and exponential backoff.
-    /// Copied, not moved (JF-315 batch 11, the sixth copy): BaseHandler retains its
-    /// own RetryAsync for its remaining callers, and the moved bodies call this one
-    /// by their original name so they keep the pre-extraction call shape (modulo
-    /// the batch's declared receiver swaps). The budget is the composition-passed
-    /// <c>_requestTimeoutMs</c> field (BaseHandler's const, single-sourced there as
-    /// the 6s controller cancellation the whole request path shares). The twin
-    /// consolidation is tracked by JF-572.
-    /// </summary>
+    /// <summary>Delegates to RetryHelper.ExecuteWithRequestBudgetAsync with
+    /// the composition-injected request budget and this class's logger; kept as a thin alias so the moved
+    /// members keep calling <c>RetryAsync</c> by name (see the entry point doc).</summary>
     private Task<T> RetryAsync<T>(Func<T> operation, string operationName, CancellationToken cancellationToken = default)
-    {
-        return RetryHelper.ExecuteWithRetryAsync(operation, _logger, operationName, cancellationToken: cancellationToken, timeoutMs: _requestTimeoutMs);
-    }
+        => RetryHelper.ExecuteWithRequestBudgetAsync(operation, _logger, operationName, timeoutMs: _requestTimeoutMs, cancellationToken: cancellationToken);
 }

@@ -22,9 +22,10 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// PlaybackLaunchBuilder batch-4 precedent): BaseHandler constructs one instance
 /// as the inherited <c>Radio</c> property so the handler ctors stay untouched;
 /// callers are PlayRadioIntentHandler and PlaybackNearlyFinishedEventHandler.
-/// Stateless (logger + the passed request budget). Carries a private RetryAsync
-/// twin so the moved body keeps its verbatim call shape (the SearchService
-/// batch-6 precedent; consolidation of the RetryAsync twins is tracked as JF-572).
+/// Stateless (logger + the passed request budget). Its private RetryAsync is a
+/// thin alias over the shared request-budget entry point on RetryHelper (JF-572
+/// consolidated the extraction-batch twins), retaining the JF-576 per-call budget
+/// override.
 /// </summary>
 public sealed class RadioTrackSource
 {
@@ -36,8 +37,8 @@ public sealed class RadioTrackSource
     /// </summary>
     /// <param name="logger">The logger instance.</param>
     /// <param name="requestTimeoutMs">The request timeout budget in milliseconds
-    /// (composition-passed; the single-sourced 6s controller cancellation the whole
-    /// request path shares, see JF-572 for the const's true-home consolidation).</param>
+    /// (composition-passed; <see cref="RetryHelper.AlexaRequestTimeoutMs"/>, the
+    /// single-sourced 6s budget the whole request path shares, JF-572).</param>
     public RadioTrackSource(ILogger logger, int requestTimeoutMs)
     {
         _logger = logger;
@@ -180,13 +181,11 @@ public sealed class RadioTrackSource
             cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// Retry twin copied from BaseHandler (JF-315 batch 10) so the moved body keeps
-    /// its verbatim call shape; consolidation of the RetryAsync twins across the
-    /// collaborators is tracked as JF-572.
-    /// </summary>
+    /// <summary>Delegates to RetryHelper.ExecuteWithRequestBudgetAsync with this
+    /// class's logger and the composition-injected request budget, EXCEPT when a
+    /// positive timeoutMs override is passed (the JF-576 radio-expansion remainder
+    /// budget); kept as a thin alias so the moved members keep calling
+    /// <c>RetryAsync</c> by name (see the entry point doc).</summary>
     private Task<T> RetryAsync<T>(Func<T> operation, string operationName, int timeoutMs = 0, CancellationToken cancellationToken = default)
-    {
-        return RetryHelper.ExecuteWithRetryAsync(operation, _logger, operationName, cancellationToken: cancellationToken, timeoutMs: timeoutMs > 0 ? timeoutMs : _requestTimeoutMs);
-    }
+        => RetryHelper.ExecuteWithRequestBudgetAsync(operation, _logger, operationName, timeoutMs: timeoutMs > 0 ? timeoutMs : _requestTimeoutMs, cancellationToken: cancellationToken);
 }

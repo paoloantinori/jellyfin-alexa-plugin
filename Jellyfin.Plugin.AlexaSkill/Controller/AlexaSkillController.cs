@@ -396,7 +396,10 @@ public class AlexaSkillController : ControllerBase
                     }
                 }
 
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(6));
+                // The single-sourced request budget (JF-572): the same const the retry
+                // helpers default to, so the controller cancellation and every retry
+                // budget on the request path are one number.
+                using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(RetryHelper.AlexaRequestTimeoutMs));
 
                 // Routing selection (FindSong session force-route + first-CanHandle-wins
                 // in registration order) lives in HandlerSelector, shared with the

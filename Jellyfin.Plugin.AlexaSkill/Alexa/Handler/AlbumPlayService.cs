@@ -206,7 +206,7 @@ public sealed class AlbumPlayService
     /// <param name="launch">The playback-launch collaborator (stream URLs and the AudioPlayer.Play response chokepoint both play flows build through).</param>
     /// <param name="search">The search collaborator (SafeGetItemsResult, the playlist fuzzy fallback, the playlist FuzzyMatch pre-check).</param>
     /// <param name="crossMedia">The cross-media-fallback collaborator (the word guard and the JF-412 embedded-winner walk the album cascade gates on).</param>
-    /// <param name="requestTimeoutMs">The Alexa request timeout budget in milliseconds (BaseHandler passes its own const, single-sourced there: it matches the controller's 6-second cancellation). Passed at composition, the SearchService precedent, so this class holds no BaseHandler reference.</param>
+    /// <param name="requestTimeoutMs">The Alexa request timeout budget in milliseconds (BaseHandler passes <see cref="RetryHelper.AlexaRequestTimeoutMs"/>, single-sourced on RetryHelper since JF-572: it is the same 6s the controller's request cancellation enforces). Passed at composition, the SearchService precedent, so this class holds no BaseHandler reference.</param>
     /// <param name="handleFuzzyMiss">The handler's own <c>HandleFuzzyMiss</c> for BaseItem candidates, wired as a DELEGATE at composition time (the PlaybackLaunchBuilder SendProgressiveResponse seam precedent). The decision block STAYS on BaseHandler (JF-408, the batch-6 stay); the delegate's target is the handler instance itself, so it captures nothing request-scoped; handlers are singleton-lifetime, so the capture pins nothing the handler does not already own.</param>
     public AlbumPlayService(
         PluginConfiguration config,
@@ -806,18 +806,9 @@ public sealed class AlbumPlayService
     /// </summary>
     private bool IsMusicEnabled => (Plugin.Instance?.Configuration ?? _config).MusicEnabled;
 
-    /// <summary>
-    /// Execute a synchronous Jellyfin API call with retry logic and exponential backoff.
-    /// Copied, not moved (JF-315 batch 8, the SearchService/CrossMediaFallback twin's
-    /// sibling): BaseHandler retains its own RetryAsync for its remaining callers, and
-    /// the moved members call this one by their original name so their bodies keep the
-    /// pre-extraction call shape (modulo the batch's declared receiver swaps). The
-    /// budget is the composition-passed <c>_requestTimeoutMs</c> field (BaseHandler's
-    /// const, single-sourced there as the 6s controller cancellation the whole request
-    /// path shares). Consolidation of the RetryAsync twins is tracked as JF-572.
-    /// </summary>
+    /// <summary>Delegates to RetryHelper.ExecuteWithRequestBudgetAsync with
+    /// the composition-injected request budget and this class's logger; kept as a thin alias so the moved
+    /// members keep calling <c>RetryAsync</c> by name (see the entry point doc).</summary>
     private Task<T> RetryAsync<T>(Func<T> operation, string operationName, CancellationToken cancellationToken = default)
-    {
-        return RetryHelper.ExecuteWithRetryAsync(operation, _logger, operationName, cancellationToken: cancellationToken, timeoutMs: _requestTimeoutMs);
-    }
+        => RetryHelper.ExecuteWithRequestBudgetAsync(operation, _logger, operationName, timeoutMs: _requestTimeoutMs, cancellationToken: cancellationToken);
 }

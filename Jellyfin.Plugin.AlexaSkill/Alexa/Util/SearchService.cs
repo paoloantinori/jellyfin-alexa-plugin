@@ -51,7 +51,7 @@ public sealed class SearchService
     /// </summary>
     /// <param name="config">The plugin configuration (search mode defaults, ASR fix toggle).</param>
     /// <param name="logger">The logger (BaseHandler passes its own instance so moved log statements keep their pre-extraction category).</param>
-    /// <param name="requestTimeoutMs">The Alexa request timeout budget in milliseconds (BaseHandler passes its own const, single-sourced there: it matches the controller's 6-second cancellation). Passed at composition, the PlaybackLaunchBuilder delegate-seam precedent, so this Util class holds no Handler-layer reference.</param>
+    /// <param name="requestTimeoutMs">The Alexa request timeout budget in milliseconds (BaseHandler passes <see cref="RetryHelper.AlexaRequestTimeoutMs"/>, single-sourced on RetryHelper since JF-572: it is the same 6s the controller's request cancellation enforces). Passed at composition, the PlaybackLaunchBuilder delegate-seam precedent, so this Util class holds no Handler-layer reference.</param>
     public SearchService(PluginConfiguration config, ILogger logger, int requestTimeoutMs)
     {
         _config = config;
@@ -343,17 +343,9 @@ public sealed class SearchService
         return _config.DefaultSearchResponseMode;
     }
 
-    /// <summary>
-    /// Execute a synchronous Jellyfin API call with retry logic and exponential backoff.
-    /// Copied, not moved (JF-315 batch 6): BaseHandler retains its own RetryAsync for
-    /// its remaining callers, and the moved members call this one by their original
-    /// name so their bodies keep the pre-extraction call shape (modulo the batch's
-    /// declared receiver swaps). The budget is the composition-passed
-    /// <c>_requestTimeoutMs</c> field (BaseHandler's const, single-sourced
-    /// there as the 6s controller cancellation the whole request path shares).
-    /// </summary>
+    /// <summary>Delegates to RetryHelper.ExecuteWithRequestBudgetAsync with
+    /// the composition-injected request budget and this class's logger; kept as a thin alias so the moved
+    /// members keep calling <c>RetryAsync</c> by name (see the entry point doc).</summary>
     private Task<T> RetryAsync<T>(Func<T> operation, string operationName, CancellationToken cancellationToken = default)
-    {
-        return RetryHelper.ExecuteWithRetryAsync(operation, _logger, operationName, cancellationToken: cancellationToken, timeoutMs: _requestTimeoutMs);
-    }
+        => RetryHelper.ExecuteWithRequestBudgetAsync(operation, _logger, operationName, timeoutMs: _requestTimeoutMs, cancellationToken: cancellationToken);
 }

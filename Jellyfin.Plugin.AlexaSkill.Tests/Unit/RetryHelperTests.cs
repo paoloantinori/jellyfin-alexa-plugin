@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
@@ -396,9 +397,12 @@ public class RetryHelperTests
     }
 
     [Fact]
-    public async Task NoTimeoutSpecified_RetriesAsBefore()
+    public async Task ExplicitNullTimeout_DisablesBudget_RetriesAllAttempts()
     {
-        // Without timeoutMs, behavior is unchanged — all retries exhausted
+        // timeoutMs: null is the explicit opt-out from the budget (JF-572 made the
+        // shared Alexa request budget the DEFAULT, so background callers like the
+        // SMAPI model deploy and the LWA flows must pass null to keep their
+        // unbounded retry chains). All retries are exhausted, budget never consulted.
         int calls = 0;
         await Assert.ThrowsAsync<HttpRequestException>(() =>
             RetryHelper.ExecuteWithRetryAsync(
@@ -410,7 +414,8 @@ public class RetryHelperTests
                 _logger,
                 "TestOp",
                 maxRetries: 2,
-                initialDelayMs: 1));
+                initialDelayMs: 1,
+                timeoutMs: null));
 
         // 1 initial + 2 retries = 3 total
         Assert.Equal(3, calls);
@@ -508,7 +513,8 @@ public class RetryHelperTests
     // Guards the JF-358 class of failure: a play-path DB query that threw repeatedly used to burn
     // the whole retry budget (~8-12s wall time) and exceed Alexa's ~8s response window, surfacing
     // to the user as INVALID_RESPONSE. Every play-path Jellyfin call goes through RetryAsync, which
-    // sets timeoutMs = AlexaRequestTimeoutMs (6000). The invariant: when an operation throws
+    // runs under the shared budget (the entry point's default, AlexaRequestTimeoutMs
+    // = 6000). The invariant: when an operation throws
     // transiently on every attempt, the retry loop must STOP once the timeoutMs budget is exhausted
     // — never run past it. If someone weakens/removes IsBudgetExceeded, this test fails before a
     // live user sees a timeout. (E2E correctness tests do not cover latency; this unit test is the
@@ -537,5 +543,97 @@ public class RetryHelperTests
         // far longer than this bound.
         Assert.True(sw.ElapsedMilliseconds < budgetMs + 1000,
             $"Retry loop ran {sw.ElapsedMilliseconds}ms, exceeding the {budgetMs}ms budget — the timeout-budget guard (IsBudgetExceeded) is not stopping retries.");
+    }
+
+    // --- Shared Alexa request budget home (JF-572) ---
+    // The 6s budget is single-sourced as RetryHelper.AlexaRequestTimeoutMs; the
+    // request-path entry points default to it, the controller CTS consumes it, and
+    // the old BaseHandler private const is gone. These tests pin the wiring so the
+    // value cannot drift back into per-site literals.
+
+    [Fact]
+    public void AlexaRequestTimeoutMs_ValueIs6000()
+    {
+        // The load-bearing value (JF-358/JF-359): 6s of retry budget inside Alexa's
+        // ~8s response window. Any change here is a deliberate budget decision, not
+        // an incidental refactor.
+        Assert.Equal(6000, RetryHelper.AlexaRequestTimeoutMs);
+    }
+
+    /// <summary>
+    /// Reflection helper: the optional timeoutMs parameter's compiled default value.
+    /// C# bakes const-valued parameter defaults into metadata as the literal, so a
+    /// default of AlexaRequestTimeoutMs reads back as 6000.
+    /// </summary>
+    private static void AssertTimeoutDefaultsToSharedBudget(string methodName)
+    {
+        System.Reflection.MethodInfo[] methods = typeof(RetryHelper)
+            .GetMethods()
+            .Where(m => m.Name == methodName)
+            .ToArray();
+
+        Assert.NotEmpty(methods);
+        foreach (System.Reflection.MethodInfo method in methods)
+        {
+            System.Reflection.ParameterInfo? timeoutParam = method
+                .GetParameters()
+                .FirstOrDefault(p => p.Name == "timeoutMs");
+            Assert.True(timeoutParam != null, $"{methodName} has no timeoutMs parameter");
+            Assert.True(timeoutParam.HasDefaultValue, $"{methodName}.timeoutMs must be optional");
+            Assert.Equal(
+                RetryHelper.AlexaRequestTimeoutMs,
+                Assert.IsType<int>(timeoutParam.RawDefaultValue));
+        }
+    }
+
+    [Fact]
+    public void ExecuteWithRetryAsync_TimeoutDefaultsToUnbounded()
+    {
+        // The generic overloads keep their pre-JF-572 omitted-parameter semantics
+        // (null = unbounded) for background callers; only the request-path entry
+        // point defaults to the shared budget (pinned above). The reflection walk
+        // covers BOTH overloads (sync Func<T> and async Func<Task<T>>).
+        System.Reflection.MethodInfo[] methods = typeof(RetryHelper)
+            .GetMethods()
+            .Where(m => m.Name == nameof(RetryHelper.ExecuteWithRetryAsync))
+            .ToArray();
+
+        Assert.NotEmpty(methods);
+        foreach (System.Reflection.MethodInfo method in methods)
+        {
+            System.Reflection.ParameterInfo? timeoutParam = method
+                .GetParameters()
+                .FirstOrDefault(p => p.Name == "timeoutMs");
+            Assert.NotNull(timeoutParam);
+            Assert.Null(timeoutParam!.RawDefaultValue);
+        }
+    }
+
+    [Fact]
+    public void ExecuteWithRequestBudgetAsync_TimeoutDefaultsToSharedBudget()
+    {
+        AssertTimeoutDefaultsToSharedBudget(nameof(RetryHelper.ExecuteWithRequestBudgetAsync));
+    }
+
+    [Fact]
+    public async Task ExecuteWithRequestBudgetAsync_ExplicitBudget_StopsRetries()
+    {
+        // The shared request-path entry point honors an explicit tighter budget
+        // (the JF-576 radio-expansion shape: the second query gets only the time
+        // the first left unspent). Budget 1ms vs min delay 500 + minOp 500: the
+        // first retry is skipped deterministically and no delay is waited.
+        int calls = 0;
+        await Assert.ThrowsAsync<HttpRequestException>(() =>
+            RetryHelper.ExecuteWithRequestBudgetAsync(
+                (Func<int>)(() =>
+                {
+                    calls++;
+                    throw new HttpRequestException("always transient");
+                }),
+                _logger,
+                "TestOp",
+                timeoutMs: 1));
+
+        Assert.Equal(1, calls);
     }
 }

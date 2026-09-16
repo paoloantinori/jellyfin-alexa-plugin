@@ -44,15 +44,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 public abstract class BaseHandler
 {
     /// <summary>
-    /// Alexa request timeout budget in milliseconds.
-    /// Matches the CancellationTokenSource(TimeSpan.FromSeconds(6)) in AlexaSkillController.
-    /// Passed to the SearchService collaborator at composition (JF-315 batch 6).
-    /// </summary>
-    private const int AlexaRequestTimeoutMs = 6000;
-
-    /// <summary>
     /// Fast-fail budget in milliseconds for the request-path session lookup (JF-477).
-    /// The lookup previously ran with the full <see cref="AlexaRequestTimeoutMs"/> budget;
+    /// The lookup previously ran with the full <see cref="RetryHelper.AlexaRequestTimeoutMs"/> budget;
     /// during a transient auth-DB hiccup it hung the whole 6s before the handler's first
     /// line could run, and the ~8s Alexa window expired with zero log output (live
     /// incident 2026-09-03 corr=40edec8a). A session lookup that cannot answer in 2s
@@ -212,23 +205,23 @@ public abstract class BaseHandler
         SessionManager = sessionManager;
         _config = config;
         Logger = loggerFactory.CreateLogger<BaseHandler>();
-        Search = new SearchService(config, Logger, AlexaRequestTimeoutMs);
+        Search = new SearchService(config, Logger, RetryHelper.AlexaRequestTimeoutMs);
         // The method group preserves virtual dispatch to the SendProgressiveResponse
         // overrides (the JF-501 test seam); mechanism documented at the builder's ctor.
         Launch = new PlaybackLaunchBuilder(config, Logger, SendProgressiveResponse);
-        CrossMedia = new CrossMediaFallback(config, Logger, Launch, AlexaRequestTimeoutMs);
+        CrossMedia = new CrossMediaFallback(config, Logger, Launch, RetryHelper.AlexaRequestTimeoutMs);
         // The lambda closes the generic fuzzy-miss decision block over BaseItem, the
         // one shape the playlist flow calls (the SendProgressiveResponse delegate-seam
         // precedent; the JF-408 decision block itself STAYS here, see AlbumPlayService).
         AlbumPlay = new AlbumPlayService(
-            config, Logger, Launch, Search, CrossMedia, AlexaRequestTimeoutMs,
+            config, Logger, Launch, Search, CrossMedia, RetryHelper.AlexaRequestTimeoutMs,
             (query, candidates, selector, matchExtractor, mediaType, locale, autoPlayFunc, user)
                 => HandleFuzzyMiss(query, candidates, selector, matchExtractor, mediaType, locale, autoPlayFunc, user: user));
         // Progress takes this handler's SessionManager (the progress writers report
         // through it) and the already-built Launch (launch-base reads).
         Progress = new ProgressReporter(sessionManager, config, Logger, Launch);
-        Radio = new RadioTrackSource(Logger, AlexaRequestTimeoutMs);
-        TvNextUp = new TvNextUpService(Logger, Search, Launch, AlexaRequestTimeoutMs);
+        Radio = new RadioTrackSource(Logger, RetryHelper.AlexaRequestTimeoutMs);
+        TvNextUp = new TvNextUpService(Logger, Search, Launch, RetryHelper.AlexaRequestTimeoutMs);
     }
 
     /// <summary>
@@ -941,6 +934,10 @@ public abstract class BaseHandler
 
     /// <summary>
     /// Execute a synchronous Jellyfin API call with retry logic and exponential backoff.
+    /// Thin delegation (JF-572) to the ONE shared request-budget entry point on
+    /// RetryHelper; kept as a protected member because every handler calls it by
+    /// this name. The budget defaults to the single-sourced
+    /// <see cref="RetryHelper.AlexaRequestTimeoutMs"/>.
     /// </summary>
     /// <typeparam name="T">The return type.</typeparam>
     /// <param name="operation">The synchronous operation to execute.</param>
@@ -948,9 +945,7 @@ public abstract class BaseHandler
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The result of the operation.</returns>
     protected Task<T> RetryAsync<T>(Func<T> operation, string operationName, CancellationToken cancellationToken = default)
-    {
-        return RetryHelper.ExecuteWithRetryAsync(operation, Logger, operationName, cancellationToken: cancellationToken, timeoutMs: AlexaRequestTimeoutMs);
-    }
+        => RetryHelper.ExecuteWithRequestBudgetAsync(operation, Logger, operationName, cancellationToken: cancellationToken);
 
     /// <summary>
     /// Result of a fuzzy match attempt with suggestion support.
