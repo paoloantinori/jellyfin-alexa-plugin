@@ -3,10 +3,10 @@ id: JF-576
 title: >-
   Radio pool is a pure genre-membership random draw: GenreSimilarityMap is dead
   code on FindRadioTracksAsync (JF-126 residual)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-16 11:01'
-updated_date: '2026-09-16 11:51'
+updated_date: '2026-09-16 12:49'
 labels:
   - search-quality
   - radio
@@ -36,6 +36,7 @@ Secondary finding from the JF-574 investigation (2026-09-16): the AutoPlay/radio
 
 ## Implementation Notes
 
+<!-- SECTION:NOTES:BEGIN -->
 <!-- SECTION:IMPLEMENTATION_NOTES:BEGIN -->
 2026-09-16: WIRE verdict chosen; the wiring was small and behavior-scoped.
 
@@ -46,3 +47,10 @@ Secondary finding from the JF-574 investigation (2026-09-16): the AutoPlay/radio
 - Files changed: Jellyfin.Plugin.AlexaSkill/Alexa/Util/RadioTrackSource.cs (QueryGenresAsync extraction + conditional expansion + ExpandGenres helper); Jellyfin.Plugin.AlexaSkill.Tests/Unit/RadioTrackSourceTests.cs (4 new tests, 2 characterization updates). Nothing committed; status left In Progress.
 - Known limitation: the map covers 20 broad English genre keys; an unmapped seed genre (e.g. a subgenre string like "vocal jazz") gets no expansion (no second query, pool unchanged). Deliberate: expanding with no data would be a no-op query. Enriching the map is a data task, not a code task.
 <!-- SECTION:IMPLEMENTATION_NOTES:END -->
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+FIXED (commit 3b9d9ea6). Verdict: WIRE, not delete. The previously-dead GenreSimilarityMap (JF-126 residual) now drives thin-result expansion in the radio pool: the primary seed-genre GetItemList (Limit 50, Random) runs first unchanged; only when it returns fewer than ExpansionThreshold (5) deduplicated items does ONE extra GetItemList run with the expanded genre filter (seeds lead the expanded FILTER array; result order stays Jellyfin's Random sort). Rich libraries never pay the second query. JF-126's small-result-set motivation is preserved as the TRIGGER, per its original intent. Review-driven hardening: both queries share ONE Alexa budget (the expansion receives only the time the primary left unspent and never fires below RetryHelper.DefaultMinOperationMs; the code-review major found two full 6s retry budgets back-to-back could reach ~12s and blow the ~8s window). ExpandGenres moved onto GenreSimilarityMap beside its constants (MaxExpandedResults doc corrected to genre-name semantics, belt-and-braces cap noted). Tests: 4 new red-first (2 failed pre-change), 2 characterization tests updated, item-seeded expansion assertion strengthened to Assert.Equal(2, queries.Count) + expanded-filter equality (review minor: the old Assert.True(Count >= 1) let a dropped expansion pass). Gates: /simplify 4-angle pass applied (merge-loop AddAll dedup, comment trims, relocation, history-sentence removal); code-review high via feature-dev:code-reviewer applied both findings. Suite 3980/3980 both TFMs, Release 0 warnings. Known bound: the map covers broad English genre keys only; an unmapped seed genre (e.g. 'vocal jazz') gets no expansion and today's pool (enriching the map is a data task, not code).
+<!-- SECTION:FINAL_SUMMARY:END -->
