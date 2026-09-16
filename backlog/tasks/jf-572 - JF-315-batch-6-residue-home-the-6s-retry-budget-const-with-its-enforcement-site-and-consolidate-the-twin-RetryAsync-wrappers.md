@@ -3,10 +3,10 @@ id: JF-572
 title: >-
   JF-315 batch-6 residue: home the 6s retry-budget const with its enforcement
   site and consolidate the twin RetryAsync wrappers
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-15 22:58'
-updated_date: '2026-09-16 15:52'
+updated_date: '2026-09-16 17:04'
 labels: []
 dependencies: []
 references:
@@ -72,3 +72,9 @@ EXECUTED (2026-09-16, implementation left uncommitted for the orchestrator's gat
 
 4. TDD + VERIFICATION. Tests written first (RED: CS0117 missing members), then green: RetryHelperTests gains AlexaRequestTimeoutMs_ValueIs6000, ExecuteWithRetryAsync_TimeoutDefaultsToSharedBudget + ExecuteWithRequestBudgetAsync_TimeoutDefaultsToSharedBudget (reflection on the compiled parameter defaults, both overloads), DefaultBudget_StopsRetries_WithoutExplicitTimeout (behavioral: delay 7000 > 6000 budget stops after 1 attempt, no delay waited), ExecuteWithRequestBudgetAsync_ExplicitBudget_StopsRetries (the override shape); the old NoTimeoutSpecified_RetriesAsBefore became ExplicitNullTimeout_DisablesBudget_RetriesAllAttempts (passes timeoutMs: null) because its premise (omitted timeoutMs = unbounded) is exactly what JF-572 inverted. Full suite: 3994/3994 PASSED on BOTH net9.0 and net10.0 (was 3939 pre-batch-wave; +5 here, rest from the later batches). `dotnet build -c Release`: 0 warnings, 0 errors. No test referenced the private wrapper internals, so no twin-test adjustments were needed.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+DONE (commit 5b9c81be). The 6s request budget is single-sourced as RetryHelper.AlexaRequestTimeoutMs=6000: the new ExecuteWithRequestBudgetAsync entry point carries the budget as a non-nullable int defaulting to the const (a request-path caller cannot silently drop it), AlexaSkillController's per-request CTS consumes the same const via TimeSpan.FromMilliseconds, and BaseHandler's private const is deleted (its composition pass-sites now read the RetryHelper const). All SIX former RetryAsync twins (BaseHandler protected ~65 call sites; SearchService, CrossMediaFallback, AlbumPlayService, TvNextUpService passing their composition-injected budget; RadioTrackSource keeping the JF-576 remainder-budget override as a delegation parameter) are now zero-logic delegations. DESIGN DECISION from the gates: the raw ExecuteWithRetryAsync overloads KEEP their pre-JF-572 omitted-parameter semantics (null = unbounded); the implementing agent had inverted their default to the const, and both /simplify reviews plus the code review converged that the inversion is a second mechanism for one policy (the entry point's type-carried guarantee already covers the request path, and the inversion forced three background callers to opt out of a default they never asked for). The three background pins were removed (plain calls again; unbounded by design); tests updated: overload defaults pinned null by reflection, entry-point default pinned to the const, one redundant behavioral default test dropped, JF-359 budget invariant test unchanged. Remaining accepted residue (noted by /simplify, kept deliberately): the five collaborators' requestTimeoutMs ctor seam stays (every construction passes 6000 today; the seam is the JF-315 composition idiom and RadioTrackSource-style remainder budgets are method-level). Gates: /simplify consolidated 4-angle pass (two agents) applied the reversion + wrapper-doc dedup + comment trims; code-review high via feature-dev:code-reviewer verified every call site budgeted (no caller lost its budget in the reversion; StartSessionLookup keeps its explicit 2000; LwaRefreshToken keeps 15000) and its doc-rot findings (const doc, both overload param docs, entry-point outer-wall clause, one test comment) applied. Suite 3993/3993 both TFMs, Release 0 warnings.
+<!-- SECTION:FINAL_SUMMARY:END -->
