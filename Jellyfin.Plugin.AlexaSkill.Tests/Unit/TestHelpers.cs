@@ -657,8 +657,11 @@ internal sealed class HandlerTestFixture
 /// JF-467: the ONE shared-gate probe handler. History: a private copy lived in
 /// CrossMediaFallbackMusicGateTests at HEAD and was hoisted here (plus the album
 /// cascade accessor) so MusicPrimaryPathGateTests could share it. Minimal concrete
-/// BaseHandler exposing the protected shared cross-media gates for direct testing
-/// (same pattern as ContentAccessTests' TestMediaTypeHandler).
+/// BaseHandler exposing the shared cross-media gates for direct testing (same
+/// pattern as ContentAccessTests' TestMediaTypeHandler): the album cascade is
+/// still a protected BaseHandler member, while the entity fallback moved to the
+/// CrossMediaFallback collaborator (JF-315 batch 7) and is reached through the
+/// composed <c>CrossMedia</c> property.
 /// </summary>
 internal sealed class SharedGateProbeHandler : BaseHandler
 {
@@ -683,7 +686,7 @@ internal sealed class SharedGateProbeHandler : BaseHandler
         IUserDataManager userDataManager,
         string logLabel,
         CancellationToken cancellationToken)
-        => TryEntityFallbackAsync(
+        => CrossMedia.TryEntityFallbackAsync(
             slotText, jellyfinUser, user, session, context, locale,
             libraryManager, userDataManager, null, null, logLabel, cancellationToken);
 

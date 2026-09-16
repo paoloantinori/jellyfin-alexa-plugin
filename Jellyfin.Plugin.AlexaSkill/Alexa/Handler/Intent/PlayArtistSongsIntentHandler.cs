@@ -488,7 +488,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             // the song with a FoundSongInstead announcement. Returns null when the
             // fallback does not apply (guard/miss/warming), leaving the clean
             // NotFoundArtist below.
-            SkillResponse? songFallback = TrySongFallback(
+            SkillResponse? songFallback = CrossMedia.TrySongFallback(
                 musician, user, session, context, locale, _songNgramIndex, _libraryManager, "PlayArtistSongs", cancellationToken);
             if (songFallback != null)
             {
@@ -684,7 +684,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             User = jellyfinUser,
             Recursive = true,
             IncludeItemTypes = new[] { BaseItemKind.Audio },
-            OrderBy = PopularitySort,
+            OrderBy = CrossMediaFallback.PopularitySort,
             DtoOptions = new DtoOptions(true),
             ArtistIds = new[] { artists[0].Id },
             Limit = ProgressiveQueueConstants.GetInitialFetchSize()
@@ -759,7 +759,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                     StartIndex = artistItems.Count,
                     TotalCount = int.MaxValue,
                     UserId = jellyfinUser!.Id,
-                    SortOrder = PopularitySort,
+                    SortOrder = CrossMediaFallback.PopularitySort,
                     Shuffle = _config.ShuffleArtistSongs
                 });
         }

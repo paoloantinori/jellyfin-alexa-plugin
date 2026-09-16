@@ -476,7 +476,7 @@ public class PlayMoodMusicIntentHandler : BaseHandler
 
         if (foundItems.Count == 0)
         {
-            SkillResponse? artistFallback = await TryEntityFallbackAsync(
+            SkillResponse? artistFallback = await CrossMedia.TryEntityFallbackAsync(
                 mood, jellyfinUser!, user, session, context, locale,
                 _libraryManager, _userDataManager, _queueManager, _artistIndex,
                 "PlayMoodMusic artist fallback", cancellationToken).ConfigureAwait(false);

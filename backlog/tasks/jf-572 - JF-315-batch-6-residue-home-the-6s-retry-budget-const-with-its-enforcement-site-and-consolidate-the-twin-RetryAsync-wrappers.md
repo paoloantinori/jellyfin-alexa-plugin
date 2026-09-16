@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-15 22:58'
+updated_date: '2026-09-16 00:39'
 labels: []
 dependencies: []
 references:
@@ -13,6 +14,7 @@ references:
   - Jellyfin.Plugin.AlexaSkill/Alexa/Handler/BaseHandler.cs
   - Jellyfin.Plugin.AlexaSkill/Alexa/Util/SearchService.cs
   - Jellyfin.Plugin.AlexaSkill/Controller/AlexaSkillController.cs
+  - Jellyfin.Plugin.AlexaSkill/Alexa/Handler/CrossMediaFallback.cs
 priority: low
 ---
 
@@ -21,11 +23,13 @@ priority: low
 <!-- SECTION:DESCRIPTION:BEGIN -->
 JF-315 batch 6 extracted SearchService and left two deliberate-but-temporary seams that this task consolidates (both flagged by the batch-6 /simplify altitude review, deferred there to keep the extraction a pure verbatim move):
 
-1. THE TWIN RetryAsync WRAPPERS. BaseHandler.RetryAsync (Alexa/Handler/BaseHandler.cs, ~line 1267) and SearchService.RetryAsync (Alexa/Util/SearchService.cs, tail) are now two identical private wrappers delegating to RetryHelper.ExecuteWithRetryAsync with the same 6s budget. This mirrors JF-570 (the twin SortByRating overloads split across BaseHandler and ResumeMath by the same batch-2 verbatim-move discipline). Consolidation direction: the shared wrapper belongs with the budget's true owner (see item 2) or on RetryHelper itself, with BaseHandler and SearchService keeping only a thin call.
+1. THE TWIN RetryAsync WRAPPERS. BaseHandler.RetryAsync (Alexa/Handler/BaseHandler.cs, ~line 1267) and SearchService.RetryAsync (Alexa/Util/SearchService.cs, tail) are now identical private wrappers delegating to RetryHelper.ExecuteWithRetryAsync with the same 6s budget. This mirrors JF-570 (the twin SortByRating overloads split across BaseHandler and ResumeMath by the same batch-2 verbatim-move discipline). Consolidation direction: the shared wrapper belongs with the budget's true owner (see item 2) or on RetryHelper itself, with BaseHandler and SearchService keeping only a thin call.
 
-2. THE BUDGET CONST'S TRUE HOME. AlexaRequestTimeoutMs is a private const on BaseHandler (6000, documented as matching AlexaSkillController's CancellationTokenSource(TimeSpan.FromSeconds(6)) at Controller/AlexaSkillController.cs ~line 399). Batch 6 passed it into SearchService at composition (the PlaybackLaunchBuilder delegate-seam precedent) so Util holds no Handler-layer reference, but the linkage is still by convention: the controller hardcodes its own 6 and reads no const. The review's recommendation: home the budget as a public const on RetryHelper (whose test suite already names the budget invariant, see RetryHelperTests.Sync_AlwaysTransient_StopsWithinTimeoutBudget), have RetryHelper.ExecuteWithRetryAsync's timeoutMs default to it, and make AlexaSkillController's CTS consume it; BaseHandler's const then aliases or deletes.
+   SCOPE EXTENSION (JF-315 batch 7, 2026-09-16, from the batch-7 /simplify review): batch 7's CrossMediaFallback extraction added a THIRD identical RetryAsync twin (Alexa/Handler/CrossMediaFallback.cs, tail) plus a private Shuffle twin (verbatim Fisher-Yates copy of BaseHandler.Shuffle, needed by the moved BuildArtistSongsResponseAsync; its consolidation belongs with the cluster-H Shuffle family rather than with the RetryAsync work). The consolidation above must cover all THREE RetryAsync wrappers; the Shuffle twin rides the cluster-H extraction per its own doc comment.
 
-Context you need: the budget is behavior-load-bearing (it is the mechanism that keeps slow play-path queries inside Alexa's ~8s response window, see the repo CLAUDE.md coverage caveat), so any change must keep BOTH the value (6000) and the single-source property. The suite is the safety net (~3919 facts both TFMs; never dotnet test --no-build after changes).
+2. THE BUDGET CONST'S TRUE HOME. AlexaRequestTimeoutMs is a private const on BaseHandler (6000, documented as matching AlexaSkillController's CancellationTokenSource(TimeSpan.FromSeconds(6)) at Controller/AlexaSkillController.cs ~line 399). Batch 6 passed it into SearchService at composition (the PlaybackLaunchBuilder delegate-seam precedent) so Util holds no Handler-layer reference, but the linkage is still by convention: the controller hardcodes its own 6 and reads no const. Batch 7 composition-passes the same const into CrossMediaFallback the same way. The review's recommendation: home the budget as a public const on RetryHelper (whose test suite already names the budget invariant, see RetryHelperTests.Sync_AlwaysTransient_StopsWithinTimeoutBudget), have RetryHelper.ExecuteWithRetryAsync's timeoutMs default to it, and make AlexaSkillController's CTS consume it; BaseHandler's const then aliases or deletes.
+
+Context you need: the budget is behavior-load-bearing (it is the mechanism that keeps slow play-path queries inside Alexa's ~8s response window, see the repo CLAUDE.md coverage caveat), so any change must keep BOTH the value (6000) and the single-source property. The suite is the safety net (~3939 facts both TFMs; never dotnet test --no-build after changes).
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done

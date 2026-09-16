@@ -314,7 +314,7 @@ public class PlaySongIntentHandler : BaseHandler
             // (on TOKENIZED words, so locale articles no longer count against the limit)
             // and the acceptance thresholds (phonetic matcher + the JF-363
             // Confirm/AutoServe band for sub-strict matches).
-            SkillResponse? artistFallback = await TryEntityFallbackAsync(
+            SkillResponse? artistFallback = await CrossMedia.TryEntityFallbackAsync(
                 songQuery, jellyfinUser!, user, session, context, locale,
                 _libraryManager, _userDataManager, _queueManager, _artistIndex,
                 "PlaySong", cancellationToken,
@@ -456,7 +456,7 @@ public class PlaySongIntentHandler : BaseHandler
     /// <summary>
     /// Fallback when the song slot contains a generic music word (e.g. "musica"/"music")
     /// but the musician slot has a valid artist. Plays the artist's songs instead of
-    /// returning "not found". Delegates to <see cref="BaseHandler.BuildArtistSongsResponseAsync"/>.
+    /// returning "not found". Delegates to <see cref="CrossMediaFallback.BuildArtistSongsResponseAsync"/>.
     /// </summary>
     private Task<SkillResponse> PlayArtistSongsFallback(
         Guid artistId,
@@ -469,7 +469,7 @@ public class PlaySongIntentHandler : BaseHandler
         CancellationToken cancellationToken,
         string? announcement = null)
     {
-        return BuildArtistSongsResponseAsync(
+        return CrossMedia.BuildArtistSongsResponseAsync(
             artistId, artistName, jellyfinUser, user, session, context, locale,
             _libraryManager, _userDataManager, _queueManager,
             "PlaySong fallback",

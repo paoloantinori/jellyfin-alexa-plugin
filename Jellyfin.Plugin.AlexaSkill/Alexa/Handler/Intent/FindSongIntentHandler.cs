@@ -426,7 +426,7 @@ public class FindSongIntentHandler : BaseHandler
         }
 
         string artistDisplay = picked.ArtistName ?? sessionData.ArtistName ?? "Unknown";
-        return BuildSingleSongResponse(
+        return CrossMedia.BuildSingleSongResponse(
             item, user, session, context, locale,
             announcement: ResponseStrings.Get("FindSongFoundOne", locale, item.Name, artistDisplay));
     }
@@ -550,7 +550,7 @@ public class FindSongIntentHandler : BaseHandler
             // within that artist's catalog, not a fresh artist query.
             if (!sessionData.HasResolvedArtist)
             {
-                SkillResponse? artistFallback = await TryEntityFallbackAsync(
+                SkillResponse? artistFallback = await CrossMedia.TryEntityFallbackAsync(
                     sessionData.Keywords ?? string.Empty, jellyfinUser!, user, session, context, locale,
                     _libraryManager, _userDataManager, _queueManager, _artistIndex,
                     "FindSong artist fallback", cancellationToken).ConfigureAwait(false);
@@ -587,7 +587,7 @@ public class FindSongIntentHandler : BaseHandler
         SkillResponse FoundOne(BaseItem song, string announcementKey)
         {
             string artistDisplay = GetItemArtistName(song) ?? sessionData.ArtistName ?? "Unknown";
-            return BuildSingleSongResponse(
+            return CrossMedia.BuildSingleSongResponse(
                 song, user, session, context, locale,
                 announcement: ResponseStrings.Get(announcementKey, locale, song.Name, artistDisplay));
         }

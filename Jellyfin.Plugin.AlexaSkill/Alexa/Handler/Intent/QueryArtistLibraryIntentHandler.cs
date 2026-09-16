@@ -134,7 +134,7 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
             // JF-440 sibling coverage: the same NLU coin flip that feeds
             // PlayArtistSongs feeds this intent's musician slot ('cosa abbiamo di
             // sugar free jazz'); serve the song instead of a dead-end not-found.
-            SkillResponse? songFallback = TrySongFallback(
+            SkillResponse? songFallback = CrossMedia.TrySongFallback(
                 musician, user, session, context, locale, _songNgramIndex, _libraryManager, "QueryArtistLibrary", cancellationToken);
             if (songFallback != null)
             {
@@ -212,7 +212,7 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
             User = jellyfinUser,
             Recursive = true,
             ArtistIds = new[] { artistId },
-            OrderBy = PopularitySort,
+            OrderBy = CrossMediaFallback.PopularitySort,
             DtoOptions = new DtoOptions(true)
         };
         ApplyLibraryFilter(query, user, _libraryManager);

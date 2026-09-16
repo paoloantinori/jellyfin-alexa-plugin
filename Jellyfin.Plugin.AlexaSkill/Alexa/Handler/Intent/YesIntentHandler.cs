@@ -275,7 +275,7 @@ public class YesIntentHandler : BaseHandler
     {
         // JF-440: the ONE single-song play shape (adds the stale-continuation clear
         // the other sites already had).
-        return BuildSingleSongResponse(song, user, session, context, locale);
+        return CrossMedia.BuildSingleSongResponse(song, user, session, context, locale);
     }
 
     private SkillResponse PlayAlbum(BaseItem album, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Entities.User user, SessionInfo session, string locale, Context? context)

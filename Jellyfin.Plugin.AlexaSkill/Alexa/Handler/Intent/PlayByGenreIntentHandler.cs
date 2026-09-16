@@ -142,7 +142,7 @@ public class PlayByGenreIntentHandler : BaseHandler
             // genre. Mirror the PlayMoodMusic recovery: try the shared cross-media
             // artist fallback (word-count guard + threshold inside); on a miss fall
             // through to the genre not-found unchanged.
-            SkillResponse? artistFallback = await TryEntityFallbackAsync(
+            SkillResponse? artistFallback = await CrossMedia.TryEntityFallbackAsync(
                 genreSlot, jellyfinUser!, user, session, context, locale,
                 _libraryManager, _userDataManager, _queueManager, _artistIndex,
                 "PlayByGenre artist fallback", cancellationToken).ConfigureAwait(false);

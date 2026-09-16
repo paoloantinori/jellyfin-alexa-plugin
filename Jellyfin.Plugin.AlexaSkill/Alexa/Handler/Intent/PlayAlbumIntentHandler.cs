@@ -343,7 +343,7 @@ public class PlayAlbumIntentHandler : BaseHandler
             // offer. Scoped to the album-by-artist resolution: an album TITLE
             // present keeps today's behavior unchanged.
             if (matchedArtist != null
-                && !PassesArtistMatchAcceptance(matchedArtist, musician!, user, pinnedArtistIndex, out int acceptanceScore))
+                && !CrossMedia.PassesArtistMatchAcceptance(matchedArtist, musician!, user, pinnedArtistIndex, out int acceptanceScore))
             {
                 Logger.LogInformation(
                     "PlayAlbum: artist match '{Artist}' for musician='{Musician}' fails the fuzzy/phonetic tier acceptance (word-coverage free pass, score={Score} below {Threshold}), refusing the album-by-artist auto-play (JF-471)",
@@ -505,7 +505,7 @@ public class PlayAlbumIntentHandler : BaseHandler
             // "Waltz for Koop" next at 61, above threshold, previously lost). NOTE: a
             // multi-match here still auto-plays the best; real disambiguation for
             // different-name collisions (several "Greatest Hits") is tracked in JF-341.
-            var fuzzyMatch = FindBestNonEmbeddedMatch(album, allAlbums, a => a.Name!, FuzzyMatcher.GetDefaultThreshold(user));
+            var fuzzyMatch = CrossMedia.FindBestNonEmbeddedMatch(album, allAlbums, a => a.Name!, FuzzyMatcher.GetDefaultThreshold(user));
             if (fuzzyMatch.HasValue)
             {
                 Logger.LogInformation(
@@ -530,7 +530,7 @@ public class PlayAlbumIntentHandler : BaseHandler
             // Search order is unchanged (deliberate, JF-446 finding 3): the album-title
             // search above runs first, so a self-titled album still preempts the artist
             // fallback; the artist answer only plays on a title miss.
-            SkillResponse? artistFallback = await TryEntityFallbackAsync(
+            SkillResponse? artistFallback = await CrossMedia.TryEntityFallbackAsync(
                 album!, jellyfinUser!, user, session, context, locale,
                 _libraryManager, _userDataManager, _queueManager, _artistIndex,
                 "PlayAlbum", cancellationToken,
