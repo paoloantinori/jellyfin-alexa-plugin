@@ -4,10 +4,10 @@ title: >-
   Restart wipes the session queue the NearlyFinished resolver reads: false
   queue-exhaustion triggers AutoPlay radio over a surviving persisted device
   queue (Norah Jones incident)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-16 05:53'
-updated_date: '2026-09-16 09:21'
+updated_date: '2026-09-16 11:44'
 labels:
   - bug
   - playback
@@ -47,3 +47,9 @@ TESTS (red-first, TDD): new Jellyfin.Plugin.AlexaSkill.Tests/Handler/PlaybackRes
 
 SECONDARY INVESTIGATION (pool quality) - FINDING: the task premise is WRONG; there is NO ListenBrainz (or any) similarity provider and NO popularity fallback in this codebase (repo-wide grep for listenbrainz/brainz/lastfm: zero hits in source). The radio pool is a PURE GENRE-MEMBERSHIP RANDOM DRAW: RadioTrackSource.FindRadioTracksAsync (Alexa/Util/RadioTrackSource.cs:54-66) delegates to FindRadioTracksByGenreAsync (RadioTrackSource.cs:83-127), which runs ONE Jellyfin query with Genres = the seed item's Genres array, IncludeItemTypes=Audio, Limit=50, OrderBy=(Random, Ascending) (lines 100-115); callers (PlaybackNearlyFinishedEventHandler.cs:588 and :650, PlayRadioIntentHandler.cs:199) then ShuffleAndCap to 15/20 (Shuffler.ShuffleAndCap). So the White Stripes/DMB/Placebo/Cranberries pool for Norah Jones came from the GENRE TAGS on the seed track (whatever genres the user's library tags carry, e.g. a Rock/Pop-ish tag on a Norah Jones item) matched against every track sharing that tag in the library, randomly drawn and capped. Pool quality is bounded by (1) the seed item's genre tags (a Norah Jones track tagged Rock yields rock radio) and (2) library breadth. The static GenreSimilarityMap (Alexa/Music/GenreSimilarityMap.cs, genre-to-related-genres expansion) is DEAD CODE on this path: GetSimilarGenres has zero production callers (test-only, GenreSimilarityMapTests). If pool quality matters, the lever is either wiring GenreSimilarityMap into the seed genre expansion (cheap, static map) or an actual similarity provider - a separate task, not this bug.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+FIXED (commit afb8b9b2). Root cause: a restart (DLL hot-swap or server recycle) wipes session.NowPlayingQueue while the Echo keeps playing the stream the old process enqueued; PlaybackNearlyFinished read the empty session queue as queue exhaustion and PostPlay AutoPlay (the user's setting) replaced the surviving 5-track Norah Jones artist queue with a 15-track genre radio pool (live incident 2026-09-16 07:28). Fix: TryRehydrateSessionQueueFromDevice in PlaybackNearlyFinishedEventHandler.HandleAsync, placed after the sleep-timer check and before the JF-390 precompute gate (placement REQUIRED: CachedNextStillFollowsCurrent validates against the rehydrated queue, and the precompute cache is in-memory so the same restart wiped it). Two-leg coherence guard, both required: (1) session queue EMPTY, so a live playback's own queue is never extended by an older persisted queue; (2) the persisted device queue CONTAINS the AudioPlayer token parsed through StreamTokenCodec (composite sleep tokens resolve), so a stale queue from a different playback cannot hijack. Membership, not the persisted CurrentIndex pointer, is the signal (pointers lag across restarts). Rehydration mirrors via ProgressReporter.MirrorQueueToSession, so the queue's physical order including shuffle is preserved. Tests: PlaybackRestartRehydrationTests, 3 scenarios, red-first (test 1 failed pre-fix exactly like the incident: radio token + RadioModeState instead of tracks[1]). Gates: /simplify 4-angle pass applied 3 cleanups (comment dedup, currentToken param folded in, TestHelpers.CreateSong genres overload replacing the 4th reflection factory; efficiency CLEAN); code-review high ran twice (adversarial general-purpose pass: no blockers/majors, applied the ItemIds.ToList snapshot and removed the dead currentId param; feature-dev:code-reviewer pass on the committed state: CLEAN, race with SetQueue verified safe, response shapes unchanged, tests non-vacuous). Suite 3976/3976 both TFMs, Release 0 warnings. Accepted trade-off documented: an empty-session single-song replay whose token sits in the stale persisted queue rehydrates the old queue behind it (low probability, membership is the best available signal). Follow-ups filed: JF-576 (radio pool is a pure genre draw, GenreSimilarityMap dead on that path) and JF-577 (hoist the guard and adopt in Next/Previous/ListQueue/AddToQueue/PlaybackStarted precompute).
+<!-- SECTION:FINAL_SUMMARY:END -->
