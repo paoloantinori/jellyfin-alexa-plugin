@@ -203,7 +203,7 @@ public class AplUserEventHandler : BaseHandler
                 locale,
                 Launch.GetVideoAppLaunchUrl(item, user),
                 item.Name,
-                BuildVideoLaunchSpeech(item, locale, _userDataManager, jellyfinUser, Launch.GetAnnounceNowPlaying(user))));
+                Launch.BuildVideoLaunchSpeech(item, locale, _userDataManager, jellyfinUser, Launch.GetAnnounceNowPlaying(user))));
         }
 
         // Folder items (audiobooks, music folders, etc.) need to be resolved to their

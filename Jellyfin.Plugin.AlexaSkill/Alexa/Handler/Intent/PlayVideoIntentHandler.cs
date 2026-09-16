@@ -214,7 +214,7 @@ public class PlayVideoIntentHandler : BaseHandler
             locale,
             Launch.GetVideoAppLaunchUrl(video, user),
             video.Name,
-            BuildVideoLaunchSpeech(video, locale, resumeTicks, Launch.GetAnnounceNowPlaying(user))).ConfigureAwait(false);
+            Launch.BuildVideoLaunchSpeech(video, locale, resumeTicks, Launch.GetAnnounceNowPlaying(user))).ConfigureAwait(false);
     }
 
     /// <summary>

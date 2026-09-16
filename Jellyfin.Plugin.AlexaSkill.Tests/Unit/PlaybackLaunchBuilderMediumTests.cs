@@ -8,7 +8,6 @@ using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Library;
-using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
 using Audio = MediaBrowser.Controller.Entities.Audio.Audio;
@@ -37,14 +36,13 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 public class PlaybackLaunchBuilderMediumTests : PluginTestBase
 {
     private readonly PluginConfiguration _config = new();
-    private readonly ILoggerFactory _loggerFactory = LoggerFactory.Create(b => { });
     private readonly PlaybackLaunchBuilder _builder;
 
     public PlaybackLaunchBuilderMediumTests()
     {
         // The delegate stands in for BaseHandler.SendProgressiveResponse (the JF-501
         // virtual seam); no member this suite exercises sends a progressive response.
-        _builder = new PlaybackLaunchBuilder(_config, _loggerFactory.CreateLogger<PlaybackLaunchBuilder>(), (_, _, _) => System.Threading.Tasks.Task.FromResult(true));
+        _builder = TestHelpers.CreateLaunchBuilder(_config);
     }
 
     /// <summary>

@@ -22,7 +22,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 
 /// <summary>
 /// The JF-315 playback-launch collaborator (extracted from BaseHandler; batch 4
-/// 2026-09-15, VideoApp launch family batch 5 same day): everything that builds a
+/// 2026-09-15, VideoApp launch family batch 5 same day, video-launch announce
+/// speech batch 9): everything that builds a
 /// launch response for an item - the stream/image URL vocabulary derived from plugin
 /// config, the <see cref="AudioLaunchSource"/> resolution family (static-vs-transcode
 /// routing, resume rebasing, the launch-scope reads), the AudioPlayer.Play response
@@ -31,7 +32,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// response (native controls) including its screenless degradation back to
 /// AudioPlayer, the VideoApp LAUNCH family (the codec-routed movie/episode URL, the
 /// launch response chokepoints with their capability gates, the live-TV channel
-/// launch, the audiobook resume, and the JF-501 progressive announce), the
+/// launch, the audiobook resume, the JF-501 progressive announce, and the
+/// resume-aware announce speech pair that feeds it), the
 /// JF-564 medium classification the transport intents answer from, and the APL
 /// now-playing attacher that rides play responses.
 /// STATELESS by construction (readonly config + logger + the composition-time
@@ -716,7 +718,7 @@ public sealed class PlaybackLaunchBuilder
     /// Gets the effective "speak the now-playing announce on MUSIC plays" preference for a user,
     /// falling back to the global <see cref="Configuration.PluginConfiguration.AnnounceAudioPlays"/>
     /// default (false, i.e. audio plays are silent by default, JF-352.4). Per-user setting takes
-    /// precedence. Video/book launches use the GetAnnounceNowPlaying resolver in BaseHandler instead.
+    /// precedence. Video/book launches use the <see cref="GetAnnounceNowPlaying"/> resolver instead.
     /// </summary>
     private bool GetAnnounceAudioPlays(Entities.User? user)
     {
@@ -835,6 +837,40 @@ public sealed class PlaybackLaunchBuilder
         // shape) instead of being lost.
         bool sent = await _sendProgressiveResponse(context, request, progressiveSpeech).ConfigureAwait(false);
         return sent ? null : announce;
+    }
+
+    /// <summary>
+    /// Resume-aware video-launch announce: "Resuming X from Y" when the user has playback
+    /// progress, else the now-playing announce. VideoApp.Launch cannot honor the offset, so
+    /// this only informs the user where they left off (playback still starts from the beginning).
+    /// The fresh-play announce (resumeTicks == 0) is suppressed when announceOn is false; the
+    /// resume announce is always spoken (position info, not the now-playing readout).
+    /// Moved here from BaseHandler (JF-315 batch 9): the announce speech pair the
+    /// launch chokepoints consume (progressively via
+    /// <see cref="SpeakVideoLaunchAnnounceAsync"/> on intent/launch paths). Instance
+    /// (not static) to match the announce family's shape; the bodies use no instance state.
+    /// </summary>
+    internal IOutputSpeech? BuildVideoLaunchSpeech(BaseItem item, string locale, long resumeTicks, bool announceOn)
+    {
+        if (resumeTicks > 0)
+        {
+            return new PlainTextOutputSpeech(ResponseStrings.Get("ResumingVideo", locale, item.Name, ResumeMath.FormatPosition(resumeTicks)));
+        }
+
+        return SpeechBuilder.BuildNowPlayingSpeech(item.Name, locale, announceOn);
+    }
+
+    /// <summary>
+    /// Resume-aware video-launch announce that fetches the playback position itself. Falls back
+    /// to the (gated) now-playing announce if the deps are unavailable.
+    /// Moved here from BaseHandler (JF-315 batch 9) with its ticks sibling.
+    /// </summary>
+    internal IOutputSpeech? BuildVideoLaunchSpeech(BaseItem item, string locale, IUserDataManager? userDataManager, Jellyfin.Database.Implementations.Entities.User? jellyfinUser, bool announceOn)
+    {
+        long resumeTicks = (userDataManager is not null && jellyfinUser is not null)
+            ? (userDataManager.GetUserData(jellyfinUser, item)?.PlaybackPositionTicks ?? 0)
+            : 0;
+        return BuildVideoLaunchSpeech(item, locale, resumeTicks, announceOn);
     }
 
     /// <summary>

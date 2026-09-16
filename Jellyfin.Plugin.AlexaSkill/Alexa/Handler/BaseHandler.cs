@@ -161,9 +161,11 @@ public abstract class BaseHandler
 
     /// <summary>
     /// The playback-launch collaborator (JF-315 batch 4 + the batch-5 VideoApp launch
-    /// family): stream/image URL building, AudioLaunchSource resolution, the
+    /// family + the batch-9 announce speech pair): stream/image URL building,
+    /// AudioLaunchSource resolution, the
     /// AudioPlayer.Play / VideoApp-for-audio response chokepoints, and the VideoApp
-    /// launch family (launch builders, medium classification, progressive announce),
+    /// launch family (launch builders, medium classification, progressive announce,
+    /// the resume-aware video-launch announce speech),
     /// extracted from this class. COMPOSITION, not per-handler
     /// injection: each handler constructs its own instance here so the 61 handler
     /// ctors stay untouched; consume it via this inherited get-only property (AC#6's
@@ -861,35 +863,6 @@ public abstract class BaseHandler
             Logger.LogWarning(ex, "Playback composition guard: runtime lookup failed for item {ItemId}; guard skipped", itemId);
             return null;
         }
-    }
-
-    /// <summary>
-    /// Resume-aware video-launch announce: "Resuming X from Y" when the user has playback
-    /// progress, else the now-playing announce. VideoApp.Launch cannot honor the offset, so
-    /// this only informs the user where they left off (playback still starts from the beginning).
-    /// The fresh-play announce (resumeTicks == 0) is suppressed when announceOn is false; the
-    /// resume announce is always spoken (position info, not the now-playing readout).
-    /// </summary>
-    protected static IOutputSpeech? BuildVideoLaunchSpeech(BaseItem item, string locale, long resumeTicks, bool announceOn)
-    {
-        if (resumeTicks > 0)
-        {
-            return new PlainTextOutputSpeech(ResponseStrings.Get("ResumingVideo", locale, item.Name, ResumeMath.FormatPosition(resumeTicks)));
-        }
-
-        return SpeechBuilder.BuildNowPlayingSpeech(item.Name, locale, announceOn);
-    }
-
-    /// <summary>
-    /// Resume-aware video-launch announce that fetches the playback position itself. Falls back
-    /// to the (gated) now-playing announce if the deps are unavailable.
-    /// </summary>
-    protected static IOutputSpeech? BuildVideoLaunchSpeech(BaseItem item, string locale, IUserDataManager? userDataManager, Jellyfin.Database.Implementations.Entities.User? jellyfinUser, bool announceOn)
-    {
-        long resumeTicks = (userDataManager is not null && jellyfinUser is not null)
-            ? (userDataManager.GetUserData(jellyfinUser, item)?.PlaybackPositionTicks ?? 0)
-            : 0;
-        return BuildVideoLaunchSpeech(item, locale, resumeTicks, announceOn);
     }
 
     /// <summary>
@@ -1949,7 +1922,7 @@ public abstract class BaseHandler
         IOutputSpeech? speech;
         if (resumeTicks > 0)
         {
-            speech = BuildVideoLaunchSpeech(episode, locale, resumeTicks, Launch.GetAnnounceNowPlaying(user));
+            speech = Launch.BuildVideoLaunchSpeech(episode, locale, resumeTicks, Launch.GetAnnounceNowPlaying(user));
         }
         else
         {

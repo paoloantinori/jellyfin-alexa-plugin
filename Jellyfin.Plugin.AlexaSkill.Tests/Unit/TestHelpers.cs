@@ -14,6 +14,7 @@ using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Entities;
 using Jellyfin.Plugin.AlexaSkill.Lwa;
@@ -56,6 +57,17 @@ internal static class TestHelpers
     /// </summary>
     internal static Jellyfin.Database.Implementations.Entities.User CreateJellyfinUser()
         => new("testuser", "test", "test");
+
+    /// <summary>
+    /// The ONE direct-construction PlaybackLaunchBuilder factory for the suites that
+    /// test builder members without a handler host: the caller's config (suites mutate
+    /// it before construction), an empty logger, and the truthful progressive-send
+    /// delegate stand-in (the JF-501 virtual seam; no member these suites exercise
+    /// sends a progressive response). Hoisted here on the third identical private
+    /// construction (the CreateSong convention, JF-315 batch 9).
+    /// </summary>
+    internal static PlaybackLaunchBuilder CreateLaunchBuilder(PluginConfiguration config)
+        => new(config, LoggerFactory.Create(b => { }).CreateLogger<PlaybackLaunchBuilder>(), (_, _, _) => Task.FromResult(true));
 
     internal static DeviceToken CreateTestDeviceToken(
         string accessToken = "access",

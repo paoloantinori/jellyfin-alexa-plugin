@@ -469,7 +469,7 @@ public class SearchMediaIntentHandler : BaseHandler
                 locale,
                 Launch.GetVideoAppLaunchUrl(item, user),
                 item.Name,
-                BuildVideoLaunchSpeech(item, locale, _userDataManager, jellyfinUser, Launch.GetAnnounceNowPlaying(user))).ConfigureAwait(false);
+                Launch.BuildVideoLaunchSpeech(item, locale, _userDataManager, jellyfinUser, Launch.GetAnnounceNowPlaying(user))).ConfigureAwait(false);
         }
 
         return Launch.BuildAudioPlayerResponse(
