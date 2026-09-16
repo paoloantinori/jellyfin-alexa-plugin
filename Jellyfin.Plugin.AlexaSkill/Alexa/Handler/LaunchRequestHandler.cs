@@ -12,6 +12,7 @@ using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -242,10 +243,30 @@ public class LaunchRequestHandler : BaseHandler
 
         var (jellyfinUser, _) = ResolveJellyfinUser(_userManager, session.UserId, locale);
         long positionTicks = 0;
+        UserItemData? userData = null;
         if (jellyfinUser != null)
         {
-            UserItemData? userData = _userDataManager.GetUserData(jellyfinUser, item);
+            userData = _userDataManager.GetUserData(jellyfinUser, item);
             positionTicks = userData?.PlaybackPositionTicks ?? 0;
+        }
+
+        // JF-581: the live 12.1 incident proved the server-side UserData writes never
+        // land for Alexa sessions (PlaybackStopped reported the real ticks, the store
+        // read 0), so a 0 here is untrustworthy. Fall back to the plugin's own
+        // per-item position store, written unconditionally by PlaybackStopped and
+        // immune to that loss. A PLAYED item is the exception: completion legitimately
+        // resets UserData to 0 (Played=true), and the store still holds an older
+        // mid-listen position that must not resurrect over the finished listen.
+        if (positionTicks <= 0 && userData?.Played != true)
+        {
+            long? storedTicks = TryGetItemPositionStateTicks(lastPlayedItemId, context);
+            if (storedTicks != null)
+            {
+                positionTicks = storedTicks.Value;
+                Logger.LogInformation(
+                    "LaunchResume: device last-played item {ItemId} UserData position was 0 (server-side write loss); seeded from ItemPositionState: {Ticks} ticks",
+                    lastPlayedItemId, storedTicks.Value);
+            }
         }
 
         // For audiobooks with native controls, prefer the segment-based tracker position
@@ -325,6 +346,15 @@ public class LaunchRequestHandler : BaseHandler
     private SkillResponse? BuildScreenlessAudioFallbackOffer(
         SessionInfo session, Entities.User user, string locale, Context context)
     {
+        // JF-581: run the plugin-owned stored-position scan BEFORE the user resolve
+        // gate: the scan needs only the device queue, so a broken Jellyfin user
+        // resolution must not decline an offer the store can still make.
+        SkillResponse? storedOffer = TryBuildStoredPositionAudioOffer(session, user, locale, context);
+        if (storedOffer != null)
+        {
+            return storedOffer;
+        }
+
         var (jellyfinUser, _) = ResolveJellyfinUser(_userManager, session.UserId, locale);
         if (jellyfinUser == null)
         {
@@ -337,6 +367,9 @@ public class LaunchRequestHandler : BaseHandler
             jellyfinUser, _libraryManager, _userDataManager, user, audioKinds, Logger);
         if (audioItem == null)
         {
+            // The stored-position scan already ran above (JF-581); this ledger scan
+            // reads Jellyfin UserData, which the incident proved can be flat while
+            // the plugin store holds positions. Nothing offerable remains.
             Logger.LogDebug("LaunchResume: screenless device, no audio item with progress to offer");
             return null;
         }
@@ -351,6 +384,72 @@ public class LaunchRequestHandler : BaseHandler
         // UserData IS the honest position for this shape.
         int audioOffsetMs = (int)Math.Min(TimeSpan.FromTicks(audioTicks).TotalMilliseconds, int.MaxValue);
         return BuildResumeOfferResponse(audioItem, audioItem.Id.ToString(), audioOffsetMs, user, locale, context, session);
+    }
+
+    /// <summary>
+    /// JF-581: read the plugin's own per-item position store for an item on the
+    /// requesting device (the "N"-format key PlaybackStopped writes). Returns null
+    /// when the device is unknown, no queue exists, or the item carries no recorded
+    /// position. The store is immune to the server-side UserData write loss the
+    /// resume seed must survive.
+    /// </summary>
+    private static long? TryGetItemPositionStateTicks(string itemId, Context context)
+        => Plugin.Instance?.DeviceQueueManager?.GetStoredPositionTicks(
+            context.System?.Device?.DeviceID ?? string.Empty, itemId);
+
+    /// <summary>
+    /// JF-581: the screenless audio fallback's Jellyfin-UserData ledger scan declines
+    /// when the server-side writes never landed. Scan the device queue from the tail
+    /// (most recent first) and offer the first queued item holding a recorded
+    /// position that the device can actually play (never a VideoApp-launch item, so
+    /// the shared builder cannot recurse back into this fallback).
+    /// </summary>
+    private SkillResponse? TryBuildStoredPositionAudioOffer(SessionInfo session, Entities.User user, string locale, Context context)
+    {
+        string? deviceId = context.System?.Device?.DeviceID;
+        DeviceQueue? queue = string.IsNullOrEmpty(deviceId) ? null : Plugin.Instance?.DeviceQueueManager?.GetQueue(deviceId);
+        if (queue == null)
+        {
+            return null;
+        }
+
+        // Candidate order (review finding): queue order is PLAYLIST order, not play
+        // recency, so the tail alone can offer an older listen over the most recent
+        // one. Try the queue's current-item pointer first (the most recently stopped
+        // item), then walk backwards from its index, then the entries above it.
+        int startIndex = queue.CurrentIndex >= 0 && queue.CurrentIndex < queue.ItemIds.Count
+            ? queue.CurrentIndex
+            : queue.ItemIds.Count - 1;
+        for (int offset = 0; offset < queue.ItemIds.Count; offset++)
+        {
+            int i = startIndex - offset;
+            if (i < 0)
+            {
+                i += queue.ItemIds.Count;
+            }
+
+            string candidateId = queue.ItemIds[i];
+            // ticks != null implies the id parsed (the accessor returns null otherwise)
+            long? ticks = Plugin.Instance?.DeviceQueueManager?.GetStoredPositionTicks(deviceId!, candidateId);
+            if (ticks == null)
+            {
+                continue;
+            }
+
+            BaseItem? candidate = _libraryManager.GetItemById(Guid.Parse(candidateId));
+            if (candidate == null || PlaybackLaunchBuilder.IsVideoAppLaunchItem(candidate))
+            {
+                continue;
+            }
+
+            int offsetMs = (int)Math.Min(TimeSpan.FromTicks(ticks.Value).TotalMilliseconds, int.MaxValue);
+            Logger.LogInformation(
+                "LaunchResume: screenless audio fallback seeded from ItemPositionState: item={ItemId}, ticks={Ticks}",
+                candidateId, ticks.Value);
+            return BuildResumeOfferResponse(candidate, candidateId, offsetMs, user, locale, context, session);
+        }
+
+        return null;
     }
 
     /// <summary>

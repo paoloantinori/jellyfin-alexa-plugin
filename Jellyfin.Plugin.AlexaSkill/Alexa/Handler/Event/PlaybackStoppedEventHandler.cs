@@ -12,6 +12,7 @@ using Jellyfin.Plugin.AlexaSkill.Alexa.Diagnostics;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
+using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Entities;
@@ -203,24 +204,45 @@ public class PlaybackStoppedEventHandler : BaseHandler
                 "Saved to ItemPositionState: item={ItemId}, ticks={Ticks}",
                 req.Token, realPositionTicks);
 
-            // 2. Overwrite Jellyfin UserData with real position for cross-client sync
-            //    OnPlaybackStopped → UpdatePlayState may have zeroed it (MinAudiobookResume).
+            // 2. Self-verify the Jellyfin UserData write (JF-581): the report above
+            //    routes through SessionManager.OnPlaybackStopped → UpdatePlayState,
+            //    which never persisted for Alexa sessions on the live 12.1 incident
+            //    (zero-runtime .strm items skip the percentage branches). Resolve the
+            //    Jellyfin user from the SESSION id; the plugin identity id (user.Id,
+            //    the LWA token GUID) is NOT a Jellyfin user id, and resolving through
+            //    it silently skipped this whole block before JF-581; re-read after the
+            //    report, and write the position directly when it did not land.
+            //    SaveUserData bypasses UpdatePlayState, so the zero-runtime shape
+            //    writes too.
             try
             {
                 var item = _libraryManager.GetItemById(stopItemId);
                 if (item != null)
                 {
-                    var jellyfinUser = _userManager.GetUserById(user.Id);
+                    var jellyfinUser = _userManager.GetUserById(session.UserId);
                     if (jellyfinUser != null)
                     {
                         var data = _userDataManager.GetUserData(jellyfinUser, item);
-                        if (data != null && data.PlaybackPositionTicks == 0 && !data.Played)
+                        // Compare against THIS stop's position, not against 0: on a
+                        // write-loss server the first stop direct-writes X and the
+                        // next stop at Y would otherwise read X (non-zero, our own
+                        // earlier write) and skip, pinning UserData at X forever.
+                        // Equality means the session report already landed exactly
+                        // this position (healthy server); inequality means it did not.
+                        if (data == null || data.PlaybackPositionTicks != realPositionTicks)
                         {
+                            data ??= new UserItemData { Key = stopItemId.ToString("N") };
                             data.PlaybackPositionTicks = realPositionTicks;
                             _userDataManager.SaveUserData(jellyfinUser, item, data, UserDataSaveReason.PlaybackProgress, CancellationToken.None);
-                            Logger.LogDebug(
-                                "Overwrote Jellyfin UserData position for cross-client sync: item={ItemId}, ticks={Ticks}",
+                            Logger.LogInformation(
+                                "PlaybackStopped: Jellyfin UserData position did not land via the session report; wrote it directly: item={ItemId}, ticks={Ticks}",
                                 req.Token, realPositionTicks);
+                        }
+                        else
+                        {
+                            Logger.LogDebug(
+                                "Jellyfin UserData position verified after session report: item={ItemId}, ticks={Ticks}",
+                                req.Token, data.PlaybackPositionTicks);
                         }
                     }
                 }

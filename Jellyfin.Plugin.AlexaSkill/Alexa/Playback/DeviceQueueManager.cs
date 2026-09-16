@@ -243,6 +243,29 @@ public sealed class DeviceQueueManager : IDisposable
     }
 
     /// <summary>
+    /// JF-581 read side: the stored per-item position (ItemPositionState, written
+    /// unconditionally by the PlaybackStopped handler) for an item on a device,
+    /// without creating a queue entry. Null when no positive position is recorded.
+    /// The plugin-owned store this exposes is immune to the server-side UserData
+    /// write loss the resume seeds must survive (live incident 2026-09-16).
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID.</param>
+    /// <param name="itemId">The item ID in any GUID format (normalized to "N").</param>
+    /// <returns>The stored position in ticks, or null when none.</returns>
+    public long? GetStoredPositionTicks(string deviceId, string itemId)
+    {
+        if (!Guid.TryParse(itemId, out Guid parsedItemId)
+            || !_queues.TryGetValue(deviceId, out DeviceQueue? queue))
+        {
+            return null;
+        }
+
+        return queue.ItemPositionState.TryGetValue(parsedItemId.ToString("N"), out long ticks) && ticks > 0
+            ? ticks
+            : null;
+    }
+
+    /// <summary>
     /// Bounds both launch-scope dictionaries exactly like the sibling trims
     /// (JF-514/JF-522): over the cap, remove the oldest entries whose item is not in
     /// the current queue; entries for queued items all stay.
