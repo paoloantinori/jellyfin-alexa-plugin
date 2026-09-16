@@ -136,8 +136,16 @@ internal static class TestHelpers
     /// JF-315 batch-4 reuse pass hoisted the third private copy here).
     /// </summary>
     internal static MediaBrowser.Controller.Entities.Audio.Audio CreateSong(
-        string name = "Test Song", Guid? id = null)
-        => new() { Name = name, Id = id ?? Guid.NewGuid() };
+        string name = "Test Song", Guid? id = null, string[]? genres = null)
+    {
+        var audio = new MediaBrowser.Controller.Entities.Audio.Audio { Name = name, Id = id ?? Guid.NewGuid() };
+        if (genres != null)
+        {
+            audio.Genres = genres;
+        }
+
+        return audio;
+    }
 
     internal static Context CreateContextWithoutApl()
     {
