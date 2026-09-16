@@ -89,12 +89,12 @@ public class PreviousIntentHandler : BaseHandler
         }
 
         // get the previous item in the queue
-        for (int i = 1; i < session.NowPlayingQueue.Count; i++)
+        int idx = SessionQueue.IndexOfQueueItem(session, currentItemId.Value);
+        if (idx > 0)
         {
-            if (session.NowPlayingQueue[i].Id == currentItemId)
+            System.Guid prevItemId = session.NowPlayingQueue[idx - 1].Id;
             {
-                System.Guid prevItemId = session.NowPlayingQueue[i - 1].Id;
-                string item_id = session.NowPlayingQueue[i - 1].Id.ToString();
+                string item_id = session.NowPlayingQueue[idx - 1].Id.ToString();
                 BaseItem? prevItem = _libraryManager.GetItemById(prevItemId);
                 if (prevItem == null)
                 {

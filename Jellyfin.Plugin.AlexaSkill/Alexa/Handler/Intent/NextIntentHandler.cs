@@ -89,12 +89,12 @@ public class NextIntentHandler : BaseHandler
         }
 
         // get the next item in the queue, skip last item
-        for (int i = 0; i < session.NowPlayingQueue.Count - 1; i++)
+        int idx = SessionQueue.IndexOfQueueItem(session, currentItemId.Value);
+        if (idx >= 0 && idx < session.NowPlayingQueue.Count - 1)
         {
-            if (session.NowPlayingQueue[i].Id == currentItemId)
+            System.Guid nextItemId = session.NowPlayingQueue[idx + 1].Id;
             {
-                System.Guid nextItemId = session.NowPlayingQueue[i + 1].Id;
-                string item_id = session.NowPlayingQueue[i + 1].Id.ToString();
+                string item_id = session.NowPlayingQueue[idx + 1].Id.ToString();
                 BaseItem? nextItem = _libraryManager.GetItemById(nextItemId);
                 if (nextItem == null)
                 {

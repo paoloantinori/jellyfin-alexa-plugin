@@ -7,7 +7,9 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Apl;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Handler.Intent;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Entities;
@@ -18,6 +20,7 @@ using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
 using Moq;
+using Newtonsoft.Json.Linq;
 using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
@@ -94,6 +97,19 @@ public class QueueRehydrationAdoptionTests : PluginTestBase, IDisposable
 
     private ListQueueIntentHandler ListQueueHandler()
         => new(_sessionManagerMock.Object, _config, _libraryManagerMock.Object, _loggerFactory, _queueManager);
+
+    private AplUserEventHandler AplHandler()
+        => new(
+            _sessionManagerMock.Object,
+            _config,
+            _libraryManagerMock.Object,
+            Mock.Of<IUserManager>(),
+            Mock.Of<IUserDataManager>(),
+            _queueManager,
+            _loggerFactory);
+
+    private static AplUserEventRequest CreateTap(string action)
+        => new() { Arguments = new JArray(action) };
 
     // === NextIntentHandler ===
 
@@ -329,5 +345,167 @@ public class QueueRehydrationAdoptionTests : PluginTestBase, IDisposable
         string text = TestHelpers.GetSpeechText(response);
         Assert.Contains("empty", text, StringComparison.OrdinalIgnoreCase);
         Assert.Empty(session.NowPlayingQueue);
+    }
+
+    // === AplUserEventHandler next/previous taps (JF-579) ===
+
+    [Fact]
+    public async Task AplNext_RestartWipedSession_CoherentDeviceQueue_ServesNextQueuedTrack()
+    {
+        // The tap on the NowPlaying screen is a customer-initiated request while the
+        // skill was most recently playing audio, so context.AudioPlayer carries the
+        // playing token (the docs inclusion rule; see the JF-579 adoption comment).
+        // The wiped session plays queue member [1] of the persisted 4-track queue;
+        // the next tap must serve member [2] from the rehydrated queue instead of
+        // the false Empty.
+        var songs = SetupQueueSongs(4);
+        _queueManager.SetQueue(DeviceId, songs.Select(s => s.Id.ToString()).ToList(), currentIndex: 1);
+
+        var handler = AplHandler();
+
+        var session = CreateWipedSession();
+        SkillResponse response = await handler.HandleAsync(
+            CreateTap("next"),
+            CreatePlayingContext(songs[1].Id),
+            TestHelpers.CreateTestUser(id: _userId),
+            session,
+            null,
+            CancellationToken.None);
+
+        AudioPlayerPlayDirective? play = TestHelpers.GetPlayDirective(response);
+        Assert.NotNull(play);
+        Assert.Equal(songs[2].Id.ToString(), play.AudioItem.Stream.Token);
+
+        // The session queue was rehydrated in full (device-queue order) and the
+        // served item became the session's now-playing item exactly as on the
+        // normal path.
+        Assert.Equal(songs.Select(s => s.Id), session.NowPlayingQueue.Select(q => q.Id));
+        Assert.Equal(songs[2].Id, session.FullNowPlayingItem?.Id);
+    }
+
+    [Fact]
+    public async Task AplNext_RestartWipedSession_StaleDeviceQueue_KeepsEmptyAnswer()
+    {
+        // Coherence leg 2: the persisted queue does not contain the item the device
+        // is actually playing, so it must never rehydrate and the tap keeps today's
+        // Empty answer.
+        var songs = SetupQueueSongs(2);
+        var staleId = Guid.NewGuid();
+        _queueManager.SetQueue(DeviceId, new List<string> { staleId.ToString() }, currentIndex: 0);
+
+        var handler = AplHandler();
+
+        var session = CreateWipedSession();
+        SkillResponse response = await handler.HandleAsync(
+            CreateTap("next"),
+            CreatePlayingContext(songs[0].Id),
+            TestHelpers.CreateTestUser(id: _userId),
+            session,
+            null,
+            CancellationToken.None);
+
+        Assert.Null(TestHelpers.GetPlayDirective(response));
+        Assert.Empty(session.NowPlayingQueue);
+    }
+
+    [Fact]
+    public async Task AplNext_NonEmptySession_KeepsTodayNextAnswer()
+    {
+        // A populated session queue belongs to a live playback: the guard's leg 1
+        // declines and the tap serves the session queue's successor exactly as
+        // before the adoption (no device queue is even present).
+        var songs = SetupQueueSongs(3);
+        var session = CreateWipedSession();
+        session.NowPlayingQueue = songs.Select(s => s.Id).Select(id => new QueueItem { Id = id }).ToList();
+        session.FullNowPlayingItem = songs[1];
+
+        SkillResponse response = await AplHandler().HandleAsync(
+            CreateTap("next"),
+            CreatePlayingContext(songs[1].Id),
+            TestHelpers.CreateTestUser(id: _userId),
+            session,
+            null,
+            CancellationToken.None);
+
+        AudioPlayerPlayDirective? play = TestHelpers.GetPlayDirective(response);
+        Assert.NotNull(play);
+        Assert.Equal(songs[2].Id.ToString(), play.AudioItem.Stream.Token);
+        Assert.Equal(songs[2].Id, session.FullNowPlayingItem?.Id);
+    }
+
+    [Fact]
+    public async Task AplPrevious_RestartWipedSession_CoherentDeviceQueue_ServesPreviousQueuedTrack()
+    {
+        // The wiped session plays queue member [2] of the persisted 4-track queue;
+        // the previous tap must serve member [1] from the rehydrated queue instead
+        // of the false Empty.
+        var songs = SetupQueueSongs(4);
+        _queueManager.SetQueue(DeviceId, songs.Select(s => s.Id.ToString()).ToList(), currentIndex: 2);
+
+        var handler = AplHandler();
+
+        var session = CreateWipedSession();
+        SkillResponse response = await handler.HandleAsync(
+            CreateTap("prev"),
+            CreatePlayingContext(songs[2].Id),
+            TestHelpers.CreateTestUser(id: _userId),
+            session,
+            null,
+            CancellationToken.None);
+
+        AudioPlayerPlayDirective? play = TestHelpers.GetPlayDirective(response);
+        Assert.NotNull(play);
+        Assert.Equal(songs[1].Id.ToString(), play.AudioItem.Stream.Token);
+        Assert.Equal(songs.Select(s => s.Id), session.NowPlayingQueue.Select(q => q.Id));
+        Assert.Equal(songs[1].Id, session.FullNowPlayingItem?.Id);
+    }
+
+    [Fact]
+    public async Task AplPrevious_RestartWipedSession_StaleDeviceQueue_KeepsEmptyAnswer()
+    {
+        // Coherence leg 2: the persisted queue does not contain the playing item,
+        // so it must never rehydrate and the tap keeps today's Empty.
+        var songs = SetupQueueSongs(2);
+        var staleId = Guid.NewGuid();
+        _queueManager.SetQueue(DeviceId, new List<string> { staleId.ToString() }, currentIndex: 0);
+
+        var handler = AplHandler();
+
+        var session = CreateWipedSession();
+        SkillResponse response = await handler.HandleAsync(
+            CreateTap("prev"),
+            CreatePlayingContext(songs[0].Id),
+            TestHelpers.CreateTestUser(id: _userId),
+            session,
+            null,
+            CancellationToken.None);
+
+        Assert.Null(TestHelpers.GetPlayDirective(response));
+        Assert.Empty(session.NowPlayingQueue);
+    }
+
+    [Fact]
+    public async Task AplPrevious_NonEmptySession_KeepsTodayPreviousAnswer()
+    {
+        // A populated session queue belongs to a live playback: the guard's leg 1
+        // declines and the tap serves the session queue's predecessor exactly as
+        // before the adoption (no device queue is even present).
+        var songs = SetupQueueSongs(3);
+        var session = CreateWipedSession();
+        session.NowPlayingQueue = songs.Select(s => s.Id).Select(id => new QueueItem { Id = id }).ToList();
+        session.FullNowPlayingItem = songs[2];
+
+        SkillResponse response = await AplHandler().HandleAsync(
+            CreateTap("prev"),
+            CreatePlayingContext(songs[2].Id),
+            TestHelpers.CreateTestUser(id: _userId),
+            session,
+            null,
+            CancellationToken.None);
+
+        AudioPlayerPlayDirective? play = TestHelpers.GetPlayDirective(response);
+        Assert.NotNull(play);
+        Assert.Equal(songs[1].Id.ToString(), play.AudioItem.Stream.Token);
+        Assert.Equal(songs[1].Id, session.FullNowPlayingItem?.Id);
     }
 }

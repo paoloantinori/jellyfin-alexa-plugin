@@ -26,12 +26,13 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// default and honoring the AnnounceAudioPlays flag through the shared builder);
 /// everything the skill cannot honestly restart mid-play (VideoApp-launched movies,
 /// episodes and live TV, audiobooks that ride the AudioPlayer path) gets the
-/// localized CannotRepeatContent tell instead of pretending. Known limitation:
-/// a VideoApp-launched audiobook (NativeControlsForBooks) is recorded nowhere as
-/// the device's last play (the last-played recording deliberately skips the
-/// audiobook concat URL to preserve chapter accuracy), so a repeat arriving
-/// mid-book cannot see the book and restarts the previously played audio track.
-/// This is the SECOND life of this handler: the JF-451-era predecessor answered
+/// localized CannotRepeatContent tell instead of pretending. Known limitation
+/// (tracked as JF-566): a repeat arriving mid-VideoApp-audiobook can still
+/// restart the previously played audio track. The ledger HAS recorded VideoApp
+/// book launches since JF-563 (PlaybackLaunchBuilder records at both launch
+/// sites), superseding this doc's original claim that books were recorded
+/// nowhere; the residual misclassification is a medium-resolution gap, not a
+/// missing recording. This is the SECOND life of this handler: the JF-451-era predecessor answered
 /// repeat with now-playing info (MediaInfo's job) and was deleted for it; the
 /// restart semantics here are the JF-562 redesign.
 /// </summary>
