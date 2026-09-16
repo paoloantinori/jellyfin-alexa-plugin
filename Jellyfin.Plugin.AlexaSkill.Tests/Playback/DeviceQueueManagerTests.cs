@@ -549,7 +549,7 @@ public class DeviceQueueManagerTests : IDisposable
     /// <summary>
     /// Non-shuffle playlist-play baseline (JF-305 Chunk 2 regression).
     /// This is the counterpart to <see cref="SetShuffledQueue_ShufflesAllItems_StoresOriginal_SetsShuffleState"/>:
-    /// the non-shuffle arm of <c>BaseHandler.BuildPlaylistPlayResponseAsync</c>
+    /// the non-shuffle arm of the playlist play flow (<c>AlbumPlayService.BuildPlaylistPlayResponseAsync</c>)
     /// (shuffle: false) persists the queue via <see cref="DeviceQueueManager.SetQueue"/>
     /// and serves the first ordered track. The persisted <see cref="DeviceQueue"/> MUST
     /// be in <c>Default</c> order with no stored original (pre-shuffle) id list — the

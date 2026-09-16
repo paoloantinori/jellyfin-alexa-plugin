@@ -16,7 +16,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// <summary>
 /// Handler for ShufflePlayIntent — start a playlist already shuffled (first track random).
 /// Shares the playlist-play flow with <see cref="PlayPlaylistIntentHandler"/> via
-/// <see cref="BaseHandler.BuildPlaylistPlayResponseAsync"/> (shuffle enabled).
+/// <see cref="AlbumPlayService.BuildPlaylistPlayResponseAsync"/> (shuffle enabled).
 /// </summary>
 public class ShufflePlayIntentHandler : BaseHandler
 {
@@ -55,7 +55,7 @@ public class ShufflePlayIntentHandler : BaseHandler
 
     /// <summary>
     /// Play a playlist by its name, shuffled. Delegates the shared playlist-play flow to
-    /// <see cref="BaseHandler.BuildPlaylistPlayResponseAsync"/> with shuffle enabled.
+    /// <see cref="AlbumPlayService.BuildPlaylistPlayResponseAsync"/> with shuffle enabled.
     /// </summary>
     /// <param name="request">The skill request which should be handled.</param>
     /// <param name="context">The context of the skill intent request.</param>
@@ -82,7 +82,7 @@ public class ShufflePlayIntentHandler : BaseHandler
             return Task.FromResult(BuildDialogElicitResponse("DidNotCatchPlaylistName", locale, "playlist", IntentNames.ShufflePlay, "playlist"));
         }
 
-        return BuildPlaylistPlayResponseAsync(
+        return AlbumPlay.BuildPlaylistPlayResponseAsync(
             _libraryManager, _userManager, _queueManager,
             playlistName ?? string.Empty, context, user, session, locale,
             shuffle: true, rng: null, cancellationToken);

@@ -219,7 +219,8 @@ public class MusicPrimaryPathGateTests : PluginTestBase, IDisposable
     }
 
     // Read-source alignment, JF-464 shared gate: TryEntityFallbackAsync reads the
-    // same live source (BaseHandler.IsMusicEnabled) after the JF-467 switch, not
+    // same live source (the IsMusicEnabled live read, since JF-315 batch 8 on the
+    // CrossMediaFallback twin) after the JF-467 switch, not
     // the injected copy. Old code (injected _fx.Config, music enabled here) would
     // have run the artist search; the live read stops it with zero queries.
     [Fact]

@@ -332,7 +332,7 @@ public class PlaySongIntentHandler : BaseHandler
             // (guaranteed in the five English locales PR #15 trimmed the carriers
             // from; a coin flip in the other 11, which still ship them) and used
             // to dead-end in the song not-found below.
-            SkillResponse? albumFallback = await TryAlbumFallbackAsync(
+            SkillResponse? albumFallback = await AlbumPlay.TryAlbumFallbackAsync(
                 songQuery, jellyfinUser!, user, session, context, locale,
                 _libraryManager, _userDataManager, _queueManager,
                 "PlaySong", cancellationToken).ConfigureAwait(false);

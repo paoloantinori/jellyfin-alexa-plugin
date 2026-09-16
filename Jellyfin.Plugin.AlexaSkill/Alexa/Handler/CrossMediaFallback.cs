@@ -854,9 +854,10 @@ public sealed class CrossMediaFallback
 
     /// <summary>
     /// Live read of the global music flag (global-only: no per-user override exists).
-    /// Copied, not moved (JF-315 batch 7): BaseHandler retains its own IsMusicEnabled
-    /// for its remaining caller (the album cascade; IfMediaTypeDisabled and
-    /// FilterByContentAccess share the same live-read source but do not call the
+    /// Copied, not moved (JF-315 batch 7): BaseHandler's own IsMusicEnabled was
+    /// later deleted with its last caller, the album cascade, when that cascade
+    /// moved to AlbumPlayService carrying its own twin (JF-315 batch 8; IfMediaTypeDisabled
+    /// and FilterByContentAccess share the same live-read source but do not call the
     /// property), and the expression is identical: Plugin.Instance.Configuration
     /// FIRST so a standard-API configuration replacement takes effect without a
     /// restart (JF-467), falling back to the injected configuration only when the

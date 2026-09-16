@@ -701,7 +701,7 @@ internal sealed class SharedGateProbeHandler : BaseHandler
         IUserDataManager userDataManager,
         string logLabel,
         CancellationToken cancellationToken)
-        => TryAlbumFallbackAsync(
+        => AlbumPlay.TryAlbumFallbackAsync(
             slotText, jellyfinUser, user, session, context, locale,
             libraryManager, userDataManager, null, logLabel, cancellationToken);
 

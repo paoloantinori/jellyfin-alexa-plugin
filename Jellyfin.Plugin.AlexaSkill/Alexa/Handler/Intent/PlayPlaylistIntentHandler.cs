@@ -65,7 +65,7 @@ public class PlayPlaylistIntentHandler : BaseHandler
 
     /// <summary>
     /// Play a playlist by its name. Delegates the shared playlist-play flow to
-    /// <see cref="BaseHandler.BuildPlaylistPlayResponseAsync"/> (shuffle disabled).
+    /// <see cref="AlbumPlayService.BuildPlaylistPlayResponseAsync"/> (shuffle disabled).
     /// </summary>
     /// <param name="request">The skill request which should be handled.</param>
     /// <param name="context">The context of the skill intent request.</param>
@@ -92,7 +92,7 @@ public class PlayPlaylistIntentHandler : BaseHandler
             return Task.FromResult(BuildDialogElicitResponse("DidNotCatchPlaylistName", locale, "playlist", IntentNames.PlayPlaylist, "playlist"));
         }
 
-        return BuildPlaylistPlayResponseAsync(
+        return AlbumPlay.BuildPlaylistPlayResponseAsync(
             _libraryManager, _userManager, _queueManager,
             playlistName ?? string.Empty, context, user, session, locale,
             shuffle: false, rng: null, cancellationToken);

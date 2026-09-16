@@ -208,13 +208,13 @@ public class PlayAlbumIntentHandler : BaseHandler
         // untouched.
         if (!string.IsNullOrWhiteSpace(musician)
             && string.IsNullOrWhiteSpace(album)
-            && TryStripLeadingAlbumCallingWord(musician, locale, out string strippedMusicianTitle))
+            && AlbumPlayService.TryStripLeadingAlbumCallingWord(musician, locale, out string strippedMusicianTitle))
         {
             Logger.LogDebug(
                 "PlayAlbum: musician='{Musician}' starts with an album calling word and the album slot is empty, trying the stripped '{Stripped}' as an album title first (JF-489)",
                 musician, strippedMusicianTitle);
             IReadOnlyList<BaseItem> strippedTitleAlbums = await RetryAsync(
-                () => _libraryManager.GetItemList(BuildAlbumQuery(_libraryManager, jellyfinUser, user, strippedMusicianTitle, artistIds: null)),
+                () => _libraryManager.GetItemList(AlbumPlay.BuildAlbumQuery(_libraryManager, jellyfinUser, user, strippedMusicianTitle, artistIds: null)),
                 "GetAlbumsMusicianCallingWordStripped",
                 cancellationToken).ConfigureAwait(false);
             Logger.LogInformation(
@@ -279,7 +279,7 @@ public class PlayAlbumIntentHandler : BaseHandler
                         "PlayAlbum: artist search missed and the album slot is empty, retrying '{Musician}' as an album title (JF-492)",
                         artistMissTitle);
                     IReadOnlyList<BaseItem> artistMissAlbums = await RetryAsync(
-                        () => _libraryManager.GetItemList(BuildAlbumQuery(_libraryManager, jellyfinUser, user, artistMissTitle, artistIds: null)),
+                        () => _libraryManager.GetItemList(AlbumPlay.BuildAlbumQuery(_libraryManager, jellyfinUser, user, artistMissTitle, artistIds: null)),
                         "GetAlbumsArtistMissTitleRetry",
                         cancellationToken).ConfigureAwait(false);
                     Logger.LogDebug(
@@ -378,7 +378,7 @@ public class PlayAlbumIntentHandler : BaseHandler
                 return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeArtist, locale, context);
             }
 
-            InternalItemsQuery artistAlbumQuery = BuildAlbumQuery(_libraryManager, jellyfinUser, user, searchTerm: null, artistIds: artistsIds.ToArray(), albumArtistsOnly: true);
+            InternalItemsQuery artistAlbumQuery = AlbumPlay.BuildAlbumQuery(_libraryManager, jellyfinUser, user, searchTerm: null, artistIds: artistsIds.ToArray(), albumArtistsOnly: true);
 
             // JF-427: explicit deterministic order; the query previously had NO OrderBy, so the
             // pick was an arbitrary database row that could change after an unrelated rescan. The
@@ -442,7 +442,7 @@ public class PlayAlbumIntentHandler : BaseHandler
         }
         else
         {
-            var albumSearchQuery = BuildAlbumQuery(_libraryManager, jellyfinUser, user, album, artistsIds.ToArray());
+            var albumSearchQuery = AlbumPlay.BuildAlbumQuery(_libraryManager, jellyfinUser, user, album, artistsIds.ToArray());
 
             Logger.LogDebug("PlayAlbum: querying Jellyfin with searchTerm='{Album}', artistIds={ArtistIdsCount}, types=MusicAlbum", album, artistsIds.Count);
             albums = await RetryAsync(
@@ -460,10 +460,10 @@ public class PlayAlbumIntentHandler : BaseHandler
             // actually titled "Chiamato qualcosa" is still found by the raw query and
             // never displaced. The raw value stays in `album` for every log line and
             // the not-found speech below.
-            if (albums.Count == 0 && TryStripLeadingAlbumCallingWord(album, locale, out string strippedAlbumTitle))
+            if (albums.Count == 0 && AlbumPlayService.TryStripLeadingAlbumCallingWord(album, locale, out string strippedAlbumTitle))
             {
                 albums = await RetryAsync(
-                    () => _libraryManager.GetItemList(BuildAlbumQuery(_libraryManager, jellyfinUser, user, strippedAlbumTitle, artistsIds.ToArray())),
+                    () => _libraryManager.GetItemList(AlbumPlay.BuildAlbumQuery(_libraryManager, jellyfinUser, user, strippedAlbumTitle, artistsIds.ToArray())),
                     "GetAlbumsStrippedCallingWord",
                     cancellationToken).ConfigureAwait(false);
                 Logger.LogInformation(
@@ -479,7 +479,7 @@ public class PlayAlbumIntentHandler : BaseHandler
         }
 
         string? fuzzyAlbumAnnouncement = null;
-        if (albums.Count == 0 && album!.Length >= MinFuzzyAlbumQueryLength)
+        if (albums.Count == 0 && album!.Length >= AlbumPlayService.MinFuzzyAlbumQueryLength)
         {
             // Fuzzy fallback: ASR may transcribe the album name with accents or
             // Italian-vs-English spelling that Jellyfin's search index doesn't normalize
@@ -489,11 +489,11 @@ public class PlayAlbumIntentHandler : BaseHandler
             // Min-length guard: very short queries produce too many substring false
             // positives across a full-catalog scan (e.g. "red", "aria") — skip them.
             Logger.LogDebug("PlayAlbum: exact search miss, trying fuzzy fallback for '{Query}'", album);
-            var phoneticAlbumQuery = BuildAlbumQuery(_libraryManager, jellyfinUser, user, searchTerm: null, artistIds: null);
+            var phoneticAlbumQuery = AlbumPlay.BuildAlbumQuery(_libraryManager, jellyfinUser, user, searchTerm: null, artistIds: null);
             // JF-446 (finding 5): the full-catalog scan reads only a.Name downstream;
             // use the cheap DTO shape instead of materializing images/userdata/
             // current-program for every album in the library.
-            phoneticAlbumQuery.DtoOptions = CheapDtoOptions();
+            phoneticAlbumQuery.DtoOptions = AlbumPlayService.CheapDtoOptions();
             IReadOnlyList<BaseItem> allAlbums = await RetryAsync(
                 () => _libraryManager.GetItemList(phoneticAlbumQuery),
                 "GetAlbumsPhonetic",
@@ -566,10 +566,11 @@ public class PlayAlbumIntentHandler : BaseHandler
         }
 
         // First track page for fast time-to-audio; remaining tracks are fetched on
-        // demand by PlaybackNearlyFinished. JF-345: the play flow lives in
-        // BaseHandler (BuildAlbumPlayResponseAsync) so the song-to-album cascade
-        // plays albums with the SAME queue semantics as a direct album request.
-        return await BuildAlbumPlayResponseAsync(
+        // demand by PlaybackNearlyFinished. JF-345: the play flow lives in the
+        // shared AlbumPlay collaborator (BuildAlbumPlayResponseAsync) so the
+        // song-to-album cascade plays albums with the SAME queue semantics as a
+        // direct album request.
+        return await AlbumPlay.BuildAlbumPlayResponseAsync(
             albums[0],
             jellyfinUser!,
             user,
@@ -672,7 +673,7 @@ public class PlayAlbumIntentHandler : BaseHandler
             Recursive = true,
             IncludeItemTypes = new[] { BaseItemKind.Audio },
             Limit = 0,
-            DtoOptions = CheapDtoOptions()
+            DtoOptions = AlbumPlayService.CheapDtoOptions()
         };
 
         if (byParentId)

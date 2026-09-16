@@ -1848,7 +1848,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase, IDisposable
             => Task.FromResult(new SkillResponse());
 
         public static bool CallTryStripLeadingAlbumCallingWord(string? slotValue, string locale, out string stripped)
-            => TryStripLeadingAlbumCallingWord(slotValue, locale, out stripped);
+            => AlbumPlayService.TryStripLeadingAlbumCallingWord(slotValue, locale, out stripped);
     }
 
     [Theory]
