@@ -3,9 +3,10 @@ id: JF-575
 title: >-
   Verify and fix lowercase api_key URLs against the Jellyfin 12.0 auth change
   (art images, PlaybackInfo, live-TV master; streams known-safe)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-16 08:29'
+updated_date: '2026-09-16 15:39'
 labels: []
 dependencies: []
 references:
@@ -45,3 +46,9 @@ Do this: (1) probe each endpoint family on the 12.0 box (image, PlaybackInfo, li
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+FIXED (commit acee97a7). Live probes on the production Jellyfin 12.0.0 box (2026-09-16, direct curl): image endpoints (/Items/{id}/Images/Primary) accept BOTH api_key and ApiKey (200/200) so sites 1 (LaunchRequestHandler art URL) and 2 (PlaybackLaunchBuilder.GetImageUrl) are safe as-is and untouched; PlaybackInfo (/Items/{id}/PlaybackInfo, POST) 401s lowercase api_key and 200s capital ApiKey with AutoOpenLiveStream=true; the /Videos/{id}/master.m3u8 live-TV route 401s lowercase (it is NOT in the auth-open stream class; the probe's 400-with-capital was the missing-MediaSourceId artifact, and the built URL always carries MediaSourceId). Fix: LiveTvStreamResolver's two builders (PlaybackInfo ~line 67, master fallback ~line 118) switched from api_key= to ApiKey= with rationale comments; the plain /Audio|Videos/{id}/stream endpoint sites stay untouched per the task contract (auth-open, jellyfin#13984). Tests: three assertion blocks in LiveTvStreamResolverTests now pin Contains("ApiKey=tok") + DoesNotContain("api_key=") on both the PlaybackInfo request URI and both fallback-branch URLs (xUnit Contains is case-sensitive, so the pins are non-vacuous). Gates: /simplify consolidated 4-angle pass CLEAN (shared-constant extraction rejected: the casing is a per-route property, and a plugin-wide symbol would falsely imply one casing fits all); code-review high via feature-dev:code-reviewer CLEAN (grep-verified no missed api_key site in the wave; the four ILiveTvStreamResolver consumers pass stream.Url through verbatim so nothing re-appends a lowercase param; RequestLogRedactor masks IgnoreCase so the capital key stays redacted). Suite 3989/3989 both TFMs, Release 0 warnings. Follow-up filed same-turn: JF-580 (the direct-remote branch logs the upstream tuner URL unredacted; IPTV provider credentials; plus the capital-ApiKey redactor unit-test gap).
+<!-- SECTION:FINAL_SUMMARY:END -->
