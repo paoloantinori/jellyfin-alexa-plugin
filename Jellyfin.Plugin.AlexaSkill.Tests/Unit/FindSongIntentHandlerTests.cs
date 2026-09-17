@@ -169,7 +169,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         // sits in titleKeywords, so the STARTED sibling-misroute branch must ignore it.
         var artistId = Guid.NewGuid();
         SetupJellyfinUser();
-        SetupSongSearch(new List<BaseItem> { CreateAudioItem(Guid.NewGuid(), "Stop") });
+        SetupSongSearch(new List<BaseItem> { TestHelpers.CreateSong("Stop", Guid.NewGuid()) });
 
         var user = CreateTestUser();
         var session = _fx.CreateSession();
@@ -577,7 +577,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
 
         SetupJellyfinUser();
         SetupArtistSearch(artistId, "Pink Floyd");
-        SetupSongSearch(new List<BaseItem> { CreateAudioItem(songId, "Wish You Were Here") });
+        SetupSongSearch(new List<BaseItem> { TestHelpers.CreateSong("Wish You Were Here", songId) });
 
         var user = CreateTestUser();
         var session = _fx.CreateSession();
@@ -627,7 +627,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
 
                 if (isAudioByArtist)
                 {
-                    return new List<BaseItem> { CreateAudioItem(Guid.NewGuid(), "Decatur St.") }.AsReadOnly();
+                    return new List<BaseItem> { TestHelpers.CreateSong("Decatur St.", Guid.NewGuid()) }.AsReadOnly();
                 }
 
                 return new List<BaseItem>().AsReadOnly();
@@ -672,7 +672,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
                     && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio);
                 if (isAudioByArtist)
                 {
-                    return new List<BaseItem> { CreateAudioItem(Guid.NewGuid(), "Decatur St.") }.AsReadOnly();
+                    return new List<BaseItem> { TestHelpers.CreateSong("Decatur St.", Guid.NewGuid()) }.AsReadOnly();
                 }
 
                 return new List<BaseItem>().AsReadOnly();
@@ -714,7 +714,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
                     && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio);
                 if (isAudioByArtist)
                 {
-                    return new List<BaseItem> { CreateAudioItem(Guid.NewGuid(), "Decatur St.") }.AsReadOnly();
+                    return new List<BaseItem> { TestHelpers.CreateSong("Decatur St.", Guid.NewGuid()) }.AsReadOnly();
                 }
 
                 return new List<BaseItem>().AsReadOnly();
@@ -784,7 +784,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
 
         SetupJellyfinUser();
         SetupArtistSearch(artistId, "Pink Floyd");
-        SetupSongSearch(new List<BaseItem> { CreateAudioItem(songId, "Comfortably Numb") });
+        SetupSongSearch(new List<BaseItem> { TestHelpers.CreateSong("Comfortably Numb", songId) });
 
         var user = CreateTestUser();
         var session = _fx.CreateSession();
@@ -848,7 +848,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         // find no song but match an artist should cross-media fall back to playing that
         // artist (mirrors PlaySong's "no musician slot" fallback), not re-prompt.
         var artist = CreateArtist(Guid.NewGuid(), "Miles Davis");
-        var song = CreateAudioItem(Guid.NewGuid(), "So What");
+        var song = TestHelpers.CreateSong("So What", Guid.NewGuid());
 
         SetupJellyfinUser();
         SetupArtistThenArtistScopedSongs(artist, song);
@@ -876,7 +876,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         // treat "name present, id null" as absent so the keywords answer gets the
         // artist chance (mechanism on the handler's gate comment).
         var artist = CreateArtist(Guid.NewGuid(), "Miles Davis");
-        var song = CreateAudioItem(Guid.NewGuid(), "So What");
+        var song = TestHelpers.CreateSong("So What", Guid.NewGuid());
 
         SetupJellyfinUser();
 
@@ -925,7 +925,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         // artist-scoped song search misses the keywords.
         var resolvedArtistId = Guid.NewGuid();
         var fallbackArtist = CreateArtist(Guid.NewGuid(), "Miles Davis");
-        var unrelatedSong = CreateAudioItem(Guid.NewGuid(), "Some Unrelated Song");
+        var unrelatedSong = TestHelpers.CreateSong("Some Unrelated Song", Guid.NewGuid());
 
         SetupJellyfinUser();
         SetupArtistThenArtistScopedSongs(fallbackArtist, unrelatedSong);
@@ -963,9 +963,9 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
 
         var songs = new List<BaseItem>
         {
-            CreateAudioItem(Guid.NewGuid(), "Hey Jude"),
-            CreateAudioItem(Guid.NewGuid(), "Hey There"),
-            CreateAudioItem(Guid.NewGuid(), "Say Hey")
+            TestHelpers.CreateSong("Hey Jude", Guid.NewGuid()),
+            TestHelpers.CreateSong("Hey There", Guid.NewGuid()),
+            TestHelpers.CreateSong("Say Hey", Guid.NewGuid())
         };
         SetupSongSearch(songs);
 
@@ -1016,9 +1016,9 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         var artistId = Guid.NewGuid();
         SetupJellyfinUser();
 
-        var first = CreateAudioItem(Guid.NewGuid(), "Hey Jude");
+        var first = TestHelpers.CreateSong("Hey Jude", Guid.NewGuid());
         first.Artists = new[] { "The Beatles" };
-        var second = CreateAudioItem(Guid.NewGuid(), "Hey Jude");
+        var second = TestHelpers.CreateSong("Hey Jude", Guid.NewGuid());
         second.Artists = new[] { "Joe Cocker" };
         SetupSongSearch(new List<BaseItem> { first, second });
 
@@ -1066,9 +1066,9 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         var artistId = Guid.NewGuid();
         SetupJellyfinUser();
 
-        var first = CreateAudioItem(Guid.NewGuid(), "Hey Jude");
+        var first = TestHelpers.CreateSong("Hey Jude", Guid.NewGuid());
         first.Artists = new[] { "The Beatles" };
-        var second = CreateAudioItem(Guid.NewGuid(), "Hey Jude");
+        var second = TestHelpers.CreateSong("Hey Jude", Guid.NewGuid());
         second.Artists = new[] { "Joe Cocker" };
         SetupSongSearch(new List<BaseItem> { first, second });
 
@@ -1114,9 +1114,9 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         var artistId = Guid.NewGuid();
         SetupJellyfinUser();
 
-        var first = CreateAudioItem(Guid.NewGuid(), "Hey Jude");
+        var first = TestHelpers.CreateSong("Hey Jude", Guid.NewGuid());
         first.Artists = new[] { "The Beatles" };
-        var second = CreateAudioItem(Guid.NewGuid(), "Hey There");
+        var second = TestHelpers.CreateSong("Hey There", Guid.NewGuid());
         second.Artists = new[] { "Joe Cocker" };
         SetupSongSearch(new List<BaseItem> { first, second });
 
@@ -1158,8 +1158,8 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         var artistId = Guid.NewGuid();
         SetupJellyfinUser();
 
-        var first = CreateAudioItem(Guid.NewGuid(), "Live Hey Jude");
-        var second = CreateAudioItem(Guid.NewGuid(), "Live Hey Jude");
+        var first = TestHelpers.CreateSong("Live Hey Jude", Guid.NewGuid());
+        var second = TestHelpers.CreateSong("Live Hey Jude", Guid.NewGuid());
         SetupSongSearch(new List<BaseItem> { first, second });
 
         var user = CreateTestUser();
@@ -1196,7 +1196,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         // compilations where only the album carries the band.
         SetupJellyfinUser();
 
-        var song = CreateAudioItem(Guid.NewGuid(), "The Idiot Kings");
+        var song = TestHelpers.CreateSong("The Idiot Kings", Guid.NewGuid());
         song.Artists = setTrackArtists ? new[] { "Soul Coughing" } : Array.Empty<string>();
         song.AlbumArtists = setAlbumArtists ? new List<string> { "Soul Coughing" } : new List<string>();
         SetupSongSearch(new List<BaseItem> { song });
@@ -1229,7 +1229,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         // single-found wording (existing behavior preserved).
         var artistId = Guid.NewGuid();
         SetupJellyfinUser();
-        SetupSongSearch(new List<BaseItem> { CreateAudioItem(Guid.NewGuid(), "Hey Jude") });
+        SetupSongSearch(new List<BaseItem> { TestHelpers.CreateSong("Hey Jude", Guid.NewGuid()) });
 
         var user = CreateTestUser();
         var session = _fx.CreateSession();
@@ -1259,7 +1259,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
     public async Task Disambiguating_ValidPickByNumber_ReturnsPlayback()
     {
         var songId = Guid.NewGuid();
-        var song = CreateAudioItem(songId, "Hey Jude");
+        var song = TestHelpers.CreateSong("Hey Jude", songId);
         SetupJellyfinUser();
         _fx.LibraryManager.Setup(lm => lm.GetItemById(songId)).Returns(song);
 
@@ -1292,7 +1292,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
     public async Task Disambiguating_ValidPickByOrdinal_ReturnsPlayback()
     {
         var songId = Guid.NewGuid();
-        var song = CreateAudioItem(songId, "Hey There");
+        var song = TestHelpers.CreateSong("Hey There", songId);
         SetupJellyfinUser();
         _fx.LibraryManager.Setup(lm => lm.GetItemById(songId)).Returns(song);
 
@@ -1325,7 +1325,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
     public async Task Disambiguating_ValidPickByPartialTitle_ReturnsPlayback()
     {
         var songId = Guid.NewGuid();
-        var song = CreateAudioItem(songId, "Hey Jude");
+        var song = TestHelpers.CreateSong("Hey Jude", songId);
         SetupJellyfinUser();
         _fx.LibraryManager.Setup(lm => lm.GetItemById(songId)).Returns(song);
 
@@ -1483,7 +1483,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
 
         SetupJellyfinUser();
         SetupArtistSearch(artistId, "Beirut");
-        SetupSongSearch(new List<BaseItem> { CreateAudioItem(songId, "Family") });
+        SetupSongSearch(new List<BaseItem> { TestHelpers.CreateSong("Family", songId) });
 
         var user = CreateTestUser();
         var session = _fx.CreateSession();
@@ -1548,7 +1548,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
 
         SetupJellyfinUser();
         SetupArtistSearch(artistId, "Beirut");
-        SetupSongSearch(new List<BaseItem> { CreateAudioItem(songId, "Family") });
+        SetupSongSearch(new List<BaseItem> { TestHelpers.CreateSong("Family", songId) });
 
         var user = CreateTestUser();
         var session = _fx.CreateSession();
@@ -1582,7 +1582,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
 
         SetupJellyfinUser();
         SetupArtistSearch(artistId, "Beirut");
-        SetupSongSearch(new List<BaseItem> { CreateAudioItem(songId, "Family") });
+        SetupSongSearch(new List<BaseItem> { TestHelpers.CreateSong("Family", songId) });
 
         var user = CreateTestUser();
         var session = _fx.CreateSession();
@@ -1643,7 +1643,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
 
         // Return 5 songs to trigger the "too many" path
         var songs = Enumerable.Range(0, 5)
-            .Select(i => (BaseItem)CreateAudioItem(Guid.NewGuid(), $"Song with love part {i}"))
+            .Select(i => (BaseItem)TestHelpers.CreateSong($"Song with love part {i}", Guid.NewGuid()))
             .ToList();
         SetupSongSearch(songs);
 
@@ -1689,7 +1689,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         // searched forever. The fix: the no-match re-prompt resets State to
         // AwaitingKeywords, whose path stores the fresh slot value before searching.
         var koop = CreateArtist(Guid.NewGuid(), "Koop");
-        var cup = CreateAudioItem(Guid.NewGuid(), "Cup");
+        var cup = TestHelpers.CreateSong("Cup", Guid.NewGuid());
         cup.Artists = new[] { "Koop" };
 
         // The artist-scoped song search finds "Cup" ONLY for the fresh keyword: a
@@ -1815,7 +1815,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         // pass proves both halves of the composition.
         var koopId = Guid.NewGuid();
         var koop = CreateArtist(koopId, "Koop");
-        var cup = CreateAudioItem(Guid.NewGuid(), "Cup");
+        var cup = TestHelpers.CreateSong("Cup", Guid.NewGuid());
         cup.Artists = new[] { "Koop" };
 
         SetupJellyfinUser();
@@ -1888,7 +1888,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         // the slot as a PICK (plays the candidate), never as fresh keywords (a
         // keywords search for "2" finds nothing and would re-prompt instead).
         var songId = Guid.NewGuid();
-        var song = CreateAudioItem(songId, "Hey There");
+        var song = TestHelpers.CreateSong("Hey There", songId);
         SetupJellyfinUser();
         _fx.LibraryManager.Setup(lm => lm.GetItemById(songId)).Returns(song);
 
@@ -1942,7 +1942,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
 
     private void SetupJellyfinUser()
     {
-        var jellyfinUser = new JellyfinUser("testuser", "test", "test") { Id = _userId };
+        var jellyfinUser = TestHelpers.CreateJellyfinUser(id: _userId);
         // Also handle any Guid for ResolveJellyfinUser (covers _userId too; Moq last-wins)
         _fx.UserManager.Setup(um => um.GetUserById(It.IsAny<Guid>())).Returns(jellyfinUser);
     }
@@ -1964,12 +1964,7 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
     }
 
     private static MusicArtist CreateArtist(Guid id, string name)
-    {
-        var artist = new MusicArtist();
-        typeof(BaseItem).GetProperty("Id")!.SetValue(artist, id);
-        typeof(BaseItem).GetProperty("Name")!.SetValue(artist, name);
-        return artist;
-    }
+        => new() { Name = name, Id = id };
 
     private void SetupArtistThenArtistScopedSongs(BaseItem artist, BaseItem song, string? songNameContains = null)
     {
@@ -2020,14 +2015,6 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
             var id = song.Id;
             _fx.LibraryManager.Setup(lm => lm.GetItemById(id)).Returns(song);
         }
-    }
-
-    private static Audio.Audio CreateAudioItem(Guid id, string name)
-    {
-        var audio = new Audio.Audio();
-        typeof(BaseItem).GetProperty("Id")!.SetValue(audio, id);
-        typeof(BaseItem).GetProperty("Name")!.SetValue(audio, name);
-        return audio;
     }
 
     private static Dictionary<string, object> BuildSessionAttributes(FindSongSessionData data)
@@ -2154,10 +2141,10 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         // (Take(8) + GroupBy name + Take(4)) must collapse to 1 entry per unique name.
         var scored = new List<(BaseItem Item, double Score)>
         {
-            (CreateAudioItem(Guid.NewGuid(), "The Idiot Kings"), 90),
-            (CreateAudioItem(Guid.NewGuid(), "The Idiot Kings"), 88),
-            (CreateAudioItem(Guid.NewGuid(), "The Idiot Kings"), 85),
-            (CreateAudioItem(Guid.NewGuid(), "American Idiot"), 82),
+            (TestHelpers.CreateSong("The Idiot Kings", Guid.NewGuid()), 90),
+            (TestHelpers.CreateSong("The Idiot Kings", Guid.NewGuid()), 88),
+            (TestHelpers.CreateSong("The Idiot Kings", Guid.NewGuid()), 85),
+            (TestHelpers.CreateSong("American Idiot", Guid.NewGuid()), 82),
         };
 
         var deduped = scored.Take(8)
@@ -2178,10 +2165,10 @@ public class FindSongIntentHandlerTests : PluginTestBase, IDisposable
         // JF-416 no-regression: items with distinct names are unaffected.
         var scored = new List<(BaseItem Item, double Score)>
         {
-            (CreateAudioItem(Guid.NewGuid(), "Song A"), 90),
-            (CreateAudioItem(Guid.NewGuid(), "Song B"), 85),
-            (CreateAudioItem(Guid.NewGuid(), "Song C"), 80),
-            (CreateAudioItem(Guid.NewGuid(), "Song D"), 75),
+            (TestHelpers.CreateSong("Song A", Guid.NewGuid()), 90),
+            (TestHelpers.CreateSong("Song B", Guid.NewGuid()), 85),
+            (TestHelpers.CreateSong("Song C", Guid.NewGuid()), 80),
+            (TestHelpers.CreateSong("Song D", Guid.NewGuid()), 75),
         };
 
         var deduped = scored.Take(8)

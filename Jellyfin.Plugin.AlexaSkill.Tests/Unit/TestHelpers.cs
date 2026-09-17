@@ -32,6 +32,13 @@ using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 
+/// <summary>
+/// The ONE shared fuzzy-match candidate shape (JF-573; replaces the four
+/// private per-file copies: two positional records, one mutable class, one
+/// new record). Callers construct positionally or via object initializer.
+/// </summary>
+internal record TestCandidate(string Name, Guid Id);
+
 internal static class TestHelpers
 {
     internal static Entities.User CreateTestUser(
@@ -51,12 +58,23 @@ internal static class TestHelpers
 
     /// <summary>
     /// The ONE Jellyfin-user factory for tests that need a server-side user value
-    /// (start consolidating the ~44 private <c>new("testuser", "test", "test")</c>
-    /// copies here; JF-315 batch 2 created this seam, migrate existing copies in a
-    /// dedicated test-cleanup batch).
+    /// (the JF-571 batch migrated all raw constructions here; the optional
+    /// parameters absorb the non-default name/provider sites).
     /// </summary>
-    internal static Jellyfin.Database.Implementations.Entities.User CreateJellyfinUser()
-        => new("testuser", "test", "test");
+    internal static Jellyfin.Database.Implementations.Entities.User CreateJellyfinUser(
+        string name = "testuser",
+        string authProviderId = "test",
+        string passwordProviderId = "test",
+        Guid? id = null)
+    {
+        var user = new Jellyfin.Database.Implementations.Entities.User(name, authProviderId, passwordProviderId);
+        if (id.HasValue)
+        {
+            user.Id = id.Value;
+        }
+
+        return user;
+    }
 
     /// <summary>
     /// The ONE direct-construction PlaybackLaunchBuilder factory for the suites that
@@ -595,7 +613,7 @@ internal sealed class HandlerTestFixture
     /// </summary>
     internal void SetupUserMock()
         => UserManager.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+            .Returns(TestHelpers.CreateJellyfinUser());
 
     /// <summary>
     /// Mocks the JF-411 indefinite album-by-artist flow on the fixture's LibraryManager:

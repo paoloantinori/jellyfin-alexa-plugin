@@ -288,7 +288,7 @@ public class VoiceIdentificationTests : PluginTestBase
 
         var userManager = new Mock<IUserManager>();
         userManager.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+            .Returns(TestHelpers.CreateJellyfinUser());
 
         _ = new Plugin(appPaths.Object, xmlSerializer.Object, _loggerFactory, userManager.Object);
 

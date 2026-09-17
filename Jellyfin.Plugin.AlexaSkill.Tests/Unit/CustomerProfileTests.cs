@@ -175,7 +175,7 @@ public class LaunchRequestHandlerTests
     {
         var userManagerMock = new Mock<IUserManager>();
         userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+            .Returns(TestHelpers.CreateJellyfinUser());
 
         return new LaunchRequestHandler(
             _sessionManagerMock.Object,

@@ -33,7 +33,7 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
     {
         _fx.UserManager
             .Setup(um => um.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+            .Returns(TestHelpers.CreateJellyfinUser());
     }
 
     private sealed class RecordingPlayVideoHandler(

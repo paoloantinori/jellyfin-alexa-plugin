@@ -47,7 +47,7 @@ public class ScreenlessResumeOfferTests : PluginTestBase
         _loggerFactory = LoggerFactory.Create(b => { });
 
         _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+            .Returns(TestHelpers.CreateJellyfinUser());
     }
 
     private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);

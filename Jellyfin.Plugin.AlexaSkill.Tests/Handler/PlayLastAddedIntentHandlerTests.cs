@@ -83,7 +83,7 @@ public class PlayLastAddedIntentHandlerTests : PluginTestBase
     private void SetupUserMock()
     {
         _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+            .Returns(TestHelpers.CreateJellyfinUser());
     }
 
     [Fact]
@@ -148,7 +148,7 @@ public class PlayLastAddedIntentHandlerTests : PluginTestBase
 
         SetupUserMock();
 
-        var audioItem = CreateTestAudio("New Song", Guid.NewGuid());
+        var audioItem = TestHelpers.CreateSong("New Song", Guid.NewGuid());
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { audioItem });
         _libraryManagerMock.Setup(l => l.GetItemById(It.IsAny<Guid>()))
@@ -291,12 +291,4 @@ public class PlayLastAddedIntentHandlerTests : PluginTestBase
         Assert.Equal(DateTime.UtcNow.Date.AddDays(-3), capturedQuery.MinDateLastSavedForUser!.Value.Date);
     }
 
-    private static Audio CreateTestAudio(string name, Guid id)
-    {
-        return new Audio
-        {
-            Name = name,
-            Id = id,
-        };
-    }
 }

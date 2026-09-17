@@ -108,7 +108,7 @@ public class PlaybackNearlyFinishedPostPlayTests : PluginTestBase, IDisposable
         var (request, context, user, session) = CreatePlaybackNearlyFinishedContext(itemId.ToString());
 
         session.NowPlayingQueue = new List<QueueItem> { new() { Id = itemId } };
-        session.FullNowPlayingItem = CreateAudioItem(itemId);
+        session.FullNowPlayingItem = TestHelpers.CreateSong("Test Song", itemId);
 
         SkillResponse response = await _handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -125,15 +125,15 @@ public class PlaybackNearlyFinishedPostPlayTests : PluginTestBase, IDisposable
         var (request, context, user, session) = CreatePlaybackNearlyFinishedContext(itemId.ToString());
 
         session.NowPlayingQueue = new List<QueueItem> { new() { Id = itemId } };
-        session.FullNowPlayingItem = CreateAudioItem(itemId, new[] { "Rock" });
+        session.FullNowPlayingItem = TestHelpers.CreateSong("Test Song", itemId, new[] { "Rock" });
 
-        var currentAudio = CreateAudioItem(itemId, new[] { "Rock" });
+        var currentAudio = TestHelpers.CreateSong("Test Song", itemId, new[] { "Rock" });
         _libraryManagerMock.Setup(lm => lm.GetItemById(itemId)).Returns(currentAudio);
 
-        var jellyfinUser = new JellyfinUser("test", "test", "test") { Id = _userId };
+        var jellyfinUser = TestHelpers.CreateJellyfinUser(authProviderId: "test", passwordProviderId: "test", id: _userId);
         _userManagerMock.Setup(um => um.GetUserById(_userId)).Returns(jellyfinUser);
 
-        var radioTrack = CreateAudioItem(radioTrackId);
+        var radioTrack = TestHelpers.CreateSong("Test Song", radioTrackId);
         _libraryManagerMock.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { radioTrack }.AsReadOnly());
         _libraryManagerMock.Setup(lm => lm.GetItemById(radioTrackId)).Returns(radioTrack);
@@ -155,12 +155,12 @@ public class PlaybackNearlyFinishedPostPlayTests : PluginTestBase, IDisposable
         var (request, context, user, session) = CreatePlaybackNearlyFinishedContext(itemId.ToString());
 
         session.NowPlayingQueue = new List<QueueItem> { new() { Id = itemId } };
-        session.FullNowPlayingItem = CreateAudioItem(itemId, new[] { "Rock" });
+        session.FullNowPlayingItem = TestHelpers.CreateSong("Test Song", itemId, new[] { "Rock" });
 
-        var currentAudio = CreateAudioItem(itemId, new[] { "Rock" });
+        var currentAudio = TestHelpers.CreateSong("Test Song", itemId, new[] { "Rock" });
         _libraryManagerMock.Setup(lm => lm.GetItemById(itemId)).Returns(currentAudio);
 
-        var jellyfinUser = new JellyfinUser("test", "test", "test") { Id = _userId };
+        var jellyfinUser = TestHelpers.CreateJellyfinUser(authProviderId: "test", passwordProviderId: "test", id: _userId);
         _userManagerMock.Setup(um => um.GetUserById(_userId)).Returns(jellyfinUser);
 
         _libraryManagerMock.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
@@ -185,8 +185,8 @@ public class PlaybackNearlyFinishedPostPlayTests : PluginTestBase, IDisposable
             new() { Id = currentId },
             new() { Id = nextId }
         };
-        session.FullNowPlayingItem = CreateAudioItem(currentId);
-        _libraryManagerMock.Setup(lm => lm.GetItemById(nextId)).Returns(CreateAudioItem(nextId));
+        session.FullNowPlayingItem = TestHelpers.CreateSong("Test Song", currentId);
+        _libraryManagerMock.Setup(lm => lm.GetItemById(nextId)).Returns(TestHelpers.CreateSong("Test Song", nextId));
 
         SkillResponse response = await _handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -204,7 +204,7 @@ public class PlaybackNearlyFinishedPostPlayTests : PluginTestBase, IDisposable
         var (request, context, user, session) = CreatePlaybackNearlyFinishedContext(itemId.ToString());
 
         session.NowPlayingQueue = new List<QueueItem> { new() { Id = itemId } };
-        session.FullNowPlayingItem = CreateAudioItem(itemId);
+        session.FullNowPlayingItem = TestHelpers.CreateSong("Test Song", itemId);
         RadioModeState.Enable(_userId, DeviceId);
 
         _userManagerMock.Setup(um => um.GetUserById(_userId)).Returns((JellyfinUser?)null);
@@ -396,12 +396,12 @@ public class PlaybackNearlyFinishedPostPlayTests : PluginTestBase, IDisposable
         var (request, context, user, session) = CreatePlaybackNearlyFinishedContext(sleepToken);
 
         session.NowPlayingQueue = new List<QueueItem> { new() { Id = itemId } };
-        session.FullNowPlayingItem = CreateAudioItem(itemId, new[] { "Rock" });
-        _libraryManagerMock.Setup(lm => lm.GetItemById(itemId)).Returns(CreateAudioItem(itemId, new[] { "Rock" }));
+        session.FullNowPlayingItem = TestHelpers.CreateSong("Test Song", itemId, new[] { "Rock" });
+        _libraryManagerMock.Setup(lm => lm.GetItemById(itemId)).Returns(TestHelpers.CreateSong("Test Song", itemId, new[] { "Rock" }));
         _userManagerMock.Setup(um => um.GetUserById(_userId))
-            .Returns(new JellyfinUser("test", "test", "test") { Id = _userId });
+            .Returns(TestHelpers.CreateJellyfinUser(authProviderId: "test", passwordProviderId: "test", id: _userId));
 
-        var radioTrack = CreateAudioItem(radioTrackId);
+        var radioTrack = TestHelpers.CreateSong("Test Song", radioTrackId);
         _libraryManagerMock.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { radioTrack }.AsReadOnly());
         _libraryManagerMock.Setup(lm => lm.GetItemById(radioTrackId)).Returns(radioTrack);
@@ -444,7 +444,7 @@ public class PlaybackNearlyFinishedPostPlayTests : PluginTestBase, IDisposable
 
         _libraryManagerMock.Setup(lm => lm.GetItemById(currentId)).Returns(currentEpisode);
         _userManagerMock.Setup(um => um.GetUserById(_userId))
-            .Returns(new JellyfinUser("test", "test", "test") { Id = _userId });
+            .Returns(TestHelpers.CreateJellyfinUser(authProviderId: "test", passwordProviderId: "test", id: _userId));
 
         // Series authorization query returns the series (user may access it).
         _libraryManagerMock.Setup(lm => lm.GetItemList(It.Is<InternalItemsQuery>(q =>
@@ -485,19 +485,6 @@ public class PlaybackNearlyFinishedPostPlayTests : PluginTestBase, IDisposable
         session.UserId = _userId;
 
         return (request, context, user, session);
-    }
-
-    private static Audio.Audio CreateAudioItem(Guid id, string[]? genres = null)
-    {
-        var audio = new Audio.Audio();
-        typeof(BaseItem).GetProperty("Id")!.SetValue(audio, id);
-        typeof(BaseItem).GetProperty("Name")!.SetValue(audio, "Test Song");
-        if (genres != null)
-        {
-            typeof(Audio.Audio).GetProperty("Genres")!.SetValue(audio, genres);
-        }
-
-        return audio;
     }
 }
 

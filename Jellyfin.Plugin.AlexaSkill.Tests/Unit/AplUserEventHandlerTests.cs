@@ -412,7 +412,7 @@ public class AplUserEventHandlerTests : PluginTestBase, IDisposable
 
         var movie = new MediaBrowser.Controller.Entities.Movies.Movie { Name = "Test Movie", Id = itemId };
         _libraryManager.Setup(l => l.GetItemById(itemId)).Returns(movie);
-        _userManager.Setup(u => u.GetUserById(session.UserId)).Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+        _userManager.Setup(u => u.GetUserById(session.UserId)).Returns(TestHelpers.CreateJellyfinUser());
 
         var response = await _handler.HandleAsync(request, _context, _user, session, CancellationToken.None);
 
@@ -477,7 +477,7 @@ public class AplUserEventHandlerTests : PluginTestBase, IDisposable
 
         var movie = new MediaBrowser.Controller.Entities.Movies.Movie { Name = "Carousel Movie", Id = itemId };
         _libraryManager.Setup(l => l.GetItemById(itemId)).Returns(movie);
-        _userManager.Setup(u => u.GetUserById(session.UserId)).Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+        _userManager.Setup(u => u.GetUserById(session.UserId)).Returns(TestHelpers.CreateJellyfinUser());
 
         var response = await _handler.HandleAsync(request, _context, _user, session, CancellationToken.None);
 
@@ -517,7 +517,7 @@ public class AplUserEventHandlerTests : PluginTestBase, IDisposable
         var movie = new MediaBrowser.Controller.Entities.Movies.Movie { Name = "Inception", Id = itemId };
         _libraryManager.Setup(l => l.GetItemById(itemId)).Returns(movie);
 
-        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
         _userManager.Setup(u => u.GetUserById(session.UserId)).Returns(jellyfinUser);
 
         _userDataManager.Setup(x => x.GetUserData(jellyfinUser, movie)).Returns(new UserItemData
@@ -547,7 +547,7 @@ public class AplUserEventHandlerTests : PluginTestBase, IDisposable
         var audio = new Audio { Name = "Audiobook Track", Id = itemId };
         _libraryManager.Setup(l => l.GetItemById(itemId)).Returns(audio);
 
-        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
         _userManager.Setup(u => u.GetUserById(session.UserId)).Returns(jellyfinUser);
 
         var progressData = new UserItemData
@@ -576,7 +576,7 @@ public class AplUserEventHandlerTests : PluginTestBase, IDisposable
         var audio = new Audio { Name = "Audiobook Track", Id = itemId };
         _libraryManager.Setup(l => l.GetItemById(itemId)).Returns(audio);
 
-        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
         _userManager.Setup(u => u.GetUserById(session.UserId)).Returns(jellyfinUser);
 
         _userDataManager.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), audio))
@@ -600,7 +600,7 @@ public class AplUserEventHandlerTests : PluginTestBase, IDisposable
         var audio = new Audio { Name = "Finished Track", Id = itemId };
         _libraryManager.Setup(l => l.GetItemById(itemId)).Returns(audio);
 
-        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
         _userManager.Setup(u => u.GetUserById(session.UserId)).Returns(jellyfinUser);
 
         var playedData = new UserItemData
@@ -887,7 +887,7 @@ public class AplUserEventHandlerTests : PluginTestBase, IDisposable
 
         var movie = new MediaBrowser.Controller.Entities.Movies.Movie { Name = "Test Movie", Id = itemId };
         _libraryManager.Setup(l => l.GetItemById(itemId)).Returns(movie);
-        _userManager.Setup(u => u.GetUserById(session.UserId)).Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+        _userManager.Setup(u => u.GetUserById(session.UserId)).Returns(TestHelpers.CreateJellyfinUser());
 
         var response = await _handler.HandleAsync(request, aplContext, _user, session, CancellationToken.None);
 
@@ -1047,7 +1047,7 @@ public class AplUserEventHandlerVideoAppTests : PluginTestBase, IDisposable
         var audio = new Audio { Name = "Audiobook Track", Id = itemId };
         _libraryManager.Setup(l => l.GetItemById(itemId)).Returns(audio);
 
-        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
         _userManager.Setup(u => u.GetUserById(session.UserId)).Returns(jellyfinUser);
 
         var progressData = new UserItemData

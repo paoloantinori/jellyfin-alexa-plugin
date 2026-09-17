@@ -278,8 +278,6 @@ public class SearchServiceTests : PluginTestBase
     private SearchService CreateSearchService(PluginConfiguration config)
         => new(config, _loggerFactory.CreateLogger<SearchServiceTests>(), requestTimeoutMs: 6000);
 
-    private record TestCandidate(string Name, Guid Id);
-
     /// <summary>
     /// Minimal probe pinning the BaseHandler ctor's Search composition (not the
     /// collaborator's own behavior, which the facts above test directly).

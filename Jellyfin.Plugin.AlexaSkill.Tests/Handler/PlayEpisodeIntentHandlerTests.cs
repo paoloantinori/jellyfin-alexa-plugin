@@ -119,7 +119,7 @@ public class PlayEpisodeIntentHandlerTests : PluginTestBase
     private void SetupUserMock()
     {
         _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+            .Returns(TestHelpers.CreateJellyfinUser());
     }
 
     [Fact]

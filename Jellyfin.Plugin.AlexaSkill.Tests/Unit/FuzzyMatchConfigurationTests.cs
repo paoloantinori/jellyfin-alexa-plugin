@@ -56,7 +56,7 @@ public class FuzzyMatchConfigurationTests : PluginTestBase, IDisposable
     {
         var candidates = new List<TestCandidate>
         {
-            new() { Name = "Abbey Road" },
+            new("Abbey Road", Guid.NewGuid()),
         };
 
         // "Abby Road" is a close typo of "Abbey Road" — should score well above 50
@@ -72,7 +72,7 @@ public class FuzzyMatchConfigurationTests : PluginTestBase, IDisposable
     {
         var candidates = new List<TestCandidate>
         {
-            new() { Name = "Abbey Road" },
+            new("Abbey Road", Guid.NewGuid()),
         };
 
         // Set a very high threshold so even a close match is rejected
@@ -87,7 +87,7 @@ public class FuzzyMatchConfigurationTests : PluginTestBase, IDisposable
     {
         var candidates = new List<TestCandidate>
         {
-            new() { Name = "Abbey Road" },
+            new("Abbey Road", Guid.NewGuid()),
         };
 
         // Null user should use default threshold of 60
@@ -102,7 +102,7 @@ public class FuzzyMatchConfigurationTests : PluginTestBase, IDisposable
     {
         var candidates = new List<TestCandidate>
         {
-            new() { Name = "The Dark Side of the Moon" },
+            new("The Dark Side of the Moon", Guid.NewGuid()),
         };
 
         // "Dark Side" is a partial match — will have a moderate score
@@ -117,7 +117,7 @@ public class FuzzyMatchConfigurationTests : PluginTestBase, IDisposable
     {
         var candidates = new List<TestCandidate>
         {
-            new() { Name = "Abbey Road" },
+            new("Abbey Road", Guid.NewGuid()),
         };
 
         // Even a very close match should be rejected with threshold 100 (only exact matches)
@@ -132,7 +132,7 @@ public class FuzzyMatchConfigurationTests : PluginTestBase, IDisposable
     {
         var candidates = new List<TestCandidate>
         {
-            new() { Name = "Abbey Road" },
+            new("Abbey Road", Guid.NewGuid()),
         };
 
         var user = new User { FuzzyMatchThreshold = 100 };
@@ -149,7 +149,7 @@ public class FuzzyMatchConfigurationTests : PluginTestBase, IDisposable
     {
         var candidates = new List<TestCandidate>
         {
-            new() { Id = Guid.NewGuid(), Name = "Abbey Road" },
+            new("Abbey Road", Guid.NewGuid()),
         };
 
         var user = new User
@@ -182,7 +182,7 @@ public class FuzzyMatchConfigurationTests : PluginTestBase, IDisposable
     {
         var candidates = new List<TestCandidate>
         {
-            new() { Id = Guid.NewGuid(), Name = "Abbey Road" },
+            new("Abbey Road", Guid.NewGuid()),
         };
 
         var user = new User
@@ -214,7 +214,7 @@ public class FuzzyMatchConfigurationTests : PluginTestBase, IDisposable
     {
         var candidates = new List<TestCandidate>
         {
-            new() { Id = Guid.NewGuid(), Name = "Abbey Road" },
+            new("Abbey Road", Guid.NewGuid()),
         };
 
         var user = new User
@@ -248,7 +248,7 @@ public class FuzzyMatchConfigurationTests : PluginTestBase, IDisposable
     {
         var candidates = new List<TestCandidate>
         {
-            new() { Id = Guid.NewGuid(), Name = "Abbey Road" },
+            new("Abbey Road", Guid.NewGuid()),
         };
 
         var user = new User
@@ -280,7 +280,7 @@ public class FuzzyMatchConfigurationTests : PluginTestBase, IDisposable
         var candidateId = Guid.NewGuid();
         var candidates = new List<TestCandidate>
         {
-            new() { Id = candidateId, Name = "Abbey Road" },
+            new("Abbey Road", candidateId),
         };
 
         var user = new User
@@ -313,7 +313,7 @@ public class FuzzyMatchConfigurationTests : PluginTestBase, IDisposable
     {
         var candidates = new List<TestCandidate>
         {
-            new() { Id = Guid.NewGuid(), Name = "Completely Different Album Title" },
+            new("Completely Different Album Title", Guid.NewGuid()),
         };
 
         var user = new User
@@ -400,15 +400,6 @@ public class FuzzyMatchConfigurationTests : PluginTestBase, IDisposable
     }
 
     // --- Test helper types ---
-
-    /// <summary>
-    /// Simple test candidate for fuzzy matching tests.
-    /// </summary>
-    private class TestCandidate
-    {
-        public Guid Id { get; set; } = Guid.NewGuid();
-        public string Name { get; set; } = string.Empty;
-    }
 
     /// <summary>
     /// Minimal concrete handler to expose FuzzyMatch (the Search collaborator's

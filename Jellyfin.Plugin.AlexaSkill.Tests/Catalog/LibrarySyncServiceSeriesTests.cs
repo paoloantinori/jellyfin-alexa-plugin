@@ -110,7 +110,7 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
         {
             SetupLibraryWithSeries("Adolescence");
             var user = CreateUser();
-            var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+            var jellyfinUser = TestHelpers.CreateJellyfinUser();
 
             var result = await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
 
@@ -145,7 +145,7 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
         // Expired well before now.
         user.SmapiDeviceToken = new DeviceToken(
             "expired-token", "refresh-token", "Bearer", DateTimeOffset.UtcNow.AddHours(-2).ToUnixTimeSeconds());
-        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
 
         var result = await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
 
@@ -165,7 +165,7 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
     {
         SetupLibraryWithSeries("Adolescence");
         var user = CreateUser();
-        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
         _smapiHandler.FailVersionUploadsWith401Times = 1;
 
         var result = await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
@@ -194,7 +194,7 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
     {
         SetupLibraryWithSeries("Adolescence");
         var user = CreateUser();
-        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
         Plugin.Instance!.Configuration.CatalogSyncLocales = "ar-SA";
 
         try
@@ -224,7 +224,7 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
         // Arrange
         SetupLibraryWithSeries("Adolescence", "Breaking Bad");
         var user = CreateUser();
-        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
 
         // Act
         var result = await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
@@ -267,7 +267,7 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
         // Arrange
         SetupLibraryWithSeries("Adolescence");
         var user = CreateUser();
-        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
 
         // Act
         await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
@@ -293,7 +293,7 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
         // Arrange
         SetupLibraryWithSeries();
         var user = CreateUser();
-        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
 
         // Act
         var result = await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
@@ -315,7 +315,7 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
         // Arrange
         SetupLibraryWithSeries("Adolescence");
         var user = CreateUser();
-        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
 
         // Act
         var result = await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
@@ -341,7 +341,7 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
         _smapiHandler.TrackModelBuild = true;
         SetupLibraryWithSeries("Adolescence");
         var user = CreateUser();
-        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
 
         // Act
         var result = await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
@@ -372,7 +372,7 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
                 : new List<BaseItem>());
         var user = CreateUser();
         user.SeriesCatalogId = "amzn1.catalog.test.stored-series";
-        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
 
         // Act
         var result = await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);

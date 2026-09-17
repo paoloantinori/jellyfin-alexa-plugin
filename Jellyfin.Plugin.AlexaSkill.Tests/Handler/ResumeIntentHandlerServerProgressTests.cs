@@ -41,7 +41,7 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
 
     public ResumeIntentHandlerServerProgressTests()
     {
-        _jellyfinUser = new JellyfinUser("testuser", "test", "test");
+        _jellyfinUser = TestHelpers.CreateJellyfinUser();
         _sessionUserId = Guid.NewGuid();
 
         TestHelpers.EnsurePluginInstance(

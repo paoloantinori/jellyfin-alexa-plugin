@@ -80,7 +80,7 @@ public class CrossMediaFallbackMusicGateTests : PluginTestBase, IDisposable
     {
         DisableMusic();
         ArmArtist("Abbey Road");
-        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
 
         var probe = new SharedGateProbeHandler(_fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory);
         SkillResponse? result = await probe.CallTryEntityFallbackAsync(
@@ -167,7 +167,7 @@ public class CrossMediaFallbackMusicGateTests : PluginTestBase, IDisposable
 
         var probe = new SharedGateProbeHandler(_fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory);
         SkillResponse? result = await probe.CallTryAlbumFallbackAsync(
-            "abbey road", CreateUserJellyfin(), _fx.CreateUser(), _fx.CreateSession(), _fx.CreateContext(), "en-US",
+            "abbey road", TestHelpers.CreateJellyfinUser(), _fx.CreateUser(), _fx.CreateSession(), _fx.CreateContext(), "en-US",
             _fx.LibraryManager.Object, _fx.UserDataManager.Object, "album gate probe", CancellationToken.None);
 
         Assert.Null(result);
@@ -183,13 +183,10 @@ public class CrossMediaFallbackMusicGateTests : PluginTestBase, IDisposable
             _fx.UserDataManager.Object,
             _fx.LoggerFactory);
 
-    private static Jellyfin.Database.Implementations.Entities.User CreateUserJellyfin()
-        => new("testuser", "test", "test");
-
     private void SetupUserMock()
     {
         _fx.UserManager.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(CreateUserJellyfin());
+            .Returns(TestHelpers.CreateJellyfinUser());
     }
 
     /// <summary>

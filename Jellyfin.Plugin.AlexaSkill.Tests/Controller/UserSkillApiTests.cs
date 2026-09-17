@@ -16,6 +16,7 @@ using Moq;
 using Newtonsoft.Json;
 using Xunit;
 using static Jellyfin.Plugin.AlexaSkill.Tests.Unit.TestHelpers;
+using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Controller;
 
@@ -1083,11 +1084,8 @@ public class UserSkillApiTests : PluginTestBase, IDisposable
     /// </summary>
     private void SetupJellyfinUser(string username, Guid userId)
     {
-        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User(
-            username, "authProviderId", "passwordProviderId")
-        {
-            Id = userId,
-        };
+        var jellyfinUser = TestHelpers.CreateJellyfinUser(username, "authProviderId", "passwordProviderId");
+        jellyfinUser.Id = userId;
 
         _userManagerMock
             .Setup(m => m.GetUserByName(username))

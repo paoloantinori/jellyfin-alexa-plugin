@@ -100,7 +100,7 @@ public class BrowseLibraryIntentHandlerTests : PluginTestBase
     private void SetupUserMock()
     {
         _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+            .Returns(TestHelpers.CreateJellyfinUser());
     }
 
     /// <summary>
@@ -143,7 +143,7 @@ public class BrowseLibraryIntentHandlerTests : PluginTestBase
         var session = CreateSession();
 
         _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+            .Returns(TestHelpers.CreateJellyfinUser());
         _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.Genres != null && q.Genres.Contains("rock"))))
             .Returns(new List<MediaBrowser.Controller.Entities.BaseItem>());
 

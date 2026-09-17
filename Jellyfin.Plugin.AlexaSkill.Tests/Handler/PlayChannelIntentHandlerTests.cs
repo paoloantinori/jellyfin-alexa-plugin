@@ -44,7 +44,7 @@ public class PlayChannelIntentHandlerTests : PluginTestBase
         _userManagerMock = new Mock<IUserManager>();
         _userManagerMock
             .Setup(um => um.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+            .Returns(TestHelpers.CreateJellyfinUser());
         // By default the resolver returns a direct-remote stream so found-channel tests
         // reach the VideoApp.Launch path. Individual tests override this as needed.
         _resolverMock = new Mock<ILiveTvStreamResolver>();

@@ -3,9 +3,10 @@ id: JF-573
 title: >-
   Test hygiene: hoist the remaining private Audio factories and the 4-copy
   TestCandidate record to TestHelpers
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-15 22:58'
+updated_date: '2026-09-17 08:26'
 labels: []
 dependencies: []
 references:
@@ -42,3 +43,9 @@ Mechanical-only migration: assertions must not change, only the construction/imp
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Migration complete (2026-09-17, mechanical batch). (1) Both stale reflection-based Audio factories deleted: PostPlayHandlerTests.CreateAudioItem (13 call sites) and FindSongIntentHandlerTests.CreateAudioItem (40 call sites) replaced with TestHelpers.CreateSong(name, id[, genres]); equivalence confirmed, CreateSong sets Name/Id via a plain initializer which is what the reflection SetValue did. (2) The 4-copy TestCandidate hoisted to one internal record TestCandidate(string Name, Guid Id) at namespace level in TestHelpers.cs (nested in the static class does not resolve unqualified at call sites, so it sits beside the class). Private copies deleted from FuzzyMatchAutoAcceptTests, HandleFuzzyMissNullGuardTests, SearchServiceTests, and FuzzyMatchConfigurationTests; the class-form's object-initializer sites were rewritten positionally (new("Abbey Road", Guid.NewGuid()) etc.), preserving the unique-Id semantics the old class default gave. Assertions untouched. Suite green both TFMs (4028/4028 each).
+<!-- SECTION:NOTES:END -->

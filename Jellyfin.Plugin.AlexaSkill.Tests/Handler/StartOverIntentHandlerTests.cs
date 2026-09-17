@@ -40,7 +40,7 @@ public class StartOverIntentHandlerTests : PluginTestBase, IDisposable
 
     public StartOverIntentHandlerTests()
     {
-        _jellyfinUser = new JellyfinUser("testuser", "test", "test");
+        _jellyfinUser = TestHelpers.CreateJellyfinUser();
         _sessionUserId = Guid.NewGuid();
         // By default the resolver returns a direct-remote stream so channel-restart
         // tests reach the VideoApp.Launch path; individual tests override this.

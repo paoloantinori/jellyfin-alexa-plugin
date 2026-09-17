@@ -3,9 +3,10 @@ id: JF-571
 title: >-
   Test cleanup: migrate the ~43 private Jellyfin-user factory copies to
   TestHelpers.CreateJellyfinUser()
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-15 13:55'
+updated_date: '2026-09-17 08:26'
 labels:
   - tech-debt
   - test-cleanup
@@ -34,3 +35,9 @@ The JF-315 batch 2 /simplify review added TestHelpers.CreateJellyfinUser() as th
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Migration complete (2026-09-17, mechanical batch). All 77 raw `new Jellyfin.Database.Implementations.Entities.User(...)` occurrences across 36 files migrated to TestHelpers.CreateJellyfinUser(); grep for the raw ctor outside TestHelpers.cs returns 0 hits. TestHelpers.CreateJellyfinUser gained optional params (name, authProviderId, passwordProviderId) to absorb the 8 non-default sites (7x ("Paolo","auth","provider") + 1x ("CompletelyDifferentName","auth","provider") in PlayFavoritesIntentHandlerTests) and the parameterized SetupJellyfinUser helper in UserSkillApiTests. Two sites needed the Id set after construction (User.Id set via initializer before; object-initializer syntax is invalid on a method result): UserSkillApiTests.SetupJellyfinUser and PlayNextEpisodeIntentHandlerTests line ~252. One inline literal inside TestHelpers itself also migrated. No documented stragglers remain. Suite green both TFMs (4028/4028 each).
+<!-- SECTION:NOTES:END -->

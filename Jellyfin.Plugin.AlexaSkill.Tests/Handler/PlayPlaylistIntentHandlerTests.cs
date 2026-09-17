@@ -83,7 +83,7 @@ public class PlayPlaylistIntentHandlerTests : PluginTestBase
         user.AllowedLibraryIds = new List<string> { cfId.ToString() };
 
         _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+            .Returns(TestHelpers.CreateJellyfinUser());
 
         var cf = new CollectionFolder { Id = cfId };
         cf.PhysicalLocationsList = new[] { "/data/media/music" };
@@ -175,7 +175,7 @@ public class PlayPlaylistIntentHandlerTests : PluginTestBase
     private void SetupTwoPlaylistCandidates()
     {
         _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+            .Returns(TestHelpers.CreateJellyfinUser());
 
         _libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
             .Returns(new QueryResult<BaseItem>

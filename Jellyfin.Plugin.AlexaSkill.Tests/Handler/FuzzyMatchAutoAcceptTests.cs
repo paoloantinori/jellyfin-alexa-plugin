@@ -19,6 +19,7 @@ using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
+using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
@@ -951,11 +952,6 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
     {
         return new TestableBaseHandler(_sessionManagerMock.Object, config, _loggerFactory);
     }
-
-    /// <summary>
-    /// Test candidate record representing a media item with a name and ID.
-    /// </summary>
-    private record TestCandidate(string Name, Guid Id);
 
     /// <summary>
     /// Testable subclass that exposes the protected HandleFuzzyMiss method.

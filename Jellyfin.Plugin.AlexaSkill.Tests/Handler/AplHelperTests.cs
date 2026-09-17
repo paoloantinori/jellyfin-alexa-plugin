@@ -164,7 +164,7 @@ public class AplHelperTests : PluginTestBase
         };
 
         userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+            .Returns(TestHelpers.CreateJellyfinUser());
 
         libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { audio });
@@ -300,7 +300,7 @@ public class AplHelperTests : PluginTestBase
         };
 
         userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+            .Returns(TestHelpers.CreateJellyfinUser());
 
         libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { audio });
@@ -351,7 +351,7 @@ public class AplHelperTests : PluginTestBase
         };
 
         userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+            .Returns(TestHelpers.CreateJellyfinUser());
 
         libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { audio1, audio2 });
@@ -398,7 +398,7 @@ public class AplHelperTests : PluginTestBase
         };
 
         userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+            .Returns(TestHelpers.CreateJellyfinUser());
 
         libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { audio1, audio2 });
@@ -538,7 +538,7 @@ public class AplHelperTests : PluginTestBase
         };
 
         userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+            .Returns(TestHelpers.CreateJellyfinUser());
 
         libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { audio });
@@ -590,7 +590,7 @@ public class AplHelperTests : PluginTestBase
         };
 
         userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+            .Returns(TestHelpers.CreateJellyfinUser());
 
         libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { audio });

@@ -157,7 +157,7 @@ public class DeadMicSweepElicitTests : PluginTestBase
     {
         var userManager = new Mock<IUserManager>();
         userManager.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+            .Returns(TestHelpers.CreateJellyfinUser());
         var handler = new BrowseLibraryIntentHandler(_sessionManager.Object, _config, Mock.Of<ILibraryManager>(), userManager.Object, NullLoggerFactory.Instance);
 
         return AssertElicitsAsync(

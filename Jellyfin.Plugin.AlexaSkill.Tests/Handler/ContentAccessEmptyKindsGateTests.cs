@@ -216,7 +216,7 @@ public class ContentAccessEmptyKindsGateTests : PluginTestBase, IDisposable
         var probe = new FindProgressProbeHandler(_fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory);
 
         var (item, ticks) = probe.CallFindLastPlayedItemWithProgress(
-            new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"),
+            TestHelpers.CreateJellyfinUser(),
             _fx.LibraryManager.Object,
             _fx.UserDataManager.Object,
             _fx.CreateUser(),
@@ -236,7 +236,7 @@ public class ContentAccessEmptyKindsGateTests : PluginTestBase, IDisposable
         var probe = new FindProgressProbeHandler(_fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory);
 
         var (item, _) = probe.CallFindLastPlayedItemWithProgress(
-            new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"),
+            TestHelpers.CreateJellyfinUser(),
             _fx.LibraryManager.Object,
             _fx.UserDataManager.Object,
             _fx.CreateUser(),

@@ -116,7 +116,7 @@ public class PlayNextEpisodeIntentHandlerTests : PluginTestBase
     private void SetupUserMock()
     {
         _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+            .Returns(TestHelpers.CreateJellyfinUser());
     }
 
     private global::MediaBrowser.Controller.Entities.TV.Series SetupSeriesFound(string name = "The Office")
@@ -249,7 +249,8 @@ public class PlayNextEpisodeIntentHandlerTests : PluginTestBase
         var user = CreateUser();
         var session = CreateSession();
 
-        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test") { Id = Guid.NewGuid() };
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
+        jellyfinUser.Id = Guid.NewGuid();
         _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>())).Returns(jellyfinUser);
         var series = SetupSeriesFound();
         SetupNextUp("The Convention", series.Id, remux: true);

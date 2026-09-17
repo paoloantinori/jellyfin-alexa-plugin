@@ -734,7 +734,7 @@ public class RadioModeTests : PluginTestBase, IDisposable
     private void SetupJellyfinUser()
     {
         _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+            .Returns(TestHelpers.CreateJellyfinUser());
     }
 
     /// <summary>
@@ -850,7 +850,7 @@ public class RadioModeTests : PluginTestBase, IDisposable
             .Returns(new List<MediaBrowser.Controller.Entities.BaseItem> { new Audio { Id = similarId, Name = "Similar Rock Song" } });
 
         _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+            .Returns(TestHelpers.CreateJellyfinUser());
 
         var response = await handler.HandleAsync(
             CreateNearlyFinishedRequest(currentId.ToString()), context, TestHelpers.CreateTestUser(), session, CancellationToken.None);

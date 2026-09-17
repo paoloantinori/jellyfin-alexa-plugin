@@ -83,7 +83,7 @@ public class PlayFavoritesIntentHandlerTests : PluginTestBase
     private void SetupUserMock()
     {
         _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+            .Returns(TestHelpers.CreateJellyfinUser());
     }
 
     [Fact]
@@ -128,7 +128,7 @@ public class PlayFavoritesIntentHandlerTests : PluginTestBase
 
         SetupUserMock();
 
-        var audioItem = CreateTestAudio("Favorite Song", Guid.NewGuid());
+        var audioItem = TestHelpers.CreateSong("Favorite Song", Guid.NewGuid());
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { audioItem });
         _libraryManagerMock.Setup(l => l.GetItemById(It.IsAny<Guid>()))
@@ -177,11 +177,11 @@ public class PlayFavoritesIntentHandlerTests : PluginTestBase
         var paoloPluginUser = new Entities.User { Id = Guid.NewGuid(), InvocationName = "test" };
         _config.Users.Add(paoloPluginUser);
 
-        var paoloJellyfinUser = new Jellyfin.Database.Implementations.Entities.User("Paolo", "auth", "provider");
+        var paoloJellyfinUser = TestHelpers.CreateJellyfinUser("Paolo", "auth", "provider");
         _userManagerMock.Setup(u => u.GetUserById(paoloPluginUser.Id))
             .Returns(paoloJellyfinUser);
 
-        var audioItem = CreateTestAudio("Paolo's Favorite Song", Guid.NewGuid());
+        var audioItem = TestHelpers.CreateSong("Paolo's Favorite Song", Guid.NewGuid());
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { audioItem });
         _libraryManagerMock.Setup(l => l.GetItemById(It.IsAny<Guid>()))
@@ -211,11 +211,11 @@ public class PlayFavoritesIntentHandlerTests : PluginTestBase
         var paoloPluginUser = new Entities.User { Id = Guid.NewGuid(), InvocationName = "test" };
         _config.Users.Add(paoloPluginUser);
 
-        var paoloJellyfinUser = new Jellyfin.Database.Implementations.Entities.User("Paolo", "auth", "provider");
+        var paoloJellyfinUser = TestHelpers.CreateJellyfinUser("Paolo", "auth", "provider");
         _userManagerMock.Setup(u => u.GetUserById(paoloPluginUser.Id))
             .Returns(paoloJellyfinUser);
 
-        var audioItem = CreateTestAudio("Paolo's Favorite Song", Guid.NewGuid());
+        var audioItem = TestHelpers.CreateSong("Paolo's Favorite Song", Guid.NewGuid());
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { audioItem });
         _libraryManagerMock.Setup(l => l.GetItemById(It.IsAny<Guid>()))
@@ -240,7 +240,7 @@ public class PlayFavoritesIntentHandlerTests : PluginTestBase
         var otherPluginUser = new Entities.User { Id = Guid.NewGuid(), InvocationName = "test" };
         _config.Users.Add(otherPluginUser);
 
-        var otherJellyfinUser = new Jellyfin.Database.Implementations.Entities.User("CompletelyDifferentName", "auth", "provider");
+        var otherJellyfinUser = TestHelpers.CreateJellyfinUser("CompletelyDifferentName", "auth", "provider");
         _userManagerMock.Setup(u => u.GetUserById(otherPluginUser.Id))
             .Returns(otherJellyfinUser);
 
@@ -281,11 +281,11 @@ public class PlayFavoritesIntentHandlerTests : PluginTestBase
         var paoloPluginUser = new Entities.User { Id = Guid.NewGuid(), InvocationName = "test" };
         _config.Users.Add(paoloPluginUser);
 
-        var paoloJellyfinUser = new Jellyfin.Database.Implementations.Entities.User("Paolo", "auth", "provider");
+        var paoloJellyfinUser = TestHelpers.CreateJellyfinUser("Paolo", "auth", "provider");
         _userManagerMock.Setup(u => u.GetUserById(paoloPluginUser.Id))
             .Returns(paoloJellyfinUser);
 
-        var audioItem = CreateTestAudio("Favorite Song", Guid.NewGuid());
+        var audioItem = TestHelpers.CreateSong("Favorite Song", Guid.NewGuid());
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { audioItem });
         _libraryManagerMock.Setup(l => l.GetItemById(It.IsAny<Guid>()))
@@ -309,7 +309,7 @@ public class PlayFavoritesIntentHandlerTests : PluginTestBase
         var pluginUser = new Entities.User { Id = Guid.NewGuid(), InvocationName = "test" };
         _config.Users.Add(pluginUser);
 
-        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("Paolo", "auth", "provider");
+        var jellyfinUser = TestHelpers.CreateJellyfinUser("Paolo", "auth", "provider");
         _userManagerMock.Setup(u => u.GetUserById(pluginUser.Id))
             .Returns(jellyfinUser);
 
@@ -327,7 +327,7 @@ public class PlayFavoritesIntentHandlerTests : PluginTestBase
         var pluginUser = new Entities.User { Id = Guid.NewGuid(), InvocationName = "test" };
         _config.Users.Add(pluginUser);
 
-        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("Paolo", "auth", "provider");
+        var jellyfinUser = TestHelpers.CreateJellyfinUser("Paolo", "auth", "provider");
         _userManagerMock.Setup(u => u.GetUserById(pluginUser.Id))
             .Returns(jellyfinUser);
 
@@ -345,7 +345,7 @@ public class PlayFavoritesIntentHandlerTests : PluginTestBase
         var pluginUser = new Entities.User { Id = Guid.NewGuid(), InvocationName = "test" };
         _config.Users.Add(pluginUser);
 
-        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("Paolo", "auth", "provider");
+        var jellyfinUser = TestHelpers.CreateJellyfinUser("Paolo", "auth", "provider");
         _userManagerMock.Setup(u => u.GetUserById(pluginUser.Id))
             .Returns(jellyfinUser);
 
@@ -363,7 +363,7 @@ public class PlayFavoritesIntentHandlerTests : PluginTestBase
         var pluginUser = new Entities.User { Id = Guid.NewGuid(), InvocationName = "test" };
         _config.Users.Add(pluginUser);
 
-        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("Paolo", "auth", "provider");
+        var jellyfinUser = TestHelpers.CreateJellyfinUser("Paolo", "auth", "provider");
         _userManagerMock.Setup(u => u.GetUserById(pluginUser.Id))
             .Returns(jellyfinUser);
 
@@ -382,12 +382,4 @@ public class PlayFavoritesIntentHandlerTests : PluginTestBase
         Assert.Null(result);
     }
 
-    private static Audio CreateTestAudio(string name, Guid id)
-    {
-        return new Audio
-        {
-            Name = name,
-            Id = id,
-        };
-    }
 }

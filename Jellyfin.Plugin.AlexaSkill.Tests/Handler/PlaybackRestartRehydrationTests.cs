@@ -196,7 +196,7 @@ public class PlaybackRestartRehydrationTests : PluginTestBase, IDisposable
             .Returns(new List<BaseItem> { radioTrack }.AsReadOnly());
 
         _userManagerMock.Setup(um => um.GetUserById(_userId))
-            .Returns(new JellyfinUser("test", "test", "test") { Id = _userId });
+            .Returns(TestHelpers.CreateJellyfinUser(authProviderId: "test", passwordProviderId: "test", id: _userId));
     }
 
     private (Request request, Context context, Entities.User user, SessionInfo session)

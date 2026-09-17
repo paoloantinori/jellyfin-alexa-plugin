@@ -105,7 +105,7 @@ public class PlayRandomIntentHandlerTests : PluginTestBase
     private void SetupUserMock()
     {
         _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+            .Returns(TestHelpers.CreateJellyfinUser());
     }
 
     [Fact]
@@ -170,7 +170,7 @@ public class PlayRandomIntentHandlerTests : PluginTestBase
 
         SetupUserMock();
 
-        var audioItem = CreateTestAudio("Test Song", Guid.NewGuid());
+        var audioItem = TestHelpers.CreateSong("Test Song", Guid.NewGuid());
 
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { audioItem });
@@ -197,7 +197,7 @@ public class PlayRandomIntentHandlerTests : PluginTestBase
         InternalItemsQuery? capturedQuery = null;
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Callback<InternalItemsQuery>(q => capturedQuery = q)
-            .Returns(new List<BaseItem> { CreateTestAudio("Rock Song", Guid.NewGuid()) });
+            .Returns(new List<BaseItem> { TestHelpers.CreateSong("Rock Song", Guid.NewGuid()) });
 
         await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -333,12 +333,4 @@ public class PlayRandomIntentHandlerTests : PluginTestBase
         Assert.False(handler.Progressive.Contains("Rock & Roll"), "announce off must not send a progressive announce");
     }
 
-    private static Audio CreateTestAudio(string name, Guid id)
-    {
-        return new Audio
-        {
-            Name = name,
-            Id = id,
-        };
-    }
 }

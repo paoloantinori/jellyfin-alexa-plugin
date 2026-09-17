@@ -121,11 +121,7 @@ public class LibraryFilterIntegrationTests : PluginTestBase, IDisposable
 
     private void SetupJellyfinUser()
     {
-        var jellyfinUser = new global::Jellyfin.Database.Implementations.Entities.User(
-            "testuser", "test", "test")
-        {
-            Id = Guid.NewGuid(),
-        };
+        var jellyfinUser = TestHelpers.CreateJellyfinUser(id: Guid.NewGuid());
         _userManagerMock.Setup(um => um.GetUserById(It.IsAny<Guid>())).Returns(jellyfinUser);
     }
 

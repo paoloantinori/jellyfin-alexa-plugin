@@ -232,7 +232,7 @@ public class MusicPrimaryPathGateTests : PluginTestBase, IDisposable
 
         var probe = new SharedGateProbeHandler(_fx.SessionManager.Object, staleConfig, _fx.LoggerFactory);
         SkillResponse? result = await probe.CallTryEntityFallbackAsync(
-            "abbey road", CreateUserJellyfin(), _fx.CreateUser(), _fx.CreateSession(), _fx.CreateContext(), "en-US",
+            "abbey road", TestHelpers.CreateJellyfinUser(), _fx.CreateUser(), _fx.CreateSession(), _fx.CreateContext(), "en-US",
             _fx.LibraryManager.Object, _fx.UserDataManager.Object, "read-source probe", CancellationToken.None);
 
         Assert.Null(result);
@@ -251,7 +251,7 @@ public class MusicPrimaryPathGateTests : PluginTestBase, IDisposable
 
         var probe = new SharedGateProbeHandler(_fx.SessionManager.Object, injected, _fx.LoggerFactory);
         SkillResponse? result = await probe.CallTryEntityFallbackAsync(
-            "abbey road", CreateUserJellyfin(), _fx.CreateUser(), _fx.CreateSession(), _fx.CreateContext(), "en-US",
+            "abbey road", TestHelpers.CreateJellyfinUser(), _fx.CreateUser(), _fx.CreateSession(), _fx.CreateContext(), "en-US",
             _fx.LibraryManager.Object, _fx.UserDataManager.Object, "fallback probe", CancellationToken.None);
 
         Assert.Null(result);
@@ -309,13 +309,10 @@ public class MusicPrimaryPathGateTests : PluginTestBase, IDisposable
             _fx.UserDataManager.Object,
             _fx.LoggerFactory);
 
-    private static Jellyfin.Database.Implementations.Entities.User CreateUserJellyfin()
-        => new("testuser", "test", "test");
-
     private void SetupUserMock()
     {
         _fx.UserManager.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(CreateUserJellyfin());
+            .Returns(TestHelpers.CreateJellyfinUser());
     }
 
     /// <summary>

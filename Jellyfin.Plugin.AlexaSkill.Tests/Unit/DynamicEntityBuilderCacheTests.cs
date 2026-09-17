@@ -46,7 +46,7 @@ public class DynamicEntityBuilderCacheTests
 
     private void SetupUserAndLibrary(Guid userId, List<BaseItem> artists, List<BaseItem> albums)
     {
-        var jellyfinUser = new User("testuser", "test", "test");
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
         _userManagerMock
             .Setup(um => um.GetUserById(userId))
             .Returns(jellyfinUser);
@@ -242,8 +242,8 @@ public class DynamicEntityBuilderCacheTests
             new MusicArtist { Name = "Queen", Id = Guid.NewGuid() }
         };
 
-        var jellyfinUser1 = new User("user1", "test", "test");
-        var jellyfinUser2 = new User("user2", "test", "test");
+        var jellyfinUser1 = TestHelpers.CreateJellyfinUser(name: "user1");
+        var jellyfinUser2 = TestHelpers.CreateJellyfinUser(name: "user2");
 
         _userManagerMock.Setup(um => um.GetUserById(user1)).Returns(jellyfinUser1);
         _userManagerMock.Setup(um => um.GetUserById(user2)).Returns(jellyfinUser2);

@@ -49,7 +49,7 @@ public class FollowMeIntentHandlerTests : PluginTestBase, IDisposable
 
         // Set up user manager to return a valid Jellyfin user for any ID
         _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+            .Returns(TestHelpers.CreateJellyfinUser());
 
         _tempDir = TestHelpers.CreateRegisteredTempDir("followme-test");
         var qmLogger = _loggerFactory.CreateLogger<DeviceQueueManager>();

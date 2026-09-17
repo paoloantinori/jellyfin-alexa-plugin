@@ -41,7 +41,7 @@ public class YesIntentHandlerTests : PluginTestBase
         _userManagerMock = new Mock<IUserManager>();
         _userManagerMock
             .Setup(um => um.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+            .Returns(TestHelpers.CreateJellyfinUser());
         _config = new PluginConfiguration();
         TestHelpers.SetServerAddress(_config, "http://localhost:8096");
         _loggerFactory = LoggerFactory.Create(b => { });

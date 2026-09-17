@@ -42,7 +42,7 @@ public class DynamicEntityBuilderTests
 
     private void SetupUserMock(Guid userId)
     {
-        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
         _userManagerMock
             .Setup(um => um.GetUserById(userId))
             .Returns(jellyfinUser);

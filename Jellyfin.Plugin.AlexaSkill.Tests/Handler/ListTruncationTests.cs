@@ -55,7 +55,7 @@ public class ListTruncationTests : PluginTestBase
         var items = new List<Audio>();
         for (int i = 0; i < count; i++)
         {
-            items.Add(new Audio { Name = $"Track {i + 1}", Id = Guid.NewGuid() });
+            items.Add(TestHelpers.CreateSong($"Track {i + 1}"));
         }
 
         return items;

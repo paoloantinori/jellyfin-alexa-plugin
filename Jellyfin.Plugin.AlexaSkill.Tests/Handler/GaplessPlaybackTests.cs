@@ -832,7 +832,7 @@ public class GaplessPlaybackTests : PluginTestBase, IDisposable
             .Returns(new List<MediaBrowser.Controller.Entities.BaseItem> { similarTrack });
 
         _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+            .Returns(TestHelpers.CreateJellyfinUser());
 
         _libraryManagerMock.Setup(l => l.GetItemById(similarId)).Returns(similarTrack);
 
@@ -872,7 +872,7 @@ public class GaplessPlaybackTests : PluginTestBase, IDisposable
             .Returns(new List<MediaBrowser.Controller.Entities.BaseItem>());
 
         _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+            .Returns(TestHelpers.CreateJellyfinUser());
 
         var response = await handler.HandleAsync(
             CreateNearlyFinishedRequest(currentId.ToString()),

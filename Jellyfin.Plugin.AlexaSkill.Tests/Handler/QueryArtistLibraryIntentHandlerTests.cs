@@ -465,7 +465,7 @@ public class QueryArtistLibraryIntentHandlerTests : PluginTestBase
         var handler = CreateHandler(artistIndex.Object, songIndex);
         var request = CreateIntentRequest(musician: "sugar free jazz");
         _fx.UserManager.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test"));
+            .Returns(TestHelpers.CreateJellyfinUser());
 
         SkillResponse response = await handler.HandleAsync(
             request, TestHelpers.CreateTestContext(), TestHelpers.CreateTestUser(),

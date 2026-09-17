@@ -18,6 +18,7 @@ using MediaBrowser.Controller.Library;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
+using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Catalog;
 
@@ -78,7 +79,7 @@ public class LibrarySyncServiceTests
         // Arrange
         var musicLibId = Guid.NewGuid();
         var user = CreatePluginUser(allowedLibraryIds: new List<string> { musicLibId.ToString() });
-        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
         var service = CreateService();
 
         List<InternalItemsQuery> capturedQueries = new List<InternalItemsQuery>();
@@ -110,7 +111,7 @@ public class LibrarySyncServiceTests
     {
         // Arrange
         var user = CreatePluginUser(allowedLibraryIds: null);
-        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
         var service = CreateService();
 
         List<InternalItemsQuery> capturedQueries = new List<InternalItemsQuery>();
@@ -138,7 +139,7 @@ public class LibrarySyncServiceTests
     {
         // Arrange
         var user = CreatePluginUser(allowedLibraryIds: new List<string>());
-        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
         var service = CreateService();
 
         List<InternalItemsQuery> capturedQueries = new List<InternalItemsQuery>();
@@ -168,7 +169,7 @@ public class LibrarySyncServiceTests
         // Arrange
         const int ExpectedLimit = 50000;
         var user = CreatePluginUser();
-        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
         var service = CreateService();
 
         List<InternalItemsQuery> capturedQueries = new List<InternalItemsQuery>();
@@ -199,7 +200,7 @@ public class LibrarySyncServiceTests
         // Arrange
         var showLibId = Guid.NewGuid();
         var user = CreatePluginUser(allowedLibraryIds: new List<string> { showLibId.ToString() });
-        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
         var service = CreateService();
 
         List<InternalItemsQuery> capturedQueries = new List<InternalItemsQuery>();
@@ -229,7 +230,7 @@ public class LibrarySyncServiceTests
         // Arrange
         var user = CreatePluginUser();
         user.SmapiDeviceToken = null;
-        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
         var service = CreateService();
 
         // Act
@@ -250,7 +251,7 @@ public class LibrarySyncServiceTests
         // Arrange
         var user = CreatePluginUser();
         user.VendorId = null;
-        var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test");
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
         var service = CreateService();
 
         // Act
