@@ -167,12 +167,18 @@ public class StartOverIntentHandler : BaseHandler
         {
             // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
             // JF-501: the announce is spoken progressively (directive-only final response).
-            return await Launch.BuildVideoAppLaunchResponseAsync(
+            // JF-586: on a screenless device (an Echo Dot) an EPISODE restart degrades
+            // to the AudioPlayer audio-only launch instead of the screen-required
+            // refusal (the progress was just cleared, so resumeTicks stays 0); a movie
+            // keeps the capability refusal inside the shared builder.
+            return await Launch.BuildEpisodeLaunchResponseAsync(
                 context,
                 request,
                 locale,
+                item,
+                user,
                 Launch.GetVideoAppLaunchUrl(item, user),
-                item.Name,
+                resumeTicks: 0,
                 new PlainTextOutputSpeech(ResponseStrings.Get("RestartingContent", locale, item.Name))).ConfigureAwait(false);
         }
 

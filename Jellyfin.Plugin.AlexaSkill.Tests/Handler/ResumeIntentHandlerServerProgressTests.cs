@@ -266,6 +266,55 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
         Assert.Contains($"/alexaskill/api/video-audio/episode/{episodeId}/stream.m3u8?start={resumeTicks}&token=", directive.VideoItem.Source, StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// JF-586: the server-progress resume of an EPISODE on a SCREENLESS device (an
+    /// Echo Dot) degrades to the AudioPlayer audio-only launch instead of the
+    /// screen-required refusal; a decodable episode keeps the static /Audio stream
+    /// with the stored position on the DIRECTIVE (AudioPlayer can seek a static
+    /// stream; the VideoApp Static route cannot).
+    /// </summary>
+    [Fact]
+    public async Task ServerProgressFallback_Episode_ScreenlessDevice_DegradesToAudioPlayer()
+    {
+        var handler = CreateHandler();
+        var request = CreateResumeRequest();
+        var context = TestHelpers.CreateScreenlessContext();
+
+        var user = TestHelpers.CreateTestUser();
+        _fx.Config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
+        {
+            Id = user.Id,
+            AnnouncePositionOnResume = false
+        });
+
+        var session = CreateEmptySession();
+
+        var episodeId = Guid.NewGuid();
+        var episode = new MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "The Convention",
+            Id = episodeId,
+            Path = "/tv/the-office/s03e02.mkv",
+            RunTimeTicks = TimeSpan.FromMinutes(30).Ticks
+        };
+
+        _fx.LibraryManager.Setup(x => x.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { episode });
+
+        long resumeTicks = TimeSpan.FromMinutes(20).Ticks;
+        _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<JellyfinUser>(), It.IsAny<BaseItem>()))
+            .Returns(new UserItemData { Key = "test", PlaybackPositionTicks = resumeTicks, Played = false });
+
+        var response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        var directive = Assert.IsType<AudioPlayerPlayDirective>(Assert.Single(response.Response.Directives));
+        Assert.Contains($"/Audio/{episodeId}/stream?static=true&api_key=", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.Equal((int)TimeSpan.FromMinutes(20).TotalMilliseconds, directive.AudioItem.Stream.OffsetInMilliseconds);
+        Assert.True(response.Response.ShouldEndSession, "JF-299: the AudioPlayer play ends the session");
+        Assert.DoesNotContain("requires a device with a screen", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task ServerProgressFallback_NoProgress_ReturnsNoMediaPlaying()
     {
@@ -630,9 +679,6 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
             // JF-567 review major: server progress is CHAPTER-relative and must never
             // slice the whole-book concat timeline; with a cold tracker the book
             // flat-resumes at the chapter offset (no VideoApp directive).
-            Assert.DoesNotContain(
-                response.Response.Directives ?? Array.Empty<IDirective>(),
-                d => d is global::Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective);
             var audioDirective = Assert.IsType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>(
                 Assert.Single(response.Response.Directives!));
             Assert.Equal(

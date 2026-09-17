@@ -176,12 +176,18 @@ public class PlayEpisodeIntentHandler : BaseHandler
 
         // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
         // JF-501: the announce is spoken progressively (directive-only final response).
-        return await Launch.BuildVideoAppLaunchResponseAsync(
+        // JF-586: on a screenless device (an Echo Dot) the episode launch degrades to
+        // the AudioPlayer audio-only route instead of the screen-required refusal;
+        // resumeTicks stays 0 (the JF-565 fresh-play pin: an explicit season/episode
+        // ask is a relaunch-from-scratch).
+        return await Launch.BuildEpisodeLaunchResponseAsync(
             context,
             request,
             locale,
+            episode,
+            user,
             Launch.GetVideoAppLaunchUrl(episode, user),
-            episode.Name,
+            resumeTicks: 0,
             SpeechBuilder.BuildNowPlayingSpeech(episode.Name, locale, Launch.GetAnnounceNowPlaying(user))).ConfigureAwait(false);
     }
 }

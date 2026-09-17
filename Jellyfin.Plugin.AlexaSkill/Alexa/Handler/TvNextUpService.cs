@@ -399,13 +399,19 @@ public sealed class TvNextUpService
         // (it is a call argument, so it evaluates first) and BEFORE the final launch
         // response returns, so the fast-start HLS player cannot cut it mid-sentence
         // (observed case). JF-565: an in-progress next-up episode carries the resolved
-        // position (the ?start= slice).
-        return await _launch.BuildVideoAppLaunchResponseAsync(
+        // position (the ?start= slice). JF-586: on a screenless device (an Echo Dot,
+        // the web simulator) the episode launch degrades to the AudioPlayer audio-only
+        // route instead of the screen-required refusal; the session queue seeding above
+        // applies on both routes, so the JF-324 auto-advance (which exists only on the
+        // AudioPlayer event path) continues the series on the Dot.
+        return await _launch.BuildEpisodeLaunchResponseAsync(
             context,
             request,
             locale,
+            episode,
+            user,
             episodeUrl,
-            episode.Name,
+            resumeTicks,
             speech).ConfigureAwait(false);
     }
 

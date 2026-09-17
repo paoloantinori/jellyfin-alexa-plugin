@@ -398,6 +398,46 @@ public class PlayEpisodeIntentHandlerTests : PluginTestBase
     }
 
     /// <summary>
+    /// JF-586: an EXPLICIT season/episode ask on a SCREENLESS device (an Echo Dot)
+    /// degrades to the AudioPlayer audio-only launch instead of the screen-required
+    /// refusal; the transcode route (eac3) serves the audio-only episode HLS, the
+    /// fresh-play shape keeps no ?start= slice (the JF-565 fresh-play pin).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_ExplicitEpisode_ScreenlessDevice_DegradesToAudioPlayer()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(seriesName: "The Office", seasonNumber: "3", episodeNumber: "2");
+        var context = TestHelpers.CreateScreenlessContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+        SetupSeriesFound();
+
+        var episodeId = Guid.NewGuid();
+        var episode = new TestHelpers.TestEpisodeWithStreams(
+            "The Convention",
+            episodeId,
+            TestHelpers.TestStream(MediaBrowser.Model.Entities.MediaStreamType.Video, "h264"),
+            TestHelpers.TestStream(MediaBrowser.Model.Entities.MediaStreamType.Audio, "eac3"))
+        {
+            IndexNumber = 2
+        };
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Episode))))
+            .Returns(new List<BaseItem> { episode });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        var directive = Assert.IsType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>(Assert.Single(response.Response.Directives));
+        Assert.Contains($"/alexaskill/api/video-audio/episode/{episodeId}/audio.m3u8?token=", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.DoesNotContain("start=", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.True(response.Response.ShouldEndSession, "JF-299: the AudioPlayer play ends the session");
+        Assert.DoesNotContain("requires a device with a screen", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// JF-501: with the announce toggle OFF the launch must keep today's silent shape:
     /// no progressive announce (only the SearchingMedia ping may arrive) and no
     /// OutputSpeech on the final response.

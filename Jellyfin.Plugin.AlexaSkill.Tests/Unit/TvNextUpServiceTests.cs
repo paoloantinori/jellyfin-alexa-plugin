@@ -144,6 +144,132 @@ public class TvNextUpServiceTests : PluginTestBase
     }
 
     /// <summary>
+    /// JF-586: the user's primary use case ("riproduci l'ultimo episodio di morning"
+    /// on an Echo Dot): on a screenless device the shared launch tail degrades to the
+    /// AudioPlayer audio-only route instead of the VideoRequiresScreen refusal. An
+    /// eac3 episode rides the audio-only HLS transcode with the resume position
+    /// minted as ?start= (directive offset 0, JF-507), the announce survives on the
+    /// final response, and the session queue seeding still applies (the JF-324
+    /// auto-advance signal on the AudioPlayer path).
+    /// </summary>
+    [Fact]
+    public async Task PlayLatestEpisode_ScreenlessDevice_DegradesToAudioPlayerTranscodeWithResume()
+    {
+        var episodeId = Guid.NewGuid();
+        var episode = new TestHelpers.TestEpisodeWithStreams(
+            "Morning #42",
+            episodeId,
+            TestHelpers.TestStream(MediaStreamType.Video, "h264"),
+            TestHelpers.TestStream(MediaStreamType.Audio, "eac3"))
+        {
+            RunTimeTicks = TimeSpan.FromMinutes(30).Ticks
+        };
+        var series = new global::MediaBrowser.Controller.Entities.TV.Series { Name = "Morning", Id = Guid.NewGuid() };
+        long resumeTicks = TimeSpan.FromMinutes(12).Ticks;
+
+        var session = TestHelpers.CreateTestSession(new Mock<ISessionManager>().Object, _loggerFactory);
+        SkillResponse response = await PlayLatestAsync(
+            episode, series,
+            new UserItemData { Key = "test", Played = false, PlaybackPositionTicks = resumeTicks },
+            TestHelpers.CreateScreenlessContext(),
+            session);
+
+        var directive = Assert.IsType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>(Assert.Single(response.Response.Directives));
+        Assert.Contains($"/alexaskill/api/video-audio/episode/{episodeId}/audio.m3u8?start={resumeTicks}&token=", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
+        Assert.True(response.Response.ShouldEndSession, "JF-299: the AudioPlayer play ends the session");
+        Assert.Contains("Morning #42", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        Assert.DoesNotContain("requires a device with a screen", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        // Queue/now-playing coherence on the audio route (feeds the JF-324 advance).
+        Assert.Equal(episodeId.ToString(), session.FullNowPlayingItem?.Id.ToString());
+    }
+
+    /// <summary>
+    /// JF-586 static-route arm: a decodable episode on a screenless device degrades
+    /// to the plain static /Audio stream URL with NO offset and no refusal speech.
+    /// </summary>
+    [Fact]
+    public async Task PlayNextUp_ScreenlessDevice_DecodableEpisode_UsesStaticAudioStream()
+    {
+        var episodeId = Guid.NewGuid();
+        var episode = new global::MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "The Convention",
+            Id = episodeId,
+            RunTimeTicks = TimeSpan.FromMinutes(30).Ticks
+        };
+        var series = new global::MediaBrowser.Controller.Entities.TV.Series { Name = "The Office", Id = Guid.NewGuid() };
+
+        SkillResponse response = await PlayNextUpAsync(
+            episode, series,
+            new UserItemData { Key = "test", Played = false, PlaybackPositionTicks = 0 },
+            queueSeeding: null,
+            context: TestHelpers.CreateScreenlessContext());
+
+        var directive = Assert.IsType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>(Assert.Single(response.Response.Directives));
+        Assert.Contains($"/Audio/{episodeId}/stream?static=true&api_key=", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
+        Assert.True(response.Response.ShouldEndSession, "JF-299: the AudioPlayer play ends the session");
+        Assert.DoesNotContain("requires a device with a screen", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-586: AudioPlayer CAN seek a static stream (unlike the VideoApp Static
+    /// route), so an in-progress decodable episode carries its resume position on the
+    /// DIRECTIVE on the screenless degrade.
+    /// </summary>
+    [Fact]
+    public async Task PlayNextUp_ScreenlessDevice_InProgressDecodableEpisode_CarriesResumeOffsetOnDirective()
+    {
+        var episode = new global::MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "The Convention",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromMinutes(30).Ticks
+        };
+        var series = new global::MediaBrowser.Controller.Entities.TV.Series { Name = "The Office", Id = Guid.NewGuid() };
+        long resumeTicks = TimeSpan.FromMinutes(10).Ticks;
+
+        SkillResponse response = await PlayNextUpAsync(
+            episode, series,
+            new UserItemData { Key = "test", Played = false, PlaybackPositionTicks = resumeTicks },
+            queueSeeding: null,
+            context: TestHelpers.CreateScreenlessContext());
+
+        var directive = Assert.IsType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>(Assert.Single(response.Response.Directives));
+        Assert.Equal((int)TimeSpan.FromMinutes(10).TotalMilliseconds, directive.AudioItem.Stream.OffsetInMilliseconds);
+        Assert.Contains("/Audio/", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-586 clamp: a stored position at or beyond the runtime cannot be a
+    /// legitimate mid-episode resume (the JF-565 fail-closed rule the VideoApp slice
+    /// applies), so the degrade plays from the start instead of minting an offset
+    /// the stream cannot serve.
+    /// </summary>
+    [Fact]
+    public async Task PlayNextUp_ScreenlessDevice_StalePositionBeyondRuntime_PlaysFromStart()
+    {
+        var episode = new global::MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "The Convention",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromMinutes(30).Ticks
+        };
+        var series = new global::MediaBrowser.Controller.Entities.TV.Series { Name = "The Office", Id = Guid.NewGuid() };
+
+        SkillResponse response = await PlayNextUpAsync(
+            episode, series,
+            new UserItemData { Key = "test", Played = false, PlaybackPositionTicks = TimeSpan.FromMinutes(45).Ticks },
+            queueSeeding: null,
+            context: TestHelpers.CreateScreenlessContext());
+
+        var directive = Assert.IsType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>(Assert.Single(response.Response.Directives));
+        Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
+        Assert.DoesNotContain("start=", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Drives <see cref="TvNextUpService.PlayNextUpEpisodeAsync"/> with the given
     /// episode stubbed as the NextUp result. <paramref name="queueSeeding"/> runs
     /// against a real DeviceQueueManager swapped into Plugin.Instance (the JF-581
@@ -153,7 +279,8 @@ public class TvNextUpServiceTests : PluginTestBase
         BaseItem episode,
         BaseItem series,
         UserItemData userData,
-        Action<DeviceQueue>? queueSeeding)
+        Action<DeviceQueue>? queueSeeding,
+        global::Alexa.NET.Request.Context? context = null)
     {
         var tv = new Mock<MediaBrowser.Controller.TV.ITVSeriesManager>();
         tv.Setup(t => t.GetNextUp(It.IsAny<NextUpQuery>(), It.IsAny<DtoOptions>()))
@@ -190,7 +317,7 @@ public class TvNextUpServiceTests : PluginTestBase
                 session,
                 series,
                 "en-US",
-                TestHelpers.CreateTestContext(),
+                context ?? TestHelpers.CreateTestContext(),
                 new IntentRequest { Locale = "en-US" },
                 CancellationToken.None);
         }
@@ -202,6 +329,41 @@ public class TvNextUpServiceTests : PluginTestBase
                 queue.Dispose();
             }
         }
+    }
+
+    /// <summary>
+    /// Drives <see cref="TvNextUpService.PlayLatestEpisodeAsync"/> (the JF-583
+    /// recency core) with the given episode stubbed as the recency winner.
+    /// </summary>
+    private async Task<SkillResponse> PlayLatestAsync(
+        BaseItem episode,
+        BaseItem series,
+        UserItemData userData,
+        global::Alexa.NET.Request.Context context,
+        SessionInfo? session = null)
+    {
+        var library = new Mock<ILibraryManager>();
+        library.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { episode });
+        var userDataMock = new Mock<IUserDataManager>();
+        userDataMock.Setup(u => u.GetUserData(
+                It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
+            .Returns(userData);
+
+        session ??= TestHelpers.CreateTestSession(new Mock<ISessionManager>().Object, _loggerFactory);
+        var service = CreateService();
+
+        return await service.PlayLatestEpisodeAsync(
+            library.Object,
+            userDataMock.Object,
+            TestHelpers.CreateJellyfinUser(),
+            TestHelpers.CreateTestUser(),
+            session,
+            series,
+            "en-US",
+            context,
+            new IntentRequest { Locale = "en-US" },
+            CancellationToken.None);
     }
 
     // ---------------------------------------------------------------------

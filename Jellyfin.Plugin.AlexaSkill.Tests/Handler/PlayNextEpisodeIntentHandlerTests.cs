@@ -281,6 +281,37 @@ public class PlayNextEpisodeIntentHandlerTests : PluginTestBase
         Assert.Equal(episode.Id.ToString(), session.FullNowPlayingItem?.Id.ToString());
     }
 
+    /// <summary>
+    /// JF-586: the same ask on a SCREENLESS device (an Echo Dot, the web simulator)
+    /// degrades to the AudioPlayer audio-only launch instead of the screen-required
+    /// refusal; the announce rides the final response and the session queue seeding
+    /// still applies (the JF-324 auto-advance signal on the AudioPlayer path).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_NextUpFound_ScreenlessDevice_DegradesToAudioPlayer()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(seriesName: "The Office");
+        var context = TestHelpers.CreateScreenlessContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+        var series = SetupSeriesFound();
+        var episode = SetupNextUp("The Convention", series.Id);
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        var directive = Assert.IsType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>(Assert.Single(response.Response.Directives));
+        Assert.Contains($"/Audio/{episode.Id}/stream?static=true&api_key=", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.True(response.Response.ShouldEndSession, "JF-299: the AudioPlayer play ends the session");
+        Assert.Contains("The Convention", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        Assert.DoesNotContain("requires a device with a screen", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        // Queue/now-playing coherence on the audio route.
+        Assert.Equal(episode.Id.ToString(), session.FullNowPlayingItem?.Id.ToString());
+    }
+
     [Fact]
     public async Task HandleAsync_NextUpQueryIsScopedToUserSeriesAndResumable()
     {

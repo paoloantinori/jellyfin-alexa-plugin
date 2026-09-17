@@ -18,6 +18,7 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
+using MediaBrowser.Model.Entities;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
@@ -97,6 +98,94 @@ public class VideoAppCapabilityGateTests : PluginTestBase
             TestHelpers.CreateTestContext(), "en-US", "https://test.example.com/Videos/x/stream?static=true", "The Matrix");
 
         Assert.True(HasVideoAppDirective(response));
+    }
+
+    // ========== Chokepoint: PlaybackLaunchBuilder.BuildEpisodeLaunchResponseAsync (JF-586) ==========
+
+    [Fact]
+    public async Task BuildEpisodeLaunchResponse_ScreenlessEpisode_DegradesToAudioPlayerTranscode()
+    {
+        var config = new PluginConfiguration { ServerAddress = "http://localhost:8096/" };
+        var handler = CreateBuilderProbe(config, LoggerFactory.Create(b => { }));
+        var user = new Entities.User { Id = Guid.NewGuid(), JellyfinToken = "tok" };
+        var episodeId = Guid.NewGuid();
+        var episode = new TestHelpers.TestEpisodeWithStreams(
+            "The Convention",
+            episodeId,
+            TestHelpers.TestStream(MediaStreamType.Video, "h264"),
+            TestHelpers.TestStream(MediaStreamType.Audio, "eac3"))
+        {
+            RunTimeTicks = TimeSpan.FromMinutes(30).Ticks
+        };
+        long resumeTicks = TimeSpan.FromMinutes(12).Ticks;
+
+        SkillResponse response = await handler.Launch.BuildEpisodeLaunchResponseAsync(
+            TestHelpers.CreateScreenlessContext(),
+            new IntentRequest { Locale = "en-US" },
+            "en-US",
+            episode,
+            user,
+            sourceUrl: "https://test.example.com/Videos/x/stream?static=true",
+            resumeTicks,
+            new PlainTextOutputSpeech("Resuming The Convention"));
+
+        var directive = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+        Assert.Empty(response.Response.Directives.OfType<VideoAppLaunchDirective>());
+        Assert.Equal(episodeId.ToString(), directive.AudioItem.Stream.Token);
+        Assert.Contains($"/alexaskill/api/video-audio/episode/{episodeId}/audio.m3u8?start={resumeTicks}&token=", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
+        Assert.True(response.Response.ShouldEndSession, "JF-299: the AudioPlayer play ends the session");
+    }
+
+    [Fact]
+    public async Task BuildEpisodeLaunchResponse_ScreenlessMovie_KeepsVideoRequiresScreenTell()
+    {
+        // JF-586 scope: movies are NOT this task; a movie on a screenless device keeps
+        // the capability refusal the generic VideoApp chokepoint answers today.
+        var config = new PluginConfiguration { ServerAddress = "http://localhost:8096/" };
+        var handler = CreateBuilderProbe(config, LoggerFactory.Create(b => { }));
+        var user = new Entities.User { Id = Guid.NewGuid(), JellyfinToken = "tok" };
+        var movie = new Movie { Name = "The Matrix", Id = Guid.NewGuid() };
+
+        SkillResponse response = await handler.Launch.BuildEpisodeLaunchResponseAsync(
+            TestHelpers.CreateScreenlessContext(),
+            new IntentRequest { Locale = "en-US" },
+            "en-US",
+            movie,
+            user,
+            sourceUrl: "https://test.example.com/Videos/x/stream?static=true",
+            resumeTicks: TimeSpan.FromMinutes(10).Ticks);
+
+        Assert.False(HasVideoAppDirective(response), "the Dot must not get a VideoApp.Launch it will reject");
+        Assert.DoesNotContain(response.Response.Directives ?? new List<IDirective>(), d => d is AudioPlayerPlayDirective);
+        Assert.Contains("requires a device with a screen", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task BuildEpisodeLaunchResponse_VideoAppDeviceEpisode_KeepsVideoAppDirective()
+    {
+        var config = new PluginConfiguration { ServerAddress = "http://localhost:8096/" };
+        var handler = CreateBuilderProbe(config, LoggerFactory.Create(b => { }));
+        var user = new Entities.User { Id = Guid.NewGuid(), JellyfinToken = "tok" };
+        var episode = new TestHelpers.TestEpisodeWithStreams(
+            "The Convention",
+            Guid.NewGuid(),
+            TestHelpers.TestStream(MediaStreamType.Video, "h264"),
+            TestHelpers.TestStream(MediaStreamType.Audio, "eac3"));
+
+        SkillResponse response = await handler.Launch.BuildEpisodeLaunchResponseAsync(
+            TestHelpers.CreateContextWithVideoApp(),
+            new IntentRequest { Locale = "en-US" },
+            "en-US",
+            episode,
+            user,
+            sourceUrl: "https://test.example.com/Videos/abc/stream?static=true",
+            resumeTicks: 0);
+
+        var directive = Assert.Single(response.Response.Directives.OfType<VideoAppLaunchDirective>());
+        Assert.Empty(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+        Assert.Equal("https://test.example.com/Videos/abc/stream?static=true", directive.VideoItem.Source);
+        Assert.Null(response.Response.ShouldEndSession);
     }
 
     // ========== Handler launch sites (the existing launch-site test shape) ==========

@@ -10,6 +10,7 @@ using global::Alexa.NET.Response;
 using global::Alexa.NET.Response.Directive;
 using Alexa.NET.Assertions;
 using Jellyfin.Data.Enums;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Entities;
@@ -237,6 +238,50 @@ public class StartOverIntentHandlerTests : PluginTestBase, IDisposable
                 UserDataSaveReason.PlaybackProgress,
                 CancellationToken.None),
             Times.Once);
+    }
+
+    /// <summary>
+    /// JF-586: restarting an EPISODE on a SCREENLESS device (an Echo Dot) degrades to
+    /// the AudioPlayer audio-only launch instead of the screen-required refusal; the
+    /// restart cleared the progress, so the degrade plays from the beginning.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_CurrentlyPlayingEpisode_ScreenlessDevice_DegradesToAudioPlayer()
+    {
+        var handler = CreateHandler();
+        var request = CreateStartOverRequest();
+        var context = TestHelpers.CreateScreenlessContext();
+        var user = TestHelpers.CreateTestUser();
+
+        var episodeId = Guid.NewGuid();
+        var episode = new MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "The Convention",
+            Id = episodeId,
+            Path = "/tv/the-office/s03e02.mkv"
+        };
+
+        var session = CreateSessionWithNowPlaying(episode);
+
+        var userData = new UserItemData
+        {
+            Key = "test",
+            PlaybackPositionTicks = TimeSpan.FromMinutes(45).Ticks,
+            Played = false
+        };
+
+        _fx.UserDataManager.Setup(x => x.GetUserData(_jellyfinUser, episode))
+            .Returns(userData);
+
+        var response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        var directive = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+        Assert.Contains($"/Audio/{episodeId}/stream?static=true&api_key=", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
+        Assert.True(response.Response.ShouldEndSession, "JF-299: the AudioPlayer play ends the session");
+        Assert.Contains("The Convention", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        Assert.DoesNotContain("requires a device with a screen", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
     }
 
     /// <summary>

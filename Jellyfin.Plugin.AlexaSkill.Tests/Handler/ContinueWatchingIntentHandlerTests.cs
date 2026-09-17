@@ -293,4 +293,44 @@ public class ContinueWatchingIntentHandlerTests : PluginTestBase
         var directive = Assert.IsType<VideoAppLaunchDirective>(Assert.Single(response.Response.Directives));
         Assert.Contains($"/alexaskill/api/video-audio/episode/{episodeId}/stream.m3u8?start={resumeTicks}&token=", directive.VideoItem.Source, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// JF-586: "continue watching" for an EPISODE on a SCREENLESS device (an Echo
+    /// Dot) degrades to the AudioPlayer audio-only launch instead of the
+    /// screen-required refusal; the transcode route carries the stored position as
+    /// ?start= on the audio-only episode HLS URL.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_ResumableEpisode_ScreenlessDevice_DegradesToAudioPlayerTranscode()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest();
+        var context = TestHelpers.CreateScreenlessContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
+
+        _fx.SetupUserMock();
+
+        var episodeId = Guid.NewGuid();
+        var episode = new TestHelpers.TestEpisodeWithStreams(
+            "The Convention",
+            episodeId,
+            TestHelpers.TestStream(MediaStreamType.Video, "h264"),
+            TestHelpers.TestStream(MediaStreamType.Audio, "eac3"));
+        episode.RunTimeTicks = TimeSpan.FromMinutes(30).Ticks;
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { episode });
+
+        long resumeTicks = TimeSpan.FromMinutes(10).Ticks;
+        _fx.UserDataManager.Setup(u => u.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
+            .Returns(new UserItemData { Key = "test", Played = false, PlaybackPositionTicks = resumeTicks });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        var directive = Assert.IsType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>(Assert.Single(response.Response.Directives));
+        Assert.Contains($"/alexaskill/api/video-audio/episode/{episodeId}/audio.m3u8?start={resumeTicks}&token=", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.True(response.Response.ShouldEndSession, "JF-299: the AudioPlayer play ends the session");
+        Assert.DoesNotContain("requires a device with a screen", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+    }
 }

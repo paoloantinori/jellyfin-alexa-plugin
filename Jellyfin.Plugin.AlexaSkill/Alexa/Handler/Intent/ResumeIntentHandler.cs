@@ -249,12 +249,18 @@ public class ResumeIntentHandler : BaseHandler
                         ? new PlainTextOutputSpeech(
                             ResponseStrings.Get("NowPlayingWithPosition", locale, resumeItem.Name, ResumeMath.FormatPosition(resumeTicks)))
                         : new PlainTextOutputSpeech(ResponseStrings.Get("NowPlaying", locale, resumeItem.Name));
-                    return await Launch.BuildVideoAppLaunchResponseAsync(
+                    // JF-586: on a screenless device (an Echo Dot) an EPISODE degrades to
+                    // the AudioPlayer audio-only launch instead of the screen-required
+                    // refusal; movies/live TV keep the capability refusal inside the
+                    // shared builder.
+                    return await Launch.BuildEpisodeLaunchResponseAsync(
                         context,
                         request,
                         locale,
+                        resumeItem,
+                        user,
                         resumeUrl,
-                        resumeItem.Name,
+                        resumeTicks,
                         announce).ConfigureAwait(false);
                 }
 

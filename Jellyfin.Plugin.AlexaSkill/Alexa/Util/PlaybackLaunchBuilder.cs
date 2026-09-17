@@ -133,6 +133,29 @@ public sealed class PlaybackLaunchBuilder
     }
 
     /// <summary>
+    /// The JF-565 fail-closed resume clamp, defined ONCE: a position at or beyond
+    /// the runtime cannot be a legitimate mid-item resume (only stale state
+    /// reaches it), and an UNKNOWN runtime cannot prove the position is within
+    /// the content (the zero-runtime .strm shape), so both fail closed to a
+    /// fresh start. Both launch routes (the VideoApp slice and the screenless
+    /// audio degrade) clamp through this so the spoken claim and the delivered
+    /// offset cannot diverge (the JF-586 /simplify R1 finding).
+    /// </summary>
+    private long ClampResumeTicksToRuntime(BaseItem item, long resumeTicks, string logLabel)
+    {
+        long? runtimeTicks = item.RunTimeTicks;
+        if (resumeTicks > 0 && (runtimeTicks is not > 0 || resumeTicks >= runtimeTicks.Value))
+        {
+            _logger.LogInformation(
+                "{Label} of '{ItemName}' ({ItemId}): resume position {ResumeTicks} ticks cannot be proven within the item runtime ({RuntimeTicks} ticks); starting from the beginning",
+                logLabel, item.Name, item.Id, resumeTicks, runtimeTicks);
+            return 0;
+        }
+
+        return resumeTicks;
+    }
+
+    /// <summary>
     /// Resolve the static-vs-HLS-remux decision for a VideoApp launch by probing the
     /// item's media streams (JF-498). Extracted as its own step so the policy itself
     /// (<see cref="VideoAppStreamPolicy.Decide"/>) stays a pure function.
@@ -169,7 +192,11 @@ public sealed class PlaybackLaunchBuilder
     /// launch site that launches a Movie or Episode item must go through this helper
     /// so the routing cannot drift between handlers (live incident 2026-09-05
     /// corr=d9f848a7: the whole PlayNextEpisode chain was correct and the video never
-    /// started because the static URL served raw EAC3 bytes).
+    /// started because the static URL served raw EAC3 bytes). JF-586: an EPISODE
+    /// launch site should call BuildEpisodeLaunchResponseAsync instead, which routes
+    /// through this helper on capable devices and degrades to the audio-only
+    /// AudioPlayer route on a screenless one (the JF-587 arms still call this
+    /// directly and refuse).
     /// JF-565: an EPISODE launch may pass <paramref name="startTicks"/> to mint the
     /// resume slice (<c>?start=</c>) on the remux URL - VideoApp.Launch has no offset
     /// parameter, so the slice IS the episode resume mechanism. The position applies
@@ -211,15 +238,9 @@ public sealed class PlaybackLaunchBuilder
         // within the content (the zero-runtime .strm shape), so it fails closed to a
         // fresh start too (review finding: the fail-open form could mint an
         // unclamped slice that serves an empty playlist).
-        long sliceTicks = item is MediaBrowser.Controller.Entities.TV.Episode ? startTicks : 0;
-        long? runtimeTicks = item.RunTimeTicks;
-        if (sliceTicks > 0 && (runtimeTicks is not > 0 || sliceTicks >= runtimeTicks.Value))
-        {
-            _logger.LogInformation(
-                "VideoApp launch of '{ItemName}' ({ItemId}): resume position {StartTicks} ticks cannot be proven within the item runtime ({RuntimeTicks} ticks); launching from the start",
-                item.Name, item.Id, sliceTicks, runtimeTicks);
-            sliceTicks = 0;
-        }
+        long sliceTicks = item is MediaBrowser.Controller.Entities.TV.Episode
+            ? ClampResumeTicksToRuntime(item, startTicks, "VideoApp launch")
+            : 0;
 
         resumeDelivered = sliceTicks > 0;
         return GetEpisodeVideoAudioUrl(item.Id.ToString(), sliceTicks);
@@ -502,6 +523,95 @@ public sealed class PlaybackLaunchBuilder
     {
         outputSpeech = await SpeakVideoLaunchAnnounceAsync(context, request, outputSpeech).ConfigureAwait(false);
         return BuildVideoAppLaunchResponse(context, locale, sourceUrl, title, outputSpeech);
+    }
+
+    /// <summary>
+    /// The JF-586 EPISODE launch chokepoint: a Movie/Episode launch through the shared
+    /// VideoApp family that lands on a SCREENLESS device (an Echo Dot, the Alexa web
+    /// simulator) degrades to the AudioPlayer audio-only launch instead of the
+    /// <c>VideoRequiresScreen</c> refusal, because an episode is AUDIO content a
+    /// speaker can still play (the <see cref="BuildVideoAppAudioResponse"/> degrade
+    /// precedent, the JF-505 family). The degrade rides
+    /// <see cref="ResolveAudioLaunchSource(BaseItem, string, Entities.User, int, string?)"/>
+    /// (JF-507): an episode whose audio codec has no Echo decoder (eac3/ac3/truehd/
+    /// dts) routes to the audio-only episode HLS transcode with the resume position
+    /// minted as <c>?start=</c> (directive offset 0); a decodable episode keeps the
+    /// static <c>/Audio/{id}/stream</c> URL with the resume offset on the DIRECTIVE
+    /// (AudioPlayer can seek a static stream; the VideoApp Static route cannot, which
+    /// is why the same episode refuses-to-resume there). The stored position is
+    /// clamped by the same JF-565 rule the VideoApp slice applies: a position at or
+    /// beyond the runtime (or an UNKNOWN runtime, the zero-tick .strm shape) fails
+    /// closed to a fresh start, so the degrade never mints an offset the stream
+    /// cannot serve. The caller-chosen announce rides the FINAL response on the
+    /// degrade (AudioPlayer playback does not steal the audio channel the way a
+    /// fast-start VideoApp player does, the JF-501 observation; on that route the
+    /// announce stays progressive inside <see cref="BuildVideoAppLaunchResponseAsync"/>
+    /// exactly as today). On a VideoApp-capable device this builder is a pure
+    /// pass-through to that method, so the capable path (codec-routed URL, progressive
+    /// announce, shouldEndSession omitted) is byte-identical.
+    /// SCOPE (JF-586): only an EPISODE degrades; a Movie (or any other item routed
+    /// here by <see cref="IsVideoAppLaunchItem"/>) keeps the capability refusal on a
+    /// screenless device, the pre-existing behavior. The caller's
+    /// <paramref name="sourceUrl"/> stays what
+    /// <see cref="GetVideoAppLaunchUrl(BaseItem, Entities.User, long)"/> resolved:
+    /// the URL-first announce gate (JF-565) runs at the caller before this call, and
+    /// the URL itself is consumed on the capable route only.
+    /// </summary>
+    /// <param name="context">The Alexa context, for the JF-505 screenless-device check.</param>
+    /// <param name="request">The skill request (JF-501 progressive announce vehicle on the capable route).</param>
+    /// <param name="locale">The request locale, for the capability Tell string a non-Episode keeps.</param>
+    /// <param name="item">The Movie/Episode item being launched; only an Episode degrades.</param>
+    /// <param name="user">The plugin user (static stream URL on the degrade).</param>
+    /// <param name="sourceUrl">The VideoApp source URL the caller already resolved (capable route only).</param>
+    /// <param name="resumeTicks">The resume position the caller resolved (the JF-565 slice input; feeds the degrade's offset).</param>
+    /// <param name="outputSpeech">The caller-chosen announce (fresh play keeps the now-playing/next/latest wording; the caller's resumeDelivered gate already picked the position-bearing form where the VideoApp route delivers it).</param>
+    /// <returns>The VideoApp.Launch response on a capable device; the AudioPlayer.Play degrade for an Episode on a screenless one; the VideoRequiresScreen Tell for every other item on a screenless one.</returns>
+    internal async Task<SkillResponse> BuildEpisodeLaunchResponseAsync(
+        Context? context,
+        Request? request,
+        string locale,
+        BaseItem item,
+        Entities.User user,
+        string sourceUrl,
+        long resumeTicks,
+        IOutputSpeech? outputSpeech = null)
+    {
+        if (item is MediaBrowser.Controller.Entities.TV.Episode
+            && !Interface.VideoAppCapabilities.DeviceSupportsVideoApp(context))
+        {
+            _logger.LogDebug(
+                "Episode launch of '{Title}' on device {DeviceId} without the VideoApp interface: degrading to the AudioPlayer audio-only route (JF-586)",
+                item.Name,
+                context?.System?.Device?.DeviceID ?? "unknown");
+
+            // The JF-565 clamp, audio-route mirror: a stored position at or beyond
+            // the runtime cannot be a legitimate mid-episode resume (only stale
+            // state reaches it), and an UNKNOWN runtime cannot prove the position
+            // is within the content (the zero-runtime .strm shape), so both fail
+            // closed to a fresh start rather than minting an offset the stream
+            // cannot serve.
+            long safeTicks = ClampResumeTicksToRuntime(item, resumeTicks, "Episode audio degrade");
+            int offsetMs = (int)Math.Min(TimeSpan.FromTicks(safeTicks).TotalMilliseconds, int.MaxValue);
+            string itemId = item.Id.ToString();
+            AudioLaunchSource source = ResolveAudioLaunchSource(item, itemId, user, offsetMs);
+            SkillResponse response = BuildAudioPlayerResponse(
+                PlayBehavior.ReplaceAll,
+                source,
+                itemId,
+                item,
+                user,
+                context);
+
+            // The caller-chosen announce rides the final response: the wording gate
+            // already ran at the caller against the VideoApp delivery verdict, and
+            // on this route the transcode ?start= delivers exactly what a
+            // position-bearing announce claims while the static directive offset can
+            // only resume further than a fresh-play wording admits, never less.
+            response.Response.OutputSpeech = outputSpeech;
+            return response;
+        }
+
+        return await BuildVideoAppLaunchResponseAsync(context, request, locale, sourceUrl, item.Name, outputSpeech).ConfigureAwait(false);
     }
 
     /// <summary>
