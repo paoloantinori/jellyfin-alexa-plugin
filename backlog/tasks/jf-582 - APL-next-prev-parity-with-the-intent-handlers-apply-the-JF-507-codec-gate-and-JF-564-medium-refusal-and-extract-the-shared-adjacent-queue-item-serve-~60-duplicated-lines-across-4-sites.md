@@ -4,10 +4,10 @@ title: >-
   APL next/prev parity with the intent handlers: apply the JF-507 codec gate and
   JF-564 medium refusal, and extract the shared adjacent-queue-item serve (~60
   duplicated lines across 4 sites)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-16 21:22'
-updated_date: '2026-09-16 21:31'
+updated_date: '2026-09-17 05:06'
 labels:
   - reliability
   - refactor
@@ -62,3 +62,9 @@ Four new tests in AplUserEventHandlerTests, all observed RED on both TFMs before
 
 The APL refusal is a Tell (session-ending) on a UserEvent; that is the same response class the intent handlers already use for the same refusal and UserEvent requests are not AudioPlayer events, so the JF-299 event restriction does not apply. The refusal's reach on the APL path is narrow by construction (the NowPlaying screen implies a recent audio launch, and a token matching the ledger item classifies Audio and skips the refusal); the widened gate only fires on the cross-media shapes the task targeted. No interaction-model or locale change (DoD 6/8 not applicable). DoD 7's E2E angle is covered at unit level here; the live E2E suite is the orchestrator's deploy-gate call. DoD 9/10 (/simplify, /code-review high) intentionally left to the orchestrator's gates per the task instructions.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+DONE (commit 2953b1f0). The four next/previous entry points route through one shared serve: ProgressReporter.ServeAdjacentQueueItem(queueManager, libraryManager, session, context, user, locale, AdjacentQueueDirection, logLabel, tapOrigin=false), internal, with the nested AdjacentQueueDirection enum mirroring the PlayingMedium precedent. It applies uniformly: the JF-564 medium refusal (ResolvePlayingMedium + BuildVideoAppTransportRefusal), the JF-577/579 rehydration guard + current-item resolution via the combined TryRehydrateAndResolveCurrentItemId (PRIVATE by the /simplify finding: a public wrapper would be a door that skips the gates; the unsplittable-pair rationale survives as its doc), the JF-507 codec-gated launch (ResolveAudioLaunchSource), SessionQueue.IndexOfQueueItem, and the JF-299-compliant AudioPlayer.Play build. NextIntentHandler and PreviousIntentHandler are one-line delegations with byte-identical gate order, edge predicates, response shapes and log text (VideoAppGapHonestResponseTests and QueueRehydrationAdoptionTests pass unchanged). AplUserEventHandler's tap cases route through the serve and legitimately widen: the refusal and the codec gate now apply where a raw static URL was served for a video-family successor (4 red-first tests: transcode routing observed RED serving /Audio/ static, refusal observed RED with no speech). Review-driven: TAP origins answer the Video/LiveTv refusal arms with a silent session-ending Empty (the voice Tell's 'use the touchscreen' wording tells a touch user to do what they just did); the two refusal tests moved to that silent contract. Roster consequence handled explicitly: AdoptedReaders is now ListQueue + PlaybackNearlyFinished, ProgressReporter exempt as the serve owner, and the guard-caller proof strips only the two OWNING METHODS' calls (per-method, with an existence assertion that fails loudly on rename), so a future ungated ProgressReporter queue reader still fails both roster facts. IlCallScanner extracted as the shared test-project IL scanner; both roster files deduped (~50 lines), both suites green. Gates: /simplify consolidated 4-angle pass (S1/A1 private helper + A2 charter widened applied; the two-scan skeleton duplication left as-is); code-review high via feature-dev:code-reviewer: no blockers or majors, both minors applied (per-method exemption, tap-silent refusal). Suite 4013/4013 both TFMs, Release 0 warnings.
+<!-- SECTION:FINAL_SUMMARY:END -->
