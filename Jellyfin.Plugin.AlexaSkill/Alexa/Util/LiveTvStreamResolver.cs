@@ -111,7 +111,9 @@ public class LiveTvStreamResolver : ILiveTvStreamResolver
                 && !string.IsNullOrWhiteSpace(path)
                 && (path.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || path.StartsWith("https://", StringComparison.OrdinalIgnoreCase)))
             {
-                _logger.LogDebug("ResolveAsync: direct-remote stream for channel {Id} -> {Url}", channelId, path);
+                // JF-580: the provider URL is not logged verbatim; its query string often
+                // carries the provider's own credentials.
+                _logger.LogDebug("ResolveAsync: direct-remote stream for channel {Id} -> {Url}", channelId, RequestLogRedactor.RedactRemoteUrl(path));
                 return new LiveTvStream(path);
             }
 

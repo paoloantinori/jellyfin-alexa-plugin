@@ -65,4 +65,44 @@ public class RequestLogRedactorTests
 
         Assert.Equal(url, RequestLogRedactor.RedactUrl(url));
     }
+
+    [Fact]
+    public void RedactUrl_CapitalApiKey_IsAlsoMasked()
+    {
+        // JF-575/JF-580: the capital ApiKey shape is the only form 12.0 accepts on
+        // auth-gated routes; the mask must cover both casings (the regex is IgnoreCase,
+        // this pin keeps it that way).
+        string url = "https://jellyfin.example.com/Items/abc/PlaybackInfo?ApiKey=da5a12a496f74e9ea546c2db8393aad2";
+        string redacted = RequestLogRedactor.RedactUrl(url);
+        Assert.Contains("ApiKey=[REDACTED]", redacted);
+        Assert.DoesNotContain("da5a12a496f74e9ea546c2db8393aad2", redacted);
+    }
+
+    [Fact]
+    public void RedactRemoteUrl_DropsTheWholeQueryString()
+    {
+        // JF-580: a third-party provider URL's query carries the provider's own
+        // credentials under unbounded param names, so the whole query is dropped.
+        string url = "https://iptv.example.com/live/stream.m3u8?user=paolo&pass=sekrit&token=abc123";
+        string redacted = RequestLogRedactor.RedactRemoteUrl(url);
+        Assert.Equal("https://iptv.example.com/live/stream.m3u8?[REDACTED]", redacted);
+        Assert.DoesNotContain("sekrit", redacted);
+    }
+
+    [Fact]
+    public void RedactRemoteUrl_StripsBasicAuthUserinfo()
+    {
+        // JF-580 review: user:pass@host in the authority is a standard M3U/IPTV
+        // convention and is a credential; it must not survive redaction.
+        string redacted = RequestLogRedactor.RedactRemoteUrl("http://paolo:sekrit@iptv.example.com/stream.m3u8?x=1");
+        Assert.DoesNotContain("sekrit", redacted);
+        Assert.DoesNotContain("paolo:", redacted);
+        Assert.Equal("http://[REDACTED]@iptv.example.com/stream.m3u8?[REDACTED]", redacted);
+    }
+
+    [Fact]
+    public void RedactRemoteUrl_WithoutQuery_ReturnsUnchanged()
+    {
+        Assert.Equal("https://iptv.example.com/live/stream.m3u8", RequestLogRedactor.RedactRemoteUrl("https://iptv.example.com/live/stream.m3u8"));
+    }
 }

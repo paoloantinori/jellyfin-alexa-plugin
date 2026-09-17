@@ -1225,12 +1225,14 @@ public sealed class PlaybackLaunchBuilder
             // The endpoint concatenates all chapters into one continuous HLS stream,
             // giving the full book duration in the Echo Show seek bar.
             videoAudioUrl = GetAudiobookVideoAudioUrl(item.ParentId.ToString());
-            _logger.LogDebug("BuildVideoAppAudioResponse: itemId={ItemId}, parentId={ParentId}, title={Title}, url={Url} (audiobook concat)", itemId, item.ParentId, item.Name, videoAudioUrl);
+            // JF-580: the URL carries the signed JF-309 stream token; log it masked.
+            _logger.LogDebug("BuildVideoAppAudioResponse: itemId={ItemId}, parentId={ParentId}, title={Title}, url={Url} (audiobook concat)", itemId, item.ParentId, item.Name, RequestLogRedactor.RedactUrl(videoAudioUrl));
         }
         else
         {
             videoAudioUrl = GetVideoAudioUrl(itemId);
-            _logger.LogDebug("BuildVideoAppAudioResponse: itemId={ItemId}, title={Title}, url={Url}", itemId, item?.Name, videoAudioUrl);
+            // JF-580: the URL carries the signed JF-309 stream token; log it masked.
+            _logger.LogDebug("BuildVideoAppAudioResponse: itemId={ItemId}, title={Title}, url={Url}", itemId, item?.Name, RequestLogRedactor.RedactUrl(videoAudioUrl));
         }
 
         var response = new SkillResponse
