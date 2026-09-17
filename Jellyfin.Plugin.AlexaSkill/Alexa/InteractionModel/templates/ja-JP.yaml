@@ -35,7 +35,8 @@
 # - English inertia RESOLVED 2026-09-12 (JF-399 executable half): the
 #   former 24 pure-English samples (PlayBook 8, FindSong 12,
 #   FindSongByArtist 4) are now native Japanese.
-# - The 9-type roster and order match pt-BR's: Mood, LibraryQueryType,
+# - The 10-type roster and order match pt-BR's (JF-583 adds
+#   EpisodePosition after SeriesName everywhere): Mood, LibraryQueryType,
 #   MediaType, BrowseCategory, SeriesName, TimePeriod, MediaInfoType,
 #   Decade, AudiobookTitle. SeriesName carries 8 values with 'Money
 #   Heist' UNTRANSLATED (pt-BR localizes it as La Casa de Papel);
@@ -72,6 +73,11 @@
 # - Every PlayAlbum carrier names the media アルバム (anti-pattern #11).
 # - AMAZON.StopIntent has NO custom samples; the it-IT "ferma"
 #   samples are a JF-402 it-IT-only exception.
+# JF-583: PlayNextEpisodeIntent carries the episode_position slot
+# (custom EpisodePosition type, the Mood architecture) distinguishing
+# 'next' (NextUp, the empty-slot default) from 'latest' (recency,
+# PremiereDate desc); see the intent and type blocks for this locale's
+# values.
 invocationName: jellyfin player
 intents:
   - name: QueryRecentlyAddedIntent
@@ -368,13 +374,18 @@ intents:
       - '{series_name} のシーズン {season_number} エピソード {episode_number} を再生して'
       - シーズン {season_number} エピソード {episode_number} の {series_name} を再生して
       - '{series_name} のシーズン {season_number} エピソード {episode_number} を見たい'
+  # JF-583: the 次の/最新の carriers are slotted ({episode_position},
+  # custom EpisodePosition type): 次の keeps NextUp, 最新の resolves by
+  # recency; the continue-watching sample carries no position (NextUp by
+  # design).
   - name: PlayNextEpisodeIntent
     slots:
       - name: series_name
         type: SeriesName
+      - name: episode_position
+        type: EpisodePosition
     samples:
-      - '{series_name} の次のエピソードを再生して'
-      - '{series_name} の最新のエピソードを再生して'
+      - '{series_name} の{episode_position}エピソードを再生して'
       - '{series_name} を続きから観て'
   - name: PlayPodcastIntent
     samples:
@@ -668,6 +679,18 @@ types:
       - value: The Walking Dead
       - value: Dark
       - value: Sherlock
+  # JF-583: restricted episode-position vocabulary on PlayNextEpisodeIntent
+  # (the Mood architecture). Ids are the shared cross-locale key space the
+  # handler's entity resolution reads; the values end in の to sit directly
+  # before エピソード in the series-first samples.
+  EpisodePosition:
+    values:
+      - value: 次の
+        id: "next"
+        synonyms: [次]
+      - value: 最新の
+        id: latest
+        synonyms: [最新, 一番新しい]
   TimePeriod:
     values:
       - id: today
@@ -828,6 +851,10 @@ dialog:
       slots:
         - name: series_name
           type: SeriesName
+          confirmationRequired: false
+          elicitationRequired: false
+        - name: episode_position
+          type: EpisodePosition
           confirmationRequired: false
           elicitationRequired: false
     - name: PlayPodcastIntent

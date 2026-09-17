@@ -13016,7 +13016,7 @@
           {
             "source": "Idle",
             "target": "PlayNextEpisode",
-            "label": "شغل الحلقة التالية من {series_name}",
+            "label": "شغل الحلقة {episode_position} من {series_name}",
             "style": "solid"
           },
           {
@@ -13409,7 +13409,7 @@
           {
             "source": "Idle",
             "target": "PlayNextEpisode",
-            "label": "spiele die nächste folge von {series_name}",
+            "label": "spiele {episode_position} folge von {series_name}",
             "style": "solid"
           },
           {
@@ -13806,7 +13806,7 @@
           {
             "source": "Idle",
             "target": "PlayNextEpisode",
-            "label": "play the next episode of {series_name}",
+            "label": "play {episode_position} episode of {series_name}",
             "style": "solid"
           },
           {
@@ -14209,7 +14209,7 @@
           {
             "source": "Idle",
             "target": "PlayNextEpisode",
-            "label": "play the next episode of {series_name}",
+            "label": "play {episode_position} episode of {series_name}",
             "style": "solid"
           },
           {
@@ -14606,7 +14606,7 @@
           {
             "source": "Idle",
             "target": "PlayNextEpisode",
-            "label": "play the next episode of {series_name}",
+            "label": "play {episode_position} episode of {series_name}",
             "style": "solid"
           },
           {
@@ -15009,7 +15009,7 @@
           {
             "source": "Idle",
             "target": "PlayNextEpisode",
-            "label": "play the next episode of {series_name}",
+            "label": "play {episode_position} episode of {series_name}",
             "style": "solid"
           },
           {
@@ -15406,7 +15406,7 @@
           {
             "source": "Idle",
             "target": "PlayNextEpisode",
-            "label": "play the next episode of {series_name}",
+            "label": "play {episode_position} episode of {series_name}",
             "style": "solid"
           },
           {
@@ -15803,7 +15803,7 @@
           {
             "source": "Idle",
             "target": "PlayNextEpisode",
-            "label": "reproduce el próximo episodio de {series_name}",
+            "label": "reproduce {episode_position} episodio de {series_name}",
             "style": "solid"
           },
           {
@@ -16200,7 +16200,7 @@
           {
             "source": "Idle",
             "target": "PlayNextEpisode",
-            "label": "reproduce el próximo episodio de {series_name}",
+            "label": "reproduce {episode_position} episodio de {series_name}",
             "style": "solid"
           },
           {
@@ -16597,7 +16597,7 @@
           {
             "source": "Idle",
             "target": "PlayNextEpisode",
-            "label": "reproduce el próximo episodio de {series_name}",
+            "label": "reproduce {episode_position} episodio de {series_name}",
             "style": "solid"
           },
           {
@@ -16994,7 +16994,7 @@
           {
             "source": "Idle",
             "target": "PlayNextEpisode",
-            "label": "joue le prochain épisode de {series_name}",
+            "label": "joue {episode_position} épisode de {series_name}",
             "style": "solid"
           },
           {
@@ -17391,7 +17391,7 @@
           {
             "source": "Idle",
             "target": "PlayNextEpisode",
-            "label": "joue le prochain épisode de {series_name}",
+            "label": "joue {episode_position} épisode de {series_name}",
             "style": "solid"
           },
           {
@@ -17788,7 +17788,7 @@
           {
             "source": "Idle",
             "target": "PlayNextEpisode",
-            "label": "{series_name} का अगला एपिसोड चलाओ",
+            "label": "{series_name} का {episode_position} एपिसोड चलाओ",
             "style": "solid"
           },
           {
@@ -18181,7 +18181,7 @@
           {
             "source": "Idle",
             "target": "PlayNextEpisode",
-            "label": "Riproduci il prossimo episodio di {series_name}",
+            "label": "Riproduci {episode_position} episodio di {series_name}",
             "style": "solid"
           },
           {
@@ -18572,7 +18572,7 @@
           {
             "source": "Idle",
             "target": "PlayNextEpisode",
-            "label": "{series_name} の次のエピソードを再生して",
+            "label": "{series_name} の{episode_position}エピソードを再生して",
             "style": "solid"
           },
           {
@@ -18969,7 +18969,7 @@
           {
             "source": "Idle",
             "target": "PlayNextEpisode",
-            "label": "speel de volgende aflevering van {series_name}",
+            "label": "speel {episode_position} aflevering van {series_name}",
             "style": "solid"
           },
           {
@@ -19366,7 +19366,7 @@
           {
             "source": "Idle",
             "target": "PlayNextEpisode",
-            "label": "tocar o próximo episódio de {series_name}",
+            "label": "tocar {episode_position} episódio de {series_name}",
             "style": "solid"
           },
           {

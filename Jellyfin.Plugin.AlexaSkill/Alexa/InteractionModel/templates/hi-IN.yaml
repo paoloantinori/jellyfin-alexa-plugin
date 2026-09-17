@@ -30,7 +30,8 @@
 #   FindSongByArtist 4) are now native Hindi. The Decade VALUES remain
 #   English-with-Devanagari-synonyms: swapping value/synonym needs
 #   handler-side decade-resolution work first (the open sub-item).
-# - The 9-type roster and order match pt-BR's: Mood, LibraryQueryType,
+# - The 10-type roster and order match pt-BR's (JF-583 adds
+#   EpisodePosition after SeriesName everywhere): Mood, LibraryQueryType,
 #   MediaType, BrowseCategory, SeriesName, TimePeriod, MediaInfoType,
 #   Decade, AudiobookTitle. SeriesName carries 8 values with 'Money
 #   Heist' UNTRANSLATED (pt-BR localizes it as La Casa de Papel);
@@ -67,6 +68,11 @@
 # - Every PlayAlbum carrier names the media एल्बम (anti-pattern #11).
 # - AMAZON.StopIntent has NO custom samples; the it-IT "ferma"
 #   samples are a JF-402 it-IT-only exception.
+# JF-583: PlayNextEpisodeIntent carries the episode_position slot
+# (custom EpisodePosition type, the Mood architecture) distinguishing
+# 'next' (NextUp, the empty-slot default) from 'latest' (recency,
+# PremiereDate desc); see the intent and type blocks for this locale's
+# values.
 invocationName: jellyfin player
 intents:
   - name: QueryRecentlyAddedIntent
@@ -373,13 +379,18 @@ intents:
       - '{series_name} सीज़न {season_number} एपिसोड {episode_number} चलाओ'
       - सीज़न {season_number} एपिसोड {episode_number} {series_name} का चलाओ
       - '{series_name} सीज़न {season_number} एपिसोड {episode_number} देखो'
+  # JF-583: the अगला/नवीनतम carriers are slotted ({episode_position},
+  # custom EpisodePosition type): अगला keeps NextUp, नवीनतम resolves by
+  # recency; the continue-watching sample carries no position (NextUp by
+  # design).
   - name: PlayNextEpisodeIntent
     slots:
       - name: series_name
         type: SeriesName
+      - name: episode_position
+        type: EpisodePosition
     samples:
-      - '{series_name} का अगला एपिसोड चलाओ'
-      - '{series_name} का नवीनतम एपिसोड चलाओ'
+      - '{series_name} का {episode_position} एपिसोड चलाओ'
       - '{series_name} देखना जारी रखो'
   - name: PlayPodcastIntent
     samples:
@@ -679,6 +690,17 @@ types:
       - value: The Walking Dead
       - value: Dark
       - value: Sherlock
+  # JF-583: restricted episode-position vocabulary on PlayNextEpisodeIntent
+  # (the Mood architecture). Ids are the shared cross-locale key space the
+  # handler's entity resolution reads.
+  EpisodePosition:
+    values:
+      - value: अगला
+        id: "next"
+        synonyms: [आगामी]
+      - value: नवीनतम
+        id: latest
+        synonyms: [सबसे नया, नया, आख़िरी]
   TimePeriod:
     values:
       - id: today
@@ -839,6 +861,10 @@ dialog:
       slots:
         - name: series_name
           type: SeriesName
+          confirmationRequired: false
+          elicitationRequired: false
+        - name: episode_position
+          type: EpisodePosition
           confirmationRequired: false
           elicitationRequired: false
     - name: PlayPodcastIntent

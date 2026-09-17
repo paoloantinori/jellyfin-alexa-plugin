@@ -27,10 +27,13 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// The JF-315 TV next-up collaborator (census cluster K's TV trio, extracted from
 /// BaseHandler batch 11): the shared series-by-name resolution
 /// (<see cref="ResolveSeriesForPlaybackAsync"/>), the Jellyfin NextUp query core
-/// (<see cref="GetNextUpEpisodesAsync"/>), and the next-up episode launch
-/// (<see cref="PlayNextUpEpisodeAsync"/> with the JF-324 latest-episode fallback
-/// and the resume-aware announce). Consumed by PlayEpisodeIntentHandler and
-/// PlayNextEpisodeIntentHandler, the two handlers whose payoff is TV episodes;
+/// (<see cref="GetNextUpEpisodesAsync"/>), the next-up episode launch
+/// (<see cref="PlayNextUpEpisodeAsync"/> with the JF-324 latest-episode fallback),
+/// the JF-583 recency core (<see cref="PlayLatestEpisodeAsync"/>, the explicit
+/// "latest episode" phrasing), and the resume-aware episode launch tail both
+/// cores share (<see cref="LaunchEpisodeAsync"/>). Consumed by
+/// PlayEpisodeIntentHandler and PlayNextEpisodeIntentHandler, the two handlers
+/// whose payoff is TV episodes;
 /// no other handler touches it, which is why it left the base class.
 /// NAMESPACE PLACEMENT (the CrossMediaFallback/AlbumPlayService/ProgressReporter
 /// precedent, not the Util home of SearchService/PlaybackLaunchBuilder): the
@@ -249,9 +252,107 @@ public sealed class TvNextUpService
             return ResponseBuilder.Tell(ResponseStrings.Get("NoNextEpisode", locale, series.Name));
         }
 
+        return await LaunchEpisodeAsync(userDataManager, jellyfinUser, user, session, series, episode, latestFallback, locale, context, request).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// JF-583 latest-episode launch: the "latest episode of X" phrasing asks for
+    /// RECENCY, not watch state, so this core never consults NextUp (whose answer
+    /// is "first unwatched in library order", the exact mismatch this method
+    /// exists to fix). It queries the series' episodes ordered PremiereDate desc
+    /// with DateCreated desc as the tiebreak (items without a metadata date), NO
+    /// played filter (the newest episode is the ask even when already watched),
+    /// and launches the winner through the SAME launch tail the NextUp path uses
+    /// (<see cref="LaunchEpisodeAsync"/>), announcing it with the latest-episode
+    /// wording (PlayingLatestEpisode, the JF-324 family).
+    /// </summary>
+    /// <param name="libraryManager">The library manager (recency query).</param>
+    /// <param name="userDataManager">The user data manager (resume-aware announce).</param>
+    /// <param name="jellyfinUser">The Jellyfin user (query context; NOT a watch filter).</param>
+    /// <param name="user">The plugin user (stream URL + announce toggle).</param>
+    /// <param name="session">The Jellyfin session (now-playing queue).</param>
+    /// <param name="series">The already-resolved series item.</param>
+    /// <param name="locale">The request locale for response strings.</param>
+    /// <param name="context">The Alexa context (JF-505 screenless-device launch gate).</param>
+    /// <param name="request">The skill request (JF-501 progressive announce vehicle).</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The VideoApp launch response, or the localized NoNextEpisode Tell when the series has no episode.</returns>
+    public async Task<SkillResponse> PlayLatestEpisodeAsync(
+        ILibraryManager libraryManager,
+        IUserDataManager userDataManager,
+        Jellyfin.Database.Implementations.Entities.User jellyfinUser,
+        Entities.User user,
+        SessionInfo session,
+        BaseItem series,
+        string locale,
+        Context context,
+        Request request,
+        CancellationToken cancellationToken)
+    {
+        var latestQuery = new InternalItemsQuery
+        {
+            User = jellyfinUser,
+            Recursive = true,
+            IncludeItemTypes = new[] { BaseItemKind.Episode },
+            AncestorIds = new[] { series.Id },
+            IsVirtualItem = false,
+            // NULL-ordering note (JF-583 review): on SQLite (the default and the
+            // production box) NULL PremiereDate sorts LAST on DESC, so undated
+            // episodes never hijack the recency pick; a Postgres deployment would
+            // need NULLS LAST verified before relying on that (its default is
+            // NULLS FIRST on DESC).
+            OrderBy = new[] { (ItemSortBy.PremiereDate, SortOrder.Descending), (ItemSortBy.DateCreated, SortOrder.Descending) },
+            Limit = 1,
+            DtoOptions = new DtoOptions(true)
+        };
+        _logger.LogDebug("LatestEpisode: querying by recency (premiereDate desc, dateCreated desc tiebreak) for seriesId={SeriesId}", series.Id);
+        IReadOnlyList<BaseItem> latest = await RetryAsync(
+            () => libraryManager.GetItemList(latestQuery),
+            "GetLatestEpisodeByPremiereDate",
+            cancellationToken).ConfigureAwait(false);
+        BaseItem? episode = latest?.FirstOrDefault();
+
+        if (episode == null)
+        {
+            _logger.LogDebug("LatestEpisode: no episodes for series '{SeriesName}' ({SeriesId})", series.Name, series.Id);
+            return ResponseBuilder.Tell(ResponseStrings.Get("NoNextEpisode", locale, series.Name));
+        }
+
+        return await LaunchEpisodeAsync(userDataManager, jellyfinUser, user, session, series, episode, announceLatest: true, locale, context, request).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The shared episode launch tail (extracted JF-583 so the NextUp and recency
+    /// cores cannot fork the launch): now-playing queue seeding, the resume-aware
+    /// position resolution (JF-565/JF-581), the URL-first announce gate, and the
+    /// VideoApp launch response (JF-498/JF-501/JF-505).
+    /// </summary>
+    /// <param name="userDataManager">The user data manager (resume-aware announce).</param>
+    /// <param name="jellyfinUser">The Jellyfin user (per-user resume state).</param>
+    /// <param name="user">The plugin user (stream URL + announce toggle).</param>
+    /// <param name="session">The Jellyfin session (now-playing queue).</param>
+    /// <param name="series">The resolved series item (logging).</param>
+    /// <param name="episode">The episode to launch.</param>
+    /// <param name="announceLatest">Whether the announce uses the latest-episode wording (JF-324 fallback and the JF-583 recency core) instead of the next-episode one.</param>
+    /// <param name="locale">The request locale for response strings.</param>
+    /// <param name="context">The Alexa context (JF-505 screenless-device launch gate).</param>
+    /// <param name="request">The skill request (JF-501 progressive announce vehicle).</param>
+    /// <returns>The VideoApp launch response.</returns>
+    private async Task<SkillResponse> LaunchEpisodeAsync(
+        IUserDataManager userDataManager,
+        Jellyfin.Database.Implementations.Entities.User jellyfinUser,
+        Entities.User user,
+        SessionInfo session,
+        BaseItem series,
+        BaseItem episode,
+        bool announceLatest,
+        string locale,
+        Context context,
+        Request request)
+    {
         _logger.LogDebug(
-            "NextUp: resolved episode '{EpisodeName}' ({EpisodeId}) for series '{SeriesName}', latestFallback={LatestFallback}",
-            episode.Name, episode.Id, series.Name, latestFallback);
+            "EpisodeLaunch: resolved episode '{EpisodeName}' ({EpisodeId}) for series '{SeriesName}', announceLatest={AnnounceLatest}",
+            episode.Name, episode.Id, series.Name, announceLatest);
 
         session.NowPlayingQueue = new List<QueueItem> { new QueueItem { Id = episode.Id } };
         session.FullNowPlayingItem = episode;
@@ -271,7 +372,7 @@ public sealed class TvNextUpService
             userData?.PlaybackPositionTicks ?? 0,
             userData?.Played == true,
             _logger,
-            "NextUp");
+            "EpisodeLaunch");
         // JF-565 review finding: resolve the launch URL FIRST and gate the resume
         // wording on whether the position was actually DELIVERED (the Static route
         // and the runtime clamp both degrade to a fresh start; announcing a resume
@@ -286,8 +387,8 @@ public sealed class TvNextUpService
         {
             speech = _launch.GetAnnounceNowPlaying(user)
                 ? SpeechBuilder.BuildOutputSpeech(
-                    latestFallback ? "PlayingLatestEpisodeSsml" : "PlayingNextEpisodeSsml",
-                    latestFallback ? "PlayingLatestEpisode" : "PlayingNextEpisode",
+                    announceLatest ? "PlayingLatestEpisodeSsml" : "PlayingNextEpisodeSsml",
+                    announceLatest ? "PlayingLatestEpisode" : "PlayingNextEpisode",
                     locale,
                     episode.Name)
                 : null;

@@ -489,21 +489,21 @@
           {
             "name": "series_name",
             "type": "SeriesName"
+          },
+          {
+            "name": "episode_position",
+            "type": "EpisodePosition"
           }
         ],
         "samples": [
-          "play the next episode of {series_name}",
-          "play the next episode of the series {series_name}",
-          "watch the next episode of {series_name}",
-          "play the latest episode of {series_name}",
-          "play the newest episode of {series_name}",
+          "play {episode_position} episode of {series_name}",
+          "play {episode_position} episode of the series {series_name}",
+          "watch {episode_position} episode of {series_name}",
           "continue watching {series_name}",
           "continue watching the series {series_name}",
-          "to play the next episode of {series_name}",
-          "to play the next episode of the series {series_name}",
-          "to watch the next episode of {series_name}",
-          "to play the latest episode of {series_name}",
-          "to play the newest episode of {series_name}",
+          "to play {episode_position} episode of {series_name}",
+          "to play {episode_position} episode of the series {series_name}",
+          "to watch {episode_position} episode of {series_name}",
           "to continue watching {series_name}",
           "to continue watching the series {series_name}"
         ]
@@ -1166,6 +1166,37 @@
         ]
       },
       {
+        "name": "EpisodePosition",
+        "values": [
+          {
+            "name": {
+              "value": "next",
+              "synonyms": [
+                "the next",
+                "upcoming",
+                "the upcoming"
+              ]
+            },
+            "id": "next"
+          },
+          {
+            "name": {
+              "value": "latest",
+              "synonyms": [
+                "the latest",
+                "newest",
+                "the newest",
+                "last",
+                "the last",
+                "most recent",
+                "the most recent"
+              ]
+            },
+            "id": "latest"
+          }
+        ]
+      },
+      {
         "name": "MediaInfoType",
         "values": [
           {
@@ -1633,6 +1664,12 @@
           {
             "name": "series_name",
             "type": "SeriesName",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          },
+          {
+            "name": "episode_position",
+            "type": "EpisodePosition",
             "confirmationRequired": false,
             "elicitationRequired": false
           }

@@ -14,7 +14,7 @@ graph TD
     Idle -->|"شغل الفيلم {title}"| PlayVideo
     Idle -->|"شغل الموسم {season_number} الحلقة {episode_number} من {series_name}"| PlayEpisode["PlayEpisodeIntent"]
     Idle -->|"شغل {series_name} الموسم {season_number} الحلقة {episode_number}"| PlayEpisode
-    Idle -->|"شغل الحلقة التالية من {series_name}"| PlayNextEpisode["PlayNextEpisodeIntent"]
+    Idle -->|"شغل الحلقة {episode_position} من {series_name}"| PlayNextEpisode["PlayNextEpisodeIntent"]
     Idle -->|"شغل شيء عشوائي"| PlayRandom["PlayRandomIntent"]
 
     PlayArtist --> Playing

@@ -496,12 +496,16 @@
           {
             "name": "series_name",
             "type": "SeriesName"
+          },
+          {
+            "name": "episode_position",
+            "type": "EpisodePosition"
           }
         ],
         "samples": [
-          "tocar o próximo episódio de {series_name}",
-          "tocar o próximo episódio da série {series_name}",
-          "tocar o episódio mais recente de {series_name}",
+          "tocar {episode_position} episódio de {series_name}",
+          "tocar {episode_position} episódio da série {series_name}",
+          "tocar o episódio {episode_position} de {series_name}",
           "continuar assistindo {series_name}"
         ]
       },
@@ -1140,6 +1144,33 @@
         ]
       },
       {
+        "name": "EpisodePosition",
+        "values": [
+          {
+            "name": {
+              "value": "o próximo",
+              "synonyms": [
+                "próximo"
+              ]
+            },
+            "id": "next"
+          },
+          {
+            "name": {
+              "value": "o último",
+              "synonyms": [
+                "último",
+                "o mais recente",
+                "mais recente",
+                "o mais novo",
+                "mais novo"
+              ]
+            },
+            "id": "latest"
+          }
+        ]
+      },
+      {
         "name": "TimePeriod",
         "values": [
           {
@@ -1552,6 +1583,12 @@
           {
             "name": "series_name",
             "type": "SeriesName",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          },
+          {
+            "name": "episode_position",
+            "type": "EpisodePosition",
             "confirmationRequired": false,
             "elicitationRequired": false
           }

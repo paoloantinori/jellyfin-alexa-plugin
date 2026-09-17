@@ -722,6 +722,18 @@ types:
       - The Walking Dead
       - Dark
       - Lupin
+  # JF-583: restricted episode-position vocabulary on PlayNextEpisodeIntent
+  # (the JF-354 Mood architecture). Ids are the shared cross-locale key space
+  # the handler's entity resolution reads (next/latest); synonyms cover the
+  # article-less and gendered spoken forms.
+  EpisodePosition:
+    values:
+      - value: il prossimo
+        id: "next"
+        synonyms: [prossimo, il successivo, successivo]
+      - value: "l'ultimo"
+        id: latest
+        synonyms: [ultimo, l'ultima, ultima, "il più recente", "più recente"]
   AlbumName:
     values:
       - Discovery
@@ -1075,25 +1087,29 @@ templates:
   # JF-493: infinitive one-shot twins ("chiedi a mia collezione di mettere il
   # prossimo episodio di X") previously had no sample, so the greedy PlayArtistSongs
   # musician slot absorbed the series name instead.
+  # JF-583: the prossimo/ultimo families are slotted through {episode_position}
+  # (custom EpisodePosition type, the Mood architecture): prossimo keeps the
+  # NextUp core, ultimo resolves by recency. The articles ride the type values
+  # ("il prossimo" / "l'ultimo"); an empty/unresolved slot defaults to NextUp
+  # (the historical behavior, also what the Continua-a-guardare family means).
   PlayNextEpisodeIntent:
     templates:
-      - Riproduci il prossimo episodio di {series_name}
-      - Metti il prossimo episodio di {series_name}
-      - Guarda il prossimo episodio di {series_name}
-      - Riproduci l'ultimo episodio di {series_name}
-      - Metti l'ultimo episodio di {series_name}
+      - Riproduci {episode_position} episodio di {series_name}
+      - Metti {episode_position} episodio di {series_name}
+      - Guarda {episode_position} episodio di {series_name}
       - Continua a guardare {series_name}
       - Continua a guardare la serie {series_name}
-      # JF-493: infinitive twins of the prossimo/ultimo families and of
+      # JF-493: infinitive twins of the position families and of
       # "Continua a guardare la serie". The "la serie" noun stays in the carrier:
       # a bare "{infinitive} {series_name}" would be a bare carrier competing
       # with the artist region.
-      - "{infinitive} il prossimo episodio di {series_name}"
-      - "{infinitive} l'ultimo episodio di {series_name}"
+      - "{infinitive} {episode_position} episodio di {series_name}"
       - "{infinitive} la serie {series_name}"
     slots:
       - name: series_name
         type: SeriesName
+      - name: episode_position
+        type: EpisodePosition
 
 # Dialog configuration for intents that use Dialog.ElicitSlot directives.
 # Without these entries Alexa silently ignores ElicitSlot and routes
@@ -1170,6 +1186,10 @@ dialog:
       slots:
         - name: series_name
           type: SeriesName
+          confirmationRequired: false
+          elicitationRequired: false
+        - name: episode_position
+          type: EpisodePosition
           confirmationRequired: false
           elicitationRequired: false
     - name: PlayPodcastIntent

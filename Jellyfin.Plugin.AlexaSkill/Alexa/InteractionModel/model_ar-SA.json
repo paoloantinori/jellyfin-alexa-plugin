@@ -448,11 +448,15 @@
           {
             "name": "series_name",
             "type": "SeriesName"
+          },
+          {
+            "name": "episode_position",
+            "type": "EpisodePosition"
           }
         ],
         "samples": [
-          "شغل الحلقة التالية من {series_name}",
-          "شغل أحدث حلقة من {series_name}",
+          "شغل الحلقة {episode_position} من {series_name}",
+          "شغل {episode_position} حلقة من {series_name}",
           "أكمل مشاهدة {series_name}"
         ]
       },
@@ -1033,6 +1037,33 @@
         ]
       },
       {
+        "name": "EpisodePosition",
+        "values": [
+          {
+            "name": {
+              "value": "التالية",
+              "synonyms": [
+                "تالية",
+                "القادمة",
+                "قادمة"
+              ]
+            },
+            "id": "next"
+          },
+          {
+            "name": {
+              "value": "الأحدث",
+              "synonyms": [
+                "أحدث",
+                "الأخيرة",
+                "الجديدة"
+              ]
+            },
+            "id": "latest"
+          }
+        ]
+      },
+      {
         "name": "TimePeriod",
         "values": [
           {
@@ -1435,6 +1466,12 @@
           {
             "name": "series_name",
             "type": "SeriesName",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          },
+          {
+            "name": "episode_position",
+            "type": "EpisodePosition",
             "confirmationRequired": false,
             "elicitationRequired": false
           }

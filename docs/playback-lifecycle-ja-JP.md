@@ -14,7 +14,7 @@ graph TD
     Idle -->|"映画 {title} を再生して"| PlayVideo
     Idle -->|"{series_name} のシーズン {season_number} エピソード {episode_number} を再生して"| PlayEpisode["PlayEpisodeIntent"]
     Idle -->|"シーズン {season_number} エピソード {episode_number} の {series_name} を再生して"| PlayEpisode
-    Idle -->|"{series_name} の次のエピソードを再生して"| PlayNextEpisode["PlayNextEpisodeIntent"]
+    Idle -->|"{series_name} の{episode_position}エピソードを再生して"| PlayNextEpisode["PlayNextEpisodeIntent"]
     Idle -->|"ランダムに何か再生して"| PlayRandom["PlayRandomIntent"]
 
     PlayArtist --> Playing

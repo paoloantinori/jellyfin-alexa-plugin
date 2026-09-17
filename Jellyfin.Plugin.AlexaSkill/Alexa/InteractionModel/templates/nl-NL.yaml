@@ -25,7 +25,8 @@
 # - English inertia RESOLVED 2026-09-12 (JF-399 executable half): the
 #   former 24 pure-English samples (PlayBook 8, FindSong 12,
 #   FindSongByArtist 4) are now native Dutch.
-# - The 9-type roster and order match pt-BR's: Mood, LibraryQueryType,
+# - The 10-type roster and order match pt-BR's (JF-583 adds
+#   EpisodePosition after SeriesName everywhere): Mood, LibraryQueryType,
 #   MediaType, BrowseCategory, SeriesName, TimePeriod, MediaInfoType,
 #   Decade, AudiobookTitle. SeriesName carries 8 values with 'Money
 #   Heist' UNTRANSLATED (pt-BR localizes it as La Casa de Papel);
@@ -65,6 +66,11 @@
 #   indefinite "een album van {musician}" form names it too).
 # - AMAZON.StopIntent has NO custom samples; the it-IT "ferma"
 #   samples are a JF-402 it-IT-only exception.
+# JF-583: PlayNextEpisodeIntent carries the episode_position slot
+# (custom EpisodePosition type, the Mood architecture) distinguishing
+# 'next' (NextUp, the empty-slot default) from 'latest' (recency,
+# PremiereDate desc); see the intent and type blocks for this locale's
+# values.
 invocationName: jellyfin player
 intents:
   - name: QueryRecentlyAddedIntent
@@ -389,14 +395,18 @@ intents:
       - speel seizoen {season_number} aflevering {episode_number} van {series_name}
       - speel {series_name} seizoen {season_number} aflevering {episode_number}
       - kijk seizoen {season_number} aflevering {episode_number} van {series_name}
+  # JF-583: the volgende/nieuwste carriers are slotted ({episode_position},
+  # custom EpisodePosition type): volgende keeps NextUp, nieuwste resolves
+  # by recency; 'ga verder met' carries no position (NextUp by design).
   - name: PlayNextEpisodeIntent
     slots:
       - name: series_name
         type: SeriesName
+      - name: episode_position
+        type: EpisodePosition
     samples:
-      - speel de volgende aflevering van {series_name}
-      - speel de volgende aflevering van de serie {series_name}
-      - speel de nieuwste aflevering van {series_name}
+      - speel {episode_position} aflevering van {series_name}
+      - speel {episode_position} aflevering van de serie {series_name}
       - ga verder met {series_name}
   - name: PlayPodcastIntent
     samples:
@@ -719,6 +729,18 @@ types:
       - value: The Walking Dead
       - value: Dark
       - value: Sherlock
+  # JF-583: restricted episode-position vocabulary on PlayNextEpisodeIntent
+  # (the Mood architecture). Ids are the shared cross-locale key space the
+  # handler's entity resolution reads; 'de laatste' is the most-recent
+  # reading (same ambiguity as en 'last').
+  EpisodePosition:
+    values:
+      - value: de volgende
+        id: "next"
+        synonyms: [volgende]
+      - value: de nieuwste
+        id: latest
+        synonyms: [nieuwste, de laatste, laatste, de meest recente]
   TimePeriod:
     values:
       - id: today
@@ -879,6 +901,10 @@ dialog:
       slots:
         - name: series_name
           type: SeriesName
+          confirmationRequired: false
+          elicitationRequired: false
+        - name: episode_position
+          type: EpisodePosition
           confirmationRequired: false
           elicitationRequired: false
     - name: PlayPodcastIntent

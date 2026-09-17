@@ -22,7 +22,7 @@
 #   joins every locale (de-DE shares this shape; fr-CA too).
 # - musician slots are the BUILT-IN AMAZON.Musician everywhere (the
 #   JellyfinArtist swap landed only in en-* + it-IT): languageModel
-#   intents and the dialog section both. Hence 8 types, no
+#   intents and the dialog section both. Hence 8 types before JF-583, no
 #   JellyfinArtist type, and NO JF-415 static seed (the validator's
 #   en-family seed-equality warning does not apply to this locale).
 # - NO modelConfiguration (de-DE and en-GB carry
@@ -61,6 +61,11 @@
 #   indefinite "un album de {musician}" form names it too).
 # - AMAZON.StopIntent has NO custom samples; the it-IT "ferma"
 #   samples are a JF-402 it-IT-only exception.
+# JF-583: PlayNextEpisodeIntent carries the episode_position slot
+# (custom EpisodePosition type, the Mood architecture) distinguishing
+# 'next' (NextUp, the empty-slot default) from 'latest' (recency,
+# PremiereDate desc); see the intent and type blocks for this locale's
+# values.
 invocationName: jellyfin player
 intents:
   - name: QueryRecentlyAddedIntent
@@ -398,20 +403,23 @@ intents:
       # JF-549: series-first one-shot twins (series-last alone dropped series_name; it-IT live 2026-09-12).
       - De jouer {series_name} saison {season_number} épisode {episode_number}
       - De regarder {series_name} saison {season_number} épisode {episode_number}
+  # JF-583: the prochain/dernier carriers are slotted ({episode_position},
+  # custom EpisodePosition type): prochain keeps NextUp, dernier resolves by
+  # recency; 'continue à regarder' carries no position (NextUp by design).
   - name: PlayNextEpisodeIntent
     slots:
       - name: series_name
         type: SeriesName
+      - name: episode_position
+        type: EpisodePosition
     samples:
-      - joue le prochain épisode de {series_name}
-      - joue le prochain épisode de la série {series_name}
-      - mets le prochain épisode de {series_name}
-      - joue le dernier épisode de {series_name}
+      - joue {episode_position} épisode de {series_name}
+      - joue {episode_position} épisode de la série {series_name}
+      - mets {episode_position} épisode de {series_name}
       - continue à regarder {series_name}
-      - De jouer le prochain épisode de {series_name}
-      - De jouer le prochain épisode de la série {series_name}
-      - De mettre le prochain épisode de {series_name}
-      - De jouer le dernier épisode de {series_name}
+      - De jouer {episode_position} épisode de {series_name}
+      - De jouer {episode_position} épisode de la série {series_name}
+      - De mettre {episode_position} épisode de {series_name}
       - De continuer à regarder {series_name}
   - name: BrowseLibraryIntent
     slots:
@@ -786,6 +794,18 @@ types:
       - value: Lupin
       - value: Le Bureau des Légendes
       - value: Engrenages
+  # JF-583: restricted episode-position vocabulary on PlayNextEpisodeIntent
+  # (the Mood architecture). Ids are the shared cross-locale key space the
+  # handler's entity resolution reads; 'le dernier' is the most-recent
+  # reading (same ambiguity as en 'last').
+  EpisodePosition:
+    values:
+      - value: le prochain
+        id: "next"
+        synonyms: [prochain]
+      - value: le dernier
+        id: latest
+        synonyms: [dernier, le plus récent, plus récent]
   MediaInfoType:
     values:
       - id: title
@@ -943,6 +963,10 @@ dialog:
       slots:
         - name: series_name
           type: SeriesName
+          confirmationRequired: false
+          elicitationRequired: false
+        - name: episode_position
+          type: EpisodePosition
           confirmationRequired: false
           elicitationRequired: false
     - name: PlayPodcastIntent

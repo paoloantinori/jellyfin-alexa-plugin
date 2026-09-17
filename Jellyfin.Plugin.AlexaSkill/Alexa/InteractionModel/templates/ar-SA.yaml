@@ -29,7 +29,8 @@
 # - English inertia RESOLVED 2026-09-12 (JF-399 executable half): the
 #   former 24 pure-English samples (PlayBook 8, FindSong 12,
 #   FindSongByArtist 4) are now native Arabic.
-# - The 9-type roster and order match pt-BR's: Mood, LibraryQueryType,
+# - The 10-type roster and order match pt-BR's (JF-583 adds
+#   EpisodePosition after SeriesName everywhere): Mood, LibraryQueryType,
 #   MediaType, BrowseCategory, SeriesName, TimePeriod, MediaInfoType,
 #   Decade, AudiobookTitle. SeriesName carries 8 values with 'Money
 #   Heist' UNTRANSLATED (pt-BR localizes it as La Casa de Papel);
@@ -68,6 +69,11 @@
 #   (anti-pattern #11).
 # - AMAZON.StopIntent has NO custom samples; the it-IT "ferma"
 #   samples are a JF-402 it-IT-only exception.
+# JF-583: PlayNextEpisodeIntent carries the episode_position slot
+# (custom EpisodePosition type, the Mood architecture) distinguishing
+# 'next' (NextUp, the empty-slot default) from 'latest' (recency,
+# PremiereDate desc); see the intent and type blocks for this locale's
+# values.
 invocationName: jellyfin player
 intents:
   - name: QueryRecentlyAddedIntent
@@ -357,13 +363,20 @@ intents:
       - شغل {series_name} الموسم {season_number} الحلقة {episode_number}
       - شاهد الموسم {season_number} الحلقة {episode_number} من {series_name}
       - شاهد {series_name} الموسم {season_number} الحلقة {episode_number}
+  # JF-583: the التالية/الأحدث carriers are slotted ({episode_position},
+  # custom EpisodePosition type): التالية keeps NextUp, الأحدث resolves by
+  # recency. Arabic postposes the definite adjective (الحلقة التالية); the
+  # indefinite preposed family (أحدث حلقة) keeps its own sample; the
+  # continue-watching sample carries no position (NextUp by design).
   - name: PlayNextEpisodeIntent
     slots:
       - name: series_name
         type: SeriesName
+      - name: episode_position
+        type: EpisodePosition
     samples:
-      - شغل الحلقة التالية من {series_name}
-      - شغل أحدث حلقة من {series_name}
+      - شغل الحلقة {episode_position} من {series_name}
+      - شغل {episode_position} حلقة من {series_name}
       - أكمل مشاهدة {series_name}
   - name: PlayPodcastIntent
     samples:
@@ -656,6 +669,18 @@ types:
       - value: The Walking Dead
       - value: Dark
       - value: Sherlock
+  # JF-583: restricted episode-position vocabulary on PlayNextEpisodeIntent
+  # (the Mood architecture). Ids are the shared cross-locale key space the
+  # handler's entity resolution reads; definite (الحلقة التالية) and
+  # indefinite (أحدث حلقة) word orders each keep a sample family.
+  EpisodePosition:
+    values:
+      - value: التالية
+        id: "next"
+        synonyms: [تالية, القادمة, قادمة]
+      - value: الأحدث
+        id: latest
+        synonyms: [أحدث, الأخيرة, الجديدة]
   TimePeriod:
     values:
       - id: today
@@ -816,6 +841,10 @@ dialog:
       slots:
         - name: series_name
           type: SeriesName
+          confirmationRequired: false
+          elicitationRequired: false
+        - name: episode_position
+          type: EpisodePosition
           confirmationRequired: false
           elicitationRequired: false
     - name: PlayPodcastIntent

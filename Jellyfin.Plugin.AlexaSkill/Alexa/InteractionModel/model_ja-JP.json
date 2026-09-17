@@ -449,11 +449,14 @@
           {
             "name": "series_name",
             "type": "SeriesName"
+          },
+          {
+            "name": "episode_position",
+            "type": "EpisodePosition"
           }
         ],
         "samples": [
-          "{series_name} の次のエピソードを再生して",
-          "{series_name} の最新のエピソードを再生して",
+          "{series_name} の{episode_position}エピソードを再生して",
           "{series_name} を続きから観て"
         ]
       },
@@ -1033,6 +1036,30 @@
         ]
       },
       {
+        "name": "EpisodePosition",
+        "values": [
+          {
+            "name": {
+              "value": "次の",
+              "synonyms": [
+                "次"
+              ]
+            },
+            "id": "next"
+          },
+          {
+            "name": {
+              "value": "最新の",
+              "synonyms": [
+                "最新",
+                "一番新しい"
+              ]
+            },
+            "id": "latest"
+          }
+        ]
+      },
+      {
         "name": "TimePeriod",
         "values": [
           {
@@ -1433,6 +1460,12 @@
           {
             "name": "series_name",
             "type": "SeriesName",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          },
+          {
+            "name": "episode_position",
+            "type": "EpisodePosition",
             "confirmationRequired": false,
             "elicitationRequired": false
           }

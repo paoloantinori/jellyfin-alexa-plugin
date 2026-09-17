@@ -31,8 +31,10 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
 /// <summary>
 /// JF-324 PlayNextEpisodeIntentHandler: NextUp resolution ("play the next episode
-/// of X" / "play the latest episode of X" / "continue watching X"), the empty-NextUp
-/// latest fallback, and the per-user library/content gating into the series query.
+/// of X" / "continue watching X"), the empty-NextUp latest fallback, and the
+/// per-user library/content gating into the series query. JF-583: the
+/// episode_position slot splits the two phrasings ("next" keeps NextUp, the
+/// empty default; "latest" resolves by recency, PremiereDate desc).
 /// </summary>
 [Collection("Plugin")]
 public class PlayNextEpisodeIntentHandlerTests : PluginTestBase
@@ -85,7 +87,7 @@ public class PlayNextEpisodeIntentHandlerTests : PluginTestBase
             _loggerFactory);
     }
 
-    private static IntentRequest CreateIntentRequest(string? seriesName = null)
+    private static IntentRequest CreateIntentRequest(string? seriesName = null, global::Alexa.NET.Request.Slot? positionSlot = null, string locale = "en-US")
     {
         var intent = new Intent { Name = IntentNames.PlayNextEpisode };
         intent.Slots = new Dictionary<string, global::Alexa.NET.Request.Slot>();
@@ -95,7 +97,46 @@ public class PlayNextEpisodeIntentHandlerTests : PluginTestBase
             intent.Slots["series_name"] = new global::Alexa.NET.Request.Slot { Name = "series_name", Value = seriesName };
         }
 
-        return new IntentRequest { Intent = intent, Locale = "en-US", RequestId = "test-req" };
+        if (positionSlot != null)
+        {
+            intent.Slots["episode_position"] = positionSlot;
+        }
+
+        return new IntentRequest { Intent = intent, Locale = locale, RequestId = "test-req" };
+    }
+
+    /// <summary>
+    /// Builds an episode_position slot (JF-583). With <paramref name="canonical"/>/
+    /// <paramref name="id"/> set it carries an ER_SUCCESS_MATCH authority (the
+    /// entity-resolution branch); without them it is a bare raw-value slot (the
+    /// no-resolution fallback branch).
+    /// </summary>
+    private static global::Alexa.NET.Request.Slot CreatePositionSlot(string? value, string? canonical = null, string? id = null)
+    {
+        var slot = new global::Alexa.NET.Request.Slot { Name = "episode_position", Value = value };
+        if (canonical == null && id == null)
+        {
+            return slot;
+        }
+
+        slot.Resolution = new global::Alexa.NET.Request.Resolution
+        {
+            Authorities = new[]
+            {
+                new global::Alexa.NET.Request.ResolutionAuthority
+                {
+                    Status = new global::Alexa.NET.Request.ResolutionStatus { Code = "ER_SUCCESS_MATCH" },
+                    Values = new[]
+                    {
+                        new global::Alexa.NET.Request.ResolutionValueContainer
+                        {
+                            Value = new global::Alexa.NET.Request.ResolutionValue { Name = canonical, Id = id }
+                        }
+                    }
+                }
+            }
+        };
+        return slot;
     }
 
     private static Context CreateContext()
@@ -312,6 +353,179 @@ public class PlayNextEpisodeIntentHandlerTests : PluginTestBase
         Assert.NotNull(capturedEpisodeQuery);
         Assert.Equal((ItemSortBy.DateCreated, SortOrder.Descending), capturedEpisodeQuery!.OrderBy[0]);
         Assert.Contains(series.Id, capturedEpisodeQuery.AncestorIds);
+    }
+
+    /// <summary>
+    /// JF-583: 'the latest episode of X' resolves by RECENCY (PremiereDate desc,
+    /// DateCreated desc tiebreak), never consults NextUp, and never filters on
+    /// watch state (a fully watched series still returns its newest episode).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_LatestPosition_ResolvesNewestByPremiereDateIgnoringWatchState()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(
+            seriesName: "The Office",
+            positionSlot: CreatePositionSlot("the latest", canonical: "latest", id: "latest"));
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+        var series = SetupSeriesFound();
+
+        var newest = new global::MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "Brand New Episode",
+            Id = Guid.NewGuid(),
+            ParentIndexNumber = 12,
+            IndexNumber = 200,
+            SeriesId = series.Id
+        };
+        InternalItemsQuery? capturedEpisodeQuery = null;
+        _libraryManagerMock
+            .Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Episode))))
+            .Callback<InternalItemsQuery>(q => capturedEpisodeQuery = q)
+            .Returns(new List<BaseItem> { newest });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        response.HasDirective<VideoAppLaunchDirective>();
+        // JF-501: the announce rides the progressive-response vehicle.
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.True(handler.Progressive.Contains("latest episode"), "progressive announce must use the latest-episode wording");
+        Assert.True(handler.Progressive.Contains("Brand New Episode"), "progressive announce must speak the newest episode title");
+        // Recency contract (JF-583): NextUp is never consulted and the query
+        // orders by PremiereDate desc with DateCreated desc as tiebreak.
+        _tvSeriesManagerMock.Verify(t => t.GetNextUp(It.IsAny<NextUpQuery>(), It.IsAny<DtoOptions>()), Times.Never);
+        Assert.NotNull(capturedEpisodeQuery);
+        Assert.Equal(2, capturedEpisodeQuery!.OrderBy.Count);
+        Assert.Equal((ItemSortBy.PremiereDate, SortOrder.Descending), capturedEpisodeQuery.OrderBy[0]);
+        Assert.Equal((ItemSortBy.DateCreated, SortOrder.Descending), capturedEpisodeQuery.OrderBy[1]);
+        Assert.Contains(series.Id, capturedEpisodeQuery.AncestorIds);
+    }
+
+    /// <summary>
+    /// JF-583 raw-value fallback: when entity resolution is absent the localized
+    /// word table still routes the Italian 'l'ultimo' to the recency path.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_LatestPosition_RawValueWithoutResolution_StillResolvesByRecency()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(
+            seriesName: "The Office",
+            positionSlot: CreatePositionSlot("l'ultimo"),
+            locale: "it-IT");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+        var series = SetupSeriesFound();
+        var newest = new global::MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "Episodio di oggi",
+            Id = Guid.NewGuid(),
+            SeriesId = series.Id
+        };
+        _libraryManagerMock
+            .Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Episode))))
+            .Returns(new List<BaseItem> { newest });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        response.HasDirective<VideoAppLaunchDirective>();
+        _tvSeriesManagerMock.Verify(t => t.GetNextUp(It.IsAny<NextUpQuery>(), It.IsAny<DtoOptions>()), Times.Never);
+        // The it-IT announce rides SSML, which XML-escapes the article's
+        // apostrophe ("l&apos;ultimo"), so pin the wording without the article.
+        Assert.True(handler.Progressive.Contains("ultimo episodio"), $"it-IT announce must use the latest-episode wording; captured: {handler.Progressive.AllText}");
+    }
+
+    /// <summary>
+    /// JF-583: an explicit 'next' position keeps NextUp semantics (the same
+    /// resolution as the empty-slot default) and never runs the recency query.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_NextPosition_KeepsNextUpSemantics()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(
+            seriesName: "The Office",
+            positionSlot: CreatePositionSlot("the next", canonical: "next", id: "next"));
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+        var series = SetupSeriesFound();
+        SetupNextUp("The Convention", series.Id);
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        response.HasDirective<VideoAppLaunchDirective>();
+        Assert.True(handler.Progressive.Contains("next episode"), "explicit next must announce with the next-episode wording");
+        _tvSeriesManagerMock.Verify(t => t.GetNextUp(It.IsAny<NextUpQuery>(), It.IsAny<DtoOptions>()), Times.Once);
+        _libraryManagerMock.Verify(
+            l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Episode))),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// JF-583: an unresolved position value (not a 'latest' word in the locale)
+    /// falls back to today's NextUp behavior rather than guessing recency.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_UnresolvedPositionValue_KeepsNextUp()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(
+            seriesName: "The Office",
+            positionSlot: CreatePositionSlot("whatever"));
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+        var series = SetupSeriesFound();
+        SetupNextUp("The Convention", series.Id);
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        response.HasDirective<VideoAppLaunchDirective>();
+        _tvSeriesManagerMock.Verify(t => t.GetNextUp(It.IsAny<NextUpQuery>(), It.IsAny<DtoOptions>()), Times.Once);
+    }
+
+    /// <summary>
+    /// JF-583: a series with no episodes at all on the latest path returns the
+    /// localized NoNextEpisode Tell (the same refusal string as the NextUp path).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_LatestPosition_NoEpisodes_ReturnsNoNextEpisode()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(
+            seriesName: "The Office",
+            positionSlot: CreatePositionSlot("the latest", canonical: "latest", id: "latest"));
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+        SetupSeriesFound();
+        _libraryManagerMock
+            .Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Episode))))
+            .Returns(new List<BaseItem>());
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        response.Tells();
+        Assert.Contains("next episode", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
     }
 
     [Fact]

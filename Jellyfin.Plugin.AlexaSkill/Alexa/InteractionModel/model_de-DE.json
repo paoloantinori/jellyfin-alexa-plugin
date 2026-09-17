@@ -488,18 +488,20 @@
           {
             "name": "series_name",
             "type": "SeriesName"
+          },
+          {
+            "name": "episode_position",
+            "type": "EpisodePosition"
           }
         ],
         "samples": [
-          "spiele die nächste folge von {series_name}",
-          "spiele die nächste folge der serie {series_name}",
-          "schau die nächste folge von {series_name}",
-          "spiele die neueste folge von {series_name}",
+          "spiele {episode_position} folge von {series_name}",
+          "spiele {episode_position} folge der serie {series_name}",
+          "schau {episode_position} folge von {series_name}",
           "schau {series_name} weiter",
-          "Zu spielen die nächste folge von {series_name}",
-          "Zu spielen die nächste folge der serie {series_name}",
-          "Zu schauen die nächste folge von {series_name}",
-          "Zu spielen die neueste folge von {series_name}"
+          "Zu spielen {episode_position} folge von {series_name}",
+          "Zu spielen {episode_position} folge der serie {series_name}",
+          "Zu schauen {episode_position} folge von {series_name}"
         ]
       },
       {
@@ -1225,6 +1227,35 @@
         ]
       },
       {
+        "name": "EpisodePosition",
+        "values": [
+          {
+            "name": {
+              "value": "die nächste",
+              "synonyms": [
+                "nächste",
+                "die kommende",
+                "kommende"
+              ]
+            },
+            "id": "next"
+          },
+          {
+            "name": {
+              "value": "die neueste",
+              "synonyms": [
+                "neueste",
+                "die letzte",
+                "letzte",
+                "aktuellste",
+                "die aktuellste"
+              ]
+            },
+            "id": "latest"
+          }
+        ]
+      },
+      {
         "name": "MediaInfoType",
         "values": [
           {
@@ -1642,6 +1673,12 @@
           {
             "name": "series_name",
             "type": "SeriesName",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          },
+          {
+            "name": "episode_position",
+            "type": "EpisodePosition",
             "confirmationRequired": false,
             "elicitationRequired": false
           }

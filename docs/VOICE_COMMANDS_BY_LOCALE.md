@@ -43,6 +43,7 @@ Placeholder legend:
 | `<العقد (الثمانينيات)>` | `{decade}` |
 | `<عدد الدقائق>` | `{duration_minutes}` |
 | `<رقم الحلقة>` | `{episode_number}` |
+| `<الموضع (التالية، الأحدث)>` | `{episode_position}` |
 | `<عامل التصفية (روك، جاز)>` | `{filter}` |
 | `<النوع الموسيقي>` | `{genre}` |
 | `<المعلومة (العنوان، الفنان، الألبوم)>` | `{media_info_type}` |
@@ -207,8 +208,8 @@ Complete phrase list (302 phrases across 60 commands):
 
 **Play the next episode**
 
-- `شغل الحلقة التالية من <اسم المسلسل>`
-- `شغل أحدث حلقة من <اسم المسلسل>`
+- `شغل الحلقة <الموضع (التالية، الأحدث)> من <اسم المسلسل>`
+- `شغل <الموضع (التالية، الأحدث)> حلقة من <اسم المسلسل>`
 - `أكمل مشاهدة <اسم المسلسل>`
 
 #### Podcasts
@@ -555,6 +556,7 @@ Placeholder legend:
 | `<decennium (jaren 80)>` | `{decade}` |
 | `<aantal minuten>` | `{duration_minutes}` |
 | `<afleveringsnummer>` | `{episode_number}` |
+| `<positie (volgende, nieuwste)>` | `{episode_position}` |
 | `<filterwoord (rock, jazz)>` | `{filter}` |
 | `<muziekgenre>` | `{genre}` |
 | `<info (titel, artiest, album)>` | `{media_info_type}` |
@@ -575,7 +577,7 @@ Placeholder legend:
 | `<woorden uit de songtitel>` | `{titleKeywords}` |
 | `<gebruikersnaam>` | `{username}` |
 
-Complete phrase list (364 phrases across 60 commands):
+Complete phrase list (363 phrases across 60 commands):
 
 #### Play music
 
@@ -750,9 +752,8 @@ Complete phrase list (364 phrases across 60 commands):
 
 **Play the next episode**
 
-- `speel de volgende aflevering van <naam van de serie>`
-- `speel de volgende aflevering van de serie <naam van de serie>`
-- `speel de nieuwste aflevering van <naam van de serie>`
+- `speel <positie (volgende, nieuwste)> aflevering van <naam van de serie>`
+- `speel <positie (volgende, nieuwste)> aflevering van de serie <naam van de serie>`
 - `ga verder met <naam van de serie>`
 
 #### Podcasts
@@ -1129,6 +1130,7 @@ Placeholder legend:
 | `<decade (the 80s)>` | `{decade}` |
 | `<number of minutes>` | `{duration_minutes}` |
 | `<episode number>` | `{episode_number}` |
+| `<position (next, latest)>` | `{episode_position}` |
 | `<filter word (rock, jazz)>` | `{filter}` |
 | `<music genre>` | `{genre}` |
 | `<what to ask (title, artist, album)>` | `{media_info_type}` |
@@ -1148,7 +1150,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (454 phrases across 60 commands):
+Complete phrase list (450 phrases across 60 commands):
 
 #### Play music
 
@@ -1345,18 +1347,14 @@ Complete phrase list (454 phrases across 60 commands):
 
 **Play the next episode**
 
-- `play the next episode of <series name>`
-- `play the next episode of the series <series name>`
-- `watch the next episode of <series name>`
-- `play the latest episode of <series name>`
-- `play the newest episode of <series name>`
+- `play <position (next, latest)> episode of <series name>`
+- `play <position (next, latest)> episode of the series <series name>`
+- `watch <position (next, latest)> episode of <series name>`
 - `continue watching <series name>`
 - `continue watching the series <series name>`
-- `to play the next episode of <series name>`
-- `to play the next episode of the series <series name>`
-- `to watch the next episode of <series name>`
-- `to play the latest episode of <series name>`
-- `to play the newest episode of <series name>`
+- `to play <position (next, latest)> episode of <series name>`
+- `to play <position (next, latest)> episode of the series <series name>`
+- `to watch <position (next, latest)> episode of <series name>`
 - `to continue watching <series name>`
 - `to continue watching the series <series name>`
 
@@ -1792,6 +1790,7 @@ Placeholder legend:
 | `<decade (the 80s)>` | `{decade}` |
 | `<number of minutes>` | `{duration_minutes}` |
 | `<episode number>` | `{episode_number}` |
+| `<position (next, latest)>` | `{episode_position}` |
 | `<filter word (rock, jazz)>` | `{filter}` |
 | `<music genre>` | `{genre}` |
 | `<what to ask (title, artist, album)>` | `{media_info_type}` |
@@ -1811,7 +1810,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (447 phrases across 60 commands):
+Complete phrase list (443 phrases across 60 commands):
 
 #### Play music
 
@@ -2005,18 +2004,14 @@ Complete phrase list (447 phrases across 60 commands):
 
 **Play the next episode**
 
-- `play the next episode of <series name>`
-- `play the next episode of the series <series name>`
-- `watch the next episode of <series name>`
-- `play the latest episode of <series name>`
-- `play the newest episode of <series name>`
+- `play <position (next, latest)> episode of <series name>`
+- `play <position (next, latest)> episode of the series <series name>`
+- `watch <position (next, latest)> episode of <series name>`
 - `continue watching <series name>`
 - `continue watching the series <series name>`
-- `to play the next episode of <series name>`
-- `to play the next episode of the series <series name>`
-- `to watch the next episode of <series name>`
-- `to play the latest episode of <series name>`
-- `to play the newest episode of <series name>`
+- `to play <position (next, latest)> episode of <series name>`
+- `to play <position (next, latest)> episode of the series <series name>`
+- `to watch <position (next, latest)> episode of <series name>`
 - `to continue watching <series name>`
 - `to continue watching the series <series name>`
 
@@ -2448,6 +2443,7 @@ Placeholder legend:
 | `<decade (the 80s)>` | `{decade}` |
 | `<number of minutes>` | `{duration_minutes}` |
 | `<episode number>` | `{episode_number}` |
+| `<position (next, latest)>` | `{episode_position}` |
 | `<filter word (rock, jazz)>` | `{filter}` |
 | `<music genre>` | `{genre}` |
 | `<what to ask (title, artist, album)>` | `{media_info_type}` |
@@ -2467,7 +2463,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (543 phrases across 60 commands):
+Complete phrase list (539 phrases across 60 commands):
 
 #### Play music
 
@@ -2738,18 +2734,14 @@ Complete phrase list (543 phrases across 60 commands):
 
 **Play the next episode**
 
-- `play the next episode of <series name>`
-- `play the next episode of the series <series name>`
-- `watch the next episode of <series name>`
-- `play the latest episode of <series name>`
-- `play the newest episode of <series name>`
+- `play <position (next, latest)> episode of <series name>`
+- `play <position (next, latest)> episode of the series <series name>`
+- `watch <position (next, latest)> episode of <series name>`
 - `continue watching <series name>`
 - `continue watching the series <series name>`
-- `to play the next episode of <series name>`
-- `to play the next episode of the series <series name>`
-- `to watch the next episode of <series name>`
-- `to play the latest episode of <series name>`
-- `to play the newest episode of <series name>`
+- `to play <position (next, latest)> episode of <series name>`
+- `to play <position (next, latest)> episode of the series <series name>`
+- `to watch <position (next, latest)> episode of <series name>`
 - `to continue watching <series name>`
 - `to continue watching the series <series name>`
 
@@ -3200,6 +3192,7 @@ Placeholder legend:
 | `<decade (the 80s)>` | `{decade}` |
 | `<number of minutes>` | `{duration_minutes}` |
 | `<episode number>` | `{episode_number}` |
+| `<position (next, latest)>` | `{episode_position}` |
 | `<filter word (rock, jazz)>` | `{filter}` |
 | `<music genre>` | `{genre}` |
 | `<what to ask (title, artist, album)>` | `{media_info_type}` |
@@ -3219,7 +3212,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (448 phrases across 60 commands):
+Complete phrase list (444 phrases across 60 commands):
 
 #### Play music
 
@@ -3412,18 +3405,14 @@ Complete phrase list (448 phrases across 60 commands):
 
 **Play the next episode**
 
-- `play the next episode of <series name>`
-- `play the next episode of the series <series name>`
-- `watch the next episode of <series name>`
-- `play the latest episode of <series name>`
-- `play the newest episode of <series name>`
+- `play <position (next, latest)> episode of <series name>`
+- `play <position (next, latest)> episode of the series <series name>`
+- `watch <position (next, latest)> episode of <series name>`
 - `continue watching <series name>`
 - `continue watching the series <series name>`
-- `to play the next episode of <series name>`
-- `to play the next episode of the series <series name>`
-- `to watch the next episode of <series name>`
-- `to play the latest episode of <series name>`
-- `to play the newest episode of <series name>`
+- `to play <position (next, latest)> episode of <series name>`
+- `to play <position (next, latest)> episode of the series <series name>`
+- `to watch <position (next, latest)> episode of <series name>`
 - `to continue watching <series name>`
 - `to continue watching the series <series name>`
 
@@ -3857,6 +3846,7 @@ Placeholder legend:
 | `<decade (the 80s)>` | `{decade}` |
 | `<number of minutes>` | `{duration_minutes}` |
 | `<episode number>` | `{episode_number}` |
+| `<position (next, latest)>` | `{episode_position}` |
 | `<filter word (rock, jazz)>` | `{filter}` |
 | `<music genre>` | `{genre}` |
 | `<what to ask (title, artist, album)>` | `{media_info_type}` |
@@ -3883,7 +3873,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (558 phrases across 62 commands):
+Complete phrase list (554 phrases across 62 commands):
 
 #### Play music
 
@@ -4159,18 +4149,14 @@ Complete phrase list (558 phrases across 62 commands):
 
 **Play the next episode**
 
-- `play the next episode of <series name>`
-- `play the next episode of the series <series name>`
-- `watch the next episode of <series name>`
-- `play the latest episode of <series name>`
-- `play the newest episode of <series name>`
+- `play <position (next, latest)> episode of <series name>`
+- `play <position (next, latest)> episode of the series <series name>`
+- `watch <position (next, latest)> episode of <series name>`
 - `continue watching <series name>`
 - `continue watching the series <series name>`
-- `to play the next episode of <series name>`
-- `to play the next episode of the series <series name>`
-- `to watch the next episode of <series name>`
-- `to play the latest episode of <series name>`
-- `to play the newest episode of <series name>`
+- `to play <position (next, latest)> episode of <series name>`
+- `to play <position (next, latest)> episode of the series <series name>`
+- `to watch <position (next, latest)> episode of <series name>`
 - `to continue watching <series name>`
 - `to continue watching the series <series name>`
 
@@ -4637,6 +4623,7 @@ Placeholder legend:
 | `<décennie (les années 80)>` | `{decade}` |
 | `<nombre de minutes>` | `{duration_minutes}` |
 | `<numéro d'épisode>` | `{episode_number}` |
+| `<position (prochain, dernier)>` | `{episode_position}` |
 | `<filtre (rock, jazz)>` | `{filter}` |
 | `<genre musical>` | `{genre}` |
 | `<information (titre, artiste, album)>` | `{media_info_type}` |
@@ -4656,7 +4643,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (415 phrases across 63 commands):
+Complete phrase list (413 phrases across 63 commands):
 
 #### Play music
 
@@ -4834,15 +4821,13 @@ Complete phrase list (415 phrases across 63 commands):
 
 **Play the next episode**
 
-- `joue le prochain épisode de <nom de la série>`
-- `joue le prochain épisode de la série <nom de la série>`
-- `mets le prochain épisode de <nom de la série>`
-- `joue le dernier épisode de <nom de la série>`
+- `joue <position (prochain, dernier)> épisode de <nom de la série>`
+- `joue <position (prochain, dernier)> épisode de la série <nom de la série>`
+- `mets <position (prochain, dernier)> épisode de <nom de la série>`
 - `continue à regarder <nom de la série>`
-- `De jouer le prochain épisode de <nom de la série>`
-- `De jouer le prochain épisode de la série <nom de la série>`
-- `De mettre le prochain épisode de <nom de la série>`
-- `De jouer le dernier épisode de <nom de la série>`
+- `De jouer <position (prochain, dernier)> épisode de <nom de la série>`
+- `De jouer <position (prochain, dernier)> épisode de la série <nom de la série>`
+- `De mettre <position (prochain, dernier)> épisode de <nom de la série>`
 - `De continuer à regarder <nom de la série>`
 
 #### Podcasts
@@ -5270,6 +5255,7 @@ Placeholder legend:
 | `<décennie (les années 80)>` | `{decade}` |
 | `<nombre de minutes>` | `{duration_minutes}` |
 | `<numéro d'épisode>` | `{episode_number}` |
+| `<position (prochain, dernier)>` | `{episode_position}` |
 | `<filtre (rock, jazz)>` | `{filter}` |
 | `<genre musical>` | `{genre}` |
 | `<information (titre, artiste, album)>` | `{media_info_type}` |
@@ -5289,7 +5275,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (426 phrases across 63 commands):
+Complete phrase list (424 phrases across 63 commands):
 
 #### Play music
 
@@ -5475,15 +5461,13 @@ Complete phrase list (426 phrases across 63 commands):
 
 **Play the next episode**
 
-- `joue le prochain épisode de <nom de la série>`
-- `joue le prochain épisode de la série <nom de la série>`
-- `mets le prochain épisode de <nom de la série>`
-- `joue le dernier épisode de <nom de la série>`
+- `joue <position (prochain, dernier)> épisode de <nom de la série>`
+- `joue <position (prochain, dernier)> épisode de la série <nom de la série>`
+- `mets <position (prochain, dernier)> épisode de <nom de la série>`
 - `continue à regarder <nom de la série>`
-- `De jouer le prochain épisode de <nom de la série>`
-- `De jouer le prochain épisode de la série <nom de la série>`
-- `De mettre le prochain épisode de <nom de la série>`
-- `De jouer le dernier épisode de <nom de la série>`
+- `De jouer <position (prochain, dernier)> épisode de <nom de la série>`
+- `De jouer <position (prochain, dernier)> épisode de la série <nom de la série>`
+- `De mettre <position (prochain, dernier)> épisode de <nom de la série>`
 - `De continuer à regarder <nom de la série>`
 
 #### Podcasts
@@ -5914,6 +5898,7 @@ Placeholder legend:
 | `<Jahrzehnt (die 80er)>` | `{decade}` |
 | `<Anzahl Minuten>` | `{duration_minutes}` |
 | `<Episodennummer>` | `{episode_number}` |
+| `<Position (nächste, neueste)>` | `{episode_position}` |
 | `<Filterwort (Rock, Jazz)>` | `{filter}` |
 | `<Musikgenre>` | `{genre}` |
 | `<gewünschte Info (Titel, Künstler, Album)>` | `{media_info_type}` |
@@ -5933,7 +5918,7 @@ Placeholder legend:
 | `<Wörter aus dem Songtitel>` | `{titleKeywords}` |
 | `<Benutzername>` | `{username}` |
 
-Complete phrase list (430 phrases across 63 commands):
+Complete phrase list (428 phrases across 63 commands):
 
 #### Play music
 
@@ -6118,15 +6103,13 @@ Complete phrase list (430 phrases across 63 commands):
 
 **Play the next episode**
 
-- `spiele die nächste folge von <Name der Serie>`
-- `spiele die nächste folge der serie <Name der Serie>`
-- `schau die nächste folge von <Name der Serie>`
-- `spiele die neueste folge von <Name der Serie>`
+- `spiele <Position (nächste, neueste)> folge von <Name der Serie>`
+- `spiele <Position (nächste, neueste)> folge der serie <Name der Serie>`
+- `schau <Position (nächste, neueste)> folge von <Name der Serie>`
 - `schau <Name der Serie> weiter`
-- `Zu spielen die nächste folge von <Name der Serie>`
-- `Zu spielen die nächste folge der serie <Name der Serie>`
-- `Zu schauen die nächste folge von <Name der Serie>`
-- `Zu spielen die neueste folge von <Name der Serie>`
+- `Zu spielen <Position (nächste, neueste)> folge von <Name der Serie>`
+- `Zu spielen <Position (nächste, neueste)> folge der serie <Name der Serie>`
+- `Zu schauen <Position (nächste, neueste)> folge von <Name der Serie>`
 
 #### Podcasts
 
@@ -6562,6 +6545,7 @@ Placeholder legend:
 | `<दशक (80 का दशक)>` | `{decade}` |
 | `<मिनट की संख्या>` | `{duration_minutes}` |
 | `<एपिसोड नंबर>` | `{episode_number}` |
+| `<स्थिति (अगला, नवीनतम)>` | `{episode_position}` |
 | `<फ़िल्टर (रॉक, जैज़)>` | `{filter}` |
 | `<संगीत शैली>` | `{genre}` |
 | `<जानकारी (शीर्षक, कलाकार, एल्बम)>` | `{media_info_type}` |
@@ -6582,7 +6566,7 @@ Placeholder legend:
 | `<गाने के नाम के शब्द>` | `{titleKeywords}` |
 | `<उपयोगकर्ता का नाम>` | `{username}` |
 
-Complete phrase list (324 phrases across 60 commands):
+Complete phrase list (323 phrases across 60 commands):
 
 #### Play music
 
@@ -6736,8 +6720,7 @@ Complete phrase list (324 phrases across 60 commands):
 
 **Play the next episode**
 
-- `<सीरीज़ का नाम> का अगला एपिसोड चलाओ`
-- `<सीरीज़ का नाम> का नवीनतम एपिसोड चलाओ`
+- `<सीरीज़ का नाम> का <स्थिति (अगला, नवीनतम)> एपिसोड चलाओ`
 - `<सीरीज़ का नाम> देखना जारी रखो`
 
 #### Podcasts
@@ -7097,6 +7080,7 @@ Placeholder legend:
 | `<ordinale (primo, secondo)>` | `{direction}` |
 | `<numero di minuti>` | `{duration_minutes}` |
 | `<numero dell'episodio>` | `{episode_number}` |
+| `<posizione (prossimo, ultimo)>` | `{episode_position}` |
 | `<filtro (rock, jazz)>` | `{filter}` |
 | `<genere musicale>` | `{genre}` |
 | `<informazione (titolo, artista, album)>` | `{media_info_type}` |
@@ -7116,7 +7100,7 @@ Placeholder legend:
 | `<titolo del video o del film>` | `{title}` |
 | `<parole del titolo del brano>` | `{titleKeywords}` |
 
-Complete phrase list (1440 phrases across 63 commands):
+Complete phrase list (1433 phrases across 63 commands):
 
 #### Play music
 
@@ -8252,23 +8236,16 @@ Complete phrase list (1440 phrases across 63 commands):
 
 **Play the next episode**
 
-- `Riproduci il prossimo episodio di <nome della serie>`
-- `Metti il prossimo episodio di <nome della serie>`
-- `Guarda il prossimo episodio di <nome della serie>`
-- `Riproduci l'ultimo episodio di <nome della serie>`
-- `Metti l'ultimo episodio di <nome della serie>`
+- `Riproduci <posizione (prossimo, ultimo)> episodio di <nome della serie>`
+- `Metti <posizione (prossimo, ultimo)> episodio di <nome della serie>`
+- `Guarda <posizione (prossimo, ultimo)> episodio di <nome della serie>`
 - `Continua a guardare <nome della serie>`
 - `Continua a guardare la serie <nome della serie>`
-- `Di riprodurre il prossimo episodio di <nome della serie>`
-- `Di suonare il prossimo episodio di <nome della serie>`
-- `Di mettere il prossimo episodio di <nome della serie>`
-- `Di pleiare il prossimo episodio di <nome della serie>`
-- `Di ascoltare il prossimo episodio di <nome della serie>`
-- `Di riprodurre l'ultimo episodio di <nome della serie>`
-- `Di suonare l'ultimo episodio di <nome della serie>`
-- `Di mettere l'ultimo episodio di <nome della serie>`
-- `Di pleiare l'ultimo episodio di <nome della serie>`
-- `Di ascoltare l'ultimo episodio di <nome della serie>`
+- `Di riprodurre <posizione (prossimo, ultimo)> episodio di <nome della serie>`
+- `Di suonare <posizione (prossimo, ultimo)> episodio di <nome della serie>`
+- `Di mettere <posizione (prossimo, ultimo)> episodio di <nome della serie>`
+- `Di pleiare <posizione (prossimo, ultimo)> episodio di <nome della serie>`
+- `Di ascoltare <posizione (prossimo, ultimo)> episodio di <nome della serie>`
 - `Di riprodurre la serie <nome della serie>`
 - `Di suonare la serie <nome della serie>`
 - `Di mettere la serie <nome della serie>`
@@ -8758,6 +8735,7 @@ Placeholder legend:
 | `<年代 (80年代)>` | `{decade}` |
 | `<分数>` | `{duration_minutes}` |
 | `<エピソード番号>` | `{episode_number}` |
+| `<位置（次、最新）>` | `{episode_position}` |
 | `<フィルター（ロック、ジャズ）>` | `{filter}` |
 | `<ジャンル>` | `{genre}` |
 | `<情報の種類 (タイトル、アーティスト、アルバム)>` | `{media_info_type}` |
@@ -8778,7 +8756,7 @@ Placeholder legend:
 | `<曲名のキーワード>` | `{titleKeywords}` |
 | `<ユーザー名>` | `{username}` |
 
-Complete phrase list (304 phrases across 60 commands):
+Complete phrase list (303 phrases across 60 commands):
 
 #### Play music
 
@@ -8921,8 +8899,7 @@ Complete phrase list (304 phrases across 60 commands):
 
 **Play the next episode**
 
-- `<シリーズ名> の次のエピソードを再生して`
-- `<シリーズ名> の最新のエピソードを再生して`
+- `<シリーズ名> の<位置（次、最新）>エピソードを再生して`
 - `<シリーズ名> を続きから観て`
 
 #### Podcasts
@@ -9272,6 +9249,7 @@ Placeholder legend:
 | `<década (anos 80)>` | `{decade}` |
 | `<número de minutos>` | `{duration_minutes}` |
 | `<número do episódio>` | `{episode_number}` |
+| `<posição (próximo, último)>` | `{episode_position}` |
 | `<filtro (rock, jazz)>` | `{filter}` |
 | `<gênero musical>` | `{genre}` |
 | `<informação (título, artista, álbum)>` | `{media_info_type}` |
@@ -9477,9 +9455,9 @@ Complete phrase list (377 phrases across 60 commands):
 
 **Play the next episode**
 
-- `tocar o próximo episódio de <nome da série>`
-- `tocar o próximo episódio da série <nome da série>`
-- `tocar o episódio mais recente de <nome da série>`
+- `tocar <posição (próximo, último)> episódio de <nome da série>`
+- `tocar <posição (próximo, último)> episódio da série <nome da série>`
+- `tocar o episódio <posição (próximo, último)> de <nome da série>`
 - `continuar assistindo <nome da série>`
 
 #### Podcasts
@@ -9859,6 +9837,7 @@ Placeholder legend:
 | `<década (los ochenta)>` | `{decade}` |
 | `<número de minutos>` | `{duration_minutes}` |
 | `<número de episodio>` | `{episode_number}` |
+| `<posición (próximo, último)>` | `{episode_position}` |
 | `<filtro (rock, jazz)>` | `{filter}` |
 | `<género musical>` | `{genre}` |
 | `<dato (título, artista, álbum)>` | `{media_info_type}` |
@@ -9878,7 +9857,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (404 phrases across 60 commands):
+Complete phrase list (403 phrases across 60 commands):
 
 #### Play music
 
@@ -10057,10 +10036,9 @@ Complete phrase list (404 phrases across 60 commands):
 
 **Play the next episode**
 
-- `reproduce el próximo episodio de <nombre de la serie>`
-- `reproduce el próximo episodio de la serie <nombre de la serie>`
-- `pon el próximo episodio de <nombre de la serie>`
-- `reproduce el último episodio de <nombre de la serie>`
+- `reproduce <posición (próximo, último)> episodio de <nombre de la serie>`
+- `reproduce <posición (próximo, último)> episodio de la serie <nombre de la serie>`
+- `pon <posición (próximo, último)> episodio de <nombre de la serie>`
 - `continúa viendo <nombre de la serie>`
 
 #### Podcasts
@@ -10472,6 +10450,7 @@ Placeholder legend:
 | `<década (los ochenta)>` | `{decade}` |
 | `<número de minutos>` | `{duration_minutes}` |
 | `<número de episodio>` | `{episode_number}` |
+| `<posición (próximo, último)>` | `{episode_position}` |
 | `<filtro (rock, jazz)>` | `{filter}` |
 | `<género musical>` | `{genre}` |
 | `<dato (título, artista, álbum)>` | `{media_info_type}` |
@@ -10491,7 +10470,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (398 phrases across 60 commands):
+Complete phrase list (397 phrases across 60 commands):
 
 #### Play music
 
@@ -10666,10 +10645,9 @@ Complete phrase list (398 phrases across 60 commands):
 
 **Play the next episode**
 
-- `reproduce el próximo episodio de <nombre de la serie>`
-- `reproduce el próximo episodio de la serie <nombre de la serie>`
-- `pon el próximo episodio de <nombre de la serie>`
-- `reproduce el último episodio de <nombre de la serie>`
+- `reproduce <posición (próximo, último)> episodio de <nombre de la serie>`
+- `reproduce <posición (próximo, último)> episodio de la serie <nombre de la serie>`
+- `pon <posición (próximo, último)> episodio de <nombre de la serie>`
 - `continúa viendo <nombre de la serie>`
 
 #### Podcasts
@@ -11079,6 +11057,7 @@ Placeholder legend:
 | `<década (los ochenta)>` | `{decade}` |
 | `<número de minutos>` | `{duration_minutes}` |
 | `<número de episodio>` | `{episode_number}` |
+| `<posición (próximo, último)>` | `{episode_position}` |
 | `<filtro (rock, jazz)>` | `{filter}` |
 | `<género musical>` | `{genre}` |
 | `<dato (título, artista, álbum)>` | `{media_info_type}` |
@@ -11098,7 +11077,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (392 phrases across 60 commands):
+Complete phrase list (391 phrases across 60 commands):
 
 #### Play music
 
@@ -11272,10 +11251,9 @@ Complete phrase list (392 phrases across 60 commands):
 
 **Play the next episode**
 
-- `reproduce el próximo episodio de <nombre de la serie>`
-- `reproduce el próximo episodio de la serie <nombre de la serie>`
-- `pon el próximo episodio de <nombre de la serie>`
-- `reproduce el último episodio de <nombre de la serie>`
+- `reproduce <posición (próximo, último)> episodio de <nombre de la serie>`
+- `reproduce <posición (próximo, último)> episodio de la serie <nombre de la serie>`
+- `pon <posición (próximo, último)> episodio de <nombre de la serie>`
 - `continúa viendo <nombre de la serie>`
 
 #### Podcasts

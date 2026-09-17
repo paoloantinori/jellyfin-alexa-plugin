@@ -30,6 +30,11 @@
 #   "play the record {album}"); no bare carriers (anti-pattern #11, PR #15).
 # - AMAZON.StopIntent has NO custom samples here; the it-IT "ferma" samples
 #   are a JF-402 it-IT-only exception.
+# JF-583: PlayNextEpisodeIntent carries the episode_position slot
+# (custom EpisodePosition type, the Mood architecture) distinguishing
+# 'next' (NextUp, the empty-slot default) from 'latest' (recency,
+# PremiereDate desc); see the intent and type blocks for this locale's
+# values.
 invocationName: jellyfin player
 
 # Word sets expanded via Cartesian product inside an intent's `templates`
@@ -43,9 +48,10 @@ vocabulary:
   # SearchMediaIntent: {search_verb} {search_obj} {query} (14 of its 18 samples)
   search_verb: [Search for, Find, Look for, Look up, Do you have, I want to find, Can you find]
   search_obj: [a movie, content]
-  # PlayNextEpisodeIntent: bare + "to ..." one-shot twin of each carrier
-  episode_carrier: [play the next episode of, play the next episode of the series, watch the next episode of, play the latest
-      episode of, play the newest episode of, continue watching, continue watching the series]
+  # PlayNextEpisodeIntent: bare + "to ..." one-shot twin of each carrier.
+  # JF-583: the next/latest/newest carriers collapse into the slotted
+  # {episode_position} forms (custom EpisodePosition type).
+  episode_carrier: ['play {episode_position} episode of', 'play {episode_position} episode of the series', 'watch {episode_position} episode of', continue watching, continue watching the series]
   # PlayBookIntent: {book_verb} {book_noun} (book_noun embeds the {book} slot ref)
   book_verb: [play, listen to]
   book_noun: ['{book}', 'the book {book}', 'audiobook {book}', 'the audiobook {book}']
@@ -535,10 +541,16 @@ intents:
       # JF-549: series-first one-shot twins (series-last alone dropped series_name; it-IT live 2026-09-12).
       - to play {series_name} season {season_number} episode {episode_number}
       - to watch {series_name} season {season_number} episode {episode_number}
+  # JF-583: the position carriers are slotted ({episode_position}, custom
+  # EpisodePosition type): next keeps NextUp, latest resolves by recency.
+  # The articles ride the type values' synonyms ("the next", "the latest");
+  # continue-watching carries no position (NextUp by design).
   - name: PlayNextEpisodeIntent
     slots:
       - name: series_name
         type: SeriesName
+      - name: episode_position
+        type: EpisodePosition
     templates:
       - '{episode_carrier} {series_name}'
       - to {episode_carrier} {series_name}
@@ -876,6 +888,17 @@ types:
       - value: Sherlock
       - value: Better Call Saul
       - value: Dexter
+  # JF-583: restricted episode-position vocabulary on PlayNextEpisodeIntent
+  # (the Mood architecture). Ids are the shared cross-locale key space the
+  # handler's entity resolution reads; synonyms carry the article forms.
+  EpisodePosition:
+    values:
+      - value: next
+        id: "next"
+        synonyms: [the next, upcoming, the upcoming]
+      - value: latest
+        id: latest
+        synonyms: [the latest, newest, the newest, last, the last, most recent, the most recent]
   TimePeriod:
     values:
       - id: today
@@ -1051,6 +1074,10 @@ dialog:
       slots:
         - name: series_name
           type: SeriesName
+          confirmationRequired: false
+          elicitationRequired: false
+        - name: episode_position
+          type: EpisodePosition
           confirmationRequired: false
           elicitationRequired: false
     - name: PlayPodcastIntent

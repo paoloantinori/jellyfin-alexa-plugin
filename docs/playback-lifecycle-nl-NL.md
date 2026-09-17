@@ -14,7 +14,7 @@ graph TD
     Idle -->|"speel de film {title}"| PlayVideo
     Idle -->|"speel seizoen {season_number} aflevering {episode_number} van {series_name}"| PlayEpisode["PlayEpisodeIntent"]
     Idle -->|"speel {series_name} seizoen {season_number} aflevering {episode_number}"| PlayEpisode
-    Idle -->|"speel de volgende aflevering van {series_name}"| PlayNextEpisode["PlayNextEpisodeIntent"]
+    Idle -->|"speel {episode_position} aflevering van {series_name}"| PlayNextEpisode["PlayNextEpisodeIntent"]
     Idle -->|"speel iets willekeurigs"| PlayRandom["PlayRandomIntent"]
 
     PlayArtist --> Playing

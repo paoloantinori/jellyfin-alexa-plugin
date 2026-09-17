@@ -23,7 +23,7 @@
 #   this milestone's batch that is unique (the fr family lacks both);
 #   across all templated locales en-US and it-IT also carry the type and
 #   the slot.
-# - The 9-type roster puts LibraryQueryType in position TWO (Mood,
+# - The 10-type roster puts LibraryQueryType in position TWO (Mood,
 #   LibraryQueryType, MediaType, BrowseCategory, SeriesName,
 #   TimePeriod, MediaInfoType, Decade, AudiobookTitle); SeriesName
 #   carries 8 values (Dark then Sherlock last; no localized tail
@@ -59,6 +59,11 @@
 #   indefinite "um álbum de {musician}" form names it too).
 # - AMAZON.StopIntent has NO custom samples; the it-IT "ferma"
 #   samples are a JF-402 it-IT-only exception.
+# JF-583: PlayNextEpisodeIntent carries the episode_position slot
+# (custom EpisodePosition type, the Mood architecture) distinguishing
+# 'next' (NextUp, the empty-slot default) from 'latest' (recency,
+# PremiereDate desc); see the intent and type blocks for this locale's
+# values.
 invocationName: jellyfin player
 intents:
   - name: QueryRecentlyAddedIntent
@@ -396,14 +401,21 @@ intents:
       - tocar {series_name} temporada {season_number} episódio {episode_number}
       - assistir temporada {season_number} episódio {episode_number} de {series_name}
       - assistir {series_name} temporada {season_number} episódio {episode_number}
+  # JF-583: the próximo/último carriers are slotted ({episode_position},
+  # custom EpisodePosition type): próximo keeps NextUp, último resolves by
+  # recency. The POSTPOSED family keeps today's 'tocar o episódio mais
+  # recente' word order (slot captures 'mais recente'); 'continuar
+  # assistindo' carries no position (NextUp by design).
   - name: PlayNextEpisodeIntent
     slots:
       - name: series_name
         type: SeriesName
+      - name: episode_position
+        type: EpisodePosition
     samples:
-      - tocar o próximo episódio de {series_name}
-      - tocar o próximo episódio da série {series_name}
-      - tocar o episódio mais recente de {series_name}
+      - tocar {episode_position} episódio de {series_name}
+      - tocar {episode_position} episódio da série {series_name}
+      - tocar o episódio {episode_position} de {series_name}
       - continuar assistindo {series_name}
   - name: PlayPodcastIntent
     samples:
@@ -731,6 +743,18 @@ types:
       - value: The Walking Dead
       - value: Dark
       - value: Sherlock
+  # JF-583: restricted episode-position vocabulary on PlayNextEpisodeIntent
+  # (the Mood architecture). Ids are the shared cross-locale key space the
+  # handler's entity resolution reads; 'mais recente' rides the POSTPOSED
+  # sample family ("tocar o episódio mais recente de X").
+  EpisodePosition:
+    values:
+      - value: o próximo
+        id: "next"
+        synonyms: [próximo]
+      - value: o último
+        id: latest
+        synonyms: [último, o mais recente, mais recente, o mais novo, mais novo]
   TimePeriod:
     values:
       - id: today
@@ -891,6 +915,10 @@ dialog:
       slots:
         - name: series_name
           type: SeriesName
+          confirmationRequired: false
+          elicitationRequired: false
+        - name: episode_position
+          type: EpisodePosition
           confirmationRequired: false
           elicitationRequired: false
     - name: PlayPodcastIntent

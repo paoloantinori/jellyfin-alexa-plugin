@@ -1921,23 +1921,16 @@
       {
         "name": "PlayNextEpisodeIntent",
         "samples": [
-          "Riproduci il prossimo episodio di {series_name}",
-          "Metti il prossimo episodio di {series_name}",
-          "Guarda il prossimo episodio di {series_name}",
-          "Riproduci l'ultimo episodio di {series_name}",
-          "Metti l'ultimo episodio di {series_name}",
+          "Riproduci {episode_position} episodio di {series_name}",
+          "Metti {episode_position} episodio di {series_name}",
+          "Guarda {episode_position} episodio di {series_name}",
           "Continua a guardare {series_name}",
           "Continua a guardare la serie {series_name}",
-          "Di riprodurre il prossimo episodio di {series_name}",
-          "Di suonare il prossimo episodio di {series_name}",
-          "Di mettere il prossimo episodio di {series_name}",
-          "Di pleiare il prossimo episodio di {series_name}",
-          "Di ascoltare il prossimo episodio di {series_name}",
-          "Di riprodurre l'ultimo episodio di {series_name}",
-          "Di suonare l'ultimo episodio di {series_name}",
-          "Di mettere l'ultimo episodio di {series_name}",
-          "Di pleiare l'ultimo episodio di {series_name}",
-          "Di ascoltare l'ultimo episodio di {series_name}",
+          "Di riprodurre {episode_position} episodio di {series_name}",
+          "Di suonare {episode_position} episodio di {series_name}",
+          "Di mettere {episode_position} episodio di {series_name}",
+          "Di pleiare {episode_position} episodio di {series_name}",
+          "Di ascoltare {episode_position} episodio di {series_name}",
           "Di riprodurre la serie {series_name}",
           "Di suonare la serie {series_name}",
           "Di mettere la serie {series_name}",
@@ -1948,6 +1941,10 @@
           {
             "name": "series_name",
             "type": "SeriesName"
+          },
+          {
+            "name": "episode_position",
+            "type": "EpisodePosition"
           }
         ]
       }
@@ -2194,6 +2191,35 @@
             "name": {
               "value": "Lupin"
             }
+          }
+        ]
+      },
+      {
+        "name": "EpisodePosition",
+        "values": [
+          {
+            "name": {
+              "value": "il prossimo",
+              "synonyms": [
+                "prossimo",
+                "il successivo",
+                "successivo"
+              ]
+            },
+            "id": "next"
+          },
+          {
+            "name": {
+              "value": "l'ultimo",
+              "synonyms": [
+                "ultimo",
+                "l'ultima",
+                "ultima",
+                "il più recente",
+                "più recente"
+              ]
+            },
+            "id": "latest"
           }
         ]
       },
@@ -2911,6 +2937,12 @@
           {
             "name": "series_name",
             "type": "SeriesName",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          },
+          {
+            "name": "episode_position",
+            "type": "EpisodePosition",
             "confirmationRequired": false,
             "elicitationRequired": false
           }

@@ -40,6 +40,11 @@
 # - Every PlayAlbum carrier names the media (anti-pattern #11, PR #15).
 # - AMAZON.StopIntent has NO custom samples; the it-IT "ferma"
 #   samples are a JF-402 it-IT-only exception.
+# JF-583: PlayNextEpisodeIntent carries the episode_position slot
+# (custom EpisodePosition type, the Mood architecture) distinguishing
+# 'next' (NextUp, the empty-slot default) from 'latest' (recency,
+# PremiereDate desc); see the intent and type blocks for this locale's
+# values.
 
 invocationName: jellyfin player
 
@@ -481,19 +486,21 @@ intents:
     slots:
       - name: series_name
         type: SeriesName
+      - name: episode_position
+        type: EpisodePosition
+    # JF-583: the next/latest/newest carriers are slotted ({episode_position},
+    # custom EpisodePosition type): next keeps NextUp, latest resolves by
+    # recency. The articles ride the type values' synonyms; continue-watching
+    # carries no position (NextUp by design).
     samples:
-      - play the next episode of {series_name}
-      - play the next episode of the series {series_name}
-      - watch the next episode of {series_name}
-      - play the latest episode of {series_name}
-      - play the newest episode of {series_name}
+      - play {episode_position} episode of {series_name}
+      - play {episode_position} episode of the series {series_name}
+      - watch {episode_position} episode of {series_name}
       - continue watching {series_name}
       - continue watching the series {series_name}
-      - to play the next episode of {series_name}
-      - to play the next episode of the series {series_name}
-      - to watch the next episode of {series_name}
-      - to play the latest episode of {series_name}
-      - to play the newest episode of {series_name}
+      - to play {episode_position} episode of {series_name}
+      - to play {episode_position} episode of the series {series_name}
+      - to watch {episode_position} episode of {series_name}
       - to continue watching {series_name}
       - to continue watching the series {series_name}
   - name: BrowseLibraryIntent
@@ -871,6 +878,17 @@ types:
       - value: Sherlock
       - value: Better Call Saul
       - value: Dexter
+  # JF-583: restricted episode-position vocabulary on PlayNextEpisodeIntent
+  # (the Mood architecture). Ids are the shared cross-locale key space the
+  # handler's entity resolution reads; synonyms carry the article forms.
+  EpisodePosition:
+    values:
+      - value: next
+        id: "next"
+        synonyms: [the next, upcoming, the upcoming]
+      - value: latest
+        id: latest
+        synonyms: [the latest, newest, the newest, last, the last, most recent, the most recent]
   MediaInfoType:
     values:
       - id: title
@@ -1043,6 +1061,10 @@ dialog:
       slots:
         - name: series_name
           type: SeriesName
+          confirmationRequired: false
+          elicitationRequired: false
+        - name: episode_position
+          type: EpisodePosition
           confirmationRequired: false
           elicitationRequired: false
     - name: PlayPodcastIntent

@@ -483,12 +483,15 @@
           {
             "name": "series_name",
             "type": "SeriesName"
+          },
+          {
+            "name": "episode_position",
+            "type": "EpisodePosition"
           }
         ],
         "samples": [
-          "speel de volgende aflevering van {series_name}",
-          "speel de volgende aflevering van de serie {series_name}",
-          "speel de nieuwste aflevering van {series_name}",
+          "speel {episode_position} aflevering van {series_name}",
+          "speel {episode_position} aflevering van de serie {series_name}",
           "ga verder met {series_name}"
         ]
       },
@@ -1111,6 +1114,32 @@
         ]
       },
       {
+        "name": "EpisodePosition",
+        "values": [
+          {
+            "name": {
+              "value": "de volgende",
+              "synonyms": [
+                "volgende"
+              ]
+            },
+            "id": "next"
+          },
+          {
+            "name": {
+              "value": "de nieuwste",
+              "synonyms": [
+                "nieuwste",
+                "de laatste",
+                "laatste",
+                "de meest recente"
+              ]
+            },
+            "id": "latest"
+          }
+        ]
+      },
+      {
         "name": "TimePeriod",
         "values": [
           {
@@ -1524,6 +1553,12 @@
           {
             "name": "series_name",
             "type": "SeriesName",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          },
+          {
+            "name": "episode_position",
+            "type": "EpisodePosition",
             "confirmationRequired": false,
             "elicitationRequired": false
           }

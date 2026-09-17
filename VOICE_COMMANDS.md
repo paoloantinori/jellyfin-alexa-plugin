@@ -48,7 +48,7 @@ Invocation name: **"jellyfin player"**
 | Play Last Added | `شغل آخر ما أضيف من {media_type}` · `شغل {media_type} المضافة {time_period}` · `شغل آخر ما أضيف من أغاني` · `شغل ما أضيف مؤخراً من {media_type}` · `شغل {media_type} جديدة` · `شغل ما أضيف مؤخراً` |
 | Play Mood Music | `شغل موسيقى {mood}` · `شغل {mood}` · `شغل أغانٍ {mood}` · `أريد موسيقى {mood}` |
 | Play Next | `شغل {song} بعد ذلك` · `شغل {song} لـ {musician} بعد ذلك` · `أريد سماع {song} بعد ذلك` · `شغل {song} بعد هذا` |
-| Play Next Episode | `شغل الحلقة التالية من {series_name}` · `شغل أحدث حلقة من {series_name}` · `أكمل مشاهدة {series_name}` |
+| Play Next Episode | `شغل الحلقة {episode_position} من {series_name}` · `أكمل مشاهدة {series_name}` · `شغل {episode_position} حلقة من {series_name}` |
 | Play Playlist | `شغل قائمة التشغيل {playlist}` · `شغل قائمة تشغيلي {playlist}` · `ابدأ قائمة التشغيل {playlist}` · `استمع إلى قائمة التشغيل {playlist}` · `هل يمكنك تشغيل قائمة التشغيل {playlist}` · `أريد سماع قائمة التشغيل {playlist}` |
 | Play Podcast | `شغل البودكاست {podcast_name}` · `استمع إلى البودكاست {podcast_name}` · `شغل آخر حلقة من {podcast_name}` · `شغل أحدث حلقة من {podcast_name}` · `ابدأ البودكاست {podcast_name}` |
 | Play Radio | `شغل الراديو` · `شغل محطة الراديو {station}` · `شغل وضع الراديو` · `ابدأ الراديو` · `شغل موسيقى مشابهة` · `شغل أغانٍ مشابهة` |
@@ -101,7 +101,7 @@ Invocation name: **"jellyfin player"**
 | Play Last Added | `Spiele neu hinzugefuegte {media_type}` · `Spiele neue Medien` · `Spiele kuerzlich hinzugefuegte {media_type}` |
 | Play Mood Music | `spiele {mood} musik` · `spiele etwas {mood}` · `ich möchte {mood} musik` · `spiele mir etwas {mood}` |
 | Play Next | `Spiele {song} als Nächstes` · `Spiele {song} von {musician} als Nächstes` · `Spiele {song} danach` · `Spiele {song} von {musician} danach` · `Ich möchte {song} als Nächstes hören` · `Setze {song} als Nächstes` |
-| Play Next Episode | `spiele die nächste folge von {series_name}` · `spiele die nächste folge der serie {series_name}` · `schau die nächste folge von {series_name}` · `spiele die neueste folge von {series_name}` · `schau {series_name} weiter` · `Zu spielen die nächste folge von {series_name}` |
+| Play Next Episode | `spiele {episode_position} folge von {series_name}` · `schau {series_name} weiter` · `spiele {episode_position} folge der serie {series_name}` · `schau {episode_position} folge von {series_name}` · `Zu spielen {episode_position} folge von {series_name}` · `Zu spielen {episode_position} folge der serie {series_name}` |
 | Play Playlist | `Spiele die Playlist {playlist}` · `Spiele meine Playlist {playlist}` · `Spiele Playlist {playlist}` · `Playlist {playlist} abspielen` · `Die Playlist {playlist} abspielen` · `Meine Playlist {playlist} abspielen` |
 | Play Podcast | `Spiele den Podcast {podcast_name}` · `Spiele Podcast {podcast_name}` · `Höre den Podcast {podcast_name}` · `Höre Podcast {podcast_name}` · `Spiele die neueste Folge von {podcast_name}` · `Starte den Podcast {podcast_name}` |
 | Play Radio | `Spiele Radio` · `Spiele den Radiosender {station}` · `Starte Radio` · `Spiele den Radiomodus` · `Spiele ähnliche Musik` · `Spiele ähnliche Lieder` |
@@ -153,7 +153,7 @@ Invocation name: **"jellyfin player"**
 | Play Last Added | `Play last added {media_type}` · `Play new media` · `Play recently added {media_type}` · `Play newly added {media_type}` |
 | Play Mood Music | `play {mood} music` · `play something {mood}` · `play {mood} songs` · `i want {mood} music` · `play me something {mood}` |
 | Play Next | `play {song} next` · `play {song} by {musician} next` · `play {song} up next` · `play {song} by {musician} up next` · `I want to hear {song} next` · `hear {song} next` |
-| Play Next Episode | `play the next episode of {series_name}` · `play the next episode of the series {series_name}` · `watch the next episode of {series_name}` · `play the latest episode of {series_name}` · `play the newest episode of {series_name}` · `continue watching {series_name}` |
+| Play Next Episode | `play {episode_position} episode of {series_name}` · `continue watching {series_name}` · `play {episode_position} episode of the series {series_name}` · `watch {episode_position} episode of {series_name}` · `continue watching the series {series_name}` · `to play {episode_position} episode of {series_name}` |
 | Play Playlist | `Play the playlist {playlist}` · `Play my playlist {playlist}` · `play the playlist {playlist}` · `play my playlist {playlist}` · `start the playlist {playlist}` · `start playlist {playlist}` |
 | Play Podcast | `play the podcast {podcast_name}` · `play podcast {podcast_name}` · `listen to the podcast {podcast_name}` · `listen to podcast {podcast_name}` · `play the latest episode of {podcast_name}` · `play the newest episode of {podcast_name}` |
 | Play Radio | `play radio` · `play the radio station {station}` · `play radio mode` · `start radio` · `play more like this` · `keep playing similar music` |
@@ -204,7 +204,7 @@ Invocation name: **"jellyfin player"**
 | Play Last Added | `Play last added {media_type}` · `Play new media` · `Play recently added {media_type}` · `Play newly added {media_type}` |
 | Play Mood Music | `play {mood} music` · `play something {mood}` · `play {mood} songs` · `i want {mood} music` · `play me something {mood}` |
 | Play Next | `play {song} next` · `play {song} by {musician} next` · `play {song} up next` · `play {song} by {musician} up next` · `I want to hear {song} next` · `hear {song} next` |
-| Play Next Episode | `play the next episode of {series_name}` · `play the next episode of the series {series_name}` · `watch the next episode of {series_name}` · `play the latest episode of {series_name}` · `play the newest episode of {series_name}` · `continue watching {series_name}` |
+| Play Next Episode | `play {episode_position} episode of {series_name}` · `continue watching {series_name}` · `play {episode_position} episode of the series {series_name}` · `watch {episode_position} episode of {series_name}` · `continue watching the series {series_name}` · `to play {episode_position} episode of {series_name}` |
 | Play Playlist | `Play the playlist {playlist}` · `Play my playlist {playlist}` · `play the playlist {playlist}` · `play my playlist {playlist}` · `start the playlist {playlist}` · `start playlist {playlist}` |
 | Play Podcast | `play the podcast {podcast_name}` · `play podcast {podcast_name}` · `listen to the podcast {podcast_name}` · `listen to podcast {podcast_name}` · `play the latest episode of {podcast_name}` · `play the newest episode of {podcast_name}` |
 | Play Radio | `play radio` · `play the radio station {station}` · `play radio mode` · `start radio` · `play more like this` · `keep playing similar music` |
@@ -255,7 +255,7 @@ Invocation name: **"jellyfin player"**
 | Play Last Added | `Play last added {media_type}` · `Play new media` · `Play recently added {media_type}` · `Play newly added {media_type}` · `what's new in {media_type}` · `play the latest {media_type}` |
 | Play Mood Music | `play {mood} music` · `play something {mood}` · `play {mood} songs` · `i want {mood} music` · `play me something {mood}` |
 | Play Next | `play {song} next` · `play {song} by {musician} next` · `play {song} up next` · `play {song} by {musician} up next` · `I want to hear {song} next` · `hear {song} next` |
-| Play Next Episode | `play the next episode of {series_name}` · `play the next episode of the series {series_name}` · `watch the next episode of {series_name}` · `play the latest episode of {series_name}` · `play the newest episode of {series_name}` · `continue watching {series_name}` |
+| Play Next Episode | `play {episode_position} episode of {series_name}` · `continue watching {series_name}` · `play {episode_position} episode of the series {series_name}` · `watch {episode_position} episode of {series_name}` · `continue watching the series {series_name}` · `to play {episode_position} episode of {series_name}` |
 | Play Playlist | `Play the playlist {playlist}` · `Play my playlist {playlist}` · `put on the playlist {playlist}` · `put on my playlist {playlist}` · `start the playlist {playlist}` · `start my playlist {playlist}` |
 | Play Podcast | `play the podcast {podcast_name}` · `play podcast {podcast_name}` · `listen to the podcast {podcast_name}` · `listen to podcast {podcast_name}` · `play the latest episode of {podcast_name}` · `play the newest episode of {podcast_name}` |
 | Play Radio | `play radio` · `play the radio station {station}` · `play radio mode` · `start radio` · `play more like this` · `keep playing similar music` |
@@ -306,7 +306,7 @@ Invocation name: **"jellyfin player"**
 | Play Last Added | `Play last added {media_type}` · `Play new media` · `Play recently added {media_type}` · `Play newly added {media_type}` |
 | Play Mood Music | `play {mood} music` · `play something {mood}` · `play {mood} songs` · `i want {mood} music` · `play me something {mood}` |
 | Play Next | `play {song} next` · `play {song} by {musician} next` · `play {song} up next` · `play {song} by {musician} up next` · `I want to hear {song} next` · `hear {song} next` |
-| Play Next Episode | `play the next episode of {series_name}` · `play the next episode of the series {series_name}` · `watch the next episode of {series_name}` · `play the latest episode of {series_name}` · `play the newest episode of {series_name}` · `continue watching {series_name}` |
+| Play Next Episode | `play {episode_position} episode of {series_name}` · `continue watching {series_name}` · `play {episode_position} episode of the series {series_name}` · `watch {episode_position} episode of {series_name}` · `continue watching the series {series_name}` · `to play {episode_position} episode of {series_name}` |
 | Play Playlist | `Play the playlist {playlist}` · `Play my playlist {playlist}` · `play the playlist {playlist}` · `play my playlist {playlist}` · `start the playlist {playlist}` · `to play the playlist {playlist}` |
 | Play Podcast | `play the podcast {podcast_name}` · `play podcast {podcast_name}` · `listen to the podcast {podcast_name}` · `listen to podcast {podcast_name}` · `play the latest episode of {podcast_name}` · `play the newest episode of {podcast_name}` |
 | Play Radio | `play radio` · `play the radio station {station}` · `play radio mode` · `start radio` · `play more like this` · `keep playing similar music` |
@@ -358,7 +358,7 @@ Invocation name: **"jellyfin player"**
 | Play Last Added | `Play last added {media_type}` · `Play new media` · `Play {media_type} added {time_period}` · `Play recently added {media_type}` · `Play newly added {media_type}` · `Play something new` |
 | Play Mood Music | `play {mood} music` · `play something {mood}` · `play {mood} songs` · `i want {mood} music` · `play me something {mood}` |
 | Play Next | `play {song} next` · `play {song} by {musician} next` · `play {song} up next` · `play {song} by {musician} up next` · `I want to hear {song} next` · `hear {song} next` |
-| Play Next Episode | `play the next episode of {series_name}` · `play the next episode of the series {series_name}` · `watch the next episode of {series_name}` · `play the latest episode of {series_name}` · `play the newest episode of {series_name}` · `continue watching {series_name}` |
+| Play Next Episode | `play {episode_position} episode of {series_name}` · `continue watching {series_name}` · `play {episode_position} episode of the series {series_name}` · `watch {episode_position} episode of {series_name}` · `continue watching the series {series_name}` · `to play {episode_position} episode of {series_name}` |
 | Play Playlist | `Play the playlist {playlist}` · `Play my playlist {playlist}` · `put on the playlist {playlist}` · `put on my playlist {playlist}` · `start the playlist {playlist}` · `start my playlist {playlist}` |
 | Play Podcast | `play the podcast {podcast_name}` · `play podcast {podcast_name}` · `listen to the podcast {podcast_name}` · `listen to podcast {podcast_name}` · `play the latest episode of {podcast_name}` · `play the newest episode of {podcast_name}` |
 | Play Radio | `play radio` · `play the radio station {station}` · `play radio mode` · `start radio` · `play more like this` · `keep playing similar music` |
@@ -410,7 +410,7 @@ Invocation name: **"jellyfin player"**
 | Play Last Added | `Reproduce los últimos {media_type} añadidos` · `Reproduce contenidos nuevos` · `Reproduce {media_type} añadidos recientemente` · `Reproduce {media_type} nuevos` |
 | Play Mood Music | `reproduce música {mood}` · `reproduce algo {mood}` · `quiero música {mood}` |
 | Play Next | `Reproduce {song} a continuación` · `Reproduce {song} de {musician} a continuación` · `Reproduce {song} después` · `Reproduce {song} de {musician} después` · `Quiero escuchar {song} a continuación` · `Pon {song} como siguiente` |
-| Play Next Episode | `reproduce el próximo episodio de {series_name}` · `reproduce el próximo episodio de la serie {series_name}` · `pon el próximo episodio de {series_name}` · `reproduce el último episodio de {series_name}` · `continúa viendo {series_name}` |
+| Play Next Episode | `reproduce {episode_position} episodio de {series_name}` · `continúa viendo {series_name}` · `reproduce {episode_position} episodio de la serie {series_name}` · `pon {episode_position} episodio de {series_name}` |
 | Play Playlist | `Reproduce la lista de reproducción {playlist}` · `Reproduce mi lista de reproducción {playlist}` · `Reproduce la playlist {playlist}` · `Reproduce mi playlist {playlist}` · `Pon la playlist {playlist}` · `Pon mi playlist {playlist}` |
 | Play Podcast | `reproduce el podcast {podcast_name}` · `escucha el podcast {podcast_name}` · `pon el podcast {podcast_name}` · `reproduce podcast {podcast_name}` · `escucha el último episodio de {podcast_name}` · `quiero escuchar el podcast {podcast_name}` |
 | Play Radio | `Reproduce radio` · `Reproduce la estación de radio {station}` · `Inicia radio` · `Reproduce modo radio` · `Reproduce música similar` · `Reproduce canciones similares` |
@@ -461,7 +461,7 @@ Invocation name: **"jellyfin player"**
 | Play Last Added | `Reproduce los últimos {media_type} añadidos` · `Reproduce contenidos nuevos` · `Reproduce {media_type} añadidos recientemente` · `Reproduce {media_type} nuevos` |
 | Play Mood Music | `reproduce música {mood}` · `reproduce algo {mood}` · `quiero música {mood}` |
 | Play Next | `Reproduce {song} a continuación` · `Reproduce {song} de {musician} a continuación` · `Reproduce {song} después` · `Reproduce {song} de {musician} después` · `Quiero escuchar {song} a continuación` · `Pon {song} como siguiente` |
-| Play Next Episode | `reproduce el próximo episodio de {series_name}` · `reproduce el próximo episodio de la serie {series_name}` · `pon el próximo episodio de {series_name}` · `reproduce el último episodio de {series_name}` · `continúa viendo {series_name}` |
+| Play Next Episode | `reproduce {episode_position} episodio de {series_name}` · `continúa viendo {series_name}` · `reproduce {episode_position} episodio de la serie {series_name}` · `pon {episode_position} episodio de {series_name}` |
 | Play Playlist | `Reproduce la lista de reproducción {playlist}` · `Reproduce mi lista de reproducción {playlist}` · `Reproduce la playlist {playlist}` · `Reproduce mi playlist {playlist}` · `Pon la playlist {playlist}` · `Pon mi playlist {playlist}` |
 | Play Podcast | `reproduce el podcast {podcast_name}` · `escucha el podcast {podcast_name}` · `pon el podcast {podcast_name}` · `reproduce podcast {podcast_name}` · `escucha el último episodio de {podcast_name}` · `quiero escuchar el podcast {podcast_name}` |
 | Play Radio | `Reproduce radio` · `Reproduce la estación de radio {station}` · `Inicia radio` · `Reproduce modo radio` · `Reproduce música similar` · `Reproduce canciones similares` |
@@ -512,7 +512,7 @@ Invocation name: **"jellyfin player"**
 | Play Last Added | `Reproduce los últimos {media_type} añadidos` · `Reproduce contenidos nuevos` · `Reproduce {media_type} añadidos recientemente` · `Reproduce {media_type} nuevos` |
 | Play Mood Music | `reproduce música {mood}` · `reproduce algo {mood}` · `quiero música {mood}` |
 | Play Next | `Reproduce {song} a continuación` · `Reproduce {song} de {musician} a continuación` · `Reproduce {song} después` · `Reproduce {song} de {musician} después` · `Quiero escuchar {song} a continuación` · `Pon {song} como siguiente` |
-| Play Next Episode | `reproduce el próximo episodio de {series_name}` · `reproduce el próximo episodio de la serie {series_name}` · `pon el próximo episodio de {series_name}` · `reproduce el último episodio de {series_name}` · `continúa viendo {series_name}` |
+| Play Next Episode | `reproduce {episode_position} episodio de {series_name}` · `continúa viendo {series_name}` · `reproduce {episode_position} episodio de la serie {series_name}` · `pon {episode_position} episodio de {series_name}` |
 | Play Playlist | `Reproduce la lista de reproducción {playlist}` · `Reproduce mi lista de reproducción {playlist}` · `Reproduce la playlist {playlist}` · `Reproduce mi playlist {playlist}` · `Pon la playlist {playlist}` · `Inicia la playlist {playlist}` |
 | Play Podcast | `reproduce el podcast {podcast_name}` · `escucha el podcast {podcast_name}` · `pon el podcast {podcast_name}` · `reproduce podcast {podcast_name}` · `escucha el último episodio de {podcast_name}` · `quiero escuchar el podcast {podcast_name}` |
 | Play Radio | `Reproduce radio` · `Reproduce la estación de radio {station}` · `Inicia radio` · `Reproduce modo radio` · `Reproduce música similar` · `Reproduce canciones similares` |
@@ -565,7 +565,7 @@ Invocation name: **"jellyfin player"**
 | Play Last Added | `Lis les derniers {media_type} ajoutés` · `Lis les nouveaux médias` · `Lis les nouveautés {media_type}` |
 | Play Mood Music | `joue de la musique {mood}` · `joue quelque chose de {mood}` · `je veux de la musique {mood}` · `joue-moi quelque chose de {mood}` |
 | Play Next | `Lis {song} ensuite` · `Lis {song} de {musician} ensuite` · `Lis {song} après` · `Lis {song} de {musician} après` · `Je veux entendre {song} ensuite` · `Passe {song} ensuite` |
-| Play Next Episode | `joue le prochain épisode de {series_name}` · `joue le prochain épisode de la série {series_name}` · `mets le prochain épisode de {series_name}` · `joue le dernier épisode de {series_name}` · `continue à regarder {series_name}` · `De jouer le prochain épisode de {series_name}` |
+| Play Next Episode | `joue {episode_position} épisode de {series_name}` · `continue à regarder {series_name}` · `joue {episode_position} épisode de la série {series_name}` · `mets {episode_position} épisode de {series_name}` · `De jouer {episode_position} épisode de {series_name}` · `De jouer {episode_position} épisode de la série {series_name}` |
 | Play Playlist | `Lis la playlist {playlist}` · `Lis ma playlist {playlist}` · `Joue la playlist {playlist}` · `Joue ma playlist {playlist}` · `Mets la playlist {playlist}` · `Lance la playlist {playlist}` |
 | Play Podcast | `joue le podcast {podcast_name}` · `écoute le podcast {podcast_name}` · `lance le podcast {podcast_name}` · `joue podcast {podcast_name}` · `écoute le dernier épisode de {podcast_name}` · `je veux écouter le podcast {podcast_name}` |
 | Play Radio | `Lis la radio` · `Lis la station de radio {station}` · `Démarre la radio` · `Lis le mode radio` · `Lis de la musique similaire` · `Lis des chansons similaires` |
@@ -619,7 +619,7 @@ Invocation name: **"jellyfin player"**
 | Play Last Added | `Lis les derniers {media_type} ajoutés` · `Lis les nouveaux médias` · `Lis les nouveautés {media_type}` |
 | Play Mood Music | `joue de la musique {mood}` · `joue quelque chose de {mood}` · `je veux de la musique {mood}` · `joue-moi quelque chose de {mood}` |
 | Play Next | `Lis {song} ensuite` · `Lis {song} de {musician} ensuite` · `Lis {song} après` · `Lis {song} de {musician} après` · `Je veux entendre {song} ensuite` · `Passe {song} ensuite` |
-| Play Next Episode | `joue le prochain épisode de {series_name}` · `joue le prochain épisode de la série {series_name}` · `mets le prochain épisode de {series_name}` · `joue le dernier épisode de {series_name}` · `continue à regarder {series_name}` · `De jouer le prochain épisode de {series_name}` |
+| Play Next Episode | `joue {episode_position} épisode de {series_name}` · `continue à regarder {series_name}` · `joue {episode_position} épisode de la série {series_name}` · `mets {episode_position} épisode de {series_name}` · `De jouer {episode_position} épisode de {series_name}` · `De jouer {episode_position} épisode de la série {series_name}` |
 | Play Playlist | `Lis la playlist {playlist}` · `Lis ma playlist {playlist}` · `Joue la playlist {playlist}` · `Joue ma playlist {playlist}` · `Mets la playlist {playlist}` · `Lance la playlist {playlist}` |
 | Play Podcast | `joue le podcast {podcast_name}` · `écoute le podcast {podcast_name}` · `lance le podcast {podcast_name}` · `joue podcast {podcast_name}` · `écoute le dernier épisode de {podcast_name}` · `je veux écouter le podcast {podcast_name}` |
 | Play Radio | `Lis la radio` · `Lis la station de radio {station}` · `Démarre la radio` · `Lis le mode radio` · `Lis de la musique similaire` · `Lis des chansons similaires` |
@@ -671,7 +671,7 @@ Invocation name: **"jellyfin player"**
 | Play Last Added | `आखिरी जोड़े {media_type} चलाओ` · `नया मीडिया चलाओ` · `{media_type} जोड़े {time_period} चलाओ` · `हाल ही में जोड़े {media_type} चलाओ` · `कुछ नया चलाओ` · `हाल ही में जोड़े {media_type} {time_period} चलाओ` |
 | Play Mood Music | `{mood} म्यूज़िक चलाओ` · `कुछ {mood} चलाओ` · `{mood} गाने चलाओ` · `मुझे {mood} म्यूज़िक चाहिए` |
 | Play Next | `{song} अगला चलाओ` · `{musician} का {song} अगला चलाओ` · `मैं {song} अगला सुनना चाहता हूँ` · `{song} इसके बाद चलाओ` |
-| Play Next Episode | `{series_name} का अगला एपिसोड चलाओ` · `{series_name} का नवीनतम एपिसोड चलाओ` · `{series_name} देखना जारी रखो` |
+| Play Next Episode | `{series_name} का {episode_position} एपिसोड चलाओ` · `{series_name} देखना जारी रखो` |
 | Play Playlist | `प्लेलिस्ट {playlist} चलाओ` · `मेरी प्लेलिस्ट {playlist} चलाओ` · `प्लेलिस्ट {playlist} लगाओ` · `प्लेलिस्ट {playlist} शुरू करो` · `प्लेलिस्ट {playlist} सुनो` · `क्या तुम प्लेलिस्ट {playlist} चला सकते हो` |
 | Play Podcast | `पॉडकास्ट {podcast_name} चलाओ` · `पॉडकास्ट {podcast_name} सुनो` · `{podcast_name} का ताज़ा एपिसोड चलाओ` · `पॉडकास्ट {podcast_name} शुरू करो` · `मैं {podcast_name} पॉडकास्ट सुनना चाहता हूँ` |
 | Play Radio | `रेडियो चलाओ` · `रेडियो स्टेशन {station} चलाओ` · `रेडियो मोड चलाओ` · `रेडियो शुरू करो` · `ऐसा ही और चलाओ` · `समान म्यूज़िक चलाते रहो` |
@@ -724,7 +724,7 @@ Invocation name: **"mia collezione"**
 | Play Last Added | `Riproduci novità {media_type}` · `Riproduci nuovi media` · `Riproduci {media_type} aggiunti {time_period}` · `Riproduci ultimi {media_type} aggiunti` · `Suona novità {media_type}` · `Suona ultimi {media_type} aggiunti` |
 | Play Mood Music | `Musica {mood}` · `Musica per {mood}` · `Riproduci musica {mood}` · `Riproduci musica per {mood}` · `Suona musica {mood}` · `Suona musica per {mood}` |
 | Play Next | `riproduci {song} dopo` · `riproduci {song} di {musician} dopo` · `suona {song} dopo` · `metti {song} dopo` · `suona {song} di {musician} dopo` · `voglio ascoltare {song} dopo` |
-| Play Next Episode | `Riproduci il prossimo episodio di {series_name}` · `Metti il prossimo episodio di {series_name}` · `Guarda il prossimo episodio di {series_name}` · `Riproduci l'ultimo episodio di {series_name}` · `Metti l'ultimo episodio di {series_name}` · `Continua a guardare {series_name}` |
+| Play Next Episode | `Riproduci {episode_position} episodio di {series_name}` · `Continua a guardare {series_name}` · `Metti {episode_position} episodio di {series_name}` · `Guarda {episode_position} episodio di {series_name}` · `Continua a guardare la serie {series_name}` · `Di riprodurre {episode_position} episodio di {series_name}` |
 | Play Playlist | `Riproduci playlist {playlist}` · `Suona playlist {playlist}` · `Metti playlist {playlist}` · `Pleia playlist {playlist}` · `Ascolta playlist {playlist}` · `Riproduci la playlist {playlist}` |
 | Play Podcast | `Riproduci il podcast {podcast_name}` · `Suona il podcast {podcast_name}` · `Ascolta il podcast {podcast_name}` · `Metti il podcast {podcast_name}` · `Ascolta l'ultimo episodio di {podcast_name}` |
 | Play Radio | `riproduci radio` · `riproduci la stazione radio {station}` · `suona radio` · `metti radio` · `attiva la radio` · `modalità radio` |
@@ -776,7 +776,7 @@ Invocation name: **"jellyfin player"**
 | Play Last Added | `最新の {media_type} を再生して` · `新しいメディアを再生して` · `{time_period} 追加された {media_type} を再生して` · `最近追加された {media_type} を再生して` · `何か新しいものを再生して` · `新着 {media_type} を再生して` |
 | Play Mood Music | `{mood} の音楽を再生して` · `{mood} な音楽を再生して` · `{mood} な曲を再生して` · `{mood} の音楽が聴きたい` |
 | Play Next | `次に {song} を再生して` · `次に {musician} の {song} を再生して` · `{song} を次に聴きたい` · `{song} をこの後に再生して` |
-| Play Next Episode | `{series_name} の次のエピソードを再生して` · `{series_name} の最新のエピソードを再生して` · `{series_name} を続きから観て` |
+| Play Next Episode | `{series_name} の{episode_position}エピソードを再生して` · `{series_name} を続きから観て` |
 | Play Playlist | `プレイリスト {playlist} を再生して` · `プレイリスト {playlist} を流して` · `プレイリスト {playlist} をスタートして` · `プレイリスト {playlist} を聴かせて` · `プレイリスト {playlist} を聞きたい` · `マイプレイリスト {playlist} を再生して` |
 | Play Podcast | `ポッドキャスト {podcast_name} を再生して` · `ポッドキャスト {podcast_name} を聴かせて` · `{podcast_name} の最新エピソードを再生して` · `ポッドキャスト {podcast_name} をスタートして` · `{podcast_name} ポッドキャストを聴きたい` |
 | Play Radio | `ラジオを再生して` · `ラジオステーション {station} を再生して` · `ラジオモードを再生して` · `ラジオをスタートして` · `似たような音楽を再生して` · `似た曲を再生して` |
@@ -827,7 +827,7 @@ Invocation name: **"jellyfin player"**
 | Play Last Added | `speel laatst toegevoegde {media_type}` · `speel nieuwe media` · `speel {media_type} toegevoegd {time_period}` · `speel recent toegevoegde {media_type}` · `speel iets nieuws` · `speel recent toegevoegde {media_type} van {time_period}` |
 | Play Mood Music | `speel {mood} muziek` · `speel iets {mood}` · `speel {mood} nummers` · `ik wil {mood} muziek` · `speel mij iets {mood}` |
 | Play Next | `speel {song} hierna` · `speel {song} van {musician} hierna` · `ik wil {song} hierna horen` · `speel {song} na dit` |
-| Play Next Episode | `speel de volgende aflevering van {series_name}` · `speel de volgende aflevering van de serie {series_name}` · `speel de nieuwste aflevering van {series_name}` · `ga verder met {series_name}` |
+| Play Next Episode | `speel {episode_position} aflevering van {series_name}` · `ga verder met {series_name}` · `speel {episode_position} aflevering van de serie {series_name}` |
 | Play Playlist | `speel de afspeellijst {playlist}` · `speel mijn afspeellijst {playlist}` · `zet de afspeellijst {playlist} op` · `start de afspeellijst {playlist}` · `zet mijn afspeellijst {playlist} op` · `luister naar de afspeellijst {playlist}` |
 | Play Podcast | `speel de podcast {podcast_name}` · `speel podcast {podcast_name}` · `luister naar de podcast {podcast_name}` · `speel de laatste aflevering van {podcast_name}` · `start de podcast {podcast_name}` · `ik wil naar podcast {podcast_name} luisteren` |
 | Play Radio | `speel radio` · `start het radiostation {station}` · `speel radiomodus` · `start radio` · `speel meer zoals dit` · `blijf vergelijkbare muziek afspelen` |
@@ -878,7 +878,7 @@ Invocation name: **"jellyfin player"**
 | Play Last Added | `tocar últimos {media_type} adicionados` · `tocar mídias novas` · `tocar {media_type} adicionados {time_period}` · `tocar {media_type} adicionados recentemente` · `tocar algo novo` · `tocar {media_type} novos de {time_period}` |
 | Play Mood Music | `tocar música {mood}` · `tocar algo {mood}` · `tocar músicas {mood}` · `quero música {mood}` |
 | Play Next | `tocar {song} depois` · `tocar {song} de {musician} depois` · `quero ouvir {song} depois` · `tocar {song} a seguir` · `tocar {song} de {musician} a seguir` · `tocar {song} após essa` |
-| Play Next Episode | `tocar o próximo episódio de {series_name}` · `tocar o próximo episódio da série {series_name}` · `tocar o episódio mais recente de {series_name}` · `continuar assistindo {series_name}` |
+| Play Next Episode | `tocar {episode_position} episódio de {series_name}` · `continuar assistindo {series_name}` · `tocar {episode_position} episódio da série {series_name}` · `tocar o episódio {episode_position} de {series_name}` |
 | Play Playlist | `tocar a playlist {playlist}` · `tocar minha playlist {playlist}` · `colocar a playlist {playlist}` · `iniciar a playlist {playlist}` · `ouvir a playlist {playlist}` · `pode tocar a playlist {playlist}` |
 | Play Podcast | `tocar o podcast {podcast_name}` · `tocar podcast {podcast_name}` · `ouvir o podcast {podcast_name}` · `ouvir podcast {podcast_name}` · `tocar o último episódio de {podcast_name}` · `iniciar o podcast {podcast_name}` |
 | Play Radio | `tocar rádio` · `Toque a estação de rádio {station}` · `tocar modo rádio` · `iniciar rádio` · `tocar mais como esse` · `continuar tocando música similar` |

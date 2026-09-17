@@ -14,11 +14,15 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
 /// <summary>
-/// Handler for PlayNextEpisodeIntent (JF-324): "play the next episode of {series}",
-/// "play the latest episode of {series}" and "continue watching {series}". All three
-/// phrasings share the NextUp core in <see cref="TvNextUpService.PlayNextUpEpisodeAsync"/>:
-/// the per-user next unwatched (or in-progress) episode, falling back to the most
-/// recently created episode when the series is fully watched.
+/// Handler for PlayNextEpisodeIntent (JF-324): "play the next episode of {series}"
+/// and "continue watching {series}" share the NextUp core in
+/// <see cref="TvNextUpService.PlayNextUpEpisodeAsync"/> (the per-user next unwatched
+/// or in-progress episode, with the JF-324 DateCreated fallback when the series is
+/// fully watched). JF-583: the episode_position slot distinguishes the "latest
+/// episode of {series}" phrasing, which resolves by RECENCY in
+/// <see cref="TvNextUpService.PlayLatestEpisodeAsync"/> (PremiereDate desc, no watch
+/// filter) because NextUp answers watch state in library order, never date. An
+/// empty, absent, or unresolved position keeps NextUp: the historical default.
 /// </summary>
 public class PlayNextEpisodeIntentHandler : BaseHandler
 {
@@ -82,7 +86,7 @@ public class PlayNextEpisodeIntentHandler : BaseHandler
 
         if (string.IsNullOrWhiteSpace(seriesName))
         {
-            return BuildDialogElicitResponse("DidNotCatchSeriesName", locale, "series_name", IntentNames.PlayNextEpisode, "series_name");
+            return BuildDialogElicitResponse("DidNotCatchSeriesName", locale, "series_name", IntentNames.PlayNextEpisode, "series_name", "episode_position");
         }
 
         // Media-type gate after the slot prompt and before any query (the JF-467
@@ -92,7 +96,14 @@ public class PlayNextEpisodeIntentHandler : BaseHandler
             return mediaDisabled;
         }
 
-        Logger.LogDebug("PlayNextEpisode: seriesName='{SeriesName}', locale={Locale}", seriesName, locale);
+        // JF-583: the episode_position slot decides the semantics ('next'/empty
+        // keeps NextUp; 'latest' resolves by recency). Entity resolution decides
+        // when it matched, the localized word table when it did not.
+        bool latestRequested = Util.EpisodePosition.IsLatest(
+            intentRequest.Intent.Slots?.TryGetValue("episode_position", out var positionSlot) == true ? positionSlot : null,
+            locale);
+
+        Logger.LogDebug("PlayNextEpisode: seriesName='{SeriesName}', locale={Locale}, latestRequested={LatestRequested}", seriesName, locale, latestRequested);
 
         RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)));
 
@@ -106,6 +117,11 @@ public class PlayNextEpisodeIntentHandler : BaseHandler
         if (seriesError != null || series is null)
         {
             return seriesError!;
+        }
+
+        if (latestRequested)
+        {
+            return await TvNextUp.PlayLatestEpisodeAsync(_libraryManager, _userDataManager, jellyfinUser!, user, session, series, locale, context, request, cancellationToken).ConfigureAwait(false);
         }
 
         return await TvNextUp.PlayNextUpEpisodeAsync(_tvSeriesManager, _libraryManager, _userDataManager, jellyfinUser!, user, session, series, locale, context, request, cancellationToken).ConfigureAwait(false);

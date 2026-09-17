@@ -465,11 +465,14 @@
           {
             "name": "series_name",
             "type": "SeriesName"
+          },
+          {
+            "name": "episode_position",
+            "type": "EpisodePosition"
           }
         ],
         "samples": [
-          "{series_name} का अगला एपिसोड चलाओ",
-          "{series_name} का नवीनतम एपिसोड चलाओ",
+          "{series_name} का {episode_position} एपिसोड चलाओ",
           "{series_name} देखना जारी रखो"
         ]
       },
@@ -1059,6 +1062,31 @@
         ]
       },
       {
+        "name": "EpisodePosition",
+        "values": [
+          {
+            "name": {
+              "value": "अगला",
+              "synonyms": [
+                "आगामी"
+              ]
+            },
+            "id": "next"
+          },
+          {
+            "name": {
+              "value": "नवीनतम",
+              "synonyms": [
+                "सबसे नया",
+                "नया",
+                "आख़िरी"
+              ]
+            },
+            "id": "latest"
+          }
+        ]
+      },
+      {
         "name": "TimePeriod",
         "values": [
           {
@@ -1462,6 +1490,12 @@
           {
             "name": "series_name",
             "type": "SeriesName",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          },
+          {
+            "name": "episode_position",
+            "type": "EpisodePosition",
             "confirmationRequired": false,
             "elicitationRequired": false
           }

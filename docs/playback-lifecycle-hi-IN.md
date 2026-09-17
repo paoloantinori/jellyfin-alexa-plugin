@@ -14,7 +14,7 @@ graph TD
     Idle -->|"फिल्म {title} चलाओ"| PlayVideo
     Idle -->|"{series_name} सीज़न {season_number} एपिसोड {episode_number} चलाओ"| PlayEpisode["PlayEpisodeIntent"]
     Idle -->|"सीज़न {season_number} एपिसोड {episode_number} {series_name} का चलाओ"| PlayEpisode
-    Idle -->|"{series_name} का अगला एपिसोड चलाओ"| PlayNextEpisode["PlayNextEpisodeIntent"]
+    Idle -->|"{series_name} का {episode_position} एपिसोड चलाओ"| PlayNextEpisode["PlayNextEpisodeIntent"]
     Idle -->|"कुछ रैंडम चलाओ"| PlayRandom["PlayRandomIntent"]
 
     PlayArtist --> Playing

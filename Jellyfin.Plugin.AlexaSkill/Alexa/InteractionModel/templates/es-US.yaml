@@ -34,6 +34,11 @@
 # generate_mood_slot.py no longer writes this locale (es-US was an
 # alias of the deleted es-ES LOCALE_MOODS entry); a mood-word change
 # is an edit to this template + regen.
+# JF-583: PlayNextEpisodeIntent carries the episode_position slot
+# (custom EpisodePosition type, the Mood architecture) distinguishing
+# 'next' (NextUp, the empty-slot default) from 'latest' (recency,
+# PremiereDate desc); see the intent and type blocks for this locale's
+# values.
 invocationName: jellyfin player
 intents:
   - name: QueryRecentlyAddedIntent
@@ -346,15 +351,19 @@ intents:
       - reproduce la temporada {season_number} episodio {episode_number} de {series_name}
       - reproduce {series_name} temporada {season_number} episodio {episode_number}
       - ver temporada {season_number} episodio {episode_number} de {series_name}
+  # JF-583: the próximo/último carriers are slotted ({episode_position},
+  # custom EpisodePosition type): próximo keeps NextUp, último resolves by
+  # recency; 'continúa viendo' carries no position (NextUp by design).
   - name: PlayNextEpisodeIntent
     slots:
       - name: series_name
         type: SeriesName
+      - name: episode_position
+        type: EpisodePosition
     samples:
-      - reproduce el próximo episodio de {series_name}
-      - reproduce el próximo episodio de la serie {series_name}
-      - pon el próximo episodio de {series_name}
-      - reproduce el último episodio de {series_name}
+      - reproduce {episode_position} episodio de {series_name}
+      - reproduce {episode_position} episodio de la serie {series_name}
+      - pon {episode_position} episodio de {series_name}
       - continúa viendo {series_name}
   - name: BrowseLibraryIntent
     slots:
@@ -717,6 +726,17 @@ types:
       - value: Sherlock
       - value: Better Call Saul
       - value: El Señor de los Cielos
+  # JF-583: restricted episode-position vocabulary on PlayNextEpisodeIntent
+  # (the Mood architecture). Ids are the shared cross-locale key space the
+  # handler's entity resolution reads.
+  EpisodePosition:
+    values:
+      - value: el próximo
+        id: "next"
+        synonyms: [próximo, el siguiente, siguiente]
+      - value: el último
+        id: latest
+        synonyms: [último, el más reciente, más reciente]
   MediaInfoType:
     values:
       - id: title
@@ -874,6 +894,10 @@ dialog:
       slots:
         - name: series_name
           type: SeriesName
+          confirmationRequired: false
+          elicitationRequired: false
+        - name: episode_position
+          type: EpisodePosition
           confirmationRequired: false
           elicitationRequired: false
     - name: PlayPodcastIntent
