@@ -141,7 +141,7 @@ public class StartOverIntentHandler : BaseHandler
         // Gated at the caller, NOT in IsVideoAppLaunchItem: the predicate is the durable
         // movie-shaped kind list (its other callers must not treat a book as video) and
         // the flag is mutable config (the JF-499 W1 split; see ResumeIntentHandler).
-        if (item is MediaBrowser.Controller.Entities.AudioBook)
+        if (AudiobookItems.IsAudioBook(item))
         {
             // The tracker's high-water mark never decreases, so the stale position must be
             // dropped here or the next resume would jump back near where the user just
@@ -151,16 +151,13 @@ public class StartOverIntentHandler : BaseHandler
 
             if (Plugin.Instance?.Configuration?.NativeControlsForBooks == true)
             {
-                SkillResponse response = Launch.BuildVideoAppAudioResponse(itemId, item, user, context: context);
-
-                // JF-501: the restart announce rides the progressive vehicle on a VideoApp
-                // launch (same as the movie branch); a screenless device degrades to
-                // AudioPlayer and the announce stays on the final response.
-                response.Response.OutputSpeech = await Launch.SpeakVideoLaunchAnnounceAsync(
+                return await Launch.BuildAudiobookVideoAppLaunchResponseAsync(
+                    itemId,
+                    item,
+                    new PlainTextOutputSpeech(ResponseStrings.Get("RestartingContent", locale, item.Name)),
+                    user,
                     context,
-                    request,
-                    new PlainTextOutputSpeech(ResponseStrings.Get("RestartingContent", locale, item.Name))).ConfigureAwait(false);
-                return response;
+                    request).ConfigureAwait(false);
             }
         }
 

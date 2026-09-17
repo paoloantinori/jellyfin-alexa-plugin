@@ -265,15 +265,20 @@ public class LaunchRequestHandler : BaseHandler
 
         // For audiobooks with native controls, prefer the segment-based tracker position
         // (accurate for HLS concat playback) and signal resume-via-playlist to YesIntent.
+        // Precedence (JF-581 + JF-567): ResolveResumeTicks above is the store fallback for
+        // every medium; the tracker read here is the audiobook-specific layer that wins
+        // when a capable device played the book via the HLS concat timeline (the store
+        // cannot see segment positions). Tracker ticks only override when > 0; otherwise
+        // the store-resolved positionTicks stands.
         bool useResumePlaylist = false;
-        if (item.GetType().Name.Equals("AudioBook", StringComparison.Ordinal)
+        if (AudiobookItems.IsAudioBook(item)
             && Plugin.Instance?.Configuration?.NativeControlsForBooks == true)
         {
-            string bookId = (item.ParentId != Guid.Empty ? item.ParentId : item.Id).ToString("N");
-            long trackedTicks = Plugin.Instance?.AudiobookPositionTracker?.GetPositionTicks(bookId) ?? 0;
+            string bookKey = ResumeMath.GetAudiobookBookKey(item);
+            long trackedTicks = ResumeMath.GetAudiobookStartTicks(bookKey, 0);
             Logger.LogDebug(
-                "LaunchResume: audiobook resume check bookId={BookId}, trackedTicks={Ticks}, userDataTicks={UserData}",
-                bookId, trackedTicks, positionTicks);
+                "LaunchResume: audiobook resume check bookKey={BookKey}, trackedTicks={Ticks}, userDataTicks={UserData}",
+                bookKey, trackedTicks, positionTicks);
             if (trackedTicks > 0)
             {
                 positionTicks = trackedTicks;

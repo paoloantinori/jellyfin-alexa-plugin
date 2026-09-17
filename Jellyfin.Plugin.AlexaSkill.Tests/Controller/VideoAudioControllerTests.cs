@@ -4150,9 +4150,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         await File.WriteAllTextAsync(Path.Combine(hlsDir, "seg_0005.ts"), new string('x', 512));
         _cache.RegisterHlsDirectory(bookIdStr, 0);
 
-        var tracker = new Jellyfin.Plugin.AlexaSkill.Alexa.Playback.AudiobookPositionTracker(
-            CreateRegisteredTempDir("jf499-tracker-folder"),
-            _loggerFactory.CreateLogger<Jellyfin.Plugin.AlexaSkill.Alexa.Playback.AudiobookPositionTracker>());
+        var tracker = CreatePositionTracker("jf499-tracker-folder");
         Plugin.Instance!.AudiobookPositionTracker = tracker;
         try
         {
@@ -4194,9 +4192,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         await File.WriteAllTextAsync(Path.Combine(hlsDir, "seg_0005.ts"), new string('x', 512));
         _cache.RegisterHlsDirectory(episodeIdStr, 0);
 
-        var tracker = new Jellyfin.Plugin.AlexaSkill.Alexa.Playback.AudiobookPositionTracker(
-            CreateRegisteredTempDir("jf499-tracker-episode"),
-            _loggerFactory.CreateLogger<Jellyfin.Plugin.AlexaSkill.Alexa.Playback.AudiobookPositionTracker>());
+        var tracker = CreatePositionTracker("jf499-tracker-episode");
         Plugin.Instance!.AudiobookPositionTracker = tracker;
         try
         {

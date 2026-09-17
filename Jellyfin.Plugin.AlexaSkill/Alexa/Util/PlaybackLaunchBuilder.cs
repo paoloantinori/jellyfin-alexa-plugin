@@ -367,7 +367,7 @@ public sealed class PlaybackLaunchBuilder
                 : PlayingMedium.Video;
         }
 
-        if (item is MediaBrowser.Controller.Entities.AudioBook)
+        if (AudiobookItems.IsAudioBook(item))
         {
             return PlayingMedium.VideoAppAudiobook;
         }
@@ -629,6 +629,11 @@ public sealed class PlaybackLaunchBuilder
             (Plugin.Instance?.DeviceQueueManager)?.RecordLastPlayed(ledgerDeviceId, item.Id.ToString());
         }
 
+        // JF-567: this GUID feeds a URL path segment, so it keeps the default dashed
+        // Guid format. It is NOT the tracker bookKey (ResumeMath.GetAudiobookBookKey's
+        // "N" string); AudiobookPositionTracker.NormalizeKey canonicalizes both shapes,
+        // so the segment-record path (URL dashed) and the resume-read path ("N") agree
+        // in the tracker dictionary.
         Guid parentId = item.ParentId != Guid.Empty ? item.ParentId : item.Id;
         string videoAudioUrl = GetAudiobookResumeUrl(parentId.ToString(), startTicks);
 
@@ -660,6 +665,37 @@ public sealed class PlaybackLaunchBuilder
                 }
             }
         };
+    }
+
+    /// <summary>
+    /// The shared audiobook VideoApp fresh-launch composition (JF-567): the launch build
+    /// plus the JF-501 progressive-announce attachment. One home for the
+    /// screenless-degradation rule (SpeakVideoLaunchAnnounceAsync degrades to riding the
+    /// final response on a device without the VideoApp interface, where the AudioPlayer
+    /// fallback has no progressive cut). PlayBook fresh-start, YesIntent's JF-361
+    /// PlayBook confirmation, and StartOver's book restart differ only in the announce
+    /// speech and the item they launch.
+    /// </summary>
+    /// <param name="itemId">The launch item id (stream URL + AudioPlayer token shape).</param>
+    /// <param name="item">The audiobook item to launch.</param>
+    /// <param name="announce">The announce speech (book title now-playing or restart notice).</param>
+    /// <param name="user">The plugin user (announce toggles + stream URLs).</param>
+    /// <param name="context">The Alexa context, for device capability detection.</param>
+    /// <param name="request">The skill request, for the progressive-response vehicle.</param>
+    /// <returns>The VideoApp.Launch response with the announce attached.</returns>
+    internal async Task<SkillResponse> BuildAudiobookVideoAppLaunchResponseAsync(
+        string itemId,
+        MediaBrowser.Controller.Entities.BaseItem item,
+        IOutputSpeech? announce,
+        Entities.User user,
+        Context? context,
+        Request? request)
+    {
+        SkillResponse response = BuildVideoAppAudioResponse(itemId, item, user, context: context);
+        // JF-501: the announce rides the progressive vehicle on a VideoApp launch; a
+        // screenless device degrades to AudioPlayer, where it stays on the final response.
+        response.Response.OutputSpeech = await SpeakVideoLaunchAnnounceAsync(context, request, announce).ConfigureAwait(false);
+        return response;
     }
 
     private string BuildStreamUrl(string pathSegment, string itemId, Entities.User user)
@@ -987,7 +1023,7 @@ public sealed class PlaybackLaunchBuilder
             bool wantsNativeControls = false;
             if (item != null)
             {
-                if (item.GetType().Name.Equals("AudioBook", StringComparison.Ordinal))
+                if (AudiobookItems.IsAudioBook(item))
                 {
                     wantsNativeControls = Plugin.Instance?.Configuration?.NativeControlsForBooks == true;
                 }
@@ -1216,7 +1252,7 @@ public sealed class PlaybackLaunchBuilder
             (Plugin.Instance?.DeviceQueueManager)?.RecordLastPlayed(ledgerDeviceId, itemId);
         }
 
-        bool isAudioBook = item != null && item.GetType().Name.Equals("AudioBook", StringComparison.Ordinal);
+        bool isAudioBook = AudiobookItems.IsAudioBook(item);
 
         string videoAudioUrl;
         if (isAudioBook && item!.ParentId != Guid.Empty)

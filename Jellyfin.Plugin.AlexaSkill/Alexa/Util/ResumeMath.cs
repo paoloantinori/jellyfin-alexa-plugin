@@ -294,8 +294,8 @@ public static class ResumeMath
     /// it has no parent. The canonical definition (JF-563): the record path (segment
     /// URLs keyed by the parentId the playlists embed) and every resume read site must
     /// agree on the shape, or the lookup silently misses and resume falls to position 0.
-    /// Pre-existing inline copies of this chain (PlayBook, YesIntent, LaunchRequestHandler)
-    /// are tracked for migration in JF-567.
+    /// The JF-567 migration completed: the only remaining variants are this canonical
+    /// one and the deliberately dashed-Guid URL form in PlaybackLaunchBuilder.
     /// </summary>
     /// <param name="bookItem">An audiobook item (chapter or single-file book).</param>
     /// <returns>The tracker key (GUID "N" format).</returns>

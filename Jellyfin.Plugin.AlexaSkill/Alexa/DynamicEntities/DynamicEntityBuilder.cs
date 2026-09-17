@@ -441,8 +441,8 @@ public class DynamicEntityBuilder : IDisposable
             return (SlotTypeNames[CatalogType.Series], CatalogType.Series);
         }
 
-        // Audiobooks → AudiobookTitle slot (concrete type not in controller package, match by name)
-        if (item.GetType().Name.Equals("AudioBook", StringComparison.Ordinal))
+        // Audiobooks → AudiobookTitle slot
+        if (AudiobookItems.IsAudioBook(item))
         {
             return (SlotTypeNames[CatalogType.Audiobook], CatalogType.Audiobook);
         }

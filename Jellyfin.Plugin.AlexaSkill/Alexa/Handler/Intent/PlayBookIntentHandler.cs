@@ -268,34 +268,27 @@ public class PlayBookIntentHandler : BaseHandler
         // tracker records under, so resume lookup is consistent.
         if (Plugin.Instance?.Configuration?.NativeControlsForBooks == true)
         {
-            string bookId = (trackItems[startIndex].ParentId != Guid.Empty
-                ? trackItems[startIndex].ParentId
-                : trackItems[startIndex].Id).ToString("N");
-            long startTicks = Plugin.Instance?.AudiobookPositionTracker?.GetPositionTicks(bookId) ?? 0;
-            if (startTicks <= 0 && resumeTicks > 0)
-            {
-                startTicks = resumeTicks; // fall back to chapter-relative progress if tracker is cold
-            }
+            string bookKey = ResumeMath.GetAudiobookBookKey(trackItems[startIndex]);
+            long startTicks = ResumeMath.GetAudiobookStartTicks(bookKey, resumeTicks);
 
             bool resuming = startTicks > 0;
             SkillResponse response = resuming
                 ? Launch.BuildAudiobookResumeResponse(trackItems[startIndex], startTicks, user, context)
-                : Launch.BuildVideoAppAudioResponse(itemId, trackItems[startIndex], user, context: context);
+                : await Launch.BuildAudiobookVideoAppLaunchResponseAsync(
+                    itemId,
+                    trackItems[startIndex],
+                    SpeechBuilder.BuildNowPlayingSpeech(books[0].Name, locale, Launch.GetAnnounceNowPlaying(user)),
+                    user,
+                    context,
+                    request).ConfigureAwait(false);
 
             if (resuming)
             {
                 response.Response.OutputSpeech = SpeechBuilder.BuildOutputSpeech(
                     "ResumingBookSsml", "ResumingBook", locale, books[0].Name, trackItems[startIndex].Name);
-                response.Response.ShouldEndSession = true;
-            }
-            else
-            {
-                // Fresh-start audiobook via VideoApp: announce the book title. JF-501:
-                // spoken progressively when the response is a VideoApp launch; a screenless
-                // device degrades to AudioPlayer, where the announce keeps riding the
-                // final response (the audio path has no such cut).
-                response.Response.OutputSpeech = await Launch.SpeakVideoLaunchAnnounceAsync(
-                    context, request, SpeechBuilder.BuildNowPlayingSpeech(books[0].Name, locale, Launch.GetAnnounceNowPlaying(user))).ConfigureAwait(false);
+                // JF-567: VideoApp.Launch responses must OMIT shouldEndSession (the repo
+                // reference rule; BuildAudiobookResumeResponse already keeps it null). The
+                // AudioPlayer resume path below keeps its play-true shape (JF-299).
             }
 
             return response;

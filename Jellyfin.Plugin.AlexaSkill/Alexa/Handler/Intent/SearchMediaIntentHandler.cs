@@ -515,8 +515,7 @@ public class SearchMediaIntentHandler : BaseHandler
             return series.MediaType == MediaType.Audio ? "podcast" : "series";
         }
 
-        // Concrete AudioBook type is in the server assembly, not the controller package
-        if (item.GetType().Name.Equals("AudioBook", StringComparison.Ordinal))
+        if (AudiobookItems.IsAudioBook(item))
         {
             return "audiobook";
         }

@@ -211,13 +211,10 @@ public class YesIntentHandler : BaseHandler
         // is encoded in the playlist via #EXT-X-START; VideoApp.Launch has no offset param.
         if (resumeState.UseResumePlaylist)
         {
-            string bookId = (item.ParentId != Guid.Empty ? item.ParentId : item.Id).ToString("N");
-            long startTicks = Plugin.Instance?.AudiobookPositionTracker?.GetPositionTicks(bookId) ?? 0;
-            if (startTicks <= 0)
-            {
-                // Tracker cleared between offer and confirm — fall back to the offered offset.
-                startTicks = TimeSpan.FromMilliseconds(Math.Min(resumeState.OffsetMs, int.MaxValue)).Ticks;
-            }
+            long offeredTicks = TimeSpan.FromMilliseconds(Math.Min(resumeState.OffsetMs, int.MaxValue)).Ticks;
+            string bookKey = ResumeMath.GetAudiobookBookKey(item);
+            // Tracker cleared between offer and confirm: fall back to the offered offset.
+            long startTicks = ResumeMath.GetAudiobookStartTicks(bookKey, offeredTicks);
 
             SkillResponse response = Launch.BuildAudiobookResumeResponse(item, startTicks, user, context);
             response.Response.OutputSpeech = _config.ResumeAnnounceTitle
@@ -360,13 +357,13 @@ public class YesIntentHandler : BaseHandler
         // NativeControlsForBooks → VideoApp HLS concat (seek bar)
         if (Plugin.Instance?.Configuration?.NativeControlsForBooks == true)
         {
-            SkillResponse response = Launch.BuildVideoAppAudioResponse(itemId, trackItems[0], user, locale, context);
-            // Fresh-start audiobook via VideoApp: announce the book title. JF-501: spoken
-            // progressively when the response is a VideoApp launch; a screenless device
-            // degrades to AudioPlayer, where the announce keeps riding the final response.
-            response.Response.OutputSpeech = await Launch.SpeakVideoLaunchAnnounceAsync(
-                context, request, SpeechBuilder.BuildNowPlayingSpeech(book.Name, locale, Launch.GetAnnounceNowPlaying(user))).ConfigureAwait(false);
-            return response;
+            return await Launch.BuildAudiobookVideoAppLaunchResponseAsync(
+                itemId,
+                trackItems[0],
+                SpeechBuilder.BuildNowPlayingSpeech(book.Name, locale, Launch.GetAnnounceNowPlaying(user)),
+                user,
+                context,
+                request).ConfigureAwait(false);
         }
 
         return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, trackItems[0], user, context);

@@ -336,4 +336,68 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
         string speech = TestHelpers.GetSpeechText(response);
         Assert.Contains("empty book", speech, StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// JF-567: the NativeControlsForBooks sliced-playlist VideoApp resume response must
+    /// OMIT shouldEndSession (the repo reference rule for VideoApp.Launch). The old
+    /// shape set it true, an incidental copy from the AudioPlayer resume path below
+    /// (commit ef30a07a, no incident or pinned test behind it).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_BookWithProgress_NativeControls_ResumePlaylist_OmitsShouldEndSession()
+    {
+        _fx.Config.NativeControlsForBooks = true;
+        var tracker = TestHelpers.CreatePositionTracker("playbook-resume-jf567");
+        Plugin.Instance!.AudiobookPositionTracker = tracker;
+        try
+        {
+            var handler = CreateHandler();
+            var request = CreateIntentRequest(bookName: "The Hobbit");
+            var context = _fx.CreateContext();
+            var user = _fx.CreateUser();
+            var session = CreateSession();
+
+            _fx.SetupUserMock();
+
+            var bookItem = new Audio { Name = "The Hobbit", Id = Guid.NewGuid() };
+            _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                    q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
+                .Returns(new List<BaseItem> { bookItem });
+
+            var trackItem = new Audio { Name = "Chapter 1", Id = Guid.NewGuid() };
+            _fx.LibraryManager.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q =>
+                    q.ParentId == bookItem.Id)))
+                .Returns(new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+                {
+                    Items = new[] { trackItem },
+                    TotalRecordCount = 1
+                });
+
+            // Tracker holds segment 31 (conservative resume position 30 * 10s = 5 min),
+            // keyed by the chapter's ParentId fallback (the chapter has no parent here,
+            // so the book key is the chapter id itself).
+            tracker.RecordSegment(trackItem.Id.ToString(), 31);
+
+            SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+            Assert.NotNull(response);
+            var videoDirective = Assert.IsType<global::Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>(
+                Assert.Single(response.Response.Directives));
+            // JF-567: omitted from the JSON, so the parsed shape is null.
+            Assert.Null(response.Response.ShouldEndSession);
+            string? source = videoDirective.VideoItem?.Source;
+            Assert.NotNull(source);
+            Assert.Contains("start=", source);
+
+            // The resume announce still speaks.
+            Assert.NotNull(response.Response.OutputSpeech);
+            string speech = TestHelpers.GetSpeechText(response);
+            Assert.Contains("resuming", speech, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Plugin.Instance.AudiobookPositionTracker = null;
+            tracker.Dispose();
+        }
+    }
 }
