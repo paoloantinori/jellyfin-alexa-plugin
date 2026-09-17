@@ -3,10 +3,10 @@ id: JF-583
 title: >-
   Latest-episode phrasing resolves by library order and watch state, never by
   date (NextUp misuse)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-17 15:15'
-updated_date: '2026-09-17 17:23'
+updated_date: '2026-09-17 18:00'
 labels: []
 dependencies: []
 priority: high
@@ -92,6 +92,12 @@ Code: Alexa/Util/EpisodePosition.cs (new), Alexa/Handler/Intent/PlayNextEpisodeI
 - SMAPI build check on first deploy: the type values carry non-ASCII and apostrophes (l'ultimo) which SMAPI accepts in principle but the build is the proof.
 - Live NLU suite run (profile-nlu) for the new it-IT fixtures.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+DONE (commit ad19d3f3). DESIGN: the episode_position custom slot (restricted type EpisodePosition, the JF-354 Mood architecture) on PlayNextEpisodeIntent in ALL 17 locales, empty/unresolved defaulting to NextUp exactly as today. A separate intent was rejected on evidence: production logs show both phrasings already route to PlayNextEpisodeIntent (only the in-handler semantics were wrong), so a new intent would add a carrier region competing with PlayPodcast (which already wins the en-US 'latest episode of' phrasing per JF-523) while the slot keeps the utterance surface unchanged; failure mode degrades to today's behavior. RESOLUTION: shared entity id 'latest' (JF-468 one-key-space rule, both values carry ids in all 17 locales), canonical-name fallback, then the localized raw-value word table in the new Alexa/Util/EpisodePosition.cs (load-bearing on the Simulator surface, which sends flat slots with no Resolution structure). CORE: TvNextUpService.PlayLatestEpisodeAsync queries the series' episodes PremiereDate DESC with DateCreated DESC tiebreak, no played filter (recency is the ask), series-scoped via AncestorIds (the production-proven JF-324 shape), Limit 1, never GetNextUp; the launch tail is the shared LaunchEpisodeAsync so nothing forked (resume-aware announce, JF-501 progressive vehicle, JF-505 screenless gate all reused; the PlayingLatestEpisode strings pre-date this from JF-324). The series_name elicit declares both slots (Amazon rejects a partial updatedIntent; validator Phase 8 caught the mid-transition mismatch as designed). 17-locale value table + dialog parity in every template; models regenerated, never hand-edited; mirrors regenerated (VOICE_COMMANDS.md + by-locale, playback-lifecycle docs, graphs.json both paths, docs-site/data.json); it-IT NLU fixtures assert episode_position on both ultimo phrasings; e2e pin updated. GATES: /simplify 4-angle pass (R1 minimum applied: the two drifted synonyms added to the hi/ar word sets - NAYA and al-Jadida, the drift was real and mechanical; S1 applied: LaunchEpisodeAsync's dead cancellationToken dropped; R2 shared entity-resolution helper skipped as minor polish, noted; efficiency CLEAN: the recency core is one AncestorIds-scoped Limit-1 two-key query, cheaper than the NextUp path; altitude CLEAN: slot semantics in the handler, query and launch cores in the service, EpisodePosition in Alexa/Util beside CancelWords/QuestionWords). Code-review high via feature-dev:code-reviewer: no blockers or majors; finding 1 applied (same two words); finding 2 applied as a SQLite-first NULL-ordering comment at the query (SQLite sorts NULL PremiereDate last on DESC, the desirable semantics; Postgres default NULLS FIRST would need verification - the task notes it); the PlayPodcast competition verified pre-existing and pinned by the JF-523 fixture note; elicit slot preservation, season-0 stance, response shapes, mirrors and fixtures all verified clean. VERIFICATION: suite 4051/4051 both TFMs, Release 0 warnings, validate_interaction_models PASS at the exact 118-warning baseline, validate_locales PASS, NLU dry-run green. LEFT OPEN: on-device verification (AC#1) and the live profile-nlu run for the pending session (deploy + rebuild models, at minimum it-IT); the first SMAPI build is the proof for the apostrophe/non-ASCII type values; the word table and template synonyms remain two hand-kept copies (documented maintenance risk; the durable fix is a validator cross-check phase or deriving the table from the embedded model).
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
