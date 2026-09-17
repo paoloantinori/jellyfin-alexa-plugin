@@ -22,7 +22,9 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// listed; removing a gate from a listed handler fails the other way. The scan
 /// uses only MethodBase.GetMethodBody IL bytes and MetadataToken resolution (the
 /// gate methods are methoddefs in the same assembly), so no IL disassembler
-/// dependency is needed. Layer-2 choke points (ArtistSearch, SongNgramIndexService)
+/// dependency is needed; the IL walking lives in the shared
+/// <see cref="IlCallScanner"/> (JF-582, with SessionQueueReaderRosterTests).
+/// Layer-2 choke points (ArtistSearch, SongNgramIndexService)
 /// are deliberately NOT BaseHandler subclasses and never appear here.
 /// </summary>
 public class WarmingGateCoverageTests
@@ -108,11 +110,9 @@ public class WarmingGateCoverageTests
             {
                 foreach (Type type in NestedTypeClosure(chainType!))
                 {
-                    IEnumerable<MethodBase> callables = type.GetMethods(allDeclared | BindingFlags.DeclaredOnly).Cast<MethodBase>()
-                        .Concat(type.GetConstructors(allDeclared | BindingFlags.DeclaredOnly));
-                    foreach (MethodBase method in callables)
+                    foreach (MethodBase method in IlCallScanner.DeclaredCallableMethods(type))
                     {
-                        if (ContainsGateCall(method, gateTokens))
+                        if (IlCallScanner.ContainsCallToAnyToken(method, gateTokens))
                         {
                             gated.Add(handlerType);
                             break;
@@ -138,32 +138,5 @@ public class WarmingGateCoverageTests
                 queue.Enqueue(nested);
             }
         }
-    }
-
-    /// <summary>
-    /// Looks for the call (0x28) or callvirt (0x6F) opcode directly followed by a
-    /// metadata token resolving to a gate entry. The operand window is checked at
-    /// every offset, so a coincidental match inside another instruction's operand
-    /// could only ADD a type to the discovered set, which fails the roster equality
-    /// loudly; it can never silently hide a real gated handler.
-    /// </summary>
-    private static bool ContainsGateCall(MethodBase method, HashSet<int> gateTokens)
-    {
-        MethodBody? body = method.GetMethodBody();
-        if (body == null)
-        {
-            return false;
-        }
-
-        byte[] il = body.GetILAsByteArray() ?? Array.Empty<byte>();
-        for (int i = 0; i + 5 <= il.Length; i++)
-        {
-            if ((il[i] == 0x28 || il[i] == 0x6F) && gateTokens.Contains(BitConverter.ToInt32(il, i + 1)))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 }

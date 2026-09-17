@@ -23,7 +23,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// <see cref="Module.ResolveMethod(int,Type[],Type[])"/> (the getter is a memberref
 /// into MediaBrowser.Controller, unlike the same-assembly methoddef the warming-gate
 /// scan compares raw), mapping nested types (async state machines, closures) up to
-/// their top-level declaring type.
+/// their top-level declaring type. The IL walking lives in the shared
+/// <see cref="IlCallScanner"/> (JF-582, with WarmingGateCoverageTests).
 /// </summary>
 public class SessionQueueReaderRosterTests
 {
@@ -31,14 +32,17 @@ public class SessionQueueReaderRosterTests
     /// Readers that adopted the shared guard: each calls
     /// <see cref="ProgressReporter.TryRehydrateSessionQueueFromDevice"/> before its
     /// queue read (asserted mechanically below, so the ADOPTED label cannot rot).
+    /// The next/previous entry points (NextIntentHandler,
+    /// PreviousIntentHandler, AplUserEventHandler taps) no longer read the queue
+    /// directly: JF-582 moved their bodies into the shared
+    /// ProgressReporter.ServeAdjacentQueueItem, which calls the guard itself (the
+    /// owner exemption below covers it; QueueRehydrationAdoptionTests pins their
+    /// rehydration behavior).
     /// </summary>
     private static readonly HashSet<Type> AdoptedReaders = new()
     {
-        typeof(NextIntentHandler),
-        typeof(PreviousIntentHandler),
         typeof(ListQueueIntentHandler),
-        typeof(PlaybackNearlyFinishedEventHandler),
-        typeof(AplUserEventHandler)
+        typeof(PlaybackNearlyFinishedEventHandler)
     };
 
     /// <summary>
@@ -56,7 +60,9 @@ public class SessionQueueReaderRosterTests
     /// - ClearQueueIntentHandler: logging-only count read; its purpose is to wipe
     ///   both queue stores, so rehydrating first would undo the user's ask.
     /// - ProgressReporter: the shared guard/mirror itself; its reads ARE the
-    ///   coherence legs and the rebuild.
+    ///   coherence legs and the rebuild, and since JF-582 also the shared
+    ///   adjacent-queue-item serve the four next/previous entry points route
+    ///   through (it calls the guard from inside, as the owner).
     /// - SessionQueue: passive index/id-set scan helper; its only callers are
     ///   PlaybackStarted (exempt) and PlaybackNearlyFinished (adopted), so adoption
     ///   is enforced at the callers.
@@ -103,6 +109,40 @@ public class SessionQueueReaderRosterTests
                 BindingFlags.Public | BindingFlags.Static)
             ?? throw new InvalidOperationException("TryRehydrateSessionQueueFromDevice not found"));
 
+        // The guard OWNER also calls it since JF-582, but ONLY from the two
+        // members that own the serve (the combined rehydrate-and-resolve helper and
+        // the shared adjacent serve). Strip exactly those two methods' calls, not
+        // the whole type (review finding, JF-582): a FUTURE ProgressReporter method
+        // that reads the queue and skips the guard must still fail this proof, and a
+        // type-wide removal would silently exempt it.
+        // The combined helper is PRIVATE by design (the JF-582 /simplify pass: a
+        // public wrapper would be a door that skips the JF-564/JF-507 gates), so it
+        // is named by string; the existence assertion below fails loudly on a rename.
+        const string ownerMethodName = "TryRehydrateAndResolveCurrentItemId";
+        const string serveMethodName = nameof(ProgressReporter.ServeAdjacentQueueItem);
+        int targetToken = typeof(ProgressReporter).GetMethod(
+            nameof(ProgressReporter.TryRehydrateSessionQueueFromDevice),
+            BindingFlags.Public | BindingFlags.Static)!.MetadataToken;
+        bool ownerStillCalls = false;
+        foreach (MethodBase m in IlCallScanner.DeclaredCallableMethods(typeof(ProgressReporter)))
+        {
+            if (m.Name != ownerMethodName && m.Name != serveMethodName)
+            {
+                continue;
+            }
+
+            if (IlCallScanner.ContainsCallToToken(m, targetToken))
+            {
+                ownerStillCalls = true;
+            }
+        }
+
+        MethodInfo? ownerMethod = typeof(ProgressReporter).GetMethod(
+            ownerMethodName, BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.True(ownerMethod != null, $"ProgressReporter.{ownerMethodName} was renamed or made public; update this exemption.");
+        Assert.True(ownerStillCalls, "The serve owner no longer calls the guard internally; update this exemption.");
+        guardCallers.Remove(typeof(ProgressReporter));
+
         var claimedButNotCalling = new SortedSet<string>(AdoptedReaders.Except(guardCallers).Select(t => t.Name));
         var callingButNotClaimed = new SortedSet<string>(guardCallers.Except(AdoptedReaders).Select(t => t.Name));
 
@@ -130,11 +170,11 @@ public class SessionQueueReaderRosterTests
 
         foreach (Type type in typeof(BaseHandler).Assembly.GetTypes())
         {
-            foreach (MethodBase method in DeclaredCallableMethods(type))
+            foreach (MethodBase method in IlCallScanner.DeclaredCallableMethods(type))
             {
-                if (CallsGetter(method, pluginModule, getter))
+                if (IlCallScanner.CallsGetter(method, pluginModule, getter))
                 {
-                    readers.Add(TopLevelType(method.DeclaringType ?? type));
+                    readers.Add(IlCallScanner.TopLevelType(method.DeclaringType ?? type));
                     break;
                 }
             }
@@ -156,105 +196,16 @@ public class SessionQueueReaderRosterTests
 
         foreach (Type type in typeof(BaseHandler).Assembly.GetTypes())
         {
-            foreach (MethodBase method in DeclaredCallableMethods(type))
+            foreach (MethodBase method in IlCallScanner.DeclaredCallableMethods(type))
             {
-                if (ContainsCallToToken(method, targetToken))
+                if (IlCallScanner.ContainsCallToToken(method, targetToken))
                 {
-                    callers.Add(TopLevelType(method.DeclaringType ?? type));
+                    callers.Add(IlCallScanner.TopLevelType(method.DeclaringType ?? type));
                     break;
                 }
             }
         }
 
         return callers;
-    }
-
-    private static IEnumerable<MethodBase> DeclaredCallableMethods(Type type)
-    {
-        const BindingFlags allDeclared =
-            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
-
-        return type.GetMethods(allDeclared | BindingFlags.DeclaredOnly).Cast<MethodBase>()
-            .Concat(type.GetConstructors(allDeclared | BindingFlags.DeclaredOnly));
-    }
-
-    private static bool CallsGetter(MethodBase method, Module module, MethodInfo getter)
-    {
-        MethodBody? body = method.GetMethodBody();
-        if (body == null)
-        {
-            return false;
-        }
-
-        byte[] il = body.GetILAsByteArray() ?? Array.Empty<byte>();
-        for (int i = 0; i + 5 <= il.Length; i++)
-        {
-            if (il[i] != 0x28 && il[i] != 0x6F)
-            {
-                continue;
-            }
-
-            int token = BitConverter.ToInt32(il, i + 1);
-
-            // Only MethodDef (0x06) and MemberRef (0x0A) tokens can name the getter;
-            // resolving anything else (e.g. a MethodSpec) throws, and a failed
-            // resolution can only SKIP a candidate, which fails the roster equality
-            // loudly the moment that candidate is the only reader of a new consumer.
-            int table = unchecked((int)((uint)token >> 24));
-            if (table != 0x06 && table != 0x0A)
-            {
-                continue;
-            }
-
-            MemberInfo? resolved;
-            try
-            {
-                resolved = module.ResolveMethod(token, null, null);
-            }
-            catch (ArgumentException)
-            {
-                continue;
-            }
-
-            if (resolved is MethodInfo m
-                && m.Name == getter.Name
-                && m.DeclaringType == getter.DeclaringType)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static bool ContainsCallToToken(MethodBase method, int targetToken)
-    {
-        MethodBody? body = method.GetMethodBody();
-        if (body == null)
-        {
-            return false;
-        }
-
-        byte[] il = body.GetILAsByteArray() ?? Array.Empty<byte>();
-        for (int i = 0; i + 5 <= il.Length; i++)
-        {
-            if ((il[i] == 0x28 || il[i] == 0x6F) && BitConverter.ToInt32(il, i + 1) == targetToken)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static Type TopLevelType(Type type)
-    {
-        Type current = type;
-        while (current.IsNested && current.DeclaringType != null)
-        {
-            current = current.DeclaringType;
-        }
-
-        return current;
     }
 }

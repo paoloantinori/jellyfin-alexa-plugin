@@ -18,6 +18,7 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
+using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -241,6 +242,142 @@ public class AplUserEventHandlerTests : PluginTestBase, IDisposable
 
         Assert.NotNull(response);
         Assert.Null(response.Response.OutputSpeech);
+    }
+
+    // === JF-582: next/prev tap parity with the intent handlers ===
+
+    [Fact]
+    public async Task HandleAsync_NextAction_VideoSuccessorWithEac3_RoutesToAudioOnlyTranscode()
+    {
+        // JF-582 (JF-507 parity): an EAC3-family video item as the queue successor
+        // must launch through the codec-gated audio transcode, not the raw static
+        // /Audio/ URL (whose bytes an Echo AudioPlayer cannot decode; the intent
+        // handlers already route this way, the tap previously did not).
+        var song = new Audio { Name = "Song One", Id = Guid.NewGuid() };
+        var episodeId = Guid.NewGuid();
+        var episode = new TestHelpers.TestEpisodeWithStreams(
+            "Eac3 Episode",
+            episodeId,
+            TestHelpers.TestStream(MediaStreamType.Video, "h264"),
+            TestHelpers.TestStream(MediaStreamType.Audio, "eac3"));
+
+        _libraryManager.Setup(l => l.GetItemById(episodeId)).Returns(episode);
+
+        var request = CreateAplEvent("next");
+        var session = CreateSession();
+        session.NowPlayingQueue = new List<QueueItem>
+        {
+            new() { Id = song.Id },
+            new() { Id = episodeId }
+        };
+        session.FullNowPlayingItem = song;
+
+        var response = await _handler.HandleAsync(request, _context, _user, session, CancellationToken.None);
+
+        var play = Assert.IsType<AudioPlayerPlayDirective>(
+            Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>()));
+        Assert.Contains($"/alexaskill/api/video-audio/episode/{episodeId}/audio.m3u8", play.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.DoesNotContain("/Audio/", play.AudioItem.Stream.Url, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task HandleAsync_PrevAction_VideoPredecessorWithEac3_RoutesToAudioOnlyTranscode()
+    {
+        var song = new Audio { Name = "Song Two", Id = Guid.NewGuid() };
+        var episodeId = Guid.NewGuid();
+        var episode = new TestHelpers.TestEpisodeWithStreams(
+            "Eac3 Episode",
+            episodeId,
+            TestHelpers.TestStream(MediaStreamType.Video, "h264"),
+            TestHelpers.TestStream(MediaStreamType.Audio, "eac3"));
+
+        _libraryManager.Setup(l => l.GetItemById(episodeId)).Returns(episode);
+
+        var request = CreateAplEvent("prev");
+        var session = CreateSession();
+        session.NowPlayingQueue = new List<QueueItem>
+        {
+            new() { Id = episodeId },
+            new() { Id = song.Id }
+        };
+        session.FullNowPlayingItem = song;
+
+        var response = await _handler.HandleAsync(request, _context, _user, session, CancellationToken.None);
+
+        var play = Assert.IsType<AudioPlayerPlayDirective>(
+            Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>()));
+        Assert.Contains($"/alexaskill/api/video-audio/episode/{episodeId}/audio.m3u8", play.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.DoesNotContain("/Audio/", play.AudioItem.Stream.Url, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task HandleAsync_NextAction_VideoAppMediumPlaying_AnswersSilentRefusal()
+    {
+        // JF-582 (JF-564 parity): the device's last play was a VideoApp-launched
+        // movie, so the queue-advance logic must not run on the tap either (the
+        // same stale-music-queue misdirect the intent handlers refuse).
+        var song1 = new Audio { Name = "Stale Track One", Id = Guid.NewGuid() };
+        var song2 = new Audio { Name = "Stale Track Two", Id = Guid.NewGuid() };
+        var movie = new MediaBrowser.Controller.Entities.Movies.Movie { Name = "Current Movie", Id = Guid.NewGuid() };
+
+        string deviceId = "jf582-apl-next-video";
+        _queueManager.RecordLastPlayed(deviceId, movie.Id.ToString());
+        _libraryManager.Setup(l => l.GetItemById(movie.Id)).Returns(movie);
+
+        var request = CreateAplEvent("next");
+        var session = CreateSession();
+        session.NowPlayingQueue = new List<QueueItem>
+        {
+            new() { Id = song1.Id },
+            new() { Id = song2.Id }
+        };
+        session.FullNowPlayingItem = song1;
+
+        var response = await _handler.HandleAsync(
+            request,
+            TestHelpers.CreateTestContext(deviceId),
+            _user,
+            session,
+            CancellationToken.None);
+
+        // Review finding (JF-582): a TAP origin answers with the SILENT refusal
+        // shape, not the voice-phrased Tell whose "use the touchscreen" wording
+        // tells a touch user to do what they just did. No speech, no play.
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.True(response.Response.ShouldEndSession ?? true);
+        TestHelpers.AssertNoAudioPlayDirective(response);
+    }
+
+    [Fact]
+    public async Task HandleAsync_PrevAction_VideoAppMediumPlaying_AnswersSilentRefusal()
+    {
+        var song1 = new Audio { Name = "Stale Track One", Id = Guid.NewGuid() };
+        var song2 = new Audio { Name = "Stale Track Two", Id = Guid.NewGuid() };
+        var movie = new MediaBrowser.Controller.Entities.Movies.Movie { Name = "Current Movie", Id = Guid.NewGuid() };
+
+        string deviceId = "jf582-apl-prev-video";
+        _queueManager.RecordLastPlayed(deviceId, movie.Id.ToString());
+        _libraryManager.Setup(l => l.GetItemById(movie.Id)).Returns(movie);
+
+        var request = CreateAplEvent("prev");
+        var session = CreateSession();
+        session.NowPlayingQueue = new List<QueueItem>
+        {
+            new() { Id = song1.Id },
+            new() { Id = song2.Id }
+        };
+        session.FullNowPlayingItem = song2;
+
+        var response = await _handler.HandleAsync(
+            request,
+            TestHelpers.CreateTestContext(deviceId),
+            _user,
+            session,
+            CancellationToken.None);
+
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.True(response.Response.ShouldEndSession ?? true);
+        TestHelpers.AssertNoAudioPlayDirective(response);
     }
 
     // SelectItem action tests

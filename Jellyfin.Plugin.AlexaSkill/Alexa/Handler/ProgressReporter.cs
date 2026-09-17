@@ -7,6 +7,7 @@ using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
+using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
@@ -15,6 +16,7 @@ using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Common.Extensions;
+using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Session;
@@ -23,7 +25,8 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
 /// <summary>
-/// The playback-progress reporting family (JF-315 batch 10, census cluster H):
+/// The playback-progress and queue-answer family (JF-315 batch 10, census
+/// cluster H, widened by JF-582 to the adjacent-queue-item serve):
 /// the JF-522 raw-to-item-absolute position composition
 /// (<see cref="ComposeItemAbsolutePosition"/>/<see cref="ComposeEventPositionTicks"/>
 /// with the fail-open <see cref="TryGetRuntimeTicksForGuard"/>), the
@@ -33,7 +36,10 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// queue-order mirror (<see cref="MirrorQueueToSession"/>), moved verbatim from
 /// BaseHandler, and the JF-574/JF-577 crash-recovery pair
 /// (<see cref="TryRehydrateSessionQueueFromDevice"/> with its
-/// <see cref="ResolveCurrentItemId"/> companion). COMPOSITION, not per-handler injection (the PlaybackLaunchBuilder
+/// <see cref="ResolveCurrentItemId"/> companion and the JF-582 combined
+/// <see cref="TryRehydrateAndResolveCurrentItemId"/> entry), plus the JF-582
+/// shared adjacent-queue-item serve (<see cref="ServeAdjacentQueueItem"/>) the
+/// four next/previous entry points route through. COMPOSITION, not per-handler injection (the PlaybackLaunchBuilder
 /// batch-4 precedent): BaseHandler constructs one instance as the inherited
 /// <c>Progress</c> property so the 61 handler ctors stay untouched. The real
 /// dependencies are ctor-passed (session manager, config, logger, the Launch
@@ -267,6 +273,155 @@ public sealed class ProgressReporter
         return rehydrated || session.NowPlayingQueue.Any(q => q.Id == tokenItemId)
             ? tokenItemId
             : null;
+    }
+
+    /// <summary>
+    /// JF-582: the combined rehydrate-and-resolve entry for the adjacent-item
+    /// consumers. The guard and its current-item companion are an unsplittable
+    /// pair there (the companion's token stand-in is only valid for a queue the
+    /// guard just validated as coherent), and the rehydrated boolean the guard
+    /// returns has no other consumer at those sites, so this helper couples the
+    /// two calls and their hand-off cannot be dropped by a future call site.
+    /// Guard-only consumers (ListQueue, PlaybackNearlyFinished) keep calling the
+    /// two members directly.
+    /// </summary>
+    /// <param name="queueManager">The caller's per-device queue manager, or null (no rehydration).</param>
+    /// <param name="session">The Jellyfin session whose queue to rehydrate and whose now-playing item to resolve.</param>
+    /// <param name="context">The Alexa context (device id and current stream token).</param>
+    /// <param name="logger">The caller's logger for the rehydration decision lines.</param>
+    /// <param name="logLabel">Caller identity prefixing the log lines.</param>
+    /// <returns>The current item id, or null when nothing is playing.</returns>
+    private static Guid? TryRehydrateAndResolveCurrentItemId(
+        DeviceQueueManager? queueManager,
+        SessionInfo session,
+        Context context,
+        ILogger logger,
+        string logLabel)
+    {
+        bool rehydrated = TryRehydrateSessionQueueFromDevice(queueManager, session, context, logger, logLabel);
+        return ResolveCurrentItemId(session, context, rehydrated);
+    }
+
+    /// <summary>
+    /// JF-582: the ONE adjacent-queue-item serve, shared by the four
+    /// next/previous entry points (NextIntentHandler, PreviousIntentHandler, and
+    /// the APL NowPlaying taps), which were shape-identical after the JF-577/579
+    /// adoptions but had already drifted in three dimensions on the APL side (no
+    /// JF-564 medium refusal, no JF-507 codec gate, no logging). Uniform gates, in
+    /// order: the JF-564 VideoApp-medium refusal (<see cref="PlaybackLaunchBuilder.ResolvePlayingMedium"/>
+    /// + <see cref="PlaybackLaunchBuilder.BuildVideoAppTransportRefusal"/>), the
+    /// JF-577 rehydration guard + current-item resolution (through the combined
+    /// <see cref="TryRehydrateAndResolveCurrentItemId"/>), the
+    /// <see cref="SessionQueue.IndexOfQueueItem"/> scan with the per-direction
+    /// edge bound, and the JF-507 codec-gated launch via
+    /// <see cref="PlaybackLaunchBuilder.ResolveAudioLaunchSource"/> (an
+    /// EAC3-family video successor routes to the audio-only transcode instead of
+    /// the raw static bytes). The APL taps are customer-initiated requests while
+    /// this skill was the most recently playing audio, so their
+    /// <c>context.AudioPlayer</c> carries the playing token the guard reads.
+    /// Response shapes: the refusal Tell, or the silent <c>Empty</c>, or the
+    /// AudioPlayer.Play build (<c>ShouldEndSession=true</c> per JF-299, owned by
+    /// the launch builder).
+    /// </summary>
+    /// <param name="queueManager">The caller's per-device queue manager (the JF-564 ledger and the rehydration source); null falls back to <c>Plugin.Instance</c>'s for the medium read and skips rehydration.</param>
+    /// <param name="libraryManager">The library manager, to resolve the ledger item and the adjacent item.</param>
+    /// <param name="session">The Jellyfin session (queue + now-playing).</param>
+    /// <param name="context">The Alexa context (device id, AudioPlayer token).</param>
+    /// <param name="user">The plugin user (static stream URL).</param>
+    /// <param name="locale">The request locale, for the transport-refusal strings.</param>
+    /// <param name="direction">Which adjacent item to serve.</param>
+    /// <param name="logLabel">Caller identity prefixing the log lines.</param>
+    /// <param name="tapOrigin">True when the caller is a screen TAP (APL UserEvent):
+    /// the Video/LiveTv refusal arms answer with a silent Empty instead of the
+    /// voice-phrased Tell, whose "use the touchscreen" wording tells a touch user to
+    /// do what they just did (review finding, JF-582).</param>
+    /// <returns>The refusal Tell (Empty on a tap origin), an <c>Empty</c> response (no adjacent item), or the AudioPlayer.Play response.</returns>
+    internal SkillResponse ServeAdjacentQueueItem(
+        DeviceQueueManager? queueManager,
+        ILibraryManager libraryManager,
+        SessionInfo session,
+        Context context,
+        Entities.User user,
+        string locale,
+        AdjacentQueueDirection direction,
+        string logLabel,
+        bool tapOrigin = false)
+    {
+        bool forward = direction == AdjacentQueueDirection.Next;
+        string directionWord = forward ? "next" : "previous";
+        _logger.LogDebug(
+            "{Label}: entered, queueSize={QueueSize}, nowPlaying={NowPlayingId}",
+            logLabel, session.NowPlayingQueue.Count, session.FullNowPlayingItem?.Id);
+
+        // JF-564: during a VideoApp-family medium the queue logic below must not run
+        // (the shared refusal helper owns the rationale); an empty ledger (Unknown)
+        // keeps the music semantics unchanged.
+        PlaybackLaunchBuilder.PlayingMedium medium = _launch.ResolvePlayingMedium(context, libraryManager, queueManager);
+        if (PlaybackLaunchBuilder.BuildVideoAppTransportRefusal(medium, locale) is { } refusal)
+        {
+            _logger.LogDebug("{Label}: {Medium} playing, answered by the transport refusal (silent={Silent})", logLabel, medium, tapOrigin);
+            return tapOrigin ? ResponseBuilder.Empty() : refusal;
+        }
+
+        // JF-577: repair a restart/re-registration-wiped session queue before the
+        // queue read (rationale on the shared helper): a coherent persisted device
+        // queue turns the false "no more tracks" below into the real queue.
+        Guid? currentItemId = TryRehydrateAndResolveCurrentItemId(queueManager, session, context, _logger, logLabel);
+
+        // check if we have any media in the queue and the is currently something playing
+        if (session.NowPlayingQueue.Count == 0 || currentItemId == null)
+        {
+            _logger.LogDebug("{Label}: empty queue or no now-playing item, returning Empty", logLabel);
+            return ResponseBuilder.Empty();
+        }
+
+        // get the adjacent item in the queue, skipping the respective queue edge
+        int idx = SessionQueue.IndexOfQueueItem(session, currentItemId.Value);
+        bool hasAdjacent = forward
+            ? idx >= 0 && idx < session.NowPlayingQueue.Count - 1
+            : idx > 0;
+        if (!hasAdjacent)
+        {
+            _logger.LogDebug(
+                "{Label}: already at {QueueEdge} item in queue, returning Empty",
+                logLabel, forward ? "last" : "first");
+            return ResponseBuilder.Empty();
+        }
+
+        Guid adjacentItemId = session.NowPlayingQueue[forward ? idx + 1 : idx - 1].Id;
+        string itemId = adjacentItemId.ToString();
+        BaseItem? adjacentItem = libraryManager.GetItemById(adjacentItemId);
+        if (adjacentItem == null)
+        {
+            _logger.LogDebug(
+                "{Label}: {Direction} item {ItemId} not found in library, returning Empty",
+                logLabel, directionWord, adjacentItemId);
+            return ResponseBuilder.Empty();
+        }
+
+        session.FullNowPlayingItem = adjacentItem;
+
+        _logger.LogDebug(
+            "{Label}: playing {Direction} item '{ItemName}' ({ItemId})",
+            logLabel, directionWord, adjacentItem.Name, adjacentItemId);
+
+        // JF-507: codec-gated audio-launch decision; an EAC3-family video item in
+        // the queue routes to the audio-only transcode instead of dying on the raw
+        // static bytes (JF-505 does not apply: this launch is audio-shaped).
+        AudioLaunchSource source = _launch.ResolveAudioLaunchSource(adjacentItem, itemId, user, 0);
+        return _launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source, itemId, adjacentItem, user, context);
+    }
+
+    /// <summary>
+    /// Which adjacent queue item a next/previous entry point serves (JF-582).
+    /// </summary>
+    internal enum AdjacentQueueDirection
+    {
+        /// <summary>The item after the current one; the queue's LAST item is the edge.</summary>
+        Next,
+
+        /// <summary>The item before the current one; the queue's FIRST item is the edge.</summary>
+        Previous
     }
 
     /// <summary>

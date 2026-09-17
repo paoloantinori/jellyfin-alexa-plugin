@@ -4,9 +4,10 @@ title: >-
   APL next/prev parity with the intent handlers: apply the JF-507 codec gate and
   JF-564 medium refusal, and extract the shared adjacent-queue-item serve (~60
   duplicated lines across 4 sites)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-16 21:22'
+updated_date: '2026-09-16 21:31'
 labels:
   - reliability
   - refactor
@@ -34,3 +35,30 @@ From the JF-579 gates (2026-09-16). Code-review minor (pre-existing, widened by 
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Session 2026-09-17 (implementation; status left In Progress, tree left uncommitted for the orchestrator's gates).
+
+## Extraction home and signature
+
+The serve lives on ProgressReporter (it already hosts the rehydration family, holds the same Launch collaborator instance the handlers use, and its logger IS the handler's logger, so the moved log lines keep their category). `internal SkillResponse ServeAdjacentQueueItem(DeviceQueueManager? queueManager, ILibraryManager libraryManager, SessionInfo session, Context context, Entities.User user, string locale, AdjacentQueueDirection direction, string logLabel)` with the nested `internal enum ProgressReporter.AdjacentQueueDirection { Next, Previous }`. All per-site dependencies arrive as parameters (the JF-522 per-call queueManager idiom preserved; no ctor changes anywhere). The combined `public static Guid? TryRehydrateAndResolveCurrentItemId(queueManager, session, context, logger, logLabel)` couples the guard and its current-item companion so the `rehydrated` hand-off cannot be dropped by a future call site; guard-only consumers (ListQueue, PlaybackNearlyFinished) keep calling the two members directly.
+
+## Per-site behavior deltas
+
+- NextIntentHandler and PreviousIntentHandler: `HandleAsync` is now a one-line delegation. NO behavior change intended or observed: the serve reproduces the exact gate order (medium refusal, rehydration, empty check, scan with the per-direction edge predicate, library resolve, FullNowPlayingItem update, codec-gated launch), the exact response shapes, and byte-identical log text (`{logLabel}: ...` with the handler name as the label). Their existing tests (VideoAppGapHonestResponseTests, QueueRehydrationAdoptionTests) pass UNCHANGED, as pinned.
+- AplUserEventHandler next/prev taps: HandleNext/HandlePrevious deleted; the switch cases call the serve directly. Behavior legitimately WIDENS (the point of the task): (a) the JF-564 VideoApp-medium refusal now applies (a movie/live-TV last-played ledger entry answers the localized CannotNavigateVideoByVoice Tell instead of emitting a misdirected AudioPlayer.Play mid-video; a VideoApp audiobook keeps the silent Empty); (b) the JF-507 codec gate now applies (a Movie/Episode queue successor with an Echo-undecodable audio codec routes to the audio-only episode HLS transcode instead of the raw static `/Audio/{id}/stream` bytes; audio items and decodable video keep the identical static URL, since ResolveAudioLaunchSource returns GetStreamUrl on that route); (c) the debug-logging drift is closed (the taps now log the same entry/refusal/empty/edge/not-found/playing lines under the "AplUserEvent next"/"AplUserEvent previous" labels). No shouldEndSession change on any branch: Empty, the refusal Tell, and the AudioPlayer.Play build (ShouldEndSession=true per JF-299, owned by BuildAudioPlayerResponse) are exactly the pre-existing shapes.
+
+## Roster and scanner notes
+
+SessionQueueReaderRosterTests rosters updated to the new call topology (a NECESSARY consequence of the extraction, not a gate failure): the three adjacent-item types no longer read `session.NowPlayingQueue` directly (the serve does), so AdoptedReaders is now ListQueueIntentHandler + PlaybackNearlyFinishedEventHandler, and the guard-caller test excludes ProgressReporter as the owner (it calls the guard internally via the combined helper and the serve; its ExemptReaders reason documents this). The behavioral lock for the trio is QueueRehydrationAdoptionTests plus the four new JF-582 tests. WarmingGateCoverageTests: ExpectedGatedHandlers UNCHANGED. The T1 scanner dedupe landed as `Jellyfin.Plugin.AlexaSkill.Tests/Handler/IlCallScanner.cs` (shared DeclaredCallableMethods, CallTokens, ContainsCallToToken/ContainsCallToAnyToken, CallsGetter, TopLevelType); both roster files point at it and stay green.
+
+## Tests (red-first) and verification
+
+Four new tests in AplUserEventHandlerTests, all observed RED on both TFMs before the implementation (the transcode pair failed on the raw static /Audio/ URL being served; the refusal pair failed on no speech at all): HandleAsync_NextAction_VideoSuccessorWithEac3_RoutesToAudioOnlyTranscode, HandleAsync_PrevAction_VideoPredecessorWithEac3_RoutesToAudioOnlyTranscode, HandleAsync_NextAction_VideoAppMediumPlaying_AnswersTransportRefusal, HandleAsync_PrevAction_VideoAppMediumPlaying_AnswersTransportRefusal. Full suite `dotnet test` (no --no-build): 4013/4013 passed on net9.0 AND net10.0. `dotnet build -c Release`: 0 warnings, 0 errors. Files changed: ProgressReporter.cs, NextIntentHandler.cs, PreviousIntentHandler.cs, AplUserEventHandler.cs, AplUserEventHandlerTests.cs, SessionQueueReaderRosterTests.cs, WarmingGateCoverageTests.cs, IlCallScanner.cs (new).
+
+## Risks
+
+The APL refusal is a Tell (session-ending) on a UserEvent; that is the same response class the intent handlers already use for the same refusal and UserEvent requests are not AudioPlayer events, so the JF-299 event restriction does not apply. The refusal's reach on the APL path is narrow by construction (the NowPlaying screen implies a recent audio launch, and a token matching the ledger item classifies Audio and skips the refusal); the widened gate only fires on the cross-media shapes the task targeted. No interaction-model or locale change (DoD 6/8 not applicable). DoD 7's E2E angle is covered at unit level here; the live E2E suite is the orchestrator's deploy-gate call. DoD 9/10 (/simplify, /code-review high) intentionally left to the orchestrator's gates per the task instructions.
+<!-- SECTION:NOTES:END -->

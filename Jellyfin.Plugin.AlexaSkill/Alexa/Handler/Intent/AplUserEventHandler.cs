@@ -98,11 +98,32 @@ public class AplUserEventHandler : BaseHandler
         switch (action)
         {
             case "prev":
-                return HandlePrevious(user, session, context);
+                // JF-582: both taps route through the shared adjacent-item serve
+                // (rehydration guard, medium refusal and codec gate applied
+                // uniformly; rationale on the serve).
+                return Task.FromResult(Progress.ServeAdjacentQueueItem(
+                    _queueManager,
+                    _libraryManager,
+                    session,
+                    context,
+                    user,
+                    GetLocale(request),
+                    ProgressReporter.AdjacentQueueDirection.Previous,
+                    "AplUserEvent previous",
+                    tapOrigin: true));
             case "pause":
                 return Task.FromResult(BuildPauseResponse());
             case "next":
-                return HandleNext(user, session, context);
+                return Task.FromResult(Progress.ServeAdjacentQueueItem(
+                    _queueManager,
+                    _libraryManager,
+                    session,
+                    context,
+                    user,
+                    GetLocale(request),
+                    ProgressReporter.AdjacentQueueDirection.Next,
+                    "AplUserEvent next",
+                    tapOrigin: true));
             case "selectItem":
             case "playTrack":
             case "carouselTap":
@@ -110,73 +131,6 @@ public class AplUserEventHandler : BaseHandler
             default:
                 return Task.FromResult(ResponseBuilder.Empty());
         }
-    }
-
-    private Task<SkillResponse> HandleNext(Entities.User user, SessionInfo session, Context context)
-    {
-        // JF-579: repair a restart/re-registration-wiped session queue before the
-        // queue read (the JF-577 guard; rationale on the shared helper): a coherent
-        // persisted device queue turns the false Empty below into the real queue.
-        // The tap is a customer-initiated request while this skill was the most
-        // recently playing audio, so context.AudioPlayer carries the playing token.
-        bool rehydrated = ProgressReporter.TryRehydrateSessionQueueFromDevice(
-            _queueManager, session, context, Logger, "AplUserEvent next");
-        Guid? currentItemId = ProgressReporter.ResolveCurrentItemId(session, context, rehydrated);
-
-        if (session.NowPlayingQueue.Count == 0 || currentItemId == null)
-        {
-            return Task.FromResult(ResponseBuilder.Empty());
-        }
-
-        int idx = SessionQueue.IndexOfQueueItem(session, currentItemId.Value);
-        if (idx >= 0 && idx < session.NowPlayingQueue.Count - 1)
-        {
-            Guid nextItemId = session.NowPlayingQueue[idx + 1].Id;
-            string nextIdStr = nextItemId.ToString();
-            BaseItem? nextItem = _libraryManager.GetItemById(nextItemId);
-            if (nextItem == null)
-            {
-                return Task.FromResult(ResponseBuilder.Empty());
-            }
-
-            session.FullNowPlayingItem = nextItem;
-            return Task.FromResult(Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(nextIdStr, user), nextIdStr, nextItem, user, context));
-        }
-
-        return Task.FromResult(ResponseBuilder.Empty());
-    }
-
-    private Task<SkillResponse> HandlePrevious(Entities.User user, SessionInfo session, Context context)
-    {
-        // JF-579: same adoption as HandleNext (the JF-577 guard; rationale on the
-        // shared helper): a coherent persisted device queue turns the false Empty
-        // below into the real queue, and the playing token stands in for the wiped
-        // now-playing item.
-        bool rehydrated = ProgressReporter.TryRehydrateSessionQueueFromDevice(
-            _queueManager, session, context, Logger, "AplUserEvent previous");
-        Guid? currentItemId = ProgressReporter.ResolveCurrentItemId(session, context, rehydrated);
-
-        if (session.NowPlayingQueue.Count == 0 || currentItemId == null)
-        {
-            return Task.FromResult(ResponseBuilder.Empty());
-        }
-
-        int idx = SessionQueue.IndexOfQueueItem(session, currentItemId.Value);
-        if (idx > 0)
-        {
-            Guid prevItemId = session.NowPlayingQueue[idx - 1].Id;
-            string prevIdStr = prevItemId.ToString();
-            BaseItem? prevItem = _libraryManager.GetItemById(prevItemId);
-            if (prevItem == null)
-            {
-                return Task.FromResult(ResponseBuilder.Empty());
-            }
-
-            session.FullNowPlayingItem = prevItem;
-            return Task.FromResult(Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(prevIdStr, user), prevIdStr, prevItem, user, context));
-        }
-
-        return Task.FromResult(ResponseBuilder.Empty());
     }
 
     private Task<SkillResponse> HandleSelectItem(AplUserEventRequest aplEvent, Entities.User user, SessionInfo session, Context context, Request request)
