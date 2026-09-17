@@ -16,14 +16,15 @@ using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
-using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
 /// <summary>
 /// Handler for PlayNextIntent requests.
-/// Inserts a song immediately after the currently playing track.
+/// Inserts a song immediately after the currently playing track, in BOTH stores
+/// since JF-578 (the persisted device queue and the session queue, through the
+/// shared queue-membership writer on <see cref="ProgressReporter"/>).
 /// </summary>
 public class PlayNextIntentHandler : BaseHandler
 {
@@ -31,6 +32,7 @@ public class PlayNextIntentHandler : BaseHandler
     private readonly IUserManager _userManager;
     private readonly IArtistIndex? _artistIndex;
     private readonly ISongNgramIndex? _songNgramIndex;
+    private readonly DeviceQueueManager? _queueManager;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PlayNextIntentHandler"/> class.
@@ -42,6 +44,7 @@ public class PlayNextIntentHandler : BaseHandler
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
     /// <param name="artistIndex">Optional in-memory artist index for fast search.</param>
     /// <param name="songNgramIndex">Optional in-memory song index (warming gate proxy for the cold song query).</param>
+    /// <param name="queueManager">Optional per-device queue manager (the JF-578 both-stores queue writer).</param>
     public PlayNextIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
@@ -49,12 +52,14 @@ public class PlayNextIntentHandler : BaseHandler
         IUserManager userManager,
         ILoggerFactory loggerFactory,
         IArtistIndex? artistIndex = null,
-        ISongNgramIndex? songNgramIndex = null) : base(sessionManager, config, loggerFactory)
+        ISongNgramIndex? songNgramIndex = null,
+        DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
         _artistIndex = artistIndex;
         _songNgramIndex = songNgramIndex;
+        _queueManager = queueManager;
     }
 
     /// <inheritdoc/>
@@ -185,15 +190,26 @@ public class PlayNextIntentHandler : BaseHandler
             }
         }
 
+        // JF-578: the same both-stores writer as AddToQueue, AfterCurrent
+        // placement: rehydrate a restart-wiped session queue first (the JF-577
+        // guard, rationale on the shared helper), resolve the current item
+        // (now-playing item first; the coherent playing token on the rehydrated
+        // shape), then insert right behind it in BOTH stores (the session-side
+        // fallback shapes: front when nothing is current or it is not queued,
+        // the former InsertAfterCurrent).
         BaseItem song = songs[0];
-        InsertAfterCurrent(session, song.Id);
+        Guid? currentItemId = ProgressReporter.RehydrateAndEnqueueToBothStores(
+            _queueManager, session, context, song.Id, DeviceQueueManager.QueueInsertPlacement.AfterCurrent, Logger, "PlayNext");
 
         // JF-424.1: the insertion displaced the item that follows the current one, so
         // any pre-computed next-track entry for this device is stale by definition.
         NextTrackPrecomputeCache.Invalidate(context.System.Device.DeviceID);
 
-        // If nothing is currently playing, start playback
-        if (session.FullNowPlayingItem == null)
+        // If nothing is genuinely playing (no now-playing item and no coherent
+        // playing token), start playback; on the rehydrated shape there IS a
+        // current item, so the insert lands behind the live stream instead of a
+        // ReplaceAll launching the inserted song over it.
+        if (currentItemId == null)
         {
             session.FullNowPlayingItem = song;
             string itemId = song.Id.ToString();
@@ -202,36 +218,5 @@ public class PlayNextIntentHandler : BaseHandler
 
         Logger.LogInformation("PlayNext: {SongName} queued to play next", song.Name);
         return ResponseBuilder.Tell(ResponseStrings.Get("PlayNextConfirmed", locale, song.Name));
-    }
-
-    /// <summary>
-    /// Insert an item right after the currently playing track in the queue.
-    /// If nothing is playing, adds to the front.
-    /// </summary>
-    private static void InsertAfterCurrent(SessionInfo session, Guid itemId)
-    {
-        var queue = new List<QueueItem>(session.NowPlayingQueue);
-        var newEntry = new QueueItem { Id = itemId };
-
-        if (session.FullNowPlayingItem == null)
-        {
-            queue.Insert(0, newEntry);
-            session.NowPlayingQueue = queue;
-            return;
-        }
-
-        for (int i = 0; i < queue.Count; i++)
-        {
-            if (queue[i].Id == session.FullNowPlayingItem.Id)
-            {
-                queue.Insert(i + 1, newEntry);
-                session.NowPlayingQueue = queue;
-                return;
-            }
-        }
-
-        // Current item not found in queue, insert at front
-        queue.Insert(0, newEntry);
-        session.NowPlayingQueue = queue;
     }
 }

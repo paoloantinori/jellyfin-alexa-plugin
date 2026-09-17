@@ -39,7 +39,10 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// <see cref="ResolveCurrentItemId"/> companion and the JF-582 combined
 /// <see cref="TryRehydrateAndResolveCurrentItemId"/> entry), plus the JF-582
 /// shared adjacent-queue-item serve (<see cref="ServeAdjacentQueueItem"/>) the
-/// four next/previous entry points route through. COMPOSITION, not per-handler injection (the PlaybackLaunchBuilder
+/// four next/previous entry points route through, and the JF-578 both-stores
+/// queue-membership writer (<see cref="EnqueueToBothStores"/> with its combined
+/// <see cref="RehydrateAndEnqueueToBothStores"/> entry) the queue-editing
+/// intents route through. COMPOSITION, not per-handler injection (the PlaybackLaunchBuilder
 /// batch-4 precedent): BaseHandler constructs one instance as the inherited
 /// <c>Progress</c> property so the 61 handler ctors stay untouched. The real
 /// dependencies are ctor-passed (session manager, config, logger, the Launch
@@ -495,6 +498,142 @@ public sealed class ProgressReporter
             "{Label}: session queue empty and a persisted device queue exists, but it does not contain the playing item {ItemId} (stale queue from an older playback); not rehydrating",
             logLabel, currentItemId);
         return false;
+    }
+
+    /// <summary>
+    /// JF-578: the both-stores queue-membership writer the queue-editing intents
+    /// (AddToQueue, PlayNext) route through, next to the mirror it composes with
+    /// (the JF-574 layering: the Playback store owns the durable mutation, this
+    /// layer owns the session view).
+    /// COHERENCE CONTRACT: the add lands in BOTH stores in one call. The durable
+    /// device store takes the insert (<see cref="DeviceQueueManager.Enqueue"/>:
+    /// ItemIds insertion, CurrentIndex bookkeeping, debounced persist; the only
+    /// queue store that survives a restart), and the session queue is brought to
+    /// the same view. The session leg MIRRORS from the mutated device queue
+    /// (<see cref="MirrorQueueToSession"/>; the device order is authoritative,
+    /// JF-447) when both stores were populated before the add, so the session's
+    /// physical order (including any shuffle) and the persisted order cannot drift
+    /// apart across the write; session-only items (progressive continuation
+    /// tracks) ride the tail exactly as on every other mirror, which is also the
+    /// established consequence of the shuffle handlers' mirror. In the degenerate
+    /// shapes the session leg mutates the session queue DIRECTLY instead (the
+    /// pre-JF-578 session-only behavior): a missing or empty device store cannot
+    /// be an order authority (the mirror would move the added item in front of
+    /// the session's own queue), and an EMPTY session queue must not be filled by
+    /// the mirror (that is rehydration, a decision the guard in
+    /// <see cref="RehydrateAndEnqueueToBothStores"/> has already made, and
+    /// possibly declined, on coherence grounds; the add then seeds the session
+    /// queue alone while the device store takes the insert for the next restart).
+    /// </summary>
+    /// <param name="queueManager">The caller's per-device queue manager, or null
+    /// (session-only write: today's behavior, the handlers' optional dependency).</param>
+    /// <param name="session">The Jellyfin session whose NowPlayingQueue to write.</param>
+    /// <param name="deviceId">The Alexa device ID (the device-store key).</param>
+    /// <param name="itemId">The item to enqueue.</param>
+    /// <param name="placement">End (the AddToQueue ask) or AfterCurrent (PlayNext).</param>
+    /// <param name="currentItemId">The caller's resolved current item (positions the
+    /// AfterCurrent insert and the direct session leg's fallback).</param>
+    private static void EnqueueToBothStores(
+        DeviceQueueManager? queueManager,
+        SessionInfo session,
+        string deviceId,
+        Guid itemId,
+        DeviceQueueManager.QueueInsertPlacement placement,
+        Guid? currentItemId)
+    {
+        // Read the pre-state before the write: a post-write store holding exactly
+        // one item cannot distinguish a seed from a one-item queue.
+        bool deviceHadQueue = queueManager?.GetQueue(deviceId) is { ItemIds.Count: > 0 };
+        bool sessionHasQueue = session.NowPlayingQueue.Count > 0;
+
+        queueManager?.Enqueue(deviceId, itemId, placement, currentItemId);
+
+        // Re-fetch for the mirror rather than reusing the pre-write reference:
+        // Enqueue mutates in place, but a concurrent SetQueue may have swapped the
+        // instance (the guard's snapshot idiom). A concurrent Clear can also have
+        // removed it entirely; the session-only fallback then keeps the write at
+        // today's pre-JF-578 semantics instead of dereferencing a corpse.
+        // Coherence gate (review BLOCKER, JF-578): mirror ONLY when the mutated
+        // device queue still describes THIS playback, i.e. it contains the resolved
+        // current item. A stale persisted queue that does not (a leftover album
+        // queue behind a fresh single-song play, which never calls SetQueue) would
+        // otherwise be mirrored over the live session queue, parking the playing
+        // song last and ending the play - the exact hijack the JF-574 guard exists
+        // to prevent. The direct session insert is the fallback that already exists
+        // for exactly this shape.
+        if (deviceHadQueue
+            && sessionHasQueue
+            && currentItemId != null
+            && queueManager!.GetQueue(deviceId) is { } mutatedQueue
+            && mutatedQueue.ItemIds.Contains(currentItemId.Value.ToString()))
+        {
+            MirrorQueueToSession(mutatedQueue, session);
+            return;
+        }
+
+        InsertIntoSessionQueue(session, itemId, placement, currentItemId);
+    }
+
+    /// <summary>
+    /// JF-578: the queue-editing intents' ONE entry point, coupling the writer's
+    /// unsplittable prelude (the JF-582 combined rehydrate-and-resolve lesson):
+    /// repair a restart-wiped session queue first (the JF-574/JF-577 guard,
+    /// rationale on <see cref="TryRehydrateSessionQueueFromDevice"/>), resolve the
+    /// current item (now-playing item first; the coherent token stands in on the
+    /// wiped shape, see <see cref="ResolveCurrentItemId"/>), THEN enqueue into
+    /// both stores with that resolution positioning the insert. The resolved
+    /// current item is returned because the callers branch on it: null means
+    /// genuinely nothing is playing (no now-playing item and no coherent token),
+    /// the only shape where the start-playback ReplaceAll launch is correct; on
+    /// the rehydrated shape there IS a current item (the playing token), so the
+    /// add lands behind the live stream instead of replacing it.
+    /// </summary>
+    /// <param name="queueManager">The caller's per-device queue manager, or null (session-only write).</param>
+    /// <param name="session">The Jellyfin session whose queue to repair and write.</param>
+    /// <param name="context">The Alexa context (device id and current stream token).</param>
+    /// <param name="itemId">The item to enqueue.</param>
+    /// <param name="placement">End (the AddToQueue ask) or AfterCurrent (PlayNext).</param>
+    /// <param name="logger">The caller's logger for the rehydration decision lines.</param>
+    /// <param name="logLabel">Caller identity prefixing the log lines.</param>
+    /// <returns>The resolved current item id, or null when nothing is playing.</returns>
+    internal static Guid? RehydrateAndEnqueueToBothStores(
+        DeviceQueueManager? queueManager,
+        SessionInfo session,
+        Context context,
+        Guid itemId,
+        DeviceQueueManager.QueueInsertPlacement placement,
+        ILogger logger,
+        string logLabel)
+    {
+        bool rehydrated = TryRehydrateSessionQueueFromDevice(queueManager, session, context, logger, logLabel);
+        Guid? currentItemId = ResolveCurrentItemId(session, context, rehydrated);
+        EnqueueToBothStores(queueManager, session, context.GetDeviceId(), itemId, placement, currentItemId);
+        return currentItemId;
+    }
+
+    /// <summary>
+    /// The session-leg fallback of <see cref="EnqueueToBothStores"/> for the
+    /// degenerate shapes (no populated device queue to mirror from, or an empty
+    /// session queue the guard declined to rehydrate): the pre-JF-578 session-only
+    /// mutation, kept verbatim so those shapes behave exactly as before. End
+    /// appends; AfterCurrent inserts behind the resolved current item, or at the
+    /// front when there is none or it is not queued (the former
+    /// <c>PlayNextIntentHandler.InsertAfterCurrent</c> shape).
+    /// </summary>
+    private static void InsertIntoSessionQueue(SessionInfo session, Guid itemId, DeviceQueueManager.QueueInsertPlacement placement, Guid? currentItemId)
+    {
+        var queue = new List<QueueItem>(session.NowPlayingQueue);
+        var entry = new QueueItem { Id = itemId };
+        // The SAME three-way policy as the device leg, resolved through
+        // DeviceQueueManager.ResolveInsertPosition so the two legs cannot drift
+        // (review finding R1).
+        int insertIndex = DeviceQueueManager.ResolveInsertPosition(
+            placement,
+            queue.Count,
+            currentItemId != null ? SessionQueue.IndexOfQueueItem(session, currentItemId.Value) : -1);
+        queue.Insert(insertIndex, entry);
+
+        session.NowPlayingQueue = queue;
     }
 
     /// <summary>

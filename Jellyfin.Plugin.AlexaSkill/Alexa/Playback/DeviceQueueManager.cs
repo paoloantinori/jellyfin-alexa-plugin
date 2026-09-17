@@ -454,6 +454,132 @@ public sealed class DeviceQueueManager : IDisposable
             deviceId, shuffled.Count);
     }
 
+    /// <summary>
+    /// Where <see cref="Enqueue"/> inserts an item into the queue (JF-578): the
+    /// two queue-editing intent shapes.
+    /// </summary>
+    public enum QueueInsertPlacement
+    {
+        /// <summary>After the last item (the AddToQueue ask).</summary>
+        End,
+
+        /// <summary>
+        /// Right after the current item, or at the front when there is no current
+        /// item or it is not queued (the PlayNext ask).
+        /// </summary>
+        AfterCurrent
+    }
+
+    /// <summary>
+    /// JF-578: the ONE queue-MEMBERSHIP writer for the non-play paths (AddToQueue,
+    /// PlayNext, through <c>ProgressReporter.EnqueueToBothStores</c>): inserts an
+    /// item into the device queue at the given placement and schedules the debounced
+    /// persist, so an add survives a restart instead of living only in the wiped
+    /// session queue. Placement is computed against the DEVICE queue (the
+    /// authoritative membership store, JF-447): End appends after the last item;
+    /// AfterCurrent inserts after <paramref name="currentItemId"/>'s position (the
+    /// caller's resolved current item: the session's now-playing item, or on the
+    /// JF-577 rehydrated shape the coherent playing token) and falls back to the
+    /// FRONT when there is no current item or it is not queued (the PlayNext
+    /// session-side fallback shape).
+    /// POINTER BOOKKEEPING: <see cref="DeviceQueue.CurrentIndex"/> keeps pointing
+    /// at the same physical item (it advances by one exactly when the insertion
+    /// point is at or before it); the playback-position pointers
+    /// (<see cref="DeviceQueue.CurrentItemId"/> and
+    /// <see cref="DeviceQueue.CurrentPositionTicks"/>) are owned by the playback
+    /// event writers and are deliberately untouched.
+    /// SHUFFLE COHERENCE: on a shuffled queue the insert lands in the physical
+    /// (shuffled) <see cref="DeviceQueue.ItemIds"/> order, which is what plays;
+    /// when a pre-shuffle snapshot exists the item is also appended to
+    /// <see cref="DeviceQueue.OriginalItemIds"/> so <see cref="RestoreOrder"/>
+    /// keeps the user's added item instead of silently dropping it (its
+    /// restored-order position is the end: the original-order position of a "next"
+    /// ask under shuffle is undefined, its membership is not). A missing or empty
+    /// queue is SEEDED with the single item and CurrentIndex=-1 (the store records
+    /// no current item; that pointer is owned by the play paths'
+    /// <see cref="SetQueue"/> and <see cref="MoveTo"/>).
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID.</param>
+    /// <param name="itemId">The media item ID to insert.</param>
+    /// <param name="placement">Where to insert the item.</param>
+    /// <param name="currentItemId">The caller's resolved current item, positioning
+    /// the AfterCurrent insert (ignored for End).</param>
+    public void Enqueue(string deviceId, Guid itemId, QueueInsertPlacement placement, Guid? currentItemId = null)
+    {
+        // JF-578 review: the mutation body runs under the launch-scope lock - this is
+        // the FIRST in-place ItemIds mutation an intent thread performs, and the
+        // event thread concurrently indexes the same list from
+        // PlaybackNearlyFinished/MoveTo (the JF-522 two-thread-writer rationale).
+        lock (_launchScopeLock)
+        {
+            DeviceQueue queue = GetOrCreateQueue(deviceId);
+            bool seeded = queue.ItemIds.Count == 0;
+            int insertIndex = ResolveInsertIndex(queue, placement, currentItemId);
+
+            queue.ItemIds.Insert(insertIndex, itemId.ToString());
+            if (seeded)
+            {
+                // A seeded queue has no current item: the doc contract says the
+                // pointer starts at -1, not at the freshly inserted item (review S1;
+                // the ternary this replaces was a no-op - ResolveInsertIndex already
+                // returns 0 on an empty queue - and an existing queue with ItemIds
+                // empty but CurrentIndex >= 0 (SetQueue with an empty list) would
+                // otherwise end up pointing past the single seeded item).
+                queue.CurrentIndex = -1;
+            }
+            else if (queue.CurrentIndex >= insertIndex)
+            {
+                // An insert at or before the pointer shifted that item one position
+                // right; advance the pointer so it keeps naming the same item.
+                queue.CurrentIndex++;
+            }
+
+            queue.OriginalItemIds?.Add(itemId.ToString());
+            queue.LastModifiedUtc = DateTime.UtcNow;
+            SchedulePersistInternal(deviceId);
+
+            _logger.LogDebug(
+                "Enqueue: device {DeviceId} inserted item {ItemId} at index {InsertIndex} ({Placement}{Seed}); queue={Count} items, currentIndex={CurrentIndex}",
+                deviceId, itemId, insertIndex, placement, seeded ? ", seeded" : string.Empty, queue.ItemIds.Count, queue.CurrentIndex);
+        }
+    }
+
+    /// <summary>
+    /// The THREE-WAY placement policy, defined once (review finding R1): the end
+    /// for End; behind the current for AfterCurrent when the current is found;
+    /// the front otherwise. ProgressReporter's session-leg insert passes its own
+    /// store's count and current index so both legs cannot drift.
+    /// </summary>
+    /// <param name="placement">Where to insert.</param>
+    /// <param name="count">The store's current item count.</param>
+    /// <param name="currentIndex">The store's index of the current item, or -1.</param>
+    /// <returns>The insert index.</returns>
+    internal static int ResolveInsertPosition(QueueInsertPlacement placement, int count, int currentIndex)
+    {
+        if (placement == QueueInsertPlacement.End)
+        {
+            return count;
+        }
+
+        return currentIndex >= 0 ? currentIndex + 1 : 0;
+    }
+
+    /// <summary>
+    /// The insert position <see cref="Enqueue"/> uses against a non-empty queue.
+    /// Delegates to <see cref="ResolveInsertPosition"/>: the three-way placement
+    /// policy (end; behind the current when queued; front otherwise) has ONE
+    /// definition because the session-leg mirror in ProgressReporter encodes the
+    /// same policy on a different store type.
+    /// </summary>
+    private static int ResolveInsertIndex(DeviceQueue queue, QueueInsertPlacement placement, Guid? currentItemId)
+    {
+        int count = queue.ItemIds.Count;
+        int current = currentItemId != null
+            ? queue.ItemIds.IndexOf(currentItemId.Value.ToString())
+            : -1;
+        return ResolveInsertPosition(placement, count, current);
+    }
+
     /// <summary>Fisher–Yates shuffle, in place. Used by SetShuffledQueue.
     /// (ShuffleRemaining keeps its own inline loop unchanged — spec non-goal.)</summary>
     private static void FisherYates(List<string> list, Random rng)

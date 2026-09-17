@@ -37,7 +37,11 @@ public class SessionQueueReaderRosterTests
     /// directly: JF-582 moved their bodies into the shared
     /// ProgressReporter.ServeAdjacentQueueItem, which calls the guard itself (the
     /// owner exemption below covers it; QueueRehydrationAdoptionTests pins their
-    /// rehydration behavior).
+    /// rehydration behavior). The queue-editing intents (AddToQueueIntentHandler,
+    /// PlayNextIntentHandler) stopped reading it the same way in JF-578: their
+    /// writes route through ProgressReporter.RehydrateAndEnqueueToBothStores
+    /// (guard + current-item resolve + both-stores enqueue), also pinned in
+    /// QueueRehydrationAdoptionTests.
     /// </summary>
     private static readonly HashSet<Type> AdoptedReaders = new()
     {
@@ -49,10 +53,6 @@ public class SessionQueueReaderRosterTests
     /// Deliberate non-adopters, each with its reason:
     /// - PlaybackStartedEventHandler: precompute cache-write only; the JF-577 skip
     ///   (NearlyFinished's own guard owns the user-visible resolution one event later).
-    /// - AddToQueueIntentHandler: the JF-578 skip; it writes only the session queue,
-    ///   so adoption waits for the shared both-stores membership writer.
-    /// - PlayNextIntentHandler: same writer shape as AddToQueue (InsertAfterCurrent
-    ///   composes the session queue only); JF-578 family.
     /// - LaunchRequestHandler: the legacy session-queue resume reads it for its own
     ///   resume offer (the device last-played ledger offer comes first).
     /// - PlayIntentHandler: the resume fallback (queue head); same legacy resume
@@ -60,18 +60,19 @@ public class SessionQueueReaderRosterTests
     /// - ClearQueueIntentHandler: logging-only count read; its purpose is to wipe
     ///   both queue stores, so rehydrating first would undo the user's ask.
     /// - ProgressReporter: the shared guard/mirror itself; its reads ARE the
-    ///   coherence legs and the rebuild, and since JF-582 also the shared
+    ///   coherence legs and the rebuild, since JF-582 also the shared
     ///   adjacent-queue-item serve the four next/previous entry points route
-    ///   through (it calls the guard from inside, as the owner).
-    /// - SessionQueue: passive index/id-set scan helper; its only callers are
-    ///   PlaybackStarted (exempt) and PlaybackNearlyFinished (adopted), so adoption
+    ///   through, and since JF-578 the both-stores queue-membership writer the
+    ///   queue-editing intents route through (it calls the guard from inside, as
+    ///   the owner).
+    /// - SessionQueue: passive index/id-set scan helper; its callers are
+    ///   PlaybackStarted (exempt), PlaybackNearlyFinished (adopted), and the
+    ///   JF-578 writer's session leg inside ProgressReporter (owner), so adoption
     ///   is enforced at the callers.
     /// </summary>
     private static readonly HashSet<Type> ExemptReaders = new()
     {
         typeof(PlaybackStartedEventHandler),
-        typeof(AddToQueueIntentHandler),
-        typeof(PlayNextIntentHandler),
         typeof(LaunchRequestHandler),
         typeof(PlayIntentHandler),
         typeof(ClearQueueIntentHandler),
@@ -109,38 +110,54 @@ public class SessionQueueReaderRosterTests
                 BindingFlags.Public | BindingFlags.Static)
             ?? throw new InvalidOperationException("TryRehydrateSessionQueueFromDevice not found"));
 
-        // The guard OWNER also calls it since JF-582, but ONLY from the two
-        // members that own the serve (the combined rehydrate-and-resolve helper and
-        // the shared adjacent serve). Strip exactly those two methods' calls, not
-        // the whole type (review finding, JF-582): a FUTURE ProgressReporter method
-        // that reads the queue and skips the guard must still fail this proof, and a
-        // type-wide removal would silently exempt it.
-        // The combined helper is PRIVATE by design (the JF-582 /simplify pass: a
-        // public wrapper would be a door that skips the JF-564/JF-507 gates), so it
-        // is named by string; the existence assertion below fails loudly on a rename.
-        const string ownerMethodName = "TryRehydrateAndResolveCurrentItemId";
-        const string serveMethodName = nameof(ProgressReporter.ServeAdjacentQueueItem);
-        int targetToken = typeof(ProgressReporter).GetMethod(
+        // The guard OWNER also calls it internally, but ONLY from the members that
+        // own a shared entry point: the combined rehydrate-and-resolve helper and
+        // the shared adjacent serve (both JF-582), and the combined
+        // rehydrate-and-enqueue writer (JF-578). Strip exactly those methods'
+        // calls, not the whole type (review finding, JF-582): a FUTURE
+        // ProgressReporter method that reads the queue and skips the guard must
+        // still fail this proof, and a type-wide removal would silently exempt it.
+        // Each listed member is asserted to still exist AND to call the guard, so
+        // a rename or a dropped guard call fails loudly. The combined helpers are
+        // PRIVATE/INTERNAL by design (the JF-582 /simplify pass: public wrappers
+        // would be doors that skip the JF-564/JF-507 gates), so the private one is
+        // named by string; the internal ones are compile-checked via nameof.
+        string[] ownerMethodNames =
+        {
+            "TryRehydrateAndResolveCurrentItemId", // private by design
+            nameof(ProgressReporter.ServeAdjacentQueueItem),
+            nameof(ProgressReporter.RehydrateAndEnqueueToBothStores)
+        };
+        int guardToken = typeof(ProgressReporter).GetMethod(
             nameof(ProgressReporter.TryRehydrateSessionQueueFromDevice),
             BindingFlags.Public | BindingFlags.Static)!.MetadataToken;
-        bool ownerStillCalls = false;
-        foreach (MethodBase m in IlCallScanner.DeclaredCallableMethods(typeof(ProgressReporter)))
+        // Each owner method must reach the guard, directly or through another owner
+        // method (ServeAdjacentQueueItem composes the private combined helper, which
+        // is the direct caller), so the chain can never detach from the guard.
+        Dictionary<string, int> ownerTokens = new();
+        foreach (string name in ownerMethodNames)
         {
-            if (m.Name != ownerMethodName && m.Name != serveMethodName)
+            MethodBase? declared = IlCallScanner.DeclaredCallableMethods(typeof(ProgressReporter))
+                .FirstOrDefault(m => m.Name == name);
+            if (declared != null)
             {
-                continue;
-            }
-
-            if (IlCallScanner.ContainsCallToToken(m, targetToken))
-            {
-                ownerStillCalls = true;
+                ownerTokens[name] = declared.MetadataToken;
             }
         }
 
-        MethodInfo? ownerMethod = typeof(ProgressReporter).GetMethod(
-            ownerMethodName, BindingFlags.NonPublic | BindingFlags.Static);
-        Assert.True(ownerMethod != null, $"ProgressReporter.{ownerMethodName} was renamed or made public; update this exemption.");
-        Assert.True(ownerStillCalls, "The serve owner no longer calls the guard internally; update this exemption.");
+        foreach (string ownerMethodName in ownerMethodNames)
+        {
+            MethodBase? ownerMethod = IlCallScanner.DeclaredCallableMethods(typeof(ProgressReporter))
+                .FirstOrDefault(m => m.Name == ownerMethodName);
+            Assert.True(ownerMethod != null, $"ProgressReporter.{ownerMethodName} was renamed or removed; update this exemption.");
+
+            var acceptableTokens = new List<int> { guardToken };
+            acceptableTokens.AddRange(ownerTokens.Where(kvp => kvp.Key != ownerMethodName).Select(kvp => kvp.Value));
+            Assert.True(
+                IlCallScanner.ContainsCallToAnyToken(ownerMethod, acceptableTokens),
+                $"ProgressReporter.{ownerMethodName} no longer reaches the shared guard internally; update this exemption.");
+        }
+
         guardCallers.Remove(typeof(ProgressReporter));
 
         var claimedButNotCalling = new SortedSet<string>(AdoptedReaders.Except(guardCallers).Select(t => t.Name));

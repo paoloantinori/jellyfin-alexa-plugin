@@ -508,4 +508,284 @@ public class QueueRehydrationAdoptionTests : PluginTestBase, IDisposable
         Assert.Equal(songs[1].Id.ToString(), play.AudioItem.Stream.Token);
         Assert.Equal(songs[1].Id, session.FullNowPlayingItem?.Id);
     }
+
+    // === AddToQueue / PlayNext (JF-578, the both-stores queue writer) ===
+
+    /// <summary>
+    /// The JF-578 adoption needs the PERSISTED file asserted (the add surviving a
+    /// restart is the point), so these tests build their manager over a known
+    /// registered temp dir instead of the class fixture's (whose dir is internal
+    /// to TestHelpers). Disposal is per test.
+    /// </summary>
+    private static (DeviceQueueManager Manager, string Dir) CreateManagerWithDir(string suffix)
+    {
+        string dir = TestHelpers.CreateRegisteredTempDir(suffix);
+        return (new DeviceQueueManager(dir, Microsoft.Extensions.Logging.Abstractions.NullLogger<DeviceQueueManager>.Instance), dir);
+    }
+
+    private AddToQueueIntentHandler AddToQueueHandler(DeviceQueueManager queueManager)
+    {
+        var userManager = new Mock<IUserManager>();
+        userManager.Setup(u => u.GetUserById(It.IsAny<Guid>())).Returns(TestHelpers.CreateJellyfinUser());
+        return new AddToQueueIntentHandler(
+            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, userManager.Object, _loggerFactory, queueManager: queueManager);
+    }
+
+    private PlayNextIntentHandler PlayNextHandler(DeviceQueueManager queueManager)
+    {
+        var userManager = new Mock<IUserManager>();
+        userManager.Setup(u => u.GetUserById(It.IsAny<Guid>())).Returns(TestHelpers.CreateJellyfinUser());
+        return new PlayNextIntentHandler(
+            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, userManager.Object, _loggerFactory, queueManager: queueManager);
+    }
+
+    /// <summary>
+    /// The song search must resolve to exactly ONE item so the handlers reach the
+    /// queue write without the fuzzy/disambiguation branches.
+    /// </summary>
+    private void SetupSingleSongResult(MediaBrowser.Controller.Entities.BaseItem song)
+        => _libraryManagerMock
+            .Setup(l => l.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Returns(new List<MediaBrowser.Controller.Entities.BaseItem> { song });
+
+    private static IntentRequest CreateAddIntent(string name)
+        => new()
+        {
+            Intent = new Intent
+            {
+                Name = name,
+                Slots = new Dictionary<string, Slot>
+                {
+                    ["song"] = new Slot { Name = "song", Value = "added song" },
+                    ["musician"] = new Slot { Name = "musician" }
+                }
+            },
+            Locale = "en-US"
+        };
+
+    [Fact]
+    public async Task AddToQueue_RestartWipedSession_CoherentDeviceQueue_AddLandsInBothStores()
+    {
+        // The JF-578 target shape: the restart wiped the session queue while the
+        // device plays queue member [1] of the coherent persisted 4-track queue.
+        // The add must land in BOTH stores (the device queue is the one that
+        // survives the next restart) and the session must mirror the device
+        // order; and because the playing token IS a current item on the
+        // rehydrated shape, the add lands BEHIND the live stream instead of the
+        // pre-adoption ReplaceAll launch of the added song over it.
+        var songs = SetupQueueSongs(4);
+        var added = TestHelpers.CreateSong("Added Song");
+        SetupSingleSongResult(added);
+        var (manager, dir) = CreateManagerWithDir("jf578-add");
+        manager.SetQueue(DeviceId, songs.Select(s => s.Id.ToString()).ToList(), currentIndex: 1);
+
+        var session = CreateWipedSession();
+        SkillResponse response = await AddToQueueHandler(manager).HandleAsync(
+            CreateAddIntent("AddToQueueIntent"),
+            CreatePlayingContext(songs[1].Id),
+            TestHelpers.CreateTestUser(id: _userId),
+            session,
+            CancellationToken.None);
+
+        // The added song was queued, not launched: no play directive, the
+        // localized add confirmation speaks its name.
+        Assert.Null(TestHelpers.GetPlayDirective(response));
+        Assert.Contains("Added Song", TestHelpers.GetSpeechText(response));
+
+        // The session queue mirrors the device order with the add at the end.
+        Assert.Equal(songs.Select(s => s.Id).Append(added.Id), session.NowPlayingQueue.Select(q => q.Id));
+
+        // The in-memory device store took the insert at the end, pointer intact.
+        DeviceQueue deviceQueue = manager.GetQueue(DeviceId)!;
+        Assert.Equal(songs.Select(s => s.Id.ToString()).Append(added.Id.ToString()), deviceQueue.ItemIds);
+        Assert.Equal(1, deviceQueue.CurrentIndex);
+
+        // The PERSISTED store carries it too: fire the debounced write, then a
+        // fresh manager over the same directory (the restart simulation) sees
+        // the add as the last queued item.
+        manager.FirePersistForTest(DeviceId);
+        using var reloaded = new DeviceQueueManager(dir, Microsoft.Extensions.Logging.Abstractions.NullLogger<DeviceQueueManager>.Instance);
+        Assert.Equal(added.Id.ToString(), reloaded.GetQueue(DeviceId)!.ItemIds[^1]);
+        manager.Dispose();
+    }
+
+    [Fact]
+    public async Task AddToQueue_StaleDeviceQueue_PopulatedSession_DoesNotHijackTheLiveQueue()
+    {
+        // The review BLOCKER shape (JF-578): the persisted device queue is a STALE
+        // leftover album queue whose members do NOT include the playing item, while
+        // the session carries a live fresh single-song play. The mirror leg must NOT
+        // fire (mirroring would park the playing song last behind nine stale items
+        // and end the play); the add lands session-only, playing item first.
+        var playing = TestHelpers.CreateSong("Playing Song");
+        var added = TestHelpers.CreateSong("Added Song");
+        var stale = Enumerable.Range(0, 3).Select(_ => TestHelpers.CreateSong("Stale")).ToList();
+        SetupSingleSongResult(added);
+        var (manager, dir) = CreateManagerWithDir("jf578-stale-add");
+        manager.SetQueue(DeviceId, stale.Select(s => s.Id.ToString()).ToList(), currentIndex: 0);
+
+        var session = CreateWipedSession();
+        session.NowPlayingQueue = new List<QueueItem> { new() { Id = playing.Id } };
+        session.FullNowPlayingItem = playing;
+
+        SkillResponse response = await AddToQueueHandler(manager).HandleAsync(
+            CreateAddIntent("AddToQueueIntent"),
+            CreatePlayingContext(playing.Id),
+            TestHelpers.CreateTestUser(id: _userId),
+            session,
+            CancellationToken.None);
+
+        Assert.Null(TestHelpers.GetPlayDirective(response));
+        // Session: the live playback stays FIRST, the add behind it, no stale item.
+        Assert.Equal(new[] { playing.Id, added.Id }, session.NowPlayingQueue.Select(q => q.Id));
+        // The durable write still landed in the device store (the both-stores
+        // contract) without reordering the session around it.
+        manager.FirePersistForTest(DeviceId);
+        using var reloaded = new DeviceQueueManager(dir, Microsoft.Extensions.Logging.Abstractions.NullLogger<DeviceQueueManager>.Instance);
+        DeviceQueue persisted = reloaded.GetQueue(DeviceId)!;
+        Assert.Contains(added.Id.ToString(), persisted.ItemIds);
+        Assert.DoesNotContain(playing.Id.ToString(), persisted.ItemIds);
+        manager.Dispose();
+    }
+
+    [Fact]
+    public async Task AddToQueue_RestartWipedSession_StaleDeviceQueue_KeepsTodayLaunchBehavior()
+    {
+        // Coherence leg 2: the persisted queue does not contain the playing
+        // item, so the guard declines and the handler keeps today's shape: the
+        // one-item session queue plus the start-playback ReplaceAll launch of
+        // the added song. The device store still takes the insert (the add
+        // lands durably in the queue the user asked to extend), which is the
+        // both-stores contract, not a rehydration.
+        var songs = SetupQueueSongs(2);
+        var added = TestHelpers.CreateSong("Added Song");
+        SetupSingleSongResult(added);
+        var (manager, _) = CreateManagerWithDir("jf578-add-stale");
+        var staleId = Guid.NewGuid();
+        manager.SetQueue(DeviceId, new List<string> { staleId.ToString() }, currentIndex: 0);
+
+        var session = CreateWipedSession();
+        SkillResponse response = await AddToQueueHandler(manager).HandleAsync(
+            CreateAddIntent("AddToQueueIntent"),
+            CreatePlayingContext(songs[0].Id),
+            TestHelpers.CreateTestUser(id: _userId),
+            session,
+            CancellationToken.None);
+
+        AudioPlayerPlayDirective? play = TestHelpers.GetPlayDirective(response);
+        Assert.NotNull(play);
+        Assert.Equal(added.Id.ToString(), play.AudioItem.Stream.Token);
+        Assert.Equal(new[] { added.Id }, session.NowPlayingQueue.Select(q => q.Id));
+        Assert.Equal(
+            new[] { staleId.ToString(), added.Id.ToString() },
+            manager.GetQueue(DeviceId)!.ItemIds);
+        manager.Dispose();
+    }
+
+    [Fact]
+    public async Task AddToQueue_NormalSession_AddLandsInBothStores()
+    {
+        // The normal (non-wiped) path pins the both-stores widening: a live
+        // playback's populated session queue and matching device queue both take
+        // the add, so the queue survives a restart that would previously drop
+        // it (the session-only writer's loss the JF-578 description names).
+        var songs = SetupQueueSongs(2);
+        var added = TestHelpers.CreateSong("Added Song");
+        SetupSingleSongResult(added);
+        var (manager, dir) = CreateManagerWithDir("jf578-add-normal");
+        manager.SetQueue(DeviceId, songs.Select(s => s.Id.ToString()).ToList(), currentIndex: 0);
+
+        var session = CreateWipedSession();
+        session.NowPlayingQueue = songs.Select(s => s.Id).Select(id => new QueueItem { Id = id }).ToList();
+        session.FullNowPlayingItem = songs[0];
+
+        SkillResponse response = await AddToQueueHandler(manager).HandleAsync(
+            CreateAddIntent("AddToQueueIntent"),
+            CreatePlayingContext(songs[0].Id),
+            TestHelpers.CreateTestUser(id: _userId),
+            session,
+            CancellationToken.None);
+
+        Assert.Null(TestHelpers.GetPlayDirective(response));
+        Assert.Contains("Added Song", TestHelpers.GetSpeechText(response));
+        Assert.Equal(songs.Select(s => s.Id).Append(added.Id), session.NowPlayingQueue.Select(q => q.Id));
+
+        manager.FirePersistForTest(DeviceId);
+        using var reloaded = new DeviceQueueManager(dir, Microsoft.Extensions.Logging.Abstractions.NullLogger<DeviceQueueManager>.Instance);
+        Assert.Equal(added.Id.ToString(), reloaded.GetQueue(DeviceId)!.ItemIds[^1]);
+        manager.Dispose();
+    }
+
+    [Fact]
+    public async Task PlayNext_RestartWipedSession_CoherentDeviceQueue_InsertsAfterCurrentInBothStores()
+    {
+        // The PlayNext shape through the same writer: the wiped session plays
+        // queue member [1]; the insert lands right after it in BOTH stores and
+        // the coherent playing token keeps the live stream playing instead of
+        // the pre-adoption ReplaceAll launch over it.
+        var songs = SetupQueueSongs(4);
+        var added = TestHelpers.CreateSong("Added Song");
+        SetupSingleSongResult(added);
+        var (manager, dir) = CreateManagerWithDir("jf578-next");
+        manager.SetQueue(DeviceId, songs.Select(s => s.Id.ToString()).ToList(), currentIndex: 1);
+
+        var session = CreateWipedSession();
+        SkillResponse response = await PlayNextHandler(manager).HandleAsync(
+            CreateAddIntent("PlayNextIntent"),
+            CreatePlayingContext(songs[1].Id),
+            TestHelpers.CreateTestUser(id: _userId),
+            session,
+            CancellationToken.None);
+
+        Assert.Null(TestHelpers.GetPlayDirective(response));
+        Assert.Contains("Added Song", TestHelpers.GetSpeechText(response));
+
+        // Both stores carry the insert behind the current item; the pointer
+        // still names the current item (the insert happened after it).
+        Assert.Equal(
+            songs.Take(2).Select(s => s.Id).Append(added.Id).Concat(songs.Skip(2).Select(s => s.Id)),
+            session.NowPlayingQueue.Select(q => q.Id));
+        DeviceQueue deviceQueue = manager.GetQueue(DeviceId)!;
+        Assert.Equal(
+            songs.Take(2).Select(s => s.Id.ToString()).Append(added.Id.ToString()).Concat(songs.Skip(2).Select(s => s.Id.ToString())),
+            deviceQueue.ItemIds);
+        Assert.Equal(1, deviceQueue.CurrentIndex);
+
+        manager.FirePersistForTest(DeviceId);
+        using var reloaded = new DeviceQueueManager(dir, Microsoft.Extensions.Logging.Abstractions.NullLogger<DeviceQueueManager>.Instance);
+        Assert.Equal(added.Id.ToString(), reloaded.GetQueue(DeviceId)!.ItemIds[2]);
+        manager.Dispose();
+    }
+
+    [Fact]
+    public async Task PlayNext_RestartWipedSession_StaleDeviceQueue_KeepsTodayLaunchBehavior()
+    {
+        // Coherence leg 2: the guard declines, nothing is current, and the
+        // handler keeps today's shape: the one-item session queue (the front
+        // insert on an empty queue) plus the start-playback launch. The device
+        // store takes the front insert per the both-stores contract.
+        var songs = SetupQueueSongs(2);
+        var added = TestHelpers.CreateSong("Added Song");
+        SetupSingleSongResult(added);
+        var (manager, _) = CreateManagerWithDir("jf578-next-stale");
+        var staleId = Guid.NewGuid();
+        manager.SetQueue(DeviceId, new List<string> { staleId.ToString() }, currentIndex: 0);
+
+        var session = CreateWipedSession();
+        SkillResponse response = await PlayNextHandler(manager).HandleAsync(
+            CreateAddIntent("PlayNextIntent"),
+            CreatePlayingContext(songs[0].Id),
+            TestHelpers.CreateTestUser(id: _userId),
+            session,
+            CancellationToken.None);
+
+        AudioPlayerPlayDirective? play = TestHelpers.GetPlayDirective(response);
+        Assert.NotNull(play);
+        Assert.Equal(added.Id.ToString(), play.AudioItem.Stream.Token);
+        Assert.Equal(new[] { added.Id }, session.NowPlayingQueue.Select(q => q.Id));
+        Assert.Equal(
+            new[] { added.Id.ToString(), staleId.ToString() },
+            manager.GetQueue(DeviceId)!.ItemIds);
+        manager.Dispose();
+    }
 }

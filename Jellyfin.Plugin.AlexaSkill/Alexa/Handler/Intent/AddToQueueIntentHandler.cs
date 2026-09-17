@@ -10,19 +10,21 @@ using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
-using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
 /// <summary>
 /// Handler for AddToQueueIntent requests.
-/// Appends a song to the end of the playback queue.
+/// Appends a song to the end of the playback queue, in BOTH stores since JF-578
+/// (the persisted device queue and the session queue, through the shared
+/// queue-membership writer on <see cref="ProgressReporter"/>).
 /// </summary>
 public class AddToQueueIntentHandler : BaseHandler
 {
@@ -30,6 +32,7 @@ public class AddToQueueIntentHandler : BaseHandler
     private readonly IUserManager _userManager;
     private readonly IArtistIndex? _artistIndex;
     private readonly ISongNgramIndex? _songNgramIndex;
+    private readonly DeviceQueueManager? _queueManager;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="AddToQueueIntentHandler"/> class.
@@ -41,6 +44,7 @@ public class AddToQueueIntentHandler : BaseHandler
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
     /// <param name="artistIndex">Optional in-memory artist index for fast search.</param>
     /// <param name="songNgramIndex">Optional in-memory song index (warming gate proxy for the cold song query).</param>
+    /// <param name="queueManager">Optional per-device queue manager (the JF-578 both-stores queue writer).</param>
     public AddToQueueIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
@@ -48,12 +52,14 @@ public class AddToQueueIntentHandler : BaseHandler
         IUserManager userManager,
         ILoggerFactory loggerFactory,
         IArtistIndex? artistIndex = null,
-        ISongNgramIndex? songNgramIndex = null) : base(sessionManager, config, loggerFactory)
+        ISongNgramIndex? songNgramIndex = null,
+        DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
         _artistIndex = artistIndex;
         _songNgramIndex = songNgramIndex;
+        _queueManager = queueManager;
     }
 
     /// <inheritdoc/>
@@ -184,13 +190,23 @@ public class AddToQueueIntentHandler : BaseHandler
             }
         }
 
-        // Append to the end of the queue
+        // JF-578: the add lands in BOTH queue stores. The shared writer first
+        // repairs a restart-wiped session queue from the coherent persisted
+        // device queue (the JF-577 guard, rationale on the shared helper), so on
+        // the wiped shape the add extends the surviving device queue instead of
+        // replacing its membership basis with a one-item session list, and it
+        // survives the next restart. The resolved current item (now-playing item
+        // first; the coherent playing token on the rehydrated shape) drives the
+        // start-playback branch below.
         BaseItem song = songs[0];
-        var queue = new List<QueueItem>(session.NowPlayingQueue) { new() { Id = song.Id } };
-        session.NowPlayingQueue = queue;
+        Guid? currentItemId = ProgressReporter.RehydrateAndEnqueueToBothStores(
+            _queueManager, session, context, song.Id, DeviceQueueManager.QueueInsertPlacement.End, Logger, "AddToQueue");
 
-        // If nothing is currently playing, start playback
-        if (session.FullNowPlayingItem == null)
+        // If nothing is genuinely playing (no now-playing item and no coherent
+        // playing token), start playback; on the rehydrated shape there IS a
+        // current item, so the add lands behind the live stream instead of a
+        // ReplaceAll launching the added song over it.
+        if (currentItemId == null)
         {
             session.FullNowPlayingItem = song;
             string itemId = song.Id.ToString();

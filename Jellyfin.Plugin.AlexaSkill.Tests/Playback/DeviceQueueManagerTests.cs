@@ -523,6 +523,145 @@ public class DeviceQueueManagerTests : IDisposable
     }
 
     // =====================================================================
+    // Enqueue (JF-578, the queue-membership writer for the non-play paths)
+    // =====================================================================
+
+    [Fact]
+    public void Enqueue_End_AppendsItem_KeepsCurrentIndex()
+    {
+        var a = Guid.NewGuid();
+        var b = Guid.NewGuid();
+        var c = Guid.NewGuid();
+        var added = Guid.NewGuid();
+        _manager.SetQueue("device-1", new List<string> { a.ToString(), b.ToString(), c.ToString() }, 1);
+
+        _manager.Enqueue("device-1", added, DeviceQueueManager.QueueInsertPlacement.End);
+
+        DeviceQueue queue = _manager.GetQueue("device-1")!;
+        Assert.Equal(
+            new[] { a, b, c, added }.Select(g => g.ToString()),
+            queue.ItemIds);
+        Assert.Equal(1, queue.CurrentIndex);
+    }
+
+    [Fact]
+    public void Enqueue_AfterCurrent_InsertsBehindCurrent_PointerUnchanged()
+    {
+        var a = Guid.NewGuid();
+        var b = Guid.NewGuid();
+        var c = Guid.NewGuid();
+        var added = Guid.NewGuid();
+        _manager.SetQueue("device-1", new List<string> { a.ToString(), b.ToString(), c.ToString() }, 0);
+
+        DeviceQueue pre = _manager.GetQueue("device-1")!;
+        long? preTicks = pre.CurrentPositionTicks;
+        string? preItemId = pre.CurrentItemId;
+
+        _manager.Enqueue("device-1", added, DeviceQueueManager.QueueInsertPlacement.AfterCurrent, a);
+
+        DeviceQueue queue = _manager.GetQueue("device-1")!;
+        Assert.Equal(
+            new[] { a, added, b, c }.Select(g => g.ToString()),
+            queue.ItemIds);
+        Assert.Equal(0, queue.CurrentIndex);
+        // Review finding 3: the playback pointers are DELIBERATELY untouched by an
+        // add (owned by the event writers); a future edit that "helpfully" updates
+        // them would silently break the Resume/PlaybackStopped token guards.
+        Assert.Equal(preItemId, queue.CurrentItemId);
+        Assert.Equal(preTicks, queue.CurrentPositionTicks);
+    }
+
+    [Fact]
+    public void Enqueue_AfterCurrent_InsertBeforePointer_AdvancesPointer()
+    {
+        // The pointer keeps naming the same PHYSICAL item: an insert at or before
+        // it shifted that item right (here the resolved current [a] sits before
+        // the pointer [c], the restart pointer-lag shape).
+        var a = Guid.NewGuid();
+        var b = Guid.NewGuid();
+        var c = Guid.NewGuid();
+        var added = Guid.NewGuid();
+        _manager.SetQueue("device-1", new List<string> { a.ToString(), b.ToString(), c.ToString() }, 2);
+
+        _manager.Enqueue("device-1", added, DeviceQueueManager.QueueInsertPlacement.AfterCurrent, a);
+
+        DeviceQueue queue = _manager.GetQueue("device-1")!;
+        Assert.Equal(
+            new[] { a, added, b, c }.Select(g => g.ToString()),
+            queue.ItemIds);
+        Assert.Equal(3, queue.CurrentIndex);
+        Assert.Equal(c.ToString(), queue.ItemIds[queue.CurrentIndex]);
+    }
+
+    [Fact]
+    public void Enqueue_AfterCurrent_NoCurrentItem_InsertsAtFront()
+    {
+        var a = Guid.NewGuid();
+        var b = Guid.NewGuid();
+        var added = Guid.NewGuid();
+        _manager.SetQueue("device-1", new List<string> { a.ToString(), b.ToString() }, 1);
+
+        _manager.Enqueue("device-1", added, DeviceQueueManager.QueueInsertPlacement.AfterCurrent);
+
+        DeviceQueue queue = _manager.GetQueue("device-1")!;
+        Assert.Equal(
+            new[] { added, a, b }.Select(g => g.ToString()),
+            queue.ItemIds);
+        Assert.Equal(2, queue.CurrentIndex);
+    }
+
+    [Fact]
+    public void Enqueue_MissingQueue_SeedsSingleItem_WithNoCurrentPointer()
+    {
+        var added = Guid.NewGuid();
+
+        _manager.Enqueue("unknown-device", added, DeviceQueueManager.QueueInsertPlacement.AfterCurrent);
+
+        DeviceQueue queue = _manager.GetQueue("unknown-device")!;
+        Assert.Equal(new[] { added.ToString() }, queue.ItemIds);
+        Assert.Equal(-1, queue.CurrentIndex);
+    }
+
+    [Fact]
+    public void Enqueue_OnShuffledQueue_AppendsToOriginalSnapshot_RestoreOrderKeepsIt()
+    {
+        var a = Guid.NewGuid();
+        var b = Guid.NewGuid();
+        var c = Guid.NewGuid();
+        var added = Guid.NewGuid();
+        _manager.SetShuffledQueue("device-1", new List<string> { a.ToString(), b.ToString(), c.ToString() }, new Random(9));
+
+        _manager.Enqueue("device-1", added, DeviceQueueManager.QueueInsertPlacement.End);
+        Assert.Contains(added.ToString(), _manager.GetQueue("device-1")!.OriginalItemIds!);
+
+        // Shuffle-off restores the original order WITHOUT dropping the user's
+        // added item (membership survives; its restored position is the end).
+        _manager.RestoreOrder("device-1");
+        DeviceQueue queue = _manager.GetQueue("device-1")!;
+        Assert.Equal(added.ToString(), queue.ItemIds[^1]);
+        Assert.Null(queue.OriginalItemIds);
+    }
+
+    [Fact]
+    public void Enqueue_SurvivesManagerRecreation()
+    {
+        var a = Guid.NewGuid();
+        var b = Guid.NewGuid();
+        var added = Guid.NewGuid();
+        _manager.SetQueue("device-1", new List<string> { a.ToString(), b.ToString() }, 0);
+
+        _manager.Enqueue("device-1", added, DeviceQueueManager.QueueInsertPlacement.AfterCurrent, a);
+        _manager.FirePersistForTest("device-1");
+
+        using var manager2 = new DeviceQueueManager(_tempDir, _logger);
+        DeviceQueue restored = manager2.GetQueue("device-1")!;
+        Assert.Equal(
+            new[] { a, added, b }.Select(g => g.ToString()),
+            restored.ItemIds);
+        Assert.Equal(0, restored.CurrentIndex);
+    }
+
+    // =====================================================================
     // Edge cases
     // =====================================================================
 
