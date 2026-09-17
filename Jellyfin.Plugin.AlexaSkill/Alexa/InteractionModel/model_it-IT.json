@@ -1931,6 +1931,8 @@
           "Di mettere {episode_position} episodio di {series_name}",
           "Di pleiare {episode_position} episodio di {series_name}",
           "Di ascoltare {episode_position} episodio di {series_name}",
+          "Di riprodurre l'ultimo episodio di {series_name}",
+          "Di riprodurre il prossimo episodio di {series_name}",
           "Di riprodurre la serie {series_name}",
           "Di suonare la serie {series_name}",
           "Di mettere la serie {series_name}",
