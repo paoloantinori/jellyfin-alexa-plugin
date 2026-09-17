@@ -456,7 +456,7 @@
           }
         ],
         "samples": [
-          "{series_name} の{episode_position}エピソードを再生して",
+          "{series_name} の {episode_position} エピソードを再生して",
           "{series_name} を続きから観て"
         ]
       },
