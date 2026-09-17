@@ -4,10 +4,10 @@ title: >-
   Audiobook launch-path consolidation: migrate the 3 pre-existing
   bookKey/position chains, unify the AudioBook type-check idiom, decide the
   PlayBook resume ShouldEndSession shape
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-15 05:17'
-updated_date: '2026-09-17 13:34'
+updated_date: '2026-09-17 14:56'
 labels:
   - tech-debt
   - audiobook
@@ -71,3 +71,9 @@ JF-567 execution (2026-09-17), per-item verdicts:
 
 Verification: dotnet build both TFMs 0 warnings (Debug and Release), dotnet test 4046 passed / 0 failed / 0 skipped on EACH of net9.0 and net10.0 (includes the new pinning test; items 6 and 7 above stay deferred as designed).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+DONE (commits 14935808 + 2856cdcd). (1) The three inlined bookKey/tracker chains (PlayBook, YesIntent useResumePlaylist arm, LaunchRequest read-only) route through ResumeMath.GetAudiobookBookKey/GetAudiobookStartTicks with the JF-581 reconciliation documented (tracker and the store fallback are complementary layers, tracker wins when >0); the BuildAudiobookResumeResponse parentId ternary stays dashed-Guid deliberately (URL segment vs the NormalizeKey-canonicalized read, documented in place). (2) The three fresh-launch sites compose through the new PlaybackLaunchBuilder.BuildAudiobookVideoAppLaunchResponseAsync (JF-501 progressive announce and the screenless-degradation rationale owned once; YesIntent's dead announceLocale dropped). (3) AudioBook detection unifies behind Alexa/Util/AudiobookItems.IsAudioBook (the is-form; ALL sites migrated in the closure pass - the 5 string-comparison ones plus the 3 remaining raw is-sites the /simplify review found - and the two stale server-assembly comments removed). (4) DECIDED per the binding reference: PlayBook's VideoApp resume ShouldEndSession=true was an incidental 2026-06-14 copy from the sibling AudioPlayer path (no incident, no pin; git log -S verified), violating the reference and forfeiting the 30s closed-mic window; now null, pinned by test; the review verified the JF-387 interceptor consequence (attributes now copy on this in-session shape, the standing exposure of the whole VideoApp family) and that the AudioPlayer resume keeps play-true per JF-299. (5) Both tracker test fixtures migrated to CreatePositionTracker. REVIEW MAJORS (pre-existing bugs on this exact chain, fixed in the follow-up commit): the ResumeIntent session-tail passed MILLISECONDS into the helper's ticks fallback (a 45-minute resume became 4.5 minutes; the call site now converts once mirroring the pinned YesIntent idiom), and the cold-tracker fallback sliced the whole-book concat timeline with CHAPTER-relative ticks (chapter 12 at 20min landed inside chapter 1); both resume paths now gate on the TRACKER: warm slices, cold-with-chapter-progress flat-resumes the chapter at its own offset (the LaunchRequest offer discipline), genuinely-fresh keeps the fresh VideoApp launch. The bug-pinning test (it asserted the server-progress slice) rewritten to the corrected contract. Minor noted, not fixed (pre-existing asymmetry): PlayBook's and YesIntent's resume announces ride the final response instead of the JF-501 progressive vehicle. Items 6 (chapter-selection degrade) and 7 (pre-tail token guard) remain deferred in the notes as scoped. Gates: /simplify 4-angle pass (S1-S4 applied: the stale migration doc, the three remaining is-sites + doc claim scoped, unqualified symbol, log template; R1/R2/S5 skipped as optional with reasons); code-review high via feature-dev:code-reviewer: the ShouldEndSession flip verified correct and required, both majors applied, all hunt questions answered clean. Suite 4046/4046 both TFMs, Release 0 warnings.
+<!-- SECTION:FINAL_SUMMARY:END -->
