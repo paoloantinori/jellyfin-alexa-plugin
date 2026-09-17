@@ -3,10 +3,10 @@ id: JF-565
 title: >-
   Episode resume producer: thread UserData position into the episode HLS launch
   URL (the ?start= slice from JF-499 has no caller)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-14 22:38'
-updated_date: '2026-09-17 05:12'
+updated_date: '2026-09-17 07:45'
 labels:
   - episode
   - resume
@@ -55,3 +55,9 @@ TESTS (15 new): PlaybackLaunchBuilderEpisodeResumeTests (6: remux episode mints 
 
 LEFT FOR THE USER (on-device verification, the task's own item 5): resume mid-episode on the Echo Show via "continue watching" / "next episode" with an EAC3-family episode, and confirm the seek bar shows the sliced-relative timeline (the same known limitation as audiobooks: the resume clock is relative to the resume point, not the episode absolute timeline - unavoidable, #EXT-X-START is ignored by the Echo). Also worth a live look: a Static-routed (h264+aac) episode still restarts from 0 on a resume ask (platform limit, announce over-claims there), and the NextUp Information seed line fires when the server drops a UserData write.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+DONE (commit d7a4f1ac). The dormant JF-499 ?start= slicing machinery has its first production caller. Position source: DeviceQueueManager.ResolveResumeTicks (static, beside GetStoredPositionTicks, the store it arbitrates) implements the JF-581 arbitration as one shared helper - UserData wins when positive, a PLAYED item returns 0 (completion legitimately resets UserData; stale stored positions must not resurrect), otherwise the plugin-owned ItemPositionState seeds with the Information diagnostic naming the write loss. LaunchRequestHandler.BuildDeviceLastPlayedOffer was refactored onto it (inline copy + single-caller helper deleted; ResumeSeedFallbackTests pins unchanged) and TvNextUpService became the second consumer (the site where the fallback arm is LIVE: the episode comes from the NextUp query so UserData can genuinely read 0 while the store holds the stop). URL plumbing: GetEpisodeVideoAudioUrl(itemId, startTicks) mirroring the GetEpisodeAudioUrl model; GetVideoAppLaunchUrl threads it EPISODE-only (structural gate), with the Static route returning before the position is consulted and a FAIL-CLOSED runtime clamp (review minor: the original fail-open form could mint an unclamped slice serving an empty playlist on the zero-runtime .strm shape; an unknown runtime now degrades to fresh start, matching the clamp's own conservative-truth rationale). Per-site decisions over all 11 call sites: mint (resume is the ask) at ContinueWatchingIntentHandler, ResumeIntentHandler fallback-4, TvNextUpService; kept fresh (0, pinned by tests) at PlayEpisode explicit S/E, StartOver, YesIntent disambiguation, PlayVideo, SearchMedia, PlayRandom; unreachable (Movie-only branches) at Recommend and AplUserEventHandler carousel. MAJOR review finding applied: the resume announce is gated on actual DELIVERY via the new GetVideoAppLaunchUrl(item, user, startTicks, out resumeDelivered) overload - a Static-routed or clamped launch now speaks the plain now-playing shape instead of 'resuming from 12:34' the device will not honor; MOVIES keep the pre-existing informational positional announce (documented no-seek limitation). /simplify applied: token mint hoisted out of the duplicated ternary in the episode query composition. Hunt checks clean: ticks contract end to end (mint → query → [FromQuery] → EXTINF slice), no position double-count (the video remux encode takes no startTicks; the slice is per-request at serve time), shouldEndSession null throughout. Tests: 15 new (4 mint red-first, delivery-gate pins, fail-closed clamp edges, fresh-play controls, store-fallback seed with a real DeviceQueueManager), fixture updates to the fail-closed contract. Suite 4028/4028 both TFMs, Release 0 warnings. Known limits (platform): the sliced seek bar spans resume-point to end (relative clock, same as audiobooks); a Static-routed episode's resume ask plays from 0 with the plain announce; movies unchanged. On-device verification left for the user: resume mid-EAC3-episode on the Echo Show and confirm the sliced-relative timeline and the NextUp seed log line.
+<!-- SECTION:FINAL_SUMMARY:END -->
