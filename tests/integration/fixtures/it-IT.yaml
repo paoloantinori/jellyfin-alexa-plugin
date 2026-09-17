@@ -1154,22 +1154,29 @@ tests:
       playlist: {}
 
   # -------------------------------------------------------------------------
-  # 34. PlayNextEpisodeIntent (series_name), JF-324
+  # 34. PlayNextEpisodeIntent (series_name + episode_position), JF-324/JF-583
   # Next/latest-episode and continue-watching phrasings. NOTE: "Continua a
   # guardare {series_name}" shares its carrier region with the slotless
   # ContinueWatchingIntent sample "Continua a guardare": the slotted variant is
   # expected to win when a series follows, the bare phrase keeps routing to
   # ContinueWatchingIntent (pinned in section 19).
+  # JF-583: the prossimo/ultimo carriers are slotted through episode_position
+  # (custom EpisodePosition type); prossimo/empty keeps NextUp, ultimo resolves
+  # by recency. The prossimo cases below pin only series_name: episode_position
+  # may fill (prossimo) or stay absent, both valid NextUp shapes.
   # -------------------------------------------------------------------------
   - utterance: "Riproduci il prossimo episodio di breaking bad"
     expected_intent: PlayNextEpisodeIntent
     expected_slots:
       series_name: {}
 
+  # JF-583: the latest phrasing must FILL episode_position (a missed fill would
+  # silently degrade to the NextUp bug this task fixes).
   - utterance: "Metti l'ultimo episodio di stranger things"
     expected_intent: PlayNextEpisodeIntent
     expected_slots:
       series_name: {}
+      episode_position: {}
 
   # 2026-09-08 live probe (JF-324 PART 1 confirm): the platform routes the
   # slotted "Continua a guardare {series}" to the slotless ContinueWatchingIntent
@@ -1190,9 +1197,13 @@ tests:
       series_name: {}
 
   - utterance: "Di riprodurre l'ultimo episodio di stranger things"
+    # KNOWN-RED (JF-585): the greedy 'Di riprodurre {genre}' SearchQuery sibling
+    # wins this prefix deterministically (10/10 probes); the row documents the
+    # desired behavior and goes green when JF-585 lands.
     expected_intent: PlayNextEpisodeIntent
     expected_slots:
       series_name: {}
+      episode_position: {}
 
   - utterance: "Di mettere la serie dark"
     expected_intent: PlayNextEpisodeIntent
