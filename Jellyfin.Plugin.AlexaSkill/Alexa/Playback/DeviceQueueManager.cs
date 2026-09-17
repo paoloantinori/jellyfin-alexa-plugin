@@ -266,6 +266,58 @@ public sealed class DeviceQueueManager : IDisposable
     }
 
     /// <summary>
+    /// JF-581/JF-565: the ONE UserData-first, plugin-store-fallback resume-position
+    /// resolution for a read-side seed. UserData is preferred (cross-client, survives
+    /// plugin data loss); when it reads non-positive the plugin-owned
+    /// <see cref="GetStoredPositionTicks"/> backs it up, because the live 2026-09-16
+    /// incident proved the server-side UserData writes can be lost for Alexa sessions
+    /// while this store (written unconditionally by the PlaybackStopped handler) held
+    /// the real ticks. A PLAYED item is the exception: completion legitimately resets
+    /// UserData to 0, and the store still holds an older mid-listen position that must
+    /// not resurrect over the finished listen. Static (not instance) so a caller with
+    /// no manager reference (cold plugin instance) resolves without a null dance; a
+    /// null manager simply means no fallback arm.
+    /// </summary>
+    /// <param name="queueManager">The manager owning the per-item position store; null disables the fallback arm.</param>
+    /// <param name="deviceId">The Alexa device ID the stored position is scoped to.</param>
+    /// <param name="itemId">The item ID in any GUID format.</param>
+    /// <param name="userDataTicks">The UserData playback position the caller already read (0 when unread).</param>
+    /// <param name="userDataPlayed">Whether UserData marks the item Played.</param>
+    /// <param name="logger">Optional logger; the seed fires an Information line (the server-side write-loss diagnostic).</param>
+    /// <param name="logLabel">Caller identity for the seed log line.</param>
+    /// <returns>The effective resume position in ticks (0 when nothing is stored).</returns>
+    public static long ResolveResumeTicks(
+        DeviceQueueManager? queueManager,
+        string? deviceId,
+        string itemId,
+        long userDataTicks,
+        bool userDataPlayed,
+        ILogger? logger = null,
+        string logLabel = "ResumeSeed")
+    {
+        if (userDataTicks > 0)
+        {
+            return userDataTicks;
+        }
+
+        if (userDataPlayed)
+        {
+            return 0;
+        }
+
+        long? storedTicks = queueManager?.GetStoredPositionTicks(deviceId ?? string.Empty, itemId);
+        if (storedTicks != null)
+        {
+            logger?.LogInformation(
+                "{Label}: item {ItemId} UserData position was 0 (server-side write loss, JF-581); seeded from ItemPositionState: {Ticks} ticks",
+                logLabel, itemId, storedTicks.Value);
+            return storedTicks.Value;
+        }
+
+        return 0;
+    }
+
+    /// <summary>
     /// Bounds both launch-scope dictionaries exactly like the sibling trims
     /// (JF-514/JF-522): over the cap, remove the oldest entries whose item is not in
     /// the current queue; entries for queued items all stay.

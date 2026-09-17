@@ -10,10 +10,12 @@ using global::Alexa.NET.Response;
 using global::Alexa.NET.Response.Directive;
 using Alexa.NET.Assertions;
 using Jellyfin.Data.Enums;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Entities;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
+using MediaBrowser.Model.Entities;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
@@ -220,6 +222,48 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
         Assert.Null(response.Response.OutputSpeech);
         Assert.True(handler.Progressive.Contains("Test Movie"), "progressive announce must speak the movie title");
         Assert.True(handler.Progressive.Contains("30m"), "progressive announce must speak the resume position");
+    }
+
+    /// <summary>
+    /// JF-565: the server-progress fallback is a RESUME ask, so an episode routed to
+    /// the HLS remux must carry the stored position on the launch URL (?start=):
+    /// VideoApp has no offset parameter, the slice IS the resume mechanism.
+    /// </summary>
+    [Fact]
+    public async Task ServerProgressFallback_RemuxEpisode_MintsStartSliceOnLaunchUrl()
+    {
+        var handler = CreateHandler();
+        var request = CreateResumeRequest();
+        var context = CreateContextNoAudioPlayer();
+
+        var user = TestHelpers.CreateTestUser();
+        _fx.Config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
+        {
+            Id = user.Id,
+            AnnouncePositionOnResume = false
+        });
+
+        var session = CreateEmptySession();
+
+        var episodeId = Guid.NewGuid();
+        var episode = new TestHelpers.TestEpisodeWithStreams(
+            "The Convention",
+            episodeId,
+            TestHelpers.TestStream(MediaStreamType.Video, "h264"),
+            TestHelpers.TestStream(MediaStreamType.Audio, "eac3"));
+        episode.RunTimeTicks = TimeSpan.FromMinutes(30).Ticks;
+
+        _fx.LibraryManager.Setup(x => x.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { episode });
+
+        long resumeTicks = TimeSpan.FromMinutes(10).Ticks;
+        _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<JellyfinUser>(), It.IsAny<BaseItem>()))
+            .Returns(new UserItemData { Key = "test", PlaybackPositionTicks = resumeTicks, Played = false });
+
+        var response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        var directive = Assert.IsType<VideoAppLaunchDirective>(Assert.Single(response.Response.Directives));
+        Assert.Contains($"/alexaskill/api/video-audio/episode/{episodeId}/stream.m3u8?start={resumeTicks}&token=", directive.VideoItem.Source, StringComparison.Ordinal);
     }
 
     [Fact]

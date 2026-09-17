@@ -3,9 +3,10 @@ id: JF-565
 title: >-
   Episode resume producer: thread UserData position into the episode HLS launch
   URL (the ?start= slice from JF-499 has no caller)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-14 22:38'
+updated_date: '2026-09-17 05:12'
 labels:
   - episode
   - resume
@@ -34,3 +35,23 @@ Follow-up from JF-499 (2026-09-14): the episode remux endpoint now honors ?start
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Implemented 2026-09-17, TDD red-first (the four mint tests failed on the pre-change tree with no ?start= on the launch URL; the fresh-play pin was green as the control), tree left uncommitted for the orchestrator gates.
+
+URL PLUMBING (PlaybackLaunchBuilder): GetEpisodeVideoAudioUrl gained the `long startTicks = 0` overload exactly mirroring the sibling GetEpisodeAudioUrl (query becomes `?start=<ticks>&token=` only when ticks > 0; the token mint is unchanged). GetVideoAppLaunchUrl gained `long startTicks = 0` and threads it ONLY on the remux/HLS tier. Scope gate is STRUCTURAL, inside the builder: (a) EPISODE-only, `item is TV.Episode`, so a remux-routed Movie ignores the position (task scope: movie resume keeps the announced-position-only shape; the remux endpoint serves movies too, so the gate is what keeps the task episode-scoped); (b) the Static route returns before the position is ever consulted (the static /Videos stream has no seek mechanism; that platform limit is why the slice exists); (c) JF-521-clamp mirror: when RunTimeTicks is known and the position reaches or exceeds it (only stale state can), the launch degrades to a fresh start (an Information line names it) instead of slicing to a zero-length playlist. The clamp is guarded on a KNOWN runtime, so the JF-581 zero-runtime .strm shape skips it.
+
+POSITION SOURCE (UserData-first, ItemPositionState-fallback, the JF-581 pattern): extracted as the shared static `DeviceQueueManager.ResolveResumeTicks(queueManager, deviceId, itemId, userDataTicks, userDataPlayed, logger?, logLabel)` beside GetStoredPositionTicks (the store it arbitrates): UserData ticks win when positive; a PLAYED item returns 0 (completion legitimately resets UserData; the stale stored mid-listen position must not resurrect); otherwise the plugin-owned ItemPositionState seeds (with the Information diagnostic naming the JF-581 write loss). Static-with-manager-param (not instance) so a caller with no manager reference (cold plugin) resolves without a null dance; LaunchRequestHandler.BuildDeviceLastPlayedOffer was refactored onto this helper (its inline copy and the single-caller TryGetItemPositionStateTicks accessor deleted; the ResumeSeedFallbackTests suite pins the behavior unchanged) and TvNextUpService is the second consumer, so the resolution logic now lives ONCE.
+
+PER-CALL-SITE DECISIONS (every GetVideoAppLaunchUrl caller enumerated at HEAD):
+- MINT (resume is the user's ask): ContinueWatchingIntentHandler (the scan's resumeTicks, already spoken in the announce); ResumeIntentHandler fallback-4 video branch (same shape); TvNextUpService.PlayNextUpEpisodeAsync (NextUp runs EnableResumable so an in-progress episode IS the next one and the announce already said "Resuming"; position resolved via the shared helper because this is the one mint site where the JF-581 fallback arm is LIVE - the episode comes from the NextUp query, not a UserData progress scan, so UserData can genuinely read 0 while the store holds the real stop).
+- NOT MINTED, no code change (fresh is the user's ask; the default 0 keeps today's behavior): PlayEpisodeIntentHandler explicit season/episode path (by-name start-over semantics; pinned by test), StartOverIntentHandler (the intent's entire point; it also clears server-side progress first), YesIntentHandler.PlayVideo (disambiguation confirm), PlayVideoIntentHandler, SearchMediaIntentHandler (both by-name plays that may launch episodes; their "Resuming X from Y" announce stays informational - honest for movies which can never slice, and the conservative reading for episodes), PlayRandomIntentHandler (random pick).
+- EPISODES CANNOT REACH THE CALL SITE (no decision needed): RecommendIntentHandler (VideoApp branch is Movie-only; the query is IsPlayed=false anyway) and AplUserEventHandler (the VideoApp branch is Movie-only; tapped episodes route to the AudioPlayer path, which already resumes via GetResumeOffset).
+- ContinueWatching and ResumeIntent-4 do NOT route through the store fallback: their items come FROM the UserData progress scan (FindLastPlayedItemWithProgress), so the fallback arm would be dead code there; this matches JF-581's documented reader-side asymmetry (those seeds heal via the writer-side self-verification).
+
+TESTS (15 new): PlaybackLaunchBuilderEpisodeResumeTests (6: remux episode mints start / no-start keeps token-only URL / static route ignores / movie ignores with the episode-only scope pin / at-or-beyond-runtime clamps to fresh / strictly-inside-runtime still slices); DeviceQueueManagerTests +4 ResolveResumeTicks cases (UserData wins, Played guard, store seeds the 0-read shape, null-manager/no-store zero); handler wiring: ContinueWatching mint, ResumeIntent fallback-4 mint, TvNextUp mint + TvNextUp UserData-write-loss seed from ItemPositionState (Plugin.Instance queue swap, the ResumeSeedFallbackTests pattern); PlayEpisode explicit-S/E fresh-play pin (progress present, no start minted). Full suite 4028/4028 passed on BOTH net9.0 and net10.0 on the final tree; dotnet build -c Release 0 warnings 0 errors. VideoApp response shapes untouched (shouldEndSession stays null; no AudioPlayer-path changes).
+
+LEFT FOR THE USER (on-device verification, the task's own item 5): resume mid-episode on the Echo Show via "continue watching" / "next episode" with an EAC3-family episode, and confirm the seek bar shows the sliced-relative timeline (the same known limitation as audiobooks: the resume clock is relative to the resume point, not the episode absolute timeline - unavoidable, #EXT-X-START is ignored by the Echo). Also worth a live look: a Static-routed (h264+aac) episode still restarts from 0 on a resume ask (platform limit, announce over-claims there), and the NextUp Information seed line fires when the server drops a UserData write.
+<!-- SECTION:NOTES:END -->

@@ -18,6 +18,7 @@ using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
+using MediaBrowser.Model.Entities;
 using MediaBrowser.Controller.TV;
 using MediaBrowser.Model.Querying;
 using MediaBrowser.Model.Session;
@@ -126,16 +127,24 @@ public class PlayNextEpisodeIntentHandlerTests : PluginTestBase
         return series;
     }
 
-    private global::MediaBrowser.Controller.Entities.TV.Episode SetupNextUp(string name, Guid seriesId)
+    private global::MediaBrowser.Controller.Entities.TV.Episode SetupNextUp(string name, Guid seriesId, bool remux = false)
     {
-        var episode = new global::MediaBrowser.Controller.Entities.TV.Episode
-        {
-            Name = name,
-            Id = Guid.NewGuid(),
-            ParentIndexNumber = 3,
-            IndexNumber = 2,
-            SeriesId = seriesId
-        };
+        // remux=true shapes the episode for the JF-565 resume pins: an eac3 stream
+        // set routes the launch through the episode remux, and the known runtime
+        // satisfies the fail-closed slice clamp (an unknown runtime cannot prove a
+        // mid-episode position). The default stays Static-shaped for the plain
+        // launch pins.
+        global::MediaBrowser.Controller.Entities.TV.Episode episode = remux
+            ? new TestHelpers.TestEpisodeWithStreams(
+                name,
+                Guid.NewGuid(),
+                TestHelpers.TestStream(MediaStreamType.Video, "h264"),
+                TestHelpers.TestStream(MediaStreamType.Audio, "eac3"))
+            : new global::MediaBrowser.Controller.Entities.TV.Episode { Name = name };
+        episode.ParentIndexNumber = 3;
+        episode.IndexNumber = 2;
+        episode.SeriesId = seriesId;
+        episode.RunTimeTicks = TimeSpan.FromMinutes(30).Ticks;
         _tvSeriesManagerMock
             .Setup(t => t.GetNextUp(It.IsAny<NextUpQuery>(), It.IsAny<DtoOptions>()))
             .Returns(new QueryResult<BaseItem>(new[] { episode }));
@@ -243,7 +252,7 @@ public class PlayNextEpisodeIntentHandlerTests : PluginTestBase
         var jellyfinUser = new Jellyfin.Database.Implementations.Entities.User("testuser", "test", "test") { Id = Guid.NewGuid() };
         _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>())).Returns(jellyfinUser);
         var series = SetupSeriesFound();
-        SetupNextUp("The Convention", series.Id);
+        SetupNextUp("The Convention", series.Id, remux: true);
         NextUpQuery? captured = null;
         _tvSeriesManagerMock
             .Setup(t => t.GetNextUp(It.IsAny<NextUpQuery>(), It.IsAny<DtoOptions>()))
@@ -338,7 +347,7 @@ public class PlayNextEpisodeIntentHandlerTests : PluginTestBase
 
         SetupUserMock();
         var series = SetupSeriesFound();
-        SetupNextUp("The Convention", series.Id);
+        SetupNextUp("The Convention", series.Id, remux: true);
         _userDataManagerMock
             .Setup(u => u.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
             .Returns(new UserItemData { Key = "test", PlaybackPositionTicks = TimeSpan.FromMinutes(5).Ticks });
@@ -369,7 +378,7 @@ public class PlayNextEpisodeIntentHandlerTests : PluginTestBase
 
         SetupUserMock();
         var series = SetupSeriesFound();
-        SetupNextUp("The Convention", series.Id);
+        SetupNextUp("The Convention", series.Id, remux: true);
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 

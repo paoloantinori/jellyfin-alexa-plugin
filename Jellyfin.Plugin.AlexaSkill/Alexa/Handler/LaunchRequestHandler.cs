@@ -250,24 +250,18 @@ public class LaunchRequestHandler : BaseHandler
             positionTicks = userData?.PlaybackPositionTicks ?? 0;
         }
 
-        // JF-581: the live 12.1 incident proved the server-side UserData writes never
-        // land for Alexa sessions (PlaybackStopped reported the real ticks, the store
-        // read 0), so a 0 here is untrustworthy. Fall back to the plugin's own
-        // per-item position store, written unconditionally by PlaybackStopped and
-        // immune to that loss. A PLAYED item is the exception: completion legitimately
-        // resets UserData to 0 (Played=true), and the store still holds an older
-        // mid-listen position that must not resurrect over the finished listen.
-        if (positionTicks <= 0 && userData?.Played != true)
-        {
-            long? storedTicks = TryGetItemPositionStateTicks(lastPlayedItemId, context);
-            if (storedTicks != null)
-            {
-                positionTicks = storedTicks.Value;
-                Logger.LogInformation(
-                    "LaunchResume: device last-played item {ItemId} UserData position was 0 (server-side write loss); seeded from ItemPositionState: {Ticks} ticks",
-                    lastPlayedItemId, storedTicks.Value);
-            }
-        }
+        // JF-581 seed resolution, shared with the JF-565 episode resume slice:
+        // UserData first, the plugin-owned ItemPositionState when the server-side
+        // write was lost, never over a Played item. The rationale comment lives
+        // once, on DeviceQueueManager.ResolveResumeTicks.
+        positionTicks = DeviceQueueManager.ResolveResumeTicks(
+            Plugin.Instance?.DeviceQueueManager,
+            context.System?.Device?.DeviceID,
+            lastPlayedItemId,
+            positionTicks,
+            userData?.Played == true,
+            Logger,
+            "LaunchResume");
 
         // For audiobooks with native controls, prefer the segment-based tracker position
         // (accurate for HLS concat playback) and signal resume-via-playlist to YesIntent.
@@ -385,17 +379,6 @@ public class LaunchRequestHandler : BaseHandler
         int audioOffsetMs = (int)Math.Min(TimeSpan.FromTicks(audioTicks).TotalMilliseconds, int.MaxValue);
         return BuildResumeOfferResponse(audioItem, audioItem.Id.ToString(), audioOffsetMs, user, locale, context, session);
     }
-
-    /// <summary>
-    /// JF-581: read the plugin's own per-item position store for an item on the
-    /// requesting device (the "N"-format key PlaybackStopped writes). Returns null
-    /// when the device is unknown, no queue exists, or the item carries no recorded
-    /// position. The store is immune to the server-side UserData write loss the
-    /// resume seed must survive.
-    /// </summary>
-    private static long? TryGetItemPositionStateTicks(string itemId, Context context)
-        => Plugin.Instance?.DeviceQueueManager?.GetStoredPositionTicks(
-            context.System?.Device?.DeviceID ?? string.Empty, itemId);
 
     /// <summary>
     /// JF-581: the screenless audio fallback's Jellyfin-UserData ledger scan declines

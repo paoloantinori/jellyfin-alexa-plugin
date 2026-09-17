@@ -9,9 +9,11 @@ using global::Alexa.NET.Request.Type;
 using global::Alexa.NET.Response;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
+using MediaBrowser.Model.Entities;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
@@ -253,5 +255,42 @@ public class ContinueWatchingIntentHandlerTests : PluginTestBase
         Assert.NotNull(response.Response.Directives?.FirstOrDefault(d => d.GetType().Name.Contains("VideoApp")));
         Assert.Null(response.Response.OutputSpeech);
         Assert.True(handler.Progressive.Contains("Inception"), "progressive announce must speak the movie title");
+    }
+
+    /// <summary>
+    /// JF-565: "continue watching" is a RESUME ask, so an episode routed to the HLS
+    /// remux must carry the stored position on the launch URL (?start=): VideoApp has
+    /// no offset parameter, the slice IS the resume mechanism.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_ResumableRemuxEpisode_MintsStartSliceOnLaunchUrl()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest();
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
+
+        _fx.SetupUserMock();
+
+        var episodeId = Guid.NewGuid();
+        var episode = new TestHelpers.TestEpisodeWithStreams(
+            "The Convention",
+            episodeId,
+            TestHelpers.TestStream(MediaStreamType.Video, "h264"),
+            TestHelpers.TestStream(MediaStreamType.Audio, "eac3"));
+        episode.RunTimeTicks = TimeSpan.FromMinutes(30).Ticks;
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { episode });
+
+        long resumeTicks = TimeSpan.FromMinutes(10).Ticks;
+        _fx.UserDataManager.Setup(u => u.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
+            .Returns(new UserItemData { Key = "test", Played = false, PlaybackPositionTicks = resumeTicks });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        var directive = Assert.IsType<VideoAppLaunchDirective>(Assert.Single(response.Response.Directives));
+        Assert.Contains($"/alexaskill/api/video-audio/episode/{episodeId}/stream.m3u8?start={resumeTicks}&token=", directive.VideoItem.Source, StringComparison.Ordinal);
     }
 }

@@ -10,6 +10,7 @@ using Alexa.NET.Response;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -255,11 +256,29 @@ public sealed class TvNextUpService
         session.NowPlayingQueue = new List<QueueItem> { new QueueItem { Id = episode.Id } };
         session.FullNowPlayingItem = episode;
 
-        // A next-up episode with playback progress is a resume: the announce says so
-        // (VideoApp.Launch cannot honor the offset; the position info is spoken only).
-        long resumeTicks = userDataManager.GetUserData(jellyfinUser, episode)?.PlaybackPositionTicks ?? 0;
+        // A next-up episode with playback progress is a resume: the JF-565 launch
+        // slice restarts at the stored position and the announce says so. The
+        // position resolves UserData-first with the plugin-owned ItemPositionState
+        // as fallback (DeviceQueueManager.ResolveResumeTicks, the JF-581 pattern):
+        // unlike the progress-scan resume seeds, the episode here comes from the
+        // NextUp query, so the UserData-loss case genuinely reads 0 and the store
+        // backs it up.
+        UserItemData? userData = userDataManager.GetUserData(jellyfinUser, episode);
+        long resumeTicks = DeviceQueueManager.ResolveResumeTicks(
+            Plugin.Instance?.DeviceQueueManager,
+            context.System?.Device?.DeviceID,
+            episode.Id.ToString(),
+            userData?.PlaybackPositionTicks ?? 0,
+            userData?.Played == true,
+            _logger,
+            "NextUp");
+        // JF-565 review finding: resolve the launch URL FIRST and gate the resume
+        // wording on whether the position was actually DELIVERED (the Static route
+        // and the runtime clamp both degrade to a fresh start; announcing a resume
+        // the device will not deliver is a false claim).
+        string episodeUrl = _launch.GetVideoAppLaunchUrl(episode, user, resumeTicks, out bool resumeDelivered);
         IOutputSpeech? speech;
-        if (resumeTicks > 0)
+        if (resumeTicks > 0 && resumeDelivered)
         {
             speech = _launch.BuildVideoLaunchSpeech(episode, locale, resumeTicks, _launch.GetAnnounceNowPlaying(user));
         }
@@ -278,12 +297,13 @@ public sealed class TvNextUpService
         // JF-501: the announce is spoken progressively AFTER the source URL has resolved
         // (it is a call argument, so it evaluates first) and BEFORE the final launch
         // response returns, so the fast-start HLS player cannot cut it mid-sentence
-        // (observed case).
+        // (observed case). JF-565: an in-progress next-up episode carries the resolved
+        // position (the ?start= slice).
         return await _launch.BuildVideoAppLaunchResponseAsync(
             context,
             request,
             locale,
-            _launch.GetVideoAppLaunchUrl(episode, user),
+            episodeUrl,
             episode.Name,
             speech).ConfigureAwait(false);
     }

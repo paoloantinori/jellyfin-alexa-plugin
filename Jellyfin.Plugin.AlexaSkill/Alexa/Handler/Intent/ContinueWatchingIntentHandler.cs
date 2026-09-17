@@ -101,13 +101,24 @@ public class ContinueWatchingIntentHandler : BaseHandler
         {
             // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
             // JF-501: the announce is spoken progressively (directive-only final response).
+            // JF-565: "continue watching" is a resume ask, so the launch carries the
+            // stored position (the ?start= slice; VideoApp has no offset parameter).
+            // Review finding: the position-bearing announce is gated on actual
+            // DELIVERY (Static route and the runtime clamp degrade to a fresh start).
+            string resumeUrl = Launch.GetVideoAppLaunchUrl(resumeItem, user, resumeTicks, out bool resumeDelivered);
+            // A MOVIE keeps the pre-existing positional announce (the documented
+            // limitation: VideoApp movies cannot seek, the position is informational).
+            bool claimPosition = resumeDelivered || resumeItem is MediaBrowser.Controller.Entities.Movies.Movie;
+            IOutputSpeech announce = claimPosition
+                ? new PlainTextOutputSpeech(ResponseStrings.Get("NowPlayingWithPosition", locale, resumeItem.Name, ResumeMath.FormatPosition(resumeTicks)))
+                : new PlainTextOutputSpeech(ResponseStrings.Get("NowPlaying", locale, resumeItem.Name));
             return Launch.BuildVideoAppLaunchResponseAsync(
                 context,
                 request,
                 locale,
-                Launch.GetVideoAppLaunchUrl(resumeItem, user),
+                resumeUrl,
                 resumeItem.Name,
-                new PlainTextOutputSpeech(ResponseStrings.Get("NowPlayingWithPosition", locale, resumeItem.Name, ResumeMath.FormatPosition(resumeTicks))));
+                announce);
         }
 
         return Task.FromResult(Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, resumeItem, user, context, offsetMs));

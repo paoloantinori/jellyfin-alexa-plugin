@@ -269,6 +269,46 @@ public class PlayEpisodeIntentHandlerTests : PluginTestBase
             .Returns(new QueryResult<BaseItem>(new[] { episode }));
     }
 
+    /// <summary>
+    /// JF-565 fresh-play pin: an EXPLICIT season/episode request ("play season 3
+    /// episode 2") is a relaunch-from-scratch ask, so even an episode with stored
+    /// progress must launch WITHOUT the ?start= resume slice.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_ExplicitNumberedRemuxEpisodeWithProgress_LaunchesWithoutStartSlice()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(seriesName: "The Office", seasonNumber: "3", episodeNumber: "2");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+        SetupSeriesFound();
+
+        var episode = new TestHelpers.TestEpisodeWithStreams(
+            "The Convention",
+            Guid.NewGuid(),
+            TestHelpers.TestStream(MediaBrowser.Model.Entities.MediaStreamType.Video, "h264"),
+            TestHelpers.TestStream(MediaBrowser.Model.Entities.MediaStreamType.Audio, "eac3"))
+        {
+            IndexNumber = 2
+        };
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Episode))))
+            .Returns(new List<BaseItem> { episode });
+
+        // Stored progress exists and must be IGNORED on this fresh-shaped ask.
+        _userDataManagerMock.Setup(u => u.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
+            .Returns(new UserItemData { Key = "test", Played = false, PlaybackPositionTicks = TimeSpan.FromMinutes(20).Ticks });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        var directive = Assert.IsType<VideoAppLaunchDirective>(Assert.Single(response.Response.Directives));
+        Assert.Contains("/alexaskill/api/video-audio/episode/", directive.VideoItem.Source, StringComparison.Ordinal);
+        Assert.DoesNotContain("start=", directive.VideoItem.Source, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task HandleAsync_SeriesNotFound_ReturnsNotFound()
     {

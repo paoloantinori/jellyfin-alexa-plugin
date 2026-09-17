@@ -30,7 +30,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// chokepoint (with its device last-played ledger and launch-scope records,
 /// metadata, seek card, and the gated music announce), the VideoApp-for-audio
 /// response (native controls) including its screenless degradation back to
-/// AudioPlayer, the VideoApp LAUNCH family (the codec-routed movie/episode URL, the
+/// AudioPlayer, the VideoApp LAUNCH family (the codec-routed movie/episode URL with
+/// the JF-565 episode resume slice it can mint, the
 /// launch response chokepoints with their capability gates, the live-TV channel
 /// launch, the audiobook resume, the JF-501 progressive announce, and the
 /// resume-aware announce speech pair that feeds it), the
@@ -110,17 +111,26 @@ public sealed class PlaybackLaunchBuilder
     /// audio AAC transcode into MPEG-TS segments, for video items whose audio codec has
     /// no decoder on the Echo Show (eac3/ac3/truehd/dts) so the static stream never
     /// starts. Serves movies too: it is the one remux endpoint for every Movie/Episode
-    /// launch that <see cref="GetVideoAppLaunchUrl"/> routes here. Segments are served
+    /// launch that <see cref="GetVideoAppLaunchUrl(BaseItem, Entities.User, long)"/> routes here. Segments are served
     /// by the existing segment endpoint, keyed by the item GUID; the token is the same
     /// item-scoped HMAC as the other video-audio endpoints (JF-309).
+    /// Optional <paramref name="startTicks"/> mints the JF-499 resume slice
+    /// (<c>?start=</c>): the endpoint serves an EXTINF-accurate sliced playlist, which
+    /// is the ONLY resume mechanism a VideoApp launch has (VideoApp.Launch has no
+    /// offset parameter).
     /// Moved here from BaseHandler (JF-315 batch 5) beside the audio-only episode URL:
     /// the VideoApp remux and the AudioPlayer transcode are the two codec-routed
     /// escape hatches from the static stream.
     /// </summary>
     /// <param name="itemId">Id of the video item.</param>
+    /// <param name="startTicks">Resume position in .NET ticks (0 plays from the start).</param>
     /// <returns>URL to the episode remux HLS endpoint.</returns>
-    internal string GetEpisodeVideoAudioUrl(string itemId)
-        => new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/episode/{itemId}/stream.m3u8?token={StreamTokenHelper.Mint(itemId, _config.StreamTokenSecret)}").ToString();
+    internal string GetEpisodeVideoAudioUrl(string itemId, long startTicks = 0)
+    {
+        string token = StreamTokenHelper.Mint(itemId, _config.StreamTokenSecret);
+        string query = startTicks > 0 ? $"?start={startTicks}&token={token}" : $"?token={token}";
+        return new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/episode/{itemId}/stream.m3u8{query}").ToString();
+    }
 
     /// <summary>
     /// Resolve the static-vs-HLS-remux decision for a VideoApp launch by probing the
@@ -160,19 +170,59 @@ public sealed class PlaybackLaunchBuilder
     /// so the routing cannot drift between handlers (live incident 2026-09-05
     /// corr=d9f848a7: the whole PlayNextEpisode chain was correct and the video never
     /// started because the static URL served raw EAC3 bytes).
+    /// JF-565: an EPISODE launch may pass <paramref name="startTicks"/> to mint the
+    /// resume slice (<c>?start=</c>) on the remux URL - VideoApp.Launch has no offset
+    /// parameter, so the slice IS the episode resume mechanism. The position applies
+    /// EPISODE-only by task scope: a Movie launch ignores it (movie resume keeps the
+    /// announced-position-only shape), and the Static route ignores it too (the static
+    /// stream has no seek mechanism at all; that platform limit is why the slice
+    /// exists).
     /// Moved here from BaseHandler (JF-315 batch 5).
     /// </summary>
     /// <param name="item">The Movie/Episode item to launch.</param>
     /// <param name="user">The user for the static stream URL (api_key).</param>
+    /// <param name="startTicks">Resume position in .NET ticks for an EPISODE launch (0/fresh sites pass nothing).</param>
     /// <returns>The VideoApp source URL (static or an episode HLS tier).</returns>
-    public string GetVideoAppLaunchUrl(BaseItem item, Entities.User user)
+    public string GetVideoAppLaunchUrl(BaseItem item, Entities.User user, long startTicks = 0)
+        => GetVideoAppLaunchUrl(item, user, startTicks, out _);
+
+    /// <summary>
+    /// The delivery-aware form (JF-565 review finding): <paramref name="resumeDelivered"/>
+    /// tells the caller whether the position actually reached the launch URL, so the
+    /// spoken announce cannot claim a resume the device will not deliver. False when
+    /// the route is Static (no seek mechanism), when the item is not an Episode
+    /// (task scope), or when the clamp degraded the slice to a fresh start.
+    /// </summary>
+    public string GetVideoAppLaunchUrl(BaseItem item, Entities.User user, long startTicks, out bool resumeDelivered)
     {
         VideoAppStreamDecision decision = ResolveVideoAppStreamDecision(item);
         _logger.LogDebug("VideoApp launch routing for '{ItemName}' ({ItemId}): {Reason}", item.Name, item.Id, decision.Reason);
 
-        return decision.Route == VideoAppStreamRoute.Static
-            ? GetVideoStreamUrl(item.Id.ToString(), user)
-            : GetEpisodeVideoAudioUrl(item.Id.ToString());
+        if (decision.Route == VideoAppStreamRoute.Static)
+        {
+            resumeDelivered = false;
+            return GetVideoStreamUrl(item.Id.ToString(), user);
+        }
+
+        // JF-521 clamp, the episode-slice mirror: a stored position at or beyond the
+        // runtime cannot be a legitimate mid-episode resume (only stale state reaches
+        // it), and the slice would serve a zero-length playlist, so the fresh start
+        // is the conservative truth. An UNKNOWN runtime cannot prove the position is
+        // within the content (the zero-runtime .strm shape), so it fails closed to a
+        // fresh start too (review finding: the fail-open form could mint an
+        // unclamped slice that serves an empty playlist).
+        long sliceTicks = item is MediaBrowser.Controller.Entities.TV.Episode ? startTicks : 0;
+        long? runtimeTicks = item.RunTimeTicks;
+        if (sliceTicks > 0 && (runtimeTicks is not > 0 || sliceTicks >= runtimeTicks.Value))
+        {
+            _logger.LogInformation(
+                "VideoApp launch of '{ItemName}' ({ItemId}): resume position {StartTicks} ticks cannot be proven within the item runtime ({RuntimeTicks} ticks); launching from the start",
+                item.Name, item.Id, sliceTicks, runtimeTicks);
+            sliceTicks = 0;
+        }
+
+        resumeDelivered = sliceTicks > 0;
+        return GetEpisodeVideoAudioUrl(item.Id.ToString(), sliceTicks);
     }
 
     /// <summary>
@@ -375,7 +425,7 @@ public sealed class PlaybackLaunchBuilder
     /// </summary>
     /// <param name="context">The Alexa context, for device capability detection.</param>
     /// <param name="locale">The request locale, for the capability Tell string.</param>
-    /// <param name="sourceUrl">The VideoApp source URL (from <see cref="GetVideoAppLaunchUrl"/> or the live-TV resolver).</param>
+    /// <param name="sourceUrl">The VideoApp source URL (from <see cref="GetVideoAppLaunchUrl(BaseItem, Entities.User, long)"/> or the live-TV resolver).</param>
     /// <param name="title">The video item metadata title.</param>
     /// <param name="outputSpeech">Optional now-playing announce.</param>
     /// <returns>The VideoApp.Launch response, or the VideoRequiresScreen Tell on a device without the VideoApp interface.</returns>
@@ -438,7 +488,7 @@ public sealed class PlaybackLaunchBuilder
     /// <param name="context">The Alexa context, for device capability detection.</param>
     /// <param name="request">The skill request, for the progressive-response vehicle.</param>
     /// <param name="locale">The request locale, for the capability Tell string.</param>
-    /// <param name="sourceUrl">The VideoApp source URL (from <see cref="GetVideoAppLaunchUrl"/> or the live-TV resolver).</param>
+    /// <param name="sourceUrl">The VideoApp source URL (from <see cref="GetVideoAppLaunchUrl(BaseItem, Entities.User, long)"/> or the live-TV resolver).</param>
     /// <param name="title">The video item metadata title.</param>
     /// <param name="outputSpeech">Optional now-playing announce; spoken progressively when the request type allows, else attached to the final response.</param>
     /// <returns>The VideoApp.Launch response, or the VideoRequiresScreen Tell on a device without the VideoApp interface.</returns>
@@ -842,7 +892,11 @@ public sealed class PlaybackLaunchBuilder
     /// <summary>
     /// Resume-aware video-launch announce: "Resuming X from Y" when the user has playback
     /// progress, else the now-playing announce. VideoApp.Launch cannot honor the offset, so
-    /// this only informs the user where they left off (playback still starts from the beginning).
+    /// this only informs the user where they left off (playback still starts from the
+    /// beginning) - except where JF-565 applies: a caller that passes the position into
+    /// <see cref="GetVideoAppLaunchUrl(BaseItem, Entities.User, long)"/> for an EPISODE slices the playlist and really
+    /// resumes (TvNextUpService); the movie-shaped and fresh-play callers keep the
+    /// informational-only meaning.
     /// The fresh-play announce (resumeTicks == 0) is suppressed when announceOn is false; the
     /// resume announce is always spoken (position info, not the now-playing readout).
     /// Moved here from BaseHandler (JF-315 batch 9): the announce speech pair the

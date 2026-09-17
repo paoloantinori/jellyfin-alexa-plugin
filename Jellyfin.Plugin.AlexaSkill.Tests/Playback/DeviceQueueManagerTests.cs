@@ -649,4 +649,74 @@ public class DeviceQueueManagerTests : IDisposable
         DeviceQueue q = _manager.GetOrCreateQueue("dev");
         Assert.Equal(1234L, q.ItemPositionState["a"]);
     }
+
+    // =====================================================================
+    // ResolveResumeTicks (JF-581 seed resolution, shared by the JF-565 slice)
+    // =====================================================================
+
+    /// <summary>
+    /// UserData-first: a healthy UserData position wins over anything the plugin
+    /// store holds.
+    /// </summary>
+    [Fact]
+    public void ResolveResumeTicks_UserDataPositive_WinsOverStore()
+    {
+        var itemId = Guid.NewGuid();
+        long userDataTicks = TimeSpan.FromMinutes(10).Ticks;
+        SeedStoredPosition("dev", itemId, TimeSpan.FromMinutes(99).Ticks);
+
+        long resolved = DeviceQueueManager.ResolveResumeTicks(_manager, "dev", itemId.ToString(), userDataTicks, userDataPlayed: false);
+
+        Assert.Equal(userDataTicks, resolved);
+    }
+
+    /// <summary>
+    /// The JF-581 Played guard: a completed item legitimately reads UserData 0, and
+    /// the stale stored mid-listen position must not resurrect over the finished
+    /// listen.
+    /// </summary>
+    [Fact]
+    public void ResolveResumeTicks_PlayedItem_DoesNotResurrectStoredPosition()
+    {
+        var itemId = Guid.NewGuid();
+        long staleTicks = TimeSpan.FromMinutes(60).Ticks;
+        SeedStoredPosition("dev", itemId, staleTicks);
+
+        long resolved = DeviceQueueManager.ResolveResumeTicks(_manager, "dev", itemId.ToString(), 0, userDataPlayed: true);
+
+        Assert.Equal(0, resolved);
+    }
+
+    /// <summary>
+    /// The live write-loss shape: UserData reads 0 while the plugin-owned store holds
+    /// the real stop position; the store seeds the resume.
+    /// </summary>
+    [Fact]
+    public void ResolveResumeTicks_UserDataZero_SeedsFromStore()
+    {
+        var itemId = Guid.NewGuid();
+        long storedTicks = 3641180000; // the JF-581 incident's real stop position
+        SeedStoredPosition("dev", itemId, storedTicks);
+
+        long resolved = DeviceQueueManager.ResolveResumeTicks(_manager, "dev", itemId.ToString(), 0, userDataPlayed: false);
+
+        Assert.Equal(storedTicks, resolved);
+    }
+
+    /// <summary>
+    /// Cold-manager and cold-store shapes resolve 0 (no manager reference, unknown
+    /// device, or nothing recorded): callers treat 0 as "play from the start".
+    /// </summary>
+    [Fact]
+    public void ResolveResumeTicks_NoManagerOrNoStoredPosition_Zero()
+    {
+        var itemId = Guid.NewGuid();
+
+        Assert.Equal(0, DeviceQueueManager.ResolveResumeTicks(null, "dev", itemId.ToString(), 0, userDataPlayed: false));
+        Assert.Equal(0, DeviceQueueManager.ResolveResumeTicks(_manager, "dev", itemId.ToString(), 0, userDataPlayed: false));
+        Assert.Equal(0, DeviceQueueManager.ResolveResumeTicks(_manager, null, itemId.ToString(), 0, userDataPlayed: false));
+    }
+
+    private void SeedStoredPosition(string deviceId, Guid itemId, long ticks)
+        => _manager.GetOrCreateQueue(deviceId).ItemPositionState[itemId.ToString("N")] = ticks;
 }
