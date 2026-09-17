@@ -3,10 +3,10 @@ id: JF-578
 title: >-
   Adopt queue rehydration in AddToQueueIntentHandler via a shared both-stores
   queue-membership writer (3 coupled changes, deferred from JF-577)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-16 13:49'
-updated_date: '2026-09-17 11:39'
+updated_date: '2026-09-17 13:21'
 labels:
   - reliability
   - queue
@@ -69,3 +69,9 @@ Full suite `dotnet test` (no --no-build): 4044/4044 passed on net9.0 AND net10.0
 - Non-wiped widening, identical to the JF-577/579 adoptions: a populated session queue with a null now-playing item and a coherent member token now counts as "current" (the add tells instead of launching).
 - DOD items 9/10 (/simplify, /code-review) intentionally left to the orchestrator's gates per the task instructions (the JF-577/JF-579 precedent).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+DONE (commit 7973626d). The both-stores queue-membership writer shipped in two legs per the JF-574 layering: DeviceQueueManager.Enqueue(deviceId, itemId, QueueInsertPlacement End|AfterCurrent, currentItemId) owns the durable device write (insert with front fallback; CurrentIndex bookkeeping that keeps naming the same physical item; a seeded queue starting at CurrentIndex -1 per its doc contract; the OriginalItemIds shuffle-snapshot append so RestoreOrder cannot drop the add; debounced persist), all under the launch-scope lock. ProgressReporter.EnqueueToBothStores composes the both-stores write behind a coherence gate, and RehydrateAndEnqueueToBothStores couples the JF-577 guard + current-item resolution + write (the JF-582 unsplittable-pair lesson). Adopters: AddToQueueIntentHandler (End placement; optional DeviceQueueManager ctor param per the ListQueue precedent; the null-current branch re-scoped so the ReplaceAll-over-live-stream launch fires only when genuinely nothing plays) and PlayNextIntentHandler (AfterCurrent; its private InsertAfterCurrent deleted). Review-driven (all applied): the code review's BLOCKER was the mirror leg firing on an incoherent device queue (a stale persisted album queue behind a fresh single-song play, which never calls SetQueue, would be mirrored over the live session queue, parking the playing song last and ending the play); the mirror now fires only when the mutated device queue CONTAINS the resolved current item, with a blocker-shape pin test (stale queue + populated session -> live playback first, add behind it, no stale item, durable write still lands). The review's MAJOR (Enqueue is the first in-place ItemIds mutation an intent thread performs; the event thread concurrently indexes the list) applied via the lock; its minor (pointer-invariant assertion, pre/post capture) applied; /simplify findings applied: A1 (EnqueueToBothStores private - a public wrapper would be a door skipping the guard), S1 (the seeded-pointer contract enforced in code, replacing a no-op ternary), R1 (the three-way placement policy defined once as DeviceQueueManager.ResolveInsertPosition, both legs delegating so they cannot drift). S2/S3 polish (comment dedup at the two call sites, roster dict) noted as accepted polish. Roster: both handlers removed from ExemptReaders entirely (they no longer read session.NowPlayingQueue); the owner exemption asserted per-member. Tests: 13 new (5 handler red-first 5/5 both TFMs, 7 writer unit tests incl. persistence round-trip, 1 blocker-shape pin). Suite 4045/4045 both TFMs, Release 0 warnings. Documented consequences (all in the task notes): session-superset tails order device-first (the existing mirror behavior), the stale-queue durable write can rehydrate older items behind the add (the JF-574 membership trade-off family), and the JF-577/579-consistent widening on populated-queue null-now-playing shapes.
+<!-- SECTION:FINAL_SUMMARY:END -->
