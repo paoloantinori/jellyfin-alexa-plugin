@@ -79,7 +79,35 @@ internal static class EpisodePosition
             }
         }
 
-        return IsLatestWord(slot.Value, locale);
+        // ASR and the flat-slot surfaces deliver BOTH the typographic apostrophe
+        // (U+2019, what Italian keyboards and Alexa's transcript produce) and the
+        // straight one, and may carry the noun ("l'ultimo episodio"); normalize
+        // before the raw-value fallback so the word table's straight-apostrophe
+        // entries match (live probe 2026-09-17: the simulator delivered
+        // "l’ultimo episodio" and the lookup missed).
+        string normalized = slot.Value
+            .Replace('\u2019', '\'')
+            .Replace('\u2018', '\'');
+        return IsLatestWord(normalized, locale) || IsLatestWord(StripEpisodeNoun(normalized), locale);
+    }
+
+    /// <summary>
+    /// Drops a trailing localized "episode" noun from a raw slot value, so the
+    /// full spoken form ("l'ultimo episodio") matches the bare position word.
+    /// </summary>
+    private static string StripEpisodeNoun(string value)
+    {
+        string[] nouns = { " episodio", " episode", " episódio", " aflevering", " épisode", " folge", " episodio", " エピソード", "प्रकरण", " حلقة" };
+        foreach (string noun in nouns)
+        {
+            int idx = value.LastIndexOf(noun, StringComparison.OrdinalIgnoreCase);
+            if (idx > 0 && idx + noun.Length == value.Length)
+            {
+                return value[..idx];
+            }
+        }
+
+        return value;
     }
 
     private static bool IsLatestWord(string? word, string locale)
