@@ -293,7 +293,12 @@ public class ResumeIntentHandler : BaseHandler
             || string.Equals(context.AudioPlayer.Token, session?.FullNowPlayingItem?.Id.ToString(), StringComparison.Ordinal))
         {
             SkillResponse? bookResponse = await TryBuildNativeControlsBookResumeAsync(
-                session?.FullNowPlayingItem, offset, user, context, request, locale).ConfigureAwait(false);
+                session?.FullNowPlayingItem,
+                // offset is MILLISECONDS here (every writer of it converts to ms);
+                // the helper's fallback parameter is ticks. Convert once, mirroring
+                // the YesIntent resume-confirm call site (review major, JF-567).
+                TimeSpan.FromMilliseconds(offset).Ticks,
+                user, context, request, locale).ConfigureAwait(false);
             if (bookResponse != null)
             {
                 return bookResponse;
@@ -378,18 +383,33 @@ public class ResumeIntentHandler : BaseHandler
         }
 
         string bookKey = ResumeMath.GetAudiobookBookKey(item);
-        long startTicks = ResumeMath.GetAudiobookStartTicks(bookKey, fallbackTicks);
+        // Review major (JF-567): the fallback ticks are CHAPTER-relative (server
+        // progress of the chapter leaf), while the sliced playlist runs the WHOLE-BOOK
+        // concat timeline; slicing with a chapter-relative value lands mid-chapter-1.
+        // Only the TRACKER's book-timeline position may slice; a cold tracker returns
+        // null so the caller flat-resumes the chapter at its own offset instead (the
+        // same discipline the LaunchRequest resume offer already applies).
+        long trackedTicks = Plugin.Instance?.AudiobookPositionTracker?.GetPositionTicks(bookKey) ?? 0;
 
         Logger.LogInformation(
-            "ResumeIntent: audiobook '{BookName}' ({BookKey}) routes to the VideoApp HLS playlist, startTicks={StartTicks} (tracker first, fallback={FallbackTicks})",
-            item.Name, bookKey, startTicks, fallbackTicks);
+            "ResumeIntent: audiobook '{BookName}' ({BookKey}) tracker={TrackedTicks} ticks, fallback={FallbackTicks} ticks (chapter-relative, not book-timeline)",
+            item.Name, bookKey, trackedTicks, fallbackTicks);
 
-        if (startTicks <= 0)
+        if (trackedTicks <= 0)
         {
-            // No position in either source: the same fresh VideoApp launch PlayBook's
-            // no-progress path uses (no start slice), kept silent like the flat tail.
-            return Launch.BuildVideoAppAudioResponse(item.Id.ToString(), item, user, context: context);
+            if (fallbackTicks <= 0)
+            {
+                // No position in either source: the same fresh VideoApp launch
+                // PlayBook's no-progress path uses (no start slice), kept silent.
+                return Launch.BuildVideoAppAudioResponse(item.Id.ToString(), item, user, context: context);
+            }
+
+            // Chapter progress only: return null so the caller flat-resumes the
+            // chapter at its own (chapter-relative) offset.
+            return null;
         }
+
+        long startTicks = trackedTicks;
 
         SkillResponse bookResponse = Launch.BuildAudiobookResumeResponse(item, startTicks, user, context);
 

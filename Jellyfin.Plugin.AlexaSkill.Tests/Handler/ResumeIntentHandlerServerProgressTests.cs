@@ -583,7 +583,7 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
     /// to the server-side progress ticks, the same fallback PlayBook applies.
     /// </summary>
     [Fact]
-    public async Task ServerProgressFallback_AudioBook_NativeControlsOn_ColdTracker_UsesServerProgressAsSlice()
+    public async Task ServerProgressFallback_AudioBook_NativeControlsOn_ColdTracker_FlatChapterResume()
     {
         Plugin.Instance!.Configuration.NativeControlsForBooks = true;
         try
@@ -627,12 +627,17 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
 
             Assert.NotNull(response);
 
-            var videoDirective = Assert.IsType<global::Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>(
-                Assert.Single(response.Response.Directives));
-            Assert.Contains(
-                $"alexaskill/api/video-audio/audiobook/{bookFolderId}/stream.m3u8?start={TimeSpan.FromMinutes(5).Ticks}&token=",
-                videoDirective.VideoItem!.Source,
-                StringComparison.Ordinal);
+            // JF-567 review major: server progress is CHAPTER-relative and must never
+            // slice the whole-book concat timeline; with a cold tracker the book
+            // flat-resumes at the chapter offset (no VideoApp directive).
+            Assert.DoesNotContain(
+                response.Response.Directives ?? Array.Empty<IDirective>(),
+                d => d is global::Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective);
+            var audioDirective = Assert.IsType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>(
+                Assert.Single(response.Response.Directives!));
+            Assert.Equal(
+                (int)TimeSpan.FromMinutes(5).TotalMilliseconds,
+                audioDirective.AudioItem.Stream.OffsetInMilliseconds);
         }
         finally
         {

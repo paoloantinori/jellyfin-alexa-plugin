@@ -262,36 +262,43 @@ public class PlayBookIntentHandler : BaseHandler
 
         string itemId = trackItems[startIndex].Id.ToString();
 
-        // Native controls for books: play via the VideoApp concat stream (seek bar). With a
-        // tracked position, resume via the #EXT-X-START playlist; otherwise start fresh.
-        // The concat URL keys by the chapter's ParentId (the book folder) — same key the
-        // tracker records under, so resume lookup is consistent.
+        // Native controls for books: play via the VideoApp concat stream (seek bar).
+        // With a TRACKED position, resume via the ?start= slice (the tracker records
+        // the book-absolute concat timeline); a cold tracker falls through to the flat
+        // chapter resume (a chapter-relative position cannot slice the book timeline).
         if (Plugin.Instance?.Configuration?.NativeControlsForBooks == true)
         {
             string bookKey = ResumeMath.GetAudiobookBookKey(trackItems[startIndex]);
-            long startTicks = ResumeMath.GetAudiobookStartTicks(bookKey, resumeTicks);
+            // Review major (JF-567): only the TRACKER's book-timeline position may
+            // slice the concat playlist; the FindResumeTrackIndex fallback is
+            // CHAPTER-relative and would land mid-chapter-1 on the book timeline.
+            // A cold tracker falls through to the flat AudioPlayer chapter resume.
+            long trackedTicks = Plugin.Instance?.AudiobookPositionTracker?.GetPositionTicks(bookKey) ?? 0;
+            if (trackedTicks > 0)
+            {
+                // JF-567: VideoApp.Launch responses must OMIT shouldEndSession (the repo
+                // reference rule; BuildAudiobookResumeResponse keeps it null).
+                SkillResponse trackedResponse = Launch.BuildAudiobookResumeResponse(trackItems[startIndex], trackedTicks, user, context);
+                trackedResponse.Response.OutputSpeech = SpeechBuilder.BuildOutputSpeech(
+                    "ResumingBookSsml", "ResumingBook", locale, books[0].Name, trackItems[startIndex].Name);
+                return trackedResponse;
+            }
 
-            bool resuming = startTicks > 0;
-            SkillResponse response = resuming
-                ? Launch.BuildAudiobookResumeResponse(trackItems[startIndex], startTicks, user, context)
-                : await Launch.BuildAudiobookVideoAppLaunchResponseAsync(
+            // Cold tracker: a genuinely FRESH book (no chapter progress) keeps the
+            // fresh VideoApp launch (the flag exists for the seek bar); a chapter
+            // with progress falls through to the flat chapter resume below, where
+            // the chapter-relative position is honest on the chapter's own timeline
+            // (the same discipline the LaunchRequest resume offer applies).
+            if (resumeTicks <= 0)
+            {
+                return await Launch.BuildAudiobookVideoAppLaunchResponseAsync(
                     itemId,
                     trackItems[startIndex],
                     SpeechBuilder.BuildNowPlayingSpeech(books[0].Name, locale, Launch.GetAnnounceNowPlaying(user)),
                     user,
                     context,
                     request).ConfigureAwait(false);
-
-            if (resuming)
-            {
-                response.Response.OutputSpeech = SpeechBuilder.BuildOutputSpeech(
-                    "ResumingBookSsml", "ResumingBook", locale, books[0].Name, trackItems[startIndex].Name);
-                // JF-567: VideoApp.Launch responses must OMIT shouldEndSession (the repo
-                // reference rule; BuildAudiobookResumeResponse already keeps it null). The
-                // AudioPlayer resume path below keeps its play-true shape (JF-299).
             }
-
-            return response;
         }
 
         SkillResponse standardResponse = Launch.BuildAudioPlayerResponse(
