@@ -3,9 +3,10 @@ id: JF-568
 title: >-
   ResolvePlayingMedium: video-kind ledger item + queue-advanced token after an
   audio-transcode video launch misclassifies Audio as Video
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-15 09:29'
+updated_date: '2026-09-18 17:53'
 labels:
   - ledger
   - transport
@@ -20,6 +21,7 @@ priority: low
 <!-- SECTION:DESCRIPTION:BEGIN -->
 Code-review P3 (JF-564, 2026-09-15): a video-kind item (Movie/Episode) launched on the audio-only transcode path (JF-507, screenless or EAC3 audio) puts the movie in the device last-played ledger AND the token; a subsequent PlaybackNearlyFinished enqueue (PostPlayBehavior=AutoPlay radio) moves the token to the radio track WITHOUT recording. BaseHandler.ResolvePlayingMedium (and RepeatIntentHandler's identical videoDisplacedAudio rule) then reads token != ledger + video-kind ledger item as displacement, classifies Video, and Next/Previous answer the "can't navigate video by voice" line while audio is genuinely playing. Narrow window (screenless + episode audio + AutoPlay + transport intent). The trade-off is byte-for-byte the one the RepeatIntentHandler precedent carries (JF-562), so this is consistent intended semantics, not a new bug; file tracks the ledger-design fix (e.g. record enqueued directives too, or persist the launch route per item).
 <!-- SECTION:DESCRIPTION:END -->
+
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done
@@ -38,6 +40,7 @@ Code-review P3 (JF-564, 2026-09-15): a video-kind item (Movie/Episode) launched 
 
 ## Implementation Notes
 
+<!-- SECTION:NOTES:BEGIN -->
 ### Chosen shape (the task's option a, extended DeviceQueue)
 
 `DeviceQueue.LastPlayedLaunchRoute` (string?, values `"Audio"`/`"VideoApp"` as the
@@ -142,3 +145,10 @@ first with NO behavior change so the red set isolates the rule):
   BuildVideoAppAudioResponse re-records VideoApp) briefly holds route Audio
   in-memory before the second write lands on the same request thread; no reader
   runs between them (both writes happen inside the one response build).
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+DONE (commit 1fe9a950). SHAPE (task option a, one ledger): DeviceQueue.LastPlayedLaunchRoute (string "Audio"/"VideoApp", the RepeatMode JSON shape for forward-safe parsing) persisted beside LastPlayedItemId; DeviceQueueManager.LaunchRoute nested enum (the QueueInsertPlacement precedent). RecordLastPlayed(deviceId, itemId, route) takes the route as a REQUIRED parameter (an unwired recording site cannot compile), with the same-item short-circuit comparing item AND route so a re-launch on the other route FLIPS it (the BuildAudioPlayerResponse-to-BuildVideoAppAudioResponse delegation exercises this; pinned by test). Read side: GetLastPlayedLaunchRoute returns null on pre-JF-568 files, unknown devices, and unknown route names (strict parse degrades to legacy semantics; a typed enum property with JsonStringEnumConverter was rejected because an unknown name would throw and LoadAllFromDisk's catch would discard the entire queue file). All 5 production recording sites wired: the audio chokepoint = Audio (the JF-507/JF-589 incident path), LastPlayedResponseInterceptor + the channel, audiobook-resume, and VideoApp-audio arms = VideoApp. CLASSIFICATION: ResolvePlayingMedium gains one arm after the token-ownership arm and before the item resolve (recorded route Audio -> PlayingMedium.Audio whatever the kind, skipping the DB resolve; VideoApp-routed and legacy null-routed entries fall through to today's kind rules, so classification is route-driven for recorded launches, kind-driven only for legacy/absent routes). The twin fixed: RepeatIntentHandler.videoDisplacedAudio adds recordedRoute != LaunchRoute.Audio (null route keeps the legacy displacement). The incident chain (video-kind ledger item on the audio route + a PostPlay radio enqueue advancing the token un-recorded) now classifies Audio and Next/Previous serve the queue. GATES: /simplify 4-angle + adversarial combined pass - all 5 callers verified wired; the interceptor's hardcoded VideoApp verified sound (it only fires on VideoAppLaunchDirective shapes the audio-transcode never rides); JSON compat verified both directions (old plugin ignores the new member; new plugin reads old files as null); the Enum.TryParse numeric-string edge verified benign (unreachable from the write path, and both consumers test only ==Audio so undefined values behave as null); the stale JF-563 idempotence comment corrected (the delegation now deliberately flips the route). Tests: 4 red-first (the incident chain, the JF-589 audio-episode shape, the audiobook shape, the Repeat no-displace) + 6 pins (VideoApp route keeps Video; the legacy-file classification through the real disk load; the disk round-trip; the same-item route flip; null-on-missing; null-on-unknown-name). Suite 4094/4094 both TFMs, Release 0 warnings.
+<!-- SECTION:FINAL_SUMMARY:END -->
