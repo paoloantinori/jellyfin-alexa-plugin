@@ -333,6 +333,87 @@ public class RepeatIntentHandlerTests : PluginTestBase, IDisposable
         Assert.Equal(radioTrack.Id.ToString(), directive.AudioItem.Stream.Token);
     }
 
+    /// <summary>
+    /// JF-566: a VideoApp-routed AUDIOBOOK in the ledger with the stale music
+    /// token (the book never sets one) displaces the token exactly like a video:
+    /// the repeat must answer the honest CannotRepeatContent tell for the BOOK,
+    /// not restart the previously played music track.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_VideoAppRoutedBookLedger_StaleMusicToken_AnswersCannotRepeatForBook()
+    {
+        var queueManager = TestHelpers.CreateDeviceQueueManager("repeat-book-stale");
+        var handler = CreateHandler(queueManager);
+        var request = CreateRepeatRequest();
+        var user = TestHelpers.CreateTestUser();
+
+        var song = new Audio
+        {
+            Name = "Old Song",
+            Id = Guid.NewGuid(),
+            Path = "/music/old.mp3"
+        };
+        Guid bookFolderId = Guid.NewGuid();
+        var chapter = new MediaBrowser.Controller.Entities.AudioBook
+        {
+            Name = "Chapter 3",
+            Id = Guid.NewGuid(),
+            ParentId = bookFolderId,
+            Path = "/audiobooks/book/chapter3.mp3"
+        };
+
+        string deviceId = "repeat-book-stale-device";
+        queueManager.RecordLastPlayed(deviceId, chapter.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        _fx.LibraryManager.Setup(x => x.GetItemById(chapter.Id)).Returns(chapter);
+        _fx.LibraryManager.Setup(x => x.GetItemById(song.Id)).Returns(song);
+
+        var context = CreateContextWithToken(song.Id.ToString(), deviceId);
+        var response = await handler.HandleAsync(request, context, user, null!, CancellationToken.None);
+
+        Assert.NotNull(response);
+        AssertNoAudioPlayDirective(response);
+        Assert.Contains("can't repeat", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// JF-566 control: a FLAT audio-path book (route Audio) with a moved token is
+    /// NOT displacement; the token-first resolution still applies.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_FlatAudioBookLedger_RouteAudio_KeepsTokenFirstResolution()
+    {
+        var queueManager = TestHelpers.CreateDeviceQueueManager("repeat-book-flat");
+        var handler = CreateHandler(queueManager);
+        var request = CreateRepeatRequest();
+        var user = TestHelpers.CreateTestUser();
+
+        var song = new Audio
+        {
+            Name = "Later Song",
+            Id = Guid.NewGuid(),
+            Path = "/music/later.mp3"
+        };
+        var chapter = new MediaBrowser.Controller.Entities.AudioBook
+        {
+            Name = "Chapter 1",
+            Id = Guid.NewGuid(),
+            Path = "/audiobooks/flat/chapter1.mp3"
+        };
+
+        string deviceId = "repeat-book-flat-device";
+        queueManager.RecordLastPlayed(deviceId, chapter.Id.ToString(), DeviceQueueManager.LaunchRoute.Audio);
+        _fx.LibraryManager.Setup(x => x.GetItemById(chapter.Id)).Returns(chapter);
+        _fx.LibraryManager.Setup(x => x.GetItemById(song.Id)).Returns(song);
+
+        var context = CreateContextWithToken(song.Id.ToString(), deviceId);
+        var response = await handler.HandleAsync(request, context, user, null!, CancellationToken.None);
+
+        // The token's song restarts (the flat-path book recorded route Audio is
+        // not displacement evidence): a music restart, not CannotRepeatContent.
+        var directive = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+        Assert.Equal(song.Id.ToString(), directive.AudioItem.Stream.Token);
+    }
+
     [Fact]
     public async Task HandleAsync_QueueAdvanced_TokenWinsOverOlderUserInitiatedPlay()
     {

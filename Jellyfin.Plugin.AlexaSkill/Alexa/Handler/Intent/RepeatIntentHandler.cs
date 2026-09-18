@@ -26,13 +26,12 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// default and honoring the AnnounceAudioPlays flag through the shared builder);
 /// everything the skill cannot honestly restart mid-play (VideoApp-launched movies,
 /// episodes and live TV, audiobooks that ride the AudioPlayer path) gets the
-/// localized CannotRepeatContent tell instead of pretending. Known limitation
-/// (tracked as JF-566): a repeat arriving mid-VideoApp-audiobook can still
-/// restart the previously played audio track. The ledger HAS recorded VideoApp
-/// book launches since JF-563 (PlaybackLaunchBuilder records at both launch
-/// sites), superseding this doc's original claim that books were recorded
-/// nowhere; the residual misclassification is a medium-resolution gap, not a
-/// missing recording. This is the SECOND life of this handler: the JF-451-era predecessor answered
+/// localized CannotRepeatContent tell instead of pretending. FIXED by JF-566:
+/// a repeat arriving mid-VideoApp-audiobook now resolves the book (the ledger
+/// has recorded VideoApp book launches since JF-563, and the JF-568 route
+/// marker lets the displacement rule recognize a VideoApp-routed book the same
+/// way it recognizes a video) and answers the honest CannotRepeatContent tell
+/// instead of restarting the previously played audio track. This is the SECOND life of this handler: the JF-451-era predecessor answered
 /// repeat with now-playing info (MediaInfo's job) and was deleted for it; the
 /// restart semantics here are the JF-562 redesign.
 /// </summary>
@@ -108,12 +107,18 @@ public class RepeatIntentHandler : BaseHandler
                 : null;
 
         BaseItem? lastPlayedItem = ResolveItem(lastPlayedId);
+        // JF-566: a VideoApp-routed AUDIOBOOK launch displaces the audio token the
+        // same way a video launch does (the book never sets a token; the stale music
+        // token would otherwise win resolution and restart the wrong track). The
+        // route guard keeps a FLAT audio-path book (route Audio) on the
+        // token-first resolution, where its own token names it.
         bool videoDisplacedAudio =
             lastPlayedItem != null
             && !string.IsNullOrEmpty(token)
             && !string.Equals(token, lastPlayedId, StringComparison.Ordinal)
             && recordedRoute != DeviceQueueManager.LaunchRoute.Audio
-            && PlaybackLaunchBuilder.IsVideoAppLaunchItem(lastPlayedItem);
+            && (PlaybackLaunchBuilder.IsVideoAppLaunchItem(lastPlayedItem)
+                || AudiobookItems.IsAudioBook(lastPlayedItem));
 
         BaseItem? item;
         if (videoDisplacedAudio)
