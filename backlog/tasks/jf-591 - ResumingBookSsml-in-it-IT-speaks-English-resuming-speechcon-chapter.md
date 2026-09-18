@@ -1,9 +1,10 @@
 ---
 id: JF-591
 title: ResumingBookSsml in it-IT speaks English ("resuming" speechcon + "chapter")
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-18 20:05'
+updated_date: '2026-09-18 21:37'
 labels:
   - bug
   - i18n
@@ -23,11 +24,17 @@ Inventory during the SSML research (claudedocs/research_alexassml-voice-tags_202
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 ResumingBookSsml in it-IT.json contains no English speechcon and no English prose: the interjection and the chapter wording are Italian (e.g. an it-IT-valid speechcon or plain text, and something like capitolo {1})
-- [ ] #2 Any other key in it-IT.json containing English residue found by the same audit is fixed in the same change or explicitly noted as deliberate (quote/track title placeholders excepted)
-- [ ] #3 The chosen Italian wording exists in it-IT speechcon reference if a speechcon is used; plain text is the fallback if none fits
-- [ ] #4 Tests pass on both TFMs without --no-build; no assertions depend on the English wording
+- [x] #1 ResumingBookSsml in it-IT.json contains no English speechcon and no English prose: the interjection and the chapter wording are Italian (e.g. an it-IT-valid speechcon or plain text, and something like capitolo {1})
+- [x] #2 Any other key in it-IT.json containing English residue found by the same audit is fixed in the same change or explicitly noted as deliberate (quote/track title placeholders excepted)
+- [x] #3 The chosen Italian wording exists in it-IT speechcon reference if a speechcon is used; plain text is the fallback if none fits
+- [x] #4 Tests pass on both TFMs without --no-build; no assertions depend on the English wording
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Shipped in e5e3715a: the it-IT resume/restart announce family now speaks Italian. ResumingBook/ResumingBookSsml use the established it-IT speechcon 'eccoci' + 'capitolo {1}' (matching ResumingSsml/FollowMeSuccessSsml); ResumingVideo reads 'dalla posizione {1}' (arg is ResumeMath localized words); RestartingContent, FolderNoPlayableContent and NoMediaToRestart italianized after the extended audit found them (same class, fixed in-change per AC#2; the word-list scan false-positives on <say-as> tags and all'apostrophe forms were dismissed). One test updated: SpeechBuilderEpisodeAnnounceTests resume-arm pinned the old English it-IT value (red-first: failed 1/4113 both TFMs before the fix). Deliberate keep: English loanwords in Italian (album, ok). Gates: code-review high CLEAN (one out-of-scope finding became the NoMediaToRestart fix); /simplify exempt (data-only strings); suite 4113/4113 both TFMs; Release 0 warnings; validate_locales PASS.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
