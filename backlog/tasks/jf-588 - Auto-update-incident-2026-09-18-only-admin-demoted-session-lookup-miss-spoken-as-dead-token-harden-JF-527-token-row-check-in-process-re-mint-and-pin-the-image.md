@@ -35,3 +35,13 @@ Live incident 2026-09-18 04:09 (user report 'jellyfin risulta non connessa' + 'n
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+
+## CORRECTED FINDINGS (2026-09-18 afternoon, after the user pushed back on "nothing new" and the DB backups proved it)
+
+- The auto-update recreating the container IS routine (journal: new container Sep 14/15/16/17/18, and the Sep 17/18 recreations used the SAME digest 2e68d77a7543 pulled Sep 16). The recreation itself was not the delta.
+- The REAL delta: the Sep 16 04:13-04:15 auto-update was a VERSION UPGRADE Jellyfin 12.0 -> 12.1 (dying image org.opencontainers.image.version=12.0ubu2604-ls48 build Sep 8; new image 12.1ubu2604-ls50 built Sep 15 17:01; the log line "[migrations] started" at the first 12.1 boot). The 12.0->12.1 DB migrations ran on the production library.
+- The SOLE-ADMIN demotion is now PROVEN, not hypothesized: the Sep 9 backup (data/data/backups/jellyfin-backup-20260909073655.zip, Permissions.json) shows 12 Kind-0 rows, all Value=false EXCEPT paolo (28dce039, Value=true) - paolo was the ONLY admin. The live DB this morning had paolo Kind-0=false and NO other admin existed. So the 12.0->12.1 migration (Sep 16 04:15+) is the prime suspect for dropping the administrator permission (a permissions migration bug or a model change that failed to carry the flag), and it likely happened silently on Sep 16 - the user noticed today only because the plugin ALSO went down (the separate session-lookup miss).
+- The session-lookup miss of the 18th morning remains not isolated; a 06:13:38 FK-constraint DbUpdateException during the IlPost episode churn (4 written/removed with alternate-version PrimaryVersionId rewrites) is a candidate contaminator of the shared DbContext, and the fresh 12.1 build is itself a suspect.
+- My interim claim in the first final summary ("the new image is itself a suspect for the demotion") is hereby corrected: at the time of that writing I had not yet read the Sep 16 recreate log showing the 12.0->12.1 jump.
+
