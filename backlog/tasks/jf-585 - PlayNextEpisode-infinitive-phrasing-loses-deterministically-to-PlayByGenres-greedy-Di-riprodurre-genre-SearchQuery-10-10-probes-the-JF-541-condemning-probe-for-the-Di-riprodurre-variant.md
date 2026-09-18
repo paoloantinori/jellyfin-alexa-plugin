@@ -4,9 +4,10 @@ title: >-
   PlayNextEpisode infinitive phrasing loses deterministically to PlayByGenre's
   greedy 'Di riprodurre {genre}' SearchQuery (10/10 probes; the JF-541
   condemning probe for the Di-riprodurre variant)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-17 18:40'
+updated_date: '2026-09-18 11:02'
 labels:
   - nlu
   - competition
@@ -34,3 +35,9 @@ From the JF-583 closure probes (2026-09-17, live profile-nlu it-IT): 'Di riprodu
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+DONE (commits 81d4dbad + fa151b58 + 693cd02a). Resolution (b) of the task's own option list, executed with the live probe chain: the greedy 'Di riprodurre {genre}' SearchQuery sample was REMOVED from PlayByGenreIntent (the JF-541 condemning probe: 10/10 deterministic steals of the episode position family), and the infinitive genre ask survives via the NEW anchored carrier 'Di riprodurre genere {genre}' (consistent with the existing Riproduci/Suona/Metti genere {genre} family). Two follow-up discoveries from the live chain, both fixed same-session: (1) the explicit literal carriers added in 532159bc (the JF-504 precedent attempt) were REMOVED again - profile-nlu proved they duplicate the vocabulary expansion of '{infinitive} {episode_position} episodio di {series_name}' verbatim AND suppress the episode_position slot fill (the literal sample matched with series_name filled but episode_position empty); without them the vocabulary-expanded slotted sample fills BOTH slots; (2) the removal flipped three it-IT trainer pins, triaged with the rebuild-battery protocol (identical-content rebuild + probe batteries per the trainer-nondeterminism memory): 'suona matrix' now stable 4/4 PlayRadioIntent (same JF-436 triage class, re-pinned), 'pleia matrix' now deterministic NO_SELECTION 5/5 (converted to a documented skip_reason - profile-nlu raises on no-selection so the expectation is inexpressible), and 'Suona musica dei pink floyd' now stable 4/4 PlayArtistSongsIntent (the JF-541 catalog-steal flip reverted; the semantically-correct resolution for 'musica dei X', re-pinned). Final live state: the KNOWN-RED row 'Di riprodurre l'ultimo episodio di stranger things' PASSES (intent + both slots), the two genre rows (Riproduci genere rock / Suona genere jazz) stay green, dry-run validates, and the voice-reference mirrors were regenerated twice (also absorbing the ja-JP space fix and clearing the stale-sample warnings back to the 118 baseline). Suite 4069/4069 both TFMs throughout; no C# changes in this task (model + fixtures only).
+<!-- SECTION:FINAL_SUMMARY:END -->
