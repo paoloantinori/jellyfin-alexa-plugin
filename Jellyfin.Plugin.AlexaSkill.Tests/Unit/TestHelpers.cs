@@ -292,8 +292,6 @@ internal static class TestHelpers
             string raw = ssml.Ssml;
             raw = raw.Replace("<speak>", string.Empty).Replace("</speak>", string.Empty);
             raw = Regex.Replace(raw, "<break[^>]*>", " ");
-            raw = Regex.Replace(raw, "<emphasis[^>]*>", string.Empty);
-            raw = raw.Replace("</emphasis>", string.Empty);
             raw = Regex.Replace(raw, "<say-as[^>]*>", string.Empty);
             raw = raw.Replace("</say-as>", string.Empty);
             raw = Regex.Replace(raw, "<prosody[^>]*>", string.Empty);

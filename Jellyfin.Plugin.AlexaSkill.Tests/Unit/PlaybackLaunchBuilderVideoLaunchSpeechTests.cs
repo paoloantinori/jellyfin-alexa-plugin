@@ -84,7 +84,7 @@ public class PlaybackLaunchBuilderVideoLaunchSpeechTests : PluginTestBase
             _builder.BuildVideoLaunchSpeech(Movie(), Locale, resumeTicks: 0, announceOn: true));
 
         Assert.Equal(
-            "<speak><say-as interpret-as=\"interjection\">now playing</say-as><break time=\"300ms\"/><emphasis level=\"moderate\">Inception</emphasis></speak>",
+            "<speak><say-as interpret-as=\"interjection\">now playing</say-as><break time=\"300ms\"/>Inception</speak>",
             speech.Ssml);
     }
 

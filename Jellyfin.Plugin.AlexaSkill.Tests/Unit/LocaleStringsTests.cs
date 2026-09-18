@@ -73,6 +73,37 @@ public class LocaleStringsTests
         Assert.NotEmpty(value);
     }
 
+    /// <summary>
+    /// JF-590: no locale response string may wrap a title in an SSML emphasis tag.
+    /// Amazon documents emphasis as louder AND slower plus a legacy-TTS quality
+    /// fallback (research_alexassml-voice-tags_2026-09-18); titles are delimited by
+    /// their adjacent break tags instead. Sweeps the raw locale resource so every
+    /// key and a future locale 18 are covered, not just the 12 title keys.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ResponseStringLocaleRows))]
+    public void ResponseStrings_ContainNoEmphasisTag(string locale)
+    {
+        string resourceName = $"Jellyfin.Plugin.AlexaSkill.Alexa.Locale.{locale}.json";
+        using var stream = typeof(Jellyfin.Plugin.AlexaSkill.Util).Assembly
+            .GetManifestResourceStream(resourceName);
+        Assert.NotNull(stream);
+        using var reader = new System.IO.StreamReader(stream!);
+        string raw = reader.ReadToEnd();
+        Assert.DoesNotContain("<emphasis", raw, StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static TheoryData<string> ResponseStringLocaleRows()
+    {
+        var data = new TheoryData<string>();
+        foreach (string locale in TestLocales.ResponseStringLocales())
+        {
+            data.Add(locale);
+        }
+
+        return data;
+    }
+
     [Fact]
     public void VideoRequiresScreen_ItItalian_UsesTaskWording()
     {

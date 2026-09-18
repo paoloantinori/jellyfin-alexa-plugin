@@ -54,7 +54,7 @@ public class SsmlResponseTests
         string? result = SpeechBuilder.GetSsml("NowPlayingSsml", "en-US", "Test Song");
         Assert.NotNull(result);
         Assert.Contains("Test Song", result);
-        Assert.Contains("emphasis", result);
+        Assert.Contains("<break", result);
     }
 
     [Fact]
@@ -68,12 +68,12 @@ public class SsmlResponseTests
     }
 
     [Fact]
-    public void GetSsml_DisambiguatePromptSsml_ContainsEmphasis()
+    public void GetSsml_DisambiguatePromptSsml_ContainsPauseDelimitedTitle()
     {
         string? result = SpeechBuilder.GetSsml("DisambiguatePromptSsml", "en-US", "Track Name");
         Assert.NotNull(result);
         Assert.Contains("Track Name", result);
-        Assert.Contains("emphasis", result);
+        Assert.Contains("<break", result);
     }
 
     [Fact]
@@ -82,7 +82,6 @@ public class SsmlResponseTests
         string? result = SpeechBuilder.GetSsml("NowPlayingSsml", "it-IT", "Brano Test");
         Assert.NotNull(result);
         Assert.Contains("Brano Test", result);
-        Assert.Contains("emphasis", result);
     }
 
     [Fact]
