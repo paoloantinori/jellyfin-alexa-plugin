@@ -1,9 +1,10 @@
 ---
 id: JF-592
 title: 'ar-SA typo: ألبوبًا for ألبومًا (album) in CrossMediaArtistOffer(+Ssml)'
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-18 21:02'
+updated_date: '2026-09-18 21:50'
 labels:
   - bug
   - i18n
@@ -20,10 +21,16 @@ Pre-existing ar-SA typo found by the JF-590 code review: Jellyfin.Plugin.AlexaSk
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 CrossMediaArtistOffer and CrossMediaArtistOfferSsml in ar-SA.json spell ألبومًا (album) correctly
-- [ ] #2 No other occurrence of the misspelling ألبوبًا remains in ar-SA.json (grep clean)
-- [ ] #3 Tests pass on both TFMs without --no-build
+- [x] #1 CrossMediaArtistOffer and CrossMediaArtistOfferSsml in ar-SA.json spell ألبومًا (album) correctly
+- [x] #2 No other occurrence of the misspelling ألبوبًا remains in ar-SA.json (grep clean)
+- [x] #3 Tests pass on both TFMs without --no-build
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Shipped: ألبوبًا corrected to ألبومًا in both CrossMediaArtistOffer and CrossMediaArtistOfferSsml in ar-SA.json (the missing م mispronounced 'album'); grep confirms zero remaining occurrences of the misspelling. The audit's larger discovery (11 non-English locales carrying 21-26 en-US-identical keys: the FindSong family, book-search family in ar/hi/ja, skip/restart/recently-played) is filed as JF-593 (High). Gates: /simplify exempt (single data-only string), review provenance = the JF-590 code-review pass that surfaced the typo; suite 4113/4113 both TFMs; Release 0 warnings; validate_locales PASS.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
