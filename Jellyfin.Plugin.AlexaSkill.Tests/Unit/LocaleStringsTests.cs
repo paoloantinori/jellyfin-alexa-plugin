@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Xunit;
 
@@ -91,6 +92,103 @@ public class LocaleStringsTests
         using var reader = new System.IO.StreamReader(stream!);
         string raw = reader.ReadToEnd();
         Assert.DoesNotContain("<emphasis", raw, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// JF-593: a non-English locale must not carry a response string identical to
+    /// en-US that contains real English words (Jellyfin/Alexa/Skill/api are brand
+    /// names and exempt). The pre-sweep state had whole families untranslated
+    /// (FindSong conversation, resume/restart, skip, book search). Sweeping the raw
+    /// embedded resources keeps a future key or locale from landing untranslated.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(NonEnglishResponseStringLocaleRows))]
+    public void ResponseStrings_NonEnglishLocale_HasNoEnUsIdenticalProse(string locale)
+    {
+        var en = ReadLocaleResource("en-US");
+        var target = ReadLocaleResource(locale);
+        foreach (var (key, value) in target)
+        {
+            if (!en.TryGetValue(key, out string? enValue) || !HasEnglishWord(value))
+            {
+                continue;
+            }
+
+            Assert.False(
+                Normalize(value) == Normalize(enValue),
+                $"{key} [{locale}] is en-US prose (possibly a stale pre-contraction copy): '{value}'");
+        }
+    }
+
+    /// <summary>
+    /// Collapses contraction and punctuation drift so a stale English copy that
+    /// predates an en-US contraction ("You are at the beginning." vs "You're at
+    /// the beginning.") still compares equal to its origin.
+    /// </summary>
+    private static string Normalize(string value)
+    {
+        var text = value.ToLowerInvariant().Replace('’', '\'');
+        foreach (var (expanded, contraction) in new[]
+        {
+            ("you are", "you're"), ("that is", "that's"), ("it is", "it's"),
+            ("i am", "i'm"), ("there is", "there's"), ("what is", "what's"),
+            ("we are", "we're"), ("do not", "don't"), ("did not", "didn't"),
+            ("does not", "doesn't"), ("cannot", "can't"), ("could not", "couldn't"),
+            ("i have", "i've"), ("you have", "you've"), ("is not", "isn't"),
+        })
+        {
+            text = text.Replace(contraction, expanded);
+        }
+
+        return System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ").Trim();
+    }
+
+    public static TheoryData<string> NonEnglishResponseStringLocaleRows()
+    {
+        var data = new TheoryData<string>();
+        foreach (string locale in TestLocales.ResponseStringLocales())
+        {
+            if (!locale.StartsWith("en-", StringComparison.OrdinalIgnoreCase))
+            {
+                data.Add(locale);
+            }
+        }
+
+        return data;
+    }
+
+    private static Dictionary<string, string> ReadLocaleResource(string locale)
+    {
+        string resourceName = $"Jellyfin.Plugin.AlexaSkill.Alexa.Locale.{locale}.json";
+        using var stream = typeof(Jellyfin.Plugin.AlexaSkill.Util).Assembly
+            .GetManifestResourceStream(resourceName);
+        Assert.NotNull(stream);
+        using var doc = System.Text.Json.JsonDocument.Parse(stream!);
+        return doc.RootElement.EnumerateObject()
+            .Where(p => p.Value.ValueKind == System.Text.Json.JsonValueKind.String)
+            .ToDictionary(p => p.Name, p => p.Value.GetString() ?? string.Empty);
+    }
+
+    /// <summary>ASCII letter runs of 2+ chars, excluding brand names; script-specific
+    /// locales (hi/ja/ar) carry no ASCII words at all outside brands, so any hit is
+    /// residue; Latin-script locales hit only on real English words after the fix.</summary>
+    private static bool HasEnglishWord(string value)
+    {
+        var text = value;
+        foreach (System.Text.RegularExpressions.Match word in System.Text.RegularExpressions.Regex.Matches(text, "[A-Za-z']+"))
+        {
+            var w = word.Value;
+            if (w.Length >= 2
+                && !string.Equals(w, "Jellyfin", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(w, "Alexa", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(w, "Skill", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(w, "api", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public static TheoryData<string> ResponseStringLocaleRows()
