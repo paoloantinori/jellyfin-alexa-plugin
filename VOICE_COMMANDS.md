@@ -717,7 +717,7 @@ Invocation name: **"mia collezione"**
 | Play Artist Songs | `brani di {musician}` · `brani dei {musician}` · `brani degli {musician}` · `brani delle {musician}` · `canzoni di {musician}` · `canzoni dei {musician}` |
 | Play Book | `riproduci il libro {book}` · `riproduci l'audiolibro {book}` · `ascolta il libro {book}` · `ascolta l'audiolibro {book}` · `suona il libro {book}` · `metti il libro {book}` |
 | Play By Decade | `Riproduci musica degli anni {decade}` · `Suona musica degli anni {decade}` · `Metti musica degli anni {decade}` · `Musica anni {decade}` · `Brani degli anni {decade}` · `Canzoni degli anni {decade}` |
-| Play By Genre | `Riproduci {genre}` · `Suona {genre}` · `Metti {genre}` · `Pleia {genre}` · `Di riprodurre {genre}` · `Riproduci genere {genre}` |
+| Play By Genre | `Riproduci {genre}` · `Suona {genre}` · `Metti {genre}` · `Pleia {genre}` · `Di riprodurre genere {genre}` · `Riproduci genere {genre}` |
 | Play Channel | `Canale {channel}` · `Riproduci radio {channel}` · `di riprodurre la radio {channel}` · `di mettere la radio {channel}` · `Radio {channel}` |
 | Play Episode | `Riproduci {series_name} stagione {season_number} episodio {episode_number}` · `Riproduci la stagione {season_number} episodio {episode_number} di {series_name}` · `Suona {series_name} stagione {season_number} episodio {episode_number}` · `Metti {series_name} stagione {season_number} episodio {episode_number}` · `Suona la stagione {season_number} episodio {episode_number} di {series_name}` · `Metti la stagione {season_number} episodio {episode_number} di {series_name}` |
 | Play Favorites | `Riproduci i miei preferiti` · `Riproduci {media_type} preferiti` · `Suona i miei preferiti` · `Suona {media_type} preferiti` · `Metti i miei preferiti` · `Metti {media_type} preferiti` |
@@ -776,7 +776,7 @@ Invocation name: **"jellyfin player"**
 | Play Last Added | `最新の {media_type} を再生して` · `新しいメディアを再生して` · `{time_period} 追加された {media_type} を再生して` · `最近追加された {media_type} を再生して` · `何か新しいものを再生して` · `新着 {media_type} を再生して` |
 | Play Mood Music | `{mood} の音楽を再生して` · `{mood} な音楽を再生して` · `{mood} な曲を再生して` · `{mood} の音楽が聴きたい` |
 | Play Next | `次に {song} を再生して` · `次に {musician} の {song} を再生して` · `{song} を次に聴きたい` · `{song} をこの後に再生して` |
-| Play Next Episode | `{series_name} の{episode_position}エピソードを再生して` · `{series_name} を続きから観て` |
+| Play Next Episode | `{series_name} の {episode_position} エピソードを再生して` · `{series_name} を続きから観て` |
 | Play Playlist | `プレイリスト {playlist} を再生して` · `プレイリスト {playlist} を流して` · `プレイリスト {playlist} をスタートして` · `プレイリスト {playlist} を聴かせて` · `プレイリスト {playlist} を聞きたい` · `マイプレイリスト {playlist} を再生して` |
 | Play Podcast | `ポッドキャスト {podcast_name} を再生して` · `ポッドキャスト {podcast_name} を聴かせて` · `{podcast_name} の最新エピソードを再生して` · `ポッドキャスト {podcast_name} をスタートして` · `{podcast_name} ポッドキャストを聴きたい` |
 | Play Radio | `ラジオを再生して` · `ラジオステーション {station} を再生して` · `ラジオモードを再生して` · `ラジオをスタートして` · `似たような音楽を再生して` · `似た曲を再生して` |

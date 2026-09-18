@@ -136,13 +136,12 @@ explicit_intents:
       # weight on Suona/Metti/Pleia (never selected) and no JF-541 failure
       # routes through it; removing uncondemned samples shifts statistics we
       # cannot verify from here. Same-family sibling on PlayByGenreIntent
-      # (Di riprodurre {genre}) KEPT: its genre captures are recovered
-      # handler-side by TryEntityFallbackAsync (the JF-463 recovery) and no
-      # JF-541 probe condemns it; uncovered candidates of this family live on
-      # pt-BR's PlayVideoIntent (assistir/mostrar {title}, the JF-459 trim
-      # never covered PlayVideoIntent). The fixture entries that flip on this
-      # removal after the phase-2 redeploy: disco thriller and the musica dei
-      # shapes (pinned in fixtures/it-IT.yaml).
+      # (Di riprodurre {genre}) REMOVED by JF-585: the live probe condemned it
+      # (10/10 profile-nlu steals of the episode position family,
+      # deterministic across two identical-content rebuilds; the genre
+      # captures it made were recovered handler-side, but the episode-position
+      # captures were NOT recoverable at all). The infinitive genre ask
+      # survives via the anchored 'Di riprodurre genere {genre}' sample.
       - voglio guardare {title}
       - fai vedere {title}
       - fammi vedere {title}
@@ -180,7 +179,10 @@ explicit_intents:
       - Suona {genre}
       - Metti {genre}
       - Pleia {genre}
-      - Di riprodurre {genre}
+      # JF-585: the bare 'Di riprodurre {genre}' is REPLACED by the anchored
+      # carrier below (the bare SearchQuery span swallowed the whole episode
+      # position family, 10/10 probes). Anchored keeps the infinitive genre ask.
+      - Di riprodurre genere {genre}
       - Riproduci genere {genre}
       - Suona genere {genre}
       - Metti genere {genre}

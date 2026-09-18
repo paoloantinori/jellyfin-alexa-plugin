@@ -7100,7 +7100,7 @@ Placeholder legend:
 | `<titolo del video o del film>` | `{title}` |
 | `<parole del titolo del brano>` | `{titleKeywords}` |
 
-Complete phrase list (1433 phrases across 63 commands):
+Complete phrase list (1435 phrases across 63 commands):
 
 #### Play music
 
@@ -7614,7 +7614,7 @@ Complete phrase list (1433 phrases across 63 commands):
 - `Suona <genere musicale>`
 - `Metti <genere musicale>`
 - `Pleia <genere musicale>`
-- `Di riprodurre <genere musicale>`
+- `Di riprodurre genere <genere musicale>`
 - `Riproduci genere <genere musicale>`
 - `Suona genere <genere musicale>`
 - `Metti genere <genere musicale>`
@@ -8246,6 +8246,8 @@ Complete phrase list (1433 phrases across 63 commands):
 - `Di mettere <posizione (prossimo, ultimo)> episodio di <nome della serie>`
 - `Di pleiare <posizione (prossimo, ultimo)> episodio di <nome della serie>`
 - `Di ascoltare <posizione (prossimo, ultimo)> episodio di <nome della serie>`
+- `Di riprodurre l'ultimo episodio di <nome della serie>`
+- `Di riprodurre il prossimo episodio di <nome della serie>`
 - `Di riprodurre la serie <nome della serie>`
 - `Di suonare la serie <nome della serie>`
 - `Di mettere la serie <nome della serie>`
@@ -8899,7 +8901,7 @@ Complete phrase list (303 phrases across 60 commands):
 
 **Play the next episode**
 
-- `<シリーズ名> の<位置（次、最新）>エピソードを再生して`
+- `<シリーズ名> の <位置（次、最新）> エピソードを再生して`
 - `<シリーズ名> を続きから観て`
 
 #### Podcasts
