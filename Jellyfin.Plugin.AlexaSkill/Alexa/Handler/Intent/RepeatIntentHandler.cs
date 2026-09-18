@@ -91,8 +91,15 @@ public class RepeatIntentHandler : BaseHandler
         // other mismatch is the ordinary queue-advance shape instead
         // (RecordLastPlayed pins the user-initiated play; the Enqueue directives
         // that advance the queue never record), where the newer token wins.
+        // JF-568: the recorded LAUNCH ROUTE gates the displacement read, the same
+        // signal ResolvePlayingMedium uses: a video-kind ledger entry recorded on
+        // the AUDIO route (the JF-507 audio-only transcode, the JF-589 audio-route
+        // episodes) was launched by the audio pipeline, so its token moving on is
+        // queue advance, not displacement; only a VideoApp-routed (or legacy
+        // null-routed, pre-JF-568) video-kind entry displaces.
         string? deviceId = context?.System?.Device?.DeviceID;
         string? lastPlayedId = deviceId != null ? _queueManager?.GetLastPlayedItemId(deviceId) : null;
+        DeviceQueueManager.LaunchRoute? recordedRoute = deviceId != null ? _queueManager?.GetLastPlayedLaunchRoute(deviceId) : null;
         string? token = context?.AudioPlayer?.Token;
 
         BaseItem? ResolveItem(string? id) =>
@@ -105,6 +112,7 @@ public class RepeatIntentHandler : BaseHandler
             lastPlayedItem != null
             && !string.IsNullOrEmpty(token)
             && !string.Equals(token, lastPlayedId, StringComparison.Ordinal)
+            && recordedRoute != DeviceQueueManager.LaunchRoute.Audio
             && PlaybackLaunchBuilder.IsVideoAppLaunchItem(lastPlayedItem);
 
         BaseItem? item;

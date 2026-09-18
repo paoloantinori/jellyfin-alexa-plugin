@@ -381,7 +381,7 @@ public class ResumeConfirmationTranscodeBaseTests : PluginTestBase, IDisposable
         _fx.UserDataManager
             .Setup(u => u.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
             .Returns(new UserItemData { Key = "test", Played = false, PlaybackPositionTicks = TimeSpan.FromMinutes(5).Ticks });
-        _queueManager.RecordLastPlayed(DeviceId, id.ToString());
+        _queueManager.RecordLastPlayed(DeviceId, id.ToString(), DeviceQueueManager.LaunchRoute.Audio);
         SeedActiveBase(id, 20);
         // The JF-521 provenance twin of the UserData value: under the raw regime the
         // device's own stop wrote the SAME 5:00 into both stores (the equality the
@@ -441,7 +441,7 @@ public class ResumeConfirmationTranscodeBaseTests : PluginTestBase, IDisposable
         _fx.UserDataManager
             .Setup(u => u.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
             .Returns(new UserItemData { Key = "test", Played = false, PlaybackPositionTicks = TimeSpan.FromMinutes(5).Ticks });
-        _queueManager.RecordLastPlayed(DeviceId, id.ToString());
+        _queueManager.RecordLastPlayed(DeviceId, id.ToString(), DeviceQueueManager.LaunchRoute.Audio);
 
         SkillResponse offer = await CreateLaunchHandler().HandleAsync(
             new LaunchRequest { Locale = "en-US" },
@@ -497,7 +497,7 @@ public class ResumeConfirmationTranscodeBaseTests : PluginTestBase, IDisposable
         _fx.UserDataManager
             .Setup(u => u.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
             .Returns(new UserItemData { Key = "test", Played = false, PlaybackPositionTicks = TimeSpan.FromMinutes(40).Ticks });
-        _queueManager.RecordLastPlayed(DeviceId, id.ToString());
+        _queueManager.RecordLastPlayed(DeviceId, id.ToString(), DeviceQueueManager.LaunchRoute.Audio);
         // The device's OWN audio-shaped transcode launch left the stale launch scope...
         SeedActiveBase(id, 20);
         // ...and its own stop persisted a 5:00 raw offset the phone's 40:00 no longer matches.

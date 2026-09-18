@@ -79,31 +79,57 @@ public sealed class DeviceQueueManager : IDisposable
     }
 
     /// <summary>
+    /// JF-568: which directive route carried a recorded last play. The route, not
+    /// the item KIND, is what distinguishes "an Episode the skill last launched via
+    /// AudioPlayer" (the JF-507 audio-only transcode and the JF-589 audio-route
+    /// episodes, where transport directives work) from "the same Episode launched
+    /// via VideoApp" (where they do not).
+    /// </summary>
+    public enum LaunchRoute
+    {
+        /// <summary>An <c>AudioPlayer.Play</c> directive launched the stream.</summary>
+        Audio,
+
+        /// <summary>A <c>VideoApp.Launch</c> directive launched the stream.</summary>
+        VideoApp
+    }
+
+    /// <summary>
     /// Records the last user-initiated play on a device. Called from the
     /// BuildAudioPlayerResponse chokepoint on every ReplaceAll play, so it captures
     /// all play paths (intent handlers, APL carousel taps, resume confirmations).
     /// This is the device-specific source of truth that survives VideoApp.Launch
     /// plays which do not update context.AudioPlayer.Token.
+    /// JF-568: the launch route is recorded beside the item id (see
+    /// <see cref="LaunchRoute"/>), and the short-circuit compares BOTH: the same
+    /// item re-launched on the other route (a screenless-degrade play followed by a
+    /// VideoApp play of the same item, or the BuildAudioPlayerResponse delegation
+    /// that re-records inside BuildVideoAppAudioResponse) must update the route, not
+    /// short-circuit on the unchanged item id.
     /// </summary>
     /// <param name="deviceId">The Alexa device ID.</param>
     /// <param name="itemId">The item ID that was played.</param>
-    public void RecordLastPlayed(string deviceId, string itemId)
+    /// <param name="launchRoute">The directive route that launched the item.</param>
+    public void RecordLastPlayed(string deviceId, string itemId, LaunchRoute launchRoute)
     {
         DeviceQueue queue = GetOrCreateQueue(deviceId);
+        string routeName = launchRoute.ToString();
 
-        // Short-circuit when the item hasn't changed — avoids timer churn and
-        // redundant disk writes when the same item is replayed or re-issued.
-        if (string.Equals(queue.LastPlayedItemId, itemId, StringComparison.Ordinal))
+        // Short-circuit when NOTHING changed: avoids timer churn and redundant
+        // disk writes when the same item is replayed or re-issued on the same route.
+        if (string.Equals(queue.LastPlayedItemId, itemId, StringComparison.Ordinal)
+            && string.Equals(queue.LastPlayedLaunchRoute, routeName, StringComparison.Ordinal))
         {
             return;
         }
 
         queue.LastPlayedItemId = itemId;
+        queue.LastPlayedLaunchRoute = routeName;
         SchedulePersistInternal(deviceId);
 
         _logger.LogDebug(
-            "Recorded last played for device {DeviceId}: item={ItemId}",
-            deviceId, itemId);
+            "Recorded last played for device {DeviceId}: item={ItemId}, route={Route}",
+            deviceId, itemId, routeName);
     }
 
     /// <summary>
@@ -118,6 +144,24 @@ public sealed class DeviceQueueManager : IDisposable
         return _queues.TryGetValue(deviceId, out DeviceQueue? queue)
             ? queue.LastPlayedItemId
             : null;
+    }
+
+    /// <summary>
+    /// JF-568 read side: the launch route recorded beside
+    /// <see cref="DeviceQueue.LastPlayedItemId"/>, without creating a queue entry.
+    /// Null means no route is known (a queue persisted before JF-568, a
+    /// pre-upgrade launch, or a route name a newer plugin wrote that this one
+    /// cannot parse); callers treat null as legacy and fall back to the item-kind
+    /// rule, preserving the pre-JF-568 classification.
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID.</param>
+    /// <returns>The recorded launch route, or null when none is recorded.</returns>
+    public LaunchRoute? GetLastPlayedLaunchRoute(string deviceId)
+    {
+        return _queues.TryGetValue(deviceId, out DeviceQueue? queue)
+            && Enum.TryParse<LaunchRoute>(queue.LastPlayedLaunchRoute, out LaunchRoute route)
+                ? route
+                : null;
     }
 
     /// <summary>

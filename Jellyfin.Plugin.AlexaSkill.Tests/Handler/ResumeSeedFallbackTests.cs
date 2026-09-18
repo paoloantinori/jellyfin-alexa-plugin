@@ -88,7 +88,7 @@ public class ResumeSeedFallbackTests : PluginTestBase, IDisposable
 
     private void SeedDeviceLastPlayed(Guid itemId, long storedTicks)
     {
-        _queueManager.RecordLastPlayed(DeviceId, itemId.ToString());
+        _queueManager.RecordLastPlayed(DeviceId, itemId.ToString(), DeviceQueueManager.LaunchRoute.Audio);
         _queueManager.GetOrCreateQueue(DeviceId).ItemPositionState[itemId.ToString("N")] = storedTicks;
     }
 

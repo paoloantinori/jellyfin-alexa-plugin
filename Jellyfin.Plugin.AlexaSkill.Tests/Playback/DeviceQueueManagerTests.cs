@@ -858,4 +858,79 @@ public class DeviceQueueManagerTests : IDisposable
 
     private void SeedStoredPosition(string deviceId, Guid itemId, long ticks)
         => _manager.GetOrCreateQueue(deviceId).ItemPositionState[itemId.ToString("N")] = ticks;
+
+    // =====================================================================
+    // Last-played launch route (JF-568)
+    // =====================================================================
+
+    /// <summary>
+    /// JF-568: the route recorded beside the last-played item survives the
+    /// persist/reload cycle (Dispose flushes, a fresh manager on the same dir
+    /// reloads), so the classification reads it after a restart too.
+    /// </summary>
+    [Fact]
+    public void RecordLastPlayed_RouteRoundTripsThroughDisk()
+    {
+        var itemId = Guid.NewGuid();
+        _manager.RecordLastPlayed("dev", itemId.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        _manager.Dispose();
+
+        using var reloaded = new DeviceQueueManager(_tempDir, _logger);
+        Assert.Equal(itemId.ToString(), reloaded.GetLastPlayedItemId("dev"));
+        Assert.Equal(DeviceQueueManager.LaunchRoute.VideoApp, reloaded.GetLastPlayedLaunchRoute("dev"));
+    }
+
+    /// <summary>
+    /// JF-568 short-circuit pin: the unchanged-item short-circuit must compare the
+    /// ROUTE too. The same item re-launched on the other route (the
+    /// BuildAudioPlayerResponse native-controls delegation re-records inside
+    /// BuildVideoAppAudioResponse, a screenless-degrade play followed by a VideoApp
+    /// play of the same item) must flip the stored route, not keep the first one.
+    /// </summary>
+    [Fact]
+    public void RecordLastPlayed_SameItemDifferentRoute_UpdatesRoute()
+    {
+        var itemId = Guid.NewGuid();
+        _manager.RecordLastPlayed("dev", itemId.ToString(), DeviceQueueManager.LaunchRoute.Audio);
+        _manager.RecordLastPlayed("dev", itemId.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+
+        Assert.Equal(itemId.ToString(), _manager.GetLastPlayedItemId("dev"));
+        Assert.Equal(DeviceQueueManager.LaunchRoute.VideoApp, _manager.GetLastPlayedLaunchRoute("dev"));
+    }
+
+    /// <summary>
+    /// JF-568 legacy shape: a queue file persisted by a pre-JF-568 plugin carries
+    /// no route member, so the read yields null (readers keep the kind-based
+    /// classification) and the unknown-member JSON still deserializes.
+    /// </summary>
+    [Fact]
+    public void GetLastPlayedLaunchRoute_LegacyFileWithoutRoute_Null()
+    {
+        var itemId = Guid.NewGuid();
+        string dir = TestHelpers.CreateRegisteredTempDir("dq-legacy");
+        File.WriteAllText(
+            Path.Combine(dir, "queue_legacy.json"),
+            $"{{\"itemIds\":[],\"currentIndex\":-1,\"repeatMode\":\"None\",\"playbackOrder\":\"Default\","
+                + $"\"lastModifiedUtc\":\"2026-09-01T00:00:00Z\",\"currentPositionTicks\":0,"
+                + $"\"itemPositionState\":{{}},\"activeLaunchBaseMs\":{{}},\"pendingLaunchBaseMs\":{{}},"
+                + $"\"lastPlayedItemId\":\"{itemId}\"}}");
+
+        using var manager = new DeviceQueueManager(dir, _logger);
+        Assert.Equal(itemId.ToString(), manager.GetLastPlayedItemId("legacy"));
+        Assert.Null(manager.GetLastPlayedLaunchRoute("legacy"));
+    }
+
+    /// <summary>
+    /// Forward-compat shape (JF-568 constraint): a queue file a NEWER plugin wrote
+    /// carries a route name this plugin does not know; the read degrades to null
+    /// (legacy semantics) instead of throwing.
+    /// </summary>
+    [Fact]
+    public void GetLastPlayedLaunchRoute_UnknownRouteName_Null()
+    {
+        _manager.GetOrCreateQueue("dev").LastPlayedItemId = Guid.NewGuid().ToString();
+        _manager.GetOrCreateQueue("dev").LastPlayedLaunchRoute = "Hologram";
+
+        Assert.Null(_manager.GetLastPlayedLaunchRoute("dev"));
+    }
 }

@@ -99,4 +99,20 @@ public sealed class DeviceQueue
     /// last play" when NativeControlsForAudio routes playback through VideoApp.
     /// </summary>
     public string? LastPlayedItemId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the launch route of the last user-initiated play (the
+    /// <see cref="DeviceQueueManager.LaunchRoute"/> name: "Audio" or "VideoApp"; JF-568).
+    /// Written by the SAME sites that write <see cref="LastPlayedItemId"/>, so the
+    /// medium classification can distinguish a video-KIND item the skill launched
+    /// through AudioPlayer (the JF-507 audio-only transcode, the JF-589 audio-route
+    /// episodes, flat-audio books) from one it launched through VideoApp. Stored as
+    /// the enum NAME string for JSON serialization compatibility (the RepeatMode
+    /// shape). Null on queues persisted before JF-568: readers treat null as legacy
+    /// and keep the item-kind classification, so old files behave unchanged. Purely
+    /// additive in the persisted JSON: an older plugin loading a newer file ignores
+    /// the unknown property (System.Text.Json skips unknown members) instead of
+    /// crashing, and a newer plugin loading an older file reads null.
+    /// </summary>
+    public string? LastPlayedLaunchRoute { get; set; }
 }

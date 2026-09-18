@@ -1068,7 +1068,7 @@ public class EventHandlerTests : PluginTestBase, IDisposable
     {
         var queueManager = TestHelpers.CreateDeviceQueueManager("jf527");
         Plugin.Instance!.DeviceQueueManager = queueManager;
-        queueManager.RecordLastPlayed(context.System.Device.DeviceID, Guid.NewGuid().ToString());
+        queueManager.RecordLastPlayed(context.System.Device.DeviceID, Guid.NewGuid().ToString(), DeviceQueueManager.LaunchRoute.Audio);
 
         // Disposal tears down the armed 2s debounce timer deterministically (no
         // post-test straggler); the in-memory queue (what the handler's

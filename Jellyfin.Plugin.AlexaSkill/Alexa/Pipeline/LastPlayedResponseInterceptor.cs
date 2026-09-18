@@ -93,7 +93,7 @@ public class LastPlayedResponseInterceptor : IResponseInterceptor
                 continue;
             }
 
-            _queueManager.RecordLastPlayed(deviceId, itemId);
+            _queueManager.RecordLastPlayed(deviceId, itemId, DeviceQueueManager.LaunchRoute.VideoApp);
             _logger.LogDebug(
                 "Recorded last played (video) for device {DeviceId}: item={ItemId}, corr={CorrelationId}",
                 deviceId, itemId, context.CorrelationId);

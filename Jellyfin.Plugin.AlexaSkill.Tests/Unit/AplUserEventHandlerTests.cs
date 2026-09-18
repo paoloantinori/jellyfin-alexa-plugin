@@ -321,7 +321,7 @@ public class AplUserEventHandlerTests : PluginTestBase, IDisposable
         var movie = new MediaBrowser.Controller.Entities.Movies.Movie { Name = "Current Movie", Id = Guid.NewGuid() };
 
         string deviceId = "jf582-apl-next-video";
-        _queueManager.RecordLastPlayed(deviceId, movie.Id.ToString());
+        _queueManager.RecordLastPlayed(deviceId, movie.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
         _libraryManager.Setup(l => l.GetItemById(movie.Id)).Returns(movie);
 
         var request = CreateAplEvent("next");
@@ -356,7 +356,7 @@ public class AplUserEventHandlerTests : PluginTestBase, IDisposable
         var movie = new MediaBrowser.Controller.Entities.Movies.Movie { Name = "Current Movie", Id = Guid.NewGuid() };
 
         string deviceId = "jf582-apl-prev-video";
-        _queueManager.RecordLastPlayed(deviceId, movie.Id.ToString());
+        _queueManager.RecordLastPlayed(deviceId, movie.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
         _libraryManager.Setup(l => l.GetItemById(movie.Id)).Returns(movie);
 
         var request = CreateAplEvent("prev");

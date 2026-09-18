@@ -84,7 +84,7 @@ public class VideoAppGapHonestResponseTests : PluginTestBase, IDisposable
     private DeviceQueueManager CreateLedger(string deviceId, BaseItem lastPlayed, params BaseItem[] resolve)
     {
         var queueManager = TestHelpers.CreateDeviceQueueManager("jf564-" + deviceId);
-        queueManager.RecordLastPlayed(deviceId, lastPlayed.Id.ToString());
+        queueManager.RecordLastPlayed(deviceId, lastPlayed.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
         _fx.LibraryManager.Setup(x => x.GetItemById(lastPlayed.Id)).Returns(lastPlayed);
         foreach (BaseItem item in resolve)
         {

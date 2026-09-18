@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using global::Alexa.NET.Request;
 using global::Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
@@ -48,12 +49,14 @@ public class PlaybackLaunchBuilderMediumTests : PluginTestBase
     /// <summary>
     /// A queue manager with the given item recorded as the device's last play,
     /// plus a library manager resolving that same id to the item (the ledger
-    /// read + item resolve pair ResolvePlayingMedium performs).
+    /// read + item resolve pair ResolvePlayingMedium performs). The route defaults
+    /// to VideoApp (the recording site a Movie/Channel/Book ledger entry comes
+    /// from); the JF-568 audio-route arms pass <see cref="DeviceQueueManager.LaunchRoute.Audio"/>.
     /// </summary>
-    private static (Mock<ILibraryManager> Library, DeviceQueueManager Queue) LedgerWith(BaseItem item, string deviceId = "test-device")
+    private static (Mock<ILibraryManager> Library, DeviceQueueManager Queue) LedgerWith(BaseItem item, string deviceId = "test-device", DeviceQueueManager.LaunchRoute route = DeviceQueueManager.LaunchRoute.VideoApp)
     {
         DeviceQueueManager queue = TestHelpers.CreateDeviceQueueManager("medium-probe");
-        queue.RecordLastPlayed(deviceId, item.Id.ToString());
+        queue.RecordLastPlayed(deviceId, item.Id.ToString(), route);
         var library = new Mock<ILibraryManager>();
         library.Setup(l => l.GetItemById(item.Id)).Returns(item);
         return (library, queue);
@@ -145,6 +148,111 @@ public class PlaybackLaunchBuilderMediumTests : PluginTestBase
     }
 
     /// <summary>
+    /// JF-568 incident chain: a video-KIND item (Movie/Episode) launched on the
+    /// AUDIO route (the JF-507 audio-only transcode, the JF-589 audio-route
+    /// episodes) records the video-kind item in the ledger WITH route Audio; a
+    /// subsequent PlaybackNearlyFinished radio enqueue (PostPlayBehavior=AutoPlay)
+    /// moves the AudioPlayer token to the radio track WITHOUT recording. The
+    /// recorded Audio route must keep the classification Audio (the audio pipeline
+    /// owns the stream; transport directives work), not read token != ledger +
+    /// video kind as VideoApp displacement.
+    /// </summary>
+    [Fact]
+    public void Medium_LedgerMovieAudioRoute_TokenMovedToRadioTrack_YieldsAudio()
+    {
+        var movie = new Movie { Name = "The Matrix", Id = Guid.NewGuid() };
+        var (library, queue) = LedgerWith(movie, route: DeviceQueueManager.LaunchRoute.Audio);
+        Context tokenMovedToRadioTrack = TestHelpers.CreateContextWithToken(Guid.NewGuid().ToString());
+
+        Assert.Equal("Audio", _builder.ResolvePlayingMedium(tokenMovedToRadioTrack, library.Object, queue).ToString());
+        Assert.Null(PlaybackLaunchBuilder.BuildVideoAppTransportRefusal(_builder.ResolvePlayingMedium(tokenMovedToRadioTrack, library.Object, queue), "en-US"));
+    }
+
+    /// <summary>
+    /// JF-568 twin of the incident chain on the Episode kind (the JF-589 .strm
+    /// audio-route shape): route Audio keeps the classification Audio even with no
+    /// AudioPlayer token at all (fresh session after the audio-route launch).
+    /// </summary>
+    [Fact]
+    public void Medium_LedgerEpisodeAudioRoute_WithoutToken_YieldsAudio()
+    {
+        var episode = new Episode { Name = "Pilot", Id = Guid.NewGuid() };
+        var (library, queue) = LedgerWith(episode, route: DeviceQueueManager.LaunchRoute.Audio);
+
+        Assert.Equal("Audio", _builder.ResolvePlayingMedium(TestHelpers.CreateTestContext(), library.Object, queue).ToString());
+    }
+
+    /// <summary>
+    /// JF-568 displacement pin: the SAME video-kind ledger shape on the VideoApp
+    /// route with the token moved still classifies Video (a VideoApp launch never
+    /// updates the token, so the mismatch IS displacement).
+    /// </summary>
+    [Fact]
+    public void Medium_LedgerMovieVideoAppRoute_TokenMoved_YieldsVideo()
+    {
+        var movie = new Movie { Name = "The Matrix", Id = Guid.NewGuid() };
+        var (library, queue) = LedgerWith(movie, route: DeviceQueueManager.LaunchRoute.VideoApp);
+        Context tokenMoved = TestHelpers.CreateContextWithToken(Guid.NewGuid().ToString());
+
+        Assert.Equal("Video", _builder.ResolvePlayingMedium(tokenMoved, library.Object, queue).ToString());
+    }
+
+    /// <summary>
+    /// JF-568: a book the AUDIO route launched (NativeControlsForBooks off, the
+    /// flat /Audio path) classifies Audio: the AudioPlayer transport directives
+    /// work on that stream. Same semantics the token-ownership arm already gives a
+    /// flat-audio book whose token matches.
+    /// </summary>
+    [Fact]
+    public void Medium_LedgerAudioBookAudioRoute_TokenMoved_YieldsAudio()
+    {
+        var book = new MediaBrowser.Controller.Entities.AudioBook { Name = "Book", Id = Guid.NewGuid() };
+        var (library, queue) = LedgerWith(book, route: DeviceQueueManager.LaunchRoute.Audio);
+        Context tokenMoved = TestHelpers.CreateContextWithToken(Guid.NewGuid().ToString());
+
+        Assert.Equal("Audio", _builder.ResolvePlayingMedium(tokenMoved, library.Object, queue).ToString());
+    }
+
+    /// <summary>
+    /// JF-568 no-regression pin: a queue file persisted by a pre-JF-568 plugin has
+    /// NO route field, so the route reads null and the classification must keep
+    /// today's kind-based behavior byte-for-byte (video kind + token moved =
+    /// Video; music kind = Audio). The JSON is hand-written to the pre-JF-568
+    /// persisted shape (no lastPlayedLaunchRoute member) and loaded through the
+    /// ctor's disk path, exactly the upgrade scenario.
+    /// </summary>
+    [Fact]
+    public void Medium_LegacyQueueFileWithoutRoute_KeepsKindBasedClassification()
+    {
+        var movie = new Movie { Name = "Old Movie", Id = Guid.NewGuid() };
+        var song = new Audio { Name = "Old Song", Id = Guid.NewGuid() };
+        var library = new Mock<ILibraryManager>();
+        library.Setup(l => l.GetItemById(movie.Id)).Returns(movie);
+        library.Setup(l => l.GetItemById(song.Id)).Returns(song);
+
+        string dir = TestHelpers.CreateRegisteredTempDir("medium-legacy");
+        File.WriteAllText(Path.Combine(dir, "queue_legacy-video-device.json"), LegacyQueueJson(movie.Id));
+        File.WriteAllText(Path.Combine(dir, "queue_legacy-music-device.json"), LegacyQueueJson(song.Id));
+        using var queue = new DeviceQueueManager(dir, Microsoft.Extensions.Logging.Abstractions.NullLogger<DeviceQueueManager>.Instance);
+
+        Context tokenMoved = TestHelpers.CreateContextWithToken(Guid.NewGuid().ToString(), "legacy-video-device");
+        Context musicContext = TestHelpers.CreateTestContext("legacy-music-device");
+
+        Assert.Equal("Video", _builder.ResolvePlayingMedium(tokenMoved, library.Object, queue).ToString());
+        Assert.Equal("Audio", _builder.ResolvePlayingMedium(musicContext, library.Object, queue).ToString());
+    }
+
+    /// <summary>
+    /// A pre-JF-568 persisted queue file: every then-existing member, no
+    /// lastPlayedLaunchRoute (the field JF-568 added).
+    /// </summary>
+    private static string LegacyQueueJson(Guid lastPlayedItemId)
+        => $"{{\"itemIds\":[],\"currentIndex\":-1,\"repeatMode\":\"None\",\"playbackOrder\":\"Default\","
+            + $"\"lastModifiedUtc\":\"2026-09-01T00:00:00Z\",\"currentPositionTicks\":0,"
+            + $"\"itemPositionState\":{{}},\"activeLaunchBaseMs\":{{}},\"pendingLaunchBaseMs\":{{}},"
+            + $"\"lastPlayedItemId\":\"{lastPlayedItemId}\"}}";
+
+    /// <summary>
     /// A ledger id the library cannot resolve (deleted item) is Unknown, so a
     /// cold handler keeps its existing behavior.
     /// </summary>
@@ -153,7 +261,7 @@ public class PlaybackLaunchBuilderMediumTests : PluginTestBase
     {
         Guid deletedId = Guid.NewGuid();
         using DeviceQueueManager queue = TestHelpers.CreateDeviceQueueManager("medium-probe");
-        queue.RecordLastPlayed("test-device", deletedId.ToString());
+        queue.RecordLastPlayed("test-device", deletedId.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
         var library = new Mock<ILibraryManager>();
         library.Setup(l => l.GetItemById(deletedId)).Returns((BaseItem?)null);
 

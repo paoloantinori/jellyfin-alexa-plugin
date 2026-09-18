@@ -279,7 +279,7 @@ public class RepeatIntentHandlerTests : PluginTestBase, IDisposable
         };
 
         string deviceId = "repeat-stale-device";
-        queueManager.RecordLastPlayed(deviceId, movie.Id.ToString());
+        queueManager.RecordLastPlayed(deviceId, movie.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
         _fx.LibraryManager.Setup(x => x.GetItemById(movie.Id)).Returns(movie);
         _fx.LibraryManager.Setup(x => x.GetItemById(song.Id)).Returns(song);
 
@@ -289,6 +289,48 @@ public class RepeatIntentHandlerTests : PluginTestBase, IDisposable
         Assert.NotNull(response);
         AssertNoAudioPlayDirective(response);
         Assert.Contains("can't repeat", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// JF-568: the SAME token-vs-ledger mismatch shape, but the video-kind ledger
+    /// entry was recorded with the AUDIO route (the JF-507 audio-only transcode
+    /// launch; the token then moved on to the AutoPlay radio track without
+    /// recording). That is NOT displacement: the audio pipeline owns the stream,
+    /// so the token's item (the radio track) is what repeats.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_AudioRouteVideoKindLedger_TokenMoved_DoesNotDisplace()
+    {
+        var queueManager = TestHelpers.CreateDeviceQueueManager("repeat-audio-route");
+        var handler = CreateHandler(queueManager);
+        var request = CreateRepeatRequest();
+        var user = TestHelpers.CreateTestUser();
+
+        var radioTrack = new Audio
+        {
+            Name = "Radio Track",
+            Id = Guid.NewGuid(),
+            Path = "/music/radio.mp3"
+        };
+        var movie = new MediaBrowser.Controller.Entities.Movies.Movie
+        {
+            Name = "Audio-Route Movie",
+            Id = Guid.NewGuid(),
+            Path = "/movies/audio-route.mkv"
+        };
+
+        string deviceId = "repeat-audio-route-device";
+        queueManager.RecordLastPlayed(deviceId, movie.Id.ToString(), DeviceQueueManager.LaunchRoute.Audio);
+        _fx.LibraryManager.Setup(x => x.GetItemById(movie.Id)).Returns(movie);
+        _fx.LibraryManager.Setup(x => x.GetItemById(radioTrack.Id)).Returns(radioTrack);
+
+        var context = CreateContextWithToken(radioTrack.Id.ToString(), deviceId);
+        var response = await handler.HandleAsync(request, context, user, null!, CancellationToken.None);
+
+        Assert.NotNull(response);
+        var directive = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+        Assert.Equal(PlayBehavior.ReplaceAll, directive.PlayBehavior);
+        Assert.Equal(radioTrack.Id.ToString(), directive.AudioItem.Stream.Token);
     }
 
     [Fact]
@@ -318,7 +360,7 @@ public class RepeatIntentHandlerTests : PluginTestBase, IDisposable
         };
 
         string deviceId = "repeat-advance-device";
-        queueManager.RecordLastPlayed(deviceId, track1.Id.ToString());
+        queueManager.RecordLastPlayed(deviceId, track1.Id.ToString(), DeviceQueueManager.LaunchRoute.Audio);
         _fx.LibraryManager.Setup(x => x.GetItemById(track1.Id)).Returns(track1);
         _fx.LibraryManager.Setup(x => x.GetItemById(track2.Id)).Returns(track2);
 
@@ -350,7 +392,7 @@ public class RepeatIntentHandlerTests : PluginTestBase, IDisposable
         };
 
         string deviceId = "repeat-notoken-device";
-        queueManager.RecordLastPlayed(deviceId, movie.Id.ToString());
+        queueManager.RecordLastPlayed(deviceId, movie.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
         _fx.LibraryManager.Setup(x => x.GetItemById(movie.Id)).Returns(movie);
 
         var context = TestHelpers.CreateTestContext(deviceId);

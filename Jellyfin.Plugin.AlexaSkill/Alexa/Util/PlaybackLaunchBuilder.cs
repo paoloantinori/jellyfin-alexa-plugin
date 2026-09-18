@@ -330,21 +330,30 @@ public sealed class PlaybackLaunchBuilder
 
     /// <summary>
     /// Classify what a device is playing from the JF-563 device last-played ledger plus
-    /// the AudioPlayer token (JF-564). The ledger is the only record a VideoApp launch
-    /// leaves (those launches never touch <c>context.AudioPlayer.Token</c>), and it is
-    /// written by every launch site: the BuildAudioPlayerResponse chokepoint, the
-    /// LastPlayedResponseInterceptor (movie/episode directives) and the VideoApp
-    /// builders (channel, video-audio, audiobook). Classification rules, in order:
-    /// an EMPTY ledger (or an unresolvable item) yields <see cref="PlayingMedium.Unknown"/>
-    /// so a cold handler keeps its existing behavior; a token naming the ledger item
-    /// yields <see cref="PlayingMedium.Audio"/> whatever the item kind (the audio
-    /// pipeline owns it: a Movie can ride the audio-only transcode and a book the flat
-    /// audio path, and on both the transport directives work) and skips the item
-    /// resolve entirely; otherwise the ledger item's kind decides via
-    /// <see cref="IsVideoAppLaunchItem"/> (channel vs other video) and the AudioBook
-    /// test, and any remaining item kind (music) is audio whose token merely moved
-    /// with the queue advance. RepeatIntentHandler keeps its own token-first
-    /// resolution because it needs the resolved item back to restart it.
+    /// the AudioPlayer token (JF-564) and the JF-568 recorded launch route. The ledger
+    /// is the only record a VideoApp launch leaves (those launches never touch
+    /// <c>context.AudioPlayer.Token</c>), and it is written by every launch site: the
+    /// BuildAudioPlayerResponse chokepoint, the LastPlayedResponseInterceptor
+    /// (movie/episode directives) and the VideoApp builders (channel, video-audio,
+    /// audiobook), each recording its route beside the item. Classification rules,
+    /// in order: an EMPTY ledger (or an unresolvable item) yields
+    /// <see cref="PlayingMedium.Unknown"/> so a cold handler keeps its existing
+    /// behavior; a token naming the ledger item yields <see cref="PlayingMedium.Audio"/>
+    /// whatever the item kind (the audio pipeline owns it: a Movie can ride the
+    /// audio-only transcode and a book the flat audio path, and on both the transport
+    /// directives work) and skips the item resolve entirely; a ledger entry recorded
+    /// on the AUDIO route yields <see cref="PlayingMedium.Audio"/> whatever the kind
+    /// for the same reason and also skips the resolve (JF-568: a video-KIND item the
+    /// skill launched through AudioPlayer, whose token a radio enqueue then moved
+    /// without recording, is the ordinary queue-advance shape, not VideoApp
+    /// displacement; classification is route-driven for recorded launches);
+    /// otherwise the ledger item's kind decides via <see cref="IsVideoAppLaunchItem"/>
+    /// (channel vs other video) and the AudioBook test, and any remaining item kind
+    /// (music) is audio whose token merely moved with the queue advance. A NULL route
+    /// (a queue persisted before JF-568) falls through to the kind rules exactly as
+    /// before, so legacy files keep the pre-JF-568 classification. RepeatIntentHandler
+    /// keeps its own token-first resolution because it needs the resolved item back
+    /// to restart it.
     /// Moved here from BaseHandler (JF-315 batch 5).
     /// </summary>
     /// <param name="context">The Alexa context (device id for the ledger read, AudioPlayer token).</param>
@@ -359,9 +368,10 @@ public sealed class PlaybackLaunchBuilder
         }
 
         string? deviceId = context?.System?.Device?.DeviceID;
-        string? lastPlayedId = deviceId != null
-            ? (queueManager ?? Plugin.Instance?.DeviceQueueManager)?.GetLastPlayedItemId(deviceId)
+        DeviceQueueManager? ledgerManager = deviceId != null
+            ? queueManager ?? Plugin.Instance?.DeviceQueueManager
             : null;
+        string? lastPlayedId = ledgerManager?.GetLastPlayedItemId(deviceId!);
         if (!Guid.TryParse(lastPlayedId, out Guid lastPlayedItemId))
         {
             return PlayingMedium.Unknown;
@@ -373,6 +383,19 @@ public sealed class PlaybackLaunchBuilder
         // shape), the answer is Audio whatever the kind and the DB read is skipped.
         if (StreamTokenCodec.TryGetItemId(context?.AudioPlayer?.Token, out Guid tokenItemId)
             && tokenItemId == lastPlayedItemId)
+        {
+            return PlayingMedium.Audio;
+        }
+
+        // JF-568: the recorded route owns the classification for recorded launches.
+        // Route Audio means the AUDIO pipeline launched the ledger item (a Movie or
+        // Episode on the JF-507 audio-only transcode, an audio-route episode since
+        // JF-589, a flat-audio book), so a token that moved on is the ordinary
+        // queue-advance/radio-enqueue shape, not VideoApp displacement; the answer
+        // is Audio whatever the item kind and the resolve is skipped, mirroring the
+        // token-ownership arm above. Only a VideoApp-routed (or legacy null-routed)
+        // entry falls through to the kind-based rules below.
+        if (ledgerManager?.GetLastPlayedLaunchRoute(deviceId!) == DeviceQueueManager.LaunchRoute.Audio)
         {
             return PlayingMedium.Audio;
         }
@@ -757,7 +780,7 @@ public sealed class PlaybackLaunchBuilder
         string? deviceId = context?.System?.Device?.DeviceID;
         if (!string.IsNullOrEmpty(deviceId))
         {
-            Plugin.Instance?.DeviceQueueManager?.RecordLastPlayed(deviceId, channel.Id.ToString());
+            Plugin.Instance?.DeviceQueueManager?.RecordLastPlayed(deviceId, channel.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
         }
 
         return await BuildVideoAppLaunchResponseAsync(
@@ -824,7 +847,7 @@ public sealed class PlaybackLaunchBuilder
         string? ledgerDeviceId = context?.System?.Device?.DeviceID;
         if (!string.IsNullOrEmpty(ledgerDeviceId))
         {
-            (Plugin.Instance?.DeviceQueueManager)?.RecordLastPlayed(ledgerDeviceId, item.Id.ToString());
+            (Plugin.Instance?.DeviceQueueManager)?.RecordLastPlayed(ledgerDeviceId, item.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
         }
 
         // JF-567: this GUID feeds a URL path segment, so it keeps the default dashed
@@ -1208,10 +1231,13 @@ public sealed class PlaybackLaunchBuilder
         // carousel taps and resume confirmations that bypass SetQueue. Captures VideoApp.Launch
         // plays too (which don't update context.AudioPlayer.Token), giving LaunchRequestHandler
         // a reliable device-specific "what did this Echo last play" signal.
+        // JF-568: records the AUDIO route. The native-controls delegation below re-records
+        // with the VideoApp route when it actually builds a VideoApp.Launch for the item, so
+        // the route always names the directive that went out, not the builder that started.
         string? deviceId = context?.System?.Device?.DeviceID;
         if (playBehavior == PlayBehavior.ReplaceAll && !string.IsNullOrEmpty(deviceId))
         {
-            (queueManager ?? Plugin.Instance?.DeviceQueueManager)?.RecordLastPlayed(deviceId, itemId);
+            (queueManager ?? Plugin.Instance?.DeviceQueueManager)?.RecordLastPlayed(deviceId, itemId, DeviceQueueManager.LaunchRoute.Audio);
         }
 
         // Route initial playback through VideoApp when native controls are enabled for the
@@ -1445,13 +1471,16 @@ public sealed class PlaybackLaunchBuilder
         // callers bypass the BuildAudioPlayerResponse chokepoint that owns the record,
         // and the response interceptor deliberately skips audio-via-VideoApp and
         // audiobook-concat URLs, so without this a VideoApp-launched play would vanish
-        // from the ledger the launch resume-offer reads. Idempotent where the chokepoint
-        // delegation also records (RecordLastPlayed short-circuits an unchanged item);
-        // the screenless degrade above records through the chokepoint as before.
+        // from the ledger the launch resume-offer reads. NOT idempotent under the JF-568
+        // route-marked ledger: when this builder runs after the chokepoint recorded
+        // the same item with route Audio (the delegation shape), RecordLastPlayed's
+        // item-AND-route short-circuit deliberately does NOT fire and the route
+        // FLIPS to VideoApp, which is the truth for this launch; the screenless
+        // degrade above records through the chokepoint (route Audio) as before.
         string? ledgerDeviceId = context?.System?.Device?.DeviceID;
         if (!string.IsNullOrEmpty(ledgerDeviceId))
         {
-            (Plugin.Instance?.DeviceQueueManager)?.RecordLastPlayed(ledgerDeviceId, itemId);
+            (Plugin.Instance?.DeviceQueueManager)?.RecordLastPlayed(ledgerDeviceId, itemId, DeviceQueueManager.LaunchRoute.VideoApp);
         }
 
         bool isAudioBook = AudiobookItems.IsAudioBook(item);
