@@ -270,6 +270,108 @@ public class TvNextUpServiceTests : PluginTestBase
     }
 
     /// <summary>
+    /// JF-589: when BOTH position stores are empty but the request context still
+    /// carries a residual AudioPlayer state whose token is the SAME episode (the
+    /// device-counter signal that survives restarts), the fresh re-ask seeds its
+    /// resume from that context offset. Audio-only content rides the AudioPlayer
+    /// static route, so the offset is visible directly on the directive.
+    /// </summary>
+    [Fact]
+    public async Task PlayLatest_EmptyStores_ContextTokenMatchesEpisode_SeedsResumeFromContextOffset()
+    {
+        var episodeId = Guid.NewGuid();
+        var episode = new TestHelpers.TestEpisodeWithStreams(
+            "Morning #1287",
+            episodeId,
+            TestHelpers.TestStream(MediaStreamType.Audio, "mp3"))
+        {
+            RunTimeTicks = TimeSpan.FromMinutes(30).Ticks
+        };
+        var series = new global::MediaBrowser.Controller.Entities.TV.Series { Name = "Morning", Id = Guid.NewGuid() };
+        var context = TestHelpers.CreateContextWithVideoApp();
+        context.AudioPlayer = new global::Alexa.NET.Request.Type.PlaybackState
+        {
+            Token = episodeId.ToString(),
+            OffsetInMilliseconds = 27_599,
+            PlayerActivity = "STOPPED"
+        };
+
+        SkillResponse response = await PlayLatestAsync(
+            episode, series,
+            new UserItemData { Key = "test", Played = false, PlaybackPositionTicks = 0 },
+            context);
+
+        var directive = Assert.IsType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>(Assert.Single(response.Response.Directives));
+        Assert.Contains("/Audio/", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.Equal(27_599, directive.AudioItem.Stream.OffsetInMilliseconds);
+    }
+
+    /// <summary>
+    /// JF-589 guard: a real stored position always wins over the residual context,
+    /// which can be stale in ways the stores are not.
+    /// </summary>
+    [Fact]
+    public async Task PlayLatest_StoredPositionPresent_StoredPositionWinsOverContext()
+    {
+        var episodeId = Guid.NewGuid();
+        var episode = new TestHelpers.TestEpisodeWithStreams(
+            "Morning #1287",
+            episodeId,
+            TestHelpers.TestStream(MediaStreamType.Audio, "mp3"))
+        {
+            RunTimeTicks = TimeSpan.FromMinutes(30).Ticks
+        };
+        var series = new global::MediaBrowser.Controller.Entities.TV.Series { Name = "Morning", Id = Guid.NewGuid() };
+        var context = TestHelpers.CreateContextWithVideoApp();
+        context.AudioPlayer = new global::Alexa.NET.Request.Type.PlaybackState
+        {
+            Token = episodeId.ToString(),
+            OffsetInMilliseconds = 27_599,
+            PlayerActivity = "STOPPED"
+        };
+
+        SkillResponse response = await PlayLatestAsync(
+            episode, series,
+            new UserItemData { Key = "test", Played = false, PlaybackPositionTicks = TimeSpan.FromMinutes(10).Ticks },
+            context);
+
+        var directive = Assert.IsType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>(Assert.Single(response.Response.Directives));
+        Assert.Equal((int)TimeSpan.FromMinutes(10).TotalMilliseconds, directive.AudioItem.Stream.OffsetInMilliseconds);
+    }
+
+    /// <summary>
+    /// JF-589 guard: a residual context token for a DIFFERENT episode (the previous
+    /// thing this device played) never seeds this launch; the fresh start stands.
+    /// </summary>
+    [Fact]
+    public async Task PlayLatest_ContextTokenForDifferentEpisode_NoSeed()
+    {
+        var episode = new TestHelpers.TestEpisodeWithStreams(
+            "Morning #1287",
+            Guid.NewGuid(),
+            TestHelpers.TestStream(MediaStreamType.Audio, "mp3"))
+        {
+            RunTimeTicks = TimeSpan.FromMinutes(30).Ticks
+        };
+        var series = new global::MediaBrowser.Controller.Entities.TV.Series { Name = "Morning", Id = Guid.NewGuid() };
+        var context = TestHelpers.CreateContextWithVideoApp();
+        context.AudioPlayer = new global::Alexa.NET.Request.Type.PlaybackState
+        {
+            Token = Guid.NewGuid().ToString(),
+            OffsetInMilliseconds = 27_599,
+            PlayerActivity = "STOPPED"
+        };
+
+        SkillResponse response = await PlayLatestAsync(
+            episode, series,
+            new UserItemData { Key = "test", Played = false, PlaybackPositionTicks = 0 },
+            context);
+
+        var directive = Assert.IsType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>(Assert.Single(response.Response.Directives));
+        Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
+    }
+
+    /// <summary>
     /// Drives <see cref="TvNextUpService.PlayNextUpEpisodeAsync"/> with the given
     /// episode stubbed as the NextUp result. <paramref name="queueSeeding"/> runs
     /// against a real DeviceQueueManager swapped into Plugin.Instance (the JF-581

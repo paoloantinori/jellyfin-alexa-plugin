@@ -570,6 +570,26 @@ public sealed class PlaybackLaunchBuilder
     /// <param name="user">The plugin user (static stream URL on the degrade).</param>
     /// <param name="sourceUrl">The VideoApp source URL the caller already resolved (capable route only).</param>
     /// <param name="resumeTicks">The resume position the caller resolved (the JF-565 slice input; feeds the degrade's offset).</param>
+    /// <remarks>
+    /// JF-589 AUDIO-SHAPE ROUTE: an EPISODE whose media streams positively prove
+    /// AUDIO-ONLY content (at least one audio stream and NO video stream, the
+    /// .strm podcast shape of the 2026-09-18 incident) routes to the AudioPlayer
+    /// degrade EVEN on a VideoApp-capable device. VideoApp playback is
+    /// POSITION-BLIND (no AudioPlayer context updates, no events on stop), so a
+    /// VideoApp listen of a podcast loses its position entirely and the next
+    /// resume lands BEHIND where the user actually listened (device-captured
+    /// 2026-09-18: 81 seconds of listening, the stop's context still reported the
+    /// pre-launch offset). AudioPlayer tracks the position correctly, so position
+    /// tracking wins over the seek bar for audio content: the trade-off is that
+    /// these items lose the VideoApp scrubber they technically could have had.
+    /// A REAL TV episode (a video stream present) keeps the VideoApp path
+    /// unchanged, and the probe FAILS OPEN: a thrown probe or a shape that proves
+    /// nothing (no streams, no audio stream) keeps today's VideoApp behavior on
+    /// capable devices - the audio-route only fires on positive audio-only
+    /// evidence. Probe cost: one <c>GetMediaStreams</c> read on the Episode
+    /// capable path, a second in-memory read of the streams the caller's codec routing already fetched
+    /// once for the VideoApp URL; no new network I/O.
+    /// </remarks>
     /// <param name="outputSpeech">The caller-chosen announce (fresh play keeps the now-playing/next/latest wording; the caller's resumeDelivered gate already picked the position-bearing form where the caller runs one (the arms that pass ungated ticks, e.g. PlayVideo, keep the informational-position-only semantics their capable route has always had) where the VideoApp route delivers it).</param>
     /// <returns>The VideoApp.Launch response on a capable device; the AudioPlayer.Play degrade for an Episode on a screenless one; the VideoRequiresScreen Tell for every other item on a screenless one.</returns>
     internal async Task<SkillResponse> BuildEpisodeLaunchResponseAsync(
@@ -582,42 +602,104 @@ public sealed class PlaybackLaunchBuilder
         long resumeTicks,
         IOutputSpeech? outputSpeech = null)
     {
-        if (item is MediaBrowser.Controller.Entities.TV.Episode
-            && !Interface.VideoAppCapabilities.DeviceSupportsVideoApp(context))
+        bool capable = Interface.VideoAppCapabilities.DeviceSupportsVideoApp(context);
+        bool isEpisode = item is MediaBrowser.Controller.Entities.TV.Episode;
+        if (isEpisode && !capable)
         {
             _logger.LogDebug(
                 "Episode launch of '{Title}' on device {DeviceId} without the VideoApp interface: degrading to the AudioPlayer audio-only route (JF-586)",
                 item.Name,
                 context?.System?.Device?.DeviceID ?? "unknown");
+            return BuildEpisodeAudioDegrade(item, user, context, resumeTicks, outputSpeech);
+        }
 
-            // The JF-565 clamp, audio-route mirror: a stored position at or beyond
-            // the runtime cannot be a legitimate mid-episode resume (only stale
-            // state reaches it), and an UNKNOWN runtime cannot prove the position
-            // is within the content (the zero-runtime .strm shape), so both fail
-            // closed to a fresh start rather than minting an offset the stream
-            // cannot serve.
-            long safeTicks = ClampResumeTicksToRuntime(item, resumeTicks, "Episode audio degrade");
-            int offsetMs = (int)Math.Min(TimeSpan.FromTicks(safeTicks).TotalMilliseconds, int.MaxValue);
-            string itemId = item.Id.ToString();
-            AudioLaunchSource source = ResolveAudioLaunchSource(item, itemId, user, offsetMs);
-            SkillResponse response = BuildAudioPlayerResponse(
-                PlayBehavior.ReplaceAll,
-                source,
-                itemId,
-                item,
-                user,
-                context);
-
-            // The caller-chosen announce rides the final response: the wording gate
-            // already ran at the caller against the VideoApp delivery verdict, and
-            // on this route the transcode ?start= delivers exactly what a
-            // position-bearing announce claims while the static directive offset can
-            // only resume further than a fresh-play wording admits, never less.
-            response.Response.OutputSpeech = outputSpeech;
-            return response;
+        // JF-589: audio-only content (the .strm podcast shape) must NOT ride the
+        // position-blind VideoApp player even on a capable device; see the remarks
+        // on this method's doc. The degrade body is the JF-586 one, verbatim.
+        if (isEpisode && capable && IsAudioOnlyEpisode(item))
+        {
+            _logger.LogInformation(
+                "Episode launch of '{Title}' ({ItemId}) on device {DeviceId} is audio-only content: routing AudioPlayer for position tracking instead of the position-blind VideoApp player (JF-589)",
+                item.Name,
+                item.Id,
+                context?.System?.Device?.DeviceID ?? "unknown");
+            return BuildEpisodeAudioDegrade(item, user, context, resumeTicks, outputSpeech);
         }
 
         return await BuildVideoAppLaunchResponseAsync(context, request, locale, sourceUrl, item.Name, outputSpeech).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The JF-586/JF-589 episode AudioPlayer degrade body, shared by the two entry
+    /// conditions (screenless device, audio-only shape on a capable device) so the
+    /// clamp, the audio-source resolution and the announce ride cannot drift.
+    /// </summary>
+    private SkillResponse BuildEpisodeAudioDegrade(
+        BaseItem item,
+        Entities.User user,
+        Context? context,
+        long resumeTicks,
+        IOutputSpeech? outputSpeech)
+    {
+        // The JF-565 clamp, audio-route mirror: a stored position at or beyond
+        // the runtime cannot be a legitimate mid-episode resume (only stale
+        // state reaches it), and an UNKNOWN runtime cannot prove the position
+        // is within the content (the zero-runtime .strm shape), so both fail
+        // closed to a fresh start rather than minting an offset the stream
+        // cannot serve.
+        long safeTicks = ClampResumeTicksToRuntime(item, resumeTicks, "Episode audio degrade");
+        int offsetMs = (int)Math.Min(TimeSpan.FromTicks(safeTicks).TotalMilliseconds, int.MaxValue);
+        string itemId = item.Id.ToString();
+        AudioLaunchSource source = ResolveAudioLaunchSource(item, itemId, user, offsetMs);
+        SkillResponse response = BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll,
+            source,
+            itemId,
+            item,
+            user,
+            context);
+
+        // The caller-chosen announce rides the final response: the wording gate
+        // already ran at the caller against the VideoApp delivery verdict, and
+        // on this route the transcode ?start= delivers exactly what a
+        // position-bearing announce claims while the static directive offset can
+        // only resume further than a fresh-play wording admits, never less.
+        response.Response.OutputSpeech = outputSpeech;
+        return response;
+    }
+
+    /// <summary>
+    /// The JF-589 audio-shape probe: positive evidence that an Episode's content is
+    /// AUDIO-ONLY, namely the media streams are readable and carry at least one
+    /// audio stream and NO video stream (the .strm podcast shape). Any other shape
+    /// (a video stream present = a real TV episode, zero streams = unknown, no
+    /// audio stream = unknown) and any probe failure are NOT audio-only: the caller
+    /// keeps today's VideoApp behavior, because the route may only change on
+    /// positive content-truth evidence, never on a guess (fail-open contract).
+    /// </summary>
+    private bool IsAudioOnlyEpisode(BaseItem item)
+    {
+        try
+        {
+            IReadOnlyList<MediaBrowser.Model.Entities.MediaStream> streams = item.GetMediaStreams();
+            if (streams.Count == 0)
+            {
+                return false;
+            }
+
+            return !streams.Any(s => s.Type == MediaBrowser.Model.Entities.MediaStreamType.Video)
+                && streams.Any(s => s.Type == MediaBrowser.Model.Entities.MediaStreamType.Audio);
+        }
+        catch (Exception ex)
+        {
+            // Same fail-open direction as ResolveVideoAppStreamDecision: the probe
+            // may only MOVE the audio route, never break the launch path.
+            _logger.LogDebug(
+                ex,
+                "JF-589 audio-shape probe could not read media streams for item {ItemId}; keeping the VideoApp route",
+                item.Id);
+            return false;
+        }
     }
 
     /// <summary>

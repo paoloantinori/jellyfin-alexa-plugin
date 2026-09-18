@@ -373,6 +373,30 @@ public sealed class TvNextUpService
             userData?.Played == true,
             _logger,
             "EpisodeLaunch");
+        // JF-589 same-item re-ask seed: when BOTH position stores are empty (the
+        // 2026-09-18 restart-ate-the-write shape) the platform still exposes one
+        // honest signal, the request context's residual AudioPlayer state, which
+        // survives server restarts by platform contract. When that state's stream
+        // token is the SAME episode being launched and carries a positive offset,
+        // seed the resume from it. A stored position always wins (the seed only
+        // fires on resumeTicks == 0, and a stale context can be wrong in ways the
+        // stores are not); an already-played episode also wins (Played means the
+        // listen COMPLETED, so the user asking for it again wants a fresh start,
+        // not the stopped tail of the last one).
+        if (resumeTicks == 0 && userData?.Played != true)
+        {
+            var residual = context.AudioPlayer;
+            if (residual != null
+                && residual.OffsetInMilliseconds > 0
+                && StreamTokenCodec.TryGetItemId(residual.Token, out Guid residualItemId)
+                && residualItemId == episode.Id)
+            {
+                resumeTicks = residual.OffsetInMilliseconds * TimeSpan.TicksPerMillisecond;
+                _logger.LogInformation(
+                    "EpisodeLaunch: both position stores were empty; seeded resume from the request context's residual AudioPlayer state of the same item: {OffsetMs}ms",
+                    residual.OffsetInMilliseconds);
+            }
+        }
         // JF-565 review finding: resolve the launch URL FIRST and gate the resume
         // wording on whether the position was actually DELIVERED (the Static route
         // and the runtime clamp both degrade to a fresh start; announcing a resume

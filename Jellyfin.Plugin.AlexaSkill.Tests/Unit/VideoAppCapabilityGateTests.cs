@@ -188,6 +188,82 @@ public class VideoAppCapabilityGateTests : PluginTestBase
         Assert.Null(response.Response.ShouldEndSession);
     }
 
+    // ========== JF-589: audio-only episodes route AudioPlayer even on capable devices ==========
+
+    /// <summary>
+    /// JF-589: an Episode whose streams positively prove AUDIO-ONLY content (an
+    /// audio stream and no video stream, the .strm podcast shape of the 2026-09-18
+    /// incident) routes to the AudioPlayer Play EVEN on a VideoApp-capable device,
+    /// because VideoApp playback is position-blind and AudioPlayer tracks position.
+    /// A decodable audio codec keeps the plain static /Audio stream URL.
+    /// </summary>
+    [Fact]
+    public async Task BuildEpisodeLaunchResponse_AudioOnlyEpisodeOnCapableDevice_RoutesAudioPlayer()
+    {
+        var config = new PluginConfiguration { ServerAddress = "http://localhost:8096/" };
+        var handler = CreateBuilderProbe(config, LoggerFactory.Create(b => { }));
+        var user = new Entities.User { Id = Guid.NewGuid(), JellyfinToken = "tok" };
+        var episodeId = Guid.NewGuid();
+        var episode = new TestHelpers.TestEpisodeWithStreams(
+            "Morning #1287",
+            episodeId,
+            TestHelpers.TestStream(MediaStreamType.Audio, "mp3"));
+
+        SkillResponse response = await handler.Launch.BuildEpisodeLaunchResponseAsync(
+            TestHelpers.CreateContextWithVideoApp(),
+            new IntentRequest { Locale = "en-US" },
+            "en-US",
+            episode,
+            user,
+            sourceUrl: "https://test.example.com/Videos/abc/stream?static=true",
+            resumeTicks: 0);
+
+        var directive = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+        Assert.Empty(response.Response.Directives.OfType<VideoAppLaunchDirective>());
+        Assert.Equal(episodeId.ToString(), directive.AudioItem.Stream.Token);
+        Assert.Contains($"/Audio/{episodeId}/stream?static=true&api_key=", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.True(response.Response.ShouldEndSession, "JF-299: the AudioPlayer play ends the session");
+    }
+
+    /// <summary>
+    /// JF-589 fail-open pin: when the audio-shape probe cannot read the media
+    /// streams the launch keeps today's VideoApp behavior on a capable device; the
+    /// audio route fires only on positive audio-only evidence.
+    /// </summary>
+    [Fact]
+    public async Task BuildEpisodeLaunchResponse_ProbeThrowsOnCapableDevice_KeepsVideoApp()
+    {
+        var config = new PluginConfiguration { ServerAddress = "http://localhost:8096/" };
+        var handler = CreateBuilderProbe(config, LoggerFactory.Create(b => { }));
+        var user = new Entities.User { Id = Guid.NewGuid(), JellyfinToken = "tok" };
+        var episode = new ThrowingStreamsEpisode("Broken Probe", Guid.NewGuid());
+
+        SkillResponse response = await handler.Launch.BuildEpisodeLaunchResponseAsync(
+            TestHelpers.CreateContextWithVideoApp(),
+            new IntentRequest { Locale = "en-US" },
+            "en-US",
+            episode,
+            user,
+            sourceUrl: "https://test.example.com/Videos/abc/stream?static=true",
+            resumeTicks: 0);
+
+        var directive = Assert.Single(response.Response.Directives.OfType<VideoAppLaunchDirective>());
+        Assert.Equal("https://test.example.com/Videos/abc/stream?static=true", directive.VideoItem.Source);
+        Assert.Null(response.Response.ShouldEndSession);
+    }
+
+    private sealed class ThrowingStreamsEpisode : global::MediaBrowser.Controller.Entities.TV.Episode
+    {
+        public ThrowingStreamsEpisode(string name, Guid id)
+        {
+            Name = name;
+            Id = id;
+        }
+
+        public override IReadOnlyList<MediaBrowser.Model.Entities.MediaStream> GetMediaStreams()
+            => throw new InvalidOperationException("probe failure under test");
+    }
+
     // ========== Handler launch sites (the existing launch-site test shape) ==========
 
     [Fact]
