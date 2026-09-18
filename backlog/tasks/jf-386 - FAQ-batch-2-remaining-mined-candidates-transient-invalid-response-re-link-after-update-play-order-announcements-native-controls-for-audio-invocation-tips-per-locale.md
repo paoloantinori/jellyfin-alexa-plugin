@@ -4,10 +4,10 @@ title: >-
   FAQ batch 2: remaining mined candidates (transient invalid-response, re-link
   after update, play-order, announcements, native-controls-for-audio, invocation
   tips per locale)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-08-21 06:28'
-updated_date: '2026-09-10 15:31'
+updated_date: '2026-09-18 23:28'
 labels:
   - docs
   - faq
@@ -36,15 +36,23 @@ Write when a natural doc-touch moment occurs (release notes, next FAQ batch); no
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 #1 Write the remaining mined FAQ candidates (list in description) in a second batch, same style/placement rules as 2cb9112
-- [ ] #2 #2 Keep the deferred list updated as entries ship
+- [x] #1 #1 Write the remaining mined FAQ candidates (list in description) in a second batch, same style/placement rules as 2cb9112
+- [x] #2 #2 Keep the deferred list updated as entries ship
 <!-- AC:END -->
 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
 2026-09-10: the 're-link after update' candidate LANDED in the README FAQ (commit bdb2d53e), prompted by external issue #23 (v12 update, generic 'Sorry, I'm having trouble', Test connection green) plus the JF-527 relink UX landing. Entry covers the symptom/mechanism (update invalidates the stored per-user token; Test connection checks the server, not the link), the dashboard re-link steps, the version-dependent spoken message (generic up to 0.12.1.0, explicit re-link message from newer releases), and the log lines to attach when opening an issue. Batch 2's remaining candidates unchanged.
+
+2026-09-19: batch 2 landed. Remaining deferred: 5 (native-controls standalone, only if reports recur), 7 (carrier-words table, merge later), 8 (upgrade-notes, release-gated). 2 landed earlier (bdb2d53e).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Batch 2 shipped (README FAQ, docs-only commit): (1) transient 'skill was unable to respond' entry (8s window, retry-first guidance, pointer to the warm-up entry); (3) same-artist-same-order entry, corrected after review to the two mechanisms that actually exist (the Shuffle Artist Songs config flag and the during-playback built-in 'shuffle'; the first draft's 'ask for shuffle in the same breath' advice was wrong: no slot-content shuffle detection exists on the artist path, and the 'in modalita casuale' samples belong to the playlist intent) with the popularity wording fixed to favorites/most-played-then-rating (PopularitySort's real key order); (4) now-playing-music announce entry (Announce Music Plays opt-in default off, video/book default on, both toggles located); (6) invocation-name entry extended with the foreign-brand-under-non-matching-locale pitfall (French 'Jellyfin' report). Also fixed in passing: 'Two common pitfalls' now says Three, and a pre-existing duplicated FAQ heading (mood/genre) removed. Deferred list now: (5) native-controls standalone entry only if reports recur, (7) carrier-words table merge later, (8) upgrade-notes class only when a release ships such a fix. Candidate (2) had landed earlier in bdb2d53e. Review: code-reviewer verified all claims against source; 2 of 4 draft entries needed corrections, both applied.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
