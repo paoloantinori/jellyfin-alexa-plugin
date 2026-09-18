@@ -3,9 +3,10 @@ id: JF-593
 title: >-
   Locale sweep: 11 non-English locales speak English on the FindSong/book/skip
   families (21-26 keys each)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-18 21:44'
+updated_date: '2026-09-18 22:45'
 labels:
   - bug
   - i18n
@@ -23,12 +24,18 @@ Systemic gap found by the JF-591/JF-592 audits: 11 of the 14 non-English locale 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Inventory baseline (the 21 common keys + per-locale extras in the task notes) is reduced to zero: no non-en locale carries an en-US-identical value with more than 12 alphabetic chars, verified by re-running the comparison scan
-- [ ] #2 Every translation keeps placeholder count and order identical to the en-US template ({0}/{1}/{2}); validate_locales.py PASS
-- [ ] #3 The FindSong family wording in each locale is a coherent conversation (prompt, disambiguation pick, found/not-found) reviewed by a fluent check or cross-checked against the locale's existing sibling strings for register
-- [ ] #4 SSML variants keep their <break> tags and, where the locale uses a speechcon, an in-locale speechcon from that locale's Amazon speechcon reference
-- [ ] #5 Suite passes on both TFMs without --no-build; no test asserts the English wording of the translated keys (StartOverIntentHandlerTests pins en-US, unaffected)
+- [x] #1 Inventory baseline (the 21 common keys + per-locale extras in the task notes) is reduced to zero: no non-en locale carries an en-US-identical value with more than 12 alphabetic chars, verified by re-running the comparison scan
+- [x] #2 Every translation keeps placeholder count and order identical to the en-US template ({0}/{1}/{2}); validate_locales.py PASS
+- [x] #3 The FindSong family wording in each locale is a coherent conversation (prompt, disambiguation pick, found/not-found) reviewed by a fluent check or cross-checked against the locale's existing sibling strings for register
+- [x] #4 SSML variants keep their <break> tags and, where the locale uses a speechcon, an in-locale speechcon from that locale's Amazon speechcon reference
+- [x] #5 Suite passes on both TFMs without --no-build; no test asserts the English wording of the translated keys (StartOverIntentHandlerTests pins en-US, unaffected)
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Shipped in 8c2edf08: ~330 strings translated across the 11 non-English locales (26-key common set incl. the whole FindSong conversation, resume/restart/skip, AtBeginning/PositionPastEnd, plus per-locale extras: book-search family in ar/hi/ja, ja TrackByArtist family de-'by'-ed to the full-width paren form, es-US WelcomeAplGreeting, it-IT RecentlyPlayed). fr register aligned to the locale's established vous (10 keys, including 3 pre-existing informal strays outside the original inventory). Structural guard ResponseStrings_NonEnglishLocale_HasNoEnUsIdenticalProse added (12 non-en locales, raw-resource sweep, brand-name exemption, contraction-normalized comparison) and proven red/green on BOTH residue shapes (identical copy and stale pre-contraction copy). Review cycle: code-review high returned 3 findings (guard blind spot hiding the AtBeginning/PositionPastEnd families, fr tu/vous register break vs the locale's sibling strings, ja 'by' in TrackByArtistFromAlbumSsml); all three applied in-change and the guard hardened accordingly. Placeholders asserted against en-US templates mechanically before landing. Known accepted limitation: the guard matches normalized-English-identity, so a future badly-translated (non-identical) string still needs human eyes; native-speaker review of my de/es/fr/hi/ja/nl/pt/ar wording remains advisable (AC#3 satisfied via sibling-register cross-check). Suite 4125/4125 both TFMs (12 new guard cases), Release 0 warnings, validate_locales PASS.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
