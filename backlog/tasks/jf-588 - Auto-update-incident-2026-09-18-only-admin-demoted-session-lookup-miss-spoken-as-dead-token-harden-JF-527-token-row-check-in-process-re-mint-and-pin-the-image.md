@@ -4,10 +4,10 @@ title: >-
   Auto-update incident 2026-09-18: only admin demoted + session-lookup miss
   spoken as dead token; harden JF-527 (token-row check, in-process re-mint) and
   pin the image
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-18 06:32'
-updated_date: '2026-09-18 08:23'
+updated_date: '2026-09-18 08:58'
 labels:
   - reliability
   - incident
@@ -46,3 +46,9 @@ LogSessionActivity note: the plugin's plugin-user Id is the Jellyfin user Id, so
 
 Scope correction to the note above: items (1) and (2) were implemented MERGED as dispatched - LogSessionActivity IS the in-process re-mint (no password needed), and the check-and-retry replaces the premature relink demand; there is no separately-open item. Remaining for this task: item 3 operational advice (image pinning, above) and the orchestrator's review gates; nothing committed.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+DONE (commit 120a11ce, items 1+2; item 3 the image-pinning advice left to the user who chose to keep auto-updates). BaseHandler's session-miss branch self-heals: when the JF-527 evidence shape holds (user.HasJellyfinToken + device last-played), before the AccountRelinkRequired tell it retries the session lookup ONCE under the same 2s JF-477 fast-fail budget; a landed retry stores the SessionReferenceCache reference and falls through to NORMAL handler dispatch (the request is served, not answered with the relink tell); a second miss keeps the relink tell unchanged. REVIEW-CORRECTED MECHANISM (the adversarial pass proved it against the 10.11.5/12.1 upstream source): the implementing agent's original cut called LogSessionActivity to 're-register' the session - inert, since that primitive only touches the in-memory SessionInfo and never writes the Devices row GetSessionByAuthenticationToken reads; and GetSessionByAuthenticationToken is itself a session creator whenever the Devices row exists. So the shipped cut is the bare retry (the honest fix for the transient-miss class), the LogSessionActivity call and its UserManager probe removed (finding 1 MAJOR applied; the second gate's probe with the same conclusion independently confirmed), and the doc claims corrected. Findings applied from the combined gates: the caller-gate doc scoping, the dead-param cleanup in the extracted shape, the self-heal gate confined to the token+history shape (cheap path untouched; events with a landed retry are served normally, which is the correct flow). Tests: 2 new red-first in EventHandlerTests (FirstLookupMisses_RetryLands_ServesRequest with token-lookup Times.Exactly(2); empty-token never retries, UserNotFound unchanged), the JF-527 relink test and no-history test green throughout. Suite 4069/4069 both TFMs, Release 0 warnings. LEFT OPEN: the root cause of the 18-morning persistent miss (candidates in the task description: post-recreation state, session eviction, a fresh-12.1-build behavior change) - the retry covers the transient class, the restart remains the fix for the persistent class; item 3 (pin the image) is the user's call, who chose to keep auto-updates.
+<!-- SECTION:FINAL_SUMMARY:END -->
