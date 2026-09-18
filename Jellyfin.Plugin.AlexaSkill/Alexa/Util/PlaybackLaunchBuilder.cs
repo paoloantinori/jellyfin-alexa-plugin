@@ -192,11 +192,11 @@ public sealed class PlaybackLaunchBuilder
     /// launch site that launches a Movie or Episode item must go through this helper
     /// so the routing cannot drift between handlers (live incident 2026-09-05
     /// corr=d9f848a7: the whole PlayNextEpisode chain was correct and the video never
-    /// started because the static URL served raw EAC3 bytes). JF-586: an EPISODE
-    /// launch site should call BuildEpisodeLaunchResponseAsync instead, which routes
+    /// started because the static URL served raw EAC3 bytes). JF-586/JF-587: an EPISODE
+    /// launch site must call BuildEpisodeLaunchResponseAsync instead, which routes
     /// through this helper on capable devices and degrades to the audio-only
-    /// AudioPlayer route on a screenless one (the JF-587 arms still call this
-    /// directly and refuse).
+    /// AudioPlayer route on a screenless one; every Movie/Episode launch site now
+    /// does (the remaining direct callers are Movie-only or LiveTvChannel).
     /// JF-565: an EPISODE launch may pass <paramref name="startTicks"/> to mint the
     /// resume slice (<c>?start=</c>) on the remux URL - VideoApp.Launch has no offset
     /// parameter, so the slice IS the episode resume mechanism. The position applies
@@ -564,7 +564,7 @@ public sealed class PlaybackLaunchBuilder
     /// <param name="user">The plugin user (static stream URL on the degrade).</param>
     /// <param name="sourceUrl">The VideoApp source URL the caller already resolved (capable route only).</param>
     /// <param name="resumeTicks">The resume position the caller resolved (the JF-565 slice input; feeds the degrade's offset).</param>
-    /// <param name="outputSpeech">The caller-chosen announce (fresh play keeps the now-playing/next/latest wording; the caller's resumeDelivered gate already picked the position-bearing form where the VideoApp route delivers it).</param>
+    /// <param name="outputSpeech">The caller-chosen announce (fresh play keeps the now-playing/next/latest wording; the caller's resumeDelivered gate already picked the position-bearing form where the caller runs one (the arms that pass ungated ticks, e.g. PlayVideo, keep the informational-position-only semantics their capable route has always had) where the VideoApp route delivers it).</param>
     /// <returns>The VideoApp.Launch response on a capable device; the AudioPlayer.Play degrade for an Episode on a screenless one; the VideoRequiresScreen Tell for every other item on a screenless one.</returns>
     internal async Task<SkillResponse> BuildEpisodeLaunchResponseAsync(
         Context? context,

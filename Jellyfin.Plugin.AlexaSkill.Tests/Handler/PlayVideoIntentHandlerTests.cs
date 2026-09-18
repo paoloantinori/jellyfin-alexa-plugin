@@ -155,6 +155,33 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
+    public async Task Handle_FoundEpisodeOnScreenlessDevice_DegradesToAudioPlayer()
+    {
+        // JF-587: an episode hit on a screenless context (the Echo Dot shape) takes
+        // the audio-only AudioPlayer launch, not the screen-required refusal.
+        var episode = new TestHelpers.TestEpisodeWithStreams(
+            "Ep. Pilot",
+            Guid.NewGuid(),
+            TestHelpers.TestStream(MediaStreamType.Video, "h264"),
+            TestHelpers.TestStream(MediaStreamType.Audio, "aac"));
+        _fx.LibraryManager
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { episode });
+        _fx.SetupUserMock();
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreatePlayVideoRequest("Ep. Pilot"),
+            TestHelpers.CreateScreenlessContext(),
+            TestHelpers.CreateTestUser(),
+            _fx.CreateSession(), CancellationToken.None);
+
+        var play = Assert.IsType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>(
+            Assert.Single(response.Response.Directives!));
+        Assert.Contains("/Audio/", play.AudioItem.Stream.Url, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Handle_NoResults_ReturnsNotFound()
     {
         _fx.LibraryManager

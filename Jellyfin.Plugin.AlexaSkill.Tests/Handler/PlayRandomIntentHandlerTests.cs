@@ -109,6 +109,35 @@ public class PlayRandomIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
+    public async Task HandleAsync_RandomEpisodePickOnScreenlessDevice_DegradesToAudioPlayer()
+    {
+        // JF-587: the random pick is an Episode and the device has no VideoApp
+        // capability (the Echo Dot shape) -> the audio-only AudioPlayer launch,
+        // not the screen-required refusal.
+        SetupUserMock();
+        var episode = new TestHelpers.TestEpisodeWithStreams(
+            "Ep. Pilot",
+            Guid.NewGuid(),
+            TestHelpers.TestStream(MediaBrowser.Model.Entities.MediaStreamType.Video, "h264"),
+            TestHelpers.TestStream(MediaBrowser.Model.Entities.MediaStreamType.Audio, "aac"));
+        _libraryManagerMock
+            .Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { episode });
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreateIntentRequest(),
+            TestHelpers.CreateScreenlessContext(),
+            CreateUser(),
+            TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory),
+            CancellationToken.None);
+
+        var play = Assert.IsType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>(
+            Assert.Single(response.Response.Directives!));
+        Assert.Contains("/Audio/", play.AudioItem.Stream.Url, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void CanHandle_PlayRandomIntent_ReturnsTrue()
     {
         var handler = CreateHandler();

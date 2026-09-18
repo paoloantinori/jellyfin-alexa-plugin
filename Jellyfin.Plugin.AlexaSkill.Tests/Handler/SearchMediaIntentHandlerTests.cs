@@ -17,6 +17,7 @@ using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Model.Entities;
 using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
@@ -134,6 +135,34 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
         Assert.NotNull(response);
         var speech = response.Tells<PlainTextOutputSpeech>();
         Assert.Contains("understand", speech.Text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task HandleAsync_SingleEpisodeResultOnScreenlessDevice_DegradesToAudioPlayer()
+    {
+        // JF-587: an episode result on a screenless context (the Echo Dot shape)
+        // takes the audio-only AudioPlayer launch, not the screen-required refusal.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(query: "Ep. Pilot");
+        var context = TestHelpers.CreateScreenlessContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
+
+        _fx.SetupUserMock();
+        var episode = new TestHelpers.TestEpisodeWithStreams(
+            "Ep. Pilot",
+            Guid.NewGuid(),
+            TestHelpers.TestStream(MediaStreamType.Video, "h264"),
+            TestHelpers.TestStream(MediaStreamType.Audio, "aac"));
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { episode });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        var play = Assert.IsType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>(
+            Assert.Single(response.Response.Directives!));
+        Assert.Contains("/Audio/", play.AudioItem.Stream.Url, StringComparison.Ordinal);
     }
 
     [Fact]

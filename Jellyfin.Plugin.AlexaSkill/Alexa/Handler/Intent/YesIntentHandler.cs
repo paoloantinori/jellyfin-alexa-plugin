@@ -402,12 +402,16 @@ public class YesIntentHandler : BaseHandler
 
         // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
         // JF-501: the announce is spoken progressively (directive-only final response).
-        return await Launch.BuildVideoAppLaunchResponseAsync(
+        // JF-587: the episode screenless degrade (audio-only on Dots); movies keep
+        // the capability refusal inside the builder. Fresh play: no resume ticks.
+        return await Launch.BuildEpisodeLaunchResponseAsync(
             context,
             request,
             locale,
+            video,
+            user,
             Launch.GetVideoAppLaunchUrl(video, user),
-            video.Name,
+            resumeTicks: 0,
             SpeechBuilder.BuildNowPlayingSpeech(video.Name, locale, Launch.GetAnnounceNowPlaying(user))).ConfigureAwait(false);
     }
 

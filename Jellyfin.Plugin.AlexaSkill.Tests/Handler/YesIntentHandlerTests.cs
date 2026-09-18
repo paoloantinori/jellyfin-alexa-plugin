@@ -181,6 +181,39 @@ public class YesIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
+    public async Task HandleAsync_WithDisambiguationState_VideoTypeEpisodeOnScreenlessDevice_DegradesToAudioPlayer()
+    {
+        // JF-587: a confirmed EPISODE on a screenless context (the Echo Dot shape)
+        // takes the audio-only AudioPlayer launch, not the screen-required refusal.
+        var episodeId = Guid.NewGuid();
+        var episode = new TestHelpers.TestEpisodeWithStreams(
+            "Ep. Pilot",
+            episodeId,
+            TestHelpers.TestStream(MediaBrowser.Model.Entities.MediaStreamType.Video, "h264"),
+            TestHelpers.TestStream(MediaBrowser.Model.Entities.MediaStreamType.Audio, "aac"));
+
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemById(episodeId))
+            .Returns(episode);
+
+        var matchInfo = new DisambiguationHelper.MatchInfo { Id = episodeId.ToString(), Name = "Ep. Pilot" };
+        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "video");
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreateYesIntentRequest(),
+            TestHelpers.CreateScreenlessContext(),
+            TestHelpers.CreateTestUser(),
+            CreateSession(),
+            attrs,
+            CancellationToken.None);
+
+        var play = Assert.IsType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>(
+            Assert.Single(response.Response.Directives!));
+        Assert.Contains("/Audio/", play.AudioItem.Stream.Url, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task HandleAsync_WithDisambiguationState_VideoType_ReturnsVideoDirective()
     {
         var videoId = Guid.NewGuid();
