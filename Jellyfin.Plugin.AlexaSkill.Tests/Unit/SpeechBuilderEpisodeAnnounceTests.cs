@@ -103,7 +103,7 @@ public class SpeechBuilderEpisodeAnnounceTests
                 Episode("Ep. 1286 – La diserzione dei medici", Wednesday),
                 ItIt, TimeSpan.FromMinutes(5).Ticks, announceOn: true));
 
-        Assert.StartsWith("Resuming Mercoledì 17 settembre – La diserzione dei medici from", speech.Text, StringComparison.Ordinal);
+        Assert.StartsWith("Riprendo Mercoledì 17 settembre – La diserzione dei medici dalla posizione", speech.Text, StringComparison.Ordinal);
     }
 
     [Fact]
