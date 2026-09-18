@@ -3,10 +3,10 @@ id: JF-584
 title: >-
   JF-567 code-review residue: audiobook URL builder duplication, predicate
   half-consolidation, two stale-comment/test-gap notes
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-17 16:12'
-updated_date: '2026-09-18 11:39'
+updated_date: '2026-09-18 12:19'
 labels:
   - review-residue
   - tech-debt
@@ -36,6 +36,12 @@ Residue from the /code-review high pass on the JF-567 changeset (2db7a6d6..9d9cd
 - [ ] #4 The fallbackTicks sign-only contract is either covered by a session-tail cold-tracker test or documented at the TryBuildNativeControlsBookResumeAsync parameter
 - [ ] #5 dotnet build 0 warnings, dotnet test green (no --no-build)
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+DONE (commit acc7f40f). All four ACs: (1) ONE audiobook URL builder - GetAudiobookVideoAudioUrl delegates to GetAudiobookResumeUrl(parentId, 0) and the unified builder mints ?start= only when ticks>0 with the token hoisted; the URL-level gate matches the endpoint's own >0 gate exactly, canonical forms byte-identical, the one benign delta being the ?start=0 canonicalization on YesIntent's cold-tracker-zero-offer path (identical endpoint behavior, no test pinned the old form). (2) ONE production type predicate - the three remaining bare AudioBook checks migrated to AudiobookItems.IsAudioBook (YesIntent JF-361 routing, ResumeIntent TryBuild gate, RepeatIntent's negative Audio-exclusion; the ResumeIntent null guard restores the type-pattern's compiler null-narrowing and was proven compile-load-bearing by a mutation probe - removing it errors CS8604 on both TFMs; AudioBook subclasses Audio in both resolved packages, reflection-verified, so the exclusion is equivalent). (3) the PlayBook cold-tracker comment now describes the actual two-shape contract (genuinely fresh AND the (lastPlayedIndex+1, 0) earlier-chapters-fully-played shape whose startIndex the fresh launch silently discards - verified against ResumeMath's return). (4) the fallbackTicks SIGN-ONLY contract documented at the TryBuildNativeControlsBookResumeAsync parameter (value used solely for the >0 fresh-vs-flat split; never a slice value; promoting it to a slice requires the chapter-vs-book timeline fix first). GATES: /simplify 4-angle + adversarial combined pass - all four angles CLEAN; correctness C1-C4 verified (URL byte-identity, null guard necessity, exclusion equivalence, no leftover forms); both doc findings applied same-turn: F1 the five stale #EXT-X-START doc sites corrected to the active ?start= slice mechanism (PlaybackLaunchBuilder x2, ResumeHelper, YesIntent, VideoAudioController; ExoPlayer ignores the hint, hardware-verified per the repo reference) and F2 the AudiobookItems class doc updated to the completed consolidation state + the hyphen prose fix. Suite 4069/4069 both TFMs, Release 0 warnings. The optional episode-family URL ternary fold (3 sites x 3-4 stable lines with differing routes) noted and declined as below the bar.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
