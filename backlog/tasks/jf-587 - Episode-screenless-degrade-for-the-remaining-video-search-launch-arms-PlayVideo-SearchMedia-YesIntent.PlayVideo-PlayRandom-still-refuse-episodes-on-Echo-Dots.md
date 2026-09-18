@@ -4,10 +4,10 @@ title: >-
   Episode screenless degrade for the remaining video-search launch arms:
   PlayVideo, SearchMedia, YesIntent.PlayVideo, PlayRandom still refuse episodes
   on Echo Dots
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-17 19:28'
-updated_date: '2026-09-18 04:51'
+updated_date: '2026-09-18 05:59'
 labels:
   - episodes
   - screenless
@@ -40,8 +40,6 @@ JF-586 shipped the screenless degrade for the episode launch family via the new 
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
-
-
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [ ] #1 PlayVideoIntentHandler: an episode hit on a screenless context answers AudioPlayer.Play (no VideoApp directive, no VideoRequiresScreen speech); a movie hit keeps the refusal
@@ -51,3 +49,9 @@ JF-586 shipped the screenless degrade for the episode launch family via the new 
 - [ ] #5 Capable-device (VideoApp) responses at all four sites stay byte-identical to today (existing tests pin them; add one pin per site if none)
 - [ ] #6 Full dotnet test suite green on both TFMs
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+DONE (commit 59e006ef). The four residual episode-reachable arms adopted the JF-586 screenless degrade: PlayVideoIntentHandler (passes its real resumeTicks - the only resume-bearing arm of the four), SearchMediaIntentHandler.PlayItem, YesIntentHandler.PlayVideo, and PlayRandomIntentHandler (the last three fresh, resumeTicks 0), each swapping BuildVideoAppLaunchResponseAsync for BuildEpisodeLaunchResponseAsync. An episode hit on a screenless device now launches the audio-only AudioPlayer stream instead of the screen-required refusal; movies keep the refusal inside the builder by construction. With this, EVERY Movie/Episode launch site goes through the episode chokepoint: the review classified all remaining direct BuildVideoAppLaunchResponseAsync callers (Recommend gated Movie-only with episodes falling to its AudioPlayer arm; APL carousel taps Movie-only; the channel builder LiveTvChannel-only, where the refusal is correct because the audio route 500s for live sources; the episode builder's own pass-through) and grepped that no hand-built VideoAppLaunchDirective exists outside the builder. Tests: one screenless-episode degrade test per arm (4 new), non-vacuousness proven mechanically by a stash probe (all 4 fail on the old code with an empty directive collection; green restored); fixture honesty verified (TestEpisodeWithStreams drives the real codec probe; aac is decodable so the /Audio/ static-route assertion discriminates against the transcode URL); the resume-bearing degrade itself already covered by the JF-586 offset tests. Gates: /simplify 4-angle + adversarial combined pass - finding 1 applied (the stale 'JF-587 arms still call this directly' doc sentence replaced with the completed state), finding 3 applied (the builder doc's caller-gate claim scoped to the arms that run one; PlayVideo's ungated informational-position semantics are byte-identical to its capable route), finding 2 accepted (SearchMedia's fresh degrade vs its position-bearing speech helper: the documented informational-position semantics its capable route has always had, not a regression), the eager-URL probe kept pre-existing (the URL-first announce gate needs it); efficiency/altitude/reuse CLEAN. Suite 4067/4067 both TFMs, Release 0 warnings. The JF-501 progressive-announce comments at the four sites noted as route-conditional now (nit, builder doc owns the detail).
+<!-- SECTION:FINAL_SUMMARY:END -->
