@@ -24,7 +24,7 @@ internal static class ResumeHelper
         public long OffsetMs { get; set; }
 
         /// <summary>
-        /// When true, resume via the audiobook HLS resume playlist (VideoApp + #EXT-X-START)
+        /// When true, resume via the audiobook HLS resume playlist (VideoApp + the ?start= slice)
         /// instead of AudioPlayer + offset. Set by the resume-offer builder for audiobooks
         /// with a tracked position under NativeControlsForBooks. Defaults false for backward
         /// compatibility (existing session attributes deserialize without it).

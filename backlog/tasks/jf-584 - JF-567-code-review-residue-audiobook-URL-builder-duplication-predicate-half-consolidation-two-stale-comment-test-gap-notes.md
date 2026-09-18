@@ -3,9 +3,10 @@ id: JF-584
 title: >-
   JF-567 code-review residue: audiobook URL builder duplication, predicate
   half-consolidation, two stale-comment/test-gap notes
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-17 16:12'
+updated_date: '2026-09-18 11:39'
 labels:
   - review-residue
   - tech-debt

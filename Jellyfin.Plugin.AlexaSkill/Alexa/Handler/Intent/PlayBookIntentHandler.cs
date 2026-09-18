@@ -284,11 +284,15 @@ public class PlayBookIntentHandler : BaseHandler
                 return trackedResponse;
             }
 
-            // Cold tracker: a genuinely FRESH book (no chapter progress) keeps the
-            // fresh VideoApp launch (the flag exists for the seek bar); a chapter
-            // with progress falls through to the flat chapter resume below, where
-            // the chapter-relative position is honest on the chapter's own timeline
-            // (the same discipline the LaunchRequest resume offer applies).
+            // Cold tracker: resumeTicks == 0 covers TWO shapes - a genuinely fresh
+            // book, and the (lastPlayedIndex+1, 0) shape where earlier chapters are
+            // fully played and the next is unstarted (FindResumeTrackIndex returns
+            // ticks 0 there; startIndex > 0 is silently discarded by the fresh
+            // launch). Both keep the fresh VideoApp launch (the flag exists for
+            // the seek bar); a chapter WITH progress falls through to the flat
+            // chapter resume below, where the chapter-relative position is honest
+            // on the chapter's own timeline (the same discipline the LaunchRequest
+            // resume offer applies).
             if (resumeTicks <= 0)
             {
                 return await Launch.BuildAudiobookVideoAppLaunchResponseAsync(

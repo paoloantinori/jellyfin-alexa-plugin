@@ -147,7 +147,7 @@ public class YesIntentHandler : BaseHandler
         // it). Route to the audiobook playback path instead of PlayAlbum. The two JF-501
         // progressive-announce paths return their tasks directly (the announcing launch
         // builders are async); the sync play paths keep the Task.FromResult shape.
-        if (mediaType == DisambiguationHelper.MediaTypeAlbum && item is AudioBook)
+        if (mediaType == DisambiguationHelper.MediaTypeAlbum && AudiobookItems.IsAudioBook(item))
         {
             Logger.LogDebug("Yes: routing AudioBook item {ItemId} to audiobook playback", itemId);
             return PlayBook(item, jellyfinUser!, user, session, locale, context, request);
@@ -208,7 +208,7 @@ public class YesIntentHandler : BaseHandler
         session.FullNowPlayingItem = item;
 
         // Audiobook resume via VideoApp resume playlist (keeps the seek bar). The position
-        // is encoded in the playlist via #EXT-X-START; VideoApp.Launch has no offset param.
+        // slices the playlist via ?start= (ExoPlayer ignores #EXT-X-START); VideoApp.Launch has no offset param.
         if (resumeState.UseResumePlaylist)
         {
             long offeredTicks = TimeSpan.FromMilliseconds(Math.Min(resumeState.OffsetMs, int.MaxValue)).Ticks;

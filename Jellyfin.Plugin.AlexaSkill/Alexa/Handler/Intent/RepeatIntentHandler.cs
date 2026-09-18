@@ -132,7 +132,7 @@ public class RepeatIntentHandler : BaseHandler
         // Jellyfin.Controller source at v10.11.8 and v12.0-rc7), so the exclusion
         // must come first: a book is not a repeatable track.
         if (item is MediaBrowser.Controller.Entities.Audio.Audio
-            && item is not MediaBrowser.Controller.Entities.AudioBook)
+            && !AudiobookItems.IsAudioBook(item))
         {
             string id = item.Id.ToString();
             Logger.LogInformation("RepeatIntent: restarting current track '{ItemName}' ({ItemId}) from the beginning", item.Name, id);

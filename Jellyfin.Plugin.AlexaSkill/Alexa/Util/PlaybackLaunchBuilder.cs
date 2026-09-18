@@ -94,8 +94,8 @@ public sealed class PlaybackLaunchBuilder
 
     /// <summary>
     /// Get a resume-aware audiobook HLS URL with a start-position hint. The endpoint reads
-    /// <c>?start=&lt;ticks&gt;</c> and injects <c>#EXT-X-START</c> into the playlist so VideoApp
-    /// can resume at position (VideoApp.Launch has no offset parameter of its own).
+    /// <c>?start=&lt;ticks&gt;</c> and slices the playlist at position (<c>?start=</c>, the active mechanism; ExoPlayer ignores <c>#EXT-X-START</c>, hardware-verified) so VideoApp
+    /// can resume (VideoApp.Launch has no offset parameter of its own).
     /// Moved here from BaseHandler (JF-315 batch 5) next to the audiobook concat URL it
     /// siblings (<see cref="GetAudiobookVideoAudioUrl"/>): both read the same
     /// config-derived server address and token secret.
@@ -104,7 +104,13 @@ public sealed class PlaybackLaunchBuilder
     /// <param name="startTicks">Resume position in .NET ticks.</param>
     /// <returns>URL to the resume-aware audiobook HLS endpoint.</returns>
     internal string GetAudiobookResumeUrl(string parentId, long startTicks)
-        => new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/audiobook/{parentId}/stream.m3u8?start={startTicks}&token={StreamTokenHelper.Mint(parentId, _config.StreamTokenSecret)}").ToString();
+    {
+        // JF-584: the ONE audiobook concat URL builder (the fresh-launch sibling
+        // delegates here with startTicks 0); a route/token-shape change lands once.
+        string token = StreamTokenHelper.Mint(parentId, _config.StreamTokenSecret);
+        string query = startTicks > 0 ? $"?start={startTicks}&token={token}" : $"?token={token}";
+        return new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/audiobook/{parentId}/stream.m3u8{query}").ToString();
+    }
 
     /// <summary>
     /// Get the video-audio URL for the EPISODE HLS REMUX (JF-498): video stream copy +
@@ -683,9 +689,9 @@ public sealed class PlaybackLaunchBuilder
 
     /// <summary>
     /// Build a VideoApp.Launch response for an audiobook RESUME, pointing at the resume-aware
-    /// HLS playlist (<c>?start=&lt;ticks&gt;</c>). The position is encoded in the playlist via
-    /// <c>#EXT-X-START</c>; VideoApp.Launch has no offset parameter, so this keeps the seek bar
-    /// AND resumes at position. Use the book's parent-folder ID for the concat stream.
+    /// HLS playlist (<c>?start=&lt;ticks&gt;</c>). The position slices the playlist
+    /// (<c>?start=</c>, the active mechanism; ExoPlayer ignores <c>#EXT-X-START</c>, hardware-verified);
+    /// VideoApp.Launch has no offset parameter, so this keeps the seek bar AND resumes at position. Use the book's parent-folder ID for the concat stream.
     /// JF-505: on a device without the VideoApp interface the directive is rejected by
     /// the platform; audiobooks are audio, so the builder degrades to the AudioPlayer
     /// resume (which supports an offset) instead of failing the play.
@@ -841,7 +847,7 @@ public sealed class PlaybackLaunchBuilder
     /// <param name="parentId">Id of the audiobook parent folder.</param>
     /// <returns>URL to the audiobook HLS concat endpoint.</returns>
     private string GetAudiobookVideoAudioUrl(string parentId)
-        => new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/audiobook/{parentId}/stream.m3u8?token={StreamTokenHelper.Mint(parentId, _config.StreamTokenSecret)}").ToString();
+        => GetAudiobookResumeUrl(parentId, startTicks: 0);
 
     /// <summary>
     /// Get the video-audio URL for the AUDIO-ONLY episode transcode (JF-507): the item's

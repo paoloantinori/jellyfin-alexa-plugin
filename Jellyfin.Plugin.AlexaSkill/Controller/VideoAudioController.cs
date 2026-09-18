@@ -2218,7 +2218,8 @@ public class VideoAudioController : ControllerBase
     }
 
     /// <summary>
-    /// Serve an audiobook playlist, injecting the resume hint (#EXT-X-START) when a start
+    /// Serve an audiobook playlist, slicing at the resume position (?start=; ExoPlayer
+    /// ignores #EXT-X-START) when a start
     /// position is requested, otherwise serve the raw file. Centralizes resume injection so
     /// every playlist return path (cache hit, encode-in-progress, post-encode) honors ?start=.
     /// </summary>

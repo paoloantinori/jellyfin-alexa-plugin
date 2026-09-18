@@ -368,7 +368,7 @@ public class ResumeIntentHandler : BaseHandler
     /// AudioPlayer flat resume, so the flag cannot break the play.
     /// </summary>
     /// <param name="item">The book item to resume (chapter or single-file book).</param>
-    /// <param name="fallbackTicks">The caller's best position (server progress or session offset; item-absolute for a book, which never transcodes).</param>
+    /// <param name="fallbackTicks">The caller's best position (server progress or session offset; item-absolute for a book, which never transcodes). SIGN-ONLY CONTRACT (JF-584): the value is used solely for its &gt;0 / &lt;=0 split (fresh vs flat-resume); it is never a slice value, so a units error here cannot mis-seek; but anyone promoting it to a slice must first fix the chapter-vs-book timeline (the JF-567 review major).</param>
     /// <param name="user">The user for the stream URL.</param>
     /// <param name="context">The Alexa context, for the JF-505 screenless-device check.</param>
     /// <param name="request">The skill request, for the JF-501 progressive announce vehicle.</param>
@@ -382,7 +382,8 @@ public class ResumeIntentHandler : BaseHandler
         Request? request,
         string locale)
     {
-        if (item is not MediaBrowser.Controller.Entities.AudioBook
+        if (item is null
+            || !AudiobookItems.IsAudioBook(item)
             || Plugin.Instance?.Configuration?.NativeControlsForBooks != true)
         {
             return null;
