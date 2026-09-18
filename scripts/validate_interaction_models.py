@@ -11,8 +11,8 @@ Catches the failure modes that have caused broken models in the past:
   - Intents with zero sample utterances
   - Duplicate sample utterances within an intent
 
-WARNING-level checks (never affect the exit code; the CI validate-models job is
-advisory and a false positive here must not break it):
+WARNING-level checks (never affect the exit code; error-level checks do, and the
+CI validate-models job has been blocking on errors since JF-556):
   - Bare album carriers: a PlayAlbumIntent sample whose carrier text does not
     name the media noun, in locales whose album slot is an AMAZON.* free-text
     type (CLAUDE.md anti-pattern #11; the catalog-backed AlbumName architecture
@@ -504,7 +504,7 @@ def lint_fixture_carriers(all_models: dict[str, dict], fixtures_dir: Path = FIXT
             if intent and intent.get("samples"):
                 lint_fragments[intent_name] = [_sample_fragments(s) for s in intent["samples"]]
         for test in tests:
-            # Malformed entries must not crash the advisory validator.
+            # Malformed entries must not crash the validator (warning-level check).
             if not isinstance(test, dict):
                 continue
             intent_name = test.get("expected_intent")
@@ -680,30 +680,96 @@ def check_elicit_dialog_registration(all_models: dict[str, dict]) -> tuple[list[
                     targets.add(resolved)
     errors: list[str] = []
     warnings: list[str] = []
-    # JF-556 item 2: the C# allSlotNames list (inline string form, the JF-550
-    # sweep shape) must match the model's slot set for that intent - Amazon
-    # rejects a partial updatedIntent. Only inline-string lists are checkable;
-    # callers passing variables (FindSong/PlayRadio) are skipped here.
+    # JF-556 item 2: the C# allSlotNames list must match the model's slot set for
+    # that intent - Amazon rejects a partial updatedIntent. Every statically
+    # resolvable call shape is checked through the same _parity helper: inline
+    # string lists, IntentNames.Slots constant-token arrays (the JF-550 sweep
+    # used both), and the two BuildElicitSlotResponse shapes further down.
+    # One sample locale suffices: slot names are uniform across locales
+    # (verified by the cross-locale checks).
+    first_lm = next(iter(all_models.values()))
+    intent_names_src = (repo_root / "Jellyfin.Plugin.AlexaSkill" / "Alexa" / "IntentNames.cs").read_text(encoding="utf-8")
+    slots_class = _re.search(r"public static class Slots.*?\{(.*?)\}", intent_names_src, _re.S)
+    if slots_class is None:
+        warnings.append(
+            "  [code] IntentNames.Slots class not found; elicit allSlotNames parity is not verified"
+        )
+    slot_constants = (
+        dict(_re.findall(r"public const string (\w+) = \"(\w+)\"", slots_class.group(1)))
+        if slots_class
+        else {}
+    )
+
+    def _parity(builder: str, intent: str | None, passed: list[str | None]) -> None:
+        slots = [s for s in passed if s is not None]
+        if not intent or len(slots) != len(passed):
+            return
+        model_slots = {s["name"] for s in (intent_by_name(first_lm, intent) or {}).get("slots", [])}
+        if model_slots and set(slots) != model_slots:
+            errors.append(
+                f"  [code] {builder} for {intent} passes allSlotNames {sorted(slots)} "
+                f"but the model declares {sorted(model_slots)} (Amazon rejects a partial updatedIntent)"
+            )
+
     for intent_token, slots_span in _re.findall(
         r"BuildDialogElicitResponse\(\s*[^,]+,\s*[^,]+,\s*[^,]+,\s*IntentNames\.(\w+),\s*([^;]*?)\)\s*;",
         handler_src,
         _re.S,
     ):
-        intent = intent_constants.get(intent_token)
-        if not intent:
-            continue
-        slots = _re.findall(r'"(\w+)"', slots_span)
+        slots = _re.findall(r'"(\w+)"', slots_span) or sorted(
+            slot_constants[tok]
+            for tok in _re.findall(r"IntentNames\.Slots\.(\w+)", slots_span)
+            if tok in slot_constants
+        )
         if not slots:
             continue  # variable or params-form; not statically resolvable
-        # one sample locale suffices: slot names are uniform across locales
-        # (verified by the cross-locale checks); use the first parsed model.
-        first_lm = next(iter(all_models.values()))
-        model_slots = {s["name"] for s in (intent_by_name(first_lm, intent) or {}).get("slots", [])}
-        if model_slots and set(slots) != model_slots:
-            errors.append(
-                f"  [code] BuildDialogElicitResponse for {intent} passes allSlotNames {sorted(slots)} "
-                f"but the model declares {sorted(model_slots)} (Amazon rejects a partial updatedIntent)"
-            )
+        _parity("BuildDialogElicitResponse", intent_constants.get(intent_token), slots)
+
+    # JF-556 item 2, remainder: the two BuildElicitSlotResponse call shapes whose
+    # allSlotNames is not an inline string list.
+    #   Shape A (direct): BuildElicitSlotResponse(IntentNames.X, IntentNames.Slots.S,
+    #               new[] { IntentNames.Slots.S, ... }, ...) - constant-token array
+    #               (PlayRadio's BuildStationElicit).
+    #   Shape B (wrapper): a private overload whose allSlotNames is new[] { slotName }
+    #               with slotName == its slotToElicit parameter (FindSong's wrapper);
+    #               the wrapper's callers then spell the slot and intent constants.
+    # Both assert the same fact as the inline loop above: the passed allSlotNames IS
+    # the model's full slot set for that intent. A future extra slot on any elicited
+    # intent passes every other gate and fails only live with Amazon's "All slots
+    # must be defined" reject.
+    for intent_tok, array_span in _re.findall(
+        r"BuildElicitSlotResponse\(\s*IntentNames\.(\w+),\s*IntentNames\.Slots\.\w+,\s*"
+        r"new\[\]\s*\{([^}]*)\}",
+        handler_src,
+    ):
+        array_slots = sorted(
+            slot_constants[tok]
+            for tok in _re.findall(r"IntentNames\.Slots\.(\w+)", array_span)
+            if tok in slot_constants
+        )
+        if array_slots:
+            _parity("BuildElicitSlotResponse", intent_constants.get(intent_tok), array_slots)
+
+    # Shape B guard: only trust the wrapper-call pattern when an identity funnel
+    # (allSlotNames = new[] { <the slotToElicit expression itself> }) exists; if
+    # the wrapper drifts away from that shape, say so instead of going silent.
+    wrapper_is_identity = _re.search(
+        r"slotToElicit:\s*(\w+),\s*allSlotNames:\s*new\[\]\s*\{\s*\1\s*\}",
+        handler_src,
+        _re.S,
+    )
+    wrapper_calls = _re.findall(
+        r"BuildElicitSlotResponse\(\s*IntentNames\.Slots\.(\w+),\s*IntentNames\.(\w+)\b",
+        handler_src,
+    )
+    if wrapper_is_identity:
+        for slot_tok, intent_tok in wrapper_calls:
+            _parity("BuildElicitSlotResponse", intent_constants.get(intent_tok), [slot_constants.get(slot_tok)])
+    elif wrapper_calls:
+        warnings.append(
+            "  [code] a BuildElicitSlotResponse wrapper is called with slot constants but no "
+            "identity funnel (allSlotNames = new[] { slotToElicit }) was found; its parity is not verified"
+        )
     if not targets:
         return [], []
 
@@ -777,8 +843,9 @@ def check_template_regen_equality() -> list[str] | None:
     templates found, generate_interaction_model or PyYAML not importable),
     so the caller cannot mistake a skip for an all-clear.
 
-    Warning-level by design: the CI validate-models job is advisory and a
-    transitional false positive must not break it. Byte-level here (not
+    Warning-level by design: warnings never affect the exit code, so a
+    transitional false positive cannot break the error-gated CI job (JF-556).
+    Byte-level here (not
     structural) on purpose: key-order and formatting desync are exactly
     the hand-edit shapes this check exists to catch.
     """
@@ -821,7 +888,7 @@ def check_template_regen_equality() -> list[str] | None:
             # The generator's template guards (unknown key, bad {ref}, ...)
             # raise ValueError with an authoring message, but a structurally
             # malformed template (top-level list, section-as-list, None
-            # config, ...) can raise anything; an advisory check warns
+            # config, ...) can raise anything; a warning-level check warns
             # instead of crashing the validator.
             warnings.append(
                 f"  [{locale}] template {template_path.name} is invalid: "

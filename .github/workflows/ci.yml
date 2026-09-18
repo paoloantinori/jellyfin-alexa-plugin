@@ -55,8 +55,11 @@ jobs:
 
   validate-models:
     runs-on: ubuntu-latest
-    # Advisory until pre-existing it-IT SearchQuery violation is fixed
-    continue-on-error: true
+    # Blocking since JF-556: the old advisory stance existed for the it-IT
+    # SearchQuery violation, which is gone (that shape is now a warning-level
+    # intent-level coexistence notice that does not affect the exit code).
+    # Errors - including the Phase 8 elicit dialog-registration gate, the hard
+    # gate for the anti-pattern #9 silent-directive-drop class - now fail CI.
     steps:
       - uses: actions/checkout@v4
 
