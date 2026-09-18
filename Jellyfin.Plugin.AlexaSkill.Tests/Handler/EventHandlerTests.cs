@@ -1163,6 +1163,93 @@ public class EventHandlerTests : PluginTestBase, IDisposable
         Assert.Empty(response.Response.Directives);
     }
 
+    // ========== JF-588: self-heal the session-miss miss by re-registering the session ==========
+
+    /// <summary>
+    /// Probe handler whose HandleAsync output is unambiguous: it only runs when the
+    /// request path got past the session resolution, so the JF-588 self-heal test can
+    /// tell "the retry landed and the request was served" from the degradation tells.
+    /// </summary>
+    private sealed class SelfHealProbeHandler : BaseHandler
+    {
+        public SelfHealProbeHandler(ISessionManager sessionManager, PluginConfiguration config, ILoggerFactory loggerFactory)
+            : base(sessionManager, config, loggerFactory)
+        {
+        }
+
+        public override bool CanHandle(Request request) => true;
+
+        public override Task<SkillResponse> HandleAsync(
+            Request request,
+            Context context,
+            Jellyfin.Plugin.AlexaSkill.Entities.User user,
+            SessionInfo session,
+            CancellationToken cancellationToken)
+            => Task.FromResult(ResponseBuilder.Tell("self-heal-probe"));
+    }
+
+    /// <summary>
+    /// JF-588 incident shape (2026-09-18: a container auto-update left the server unable
+    /// to resolve the alive, DB-verified token session for hours): the FIRST session
+    /// lookup misses, but the user has a JellyfinToken and the device has recorded play
+    /// history. The plugin retries the lookup once (the review-corrected JF-588
+    /// mechanism: LogSessionActivity cannot repair the Devices-row precondition, so
+    /// the valuable part is the retry); the retry lands and the request is SERVED,
+    /// not answered with the AccountRelinkRequired relink tell.
+    /// </summary>
+    [Fact]
+    public async Task HandleRequestAsync_IntentRequest_FirstLookupMisses_RetryLands_ServesRequest()
+    {
+        var (config, user, sessionManager, context) = CreateSessionMissHarness();
+        RecordPreviousPlayOnHarnessDevice(context);
+        var session = TestHelpers.CreateTestSession(sessionManager.Object, _loggerFactory);
+        sessionManager.SetupSequence(
+                s => s.GetSessionByAuthenticationToken(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync((SessionInfo?)null)
+            .ReturnsAsync(session);
+        Mock.Get(Plugin.Instance!.UserManager)
+            .Setup(u => u.GetUserById(user.Id))
+            .Returns(TestHelpers.CreateJellyfinUser(id: user.Id));
+
+        var handler = new SelfHealProbeHandler(sessionManager.Object, config, _loggerFactory);
+        var request = new IntentRequest { Intent = new Intent { Name = "WhoAmIIntent" } };
+
+        SkillResponse response = await handler.HandleRequestAsync(request, context, CancellationToken.None);
+
+        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        Assert.Equal("self-heal-probe", speech.Text);
+        sessionManager.Verify(
+            s => s.GetSessionByAuthenticationToken(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()),
+            Times.Exactly(2));
+    }
+
+    /// <summary>
+    /// The self-heal is cheap on every other miss path: without the token+history
+    /// evidence (here: no token) LogSessionActivity never fires and only ONE lookup
+    /// runs before the existing UserNotFound tell.
+    /// </summary>
+    [Fact]
+    public async Task HandleRequestAsync_IntentRequest_SessionNotFound_EmptyToken_NeverReRegisters()
+    {
+        var (config, user, sessionManager, context) = CreateSessionMissHarness();
+        RecordPreviousPlayOnHarnessDevice(context);
+        user.JellyfinToken = null;
+        var handler = new SelfHealProbeHandler(sessionManager.Object, config, _loggerFactory);
+        var request = new IntentRequest { Intent = new Intent { Name = "WhoAmIIntent" } };
+
+        SkillResponse response = await handler.HandleRequestAsync(request, context, CancellationToken.None);
+
+        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        Assert.Equal(ResponseStrings.Get("UserNotFound", "en-US"), speech.Text);
+        sessionManager.Verify(
+            s => s.LogSessionActivity(
+                It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Jellyfin.Database.Implementations.Entities.User>()),
+            Times.Never);
+        sessionManager.Verify(
+            s => s.GetSessionByAuthenticationToken(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()),
+            Times.Once);
+    }
+
     /// <summary>
     /// The predicate behind the degradation: every AudioPlayer event, SessionEnded, and
     /// SystemExceptionEncountered is event-shaped; intents and launch requests are not.

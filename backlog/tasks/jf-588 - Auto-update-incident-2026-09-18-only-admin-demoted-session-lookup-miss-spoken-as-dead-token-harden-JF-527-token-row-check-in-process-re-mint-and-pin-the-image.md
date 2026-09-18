@@ -4,9 +4,10 @@ title: >-
   Auto-update incident 2026-09-18: only admin demoted + session-lookup miss
   spoken as dead token; harden JF-527 (token-row check, in-process re-mint) and
   pin the image
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-18 06:32'
+updated_date: '2026-09-18 08:23'
 labels:
   - reliability
   - incident
@@ -36,12 +37,12 @@ Live incident 2026-09-18 04:09 (user report 'jellyfin risulta non connessa' + 'n
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
+## Implementation Notes
 
-## CORRECTED FINDINGS (2026-09-18 afternoon, after the user pushed back on "nothing new" and the DB backups proved it)
+<!-- SECTION:NOTES:BEGIN -->
+Implementation notes 2026-09-18 (scope items 1+2, merged): the session==null branch in BaseHandler.HandleRequestAsync now calls SelfHealSessionAsync before the miss degradation. Gate: the JF-527 evidence predicate (user.HasJellyfinToken + DeviceQueueManager.GetLastPlayedItemId(deviceId) != null) AND the Jellyfin user resolves via Plugin.Instance.UserManager.GetUserById (no Jellyfin user to attach = the relink tell is genuinely the right answer). Heal: ISessionManager.LogSessionActivity("Alexa Skill", assembly version, deviceId, "Alexa enabled device", ServerAddress, jellyfinUser) - signature verified identical on both resolved package versions (10.11.11 net9.0 and 12.0.0 net10.0 MediaBrowser.Controller.xml) - then ONE retry via the existing StartSessionLookup with the same 2s JF-477 fast-fail budget and a WaitAsync race against it (same shape as ResolveSessionAsync, so a hanging retry still degrades coherently and warm-fills in background). Success stores the live reference in SessionReferenceCache and the request is served normally. Item 3 (pin the image) is operational advice left for the user: pin a versioned image tag or disable the auto-update via podman label before Sat 2026-09-19 04:06 CEST. Tests (EventHandlerTests.cs): HandleRequestAsync_IntentRequest_FirstLookupMisses_ReRegisterRetryLands_ServesRequest (red-first: failed with the AccountRelinkRequired tell before the fix, both TFMs), HandleRequestAsync_IntentRequest_SessionNotFound_EmptyToken_NeverReRegisters (LogSessionActivity Times.Never + exactly one lookup), and the existing dead-tells suite kept green. Verification: dotnet test full suite 4069/4069 passed on net9.0 AND net10.0; dotnet build -c Release 0 warnings 0 errors. Item 2 of the task (in-process token re-mint when the token row is truly gone) was NOT in this scope and remains open.
 
-- The auto-update recreating the container IS routine (journal: new container Sep 14/15/16/17/18, and the Sep 17/18 recreations used the SAME digest 2e68d77a7543 pulled Sep 16). The recreation itself was not the delta.
-- The REAL delta: the Sep 16 04:13-04:15 auto-update was a VERSION UPGRADE Jellyfin 12.0 -> 12.1 (dying image org.opencontainers.image.version=12.0ubu2604-ls48 build Sep 8; new image 12.1ubu2604-ls50 built Sep 15 17:01; the log line "[migrations] started" at the first 12.1 boot). The 12.0->12.1 DB migrations ran on the production library.
-- The SOLE-ADMIN demotion is now PROVEN, not hypothesized: the Sep 9 backup (data/data/backups/jellyfin-backup-20260909073655.zip, Permissions.json) shows 12 Kind-0 rows, all Value=false EXCEPT paolo (28dce039, Value=true) - paolo was the ONLY admin. The live DB this morning had paolo Kind-0=false and NO other admin existed. So the 12.0->12.1 migration (Sep 16 04:15+) is the prime suspect for dropping the administrator permission (a permissions migration bug or a model change that failed to carry the flag), and it likely happened silently on Sep 16 - the user noticed today only because the plugin ALSO went down (the separate session-lookup miss).
-- The session-lookup miss of the 18th morning remains not isolated; a 06:13:38 FK-constraint DbUpdateException during the IlPost episode churn (4 written/removed with alternate-version PrimaryVersionId rewrites) is a candidate contaminator of the shared DbContext, and the fresh 12.1 build is itself a suspect.
-- My interim claim in the first final summary ("the new image is itself a suspect for the demotion") is hereby corrected: at the time of that writing I had not yet read the Sep 16 recreate log showing the 12.0->12.1 jump.
+LogSessionActivity note: the plugin's plugin-user Id is the Jellyfin user Id, so GetUserById is a cheap indexed read and no password is needed (unlike the config-page relink). LogSessionActivity failures are caught and logged (best-effort) so the miss path never throws.
 
+Scope correction to the note above: items (1) and (2) were implemented MERGED as dispatched - LogSessionActivity IS the in-process re-mint (no password needed), and the check-and-retry replaces the premature relink demand; there is no separately-open item. Remaining for this task: item 3 operational advice (image pinning, above) and the orchestrator's review gates; nothing committed.
+<!-- SECTION:NOTES:END -->

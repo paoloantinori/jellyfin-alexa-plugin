@@ -303,6 +303,11 @@ public abstract class BaseHandler
 
         if (session == null)
         {
+            session = await SelfHealSessionAsync(user, deviceId, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (session == null)
+        {
             Logger.LogError("Session not found for user {UserId}", user.Id);
             return BuildSessionMissResponse(request, user, deviceId);
         }
@@ -360,6 +365,72 @@ public abstract class BaseHandler
         }
 
         SessionReferenceCache.Store(token, deviceId, session);
+        return session;
+    }
+
+    /// <summary>
+    /// JF-588 self-heal on the session-miss path, fired ONLY in the JF-527 dead-token
+    /// evidence shape (the user HAS a JellyfinToken AND the device has recorded play
+    /// history, the same predicate <see cref="BuildSessionMissResponse"/> uses): it
+    /// retries the session lookup ONCE under the same JF-477 fast-fail budget. A
+    /// review pass proved the original re-register-via-LogSessionActivity cut inert
+    /// (that primitive only touches the in-memory SessionInfo; it never writes the
+    /// Devices row the lookup reads), so the value here is the RETRY: the morning
+    /// miss persisted for hours until a restart, while some misses are transient
+    /// and a fresh lookup a few seconds later catches them. Rationale: live incident
+    /// 2026-09-18, a container auto-update left the server unable to resolve the
+    /// alive, DB-verified token session for hours; the retry catches the transient
+    /// class of that failure. The relink tell remains only when the retry also
+    /// misses (or the evidence shape does not hold: no token, no history).
+    /// </summary>
+    /// <param name="user">The resolved plugin user.</param>
+    /// <param name="deviceId">The Alexa device ID the request came from.</param>
+    /// <param name="cancellationToken">Cancellation token for request timeout.</param>
+    /// <returns>The recovered session, or null to keep today's miss degradation.</returns>
+    private async Task<SessionInfo?> SelfHealSessionAsync(Entities.User user, string deviceId, CancellationToken cancellationToken)
+    {
+        bool hadPreviousPlay = Plugin.Instance?.DeviceQueueManager?.GetLastPlayedItemId(deviceId) != null;
+        if (!user.HasJellyfinToken || !hadPreviousPlay)
+        {
+            return null;
+        }
+
+        // JF-588 review correction: the original cut called LogSessionActivity to
+        // "re-register" the session, but that primitive only touches the in-memory
+        // SessionInfo; it never writes the Devices row the lookup needs, so it could
+        // not repair the incident's failure mode. What remains valuable is the RETRY:
+        // the morning miss was transient-persistent until a restart, and one fresh
+        // lookup a few seconds later catches the transient class.
+        Logger.LogWarning(
+            "Session lookup missed for user {UserId} on device {DeviceId} but the token has play history; retrying the lookup once (JF-588)",
+            user.Id,
+            deviceId);
+
+        Task<SessionInfo?> lookup = StartSessionLookup(
+            user.JellyfinToken, deviceId, "GetSessionByAuthToken-ReRegister", SessionLookupTimeoutMs, cancellationToken);
+
+        SessionInfo? session;
+        try
+        {
+            using var budgetCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            budgetCts.CancelAfter(SessionLookupTimeoutMs);
+            session = await lookup.WaitAsync(budgetCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            Logger.LogWarning(
+                "The JF-588 re-register retry exceeded the {BudgetMs}ms fast-fail budget for device {DeviceId}; degrading to the not-found response",
+                SessionLookupTimeoutMs,
+                deviceId);
+            WarmFillAbandonedLookupInBackground(lookup, user.JellyfinToken, deviceId);
+            return null;
+        }
+
+        if (session != null)
+        {
+            SessionReferenceCache.Store(user.JellyfinToken, deviceId, session);
+        }
+
         return session;
     }
 
