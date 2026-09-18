@@ -414,7 +414,7 @@ public sealed class TvNextUpService
                     announceLatest ? "PlayingLatestEpisodeSsml" : "PlayingNextEpisodeSsml",
                     announceLatest ? "PlayingLatestEpisode" : "PlayingNextEpisode",
                     locale,
-                    episode.Name)
+                    SpeechBuilder.FormatEpisodeAnnounceTitle(episode, locale) ?? episode.Name)
                 : null;
         }
 

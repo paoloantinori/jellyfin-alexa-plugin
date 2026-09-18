@@ -178,6 +178,46 @@ public static class SpeechBuilder
     public static IOutputSpeech? BuildNowPlayingSpeech(string name, string locale, bool announceOn)
         => announceOn ? BuildOutputSpeech("NowPlayingSsml", "NowPlaying", locale, name) : null;
     /// <summary>
+    /// Matches a leading "Ep. N - " episode-number prefix (en-dash or hyphen separator,
+    /// case/space tolerant) in daily-podcast episode titles.
+    /// </summary>
+    private static readonly System.Text.RegularExpressions.Regex EpisodeNumberPrefix
+        = new(@"^\s*ep\.?\s*\d+\s*[-–]\s*", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// TASK-HIGH.1: the TITLE portion of the VOICE now-playing announce for an episode,
+    /// replacing the raw item name when the name would read the episode number twice
+    /// (daily-podcast titles like "Ep. 1286 - Title" already carry the number the announce
+    /// context adds). Returns "weekday day month" plus the stripped title under the it-IT
+    /// culture (e.g. "Mercoledì 17 settembre" + " - " + title) ONLY when the item is an Episode
+    /// with a PremiereDate and the locale is it-IT; any other item, locale, or a missing
+    /// PremiereDate returns null so callers keep the raw item name byte-identically.
+    /// A name without a recognizable "Ep. N" prefix still gets the date prepended (the
+    /// date is the point, the prefix strip is secondary). DISPLAY/APL metadata must keep
+    /// the full item name; only the speech title swaps.
+    /// </summary>
+    public static string? FormatEpisodeAnnounceTitle(MediaBrowser.Controller.Entities.BaseItem item, string locale)
+    {
+        if (item is not MediaBrowser.Controller.Entities.TV.Episode
+            || item.PremiereDate is not DateTime premiere
+            || !string.Equals(locale, "it-IT", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        string date = premiere.ToString("dddd d MMMM", new System.Globalization.CultureInfo("it-IT"));
+        date = char.ToUpperInvariant(date[0]) + date[1..];
+
+        string title = EpisodeNumberPrefix.Replace(item.Name ?? string.Empty, string.Empty).Trim();
+        if (title.Length == 0)
+        {
+            title = item.Name ?? string.Empty;
+        }
+
+        return $"{date} – {title}";
+    }
+
+    /// <summary>
     /// Escapes special XML characters in text for safe inclusion in SSML.
     /// </summary>
     /// <param name="text">The text to escape.</param>

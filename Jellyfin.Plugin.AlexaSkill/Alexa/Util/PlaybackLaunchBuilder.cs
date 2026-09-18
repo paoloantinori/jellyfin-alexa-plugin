@@ -1140,12 +1140,16 @@ public sealed class PlaybackLaunchBuilder
     /// </summary>
     internal IOutputSpeech? BuildVideoLaunchSpeech(BaseItem item, string locale, long resumeTicks, bool announceOn)
     {
+        // TASK-HIGH.1: it-IT daily-podcast episodes speak the date instead of the raw
+        // "Ep. N" name (the number would be read twice); every other case is null and
+        // keeps item.Name. Display/APL metadata elsewhere keeps the raw name.
+        string speechTitle = SpeechBuilder.FormatEpisodeAnnounceTitle(item, locale) ?? item.Name;
         if (resumeTicks > 0)
         {
-            return new PlainTextOutputSpeech(ResponseStrings.Get("ResumingVideo", locale, item.Name, ResumeMath.FormatPosition(resumeTicks)));
+            return new PlainTextOutputSpeech(ResponseStrings.Get("ResumingVideo", locale, speechTitle, ResumeMath.FormatPosition(resumeTicks)));
         }
 
-        return SpeechBuilder.BuildNowPlayingSpeech(item.Name, locale, announceOn);
+        return SpeechBuilder.BuildNowPlayingSpeech(speechTitle, locale, announceOn);
     }
 
     /// <summary>
