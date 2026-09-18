@@ -294,11 +294,15 @@ tests:
     expected_response_type: speech
     expected_speech_contains: "dispositivo con schermo"
 
-  # Latest-episode carrier.
+  # Latest-episode carrier. JF-583: episode_position must FILL (a missed fill
+  # would degrade to the NextUp watch-state resolution this task fixes); the
+  # gate Tell pins the whole chain (NLU -> catalog fill -> recency resolution
+  # -> launch decision).
   - utterance: "l'ultimo episodio di the bear"
     expected_intent: PlayNextEpisodeIntent
     expected_slots:
       series_name: {}
+      episode_position: {}
     expected_response_type: speech
     expected_speech_contains: "dispositivo con schermo"
 

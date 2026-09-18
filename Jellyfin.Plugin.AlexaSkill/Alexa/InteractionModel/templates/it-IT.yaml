@@ -1106,13 +1106,12 @@ templates:
       # a bare "{infinitive} {series_name}" would be a bare carrier competing
       # with the artist region.
       - "{infinitive} {episode_position} episodio di {series_name}"
-      # JF-583 NLU probe: the infinitive family loses deterministically to
-      # PlayByGenre's greedy "Di riprodurre {genre}" (SearchQuery swallows the
-      # whole tail), so the two position carriers get explicit literal samples
-      # (the JF-504 explicit-carrier precedent). {series_name} keeps the sample
-      # slotted (anti-pattern #1 does not apply: one slot remains).
-      - Di riprodurre l'ultimo episodio di {series_name}
-      - Di riprodurre il prossimo episodio di {series_name}
+      # JF-583 NLU history: the infinitive family originally lost to PlayByGenre's
+      # greedy "Di riprodurre {genre}"; JF-585 removed that greedy sibling and the
+      # explicit literal carriers tried in 532159bc were removed again after the
+      # live probe showed they SUPPRESS the episode_position slot fill (the
+      # vocabulary expansion of "{infinitive} {episode_position} episodio di
+      # {series_name}" already generates those exact phrases as slotted samples).
       - "{infinitive} la serie {series_name}"
     slots:
       - name: series_name

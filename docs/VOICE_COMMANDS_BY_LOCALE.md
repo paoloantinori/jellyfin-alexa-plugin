@@ -7100,7 +7100,7 @@ Placeholder legend:
 | `<titolo del video o del film>` | `{title}` |
 | `<parole del titolo del brano>` | `{titleKeywords}` |
 
-Complete phrase list (1435 phrases across 63 commands):
+Complete phrase list (1433 phrases across 63 commands):
 
 #### Play music
 
@@ -8246,8 +8246,6 @@ Complete phrase list (1435 phrases across 63 commands):
 - `Di mettere <posizione (prossimo, ultimo)> episodio di <nome della serie>`
 - `Di pleiare <posizione (prossimo, ultimo)> episodio di <nome della serie>`
 - `Di ascoltare <posizione (prossimo, ultimo)> episodio di <nome della serie>`
-- `Di riprodurre l'ultimo episodio di <nome della serie>`
-- `Di riprodurre il prossimo episodio di <nome della serie>`
 - `Di riprodurre la serie <nome della serie>`
 - `Di suonare la serie <nome della serie>`
 - `Di mettere la serie <nome della serie>`
