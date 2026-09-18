@@ -419,11 +419,12 @@ For a formatted reference of all voice commands by language, see [VOICE_COMMANDS
 
 ### My invocation name doesn't work — Alexa doesn't recognize it
 
-Choosing an invocation name is trickier than it seems. Two common pitfalls:
+Choosing an invocation name is trickier than it seems. Three common pitfalls:
 
 1. **Foreign words in a non-matching locale**: If your Echo device is set to, say, Italian (it-IT), Alexa's speech recognition is tuned for Italian phonology. An invocation name containing English or other foreign words may be misrecognized or fail to trigger consistently. Pick a name that sounds natural in the device's locale language. For example, "mia collezione" works well for Italian because every word is native Italian.
 
 2. **Keywords that collide with built-in Alexa features**: Words like "video", "music", "radio", "tv", or "book" are heavily used by Amazon's own skills and services. An invocation name containing these words can cause Alexa to route your request to a built-in skill instead of yours, or leave the intent unresolved. Avoid these keywords entirely.
+3. **Foreign names under a non-matching accent**: the default English name "Jellyfin Player" itself can be hard to trigger reliably on a device set to another language, because the speech recognizer expects that locale's phonology and an English brand name gets distorted in the accent (a French user could not get "Jellyfin" recognized at all, while a native-sounding custom name worked immediately). If you use the skill on a non-English Echo, prefer a custom invocation name made of words native to that locale.
 
 If you're unsure whether a name will work, test it in the [Alexa Developer Console](https://developer.amazon.com/alexa/console/ask) simulator before committing (see the [Testing section](#using-the-alexa-simulator)).
 
@@ -486,6 +487,10 @@ What you can get instead:
 - **Audiobooks on Echo Show** do have a full seek bar, because they play through the video interface (`VideoApp`). The trade-off is no album art or on-screen metadata on that path.
 - The plugin setting **Native controls for audio** reroutes music through the video interface as well, gaining the seek bar at the cost of on-device transcoding (slower first play) and compatibility issues on some devices. If you enable it and playback breaks, turn it off again; the default (plain `AudioPlayer`) is the reliable path.
 
+### Why don't I hear the song title when music starts?
+
+By default, music plays immediately with no spoken announcement. That is deliberate: the **now-playing announce for music is opt-in** because most people prefer instant playback, while the announcements on video and audiobook launches are on by default (there the launch takes a moment anyway). If you want the skill to say *"Now playing X"* before songs, enable **Announce Music Plays** in the plugin configuration (per user or globally, like the other behavior settings). Video and audiobook announcements have their own separate toggle in the same place.
+
 ### Why does "next" sometimes answer "Sorry, I can't move to the next track"?
 
 If you ask for the next track well before the current song is near its end, the Echo's own buffering sometimes answers with its built-in error message instead of passing the request to the skill. The skill is never consulted in that case, so nothing is skipped. Asking again, or waiting until the track is closer to its end, works. This comes from the device's preloaded-buffer behavior and cannot be changed from the skill side.
@@ -543,6 +548,10 @@ Two reliable fixes:
 - Add a **carrier word** before the name: *"play the band Soul Coughing"*, *"play the singer X"* (Italian: *"suona la band X"*, *"metti il cantante X"*, *"il gruppo X"*). The carrier word tells Alexa the name is an artist, and the request routes correctly.
 - If the skill answers **"Did you mean X?"**, that is the disambiguation prompt: say *yes* to play the suggested match, or *no* for a clean "not found". Nothing plays without your confirmation on that path, so a wrong suggestion can never start on its own.
 
+### Why does the same artist always play the same songs in the same order?
+
+That is the intended behavior, not a stuck queue: when you ask for an artist without saying more, the skill builds the playlist in a stable popularity-based order (favorites and most-played first, then rating) so the same request gives a predictable experience. Two ways to get variety: enable **Shuffle Artist Songs** in the plugin configuration (artist plays are then shuffled from the start), or, while the artist is playing, just say *"shuffle"* (built-in command, no invocation name needed) to reshuffle what is queued.
+
 ### Alexa found multiple artists: how do I choose one?
 
 When several artists plausibly match what you said, the skill lists them and asks about the **first** one (for example: *"I found multiple artists: P!nk, Pink Floyd. Shall I play the first one? Say no for the next."*). Say **yes** (or "play it") to play the first artist; say **no** to move to the next name; say **no** past the last one for a clean "no more matches". You can also just say the artist's name again with a carrier word (*"play the band Pink Floyd"*) to route unambiguously.
@@ -551,7 +560,6 @@ When several artists plausibly match what you said, the skill lists them and ask
 
 Right after the Jellyfin server (re)starts, the skill loads in-memory search indexes of your library in the background. Until they finish, search requests answer with a friendly "still preparing, try again in a minute" instead of risking a timeout. The window is normally a few seconds on small libraries and up to a minute on very large ones; a single retry after that is all it takes. If the message persists for many minutes, the index failed to load repeatedly: the skill automatically falls back to direct database searches after its retry budget, so playback keeps working while you check the logs.
 
-### Mood or genre requests find nothing, even though my artists are tagged with that genre
 ### Mood or genre requests find nothing, even though my artists are tagged with that genre
 
 Jellyfin does not propagate genre tags from an artist to its audio tracks. Mood and genre playback searches the **tracks** (and albums), so tagging genres only on the artist entry in Jellyfin has no effect. Open the artist's albums in Jellyfin and set the genre on the tracks (or on the albums), then retry: *"Alexa, chiedi a Mia Collezione di mettere musica rilassante"* will find the tracks once the genre is on the audio files themselves.
@@ -575,6 +583,10 @@ This is not specific to this plugin; it affects any Jellyfin plugin that changes
 ## Troubleshooting
 
 > **If the skill seems badly broken after a config change or deploy, check this first:** Alexa caches the interaction model and catalog slot data on Amazon's side, and changes take time to propagate. An utterance that worked yesterday may fail today (or vice versa) purely because a model rebuild is still in progress or a catalog version hasn't been promoted yet. Wait 2–5 minutes after any change that triggers a rebuild (invocation name, mood words, catalog sync, "Rebuild models"), then test again. Verify the model build status in the Alexa Developer Console (your skill → **Build** → **Model**) shows "Ready" before assuming a code regression.
+
+### Every so often Alexa says the skill didn't answer ("was unable to respond to the request")
+
+An occasional *"the skill was unable to respond"* or *"non ha fornito una risposta valida"*, with the very same request working on retry, is the Alexa response window at work: a skill must answer within roughly 8 seconds or the device gives up on it. A slow single lookup (a big library search, the server briefly busy) can brush against that limit even when everything is configured correctly. Retrying usually succeeds, and the skill's retry and timeout machinery is tuned to stay inside the window, so a one-off miss is not a bug to chase. See it as a problem only when it repeats for the same request every time: then check the [restart warm-up entry](#why-does-the-skill-say-it-is-still-preparing-right-after-a-restart) and the Jellyfin log lines for that request.
 
 ### "There was a problem with the requested skill's response"
 
