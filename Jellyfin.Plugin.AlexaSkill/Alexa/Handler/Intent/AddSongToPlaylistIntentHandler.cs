@@ -98,13 +98,21 @@ public class AddSongToPlaylistIntentHandler : PlaylistEditHandlerBase
             IncludeItemTypes = new[] { Jellyfin.Data.Enums.BaseItemKind.Audio },
             DtoOptions = new DtoOptions(true)
         };
+        // Carrier-noun tolerance (live profile-nlu 2026-09-19: "aggiungi la canzone
+        // {song}" fills song with "canzone rapsodia" - the noun rides into the slot
+        // value in every locale's noun-carrying sample). The pick below therefore
+        // also accepts a candidate the query merely ENDS with, which strips any
+        // leading noun generically, no per-locale table (the JF-381 containment-band
+        // shape, >=3 chars so a trailing article cannot match alone).
         ApplyLibraryFilter(query, user, _libraryManager);
         var candidates = await RetryAsync(
             () => _libraryManager.GetItemList(query),
             "AddSongToPlaylist search",
             cancellationToken).ConfigureAwait(false);
         BaseItem? match = candidates.FirstOrDefault(s => string.Equals(s.Name, songName, StringComparison.OrdinalIgnoreCase))
-            ?? candidates.FirstOrDefault(s => s.Name.StartsWith(songName, StringComparison.OrdinalIgnoreCase));
+            ?? candidates.FirstOrDefault(s => s.Name.StartsWith(songName, StringComparison.OrdinalIgnoreCase))
+            ?? candidates.FirstOrDefault(s => songName.EndsWith(s.Name, StringComparison.OrdinalIgnoreCase)
+                && s.Name.Length >= 3);
         if (match == null)
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByName", locale, songName));

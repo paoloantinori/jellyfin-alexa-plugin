@@ -22,6 +22,7 @@ using MediaBrowser.Controller.Playlists;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Playlists;
+using MediaBrowser.Model.Querying;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
@@ -162,6 +163,23 @@ public class PlaylistEditIntentHandlerTests : PluginTestBase
             CreateTokenContext(SongId), CreateUser(), session: null!, CancellationToken.None);
 
         Assert.Equal(ResponseStrings.Get("DidNotCatchPlaylistName", "en-US"), GetSpeech(response));
+    }
+
+    [Fact]
+    public async void AddSong_CarrierNounLeakedIntoSlotValue_StillFindsTheSong()
+    {
+        // Live profile-nlu 2026-09-19: "aggiungi la canzone {song} alla playlist X"
+        // fills song with "canzone rapsodia" (the noun rides into the slot value).
+        // The pick must accept a candidate the query ends with.
+        _libraryManagerMock
+            .Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<Audio> { new() { Name = "Rapsodia", Id = SongId } });
+
+        SkillResponse response = await CreateAddSong().HandleAsync(
+            CreateRequest(IntentNames.AddSongToPlaylist, new() { ["song"] = "canzone rapsodia", ["playlist_target"] = "road trip" }),
+            new Context(), CreateUser(), session: null!, CancellationToken.None);
+
+        VerifyAddItem(PlaylistId, id => id == SongId, Times.Once());
     }
 
     [Fact]
