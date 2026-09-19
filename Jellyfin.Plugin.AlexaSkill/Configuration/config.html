@@ -216,6 +216,13 @@
                     </details>
 
                     <details>
+                        <summary><span class="accordion-title">Device Library Bindings</span></summary>
+                            <div class="fieldDescription">Bind an Echo device to a default library (JF-327): requests from that device only see the bound library, intersected with each user's own library restrictions. A recognized voice profile outranks the room. The device id is the Alexa DeviceID (visible in the plugin log lines or the Jellyfin session).</div>
+                            <div id="deviceBindingsTable" style="margin-bottom:1em;"></div>
+                            <button is="emby-button" type="button" class="raised button-submit block" id="addDeviceBindingBtn" style="display:inline-block;">Add binding</button>
+                    </details>
+
+                    <details>
                         <summary><span class="accordion-title">Playback Preferences</span></summary>
                             <div class="fieldDescription">Fine-tune how audio is delivered to Alexa devices. Changes take effect on the next playback request.</div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
@@ -562,6 +569,8 @@
                     document.querySelector("#VideoAudioCacheSizeMB").value = config.VideoAudioCacheSizeMB != null ? config.VideoAudioCacheSizeMB : 4096;
 
                     // Mood overrides (JF-355) — render array of {Mood, Genres} as "mood: genres" lines
+                    renderDeviceBindings(config.DeviceLibraryBindings || []);
+
                     var moodTA = document.querySelector("#MoodGenreOverrides");
                     if (moodTA) {
                         var ov = Array.isArray(config.MoodGenreOverrides) ? config.MoodGenreOverrides : [];
@@ -615,6 +624,84 @@
                 input.value = "";
                 validateInvocationName(input);
                 input.focus();
+            }
+
+            // JF-327 device library bindings: render/load/save. Inline styles per the
+            // JF-365 lesson (element-scoped <style> rules are unreliable here).
+            function renderDeviceBindings(bindings) {
+                var host = document.querySelector("#deviceBindingsTable");
+                host.innerHTML = "";
+                (bindings || []).forEach(function (b) { host.appendChild(deviceBindingRow(b)); });
+                var addBtn = document.querySelector("#addDeviceBindingBtn");
+                if (addBtn && !addBtn._wired) {
+                    addBtn._wired = true;
+                    addBtn.addEventListener("click", function () {
+                        host.appendChild(deviceBindingRow(null));
+                    });
+                }
+            }
+
+            function deviceBindingRow(binding) {
+                var row = document.createElement("div");
+                row.style.cssText = "display:flex;gap:0.5em;align-items:center;margin-bottom:0.5em;flex-wrap:wrap;";
+                var name = document.createElement("input");
+                name.is = "emby-input";
+                name.setAttribute("is", "emby-input");
+                name.type = "text";
+                name.placeholder = "Label (e.g. Kitchen)";
+                name.value = binding ? (binding.DeviceName || "") : "";
+                name.style.cssText = "flex:1 1 120px;min-width:110px;";
+                name.className = "device-binding-name";
+                var id = document.createElement("input");
+                id.setAttribute("is", "emby-input");
+                id.type = "text";
+                id.placeholder = "Alexa Device ID";
+                id.value = binding ? (binding.DeviceId || "") : "";
+                id.style.cssText = "flex:2 1 220px;min-width:180px;";
+                id.className = "device-binding-id";
+                var lib = document.createElement("select");
+                lib.setAttribute("is", "emby-select");
+                lib.style.cssText = "flex:2 1 220px;min-width:160px;";
+                lib.className = "device-binding-lib";
+                var placeholder = document.createElement("option");
+                placeholder.value = "";
+                placeholder.textContent = binding && binding.LibraryName ? binding.LibraryName : "Library...";
+                lib.appendChild(placeholder);
+                fetchLibraries(function (libraries) {
+                    libraries.forEach(function (f) {
+                        var opt = document.createElement("option");
+                        opt.value = f.Id;
+                        opt.textContent = f.Name;
+                        if (binding && f.Id === binding.LibraryId) { opt.selected = true; }
+                        lib.appendChild(opt);
+                    });
+                });
+                var del = document.createElement("button");
+                del.setAttribute("is", "emby-button");
+                del.type = "button";
+                del.className = "raised";
+                del.textContent = "Remove";
+                del.style.cssText = "flex:0 0 auto;";
+                del.addEventListener("click", function () { row.remove(); });
+                row.appendChild(name); row.appendChild(id); row.appendChild(lib); row.appendChild(del);
+                return row;
+            }
+
+            function collectDeviceBindings() {
+                var out = [];
+                document.querySelectorAll("#deviceBindingsTable > div").forEach(function (row) {
+                    var id = row.querySelector(".device-binding-id").value.trim();
+                    var lib = row.querySelector(".device-binding-lib").value;
+                    if (!id || !lib) { return; }
+                    var opt = row.querySelector(".device-binding-lib option[value='" + lib + "']");
+                    out.push({
+                        deviceId: id,
+                        libraryId: lib,
+                        libraryName: opt ? opt.textContent : "",
+                        deviceName: row.querySelector(".device-binding-name").value.trim()
+                    });
+                });
+                return out;
             }
 
             var _cachedLibraries = null;
@@ -1427,7 +1514,8 @@
                         DefaultSearchResponseMode: config.DefaultSearchResponseMode,
                         DefaultPostPlayBehavior: config.DefaultPostPlayBehavior,
                         DefaultCrossMediaArtistSuggestion: config.DefaultCrossMediaArtistSuggestion,
-                        DefaultDiagnosticInteractionLogging: config.DefaultDiagnosticInteractionLogging
+                        DefaultDiagnosticInteractionLogging: config.DefaultDiagnosticInteractionLogging,
+                        DeviceLibraryBindings: collectDeviceBindings()
                     };
                     ApiClient.ajax({
                         type: "PATCH",

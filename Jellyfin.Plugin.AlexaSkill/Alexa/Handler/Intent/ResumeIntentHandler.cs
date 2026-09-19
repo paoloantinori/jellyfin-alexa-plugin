@@ -196,7 +196,10 @@ public class ResumeIntentHandler : BaseHandler
                 return userError;
             }
 
-            Entities.User pluginUser = _config.GetUserById(user.Id) ?? user;
+            // JF-327: the re-fetch (fresh config) would drop the device-library
+            // scoping applied at the request funnel; re-apply it (idempotent).
+            Entities.User pluginUser = Util.DeviceLibraryBindingResolver.Apply(
+                context, _config.GetUserById(user.Id) ?? user, _config, Logger);
             BaseItemKind[] contentTypes = FilterByContentAccess(new[] { BaseItemKind.Audio, BaseItemKind.Movie, BaseItemKind.Episode, BaseItemKind.AudioBook });
 
             var (resumeItem, resumeTicks) = FindLastPlayedItemWithProgress(

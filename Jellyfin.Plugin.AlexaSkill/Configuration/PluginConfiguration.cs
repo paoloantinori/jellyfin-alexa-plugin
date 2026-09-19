@@ -352,6 +352,38 @@ public class PluginConfiguration : BasePluginConfiguration
 #pragma warning restore CA2227
 
     /// <summary>
+    /// Gets or sets per-device default library bindings (JF-327 V1, library-only):
+    /// an Alexa device whose deviceId has an entry here is restricted to the bound
+    /// library for every request it makes, INTERSECTED with the speaking user's own
+    /// AllowedLibraryIds (the binding can restrict further but never grant access
+    /// the user does not have, AC#4). A recognized voice profile (PersonId mapped
+    /// to a configured user) wins over the binding: the person speaking outranks
+    /// the room. Unbound devices keep the account-linking behavior unchanged.
+    /// Stored as a list because XmlSerializer cannot serialize Dictionary.
+    /// </summary>
+#pragma warning disable CA2227
+    public Collection<DeviceLibraryBinding> DeviceLibraryBindings { get; set; } = new();
+#pragma warning restore CA2227
+
+    /// <summary>
+    /// Finds the library binding for an Alexa device id, or null when the device is
+    /// not bound. Case-insensitive device id compare (the config UI round-trips the
+    /// exact id, but hand-edited config files have drifted case before).
+    /// </summary>
+    /// <param name="deviceId">The Alexa device id from the request context.</param>
+    /// <returns>The binding, or null.</returns>
+    public DeviceLibraryBinding? GetDeviceLibraryBinding(string? deviceId)
+    {
+        if (string.IsNullOrWhiteSpace(deviceId))
+        {
+            return null;
+        }
+
+        return DeviceLibraryBindings.FirstOrDefault(b =>
+            string.Equals(b.DeviceId, deviceId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
     /// Gets locale model status by locale code.
     /// </summary>
     public LocaleModelStatus? GetLocaleModelStatus(string locale)
@@ -706,4 +738,26 @@ public class MoodGenreOverride
     /// <summary>Parses Genres into a trimmed, non-empty array.</summary>
     public string[] GenreArray() =>
         Genres.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+}
+
+/// <summary>
+/// XML-serializable admin mapping of an Alexa device (an Echo) to a default
+/// Jellyfin library (JF-327 V1). DeviceId is the raw Alexa device id from the
+/// request context (also visible in the plugin log's DeviceId scope); LibraryId
+/// is the Jellyfin media folder GUID; LibraryName is display-only convenience
+/// for the config table.
+/// </summary>
+public class DeviceLibraryBinding
+{
+    /// <summary>The Alexa device id (Context.System.Device.DeviceID).</summary>
+    public string DeviceId { get; set; } = string.Empty;
+
+    /// <summary>The Jellyfin library (media folder) GUID as a string.</summary>
+    public string LibraryId { get; set; } = string.Empty;
+
+    /// <summary>Display-only library name for the config table.</summary>
+    public string LibraryName { get; set; } = string.Empty;
+
+    /// <summary>Display-only label for the device (e.g. "Cucina", "Kids room").</summary>
+    public string DeviceName { get; set; } = string.Empty;
 }

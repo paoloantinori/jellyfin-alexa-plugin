@@ -647,6 +647,39 @@ public class ConfigurationController : ControllerBase
             updated = true;
         }
 
+        // JF-327 per-device library bindings. Array of {deviceId, libraryId,
+        // libraryName?, deviceName?}; entries without a usable deviceId+libraryId
+        // pair are skipped (same defensive shape as the mood block above).
+        if (req.TryGetValue("DeviceLibraryBindings", out var bindingsToken) && bindingsToken.Type == JTokenType.Array)
+        {
+            var parsedBindings = new Collection<DeviceLibraryBinding>();
+            foreach (JToken entry in bindingsToken)
+            {
+                if (entry.Type != JTokenType.Object)
+                {
+                    continue;
+                }
+
+                string deviceId = (entry.Value<string>("deviceId") ?? entry.Value<string>("DeviceId") ?? string.Empty).Trim();
+                string libraryId = (entry.Value<string>("libraryId") ?? entry.Value<string>("LibraryId") ?? string.Empty).Trim();
+                if (deviceId.Length == 0 || !Guid.TryParse(libraryId, out _))
+                {
+                    continue;
+                }
+
+                parsedBindings.Add(new DeviceLibraryBinding
+                {
+                    DeviceId = deviceId,
+                    LibraryId = libraryId,
+                    LibraryName = (entry.Value<string>("libraryName") ?? entry.Value<string>("LibraryName") ?? string.Empty).Trim(),
+                    DeviceName = (entry.Value<string>("deviceName") ?? entry.Value<string>("DeviceName") ?? string.Empty).Trim(),
+                });
+            }
+
+            config.DeviceLibraryBindings = parsedBindings;
+            updated = true;
+        }
+
         // Handle DefaultSearchResponseMode (string enum: "Thorough" or "Fast")
         if (req.TryGetValue("DefaultSearchResponseMode", out var defaultModeToken)
             && defaultModeToken.Type == JTokenType.String)

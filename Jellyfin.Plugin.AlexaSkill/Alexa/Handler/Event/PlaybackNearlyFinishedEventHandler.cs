@@ -590,7 +590,10 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             return null;
         }
 
-        Entities.User? pluginUser = _config.GetUserById(session.UserId);
+        // JF-327: re-fetch must not drop the device-library scope (the funnel scoped
+            // a clone; GetUserById returns the unscoped config instance).
+            Entities.User? pluginUser = Util.DeviceLibraryBindingResolver.ApplyByDevice(
+                session.DeviceId, _config.GetUserById(session.UserId), _config, Logger);
         IReadOnlyList<BaseItem> similar = await Radio.FindRadioTracksAsync(currentAudio, jellyfinUser, pluginUser!, _libraryManager, cancellationToken).ConfigureAwait(false);
 
         if (similar.Count == 0)
@@ -652,7 +655,10 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             return null;
         }
 
-        Entities.User? pluginUser = _config.GetUserById(session.UserId);
+        // JF-327: re-fetch must not drop the device-library scope (the funnel scoped
+            // a clone; GetUserById returns the unscoped config instance).
+            Entities.User? pluginUser = Util.DeviceLibraryBindingResolver.ApplyByDevice(
+                session.DeviceId, _config.GetUserById(session.UserId), _config, Logger);
         IReadOnlyList<BaseItem> similar = await Radio.FindRadioTracksAsync(
             currentAudio, jellyfinUser, pluginUser!, _libraryManager, cancellationToken).ConfigureAwait(false);
 

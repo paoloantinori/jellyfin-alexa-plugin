@@ -281,6 +281,14 @@ public abstract class BaseHandler
             return BuildUserNotFoundResponse(request);
         }
 
+        // JF-327 per-device default library binding, at the ONE funnel every request
+        // flows through (handlers and the simulator both land here). Applying it at
+        // the controller was dead wiring: the pipeline dispatches without the user
+        // and this method re-resolves it from the untouched configuration. A
+        // recognized voice profile (which may have resolved the user just above)
+        // makes the resolver skip the binding: the person outranks the room.
+        user = Util.DeviceLibraryBindingResolver.Apply(context, user, _config, Logger);
+
         // JF-477: the session lookup runs on EVERY request of every dialog turn, and
         // Jellyfin's implementation queries the device/auth database per call. Serve it
         // from the live-reference cache when fresh; only a miss pays the lookup below.

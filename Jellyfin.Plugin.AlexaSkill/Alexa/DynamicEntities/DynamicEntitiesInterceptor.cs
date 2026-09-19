@@ -157,6 +157,7 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
             {
                 return (user.Id, () => LibraryFilter.ResolveForUser(user, _libraryManager, _logger));
             }
+            // PersonId present but unmapped: the room binding still applies below.
         }
 
         // Account linking fallback
@@ -164,6 +165,10 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
         if (Guid.TryParse(accessToken, out Guid userId))
         {
             Entities.User? user = _config.GetUserById(userId);
+            // JF-327: dynamic entity values must reflect the device's bound library.
+            // A person id that reached this arm is unmapped (not a recognized
+            // profile), so the device binding correctly applies.
+            user = Alexa.Util.DeviceLibraryBindingResolver.Apply(context.AlexaContext, user!, _config, _logger);
             return (userId, () => LibraryFilter.ResolveForUser(user, _libraryManager, _logger));
         }
 
