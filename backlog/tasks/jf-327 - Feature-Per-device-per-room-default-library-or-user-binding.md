@@ -4,7 +4,7 @@ title: 'Feature: Per-device / per-room default library or user binding'
 status: To Do
 assignee: []
 created_date: '2026-07-12 15:00'
-updated_date: '2026-07-13 20:17'
+updated_date: '2026-09-19 01:55'
 labels:
   - feature
   - multi-user
@@ -34,6 +34,12 @@ The `deviceId` is already captured on requests. Add a device→(user and/or libr
 - [ ] #5 Config persists correctly without wiping other settings (uses a dedicated endpoint, not full config overwrite)
 - [ ] #6 Unit tests cover binding resolution and fallback
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-09-19 ~02:05 feasibility scan (night run; implementation NOT started - design questions for the morning first). INTEGRATION ANCHOR: AlexaSkillController.cs ~line 320-350 already extracts deviceId (req.Context.System.Device?.DeviceID) and resolves the user via Configuration.GetUserById(userId from the LWA access-token GUID), with a PersonId branch for voice profiles just above. A DeviceBinding lookup slots exactly between those: config.DeviceBindings (Collection<DeviceBinding> XmlSerializer-safe, {DeviceId, BoundUserId?, BoundLibraryId?}) resolved after user resolution, before handler dispatch; the library half rides the existing per-user library gating (ApplyLibraryFilter already takes the resolved Entities.User). DESIGN QUESTIONS FOR PAOLO (these gate implementation): (1) per-user skills nuance - each Jellyfin user has their OWN skill, so within one skill's requests the speaker is already the linked user; the USER-binding half of the feature is mostly relevant for the skill OWNER delegating a shared Echo to another user's CONTENT, which in practice means the LIBRARY binding (BoundLibraryId) is the real feature; do we ship library-only binding V1? (2) precedence - voice profile (PersonId) should presumably WIN over the device default (it identifies the actual speaker); device binding wins over plain linked-account fallback. Confirm. (3) queue ownership: DeviceQueueManager keys queues by deviceId already; if a bound device serves a different user's content, whose DeviceQueue/LastPlayed ledger applies (tonight's JF-566-588 reliability layer keys playback state by device - the binding must not silently mix ledgers). (4) AC#5 dedicated endpoint: follow the alexaskill/api/config PATCH flat-field pattern (NOT updatePluginConfiguration, which wipes Users). UI: config.html new accordion + the devices list can seed from Jellyfin's /Devices endpoint for display names. Estimated implementation after decisions: config DTO + PATCH field + controller resolution + config.html section + 6-8 unit tests; no interaction-model or locale changes (no new intents).
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
