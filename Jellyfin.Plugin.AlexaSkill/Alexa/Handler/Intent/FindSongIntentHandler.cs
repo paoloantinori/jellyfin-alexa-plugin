@@ -680,21 +680,6 @@ public class FindSongIntentHandler : BaseHandler
     /// <summary>
     /// Extract a slot value from the intent request, or null if the slot is missing/empty.
     /// </summary>
-    private static string? GetSlotValue(IntentRequest intentRequest, string slotName)
-    {
-        if (intentRequest.Intent.Slots == null)
-        {
-            return null;
-        }
-
-        if (!intentRequest.Intent.Slots.TryGetValue(slotName, out var slot))
-        {
-            return null;
-        }
-
-        return string.IsNullOrWhiteSpace(slot.Value) ? null : slot.Value;
-    }
-
     /// <summary>
     /// Extract text from any slot in the intent, used as a fallback when the expected
     /// slots (titleKeywords, musician) are not present. This handles the case where

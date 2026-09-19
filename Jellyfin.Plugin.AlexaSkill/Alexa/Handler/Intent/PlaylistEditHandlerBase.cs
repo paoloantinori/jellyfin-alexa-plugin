@@ -123,21 +123,4 @@ public abstract class PlaylistEditHandlerBase : BaseHandler
         return _playlistManager.AddItemToPlaylistAsync(playlistId, itemIds, userId);
 #endif
     }
-
-    /// <summary>
-    /// Extracts a slot's raw spoken value (whitespace-normalized), null when absent
-    /// (the IsNullOrWhiteSpace guard rule, CLAUDE.md anti-pattern #7).
-    /// </summary>
-    /// <param name="request">The intent request.</param>
-    /// <param name="slotName">The slot name.</param>
-    /// <returns>The trimmed slot value, or null.</returns>
-    protected static string? GetSlotValue(IntentRequest request, string slotName)
-    {
-        if (request.Intent.Slots == null || !request.Intent.Slots.TryGetValue(slotName, out Slot? slot))
-        {
-            return null;
-        }
-
-        return string.IsNullOrWhiteSpace(slot.Value) ? null : slot.Value.Trim();
-    }
 }

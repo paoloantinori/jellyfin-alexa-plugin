@@ -816,6 +816,26 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// Extract a slot's raw spoken value (trimmed), or null when the slot is
+    /// absent or whitespace (Alexa delivers partially-matched slots as empty or
+    /// whitespace strings; IsNullOrWhiteSpace, not IsNullOrEmpty - CLAUDE.md
+    /// anti-pattern #7). The one home for slot extraction (JF-594): the three
+    /// former private copies diverged on exactly that check and on trimming.
+    /// </summary>
+    /// <param name="request">The intent request carrying the slots.</param>
+    /// <param name="slotName">The slot name.</param>
+    /// <returns>The trimmed slot value, or null.</returns>
+    protected static string? GetSlotValue(IntentRequest request, string slotName)
+    {
+        if (request.Intent.Slots == null || !request.Intent.Slots.TryGetValue(slotName, out Slot? slot))
+        {
+            return null;
+        }
+
+        return string.IsNullOrWhiteSpace(slot.Value) ? null : slot.Value.Trim();
+    }
+
+    /// <summary>
     /// Extract the locale from the request, defaulting to en-US if not available.
     /// Public version accessible from pipeline interceptors.
     /// </summary>

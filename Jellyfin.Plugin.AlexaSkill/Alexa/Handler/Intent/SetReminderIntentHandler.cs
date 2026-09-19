@@ -220,15 +220,4 @@ public class SetReminderIntentHandler : BaseHandler
         };
     }
 
-    private static string? GetSlotValue(IntentRequest intentRequest, string slotName)
-    {
-        if (intentRequest.Intent.Slots != null
-            && intentRequest.Intent.Slots.TryGetValue(slotName, out Slot? slot)
-            && !string.IsNullOrEmpty(slot.Value))
-        {
-            return slot.Value;
-        }
-
-        return null;
-    }
 }
