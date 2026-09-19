@@ -32,33 +32,8 @@ public class DeviceLibraryBindingFunnelTests : PluginTestBase
     public DeviceLibraryBindingFunnelTests()
     {
         // The funnel reads Plugin.Instance.Configuration.ServerAddress deep inside
-        // the session lookup; a real Plugin instance is required (PipelineTests
-        // recipe: its constructor sets Plugin.Instance).
-        if (Plugin.Instance != null)
-        {
-            return;
-        }
-
-        string tmpDir = TestHelpers.CreateRegisteredTempDir("alexa-skill-test");
-        var appPaths = new Mock<MediaBrowser.Common.Configuration.IApplicationPaths>();
-        appPaths.Setup(p => p.PluginsPath).Returns(tmpDir);
-        appPaths.Setup(p => p.PluginConfigurationsPath).Returns(tmpDir);
-        appPaths.Setup(p => p.DataPath).Returns(tmpDir);
-        appPaths.Setup(p => p.CachePath).Returns(tmpDir);
-        appPaths.Setup(p => p.LogDirectoryPath).Returns(tmpDir);
-        appPaths.Setup(p => p.ConfigurationDirectoryPath).Returns(tmpDir);
-        appPaths.Setup(p => p.SystemConfigurationFilePath).Returns(System.IO.Path.Combine(tmpDir, "system.xml"));
-        appPaths.Setup(p => p.ProgramDataPath).Returns(tmpDir);
-        appPaths.Setup(p => p.ProgramSystemPath).Returns(tmpDir);
-        appPaths.Setup(p => p.TempDirectory).Returns(tmpDir);
-        appPaths.Setup(p => p.VirtualDataPath).Returns(tmpDir);
-        var xmlSerializer = new Mock<MediaBrowser.Model.Serialization.IXmlSerializer>();
-        xmlSerializer
-            .Setup(x => x.DeserializeFromFile(typeof(PluginConfiguration), It.IsAny<string>()))
-            .Returns(new PluginConfiguration());
-        var userManager = new Mock<MediaBrowser.Controller.Library.IUserManager>();
-        var plugin = new Plugin(appPaths.Object, xmlSerializer.Object, LoggerFactory.Create(b => { }), userManager.Object);
-        plugin.Configuration.ServerAddress = "http://localhost:8096";
+        // the session lookup; a real Plugin instance is required.
+        TestHelpers.EnsureRealPlugin();
     }
 
     private sealed class RecordingHandler : BaseHandler

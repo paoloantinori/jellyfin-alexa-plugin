@@ -17,6 +17,7 @@ public class RequestCounters
     private int _responseSizeBucketMedium;
     private int _responseSizeBucketLarge;
     private long _startedAt;
+    private long _lastRequestAtUnix;
 
     public RequestCounters()
     {
@@ -49,9 +50,26 @@ public class RequestCounters
     public TimeSpan Uptime => DateTimeOffset.UtcNow - DateTimeOffset.FromUnixTimeSeconds(Volatile.Read(ref _startedAt));
 
     /// <summary>
+    /// Gets when the last Alexa request was seen (JF-328 health panel), or null
+    /// when none arrived since the server started. 0 is the unset sentinel.
+    /// </summary>
+    public DateTimeOffset? LastRequestAt
+    {
+        get
+        {
+            long unix = Interlocked.Read(ref _lastRequestAtUnix);
+            return unix == 0 ? null : DateTimeOffset.FromUnixTimeMilliseconds(unix);
+        }
+    }
+
+    /// <summary>
     /// Increment total request count.
     /// </summary>
-    public void IncrementRequests() => Interlocked.Increment(ref _totalRequests);
+    public void IncrementRequests()
+    {
+        Interlocked.Increment(ref _totalRequests);
+        Interlocked.Exchange(ref _lastRequestAtUnix, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+    }
 
     /// <summary>
     /// Increment total error count.

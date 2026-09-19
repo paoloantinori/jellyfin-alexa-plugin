@@ -81,6 +81,13 @@
 
                     <form id="ConfigForm" method="post">
                     <details open>
+                        <summary><span class="accordion-title">Setup &amp; Health</span></summary>
+                            <div class="fieldDescription">Is my skill working? The checklist walks the setup in order; the health facts update from the live server. Steps deep-link to the section you need.</div>
+                            <div id="setupHealthPanel" style="margin-top:0.8em;">Loading…</div>
+                            <button is="emby-button" type="button" class="raised" id="refreshHealthBtn" style="display:inline-block;margin-top:0.6em;">Refresh</button>
+                    </details>
+
+                    <details open>
                         <summary><span class="accordion-title">General Configuration</span></summary>
                             <div class="inputContainer">
                                 <label class="inputLabel inputLabelUnfocused" for="ServerAddress">Server Address</label>
@@ -522,6 +529,7 @@
 
             document.querySelector("#ConfigPage").addEventListener("pageshow", function() {
                 Dashboard.showLoadingMsg();
+                loadSetupHealthPanel();
 
                 ApiClient.getPluginConfiguration(Config.pluginUniqueId).then(function (config) {
                     document.querySelector("#ServerAddress").value = config.ServerAddress;
@@ -624,6 +632,106 @@
                 input.value = "";
                 validateInvocationName(input);
                 input.focus();
+            }
+
+            // JF-328 setup checklist + health panel (GET alexaskill/api/diagnostics/panel).
+            // Inline styles per the JF-365 lesson; no secrets are ever rendered (the
+            // endpoint itself only returns booleans, ids and names).
+            function loadSetupHealthPanel() {
+                ApiClient.ajax({
+                    type: "GET",
+                    url: ApiClient.getUrl("alexaskill/api/diagnostics/panel")
+                }).then(function (res) {
+                    res.json().then(renderSetupHealthPanel);
+                }, function () {
+                    document.querySelector("#setupHealthPanel").innerHTML =
+                        "<div class='fieldDescription'>Health data unavailable (the panel endpoint did not answer).</div>";
+                });
+                wireRefreshButton();
+            }
+
+            function renderSetupHealthPanel(d) {
+                var steps = [
+                    { key: "ServerConfigured", label: "Server address configured", target: "General Configuration" },
+                    { key: "LwaConfigured", label: "Login with Amazon credentials set", target: "General Configuration" },
+                    { key: "SkillCreated", label: "Alexa skill created", target: "User Skill Configuration" },
+                    { key: "AccountLinked", label: "Account linked (Jellyfin token)", target: "User Skill Configuration" },
+                    { key: "ModelsDeployed", label: "Interaction models deployed", target: "Custom Interaction Model & Catalog" }
+                ];
+                var userRows = [];
+                var html = "<div style='margin-bottom:1em;'>";
+                steps.forEach(function (st) {
+                    var ok = d.Checklist && d.Checklist[st.key];
+                    html += "<div class='fieldDescription' style='margin-bottom:0.35em;'>" +
+                        (ok ? "\u2705" : "\u2b1c") + " " + st.label +
+                        (ok ? "" : " &mdash; <a href='#' data-open-section='" + st.target + "'>open settings</a>") +
+                        "</div>";
+                });
+                html += "</div><div style='border-top:1px solid #333;padding-top:0.8em;'>";
+                html += "<div class='fieldDescription'>Version " + (d.Version || "?") +
+                    " &middot; last Alexa request: " + fmtWhen(d.LastRequestAt) +
+                    " &middot; " + (d.TotalRequests || 0) + " requests &middot; error rate " +
+                    ((d.ErrorRate || 0) * 100).toFixed(1) + "%</div>";
+                var c = d.JellyfinConnectivity || {};
+                var connDiv = document.createElement("div");
+                connDiv.className = "fieldDescription";
+                connDiv.textContent = "Jellyfin server: " +
+                    (c.IsReachable ? "reachable (" + (c.ResponseTimeMs || 0) + " ms)" : ("unreachable" + (c.Message ? " - " + c.Message : "")));
+                html += "<div class='fieldDescription'>Model deploys: " + (d.DeployedLocales || 0) + " locales ok" +
+                    ((d.FailedModels || 0) > 0 ? (", " + d.FailedModels + " failed") : "") +
+                    " &middot; last: " + fmtWhen(d.LastModelDeploy) + "</div>";
+                userRows = (d.Users || []).map(function (u) {
+                    var row = document.createElement("div");
+                    row.className = "fieldDescription";
+                    row.textContent = "User " + (u.Username || u.Id) +
+                        ": skill " + (u.SkillStatus || "None") +
+                        (u.SkillId ? " (" + u.SkillId.substring(0, 27) + "\u2026)" : "") +
+                        " \u00b7 account " + (u.AccountLinked ? "linked" : "NOT linked") +
+                        " \u00b7 SMAPI " + (u.SmapiLinked ? "ok" : "off");
+                    return row;
+                });
+                html += "</div>";
+                var host = document.querySelector("#setupHealthPanel");
+                host.innerHTML = html;
+                if (connDiv) { host.appendChild(connDiv); }
+                userRows.forEach(function (r) { host.appendChild(r); });
+                host.querySelectorAll("a[data-open-section]").forEach(function (a) {
+                    a.addEventListener("click", function (e) {
+                        e.preventDefault();
+                        var title = a.getAttribute("data-open-section");
+                        // Accordions AND the h2 .detailSectionHeader sections (the
+                        // User Skill table is the latter: not wrapped in <details>).
+                        var targets = [].concat(
+                            Array.prototype.slice.call(document.querySelectorAll("details .accordion-title")),
+                            Array.prototype.slice.call(document.querySelectorAll(".detailSectionHeader h2")));
+                        targets.forEach(function (t) {
+                            if (t.textContent.trim() === title) {
+                                var box = t.closest("details");
+                                if (box) { box.open = true; }
+                                t.scrollIntoView({ behavior: "smooth", block: "start" });
+                            }
+                        });
+                    });
+                });
+            }
+
+            function wireRefreshButton() {
+                var btn = document.querySelector("#refreshHealthBtn");
+                if (btn && !btn._wired) {
+                    btn._wired = true;
+                    btn.addEventListener("click", loadSetupHealthPanel);
+                }
+            }
+
+            function fmtWhen(iso) {
+                if (!iso) { return "never"; }
+                var t = new Date(iso);
+                var mins = Math.round((Date.now() - t.getTime()) / 60000);
+                if (mins < 1) { return "just now"; }
+                if (mins < 60) { return mins + " min ago"; }
+                var hrs = Math.round(mins / 60);
+                if (hrs < 24) { return hrs + " h ago"; }
+                return t.toLocaleDateString();
             }
 
             // JF-327 device library bindings: render/load/save. Inline styles per the

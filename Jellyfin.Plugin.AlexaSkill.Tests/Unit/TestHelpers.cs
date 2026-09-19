@@ -334,6 +334,19 @@ internal static class TestHelpers
     }
 
     /// <summary>
+    /// Ensures a real Plugin instance exists (funnel/controller tests that read
+    /// Plugin.Instance.Configuration deep inside the request path). Thin wrapper
+    /// over <see cref="EnsurePluginInstance"/>: the construction block has ONE
+    /// owner; this only pins the ServerAddress the funnel's session lookup reads.
+    /// </summary>
+    internal static void EnsureRealPlugin()
+        => EnsurePluginInstance(
+            new PluginConfiguration(),
+            LoggerFactory.Create(b => { }),
+            c => c.ServerAddress = "http://localhost:8096",
+            "alexa-skill-test");
+
+    /// <summary>
     /// Mints <c>&lt;suffix&gt;-&lt;guid&gt;</c> under the temp path, creates it, and
     /// registers it with PluginTempDirCleanup for deletion at process exit
     /// (JF-453/JF-486). Test code minting GUID temp dirs MUST go through this

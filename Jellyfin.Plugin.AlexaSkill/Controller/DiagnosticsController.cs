@@ -166,6 +166,79 @@ public class DiagnosticsController : ControllerBase
         return new JsonResult(result);
     }
 
+    /// <summary>
+    /// The end-user "is my skill working?" panel payload (JF-328): plain-language
+    /// setup checklist + health facts, assembled from existing state (config,
+    /// request counters, the connectivity checker) with NO secrets - tokens and
+    /// client secrets are reduced to booleans, and only skill ids and usernames
+    /// are exposed (both already visible in this same admin page).
+    /// </summary>
+    /// <returns>Checklist steps, per-user status, and health facts.</returns>
+    [HttpGet("diagnostics/panel")]
+    [Authorize(Policy = "RequiresElevation")]
+    public async Task<ActionResult> GetPanel()
+    {
+        var config = Plugin.Instance!.Configuration;
+
+        ConnectivityResult connectivity = await _connectivityChecker.CheckAsync().ConfigureAwait(false);
+
+        var modelEntries = config.LocaleModelStatuses;
+        var lastDeploy = modelEntries.Count == 0
+            ? (DateTime?)null
+            : modelEntries.Max(e => e.LastUpdated);
+        // Only genuine failure states count (the ledger also carries IN_PROGRESS
+        // during a rebuild and Skipped for catalog-less locales - both healthy;
+        // counting them as failures makes the panel cry wolf on working setups).
+        int failedModels = modelEntries.Count(e =>
+            string.Equals(e.Status, "FAILED", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(e.Status, "TIMEOUT", StringComparison.OrdinalIgnoreCase));
+
+        var users = config.Users
+            .Select(u => new
+            {
+                Id = u.Id,
+                Username = u.Username,
+                SkillStatus = u.UserSkill?.UserSkillStatus.ToString() ?? "None",
+                SkillId = u.UserSkill?.SkillId,
+                InvocationName = u.UserSkill?.InvocationName,
+                AccountLinked = u.HasJellyfinToken,
+                SmapiLinked = u.SmapiDeviceToken != null,
+            })
+            .ToList();
+
+        var checklist = new
+        {
+            ServerConfigured = !string.IsNullOrWhiteSpace(config.ServerAddress),
+            LwaConfigured = !string.IsNullOrWhiteSpace(config.LwaClientSecret)
+                && !string.IsNullOrWhiteSpace(config.AccountLinkingClientId),
+            SkillCreated = users.Any(u => !string.IsNullOrEmpty(u.SkillId)),
+            AccountLinked = users.Any(u => u.AccountLinked),
+            ModelsDeployed = modelEntries.Any(e => string.Equals(e.Status, "Succeeded", StringComparison.OrdinalIgnoreCase)),
+        };
+
+        var result = new
+        {
+            Version = Util.GetVersion(),
+            LastRequestAt = _counters.LastRequestAt,
+            TotalRequests = _counters.TotalRequests,
+            ErrorRate = Math.Round(ComputeErrorRate(), 4),
+            JellyfinConnectivity = new
+            {
+                connectivity.IsReachable,
+                connectivity.Message,
+                connectivity.ResponseTimeMs,
+            },
+            LastModelDeploy = lastDeploy,
+            DeployedLocales = modelEntries.Count - failedModels,
+            FailedModels = failedModels,
+            Users = users,
+            Checklist = checklist,
+            CheckedAt = DateTime.UtcNow,
+        };
+
+        return new JsonResult(result);
+    }
+
     private double ComputeErrorRate() =>
         _counters.TotalRequests > 0 ? (double)_counters.TotalErrors / _counters.TotalRequests : 0;
 
