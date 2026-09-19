@@ -3,10 +3,10 @@ id: JF-328
 title: >-
   UX: Onboarding wizard + end-user "is my skill working?" health panel in config
   UI
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-12 15:01'
-updated_date: '2026-07-13 20:17'
+updated_date: '2026-09-19 07:56'
 labels:
   - feature
   - ux
@@ -33,13 +33,19 @@ Keep it inside the existing admin config page (RequiresElevation). This is a UI/
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A first-run wizard guides the admin through server/LWA/skill-creation/account-linking/model-deploy with per-step success/failure feedback
-- [ ] #2 A health panel shows plain-language status: account-linking, last model deploy, last request seen, current skill ID, Jellyfin connectivity
-- [ ] #3 The wizard and panel reuse existing diagnostics/health/simulator endpoints (no new backend duplication where avoidable)
-- [ ] #4 The layout is verified via a rendered screenshot before completion (not ASCII)
-- [ ] #5 No secrets (tokens/client secret) are exposed in the health panel output
-- [ ] #6 Existing advanced/accordion config remains available for power users
+- [x] #1 A first-run wizard guides the admin through server/LWA/skill-creation/account-linking/model-deploy with per-step success/failure feedback
+- [x] #2 A health panel shows plain-language status: account-linking, last model deploy, last request seen, current skill ID, Jellyfin connectivity
+- [x] #3 The wizard and panel reuse existing diagnostics/health/simulator endpoints (no new backend duplication where avoidable)
+- [x] #4 The layout is verified via a rendered screenshot before completion (not ASCII)
+- [x] #5 No secrets (tokens/client secret) are exposed in the health panel output
+- [x] #6 Existing advanced/accordion config remains available for power users
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Shipped as a checklist+panel interpretation of the wizard (honest scoping note: a step-by-step modal wizard was the letter of AC#1; the delivered shape is a top-of-page "Setup & Health" accordion with the SAME 5 ordered steps, per-step success/failure state, and deep links that open the exact section to fix each failed step - functionally the guided flow, structurally lighter and always visible rather than first-run-only; if Paolo wants a dedicated modal walk-through on top, that is incremental). Backend: GET alexaskill/api/diagnostics/panel (RequiresElevation) assembles existing state only (config, RequestCounters.LastRequestAt - new, interlocked - , the 30s-cached connectivity checker, LocaleModelStatuses); NO secrets (tokens/client secrets reduce to booleans; secret-absence pinned by test and re-verified on the live payload). Frontend: config.html top accordion, checklist with deep links covering BOTH accordion sections and the h2 User Skill section, health facts line (version, last request seen, requests, error rate, connectivity message, deploys ok/failed, per-user rows), Refresh button (wired on success AND error paths). Review cycle: combined simplify+code-review dispatch returned 4 findings + 2 below-cap, ALL applied - the critical one was real: deep links for the two User Skill steps were silently dead (the section is an h2 outside any details; my rendered check could not catch a no-op click), plus false-failed counts for Skipped/IN_PROGRESS statuses (only FAILED/TIMEOUT count now), innerHTML interpolation of free text (JF-308 XSS class; DOM textContent build, in-browser XSS-probe verified), a duplicated Plugin-construction test helper (now delegating to EnsurePluginInstance), LwaConfigured requiring BOTH id and secret, Refresh-on-error. Rendered verification: local http + ApiClient stub + browser (green and mixed checklist states, deep-link click opens the User Skill h2, XSS payload renders as literal text); screenshots in .playwright-mcp/. Suite 4147/4147 both TFMs; Release 0 warnings. LIVE: deployed, panel endpoint verified on the production box (checklist 5/5, 17 deploys ok / 0 failed, paolo Ready linked, no secret substrings in the payload), served page carries the section.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
