@@ -3,9 +3,10 @@ id: JF-364
 title: >-
   Regroup plugin config settings by user intent + add example utterances to
   behavior-shaping settings
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-24 08:40'
+updated_date: '2026-09-19 00:10'
 labels:
   - ux
   - config
@@ -71,3 +72,9 @@ Related: JF-363 (added the CrossMediaArtistSuggestion setting that prompted this
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining, or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Shipped in 8fc6026a (deployed, md5 88924cfd). INVENTORY FINDING: PART 1 (regroup) and PART 2 (example utterances) had ALREADY landed in prior sessions - verified this session against every AC: 10 focused accordions (Features with the 9 capability toggles, Announcements with the 5 announce toggles incl. Announce Position on Pause, Seek Controls in Playback Preferences, Catalog Sync Locales in Custom Interaction Model & Catalog, Media Type Access and Cache Settings untouched) and all five task-specified example utterances present verbatim (soul-coffin cross-media, strokes search-mode, radio-station post-play, now-playing music announce). THE REAL RESIDUE, found by review: the CatalogSyncLocales control was functionally DEAD - listed in both boolean feature-flag arrays, so load set .checked on a text input (admin never saw the real value; the placeholder actively misled when the server held *) and save sent boolean false which the server's string guard silently dropped (typed values discarded every save; the setting was editable only via raw API). Fixed to the ServerAddress text-field pattern; input now uses is=emby-input (JF-365); description corrected to the code's real semantics (LibrarySyncService: it-IT always seeded, explicit list appends, empty = it-IT only) and the ~7s/locale figure replaced with the measured ~1-2 min (JF-544's 82-123s legs; ~7s was contradicted by every recorded figure). Verification: browser-rendered structure check via local http serve (10 accordions), clean-build embedded-resource ritual (rm DLL + build + strings), suite 4125/4125 both TFMs, deployed + served-page cache-buster grep carries all new lines, API string round-trip PATCH de-DE,en-US -> read-back -> restore * green (pre-test value preserved). Known residual: the in-dashboard browser round-trip was verified at API level plus served-page line checks, not by a logged-in dashboard session (needs admin UI credentials); the wiring is byte-identical in shape to the proven ServerAddress pattern.
+<!-- SECTION:FINAL_SUMMARY:END -->
