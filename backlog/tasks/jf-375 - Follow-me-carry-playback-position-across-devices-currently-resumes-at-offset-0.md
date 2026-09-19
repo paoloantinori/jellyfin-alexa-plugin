@@ -3,19 +3,16 @@ id: JF-375
 title: >-
   Follow-me: carry playback position across devices (currently resumes at offset
   0)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-25 14:34'
+updated_date: '2026-09-19 08:29'
 labels:
   - enhancement
   - follow-me
   - playback
   - multi-device
 dependencies: []
-modified_files:
-  - Jellyfin.Plugin.AlexaSkill/Alexa/Playback/DeviceQueueManager.cs
-  - Jellyfin.Plugin.AlexaSkill/Alexa/Handler/Intent/FollowMeIntentHandler.cs
-  - Jellyfin.Plugin.AlexaSkill.Tests/Handler/FollowMeIntentHandlerTests.cs
 priority: low
 ---
 
@@ -42,6 +39,12 @@ OUT OF SCOPE for this task: the source-device-does-not-stop limitation. That is 
 - [ ] #4 Live verification on 2 Echos: source plays to a mid-point position, follow-me transfer, target resumes from (approximately) that position, not 0
 - [ ] #5 Investigate the timing gap: Jellyfin's PlaybackStopped event clears FullNowPlayingItem before the resume request arrives (per CLAUDE.md). Confirm the offset source survives this (AudioPlayer.Token or the DeviceQueue offset, not FullNowPlayingItem)
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Shipped and deployed (a034ca4f). Design (AC#1): the offset source is the plugin-owned per-device state, freshest first - the source queue's live pointer (CurrentItemId/CurrentPositionTicks, written by the PlaybackStopped AND PlaybackNearlyFinished event paths) then the durable per-item store (ItemPositionState, GetStoredPositionTicks); both survive the FullNowPlayingItem clearing (AC#5 confirmed: neither reads session state) and both are read BEFORE the source-queue Clear. Applied (AC#2): through BuildAudioPlayerResponse's offsetInMilliseconds (the same mechanism Resume/SleepTimer use on static streams), run through the ONE fail-closed runtime clamp (ClampResumeTicksToRuntime widened to internal - unknown runtime or beyond-runtime drops to 0 AND logs, replacing my first draft's silent fail-open third copy). Announcement (AC#3): FollowMeSuccessResume (17 locales, 'right where you left it' wording, speechcon + break shape mirroring the existing key) only when an offset actually carries; plain FollowMeSuccess at 0 - honest in both directions. README feature + FAQ updated. REVIEW TRAIL: the combined simplify+code-review dispatch caught a REAL production bug in my first draft (C1): the pointer compare string-matched 'N' GUID format while every production writer stores DASHED GUIDs - the freshest signal would have been dead in production, with a possible resume-at-stale-position announcement; my test seam mirrored the wrong shape so the suite was green over dead code. Fixed: GUID-parsed comparison (format-agnostic, unparsable pointer falls to the store arm), the seam writes the production dashed form, and a dedicated lock test seeds the production shape. Also: the stale offset-0 class-doc paragraph rewritten (C2), seams internal per file convention (I2), clamp deduplicated (I1). Tests: the old FollowMe_ResumesAtOffsetZero_ByDesign lock split into 4 (zero+plain-string, live-pointer+resume-string, store fallback, beyond-runtime clamp) + the production-shape lock = 22 follow-me tests green; suite 4151/4151 both TFMs; Release 0 warnings. OPEN: AC#4 on-device verification on 2 Echos (source mid-track, follow-me, target resumes near that position) awaits Paolo - the unit layer pins the mechanism, only the real device timing (whether the live pointer is fresh enough mid-playback) needs ears.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

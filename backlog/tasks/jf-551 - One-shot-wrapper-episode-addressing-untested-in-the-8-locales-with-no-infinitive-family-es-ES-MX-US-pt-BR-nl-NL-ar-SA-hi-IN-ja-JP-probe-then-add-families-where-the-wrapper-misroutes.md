@@ -7,7 +7,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-12 16:55'
-updated_date: '2026-09-13 13:26'
+updated_date: '2026-09-19 07:57'
 labels:
   - interaction-model
   - nlu
@@ -39,14 +39,9 @@ Work: for each of the 8 locales, probe the natural one-shot wrapper form via pro
 
 <!-- SECTION:NOTES:BEGIN -->
 PROBE RESULTS 2026-09-13 (the AC#1 probe half is COMPLETE; recorded here because the findings reframe the task): MODEL-SIDE - nl-NL/ar-SA/hi-IN PASS (the natural bare imperative series-first form routes PlayEpisodeIntent with series_name='breaking bad' filled); es-ES/es-MX NO-SELECT on series-first while the series-LAST form routes+fills (order-dependent selection quality, sample family already present - not fixable by adding the infinitive twin: a 'reproducir {series} temporada...' series-first addition was live-tested on the deployed models and FAILED to route cleanly (Fallback on es-ES/es-MX, polluted series='reproducir breaking bad' on es-US) and was REVERTED); es-US and pt-BR steal BOTH episode orders to PlayNextIntent (queue bare-carrier competition); ja-JP steals both orders to PlayVideoIntent. INVOCATION-SIDE (the bigger finding): the one-shot wrapper layer is BROKEN in all 8 locales with the English invocation name 'jellyfin player' - even favorites-payload controls (verbatim samples) fail in es-ES/es-MX/es-US/pt-BR/hi-IN/ar-SA via simulate-skill, de-DE 'sag X ...' worked once of four (unreliable), nl-NL/ja-JP invocations reach the skill but wrapped payload routing is unstable. it-IT works consistently BECAUSE its invocation name is native ('mia collezione'). The JF-511/512 smoke for the 5 new locales used the two-step open-verb convention ('abre jellyfin player' + bare in-session command), never the one-shot wrapper - which is why it passed. CONSEQUENCE: adding infinitive sample families (the original fix shape) cannot fix the one-shot in these locales while the invocation layer fails first. The REAL fix is per-locale localized invocation names (it-IT precedent; the plumbing exists: Config.LocaleInvocationNames) - a product/naming decision for Paolo per locale, THEN the payload families become testable. Verified compositions recorded in SmapiClient.INVOCATION_PREFIX + the locale-routing-probe skill.
+
+2026-09-19: dependency made explicit - the remaining model-side fixes (es-US/pt-BR PlayNext competition, ja-JP PlayVideo steal) and any payload-family work are gated on JF-558 (per-locale localized invocation names, PARKED on Paolo's naming decision 2026-09-18). The probe evidence shows the one-shot invocation layer fails FIRST in all 8 locales with the English name, so model surgery now would be unverifiable end-to-end and risk the es-family-revert class again. Do not pick this task before JF-558 is decided.
 <!-- SECTION:NOTES:END -->
-
-## Implementation Notes
-
-MODEL-SIDE RESIDUAL CAMPAIGN 2026-09-13 (post-bisect, 10-probe/6-probe batteries):
-- pt-BR + es-US (PlayNext steal, song='breaking bad' absorbing the series while dropping the numbers): STABLE loss - an identical-content rebuild did NOT flip it (0/6 post-rebuild, unlike the de-DE JF-553 flip). The winning queue carriers are NOT bare ("tocar {song} depois" / "Reproduce {song} a continuación" - legit trailing-adverb forms), so the JF-459 trim does not apply; removing them would break queue UX. Recorded as platform NLU free-text competition, no model change.
-- ja-JP (PlayVideo steal): the BARE '{title} を再生して' carrier was TRIMMED (condemned: stole both episode orders 2/2, JF-459 class) and the model rebuilt SUCCEEDED - but the steal PERSISTS via generalization of the remaining video carriers ('ビデオ {title} を再生して' et al. absorb 'breaking bad のシーズン 1 エピソード 3' whole into title). The trim stays as harm-reduction (the condemned sample is gone; anchored video carriers remain); episode routing in ja needs a deeper carrier redesign, not a trim. NOT further pursued: with the JF-553 nondeterminism finding, per-locale NLU surgery has unstable measurement foundations.
-- VALIDATOR REFINEMENT shipped alongside: check #6 (SearchQuery coexistence) is now SAMPLE-level error + intent-level warning - SMAPI accepted BrowseLibrary's filter+browse_category intent shape in every build today (JF-550/JF-557 batches, 17/17 SUCCEEDED), so the old intent-level error was stricter than the platform; the sample-level combination remains the enforced shape. Negative-tested.
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
