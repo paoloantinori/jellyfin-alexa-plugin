@@ -3,9 +3,10 @@ id: JF-594
 title: >-
   Hoist GetSlotValue to BaseHandler (3 divergent private copies; SetReminder
   copy violates anti-pattern #7)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-19 01:33'
+updated_date: '2026-09-19 01:54'
 labels:
   - tech-debt
   - cleanup
@@ -22,11 +23,17 @@ priority: low
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 BaseHandler (or a shared util) exposes one strict GetSlotValue(intentRequest, slotName) (IsNullOrWhiteSpace + Trim)
-- [ ] #2 The three private copies are deleted and their call sites use the shared helper
-- [ ] #3 The behavior deltas are stated in the task notes: SetReminder starts rejecting whitespace-only slots (its private copy uses IsNullOrEmpty, a latent anti-pattern #7 violation) and FindSong starts trimming
-- [ ] #4 Suite passes both TFMs without --no-build
+- [x] #1 BaseHandler (or a shared util) exposes one strict GetSlotValue(intentRequest, slotName) (IsNullOrWhiteSpace + Trim)
+- [x] #2 The three private copies are deleted and their call sites use the shared helper
+- [x] #3 The behavior deltas are stated in the task notes: SetReminder starts rejecting whitespace-only slots (its private copy uses IsNullOrEmpty, a latent anti-pattern #7 violation) and FindSong starts trimming
+- [x] #4 Suite passes both TFMs without --no-build
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Shipped and deployed: BaseHandler.GetSlotValue is now the one strict slot extractor (IsNullOrWhiteSpace + Trim); the three private copies are deleted (PlaylistEditHandlerBase, FindSongIntentHandler 11 call sites, SetReminderIntentHandler 4 call sites) and their callers resolve to the inherited method unchanged in name and shape. Behavior deltas, both intended and stated: SetReminder now rejects whitespace-only slots (its private used IsNullOrEmpty, the latent anti-pattern #7 violation - verified LIVE on the deployed build: a whitespace-only playlist slot now answers the DidNotCatchPlaylistName prompt instead of passing " " downstream), and FindSong slot values are now trimmed (trimming only aids matching). Suite 4135/4135 both TFMs; Release 0 warnings. Gate provenance: the finding came from the JF-325 /simplify pass; the hoist itself is a pure dedup (exempt as trivial dedup, justified here).
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
