@@ -898,6 +898,66 @@
         ]
       },
       {
+        "name": "AddCurrentToPlaylistIntent",
+        "samples": [
+          "Aggiungi questo brano alla playlist {playlist}",
+          "Aggiungi questo alla playlist {playlist}",
+          "Metti questo brano nella playlist {playlist}"
+        ],
+        "slots": [
+          {
+            "name": "playlist",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
+      },
+      {
+        "name": "AddSongToPlaylistIntent",
+        "samples": [
+          "Aggiungi la canzone {song} alla playlist {playlist_target}",
+          "Aggiungi il brano {song} alla playlist {playlist_target}",
+          "Metti la canzone {song} nella playlist {playlist_target}"
+        ],
+        "slots": [
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording"
+          },
+          {
+            "name": "playlist_target",
+            "type": "AMAZON.MusicRecording"
+          }
+        ]
+      },
+      {
+        "name": "RemoveCurrentFromPlaylistIntent",
+        "samples": [
+          "Rimuovi questo brano dalla playlist {playlist}",
+          "Rimuovi questo dalla playlist {playlist}",
+          "Togli questo brano dalla playlist {playlist}"
+        ],
+        "slots": [
+          {
+            "name": "playlist",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
+      },
+      {
+        "name": "CreatePlaylistIntent",
+        "samples": [
+          "Crea una playlist chiamata {playlist}",
+          "Crea una nuova playlist chiamata {playlist}",
+          "Nuova playlist chiamata {playlist}"
+        ],
+        "slots": [
+          {
+            "name": "playlist",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
+      },
+      {
         "name": "PlayAlbumIntent",
         "samples": [
           "Riproduci l'album {album}",

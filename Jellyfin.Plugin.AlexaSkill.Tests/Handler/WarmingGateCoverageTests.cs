@@ -39,6 +39,7 @@ public class WarmingGateCoverageTests
     private static readonly HashSet<Type> ExpectedGatedHandlers = new()
     {
         typeof(AddToQueueIntentHandler),
+        typeof(AddSongToPlaylistIntentHandler),
         typeof(FindSongIntentHandler),
         typeof(PlayAlbumIntentHandler),
         typeof(PlayArtistSongsIntentHandler),

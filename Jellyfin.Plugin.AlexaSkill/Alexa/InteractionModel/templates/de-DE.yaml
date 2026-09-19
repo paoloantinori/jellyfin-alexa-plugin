@@ -296,6 +296,39 @@ intents:
     slots:
       - name: playlist
         type: AMAZON.SearchQuery
+  - name: AddCurrentToPlaylistIntent
+    samples:
+      - Füge dieses Lied zur Playlist {playlist} hinzu
+      - Füge das aktuelle Lied zur Playlist {playlist} hinzu
+      - Lege dieses Lied in die Playlist {playlist}
+    slots:
+      - name: playlist
+        type: AMAZON.SearchQuery
+  - name: AddSongToPlaylistIntent
+    samples:
+      - Füge das Lied {song} zur Playlist {playlist_target} hinzu
+      - Füge {song} zur Playlist {playlist_target} hinzu
+    slots:
+      - name: song
+        type: AMAZON.MusicRecording
+      - name: playlist_target
+        type: AMAZON.MusicRecording
+  - name: RemoveCurrentFromPlaylistIntent
+    samples:
+      - Entferne dieses Lied aus der Playlist {playlist}
+      - Entferne das aktuelle Lied aus der Playlist {playlist}
+      - Nimm dieses Lied von der Playlist {playlist}
+    slots:
+      - name: playlist
+        type: AMAZON.SearchQuery
+  - name: CreatePlaylistIntent
+    samples:
+      - Erstelle eine Playlist namens {playlist}
+      - Erstelle eine neue Playlist namens {playlist}
+      - Neue Playlist namens {playlist}
+    slots:
+      - name: playlist
+        type: AMAZON.SearchQuery
   - name: PlayFavoritesIntent
     samples:
       - Spiele meine Lieblings {media_type}

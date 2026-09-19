@@ -338,6 +338,63 @@
         ]
       },
       {
+        "name": "AddCurrentToPlaylistIntent",
+        "samples": [
+          "Ajoute ce titre à la liste de lecture {playlist}",
+          "Ajoute la chanson en cours à la liste de lecture {playlist}",
+          "Mets ce titre dans la liste de lecture {playlist}"
+        ],
+        "slots": [
+          {
+            "name": "playlist",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
+      },
+      {
+        "name": "AddSongToPlaylistIntent",
+        "samples": [
+          "Ajoute la chanson {song} à la liste de lecture {playlist_target}",
+          "Ajoute {song} à la liste de lecture {playlist_target}"
+        ],
+        "slots": [
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording"
+          },
+          {
+            "name": "playlist_target",
+            "type": "AMAZON.MusicRecording"
+          }
+        ]
+      },
+      {
+        "name": "RemoveCurrentFromPlaylistIntent",
+        "samples": [
+          "Retire ce titre de la liste de lecture {playlist}",
+          "Enlève la chanson en cours de la liste de lecture {playlist}"
+        ],
+        "slots": [
+          {
+            "name": "playlist",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
+      },
+      {
+        "name": "CreatePlaylistIntent",
+        "samples": [
+          "Crée une liste de lecture appelée {playlist}",
+          "Crée une nouvelle liste de lecture appelée {playlist}"
+        ],
+        "slots": [
+          {
+            "name": "playlist",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
+      },
+      {
         "name": "PlayFavoritesIntent",
         "samples": [
           "Lis mes {media_type} préférés",

@@ -8,6 +8,10 @@
       Local SDK 9 recipe (when the multi-target build fights you): dotnet restore -p:TargetFramework=net9.0, then dotnet build -f net9.0 with the no-restore flag (see docs/jf307-rc7-spike-findings.md).
 -->
     <TargetFrameworks>net9.0;net10.0</TargetFrameworks>
+    <!-- JF-325: the two Jellyfin lines diverge on IPlaylistManager.AddItemToPlaylistAsync
+         (12.0 adds a nullable insert-index parameter before userId). The symbol lets the
+         one divergent call site live in a single file instead of Condition'd sources. -->
+    <DefineConstants Condition="'$(TargetFramework)'=='net10.0'">$(DefineConstants);JELLYFIN_12</DefineConstants>
     <RootNamespace>Jellyfin.Plugin.AlexaSkill</RootNamespace>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <!-- CA1873 (non-guarded log-argument evaluation; 519 sites under the .NET 10

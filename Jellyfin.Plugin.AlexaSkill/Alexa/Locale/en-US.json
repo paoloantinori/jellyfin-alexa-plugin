@@ -260,5 +260,10 @@
   "FlowCancelled": "Okay, I've stopped searching.",
   "SkillWarmingUp": "I'm still getting ready. Please try again in a minute.",
   "PauseSessionSpeech": "Paused.",
-  "PauseSessionReprompt": "Tell me whenever you want to resume."
+  "PauseSessionReprompt": "Tell me whenever you want to resume.",
+  "AddedToPlaylist": "Added {0} to the playlist {1}.",
+  "RemovedFromPlaylist": "Removed {0} from the playlist {1}.",
+  "PlaylistCreated": "Playlist {0} created.",
+  "PlaylistAlreadyExists": "A playlist called {0} already exists.",
+  "PlaylistCreateFailed": "I couldn't create the playlist. Make sure your Jellyfin library includes a playlists folder."
 }

@@ -260,5 +260,10 @@
   "FlowCancelled": "حسناً، أوقفت البحث.",
   "SkillWarmingUp": "لا أزال أستعد. حاول مرة أخرى بعد دقيقة.",
   "PauseSessionSpeech": "تم الإيقاف المؤقت.",
-  "PauseSessionReprompt": "أخبرني عندما تريد الاستئناف."
+  "PauseSessionReprompt": "أخبرني عندما تريد الاستئناف.",
+  "AddedToPlaylist": "تمت إضافة {0} إلى قائمة التشغيل {1}.",
+  "RemovedFromPlaylist": "تمت إزالة {0} من قائمة التشغيل {1}.",
+  "PlaylistCreated": "تم إنشاء قائمة التشغيل {0}.",
+  "PlaylistAlreadyExists": "توجد بالفعل قائمة تشغيل باسم {0}.",
+  "PlaylistCreateFailed": "لم أتمكن من إنشاء قائمة التشغيل. تأكد من أن مكتبة Jellyfin لديك تتضمن مجلد قوائم التشغيل."
 }

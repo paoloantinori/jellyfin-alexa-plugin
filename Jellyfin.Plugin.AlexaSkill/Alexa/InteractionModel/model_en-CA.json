@@ -340,6 +340,67 @@
         ]
       },
       {
+        "name": "AddCurrentToPlaylistIntent",
+        "samples": [
+          "add this song to the playlist {playlist}",
+          "add this to the playlist {playlist}",
+          "add the current song to the playlist {playlist}",
+          "put this song in the playlist {playlist}"
+        ],
+        "slots": [
+          {
+            "name": "playlist",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
+      },
+      {
+        "name": "AddSongToPlaylistIntent",
+        "samples": [
+          "add the song {song} to the playlist {playlist_target}",
+          "add {song} to the playlist {playlist_target}",
+          "put the song {song} in the playlist {playlist_target}"
+        ],
+        "slots": [
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording"
+          },
+          {
+            "name": "playlist_target",
+            "type": "AMAZON.MusicRecording"
+          }
+        ]
+      },
+      {
+        "name": "RemoveCurrentFromPlaylistIntent",
+        "samples": [
+          "remove this song from the playlist {playlist}",
+          "remove this from the playlist {playlist}",
+          "take this song off the playlist {playlist}"
+        ],
+        "slots": [
+          {
+            "name": "playlist",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
+      },
+      {
+        "name": "CreatePlaylistIntent",
+        "samples": [
+          "create a playlist called {playlist}",
+          "create a new playlist called {playlist}",
+          "make a playlist called {playlist}"
+        ],
+        "slots": [
+          {
+            "name": "playlist",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
+      },
+      {
         "name": "PlayFavoritesIntent",
         "samples": [
           "Play my favorite {media_type}",

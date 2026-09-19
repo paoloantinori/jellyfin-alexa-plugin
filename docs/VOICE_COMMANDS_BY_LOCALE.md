@@ -51,6 +51,7 @@ Placeholder legend:
 | `<المزاج (هادئ، نشيط)>` | `{mood}` |
 | `<اسم الفنان>` | `{musician}` |
 | `<اسم قائمة التشغيل>` | `{playlist}` |
+| `<اسم قائمة التشغيل>` | `{playlist_target}` |
 | `<اسم البودكاست>` | `{podcast_name}` |
 | `<نص البحث>` | `{query}` |
 | `<أغانٍ أو ألبومات>` | `{query_type}` |
@@ -64,7 +65,7 @@ Placeholder legend:
 | `<كلمات من عنوان الأغنية>` | `{titleKeywords}` |
 | `<اسم المستخدم>` | `{username}` |
 
-Complete phrase list (302 phrases across 60 commands):
+Complete phrase list (310 phrases across 64 commands):
 
 #### Play music
 
@@ -324,6 +325,26 @@ Complete phrase list (302 phrases across 60 commands):
 - `أريد سماع <اسم الأغنية> بعد ذلك`
 - `شغل <اسم الأغنية> بعد هذا`
 
+**Add the current song to a playlist**
+
+- `أضف هذه الأغنية إلى قائمة التشغيل <اسم قائمة التشغيل>`
+- `أضف الحالي إلى قائمة التشغيل <اسم قائمة التشغيل>`
+
+**Add a song to a playlist**
+
+- `أضف الأغنية <اسم الأغنية> إلى قائمة التشغيل <اسم قائمة التشغيل>`
+- `أضف <اسم الأغنية> إلى قائمة التشغيل <اسم قائمة التشغيل>`
+
+**Remove the current song from a playlist**
+
+- `أزل هذه الأغنية من قائمة التشغيل <اسم قائمة التشغيل>`
+- `احذف الحالي من قائمة التشغيل <اسم قائمة التشغيل>`
+
+**Create a playlist**
+
+- `أنشئ قائمة تشغيل باسم <اسم قائمة التشغيل>`
+- `أنشئ قائمة تشغيل جديدة باسم <اسم قائمة التشغيل>`
+
 **Clear the queue**
 
 - `امسح قائمة الانتظار`
@@ -564,6 +585,7 @@ Placeholder legend:
 | `<stemming (relaxt, energiek)>` | `{mood}` |
 | `<naam van de artiest>` | `{musician}` |
 | `<naam van de playlist>` | `{playlist}` |
+| `<playlist name>` | `{playlist_target}` |
 | `<naam van de podcast>` | `{podcast_name}` |
 | `<zoektekst>` | `{query}` |
 | `<nummers of albums>` | `{query_type}` |
@@ -577,7 +599,7 @@ Placeholder legend:
 | `<woorden uit de songtitel>` | `{titleKeywords}` |
 | `<gebruikersnaam>` | `{username}` |
 
-Complete phrase list (363 phrases across 60 commands):
+Complete phrase list (371 phrases across 64 commands):
 
 #### Play music
 
@@ -882,6 +904,26 @@ Complete phrase list (363 phrases across 60 commands):
 - `ik wil <titel van het nummer> hierna horen`
 - `speel <titel van het nummer> na dit`
 
+**Add the current song to a playlist**
+
+- `Voeg dit nummer toe aan de afspeellijst <naam van de playlist>`
+- `Voeg het huidige nummer toe aan de afspeellijst <naam van de playlist>`
+
+**Add a song to a playlist**
+
+- `Voeg het nummer <titel van het nummer> toe aan de afspeellijst <playlist name>`
+- `Voeg <titel van het nummer> toe aan de afspeellijst <playlist name>`
+
+**Remove the current song from a playlist**
+
+- `Verwijder dit nummer uit de afspeellijst <naam van de playlist>`
+- `Haal het huidige nummer van de afspeellijst <naam van de playlist>`
+
+**Create a playlist**
+
+- `Maak een afspeellijst genaamd <naam van de playlist>`
+- `Maak een nieuwe afspeellijst genaamd <naam van de playlist>`
+
 **Clear the queue**
 
 - `wis mijn wachtrij`
@@ -1138,6 +1180,7 @@ Placeholder legend:
 | `<mood (relaxed, energetic)>` | `{mood}` |
 | `<artist name>` | `{musician}` |
 | `<playlist name>` | `{playlist}` |
+| `<playlist name>` | `{playlist_target}` |
 | `<podcast name>` | `{podcast_name}` |
 | `<what to search for>` | `{query}` |
 | `<tracks or albums>` | `{query_type}` |
@@ -1150,7 +1193,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (450 phrases across 60 commands):
+Complete phrase list (463 phrases across 64 commands):
 
 #### Play music
 
@@ -1509,6 +1552,31 @@ Complete phrase list (450 phrases across 60 commands):
 - `hear <song title> next`
 - `play <song title> after this`
 
+**Add the current song to a playlist**
+
+- `add this song to the playlist <playlist name>`
+- `add this to the playlist <playlist name>`
+- `add the current song to the playlist <playlist name>`
+- `put this song in the playlist <playlist name>`
+
+**Add a song to a playlist**
+
+- `add the song <song title> to the playlist <playlist name>`
+- `add <song title> to the playlist <playlist name>`
+- `put the song <song title> in the playlist <playlist name>`
+
+**Remove the current song from a playlist**
+
+- `remove this song from the playlist <playlist name>`
+- `remove this from the playlist <playlist name>`
+- `take this song off the playlist <playlist name>`
+
+**Create a playlist**
+
+- `create a playlist called <playlist name>`
+- `create a new playlist called <playlist name>`
+- `make a playlist called <playlist name>`
+
 **Clear the queue**
 
 - `clear my queue`
@@ -1798,6 +1866,7 @@ Placeholder legend:
 | `<mood (relaxed, energetic)>` | `{mood}` |
 | `<artist name>` | `{musician}` |
 | `<playlist name>` | `{playlist}` |
+| `<playlist name>` | `{playlist_target}` |
 | `<podcast name>` | `{podcast_name}` |
 | `<what to search for>` | `{query}` |
 | `<tracks or albums>` | `{query_type}` |
@@ -1810,7 +1879,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (443 phrases across 60 commands):
+Complete phrase list (456 phrases across 64 commands):
 
 #### Play music
 
@@ -2166,6 +2235,31 @@ Complete phrase list (443 phrases across 60 commands):
 - `hear <song title> next`
 - `play <song title> after this`
 
+**Add the current song to a playlist**
+
+- `add this song to the playlist <playlist name>`
+- `add this to the playlist <playlist name>`
+- `add the current song to the playlist <playlist name>`
+- `put this song in the playlist <playlist name>`
+
+**Add a song to a playlist**
+
+- `add the song <song title> to the playlist <playlist name>`
+- `add <song title> to the playlist <playlist name>`
+- `put the song <song title> in the playlist <playlist name>`
+
+**Remove the current song from a playlist**
+
+- `remove this song from the playlist <playlist name>`
+- `remove this from the playlist <playlist name>`
+- `take this song off the playlist <playlist name>`
+
+**Create a playlist**
+
+- `create a playlist called <playlist name>`
+- `create a new playlist called <playlist name>`
+- `make a playlist called <playlist name>`
+
 **Clear the queue**
 
 - `clear my queue`
@@ -2451,6 +2545,7 @@ Placeholder legend:
 | `<mood (relaxed, energetic)>` | `{mood}` |
 | `<artist name>` | `{musician}` |
 | `<playlist name>` | `{playlist}` |
+| `<playlist name>` | `{playlist_target}` |
 | `<podcast name>` | `{podcast_name}` |
 | `<what to search for>` | `{query}` |
 | `<tracks or albums>` | `{query_type}` |
@@ -2463,7 +2558,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (539 phrases across 60 commands):
+Complete phrase list (552 phrases across 64 commands):
 
 #### Play music
 
@@ -2896,6 +2991,31 @@ Complete phrase list (539 phrases across 60 commands):
 - `hear <song title> next`
 - `play <song title> after this`
 
+**Add the current song to a playlist**
+
+- `add this song to the playlist <playlist name>`
+- `add this to the playlist <playlist name>`
+- `add the current song to the playlist <playlist name>`
+- `put this song in the playlist <playlist name>`
+
+**Add a song to a playlist**
+
+- `add the song <song title> to the playlist <playlist name>`
+- `add <song title> to the playlist <playlist name>`
+- `put the song <song title> in the playlist <playlist name>`
+
+**Remove the current song from a playlist**
+
+- `remove this song from the playlist <playlist name>`
+- `remove this from the playlist <playlist name>`
+- `take this song off the playlist <playlist name>`
+
+**Create a playlist**
+
+- `create a playlist called <playlist name>`
+- `create a new playlist called <playlist name>`
+- `make a playlist called <playlist name>`
+
 **Clear the queue**
 
 - `clear my queue`
@@ -3200,6 +3320,7 @@ Placeholder legend:
 | `<mood (relaxed, energetic)>` | `{mood}` |
 | `<artist name>` | `{musician}` |
 | `<playlist name>` | `{playlist}` |
+| `<playlist name>` | `{playlist_target}` |
 | `<podcast name>` | `{podcast_name}` |
 | `<what to search for>` | `{query}` |
 | `<tracks or albums>` | `{query_type}` |
@@ -3212,7 +3333,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (444 phrases across 60 commands):
+Complete phrase list (457 phrases across 64 commands):
 
 #### Play music
 
@@ -3567,6 +3688,31 @@ Complete phrase list (444 phrases across 60 commands):
 - `hear <song title> next`
 - `play <song title> after this`
 
+**Add the current song to a playlist**
+
+- `add this song to the playlist <playlist name>`
+- `add this to the playlist <playlist name>`
+- `add the current song to the playlist <playlist name>`
+- `put this song in the playlist <playlist name>`
+
+**Add a song to a playlist**
+
+- `add the song <song title> to the playlist <playlist name>`
+- `add <song title> to the playlist <playlist name>`
+- `put the song <song title> in the playlist <playlist name>`
+
+**Remove the current song from a playlist**
+
+- `remove this song from the playlist <playlist name>`
+- `remove this from the playlist <playlist name>`
+- `take this song off the playlist <playlist name>`
+
+**Create a playlist**
+
+- `create a playlist called <playlist name>`
+- `create a new playlist called <playlist name>`
+- `make a playlist called <playlist name>`
+
 **Clear the queue**
 
 - `clear my queue`
@@ -3854,6 +4000,7 @@ Placeholder legend:
 | `<mood (relaxed, energetic)>` | `{mood}` |
 | `<artist name>` | `{musician}` |
 | `<playlist name>` | `{playlist}` |
+| `<playlist name>` | `{playlist_target}` |
 | `<podcast name>` | `{podcast_name}` |
 | `<hours>` | `{position_hours}` |
 | `<minutes>` | `{position_minutes}` |
@@ -3873,7 +4020,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (554 phrases across 62 commands):
+Complete phrase list (567 phrases across 66 commands):
 
 #### Play music
 
@@ -4294,6 +4441,31 @@ Complete phrase list (554 phrases across 62 commands):
 - `hear <song title> next`
 - `play <song title> after this`
 
+**Add the current song to a playlist**
+
+- `add this song to the playlist <playlist name>`
+- `add this to the playlist <playlist name>`
+- `add the current song to the playlist <playlist name>`
+- `put this song in the playlist <playlist name>`
+
+**Add a song to a playlist**
+
+- `add the song <song title> to the playlist <playlist name>`
+- `add <song title> to the playlist <playlist name>`
+- `put the song <song title> in the playlist <playlist name>`
+
+**Remove the current song from a playlist**
+
+- `remove this song from the playlist <playlist name>`
+- `remove this from the playlist <playlist name>`
+- `take this song off the playlist <playlist name>`
+
+**Create a playlist**
+
+- `create a playlist called <playlist name>`
+- `create a new playlist called <playlist name>`
+- `make a playlist called <playlist name>`
+
 **Clear the queue**
 
 - `clear my queue`
@@ -4631,6 +4803,7 @@ Placeholder legend:
 | `<ambiance (détendu, énergique)>` | `{mood}` |
 | `<nom de l'artiste>` | `{musician}` |
 | `<nom de la playlist>` | `{playlist}` |
+| `<playlist name>` | `{playlist_target}` |
 | `<nom du podcast>` | `{podcast_name}` |
 | `<texte à rechercher>` | `{query}` |
 | `<chansons ou albums>` | `{query_type}` |
@@ -4643,7 +4816,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (413 phrases across 63 commands):
+Complete phrase list (422 phrases across 67 commands):
 
 #### Play music
 
@@ -4975,6 +5148,27 @@ Complete phrase list (413 phrases across 63 commands):
 - `Je veux entendre <titre de la chanson> ensuite`
 - `Passe <titre de la chanson> ensuite`
 
+**Add the current song to a playlist**
+
+- `Ajoute ce titre à la liste de lecture <nom de la playlist>`
+- `Ajoute la chanson en cours à la liste de lecture <nom de la playlist>`
+- `Mets ce titre dans la liste de lecture <nom de la playlist>`
+
+**Add a song to a playlist**
+
+- `Ajoute la chanson <titre de la chanson> à la liste de lecture <playlist name>`
+- `Ajoute <titre de la chanson> à la liste de lecture <playlist name>`
+
+**Remove the current song from a playlist**
+
+- `Retire ce titre de la liste de lecture <nom de la playlist>`
+- `Enlève la chanson en cours de la liste de lecture <nom de la playlist>`
+
+**Create a playlist**
+
+- `Crée une liste de lecture appelée <nom de la playlist>`
+- `Crée une nouvelle liste de lecture appelée <nom de la playlist>`
+
 **Clear the queue**
 
 - `Efface ma file d'attente`
@@ -5263,6 +5457,7 @@ Placeholder legend:
 | `<ambiance (détendu, énergique)>` | `{mood}` |
 | `<nom de l'artiste>` | `{musician}` |
 | `<nom de la playlist>` | `{playlist}` |
+| `<playlist name>` | `{playlist_target}` |
 | `<nom du podcast>` | `{podcast_name}` |
 | `<texte à rechercher>` | `{query}` |
 | `<chansons ou albums>` | `{query_type}` |
@@ -5275,7 +5470,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (424 phrases across 63 commands):
+Complete phrase list (433 phrases across 67 commands):
 
 #### Play music
 
@@ -5615,6 +5810,27 @@ Complete phrase list (424 phrases across 63 commands):
 - `Je veux entendre <titre de la chanson> ensuite`
 - `Passe <titre de la chanson> ensuite`
 
+**Add the current song to a playlist**
+
+- `Ajoute ce titre à la liste de lecture <nom de la playlist>`
+- `Ajoute la chanson en cours à la liste de lecture <nom de la playlist>`
+- `Mets ce titre dans la liste de lecture <nom de la playlist>`
+
+**Add a song to a playlist**
+
+- `Ajoute la chanson <titre de la chanson> à la liste de lecture <playlist name>`
+- `Ajoute <titre de la chanson> à la liste de lecture <playlist name>`
+
+**Remove the current song from a playlist**
+
+- `Retire ce titre de la liste de lecture <nom de la playlist>`
+- `Enlève la chanson en cours de la liste de lecture <nom de la playlist>`
+
+**Create a playlist**
+
+- `Crée une liste de lecture appelée <nom de la playlist>`
+- `Crée une nouvelle liste de lecture appelée <nom de la playlist>`
+
 **Clear the queue**
 
 - `Efface ma file d'attente`
@@ -5906,6 +6122,7 @@ Placeholder legend:
 | `<Stimmung (entspannt, energiegeladen)>` | `{mood}` |
 | `<Name des Künstlers>` | `{musician}` |
 | `<Name der Playlist>` | `{playlist}` |
+| `<playlist name>` | `{playlist_target}` |
 | `<Name des Podcasts>` | `{podcast_name}` |
 | `<Suchbegriff>` | `{query}` |
 | `<Titel oder Alben>` | `{query_type}` |
@@ -5918,7 +6135,7 @@ Placeholder legend:
 | `<Wörter aus dem Songtitel>` | `{titleKeywords}` |
 | `<Benutzername>` | `{username}` |
 
-Complete phrase list (428 phrases across 63 commands):
+Complete phrase list (439 phrases across 67 commands):
 
 #### Play music
 
@@ -6261,6 +6478,29 @@ Complete phrase list (428 phrases across 63 commands):
 - `Ich möchte <Titel des Liedes> als Nächstes hören`
 - `Setze <Titel des Liedes> als Nächstes`
 
+**Add the current song to a playlist**
+
+- `Füge dieses Lied zur Playlist <Name der Playlist> hinzu`
+- `Füge das aktuelle Lied zur Playlist <Name der Playlist> hinzu`
+- `Lege dieses Lied in die Playlist <Name der Playlist>`
+
+**Add a song to a playlist**
+
+- `Füge das Lied <Titel des Liedes> zur Playlist <playlist name> hinzu`
+- `Füge <Titel des Liedes> zur Playlist <playlist name> hinzu`
+
+**Remove the current song from a playlist**
+
+- `Entferne dieses Lied aus der Playlist <Name der Playlist>`
+- `Entferne das aktuelle Lied aus der Playlist <Name der Playlist>`
+- `Nimm dieses Lied von der Playlist <Name der Playlist>`
+
+**Create a playlist**
+
+- `Erstelle eine Playlist namens <Name der Playlist>`
+- `Erstelle eine neue Playlist namens <Name der Playlist>`
+- `Neue Playlist namens <Name der Playlist>`
+
 **Clear the queue**
 
 - `Lösche meine Warteschlange`
@@ -6553,6 +6793,7 @@ Placeholder legend:
 | `<मूड (शांत, ऊर्जावान)>` | `{mood}` |
 | `<कलाकार का नाम>` | `{musician}` |
 | `<प्लेलिस्ट का नाम>` | `{playlist}` |
+| `<प्लेलिस्ट का नाम>` | `{playlist_target}` |
 | `<पॉडकास्ट का नाम>` | `{podcast_name}` |
 | `<खोजने के लिए शब्द>` | `{query}` |
 | `<गाने या एल्बम>` | `{query_type}` |
@@ -6566,7 +6807,7 @@ Placeholder legend:
 | `<गाने के नाम के शब्द>` | `{titleKeywords}` |
 | `<उपयोगकर्ता का नाम>` | `{username}` |
 
-Complete phrase list (323 phrases across 60 commands):
+Complete phrase list (332 phrases across 64 commands):
 
 #### Play music
 
@@ -6839,6 +7080,27 @@ Complete phrase list (323 phrases across 60 commands):
 - `मैं <गाने का नाम> अगला सुनना चाहता हूँ`
 - `<गाने का नाम> इसके बाद चलाओ`
 
+**Add the current song to a playlist**
+
+- `इस गाने को प्लेलिस्ट <प्लेलिस्ट का नाम> में जोड़ो`
+- `यह गाना प्लेलिस्ट <प्लेलिस्ट का नाम> में जोड़ें`
+- `मौजूदा गाना प्लेलिस्ट <प्लेलिस्ट का नाम> में जोड़ो`
+
+**Add a song to a playlist**
+
+- `गाना <गाने का नाम> को प्लेलिस्ट <प्लेलिस्ट का नाम> में जोड़ो`
+- `<गाने का नाम> को प्लेलिस्ट <प्लेलिस्ट का नाम> में जोड़ें`
+
+**Remove the current song from a playlist**
+
+- `यह गाना प्लेलिस्ट <प्लेलिस्ट का नाम> से हटाओ`
+- `मौजूदा गाना प्लेलिस्ट <प्लेलिस्ट का नाम> से हटाओ`
+
+**Create a playlist**
+
+- `<प्लेलिस्ट का नाम> नाम की प्लेलिस्ट बनाओ`
+- `नई प्लेलिस्ट <प्लेलिस्ट का नाम> बनाओ`
+
 **Clear the queue**
 
 - `कतार साफ़ करो`
@@ -7088,6 +7350,7 @@ Placeholder legend:
 | `<umore (rilassato, energico)>` | `{mood}` |
 | `<nome dell'artista>` | `{musician}` |
 | `<nome della playlist>` | `{playlist}` |
+| `<nome della playlist>` | `{playlist_target}` |
 | `<nome del podcast>` | `{podcast_name}` |
 | `<testo da cercare>` | `{query}` |
 | `<brani o album>` | `{query_type}` |
@@ -7100,7 +7363,7 @@ Placeholder legend:
 | `<titolo del video o del film>` | `{title}` |
 | `<parole del titolo del brano>` | `{titleKeywords}` |
 
-Complete phrase list (1433 phrases across 63 commands):
+Complete phrase list (1445 phrases across 67 commands):
 
 #### Play music
 
@@ -8398,6 +8661,30 @@ Complete phrase list (1433 phrases across 63 commands):
 - `ascolta <titolo del brano> dopo`
 - `metti <titolo del brano> di <nome dell'artista> dopo`
 
+**Add the current song to a playlist**
+
+- `Aggiungi questo brano alla playlist <nome della playlist>`
+- `Aggiungi questo alla playlist <nome della playlist>`
+- `Metti questo brano nella playlist <nome della playlist>`
+
+**Add a song to a playlist**
+
+- `Aggiungi la canzone <titolo del brano> alla playlist <nome della playlist>`
+- `Aggiungi il brano <titolo del brano> alla playlist <nome della playlist>`
+- `Metti la canzone <titolo del brano> nella playlist <nome della playlist>`
+
+**Remove the current song from a playlist**
+
+- `Rimuovi questo brano dalla playlist <nome della playlist>`
+- `Rimuovi questo dalla playlist <nome della playlist>`
+- `Togli questo brano dalla playlist <nome della playlist>`
+
+**Create a playlist**
+
+- `Crea una playlist chiamata <nome della playlist>`
+- `Crea una nuova playlist chiamata <nome della playlist>`
+- `Nuova playlist chiamata <nome della playlist>`
+
 **Clear the queue**
 
 - `svuota la coda`
@@ -8743,6 +9030,7 @@ Placeholder legend:
 | `<ムード (リラックス、エネルギッシュ)>` | `{mood}` |
 | `<アーティスト名>` | `{musician}` |
 | `<プレイリスト名>` | `{playlist}` |
+| `<プレイリスト名>` | `{playlist_target}` |
 | `<ポッドキャスト名>` | `{podcast_name}` |
 | `<検索したい言葉>` | `{query}` |
 | `<トラックまたはアルバム>` | `{query_type}` |
@@ -8756,7 +9044,7 @@ Placeholder legend:
 | `<曲名のキーワード>` | `{titleKeywords}` |
 | `<ユーザー名>` | `{username}` |
 
-Complete phrase list (303 phrases across 60 commands):
+Complete phrase list (311 phrases across 64 commands):
 
 #### Play music
 
@@ -9013,6 +9301,26 @@ Complete phrase list (303 phrases across 60 commands):
 - `<曲名> を次に聴きたい`
 - `<曲名> をこの後に再生して`
 
+**Add the current song to a playlist**
+
+- `この曲をプレイリスト <プレイリスト名> に追加して`
+- `今の曲をプレイリスト <プレイリスト名> に追加して`
+
+**Add a song to a playlist**
+
+- `曲 <曲名> をプレイリスト <プレイリスト名> に追加して`
+- `<曲名> をプレイリスト <プレイリスト名> に追加して`
+
+**Remove the current song from a playlist**
+
+- `この曲をプレイリスト <プレイリスト名> から削除して`
+- `今の曲をプレイリスト <プレイリスト名> から消して`
+
+**Create a playlist**
+
+- `<プレイリスト名> というプレイリストを作って`
+- `新しいプレイリスト <プレイリスト名> を作成して`
+
 **Clear the queue**
 
 - `キューをクリアして`
@@ -9257,6 +9565,7 @@ Placeholder legend:
 | `<humor (relaxado, energético)>` | `{mood}` |
 | `<nome do artista>` | `{musician}` |
 | `<nome da playlist>` | `{playlist}` |
+| `<nome da playlist>` | `{playlist_target}` |
 | `<nome do podcast>` | `{podcast_name}` |
 | `<texto a procurar>` | `{query}` |
 | `<faixas ou álbuns>` | `{query_type}` |
@@ -9270,7 +9579,7 @@ Placeholder legend:
 | `<palavras do título da música>` | `{titleKeywords}` |
 | `<nome do usuário>` | `{username}` |
 
-Complete phrase list (377 phrases across 60 commands):
+Complete phrase list (386 phrases across 64 commands):
 
 #### Play music
 
@@ -9583,6 +9892,27 @@ Complete phrase list (377 phrases across 60 commands):
 - `tocar <título da música> de <nome do artista> a seguir`
 - `tocar <título da música> após essa`
 
+**Add the current song to a playlist**
+
+- `Adicione esta música à playlist <nome da playlist>`
+- `Adicione a música atual à playlist <nome da playlist>`
+- `Coloque esta música na playlist <nome da playlist>`
+
+**Add a song to a playlist**
+
+- `Adicione a música <título da música> à playlist <nome da playlist>`
+- `Adicione <título da música> à playlist <nome da playlist>`
+
+**Remove the current song from a playlist**
+
+- `Remova esta música da playlist <nome da playlist>`
+- `Tire esta música da playlist <nome da playlist>`
+
+**Create a playlist**
+
+- `Crie uma playlist chamada <nome da playlist>`
+- `Crie uma nova playlist chamada <nome da playlist>`
+
 **Clear the queue**
 
 - `limpar minha fila`
@@ -9845,6 +10175,7 @@ Placeholder legend:
 | `<ánimo (relajado, energético)>` | `{mood}` |
 | `<nombre del artista>` | `{musician}` |
 | `<nombre de la lista>` | `{playlist}` |
+| `<nombre de la lista>` | `{playlist_target}` |
 | `<nombre del pódcast>` | `{podcast_name}` |
 | `<texto a buscar>` | `{query}` |
 | `<canciones o álbumes>` | `{query_type}` |
@@ -9857,7 +10188,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (403 phrases across 60 commands):
+Complete phrase list (414 phrases across 64 commands):
 
 #### Play music
 
@@ -10185,6 +10516,29 @@ Complete phrase list (403 phrases across 60 commands):
 - `Quiero escuchar <título de la canción> a continuación`
 - `Pon <título de la canción> como siguiente`
 
+**Add the current song to a playlist**
+
+- `Añade esta canción a la lista <nombre de la lista>`
+- `Añade esto a la lista <nombre de la lista>`
+- `Pon esta canción en la lista <nombre de la lista>`
+
+**Add a song to a playlist**
+
+- `Añade la canción <título de la canción> a la lista <nombre de la lista>`
+- `Añade <título de la canción> a la lista <nombre de la lista>`
+
+**Remove the current song from a playlist**
+
+- `Quita esta canción de la lista <nombre de la lista>`
+- `Elimina esto de la lista <nombre de la lista>`
+- `Saca esta canción de la lista <nombre de la lista>`
+
+**Create a playlist**
+
+- `Crea una lista llamada <nombre de la lista>`
+- `Crea una nueva lista llamada <nombre de la lista>`
+- `Nueva lista llamada <nombre de la lista>`
+
 **Clear the queue**
 
 - `Borra mi cola`
@@ -10458,6 +10812,7 @@ Placeholder legend:
 | `<ánimo (relajado, energético)>` | `{mood}` |
 | `<nombre del artista>` | `{musician}` |
 | `<nombre de la lista>` | `{playlist}` |
+| `<nombre de la lista>` | `{playlist_target}` |
 | `<nombre del pódcast>` | `{podcast_name}` |
 | `<texto a buscar>` | `{query}` |
 | `<canciones o álbumes>` | `{query_type}` |
@@ -10470,7 +10825,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (397 phrases across 60 commands):
+Complete phrase list (408 phrases across 64 commands):
 
 #### Play music
 
@@ -10794,6 +11149,29 @@ Complete phrase list (397 phrases across 60 commands):
 - `Quiero escuchar <título de la canción> a continuación`
 - `Pon <título de la canción> como siguiente`
 
+**Add the current song to a playlist**
+
+- `Añade esta canción a la lista <nombre de la lista>`
+- `Añade esto a la lista <nombre de la lista>`
+- `Pon esta canción en la lista <nombre de la lista>`
+
+**Add a song to a playlist**
+
+- `Añade la canción <título de la canción> a la lista <nombre de la lista>`
+- `Añade <título de la canción> a la lista <nombre de la lista>`
+
+**Remove the current song from a playlist**
+
+- `Quita esta canción de la lista <nombre de la lista>`
+- `Elimina esto de la lista <nombre de la lista>`
+- `Saca esta canción de la lista <nombre de la lista>`
+
+**Create a playlist**
+
+- `Crea una lista llamada <nombre de la lista>`
+- `Crea una nueva lista llamada <nombre de la lista>`
+- `Nueva lista llamada <nombre de la lista>`
+
 **Clear the queue**
 
 - `Borra mi cola`
@@ -11065,6 +11443,7 @@ Placeholder legend:
 | `<ánimo (relajado, energético)>` | `{mood}` |
 | `<nombre del artista>` | `{musician}` |
 | `<nombre de la lista>` | `{playlist}` |
+| `<nombre de la lista>` | `{playlist_target}` |
 | `<nombre del pódcast>` | `{podcast_name}` |
 | `<texto a buscar>` | `{query}` |
 | `<canciones o álbumes>` | `{query_type}` |
@@ -11077,7 +11456,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (391 phrases across 60 commands):
+Complete phrase list (402 phrases across 64 commands):
 
 #### Play music
 
@@ -11398,6 +11777,29 @@ Complete phrase list (391 phrases across 60 commands):
 - `Quiero escuchar <título de la canción> a continuación`
 - `Pon <título de la canción> como siguiente`
 
+**Add the current song to a playlist**
+
+- `Añade esta canción a la lista <nombre de la lista>`
+- `Añade esto a la lista <nombre de la lista>`
+- `Pon esta canción en la lista <nombre de la lista>`
+
+**Add a song to a playlist**
+
+- `Añade la canción <título de la canción> a la lista <nombre de la lista>`
+- `Añade <título de la canción> a la lista <nombre de la lista>`
+
+**Remove the current song from a playlist**
+
+- `Quita esta canción de la lista <nombre de la lista>`
+- `Elimina esto de la lista <nombre de la lista>`
+- `Saca esta canción de la lista <nombre de la lista>`
+
+**Create a playlist**
+
+- `Crea una lista llamada <nombre de la lista>`
+- `Crea una nueva lista llamada <nombre de la lista>`
+- `Nueva lista llamada <nombre de la lista>`
+
 **Clear the queue**
 
 - `Borra mi cola`
@@ -11670,6 +12072,10 @@ The body above is user-facing and never names intents or handlers. This table ma
 | Search | Find a song by an artist | `FindSongByArtistIntent` |
 | Queue and repeat | Add to the queue | `AddToQueueIntent` |
 | Queue and repeat | Play next | `PlayNextIntent` |
+| Queue and repeat | Add the current song to a playlist | `AddCurrentToPlaylistIntent` |
+| Queue and repeat | Add a song to a playlist | `AddSongToPlaylistIntent` |
+| Queue and repeat | Remove the current song from a playlist | `RemoveCurrentFromPlaylistIntent` |
+| Queue and repeat | Create a playlist | `CreatePlaylistIntent` |
 | Queue and repeat | Clear the queue | `ClearQueueIntent` |
 | Queue and repeat | List the queue | `ListQueueIntent` |
 | Queue and repeat | Loop the current song | `LoopSongOnIntent` |

@@ -260,5 +260,10 @@
   "FlowCancelled": "ठीक है, मैंने खोज रोक दी।",
   "SkillWarmingUp": "मैं अभी भी तैयार हो रहा हूँ। एक मिनट में फिर से कोशिश करें।",
   "PauseSessionSpeech": "रोक दिया गया।",
-  "PauseSessionReprompt": "जब आप फिर से सुनना चाहें, तब बताइए।"
+  "PauseSessionReprompt": "जब आप फिर से सुनना चाहें, तब बताइए।",
+  "AddedToPlaylist": "{0} को प्लेलिस्ट {1} में जोड़ा गया।",
+  "RemovedFromPlaylist": "{0} को प्लेलिस्ट {1} से हटाया गया।",
+  "PlaylistCreated": "प्लेलिस्ट {0} बनाई गई।",
+  "PlaylistAlreadyExists": "{0} नाम की प्लेलिस्ट पहले से मौजूद है।",
+  "PlaylistCreateFailed": "प्लेलिस्ट नहीं बना पाया। सुनिश्चित करें कि आपकी Jellyfin लाइब्रेरी में प्लेलिस्ट फ़ोल्डर हो।"
 }

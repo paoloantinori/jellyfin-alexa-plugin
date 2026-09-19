@@ -23,10 +23,13 @@ Invocation name: **"jellyfin player"**
 
 | Intent | Utterances |
 |--------|------------|
+| Add Current To Playlist | `أضف هذه الأغنية إلى قائمة التشغيل {playlist}` · `أضف الحالي إلى قائمة التشغيل {playlist}` |
+| Add Song To Playlist | `أضف الأغنية {song} إلى قائمة التشغيل {playlist_target}` · `أضف {song} إلى قائمة التشغيل {playlist_target}` |
 | Add To Queue | `أضف {song} إلى قائمة الانتظار` · `أضف {song} لـ {musician} إلى قائمة الانتظار` · `ضع {song} في قائمة الانتظار` · `أضف {song} إلى القائمة` |
 | Browse Library | `{browse_category}` · `تصفح أنواع {filter}` · `تصفح {browse_category}` · `أرني {browse_category}` · `أعرض {browse_category}` · `ما {browse_category} لدي` |
 | Clear Queue | `امسح قائمة الانتظار` · `أفرغ قائمة الانتظار` · `أزل كل شيء من قائمة الانتظار` |
 | Continue Watching | `أكمل المشاهدة` · `أكمل الاستماع` · `أكمل من حيث توقفت` · `ما كنت أشاهده` · `أكمل` |
+| Create Playlist | `أنشئ قائمة تشغيل باسم {playlist}` · `أنشئ قائمة تشغيل جديدة باسم {playlist}` |
 | Find Song | `ابحث عن أغنية` · `ابحث عن أغنية اسمها {titleKeywords}` · `ساعدني في البحث عن أغنية` · `ابحث لي عن أغنية` · `أبحث عن أغنية` · `أريد أن أجد أغنية` |
 | Find Song By Artist | `ابحث عن أغنية لـ {musician}` · `ساعدني في البحث عن أغنية لـ {musician}` · `اعثر على أغنية لـ {musician}` · `أبحث عن أغنية لـ {musician}` |
 | Follow Me | `تابعني` · `استمر في التشغيل` · `انقل التشغيل` |
@@ -58,6 +61,7 @@ Invocation name: **"jellyfin player"**
 | Query Artist Library | `ما الأغاني لدينا لـ {musician}` · `ما {query_type} لدينا لـ {musician}` · `ما الألبومات لدينا لـ {musician}` · `ما الذي لدينا لـ {musician}` · `أعرض الأغاني لـ {musician}` · `أعرض الألبومات لـ {musician}` |
 | Query Recently Added | `ما الجديد` · `ما الذي أضيف مؤخراً` · `ما الجديد في مكتبتي` · `أرني ما أضيف مؤخراً` · `هل هناك شيء جديد` · `ما الذي تمت إضافته مؤخراً` |
 | Recommend | `أوصني بشيء` · `اقترح {media_type}` · `أوصني بموسيقى` · `أوصني بفيلم` · `اقترح شيئاً لمشاهدته` · `شغل شيئاً قد يعجبني` |
+| Remove Current From Playlist | `أزل هذه الأغنية من قائمة التشغيل {playlist}` · `احذف الحالي من قائمة التشغيل {playlist}` |
 | Search Media | `ابحث عن فيلم {query}` · `ابحث عن محتوى {query}` · `ابحث عن فيديو {query}` · `ابحث عن مسلسل {query}` · `جد فيلم {query}` · `جد محتوى {query}` |
 | Set Reminder | `ذكرني بعد {duration_minutes} دقيقة` · `ذكرني الساعة {reminder_time}` · `اضبط منبها بعد {duration_minutes} دقيقة` · `اضبط منبها الساعة {reminder_time}` |
 | Show More | `أظهر المزيد` · `المزيد` · `الصفحة التالية` · `استمر` · `ماذا أيضا` · `المزيد من النتائج` |
@@ -74,10 +78,13 @@ Invocation name: **"jellyfin player"**
 
 | Intent | Utterances |
 |--------|------------|
+| Add Current To Playlist | `Füge dieses Lied zur Playlist {playlist} hinzu` · `Füge das aktuelle Lied zur Playlist {playlist} hinzu` · `Lege dieses Lied in die Playlist {playlist}` |
+| Add Song To Playlist | `Füge das Lied {song} zur Playlist {playlist_target} hinzu` · `Füge {song} zur Playlist {playlist_target} hinzu` |
 | Add To Queue | `Füge {song} zur Wiedergabeliste hinzu` · `Füge {song} von {musician} zur Wiedergabeliste hinzu` · `Setze {song} auf die Warteschlange` · `Setze {song} von {musician} auf die Warteschlange` · `Stelle {song} hinten an` · `Füge {song} hinzu` |
 | Browse Library | `{browse_category}` · `durchsuche genres {filter}` · `nur {browse_category}` · `ich möchte {browse_category}` · `durchsuche {browse_category}` · `zeige mir {browse_category}` |
 | Clear Queue | `Lösche meine Warteschlange` · `Lösche die Warteschlange` · `Leere meine Warteschlange` · `Leere die Warteschlange` · `Entferne alles aus der Warteschlange` · `Lösche meine Playlist` |
 | Continue Watching | `Weiter schauen` · `Weiter hören` · `Mach da weiter wo ich war` · `Weiter` |
+| Create Playlist | `Erstelle eine Playlist namens {playlist}` · `Erstelle eine neue Playlist namens {playlist}` · `Neue Playlist namens {playlist}` |
 | Find Song | `finde ein lied` · `finde ein lied namens {titleKeywords}` · `hilf mir ein lied zu finden` · `suche ein lied` · `ich suche ein lied` · `suche ein lied namens {titleKeywords}` |
 | Find Song By Artist | `finde ein lied von {musician}` · `hilf mir ein lied zu finden von {musician}` · `suche ein lied von {musician}` · `ich suche ein lied von {musician}` |
 | Follow Me | `folge mir` · `weiterhören` · `Wiedergabe fortsetzen` · `Wiedergabe übernehmen` · `weiter abspielen` · `musik mitnehmen` |
@@ -111,6 +118,7 @@ Invocation name: **"jellyfin player"**
 | Query Artist Library | `Welche Titel haben wir von {musician}` · `Welche {query_type} haben wir von {musician}` · `Welche Lieder haben wir von {musician}` · `Welche Alben haben wir von {musician}` · `Was haben wir von {musician}` · `Zeige Titel von {musician}` |
 | Query Recently Added | `was ist neu` · `was wurde kürzlich hinzugefügt` · `zeige mir die Neuzugänge` · `gibt es etwas Neues` · `was ist neu in meiner Bibliothek` · `die neuesten Elemente` |
 | Recommend | `empfehle etwas` · `empfehle {media_type}` · `empfehle musik` · `empfehle einen film` · `schlage etwas vor` · `spiele etwas das mir gefällt` |
+| Remove Current From Playlist | `Entferne dieses Lied aus der Playlist {playlist}` · `Entferne das aktuelle Lied aus der Playlist {playlist}` · `Nimm dieses Lied von der Playlist {playlist}` |
 | Repeat Single On | `Lied wiederholen` · `Titel wiederholen` · `Video wiederholen` · `Das wiederholen` |
 | Search Media | `Suche nach einem Film {query}` · `Suche nach einem Video {query}` · `Suche nach einer Serie {query}` · `Suche nach Inhalt {query}` · `Finde einen Film {query}` · `Finde einen Inhalt {query}` |
 | Set Reminder | `erinnere mich in {duration_minutes} minuten` · `erinnere mich um {reminder_time}` · `stelle eine erinnerung für {duration_minutes} minuten` · `setze eine erinnerung auf {reminder_time}` |
@@ -128,10 +136,13 @@ Invocation name: **"jellyfin player"**
 
 | Intent | Utterances |
 |--------|------------|
+| Add Current To Playlist | `add this song to the playlist {playlist}` · `add this to the playlist {playlist}` · `add the current song to the playlist {playlist}` · `put this song in the playlist {playlist}` |
+| Add Song To Playlist | `add the song {song} to the playlist {playlist_target}` · `add {song} to the playlist {playlist_target}` · `put the song {song} in the playlist {playlist_target}` |
 | Add To Queue | `add {song} to my queue` · `add {song} by {musician} to my queue` · `add {song} to the queue` · `add {song} by {musician} to the queue` · `queue {song}` · `queue {song} by {musician}` |
 | Browse Library | `{browse_category}` · `browse genres {filter}` · `just {browse_category}` · `I want {browse_category}` · `browse {browse_category}` · `show me {browse_category}` |
 | Clear Queue | `clear my queue` · `clear the queue` · `empty my queue` · `empty the queue` · `remove everything from my queue` · `clear my playlist` |
 | Continue Watching | `Continue watching` · `Continue listening` · `Resume where I left off` · `What was I watching` · `Keep playing` · `Continue` |
+| Create Playlist | `create a playlist called {playlist}` · `create a new playlist called {playlist}` · `make a playlist called {playlist}` |
 | Find Song | `find a song` · `find a song called {titleKeywords}` · `help me find a song` · `search for a song` · `I'm looking for a song` · `I need to find a song` |
 | Find Song By Artist | `find a song by {musician}` · `help me find a song by {musician}` · `search for a song by {musician}` · `I'm looking for a song by {musician}` |
 | Follow Me | `follow me` · `continue playing` · `resume from where I left off` · `take over playback` · `keep playing` · `pick up where I left off` |
@@ -163,6 +174,7 @@ Invocation name: **"jellyfin player"**
 | Query Artist Library | `which tracks do we have by {musician}` · `which {query_type} do we have by {musician}` · `which songs do we have by {musician}` · `what tracks are available from {musician}` · `what songs are available from {musician}` · `which albums do we have by {musician}` |
 | Query Recently Added | `what's new` · `what was recently added` · `what's new in my library` · `show me recently added` · `what's on deck` · `anything new lately` |
 | Recommend | `recommend something` · `recommend {media_type}` · `recommend some music` · `recommend a movie` · `suggest something to watch` · `suggest some music` |
+| Remove Current From Playlist | `remove this song from the playlist {playlist}` · `remove this from the playlist {playlist}` · `take this song off the playlist {playlist}` |
 | Search Media | `Search for a movie {query}` · `Search for content {query}` · `Find a movie {query}` · `Find content {query}` · `Look for a movie {query}` · `Look for content {query}` |
 | Set Reminder | `remind me in {duration_minutes} minutes` · `remind me at {reminder_time}` · `set a reminder for {duration_minutes} minutes` · `set a reminder for {reminder_time}` |
 | Show More | `show more` · `next page` · `more results` · `see more` · `more` · `what else` |
@@ -179,10 +191,13 @@ Invocation name: **"jellyfin player"**
 
 | Intent | Utterances |
 |--------|------------|
+| Add Current To Playlist | `add this song to the playlist {playlist}` · `add this to the playlist {playlist}` · `add the current song to the playlist {playlist}` · `put this song in the playlist {playlist}` |
+| Add Song To Playlist | `add the song {song} to the playlist {playlist_target}` · `add {song} to the playlist {playlist_target}` · `put the song {song} in the playlist {playlist_target}` |
 | Add To Queue | `add {song} to my queue` · `add {song} by {musician} to my queue` · `add {song} to the queue` · `add {song} by {musician} to the queue` · `queue {song}` · `queue {song} by {musician}` |
 | Browse Library | `browse {browse_category}` · `browse genres {filter}` · `show me {browse_category}` · `list {browse_category}` · `what {browse_category} do i have` · `list genres {filter}` |
 | Clear Queue | `clear my queue` · `clear the queue` · `empty my queue` · `empty the queue` · `remove everything from my queue` · `clear my playlist` |
 | Continue Watching | `Continue watching` · `Continue listening` · `Resume where I left off` · `What was I watching` · `Keep playing` · `Continue` |
+| Create Playlist | `create a playlist called {playlist}` · `create a new playlist called {playlist}` · `make a playlist called {playlist}` |
 | Find Song | `find a song` · `find a song called {titleKeywords}` · `help me find a song` · `search for a song` · `I'm looking for a song` · `I need to find a song` |
 | Find Song By Artist | `find a song by {musician}` · `help me find a song by {musician}` · `search for a song by {musician}` · `I'm looking for a song by {musician}` |
 | Follow Me | `follow me` · `continue playing` · `resume from where I left off` · `take over playback` · `keep playing` |
@@ -214,6 +229,7 @@ Invocation name: **"jellyfin player"**
 | Query Artist Library | `which tracks do we have by {musician}` · `which {query_type} do we have by {musician}` · `which songs do we have by {musician}` · `what tracks are available from {musician}` · `what songs are available from {musician}` · `which albums do we have by {musician}` |
 | Query Recently Added | `what's new` · `what was recently added` · `what's new in my library` · `show me recently added` · `what's on deck` · `anything new lately` |
 | Recommend | `recommend something` · `recommend {media_type}` · `recommend some music` · `recommend a movie` · `suggest something to watch` · `suggest some music` |
+| Remove Current From Playlist | `remove this song from the playlist {playlist}` · `remove this from the playlist {playlist}` · `take this song off the playlist {playlist}` |
 | Search Media | `Search for a movie {query}` · `Search for content {query}` · `Find a movie {query}` · `Find content {query}` · `Look for a movie {query}` · `Look for content {query}` |
 | Set Reminder | `remind me in {duration_minutes} minutes` · `remind me at {reminder_time}` · `set a reminder for {duration_minutes} minutes` · `set a reminder for {reminder_time}` |
 | Show More | `show more` · `next page` · `more results` · `see more` · `more` · `what else` |
@@ -230,10 +246,13 @@ Invocation name: **"jellyfin player"**
 
 | Intent | Utterances |
 |--------|------------|
+| Add Current To Playlist | `add this song to the playlist {playlist}` · `add this to the playlist {playlist}` · `add the current song to the playlist {playlist}` · `put this song in the playlist {playlist}` |
+| Add Song To Playlist | `add the song {song} to the playlist {playlist_target}` · `add {song} to the playlist {playlist_target}` · `put the song {song} in the playlist {playlist_target}` |
 | Add To Queue | `add {song} to my queue` · `add {song} by {musician} to my queue` · `add {song} to the queue` · `add {song} by {musician} to the queue` · `queue {song}` · `queue {song} by {musician}` |
 | Browse Library | `{browse_category}` · `browse genres {filter}` · `just {browse_category}` · `I want {browse_category}` · `browse {browse_category}` · `show me {browse_category}` |
 | Clear Queue | `clear my queue` · `clear the queue` · `empty my queue` · `empty the queue` · `remove everything from my queue` · `clear my playlist` |
 | Continue Watching | `Continue watching` · `Continue listening` · `Resume where I left off` · `What was I watching` · `Keep playing` · `Continue` |
+| Create Playlist | `create a playlist called {playlist}` · `create a new playlist called {playlist}` · `make a playlist called {playlist}` |
 | Find Song | `find a song` · `find a song called {titleKeywords}` · `help me find a song` · `search for a song` · `I'm looking for a song` · `I need to find a song` |
 | Find Song By Artist | `find a song by {musician}` · `help me find a song by {musician}` · `search for a song by {musician}` · `I'm looking for a song by {musician}` |
 | Follow Me | `follow me` · `continue playing` · `resume from where I left off` · `take over playback` · `move playback here` · `keep playing` |
@@ -265,6 +284,7 @@ Invocation name: **"jellyfin player"**
 | Query Artist Library | `which tracks do we have by {musician}` · `which {query_type} do we have by {musician}` · `which songs do we have by {musician}` · `what tracks are available from {musician}` · `what songs are available from {musician}` · `which albums do we have by {musician}` |
 | Query Recently Added | `what's new` · `what was recently added` · `what's new in my library` · `show me recently added` · `what's on deck` · `anything new lately` |
 | Recommend | `recommend something` · `recommend {media_type}` · `recommend some music` · `recommend a movie` · `suggest something to watch` · `suggest some music` |
+| Remove Current From Playlist | `remove this song from the playlist {playlist}` · `remove this from the playlist {playlist}` · `take this song off the playlist {playlist}` |
 | Search Media | `Search for a movie {query}` · `Search for content {query}` · `Find a movie {query}` · `Find content {query}` · `Look for a movie {query}` · `Look for content {query}` |
 | Set Reminder | `remind me in {duration_minutes} minutes` · `remind me at {reminder_time}` · `set a reminder for {duration_minutes} minutes` · `set a reminder for {reminder_time}` |
 | Show More | `show more` · `next page` · `more results` · `see more` · `more` · `what else` |
@@ -281,10 +301,13 @@ Invocation name: **"jellyfin player"**
 
 | Intent | Utterances |
 |--------|------------|
+| Add Current To Playlist | `add this song to the playlist {playlist}` · `add this to the playlist {playlist}` · `add the current song to the playlist {playlist}` · `put this song in the playlist {playlist}` |
+| Add Song To Playlist | `add the song {song} to the playlist {playlist_target}` · `add {song} to the playlist {playlist_target}` · `put the song {song} in the playlist {playlist_target}` |
 | Add To Queue | `add {song} to my queue` · `add {song} by {musician} to my queue` · `add {song} to the queue` · `add {song} by {musician} to the queue` · `queue {song}` · `queue {song} by {musician}` |
 | Browse Library | `{browse_category}` · `browse genres {filter}` · `just {browse_category}` · `I want {browse_category}` · `browse {browse_category}` · `show me {browse_category}` |
 | Clear Queue | `clear my queue` · `clear the queue` · `empty my queue` · `empty the queue` · `remove everything from my queue` · `clear my playlist` |
 | Continue Watching | `Continue watching` · `Continue listening` · `Resume where I left off` · `What was I watching` · `Keep playing` · `Continue` |
+| Create Playlist | `create a playlist called {playlist}` · `create a new playlist called {playlist}` · `make a playlist called {playlist}` |
 | Find Song | `find a song` · `find a song called {titleKeywords}` · `help me find a song` · `search for a song` · `I'm looking for a song` · `I need to find a song` |
 | Find Song By Artist | `find a song by {musician}` · `help me find a song by {musician}` · `search for a song by {musician}` · `I'm looking for a song by {musician}` |
 | Follow Me | `follow me` · `continue playing` · `resume from where I left off` · `take over playback` |
@@ -316,6 +339,7 @@ Invocation name: **"jellyfin player"**
 | Query Artist Library | `which tracks do we have by {musician}` · `which {query_type} do we have by {musician}` · `which songs do we have by {musician}` · `what tracks are available from {musician}` · `what songs are available from {musician}` · `which albums do we have by {musician}` |
 | Query Recently Added | `what's new` · `what was recently added` · `what's new in my library` · `show me recently added` · `what's on deck` · `anything new lately` |
 | Recommend | `recommend something` · `recommend {media_type}` · `recommend some music` · `recommend a movie` · `suggest something to watch` · `suggest some music` |
+| Remove Current From Playlist | `remove this song from the playlist {playlist}` · `remove this from the playlist {playlist}` · `take this song off the playlist {playlist}` |
 | Search Media | `Search for a movie {query}` · `Search for content {query}` · `Find a movie {query}` · `Find content {query}` · `Look for a movie {query}` · `Look for content {query}` |
 | Set Reminder | `remind me in {duration_minutes} minutes` · `remind me at {reminder_time}` · `set a reminder for {duration_minutes} minutes` · `set a reminder for {reminder_time}` |
 | Show More | `show more` · `next page` · `more results` · `see more` · `more` · `what else` |
@@ -332,10 +356,13 @@ Invocation name: **"jellyfin player"**
 
 | Intent | Utterances |
 |--------|------------|
+| Add Current To Playlist | `add this song to the playlist {playlist}` · `add this to the playlist {playlist}` · `add the current song to the playlist {playlist}` · `put this song in the playlist {playlist}` |
+| Add Song To Playlist | `add the song {song} to the playlist {playlist_target}` · `add {song} to the playlist {playlist_target}` · `put the song {song} in the playlist {playlist_target}` |
 | Add To Queue | `add {song} to my queue` · `add {song} by {musician} to my queue` · `add {song} to the queue` · `add {song} by {musician} to the queue` · `queue {song}` · `queue {song} by {musician}` |
 | Browse Library | `{browse_category}` · `browse genres {filter}` · `just {browse_category}` · `I want {browse_category}` · `browse {browse_category}` · `show me {browse_category}` |
 | Clear Queue | `clear my queue` · `clear the queue` · `empty my queue` · `empty the queue` · `remove everything from my queue` · `clear my playlist` |
 | Continue Watching | `Continue watching` · `Continue listening` · `Resume where I left off` · `What was I watching` · `Keep playing` · `Continue` |
+| Create Playlist | `create a playlist called {playlist}` · `create a new playlist called {playlist}` · `make a playlist called {playlist}` |
 | Find Song | `find a song` · `find a song called {titleKeywords}` · `help me find a song` · `search for a song` · `I'm looking for a song` · `I need to find a song` |
 | Find Song By Artist | `find a song by {musician}` · `help me find a song by {musician}` · `search for a song by {musician}` · `I'm looking for a song by {musician}` |
 | Follow Me | `follow me` · `continue playing` · `resume from where I left off` · `take over playback` · `move playback here` · `keep playing` |
@@ -368,6 +395,7 @@ Invocation name: **"jellyfin player"**
 | Query Artist Library | `which tracks do we have by {musician}` · `which {query_type} do we have by {musician}` · `which songs do we have by {musician}` · `what tracks are available from {musician}` · `what songs are available from {musician}` · `which albums do we have by {musician}` |
 | Query Recently Added | `what's new` · `what was recently added` · `what's new in my library` · `show me recently added` · `what's on deck` · `anything new lately` |
 | Recommend | `recommend something` · `recommend {media_type}` · `recommend some music` · `recommend a movie` · `suggest something to watch` · `suggest some music` |
+| Remove Current From Playlist | `remove this song from the playlist {playlist}` · `remove this from the playlist {playlist}` · `take this song off the playlist {playlist}` |
 | Search Media | `Search for a movie {query}` · `Search for content {query}` · `Find a movie {query}` · `Find content {query}` · `Look for a movie {query}` · `Look for content {query}` |
 | Set Reminder | `remind me in {duration_minutes} minutes` · `remind me at {reminder_time}` · `set a reminder for {duration_minutes} minutes` · `set a reminder for {reminder_time}` |
 | Show More | `show more` · `next page` · `more results` · `see more` · `more` · `what else` |
@@ -385,10 +413,13 @@ Invocation name: **"jellyfin player"**
 
 | Intent | Utterances |
 |--------|------------|
+| Add Current To Playlist | `Añade esta canción a la lista {playlist}` · `Añade esto a la lista {playlist}` · `Pon esta canción en la lista {playlist}` |
+| Add Song To Playlist | `Añade la canción {song} a la lista {playlist_target}` · `Añade {song} a la lista {playlist_target}` |
 | Add To Queue | `Añade {song} a mi cola` · `Añade {song} de {musician} a mi cola` · `Añade {song} a la cola` · `Añade {song} de {musician} a la cola` · `Pon {song} en la cola` · `Pon {song} de {musician} en la cola` |
 | Browse Library | `{browse_category}` · `explorar géneros {filter}` · `solo {browse_category}` · `quiero {browse_category}` · `explorar {browse_category}` · `muéstrame {browse_category}` |
 | Clear Queue | `Borra mi cola` · `Borra la cola` · `Vacía mi cola` · `Vacía la cola` · `Quita todo de mi cola` · `Limpia mi lista` |
 | Continue Watching | `Continuar viendo` · `Continuar escuchando` · `Seguir donde lo dejé` · `Continuar` |
+| Create Playlist | `Crea una lista llamada {playlist}` · `Crea una nueva lista llamada {playlist}` · `Nueva lista llamada {playlist}` |
 | Find Song | `busca una cancion` · `busca una cancion llamada {titleKeywords}` · `ayudame a encontrar una cancion` · `estoy buscando una cancion` · `encuentra una cancion llamada {titleKeywords}` · `encuentra una cancion` |
 | Find Song By Artist | `busca una cancion de {musician}` · `ayudame a encontrar una cancion de {musician}` · `estoy buscando una cancion de {musician}` |
 | Follow Me | `sígueme` · `continuar reproduciendo` · `seguir escuchando` · `retomar reproducción` · `transferir la música` |
@@ -420,6 +451,7 @@ Invocation name: **"jellyfin player"**
 | Query Artist Library | `Qué canciones tenemos de {musician}` · `Qué {query_type} tenemos de {musician}` · `Qué temas tenemos de {musician}` · `Qué álbumes tenemos de {musician}` · `Qué discos tenemos de {musician}` · `Qué tenemos de {musician}` |
 | Query Recently Added | `qué hay de nuevo` · `qué se añadió recientemente` · `muéstrame las novedades` · `hay algo nuevo` · `cuáles son los últimos añadidos` · `qué hay de nuevo en mi biblioteca` |
 | Recommend | `recomienda algo` · `recomienda {media_type}` · `recomienda música` · `recomienda una película` · `sugiere algo` · `reproduce algo que me guste` |
+| Remove Current From Playlist | `Quita esta canción de la lista {playlist}` · `Elimina esto de la lista {playlist}` · `Saca esta canción de la lista {playlist}` |
 | Search Media | `Busca una película {query}` · `Busca un video {query}` · `Busca una serie {query}` · `Busca contenido {query}` · `Encuentra una película {query}` · `Encuentra contenido {query}` |
 | Set Reminder | `recuérdame en {duration_minutes} minutos` · `recuérdame a las {reminder_time}` · `pon un recordatorio de {duration_minutes} minutos` · `crea un recordatorio para las {reminder_time}` |
 | Show More | `mostrar más` · `más resultados` · `siguiente` · `continúa` · `qué más` · `ver más` |
@@ -436,10 +468,13 @@ Invocation name: **"jellyfin player"**
 
 | Intent | Utterances |
 |--------|------------|
+| Add Current To Playlist | `Añade esta canción a la lista {playlist}` · `Añade esto a la lista {playlist}` · `Pon esta canción en la lista {playlist}` |
+| Add Song To Playlist | `Añade la canción {song} a la lista {playlist_target}` · `Añade {song} a la lista {playlist_target}` |
 | Add To Queue | `Añade {song} a mi cola` · `Añade {song} de {musician} a mi cola` · `Añade {song} a la cola` · `Añade {song} de {musician} a la cola` · `Pon {song} en la cola` · `Pon {song} de {musician} en la cola` |
 | Browse Library | `{browse_category}` · `explorar géneros {filter}` · `solo {browse_category}` · `quiero {browse_category}` · `explorar {browse_category}` · `muéstrame {browse_category}` |
 | Clear Queue | `Borra mi cola` · `Borra la cola` · `Vacía mi cola` · `Vacía la cola` · `Quita todo de mi cola` · `Limpia mi lista` |
 | Continue Watching | `Continuar viendo` · `Continuar escuchando` · `Seguir donde lo dejé` · `Continuar` |
+| Create Playlist | `Crea una lista llamada {playlist}` · `Crea una nueva lista llamada {playlist}` · `Nueva lista llamada {playlist}` |
 | Find Song | `busca una cancion` · `busca una cancion llamada {titleKeywords}` · `ayudame a encontrar una cancion` · `estoy buscando una cancion` · `encuentra una cancion llamada {titleKeywords}` · `encuentra una cancion` |
 | Find Song By Artist | `busca una cancion de {musician}` · `ayudame a encontrar una cancion de {musician}` · `estoy buscando una cancion de {musician}` |
 | Follow Me | `sígueme` · `continuar reproduciendo` · `seguir escuchando` · `retomar reproducción` |
@@ -471,6 +506,7 @@ Invocation name: **"jellyfin player"**
 | Query Artist Library | `Qué canciones tenemos de {musician}` · `Qué {query_type} tenemos de {musician}` · `Qué temas tenemos de {musician}` · `Qué álbumes tenemos de {musician}` · `Qué discos tenemos de {musician}` · `Qué tenemos de {musician}` |
 | Query Recently Added | `qué hay de nuevo` · `qué se añadió recientemente` · `muéstrame las novedades` · `hay algo nuevo` · `cuáles son los últimos añadidos` · `qué hay de nuevo en mi biblioteca` |
 | Recommend | `recomienda algo` · `recomienda {media_type}` · `recomienda música` · `recomienda una película` · `sugiere algo` · `reproduce algo que me guste` |
+| Remove Current From Playlist | `Quita esta canción de la lista {playlist}` · `Elimina esto de la lista {playlist}` · `Saca esta canción de la lista {playlist}` |
 | Search Media | `Busca una película {query}` · `Busca un video {query}` · `Busca una serie {query}` · `Busca contenido {query}` · `Encuentra una película {query}` · `Encuentra contenido {query}` |
 | Set Reminder | `recuérdame en {duration_minutes} minutos` · `recuérdame a las {reminder_time}` · `pon un recordatorio de {duration_minutes} minutos` · `crea un recordatorio para las {reminder_time}` |
 | Show More | `mostrar más` · `más resultados` · `siguiente` · `continúa` · `qué más` · `ver más` |
@@ -487,10 +523,13 @@ Invocation name: **"jellyfin player"**
 
 | Intent | Utterances |
 |--------|------------|
+| Add Current To Playlist | `Añade esta canción a la lista {playlist}` · `Añade esto a la lista {playlist}` · `Pon esta canción en la lista {playlist}` |
+| Add Song To Playlist | `Añade la canción {song} a la lista {playlist_target}` · `Añade {song} a la lista {playlist_target}` |
 | Add To Queue | `Añade {song} a mi cola` · `Añade {song} de {musician} a mi cola` · `Añade {song} a la cola` · `Añade {song} de {musician} a la cola` · `Pon {song} en la cola` · `Pon {song} de {musician} en la cola` |
 | Browse Library | `explorar {browse_category}` · `explorar géneros {filter}` · `muéstrame {browse_category}` · `lista {browse_category}` · `qué {browse_category} tengo` · `qué {browse_category} hay` |
 | Clear Queue | `Borra mi cola` · `Borra la cola` · `Vacía mi cola` · `Vacía la cola` · `Quita todo de mi cola` · `Limpia mi lista` |
 | Continue Watching | `Continuar viendo` · `Continuar escuchando` · `Seguir donde lo dejé` · `Continuar` |
+| Create Playlist | `Crea una lista llamada {playlist}` · `Crea una nueva lista llamada {playlist}` · `Nueva lista llamada {playlist}` |
 | Find Song | `find a song` · `find a song called {titleKeywords}` · `help me find a song` · `search for a song` · `I'm looking for a song` · `I need to find a song` |
 | Find Song By Artist | `find a song by {musician}` · `help me find a song by {musician}` · `search for a song by {musician}` · `I'm looking for a song by {musician}` |
 | Follow Me | `sígueme` · `continuar reproduciendo` · `seguir escuchando` · `retomar reproducción` |
@@ -522,6 +561,7 @@ Invocation name: **"jellyfin player"**
 | Query Artist Library | `Qué canciones tenemos de {musician}` · `Qué {query_type} tenemos de {musician}` · `Qué temas tenemos de {musician}` · `Qué álbumes tenemos de {musician}` · `Qué discos tenemos de {musician}` · `Qué tenemos de {musician}` |
 | Query Recently Added | `qué hay de nuevo` · `qué se añadió recientemente` · `muéstrame las novedades` · `hay algo nuevo` · `cuáles son los últimos añadidos` · `qué hay de nuevo en mi biblioteca` |
 | Recommend | `recomienda algo` · `recomienda {media_type}` · `recomienda música` · `recomienda una película` · `sugiere algo` · `reproduce algo que me guste` |
+| Remove Current From Playlist | `Quita esta canción de la lista {playlist}` · `Elimina esto de la lista {playlist}` · `Saca esta canción de la lista {playlist}` |
 | Search Media | `Busca una película {query}` · `Busca un video {query}` · `Busca una serie {query}` · `Busca contenido {query}` · `Encuentra una película {query}` · `Encuentra contenido {query}` |
 | Set Reminder | `recuérdame en {duration_minutes} minutos` · `recuérdame a las {reminder_time}` · `pon un recordatorio de {duration_minutes} minutos` · `crea un recordatorio para las {reminder_time}` |
 | Show More | `mostrar más` · `más resultados` · `siguiente` · `continúa` · `qué más` · `ver más` |
@@ -538,10 +578,13 @@ Invocation name: **"jellyfin player"**
 
 | Intent | Utterances |
 |--------|------------|
+| Add Current To Playlist | `Ajoute ce titre à la liste de lecture {playlist}` · `Ajoute la chanson en cours à la liste de lecture {playlist}` · `Mets ce titre dans la liste de lecture {playlist}` |
+| Add Song To Playlist | `Ajoute la chanson {song} à la liste de lecture {playlist_target}` · `Ajoute {song} à la liste de lecture {playlist_target}` |
 | Add To Queue | `Ajoute {song} à ma file d'attente` · `Ajoute {song} de {musician} à ma file d'attente` · `Ajoute {song} à la file d'attente` · `Ajoute {song} de {musician} à la file d'attente` · `Mets {song} dans la file d'attente` · `Mets {song} de {musician} dans la file d'attente` |
 | Browse Library | `{browse_category}` · `parcourir genres {filter}` · `juste {browse_category}` · `je veux {browse_category}` · `parcourir {browse_category}` · `montre-moi {browse_category}` |
 | Clear Queue | `Efface ma file d'attente` · `Efface la file d'attente` · `Vide ma file d'attente` · `Vide la file d'attente` · `Supprime tout de ma file d'attente` · `Efface ma liste` |
 | Continue Watching | `Continuer à regarder` · `Continuer à écouter` · `Reprendre où j'en étais` · `Continuer` |
+| Create Playlist | `Crée une liste de lecture appelée {playlist}` · `Crée une nouvelle liste de lecture appelée {playlist}` |
 | Find Song | `trouve une chanson` · `trouve une chanson appelee {titleKeywords}` · `aide moi a trouver une chanson` · `je cherche une chanson` · `cherche une chanson appelee {titleKeywords}` · `cherche une chanson` |
 | Find Song By Artist | `trouve une chanson de {musician}` · `aide moi a trouver une chanson de {musician}` · `je cherche une chanson de {musician}` |
 | Follow Me | `suis-moi` · `continuer la lecture` · `reprendre la lecture` · `transférer la lecture` |
@@ -575,6 +618,7 @@ Invocation name: **"jellyfin player"**
 | Query Artist Library | `Quelles chansons avons-nous de {musician}` · `Quels {query_type} avons-nous de {musician}` · `Quels titres avons-nous de {musician}` · `Quels albums avons-nous de {musician}` · `Quels disques avons-nous de {musician}` · `Qu'avons-nous de {musician}` |
 | Query Recently Added | `quoi de neuf` · `qu'est-ce qui a été ajouté récemment` · `montre-moi les nouveautés` · `y a-t-il du nouveau` · `quels sont les derniers ajouts` · `quoi de neuf dans ma bibliothèque` |
 | Recommend | `recommande quelque chose` · `recommande {media_type}` · `recommande de la musique` · `recommande un film` · `suggère quelque chose` · `joue quelque chose que j'aimerais` |
+| Remove Current From Playlist | `Retire ce titre de la liste de lecture {playlist}` · `Enlève la chanson en cours de la liste de lecture {playlist}` |
 | Repeat Single On | `Répète la chanson` · `Répète le morceau` · `Répète la vidéo` · `Répète` |
 | Search Media | `Cherche un film {query}` · `Cherche un contenu {query}` · `Cherche une série {query}` · `Cherche un vidéo {query}` · `Trouve un film {query}` · `Trouve un contenu {query}` |
 | Set Reminder | `rappelle-moi dans {duration_minutes} minutes` · `rappelle-moi à {reminder_time}` · `mets un rappel de {duration_minutes} minutes` · `crée un rappel pour {reminder_time}` |
@@ -592,10 +636,13 @@ Invocation name: **"jellyfin player"**
 
 | Intent | Utterances |
 |--------|------------|
+| Add Current To Playlist | `Ajoute ce titre à la liste de lecture {playlist}` · `Ajoute la chanson en cours à la liste de lecture {playlist}` · `Mets ce titre dans la liste de lecture {playlist}` |
+| Add Song To Playlist | `Ajoute la chanson {song} à la liste de lecture {playlist_target}` · `Ajoute {song} à la liste de lecture {playlist_target}` |
 | Add To Queue | `Ajoute {song} à ma file d'attente` · `Ajoute {song} de {musician} à ma file d'attente` · `Ajoute {song} à la file d'attente` · `Ajoute {song} de {musician} à la file d'attente` · `Mets {song} dans la file d'attente` · `Mets {song} de {musician} dans la file d'attente` |
 | Browse Library | `{browse_category}` · `parcourir genres {filter}` · `juste {browse_category}` · `je veux {browse_category}` · `parcourir {browse_category}` · `montre-moi {browse_category}` |
 | Clear Queue | `Efface ma file d'attente` · `Efface la file d'attente` · `Vide ma file d'attente` · `Vide la file d'attente` · `Supprime tout de ma file d'attente` · `Efface ma liste` |
 | Continue Watching | `Continuer à regarder` · `Continuer à écouter` · `Reprendre où j'en étais` · `Continuer` |
+| Create Playlist | `Crée une liste de lecture appelée {playlist}` · `Crée une nouvelle liste de lecture appelée {playlist}` |
 | Find Song | `trouve une chanson` · `trouve une chanson appelee {titleKeywords}` · `aide moi a trouver une chanson` · `je cherche une chanson` · `cherche une chanson appelee {titleKeywords}` · `cherche une chanson` |
 | Find Song By Artist | `trouve une chanson de {musician}` · `aide moi a trouver une chanson de {musician}` · `je cherche une chanson de {musician}` |
 | Follow Me | `suis-moi` · `continuer la lecture` · `reprendre la lecture` · `transférer la lecture` · `reprendre où j'en étais` |
@@ -629,6 +676,7 @@ Invocation name: **"jellyfin player"**
 | Query Artist Library | `Quelles chansons avons-nous de {musician}` · `Quels {query_type} avons-nous de {musician}` · `Quels titres avons-nous de {musician}` · `Quels albums avons-nous de {musician}` · `Quels disques avons-nous de {musician}` · `Qu'avons-nous de {musician}` |
 | Query Recently Added | `quoi de neuf` · `qu'est-ce qui a été ajouté récemment` · `montre-moi les nouveautés` · `y a-t-il du nouveau` · `quels sont les derniers ajouts` · `quoi de neuf dans ma bibliothèque` |
 | Recommend | `recommande quelque chose` · `recommande {media_type}` · `recommande de la musique` · `recommande un film` · `suggère quelque chose` · `joue quelque chose que j'aimerais` |
+| Remove Current From Playlist | `Retire ce titre de la liste de lecture {playlist}` · `Enlève la chanson en cours de la liste de lecture {playlist}` |
 | Repeat Single On | `Répète la chanson` · `Répète le morceau` · `Répète la vidéo` · `Répète` |
 | Search Media | `Cherche un film {query}` · `Cherche un contenu {query}` · `Cherche une série {query}` · `Cherche un vidéo {query}` · `Trouve un film {query}` · `Trouve un contenu {query}` |
 | Set Reminder | `rappelle-moi dans {duration_minutes} minutes` · `rappelle-moi à {reminder_time}` · `mets un rappel de {duration_minutes} minutes` · `crée un rappel pour {reminder_time}` |
@@ -646,10 +694,13 @@ Invocation name: **"jellyfin player"**
 
 | Intent | Utterances |
 |--------|------------|
+| Add Current To Playlist | `इस गाने को प्लेलिस्ट {playlist} में जोड़ो` · `यह गाना प्लेलिस्ट {playlist} में जोड़ें` · `मौजूदा गाना प्लेलिस्ट {playlist} में जोड़ो` |
+| Add Song To Playlist | `गाना {song} को प्लेलिस्ट {playlist_target} में जोड़ो` · `{song} को प्लेलिस्ट {playlist_target} में जोड़ें` |
 | Add To Queue | `{song} कतार में जोड़ो` · `{musician} का {song} कतार में जोड़ो` · `{song} कतार में डालो` · `{musician} का {song} कतार में डालो` |
 | Browse Library | `{browse_category}` · `शैलियाँ {filter} ब्राउज़ करो` · `{browse_category} ब्राउज़ करो` · `मुझे {browse_category} दिखाओ` · `{browse_category} की लिस्ट दो` · `मेरे पास कौन से {browse_category} हैं` |
 | Clear Queue | `कतार साफ़ करो` · `कतार खाली करो` · `कतार से सब हटाओ` |
 | Continue Watching | `देखना जारी रखो` · `सुनना जारी रखो` · `जहाँ छोड़ा था वहाँ से फिर से शुरू करो` · `मैं क्या देख रहा था` · `जारी रखो` · `जारी` |
+| Create Playlist | `{playlist} नाम की प्लेलिस्ट बनाओ` · `नई प्लेलिस्ट {playlist} बनाओ` |
 | Find Song | `गाना खोजो` · `{titleKeywords} नाम का गाना खोजो` · `मेरे गाना खोजने में मदद करो` · `गाना खोजना है` · `मैं गाना खोज रहा हूँ` · `मुझे गाना खोजना है` |
 | Find Song By Artist | `{musician} का गाना खोजो` · `{musician} का गाना खोजने में मदद करो` · `{musician} का गाना ढूंढो` · `मैं {musician} का गाना खोज रहा हूँ` |
 | Follow Me | `मेरे साथ आओ` · `चलाना जारी रखो` · `जहां छोड़ा थे वहां से शुरू करो` |
@@ -681,6 +732,7 @@ Invocation name: **"jellyfin player"**
 | Query Artist Library | `{musician} के कौन से ट्रैक हैं` · `{musician} के {query_type} दिखाओ` · `{musician} के कौन से गाने हैं` · `{musician} के कौन से एल्बम हैं` · `{musician} के पास क्या है` · `{musician} के ट्रैक दिखाओ` |
 | Query Recently Added | `क्या नया है` · `हाल ही में क्या जोड़ा गया` · `मेरी लाइब्रेरी में क्या नया है` · `हाल ही में जोड़े गए दिखाओ` · `कुछ नया है क्या` · `नए जोड़े गए आइटम दिखाओ` |
 | Recommend | `कुछ सुझाव दो` · `{media_type} सुझाओ` · `कुछ म्यूज़िक सुझाओ` · `एक फिल्म सुझाओ` · `देखने के लिए कुछ सुझाओ` |
+| Remove Current From Playlist | `यह गाना प्लेलिस्ट {playlist} से हटाओ` · `मौजूदा गाना प्लेलिस्ट {playlist} से हटाओ` |
 | Search Media | `एक फिल्म {query} खोजो` · `कंटेंट {query} खोजो` · `एक वीडियो {query} खोजो` · `एक फिल्म {query} ढूंढो` · `कंटेंट {query} ढूंढो` · `एक वीडियो {query} ढूंढो` |
 | Set Reminder | `{duration_minutes} मिनट में मुझे याद दिलाओ` · `{reminder_time} पर मुझे याद दिलाओ` · `{duration_minutes} मिनट का रिमाइंडर सेट करो` · `{reminder_time} का रिमाइंडर सेट करो` |
 | Show More | `और दिखाओ` · `अगला पेज` · `और` · `जारी रखो` · `आगे` · `क्या और है` |
@@ -697,10 +749,13 @@ Invocation name: **"mia collezione"**
 
 | Intent | Utterances |
 |--------|------------|
+| Add Current To Playlist | `Aggiungi questo brano alla playlist {playlist}` · `Aggiungi questo alla playlist {playlist}` · `Metti questo brano nella playlist {playlist}` |
+| Add Song To Playlist | `Aggiungi la canzone {song} alla playlist {playlist_target}` · `Aggiungi il brano {song} alla playlist {playlist_target}` · `Metti la canzone {song} nella playlist {playlist_target}` |
 | Add To Queue | `aggiungi {song} alla coda` · `accoda {song} di {musician}` · `metti {song} in coda` · `accoda {song}` · `aggiungi {song} di {musician} alla coda` · `metti {song} di {musician} in coda` |
 | Browse Library | `Sfoglia {browse_category}` · `Sfoglia i generi {filter}` · `Sfoglia i {browse_category}` · `Mostra {browse_category}` · `Mostra i {browse_category}` · `Elenca {browse_category}` |
 | Clear Queue | `svuota la coda` · `pulisci la coda` · `cancella la coda` · `elimina la coda` · `rimuovi tutto dalla coda` · `svuota la mia coda` |
 | Continue Watching | `Continua a guardare` · `Riprendi a guardare` · `Continua il video` · `Riprendi il video` |
+| Create Playlist | `Crea una playlist chiamata {playlist}` · `Crea una nuova playlist chiamata {playlist}` · `Nuova playlist chiamata {playlist}` |
 | Find Song | `cerca una canzone` · `trova una canzone chiamata {titleKeywords}` · `aiutami a trovare una canzone` · `sto cercando una canzone` · `voglio trovare una canzone` · `trova una canzone` |
 | Find Song By Artist | `cerca una canzone di {musician}` · `cerca una canzone dei {musician}` · `cerca una canzone degli {musician}` · `cerca una canzone delle {musician}` · `aiutami a trovare una canzone di {musician}` · `aiutami a trovare una canzone dei {musician}` |
 | Follow Me | `seguimi` · `seguirmi` · `seguir mi` · `continua ad ascoltare` · `riprendi da dove ero rimasto` · `riprendi da dove ero rimasta` |
@@ -734,6 +789,7 @@ Invocation name: **"mia collezione"**
 | Query Artist Library | `Quali brani abbiamo di {musician}` · `Quali {query_type} abbiamo di {musician}` · `Quali canzoni abbiamo di {musician}` · `Che brani abbiamo di {musician}` · `Che canzoni abbiamo di {musician}` · `Quali album abbiamo di {musician}` |
 | Query Recently Added | `cosa c'è di nuovo` · `cosa è stato aggiunto di recente` · `quali novità ci sono` · `mostra le novità` · `mostrami gli ultimi aggiunti` · `ci sono novità` |
 | Recommend | `Consiglia {media_type}` · `Suggerisci una canzone` · `Raccomanda {media_type}` · `Suggerisci {media_type}` · `Di consigliare {media_type}` · `Di raccomandare {media_type}` |
+| Remove Current From Playlist | `Rimuovi questo brano dalla playlist {playlist}` · `Rimuovi questo dalla playlist {playlist}` · `Togli questo brano dalla playlist {playlist}` |
 | Repeat Single On | `Ripeti la canzone` · `Ripeti la traccia` · `Ripeti il brano` · `Ripeti il video` · `di ripeter la canzone` · `di ripeter la traccia` |
 | Search Media | `Cerca il contenuto {query}` · `Cerca un film {query}` · `Cerca un video {query}` · `Cerca una serie {query}` · `Cerca un audiolibro {query}` · `Trova il contenuto {query}` |
 | Set Reminder | `Ricordami tra {duration_minutes} minuti` · `Ricordami alle {reminder_time}` · `Imposta un promemoria tra {duration_minutes} minuti` · `Imposta un promemoria per le {reminder_time}` |
@@ -751,10 +807,13 @@ Invocation name: **"jellyfin player"**
 
 | Intent | Utterances |
 |--------|------------|
+| Add Current To Playlist | `この曲をプレイリスト {playlist} に追加して` · `今の曲をプレイリスト {playlist} に追加して` |
+| Add Song To Playlist | `曲 {song} をプレイリスト {playlist_target} に追加して` · `{song} をプレイリスト {playlist_target} に追加して` |
 | Add To Queue | `{song} をキューに追加して` · `{musician} の {song} をキューに追加して` · `{song} をキューに入れて` · `{musician} の {song} をキューに入れて` |
 | Browse Library | `{browse_category}` · `ジャンル {filter} をブラウズして` · `{browse_category} をブラウズして` · `{browse_category} を見せて` · `{browse_category} のリスト` · `どんな {browse_category} がある` |
 | Clear Queue | `キューをクリアして` · `キューを空にして` · `キューから全部消して` |
 | Continue Watching | `続きを見て` · `続きを聴いて` · `途中から再開して` · `何を見てたっけ` · `続き` |
+| Create Playlist | `{playlist} というプレイリストを作って` · `新しいプレイリスト {playlist} を作成して` |
 | Find Song | `曲を探して` · `{titleKeywords} という曲を探して` · `曲を探すのを手伝って` · `曲を検索して` · `曲を探しているの` · `曲を見つけたいの` |
 | Find Song By Artist | `{musician} の曲を探して` · `{musician} の曲を探すのを手伝って` · `{musician} の曲を検索して` · `{musician} の曲を探しているの` |
 | Follow Me | `ついてきて` · `再生を続けて` · `続きから再生` · `再生を引き継ぐ` |
@@ -786,6 +845,7 @@ Invocation name: **"jellyfin player"**
 | Query Artist Library | `{musician} のトラックは何がある` · `{musician} の {query_type} を見せて` · `{musician} の曲は何がある` · `{musician} のアルバムは何がある` · `{musician} には何がある` · `{musician} のトラックを見せて` |
 | Query Recently Added | `新着はある` · `最近追加されたものは` · `ライブラリの新着は` · `最近追加されたものを見せて` · `最近何か新しいものある` · `最新のアイテムは何` |
 | Recommend | `何かおすすめは` · `{media_type} をおすすめして` · `音楽のおすすめは` · `映画のおすすめは` · `何か見るものを提案して` |
+| Remove Current From Playlist | `この曲をプレイリスト {playlist} から削除して` · `今の曲をプレイリスト {playlist} から消して` |
 | Search Media | `映画 {query} を検索して` · `コンテンツ {query} を検索して` · `ビデオ {query} を検索して` · `映画 {query} を見つけて` · `コンテンツ {query} を見つけて` · `映画 {query} を探して` |
 | Set Reminder | `{duration_minutes} 分後にリマインドして` · `{reminder_time} にリマインドして` · `{duration_minutes} 分のリマインダーを設定して` · `{reminder_time} のリマインダーを設定して` |
 | Show More | `もっと見せて` · `次のページ` · `もっと` · `続き` · `他に何がある` · `もっと結果` |
@@ -802,10 +862,13 @@ Invocation name: **"jellyfin player"**
 
 | Intent | Utterances |
 |--------|------------|
+| Add Current To Playlist | `Voeg dit nummer toe aan de afspeellijst {playlist}` · `Voeg het huidige nummer toe aan de afspeellijst {playlist}` |
+| Add Song To Playlist | `Voeg het nummer {song} toe aan de afspeellijst {playlist_target}` · `Voeg {song} toe aan de afspeellijst {playlist_target}` |
 | Add To Queue | `voeg {song} toe aan mijn wachtrij` · `voeg {song} van {musician} toe aan mijn wachtrij` · `voeg {song} toe aan de wachtrij` · `voeg {song} van {musician} toe aan de wachtrij` · `wachtrij {song}` · `wachtrij {song} van {musician}` |
 | Browse Library | `{browse_category}` · `browse genres {filter}` · `alleen {browse_category}` · `ik wil {browse_category}` · `browse {browse_category}` · `laat {browse_category} zien` |
 | Clear Queue | `wis mijn wachtrij` · `wis de wachtrij` · `leeg mijn wachtrij` · `leeg de wachtrij` · `verwijder alles uit mijn wachtrij` |
 | Continue Watching | `verder kijken` · `verder luisteren` · `hervat waar ik was gebleven` · `wat was ik aan het kijken` · `doorgaan` · `verder gaan` |
+| Create Playlist | `Maak een afspeellijst genaamd {playlist}` · `Maak een nieuwe afspeellijst genaamd {playlist}` |
 | Find Song | `vind een nummer` · `vind een nummer genaamd {titleKeywords}` · `help me een nummer te vinden` · `zoek een nummer` · `ik zoek een nummer` · `ik moet een nummer vinden` |
 | Find Song By Artist | `vind een nummer van {musician}` · `help me een nummer te vinden van {musician}` · `zoek een nummer van {musician}` · `ik zoek een nummer van {musician}` |
 | Follow Me | `volg me` · `verder met afspelen` · `neem het over` · `doorgaan met luisteren` |
@@ -837,6 +900,7 @@ Invocation name: **"jellyfin player"**
 | Query Artist Library | `welke tracks hebben we van {musician}` · `welke {query_type} hebben we van {musician}` · `welke nummers hebben we van {musician}` · `welke albums hebben we van {musician}` · `wat hebben we van {musician}` · `laat tracks zien van {musician}` |
 | Query Recently Added | `wat is er nieuw` · `wat is er recentelijk toegevoegd` · `wat is er nieuw in mijn bibliotheek` · `laat recent toegevoegde zien` · `iets nieuws onlangs` · `laat de nieuwste items zien` |
 | Recommend | `beveel iets aan` · `beveel {media_type} aan` · `beveel wat muziek aan` · `beveel een film aan` · `stel iets voor om te kijken` · `stel wat muziek voor` |
+| Remove Current From Playlist | `Verwijder dit nummer uit de afspeellijst {playlist}` · `Haal het huidige nummer van de afspeellijst {playlist}` |
 | Search Media | `zoek naar een film {query}` · `zoek naar content {query}` · `zoek naar een video {query}` · `zoek naar een serie {query}` · `vind een film {query}` · `vind content {query}` |
 | Set Reminder | `herinner me over {duration_minutes} minuten` · `herinner me om {reminder_time}` · `stel een herinnering in voor {duration_minutes} minuten` · `zet een herinnering op {reminder_time}` |
 | Show More | `toon meer` · `meer resultaten` · `volgende` · `doorgaan` · `wat nog meer` · `meer` |
@@ -853,10 +917,13 @@ Invocation name: **"jellyfin player"**
 
 | Intent | Utterances |
 |--------|------------|
+| Add Current To Playlist | `Adicione esta música à playlist {playlist}` · `Adicione a música atual à playlist {playlist}` · `Coloque esta música na playlist {playlist}` |
+| Add Song To Playlist | `Adicione a música {song} à playlist {playlist_target}` · `Adicione {song} à playlist {playlist_target}` |
 | Add To Queue | `adicionar {song} à minha fila` · `adicionar {song} de {musician} à minha fila` · `adicionar {song} à fila` · `adicionar {song} de {musician} à fila` · `enfileirar {song}` · `enfileirar {song} de {musician}` |
 | Browse Library | `{browse_category}` · `navegar gêneros {filter}` · `só {browse_category}` · `quero {browse_category}` · `navegar {browse_category}` · `mostrar {browse_category}` |
 | Clear Queue | `limpar minha fila` · `limpar a fila` · `esvaziar minha fila` · `esvaziar a fila` · `remover tudo da minha fila` · `limpar minha playlist` |
 | Continue Watching | `continuar assistindo` · `continuar ouvindo` · `retomar de onde parei` · `o que eu estava assistindo` · `continuar tocando` · `continuar` |
+| Create Playlist | `Crie uma playlist chamada {playlist}` · `Crie uma nova playlist chamada {playlist}` |
 | Find Song | `encontre uma musica` · `encontre uma musica chamada {titleKeywords}` · `me ajude a encontrar uma musica` · `estou procurando uma musica` · `procure uma musica chamada {titleKeywords}` · `procure uma musica` |
 | Find Song By Artist | `encontre uma musica de {musician}` · `me ajude a encontrar uma musica de {musician}` · `estou procurando uma musica de {musician}` |
 | Follow Me | `me siga` · `continuar tocando` · `retomar a reprodução` · `transferir a música` |
@@ -888,6 +955,7 @@ Invocation name: **"jellyfin player"**
 | Query Artist Library | `quais faixas temos de {musician}` · `quais {query_type} temos de {musician}` · `quais músicas temos de {musician}` · `quais álbuns temos de {musician}` · `o que temos de {musician}` · `mostrar faixas de {musician}` |
 | Query Recently Added | `o que há de novo` · `o que foi adicionado recentemente` · `o que há de novo na minha biblioteca` · `mostrar adicionados recentemente` · `alguma novidade` · `mostrar os itens mais recentes` |
 | Recommend | `recomendar algo` · `recomendar {media_type}` · `recomendar uma música` · `recomendar um filme` · `sugerir algo para assistir` · `sugerir uma música` |
+| Remove Current From Playlist | `Remova esta música da playlist {playlist}` · `Tire esta música da playlist {playlist}` |
 | Search Media | `procurar um filme {query}` · `procurar conteúdo {query}` · `procurar um vídeo {query}` · `procurar uma série {query}` · `encontrar um filme {query}` · `encontrar conteúdo {query}` |
 | Set Reminder | `me lembre em {duration_minutes} minutos` · `me lembre às {reminder_time}` · `crie um lembrete de {duration_minutes} minutos` · `crie um lembrete para as {reminder_time}` |
 | Show More | `mostrar mais` · `mais resultados` · `próximo` · `continuar` · `o que mais` · `ver mais` |

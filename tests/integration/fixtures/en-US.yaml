@@ -247,6 +247,19 @@ tests:
     expected_intent: PlayPlaylistIntent
     expected_slots:
       playlist: {}
+  - utterance: "add this song to the playlist road trip songs"
+    expected_intent: AddCurrentToPlaylistIntent
+    expected_slots:
+      playlist: {}
+  - utterance: "create a playlist called evening jazz"
+    expected_intent: CreatePlaylistIntent
+    expected_slots:
+      playlist: {}
+  - utterance: "add the song rhapsody to the playlist road trip songs"
+    expected_intent: AddSongToPlaylistIntent
+    expected_slots:
+      song: {}
+      playlist_target: {}
 
   - utterance: "Play my playlist road trip"
     expected_intent: PlayPlaylistIntent

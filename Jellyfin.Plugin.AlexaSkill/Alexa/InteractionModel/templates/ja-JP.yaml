@@ -287,6 +287,36 @@ intents:
     slots:
       - name: playlist
         type: AMAZON.SearchQuery
+  - name: AddCurrentToPlaylistIntent
+    samples:
+      - この曲をプレイリスト {playlist} に追加して
+      - 今の曲をプレイリスト {playlist} に追加して
+    slots:
+      - name: playlist
+        type: AMAZON.SearchQuery
+  - name: AddSongToPlaylistIntent
+    samples:
+      - 曲 {song} をプレイリスト {playlist_target} に追加して
+      - '{song} をプレイリスト {playlist_target} に追加して'
+    slots:
+      - name: song
+        type: AMAZON.MusicRecording
+      - name: playlist_target
+        type: AMAZON.MusicRecording
+  - name: RemoveCurrentFromPlaylistIntent
+    samples:
+      - この曲をプレイリスト {playlist} から削除して
+      - 今の曲をプレイリスト {playlist} から消して
+    slots:
+      - name: playlist
+        type: AMAZON.SearchQuery
+  - name: CreatePlaylistIntent
+    samples:
+      - '{playlist} というプレイリストを作って'
+      - 新しいプレイリスト {playlist} を作成して
+    slots:
+      - name: playlist
+        type: AMAZON.SearchQuery
   - name: PlayFavoritesIntent
     samples:
       - お気に入りの {media_type} を再生して

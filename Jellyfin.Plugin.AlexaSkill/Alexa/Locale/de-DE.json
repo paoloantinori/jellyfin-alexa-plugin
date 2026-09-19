@@ -260,5 +260,10 @@
   "FlowCancelled": "Okay, ich habe die Suche abgebrochen.",
   "SkillWarmingUp": "Ich bin noch beim Vorbereiten. Bitte versuche es in einer Minute erneut.",
   "PauseSessionSpeech": "Pausiert.",
-  "PauseSessionReprompt": "Sag mir einfach, wann du weiterhören möchtest."
+  "PauseSessionReprompt": "Sag mir einfach, wann du weiterhören möchtest.",
+  "AddedToPlaylist": "{0} zur Playlist {1} hinzugefügt.",
+  "RemovedFromPlaylist": "{0} aus der Playlist {1} entfernt.",
+  "PlaylistCreated": "Playlist {0} erstellt.",
+  "PlaylistAlreadyExists": "Eine Playlist namens {0} existiert bereits.",
+  "PlaylistCreateFailed": "Ich konnte die Playlist nicht erstellen. Stelle sicher, dass deine Jellyfin-Mediathek einen Playlist-Ordner enthält."
 }

@@ -325,6 +325,62 @@
         ]
       },
       {
+        "name": "AddCurrentToPlaylistIntent",
+        "samples": [
+          "أضف هذه الأغنية إلى قائمة التشغيل {playlist}",
+          "أضف الحالي إلى قائمة التشغيل {playlist}"
+        ],
+        "slots": [
+          {
+            "name": "playlist",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
+      },
+      {
+        "name": "AddSongToPlaylistIntent",
+        "samples": [
+          "أضف الأغنية {song} إلى قائمة التشغيل {playlist_target}",
+          "أضف {song} إلى قائمة التشغيل {playlist_target}"
+        ],
+        "slots": [
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording"
+          },
+          {
+            "name": "playlist_target",
+            "type": "AMAZON.MusicRecording"
+          }
+        ]
+      },
+      {
+        "name": "RemoveCurrentFromPlaylistIntent",
+        "samples": [
+          "أزل هذه الأغنية من قائمة التشغيل {playlist}",
+          "احذف الحالي من قائمة التشغيل {playlist}"
+        ],
+        "slots": [
+          {
+            "name": "playlist",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
+      },
+      {
+        "name": "CreatePlaylistIntent",
+        "samples": [
+          "أنشئ قائمة تشغيل باسم {playlist}",
+          "أنشئ قائمة تشغيل جديدة باسم {playlist}"
+        ],
+        "slots": [
+          {
+            "name": "playlist",
+            "type": "AMAZON.SearchQuery"
+          }
+        ]
+      },
+      {
         "name": "PlayFavoritesIntent",
         "samples": [
           "شغل مفضلاتي",

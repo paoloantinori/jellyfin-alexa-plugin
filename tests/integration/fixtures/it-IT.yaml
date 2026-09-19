@@ -251,6 +251,27 @@ tests:
       playlist: {}
 
   # -------------------------------------------------------------------------
+  # JF-325: voice playlist editing
+  # -------------------------------------------------------------------------
+  - utterance: "Aggiungi questo brano alla playlist i miei brani"
+    expected_intent: AddCurrentToPlaylistIntent
+    expected_slots:
+      playlist: {}
+  - utterance: "Rimuovi questo dalla playlist rock classico"
+    expected_intent: RemoveCurrentFromPlaylistIntent
+    expected_slots:
+      playlist: {}
+  - utterance: "Crea una playlist chiamata sera jazz"
+    expected_intent: CreatePlaylistIntent
+    expected_slots:
+      playlist: {}
+  - utterance: "Aggiungi la canzone rapsodia alla playlist rock classico"
+    expected_intent: AddSongToPlaylistIntent
+    expected_slots:
+      song: {}
+      playlist_target: {}
+
+  # -------------------------------------------------------------------------
   # 8. GoToChapterIntent (direction, chapter_number)
   # -------------------------------------------------------------------------
   - utterance: "Vai al capitolo cinque"

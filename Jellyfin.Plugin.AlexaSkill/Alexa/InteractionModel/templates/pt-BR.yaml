@@ -313,6 +313,37 @@ intents:
     slots:
       - name: playlist
         type: AMAZON.SearchQuery
+  - name: AddCurrentToPlaylistIntent
+    samples:
+      - Adicione esta música à playlist {playlist}
+      - Adicione a música atual à playlist {playlist}
+      - Coloque esta música na playlist {playlist}
+    slots:
+      - name: playlist
+        type: AMAZON.SearchQuery
+  - name: AddSongToPlaylistIntent
+    samples:
+      - Adicione a música {song} à playlist {playlist_target}
+      - Adicione {song} à playlist {playlist_target}
+    slots:
+      - name: song
+        type: AMAZON.MusicRecording
+      - name: playlist_target
+        type: AMAZON.MusicRecording
+  - name: RemoveCurrentFromPlaylistIntent
+    samples:
+      - Remova esta música da playlist {playlist}
+      - Tire esta música da playlist {playlist}
+    slots:
+      - name: playlist
+        type: AMAZON.SearchQuery
+  - name: CreatePlaylistIntent
+    samples:
+      - Crie uma playlist chamada {playlist}
+      - Crie uma nova playlist chamada {playlist}
+    slots:
+      - name: playlist
+        type: AMAZON.SearchQuery
   - name: PlayFavoritesIntent
     samples:
       - tocar meus favoritos

@@ -260,5 +260,10 @@
   "FlowCancelled": "Oké, ik heb het zoeken gestopt.",
   "SkillWarmingUp": "Ik ben nog aan het opwarmen. Probeer het over een minuut opnieuw.",
   "PauseSessionSpeech": "Gepauzeerd.",
-  "PauseSessionReprompt": "Zeg het maar wanneer je wilt verdergaan."
+  "PauseSessionReprompt": "Zeg het maar wanneer je wilt verdergaan.",
+  "AddedToPlaylist": "{0} toegevoegd aan de afspeellijst {1}.",
+  "RemovedFromPlaylist": "{0} verwijderd uit de afspeellijst {1}.",
+  "PlaylistCreated": "Afspeellijst {0} aangemaakt.",
+  "PlaylistAlreadyExists": "Er bestaat al een afspeellijst met de naam {0}.",
+  "PlaylistCreateFailed": "Ik kon de afspeellijst niet aanmaken. Zorg dat je Jellyfin-bibliotheek een map voor afspeellijsten heeft."
 }

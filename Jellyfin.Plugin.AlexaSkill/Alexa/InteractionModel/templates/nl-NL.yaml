@@ -309,6 +309,36 @@ intents:
     slots:
       - name: playlist
         type: AMAZON.SearchQuery
+  - name: AddCurrentToPlaylistIntent
+    samples:
+      - Voeg dit nummer toe aan de afspeellijst {playlist}
+      - Voeg het huidige nummer toe aan de afspeellijst {playlist}
+    slots:
+      - name: playlist
+        type: AMAZON.SearchQuery
+  - name: AddSongToPlaylistIntent
+    samples:
+      - Voeg het nummer {song} toe aan de afspeellijst {playlist_target}
+      - Voeg {song} toe aan de afspeellijst {playlist_target}
+    slots:
+      - name: song
+        type: AMAZON.MusicRecording
+      - name: playlist_target
+        type: AMAZON.MusicRecording
+  - name: RemoveCurrentFromPlaylistIntent
+    samples:
+      - Verwijder dit nummer uit de afspeellijst {playlist}
+      - Haal het huidige nummer van de afspeellijst {playlist}
+    slots:
+      - name: playlist
+        type: AMAZON.SearchQuery
+  - name: CreatePlaylistIntent
+    samples:
+      - Maak een afspeellijst genaamd {playlist}
+      - Maak een nieuwe afspeellijst genaamd {playlist}
+    slots:
+      - name: playlist
+        type: AMAZON.SearchQuery
   - name: PlayFavoritesIntent
     samples:
       - speel mijn favoriete {media_type}

@@ -260,5 +260,10 @@
   "FlowCancelled": "はい、検索を中止しました。",
   "SkillWarmingUp": "準備中です。1分後にもう一度お試しください。",
   "PauseSessionSpeech": "一時停止しました。",
-  "PauseSessionReprompt": "再開したいときは、声をかけてください。"
+  "PauseSessionReprompt": "再開したいときは、声をかけてください。",
+  "AddedToPlaylist": "{0} をプレイリスト {1} に追加しました。",
+  "RemovedFromPlaylist": "{0} をプレイリスト {1} から削除しました。",
+  "PlaylistCreated": "プレイリスト {0} を作成しました。",
+  "PlaylistAlreadyExists": "{0} という名前のプレイリストは既に存在します。",
+  "PlaylistCreateFailed": "プレイリストを作成できませんでした。Jellyfin のライブラリにプレイリストフォルダーがあることを確認してください。"
 }

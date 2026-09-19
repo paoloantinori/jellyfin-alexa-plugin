@@ -20,6 +20,10 @@ internal static class IntentNames
     public const string Play = "PlayIntent";
     public const string PlayLastAdded = "PlayLastAddedIntent";
     public const string PlayPlaylist = "PlayPlaylistIntent";
+    public const string AddCurrentToPlaylist = "AddCurrentToPlaylistIntent";
+    public const string AddSongToPlaylist = "AddSongToPlaylistIntent";
+    public const string RemoveCurrentFromPlaylist = "RemoveCurrentFromPlaylistIntent";
+    public const string CreatePlaylist = "CreatePlaylistIntent";
     public const string ShufflePlay = "ShufflePlayIntent";
     public const string PlaySong = "PlaySongIntent";
     public const string PlayVideo = "PlayVideoIntent";
@@ -124,5 +128,16 @@ internal static class IntentNames
         public const string Album = "album";
         public const string Song = "song";
         public const string Station = "station";
+
+        /// <summary>
+        /// Playlist-name slot on AddSongToPlaylistIntent. Named differently from
+        /// <see cref="Playlist"/> because that name is typed AMAZON.SearchQuery in
+        /// PlayPlaylist/ShufflePlayIntent, and a slot name must keep one type across
+        /// intents; this one must combine with the song slot in a single sample,
+        /// which SearchQuery forbids (CLAUDE.md anti-pattern #2), so it is free-text
+        /// AMAZON.MusicRecording like the album slot on the 16 free-text locales.
+        /// </summary>
+        public const string PlaylistTarget = "playlist_target";
+        public const string Playlist = "playlist";
     }
 }

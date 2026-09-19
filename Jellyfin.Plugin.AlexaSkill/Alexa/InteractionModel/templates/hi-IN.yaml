@@ -291,6 +291,37 @@ intents:
     slots:
       - name: playlist
         type: AMAZON.SearchQuery
+  - name: AddCurrentToPlaylistIntent
+    samples:
+      - इस गाने को प्लेलिस्ट {playlist} में जोड़ो
+      - यह गाना प्लेलिस्ट {playlist} में जोड़ें
+      - मौजूदा गाना प्लेलिस्ट {playlist} में जोड़ो
+    slots:
+      - name: playlist
+        type: AMAZON.SearchQuery
+  - name: AddSongToPlaylistIntent
+    samples:
+      - गाना {song} को प्लेलिस्ट {playlist_target} में जोड़ो
+      - '{song} को प्लेलिस्ट {playlist_target} में जोड़ें'
+    slots:
+      - name: song
+        type: AMAZON.MusicRecording
+      - name: playlist_target
+        type: AMAZON.MusicRecording
+  - name: RemoveCurrentFromPlaylistIntent
+    samples:
+      - यह गाना प्लेलिस्ट {playlist} से हटाओ
+      - मौजूदा गाना प्लेलिस्ट {playlist} से हटाओ
+    slots:
+      - name: playlist
+        type: AMAZON.SearchQuery
+  - name: CreatePlaylistIntent
+    samples:
+      - '{playlist} नाम की प्लेलिस्ट बनाओ'
+      - नई प्लेलिस्ट {playlist} बनाओ
+    slots:
+      - name: playlist
+        type: AMAZON.SearchQuery
   - name: PlayFavoritesIntent
     samples:
       - मेरी पसंदीदा {media_type} चलाओ

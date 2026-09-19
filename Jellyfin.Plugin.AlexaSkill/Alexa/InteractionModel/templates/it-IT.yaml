@@ -933,6 +933,40 @@ templates:
       - name: playlist
         type: AMAZON.SearchQuery
 
+  AddCurrentToPlaylistIntent:
+    templates:
+      - Aggiungi questo brano alla playlist {playlist}
+      - Aggiungi questo alla playlist {playlist}
+      - Metti questo brano nella playlist {playlist}
+    slots:
+      - name: playlist
+        type: AMAZON.SearchQuery
+  AddSongToPlaylistIntent:
+    templates:
+      - Aggiungi la canzone {song} alla playlist {playlist_target}
+      - Aggiungi il brano {song} alla playlist {playlist_target}
+      - Metti la canzone {song} nella playlist {playlist_target}
+    slots:
+      - name: song
+        type: AMAZON.MusicRecording
+      - name: playlist_target
+        type: AMAZON.MusicRecording
+  RemoveCurrentFromPlaylistIntent:
+    templates:
+      - Rimuovi questo brano dalla playlist {playlist}
+      - Rimuovi questo dalla playlist {playlist}
+      - Togli questo brano dalla playlist {playlist}
+    slots:
+      - name: playlist
+        type: AMAZON.SearchQuery
+  CreatePlaylistIntent:
+    templates:
+      - Crea una playlist chiamata {playlist}
+      - Crea una nuova playlist chiamata {playlist}
+      - Nuova playlist chiamata {playlist}
+    slots:
+      - name: playlist
+        type: AMAZON.SearchQuery
   PlayAlbumIntent:
     templates:
       - "{imperative} {album_noun} {album}"
