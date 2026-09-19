@@ -25,14 +25,12 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 ///   1. Source device is playing music (tracked by DeviceQueueManager)
 ///   2. User walks to another room, speaks to that Echo: "ask jellyfin to follow me"
 ///   3. This handler finds the most recently active queue from any OTHER device
-///   4. Replays the queue's current item on the current device from offset 0
-///
-/// KNOWN LIMITATION: transfer restarts the current item from the beginning (offset 0),
-/// NOT at the saved playback position. DeviceQueueManager tracks per-item resume position
-/// for same-device resume, not a cross-device transfer offset; the source device's elapsed
-/// offset is not available to this handler. Locked by the FollowMe_ResumesAtOffsetZero_ByDesign
-/// unit test. The localized FollowMeSuccess string ("resuming from where you left off")
-/// overpromises this; it is retained because the same item continues, only the position resets.
+///   4. Replays the queue's current item on the current device, carrying the source
+///      device's playback position when one was recorded (JF-375): the queue's live
+///      pointer first, the per-item store second, both fail-closed through the shared
+///      runtime clamp. Nothing recorded = offset 0 and the plain announcement; a
+///      carried offset announces the resume wording. Still true: the SOURCE device
+///      is not stopped (platform wall, see README).
 /// </summary>
 public class FollowMeIntentHandler : BaseHandler
 {
@@ -138,9 +136,34 @@ public class FollowMeIntentHandler : BaseHandler
 
         session.FullNowPlayingItem = item;
 
-        // Build the audio response (offset 0 since we don't track per-device playback position
-        // through DeviceQueueManager — the offset comes from the AudioPlayer context which is
-        // only available on the source device, not here)
+        // JF-375: carry the source device's playback position. Two signals, freshest
+        // first: the queue's live per-device pointer (CurrentItemId/CurrentPositionTicks),
+        // then the durable per-item store. Both are plugin-owned, so the
+        // FullNowPlayingItem clearing documented in CLAUDE.md cannot take this offset
+        // away. Read BEFORE the source Clear below. The pointer comparison is
+        // GUID-parsed, not string-compared: production writers store the dashed
+        // format while the store keys on "N" (review C1 - a string compare silently
+        // favored one writer and killed the freshest signal).
+        long carryTicks = 0;
+        if (Guid.TryParse(currentItemId, out Guid normalizedItem))
+        {
+            carryTicks = Guid.TryParse(sourceQueue.CurrentItemId, out Guid pointerItem)
+                && pointerItem == normalizedItem
+                && sourceQueue.CurrentPositionTicks > 0
+                    ? sourceQueue.CurrentPositionTicks
+                    : _queueManager.GetStoredPositionTicks(sourceDeviceId, currentItemId) ?? 0;
+        }
+
+        // The ONE fail-closed runtime clamp (JF-565/JF-586): a position that cannot
+        // be proven within the item runtime drops to 0 - and logs, so the spoken
+        // "right where you left it" can never cover a stale offset.
+        carryTicks = Launch.ClampResumeTicksToRuntime(item, carryTicks, "FollowMe carry");
+
+        int offsetMs = (int)(carryTicks / 10_000);
+        Logger.LogInformation(
+            "FollowMeIntent: carry position {OffsetMs}ms from device {SourceDevice} for item {ItemId}",
+            offsetMs, sourceDeviceId, currentItemId);
+
         string streamUrl = Launch.GetStreamUrl(currentItemId, user);
         string title = item.Name ?? ResponseStrings.Get("UnknownMedia", locale);
 
@@ -150,10 +173,15 @@ public class FollowMeIntentHandler : BaseHandler
             currentItemId,
             item,
             user,
-            context);
+            context,
+            offsetInMilliseconds: offsetMs);
 
-        // Replace the default speech with the follow-me announcement
-        response.Response.OutputSpeech = SpeechBuilder.BuildOutputSpeech("FollowMeSuccessSsml", "FollowMeSuccess", locale, title);
+        // Replace the default speech with the follow-me announcement. Two wordings,
+        // honest in both directions: the carried-position phrase only when an offset
+        // actually applies (nothing stored = the transfer genuinely starts at 0).
+        response.Response.OutputSpeech = offsetMs > 0
+            ? SpeechBuilder.BuildOutputSpeech("FollowMeSuccessResumeSsml", "FollowMeSuccessResume", locale, title)
+            : SpeechBuilder.BuildOutputSpeech("FollowMeSuccessSsml", "FollowMeSuccess", locale, title);
 
         // Clear the source device's queue so it doesn't keep appearing as "active"
         _queueManager.Clear(sourceDeviceId);

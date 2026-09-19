@@ -265,5 +265,7 @@
   "RemovedFromPlaylist": "{0} rimosso dalla playlist {1}.",
   "PlaylistCreated": "Playlist {0} creata.",
   "PlaylistAlreadyExists": "Esiste già una playlist chiamata {0}.",
-  "PlaylistCreateFailed": "Non sono riuscito a creare la playlist. Assicurati che la tua libreria Jellyfin includa una cartella per le playlist."
+  "PlaylistCreateFailed": "Non sono riuscito a creare la playlist. Assicurati che la tua libreria Jellyfin includa una cartella per le playlist.",
+  "FollowMeSuccessResume": "Continuo {0} su questo dispositivo, dal punto in cui eri. Metti in pausa l'altro per fermarlo.",
+  "FollowMeSuccessResumeSsml": "<say-as interpret-as=\"interjection\">eccoci</say-as><break time=\"200ms\"/>Continuo {0} su questo dispositivo, dal punto in cui eri. Metti in pausa l'altro per fermarlo."
 }

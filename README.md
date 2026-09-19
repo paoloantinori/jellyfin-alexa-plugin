@@ -153,7 +153,7 @@ See the [FAQ](#faq) for details and workarounds on each of these.
 - **Multi-user**: each Jellyfin user gets their own skill with individual settings
 - **Per-user settings**: library access, content-type access, fuzzy matching, search mode, PostPlay, and music delivery — all configurable per user or globally
 - **Voice profiles**: "Learn my voice" and "Who am I" for multi-user voice recognition
-- **Follow me**: transfer playback between Alexa devices (pull model: speak "follow me" to the destination Echo). Two limitations: the current track restarts from the beginning on the new device (position is not carried over), and the source device does not stop automatically, so pause it manually (custom Alexa skills cannot send a stop command to another device)
+- **Follow me**: transfer playback between Alexa devices (pull model: speak "follow me" to the destination Echo), carrying the current track position with it. One limitation: the source device does not stop automatically, so pause it manually (custom Alexa skills cannot send a stop command to another device)
 - **Custom interaction models**: deploy your own interaction model via URL for any locale
 
 ### 🌍 Languages
@@ -500,7 +500,7 @@ If you ask for the next track well before the current song is near its end, the 
 Saying *"Alexa, chiedi a Mia Collezione seguimi"* (English: *"ask Jellyfin Player to follow me"*) starts playback of the current track on the Echo you are speaking to. Two things to know:
 
 1. Use the imperative form **"seguimi"**, not *"di seguirmi"*: the latter is often split by speech recognition into separate words and fails to match.
-2. Playback starts the **current track from the beginning** on the new device, and the previous Echo is not always stopped automatically. Pause or stop the old device yourself if both are playing.
+2. The current track resumes **from the position it had reached** on the other device (when the skill could observe it; a track that never reported a position starts from the beginning). The previous Echo is not always stopped automatically: pause or stop the old device yourself if both are playing.
 
 ### Why do some Live TV / IPTV channels show a black screen or fail to play?
 

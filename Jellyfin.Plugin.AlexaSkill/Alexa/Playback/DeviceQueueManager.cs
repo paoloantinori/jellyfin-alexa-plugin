@@ -287,6 +287,47 @@ public sealed class DeviceQueueManager : IDisposable
     }
 
     /// <summary>
+    /// JF-375 test/record seam: sets the queue's live now-playing pointer exactly
+    /// as the PlaybackStopped event path does (CurrentItemId + CurrentPositionTicks).
+    /// Follow-me reads this as its freshest cross-device position signal.
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID.</param>
+    /// <param name="itemId">The item ID in any GUID format (normalized to "N").</param>
+    /// <param name="positionTicks">The playback position in ticks.</param>
+    internal void RecordNowPlaying(string deviceId, string itemId, long positionTicks)
+    {
+        if (!Guid.TryParse(itemId, out Guid parsed))
+        {
+            return;
+        }
+
+        DeviceQueue queue = GetOrCreateQueue(deviceId);
+        // The PRODUCTION pointer shape: PlaybackStoppedEventHandler stores the
+        // dashed Guid.ToString() form, not "N" (review C1 - the read must stay
+        // format-agnostic because this is what it sees in the wild).
+        queue.CurrentItemId = parsed.ToString();
+        queue.CurrentPositionTicks = positionTicks;
+    }
+
+    /// <summary>
+    /// JF-375 test/record seam: writes the durable per-item position store exactly
+    /// as the PlaybackStopped event path does (ItemPositionState, "N"-keyed).
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID.</param>
+    /// <param name="itemId">The item ID in any GUID format (normalized to "N").</param>
+    /// <param name="positionTicks">The playback position in ticks.</param>
+    internal void RecordItemPosition(string deviceId, string itemId, long positionTicks)
+    {
+        if (!Guid.TryParse(itemId, out Guid parsed) || positionTicks <= 0)
+        {
+            return;
+        }
+
+        DeviceQueue queue = GetOrCreateQueue(deviceId);
+        queue.ItemPositionState[parsed.ToString("N")] = positionTicks;
+    }
+
+    /// <summary>
     /// JF-581 read side: the stored per-item position (ItemPositionState, written
     /// unconditionally by the PlaybackStopped handler) for an item on a device,
     /// without creating a queue entry. Null when no positive position is recorded.

@@ -265,5 +265,7 @@
   "RemovedFromPlaylist": "تمت إزالة {0} من قائمة التشغيل {1}.",
   "PlaylistCreated": "تم إنشاء قائمة التشغيل {0}.",
   "PlaylistAlreadyExists": "توجد بالفعل قائمة تشغيل باسم {0}.",
-  "PlaylistCreateFailed": "لم أتمكن من إنشاء قائمة التشغيل. تأكد من أن مكتبة Jellyfin لديك تتضمن مجلد قوائم التشغيل."
+  "PlaylistCreateFailed": "لم أتمكن من إنشاء قائمة التشغيل. تأكد من أن مكتبة Jellyfin لديك تتضمن مجلد قوائم التشغيل.",
+  "FollowMeSuccessResume": "أكمل {0} على هذا الجهاز من حيث توقفت.",
+  "FollowMeSuccessResumeSsml": "<say-as interpret-as=\"interjection\">فهمت</say-as><break time=\"200ms\"/>أكمل {0} على هذا الجهاز من حيث توقفت."
 }

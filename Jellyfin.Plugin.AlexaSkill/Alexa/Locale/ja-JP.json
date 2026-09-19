@@ -265,5 +265,7 @@
   "RemovedFromPlaylist": "{0} をプレイリスト {1} から削除しました。",
   "PlaylistCreated": "プレイリスト {0} を作成しました。",
   "PlaylistAlreadyExists": "{0} という名前のプレイリストは既に存在します。",
-  "PlaylistCreateFailed": "プレイリストを作成できませんでした。Jellyfin のライブラリにプレイリストフォルダーがあることを確認してください。"
+  "PlaylistCreateFailed": "プレイリストを作成できませんでした。Jellyfin のライブラリにプレイリストフォルダーがあることを確認してください。",
+  "FollowMeSuccessResume": "{0} をこの端末で、前回の位置から再開します。",
+  "FollowMeSuccessResumeSsml": "<say-as interpret-as=\"interjection\">了解</say-as><break time=\"200ms\"/>{0} をこの端末で、前回の位置から再開します。"
 }

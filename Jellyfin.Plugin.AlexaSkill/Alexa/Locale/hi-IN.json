@@ -265,5 +265,7 @@
   "RemovedFromPlaylist": "{0} को प्लेलिस्ट {1} से हटाया गया।",
   "PlaylistCreated": "प्लेलिस्ट {0} बनाई गई।",
   "PlaylistAlreadyExists": "{0} नाम की प्लेलिस्ट पहले से मौजूद है।",
-  "PlaylistCreateFailed": "प्लेलिस्ट नहीं बना पाया। सुनिश्चित करें कि आपकी Jellyfin लाइब्रेरी में प्लेलिस्ट फ़ोल्डर हो।"
+  "PlaylistCreateFailed": "प्लेलिस्ट नहीं बना पाया। सुनिश्चित करें कि आपकी Jellyfin लाइब्रेरी में प्लेलिस्ट फ़ोल्डर हो।",
+  "FollowMeSuccessResume": "{0} को इसी डिवाइस पर वहीं से जारी रखता हूँ जहाँ आप छोड़े थे।",
+  "FollowMeSuccessResumeSsml": "<say-as interpret-as=\"interjection\">समझ गया</say-as><break time=\"200ms\"/>{0} को इसी डिवाइस पर वहीं से जारी रखता हूँ जहाँ आप छोड़े थे।"
 }

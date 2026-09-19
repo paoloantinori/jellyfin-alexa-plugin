@@ -147,7 +147,7 @@ public sealed class PlaybackLaunchBuilder
     /// audio degrade) clamp through this so the spoken claim and the delivered
     /// offset cannot diverge (the JF-586 /simplify R1 finding).
     /// </summary>
-    private long ClampResumeTicksToRuntime(BaseItem item, long resumeTicks, string logLabel)
+    internal long ClampResumeTicksToRuntime(BaseItem item, long resumeTicks, string logLabel)
     {
         long? runtimeTicks = item.RunTimeTicks;
         if (resumeTicks > 0 && (runtimeTicks is not > 0 || resumeTicks >= runtimeTicks.Value))

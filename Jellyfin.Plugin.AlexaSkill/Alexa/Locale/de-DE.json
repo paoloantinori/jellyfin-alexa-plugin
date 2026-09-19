@@ -265,5 +265,7 @@
   "RemovedFromPlaylist": "{0} aus der Playlist {1} entfernt.",
   "PlaylistCreated": "Playlist {0} erstellt.",
   "PlaylistAlreadyExists": "Eine Playlist namens {0} existiert bereits.",
-  "PlaylistCreateFailed": "Ich konnte die Playlist nicht erstellen. Stelle sicher, dass deine Jellyfin-Mediathek einen Playlist-Ordner enthält."
+  "PlaylistCreateFailed": "Ich konnte die Playlist nicht erstellen. Stelle sicher, dass deine Jellyfin-Mediathek einen Playlist-Ordner enthält.",
+  "FollowMeSuccessResume": "Mache auf diesem Gerät weiter, genau da, wo du warst: {0}.",
+  "FollowMeSuccessResumeSsml": "<say-as interpret-as=\"interjection\">verstanden</say-as><break time=\"200ms\"/>Mache auf diesem Gerät weiter, genau da, wo du warst: {0}."
 }

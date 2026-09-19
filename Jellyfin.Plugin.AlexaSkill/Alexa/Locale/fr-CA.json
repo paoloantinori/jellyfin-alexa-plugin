@@ -265,5 +265,7 @@
   "RemovedFromPlaylist": "{0} retiré de la liste de lecture {1}.",
   "PlaylistCreated": "Liste de lecture {0} créée.",
   "PlaylistAlreadyExists": "Une liste de lecture nommée {0} existe déjà.",
-  "PlaylistCreateFailed": "Je n'ai pas pu créer la liste de lecture. Vérifiez que votre bibliothèque Jellyfin contient un dossier de listes de lecture."
+  "PlaylistCreateFailed": "Je n'ai pas pu créer la liste de lecture. Vérifiez que votre bibliothèque Jellyfin contient un dossier de listes de lecture.",
+  "FollowMeSuccessResume": "Je continue {0} sur cet appareil, là où vous l'aviez laissé.",
+  "FollowMeSuccessResumeSsml": "<say-as interpret-as=\"interjection\">allons-y</say-as><break time=\"200ms\"/>Je continue {0} sur cet appareil, là où vous l'aviez laissé."
 }

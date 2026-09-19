@@ -265,5 +265,7 @@
   "RemovedFromPlaylist": "{0} verwijderd uit de afspeellijst {1}.",
   "PlaylistCreated": "Afspeellijst {0} aangemaakt.",
   "PlaylistAlreadyExists": "Er bestaat al een afspeellijst met de naam {0}.",
-  "PlaylistCreateFailed": "Ik kon de afspeellijst niet aanmaken. Zorg dat je Jellyfin-bibliotheek een map voor afspeellijsten heeft."
+  "PlaylistCreateFailed": "Ik kon de afspeellijst niet aanmaken. Zorg dat je Jellyfin-bibliotheek een map voor afspeellijsten heeft.",
+  "FollowMeSuccessResume": "Ik ga verder met {0} op dit apparaat, waar je gebleven was.",
+  "FollowMeSuccessResumeSsml": "<say-as interpret-as=\"interjection\">begrepen</say-as><break time=\"200ms\"/>Ik ga verder met {0} op dit apparaat, waar je gebleven was."
 }

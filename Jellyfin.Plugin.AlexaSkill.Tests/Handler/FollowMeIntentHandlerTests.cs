@@ -258,14 +258,11 @@ public class FollowMeIntentHandlerTests : PluginTestBase, IDisposable
     // =====================================================================
 
     /// <summary>
-    /// Documents the by-design offset-0 limitation: follow-me resumes the current item
-    /// from the beginning, NOT at the saved playback position. DeviceQueueManager tracks
-    /// per-item resume position, not a cross-device transfer offset. If this assertion
-    /// ever fails, either the limitation was lifted (update docs and release notes) or a
-    /// regression silently added a bogus offset.
+    /// JF-375: nothing recorded for the item on the source device - the transfer
+    /// genuinely starts at 0 and must use the plain (non-resume) announcement.
     /// </summary>
     [Fact]
-    public async Task FollowMe_ResumesAtOffsetZero_ByDesign()
+    public async Task FollowMe_NoStoredPosition_StartsAtZeroWithPlainAnnouncement()
     {
         var handler = CreateHandler();
         var session = CreateSession();
@@ -275,6 +272,140 @@ public class FollowMeIntentHandlerTests : PluginTestBase, IDisposable
         var item = new Audio { Id = itemId, Name = "Song" };
 
         _queueManager.SetQueue("device-livingroom", new List<string> { itemId.ToString() }, 0);
+        _libraryManagerMock.Setup(l => l.GetItemById(itemId)).Returns(item);
+
+        var response = await handler.HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "FollowMeIntent" } },
+            context,
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        var playDirective = Assert.IsType<AudioPlayerPlayDirective>(
+            response.Response.Directives!.First(d => d is AudioPlayerPlayDirective));
+        Assert.Equal(0, playDirective.AudioItem.Stream.OffsetInMilliseconds);
+        Assert.Contains(
+            ResponseStrings.Get("FollowMeSuccess", "en-US", "Song"),
+            TestHelpers.GetSpeechText(response),
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-375: the source queue's live per-device pointer (CurrentItemId +
+    /// CurrentPositionTicks, written on every PlaybackStopped) carries across the
+    /// transfer as the AudioPlayer.Play offset, and the announcement says so.
+    /// </summary>
+    [Fact]
+    public async Task FollowMe_SourceQueuePointer_CarriesPositionAndAnnouncesResume()
+    {
+        var handler = CreateHandler();
+        var session = CreateSession();
+        var context = CreateContext("device-kitchen");
+
+        var itemId = Guid.NewGuid();
+        var item = new Audio { Id = itemId, Name = "Song", RunTimeTicks = 10 * TimeSpan.TicksPerMinute };
+
+        _queueManager.SetQueue("device-livingroom", new List<string> { itemId.ToString() }, 0);
+        _queueManager.RecordNowPlaying("device-livingroom", itemId.ToString("N"), 90_000 * TimeSpan.TicksPerSecond / 1000);
+        _libraryManagerMock.Setup(l => l.GetItemById(itemId)).Returns(item);
+
+        var response = await handler.HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "FollowMeIntent" } },
+            context,
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        var playDirective = Assert.IsType<AudioPlayerPlayDirective>(
+            response.Response.Directives!.First(d => d is AudioPlayerPlayDirective));
+        Assert.Equal(90_000, playDirective.AudioItem.Stream.OffsetInMilliseconds);
+        Assert.Contains(
+            ResponseStrings.Get("FollowMeSuccessResume", "en-US", "Song"),
+            TestHelpers.GetSpeechText(response),
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-375 review C1 lock: the production writers store the pointer in DASHED
+    /// Guid form (PlaybackStopped/NearlyFinished), while the per-item store keys
+    /// on "N". The read must be format-agnostic or the freshest signal is dead.
+    /// </summary>
+    [Fact]
+    public async Task FollowMe_DashedProductionPointerShape_StillCarriesPosition()
+    {
+        var handler = CreateHandler();
+        var session = CreateSession();
+        var context = CreateContext("device-kitchen");
+
+        var itemId = Guid.NewGuid();
+        var item = new Audio { Id = itemId, Name = "Song", RunTimeTicks = 10 * TimeSpan.TicksPerMinute };
+
+        _queueManager.SetQueue("device-livingroom", new List<string> { itemId.ToString() }, 0);
+        // The PRODUCTION shape: dashed Guid.ToString(), as the event writers store it.
+        var queue = _queueManager.GetQueue("device-livingroom");
+        queue!.CurrentItemId = itemId.ToString();
+        queue.CurrentPositionTicks = 45_000 * TimeSpan.TicksPerSecond / 1000;
+        _libraryManagerMock.Setup(l => l.GetItemById(itemId)).Returns(item);
+
+        var response = await handler.HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "FollowMeIntent" } },
+            context,
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        var playDirective = Assert.IsType<AudioPlayerPlayDirective>(
+            response.Response.Directives!.First(d => d is AudioPlayerPlayDirective));
+        Assert.Equal(45_000, playDirective.AudioItem.Stream.OffsetInMilliseconds);
+    }
+
+    /// <summary>
+    /// JF-375 fallback arm: when the live pointer is absent, the durable per-item
+    /// store (GetStoredPositionTicks) supplies the transfer offset.
+    /// </summary>
+    [Fact]
+    public async Task FollowMe_NoLivePointer_FallsBackToItemPositionStore()
+    {
+        var handler = CreateHandler();
+        var session = CreateSession();
+        var context = CreateContext("device-kitchen");
+
+        var itemId = Guid.NewGuid();
+        var item = new Audio { Id = itemId, Name = "Song", RunTimeTicks = 10 * TimeSpan.TicksPerMinute };
+
+        _queueManager.SetQueue("device-livingroom", new List<string> { itemId.ToString() }, 0);
+        _queueManager.RecordItemPosition("device-livingroom", itemId.ToString("N"), 30_000 * TimeSpan.TicksPerSecond / 1000);
+        _libraryManagerMock.Setup(l => l.GetItemById(itemId)).Returns(item);
+
+        var response = await handler.HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "FollowMeIntent" } },
+            context,
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        var playDirective = Assert.IsType<AudioPlayerPlayDirective>(
+            response.Response.Directives!.First(d => d is AudioPlayerPlayDirective));
+        Assert.Equal(30_000, playDirective.AudioItem.Stream.OffsetInMilliseconds);
+    }
+
+    /// <summary>
+    /// JF-375 clamp: a stored position at or beyond the item runtime (stale entry
+    /// from a longer previous version of the track) must not start past the end -
+    /// the offset drops to 0 and the plain announcement applies.
+    /// </summary>
+    [Fact]
+    public async Task FollowMe_StoredPositionBeyondRuntime_ClampsToZero()
+    {
+        var handler = CreateHandler();
+        var session = CreateSession();
+        var context = CreateContext("device-kitchen");
+
+        var itemId = Guid.NewGuid();
+        var item = new Audio { Id = itemId, Name = "Song", RunTimeTicks = TimeSpan.TicksPerMinute };
+
+        _queueManager.SetQueue("device-livingroom", new List<string> { itemId.ToString() }, 0);
+        _queueManager.RecordItemPosition("device-livingroom", itemId.ToString("N"), 5 * TimeSpan.TicksPerMinute);
         _libraryManagerMock.Setup(l => l.GetItemById(itemId)).Returns(item);
 
         var response = await handler.HandleAsync(
