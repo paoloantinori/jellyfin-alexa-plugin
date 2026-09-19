@@ -87,8 +87,10 @@ public abstract class PlaylistEditHandlerBase : BaseHandler
     /// <returns>The library item, or null when nothing is resolvable.</returns>
     protected BaseItem? ResolveCurrentItem(Context? context, SessionInfo? session)
     {
-        if (context?.AudioPlayer?.Token != null
-            && Guid.TryParse(context.AudioPlayer.Token, out Guid tokenId))
+        // The shared codec, not raw Guid.TryParse: tokens can be composite
+        // ("{guid}|sleep:{ticks}", JF-447), and a raw parse would silently
+        // decline to the session fallback while a sleep timer is armed.
+        if (Playback.StreamTokenCodec.TryGetItemId(context?.AudioPlayer?.Token, out Guid tokenId))
         {
             BaseItem? tokenItem = _libraryManager.GetItemById(tokenId);
             if (tokenItem != null)
