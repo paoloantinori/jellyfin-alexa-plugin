@@ -3,10 +3,10 @@ id: JF-355
 title: >-
   Mood feature: default to Spotify's mood list + expose the mood list in user
   settings (follow-up to JF-354)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-20 07:43'
-updated_date: '2026-07-20 09:04'
+updated_date: '2026-09-19 13:26'
 labels:
   - mood
   - config
@@ -57,3 +57,9 @@ Do this AFTER JF-354's pioneer (it-IT custom Mood type) is verified + rolled to 
 
 [Part 2 ASSESSMENT] Per-user model slice = IMPOSSIBLE (SMAPI models are 1-per-skill-per-stage; IInteractionModelRedeployer rebuilds all 17 for the whole skill, not per-user). Dynamic entities = only viable per-user lever: DynamicEntitiesInterceptor already fires on new sessions (DynamicEntitiesInterceptor.cs:60) pushing catalog slots via Dialog.UpdateDynamicEntities, BUT dynamic entities are a response directive => turn-2+ only. Moods are one-shot ('musica per dormire') so turn-1 uses the static model; dynamic entities add little. Recommendation given low usage: DEFER the full customizer. Lightest viable future path if wanted: admin-level config field (PluginConfiguration.MoodGenreOverrides dict) merged into MoodGenreMap at resolve time + IInteractionModelRedeployer trigger on save (mirrors the invocation-name redeploy path at ConfigurationController.cs:247). Doable in JF-356's wake.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+CLOSED by verification (2026-09-19): everything this task asked for is shipped and live; the To Do status was stale (the recurring already-implemented pattern). Part 1 (Spotify alignment) was done 2026-07-20 and re-verified now: en-US Mood values carry the full Spotify canonical list (chill, happy, sad, focus, workout, party, sleep, romantic, energetic, dinner - plus morning/evening/upbeat/relaxing extras) and it-IT carries the localized equivalents including the JF-355 additions (dormire, energica); MoodGenreMap 'sleep' genres present. Part 2 (expose the mood list in settings): the assessment's recommended lightest path SHIPPED as the admin-level customizer - PluginConfiguration.MoodGenreOverrides (Collection, XmlSerializer-safe), merged into ResolveGenres at resolve time (BuildMoodGenreOverrides in PlayMoodMusicIntentHandler), injected into every locale's Mood slot type on model rebuild (Plugin.cs -> InjectMoodSlotValues, trims/dedupes/filters), and exposed in the config UI ('Custom moods' textarea). The per-user customizer remains DEFERRED as the assessment recommended (SMAPI models are 1-per-skill, a per-user slice is impossible; dynamic entities are turn-2+ only while moods are one-shot) - a documented decision, not a silent skip; if per-user moods ever matter, reopen with the dynamic-entities constraint in mind.
+<!-- SECTION:FINAL_SUMMARY:END -->
