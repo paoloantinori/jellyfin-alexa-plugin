@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-19 14:08'
+updated_date: '2026-09-19 14:12'
 labels:
   - research
   - alexa-platform
@@ -27,6 +28,12 @@ Adjacent finding from the JF-561 MSAPI research (2026-09-19): MyMedia for Alexa'
 - [ ] #2 If shipped: on-device battery during OUR AudioPlayer playback - bare 'stop', 'next', 'ferma', 'avanti' - log-verified whether requests now reach the skill
 - [ ] #3 Outcome recorded in the CLAUDE.md stop-routing reference section (either the wall is relieved or it stands, with evidence)
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-09-19 BASELINE captured (delegation to hermes-fleet agent decided by Paolo): alexa-plus.html scraped live - page Last Updated 6/25/26 (untouched ~3 months); the Q3 sentence verbatim: 'We escalated the route hijacking to Amazon who analyzed sample user sessions and confirmed it is a bug Amazon side and not in our skill. They have proposed a 2026Q3 fix timeframe, however, offer no guarantees.' NEW CONTEXT: the hijacking is tied to Alexa+ introduction ('in the past 6 months, with the introduction of Alexa+... Other intents are massively deprioritized'); MyMedia's workaround is the ARH multi-turn dialog model (confirms our two-step convention as the right mitigation); their Step 3 explicitly says presentation 'will depend on whether Amazon resolves the hijacking issue' - so the page updating at all is a secondary signal. Monitoring handed to the hermes agent with a self-contained prompt (baseline quotes + diff-based drift detection); JF-595 stays open here and gets updated when hermes reports a change; the on-device stop/next battery (AC#2) remains ours.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
