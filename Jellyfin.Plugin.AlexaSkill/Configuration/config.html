@@ -382,8 +382,8 @@
                             <hr style="border:0;border-top:1px solid #333;margin:1.2em 0;" />
                             <div class="inputContainer">
                                 <label class="inputLabel" for="CatalogSyncLocales">Catalog Sync: Additional Locales</label>
-                                <input type="text" id="CatalogSyncLocales" class="emby-input" placeholder="e.g. de-DE,en-US (empty = it-IT only, * = all)" />
-                                <div class="fieldDescription">Comma-separated locale codes for catalog sync beyond it-IT (always synced). Adds phonetic synonyms for non-English names so Alexa recognizes accented speech. Use * for all active locales. Each locale adds ~7s to sync time.</div>
+                                <input type="text" id="CatalogSyncLocales" name="CatalogSyncLocales" is="emby-input" placeholder="e.g. de-DE,en-US (* = all, empty = it-IT only)" />
+                                <div class="fieldDescription">Comma-separated locale codes to include in catalog sync in addition to it-IT (always synced). Adds phonetic synonyms for non-English names so Alexa recognizes accented speech. Default * syncs every active locale except ar-SA (whose Amazon-side model build rejects catalog data); an explicit list adds those locales on top of it-IT, and an empty value syncs it-IT only. Each locale adds roughly one to two minutes to the sync run.</div>
                             </div>
                     </details>
 
@@ -523,10 +523,12 @@
                     document.querySelector("#LwaClientId").value = config.LwaClientId;
                     document.querySelector("#LwaClientSecret").value = config.LwaClientSecret;
 
+                    document.querySelector("#CatalogSyncLocales").value = config.CatalogSyncLocales || "";
+
                     // Feature flags
                     ["RadioModeEnabled", "PodcastsEnabled", "LiveTvEnabled", "SleepTimerEnabled",
                      "QueueManagementEnabled", "BrowseLibraryEnabled", "RecommendationsEnabled",
-                     "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeOfferEnabled", "ResumeAnnounceTitle", "DefaultAnnounceNowPlaying","AnnounceAudioPlays","AnnounceCrossMediaSubstitution","CatalogSyncLocales","AsrCompoundWordFixEnabled", "SeekEnabled", "PauseAnnouncePosition",
+                     "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeOfferEnabled", "ResumeAnnounceTitle", "DefaultAnnounceNowPlaying","AnnounceAudioPlays","AnnounceCrossMediaSubstitution","AsrCompoundWordFixEnabled", "SeekEnabled", "PauseAnnouncePosition",
                      "ShuffleArtistSongs", "NativeControlsForAudio", "NativeControlsForBooks"].forEach(function(f) {
                         document.querySelector("#" + f).checked = config[f] !== false;
                     });
@@ -1316,10 +1318,11 @@
                     config.SslCertType = document.querySelector("#SslCertType").value;
                     config.LwaClientId = document.querySelector("#LwaClientId").value;
                     config.LwaClientSecret = document.querySelector("#LwaClientSecret").value;
+                    config.CatalogSyncLocales = document.querySelector("#CatalogSyncLocales").value.trim();
 
                     ["RadioModeEnabled", "PodcastsEnabled", "LiveTvEnabled", "SleepTimerEnabled",
                      "QueueManagementEnabled", "BrowseLibraryEnabled", "RecommendationsEnabled",
-                     "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeOfferEnabled", "ResumeAnnounceTitle", "DefaultAnnounceNowPlaying","AnnounceAudioPlays","AnnounceCrossMediaSubstitution","CatalogSyncLocales","AsrCompoundWordFixEnabled", "SeekEnabled", "PauseAnnouncePosition",
+                     "AplVisualsEnabled", "VideoPlaybackEnabled", "ResumeOfferEnabled", "ResumeAnnounceTitle", "DefaultAnnounceNowPlaying","AnnounceAudioPlays","AnnounceCrossMediaSubstitution","AsrCompoundWordFixEnabled", "SeekEnabled", "PauseAnnouncePosition",
                      "ShuffleArtistSongs", "NativeControlsForAudio", "NativeControlsForBooks"].forEach(function(f) {
                         config[f] = document.querySelector("#" + f).checked;
                     });
