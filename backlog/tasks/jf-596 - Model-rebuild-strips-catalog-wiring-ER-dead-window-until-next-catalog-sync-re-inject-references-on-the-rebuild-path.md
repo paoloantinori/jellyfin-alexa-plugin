@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-19 23:16'
+updated_date: '2026-09-19 23:43'
 labels:
   - bug
   - catalog
@@ -29,6 +30,12 @@ OPERATIONAL BUG found via the 2026-09-19 full E2E+NLU run (66 NLU failures, root
 - [ ] #3 Verified live: after a plain rebuild, profile-nlu still resolves catalog-backed entities (no ER dead window)
 - [ ] #4 Suite green both TFMs; no new warnings
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-09-20 02:10 CORRECTION before implementation: the graft mechanism ALREADY exists on the rebuild path - UpdateSkillAsync -> UpdateInteractionModelsAsync -> PutLocaleModelPreservingWiringAsync (SmapiManagement.cs:200-228) GETs the live model, ExtractWiring, Apply, with the JF-552/555 no-swallow retry hardening. So 'rebuild strips wiring' is NOT proven; tonight's 00:20 identical-content rebuild should have preserved whatever was live. The AC#1 mechanical repro is now THE decisive experiment: rebuild, then live-GET and diff valueSupplier before/after. ALTERNATIVE deeper hypothesis: the Sep-16 skill recreation orphaned the catalog associations server-side (the first deploy of the recreated skill is necessarily unwired; a catalog SYNC re-creates versions + associations), and the Sep-19 00:04 sync either failed to re-associate or its versions were discarded - leaving live wiring absent-or-impotent until tonight's full manual sync (1133/886/138, ER verified alive after). If AC#1 shows wiring SURVIVES a rebuild, this task reframes to: 'skill recreation orphans catalog associations; detect and trigger a full catalog sync when the live model carries no wiring but catalog versions exist' (the same detection shape as the original AC#2, but the trigger condition is orphaned-association, not rebuild-stripped).
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
