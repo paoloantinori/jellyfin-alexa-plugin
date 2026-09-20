@@ -65,7 +65,7 @@ Placeholder legend:
 | `<كلمات من عنوان الأغنية>` | `{titleKeywords}` |
 | `<اسم المستخدم>` | `{username}` |
 
-Complete phrase list (310 phrases across 64 commands):
+Complete phrase list (311 phrases across 64 commands):
 
 #### Play music
 
@@ -344,6 +344,7 @@ Complete phrase list (310 phrases across 64 commands):
 
 - `أنشئ قائمة تشغيل باسم <اسم قائمة التشغيل>`
 - `أنشئ قائمة تشغيل جديدة باسم <اسم قائمة التشغيل>`
+- `أنشئ قائمة تشغيل <اسم قائمة التشغيل>`
 
 **Clear the queue**
 
@@ -599,7 +600,7 @@ Placeholder legend:
 | `<woorden uit de songtitel>` | `{titleKeywords}` |
 | `<gebruikersnaam>` | `{username}` |
 
-Complete phrase list (371 phrases across 64 commands):
+Complete phrase list (373 phrases across 64 commands):
 
 #### Play music
 
@@ -923,6 +924,8 @@ Complete phrase list (371 phrases across 64 commands):
 
 - `Maak een afspeellijst genaamd <naam van de playlist>`
 - `Maak een nieuwe afspeellijst genaamd <naam van de playlist>`
+- `Maak een afspeellijst <naam van de playlist>`
+- `Nieuwe afspeellijst <naam van de playlist>`
 
 **Clear the queue**
 
@@ -1193,7 +1196,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (463 phrases across 64 commands):
+Complete phrase list (466 phrases across 64 commands):
 
 #### Play music
 
@@ -1576,6 +1579,9 @@ Complete phrase list (463 phrases across 64 commands):
 - `create a playlist called <playlist name>`
 - `create a new playlist called <playlist name>`
 - `make a playlist called <playlist name>`
+- `create a playlist <playlist name>`
+- `create playlist <playlist name>`
+- `new playlist <playlist name>`
 
 **Clear the queue**
 
@@ -1879,7 +1885,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (456 phrases across 64 commands):
+Complete phrase list (459 phrases across 64 commands):
 
 #### Play music
 
@@ -2259,6 +2265,9 @@ Complete phrase list (456 phrases across 64 commands):
 - `create a playlist called <playlist name>`
 - `create a new playlist called <playlist name>`
 - `make a playlist called <playlist name>`
+- `create a playlist <playlist name>`
+- `create playlist <playlist name>`
+- `new playlist <playlist name>`
 
 **Clear the queue**
 
@@ -2558,7 +2567,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (552 phrases across 64 commands):
+Complete phrase list (555 phrases across 64 commands):
 
 #### Play music
 
@@ -3015,6 +3024,9 @@ Complete phrase list (552 phrases across 64 commands):
 - `create a playlist called <playlist name>`
 - `create a new playlist called <playlist name>`
 - `make a playlist called <playlist name>`
+- `create a playlist <playlist name>`
+- `create playlist <playlist name>`
+- `new playlist <playlist name>`
 
 **Clear the queue**
 
@@ -3333,7 +3345,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (457 phrases across 64 commands):
+Complete phrase list (460 phrases across 64 commands):
 
 #### Play music
 
@@ -3712,6 +3724,9 @@ Complete phrase list (457 phrases across 64 commands):
 - `create a playlist called <playlist name>`
 - `create a new playlist called <playlist name>`
 - `make a playlist called <playlist name>`
+- `create a playlist <playlist name>`
+- `create playlist <playlist name>`
+- `new playlist <playlist name>`
 
 **Clear the queue**
 
@@ -4020,7 +4035,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (567 phrases across 66 commands):
+Complete phrase list (570 phrases across 66 commands):
 
 #### Play music
 
@@ -4465,6 +4480,9 @@ Complete phrase list (567 phrases across 66 commands):
 - `create a playlist called <playlist name>`
 - `create a new playlist called <playlist name>`
 - `make a playlist called <playlist name>`
+- `create a playlist <playlist name>`
+- `create playlist <playlist name>`
+- `new playlist <playlist name>`
 
 **Clear the queue**
 
@@ -4816,7 +4834,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (422 phrases across 67 commands):
+Complete phrase list (424 phrases across 67 commands):
 
 #### Play music
 
@@ -5168,6 +5186,8 @@ Complete phrase list (422 phrases across 67 commands):
 
 - `Crée une liste de lecture appelée <nom de la playlist>`
 - `Crée une nouvelle liste de lecture appelée <nom de la playlist>`
+- `Crée une liste de lecture <nom de la playlist>`
+- `Nouvelle liste de lecture <nom de la playlist>`
 
 **Clear the queue**
 
@@ -5470,7 +5490,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (433 phrases across 67 commands):
+Complete phrase list (435 phrases across 67 commands):
 
 #### Play music
 
@@ -5830,6 +5850,8 @@ Complete phrase list (433 phrases across 67 commands):
 
 - `Crée une liste de lecture appelée <nom de la playlist>`
 - `Crée une nouvelle liste de lecture appelée <nom de la playlist>`
+- `Crée une liste de lecture <nom de la playlist>`
+- `Nouvelle liste de lecture <nom de la playlist>`
 
 **Clear the queue**
 
@@ -6135,7 +6157,7 @@ Placeholder legend:
 | `<Wörter aus dem Songtitel>` | `{titleKeywords}` |
 | `<Benutzername>` | `{username}` |
 
-Complete phrase list (439 phrases across 67 commands):
+Complete phrase list (442 phrases across 67 commands):
 
 #### Play music
 
@@ -6500,6 +6522,9 @@ Complete phrase list (439 phrases across 67 commands):
 - `Erstelle eine Playlist namens <Name der Playlist>`
 - `Erstelle eine neue Playlist namens <Name der Playlist>`
 - `Neue Playlist namens <Name der Playlist>`
+- `Erstelle eine Playlist <Name der Playlist>`
+- `Erstelle Playlist <Name der Playlist>`
+- `Neue Playlist <Name der Playlist>`
 
 **Clear the queue**
 
@@ -6807,7 +6832,7 @@ Placeholder legend:
 | `<गाने के नाम के शब्द>` | `{titleKeywords}` |
 | `<उपयोगकर्ता का नाम>` | `{username}` |
 
-Complete phrase list (332 phrases across 64 commands):
+Complete phrase list (333 phrases across 64 commands):
 
 #### Play music
 
@@ -7100,6 +7125,7 @@ Complete phrase list (332 phrases across 64 commands):
 
 - `<प्लेलिस्ट का नाम> नाम की प्लेलिस्ट बनाओ`
 - `नई प्लेलिस्ट <प्लेलिस्ट का नाम> बनाओ`
+- `प्लेलिस्ट <प्लेलिस्ट का नाम> बनाओ`
 
 **Clear the queue**
 
@@ -7363,7 +7389,7 @@ Placeholder legend:
 | `<titolo del video o del film>` | `{title}` |
 | `<parole del titolo del brano>` | `{titleKeywords}` |
 
-Complete phrase list (1445 phrases across 67 commands):
+Complete phrase list (1448 phrases across 67 commands):
 
 #### Play music
 
@@ -8684,6 +8710,9 @@ Complete phrase list (1445 phrases across 67 commands):
 - `Crea una playlist chiamata <nome della playlist>`
 - `Crea una nuova playlist chiamata <nome della playlist>`
 - `Nuova playlist chiamata <nome della playlist>`
+- `Crea una playlist <nome della playlist>`
+- `Crea playlist <nome della playlist>`
+- `Crea playlist chiamata <nome della playlist>`
 
 **Clear the queue**
 
@@ -9044,7 +9073,7 @@ Placeholder legend:
 | `<曲名のキーワード>` | `{titleKeywords}` |
 | `<ユーザー名>` | `{username}` |
 
-Complete phrase list (311 phrases across 64 commands):
+Complete phrase list (312 phrases across 64 commands):
 
 #### Play music
 
@@ -9320,6 +9349,7 @@ Complete phrase list (311 phrases across 64 commands):
 
 - `<プレイリスト名> というプレイリストを作って`
 - `新しいプレイリスト <プレイリスト名> を作成して`
+- `プレイリスト <プレイリスト名> を作って`
 
 **Clear the queue**
 
@@ -9579,7 +9609,7 @@ Placeholder legend:
 | `<palavras do título da música>` | `{titleKeywords}` |
 | `<nome do usuário>` | `{username}` |
 
-Complete phrase list (386 phrases across 64 commands):
+Complete phrase list (389 phrases across 64 commands):
 
 #### Play music
 
@@ -9912,6 +9942,9 @@ Complete phrase list (386 phrases across 64 commands):
 
 - `Crie uma playlist chamada <nome da playlist>`
 - `Crie uma nova playlist chamada <nome da playlist>`
+- `Crie uma playlist <nome da playlist>`
+- `Crie playlist <nome da playlist>`
+- `Nova playlist <nome da playlist>`
 
 **Clear the queue**
 
@@ -10188,7 +10221,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (414 phrases across 64 commands):
+Complete phrase list (417 phrases across 64 commands):
 
 #### Play music
 
@@ -10538,6 +10571,9 @@ Complete phrase list (414 phrases across 64 commands):
 - `Crea una lista llamada <nombre de la lista>`
 - `Crea una nueva lista llamada <nombre de la lista>`
 - `Nueva lista llamada <nombre de la lista>`
+- `Crea una lista <nombre de la lista>`
+- `Crea lista <nombre de la lista>`
+- `Nueva lista <nombre de la lista>`
 
 **Clear the queue**
 
@@ -10825,7 +10861,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (408 phrases across 64 commands):
+Complete phrase list (411 phrases across 64 commands):
 
 #### Play music
 
@@ -11171,6 +11207,9 @@ Complete phrase list (408 phrases across 64 commands):
 - `Crea una lista llamada <nombre de la lista>`
 - `Crea una nueva lista llamada <nombre de la lista>`
 - `Nueva lista llamada <nombre de la lista>`
+- `Crea una lista <nombre de la lista>`
+- `Crea lista <nombre de la lista>`
+- `Nueva lista <nombre de la lista>`
 
 **Clear the queue**
 
@@ -11456,7 +11495,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (402 phrases across 64 commands):
+Complete phrase list (405 phrases across 64 commands):
 
 #### Play music
 
@@ -11799,6 +11838,9 @@ Complete phrase list (402 phrases across 64 commands):
 - `Crea una lista llamada <nombre de la lista>`
 - `Crea una nueva lista llamada <nombre de la lista>`
 - `Nueva lista llamada <nombre de la lista>`
+- `Crea una lista <nombre de la lista>`
+- `Crea lista <nombre de la lista>`
+- `Nueva lista <nombre de la lista>`
 
 **Clear the queue**
 
