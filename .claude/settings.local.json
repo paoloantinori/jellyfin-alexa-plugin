@@ -79,7 +79,9 @@
       "mcp__chrome-devtools__take_snapshot",
       "Bash(cp \"/home/pantinor/Pictures/Screenshots/Screenshot From 2026-07-26 15-24-46.png\" /home/pantinor/data/repo/personal/jellyfin-alexa-plugin/screenshots/settings.png)",
       "Bash(cp \"/home/pantinor/Pictures/Screenshots/Screenshot From 2026-07-26 15-24-39.png\" /home/pantinor/data/repo/personal/jellyfin-alexa-plugin/screenshots/settings-general.png)",
-      "Read(//home/pantinor/.cc-mirror/zai/config/**)"
+      "Read(//home/pantinor/.cc-mirror/zai/config/**)",
+      "Bash(python3 scripts/validate_locales.py)",
+      "Bash(NUGET_PACKAGES=/tmp/nuget-pkgs NUGET_HTTP_CACHE_PATH=/tmp/nuget-http-cache dotnet test Jellyfin.Plugin.AlexaSkill.Tests/Jellyfin.Plugin.AlexaSkill.Tests.csproj)"
     ]
   },
   "enabledMcpjsonServers": [
