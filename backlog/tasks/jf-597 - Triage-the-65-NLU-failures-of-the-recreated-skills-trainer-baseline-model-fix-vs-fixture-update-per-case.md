@@ -3,10 +3,10 @@ id: JF-597
 title: >-
   Triage the 65 NLU failures of the recreated skill's trainer baseline (model
   fix vs fixture update, per case)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-20 01:46'
-updated_date: '2026-09-20 11:04'
+updated_date: '2026-09-20 11:27'
 labels:
   - nlu
   - interaction-model
@@ -39,6 +39,12 @@ Post-recreation trainer baseline triage. The 2026-09-20 full NLU re-run (AFTER t
 
 2026-09-20 CORRECTION of the task's own premise (found while extracting the definitive list): the '65 failed / 987 passed' run was the FULL integration suite (test_nlu + test_e2e collected together), so 65 = 53 E2E failures (the invocation-layer wall, already classified under JF-551/595) + ONLY 12 REAL NLU fixture failures: de-DE 'spiele stranger things staffel zwei folge eins'; en-CA 'Play a random movie'; en-GB + en-US 'Play the song hotel california from the eagles'; en-IN 'play stranger things season two episode one'; en-US 'Play imagine by john lennon next'; es-MX 'recuerdame en treinta minutos'; fr-FR 'joue stranger things saison deux episode un'; it-IT 'Riproduci star wars' + 'suona star wars' + 'Continua a guardare dark'; ja-JP 'queen no uta wo sagashite'. The '66->65 unchanged' comparison in rounds 1-2 stands (same mix), but the scale of the fixture work is 12 rows, not 65. The 12 cluster into: (i) season/episode worded addressing in 4 locales (de/en-IN/fr) - the JF-583 episode_position family, likely the same trainer-generalization loss; (ii) 'song by artist' compound (en-GB/en-US hotel california from the eagles) + 'play X next' (en-US imagine) - the JF-345/JF-578 carrier families; (iii) it-IT 'star wars' video-title steals (the PlayNextIntent steal, round-1 class); (iv) es-MX sleep timer word form; (v) ja-JP find-song form; (vi) en-CA 'Play a random movie' (PlayRandom media_type); (vii) it-IT 'Continua a guardare dark' (ContinueWatching). Round 2's conclusion still holds: rewrite fixture rows to exact-sample shapes; the batch is now tractable in one sitting.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+CLOSED (2026-09-20). The task's premise was corrected twice during triage, both recorded in the notes: (1) the '65 failed' run was the FULL integration suite, so 65 = 53 E2E two-step failures (the non-English invocation-layer wall, owned by JF-551/595, NOT this task) + exactly 12 real NLU fixture failures; (2) rounds 1-2 established with live probe batteries (all deterministic 2-3x) that the recreated trainer lost the OLD skill's generalizations but keeps exact-sample routing at 100%, so the fix is fixture rewrites, not model surgery - the anti-pattern #11 precedent (bare carriers deliberately removed) and anti-pattern #3 (qualified search carriers are the design) both argue against re-adding bare forms. The 12 rows were rewritten comment-preserving (two whole-file yaml.safe_dump rewrites were caught by git diff and reverted BEFORE commit; the load-bearing comments survive): de/fr worded season numbers -> digit forms with the schau/joue verbs (series_name fill verified None live, dropped from expectations), en-GB/en-US from-artist -> by-artist (fills both slots), en-US play-next strict slots relaxed (value carries the quoted title), es-MX worded minutes -> digits now pinned on SleepTimerIntent, it-IT bare 'star wars' x2 -> 'il film' carrier on PlayVideo, it-IT 'Continua a guardare dark' expectation flipped to PlayNextEpisodeIntent (semantically right). LIVE-VERIFIED: every rewritten row passes against the deployed skill (spot run 20 passed incl. both episode rows after the series_name drop; the full de-DE canary slice ends 65 passed / 0 NLU failures - the only remaining reds are the 5 E2E invocation-wall tests owned elsewhere). Remaining known trainer-baseline items NOT fixture rows, filed separately: the 'Metti i brani dei X' -> PlayRandom noun collision (noted in round 2) and JF-598 (movie fuzzy ranking). Shipped in commit 661191cd.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
