@@ -55,13 +55,13 @@ public class PlayPlaylistIntentHandlerTests : PluginTestBase
             _loggerFactory);
     }
 
-    private static IntentRequest CreateRequest(string playlistName = "road trip songs")
+    private static IntentRequest CreateRequest(string playlistName = "road trip songs", string intentName = IntentNames.PlayPlaylist)
     {
         return new IntentRequest
         {
             Intent = new Intent
             {
-                Name = IntentNames.PlayPlaylist,
+                Name = intentName,
                 Slots = new Dictionary<string, Slot>
                 {
                     ["playlist"] = new Slot { Name = "playlist", Value = playlistName }
@@ -158,22 +158,8 @@ public class PlayPlaylistIntentHandlerTests : PluginTestBase
             _sessionManagerMock.Object, _config, _libraryManagerMock.Object,
             _userManagerMock.Object, _loggerFactory);
 
-        var request = new IntentRequest
-        {
-            Intent = new Intent
-            {
-                Name = IntentNames.ShufflePlay,
-                Slots = new Dictionary<string, Slot>
-                {
-                    ["playlist"] = new Slot { Name = "playlist", Value = "called road trip songs" }
-                }
-            },
-            Locale = "en-US",
-            RequestId = "test-req"
-        };
-
         var response = await handler.HandleAsync(
-            request,
+            CreateRequest("called road trip songs", IntentNames.ShufflePlay),
             TestHelpers.CreateTestContext(),
             TestHelpers.CreateTestUser(),
             TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory),
