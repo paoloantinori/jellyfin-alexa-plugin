@@ -29,7 +29,7 @@ Invocation name: **"jellyfin player"**
 | Browse Library | `{browse_category}` · `تصفح أنواع {filter}` · `تصفح {browse_category}` · `أرني {browse_category}` · `أعرض {browse_category}` · `ما {browse_category} لدي` |
 | Clear Queue | `امسح قائمة الانتظار` · `أفرغ قائمة الانتظار` · `أزل كل شيء من قائمة الانتظار` |
 | Continue Watching | `أكمل المشاهدة` · `أكمل الاستماع` · `أكمل من حيث توقفت` · `ما كنت أشاهده` · `أكمل` |
-| Create Playlist | `أنشئ قائمة تشغيل باسم {playlist}` · `أنشئ قائمة تشغيل جديدة باسم {playlist}` · `أنشئ قائمة تشغيل {playlist}` |
+| Create Playlist | `أنشئ قائمة تشغيل باسم {playlist}` · `أنشئ قائمة تشغيل جديدة باسم {playlist}` · `أنشئ قائمة تشغيل {playlist}` · `قائمة تشغيل جديدة {playlist}` |
 | Find Song | `ابحث عن أغنية` · `ابحث عن أغنية اسمها {titleKeywords}` · `ساعدني في البحث عن أغنية` · `ابحث لي عن أغنية` · `أبحث عن أغنية` · `أريد أن أجد أغنية` |
 | Find Song By Artist | `ابحث عن أغنية لـ {musician}` · `ساعدني في البحث عن أغنية لـ {musician}` · `اعثر على أغنية لـ {musician}` · `أبحث عن أغنية لـ {musician}` |
 | Follow Me | `تابعني` · `استمر في التشغيل` · `انقل التشغيل` |

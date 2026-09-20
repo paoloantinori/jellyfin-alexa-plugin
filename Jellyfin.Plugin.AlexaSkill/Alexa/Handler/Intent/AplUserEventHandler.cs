@@ -187,7 +187,12 @@ public class AplUserEventHandler : BaseHandler
                 // episodes for this shape (they are Episode items under season
                 // folders, so the series is an ancestor and the media type is Video),
                 // and the tap would answer FolderNoPlayableContent. The shared
-                // resolver plays the newest episode instead.
+                // resolver plays the newest episode instead. REACH: this keys on
+                // ANY Series (no podcast discriminator exists; the IlPost library
+                // is CollectionType=tvshows like a real TV library), so a tap on a
+                // real TV show in a series carousel also plays its newest episode
+                // audio-only (the pre-change behavior was the FolderNoPlayableContent
+                // refusal; tapped Episode items already played audio-only).
                 string seriesLocale = GetLocale(request);
                 var (seriesUser, seriesUserError) = ResolveJellyfinUser(_userManager, session.UserId, seriesLocale);
                 if (seriesUserError != null)

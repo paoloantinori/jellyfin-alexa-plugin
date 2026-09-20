@@ -51,10 +51,10 @@ public class AddCurrentToPlaylistIntentHandler : PlaylistEditHandlerBase
     {
         string locale = GetLocale(request);
         var intentRequest = (IntentRequest)request;
-        string? playlistName = GetPlaylistSlotValue(intentRequest, IntentNames.Slots.Playlist, locale);
+        (string? rawPlaylistName, string? playlistName) = ReadPlaylistSlot(intentRequest, IntentNames.Slots.Playlist, locale);
         if (playlistName == null)
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("SpecifyPlaylistName", locale));
+            return SpecifyPlaylistNameTell(locale);
         }
 
         BaseItem? current = ResolveCurrentItem(context, session);
@@ -70,7 +70,7 @@ public class AddCurrentToPlaylistIntentHandler : PlaylistEditHandlerBase
             return userError;
         }
 
-        MediaBrowser.Controller.Playlists.Playlist? playlist = FindPlaylist(playlistName, jellyfinUser!.Id);
+        MediaBrowser.Controller.Playlists.Playlist? playlist = FindPlaylist(rawPlaylistName!, playlistName, jellyfinUser!.Id);
         if (playlist == null)
         {
             Logger.LogDebug("AddCurrentToPlaylist: playlist '{Playlist}' not found", playlistName);

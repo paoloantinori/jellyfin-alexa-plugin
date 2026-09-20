@@ -126,6 +126,10 @@ public class PlayPodcastIntentHandler : BaseHandler
         if (podcasts.Count == 0)
         {
             podcasts = await QueryKindsAsync(new[] { BaseItemKind.Series }, "GetPodcastSeries").ConfigureAwait(false);
+            if (podcasts.Count > 0)
+            {
+                Logger.LogDebug("PlayPodcast: album query missed, series shape matched {Count} candidates (first='{FirstName}' id={FirstId})", podcasts.Count, podcasts[0].Name, podcasts[0].Id);
+            }
         }
 
         if (podcasts.Count == 0)
@@ -186,6 +190,7 @@ public class PlayPodcastIntentHandler : BaseHandler
         // items (AncestorId - episodes nest under season/year folders, so the
         // series is an ANCESTOR, not the direct parent). The shared resolver is
         // also what the disambiguation "yes" and the APL carousel tap replay.
+        Logger.LogDebug("PlayPodcast: container='{Name}' id={Id} shape={Shape}", podcast.Name, podcast.Id, Util.PodcastEpisodeResolver.DescribeShape(podcast));
         var episodeQuery = Util.PodcastEpisodeResolver.BuildLatestEpisodeQuery(podcast, jellyfinUser);
 
         IReadOnlyList<BaseItem> episodes = await RetryAsync(
@@ -200,6 +205,7 @@ public class PlayPodcastIntentHandler : BaseHandler
 
         BaseItem episode = episodes[0];
         string itemId = episode.Id.ToString();
+        Logger.LogDebug("PlayPodcast: newest episode='{EpisodeName}' id={EpisodeId}", episode.Name, episode.Id);
 
         List<QueueItem> queueItems = new()
         {

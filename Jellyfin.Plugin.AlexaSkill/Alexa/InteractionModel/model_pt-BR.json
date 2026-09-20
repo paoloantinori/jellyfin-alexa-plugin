@@ -1803,6 +1803,24 @@
             "elicitationRequired": false
           }
         ]
+      },
+      {
+        "name": "AddSongToPlaylistIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          },
+          {
+            "name": "playlist_target",
+            "type": "AMAZON.MusicRecording",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
       }
     ]
   }

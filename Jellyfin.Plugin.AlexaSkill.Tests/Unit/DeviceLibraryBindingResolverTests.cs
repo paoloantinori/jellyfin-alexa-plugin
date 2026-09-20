@@ -56,8 +56,9 @@ public class DeviceLibraryBindingResolverTests
     public void BoundDevice_UnrestrictedUser_ScopedToBoundLibrary()
     {
         Entities.User original = User();
-        Entities.User effective = DeviceLibraryBindingResolver.Apply(
+        Entities.User? effective = DeviceLibraryBindingResolver.Apply(
             DeviceContext("echo-kitchen"), original, ConfigWithBinding(), _logger);
+        Assert.NotNull(effective);
 
         Assert.NotSame(original, effective);
         Assert.Equal(new List<string> { KidsLibrary.ToString() }, effective.AllowedLibraryIds);
@@ -68,8 +69,9 @@ public class DeviceLibraryBindingResolverTests
     public void BoundDevice_UserAlreadyHasBoundLibrary_StillScoped()
     {
         Entities.User user = User(new List<string> { KidsLibrary.ToString() });
-        Entities.User effective = DeviceLibraryBindingResolver.Apply(
+        Entities.User? effective = DeviceLibraryBindingResolver.Apply(
             DeviceContext("echo-kitchen"), user, ConfigWithBinding(), _logger);
+        Assert.NotNull(effective);
 
         Assert.Equal(new List<string> { KidsLibrary.ToString() }, effective.AllowedLibraryIds);
     }
@@ -80,8 +82,9 @@ public class DeviceLibraryBindingResolverTests
         // AC#4: the binding cannot grant access the user does not have. The
         // effective list is a non-empty impossible id (empty means "all").
         Entities.User user = User(new List<string> { MusicLibrary.ToString() });
-        Entities.User effective = DeviceLibraryBindingResolver.Apply(
+        Entities.User? effective = DeviceLibraryBindingResolver.Apply(
             DeviceContext("echo-kitchen"), user, ConfigWithBinding(), _logger);
+        Assert.NotNull(effective);
 
         Assert.NotEqual(new List<string>(), effective.AllowedLibraryIds);
         Assert.DoesNotContain(KidsLibrary.ToString(), effective.AllowedLibraryIds!);
@@ -92,8 +95,9 @@ public class DeviceLibraryBindingResolverTests
     public void UnboundDevice_SameInstanceUnchanged()
     {
         Entities.User user = User();
-        Entities.User effective = DeviceLibraryBindingResolver.Apply(
+        Entities.User? effective = DeviceLibraryBindingResolver.Apply(
             DeviceContext("echo-unknown"), user, ConfigWithBinding(), _logger);
+        Assert.NotNull(effective);
 
         Assert.Same(user, effective);
     }
@@ -106,8 +110,9 @@ public class DeviceLibraryBindingResolverTests
         kid.AlexaPersonId = "person-1";
         config.Users.Add(kid);
         Entities.User owner = User();
-        Entities.User effective = DeviceLibraryBindingResolver.Apply(
+        Entities.User? effective = DeviceLibraryBindingResolver.Apply(
             DeviceContext("echo-kitchen", personId: "person-1"), owner, config, _logger);
+        Assert.NotNull(effective);
 
         Assert.Same(owner, effective); // binding skipped: the person outranks the room
     }
@@ -117,8 +122,9 @@ public class DeviceLibraryBindingResolverTests
     {
         // A PersonId Alexa reports but the household has not mapped to a user is
         // not a recognized profile: the room binding applies.
-        Entities.User effective = DeviceLibraryBindingResolver.Apply(
+        Entities.User? effective = DeviceLibraryBindingResolver.Apply(
             DeviceContext("echo-kitchen", personId: "person-stranger"), User(), ConfigWithBinding(), _logger);
+        Assert.NotNull(effective);
 
         Assert.Equal(new List<string> { KidsLibrary.ToString() }, effective.AllowedLibraryIds);
     }
@@ -129,8 +135,9 @@ public class DeviceLibraryBindingResolverTests
         Entities.User original = User();
         original.JellyfinToken = "tok";
         original.AlexaPersonId = "person-9";
-        Entities.User effective = DeviceLibraryBindingResolver.Apply(
+        Entities.User? effective = DeviceLibraryBindingResolver.Apply(
             DeviceContext("echo-kitchen"), original, ConfigWithBinding(), _logger);
+        Assert.NotNull(effective);
 
         Assert.Equal(original.Id, effective.Id);
         Assert.Equal("tok", effective.JellyfinToken);

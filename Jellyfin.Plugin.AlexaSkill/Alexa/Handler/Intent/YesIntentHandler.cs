@@ -200,6 +200,7 @@ public class YesIntentHandler : BaseHandler
         Context context,
         string locale)
     {
+        Logger.LogDebug("Yes: podcast confirm, container='{Name}' id={Id} shape={Shape}", podcast.Name, podcast.Id, Util.PodcastEpisodeResolver.DescribeShape(podcast));
         var episodeQuery = Util.PodcastEpisodeResolver.BuildLatestEpisodeQuery(podcast, jellyfinUser);
         IReadOnlyList<BaseItem> episodes = await RetryAsync(
             () => _libraryManager.GetItemList(episodeQuery),
@@ -212,6 +213,7 @@ public class YesIntentHandler : BaseHandler
 
         BaseItem episode = episodes[0];
         string itemId = episode.Id.ToString();
+        Logger.LogDebug("Yes: podcast newest episode='{EpisodeName}' id={EpisodeId}", episode.Name, episode.Id);
         session.NowPlayingQueue = new List<QueueItem> { new() { Id = episode.Id } };
         session.FullNowPlayingItem = episode;
 

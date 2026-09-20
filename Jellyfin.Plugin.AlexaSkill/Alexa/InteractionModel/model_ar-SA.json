@@ -372,7 +372,8 @@
         "samples": [
           "أنشئ قائمة تشغيل باسم {playlist}",
           "أنشئ قائمة تشغيل جديدة باسم {playlist}",
-          "أنشئ قائمة تشغيل {playlist}"
+          "أنشئ قائمة تشغيل {playlist}",
+          "قائمة تشغيل جديدة {playlist}"
         ],
         "slots": [
           {
@@ -1679,6 +1680,24 @@
           {
             "name": "playlist",
             "type": "AMAZON.SearchQuery",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
+      {
+        "name": "AddSongToPlaylistIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          },
+          {
+            "name": "playlist_target",
+            "type": "AMAZON.MusicRecording",
             "confirmationRequired": false,
             "elicitationRequired": false
           }

@@ -65,7 +65,7 @@ Placeholder legend:
 | `<كلمات من عنوان الأغنية>` | `{titleKeywords}` |
 | `<اسم المستخدم>` | `{username}` |
 
-Complete phrase list (311 phrases across 64 commands):
+Complete phrase list (312 phrases across 64 commands):
 
 #### Play music
 
@@ -345,6 +345,7 @@ Complete phrase list (311 phrases across 64 commands):
 - `أنشئ قائمة تشغيل باسم <اسم قائمة التشغيل>`
 - `أنشئ قائمة تشغيل جديدة باسم <اسم قائمة التشغيل>`
 - `أنشئ قائمة تشغيل <اسم قائمة التشغيل>`
+- `قائمة تشغيل جديدة <اسم قائمة التشغيل>`
 
 **Clear the queue**
 
@@ -7389,7 +7390,7 @@ Placeholder legend:
 | `<titolo del video o del film>` | `{title}` |
 | `<parole del titolo del brano>` | `{titleKeywords}` |
 
-Complete phrase list (1448 phrases across 67 commands):
+Complete phrase list (1449 phrases across 67 commands):
 
 #### Play music
 
@@ -8713,6 +8714,7 @@ Complete phrase list (1448 phrases across 67 commands):
 - `Crea una playlist <nome della playlist>`
 - `Crea playlist <nome della playlist>`
 - `Crea playlist chiamata <nome della playlist>`
+- `Nuova playlist <nome della playlist>`
 
 **Clear the queue**
 

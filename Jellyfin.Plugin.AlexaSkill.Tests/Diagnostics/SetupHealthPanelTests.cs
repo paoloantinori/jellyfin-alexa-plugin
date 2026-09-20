@@ -63,7 +63,7 @@ public class SetupHealthPanelTests : PluginTestBase
         try
         {
             DiagnosticsController controller = CreateController();
-            ActionResult result = await controller.GetPanel().ConfigureAwait(false);
+            ActionResult result = await controller.GetPanel();
 
             var json = Assert.IsType<JsonResult>(result);
             var payload = System.Text.Json.JsonSerializer.Serialize(json.Value!);

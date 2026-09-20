@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
@@ -63,32 +64,73 @@ public abstract class PlaylistEditHandlerBase : BaseHandler
     }
 
     /// <summary>
-    /// Reads a playlist-name slot and returns the carrier-stripped value (JF-600).
-    /// The strip itself lives on <see cref="Util.PlaylistNameNormalizer"/> (the
-    /// slot-text utility home, the ArtistSearch precedent) so play-path handlers
-    /// outside this family can share it.
+    /// Reads a playlist-name slot as the (raw, carrier-stripped) pair (JF-600/602):
+    /// the raw value feeds FindPlaylist's raw-first tiers and the stripped value
+    /// feeds speech and the create path. The strip lives on
+    /// <see cref="Util.PlaylistNameNormalizer"/>.
     /// </summary>
     /// <param name="request">The intent request carrying the slot.</param>
     /// <param name="slotName">The slot name ("playlist" or "playlist_target").</param>
     /// <param name="locale">The request locale.</param>
-    /// <returns>The normalized name, or null when the slot is empty or all carrier.</returns>
-    protected static string? GetPlaylistSlotValue(IntentRequest request, string slotName, string locale)
-        => Util.PlaylistNameNormalizer.NormalizePlaylistName(GetSlotValue(request, slotName), locale);
+    /// <returns>The raw and stripped names; both null when the slot is empty.</returns>
+    protected static (string? Raw, string? Name) ReadPlaylistSlot(IntentRequest request, string slotName, string locale)
+    {
+        string? raw = GetSlotValue(request, slotName);
+        return (raw, Util.PlaylistNameNormalizer.NormalizePlaylistName(raw, locale));
+    }
+
+    /// <summary>
+    /// The edit family's missing-playlist-name answer. Kept a Tell DELIBERATELY
+    /// (JF-601 AC#3, the ONE rationale home): the string is a retry imperative
+    /// ("Please try again"), not a question, so the user re-issues the full command
+    /// one-shot; the dead-mic detector exempts this shape by design and an elicit
+    /// here would need the intent registered in dialog.intents in all 17 models
+    /// for one word of gain (AddSong's question-shaped prompts DO elicit).
+    /// </summary>
+    /// <param name="locale">The request locale.</param>
+    /// <returns>The session-ending retry Tell.</returns>
+    protected static SkillResponse SpecifyPlaylistNameTell(string locale)
+        => ResponseBuilder.Tell(ResponseStrings.Get("SpecifyPlaylistName", locale));
 
     /// <summary>
     /// Finds a playlist visible to the user by spoken name: exact (case-insensitive),
-    /// then prefix, then substring. Returns null when nothing matches.
+    /// then prefix, then substring. The RAW spoken name runs every tier FIRST (a
+    /// playlist genuinely named "Named Sessions" or "Chiamata Sei", created via the
+    /// Jellyfin web UI or an .m3u import through the same server-wide playlist
+    /// manager, keeps its match); the carrier-stripped form runs only on a miss,
+    /// absorbing the "chiamata X" slot-fill leak (JF-602; the JF-469 fallback-only
+    /// contract the album strip already follows).
     /// </summary>
-    /// <param name="name">The spoken playlist name.</param>
+    /// <param name="rawName">The raw spoken playlist name.</param>
+    /// <param name="strippedName">The carrier-stripped name the caller already holds (may equal or be null).</param>
     /// <param name="jellyfinUserId">The linked Jellyfin user id.</param>
     /// <returns>The matched playlist, or null.</returns>
-    protected Playlist? FindPlaylist(string name, Guid jellyfinUserId)
+    protected Playlist? FindPlaylist(string rawName, string? strippedName, Guid jellyfinUserId)
     {
         var playlists = _playlistManager.GetPlaylists(jellyfinUserId).ToList();
-        return playlists.FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase))
-            ?? playlists.FirstOrDefault(p => p.Name.StartsWith(name, StringComparison.OrdinalIgnoreCase))
-            ?? playlists.FirstOrDefault(p => name.Contains(p.Name, StringComparison.OrdinalIgnoreCase)
+
+        Playlist? Exact(string candidate) =>
+            playlists.FirstOrDefault(p => string.Equals(p.Name, candidate, StringComparison.OrdinalIgnoreCase));
+        Playlist? Prefix(string candidate) =>
+            playlists.FirstOrDefault(p => p.Name.StartsWith(candidate, StringComparison.OrdinalIgnoreCase));
+        Playlist? Substring(string candidate) =>
+            playlists.FirstOrDefault(p => candidate.Contains(p.Name, StringComparison.OrdinalIgnoreCase)
                 && p.Name.Length >= 3);
+
+        // Tier INTERLEAVING (review round on JF-602): the loose substring tier on
+        // the raw carrier-prefixed value must not preempt the stripped name's
+        // exact tier (a "chiamata road trip" fill with playlists "road" and
+        // "road trip" in the library must resolve to "road trip").
+        bool hasStripped = strippedName != null
+            && !string.Equals(strippedName, rawName, StringComparison.OrdinalIgnoreCase);
+        Playlist? Stripped(Func<string, Playlist?> tier) => hasStripped ? tier(strippedName!) : null;
+
+        return Exact(rawName)
+            ?? Prefix(rawName)
+            ?? Stripped(Exact)
+            ?? Stripped(Prefix)
+            ?? Substring(rawName)
+            ?? Stripped(Substring);
     }
 
     /// <summary>

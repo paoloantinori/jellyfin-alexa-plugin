@@ -28,6 +28,12 @@ public static class PodcastEpisodeResolver
     public static bool IsSeriesShape(BaseItem podcast)
         => podcast is MediaBrowser.Controller.Entities.TV.Series;
 
+    /// <summary>Gets the storage-shape tag for debug logs ("series" or "album").</summary>
+    /// <param name="podcast">The matched podcast container.</param>
+    /// <returns>The shape name.</returns>
+    public static string DescribeShape(BaseItem podcast)
+        => IsSeriesShape(podcast) ? "series" : "album";
+
     /// <summary>
     /// Builds the newest-episode query for a matched podcast container, newest first.
     /// The caller wraps the <c>GetItemList</c> call in its own retry/timeout policy.

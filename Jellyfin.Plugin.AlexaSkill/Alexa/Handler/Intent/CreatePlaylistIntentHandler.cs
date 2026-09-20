@@ -51,10 +51,10 @@ public class CreatePlaylistIntentHandler : PlaylistEditHandlerBase
     {
         string locale = GetLocale(request);
         var intentRequest = (IntentRequest)request;
-        string? playlistName = GetPlaylistSlotValue(intentRequest, IntentNames.Slots.Playlist, locale);
+        (string? rawPlaylistName, string? playlistName) = ReadPlaylistSlot(intentRequest, IntentNames.Slots.Playlist, locale);
         if (playlistName == null)
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("SpecifyPlaylistName", locale));
+            return SpecifyPlaylistNameTell(locale);
         }
 
         var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, user.Id, locale);
@@ -63,9 +63,12 @@ public class CreatePlaylistIntentHandler : PlaylistEditHandlerBase
             return userError;
         }
 
-        if (FindPlaylist(playlistName, jellyfinUser!.Id) != null)
+        MediaBrowser.Controller.Playlists.Playlist? existing = FindPlaylist(rawPlaylistName!, playlistName, jellyfinUser!.Id);
+        if (existing != null)
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("PlaylistAlreadyExists", locale, playlistName));
+            // Speak the REAL playlist's name: the raw tier may have matched a
+            // web-UI playlist the stripped echo would misname (review round JF-602).
+            return ResponseBuilder.Tell(ResponseStrings.Get("PlaylistAlreadyExists", locale, existing.Name));
         }
 
         try

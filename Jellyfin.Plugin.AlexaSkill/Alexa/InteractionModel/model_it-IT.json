@@ -951,7 +951,8 @@
           "Nuova playlist chiamata {playlist}",
           "Crea una playlist {playlist}",
           "Crea playlist {playlist}",
-          "Crea playlist chiamata {playlist}"
+          "Crea playlist chiamata {playlist}",
+          "Nuova playlist {playlist}"
         ],
         "slots": [
           {
@@ -3156,6 +3157,24 @@
           {
             "name": "playlist",
             "type": "AMAZON.SearchQuery",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
+      {
+        "name": "AddSongToPlaylistIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "song",
+            "type": "AMAZON.MusicRecording",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          },
+          {
+            "name": "playlist_target",
+            "type": "AMAZON.MusicRecording",
             "confirmationRequired": false,
             "elicitationRequired": false
           }

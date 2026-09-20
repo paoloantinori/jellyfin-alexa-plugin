@@ -75,7 +75,7 @@ public class PlaylistEditIntentHandlerTests : PluginTestBase
     private CreatePlaylistIntentHandler CreateCreate() =>
         new(_playlistManagerMock.Object, _sessionManagerMock.Object, _config, _userManagerMock.Object, _libraryManagerMock.Object, _loggerFactory);
 
-    private static IntentRequest CreateRequest(string intentName, Dictionary<string, string>? slots = null)
+    private static IntentRequest CreateRequest(string intentName, Dictionary<string, string>? slots = null, string dialogState = "COMPLETED")
     {
         var slotDict = new Dictionary<string, Slot>();
         foreach (var (name, value) in slots ?? new Dictionary<string, string>())
@@ -87,7 +87,8 @@ public class PlaylistEditIntentHandlerTests : PluginTestBase
         {
             Intent = new Intent { Name = intentName, Slots = slotDict },
             Locale = "en-US",
-            Type = "IntentRequest"
+            Type = "IntentRequest",
+            DialogState = dialogState
         };
     }
 
@@ -259,18 +260,22 @@ public class PlaylistEditIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
-    public async void AddSong_SongMissing_SpeaksSongPromptWithStrippedName()
+    public async void AddSong_SongMissing_ElicitsSongWithStrippedPlaylistName()
     {
+        // JF-601: a question prompt must keep the mic open (elicit), not end the
+        // session on a Tell; the speech still carries the stripped playlist name.
         SkillResponse response = await CreateAddSong().HandleAsync(
             CreateRequest(IntentNames.AddSongToPlaylist, new() { ["playlist_target"] = "called road trip" }),
             new Context(), CreateUser(), session: null!, CancellationToken.None);
 
-        Assert.Equal(ResponseStrings.Get("SpecifySongForPlaylist", "en-US", "road trip"), GetSpeech(response));
+        TestHelpers.AssertElicitsSlot(response, "song", IntentNames.AddSongToPlaylist);
+        Assert.Contains("road trip", GetSpeech(response), StringComparison.Ordinal);
+        Assert.DoesNotContain("called road trip", GetSpeech(response), StringComparison.Ordinal);
         VerifyAddItemNever();
     }
 
     [Fact]
-    public async void AddSong_PlaylistMissing_SpeaksNeutralPlaylistPrompt()
+    public async void AddSong_PlaylistMissing_ElicitsPlaylistTarget()
     {
         _libraryManagerMock
             .Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
@@ -280,8 +285,44 @@ public class PlaylistEditIntentHandlerTests : PluginTestBase
             CreateRequest(IntentNames.AddSongToPlaylist, new() { ["song"] = "circles" }),
             new Context(), CreateUser(), session: null!, CancellationToken.None);
 
+        TestHelpers.AssertElicitsSlot(response, "playlist_target", IntentNames.AddSongToPlaylist);
+        // Review round: pin the spoken prompt too, not just the directive shape.
         Assert.Equal(ResponseStrings.Get("SpecifyPlaylistName", "en-US"), GetSpeech(response));
         VerifyAddItemNever();
+    }
+
+    [Fact]
+    public async void AddSong_CancelWordDuringOpenElicit_EndsFlow()
+    {
+        // JF-601 AC#4: an open elicit traps the next utterance into the slot; a
+        // bare cancel word must end the flow instead of searching for "stop".
+        SkillResponse response = await CreateAddSong().HandleAsync(
+            CreateRequest(IntentNames.AddSongToPlaylist, new() { ["song"] = "stop", ["playlist_target"] = "road trip" }, dialogState: "IN_PROGRESS"),
+            new Context(), CreateUser(), session: null!, CancellationToken.None);
+
+        Assert.Equal(ResponseStrings.Get("FlowCancelled", "en-US"), GetSpeech(response));
+        Assert.True(response.Response.ShouldEndSession);
+        VerifyAddItemNever();
+    }
+
+    [Fact]
+    public async void AddSong_PlaylistGenuinelyNamedWithCarrier_RawNameWins()
+    {
+        // JF-602: a playlist whose REAL name starts with the carrier word (created
+        // via the Jellyfin web UI through the same server-wide playlist manager)
+        // must keep its exact-tier match; the strip runs only on a miss.
+        _playlistManagerMock
+            .Setup(p => p.GetPlaylists(It.IsAny<Guid>()))
+            .Returns(new[] { new Playlist { Name = "Called Road Trip", Id = PlaylistId } });
+        _libraryManagerMock
+            .Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<Audio> { new() { Name = "Circles", Id = SongId } });
+
+        await CreateAddSong().HandleAsync(
+            CreateRequest(IntentNames.AddSongToPlaylist, new() { ["song"] = "circles", ["playlist_target"] = "called road trip" }),
+            new Context(), CreateUser(), session: null!, CancellationToken.None);
+
+        VerifyAddItem(PlaylistId, id => id == SongId, Times.Once());
     }
 
     [Fact]
@@ -307,6 +348,7 @@ public class PlaylistEditIntentHandlerTests : PluginTestBase
     [InlineData("fr-FR", "appelée nuit", "nuit")]
     [InlineData("de-DE", "namens Liste", "Liste")]
     [InlineData("ja-JP", "テスト という", "テスト")]
+    [InlineData("ja-JP", "テストという", "テスト")]
     [InlineData("hi-IN", "prova नाम की", "prova")]
     [InlineData("hi-IN", "prova नाम का", "prova")]
     [InlineData("it-IT", "chiamata", "chiamata")]

@@ -10,16 +10,19 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// playlist_target with "chiamata prova echo"). Keyed by language prefix of the
 /// request locale; ja also strips the TRAILING carrier because its sample order
 /// puts the qualifier after the name.
-/// SIBLING STRIP MECHANISMS (do not merge the word tables, they are per-feature):
-/// AlbumPlayService carries the album-slot strip (JF-469) and
-/// PlayVideoIntentHandler the media-noun strip (JF-509). Those two are
-/// FALLBACK-ONLY (strip after a confirmed miss) because real album titles collide
-/// with carrier words ("Called Out in the Dark"). This one is a PREEMPTIVE strip:
-/// playlist names are user-coined free text, and the plugin's own create path is
-/// the only writer in that namespace, so a carrier-prefixed playlist name is a
-/// slot-fill artifact, not a title to protect. ACCEPTED TRADE-OFF: a user who
-/// deliberately names a playlist "Chiamata Sei" gets "Sei" (the strip is
-/// unconditional and repeated); no recovery path exists for that name.
+/// WHO WRITES PLAYLIST NAMES: the server-wide IPlaylistManager, i.e. this
+/// plugin's create path AND the Jellyfin web UI AND .m3u imports, so a playlist
+/// genuinely named "Chiamata Sei" is a REAL title this strip must not shadow.
+/// USAGE CONTRACT (JF-602, mirrors the JF-469 album-strip fallback-only rule):
+/// the EDIT family (FindPlaylist) tries the RAW name on every tier first and
+/// only retries with this strip on a miss, interleaved so a stripped exact hit
+/// beats a raw substring hit; the CREATE path keeps the stripped form for the
+/// new playlist's name (the spoken intent) while the duplicate check runs
+/// raw-first; the PLAY paths (PlayPlaylist/ShufflePlay, SearchTerm-contains
+/// lookup) still apply the strip at read time, whose raw-first rework is JF-610
+/// scope. SIBLING STRIP MECHANISMS (do not merge the word tables, they are
+/// per-feature): AlbumPlayService carries the album-slot strip (JF-469) and
+/// PlayVideoIntentHandler the media-noun strip (JF-509).
 /// </summary>
 public static class PlaylistNameNormalizer
 {
@@ -45,13 +48,16 @@ public static class PlaylistNameNormalizer
     /// <summary>
     /// Trailing carriers for the locales whose create samples put the qualifier
     /// AFTER the name (ja "{playlist} という...", hi "{playlist} नाम की..."). The
-    /// leading space is baked in for the same reason as above; Japanese ASR often
-    /// emits the unspaced form, which simply does not match and keeps today's
-    /// behavior (fail-safe).
+    /// leading space is baked in for the same reason as above. ja ALSO carries
+    /// the unspaced form because Japanese ASR routinely drops the boundary space
+    /// (JF-607); という is a particle, never a title ending, so the unspaced
+    /// strip is safe.
     /// </summary>
     private static readonly Dictionary<string, string[]> TrailingCarriers = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["ja"] = new[] { " という" },
+        // Unspaced form included: Japanese ASR routinely drops the boundary space,
+        // and という is a particle, never a title ending (JF-607).
+        ["ja"] = new[] { " という", "という" },
         ["hi"] = new[] { " नाम की", " नाम का" }
     };
 

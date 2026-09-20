@@ -60,16 +60,36 @@ public class AddSongToPlaylistIntentHandler : PlaylistEditHandlerBase
     {
         string locale = GetLocale(request);
         var intentRequest = (IntentRequest)request;
+
+        // JF-550: an open elicit traps the next utterance into the slot, so a bare
+        // cancel word must end the flow instead of searching for a song named "stop".
+        if (BuildCancelDuringOpenElicit(intentRequest, locale, "AddSongToPlaylist") is { } elicitCancel)
+        {
+            return elicitCancel;
+        }
+
         string? songName = GetSlotValue(intentRequest, IntentNames.Slots.Song);
-        string? playlistName = GetPlaylistSlotValue(intentRequest, IntentNames.Slots.PlaylistTarget, locale);
+        (string? rawPlaylistName, string? playlistName) = ReadPlaylistSlot(intentRequest, IntentNames.Slots.PlaylistTarget, locale);
         if (playlistName == null)
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("SpecifyPlaylistName", locale));
+            // JF-601: elicit with the mic open, not a session-ending question Tell
+            // (the spoken answer must come back to this intent, not general NLU).
+            // The slot array stays INLINE: the validator's Phase 8 parity checker
+            // only matches inline literals (a hoisted local silently skips it).
+            return BuildElicitSlotResponse(
+                IntentNames.AddSongToPlaylist,
+                IntentNames.Slots.PlaylistTarget,
+                new[] { IntentNames.Slots.Song, IntentNames.Slots.PlaylistTarget },
+                ResponseStrings.Get("SpecifyPlaylistName", locale));
         }
 
         if (songName == null)
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("SpecifySongForPlaylist", locale, playlistName));
+            return BuildElicitSlotResponse(
+                IntentNames.AddSongToPlaylist,
+                IntentNames.Slots.Song,
+                new[] { IntentNames.Slots.Song, IntentNames.Slots.PlaylistTarget },
+                ResponseStrings.Get("SpecifySongForPlaylist", locale, playlistName));
         }
 
         // Music gate AFTER the slot prompt (BaseHandler.IfMediaTypeDisabled contract).
@@ -88,7 +108,7 @@ public class AddSongToPlaylistIntentHandler : PlaylistEditHandlerBase
             return userError;
         }
 
-        MediaBrowser.Controller.Playlists.Playlist? playlist = FindPlaylist(playlistName, jellyfinUser!.Id);
+        MediaBrowser.Controller.Playlists.Playlist? playlist = FindPlaylist(rawPlaylistName!, playlistName, jellyfinUser!.Id);
         if (playlist == null)
         {
             Logger.LogDebug("AddSongToPlaylist: playlist '{Playlist}' not found", playlistName);

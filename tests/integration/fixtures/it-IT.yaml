@@ -280,6 +280,10 @@ tests:
     expected_intent: CreatePlaylistIntent
     expected_slots:
       playlist: {}
+  - utterance: "nuova playlist prova echo"
+    expected_intent: CreatePlaylistIntent
+    expected_slots:
+      playlist: {}
   - utterance: "Aggiungi la canzone rapsodia alla playlist rock classico"
     expected_intent: AddSongToPlaylistIntent
     expected_slots:

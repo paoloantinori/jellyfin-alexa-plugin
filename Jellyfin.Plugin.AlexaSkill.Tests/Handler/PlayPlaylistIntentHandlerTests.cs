@@ -118,6 +118,72 @@ public class PlayPlaylistIntentHandlerTests : PluginTestBase
         Assert.Empty(fuzzyQuery.TopParentIds); // nor on the fuzzy fallback
     }
 
+    [Fact]
+    public async Task PlayPlaylist_CalledCarrierInSlot_SpeechEchoesStrippedName()
+    {
+        // JF-602 AC#3: the play paths keep the read-time strip; the not-found echo
+        // must name the stripped playlist, never the carrier-polluted raw fill.
+        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
+            .Returns(TestHelpers.CreateJellyfinUser());
+        _libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem>());
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        var response = await CreateHandler().HandleAsync(
+            CreateRequest(playlistName: "called road trip songs"),
+            TestHelpers.CreateTestContext(),
+            TestHelpers.CreateTestUser(),
+            TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory),
+            CancellationToken.None);
+
+        var speech = ((global::Alexa.NET.Response.PlainTextOutputSpeech)response.Response.OutputSpeech).Text;
+        Assert.Contains("road trip songs", speech, StringComparison.Ordinal);
+        Assert.DoesNotContain("called road trip songs", speech, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ShufflePlay_CalledCarrierInSlot_SpeechEchoesStrippedName()
+    {
+        // JF-602 AC#3 sibling pin for ShufflePlay: the strip reaches the shared
+        // AlbumPlay lookup through the same read-time normalization.
+        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
+            .Returns(TestHelpers.CreateJellyfinUser());
+        _libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem>());
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        var handler = new ShufflePlayIntentHandler(
+            _sessionManagerMock.Object, _config, _libraryManagerMock.Object,
+            _userManagerMock.Object, _loggerFactory);
+
+        var request = new IntentRequest
+        {
+            Intent = new Intent
+            {
+                Name = IntentNames.ShufflePlay,
+                Slots = new Dictionary<string, Slot>
+                {
+                    ["playlist"] = new Slot { Name = "playlist", Value = "called road trip songs" }
+                }
+            },
+            Locale = "en-US",
+            RequestId = "test-req"
+        };
+
+        var response = await handler.HandleAsync(
+            request,
+            TestHelpers.CreateTestContext(),
+            TestHelpers.CreateTestUser(),
+            TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory),
+            CancellationToken.None);
+
+        var speech = ((global::Alexa.NET.Response.PlainTextOutputSpeech)response.Response.OutputSpeech).Text;
+        Assert.Contains("road trip songs", speech, StringComparison.Ordinal);
+        Assert.DoesNotContain("called road trip songs", speech, StringComparison.Ordinal);
+    }
+
     // JF-526 (JF-508 sibling): BuildPlaylistPlayResponseAsync's site-level FuzzyMatch
     // pre-check (the >1-match branch) returns before HandleFuzzyMiss, so without the
     // shared gate a 2-word partial-coverage hit ("soul coffee" -> "Starfish & Coffee",
