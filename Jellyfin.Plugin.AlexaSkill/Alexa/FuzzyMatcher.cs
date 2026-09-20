@@ -163,12 +163,107 @@ internal static class FuzzyMatcher
 
                 if (bestScore >= ContainmentScore)
                 {
-                    return (bestMatch, bestScore);
+                    // JF-598: a containment hit returns immediately, so when SEVERAL
+                    // candidates contain the query they all score exactly
+                    // ContainmentScore and the winner is whoever the candidate source
+                    // happened to list first. Break that tie deterministically in
+                    // favor of the token-prefix shape ("Ada: My Mother the Architect"
+                    // for "ada") over an interior substring ("Cicada") - the same
+                    // shape preference as the JF-381 artist containment band, applied
+                    // as pure ORDERING AMONG EQUAL SCORES: nothing is rejected, no
+                    // score changes, and non-containment candidates are unaffected,
+                    // so this stays inside this layer's recall contract (the JF-408
+                    // reverts demoted candidates; this only chooses among identical
+                    // scorers).
+                    return (PreferTokenPrefixContainment(normalizedQuery, candidates, selector, bestMatch), bestScore);
                 }
             }
         }
 
         return bestMatch != null ? (bestMatch, bestScore) : null;
+    }
+
+    /// <summary>
+    /// JF-598 tie-break: among candidates that contain the query (the containment
+    /// class, all scoring <see cref="ContainmentScore"/>), prefer one where the
+    /// query aligns with the START of a name token over one where it occurs in the
+    /// middle of a word. Returns the incumbent when the incumbent already has the
+    /// token-prefix shape, when no rival does, or when the incumbent is not a
+    /// query-in-name containment at all.
+    /// </summary>
+    /// <typeparam name="T">The candidate type.</typeparam>
+    /// <param name="normalizedQuery">The already-normalized query.</param>
+    /// <param name="candidates">The full candidate source (re-scanned for rivals).</param>
+    /// <param name="selector">The name selector.</param>
+    /// <param name="incumbent">The first containment-class winner found.</param>
+    /// <returns>The preferred candidate (the incumbent unless a token-prefix rival exists).</returns>
+    /// <remarks>PARSING DELIBERATELY SKIPS the main loop's maxLenDiff band: for a
+    /// short query the band excludes long titles ("ada" vs the 28-char "Ada: My
+    /// Mother the Architect"), so a band-respecting scan would never find the very
+    /// rival this exists for. Soundness: name-contains-query forces PartialRatio to
+    /// ContainmentScore, so the swapped (rival, incumbentScore) pair is a floor-correct
+    /// claim; the downstream decision-point gates still judge the returned item.</remarks>
+    private static T PreferTokenPrefixContainment<T>(string normalizedQuery, IEnumerable<T> candidates, Func<T, string> selector, T incumbent)
+        where T : class
+    {
+        string incumbentName = Normalize(selector(incumbent));
+
+        // Only a query-inside-name containment is tie-eligible: the reverse shape
+        // (a short name inside a longer query) is the ASR-truncation/real-name
+        // class the length-penalty exemption protects, not this tie.
+        if (!incumbentName.Contains(normalizedQuery, StringComparison.OrdinalIgnoreCase)
+            || HasTokenPrefixAlignment(normalizedQuery, incumbentName))
+        {
+            return incumbent;
+        }
+
+        foreach (T candidate in candidates)
+        {
+            if (ReferenceEquals(candidate, incumbent))
+            {
+                continue;
+            }
+
+            string name = Normalize(selector(candidate));
+            if (name.Length == 0
+                || !name.Contains(normalizedQuery, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (HasTokenPrefixAlignment(normalizedQuery, name))
+            {
+                return candidate;
+            }
+        }
+
+        return incumbent;
+    }
+
+    /// <summary>
+    /// Whether the query aligns with the start of a name token: position 0, or
+    /// immediately after a non-alphanumeric boundary (space, punctuation like the
+    /// colon in "Ada: My Mother the Architect").
+    /// </summary>
+    /// <param name="normalizedQuery">The already-normalized query.</param>
+    /// <param name="name">The already-normalized candidate name.</param>
+    /// <returns>True when the query begins at a token boundary.</returns>
+    private static bool HasTokenPrefixAlignment(string normalizedQuery, string name)
+    {
+        for (int i = 0; i + normalizedQuery.Length <= name.Length; i++)
+        {
+            if (i > 0 && char.IsLetterOrDigit(name[i - 1]))
+            {
+                continue;
+            }
+
+            if (name.Substring(i, normalizedQuery.Length).Equals(normalizedQuery, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

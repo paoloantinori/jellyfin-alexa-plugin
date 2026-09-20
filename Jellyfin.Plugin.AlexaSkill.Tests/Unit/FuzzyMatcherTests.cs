@@ -697,5 +697,98 @@ public class FuzzyMatcherTests
         Assert.Equal(36, FuzzyMatcher.ApplyFairLengthPenalty("p!nk floyd", "P!nk", 90));
     }
 
+    /// <summary>
+    /// JF-598: containment-class ties (query inside name, all scoring exactly
+    /// ContainmentScore) must resolve toward the token-prefix shape, not toward
+    /// whoever the DB listed first. Live case: query "ada" suggested "Cicada"
+    /// (interior) over "Ada: My Mother the Architect" (token prefix).
+    /// </summary>
+    [Fact]
+    public void FindBestMatchWithScore_ContainmentTie_PrefersTokenPrefixOverInterior()
+    {
+        var items = new[]
+        {
+            new TestItem("Cicada"),
+            new TestItem("Ada: My Mother the Architect"),
+        };
+
+        var match = FuzzyMatcher.FindBestMatchWithScore("ada", items, i => i.Name);
+
+        Assert.NotNull(match);
+        Assert.Equal("Ada: My Mother the Architect", match!.Value.Item.Name);
+        Assert.Equal(FuzzyMatcher.ContainmentScore, match.Value.Score);
+    }
+
+    [Fact]
+    public void FindBestMatchWithScore_ContainmentTie_SourceOrderIndependence()
+    {
+        // The reverse listing must produce the same winner: the tie-break is
+        // deterministic, not "first wins" (the pre-fix behavior was list order).
+        var items = new[]
+        {
+            new TestItem("Ada: My Mother the Architect"),
+            new TestItem("Cicada"),
+        };
+
+        var match = FuzzyMatcher.FindBestMatchWithScore("ada", items, i => i.Name);
+
+        Assert.Equal("Ada: My Mother the Architect", match!.Value.Item.Name);
+    }
+
+    [Fact]
+    public void FindBestMatchWithScore_InteriorOnlyContainment_KeepsTheMatch()
+    {
+        // No token-prefix rival exists: the interior containment still wins (this
+        // is ordering among equals, nothing gets rejected).
+        var items = new[]
+        {
+            new TestItem("Cicada"),
+            new TestItem("The Armageddon Tales"),
+        };
+
+        var match = FuzzyMatcher.FindBestMatchWithScore("ada", items, i => i.Name);
+
+        Assert.NotNull(match);
+        Assert.Equal("Cicada", match!.Value.Item.Name);
+    }
+
+    [Fact]
+    public void FindBestMatchWithScore_MidNameTokenBoundary_CountsAsPrefix()
+    {
+        // Token boundaries are not only position 0: after the colon in "Ada: My
+        // Mother..." the token "mother" starts mid-name and must count as a
+        // token-prefix alignment (punctuation is a boundary, letters are not).
+        var items = new[]
+        {
+            new TestItem("Smashmothers"),
+            new TestItem("Ada: My Mother the Architect"),
+        };
+
+        var match = FuzzyMatcher.FindBestMatchWithScore("mother", items, i => i.Name);
+
+        Assert.NotNull(match);
+        Assert.Equal("Ada: My Mother the Architect", match!.Value.Item.Name);
+    }
+
+    [Fact]
+    public void FindBestMatchWithScore_ReverseContainment_NotTieBroken()
+    {
+        // A short NAME inside a longer query (the ASR-truncation / real-name
+        // class the length-penalty exemption protects): the tie-break must not
+        // roam candidates looking for a prefix rival of the QUERY.
+        var items = new[]
+        {
+            new TestItem("U2"),
+            new TestItem("Suono la musica di U2 stasera"),
+        };
+
+        var match = FuzzyMatcher.FindBestMatchWithScore("suono la musica di u2 stasera", items, i => i.Name);
+
+        // "U2" is contained in the query (reverse containment, score 90 with the
+        // exemption): it stays the winner - no swap toward the full-title candidate
+        // (which is exact-score 100 only when equal; here it differs).
+        Assert.Equal("U2", match!.Value.Item.Name);
+    }
+
     private record TestItemWithId(string Name, Guid Id);
 }
