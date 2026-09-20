@@ -283,7 +283,7 @@ tests:
     expected_slots:
       series_name: {}
     expected_response_type: speech
-    expected_speech_contains: "dispositivo con schermo"
+    expected_speech_contains: "Riproduco"
 
   # JF-493 infinitive one-shot twin (the prefixed form composes to the
   # natural 'chiedi a mia collezione di riprodurre il prossimo episodio...').
@@ -292,7 +292,7 @@ tests:
     expected_slots:
       series_name: {}
     expected_response_type: speech
-    expected_speech_contains: "dispositivo con schermo"
+    expected_speech_contains: "Riproduco"
 
   # Latest-episode carrier. JF-583: episode_position must FILL (a missed fill
   # would degrade to the NextUp watch-state resolution this task fixes); the
@@ -304,7 +304,7 @@ tests:
       series_name: {}
       episode_position: {}
     expected_response_type: speech
-    expected_speech_contains: "dispositivo con schermo"
+    expected_speech_contains: "Riproduco"
 
   # 'Guarda' verb variant of the next-episode carrier.
   - utterance: "guarda il prossimo episodio di the bear"
@@ -312,7 +312,7 @@ tests:
     expected_slots:
       series_name: {}
     expected_response_type: speech
-    expected_speech_contains: "dispositivo con schermo"
+    expected_speech_contains: "Riproduco"
 
   # JF-324 continue-watching shape.
   - utterance: "continua a guardare the bear"
@@ -320,7 +320,7 @@ tests:
     expected_slots:
       series_name: {}
     expected_response_type: speech
-    expected_speech_contains: "dispositivo con schermo"
+    expected_speech_contains: "Riproduco"
 
   # JF-493 'la serie' noun carrier (the noun stays in the carrier by design).
   - utterance: "continua a guardare la serie the bear"
@@ -328,7 +328,7 @@ tests:
     expected_slots:
       series_name: {}
     expected_response_type: speech
-    expected_speech_contains: "dispositivo con schermo"
+    expected_speech_contains: "Riproduco"
 
   # JF-493 numbers-first explicit shape (stagione/episodio before the series).
   - utterance: "metti la stagione 1 episodio 1 di the bear"
@@ -338,7 +338,7 @@ tests:
       season_number: {}
       episode_number: {}
     expected_response_type: speech
-    expected_speech_contains: "dispositivo con schermo"
+    expected_speech_contains: "In riproduzione"
 
   # JF-493 numbers-first infinitive twin on an h264+eac3 series (the JF-498
   # remux class; see the section note above for why the URL itself is not
@@ -350,7 +350,7 @@ tests:
       season_number: {}
       episode_number: {}
     expected_response_type: speech
-    expected_speech_contains: "dispositivo con schermo"
+    expected_speech_contains: "In riproduzione"
 
   # JF-324 series-first classic shape (curated Riproduci/Suona/Metti trio).
   - utterance: "metti the bear stagione 1 episodio 1"
@@ -360,7 +360,7 @@ tests:
       season_number: {}
       episode_number: {}
     expected_response_type: speech
-    expected_speech_contains: "dispositivo con schermo"
+    expected_speech_contains: "In riproduzione"
 
   # --- Movies by title (JF-504/JF-509, JF-510 AXIS 2) ---
   # 'Ada: My Mother the Architect' is a real library movie (h264+aac, the
@@ -375,14 +375,14 @@ tests:
     expected_slots:
       title: {}
     expected_response_type: speech
-    expected_speech_contains: "dispositivo con schermo"
+    expected_speech_contains: "Intendevi"
 
   - utterance: "riproduci il film ada"
     expected_intent: PlayVideoIntent
     expected_slots:
       title: {}
     expected_response_type: speech
-    expected_speech_contains: "dispositivo con schermo"
+    expected_speech_contains: "Intendevi"
 
   # JF-504 cerca-as-play movie carrier.
   - utterance: "cerca il film ada"
@@ -390,7 +390,7 @@ tests:
     expected_slots:
       title: {}
     expected_response_type: speech
-    expected_speech_contains: "dispositivo con schermo"
+    expected_speech_contains: "Intendevi"
 
   # The h264+eac3 movie (JF-498 remux routing class).
   - utterance: "metti il film inside out 2"
@@ -411,7 +411,7 @@ tests:
     expected_slots:
       title: {}
     expected_response_type: speech
-    expected_speech_contains: "dispositivo con schermo"
+    expected_speech_contains: "Intendevi"
     skip_reason: >
       JF-504 open item: the invocation-wrapped infinitive one-shot stays
       Fallback in simulate-skill and on-device (2026-09-06); re-enable when
