@@ -158,6 +158,15 @@ public class YesIntentHandler : BaseHandler
             return PlayVideo(item, user, session, locale, context, request);
         }
 
+        // JF-599: the podcast disambiguation confirm. Both storage shapes (a
+        // MusicAlbum or an IlPost Series) resolve to their newest episode through
+        // the shared resolver the PlayPodcast intent uses, so "yes" can never
+        // dead-end a multi-match podcast prompt.
+        if (mediaType == DisambiguationHelper.MediaTypePodcast)
+        {
+            return PlayPodcastEpisode(item, jellyfinUser!, user, session, context, locale);
+        }
+
         SkillResponse response = mediaType switch
         {
             DisambiguationHelper.MediaTypeSong => PlaySong(item, user, session, context, locale),
@@ -168,6 +177,46 @@ public class YesIntentHandler : BaseHandler
         };
 
         return Task.FromResult(response);
+    }
+
+    /// <summary>
+    /// Plays the newest episode of a disambiguation-confirmed podcast container
+    /// (JF-599): the shared <see cref="Util.PodcastEpisodeResolver"/> query, then
+    /// the same codec-routed audio launch the intent handler performs. The sync
+    /// Task.FromResult shape matches the sibling play arms.
+    /// </summary>
+    /// <param name="podcast">The confirmed podcast container (MusicAlbum or Series).</param>
+    /// <param name="jellyfinUser">The linked Jellyfin user.</param>
+    /// <param name="user">The plugin user.</param>
+    /// <param name="session">The Jellyfin session.</param>
+    /// <param name="context">The Alexa context.</param>
+    /// <param name="locale">The request locale.</param>
+    /// <returns>The play response, or the no-episodes Tell.</returns>
+    private async Task<SkillResponse> PlayPodcastEpisode(
+        BaseItem podcast,
+        Jellyfin.Database.Implementations.Entities.User jellyfinUser,
+        Entities.User user,
+        SessionInfo session,
+        Context context,
+        string locale)
+    {
+        var episodeQuery = Util.PodcastEpisodeResolver.BuildLatestEpisodeQuery(podcast, jellyfinUser);
+        IReadOnlyList<BaseItem> episodes = await RetryAsync(
+            () => _libraryManager.GetItemList(episodeQuery),
+            "YesPodcastEpisodes").ConfigureAwait(false);
+
+        if (episodes.Count == 0)
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("NoEpisodesInPodcast", locale, podcast.Name));
+        }
+
+        BaseItem episode = episodes[0];
+        string itemId = episode.Id.ToString();
+        session.NowPlayingQueue = new List<QueueItem> { new() { Id = episode.Id } };
+        session.FullNowPlayingItem = episode;
+
+        AudioLaunchSource source = Launch.ResolveAudioLaunchSource(episode, itemId, user, 0);
+        return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source, itemId, episode, user, context);
     }
 
     /// <summary>

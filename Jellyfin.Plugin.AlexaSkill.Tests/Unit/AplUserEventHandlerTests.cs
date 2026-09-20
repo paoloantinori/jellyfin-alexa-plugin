@@ -404,6 +404,36 @@ public class AplUserEventHandlerTests : PluginTestBase, IDisposable
     }
 
     [Fact]
+    public async Task HandleAsync_SelectItem_PodcastSeries_PlaysNewestEpisode()
+    {
+        // JF-599: a tapped podcast Series (the IlPost carousel surface) must resolve
+        // its newest Episode descendant via AncestorIds; the generic folder child
+        // query (ParentId+MediaTypes=Audio) returns zero for this shape and the tap
+        // used to answer FolderNoPlayableContent.
+        var seriesId = Guid.NewGuid();
+        var episodeId = Guid.NewGuid();
+        var request = CreateAplEvent("selectItem", seriesId.ToString());
+        var session = CreateSession();
+
+        var series = new MediaBrowser.Controller.Entities.TV.Series { Name = "Generazione", Id = seriesId };
+        var episode = new MediaBrowser.Controller.Entities.TV.Episode { Name = "Ep 12", Id = episodeId };
+        _libraryManager.Setup(l => l.GetItemById(seriesId)).Returns(series);
+        _userManager.Setup(u => u.GetUserById(session.UserId)).Returns(TestHelpers.CreateJellyfinUser());
+        _libraryManager
+            .Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == Jellyfin.Data.Enums.BaseItemKind.Episode))))
+            .Returns(new List<BaseItem> { episode });
+
+        var response = await _handler.HandleAsync(request, _context, _user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.Equal(episodeId, session.FullNowPlayingItem!.Id);
+        Assert.Single(session.NowPlayingQueue);
+        Assert.Equal(episodeId, session.NowPlayingQueue[0].Id);
+        var playDirective = response.Response.Directives.FirstOrDefault(d => d is AudioPlayerPlayDirective);
+        Assert.NotNull(playDirective);
+    }
+
+    [Fact]
     public async Task HandleAsync_SelectItem_ValidMovieId_PlaysVideo()
     {
         var itemId = Guid.NewGuid();

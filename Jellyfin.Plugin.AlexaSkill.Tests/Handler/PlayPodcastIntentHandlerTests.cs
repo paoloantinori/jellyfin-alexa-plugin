@@ -406,6 +406,173 @@ public class PlayPodcastIntentHandlerTests : PluginTestBase
         Assert.Equal(album.Id, capturedEpisodeQuery.ParentId);
     }
 
+    /// <summary>
+    /// Wires the JF-599 series-shape mocks: album discovery misses, the Series
+    /// fallback matches <paramref name="series"/>, and the episode query returns
+    /// <paramref name="episodes"/> (queries appended to <paramref name="capturedQueries"/>
+    /// when non-null, for shape assertions).
+    /// </summary>
+    private void SetupSeriesFallback(MediaBrowser.Controller.Entities.TV.Series series, IReadOnlyList<BaseItem> episodes, List<InternalItemsQuery>? capturedQueries = null)
+    {
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum) && !q.IncludeItemTypes.Any(t => t == BaseItemKind.Series))))
+            .Returns(new List<BaseItem>());
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Length == 1 && q.IncludeItemTypes[0] == BaseItemKind.Series)))
+            .Returns(new List<BaseItem> { series });
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Episode))))
+            .Callback<InternalItemsQuery>(q => capturedQueries?.Add(q))
+            .Returns(episodes);
+    }
+
+    /// <summary>
+    /// JF-599: the IlPost storage shape. When the MusicAlbum query misses, the handler
+    /// must fall back to a Series query and play the newest Episode descendant
+    /// (episodes nest under season folders, so the series is an ancestor, not the parent).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_AlbumMiss_SeriesMatch_PlaysNewestEpisode()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(podcastName: "generazione");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var series = new MediaBrowser.Controller.Entities.TV.Series
+        {
+            Name = "Generazione",
+            Id = Guid.NewGuid()
+        };
+
+        var oldEpisode = new MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "Episode 1",
+            Id = Guid.NewGuid(),
+            DateCreated = DateTime.UtcNow.AddDays(-10)
+        };
+
+        var newEpisode = new MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "Episode 12",
+            Id = Guid.NewGuid(),
+            DateCreated = DateTime.UtcNow.AddDays(-1)
+        };
+
+        SetupSeriesFallback(series, new List<BaseItem> { newEpisode, oldEpisode });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        response.HasDirective<AudioPlayerPlayDirective>();
+        Assert.NotNull(session.NowPlayingQueue);
+        Assert.Single(session.NowPlayingQueue);
+        Assert.Equal(newEpisode.Id, session.NowPlayingQueue[0].Id);
+    }
+
+    /// <summary>
+    /// JF-599: for a matched Series the episode query must scope by AncestorIds (season
+    /// folders sit between the series and its episodes) with no ParentId, and accept
+    /// both Episode and Audio children. The album shape keeps ParentId (sibling test).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_SeriesShape_EpisodeQueryUsesAncestorIdsNotParentId()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(podcastName: "generazione");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var series = new MediaBrowser.Controller.Entities.TV.Series
+        {
+            Name = "Generazione",
+            Id = Guid.NewGuid()
+        };
+
+        var episodeQueries = new List<InternalItemsQuery>();
+        SetupSeriesFallback(
+            series,
+            new List<BaseItem> { new MediaBrowser.Controller.Entities.TV.Episode { Name = "Episode 1", Id = Guid.NewGuid() } },
+            episodeQueries);
+
+        await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        InternalItemsQuery episodeQuery = Assert.Single(episodeQueries);
+        Assert.NotNull(episodeQuery.AncestorIds);
+        Assert.Contains(series.Id, episodeQuery.AncestorIds);
+        Assert.Equal(Guid.Empty, episodeQuery.ParentId);
+        Assert.NotNull(episodeQuery.IncludeItemTypes);
+        Assert.Contains(BaseItemKind.Episode, episodeQuery.IncludeItemTypes);
+        Assert.Contains(BaseItemKind.Audio, episodeQuery.IncludeItemTypes);
+    }
+
+    /// <summary>
+    /// JF-599 contract: the album shape stays primary. When MusicAlbum matches, the
+    /// Series fallback query is never issued (community-plugin libraries keep their
+    /// exact previous behavior).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_AlbumMatch_NeverQueriesSeries()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(podcastName: "Serial");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var album = new MusicAlbum { Name = "Serial", Id = Guid.NewGuid() };
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum))))
+            .Returns(new List<BaseItem> { album });
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))))
+            .Returns(new List<BaseItem> { new Audio { Name = "Episode 1", Id = Guid.NewGuid() } });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        response.HasDirective<AudioPlayerPlayDirective>();
+        _libraryManagerMock.Verify(
+            l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Length == 1 && q.IncludeItemTypes[0] == BaseItemKind.Series)),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// JF-599: a matched Series with zero playable children answers the NoEpisodes
+    /// Tell instead of crashing or silently falling through to not-found.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_SeriesMatch_NoEpisodes_ReturnsNoEpisodes()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(podcastName: "generazione");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var series = new MediaBrowser.Controller.Entities.TV.Series
+        {
+            Name = "Generazione",
+            Id = Guid.NewGuid()
+        };
+
+        SetupSeriesFallback(series, new List<BaseItem>());
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        response.Tells();
+    }
+
     [Fact]
     public async Task HandleAsync_MultiplePodcasts_ReturnsDisambiguation()
     {

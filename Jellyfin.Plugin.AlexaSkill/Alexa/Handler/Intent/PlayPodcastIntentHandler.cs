@@ -11,6 +11,7 @@ using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -24,9 +25,11 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
 /// <summary>
 /// Handler for PlayPodcastIntent, plays the latest episode of a podcast.
-/// Jellyfin has no native podcast type, so a podcast is stored as a MusicAlbum of
-/// Audio tracks in a Music library; this handler queries MusicAlbum by name and plays
-/// its newest Audio child (DateCreated descending) as the latest episode.
+/// Jellyfin has no native podcast type, so podcasts are stored under one of two
+/// shapes (JF-599): a MusicAlbum of Audio tracks in a Music library (the community
+/// plugins), or a Series of Episode items under season folders (the IlPost plugin).
+/// This handler queries MusicAlbum first, falls back to Series on a miss, and plays
+/// the matched item's newest child (DateCreated descending) as the latest episode.
 /// </summary>
 public class PlayPodcastIntentHandler : BaseHandler
 {
@@ -85,29 +88,49 @@ public class PlayPodcastIntentHandler : BaseHandler
             return userError;
         }
 
-        // Jellyfin has no native podcast type: a podcast is stored as a MusicAlbum of
-        // Audio tracks in a Music library (verified against live Jellyfin 10.11.x; a
-        // Series rollup is always MediaType=Unknown, so the old Series+MediaTypes=Audio
-        // query matched nothing). Query MusicAlbum by name; the MediaTypes=Audio filter
-        // is intentionally omitted because the album rollup is also MediaType=Unknown.
-        var podcastQuery = new InternalItemsQuery
+        // The MediaTypes filter is intentionally omitted on both shape queries: a
+        // MusicAlbum AND a Series rollup are MediaType=Unknown in Jellyfin, so a
+        // MediaTypes=Audio filter would exclude every podcast container (the dead
+        // JF-373 query shape).
+        async Task<IReadOnlyList<BaseItem>> QueryKindsAsync(BaseItemKind[] kinds, string label)
         {
-            User = jellyfinUser,
-            Recursive = true,
-            SearchTerm = podcastName,
-            IncludeItemTypes = new[] { BaseItemKind.MusicAlbum },
-            DtoOptions = new DtoOptions(true)
-        };
-        ApplyLibraryFilter(podcastQuery, user, _libraryManager);
+            var query = new InternalItemsQuery
+            {
+                User = jellyfinUser,
+                Recursive = true,
+                SearchTerm = podcastName,
+                IncludeItemTypes = kinds,
+                DtoOptions = new DtoOptions(true)
+            };
+            ApplyLibraryFilter(query, user, _libraryManager);
 
-        IReadOnlyList<BaseItem> podcasts = await RetryAsync(
-            () => _libraryManager.GetItemList(podcastQuery),
-            "GetPodcasts",
-            cancellationToken).ConfigureAwait(false);
+            return await RetryAsync(
+                () => _libraryManager.GetItemList(query),
+                label,
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        // JF-599: two storage shapes. The community plugins store a podcast as a
+        // MusicAlbum of Audio tracks; the IlPost plugin stores podcasts as a Series
+        // of Episode items under season folders (live-verified 2026-09-20: 78 series
+        // / 677 episodes and ZERO MusicAlbums in that library), so a MusicAlbum-only
+        // search never found them and the podcast play path answered NotFound for
+        // the whole library. The Series fallback runs only when the album query
+        // matched nothing, keeping the community-plugin path byte-identical. The
+        // fallback deliberately admits real TV Series too: no type-level
+        // discriminator exists (the IlPost library is CollectionType=tvshows, the
+        // same as a real TV library), and a matched TV episode still rides the
+        // codec-routed launch below, so the worst case is a content miss on a
+        // "podcast"-phrased query, never a broken launch.
+        IReadOnlyList<BaseItem> podcasts = await QueryKindsAsync(new[] { BaseItemKind.MusicAlbum }, "GetPodcasts").ConfigureAwait(false);
+        if (podcasts.Count == 0)
+        {
+            podcasts = await QueryKindsAsync(new[] { BaseItemKind.Series }, "GetPodcastSeries").ConfigureAwait(false);
+        }
 
         if (podcasts.Count == 0)
         {
-            var fuzzy = await Search.SearchItemsFuzzyAsync(podcastName, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.MusicAlbum }, cancellationToken, "PlayPodcastFuzzyFallback", locale: locale).ConfigureAwait(false);
+            var fuzzy = await Search.SearchItemsFuzzyAsync(podcastName, jellyfinUser, user, _libraryManager, new[] { BaseItemKind.MusicAlbum, BaseItemKind.Series }, cancellationToken, "PlayPodcastFuzzyFallback", locale: locale).ConfigureAwait(false);
             if (fuzzy != null)
             {
                 podcasts = new List<BaseItem> { fuzzy.Value.Item };
@@ -156,18 +179,14 @@ public class PlayPodcastIntentHandler : BaseHandler
 
         BaseItem podcast = podcasts[0];
 
-        // Get the latest episode (newest Audio track) under this podcast album.
-        // ParentId (not AncestorIds) matches the album-track convention in PlayAlbumIntentHandler:
-        // an Audio track's direct parent is the MusicAlbum, with no intermediate "season" level.
-        var episodeQuery = new InternalItemsQuery
-        {
-            User = jellyfinUser,
-            Recursive = true,
-            IncludeItemTypes = new[] { BaseItemKind.Audio },
-            ParentId = podcast.Id,
-            OrderBy = new[] { (ItemSortBy.DateCreated, SortOrder.Descending) },
-            DtoOptions = new DtoOptions(true)
-        };
+        // Get the latest episode under the podcast. Two shapes (JF-599): the
+        // MusicAlbum of Audio tracks (direct ParentId, the album-track convention
+        // in PlayAlbumIntentHandler - an Audio track's direct parent is the
+        // MusicAlbum with no intermediate season level) and the Series of Episode
+        // items (AncestorId - episodes nest under season/year folders, so the
+        // series is an ANCESTOR, not the direct parent). The shared resolver is
+        // also what the disambiguation "yes" and the APL carousel tap replay.
+        var episodeQuery = Util.PodcastEpisodeResolver.BuildLatestEpisodeQuery(podcast, jellyfinUser);
 
         IReadOnlyList<BaseItem> episodes = await RetryAsync(
             () => _libraryManager.GetItemList(episodeQuery),
@@ -189,6 +208,11 @@ public class PlayPodcastIntentHandler : BaseHandler
         session.NowPlayingQueue = queueItems;
         session.FullNowPlayingItem = episode;
 
-        return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, episode, user, context);
+        // The codec-routed audio source (JF-507): a series-shape Episode whose audio
+        // codec has no Echo decoder (a TV series matched by name, eac3/ac3) rides the
+        // audio-only HLS transcode instead of a static URL that never starts; an
+        // Audio item resolves to the same static URL GetStreamUrl built.
+        AudioLaunchSource source = Launch.ResolveAudioLaunchSource(episode, itemId, user, 0);
+        return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source, itemId, episode, user, context);
     }
 }

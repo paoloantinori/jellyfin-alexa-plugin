@@ -181,6 +181,42 @@ public class YesIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
+    public async Task HandleAsync_WithDisambiguationState_PodcastTypeSeries_PlaysNewestEpisode()
+    {
+        // JF-599: the podcast confirm must resolve the newest Episode descendant of
+        // a confirmed Series (AncestorIds, not ParentId) and play it; before the fix
+        // this arm fell to MediaNotFound and the multi-match prompt dead-ended.
+        var seriesId = Guid.NewGuid();
+        var episodeId = Guid.NewGuid();
+        var series = new MediaBrowser.Controller.Entities.TV.Series { Name = "Generazione", Id = seriesId };
+        var episode = new MediaBrowser.Controller.Entities.TV.Episode { Name = "Ep 12", Id = episodeId };
+
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemById(seriesId))
+            .Returns(series);
+        _libraryManagerMock
+            .Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == Jellyfin.Data.Enums.BaseItemKind.Episode))))
+            .Returns(new List<BaseItem> { episode });
+
+        var matchInfo = new DisambiguationHelper.MatchInfo { Id = seriesId.ToString(), Name = "Generazione" };
+        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "podcast");
+
+        var handler = CreateHandler();
+        var session = CreateSession();
+        var response = await handler.HandleAsync(
+            CreateYesIntentRequest(),
+            CreateContext(),
+            TestHelpers.CreateTestUser(),
+            session,
+            attrs,
+            CancellationToken.None);
+
+        response.HasDirective<AudioPlayerPlayDirective>();
+        Assert.NotNull(session.FullNowPlayingItem);
+        Assert.Equal(episodeId, session.FullNowPlayingItem.Id);
+    }
+
+    [Fact]
     public async Task HandleAsync_WithDisambiguationState_VideoTypeEpisodeOnScreenlessDevice_DegradesToAudioPlayer()
     {
         // JF-587: a confirmed EPISODE on a screenless context (the Echo Dot shape)

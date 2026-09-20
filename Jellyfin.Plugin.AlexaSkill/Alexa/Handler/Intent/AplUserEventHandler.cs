@@ -14,6 +14,7 @@ using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -179,40 +180,74 @@ public class AplUserEventHandler : BaseHandler
         // which fails because Folders don't have media sources.
         if (item is Folder folder)
         {
-            // Multi-disc albums play disc-then-track (JF-339 AC#3); other folders
-            // (audiobook/artist folders) keep SortName.
-            bool isAlbum = folder is MediaBrowser.Controller.Entities.Audio.MusicAlbum;
-            var childQuery = new InternalItemsQuery
+            if (Util.PodcastEpisodeResolver.IsSeriesShape(folder))
             {
-                ParentId = folder.Id,
-                MediaTypes = new[] { MediaType.Audio },
-                Recursive = true,
-                Limit = 500,
-                OrderBy = isAlbum
-                    ? QueueContinuationFetcher.AlbumTrackOrder
-                    : new[] { (ItemSortBy.SortName, SortOrder.Ascending) }
-            };
+                // JF-599: a tapped podcast Series (the IlPost carousel surface). The
+                // generic ParentId+MediaTypes=Audio child query below returns ZERO
+                // episodes for this shape (they are Episode items under season
+                // folders, so the series is an ancestor and the media type is Video),
+                // and the tap would answer FolderNoPlayableContent. The shared
+                // resolver plays the newest episode instead.
+                string seriesLocale = GetLocale(request);
+                var (seriesUser, seriesUserError) = ResolveJellyfinUser(_userManager, session.UserId, seriesLocale);
+                if (seriesUserError != null)
+                {
+                    return Task.FromResult(seriesUserError);
+                }
 
-            var children = _libraryManager.GetItemList(childQuery);
+                var episodeQuery = Util.PodcastEpisodeResolver.BuildLatestEpisodeQuery(folder, seriesUser);
+                var episodes = _libraryManager.GetItemList(episodeQuery);
+                if (episodes.Count == 0)
+                {
+                    Logger.LogWarning("AplUserEvent HandleSelectItem: podcast series {FolderName} has no episodes", folder.Name);
+                    return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("FolderNoPlayableContent", seriesLocale)));
+                }
 
-            if (children.Count == 0)
-            {
-                Logger.LogWarning("AplUserEvent HandleSelectItem: folder {FolderName} has no audio children", folder.Name);
-                string locale = GetLocale(request);
-                return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("FolderNoPlayableContent", locale)));
+                item = episodes[0];
+                itemIdStr = item.Id.ToString();
+                session.NowPlayingQueue = new List<QueueItem> { new() { Id = item.Id } };
+                session.FullNowPlayingItem = item;
+                Logger.LogDebug(
+                    "AplUserEvent HandleSelectItem: resolved podcast series {FolderName} to newest episode {ChildName} ({ChildId})",
+                    folder.Name, item.Name, itemIdStr);
             }
+            else
+            {
+                // Multi-disc albums play disc-then-track (JF-339 AC#3); other folders
+                // (audiobook/artist folders) keep SortName.
+                bool isAlbum = folder is MediaBrowser.Controller.Entities.Audio.MusicAlbum;
+                var childQuery = new InternalItemsQuery
+                {
+                    ParentId = folder.Id,
+                    MediaTypes = new[] { MediaType.Audio },
+                    Recursive = true,
+                    Limit = 500,
+                    OrderBy = isAlbum
+                        ? QueueContinuationFetcher.AlbumTrackOrder
+                        : new[] { (ItemSortBy.SortName, SortOrder.Ascending) }
+                };
 
-            item = children[0];
-            itemIdStr = item.Id.ToString();
+                var children = _libraryManager.GetItemList(childQuery);
 
-            Logger.LogDebug(
-                "AplUserEvent HandleSelectItem: resolved folder {FolderName} to first child {ChildName} ({ChildId})",
-                folder.Name, item.Name, itemIdStr);
+                if (children.Count == 0)
+                {
+                    Logger.LogWarning("AplUserEvent HandleSelectItem: folder {FolderName} has no audio children", folder.Name);
+                    string locale = GetLocale(request);
+                    return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("FolderNoPlayableContent", locale)));
+                }
 
-            // Queue remaining children
-            var queueItems = children.Select(c => new QueueItem { Id = c.Id }).ToList();
-            session.NowPlayingQueue = queueItems;
-            session.FullNowPlayingItem = item;
+                item = children[0];
+                itemIdStr = item.Id.ToString();
+
+                Logger.LogDebug(
+                    "AplUserEvent HandleSelectItem: resolved folder {FolderName} to first child {ChildName} ({ChildId})",
+                    folder.Name, item.Name, itemIdStr);
+
+                // Queue remaining children
+                var queueItems = children.Select(c => new QueueItem { Id = c.Id }).ToList();
+                session.NowPlayingQueue = queueItems;
+                session.FullNowPlayingItem = item;
+            }
         }
         else
         {
@@ -222,7 +257,11 @@ public class AplUserEventHandler : BaseHandler
 
         int offsetMs = GetResumeOffset(item, session, request);
 
-        var response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemIdStr, user), itemIdStr, item, user, context, offsetMs);
+        // The codec-routed audio source (JF-507): a resolved Episode whose audio
+        // codec has no Echo decoder rides the audio-only transcode; every other
+        // resolved item keeps the static URL GetStreamUrl built.
+        AudioLaunchSource source = Launch.ResolveAudioLaunchSource(item, itemIdStr, user, offsetMs);
+        var response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source, itemIdStr, item, user, context);
 
         Launch.TryAttachNowPlayingDirective(response, item, itemIdStr, user, context);
 
