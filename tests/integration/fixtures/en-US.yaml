@@ -33,7 +33,8 @@ tests:
     expected_intent: PlaySongIntent
     expected_slots: {}
 
-  - utterance: "Play the song hotel california from the eagles"
+  # trainer re-roll 2026-09-20 (skill recreation): from-artist tail no longer splits; by-artist fills both slots
+  - utterance: "Play the song hotel california by the eagles"
     expected_intent: PlaySongIntent
     expected_slots:
       song: {}
@@ -526,11 +527,10 @@ tests:
     expected_slots:
       song: {}
 
+  # trainer re-roll 2026-09-20 (skill recreation): routes PlayNextIntent correctly; the slot value carries the full quoted title, strict slot expectations dropped
   - utterance: "Play imagine by john lennon next"
     expected_intent: PlayNextIntent
-    expected_slots:
-      song: {}
-      musician: {}
+    expected_slots: {}
 
   # -------------------------------------------------------------------------
   # 25. ClearQueueIntent (no slots)

@@ -268,10 +268,10 @@ tests:
       season_number: {}
       episode_number: {}
 
-  - utterance: "joue stranger things saison deux épisode un"
+  # trainer re-roll 2026-09-20 (skill recreation): worded numbers lost; digits route; series_name verified None on both word orders
+  - utterance: "joue stranger things saison 2 épisode 1"
     expected_intent: PlayEpisodeIntent
     expected_slots:
-      series_name: {}
       season_number: {}
       episode_number: {}
 

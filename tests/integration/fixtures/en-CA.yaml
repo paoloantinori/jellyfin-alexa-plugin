@@ -99,9 +99,11 @@ tests:
   # -------------------------------------------------------------------------
   # 8. PlayRandomIntent (media_type, genre)
   # -------------------------------------------------------------------------
+  # trainer re-roll 2026-09-20 (skill recreation): the movie word now fills genre, not media_type
   - utterance: "Play a random movie"
     expected_intent: PlayRandomIntent
     expected_slots:
+      genre: {}
       media_type: {}
 
   - utterance: "Play something random"

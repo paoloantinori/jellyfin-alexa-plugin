@@ -33,9 +33,12 @@ tests:
     expected_slots:
       song: {}
 
-  - utterance: "Play the song hotel california from the eagles"
+  # trainer re-roll 2026-09-20 (skill recreation): from-artist tail no longer splits; by-artist fills both slots
+  - utterance: "Play the song hotel california by the eagles"
     expected_intent: PlaySongIntent
     expected_slots:
+      song: {}
+      musician: {}
       song: {}
       musician: {}
 

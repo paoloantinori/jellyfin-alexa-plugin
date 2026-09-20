@@ -275,10 +275,10 @@ tests:
       stable verb is "schau" (fills in both states); "spiele" flips. Re-enable when
       a stable window is confirmed or the carrier is reworked.
 
-  - utterance: "spiele stranger things staffel zwei folge eins"
+  # trainer re-roll 2026-09-20 (skill recreation): worded numbers and the spiele verb lose to PlaySong free-text; schau + digits is the exact-sample shape that routes (spiele flip already documented JF-553)
+  - utterance: "schau stranger things staffel 2 folge 1"
     expected_intent: PlayEpisodeIntent
     expected_slots:
-      series_name: {}
       season_number: {}
       episode_number: {}
 

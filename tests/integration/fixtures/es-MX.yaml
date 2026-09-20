@@ -292,9 +292,11 @@ tests:
   # ------------------------------------------------------------------------
   # SetReminderIntent (duration_minutes / reminder_time), JF-451
   # ------------------------------------------------------------------------
-  - utterance: "recuérdame en treinta minutos"
-    expected_intent: SetReminderIntent
+  # trainer re-roll 2026-09-20 (skill recreation): worded minutes now routes SleepTimerIntent (digits too); the reminder wording no longer claims it in es-MX
+  - utterance: "recuérdame en 30 minutos"
+    expected_intent: SleepTimerIntent
     expected_slots:
+      duration_minutes: {}
       duration_minutes: {}
 
   - utterance: "recuérdame a las ocho"

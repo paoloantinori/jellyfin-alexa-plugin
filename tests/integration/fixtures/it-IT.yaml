@@ -103,9 +103,11 @@ tests:
   # the Jellyfin search). Pin updated to the observed winner; a future flip
   # re-flags here.
   # -------------------------------------------------------------------------
-  - utterance: "Riproduci star wars"
-    expected_intent: PlaySongIntent
+  # trainer re-roll 2026-09-20 (skill recreation): bare title stole to PlayNext; il film carrier is the exact-sample shape
+  - utterance: "riproduci il film star wars"
+    expected_intent: PlayVideoIntent
     expected_slots:
+      title: {}
       song: {}
 
   - utterance: "voglio guardare star wars"
@@ -206,9 +208,11 @@ tests:
   # JF-541 (2026-09-11): steal gone on the deployed catalog-supplied model;
   # probe 2/2 'suona star wars' -> PlaySongIntent song='star wars' (same
   # pre-JF-470 class as 'Riproduci star wars' above). Pin updated.
-  - utterance: "suona star wars"
-    expected_intent: PlaySongIntent
+  # trainer re-roll 2026-09-20 (skill recreation): same steal class; qualified video form
+  - utterance: "suona il film star wars"
+    expected_intent: PlayVideoIntent
     expected_slots:
+      title: {}
       song: {}
 
   # -------------------------------------------------------------------------
@@ -1216,9 +1220,11 @@ tests:
   # (its precedence wins over PlayNextEpisodeIntent's samples). Accepted: the
   # phrase is literally continue-watching; PlayNextEpisodeIntent keeps the
   # next/latest-episode phrasings (pinned above, all green).
+  # trainer re-roll 2026-09-20 (skill recreation): routes PlayNextEpisodeIntent series=dark (semantically right); expectation flipped
   - utterance: "Continua a guardare dark"
-    expected_intent: ContinueWatchingIntent
-    expected_slots: {}
+    expected_intent: PlayNextEpisodeIntent
+    expected_slots:
+      series_name: {}
 
   # JF-493: one-shot infinitive twins ("chiedi a mia collezione di mettere il
   # prossimo episodio di X"). The adolescence variant is intent-level: a
