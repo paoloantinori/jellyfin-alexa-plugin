@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-20 01:46'
+updated_date: '2026-09-20 10:59'
 labels:
   - nlu
   - interaction-model
@@ -28,6 +29,12 @@ Post-recreation trainer baseline triage. The 2026-09-20 full NLU re-run (AFTER t
 - [ ] #3 For class (a): model-side fixes follow the anti-pattern rules (carriers/nouns, no bare greedy samples); for class (b): fixtures updated with a comment naming the trainer re-roll
 - [ ] #4 Full NLU re-run after the batch: failures reduced to the agreed residual, all remaining failures documented as accepted
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-09-20 triage round 1 (live probes, 2-3x each, all deterministic): CLASSIFICATION of the 65 failures into four classes. (A) TRANSIENT, already healed: the fast-mode 'soul coug' and en-GB 'play the movie barbie' failures both PASS on re-run (they were mid-catalog-sync timing artifacts of the interrupted run); no action. (B) BARE-CARRIER COMPETITION (the biggest user-facing class): bare 'Metti {name}' (imperative + name, no noun) is stolen by PlayRadioIntent with station=None ('Metti beatles' 2/2, 'Metti thriller' 1/1) or by AddToQueueIntent with empty slots ('Metti hotel california'); these forms were NEVER pinned samples - they relied on the OLD skill's trainer generalization, and the recreated trainer routes them to whichever intent carries 'metti' samples. 'Suona {artist}' survives (PlayArtistSongs 2/2). Decision needed per the anti-pattern rules: either add explicit noun-less artist/album samples (risk: greedy bare carriers, anti-pattern #11!) or update fixtures to the noun forms and document bare 'metti X' as unsupported. The #11 precedent (bare album carriers REMOVED deliberately) argues for FIXTURES + guidance, not model surgery. (C) MEDIA-INFO SLOT-FILL: 'Che brano e questo'/'Was laeuft gerade' route to MediaInfoIntent correctly but media_info_type stays None (en-GB 'What song is this' fills 'song'); the handler already tolerates the empty slot (generic info answer) - fixture shape, likely class (b); verify the fixture only expects intent, not slot fill. (D) SEARCH-VERB NO_SELECT: 'Trova/Find inception' NO_SELECT deterministically in 2+ locales; the samples are qualified ('Trova il film {query}') and the bare verb+title form was again trainer generalization; per anti-pattern #3 the qualified carriers are the design - fixtures should use the qualified forms or accept NO_SELECT for bare ones. es-US mass failures are (B)+(D) combined. NEXT per the trainer-nondeterminism memory: each proposed model-side fix needs its own 6-10 probe battery; recommend deciding (B) first since it affects the most fixtures.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
