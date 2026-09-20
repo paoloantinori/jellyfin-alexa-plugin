@@ -29,6 +29,8 @@
   "NotFoundPlaylist": "Je n'ai pas trouvé de playlist nommée {0}.",
   "PlaylistEmpty": "La playlist est vide.",
   "DidNotCatchPlaylistName": "Je n'ai pas compris le nom de la liste de lecture. Quelle liste souhaitez-vous écouter?",
+  "SpecifyPlaylistName": "Je n'ai pas compris le nom de la liste de lecture. Réessaie.",
+  "SpecifySongForPlaylist": "Quelle chanson veux-tu ajouter à la liste de lecture {0}?",
   "NoFavoriteItems": "Aucun favori trouvé.",
   "NoNewlyAddedItems": "Aucun élément récemment ajouté trouvé.",
   "NoNewlyAddedItemsTime": "Aucun élément ajouté {0} trouvé.",

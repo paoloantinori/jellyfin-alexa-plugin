@@ -386,7 +386,8 @@
         "name": "CreatePlaylistIntent",
         "samples": [
           "{playlist} नाम की प्लेलिस्ट बनाओ",
-          "नई प्लेलिस्ट {playlist} बनाओ"
+          "नई प्लेलिस्ट {playlist} बनाओ",
+          "प्लेलिस्ट {playlist} बनाओ"
         ],
         "slots": [
           {

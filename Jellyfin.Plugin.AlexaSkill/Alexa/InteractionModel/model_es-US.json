@@ -374,7 +374,10 @@
         "samples": [
           "Crea una lista llamada {playlist}",
           "Crea una nueva lista llamada {playlist}",
-          "Nueva lista llamada {playlist}"
+          "Nueva lista llamada {playlist}",
+          "Crea una lista {playlist}",
+          "Crea lista {playlist}",
+          "Nueva lista {playlist}"
         ],
         "slots": [
           {

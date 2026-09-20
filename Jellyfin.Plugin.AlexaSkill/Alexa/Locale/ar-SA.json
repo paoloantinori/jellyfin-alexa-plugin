@@ -28,6 +28,8 @@
   "NotFoundPlaylist": "لم أجد قائمة تشغيل باسم {0}.",
   "PlaylistEmpty": "قائمة التشغيل فارغة.",
   "DidNotCatchPlaylistName": "لم أسمع اسم قائمة التشغيل بوضوح. أي قائمة تشغيل تريد الاستماع إليها؟",
+  "SpecifyPlaylistName": "لم أفهم اسم قائمة التشغيل. حاول مرة أخرى.",
+  "SpecifySongForPlaylist": "أي أغنية تريد إضافتها إلى قائمة التشغيل {0}؟",
   "NoFavoriteItems": "لم يتم العثور على عناصر مفضلة.",
   "NoNewlyAddedItems": "لم يتم العثور على عناصر مضافة حديثاً.",
   "NoNewlyAddedItemsTime": "لم يتم العثور على عناصر مضافة {0}.",

@@ -26,6 +26,8 @@
   "DidNotCatchGenre": "I didn't catch the genre. Please try again.",
   "DidNotCatchMood": "What kind of music would you like? You can say relaxing, upbeat, chill, energetic, or focus.",
   "DidNotCatchPlaylistName": "I didn't catch the playlist name. Which playlist would you like to hear?",
+  "SpecifyPlaylistName": "I didn't catch the playlist name. Please try again.",
+  "SpecifySongForPlaylist": "Which song should I add to the playlist {0}?",
   "DidNotCatchPodcastName": "I didn't catch the podcast name. Which podcast would you like to listen to?",
   "DidNotCatchQueueItem": "What would you like to add to your queue?",
   "DidNotCatchReminderTime": "When should I remind you? Please say a time or a number of minutes.",

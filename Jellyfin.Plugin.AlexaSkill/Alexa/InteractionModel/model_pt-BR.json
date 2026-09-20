@@ -417,7 +417,10 @@
         "name": "CreatePlaylistIntent",
         "samples": [
           "Crie uma playlist chamada {playlist}",
-          "Crie uma nova playlist chamada {playlist}"
+          "Crie uma nova playlist chamada {playlist}",
+          "Crie uma playlist {playlist}",
+          "Crie playlist {playlist}",
+          "Nova playlist {playlist}"
         ],
         "slots": [
           {

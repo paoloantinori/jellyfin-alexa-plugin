@@ -385,7 +385,9 @@
         "name": "CreatePlaylistIntent",
         "samples": [
           "Crée une liste de lecture appelée {playlist}",
-          "Crée une nouvelle liste de lecture appelée {playlist}"
+          "Crée une nouvelle liste de lecture appelée {playlist}",
+          "Crée une liste de lecture {playlist}",
+          "Nouvelle liste de lecture {playlist}"
         ],
         "slots": [
           {

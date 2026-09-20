@@ -319,6 +319,7 @@ intents:
     samples:
       - '{playlist} नाम की प्लेलिस्ट बनाओ'
       - नई प्लेलिस्ट {playlist} बनाओ
+      - प्लेलिस्ट {playlist} बनाओ
     slots:
       - name: playlist
         type: AMAZON.SearchQuery

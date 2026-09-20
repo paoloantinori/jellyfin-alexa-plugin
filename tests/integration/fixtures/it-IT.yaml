@@ -269,6 +269,17 @@ tests:
     expected_intent: CreatePlaylistIntent
     expected_slots:
       playlist: {}
+  # JF-600 carrier-optional create forms (the on-device failure shapes: ASR drops
+  # the article or the carrier entirely and the phrase used to fall into the
+  # AddSongToPlaylist free-text slot)
+  - utterance: "crea playlist chiamata prova echo"
+    expected_intent: CreatePlaylistIntent
+    expected_slots:
+      playlist: {}
+  - utterance: "crea una playlist prova echo"
+    expected_intent: CreatePlaylistIntent
+    expected_slots:
+      playlist: {}
   - utterance: "Aggiungi la canzone rapsodia alla playlist rock classico"
     expected_intent: AddSongToPlaylistIntent
     expected_slots:

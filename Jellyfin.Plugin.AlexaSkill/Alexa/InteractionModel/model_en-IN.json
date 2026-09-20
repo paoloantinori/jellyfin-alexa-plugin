@@ -389,7 +389,10 @@
         "samples": [
           "create a playlist called {playlist}",
           "create a new playlist called {playlist}",
-          "make a playlist called {playlist}"
+          "make a playlist called {playlist}",
+          "create a playlist {playlist}",
+          "create playlist {playlist}",
+          "new playlist {playlist}"
         ],
         "slots": [
           {

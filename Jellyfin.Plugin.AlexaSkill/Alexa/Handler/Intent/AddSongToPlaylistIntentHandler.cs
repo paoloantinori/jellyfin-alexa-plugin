@@ -61,10 +61,15 @@ public class AddSongToPlaylistIntentHandler : PlaylistEditHandlerBase
         string locale = GetLocale(request);
         var intentRequest = (IntentRequest)request;
         string? songName = GetSlotValue(intentRequest, IntentNames.Slots.Song);
-        string? playlistName = GetSlotValue(intentRequest, IntentNames.Slots.PlaylistTarget);
-        if (songName == null || playlistName == null)
+        string? playlistName = GetPlaylistSlotValue(intentRequest, IntentNames.Slots.PlaylistTarget, locale);
+        if (playlistName == null)
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchPlaylistName", locale));
+            return ResponseBuilder.Tell(ResponseStrings.Get("SpecifyPlaylistName", locale));
+        }
+
+        if (songName == null)
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("SpecifySongForPlaylist", locale, playlistName));
         }
 
         // Music gate AFTER the slot prompt (BaseHandler.IfMediaTypeDisabled contract).

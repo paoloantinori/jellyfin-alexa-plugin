@@ -52,10 +52,10 @@ public class RemoveCurrentFromPlaylistIntentHandler : PlaylistEditHandlerBase
     {
         string locale = GetLocale(request);
         var intentRequest = (IntentRequest)request;
-        string? playlistName = GetSlotValue(intentRequest, IntentNames.Slots.Playlist);
+        string? playlistName = GetPlaylistSlotValue(intentRequest, IntentNames.Slots.Playlist, locale);
         if (playlistName == null)
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchPlaylistName", locale));
+            return ResponseBuilder.Tell(ResponseStrings.Get("SpecifyPlaylistName", locale));
         }
 
         BaseItem? current = ResolveCurrentItem(context, session);

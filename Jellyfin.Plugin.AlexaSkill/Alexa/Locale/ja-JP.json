@@ -28,6 +28,8 @@
   "NotFoundPlaylist": "{0} というプレイリストが見つかりませんでした。",
   "PlaylistEmpty": "プレイリストは空です。",
   "DidNotCatchPlaylistName": "プレイリスト名が聞き取れませんでした。どのプレイリストを聴きたいですか？",
+  "SpecifyPlaylistName": "プレイリスト名が聞き取れませんでした。もう一度お試しください。",
+  "SpecifySongForPlaylist": "プレイリスト {0} に追加する曲を教えてください。",
   "NoFavoriteItems": "お気に入りのアイテムが見つかりません。",
   "NoNewlyAddedItems": "新しく追加されたアイテムが見つかりません。",
   "NoNewlyAddedItemsTime": "{0} 追加されたアイテムが見つかりません。",

@@ -405,7 +405,9 @@
         "name": "CreatePlaylistIntent",
         "samples": [
           "Maak een afspeellijst genaamd {playlist}",
-          "Maak een nieuwe afspeellijst genaamd {playlist}"
+          "Maak een nieuwe afspeellijst genaamd {playlist}",
+          "Maak een afspeellijst {playlist}",
+          "Nieuwe afspeellijst {playlist}"
         ],
         "slots": [
           {

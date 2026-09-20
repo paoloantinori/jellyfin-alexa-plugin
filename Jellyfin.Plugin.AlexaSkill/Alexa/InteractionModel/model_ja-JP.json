@@ -370,7 +370,8 @@
         "name": "CreatePlaylistIntent",
         "samples": [
           "{playlist} というプレイリストを作って",
-          "新しいプレイリスト {playlist} を作成して"
+          "新しいプレイリスト {playlist} を作成して",
+          "プレイリスト {playlist} を作って"
         ],
         "slots": [
           {

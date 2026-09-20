@@ -63,6 +63,19 @@ public abstract class PlaylistEditHandlerBase : BaseHandler
     }
 
     /// <summary>
+    /// Reads a playlist-name slot and returns the carrier-stripped value (JF-600).
+    /// The strip itself lives on <see cref="Util.PlaylistNameNormalizer"/> (the
+    /// slot-text utility home, the ArtistSearch precedent) so play-path handlers
+    /// outside this family can share it.
+    /// </summary>
+    /// <param name="request">The intent request carrying the slot.</param>
+    /// <param name="slotName">The slot name ("playlist" or "playlist_target").</param>
+    /// <param name="locale">The request locale.</param>
+    /// <returns>The normalized name, or null when the slot is empty or all carrier.</returns>
+    protected static string? GetPlaylistSlotValue(IntentRequest request, string slotName, string locale)
+        => Util.PlaylistNameNormalizer.NormalizePlaylistName(GetSlotValue(request, slotName), locale);
+
+    /// <summary>
     /// Finds a playlist visible to the user by spoken name: exact (case-insensitive),
     /// then prefix, then substring. Returns null when nothing matches.
     /// </summary>

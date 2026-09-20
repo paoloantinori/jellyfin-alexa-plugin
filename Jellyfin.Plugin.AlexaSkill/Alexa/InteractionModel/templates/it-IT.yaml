@@ -964,6 +964,9 @@ templates:
       - Crea una playlist chiamata {playlist}
       - Crea una nuova playlist chiamata {playlist}
       - Nuova playlist chiamata {playlist}
+      - Crea una playlist {playlist}
+      - Crea playlist {playlist}
+      - Crea playlist chiamata {playlist}
     slots:
       - name: playlist
         type: AMAZON.SearchQuery

@@ -162,7 +162,9 @@ public class PlaylistEditIntentHandlerTests : PluginTestBase
             CreateRequest(IntentNames.AddCurrentToPlaylist),
             CreateTokenContext(SongId), CreateUser(), session: null!, CancellationToken.None);
 
-        Assert.Equal(ResponseStrings.Get("DidNotCatchPlaylistName", "en-US"), GetSpeech(response));
+        // JF-600: the playlist-EDIT family speaks the neutral retry prompt; the
+        // listen-worded DidNotCatchPlaylistName stays with PlayPlaylist.
+        Assert.Equal(ResponseStrings.Get("SpecifyPlaylistName", "en-US"), GetSpeech(response));
     }
 
     [Fact]
@@ -237,6 +239,84 @@ public class PlaylistEditIntentHandlerTests : PluginTestBase
             new Context(), CreateUser(), session: null!, CancellationToken.None);
 
         Assert.Equal(ResponseStrings.Get("PlaylistCreateFailed", "en-US"), GetSpeech(response));
+    }
+
+    [Fact]
+    public async void AddSong_CalledCarrierLeakedIntoPlaylistTarget_StillFindsPlaylist()
+    {
+        // Live incident 2026-09-20 (JF-600): "crea una playlist chiamata prova echo"
+        // misrouted to AddSong with playlist_target="chiamata prova echo". The strip
+        // must let the tiered match see the spoken name. en-US carrier is "called".
+        _libraryManagerMock
+            .Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<Audio> { new() { Name = "Circles", Id = SongId } });
+
+        await CreateAddSong().HandleAsync(
+            CreateRequest(IntentNames.AddSongToPlaylist, new() { ["song"] = "circles", ["playlist_target"] = "called road trip" }),
+            new Context(), CreateUser(), session: null!, CancellationToken.None);
+
+        VerifyAddItem(PlaylistId, id => id == SongId, Times.Once());
+    }
+
+    [Fact]
+    public async void AddSong_SongMissing_SpeaksSongPromptWithStrippedName()
+    {
+        SkillResponse response = await CreateAddSong().HandleAsync(
+            CreateRequest(IntentNames.AddSongToPlaylist, new() { ["playlist_target"] = "called road trip" }),
+            new Context(), CreateUser(), session: null!, CancellationToken.None);
+
+        Assert.Equal(ResponseStrings.Get("SpecifySongForPlaylist", "en-US", "road trip"), GetSpeech(response));
+        VerifyAddItemNever();
+    }
+
+    [Fact]
+    public async void AddSong_PlaylistMissing_SpeaksNeutralPlaylistPrompt()
+    {
+        _libraryManagerMock
+            .Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<Audio> { new() { Name = "Circles", Id = SongId } });
+
+        SkillResponse response = await CreateAddSong().HandleAsync(
+            CreateRequest(IntentNames.AddSongToPlaylist, new() { ["song"] = "circles" }),
+            new Context(), CreateUser(), session: null!, CancellationToken.None);
+
+        Assert.Equal(ResponseStrings.Get("SpecifyPlaylistName", "en-US"), GetSpeech(response));
+        VerifyAddItemNever();
+    }
+
+    [Fact]
+    public async void CreatePlaylist_CalledCarrierStripped_FromNewName()
+    {
+        PlaylistCreationRequest? captured = null;
+        _playlistManagerMock
+            .Setup(p => p.CreatePlaylist(It.IsAny<PlaylistCreationRequest>()))
+            .Callback<PlaylistCreationRequest>(r => captured = r)
+            .ReturnsAsync(new PlaylistCreationResult(Guid.NewGuid().ToString("N")));
+
+        await CreateCreate().HandleAsync(
+            CreateRequest(IntentNames.CreatePlaylist, new() { ["playlist"] = "called Evening Jazz" }),
+            new Context(), CreateUser(), session: null!, CancellationToken.None);
+
+        Assert.Equal("Evening Jazz", captured!.Name);
+    }
+
+    [Theory]
+    [InlineData("it-IT", "chiamata prova echo", "prova echo")]
+    [InlineData("it-IT", "chiamato Prova", "Prova")]
+    [InlineData("en-US", "called Road Trip", "Road Trip")]
+    [InlineData("fr-FR", "appelée nuit", "nuit")]
+    [InlineData("de-DE", "namens Liste", "Liste")]
+    [InlineData("ja-JP", "テスト という", "テスト")]
+    [InlineData("hi-IN", "prova नाम की", "prova")]
+    [InlineData("hi-IN", "prova नाम का", "prova")]
+    [InlineData("it-IT", "chiamata", "chiamata")]
+    [InlineData("en-US", "la chiamata", "la chiamata")]
+    [InlineData("it-IT", "  ", null)]
+    [InlineData("it-IT", null, null)]
+    [InlineData("xx-XX", "chiamata prova", "chiamata prova")]
+    public void NormalizePlaylistName_StripsCarrierPerLocale(string locale, string? raw, string? expected)
+    {
+        Assert.Equal(expected, Jellyfin.Plugin.AlexaSkill.Alexa.Util.PlaylistNameNormalizer.NormalizePlaylistName(raw, locale));
     }
 
     private SessionInfo CreateSession(Guid itemId) => new(_sessionManagerMock.Object, _loggerFactory.CreateLogger<SessionInfo>())

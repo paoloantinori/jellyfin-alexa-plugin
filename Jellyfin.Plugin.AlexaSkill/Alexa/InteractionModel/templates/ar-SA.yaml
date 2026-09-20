@@ -305,6 +305,7 @@ intents:
     samples:
       - أنشئ قائمة تشغيل باسم {playlist}
       - أنشئ قائمة تشغيل جديدة باسم {playlist}
+      - أنشئ قائمة تشغيل {playlist}
     slots:
       - name: playlist
         type: AMAZON.SearchQuery
