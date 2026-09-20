@@ -111,15 +111,20 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
             }
         }
 
-        var (jellyfinUserId, resolveScope) = ResolveUserWithLibraryScope(context);
-        if (jellyfinUserId == Guid.Empty)
-        {
-            return Task.CompletedTask;
-        }
-
+        // Inside the try (review round 2): user resolution failing must degrade via
+        // the interceptor's own catch (which names the purpose), not the pipeline's
+        // generic per-interceptor swallow that hid the JF-588 NRE.
+        Guid? scopedUserId = null;
         try
         {
-            DynamicEntitiesDirective? directive = _builder.Build(jellyfinUserId, context.Locale, resolveScope, includeSeries, includeAudiobooks, cancellationToken);
+            var (jellyfinUserId, resolveScope, boundLibraryId) = ResolveUserWithLibraryScope(context);
+            if (jellyfinUserId == Guid.Empty)
+            {
+                return Task.CompletedTask;
+            }
+
+            scopedUserId = jellyfinUserId;
+            DynamicEntitiesDirective? directive = _builder.Build(jellyfinUserId, context.Locale, resolveScope, includeSeries, includeAudiobooks, cancellationToken, boundLibraryId);
 
             if (directive == null)
             {
@@ -131,7 +136,7 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogWarning(ex, "Failed to build dynamic entities for user {UserId}", jellyfinUserId);
+            _logger.LogWarning(ex, "Failed to build dynamic entities for user {UserId}", scopedUserId);
         }
 
         return Task.CompletedTask;
@@ -146,7 +151,7 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
     /// RESOLVED scope: raw collection-folder ids never escape it (JF-456). A null
     /// resolver result = unrestricted user.
     /// </summary>
-    private (Guid UserId, Func<Guid[]?>? ResolveScope) ResolveUserWithLibraryScope(RequestContext context)
+    private (Guid UserId, Func<Guid[]?>? ResolveScope, string? BoundLibraryId) ResolveUserWithLibraryScope(RequestContext context)
     {
         // Voice-based identification takes priority (multi-user households)
         string? personId = context.AlexaContext?.System?.Person?.PersonId;
@@ -155,7 +160,7 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
             Entities.User? user = _config.GetUserByPersonId(personId);
             if (user != null)
             {
-                return (user.Id, () => LibraryFilter.ResolveForUser(user, _libraryManager, _logger));
+                return (user.Id, () => LibraryFilter.ResolveForUser(user, _libraryManager, _logger), null);
             }
             // PersonId present but unmapped: the room binding still applies below.
         }
@@ -165,24 +170,31 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
         if (Guid.TryParse(accessToken, out Guid userId))
         {
             Entities.User? user = _config.GetUserById(userId);
-            // JF-327: dynamic entity values must reflect the device's bound library.
-            // A person id that reached this arm is unmapped (not a recognized
-            // profile), so the device binding correctly applies. A NULL user is the
-            // pre-existing deliberate degradation (stale token id after a config
-            // wipe, the JF-588 shape): the entity values stay unrestricted, and the
-            // binding must be skipped because Apply derefs the user whenever this
-            // device is bound (review finding: the old `user!` was an NRE exactly
-            // there).
-            if (user != null)
+            if (user == null)
             {
-                user = Alexa.Util.DeviceLibraryBindingResolver.Apply(context.AlexaContext, user, _config, _logger);
+                // Parsed-but-stale token id (config wiped, the JF-588 shape): the
+                // funnel answers this same request with user-not-found, so entity
+                // values would leak every library's names onto a device the admin
+                // may have bound (fail-open, review round 2). Mirror the funnel's
+                // verdict: no user, no entity refresh.
+                _logger.LogDebug("Dynamic entities: token id {UserId} resolves to no plugin user; skipping entity refresh", userId);
+                return (Guid.Empty, null, null);
             }
 
-            return (userId, () => LibraryFilter.ResolveForUser(user, _libraryManager, _logger));
+            // JF-327: dynamic entity values must reflect the device's bound library.
+            // A person id that reached this arm is unmapped (not a recognized
+            // profile), so the device binding correctly applies. The binding's
+            // library id also becomes the output-cache scope dimension: without it
+            // a bound device can be served whatever scope was first cached for
+            // this user (review round 2).
+            string? boundLibraryId = _config.GetDeviceLibraryBinding(
+                context.AlexaContext?.System?.Device?.DeviceID)?.LibraryId;
+            user = Alexa.Util.DeviceLibraryBindingResolver.Apply(context.AlexaContext, user, _config, _logger);
+            return (userId, () => LibraryFilter.ResolveForUser(user, _libraryManager, _logger), boundLibraryId);
         }
 
         _logger.LogDebug("Could not resolve Jellyfin user ID for dynamic entities");
-        return (Guid.Empty, null);
+        return (Guid.Empty, null, null);
     }
 
     /// <summary>

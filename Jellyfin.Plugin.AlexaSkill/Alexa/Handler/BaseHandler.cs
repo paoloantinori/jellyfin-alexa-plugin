@@ -287,7 +287,8 @@ public abstract class BaseHandler
         // and this method re-resolves it from the untouched configuration. A
         // recognized voice profile (which may have resolved the user just above)
         // makes the resolver skip the binding: the person outranks the room.
-        user = Util.DeviceLibraryBindingResolver.Apply(context, user, _config, Logger);
+        user = Util.DeviceLibraryBindingResolver.Apply(context, user, _config, Logger)
+            ?? user; // null-in/null-out only; a non-null user never comes back null
 
         // JF-477: the session lookup runs on EVERY request of every dialog turn, and
         // Jellyfin's implementation queries the device/auth database per call. Serve it

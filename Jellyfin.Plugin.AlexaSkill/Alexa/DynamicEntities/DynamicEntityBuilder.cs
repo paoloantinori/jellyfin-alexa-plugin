@@ -48,7 +48,12 @@ public class DynamicEntityBuilder : IDisposable
     // session on the wrong type.
     private readonly ConcurrentDictionary<(Guid UserId, string Locale), (List<LastPlayedSlotValue> Values, DateTime ExpiresAt)> _lastPlayedCache = new();
 
-    private readonly record struct OutputCacheKey(Guid UserId, string Locale, bool IncludeSeries, bool IncludeAudiobooks);
+    // The bound-library id is a cache-key dimension (review round 2): the device
+    // binding changes the effective scope for the SAME user, so a key without it
+    // serves a bound device whatever scope was first cached (unrestricted
+    // included) for the TTL. Null = unbound (the vast majority of requests and
+    // every legacy key shape).
+    private readonly record struct OutputCacheKey(Guid UserId, string Locale, bool IncludeSeries, bool IncludeAudiobooks, string? BoundLibraryId);
 
     private static readonly Dictionary<CatalogType, string> SlotTypeNames = CatalogSlotTypes.Names;
 
@@ -120,9 +125,10 @@ public class DynamicEntityBuilder : IDisposable
         Func<Guid[]?>? resolveScope,
         bool includeSeries,
         bool includeAudiobooks,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? boundLibraryId = null)
     {
-        var cacheKey = new OutputCacheKey(jellyfinUserId, locale, includeSeries, includeAudiobooks);
+        var cacheKey = new OutputCacheKey(jellyfinUserId, locale, includeSeries, includeAudiobooks, boundLibraryId);
         if (_outputCache.TryGetValue(cacheKey, out var cached) && cached.ExpiresAt > DateTime.UtcNow)
         {
             _logger.LogDebug("Dynamic entities cache hit for user {UserId}", jellyfinUserId);

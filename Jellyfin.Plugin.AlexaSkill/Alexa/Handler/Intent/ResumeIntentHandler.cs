@@ -198,8 +198,10 @@ public class ResumeIntentHandler : BaseHandler
 
             // JF-327: the re-fetch (fresh config) would drop the device-library
             // scoping applied at the request funnel; re-apply it (idempotent).
+            // The input is never null here (?? user), and Apply is null-in/null-out,
+            // so the null-forgiving fallback is defensive only.
             Entities.User pluginUser = Util.DeviceLibraryBindingResolver.Apply(
-                context, _config.GetUserById(user.Id) ?? user, _config, Logger);
+                context, _config.GetUserById(user.Id) ?? user, _config, Logger) ?? user;
             BaseItemKind[] contentTypes = FilterByContentAccess(new[] { BaseItemKind.Audio, BaseItemKind.Movie, BaseItemKind.Episode, BaseItemKind.AudioBook });
 
             var (resumeItem, resumeTicks) = FindLastPlayedItemWithProgress(

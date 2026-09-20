@@ -86,25 +86,20 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
 
         // Should not have called builder (intent name is "none", not TV or book context)
         _builderMock.Verify(
-            b => b.Build(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
+            b => b.Build(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>(), It.IsAny<string?>()),
             Times.Never);
     }
 
     /// <summary>
-    /// Review finding on the 2-day range (2026-09-20): a device binding plus a
-    /// stale token id (config wiped, JF-588 shape) used to NRE inside Apply and
-    /// silently drop the dynamic-entities directive. The null user must degrade to
-    /// UNRESTRICTED values (the pre-JF-327 contract), with the binding skipped.
+    /// Review round 2 (2026-09-20): a bound device plus a stale token id (config
+    /// wiped, JF-588 shape) must FAIL CLOSED. The first fix NRE'd; the second fix
+    /// would have failed OPEN (unrestricted values on a bound device, riding the
+    /// same user-not-found Tell). The contract now mirrors the funnel: no plugin
+    /// user, no entity refresh at all.
     /// </summary>
     [Fact]
-    public async Task ProcessAsync_BoundDevice_StaleUserId_DegradesUnrestrictedWithoutThrowing()
+    public async Task ProcessAsync_BoundDevice_StaleUserId_SkipsEntityRefreshWithoutThrowing()
     {
-        var userId = Guid.NewGuid();
-        var directive = new DynamicEntitiesDirective();
-        _builderMock
-            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, false, It.IsAny<CancellationToken>()))
-            .Returns(directive);
-
         _config.DeviceLibraryBindings.Add(new Jellyfin.Plugin.AlexaSkill.Configuration.DeviceLibraryBinding
         {
             DeviceId = "test-device",
@@ -112,7 +107,39 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
         });
 
         var interceptor = CreateInterceptor();
-        var request = new LaunchRequest { Type = "LaunchRequest" };
+        // CreateContext's default IS the stale-id shape: fresh random-Guid access
+        // token, DeviceID "test-device", and PluginTestBase seeds no config users.
+        var ctx = CreateContext(new LaunchRequest { Type = "LaunchRequest" }, session: new AlexaSession { New = false });
+        await interceptor.ProcessAsync(ctx, CancellationToken.None);
+
+        _builderMock.Verify(
+            b => b.Build(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>(), It.IsAny<string?>()),
+            Times.Never);
+    }
+
+    /// <summary>
+    /// Review round 2, cache-scope dimension: a resolved user on a BOUND device
+    /// must reach Build with the bound library id as the cache-scope argument, so
+    /// the output cache can never serve an unrestricted entry to a bound device.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_BoundDevice_ResolvedUser_BuildsScopedToBoundLibrary()
+    {
+        var userId = Guid.NewGuid();
+        var boundLibraryId = Guid.NewGuid().ToString();
+        var user = new Jellyfin.Plugin.AlexaSkill.Entities.User { Id = userId };
+        _config.Users.Add(user);
+        _config.DeviceLibraryBindings.Add(new Jellyfin.Plugin.AlexaSkill.Configuration.DeviceLibraryBinding
+        {
+            DeviceId = "test-device",
+            LibraryId = boundLibraryId,
+        });
+        var directive = new DynamicEntitiesDirective();
+        _builderMock
+            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, false, It.IsAny<CancellationToken>(), boundLibraryId))
+            .Returns(directive);
+
+        var interceptor = CreateInterceptor();
         var alexaContext = new Context
         {
             System = new global::Alexa.NET.Request.AlexaSystem
@@ -122,23 +149,21 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
             }
         };
 
-        var ctx = CreateContext(request, alexaContext, session: new AlexaSession { New = false });
+        var ctx = CreateContext(new LaunchRequest { Type = "LaunchRequest" }, alexaContext, session: new AlexaSession { New = false });
         await interceptor.ProcessAsync(ctx, CancellationToken.None);
 
-        // The directive still lands (unrestricted values): the stale id degrades,
-        // it does not throw, and it does not lose the feature.
-        Assert.NotNull(ctx.Response!.Response.Directives);
-        Assert.Contains(directive, ctx.Response.Response.Directives);
+        Assert.Contains(directive, ctx.Response!.Response.Directives!);
     }
 
     [Fact]
     public async Task ProcessAsync_LaunchRequest_InjectsDirective()
     {
         var userId = Guid.NewGuid();
+        _config.Users.Add(new Jellyfin.Plugin.AlexaSkill.Entities.User { Id = userId });
         var directive = new DynamicEntitiesDirective();
 
         _builderMock
-            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, false, It.IsAny<CancellationToken>()))
+            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, false, It.IsAny<CancellationToken>(), It.IsAny<string?>()))
             .Returns(directive);
 
         var interceptor = CreateInterceptor();
@@ -163,10 +188,11 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
     public async Task ProcessAsync_NewSession_InjectsDirective()
     {
         var userId = Guid.NewGuid();
+        _config.Users.Add(new Jellyfin.Plugin.AlexaSkill.Entities.User { Id = userId });
         var directive = new DynamicEntitiesDirective();
 
         _builderMock
-            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, false, It.IsAny<CancellationToken>()))
+            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, false, It.IsAny<CancellationToken>(), It.IsAny<string?>()))
             .Returns(directive);
 
         var interceptor = CreateInterceptor();
@@ -193,7 +219,7 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
     {
         var userId = Guid.NewGuid();
         _builderMock
-            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, false, It.IsAny<CancellationToken>()))
+            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, false, It.IsAny<CancellationToken>(), It.IsAny<string?>()))
             .Returns((DynamicEntitiesDirective?)null);
 
         var interceptor = CreateInterceptor();
@@ -231,7 +257,7 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
         await interceptor.ProcessAsync(ctx, CancellationToken.None);
 
         _builderMock.Verify(
-            b => b.Build(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
+            b => b.Build(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>(), It.IsAny<string?>()),
             Times.Never);
     }
 
@@ -250,7 +276,7 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
 
         var directive = new DynamicEntitiesDirective();
         _builderMock
-            .Setup(b => b.Build(testUserId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, false, It.IsAny<CancellationToken>()))
+            .Setup(b => b.Build(testUserId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, false, It.IsAny<CancellationToken>(), It.IsAny<string?>()))
             .Returns(directive);
 
         var interceptor = CreateInterceptor();
@@ -269,7 +295,7 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
         await interceptor.ProcessAsync(ctx, CancellationToken.None);
 
         _builderMock.Verify(
-            b => b.Build(testUserId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, false, It.IsAny<CancellationToken>()),
+            b => b.Build(testUserId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, false, It.IsAny<CancellationToken>(), It.IsAny<string?>()),
             Times.Once);
     }
 
@@ -300,7 +326,7 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
     {
         var userId = Guid.NewGuid();
         _builderMock
-            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, false, It.IsAny<CancellationToken>()))
+            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, false, It.IsAny<CancellationToken>(), It.IsAny<string?>()))
             .Throws(new InvalidOperationException("test failure"));
 
         var interceptor = CreateInterceptor();
@@ -325,8 +351,9 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
     public async Task ProcessAsync_Cancellation_Propagates()
     {
         var userId = Guid.NewGuid();
+        _config.Users.Add(new Jellyfin.Plugin.AlexaSkill.Entities.User { Id = userId });
         _builderMock
-            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, false, It.IsAny<CancellationToken>()))
+            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, false, It.IsAny<CancellationToken>(), It.IsAny<string?>()))
             .Throws(new OperationCanceledException());
 
         var interceptor = CreateInterceptor();
@@ -375,7 +402,7 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
         await interceptor.ProcessAsync(ctx, CancellationToken.None);
 
         _builderMock.Verify(
-            b => b.Build(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
+            b => b.Build(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>(), It.IsAny<string?>()),
             Times.Never);
 
         Assert.Single(ctx.Response.Response.Directives);
@@ -401,7 +428,7 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
         await interceptor.ProcessAsync(ctx, CancellationToken.None);
 
         _builderMock.Verify(
-            b => b.Build(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
+            b => b.Build(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>(), It.IsAny<string?>()),
             Times.Never);
 
         Assert.Single(ctx.Response.Response.Directives);
@@ -412,10 +439,11 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
     public async Task ProcessAsync_NoAudioPlayerDirective_NewSession_StillInjectsDynamicEntities()
     {
         var userId = Guid.NewGuid();
+        _config.Users.Add(new Jellyfin.Plugin.AlexaSkill.Entities.User { Id = userId });
         var directive = new DynamicEntitiesDirective();
 
         _builderMock
-            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, false, It.IsAny<CancellationToken>()))
+            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, false, It.IsAny<CancellationToken>(), It.IsAny<string?>()))
             .Returns(directive);
 
         var interceptor = CreateInterceptor();
@@ -434,7 +462,7 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
         await interceptor.ProcessAsync(ctx, CancellationToken.None);
 
         _builderMock.Verify(
-            b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, false, It.IsAny<CancellationToken>()),
+            b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, false, It.IsAny<CancellationToken>(), It.IsAny<string?>()),
             Times.Once);
 
         Assert.NotNull(ctx.Response.Response.Directives);
@@ -445,10 +473,11 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
     public async Task ProcessAsync_TvIntentMidSession_InjectsWithSeries()
     {
         var userId = Guid.NewGuid();
+        _config.Users.Add(new Jellyfin.Plugin.AlexaSkill.Entities.User { Id = userId });
         var directive = new DynamicEntitiesDirective();
 
         _builderMock
-            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), true, false, It.IsAny<CancellationToken>()))
+            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), true, false, It.IsAny<CancellationToken>(), It.IsAny<string?>()))
             .Returns(directive);
 
         var interceptor = CreateInterceptor();
@@ -471,7 +500,7 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
         await interceptor.ProcessAsync(ctx, CancellationToken.None);
 
         _builderMock.Verify(
-            b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), true, false, It.IsAny<CancellationToken>()),
+            b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), true, false, It.IsAny<CancellationToken>(), It.IsAny<string?>()),
             Times.Once);
         Assert.Contains(directive, ctx.Response!.Response.Directives!);
     }
@@ -480,10 +509,11 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
     public async Task ProcessAsync_BookIntentMidSession_InjectsWithAudiobooks()
     {
         var userId = Guid.NewGuid();
+        _config.Users.Add(new Jellyfin.Plugin.AlexaSkill.Entities.User { Id = userId });
         var directive = new DynamicEntitiesDirective();
 
         _builderMock
-            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, true, It.IsAny<CancellationToken>()))
+            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, true, It.IsAny<CancellationToken>(), It.IsAny<string?>()))
             .Returns(directive);
 
         var interceptor = CreateInterceptor();
@@ -506,7 +536,7 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
         await interceptor.ProcessAsync(ctx, CancellationToken.None);
 
         _builderMock.Verify(
-            b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, true, It.IsAny<CancellationToken>()),
+            b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, true, It.IsAny<CancellationToken>(), It.IsAny<string?>()),
             Times.Once);
         Assert.Contains(directive, ctx.Response!.Response.Directives!);
     }
@@ -526,7 +556,7 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
         await interceptor.ProcessAsync(ctx, CancellationToken.None);
 
         _builderMock.Verify(
-            b => b.Build(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
+            b => b.Build(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>(), It.IsAny<string?>()),
             Times.Never);
     }
 
@@ -543,7 +573,7 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
         // playback-control intents carry no slot to resolve, so they must always skip.
         var userId = Guid.NewGuid();
         _builderMock
-            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>(), It.IsAny<string?>()))
             .Returns(new DynamicEntitiesDirective());
 
         var interceptor = CreateInterceptor();
@@ -566,7 +596,7 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
         await interceptor.ProcessAsync(ctx, CancellationToken.None);
 
         _builderMock.Verify(
-            b => b.Build(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
+            b => b.Build(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), It.IsAny<bool>(), It.IsAny<bool>(), It.IsAny<CancellationToken>(), It.IsAny<string?>()),
             Times.Never);
     }
 }

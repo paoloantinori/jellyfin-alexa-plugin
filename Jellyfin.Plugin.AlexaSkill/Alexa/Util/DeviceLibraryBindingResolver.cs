@@ -27,9 +27,17 @@ public static class DeviceLibraryBindingResolver
     /// <param name="user">The user resolved by the controller (linking, or profile fallback).</param>
     /// <param name="config">The plugin configuration holding the bindings.</param>
     /// <param name="logger">The logger.</param>
-    /// <returns>The effective user (the same instance when unrestricted).</returns>
-    public static Entities.User Apply(Context? context, Entities.User user, PluginConfiguration config, ILogger logger)
+    /// <returns>The effective user (the same instance when unrestricted; null in, null out).</returns>
+    public static Entities.User? Apply(Context? context, Entities.User? user, PluginConfiguration config, ILogger logger)
     {
+        if (user == null)
+        {
+            // Null-safe in/out like the sibling ApplyByDevice (review round 2 root
+            // cause): a caller holding a re-fetched config user must not NRE here
+            // just because the device is bound. Null means "no user to scope".
+            return null;
+        }
+
         // A recognized voice profile outranks the room: skip the binding entirely.
         string? personId = context?.System?.Person?.PersonId;
         if (!string.IsNullOrEmpty(personId) && config.GetUserByPersonId(personId) != null)
