@@ -167,8 +167,17 @@ public class DynamicEntitiesInterceptor : IResponseInterceptor
             Entities.User? user = _config.GetUserById(userId);
             // JF-327: dynamic entity values must reflect the device's bound library.
             // A person id that reached this arm is unmapped (not a recognized
-            // profile), so the device binding correctly applies.
-            user = Alexa.Util.DeviceLibraryBindingResolver.Apply(context.AlexaContext, user!, _config, _logger);
+            // profile), so the device binding correctly applies. A NULL user is the
+            // pre-existing deliberate degradation (stale token id after a config
+            // wipe, the JF-588 shape): the entity values stay unrestricted, and the
+            // binding must be skipped because Apply derefs the user whenever this
+            // device is bound (review finding: the old `user!` was an NRE exactly
+            // there).
+            if (user != null)
+            {
+                user = Alexa.Util.DeviceLibraryBindingResolver.Apply(context.AlexaContext, user, _config, _logger);
+            }
+
             return (userId, () => LibraryFilter.ResolveForUser(user, _libraryManager, _logger));
         }
 

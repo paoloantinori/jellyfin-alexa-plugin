@@ -90,6 +90,47 @@ public class DynamicEntitiesInterceptorTests : PluginTestBase
             Times.Never);
     }
 
+    /// <summary>
+    /// Review finding on the 2-day range (2026-09-20): a device binding plus a
+    /// stale token id (config wiped, JF-588 shape) used to NRE inside Apply and
+    /// silently drop the dynamic-entities directive. The null user must degrade to
+    /// UNRESTRICTED values (the pre-JF-327 contract), with the binding skipped.
+    /// </summary>
+    [Fact]
+    public async Task ProcessAsync_BoundDevice_StaleUserId_DegradesUnrestrictedWithoutThrowing()
+    {
+        var userId = Guid.NewGuid();
+        var directive = new DynamicEntitiesDirective();
+        _builderMock
+            .Setup(b => b.Build(userId, It.IsAny<string>(), It.IsAny<Func<Guid[]?>>(), false, false, It.IsAny<CancellationToken>()))
+            .Returns(directive);
+
+        _config.DeviceLibraryBindings.Add(new Jellyfin.Plugin.AlexaSkill.Configuration.DeviceLibraryBinding
+        {
+            DeviceId = "test-device",
+            LibraryId = Guid.NewGuid().ToString(),
+        });
+
+        var interceptor = CreateInterceptor();
+        var request = new LaunchRequest { Type = "LaunchRequest" };
+        var alexaContext = new Context
+        {
+            System = new global::Alexa.NET.Request.AlexaSystem
+            {
+                User = new global::Alexa.NET.Request.User { AccessToken = userId.ToString() },
+                Device = new Device { DeviceID = "test-device" }
+            }
+        };
+
+        var ctx = CreateContext(request, alexaContext, session: new AlexaSession { New = false });
+        await interceptor.ProcessAsync(ctx, CancellationToken.None);
+
+        // The directive still lands (unrestricted values): the stale id degrades,
+        // it does not throw, and it does not lose the feature.
+        Assert.NotNull(ctx.Response!.Response.Directives);
+        Assert.Contains(directive, ctx.Response.Response.Directives);
+    }
+
     [Fact]
     public async Task ProcessAsync_LaunchRequest_InjectsDirective()
     {
