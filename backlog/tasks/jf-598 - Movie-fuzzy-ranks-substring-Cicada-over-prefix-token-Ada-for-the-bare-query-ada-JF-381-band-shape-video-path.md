@@ -1,0 +1,44 @@
+---
+id: JF-598
+title: >-
+  Movie fuzzy ranks substring 'Cicada' over prefix-token 'Ada' for the bare
+  query 'ada' (JF-381 band shape, video path)
+status: To Do
+assignee: []
+created_date: '2026-09-20 10:43'
+labels:
+  - bug
+  - search
+  - fuzzy-matching
+milestone: Polish
+dependencies: []
+priority: low
+---
+
+## Description
+
+<!-- SECTION:DESCRIPTION:BEGIN -->
+Found during the 2026-09-20 E2E run + fixture repins: the library contains 'Ada: My Mother the Architect' (2025), and a bare 'ada' query in PlayVideoIntent answers the did-you-mean flow suggesting 'Cicada' ('Non ho trovato ada. Intendevi Cicada?'). The video-title fuzzy evidently ranks the substring-containing 'Cicada' over the prefix-token 'Ada: ...'. This is the same shape as the JF-381 artist containment band (a coincidental substring match must not beat a prefix match), on the movie path. The E2E fixtures now honestly pin the current did-you-mean behavior; this task is the ranking fix.
+<!-- SECTION:DESCRIPTION:END -->
+
+## Acceptance Criteria
+<!-- AC:BEGIN -->
+- [ ] #1 Reproduce via simulator: 'metti il film ada' (it-IT) answers the did-you-mean flow suggesting 'Cicada' although the library contains 'Ada: My Mother the Architect' (a prefix-token match on 'ada')
+- [ ] #2 Ranking fix follows the JF-381 containment-band principle: a candidate whose title TOKEN starts with the query ('Ada: ...' token 'Ada' vs query 'ada') outranks a candidate that merely CONTAINS the query as a substring ('Cicada')
+- [ ] #3 E2E fixtures for the ada movie rows updated back to a play expectation once the ranking lands (currently pinned to 'Intendevi' honestly)
+- [ ] #4 Suite green both TFMs
+<!-- AC:END -->
+
+## Definition of Done
+<!-- DOD:BEGIN -->
+- [ ] #1 dotnet build passes with 0 errors
+- [ ] #2 dotnet test passes
+- [ ] #3 No new compiler warnings introduced
+- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
+- [ ] #6 NLU test fixtures updated if interaction model changed
+- [ ] #7 E2E test added for new intent or handler logic
+- [ ] #8 Locale response strings added to all 17 locales
+- [ ] #9 /simplify passed (no blocking cleanups remaining)
+- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+<!-- DOD:END -->
