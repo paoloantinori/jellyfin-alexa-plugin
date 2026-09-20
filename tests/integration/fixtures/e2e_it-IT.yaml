@@ -375,14 +375,14 @@ tests:
     expected_slots:
       title: {}
     expected_response_type: speech
-    expected_speech_contains: "Intendevi"
+    expected_speech_contains: "dispositivo con schermo"
 
   - utterance: "riproduci il film ada"
     expected_intent: PlayVideoIntent
     expected_slots:
       title: {}
     expected_response_type: speech
-    expected_speech_contains: "Intendevi"
+    expected_speech_contains: "dispositivo con schermo"
 
   # JF-504 cerca-as-play movie carrier.
   - utterance: "cerca il film ada"
@@ -390,7 +390,7 @@ tests:
     expected_slots:
       title: {}
     expected_response_type: speech
-    expected_speech_contains: "Intendevi"
+    expected_speech_contains: "dispositivo con schermo"
 
   # The h264+eac3 movie (JF-498 remux routing class).
   - utterance: "metti il film inside out 2"
@@ -411,7 +411,7 @@ tests:
     expected_slots:
       title: {}
     expected_response_type: speech
-    expected_speech_contains: "Intendevi"
+    expected_speech_contains: "dispositivo con schermo"
     skip_reason: >
       JF-504 open item: the invocation-wrapped infinitive one-shot stays
       Fallback in simulate-skill and on-device (2026-09-06); re-enable when
