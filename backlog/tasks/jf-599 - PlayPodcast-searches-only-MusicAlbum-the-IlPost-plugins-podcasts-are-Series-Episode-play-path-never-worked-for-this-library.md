@@ -3,10 +3,10 @@ id: JF-599
 title: >-
   PlayPodcast searches only MusicAlbum; the IlPost plugin's podcasts are
   Series/Episode (play path never worked for this library)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-20 16:51'
-updated_date: '2026-09-20 16:52'
+updated_date: '2026-09-20 18:30'
 labels:
   - bug
   - podcast
@@ -28,6 +28,12 @@ Live-found 2026-09-20 (user test 2): PlayPodcastIntent searches MusicAlbum only,
 - [ ] #2 The MusicAlbum path still works for community-plugin libraries (query unchanged)
 - [ ] #3 Suite green both TFMs
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Fixed 2026-09-20 (commit "fix(podcast): JF-599 the Series/Episode storage shape plays at last"). The IlPost library (78 Series / 677 Episode items / zero MusicAlbums, CollectionType=tvshows) now resolves: MusicAlbum query first (community-plugin path byte-identical, locked by test), Series fallback on miss, newest episode via the shared PodcastEpisodeResolver (AncestorIds + Episode|Audio + Limit 1 + IsVirtualItem=false for the series shape). Review round found and fixed the dead confirm paths: YesIntentHandler gained the podcast arm (was falling to MediaNotFound) and the APL carousel tap resolves a tapped Series (was FolderNoPlayableContent via the ParentId+MediaTypes=Audio child query). All three launch sites (handler, yes, APL) ride ResolveAudioLaunchSource so a name-matched TV episode can never dead-launch on eac3. TV-series contamination risk documented on the fallback (no type-level discriminator exists). 7 new tests; suite 4181/4181 both TFMs; /simplify + code-review gates passed with findings applied.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

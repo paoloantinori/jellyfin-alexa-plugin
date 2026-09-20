@@ -3,10 +3,10 @@ id: JF-600
 title: >-
   Playlist create leak: "chiamata" carrier captured into playlist_target and the
   empty-song branch asks the wrong question
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-20 17:04'
-updated_date: '2026-09-20 17:30'
+updated_date: '2026-09-20 18:30'
 labels: []
 dependencies: []
 priority: high
@@ -48,3 +48,9 @@ Implementation (2026-09-20):
 - Strings: SpecifyPlaylistName + SpecifySongForPlaylist in all 17 locale JSONs (validate_locales PASS).
 - Tests: 5 handler tests + 11-case normalizer Theory in PlaylistEditIntentHandlerTests; NLU fixtures +2 it-IT rows.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Shipped 2026-09-20 (commit 'fix(playlist): JF-600 carrier leak stripped, create routing widened, empty-slot prompts split'). Live-verified after deploy: profile-nlu routes 'crea playlist chiamata prova echo' / 'crea playlist prova echo' / 'crea una playlist prova echo' all to CreatePlaylistIntent with playlist='prova echo' (previously the first two fell into the AddSong free-text steal); simulator with the incident shape playlist_target='chiamata prova echo' + empty song now answers 'Quale canzone vuoi aggiungere alla playlist prova echo?' (was the listen-worded DidNotCatchPlaylistName); simulator Create with playlist='chiamata prova echo' creates the playlist named 'prova echo' (was: would create 'chiamata prova echo'). All 17 locale models rebuilt (fr-CA needed one solo retry, the known trainer flake). Gates: /simplify (home moved to Util/PlaylistNameNormalizer, ShufflePlay 6th site rewired, dead guards removed, separators baked) + code-review high (hi-IN trailing carrier added, preemptive-strip trade-off documented); suite 4181/4181 both TFMs.
+<!-- SECTION:FINAL_SUMMARY:END -->
