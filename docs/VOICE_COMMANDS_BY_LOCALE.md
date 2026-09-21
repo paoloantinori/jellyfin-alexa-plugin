@@ -65,7 +65,7 @@ Placeholder legend:
 | `<كلمات من عنوان الأغنية>` | `{titleKeywords}` |
 | `<اسم المستخدم>` | `{username}` |
 
-Complete phrase list (314 phrases across 64 commands):
+Complete phrase list (315 phrases across 64 commands):
 
 #### Play music
 
@@ -336,6 +336,7 @@ Complete phrase list (314 phrases across 64 commands):
 
 - `أضف الأغنية <اسم الأغنية> إلى قائمة التشغيل <اسم قائمة التشغيل>`
 - `أضف <اسم الأغنية> إلى قائمة التشغيل <اسم قائمة التشغيل>`
+- `أضف إلى قائمة التشغيل <اسم قائمة التشغيل>`
 
 **Remove the current song from a playlist**
 
@@ -603,7 +604,7 @@ Placeholder legend:
 | `<woorden uit de songtitel>` | `{titleKeywords}` |
 | `<gebruikersnaam>` | `{username}` |
 
-Complete phrase list (375 phrases across 64 commands):
+Complete phrase list (377 phrases across 64 commands):
 
 #### Play music
 
@@ -919,6 +920,8 @@ Complete phrase list (375 phrases across 64 commands):
 
 - `Voeg het nummer <titel van het nummer> toe aan de afspeellijst <playlist name>`
 - `Voeg <titel van het nummer> toe aan de afspeellijst <playlist name>`
+- `voeg <titel van het nummer> toe aan de afspeellijst <playlist name>`
+- `voeg toe aan de afspeellijst <playlist name>`
 
 **Remove the current song from a playlist**
 
@@ -1201,7 +1204,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (469 phrases across 64 commands):
+Complete phrase list (470 phrases across 64 commands):
 
 #### Play music
 
@@ -1575,6 +1578,7 @@ Complete phrase list (469 phrases across 64 commands):
 - `add the song <song title> to the playlist <playlist name>`
 - `add <song title> to the playlist <playlist name>`
 - `put the song <song title> in the playlist <playlist name>`
+- `add to the playlist <playlist name>`
 
 **Remove the current song from a playlist**
 
@@ -1893,7 +1897,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (462 phrases across 64 commands):
+Complete phrase list (463 phrases across 64 commands):
 
 #### Play music
 
@@ -2264,6 +2268,7 @@ Complete phrase list (462 phrases across 64 commands):
 - `add the song <song title> to the playlist <playlist name>`
 - `add <song title> to the playlist <playlist name>`
 - `put the song <song title> in the playlist <playlist name>`
+- `add to the playlist <playlist name>`
 
 **Remove the current song from a playlist**
 
@@ -2578,7 +2583,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (558 phrases across 64 commands):
+Complete phrase list (559 phrases across 64 commands):
 
 #### Play music
 
@@ -3026,6 +3031,7 @@ Complete phrase list (558 phrases across 64 commands):
 - `add the song <song title> to the playlist <playlist name>`
 - `add <song title> to the playlist <playlist name>`
 - `put the song <song title> in the playlist <playlist name>`
+- `add to the playlist <playlist name>`
 
 **Remove the current song from a playlist**
 
@@ -3359,7 +3365,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (463 phrases across 64 commands):
+Complete phrase list (464 phrases across 64 commands):
 
 #### Play music
 
@@ -3729,6 +3735,7 @@ Complete phrase list (463 phrases across 64 commands):
 - `add the song <song title> to the playlist <playlist name>`
 - `add <song title> to the playlist <playlist name>`
 - `put the song <song title> in the playlist <playlist name>`
+- `add to the playlist <playlist name>`
 
 **Remove the current song from a playlist**
 
@@ -4052,7 +4059,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (573 phrases across 66 commands):
+Complete phrase list (574 phrases across 66 commands):
 
 #### Play music
 
@@ -4488,6 +4495,7 @@ Complete phrase list (573 phrases across 66 commands):
 - `add the song <song title> to the playlist <playlist name>`
 - `add <song title> to the playlist <playlist name>`
 - `put the song <song title> in the playlist <playlist name>`
+- `add to the playlist <playlist name>`
 
 **Remove the current song from a playlist**
 
@@ -4854,7 +4862,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (424 phrases across 67 commands):
+Complete phrase list (426 phrases across 67 commands):
 
 #### Play music
 
@@ -5196,6 +5204,8 @@ Complete phrase list (424 phrases across 67 commands):
 
 - `Ajoute la chanson <titre de la chanson> à la liste de lecture <playlist name>`
 - `Ajoute <titre de la chanson> à la liste de lecture <playlist name>`
+- `ajoute <titre de la chanson> à la liste de lecture <playlist name>`
+- `ajoute à la liste de lecture <playlist name>`
 
 **Remove the current song from a playlist**
 
@@ -5510,7 +5520,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (435 phrases across 67 commands):
+Complete phrase list (437 phrases across 67 commands):
 
 #### Play music
 
@@ -5860,6 +5870,8 @@ Complete phrase list (435 phrases across 67 commands):
 
 - `Ajoute la chanson <titre de la chanson> à la liste de lecture <playlist name>`
 - `Ajoute <titre de la chanson> à la liste de lecture <playlist name>`
+- `ajoute <titre de la chanson> à la liste de lecture <playlist name>`
+- `ajoute à la liste de lecture <playlist name>`
 
 **Remove the current song from a playlist**
 
@@ -6177,7 +6189,7 @@ Placeholder legend:
 | `<Wörter aus dem Songtitel>` | `{titleKeywords}` |
 | `<Benutzername>` | `{username}` |
 
-Complete phrase list (444 phrases across 67 commands):
+Complete phrase list (445 phrases across 67 commands):
 
 #### Play music
 
@@ -6532,6 +6544,7 @@ Complete phrase list (444 phrases across 67 commands):
 
 - `Füge das Lied <Titel des Liedes> zur Playlist <playlist name> hinzu`
 - `Füge <Titel des Liedes> zur Playlist <playlist name> hinzu`
+- `Füge zur Playlist <playlist name> hinzu`
 
 **Remove the current song from a playlist**
 
@@ -6854,7 +6867,7 @@ Placeholder legend:
 | `<गाने के नाम के शब्द>` | `{titleKeywords}` |
 | `<उपयोगकर्ता का नाम>` | `{username}` |
 
-Complete phrase list (333 phrases across 64 commands):
+Complete phrase list (335 phrases across 64 commands):
 
 #### Play music
 
@@ -7137,6 +7150,8 @@ Complete phrase list (333 phrases across 64 commands):
 
 - `गाना <गाने का नाम> को प्लेलिस्ट <प्लेलिस्ट का नाम> में जोड़ो`
 - `<गाने का नाम> को प्लेलिस्ट <प्लेलिस्ट का नाम> में जोड़ें`
+- `प्लेलिस्ट <प्लेलिस्ट का नाम> में <गाने का नाम> जोड़ो`
+- `प्लेलिस्ट <प्लेलिस्ट का नाम> में जोड़ो`
 
 **Remove the current song from a playlist**
 
@@ -7411,7 +7426,7 @@ Placeholder legend:
 | `<titolo del video o del film>` | `{title}` |
 | `<parole del titolo del brano>` | `{titleKeywords}` |
 
-Complete phrase list (1453 phrases across 67 commands):
+Complete phrase list (1455 phrases across 67 commands):
 
 #### Play music
 
@@ -8724,6 +8739,8 @@ Complete phrase list (1453 phrases across 67 commands):
 - `Aggiungi la canzone <titolo del brano> alla playlist <nome della playlist>`
 - `Aggiungi il brano <titolo del brano> alla playlist <nome della playlist>`
 - `Metti la canzone <titolo del brano> nella playlist <nome della playlist>`
+- `Aggiungi <titolo del brano> alla playlist <nome della playlist>`
+- `Aggiungi alla playlist <nome della playlist>`
 
 **Remove the current song from a playlist**
 
@@ -9636,7 +9653,7 @@ Placeholder legend:
 | `<palavras do título da música>` | `{titleKeywords}` |
 | `<nome do usuário>` | `{username}` |
 
-Complete phrase list (389 phrases across 64 commands):
+Complete phrase list (391 phrases across 64 commands):
 
 #### Play music
 
@@ -9959,6 +9976,8 @@ Complete phrase list (389 phrases across 64 commands):
 
 - `Adicione a música <título da música> à playlist <nome da playlist>`
 - `Adicione <título da música> à playlist <nome da playlist>`
+- `adicione <título da música> à playlist <nome da playlist>`
+- `adicione à playlist <nome da playlist>`
 
 **Remove the current song from a playlist**
 
@@ -10248,7 +10267,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (419 phrases across 64 commands):
+Complete phrase list (421 phrases across 64 commands):
 
 #### Play music
 
@@ -10588,6 +10607,8 @@ Complete phrase list (419 phrases across 64 commands):
 
 - `Añade la canción <título de la canción> a la lista <nombre de la lista>`
 - `Añade <título de la canción> a la lista <nombre de la lista>`
+- `añade <título de la canción> a la lista <nombre de la lista>`
+- `añade a la lista <nombre de la lista>`
 
 **Remove the current song from a playlist**
 
@@ -10890,7 +10911,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (413 phrases across 64 commands):
+Complete phrase list (415 phrases across 64 commands):
 
 #### Play music
 
@@ -11226,6 +11247,8 @@ Complete phrase list (413 phrases across 64 commands):
 
 - `Añade la canción <título de la canción> a la lista <nombre de la lista>`
 - `Añade <título de la canción> a la lista <nombre de la lista>`
+- `añade <título de la canción> a la lista <nombre de la lista>`
+- `añade a la lista <nombre de la lista>`
 
 **Remove the current song from a playlist**
 
@@ -11526,7 +11549,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (407 phrases across 64 commands):
+Complete phrase list (409 phrases across 64 commands):
 
 #### Play music
 
@@ -11859,6 +11882,8 @@ Complete phrase list (407 phrases across 64 commands):
 
 - `Añade la canción <título de la canción> a la lista <nombre de la lista>`
 - `Añade <título de la canción> a la lista <nombre de la lista>`
+- `añade <título de la canción> a la lista <nombre de la lista>`
+- `añade a la lista <nombre de la lista>`
 
 **Remove the current song from a playlist**
 

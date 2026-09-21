@@ -24,7 +24,7 @@ Invocation name: **"jellyfin player"**
 | Intent | Utterances |
 |--------|------------|
 | Add Current To Playlist | `أضف هذه الأغنية إلى قائمة التشغيل {playlist}` · `أضف الحالي إلى قائمة التشغيل {playlist}` |
-| Add Song To Playlist | `أضف الأغنية {song} إلى قائمة التشغيل {playlist_target}` · `أضف {song} إلى قائمة التشغيل {playlist_target}` |
+| Add Song To Playlist | `أضف الأغنية {song} إلى قائمة التشغيل {playlist_target}` · `أضف إلى قائمة التشغيل {playlist_target}` · `أضف {song} إلى قائمة التشغيل {playlist_target}` |
 | Add To Queue | `أضف {song} إلى قائمة الانتظار` · `أضف {song} لـ {musician} إلى قائمة الانتظار` · `ضع {song} في قائمة الانتظار` · `أضف {song} إلى القائمة` |
 | Browse Library | `{browse_category}` · `تصفح أنواع {filter}` · `تصفح {browse_category}` · `أرني {browse_category}` · `أعرض {browse_category}` · `ما {browse_category} لدي` |
 | Clear Queue | `امسح قائمة الانتظار` · `أفرغ قائمة الانتظار` · `أزل كل شيء من قائمة الانتظار` |
@@ -79,7 +79,7 @@ Invocation name: **"jellyfin player"**
 | Intent | Utterances |
 |--------|------------|
 | Add Current To Playlist | `Füge dieses Lied zur Playlist {playlist} hinzu` · `Füge das aktuelle Lied zur Playlist {playlist} hinzu` · `Lege dieses Lied in die Playlist {playlist}` |
-| Add Song To Playlist | `Füge das Lied {song} zur Playlist {playlist_target} hinzu` · `Füge {song} zur Playlist {playlist_target} hinzu` |
+| Add Song To Playlist | `Füge das Lied {song} zur Playlist {playlist_target} hinzu` · `Füge zur Playlist {playlist_target} hinzu` · `Füge {song} zur Playlist {playlist_target} hinzu` |
 | Add To Queue | `Füge {song} zur Wiedergabeliste hinzu` · `Füge {song} von {musician} zur Wiedergabeliste hinzu` · `Setze {song} auf die Warteschlange` · `Setze {song} von {musician} auf die Warteschlange` · `Stelle {song} hinten an` · `Füge {song} hinzu` |
 | Browse Library | `{browse_category}` · `durchsuche genres {filter}` · `nur {browse_category}` · `ich möchte {browse_category}` · `durchsuche {browse_category}` · `zeige mir {browse_category}` |
 | Clear Queue | `Lösche meine Warteschlange` · `Lösche die Warteschlange` · `Leere meine Warteschlange` · `Leere die Warteschlange` · `Entferne alles aus der Warteschlange` · `Lösche meine Playlist` |
@@ -137,7 +137,7 @@ Invocation name: **"jellyfin player"**
 | Intent | Utterances |
 |--------|------------|
 | Add Current To Playlist | `add this song to the playlist {playlist}` · `add this to the playlist {playlist}` · `add the current song to the playlist {playlist}` · `put this song in the playlist {playlist}` |
-| Add Song To Playlist | `add the song {song} to the playlist {playlist_target}` · `add {song} to the playlist {playlist_target}` · `put the song {song} in the playlist {playlist_target}` |
+| Add Song To Playlist | `add the song {song} to the playlist {playlist_target}` · `add to the playlist {playlist_target}` · `add {song} to the playlist {playlist_target}` · `put the song {song} in the playlist {playlist_target}` |
 | Add To Queue | `add {song} to my queue` · `add {song} by {musician} to my queue` · `add {song} to the queue` · `add {song} by {musician} to the queue` · `queue {song}` · `queue {song} by {musician}` |
 | Browse Library | `{browse_category}` · `browse genres {filter}` · `just {browse_category}` · `I want {browse_category}` · `browse {browse_category}` · `show me {browse_category}` |
 | Clear Queue | `clear my queue` · `clear the queue` · `empty my queue` · `empty the queue` · `remove everything from my queue` · `clear my playlist` |
@@ -192,7 +192,7 @@ Invocation name: **"jellyfin player"**
 | Intent | Utterances |
 |--------|------------|
 | Add Current To Playlist | `add this song to the playlist {playlist}` · `add this to the playlist {playlist}` · `add the current song to the playlist {playlist}` · `put this song in the playlist {playlist}` |
-| Add Song To Playlist | `add the song {song} to the playlist {playlist_target}` · `add {song} to the playlist {playlist_target}` · `put the song {song} in the playlist {playlist_target}` |
+| Add Song To Playlist | `add the song {song} to the playlist {playlist_target}` · `add to the playlist {playlist_target}` · `add {song} to the playlist {playlist_target}` · `put the song {song} in the playlist {playlist_target}` |
 | Add To Queue | `add {song} to my queue` · `add {song} by {musician} to my queue` · `add {song} to the queue` · `add {song} by {musician} to the queue` · `queue {song}` · `queue {song} by {musician}` |
 | Browse Library | `browse {browse_category}` · `browse genres {filter}` · `show me {browse_category}` · `list {browse_category}` · `what {browse_category} do i have` · `list genres {filter}` |
 | Clear Queue | `clear my queue` · `clear the queue` · `empty my queue` · `empty the queue` · `remove everything from my queue` · `clear my playlist` |
@@ -247,7 +247,7 @@ Invocation name: **"jellyfin player"**
 | Intent | Utterances |
 |--------|------------|
 | Add Current To Playlist | `add this song to the playlist {playlist}` · `add this to the playlist {playlist}` · `add the current song to the playlist {playlist}` · `put this song in the playlist {playlist}` |
-| Add Song To Playlist | `add the song {song} to the playlist {playlist_target}` · `add {song} to the playlist {playlist_target}` · `put the song {song} in the playlist {playlist_target}` |
+| Add Song To Playlist | `add the song {song} to the playlist {playlist_target}` · `add to the playlist {playlist_target}` · `add {song} to the playlist {playlist_target}` · `put the song {song} in the playlist {playlist_target}` |
 | Add To Queue | `add {song} to my queue` · `add {song} by {musician} to my queue` · `add {song} to the queue` · `add {song} by {musician} to the queue` · `queue {song}` · `queue {song} by {musician}` |
 | Browse Library | `{browse_category}` · `browse genres {filter}` · `just {browse_category}` · `I want {browse_category}` · `browse {browse_category}` · `show me {browse_category}` |
 | Clear Queue | `clear my queue` · `clear the queue` · `empty my queue` · `empty the queue` · `remove everything from my queue` · `clear my playlist` |
@@ -302,7 +302,7 @@ Invocation name: **"jellyfin player"**
 | Intent | Utterances |
 |--------|------------|
 | Add Current To Playlist | `add this song to the playlist {playlist}` · `add this to the playlist {playlist}` · `add the current song to the playlist {playlist}` · `put this song in the playlist {playlist}` |
-| Add Song To Playlist | `add the song {song} to the playlist {playlist_target}` · `add {song} to the playlist {playlist_target}` · `put the song {song} in the playlist {playlist_target}` |
+| Add Song To Playlist | `add the song {song} to the playlist {playlist_target}` · `add to the playlist {playlist_target}` · `add {song} to the playlist {playlist_target}` · `put the song {song} in the playlist {playlist_target}` |
 | Add To Queue | `add {song} to my queue` · `add {song} by {musician} to my queue` · `add {song} to the queue` · `add {song} by {musician} to the queue` · `queue {song}` · `queue {song} by {musician}` |
 | Browse Library | `{browse_category}` · `browse genres {filter}` · `just {browse_category}` · `I want {browse_category}` · `browse {browse_category}` · `show me {browse_category}` |
 | Clear Queue | `clear my queue` · `clear the queue` · `empty my queue` · `empty the queue` · `remove everything from my queue` · `clear my playlist` |
@@ -357,7 +357,7 @@ Invocation name: **"jellyfin player"**
 | Intent | Utterances |
 |--------|------------|
 | Add Current To Playlist | `add this song to the playlist {playlist}` · `add this to the playlist {playlist}` · `add the current song to the playlist {playlist}` · `put this song in the playlist {playlist}` |
-| Add Song To Playlist | `add the song {song} to the playlist {playlist_target}` · `add {song} to the playlist {playlist_target}` · `put the song {song} in the playlist {playlist_target}` |
+| Add Song To Playlist | `add the song {song} to the playlist {playlist_target}` · `add to the playlist {playlist_target}` · `add {song} to the playlist {playlist_target}` · `put the song {song} in the playlist {playlist_target}` |
 | Add To Queue | `add {song} to my queue` · `add {song} by {musician} to my queue` · `add {song} to the queue` · `add {song} by {musician} to the queue` · `queue {song}` · `queue {song} by {musician}` |
 | Browse Library | `{browse_category}` · `browse genres {filter}` · `just {browse_category}` · `I want {browse_category}` · `browse {browse_category}` · `show me {browse_category}` |
 | Clear Queue | `clear my queue` · `clear the queue` · `empty my queue` · `empty the queue` · `remove everything from my queue` · `clear my playlist` |
@@ -414,7 +414,7 @@ Invocation name: **"jellyfin player"**
 | Intent | Utterances |
 |--------|------------|
 | Add Current To Playlist | `Añade esta canción a la lista {playlist}` · `Añade esto a la lista {playlist}` · `Pon esta canción en la lista {playlist}` |
-| Add Song To Playlist | `Añade la canción {song} a la lista {playlist_target}` · `Añade {song} a la lista {playlist_target}` |
+| Add Song To Playlist | `Añade la canción {song} a la lista {playlist_target}` · `añade a la lista {playlist_target}` · `Añade {song} a la lista {playlist_target}` · `añade {song} a la lista {playlist_target}` |
 | Add To Queue | `Añade {song} a mi cola` · `Añade {song} de {musician} a mi cola` · `Añade {song} a la cola` · `Añade {song} de {musician} a la cola` · `Pon {song} en la cola` · `Pon {song} de {musician} en la cola` |
 | Browse Library | `{browse_category}` · `explorar géneros {filter}` · `solo {browse_category}` · `quiero {browse_category}` · `explorar {browse_category}` · `muéstrame {browse_category}` |
 | Clear Queue | `Borra mi cola` · `Borra la cola` · `Vacía mi cola` · `Vacía la cola` · `Quita todo de mi cola` · `Limpia mi lista` |
@@ -469,7 +469,7 @@ Invocation name: **"jellyfin player"**
 | Intent | Utterances |
 |--------|------------|
 | Add Current To Playlist | `Añade esta canción a la lista {playlist}` · `Añade esto a la lista {playlist}` · `Pon esta canción en la lista {playlist}` |
-| Add Song To Playlist | `Añade la canción {song} a la lista {playlist_target}` · `Añade {song} a la lista {playlist_target}` |
+| Add Song To Playlist | `Añade la canción {song} a la lista {playlist_target}` · `añade a la lista {playlist_target}` · `Añade {song} a la lista {playlist_target}` · `añade {song} a la lista {playlist_target}` |
 | Add To Queue | `Añade {song} a mi cola` · `Añade {song} de {musician} a mi cola` · `Añade {song} a la cola` · `Añade {song} de {musician} a la cola` · `Pon {song} en la cola` · `Pon {song} de {musician} en la cola` |
 | Browse Library | `{browse_category}` · `explorar géneros {filter}` · `solo {browse_category}` · `quiero {browse_category}` · `explorar {browse_category}` · `muéstrame {browse_category}` |
 | Clear Queue | `Borra mi cola` · `Borra la cola` · `Vacía mi cola` · `Vacía la cola` · `Quita todo de mi cola` · `Limpia mi lista` |
@@ -524,7 +524,7 @@ Invocation name: **"jellyfin player"**
 | Intent | Utterances |
 |--------|------------|
 | Add Current To Playlist | `Añade esta canción a la lista {playlist}` · `Añade esto a la lista {playlist}` · `Pon esta canción en la lista {playlist}` |
-| Add Song To Playlist | `Añade la canción {song} a la lista {playlist_target}` · `Añade {song} a la lista {playlist_target}` |
+| Add Song To Playlist | `Añade la canción {song} a la lista {playlist_target}` · `añade a la lista {playlist_target}` · `Añade {song} a la lista {playlist_target}` · `añade {song} a la lista {playlist_target}` |
 | Add To Queue | `Añade {song} a mi cola` · `Añade {song} de {musician} a mi cola` · `Añade {song} a la cola` · `Añade {song} de {musician} a la cola` · `Pon {song} en la cola` · `Pon {song} de {musician} en la cola` |
 | Browse Library | `explorar {browse_category}` · `explorar géneros {filter}` · `muéstrame {browse_category}` · `lista {browse_category}` · `qué {browse_category} tengo` · `qué {browse_category} hay` |
 | Clear Queue | `Borra mi cola` · `Borra la cola` · `Vacía mi cola` · `Vacía la cola` · `Quita todo de mi cola` · `Limpia mi lista` |
@@ -579,7 +579,7 @@ Invocation name: **"jellyfin player"**
 | Intent | Utterances |
 |--------|------------|
 | Add Current To Playlist | `Ajoute ce titre à la liste de lecture {playlist}` · `Ajoute la chanson en cours à la liste de lecture {playlist}` · `Mets ce titre dans la liste de lecture {playlist}` |
-| Add Song To Playlist | `Ajoute la chanson {song} à la liste de lecture {playlist_target}` · `Ajoute {song} à la liste de lecture {playlist_target}` |
+| Add Song To Playlist | `Ajoute la chanson {song} à la liste de lecture {playlist_target}` · `ajoute à la liste de lecture {playlist_target}` · `Ajoute {song} à la liste de lecture {playlist_target}` · `ajoute {song} à la liste de lecture {playlist_target}` |
 | Add To Queue | `Ajoute {song} à ma file d'attente` · `Ajoute {song} de {musician} à ma file d'attente` · `Ajoute {song} à la file d'attente` · `Ajoute {song} de {musician} à la file d'attente` · `Mets {song} dans la file d'attente` · `Mets {song} de {musician} dans la file d'attente` |
 | Browse Library | `{browse_category}` · `parcourir genres {filter}` · `juste {browse_category}` · `je veux {browse_category}` · `parcourir {browse_category}` · `montre-moi {browse_category}` |
 | Clear Queue | `Efface ma file d'attente` · `Efface la file d'attente` · `Vide ma file d'attente` · `Vide la file d'attente` · `Supprime tout de ma file d'attente` · `Efface ma liste` |
@@ -637,7 +637,7 @@ Invocation name: **"jellyfin player"**
 | Intent | Utterances |
 |--------|------------|
 | Add Current To Playlist | `Ajoute ce titre à la liste de lecture {playlist}` · `Ajoute la chanson en cours à la liste de lecture {playlist}` · `Mets ce titre dans la liste de lecture {playlist}` |
-| Add Song To Playlist | `Ajoute la chanson {song} à la liste de lecture {playlist_target}` · `Ajoute {song} à la liste de lecture {playlist_target}` |
+| Add Song To Playlist | `Ajoute la chanson {song} à la liste de lecture {playlist_target}` · `ajoute à la liste de lecture {playlist_target}` · `Ajoute {song} à la liste de lecture {playlist_target}` · `ajoute {song} à la liste de lecture {playlist_target}` |
 | Add To Queue | `Ajoute {song} à ma file d'attente` · `Ajoute {song} de {musician} à ma file d'attente` · `Ajoute {song} à la file d'attente` · `Ajoute {song} de {musician} à la file d'attente` · `Mets {song} dans la file d'attente` · `Mets {song} de {musician} dans la file d'attente` |
 | Browse Library | `{browse_category}` · `parcourir genres {filter}` · `juste {browse_category}` · `je veux {browse_category}` · `parcourir {browse_category}` · `montre-moi {browse_category}` |
 | Clear Queue | `Efface ma file d'attente` · `Efface la file d'attente` · `Vide ma file d'attente` · `Vide la file d'attente` · `Supprime tout de ma file d'attente` · `Efface ma liste` |
@@ -695,7 +695,7 @@ Invocation name: **"jellyfin player"**
 | Intent | Utterances |
 |--------|------------|
 | Add Current To Playlist | `इस गाने को प्लेलिस्ट {playlist} में जोड़ो` · `यह गाना प्लेलिस्ट {playlist} में जोड़ें` · `मौजूदा गाना प्लेलिस्ट {playlist} में जोड़ो` |
-| Add Song To Playlist | `गाना {song} को प्लेलिस्ट {playlist_target} में जोड़ो` · `{song} को प्लेलिस्ट {playlist_target} में जोड़ें` |
+| Add Song To Playlist | `गाना {song} को प्लेलिस्ट {playlist_target} में जोड़ो` · `प्लेलिस्ट {playlist_target} में {song} जोड़ो` · `प्लेलिस्ट {playlist_target} में जोड़ो` · `{song} को प्लेलिस्ट {playlist_target} में जोड़ें` |
 | Add To Queue | `{song} कतार में जोड़ो` · `{musician} का {song} कतार में जोड़ो` · `{song} कतार में डालो` · `{musician} का {song} कतार में डालो` |
 | Browse Library | `{browse_category}` · `शैलियाँ {filter} ब्राउज़ करो` · `{browse_category} ब्राउज़ करो` · `मुझे {browse_category} दिखाओ` · `{browse_category} की लिस्ट दो` · `मेरे पास कौन से {browse_category} हैं` |
 | Clear Queue | `कतार साफ़ करो` · `कतार खाली करो` · `कतार से सब हटाओ` |
@@ -750,7 +750,7 @@ Invocation name: **"mia collezione"**
 | Intent | Utterances |
 |--------|------------|
 | Add Current To Playlist | `Aggiungi questo brano alla playlist {playlist}` · `Aggiungi questo alla playlist {playlist}` · `Metti questo brano nella playlist {playlist}` |
-| Add Song To Playlist | `Aggiungi la canzone {song} alla playlist {playlist_target}` · `Aggiungi il brano {song} alla playlist {playlist_target}` · `Metti la canzone {song} nella playlist {playlist_target}` |
+| Add Song To Playlist | `Aggiungi la canzone {song} alla playlist {playlist_target}` · `Aggiungi alla playlist {playlist_target}` · `Aggiungi il brano {song} alla playlist {playlist_target}` · `Metti la canzone {song} nella playlist {playlist_target}` · `Aggiungi {song} alla playlist {playlist_target}` |
 | Add To Queue | `aggiungi {song} alla coda` · `accoda {song} di {musician}` · `metti {song} in coda` · `accoda {song}` · `aggiungi {song} di {musician} alla coda` · `metti {song} di {musician} in coda` |
 | Browse Library | `Sfoglia {browse_category}` · `Sfoglia i generi {filter}` · `Sfoglia i {browse_category}` · `Mostra {browse_category}` · `Mostra i {browse_category}` · `Elenca {browse_category}` |
 | Clear Queue | `svuota la coda` · `pulisci la coda` · `cancella la coda` · `elimina la coda` · `rimuovi tutto dalla coda` · `svuota la mia coda` |
@@ -863,7 +863,7 @@ Invocation name: **"jellyfin player"**
 | Intent | Utterances |
 |--------|------------|
 | Add Current To Playlist | `Voeg dit nummer toe aan de afspeellijst {playlist}` · `Voeg het huidige nummer toe aan de afspeellijst {playlist}` |
-| Add Song To Playlist | `Voeg het nummer {song} toe aan de afspeellijst {playlist_target}` · `Voeg {song} toe aan de afspeellijst {playlist_target}` |
+| Add Song To Playlist | `Voeg het nummer {song} toe aan de afspeellijst {playlist_target}` · `voeg toe aan de afspeellijst {playlist_target}` · `Voeg {song} toe aan de afspeellijst {playlist_target}` · `voeg {song} toe aan de afspeellijst {playlist_target}` |
 | Add To Queue | `voeg {song} toe aan mijn wachtrij` · `voeg {song} van {musician} toe aan mijn wachtrij` · `voeg {song} toe aan de wachtrij` · `voeg {song} van {musician} toe aan de wachtrij` · `wachtrij {song}` · `wachtrij {song} van {musician}` |
 | Browse Library | `{browse_category}` · `browse genres {filter}` · `alleen {browse_category}` · `ik wil {browse_category}` · `browse {browse_category}` · `laat {browse_category} zien` |
 | Clear Queue | `wis mijn wachtrij` · `wis de wachtrij` · `leeg mijn wachtrij` · `leeg de wachtrij` · `verwijder alles uit mijn wachtrij` |
@@ -918,7 +918,7 @@ Invocation name: **"jellyfin player"**
 | Intent | Utterances |
 |--------|------------|
 | Add Current To Playlist | `Adicione esta música à playlist {playlist}` · `Adicione a música atual à playlist {playlist}` · `Coloque esta música na playlist {playlist}` |
-| Add Song To Playlist | `Adicione a música {song} à playlist {playlist_target}` · `Adicione {song} à playlist {playlist_target}` |
+| Add Song To Playlist | `Adicione a música {song} à playlist {playlist_target}` · `adicione à playlist {playlist_target}` · `Adicione {song} à playlist {playlist_target}` · `adicione {song} à playlist {playlist_target}` |
 | Add To Queue | `adicionar {song} à minha fila` · `adicionar {song} de {musician} à minha fila` · `adicionar {song} à fila` · `adicionar {song} de {musician} à fila` · `enfileirar {song}` · `enfileirar {song} de {musician}` |
 | Browse Library | `{browse_category}` · `navegar gêneros {filter}` · `só {browse_category}` · `quero {browse_category}` · `navegar {browse_category}` · `mostrar {browse_category}` |
 | Clear Queue | `limpar minha fila` · `limpar a fila` · `esvaziar minha fila` · `esvaziar a fila` · `remover tudo da minha fila` · `limpar minha playlist` |
