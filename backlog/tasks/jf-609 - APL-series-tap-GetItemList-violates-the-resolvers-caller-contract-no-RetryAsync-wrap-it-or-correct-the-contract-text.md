@@ -3,9 +3,10 @@ id: JF-609
 title: >-
   APL series-tap GetItemList violates the resolver's caller contract (no
   RetryAsync): wrap it or correct the contract text
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-20 19:19'
+updated_date: '2026-09-21 06:04'
 labels: []
 dependencies: []
 references:
@@ -27,6 +28,12 @@ Gate review of eefb09ec (JF-599): AplUserEventHandler.cs:199 calls _libraryManag
 - [ ] #2 If wrapped: a transient-failure unit test shows the tap path retries instead of immediately speaking FolderNoPlayableContent
 - [ ] #3 If documented: the comment explains why the sync tap path runs unwrapped (consistency with GetItemById and the pre-change folder query)
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Absorbed into JF-605 (commit 71d4889c): the APL series-tap GetItemList now rides the shared retry-budgeted read inside PodcastEpisodeResolver.PlayLatestEpisodeAsync (RetryHelper.ExecuteWithRequestBudgetAsync, the same engine BaseHandler.RetryAsync wraps); HandleSelectItem threads its cancellation token into it. No residual deviation: the resolver's caller-contract text is gone (BuildLatestEpisodeQuery went private, no bypass possible).
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
