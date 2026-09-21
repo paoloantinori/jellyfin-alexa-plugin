@@ -161,8 +161,16 @@ public class YesIntentHandler : BaseHandler
         // JF-599/JF-605: the podcast disambiguation confirm rides the same
         // shared resolve-to-launch tail as the intent handler, so "yes" can never
         // dead-end a multi-match podcast prompt. Fresh play, offset 0.
+        // JF-611 review: the feature flag gates here too (a prompt opened before
+        // an admin disabled podcasts must not launch through the confirm).
         if (mediaType == DisambiguationHelper.MediaTypePodcast)
         {
+            SkillResponse? podcastsDisabled = IfFeatureDisabled(c => c.PodcastsEnabled, request);
+            if (podcastsDisabled != null)
+            {
+                return Task.FromResult(podcastsDisabled);
+            }
+
             return Util.PodcastEpisodeResolver.PlayLatestEpisodeAsync(
                 _libraryManager, Launch, Logger, "YesPodcastEpisodes", item, jellyfinUser!, user, session, context, locale,
                 cancellationToken: cancellationToken);

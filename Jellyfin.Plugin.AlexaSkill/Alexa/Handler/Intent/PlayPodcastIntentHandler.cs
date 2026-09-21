@@ -191,7 +191,7 @@ public class PlayPodcastIntentHandler : BaseHandler
             Logger,
             "GetPodcastEpisodes",
             podcast,
-            jellyfinUser,
+            jellyfinUser!,
             user,
             session,
             context,

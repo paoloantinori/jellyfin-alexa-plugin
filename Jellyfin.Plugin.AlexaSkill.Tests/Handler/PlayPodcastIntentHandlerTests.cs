@@ -475,7 +475,8 @@ public class PlayPodcastIntentHandlerTests : PluginTestBase
     /// <summary>
     /// JF-599: for a matched Series the episode query must scope by AncestorIds (season
     /// folders sit between the series and its episodes) with no ParentId, and accept
-    /// both Episode and Audio children. The album shape keeps ParentId (sibling test).
+    /// only Episode children (JF-611: no real storage shape puts an Audio item under
+    /// a Series ancestor). The album shape keeps ParentId (sibling test).
     /// </summary>
     [Fact]
     public async Task HandleAsync_SeriesShape_EpisodeQueryUsesAncestorIdsNotParentId()
@@ -508,7 +509,9 @@ public class PlayPodcastIntentHandlerTests : PluginTestBase
         Assert.Equal(Guid.Empty, episodeQuery.ParentId);
         Assert.NotNull(episodeQuery.IncludeItemTypes);
         Assert.Contains(BaseItemKind.Episode, episodeQuery.IncludeItemTypes);
-        Assert.Contains(BaseItemKind.Audio, episodeQuery.IncludeItemTypes);
+        // JF-611: Audio is deliberately absent from the series shape (no real
+        // storage shape puts an Audio item under a Series ancestor).
+        Assert.DoesNotContain(BaseItemKind.Audio, episodeQuery.IncludeItemTypes);
     }
 
     /// <summary>

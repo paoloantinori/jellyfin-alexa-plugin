@@ -193,6 +193,12 @@ public class AplUserEventHandler : BaseHandler
                 // real TV show in a series carousel also plays its newest episode
                 // audio-only (the pre-change behavior was the FolderNoPlayableContent
                 // refusal; tapped Episode items already played audio-only).
+                SkillResponse? podcastsDisabled = IfFeatureDisabled(c => c.PodcastsEnabled, request);
+                if (podcastsDisabled != null)
+                {
+                    return podcastsDisabled;
+                }
+
                 string seriesLocale = GetLocale(request);
                 var (seriesUser, seriesUserError) = ResolveJellyfinUser(_userManager, session.UserId, seriesLocale);
                 if (seriesUserError != null)
@@ -210,7 +216,7 @@ public class AplUserEventHandler : BaseHandler
                     Logger,
                     "AplPodcastEpisodes",
                     folder,
-                    seriesUser,
+                    seriesUser!,
                     user,
                     session,
                     context,

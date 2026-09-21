@@ -4,9 +4,10 @@ title: >-
   PodcastEpisodeResolver trivia: null-user doc comment misdescribes every
   caller, and the series AncestorIds query carries a dead BaseItemKind.Audio
   member
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-20 19:20'
+updated_date: '2026-09-21 08:42'
 labels: []
 dependencies: []
 references:
@@ -25,7 +26,7 @@ Gate review of eefb09ec (JF-599) trivia in the new shared resolver (both confirm
 <!-- AC:BEGIN -->
 - [ ] #1 BuildLatestEpisodeQuery's jellyfinUser doc describes reality (all three callers pass a resolved non-null user; BaseHandler.ResolveJellyfinUser never returns null user with null error)
 - [ ] #2 The series-shape IncludeItemTypes decision is deliberate and documented, or the Audio member is removed with the data-model reasoning in the comment
-- [ ] #3 No test changes needed (the series-shape mock keys on Episode only, verified in the review); full suite green
+- [ ] #3 Test changes limited to repinning the series-shape assertion (Episode present, Audio deliberately absent) and its doc; full suite green
 - [ ] #4 While in the file: the two added comment lines using the 'word - word' parenthetical-hyphen shape (PlayPodcastIntentHandler.cs:184/186) are reworded per the user-manual prose rule, or noted as accepted repo style if that is the maintainer's call
 <!-- AC:END -->
 

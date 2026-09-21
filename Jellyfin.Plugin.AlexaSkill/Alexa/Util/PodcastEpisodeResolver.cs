@@ -27,7 +27,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// shapes: a MusicAlbum of Audio tracks (the community plugins, direct children so
 /// ParentId) or a Series of Episode items under season folders (the IlPost plugin,
 /// the series is an ANCESTOR so AncestorIds). The series shape takes only the newest
-/// episode (Limit 1, matching the TvNextUpService newest-episode cores) and skips
+/// episode (Limit 1, ordered DateCreated-desc like the TvNextUpService newest
+/// core) and skips
 /// virtual placeholder episodes; the album shape keeps its pre-JF-599 form.
 /// </summary>
 public static class PodcastEpisodeResolver
@@ -63,7 +64,7 @@ public static class PodcastEpisodeResolver
     /// <param name="logger">The caller's logger (retry + triage lines).</param>
     /// <param name="retryLabel">The caller-scoped retry/triage label.</param>
     /// <param name="podcast">The matched podcast container (MusicAlbum or Series).</param>
-    /// <param name="jellyfinUser">The linked Jellyfin user.</param>
+    /// <param name="jellyfinUser">The linked Jellyfin user (every caller resolves one first; BaseHandler.ResolveJellyfinUser never yields a null user with a null error).</param>
     /// <param name="user">The plugin user.</param>
     /// <param name="session">The Jellyfin session (now-playing queue + item).</param>
     /// <param name="context">The Alexa context.</param>
@@ -78,7 +79,7 @@ public static class PodcastEpisodeResolver
         ILogger logger,
         string retryLabel,
         BaseItem podcast,
-        Jellyfin.Database.Implementations.Entities.User? jellyfinUser,
+        Jellyfin.Database.Implementations.Entities.User jellyfinUser,
         Entities.User user,
         SessionInfo session,
         Context? context,
@@ -87,6 +88,8 @@ public static class PodcastEpisodeResolver
         Action<SkillResponse, BaseItem>? attachScreen = null,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(jellyfinUser);
+
         logger.LogDebug("{Label}: podcast container='{Name}' id={Id} shape={Shape}", retryLabel, podcast.Name, podcast.Id, DescribeShape(podcast));
         var episodeQuery = BuildLatestEpisodeQuery(podcast, jellyfinUser);
 
@@ -125,20 +128,27 @@ public static class PodcastEpisodeResolver
     /// only consumer, so no caller can bypass its retry-budgeted read.
     /// </summary>
     /// <param name="podcast">The matched podcast container (MusicAlbum or Series).</param>
-    /// <param name="jellyfinUser">The linked Jellyfin user.</param>
+    /// <param name="jellyfinUser">The linked Jellyfin user (never null: all callers resolve one).</param>
     /// <returns>The query for the episode read.</returns>
-    private static InternalItemsQuery BuildLatestEpisodeQuery(BaseItem podcast, Jellyfin.Database.Implementations.Entities.User? jellyfinUser)
+    private static InternalItemsQuery BuildLatestEpisodeQuery(BaseItem podcast, Jellyfin.Database.Implementations.Entities.User jellyfinUser)
     {
         bool isSeriesShape = IsSeriesShape(podcast);
         var query = new InternalItemsQuery
         {
             User = jellyfinUser,
             Recursive = true,
+            // Episode ONLY under a Series (JF-611): no real storage shape puts an
+            // Audio item under a Series ancestor (live-probed: zero Audio under
+            // the Podcasts and Shows libraries, zero Series under Music), so an
+            // Audio arm here would be dead predicate weight misdocumenting the
+            // two-shape data model this resolver encodes. Both shapes take only
+            // the newest child (Limit 1) and skip virtual placeholders: the only
+            // consumer reads episodes[0] and queues a single item.
             IncludeItemTypes = isSeriesShape
-                ? new[] { BaseItemKind.Episode, BaseItemKind.Audio }
+                ? new[] { BaseItemKind.Episode }
                 : new[] { BaseItemKind.Audio },
-            Limit = isSeriesShape ? 1 : null,
-            IsVirtualItem = isSeriesShape ? false : null,
+            Limit = 1,
+            IsVirtualItem = false,
             OrderBy = new[] { (ItemSortBy.DateCreated, SortOrder.Descending) },
             DtoOptions = new DtoOptions(true)
         };
