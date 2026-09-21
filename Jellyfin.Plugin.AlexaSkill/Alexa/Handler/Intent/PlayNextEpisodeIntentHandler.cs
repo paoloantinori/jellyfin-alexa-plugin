@@ -86,7 +86,7 @@ public class PlayNextEpisodeIntentHandler : BaseHandler
 
         if (string.IsNullOrWhiteSpace(seriesName))
         {
-            return BuildDialogElicitResponse("DidNotCatchSeriesName", locale, "series_name", IntentNames.PlayNextEpisode, "series_name", "episode_position");
+            return BuildDialogElicitResponse("DidNotCatchSeriesName", locale, "series_name", IntentNames.PlayNextEpisode, Util.ElicitSlots.For(IntentNames.PlayNextEpisode));
         }
 
         // Media-type gate after the slot prompt and before any query (the JF-467

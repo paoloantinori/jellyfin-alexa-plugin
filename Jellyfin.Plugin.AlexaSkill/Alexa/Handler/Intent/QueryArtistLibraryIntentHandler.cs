@@ -108,7 +108,7 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
         if (string.IsNullOrWhiteSpace(musician))
         {
             Logger.LogDebug("QueryArtistLibrary: missing musician slot, eliciting");
-            return BuildDialogElicitResponse("DidNotCatchArtistName", locale, "musician", IntentNames.QueryArtistLibrary, "musician", "query_type");
+            return BuildDialogElicitResponse("DidNotCatchArtistName", locale, "musician", IntentNames.QueryArtistLibrary, Util.ElicitSlots.For(IntentNames.QueryArtistLibrary));
         }
 
         // Layer-1 gate (GuardIndexReady): before the "searching" progressive response.

@@ -49,7 +49,6 @@ Exit code: 0 if all checks pass, 1 if any error found. Warnings alone exit 0.
 import json
 import re
 import sys
-from collections.abc import Sequence
 from pathlib import Path
 
 from generate_interaction_model import MODELS_DIR  # the one layout owner
@@ -629,235 +628,131 @@ def lint_play_episode_one_shot_order(all_models: dict[str, dict]) -> list[str]:
 
 
 
-def check_elicit_dialog_registration(all_models: dict[str, dict]) -> tuple[list[str], list[str]]:
-    """ERROR check: every intent the plugin elicits must be dialog-registered.
+def check_elicit_dialog_registration(
+    sources: dict[str, str] | None = None,
+) -> tuple[list[str], list[str]]:
+    """ERROR check (JF-613 redesign): declaration against declaration.
 
-    The model-side half of the dead-mic pattern (JF-550): the handler emits a
-    Dialog.ElicitSlot, and Amazon SILENTLY drops the directive unless the target
-    intent appears in the model's dialog.intents (anti-pattern #9). Unit tests
-    cannot see this (they assert what the plugin SENDS, not what Amazon keeps),
-    so this check cross-references the elicit call sites in the handler source
-    against every locale's dialog section. Slot parity between the dialog entry
-    and the languageModel intent is asserted too: SMAPI rejects MismatchedSlotType
-    shapes at build time, and silent drift would surface only per-locale at deploy.
+    The OLD check hand-parsed four C# call shapes (inline arrays, constant-token
+    arrays, wrappers, hoisted locals) - every new C# idiom was a fresh
+    false-negative escape. The NEW contract: every elicit call site passes
+    Util.ElicitSlots.For(<intent>) as its allSlotNames, and the ONE ElicitSlots
+    table is compared against every locale's dialog.intents declaration. What
+    this checks:
+
+    1. CANONICAL SHAPE: any elicit builder call (BuildDialogElicitResponse /
+       BuildElicitSlotResponse / ElicitSlotDirective) outside BaseHandler.cs
+       whose span carries no ElicitSlots.For( is an error - the call site chose
+       a shape the table cannot guarantee, the exact silent-escape class this
+       redesign retires. BaseHandler.cs is exempt: it DEFINES the builders and
+       delegates their params internally.
+    2. TABLE PARITY: each table entry's slot set must equal every locale's
+       dialog.intents entry (and the languageModel slots, via the dialog-vs-lm
+       loop that stays). Drift in either direction fails here.
+    3. TABLE COMPLETENESS: every intent an elicit call targets must have a
+       table entry (a new elicit flow that forgets the table fails).
+    4. REGISTRATION (JF-550): every elicited intent must appear in every
+       locale's dialog.intents (anti-pattern #9, unchanged).
+
+    ``sources`` injects {filename: content} for the pytest harness; the default
+    reads the repo tree ONCE (the JF-612 double read is gone).
     """
     import glob as _glob
     import os as _os
     import re as _re
 
     repo_root = Path(__file__).resolve().parent.parent
-    handler_files = [
-        p
-        for p in _glob.glob(
-            str(repo_root / "Jellyfin.Plugin.AlexaSkill" / "Alexa" / "Handler" / "**" / "*.cs"),
-            recursive=True,
-        )
-        if f"{_os.sep}bin{_os.sep}" not in p and f"{_os.sep}obj{_os.sep}" not in p
-    ]
-    handler_src = "\n".join(open(p, encoding="utf-8").read() for p in handler_files)
+    if sources is None:
+        handler_files = [
+            p
+            for p in _glob.glob(
+                str(repo_root / "Jellyfin.Plugin.AlexaSkill" / "Alexa" / "**" / "*.cs"),
+                recursive=True,
+            )
+            if f"{_os.sep}bin{_os.sep}" not in p and f"{_os.sep}obj{_os.sep}" not in p
+        ]
+        sources = {p: Path(p).read_text(encoding="utf-8") for p in handler_files}
+
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    intent_names_src = sources.get(
+        str(repo_root / "Jellyfin.Plugin.AlexaSkill" / "Alexa" / "IntentNames.cs"),
+        (repo_root / "Jellyfin.Plugin.AlexaSkill" / "Alexa" / "IntentNames.cs").read_text(encoding="utf-8"),
+    )
     intent_constants = dict(
+        _re.findall(r'public const string (\w+) = "([\w.]+)"', intent_names_src)
+    )
+    slot_constants = dict(
         _re.findall(
-            r'public const string (\w+) = "([\w.]+)"',
-            (repo_root / "Jellyfin.Plugin.AlexaSkill" / "Alexa" / "IntentNames.cs").read_text(encoding="utf-8"),
+            r'public const string (\w+) = "(\w+)"',
+            _re.search(r"public static class Slots.*?\{(.*?)\}", intent_names_src, _re.S).group(1),
         )
     )
 
-    # Elicit targets: every builder call site naming an IntentNames.* constant.
-    # Three surfaces (JF-556): BuildDialogElicitResponse (the JF-549/550 sweep
-    # helper), raw ElicitSlotDirective constructions, and BuildElicitSlotResponse
-    # (FindSong's ElicitAnswer and PlayRadio's BuildStationElicit funnel through
-    # it - the intent that hit anti-pattern #9 live on 2026-08-21 must not be
-    # able to lose its registration with this checker green).
-    # A call span may reference several IntentNames.* tokens (e.g. FindSong's
-    # BuildElicitSlotResponse(IntentNames.Slots.TitleKeywords, IntentNames.
-    # FindSongIntent, ...)); keep every token that resolves to an intent
-    # constant and ignore the rest (nested classes like IntentNames.Slots).
-    targets = set()
-    for builder in ("BuildDialogElicitResponse", "ElicitSlotDirective", "BuildElicitSlotResponse"):
-        for span in _re.findall(builder + r"\([^;]*?\);", handler_src, _re.S):
+    # --- Parse the ONE ElicitSlots table (declaration source of truth) ---
+    elicit_slots_key = next((k for k in sources if k.endswith("ElicitSlots.cs")), None)
+    elicit_slots_src = sources[elicit_slots_key] if elicit_slots_key else ""
+    table: dict[str, set[str]] = {}
+    if not elicit_slots_src:
+        errors.append("  [code] Util/ElicitSlots.cs not found; the elicit slot-set table is the parity source of truth (JF-613)")
+    else:
+        src_nc = _re.sub(r"//[^\n]*", " ", elicit_slots_src)
+        for intent_tok, body in _re.findall(r"\[IntentNames\.(\w+)\]\s*=\s*new\[\]\s*\{([^}]*)\}", src_nc):
+            slots: set[str] = set()
+            for lit in _re.findall(r'"(\w+)"', body):
+                slots.add(lit)
+            for slot_tok in _re.findall(r"IntentNames\.Slots\.(\w+)", body):
+                if slot_tok in slot_constants:
+                    slots.add(slot_constants[slot_tok])
+            resolved = intent_constants.get(intent_tok, intent_tok + "?")
+            table[resolved] = slots
+        if not table:
+            errors.append("  [code] the ElicitSlots table parsed to zero entries; the initializer shape must stay '[IntentNames.X] = new[] { ... }'")
+
+    # --- Elicited targets + canonical-shape scan (per file, comments stripped) ---
+    targets: set[str] = set()
+    builder_re = _re.compile(r"(BuildDialogElicitResponse|BuildElicitSlotResponse|ElicitSlotDirective)\((.*?)\);", _re.S)
+    for fname, raw in sources.items():
+        src_nc = _re.sub(r"/\*.*?\*/", " ", raw, flags=_re.S)
+        src_nc = _re.sub(r"//[^\n]*", " ", src_nc)
+        # Path-based, not basename: a future same-named file elsewhere must not
+        # silently lose canonical-shape enforcement.
+        is_builder_home = str(Path(fname)).replace("\\", "/").endswith(
+            ("Alexa/Handler/BaseHandler.cs", "Alexa/Directive/ElicitSlotDirective.cs")
+        )
+        for builder, span in builder_re.findall(src_nc):
             for token in _re.findall(r"IntentNames\.(\w+)", span):
                 resolved = intent_constants.get(token)
                 if resolved:
                     targets.add(resolved)
-    errors: list[str] = []
-    warnings: list[str] = []
-    # JF-556 item 2: the C# allSlotNames list must match the model's slot set for
-    # that intent - Amazon rejects a partial updatedIntent. Every statically
-    # resolvable call shape is checked through the same _parity helper: inline
-    # string lists, IntentNames.Slots constant-token arrays (the JF-550 sweep
-    # used both), and the two BuildElicitSlotResponse shapes further down.
-    # One sample locale suffices: slot names are uniform across locales
-    # (verified by the cross-locale checks).
-    first_lm = next(iter(all_models.values()))
-    intent_names_src = (repo_root / "Jellyfin.Plugin.AlexaSkill" / "Alexa" / "IntentNames.cs").read_text(encoding="utf-8")
-    slots_class = _re.search(r"public static class Slots.*?\{(.*?)\}", intent_names_src, _re.S)
-    if slots_class is None:
-        warnings.append(
-            "  [code] IntentNames.Slots class not found; elicit allSlotNames parity is not verified"
-        )
-    slot_constants = (
-        dict(_re.findall(r"public const string (\w+) = \"(\w+)\"", slots_class.group(1)))
-        if slots_class
-        else {}
-    )
+            if is_builder_home:
+                continue
+            if "ElicitSlots.For(" not in span:
+                errors.append(
+                    f"  [code] {Path(fname).name}: a {builder} call does not pass ElicitSlots.For(...) "
+                    f"as allSlotNames (JF-613 canonical shape; hand-built slot arrays can drift silently)"
+                )
 
-    def _slot_tokens(span: str) -> list[str]:
-        # The ONE slot-token extraction (JF-612 simplify round): three call shapes
-        # shared this comprehension; token semantics now change in one place.
-        return sorted(
-            slot_constants[tok]
-            for tok in _re.findall(r"IntentNames\.Slots\.(\w+)", span)
-            if tok in slot_constants
-        )
-
-    def _parity(builder: str, intent: str | None, passed: Sequence[str | None]) -> None:
-        slots = [s for s in passed if s is not None]
-        if not intent or len(slots) != len(passed):
-            return
-        model_slots = {s["name"] for s in (intent_by_name(first_lm, intent) or {}).get("slots", [])}
-        if model_slots and set(slots) != model_slots:
+    # --- Table completeness: every elicited target needs an entry ---
+    for intent in sorted(targets):
+        if intent not in table:
             errors.append(
-                f"  [code] {builder} for {intent} passes allSlotNames {sorted(slots)} "
-                f"but the model declares {sorted(model_slots)} (Amazon rejects a partial updatedIntent)"
+                f"  [code] intent {intent} is elicited but has no ElicitSlots table entry; add it to Util/ElicitSlots.cs AND the 17 templates' dialog sections in the same change"
             )
 
-    decl_re = _re.compile(
-        r"(?:private\s+|internal\s+|public\s+)*(?:static\s+)?(?:readonly\s+)?(?:string\[\]|var)\s+(\w+)\s*=\s*(?:new\[\]\s*)?\{([^}]*)\}"
-    )
-    # The combined per-file declaration map (JF-612): shared by the dialog loop's
-    # identifier fallback and the hoisted BuildElicitSlotResponse scan below.
-    array_decls_all: dict[str, list[str]] = {}
-    for src_file in handler_files:
-        raw = open(src_file, encoding="utf-8").read()
-        src_nc = _re.sub(r"/\*.*?\*/", " ", raw, flags=_re.S)
-        src_nc = _re.sub(r"//[^\n]*", " ", src_nc)
-        for decl_name, decl_body in decl_re.findall(src_nc):
-            array_decls_all[decl_name] = decl_body
-
-    for intent_token, slots_span in _re.findall(
-        r"BuildDialogElicitResponse\(\s*[^,]+,\s*[^,]+,\s*[^,]+,\s*IntentNames\.(\w+),\s*([^;]*?)\)\s*;",
-        handler_src,
-        _re.S,
-    ):
-        slots = _re.findall(r'"(\w+)"', slots_span) or _slot_tokens(slots_span)
-        if not slots:
-            ident = slots_span.strip()
-            if _re.fullmatch(r"(?:this\.)?\w+", ident):
-                decl_body = array_decls_all.get(ident)
-                slots = _slot_tokens(decl_body) if decl_body else []
-            if not slots:
-                warnings.append(
-                    f"  [code] BuildDialogElicitResponse for {intent_tok} passes allSlotNames as "
-                    f"'{ident.strip()[:40]}' whose slot set is not statically resolvable; its parity is not verified"
-                )
-                continue
-        _parity("BuildDialogElicitResponse", intent_constants.get(intent_token), slots)
-
-    # JF-556 item 2, remainder: the two BuildElicitSlotResponse call shapes whose
-    # allSlotNames is not an inline string list.
-    #   Shape A (direct): BuildElicitSlotResponse(IntentNames.X, IntentNames.Slots.S,
-    #               new[] { IntentNames.Slots.S, ... }, ...) - constant-token array
-    #               (PlayRadio's BuildStationElicit).
-    #   Shape B (wrapper): a private overload whose allSlotNames is new[] { slotName }
-    #               with slotName == its slotToElicit parameter (FindSong's wrapper);
-    #               the wrapper's callers then spell the slot and intent constants.
-    # Both assert the same fact as the inline loop above: the passed allSlotNames IS
-    # the model's full slot set for that intent. A future extra slot on any elicited
-    # intent passes every other gate and fails only live with Amazon's "All slots
-    # must be defined" reject.
-    for intent_tok, array_span in _re.findall(
-        r"BuildElicitSlotResponse\(\s*IntentNames\.(\w+),\s*IntentNames\.Slots\.\w+,\s*"
-        r"new\[\]\s*\{([^}]*)\}",
-        handler_src,
-    ):
-        array_slots = _slot_tokens(array_span)
-        if array_slots:
-            _parity("BuildElicitSlotResponse", intent_constants.get(intent_tok), array_slots)
-
-    # JF-612: a hoisted allSlotNames local/field must not silently skip parity.
-    # Resolve simple declarations (string[] NAME = { ... } / new[] { ... }, any
-    # private/static/readonly prefix chain); an identifier that resolves to nothing
-    # or to a token-free initializer stays a WARNING, never silence.
-    # Positional OR named-in-order, this.-qualified or not (review round: a
-    # named-args refactor of the exact call shape used to escape both shapes).
-    call_re = _re.compile(
-        r"BuildElicitSlotResponse\(\s*(?:intentName:\s*)?(?:this\.)?IntentNames\.(\w+)\s*,\s*"
-        r"(?:slotToElicit:\s*)?(?:this\.)?IntentNames\.Slots\.\w+\s*,\s*"
-        r"(?:allSlotNames:\s*)?(?:this\.)?(\w+)\s*[,)]"
-    )
-    # Per-file resolution (JF-612 simplify round): the declaration dict is scoped to
-    # its own file, so a same-named array in another handler can never satisfy
-    # this call's parity in silence. Comments are stripped first (a doc-comment
-    # example must not register as a declaration or truncate a capture).
-    seen_parity_facts: set[str] = set()
-
-    def _parity_once(builder: str, intent_tok: str, slots: list[str]) -> None:
-        fact = f"{builder}:{intent_tok}:{sorted(slots)}"
-        if fact not in seen_parity_facts:
-            seen_parity_facts.add(fact)
-            _parity(builder, intent_constants.get(intent_tok), slots)
-
-    for src_file in handler_files:
-        raw = open(src_file, encoding="utf-8").read()
-        src = _re.sub(r"/\*.*?\*/", " ", raw, flags=_re.S)
-        src = _re.sub(r"//[^\n]*", " ", src)
-        array_decls: dict[str, list[str]] = {}
-        array_multi: set[str] = set()
-        for decl_name, decl_body in decl_re.findall(src):
-            if decl_name in array_decls:
-                # Same-name redeclaration in one file (a local shadowing a field):
-                # last-wins would pick an arbitrary slot set, so both failure
-                # modes degrade to a warning instead.
-                array_multi.add(decl_name)
-            array_decls[decl_name] = decl_body
-        for intent_tok, arr_name in call_re.findall(src):
-            if arr_name in array_multi:
-                warnings.append(
-                    f"  [code] BuildElicitSlotResponse for {intent_tok} passes allSlotNames as '{arr_name}' "
-                    f"which is declared more than once in its file; its parity is not verified"
-                )
-                continue
-            decl = array_decls.get(arr_name)
-            if decl is None:
-                warnings.append(
-                    f"  [code] BuildElicitSlotResponse for {intent_tok} passes allSlotNames as '{arr_name}' "
-                    f"but no array declaration for it was found in the same file; its parity is not verified"
-                )
-                continue
-            hoisted_slots = _slot_tokens(decl)
-            if hoisted_slots:
-                _parity_once("BuildElicitSlotResponse", intent_tok, hoisted_slots)
-            else:
-                warnings.append(
-                    f"  [code] BuildElicitSlotResponse for {intent_tok} passes allSlotNames as '{arr_name}' "
-                    f"whose declaration carries no IntentNames.Slots tokens; its parity is not verified"
-                )
-
-    # Shape B guard: only trust the wrapper-call pattern when an identity funnel
-    # (allSlotNames = new[] { <the slotToElicit expression itself> }) exists; if
-    # the wrapper drifts away from that shape, say so instead of going silent.
-    wrapper_is_identity = _re.search(
-        r"slotToElicit:\s*(\w+),\s*allSlotNames:\s*new\[\]\s*\{\s*\1\s*\}",
-        handler_src,
-        _re.S,
-    )
-    wrapper_calls = _re.findall(
-        r"BuildElicitSlotResponse\(\s*IntentNames\.Slots\.(\w+),\s*IntentNames\.(\w+)\b",
-        handler_src,
-    )
-    if wrapper_is_identity:
-        for slot_tok, intent_tok in wrapper_calls:
-            _parity("BuildElicitSlotResponse", intent_constants.get(intent_tok), [slot_constants.get(slot_tok)])
-    elif wrapper_calls:
+    # --- Reverse completeness (JF-613 simplify round): a table entry no call
+    # site elicits is dead weight that silently drifts. WARNING, not error:
+    # removing the entry cascades into the 17 templates' dialog sections, a
+    # model change judged out of proportion for harmless weight.
+    for intent in sorted(set(table) - targets):
         warnings.append(
-            "  [code] a BuildElicitSlotResponse wrapper is called with slot constants but no "
-            "identity funnel (allSlotNames = new[] { slotToElicit }) was found; its parity is not verified"
+            f"  [code] ElicitSlots entry for {intent} is never elicited by any call site; remove it or wire the elicit (its parity is otherwise unchecked)"
         )
-    if not targets:
-        return [], []
 
-    # all_models carries languageModels only; the dialog section is its sibling in
-    # the envelope, so re-read the raw files for this check.
+    # --- Table parity vs every locale's dialog section + registration ---
+    # all_models carries languageModels only; the dialog section is its sibling
+    # in the envelope, so re-read the raw files for this part.
     envelope: dict[str, dict] = {}
     for model_path in sorted(MODELS_DIR.glob("model_*.json")):
         with open(model_path, encoding="utf-8") as fh:
@@ -866,10 +761,7 @@ def check_elicit_dialog_registration(all_models: dict[str, dict]) -> tuple[list[
     for locale, doc in sorted(envelope.items()):
         lm = doc.get("interactionModel", doc).get("languageModel", doc.get("languageModel"))
         dialog = {i.get("name"): i for i in doc.get("interactionModel", doc).get("dialog", {}).get("intents", [])}
-        lm_slots = {
-            i["name"]: {s["name"] for s in (i.get("slots") or [])}
-            for i in lm["intents"]
-        }
+        lm_slots = {i["name"]: {s["name"] for s in (i.get("slots") or [])} for i in lm["intents"]}
         for intent in sorted(targets):
             entry = dialog.get(intent)
             if entry is None:
@@ -878,12 +770,15 @@ def check_elicit_dialog_registration(all_models: dict[str, dict]) -> tuple[list[
                 )
                 continue
             dlg_slots = {s.get("name") for s in (entry.get("slots") or [])}
+            if intent in table and dlg_slots != table[intent]:
+                errors.append(
+                    f"  [{locale}] dialog entry for {intent} lists slots {sorted(dlg_slots)} but the ElicitSlots table declares {sorted(table[intent])} (declaration drift; keep the table and the 17 templates in lockstep)"
+                )
             if intent in lm_slots and dlg_slots != lm_slots[intent]:
                 errors.append(
                     f"  [{locale}] dialog entry for {intent} lists slots {sorted(dlg_slots)} but the languageModel intent declares {sorted(lm_slots[intent])} (MismatchedSlotType at build)"
                 )
     return errors, warnings
-
 
 def _first_divergence(expected: str, actual: str) -> str:
     """First differing line pair between two serialized models, for warnings."""
@@ -1308,7 +1203,7 @@ def main() -> int:
     # Phase 8: elicit-target dialog registration (JF-550 error check)
     if all_models:
         print("\nElicit dialog registration:")
-        reg_errors, reg_warnings = check_elicit_dialog_registration(all_models)
+        reg_errors, reg_warnings = check_elicit_dialog_registration()
         all_errors.extend(reg_errors)
         # JF-612: surface the check's warnings (the pre-existing Shape B wrapper
         # drift note plus the hoisted-array unresolved notes) - they used to be

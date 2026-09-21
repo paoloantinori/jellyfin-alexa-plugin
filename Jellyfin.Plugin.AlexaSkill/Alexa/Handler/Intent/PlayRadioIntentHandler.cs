@@ -423,7 +423,7 @@ public class PlayRadioIntentHandler : BaseHandler
         => BuildElicitSlotResponse(
             IntentNames.PlayRadio,
             IntentNames.Slots.Station,
-            new[] { IntentNames.Slots.Station },
+            Util.ElicitSlots.For(IntentNames.PlayRadio),
             prompt,
             BuildStationChoicesReprompt(locale, channelNames));
 

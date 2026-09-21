@@ -82,7 +82,7 @@ public class SleepTimerIntentHandler : BaseHandler
         if (string.IsNullOrEmpty(durationSlot) || !int.TryParse(durationSlot, NumberStyles.Integer, CultureInfo.InvariantCulture, out int durationMinutes))
         {
             Logger.LogDebug("SleepTimer: invalid duration, eliciting");
-            return Task.FromResult(BuildDialogElicitResponse("DidNotCatchSleepTimer", locale, "duration_minutes", IntentNames.SleepTimer, "duration_minutes"));
+            return Task.FromResult(BuildDialogElicitResponse("DidNotCatchSleepTimer", locale, "duration_minutes", IntentNames.SleepTimer, Util.ElicitSlots.For(IntentNames.SleepTimer)));
         }
 
         // Nothing currently playing.

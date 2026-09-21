@@ -93,7 +93,7 @@ public class AddToQueueIntentHandler : BaseHandler
 
         if (string.IsNullOrWhiteSpace(songQuery))
         {
-            return BuildDialogElicitResponse("DidNotCatchQueueItem", locale, "song", IntentNames.AddToQueue, "song", "musician");
+            return BuildDialogElicitResponse("DidNotCatchQueueItem", locale, "song", IntentNames.AddToQueue, Util.ElicitSlots.For(IntentNames.AddToQueue));
         }
 
         // Per-path routing (gate = GuardIndexReady): the song gate first (the

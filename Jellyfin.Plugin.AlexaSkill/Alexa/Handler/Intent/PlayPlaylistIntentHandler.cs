@@ -89,7 +89,7 @@ public class PlayPlaylistIntentHandler : BaseHandler
 
         if (string.IsNullOrWhiteSpace(playlistName))
         {
-            return Task.FromResult(BuildDialogElicitResponse("DidNotCatchPlaylistName", locale, "playlist", IntentNames.PlayPlaylist, "playlist"));
+            return Task.FromResult(BuildDialogElicitResponse("DidNotCatchPlaylistName", locale, "playlist", IntentNames.PlayPlaylist, Util.ElicitSlots.For(IntentNames.PlayPlaylist)));
         }
 
         return AlbumPlay.BuildPlaylistPlayResponseAsync(

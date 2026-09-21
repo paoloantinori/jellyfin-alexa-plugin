@@ -75,7 +75,7 @@ public class PlayPodcastIntentHandler : BaseHandler
 
         if (string.IsNullOrWhiteSpace(podcastName))
         {
-            return BuildDialogElicitResponse("DidNotCatchPodcastName", locale, "podcast_name", IntentNames.PlayPodcast, "podcast_name");
+            return BuildDialogElicitResponse("DidNotCatchPodcastName", locale, "podcast_name", IntentNames.PlayPodcast, Util.ElicitSlots.For(IntentNames.PlayPodcast));
         }
 
         RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingPodcast", locale)));

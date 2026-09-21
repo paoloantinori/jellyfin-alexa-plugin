@@ -185,7 +185,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
 
         if (string.IsNullOrWhiteSpace(musician))
         {
-            return BuildDialogElicitResponse("DidNotCatchArtistName", locale, "musician", IntentNames.PlayArtistSongs, "musician");
+            return BuildDialogElicitResponse("DidNotCatchArtistName", locale, "musician", IntentNames.PlayArtistSongs, Util.ElicitSlots.For(IntentNames.PlayArtistSongs));
         }
 
         // JF-467: primary-path music gate (shared contract on IfMediaTypeDisabled).

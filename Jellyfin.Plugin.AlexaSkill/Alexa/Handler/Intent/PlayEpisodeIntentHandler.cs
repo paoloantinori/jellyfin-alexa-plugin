@@ -93,7 +93,7 @@ public class PlayEpisodeIntentHandler : BaseHandler
                 locale,
                 "series_name",
                 IntentNames.PlayEpisode,
-                "series_name", "season_number", "episode_number");
+                Util.ElicitSlots.For(IntentNames.PlayEpisode));
         }
 
         string? seasonRaw = intentRequest.Intent.Slots?.TryGetValue("season_number", out var seasonSlot) == true ? seasonSlot.Value : null;

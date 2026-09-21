@@ -172,7 +172,7 @@ public class PlaySongIntentHandler : BaseHandler
                 locale,
                 IntentNames.Slots.Song,
                 IntentNames.PlaySong,
-                new[] { IntentNames.Slots.Song, IntentNames.Slots.Musician });
+                Util.ElicitSlots.For(IntentNames.PlaySong));
         }
 
         // JF-467: primary-path music gate (shared contract on IfMediaTypeDisabled).

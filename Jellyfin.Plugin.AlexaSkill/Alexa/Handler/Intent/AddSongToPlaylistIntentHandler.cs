@@ -31,15 +31,6 @@ public class AddSongToPlaylistIntentHandler : PlaylistEditHandlerBase
     private readonly ISongNgramIndex? _songIndex;
 
     /// <summary>
-    /// The full dialog slot set for the elicit calls below. Hoisted (JF-612): the
-    /// validator's Phase 8 parity checker resolves the declaration and still
-    /// enforces allSlotNames == the model's slot set, so a future third slot on
-    /// this intent fails validation instead of Amazon's live "All slots must be
-    /// defined" reject.
-    /// </summary>
-    private static readonly string[] AllSlots = { IntentNames.Slots.SongQuery, IntentNames.Slots.PlaylistTarget };
-
-    /// <summary>
     /// Initializes a new instance of the <see cref="AddSongToPlaylistIntentHandler"/> class.
     /// </summary>
     /// <param name="playlistManager">Instance of the <see cref="IPlaylistManager"/> interface.</param>
@@ -102,7 +93,7 @@ public class AddSongToPlaylistIntentHandler : PlaylistEditHandlerBase
             return BuildElicitSlotResponse(
                 IntentNames.AddSongToPlaylist,
                 IntentNames.Slots.SongQuery,
-                AllSlots,
+                Util.ElicitSlots.For(IntentNames.AddSongToPlaylist),
                 ResponseStrings.Get("SpecifySongForPlaylistNoPlaylist", locale),
                 slotValues: new Dictionary<string, string?> { [IntentNames.Slots.SongQuery] = null, [IntentNames.Slots.PlaylistTarget] = rawPlaylistName });
         }
@@ -161,7 +152,7 @@ public class AddSongToPlaylistIntentHandler : PlaylistEditHandlerBase
             return BuildElicitSlotResponse(
                 IntentNames.AddSongToPlaylist,
                 IntentNames.Slots.PlaylistTarget,
-                AllSlots,
+                Util.ElicitSlots.For(IntentNames.AddSongToPlaylist),
                 ResponseStrings.Get("SpecifyPlaylistName", locale),
                 slotValues: new Dictionary<string, string?> { [IntentNames.Slots.SongQuery] = songName, [IntentNames.Slots.PlaylistTarget] = null });
         }

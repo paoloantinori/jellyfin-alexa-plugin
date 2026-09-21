@@ -93,7 +93,7 @@ public class PlayNextIntentHandler : BaseHandler
 
         if (string.IsNullOrWhiteSpace(songQuery))
         {
-            return BuildDialogElicitResponse("DidNotCatchQueueItem", locale, "song", IntentNames.PlayNext, "song", "musician");
+            return BuildDialogElicitResponse("DidNotCatchQueueItem", locale, "song", IntentNames.PlayNext, Util.ElicitSlots.For(IntentNames.PlayNext));
         }
 
         // Per-path routing (gate = GuardIndexReady): the song gate first (the

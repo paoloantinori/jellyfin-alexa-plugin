@@ -79,7 +79,7 @@ public class ShufflePlayIntentHandler : BaseHandler
 
         if (string.IsNullOrWhiteSpace(playlistName))
         {
-            return Task.FromResult(BuildDialogElicitResponse("DidNotCatchPlaylistName", locale, "playlist", IntentNames.ShufflePlay, "playlist"));
+            return Task.FromResult(BuildDialogElicitResponse("DidNotCatchPlaylistName", locale, "playlist", IntentNames.ShufflePlay, Util.ElicitSlots.For(IntentNames.ShufflePlay)));
         }
 
         return AlbumPlay.BuildPlaylistPlayResponseAsync(

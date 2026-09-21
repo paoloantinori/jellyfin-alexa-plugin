@@ -321,7 +321,7 @@ public class BrowseLibraryIntentHandler : BaseHandler
     {
         if (string.IsNullOrWhiteSpace(filter))
         {
-            return BuildDialogElicitResponse("DidNotCatchBrowseCategory", locale, "browse_category", IntentNames.BrowseLibrary, "browse_category", "filter");
+            return BuildDialogElicitResponse("DidNotCatchBrowseCategory", locale, "browse_category", IntentNames.BrowseLibrary, Util.ElicitSlots.For(IntentNames.BrowseLibrary));
         }
 
         // JF-466: both browsable kinds are disabled by content access. An empty

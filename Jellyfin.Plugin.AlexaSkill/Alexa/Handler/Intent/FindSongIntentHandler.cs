@@ -751,7 +751,7 @@ public class FindSongIntentHandler : BaseHandler
     /// Elicit the user's answer on the titleKeywords slot and record what that answer MEANS.
     /// Every FindSong prompt (keywords, artist, disambiguation pick) elicits the SAME
     /// titleKeywords slot, a deliberate design (why SearchQuery and not a built-in entity
-    /// type: <see cref="BuildElicitSlotResponse"/>'s doc).
+    /// type: <see cref="BuildFindSongElicitResponse"/>'s doc).
     /// Because the slot is shared, <see cref="FindSongSessionData.State"/> is the ONLY
     /// signal telling the next turn what the captured answer means:
     /// HandleAwaitingKeywordsAsync reads it as song keywords, HandleAwaitingArtistAsync
@@ -773,7 +773,7 @@ public class FindSongIntentHandler : BaseHandler
     private static SkillResponse ElicitAnswer(string prompt, FindSongSessionData sessionData, FindSongState nextState)
     {
         sessionData.State = nextState;
-        return BuildElicitSlotResponse(IntentNames.Slots.TitleKeywords, IntentNames.FindSongIntent, prompt, sessionData);
+        return BuildFindSongElicitResponse(IntentNames.Slots.TitleKeywords, IntentNames.FindSongIntent, prompt, sessionData);
     }
 
     /// <summary>
@@ -789,7 +789,10 @@ public class FindSongIntentHandler : BaseHandler
     /// (JF-398: a FindSong elicitation supersedes any other conversational flow whose
     /// state was riding along, or the interceptor would merge it back in).
     /// </summary>
-    private static SkillResponse BuildElicitSlotResponse(
+    // Renamed off the builder's name (JF-613): the validator's canonical-shape
+    // scan flags any BuildElicitSlotResponse call span without ElicitSlots.For,
+    // and this wrapper is a FindSong-specific funnel, not a builder call.
+    private static SkillResponse BuildFindSongElicitResponse(
         string slotName,
         string intentName,
         string prompt,
@@ -797,7 +800,7 @@ public class FindSongIntentHandler : BaseHandler
         => BuildElicitSlotResponse(
             intentName: intentName,
             slotToElicit: slotName,
-            allSlotNames: new[] { slotName },
+            allSlotNames: Util.ElicitSlots.For(IntentNames.FindSongIntent),
             prompt: prompt,
             sessionAttributes: BuildSessionAttributes(sessionData),
             activeFlowKeys: ConversationalFlows.FindSongKeys);

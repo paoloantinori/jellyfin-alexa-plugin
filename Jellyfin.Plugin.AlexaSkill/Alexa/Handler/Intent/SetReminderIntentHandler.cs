@@ -80,7 +80,7 @@ public class SetReminderIntentHandler : BaseHandler
 
         if (string.IsNullOrEmpty(durationText) && string.IsNullOrEmpty(timeText))
         {
-            return BuildDialogElicitResponse("DidNotCatchReminderTime", locale, "reminder_time", IntentNames.SetReminder, "duration_minutes", "reminder_time");
+            return BuildDialogElicitResponse("DidNotCatchReminderTime", locale, "reminder_time", IntentNames.SetReminder, Util.ElicitSlots.For(IntentNames.SetReminder));
         }
 
         string spokenText = !string.IsNullOrEmpty(message)
@@ -112,7 +112,7 @@ public class SetReminderIntentHandler : BaseHandler
         {
             // One elicit for every no-time shape: both slots empty, an unparseable
             // duration, or an invalid time string (JF-550 dead-mic sweep).
-            return BuildDialogElicitResponse("DidNotCatchReminderTime", locale, "reminder_time", IntentNames.SetReminder, "duration_minutes", "reminder_time");
+            return BuildDialogElicitResponse("DidNotCatchReminderTime", locale, "reminder_time", IntentNames.SetReminder, Util.ElicitSlots.For(IntentNames.SetReminder));
         }
 
         try

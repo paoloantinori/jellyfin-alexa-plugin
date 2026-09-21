@@ -3,9 +3,10 @@ id: JF-613
 title: >-
   Elicit slot-set single source of truth (retire the shape-limited Phase 8 regex
   parser) + validator test harness
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-21 08:29'
+updated_date: '2026-09-21 17:14'
 labels: []
 dependencies: []
 priority: medium

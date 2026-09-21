@@ -68,10 +68,15 @@ jobs:
           python-version: "3.12"
 
       - name: Install Python dependencies
-        run: pip install pyyaml
+        run: pip install pyyaml pytest
 
       - name: Validate interaction models
         run: python3 scripts/validate_interaction_models.py
+
+      - name: Elicit checker test harness (JF-613)
+        run: python3 -m pytest tests/scripts -q
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
 
       - name: Check generated voice-reference doc freshness
         run: python3 scripts/generate_voice_reference.py --check

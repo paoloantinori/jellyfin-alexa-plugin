@@ -414,7 +414,7 @@ public class PlayMoodMusicIntentHandler : BaseHandler
 
         if (string.IsNullOrWhiteSpace(mood))
         {
-            return BuildDialogElicitResponse("DidNotCatchMood", locale, "mood", IntentNames.PlayMoodMusic, "mood");
+            return BuildDialogElicitResponse("DidNotCatchMood", locale, "mood", IntentNames.PlayMoodMusic, Util.ElicitSlots.For(IntentNames.PlayMoodMusic));
         }
 
         // JF-467: primary-path music gate (shared contract on IfMediaTypeDisabled).
