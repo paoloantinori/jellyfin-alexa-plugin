@@ -49,6 +49,7 @@ Exit code: 0 if all checks pass, 1 if any error found. Warnings alone exit 0.
 import json
 import re
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 
 from generate_interaction_model import MODELS_DIR  # the one layout owner
@@ -700,7 +701,16 @@ def check_elicit_dialog_registration(all_models: dict[str, dict]) -> tuple[list[
         else {}
     )
 
-    def _parity(builder: str, intent: str | None, passed: list[str | None]) -> None:
+    def _slot_tokens(span: str) -> list[str]:
+        # The ONE slot-token extraction (JF-612 simplify round): three call shapes
+        # shared this comprehension; token semantics now change in one place.
+        return sorted(
+            slot_constants[tok]
+            for tok in _re.findall(r"IntentNames\.Slots\.(\w+)", span)
+            if tok in slot_constants
+        )
+
+    def _parity(builder: str, intent: str | None, passed: Sequence[str | None]) -> None:
         slots = [s for s in passed if s is not None]
         if not intent or len(slots) != len(passed):
             return
@@ -711,18 +721,36 @@ def check_elicit_dialog_registration(all_models: dict[str, dict]) -> tuple[list[
                 f"but the model declares {sorted(model_slots)} (Amazon rejects a partial updatedIntent)"
             )
 
+    decl_re = _re.compile(
+        r"(?:private\s+|internal\s+|public\s+)*(?:static\s+)?(?:readonly\s+)?(?:string\[\]|var)\s+(\w+)\s*=\s*(?:new\[\]\s*)?\{([^}]*)\}"
+    )
+    # The combined per-file declaration map (JF-612): shared by the dialog loop's
+    # identifier fallback and the hoisted BuildElicitSlotResponse scan below.
+    array_decls_all: dict[str, list[str]] = {}
+    for src_file in handler_files:
+        raw = open(src_file, encoding="utf-8").read()
+        src_nc = _re.sub(r"/\*.*?\*/", " ", raw, flags=_re.S)
+        src_nc = _re.sub(r"//[^\n]*", " ", src_nc)
+        for decl_name, decl_body in decl_re.findall(src_nc):
+            array_decls_all[decl_name] = decl_body
+
     for intent_token, slots_span in _re.findall(
         r"BuildDialogElicitResponse\(\s*[^,]+,\s*[^,]+,\s*[^,]+,\s*IntentNames\.(\w+),\s*([^;]*?)\)\s*;",
         handler_src,
         _re.S,
     ):
-        slots = _re.findall(r'"(\w+)"', slots_span) or sorted(
-            slot_constants[tok]
-            for tok in _re.findall(r"IntentNames\.Slots\.(\w+)", slots_span)
-            if tok in slot_constants
-        )
+        slots = _re.findall(r'"(\w+)"', slots_span) or _slot_tokens(slots_span)
         if not slots:
-            continue  # variable or params-form; not statically resolvable
+            ident = slots_span.strip()
+            if _re.fullmatch(r"(?:this\.)?\w+", ident):
+                decl_body = array_decls_all.get(ident)
+                slots = _slot_tokens(decl_body) if decl_body else []
+            if not slots:
+                warnings.append(
+                    f"  [code] BuildDialogElicitResponse for {intent_tok} passes allSlotNames as "
+                    f"'{ident.strip()[:40]}' whose slot set is not statically resolvable; its parity is not verified"
+                )
+                continue
         _parity("BuildDialogElicitResponse", intent_constants.get(intent_token), slots)
 
     # JF-556 item 2, remainder: the two BuildElicitSlotResponse call shapes whose
@@ -742,13 +770,68 @@ def check_elicit_dialog_registration(all_models: dict[str, dict]) -> tuple[list[
         r"new\[\]\s*\{([^}]*)\}",
         handler_src,
     ):
-        array_slots = sorted(
-            slot_constants[tok]
-            for tok in _re.findall(r"IntentNames\.Slots\.(\w+)", array_span)
-            if tok in slot_constants
-        )
+        array_slots = _slot_tokens(array_span)
         if array_slots:
             _parity("BuildElicitSlotResponse", intent_constants.get(intent_tok), array_slots)
+
+    # JF-612: a hoisted allSlotNames local/field must not silently skip parity.
+    # Resolve simple declarations (string[] NAME = { ... } / new[] { ... }, any
+    # private/static/readonly prefix chain); an identifier that resolves to nothing
+    # or to a token-free initializer stays a WARNING, never silence.
+    # Positional OR named-in-order, this.-qualified or not (review round: a
+    # named-args refactor of the exact call shape used to escape both shapes).
+    call_re = _re.compile(
+        r"BuildElicitSlotResponse\(\s*(?:intentName:\s*)?(?:this\.)?IntentNames\.(\w+)\s*,\s*"
+        r"(?:slotToElicit:\s*)?(?:this\.)?IntentNames\.Slots\.\w+\s*,\s*"
+        r"(?:allSlotNames:\s*)?(?:this\.)?(\w+)\s*[,)]"
+    )
+    # Per-file resolution (JF-612 simplify round): the declaration dict is scoped to
+    # its own file, so a same-named array in another handler can never satisfy
+    # this call's parity in silence. Comments are stripped first (a doc-comment
+    # example must not register as a declaration or truncate a capture).
+    seen_parity_facts: set[str] = set()
+
+    def _parity_once(builder: str, intent_tok: str, slots: list[str]) -> None:
+        fact = f"{builder}:{intent_tok}:{sorted(slots)}"
+        if fact not in seen_parity_facts:
+            seen_parity_facts.add(fact)
+            _parity(builder, intent_constants.get(intent_tok), slots)
+
+    for src_file in handler_files:
+        raw = open(src_file, encoding="utf-8").read()
+        src = _re.sub(r"/\*.*?\*/", " ", raw, flags=_re.S)
+        src = _re.sub(r"//[^\n]*", " ", src)
+        array_decls: dict[str, list[str]] = {}
+        array_multi: set[str] = set()
+        for decl_name, decl_body in decl_re.findall(src):
+            if decl_name in array_decls:
+                # Same-name redeclaration in one file (a local shadowing a field):
+                # last-wins would pick an arbitrary slot set, so both failure
+                # modes degrade to a warning instead.
+                array_multi.add(decl_name)
+            array_decls[decl_name] = decl_body
+        for intent_tok, arr_name in call_re.findall(src):
+            if arr_name in array_multi:
+                warnings.append(
+                    f"  [code] BuildElicitSlotResponse for {intent_tok} passes allSlotNames as '{arr_name}' "
+                    f"which is declared more than once in its file; its parity is not verified"
+                )
+                continue
+            decl = array_decls.get(arr_name)
+            if decl is None:
+                warnings.append(
+                    f"  [code] BuildElicitSlotResponse for {intent_tok} passes allSlotNames as '{arr_name}' "
+                    f"but no array declaration for it was found in the same file; its parity is not verified"
+                )
+                continue
+            hoisted_slots = _slot_tokens(decl)
+            if hoisted_slots:
+                _parity_once("BuildElicitSlotResponse", intent_tok, hoisted_slots)
+            else:
+                warnings.append(
+                    f"  [code] BuildElicitSlotResponse for {intent_tok} passes allSlotNames as '{arr_name}' "
+                    f"whose declaration carries no IntentNames.Slots tokens; its parity is not verified"
+                )
 
     # Shape B guard: only trust the wrapper-call pattern when an identity funnel
     # (allSlotNames = new[] { <the slotToElicit expression itself> }) exists; if
@@ -1173,11 +1256,19 @@ def main() -> int:
     # Phase 8: elicit-target dialog registration (JF-550 error check)
     if all_models:
         print("\nElicit dialog registration:")
-        reg_errors, _ = check_elicit_dialog_registration(all_models)
+        reg_errors, reg_warnings = check_elicit_dialog_registration(all_models)
         all_errors.extend(reg_errors)
+        # JF-612: surface the check's warnings (the pre-existing Shape B wrapper
+        # drift note plus the hoisted-array unresolved notes) - they used to be
+        # discarded with `_`, so the never-silence policy had no output path.
+        all_warnings.extend(reg_warnings)
+        # Review round: the all-clear must never print over unverified parity.
         if reg_errors:
             for e in reg_errors:
                 print(f"  ERROR: {e}")
+        elif reg_warnings:
+            for w in reg_warnings:
+                print(f"  WARN: {w}")
         else:
             print("  Every handler-elicited intent is dialog-registered with slot parity in all locales")
 

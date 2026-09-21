@@ -322,7 +322,7 @@ internal static class TestHelpers
     /// and a reprompt. The one shared assertion for every dead-mic sweep pin
     /// (was eight per-file copies).
     /// </summary>
-    internal static void AssertElicitsSlot(SkillResponse response, string slotToElicit, string intentName)
+    internal static void AssertElicitsSlot(SkillResponse response, string slotToElicit, string intentName, IEnumerable<string>? expectedSlotSet = null)
     {
         AssertSessionOpen(response, "a question must keep the session open or the mic never listens");
         global::Xunit.Assert.NotNull(response.Response.Reprompt);
@@ -331,6 +331,14 @@ internal static class TestHelpers
         global::Xunit.Assert.NotNull(elicit);
         global::Xunit.Assert.Equal(slotToElicit, elicit!.SlotToElicit);
         global::Xunit.Assert.Equal(intentName, elicit.UpdatedIntent.Name);
+        if (expectedSlotSet != null)
+        {
+            // JF-612 review: the updatedIntent slot set is the live mirror of the
+            // allSlotNames the Phase 8 checker validates; a drift between them
+            // must fail here, not only in CI.
+            var actual = elicit.UpdatedIntent.Slots?.Keys.ToHashSet(StringComparer.Ordinal) ?? new HashSet<string>();
+            global::Xunit.Assert.Equal(expectedSlotSet.ToHashSet(StringComparer.Ordinal), actual);
+        }
     }
 
     /// <summary>

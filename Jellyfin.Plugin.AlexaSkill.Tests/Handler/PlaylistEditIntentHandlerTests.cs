@@ -268,7 +268,7 @@ public class PlaylistEditIntentHandlerTests : PluginTestBase
             CreateRequest(IntentNames.AddSongToPlaylist, new() { ["playlist_target"] = "called road trip" }),
             new Context(), CreateUser(), session: null!, CancellationToken.None);
 
-        TestHelpers.AssertElicitsSlot(response, "song", IntentNames.AddSongToPlaylist);
+        TestHelpers.AssertElicitsSlot(response, "song", IntentNames.AddSongToPlaylist, new[] { IntentNames.Slots.Song, IntentNames.Slots.PlaylistTarget });
         Assert.Contains("road trip", GetSpeech(response), StringComparison.Ordinal);
         Assert.DoesNotContain("called road trip", GetSpeech(response), StringComparison.Ordinal);
         VerifyAddItemNever();
@@ -285,7 +285,7 @@ public class PlaylistEditIntentHandlerTests : PluginTestBase
             CreateRequest(IntentNames.AddSongToPlaylist, new() { ["song"] = "circles" }),
             new Context(), CreateUser(), session: null!, CancellationToken.None);
 
-        TestHelpers.AssertElicitsSlot(response, "playlist_target", IntentNames.AddSongToPlaylist);
+        TestHelpers.AssertElicitsSlot(response, "playlist_target", IntentNames.AddSongToPlaylist, new[] { IntentNames.Slots.Song, IntentNames.Slots.PlaylistTarget });
         // Review round: pin the spoken prompt too, not just the directive shape.
         Assert.Equal(ResponseStrings.Get("SpecifyPlaylistName", "en-US"), GetSpeech(response));
         VerifyAddItemNever();

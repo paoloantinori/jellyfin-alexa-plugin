@@ -30,6 +30,15 @@ public class AddSongToPlaylistIntentHandler : PlaylistEditHandlerBase
     private readonly ISongNgramIndex? _songIndex;
 
     /// <summary>
+    /// The full dialog slot set for the elicit calls below. Hoisted (JF-612): the
+    /// validator's Phase 8 parity checker resolves the declaration and still
+    /// enforces allSlotNames == the model's slot set, so a future third slot on
+    /// this intent fails validation instead of Amazon's live "All slots must be
+    /// defined" reject.
+    /// </summary>
+    private static readonly string[] AllSlots = { IntentNames.Slots.Song, IntentNames.Slots.PlaylistTarget };
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="AddSongToPlaylistIntentHandler"/> class.
     /// </summary>
     /// <param name="playlistManager">Instance of the <see cref="IPlaylistManager"/> interface.</param>
@@ -74,12 +83,10 @@ public class AddSongToPlaylistIntentHandler : PlaylistEditHandlerBase
         {
             // JF-601: elicit with the mic open, not a session-ending question Tell
             // (the spoken answer must come back to this intent, not general NLU).
-            // The slot array stays INLINE: the validator's Phase 8 parity checker
-            // only matches inline literals (a hoisted local silently skips it).
             return BuildElicitSlotResponse(
                 IntentNames.AddSongToPlaylist,
                 IntentNames.Slots.PlaylistTarget,
-                new[] { IntentNames.Slots.Song, IntentNames.Slots.PlaylistTarget },
+                AllSlots,
                 ResponseStrings.Get("SpecifyPlaylistName", locale));
         }
 
@@ -88,7 +95,7 @@ public class AddSongToPlaylistIntentHandler : PlaylistEditHandlerBase
             return BuildElicitSlotResponse(
                 IntentNames.AddSongToPlaylist,
                 IntentNames.Slots.Song,
-                new[] { IntentNames.Slots.Song, IntentNames.Slots.PlaylistTarget },
+                AllSlots,
                 ResponseStrings.Get("SpecifySongForPlaylist", locale, playlistName));
         }
 

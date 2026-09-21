@@ -4,10 +4,10 @@ title: >-
   Dead-mic playlist prompts: SpecifySongForPlaylist question rides a
   session-ending Tell; convert to the JF-550 elicit pattern with dialog.intents
   registration
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-20 19:13'
-updated_date: '2026-09-20 19:56'
+updated_date: '2026-09-20 21:15'
 labels: []
 dependencies: []
 references:
@@ -38,6 +38,12 @@ Gate review of 560b484c (JF-600) found that the new missing-slot prompts in the 
 <!-- SECTION:NOTES:BEGIN -->
 Implemented 2026-09-20 (uncommitted, under the literal /code-review gate): AddSongToPlaylistIntentHandler's two missing-slot branches now elicit via BuildElicitSlotResponse (song / playlist_target) with the JF-550 BuildCancelDuringOpenElicit hatch in front; AddSongToPlaylistIntent registered in dialog.intents in ALL 17 templates (4-space sibling indent, parse-gated insert); models regenerated; validate_question_responses.py now reports 0 live dead-mic sites; tests updated to AssertElicitsSlot + stripped-name speech assertions.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Fixed 2026-09-20 (commit 72b1989a). The two missing-slot prompts of AddSongToPlaylist now elicit via BuildElicitSlotResponse (mic open) with the JF-550 cancel hatch; AddSongToPlaylistIntent registered in dialog.intents in all 17 templates; validate_question_responses.py reports 0 live dead-mic sites; the elicit slot arrays were inline (JF-612 later lifted that constraint: the checker resolves hoisted declarations, see jf-612). Sibling retry-imperative Tells kept with the rationale owned once on SpecifyPlaylistNameTell (AC#3 documented-keep). Live-verified: simulator AddSong with playlist only -> "Quale canzone vuoi aggiungere alla playlist prova echo?" with shouldEndSession=false + Dialog.ElicitSlot directive. Gates: literal /code-review high (2 rounds, all findings applied) + /simplify + tests 4186/4186.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
