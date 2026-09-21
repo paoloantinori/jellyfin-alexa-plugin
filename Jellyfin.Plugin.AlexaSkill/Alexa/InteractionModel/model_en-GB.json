@@ -784,7 +784,10 @@
           "I want to hear the podcast {podcast_name}",
           "let us listen to the podcast {podcast_name}",
           "play {podcast_name} episodes",
-          "catch up on the podcast {podcast_name}"
+          "catch up on the podcast {podcast_name}",
+          "to play the podcast {podcast_name}",
+          "to play podcast {podcast_name}",
+          "to listen to the podcast {podcast_name}"
         ],
         "slots": [
           {

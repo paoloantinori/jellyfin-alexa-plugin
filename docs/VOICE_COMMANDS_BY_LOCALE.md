@@ -65,7 +65,7 @@ Placeholder legend:
 | `<كلمات من عنوان الأغنية>` | `{titleKeywords}` |
 | `<اسم المستخدم>` | `{username}` |
 
-Complete phrase list (312 phrases across 64 commands):
+Complete phrase list (314 phrases across 64 commands):
 
 #### Play music
 
@@ -222,6 +222,8 @@ Complete phrase list (312 phrases across 64 commands):
 - `شغل آخر حلقة من <اسم البودكاست>`
 - `شغل أحدث حلقة من <اسم البودكاست>`
 - `ابدأ البودكاست <اسم البودكاست>`
+- `تشغيل بودكاست <اسم البودكاست>`
+- `الاستماع إلى بودكاست <اسم البودكاست>`
 
 #### Audiobooks
 
@@ -601,7 +603,7 @@ Placeholder legend:
 | `<woorden uit de songtitel>` | `{titleKeywords}` |
 | `<gebruikersnaam>` | `{username}` |
 
-Complete phrase list (373 phrases across 64 commands):
+Complete phrase list (375 phrases across 64 commands):
 
 #### Play music
 
@@ -790,6 +792,8 @@ Complete phrase list (373 phrases across 64 commands):
 - `speel de laatste aflevering van <naam van de podcast>`
 - `start de podcast <naam van de podcast>`
 - `ik wil naar podcast <naam van de podcast> luisteren`
+- `om de podcast <naam van de podcast> af te spelen`
+- `om naar de podcast <naam van de podcast> te luisteren`
 
 #### Audiobooks
 
@@ -1197,7 +1201,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (466 phrases across 64 commands):
+Complete phrase list (469 phrases across 64 commands):
 
 #### Play music
 
@@ -1430,6 +1434,9 @@ Complete phrase list (466 phrases across 64 commands):
 - `let us listen to the podcast <podcast name>`
 - `play <podcast name> episodes`
 - `catch up on the podcast <podcast name>`
+- `to play the podcast <podcast name>`
+- `to play podcast <podcast name>`
+- `to listen to the podcast <podcast name>`
 
 #### Audiobooks
 
@@ -1886,7 +1893,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (459 phrases across 64 commands):
+Complete phrase list (462 phrases across 64 commands):
 
 #### Play music
 
@@ -2116,6 +2123,9 @@ Complete phrase list (459 phrases across 64 commands):
 - `let us listen to the podcast <podcast name>`
 - `play <podcast name> episodes`
 - `catch up on the podcast <podcast name>`
+- `to play the podcast <podcast name>`
+- `to play podcast <podcast name>`
+- `to listen to the podcast <podcast name>`
 
 #### Audiobooks
 
@@ -2568,7 +2578,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (555 phrases across 64 commands):
+Complete phrase list (558 phrases across 64 commands):
 
 #### Play music
 
@@ -2875,6 +2885,9 @@ Complete phrase list (555 phrases across 64 commands):
 - `let us listen to the podcast <podcast name>`
 - `play <podcast name> episodes`
 - `catch up on the podcast <podcast name>`
+- `to play the podcast <podcast name>`
+- `to play podcast <podcast name>`
+- `to listen to the podcast <podcast name>`
 
 #### Audiobooks
 
@@ -3346,7 +3359,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (460 phrases across 64 commands):
+Complete phrase list (463 phrases across 64 commands):
 
 #### Play music
 
@@ -3575,6 +3588,9 @@ Complete phrase list (460 phrases across 64 commands):
 - `let us listen to the podcast <podcast name>`
 - `play <podcast name> episodes`
 - `catch up on the podcast <podcast name>`
+- `to play the podcast <podcast name>`
+- `to play podcast <podcast name>`
+- `to listen to the podcast <podcast name>`
 
 #### Audiobooks
 
@@ -4036,7 +4052,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (570 phrases across 66 commands):
+Complete phrase list (573 phrases across 66 commands):
 
 #### Play music
 
@@ -4339,6 +4355,9 @@ Complete phrase list (570 phrases across 66 commands):
 - `I want to listen to <podcast name> podcast`
 - `play <podcast name> podcast`
 - `open <podcast name> podcast`
+- `to play the podcast <podcast name>`
+- `to play podcast <podcast name>`
+- `to listen to the podcast <podcast name>`
 
 #### Audiobooks
 
@@ -6158,7 +6177,7 @@ Placeholder legend:
 | `<Wörter aus dem Songtitel>` | `{titleKeywords}` |
 | `<Benutzername>` | `{username}` |
 
-Complete phrase list (442 phrases across 67 commands):
+Complete phrase list (444 phrases across 67 commands):
 
 #### Play music
 
@@ -6374,6 +6393,8 @@ Complete phrase list (442 phrases across 67 commands):
 - `Spiele die aktuelle Folge von <Name des Podcasts>`
 - `Weiter mit dem Podcast <Name des Podcasts>`
 - `Lass uns den Podcast <Name des Podcasts> hören`
+- `den Podcast <Name des Podcasts> abspielen`
+- `den Podcast <Name des Podcasts> wiedergeben`
 
 #### Audiobooks
 
@@ -7390,7 +7411,7 @@ Placeholder legend:
 | `<titolo del video o del film>` | `{title}` |
 | `<parole del titolo del brano>` | `{titleKeywords}` |
 
-Complete phrase list (1449 phrases across 67 commands):
+Complete phrase list (1453 phrases across 67 commands):
 
 #### Play music
 
@@ -8551,6 +8572,10 @@ Complete phrase list (1449 phrases across 67 commands):
 - `Ascolta il podcast <nome del podcast>`
 - `Metti il podcast <nome del podcast>`
 - `Ascolta l'ultimo episodio di <nome del podcast>`
+- `Di riprodurre il podcast <nome del podcast>`
+- `Di suonare il podcast <nome del podcast>`
+- `Di ascoltare il podcast <nome del podcast>`
+- `Di mettere il podcast <nome del podcast>`
 
 #### Audiobooks
 
@@ -10223,7 +10248,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (417 phrases across 64 commands):
+Complete phrase list (419 phrases across 64 commands):
 
 #### Play music
 
@@ -10429,6 +10454,8 @@ Complete phrase list (417 phrases across 64 commands):
 - `escucha la última entrega de <nombre del pódcast>`
 - `pon el episodio más nuevo de <nombre del pódcast>`
 - `arranca el podcast <nombre del pódcast>`
+- `reproducir el podcast <nombre del pódcast>`
+- `escuchar el podcast <nombre del pódcast>`
 
 #### Audiobooks
 
@@ -10863,7 +10890,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (411 phrases across 64 commands):
+Complete phrase list (413 phrases across 64 commands):
 
 #### Play music
 
@@ -11065,6 +11092,8 @@ Complete phrase list (411 phrases across 64 commands):
 - `escucha la última entrega de <nombre del pódcast>`
 - `pon el episodio más nuevo de <nombre del pódcast>`
 - `arranca el podcast <nombre del pódcast>`
+- `reproducir el podcast <nombre del pódcast>`
+- `escuchar el podcast <nombre del pódcast>`
 
 #### Audiobooks
 
@@ -11497,7 +11526,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (405 phrases across 64 commands):
+Complete phrase list (407 phrases across 64 commands):
 
 #### Play music
 
@@ -11698,6 +11727,8 @@ Complete phrase list (405 phrases across 64 commands):
 - `escucha la última entrega de <nombre del pódcast>`
 - `pon el episodio más nuevo de <nombre del pódcast>`
 - `arranca el podcast <nombre del pódcast>`
+- `reproducir el podcast <nombre del pódcast>`
+- `escuchar el podcast <nombre del pódcast>`
 
 #### Audiobooks
 

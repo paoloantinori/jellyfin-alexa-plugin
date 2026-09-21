@@ -417,6 +417,8 @@ intents:
       - شغل آخر حلقة من {podcast_name}
       - شغل أحدث حلقة من {podcast_name}
       - ابدأ البودكاست {podcast_name}
+      - تشغيل بودكاست {podcast_name}
+      - الاستماع إلى بودكاست {podcast_name}
     slots:
       - name: podcast_name
         type: AMAZON.SearchQuery

@@ -643,7 +643,9 @@
           "reanuda el podcast {podcast_name}",
           "escucha la última entrega de {podcast_name}",
           "pon el episodio más nuevo de {podcast_name}",
-          "arranca el podcast {podcast_name}"
+          "arranca el podcast {podcast_name}",
+          "reproducir el podcast {podcast_name}",
+          "escuchar el podcast {podcast_name}"
         ],
         "slots": [
           {

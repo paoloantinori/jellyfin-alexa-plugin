@@ -448,6 +448,8 @@ intents:
       - speel de laatste aflevering van {podcast_name}
       - start de podcast {podcast_name}
       - ik wil naar podcast {podcast_name} luisteren
+      - om de podcast {podcast_name} af te spelen
+      - om naar de podcast {podcast_name} te luisteren
     slots:
       - name: podcast_name
         type: AMAZON.SearchQuery

@@ -1139,6 +1139,53 @@ def lint_voice_commands_rows(
     return warnings
 
 
+# One-shot wrapper coverage (JF-614, the meta-bug check): the primary one-shot
+# construction is "<invocation> <wrapper-marker> <noun> <name>" (it-IT "chiedi a
+# mia collezione DI riprodurre il podcast X"). An intent whose sample family
+# lacks a wrapper-marker twin NO_SELECTIONs at NLU with zero server-side logs
+# (live 2026-09-21: three device beeps on PlayPodcastIntent, JF-551's episode
+# sibling). Marker tokens per language prefix, matched case-insensitively inside
+# a sample; triage gaps as JF-551-class extensions or accepted.
+WRAPPER_MARKERS: dict[str, list[str]] = {
+    "it": ["di riprodu", "di suona", "di metti", "di ascolta", "di pleia", "di fammi"],
+    "en": ["to play", "to listen", "to hear", "to watch", "to stream", "to queue", "to give"],
+    "de": ["abspielen", "wiedergeben", "hören", "anschauen"],
+    "es": ["reproducir", "escuchar", "ver ", "poner"],
+    "fr": ["écouter", "lire ", "regarder", "mettre"],
+    "pt": ["tocar", "ouvir", "assistir", "colocar"],
+    "nl": ["afspelen", "luisteren", "kijken"],
+    "ar": ["تشغيل", "الاستماع"],
+    "hi": ["चलाओ", "सुनो", "दिखाओ"],
+    "ja": ["を再生して", "を聴いて", "を見せて"],
+}
+
+
+def check_wrapper_coverage(all_models: dict[str, dict]) -> list[str]:
+    """WARNING check: every playable custom intent must carry a one-shot wrapper
+    twin in every locale. See WRAPPER_MARKERS above for the failure being caught."""
+    warnings: list[str] = []
+    for locale, lm in sorted(all_models.items()):
+        prefix = locale.split("-")[0]
+        markers = WRAPPER_MARKERS.get(prefix)
+        if not markers:
+            continue  # locale without a known wrapper construction
+        for intent in lm.get("intents", []):
+            name = intent.get("name", "")
+            if not name.startswith("Play"):
+                continue  # the wrapper is a play-shape construction
+            samples = intent.get("samples", [])
+            if not samples:
+                continue  # zero-sample intents are another check's job
+            lowered = [s.lower() for s in samples]
+            if not any(m in s for m in markers for s in lowered):
+                warnings.append(
+                    f"[{locale}] Intent '{name}' has no one-shot wrapper twin "
+                    f"(no sample contains any of {markers}); the '<invocation> <wrapper>' "
+                    f"construction NO_SELECTIONs at NLU (the JF-551/PlayPodcast beep class)"
+                )
+    return warnings
+
+
 def main() -> int:
     verbose = "--verbose" in sys.argv[1:]
     model_files = sorted(MODELS_DIR.glob("model_*.json"))
@@ -1252,6 +1299,11 @@ def main() -> int:
                 print(f"  WARN: {w}")
         else:
             print("  Every one-shot carrier family carries both word orders (series-first and series-last)")
+
+    # Phase 9: one-shot wrapper coverage (JF-614 warning check)
+    if all_models:
+        wrapper_warnings = check_wrapper_coverage(all_models)
+        all_warnings.extend(wrapper_warnings)
 
     # Phase 8: elicit-target dialog registration (JF-550 error check)
     if all_models:

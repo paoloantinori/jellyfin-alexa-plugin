@@ -53,7 +53,7 @@ Invocation name: **"jellyfin player"**
 | Play Next | `شغل {song} بعد ذلك` · `شغل {song} لـ {musician} بعد ذلك` · `أريد سماع {song} بعد ذلك` · `شغل {song} بعد هذا` |
 | Play Next Episode | `شغل الحلقة {episode_position} من {series_name}` · `أكمل مشاهدة {series_name}` · `شغل {episode_position} حلقة من {series_name}` |
 | Play Playlist | `شغل قائمة التشغيل {playlist}` · `شغل قائمة تشغيلي {playlist}` · `ابدأ قائمة التشغيل {playlist}` · `استمع إلى قائمة التشغيل {playlist}` · `هل يمكنك تشغيل قائمة التشغيل {playlist}` · `أريد سماع قائمة التشغيل {playlist}` |
-| Play Podcast | `شغل البودكاست {podcast_name}` · `استمع إلى البودكاست {podcast_name}` · `شغل آخر حلقة من {podcast_name}` · `شغل أحدث حلقة من {podcast_name}` · `ابدأ البودكاست {podcast_name}` |
+| Play Podcast | `شغل البودكاست {podcast_name}` · `استمع إلى البودكاست {podcast_name}` · `شغل آخر حلقة من {podcast_name}` · `شغل أحدث حلقة من {podcast_name}` · `ابدأ البودكاست {podcast_name}` · `تشغيل بودكاست {podcast_name}` |
 | Play Radio | `شغل الراديو` · `شغل محطة الراديو {station}` · `شغل وضع الراديو` · `ابدأ الراديو` · `شغل موسيقى مشابهة` · `شغل أغانٍ مشابهة` |
 | Play Random | `شغل {media_type} عشوائي` · `شغل شيء عشوائي` · `شغل {media_type} عشوائي من {genre}` · `شغل {genre} عشوائي` · `اخلط {media_type}` · `شغل أغانٍ عشوائية` |
 | Play Song | `شغل {song}` · `شغل {song} لـ {musician}` · `شغل الأغنية {song}` · `شغل أغنية {song}` · `شغل الأغنية {song} لـ {musician}` · `شغل أغنية {song} لـ {musician}` |
@@ -781,7 +781,7 @@ Invocation name: **"mia collezione"**
 | Play Next | `riproduci {song} dopo` · `riproduci {song} di {musician} dopo` · `suona {song} dopo` · `metti {song} dopo` · `suona {song} di {musician} dopo` · `voglio ascoltare {song} dopo` |
 | Play Next Episode | `Riproduci {episode_position} episodio di {series_name}` · `Continua a guardare {series_name}` · `Metti {episode_position} episodio di {series_name}` · `Guarda {episode_position} episodio di {series_name}` · `Continua a guardare la serie {series_name}` · `Di riprodurre {episode_position} episodio di {series_name}` |
 | Play Playlist | `Riproduci playlist {playlist}` · `Suona playlist {playlist}` · `Metti playlist {playlist}` · `Pleia playlist {playlist}` · `Ascolta playlist {playlist}` · `Riproduci la playlist {playlist}` |
-| Play Podcast | `Riproduci il podcast {podcast_name}` · `Suona il podcast {podcast_name}` · `Ascolta il podcast {podcast_name}` · `Metti il podcast {podcast_name}` · `Ascolta l'ultimo episodio di {podcast_name}` |
+| Play Podcast | `Riproduci il podcast {podcast_name}` · `Suona il podcast {podcast_name}` · `Ascolta il podcast {podcast_name}` · `Metti il podcast {podcast_name}` · `Ascolta l'ultimo episodio di {podcast_name}` · `Di riprodurre il podcast {podcast_name}` |
 | Play Radio | `riproduci radio` · `riproduci la stazione radio {station}` · `suona radio` · `metti radio` · `attiva la radio` · `modalità radio` |
 | Play Random | `Riproduci {media_type} casuali` · `Riproduci {media_type} a caso` · `Suona {media_type} casuali` · `Suona {media_type} a caso` · `Metti {media_type} casuali` · `Metti {media_type} a caso` |
 | Play Song | `Riproduci il brano {song}` · `Riproduci {song} di {musician}` · `Riproduci la canzone {song}` · `Riproduci il pezzo {song}` · `Riproduci la traccia {song}` · `Suona il brano {song}` |

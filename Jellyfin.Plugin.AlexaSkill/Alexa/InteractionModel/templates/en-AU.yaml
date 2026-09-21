@@ -539,6 +539,9 @@ intents:
       - let us listen to the podcast {podcast_name}
       - play {podcast_name} episodes
       - catch up on the podcast {podcast_name}
+      - to play the podcast {podcast_name}
+      - to play podcast {podcast_name}
+      - to listen to the podcast {podcast_name}
     slots:
       - name: podcast_name
         type: AMAZON.SearchQuery

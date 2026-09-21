@@ -537,6 +537,8 @@ intents:
       - Spiele die aktuelle Folge von {podcast_name}
       - Weiter mit dem Podcast {podcast_name}
       - Lass uns den Podcast {podcast_name} hören
+      - den Podcast {podcast_name} abspielen
+      - den Podcast {podcast_name} wiedergeben
     slots:
       - name: podcast_name
         type: AMAZON.SearchQuery

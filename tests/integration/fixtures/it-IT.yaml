@@ -280,6 +280,10 @@ tests:
     expected_intent: CreatePlaylistIntent
     expected_slots:
       playlist: {}
+  - utterance: "di riprodurre il podcast generazione"
+    expected_intent: PlayPodcastIntent
+    expected_slots:
+      podcast_name: {}
   - utterance: "nuova playlist prova echo"
     expected_intent: CreatePlaylistIntent
     expected_slots:

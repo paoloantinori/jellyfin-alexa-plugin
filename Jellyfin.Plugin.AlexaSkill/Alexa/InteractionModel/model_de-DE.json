@@ -679,7 +679,9 @@
           "Starte den neuesten Podcast {podcast_name}",
           "Spiele die aktuelle Folge von {podcast_name}",
           "Weiter mit dem Podcast {podcast_name}",
-          "Lass uns den Podcast {podcast_name} hören"
+          "Lass uns den Podcast {podcast_name} hören",
+          "den Podcast {podcast_name} abspielen",
+          "den Podcast {podcast_name} wiedergeben"
         ],
         "slots": [
           {

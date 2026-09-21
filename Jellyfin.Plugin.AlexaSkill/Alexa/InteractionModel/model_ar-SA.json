@@ -525,7 +525,9 @@
           "استمع إلى البودكاست {podcast_name}",
           "شغل آخر حلقة من {podcast_name}",
           "شغل أحدث حلقة من {podcast_name}",
-          "ابدأ البودكاست {podcast_name}"
+          "ابدأ البودكاست {podcast_name}",
+          "تشغيل بودكاست {podcast_name}",
+          "الاستماع إلى بودكاست {podcast_name}"
         ],
         "slots": [
           {
