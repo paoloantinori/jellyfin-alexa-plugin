@@ -8,7 +8,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// (JF-613). Every elicit call site passes <see cref="For"/> as its
 /// allSlotNames (Amazon requires the complete set in updatedIntent), and
 /// scripts/validate_interaction_models.py Phase 8 compares THIS table against
-/// every locale's dialog.intents declaration - declaration against
+/// every locale's dialog.intents declaration; declaration against
 /// declaration, no call-shape parsing. A call site that builds its own array
 /// is flagged by the validator's canonical-shape check, so a new C# idiom
 /// (collection expressions, FrozenSet, Concat) can never silently skip parity.
@@ -50,6 +50,6 @@ public static class ElicitSlots
     /// <returns>The complete slot-name set for the updatedIntent.</returns>
     public static string[] For(string intentName)
         => Table.TryGetValue(intentName, out string[]? slots)
-            ? slots
+            ? (string[])slots.Clone()
             : throw new KeyNotFoundException($"ElicitSlots: intent '{intentName}' elicits but has no slot-set entry; add it here and to all 17 templates' dialog sections in the same change.");
 }

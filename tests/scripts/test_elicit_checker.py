@@ -62,6 +62,13 @@ def _models() -> dict[str, dict]:
     return models
 
 
+def test_default_sources_path_passes():
+    """sources=None must exercise the checker's own repo walk (the CLI path);
+    a default-glob regression would otherwise leave every other test green."""
+    errors, _ = check_elicit_dialog_registration()
+    assert errors == [], errors
+
+
 def test_clean_tree_passes():
     errors, _ = check_elicit_dialog_registration(_sources())
     assert errors == [], errors

@@ -683,12 +683,12 @@ def check_elicit_dialog_registration(
     intent_constants = dict(
         _re.findall(r'public const string (\w+) = "([\w.]+)"', intent_names_src)
     )
-    slot_constants = dict(
-        _re.findall(
-            r'public const string (\w+) = "(\w+)"',
-            _re.search(r"public static class Slots.*?\{(.*?)\}", intent_names_src, _re.S).group(1),
-        )
-    )
+    slots_class = _re.search(r"public static class Slots.*?\{(.*?)\}", intent_names_src, _re.S)
+    if slots_class is None:
+        errors.append("  [code] IntentNames.Slots class not found; the ElicitSlots table cannot be fully parsed (JF-613)")
+        slot_constants: dict[str, str] = {}
+    else:
+        slot_constants = dict(_re.findall(r'public const string (\w+) = "(\w+)"', slots_class.group(1)))
 
     # --- Parse the ONE ElicitSlots table (declaration source of truth) ---
     elicit_slots_key = next((k for k in sources if k.endswith("ElicitSlots.cs")), None)
@@ -705,6 +705,12 @@ def check_elicit_dialog_registration(
             for slot_tok in _re.findall(r"IntentNames\.Slots\.(\w+)", body):
                 if slot_tok in slot_constants:
                     slots.add(slot_constants[slot_tok])
+            raw_values = _re.findall(r'"(\w+)"|IntentNames\.Slots\.(\w+)', body)
+            if len(raw_values) != len(slots):
+                errors.append(
+                    f"  [code] ElicitSlots row for {intent_constants.get(intent_tok, intent_tok)} has duplicate or unresolvable slot values; "
+                    f"duplicates crash ElicitSlotDirective's ToDictionary at runtime, and unresolvable tokens mean IntentNames.Slots drifted"
+                )
             resolved = intent_constants.get(intent_tok, intent_tok + "?")
             table[resolved] = slots
         if not table:
@@ -712,7 +718,14 @@ def check_elicit_dialog_registration(
 
     # --- Elicited targets + canonical-shape scan (per file, comments stripped) ---
     targets: set[str] = set()
-    builder_re = _re.compile(r"(BuildDialogElicitResponse|BuildElicitSlotResponse|ElicitSlotDirective)\((.*?)\);", _re.S)
+    # Non-greedy span to the first ');' can truncate when an ARGUMENT contains
+    # ');' (a lambda body, a string literal); extend the span to the statement
+    # end heuristically: the first ');' followed by end-of-line (the closing
+    # paren of a statement sits at a line end in this codebase's style).
+    builder_re = _re.compile(
+        r"(BuildDialogElicitResponse|BuildElicitSlotResponse|ElicitSlotDirective)\((.*?)\);(?=\s*(?:$|[;)}]|return))",
+        _re.S | _re.M,
+    )
     for fname, raw in sources.items():
         src_nc = _re.sub(r"/\*.*?\*/", " ", raw, flags=_re.S)
         src_nc = _re.sub(r"//[^\n]*", " ", src_nc)
