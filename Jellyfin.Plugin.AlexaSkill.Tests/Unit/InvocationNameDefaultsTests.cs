@@ -38,8 +38,9 @@ public class InvocationNameDefaultsTests : PluginTestBase
         Assert.Equal("mon serveur", Config.EffectiveInvocationName("fr-CA", string.Empty));
         Assert.Equal("minha coleção", Config.EffectiveInvocationName("pt-BR", string.Empty));
         Assert.Equal("mijn collectie", Config.EffectiveInvocationName("nl-NL", string.Empty));
-        Assert.Equal("मेरा संग्रह", Config.EffectiveInvocationName("hi-IN", string.Empty));
-        Assert.Equal("مجموعتي الصوتية", Config.EffectiveInvocationName("ar-SA", string.Empty));
+        // Paolo-confirmed 2026-09-21: hi takes the naturalized loanword, ar the short form
+        Assert.Equal("मेरी कलेक्शन", Config.EffectiveInvocationName("hi-IN", string.Empty));
+        Assert.Equal("مجموعتي", Config.EffectiveInvocationName("ar-SA", string.Empty));
         Assert.Equal("マイコレクション", Config.EffectiveInvocationName("ja-JP", string.Empty));
 
         // an explicit user name STILL overrides every locale default (the
