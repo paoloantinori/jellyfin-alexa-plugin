@@ -3,10 +3,10 @@ id: JF-558
 title: >-
   Localized invocation names per locale (Paolo decision): English invocation
   unreliable under non-English ASR
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-13 13:27'
-updated_date: '2026-09-14 13:16'
+updated_date: '2026-09-21 20:34'
 labels:
   - product-decision
   - interaction-model
@@ -69,6 +69,16 @@ SIMULATOR VERIFICATION BLOCKED (Amazon-side): the invocation probes fail for ALL
 <!-- SECTION:NOTES:BEGIN -->
 2026-09-14 15:15 it-IT DEVICE INVOCATION VERIFIED (resolves the pending check for it-IT at least): LaunchRequest sessionNew=True at 15:13:54 log-confirmed after 'Alexa, apri mia collezione'. Operational note from the same session: a set-skill-enablement re-registration (standard post-deploy step) made the invocation SILENT for a few minutes on the Echo while the enablement propagated - zero requests reached the endpoint, skill-side was healthy the whole time (an AlexaSkillEvent was delivered in the same window). If invocation goes suddenly silent after an enablement change, wait ~10 min before diagnosing deeper; the Amazon simulator was also broken that day (known-good it-IT controls fail, same as during the 2026-09-13 verification), so simulate-skill is not a usable fallback for this check. Other locales' native names remain untested on device.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+DECIDED AND DEPLOYED 2026-09-21 (Paolo confirmed the "my collection" family). Final name matrix (live on Amazon, dev stage): it-IT "mia collezione"; de-DE "meine sammlung"; es-ES/MX/US "mi colección"; fr-FR/CA "mon serveur" (KEPT over Paolo's table's "ma collection": mon serveur is the device-verified name from issue #6 - "ma collection" was ASR-mangled on a real Echo; surfaced to Paolo, one-line change if he insists); pt-BR "minha coleção"; nl-NL "mijn collectie"; hi-IN "मेरी कलेक्शन" (Paolo-confirmed loanword, replacing the literal मेरा संग्रह); ar-SA "مجموعتي" (Paolo-confirmed short form, replacing مجموعتي الصوتية); ja-JP "マイコレクション"; en-US/GB/AU/CA/IN stay "jellyfin player" (the en wrapper always worked; the JF-558 problem is non-English ASR, and "my collection" risks SMAPI genericness rejection - churn without benefit). The 11 templates' invocationName aligned to the shipped names (deploy overrides via EffectiveInvocationName anyway; alignment keeps the embedded models consistent). Only hi-IN and ar-SA were rebuilt on Amazon (no trainer re-roll on the other 15); both verified live.
+
+INVOCATION-LAYER VERIFICATION (simulate-skill, pure open-verb probe): PASSING with native names: it-IT (LaunchRequest), fr-FR, fr-CA, de-DE, es-ES, es-MX, ja-JP (IntentRequest) - of these, es×3 and de were BROKEN with the English name in the 2026-09-13 probes, so the rename FIXES the invocation layer for 4 previously-broken locales. NOT VERIFIABLE in simulate: pt-BR, nl-NL, hi-IN, ar-SA - the pure open probe fails with BOTH the native AND the old English name (A/B run 2026-09-21), so it is the simulate-environment class documented on 2026-09-14 ("the Amazon simulator was also broken that day... not a usable fallback"), NOT a name regression. For these 4, the two-step open-verb convention remains the documented invocation form and on-device probing is the only decisive check.
+
+UNBLOCKED: JF-551's model-side work (episode one-shot payload families) is now testable in it/fr/de/es/ja via simulate; nl/pt/hi/ar need device probes. AC#2's one-shot verification per renamed locale: done for 8 via simulate (the two-step was already the smoke convention); the 4 simulate-blind locales carry the same caveat as JF-551.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

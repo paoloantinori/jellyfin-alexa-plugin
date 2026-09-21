@@ -64,7 +64,7 @@
 # 'next' (NextUp, the empty-slot default) from 'latest' (recency,
 # PremiereDate desc); see the intent and type blocks for this locale's
 # values.
-invocationName: jellyfin player
+invocationName: minha coleção
 intents:
   - name: QueryRecentlyAddedIntent
     samples:

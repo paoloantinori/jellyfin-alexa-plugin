@@ -1,6 +1,6 @@
 {
   "languageModel": {
-    "invocationName": "jellyfin player",
+    "invocationName": "मेरी कलेक्शन",
     "intents": [
       {
         "name": "QueryRecentlyAddedIntent",

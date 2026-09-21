@@ -44,8 +44,12 @@ public static class Config
         ["fr-CA"] = "mon serveur",
         ["pt-BR"] = "minha coleção",
         ["nl-NL"] = "mijn collectie",
-        ["hi-IN"] = "मेरा संग्रह",
-        ["ar-SA"] = "مجموعتي الصوتية",
+        // Paolo-confirmed 2026-09-21: hi takes the naturalized LOANWORD (what
+        // speakers actually say for media collections; the literal संग्रह reads
+        // bookish), ar takes the SHORT form (two words ASR-friendlier than the
+        // longer "audio collection" variant deployed first).
+        ["hi-IN"] = "मेरी कलेक्शन",
+        ["ar-SA"] = "مجموعتي",
         ["ja-JP"] = "マイコレクション",
     };
 
