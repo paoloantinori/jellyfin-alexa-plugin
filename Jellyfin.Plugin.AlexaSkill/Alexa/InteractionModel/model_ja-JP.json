@@ -339,17 +339,17 @@
       {
         "name": "AddSongToPlaylistIntent",
         "samples": [
-          "曲 {song} をプレイリスト {playlist_target} に追加して",
-          "{song} をプレイリスト {playlist_target} に追加して"
+          "曲 {song_query}",
+          "プレイリスト {playlist_target} に追加して"
         ],
         "slots": [
           {
-            "name": "song",
-            "type": "AMAZON.MusicRecording"
+            "name": "song_query",
+            "type": "AMAZON.SearchQuery"
           },
           {
             "name": "playlist_target",
-            "type": "AMAZON.MusicRecording"
+            "type": "AMAZON.SearchQuery"
           }
         ]
       },
@@ -1683,14 +1683,14 @@
         "confirmationRequired": false,
         "slots": [
           {
-            "name": "song",
-            "type": "AMAZON.MusicRecording",
+            "name": "song_query",
+            "type": "AMAZON.SearchQuery",
             "confirmationRequired": false,
             "elicitationRequired": false
           },
           {
             "name": "playlist_target",
-            "type": "AMAZON.MusicRecording",
+            "type": "AMAZON.SearchQuery",
             "confirmationRequired": false,
             "elicitationRequired": false
           }

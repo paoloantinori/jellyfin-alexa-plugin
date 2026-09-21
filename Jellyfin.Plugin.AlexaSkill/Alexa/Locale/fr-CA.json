@@ -31,6 +31,7 @@
   "DidNotCatchPlaylistName": "Je n'ai pas compris le nom de la liste de lecture. Quelle liste souhaitez-vous écouter?",
   "SpecifyPlaylistName": "Je n'ai pas compris le nom de la liste de lecture. Réessaie.",
   "SpecifySongForPlaylist": "Quelle chanson veux-tu ajouter à la liste de lecture {0}?",
+  "SpecifySongForPlaylistNoPlaylist": "Quelle chanson veux-tu ajouter ?",
   "NoFavoriteItems": "Aucun favori trouvé.",
   "NoNewlyAddedItems": "Aucun élément récemment ajouté trouvé.",
   "NoNewlyAddedItemsTime": "Aucun élément ajouté {0} trouvé.",

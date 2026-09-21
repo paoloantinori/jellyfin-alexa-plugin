@@ -922,20 +922,19 @@
       {
         "name": "AddSongToPlaylistIntent",
         "samples": [
-          "Aggiungi la canzone {song} alla playlist {playlist_target}",
-          "Aggiungi il brano {song} alla playlist {playlist_target}",
-          "Metti la canzone {song} nella playlist {playlist_target}",
-          "Aggiungi {song} alla playlist {playlist_target}",
+          "Aggiungi la canzone {song_query}",
+          "Aggiungi il brano {song_query}",
+          "Metti la canzone {song_query}",
           "Aggiungi alla playlist {playlist_target}"
         ],
         "slots": [
           {
-            "name": "song",
-            "type": "AMAZON.MusicRecording"
+            "name": "song_query",
+            "type": "AMAZON.SearchQuery"
           },
           {
             "name": "playlist_target",
-            "type": "AMAZON.MusicRecording"
+            "type": "AMAZON.SearchQuery"
           }
         ]
       },
@@ -3177,14 +3176,14 @@
         "confirmationRequired": false,
         "slots": [
           {
-            "name": "song",
-            "type": "AMAZON.MusicRecording",
+            "name": "song_query",
+            "type": "AMAZON.SearchQuery",
             "confirmationRequired": false,
             "elicitationRequired": false
           },
           {
             "name": "playlist_target",
-            "type": "AMAZON.MusicRecording",
+            "type": "AMAZON.SearchQuery",
             "confirmationRequired": false,
             "elicitationRequired": false
           }

@@ -59,13 +59,14 @@ Placeholder legend:
 | `<رقم الموسم>` | `{season_number}` |
 | `<اسم المسلسل>` | `{series_name}` |
 | `<اسم الأغنية>` | `{song}` |
+| `<عنوان الأغنية>` | `{song_query}` |
 | `<اسم محطة الراديو>` | `{station}` |
 | `<الفترة (اليوم، هذا الأسبوع)>` | `{time_period}` |
 | `<عنوان الفيديو أو الفيلم>` | `{title}` |
 | `<كلمات من عنوان الأغنية>` | `{titleKeywords}` |
 | `<اسم المستخدم>` | `{username}` |
 
-Complete phrase list (315 phrases across 64 commands):
+Complete phrase list (314 phrases across 64 commands):
 
 #### Play music
 
@@ -334,8 +335,7 @@ Complete phrase list (315 phrases across 64 commands):
 
 **Add a song to a playlist**
 
-- `أضف الأغنية <اسم الأغنية> إلى قائمة التشغيل <اسم قائمة التشغيل>`
-- `أضف <اسم الأغنية> إلى قائمة التشغيل <اسم قائمة التشغيل>`
+- `أضف الأغنية <عنوان الأغنية>`
 - `أضف إلى قائمة التشغيل <اسم قائمة التشغيل>`
 
 **Remove the current song from a playlist**
@@ -598,6 +598,7 @@ Placeholder legend:
 | `<seizoensnummer>` | `{season_number}` |
 | `<naam van de serie>` | `{series_name}` |
 | `<titel van het nummer>` | `{song}` |
+| `<nummer>` | `{song_query}` |
 | `<naam van het radiostation>` | `{station}` |
 | `<periode (vandaag, deze week)>` | `{time_period}` |
 | `<titel van de video of film>` | `{title}` |
@@ -918,9 +919,9 @@ Complete phrase list (377 phrases across 64 commands):
 
 **Add a song to a playlist**
 
-- `Voeg het nummer <titel van het nummer> toe aan de afspeellijst <playlist name>`
-- `Voeg <titel van het nummer> toe aan de afspeellijst <playlist name>`
-- `voeg <titel van het nummer> toe aan de afspeellijst <playlist name>`
+- `Voeg het nummer <nummer>`
+- `Voeg <nummer>`
+- `voeg <nummer>`
 - `voeg toe aan de afspeellijst <playlist name>`
 
 **Remove the current song from a playlist**
@@ -1199,12 +1200,13 @@ Placeholder legend:
 | `<season number>` | `{season_number}` |
 | `<series name>` | `{series_name}` |
 | `<song title>` | `{song}` |
+| `<song title>` | `{song_query}` |
 | `<radio station name>` | `{station}` |
 | `<video or movie title>` | `{title}` |
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (470 phrases across 64 commands):
+Complete phrase list (469 phrases across 64 commands):
 
 #### Play music
 
@@ -1575,9 +1577,8 @@ Complete phrase list (470 phrases across 64 commands):
 
 **Add a song to a playlist**
 
-- `add the song <song title> to the playlist <playlist name>`
-- `add <song title> to the playlist <playlist name>`
-- `put the song <song title> in the playlist <playlist name>`
+- `add the song <song title>`
+- `put the song <song title>`
 - `add to the playlist <playlist name>`
 
 **Remove the current song from a playlist**
@@ -1892,12 +1893,13 @@ Placeholder legend:
 | `<season number>` | `{season_number}` |
 | `<series name>` | `{series_name}` |
 | `<song title>` | `{song}` |
+| `<song title>` | `{song_query}` |
 | `<radio station name>` | `{station}` |
 | `<video or movie title>` | `{title}` |
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (463 phrases across 64 commands):
+Complete phrase list (462 phrases across 64 commands):
 
 #### Play music
 
@@ -2265,9 +2267,8 @@ Complete phrase list (463 phrases across 64 commands):
 
 **Add a song to a playlist**
 
-- `add the song <song title> to the playlist <playlist name>`
-- `add <song title> to the playlist <playlist name>`
-- `put the song <song title> in the playlist <playlist name>`
+- `add the song <song title>`
+- `put the song <song title>`
 - `add to the playlist <playlist name>`
 
 **Remove the current song from a playlist**
@@ -2578,12 +2579,13 @@ Placeholder legend:
 | `<season number>` | `{season_number}` |
 | `<series name>` | `{series_name}` |
 | `<song title>` | `{song}` |
+| `<song title>` | `{song_query}` |
 | `<radio station name>` | `{station}` |
 | `<video or movie title>` | `{title}` |
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (559 phrases across 64 commands):
+Complete phrase list (558 phrases across 64 commands):
 
 #### Play music
 
@@ -3028,9 +3030,8 @@ Complete phrase list (559 phrases across 64 commands):
 
 **Add a song to a playlist**
 
-- `add the song <song title> to the playlist <playlist name>`
-- `add <song title> to the playlist <playlist name>`
-- `put the song <song title> in the playlist <playlist name>`
+- `add the song <song title>`
+- `put the song <song title>`
 - `add to the playlist <playlist name>`
 
 **Remove the current song from a playlist**
@@ -3360,12 +3361,13 @@ Placeholder legend:
 | `<season number>` | `{season_number}` |
 | `<series name>` | `{series_name}` |
 | `<song title>` | `{song}` |
+| `<song title>` | `{song_query}` |
 | `<radio station name>` | `{station}` |
 | `<video or movie title>` | `{title}` |
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (464 phrases across 64 commands):
+Complete phrase list (463 phrases across 64 commands):
 
 #### Play music
 
@@ -3732,9 +3734,8 @@ Complete phrase list (464 phrases across 64 commands):
 
 **Add a song to a playlist**
 
-- `add the song <song title> to the playlist <playlist name>`
-- `add <song title> to the playlist <playlist name>`
-- `put the song <song title> in the playlist <playlist name>`
+- `add the song <song title>`
+- `put the song <song title>`
 - `add to the playlist <playlist name>`
 
 **Remove the current song from a playlist**
@@ -4053,13 +4054,14 @@ Placeholder legend:
 | `<seconds or minutes>` | `{seek_unit}` |
 | `<series name>` | `{series_name}` |
 | `<song title>` | `{song}` |
+| `<song title>` | `{song_query}` |
 | `<radio station name>` | `{station}` |
 | `<time period (today, this week)>` | `{time_period}` |
 | `<video or movie title>` | `{title}` |
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (574 phrases across 66 commands):
+Complete phrase list (573 phrases across 66 commands):
 
 #### Play music
 
@@ -4492,9 +4494,8 @@ Complete phrase list (574 phrases across 66 commands):
 
 **Add a song to a playlist**
 
-- `add the song <song title> to the playlist <playlist name>`
-- `add <song title> to the playlist <playlist name>`
-- `put the song <song title> in the playlist <playlist name>`
+- `add the song <song title>`
+- `put the song <song title>`
 - `add to the playlist <playlist name>`
 
 **Remove the current song from a playlist**
@@ -4857,12 +4858,13 @@ Placeholder legend:
 | `<numéro de saison>` | `{season_number}` |
 | `<nom de la série>` | `{series_name}` |
 | `<titre de la chanson>` | `{song}` |
+| `<titre de la chanson>` | `{song_query}` |
 | `<nom de la station de radio>` | `{station}` |
 | `<titre de la vidéo ou du film>` | `{title}` |
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (426 phrases across 67 commands):
+Complete phrase list (425 phrases across 67 commands):
 
 #### Play music
 
@@ -5202,9 +5204,8 @@ Complete phrase list (426 phrases across 67 commands):
 
 **Add a song to a playlist**
 
-- `Ajoute la chanson <titre de la chanson> à la liste de lecture <playlist name>`
-- `Ajoute <titre de la chanson> à la liste de lecture <playlist name>`
-- `ajoute <titre de la chanson> à la liste de lecture <playlist name>`
+- `Ajoute la chanson <titre de la chanson>`
+- `Ajoute <titre de la chanson>`
 - `ajoute à la liste de lecture <playlist name>`
 
 **Remove the current song from a playlist**
@@ -5515,12 +5516,13 @@ Placeholder legend:
 | `<numéro de saison>` | `{season_number}` |
 | `<nom de la série>` | `{series_name}` |
 | `<titre de la chanson>` | `{song}` |
+| `<titre de la chanson>` | `{song_query}` |
 | `<nom de la station de radio>` | `{station}` |
 | `<titre de la vidéo ou du film>` | `{title}` |
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (437 phrases across 67 commands):
+Complete phrase list (436 phrases across 67 commands):
 
 #### Play music
 
@@ -5868,9 +5870,8 @@ Complete phrase list (437 phrases across 67 commands):
 
 **Add a song to a playlist**
 
-- `Ajoute la chanson <titre de la chanson> à la liste de lecture <playlist name>`
-- `Ajoute <titre de la chanson> à la liste de lecture <playlist name>`
-- `ajoute <titre de la chanson> à la liste de lecture <playlist name>`
+- `Ajoute la chanson <titre de la chanson>`
+- `Ajoute <titre de la chanson>`
 - `ajoute à la liste de lecture <playlist name>`
 
 **Remove the current song from a playlist**
@@ -6184,6 +6185,7 @@ Placeholder legend:
 | `<Staffelnummer>` | `{season_number}` |
 | `<Name der Serie>` | `{series_name}` |
 | `<Titel des Liedes>` | `{song}` |
+| `<Songtitel>` | `{song_query}` |
 | `<Name des Radiosenders>` | `{station}` |
 | `<Titel des Videos oder Films>` | `{title}` |
 | `<Wörter aus dem Songtitel>` | `{titleKeywords}` |
@@ -6542,8 +6544,8 @@ Complete phrase list (445 phrases across 67 commands):
 
 **Add a song to a playlist**
 
-- `Füge das Lied <Titel des Liedes> zur Playlist <playlist name> hinzu`
-- `Füge <Titel des Liedes> zur Playlist <playlist name> hinzu`
+- `Füge das Lied <Songtitel> hinzu`
+- `Füge <Songtitel> hinzu`
 - `Füge zur Playlist <playlist name> hinzu`
 
 **Remove the current song from a playlist**
@@ -6861,13 +6863,14 @@ Placeholder legend:
 | `<सीज़न नंबर>` | `{season_number}` |
 | `<सीरीज़ का नाम>` | `{series_name}` |
 | `<गाने का नाम>` | `{song}` |
+| `<गाने का नाम>` | `{song_query}` |
 | `<रेडियो स्टेशन का नाम>` | `{station}` |
 | `<समयावधि (आज, इस सप्ताह)>` | `{time_period}` |
 | `<वीडियो या फिल्म का नाम>` | `{title}` |
 | `<गाने के नाम के शब्द>` | `{titleKeywords}` |
 | `<उपयोगकर्ता का नाम>` | `{username}` |
 
-Complete phrase list (335 phrases across 64 commands):
+Complete phrase list (334 phrases across 64 commands):
 
 #### Play music
 
@@ -7148,9 +7151,8 @@ Complete phrase list (335 phrases across 64 commands):
 
 **Add a song to a playlist**
 
-- `गाना <गाने का नाम> को प्लेलिस्ट <प्लेलिस्ट का नाम> में जोड़ो`
-- `<गाने का नाम> को प्लेलिस्ट <प्लेलिस्ट का नाम> में जोड़ें`
-- `प्लेलिस्ट <प्लेलिस्ट का नाम> में <गाने का नाम> जोड़ो`
+- `गाना <गाने का नाम> को जोड़ो`
+- `<गाने का नाम> को जोड़ें`
 - `प्लेलिस्ट <प्लेलिस्ट का नाम> में जोड़ो`
 
 **Remove the current song from a playlist**
@@ -7421,12 +7423,13 @@ Placeholder legend:
 | `<numero della stagione>` | `{season_number}` |
 | `<nome della serie>` | `{series_name}` |
 | `<titolo del brano>` | `{song}` |
+| `<titolo del brano>` | `{song_query}` |
 | `<nome della stazione radio>` | `{station}` |
 | `<periodo (oggi, questa settimana)>` | `{time_period}` |
 | `<titolo del video o del film>` | `{title}` |
 | `<parole del titolo del brano>` | `{titleKeywords}` |
 
-Complete phrase list (1459 phrases across 67 commands):
+Complete phrase list (1458 phrases across 67 commands):
 
 #### Play music
 
@@ -8740,10 +8743,9 @@ Complete phrase list (1459 phrases across 67 commands):
 
 **Add a song to a playlist**
 
-- `Aggiungi la canzone <titolo del brano> alla playlist <nome della playlist>`
-- `Aggiungi il brano <titolo del brano> alla playlist <nome della playlist>`
-- `Metti la canzone <titolo del brano> nella playlist <nome della playlist>`
-- `Aggiungi <titolo del brano> alla playlist <nome della playlist>`
+- `Aggiungi la canzone <titolo del brano>`
+- `Aggiungi il brano <titolo del brano>`
+- `Metti la canzone <titolo del brano>`
 - `Aggiungi alla playlist <nome della playlist>`
 
 **Remove the current song from a playlist**
@@ -9115,6 +9117,7 @@ Placeholder legend:
 | `<シーズン番号>` | `{season_number}` |
 | `<シリーズ名>` | `{series_name}` |
 | `<曲名>` | `{song}` |
+| `<曲名>` | `{song_query}` |
 | `<ラジオ局名>` | `{station}` |
 | `<期間 (今日、今週)>` | `{time_period}` |
 | `<動画または映画のタイトル>` | `{title}` |
@@ -9385,8 +9388,8 @@ Complete phrase list (312 phrases across 64 commands):
 
 **Add a song to a playlist**
 
-- `曲 <曲名> をプレイリスト <プレイリスト名> に追加して`
-- `<曲名> をプレイリスト <プレイリスト名> に追加して`
+- `曲 <曲名>`
+- `プレイリスト <プレイリスト名> に追加して`
 
 **Remove the current song from a playlist**
 
@@ -9651,13 +9654,14 @@ Placeholder legend:
 | `<número da temporada>` | `{season_number}` |
 | `<nome da série>` | `{series_name}` |
 | `<título da música>` | `{song}` |
+| `<título da música>` | `{song_query}` |
 | `<nome da estação de rádio>` | `{station}` |
 | `<período (hoje, esta semana)>` | `{time_period}` |
 | `<título do vídeo ou do filme>` | `{title}` |
 | `<palavras do título da música>` | `{titleKeywords}` |
 | `<nome do usuário>` | `{username}` |
 
-Complete phrase list (391 phrases across 64 commands):
+Complete phrase list (390 phrases across 64 commands):
 
 #### Play music
 
@@ -9978,9 +9982,8 @@ Complete phrase list (391 phrases across 64 commands):
 
 **Add a song to a playlist**
 
-- `Adicione a música <título da música> à playlist <nome da playlist>`
-- `Adicione <título da música> à playlist <nome da playlist>`
-- `adicione <título da música> à playlist <nome da playlist>`
+- `Adicione a música <título da música>`
+- `Adicione <título da música>`
 - `adicione à playlist <nome da playlist>`
 
 **Remove the current song from a playlist**
@@ -10266,12 +10269,13 @@ Placeholder legend:
 | `<número de temporada>` | `{season_number}` |
 | `<nombre de la serie>` | `{series_name}` |
 | `<título de la canción>` | `{song}` |
+| `<título de la canción>` | `{song_query}` |
 | `<nombre de la emisora>` | `{station}` |
 | `<título del vídeo o de la película>` | `{title}` |
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (421 phrases across 64 commands):
+Complete phrase list (420 phrases across 64 commands):
 
 #### Play music
 
@@ -10609,9 +10613,8 @@ Complete phrase list (421 phrases across 64 commands):
 
 **Add a song to a playlist**
 
-- `Añade la canción <título de la canción> a la lista <nombre de la lista>`
-- `Añade <título de la canción> a la lista <nombre de la lista>`
-- `añade <título de la canción> a la lista <nombre de la lista>`
+- `Añade la canción <título de la canción>`
+- `Añade <título de la canción>`
 - `añade a la lista <nombre de la lista>`
 
 **Remove the current song from a playlist**
@@ -10910,12 +10913,13 @@ Placeholder legend:
 | `<número de temporada>` | `{season_number}` |
 | `<nombre de la serie>` | `{series_name}` |
 | `<título de la canción>` | `{song}` |
+| `<título de la canción>` | `{song_query}` |
 | `<nombre de la emisora>` | `{station}` |
 | `<título del vídeo o de la película>` | `{title}` |
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (415 phrases across 64 commands):
+Complete phrase list (414 phrases across 64 commands):
 
 #### Play music
 
@@ -11249,9 +11253,8 @@ Complete phrase list (415 phrases across 64 commands):
 
 **Add a song to a playlist**
 
-- `Añade la canción <título de la canción> a la lista <nombre de la lista>`
-- `Añade <título de la canción> a la lista <nombre de la lista>`
-- `añade <título de la canción> a la lista <nombre de la lista>`
+- `Añade la canción <título de la canción>`
+- `Añade <título de la canción>`
 - `añade a la lista <nombre de la lista>`
 
 **Remove the current song from a playlist**
@@ -11548,12 +11551,13 @@ Placeholder legend:
 | `<número de temporada>` | `{season_number}` |
 | `<nombre de la serie>` | `{series_name}` |
 | `<título de la canción>` | `{song}` |
+| `<título de la canción>` | `{song_query}` |
 | `<nombre de la emisora>` | `{station}` |
 | `<título del vídeo o de la película>` | `{title}` |
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (409 phrases across 64 commands):
+Complete phrase list (408 phrases across 64 commands):
 
 #### Play music
 
@@ -11884,9 +11888,8 @@ Complete phrase list (409 phrases across 64 commands):
 
 **Add a song to a playlist**
 
-- `Añade la canción <título de la canción> a la lista <nombre de la lista>`
-- `Añade <título de la canción> a la lista <nombre de la lista>`
-- `añade <título de la canción> a la lista <nombre de la lista>`
+- `Añade la canción <título de la canción>`
+- `Añade <título de la canción>`
 - `añade a la lista <nombre de la lista>`
 
 **Remove the current song from a playlist**

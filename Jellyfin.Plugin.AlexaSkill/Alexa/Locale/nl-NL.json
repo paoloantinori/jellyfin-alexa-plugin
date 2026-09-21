@@ -30,6 +30,7 @@
   "DidNotCatchPlaylistName": "Ik heb de naam van de afspeellijst niet goed verstaan. Welke afspeellijst wil je horen?",
   "SpecifyPlaylistName": "Ik heb de naam van de afspeellijst niet verstaan. Probeer het opnieuw.",
   "SpecifySongForPlaylist": "Welk nummer moet ik toevoegen aan de afspeellijst {0}?",
+  "SpecifySongForPlaylistNoPlaylist": "Welk nummer moet ik toevoegen?",
   "NoFavoriteItems": "Geen favoriete items gevonden.",
   "NoNewlyAddedItems": "Geen recent toegevoegde items gevonden.",
   "NoNewlyAddedItemsTime": "Geen items gevonden die {0} zijn toegevoegd.",

@@ -27,10 +27,10 @@ internal sealed class ElicitSlotDirective : IDirective
     [JsonProperty("updatedIntent")]
     public ElicitSlotIntent UpdatedIntent { get; }
 
-    public ElicitSlotDirective(string slotToElicit, string intentName, string[]? allSlotNames = null)
+    public ElicitSlotDirective(string slotToElicit, string intentName, string[]? allSlotNames = null, Dictionary<string, string?>? slotValues = null)
     {
         SlotToElicit = slotToElicit;
-        UpdatedIntent = new ElicitSlotIntent(intentName, allSlotNames ?? new[] { slotToElicit });
+        UpdatedIntent = new ElicitSlotIntent(intentName, allSlotNames ?? new[] { slotToElicit }, slotValues);
     }
 }
 
@@ -46,10 +46,14 @@ internal sealed class ElicitSlotIntent
     [JsonProperty("slots")]
     public Dictionary<string, ElicitSlot> Slots { get; }
 
-    public ElicitSlotIntent(string name, string[] slotNames)
+    public ElicitSlotIntent(string name, string[] slotNames, Dictionary<string, string?>? slotValues = null)
     {
         Name = name;
-        Slots = slotNames.ToDictionary(slotName => slotName, slotName => new ElicitSlot(slotName));
+        Slots = slotNames.ToDictionary(
+            slotName => slotName,
+            slotName => new ElicitSlot(
+                slotName,
+                slotValues != null && slotValues.TryGetValue(slotName, out string? value) ? value : null));
     }
 }
 
@@ -61,5 +65,23 @@ internal sealed class ElicitSlot
     [JsonProperty("name")]
     public string Name { get; }
 
-    public ElicitSlot(string name) => Name = name;
+    /// <summary>
+    /// The slot's CURRENT value, when the caller holds one: a multi-turn elicit
+    /// chain must echo already-filled slots back or Amazon may treat the
+    /// value-less updatedIntent as dialog-state replacement and wipe them
+    /// (JF-614 review: no prior two-slot elicit chain existed to prove
+    /// otherwise). Serialized only when present.
+    /// </summary>
+    [JsonProperty("value", NullValueHandling = NullValueHandling.Ignore)]
+    public string? Value { get; }
+
+    [JsonProperty("confirmationStatus", NullValueHandling = NullValueHandling.Ignore)]
+    public string? ConfirmationStatus { get; }
+
+    public ElicitSlot(string name, string? value = null)
+    {
+        Name = name;
+        Value = value;
+        ConfirmationStatus = value == null ? null : "NONE";
+    }
 }

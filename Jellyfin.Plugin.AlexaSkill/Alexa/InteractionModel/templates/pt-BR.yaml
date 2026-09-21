@@ -323,15 +323,14 @@ intents:
         type: AMAZON.SearchQuery
   - name: AddSongToPlaylistIntent
     samples:
-      - Adicione a música {song} à playlist {playlist_target}
-      - Adicione {song} à playlist {playlist_target}
-      - adicione {song} à playlist {playlist_target}
+      - Adicione a música {song_query}
+      - Adicione {song_query}
       - adicione à playlist {playlist_target}
     slots:
-      - name: song
-        type: AMAZON.MusicRecording
+      - name: song_query
+        type: AMAZON.SearchQuery
       - name: playlist_target
-        type: AMAZON.MusicRecording
+        type: AMAZON.SearchQuery
   - name: RemoveCurrentFromPlaylistIntent
     samples:
       - Remova esta música da playlist {playlist}
@@ -1050,11 +1049,11 @@ dialog:
     - name: AddSongToPlaylistIntent
       confirmationRequired: false
       slots:
-        - name: song
-          type: AMAZON.MusicRecording
+        - name: song_query
+          type: AMAZON.SearchQuery
           confirmationRequired: false
           elicitationRequired: false
         - name: playlist_target
-          type: AMAZON.MusicRecording
+          type: AMAZON.SearchQuery
           confirmationRequired: false
           elicitationRequired: false

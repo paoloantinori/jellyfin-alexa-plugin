@@ -738,6 +738,7 @@ public abstract class BaseHandler
         string prompt,
         string? reprompt = null,
         Dictionary<string, object>? sessionAttributes = null,
+        Dictionary<string, string?>? slotValues = null,
         params string[] activeFlowKeys)
     {
         var response = new SkillResponse
@@ -749,7 +750,7 @@ public abstract class BaseHandler
                 ShouldEndSession = false,
                 OutputSpeech = new PlainTextOutputSpeech { Text = prompt },
                 Reprompt = new Reprompt(reprompt ?? prompt),
-                Directives = new List<IDirective> { new ElicitSlotDirective(slotToElicit, intentName, allSlotNames) }
+                Directives = new List<IDirective> { new ElicitSlotDirective(slotToElicit, intentName, allSlotNames, slotValues) }
             }
         };
 

@@ -301,15 +301,14 @@ intents:
         type: AMAZON.SearchQuery
   - name: AddSongToPlaylistIntent
     samples:
-      - गाना {song} को प्लेलिस्ट {playlist_target} में जोड़ो
-      - '{song} को प्लेलिस्ट {playlist_target} में जोड़ें'
-      - प्लेलिस्ट {playlist_target} में {song} जोड़ो
+      - गाना {song_query} को जोड़ो
+      - '{song_query} को जोड़ें'
       - प्लेलिस्ट {playlist_target} में जोड़ो
     slots:
-      - name: song
-        type: AMAZON.MusicRecording
+      - name: song_query
+        type: AMAZON.SearchQuery
       - name: playlist_target
-        type: AMAZON.MusicRecording
+        type: AMAZON.SearchQuery
   - name: RemoveCurrentFromPlaylistIntent
     samples:
       - यह गाना प्लेलिस्ट {playlist} से हटाओ
@@ -994,11 +993,11 @@ dialog:
     - name: AddSongToPlaylistIntent
       confirmationRequired: false
       slots:
-        - name: song
-          type: AMAZON.MusicRecording
+        - name: song_query
+          type: AMAZON.SearchQuery
           confirmationRequired: false
           elicitationRequired: false
         - name: playlist_target
-          type: AMAZON.MusicRecording
+          type: AMAZON.SearchQuery
           confirmationRequired: false
           elicitationRequired: false

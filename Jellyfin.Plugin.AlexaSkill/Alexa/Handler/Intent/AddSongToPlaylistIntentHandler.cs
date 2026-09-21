@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -36,7 +37,7 @@ public class AddSongToPlaylistIntentHandler : PlaylistEditHandlerBase
     /// this intent fails validation instead of Amazon's live "All slots must be
     /// defined" reject.
     /// </summary>
-    private static readonly string[] AllSlots = { IntentNames.Slots.Song, IntentNames.Slots.PlaylistTarget };
+    private static readonly string[] AllSlots = { IntentNames.Slots.SongQuery, IntentNames.Slots.PlaylistTarget };
 
     /// <summary>
     /// Initializes a new instance of the <see cref="AddSongToPlaylistIntentHandler"/> class.
@@ -77,26 +78,33 @@ public class AddSongToPlaylistIntentHandler : PlaylistEditHandlerBase
             return elicitCancel;
         }
 
-        string? songName = GetSlotValue(intentRequest, IntentNames.Slots.Song);
+        string? songName = GetSlotValue(intentRequest, IntentNames.Slots.SongQuery);
         (string? rawPlaylistName, string? playlistName) = ReadPlaylistSlot(intentRequest, IntentNames.Slots.PlaylistTarget, locale);
-        if (playlistName == null)
+
+        // JF-614 review: the song-only SearchQuery samples capture the WHOLE tail,
+        // so "aggiungi la canzone rapsodia alla playlist rock" arrives as
+        // song_query="rapsodia alla playlist rock". Split the playlist clause out
+        // handler-side (the model cannot express both slots in one sample); when
+        // the explicit playlist slot is also filled, it wins over the hint.
+        if (songName != null && SplitPlaylistClause(songName, locale) is { } split)
         {
-            // JF-601: elicit with the mic open, not a session-ending question Tell
-            // (the spoken answer must come back to this intent, not general NLU).
-            return BuildElicitSlotResponse(
-                IntentNames.AddSongToPlaylist,
-                IntentNames.Slots.PlaylistTarget,
-                AllSlots,
-                ResponseStrings.Get("SpecifyPlaylistName", locale));
+            Logger.LogDebug("AddSongToPlaylist: split playlist clause '{Hint}' out of the song query", split.Playlist);
+            songName = split.Song;
+            if (rawPlaylistName == null)
+            {
+                rawPlaylistName = split.Playlist;
+                playlistName = Util.PlaylistNameNormalizer.NormalizePlaylistName(split.Playlist, locale);
+            }
         }
 
         if (songName == null)
         {
             return BuildElicitSlotResponse(
                 IntentNames.AddSongToPlaylist,
-                IntentNames.Slots.Song,
+                IntentNames.Slots.SongQuery,
                 AllSlots,
-                ResponseStrings.Get("SpecifySongForPlaylist", locale, playlistName));
+                ResponseStrings.Get("SpecifySongForPlaylistNoPlaylist", locale),
+                slotValues: new Dictionary<string, string?> { [IntentNames.Slots.SongQuery] = null, [IntentNames.Slots.PlaylistTarget] = rawPlaylistName });
         }
 
         // Music gate AFTER the slot prompt (BaseHandler.IfMediaTypeDisabled contract).
@@ -115,13 +123,8 @@ public class AddSongToPlaylistIntentHandler : PlaylistEditHandlerBase
             return userError;
         }
 
-        MediaBrowser.Controller.Playlists.Playlist? playlist = FindPlaylist(rawPlaylistName!, playlistName, jellyfinUser!.Id);
-        if (playlist == null)
-        {
-            Logger.LogDebug("AddSongToPlaylist: playlist '{Playlist}' not found", playlistName);
-            return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundPlaylist", locale, playlistName));
-        }
-
+        // JF-614 review: resolve the song BEFORE the playlist elicit - a
+        // mistyped title must fail fast, not waste the playlist turn first.
         var query = new InternalItemsQuery
         {
             User = jellyfinUser,
@@ -131,7 +134,7 @@ public class AddSongToPlaylistIntentHandler : PlaylistEditHandlerBase
             DtoOptions = new DtoOptions(true)
         };
         // Carrier-noun tolerance (live profile-nlu 2026-09-19: "aggiungi la canzone
-        // {song}" fills song with "canzone rapsodia" - the noun rides into the slot
+        // {song}" fills song_query with "canzone rapsodia" - the noun rides into the slot
         // value in every locale's noun-carrying sample). The pick below therefore
         // also accepts a candidate the query merely ENDS with, which strips any
         // leading noun generically, no per-locale table (the JF-381 containment-band
@@ -150,8 +153,76 @@ public class AddSongToPlaylistIntentHandler : PlaylistEditHandlerBase
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByName", locale, songName));
         }
 
+        if (playlistName == null)
+        {
+            // JF-601/JF-614: the song is resolved; the playlist is the second
+            // dialog turn. The elicit echoes the resolved song back in the
+            // updatedIntent so the round-trip cannot wipe it.
+            return BuildElicitSlotResponse(
+                IntentNames.AddSongToPlaylist,
+                IntentNames.Slots.PlaylistTarget,
+                AllSlots,
+                ResponseStrings.Get("SpecifyPlaylistName", locale),
+                slotValues: new Dictionary<string, string?> { [IntentNames.Slots.SongQuery] = songName, [IntentNames.Slots.PlaylistTarget] = null });
+        }
+
+        MediaBrowser.Controller.Playlists.Playlist? playlist = FindPlaylist(rawPlaylistName!, playlistName, jellyfinUser!.Id);
+        if (playlist == null)
+        {
+            Logger.LogDebug("AddSongToPlaylist: playlist '{Playlist}' not found", playlistName);
+            return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundPlaylist", locale, playlistName));
+        }
+
         await AddItemToPlaylistAsync(playlist.Id, new[] { match.Id }, jellyfinUser.Id).ConfigureAwait(false);
         Logger.LogInformation("AddSongToPlaylist: added {ItemName} to {PlaylistName}", match.Name, playlist.Name);
         return ResponseBuilder.Tell(ResponseStrings.Get("AddedToPlaylist", locale, match.Name, playlist.Name));
+    }
+
+    /// <summary>
+    /// The playlist-clause markers the greedy song_query capture can carry,
+    /// per language prefix (JF-614 review: the song-only samples capture the
+    /// whole tail, so "X alla playlist Y" arrives in one slot).
+    /// </summary>
+    private static readonly Dictionary<string, string[]> PlaylistClauseMarkers = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["it"] = new[] { " alla playlist ", " nella playlist " },
+        ["en"] = new[] { " to the playlist ", " in the playlist " },
+        ["de"] = new[] { " zur playlist " },
+        ["es"] = new[] { " a la lista " },
+        ["fr"] = new[] { " à la liste de lecture ", " a la liste de lecture " },
+        ["pt"] = new[] { " à playlist ", " a playlist " },
+        ["nl"] = new[] { " aan de afspeellijst " },
+    };
+
+    /// <summary>
+    /// Splits a playlist clause out of a greedy song_query capture. Returns null
+    /// when the query carries no clause.
+    /// </summary>
+    /// <param name="songQuery">The raw song_query slot value.</param>
+    /// <param name="locale">The request locale.</param>
+    /// <returns>The song and playlist parts, or null.</returns>
+    private static (string Song, string Playlist)? SplitPlaylistClause(string songQuery, string locale)
+    {
+        string prefix = locale.Split('-')[0].ToLowerInvariant();
+        if (!PlaylistClauseMarkers.TryGetValue(prefix, out string[]? markers))
+        {
+            return null;
+        }
+
+        foreach (string marker in markers)
+        {
+            int index = songQuery.LastIndexOf(marker, StringComparison.OrdinalIgnoreCase);
+            if (index > 0)
+            {
+                string song = songQuery[..index].Trim();
+                string playlist = songQuery[(index + marker.Length)..].Trim();
+                if (song.Length > 0 && playlist.Length > 0)
+                {
+                    return (song, playlist);
+                }
+            }
+        }
+
+        return null;
     }
 }

@@ -288,11 +288,20 @@ tests:
     expected_intent: CreatePlaylistIntent
     expected_slots:
       playlist: {}
+  - utterance: "Aggiungi la canzone rapsodia"
+    expected_intent: AddSongToPlaylistIntent
+    expected_slots:
+      song_query: {value: rapsodia}
   - utterance: "Aggiungi la canzone rapsodia alla playlist rock classico"
     expected_intent: AddSongToPlaylistIntent
     expected_slots:
-      song: {}
-      playlist_target: {}
+      song_query: {}
+  # JF-614 review: the stolen shape guard - the create phrase with BOTH article
+  # and carrier must route to CreatePlaylistIntent, not AddSongToPlaylistIntent.
+  - utterance: "crea una playlist chiamata prova echo sette"
+    expected_intent: CreatePlaylistIntent
+    expected_slots:
+      playlist: {}
 
   # -------------------------------------------------------------------------
   # 8. GoToChapterIntent (direction, chapter_number)

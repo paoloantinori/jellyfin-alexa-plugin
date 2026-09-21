@@ -363,19 +363,18 @@
       {
         "name": "AddSongToPlaylistIntent",
         "samples": [
-          "Ajoute la chanson {song} à la liste de lecture {playlist_target}",
-          "Ajoute {song} à la liste de lecture {playlist_target}",
-          "ajoute {song} à la liste de lecture {playlist_target}",
+          "Ajoute la chanson {song_query}",
+          "Ajoute {song_query}",
           "ajoute à la liste de lecture {playlist_target}"
         ],
         "slots": [
           {
-            "name": "song",
-            "type": "AMAZON.MusicRecording"
+            "name": "song_query",
+            "type": "AMAZON.SearchQuery"
           },
           {
             "name": "playlist_target",
-            "type": "AMAZON.MusicRecording"
+            "type": "AMAZON.SearchQuery"
           }
         ]
       },
@@ -1857,14 +1856,14 @@
         "confirmationRequired": false,
         "slots": [
           {
-            "name": "song",
-            "type": "AMAZON.MusicRecording",
+            "name": "song_query",
+            "type": "AMAZON.SearchQuery",
             "confirmationRequired": false,
             "elicitationRequired": false
           },
           {
             "name": "playlist_target",
-            "type": "AMAZON.MusicRecording",
+            "type": "AMAZON.SearchQuery",
             "confirmationRequired": false,
             "elicitationRequired": false
           }

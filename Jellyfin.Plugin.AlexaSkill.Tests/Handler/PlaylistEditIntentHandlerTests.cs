@@ -179,7 +179,7 @@ public class PlaylistEditIntentHandlerTests : PluginTestBase
             .Returns(new List<Audio> { new() { Name = "Rapsodia", Id = SongId } });
 
         SkillResponse response = await CreateAddSong().HandleAsync(
-            CreateRequest(IntentNames.AddSongToPlaylist, new() { ["song"] = "canzone rapsodia", ["playlist_target"] = "road trip" }),
+            CreateRequest(IntentNames.AddSongToPlaylist, new() { [IntentNames.Slots.SongQuery] = "canzone rapsodia", ["playlist_target"] = "road trip" }),
             new Context(), CreateUser(), session: null!, CancellationToken.None);
 
         VerifyAddItem(PlaylistId, id => id == SongId, Times.Once());
@@ -273,7 +273,7 @@ public class PlaylistEditIntentHandlerTests : PluginTestBase
             .Returns(new List<Audio> { new() { Name = "Circles", Id = SongId } });
 
         await CreateAddSong().HandleAsync(
-            CreateRequest(IntentNames.AddSongToPlaylist, new() { ["song"] = "circles", ["playlist_target"] = "called road trip" }),
+            CreateRequest(IntentNames.AddSongToPlaylist, new() { [IntentNames.Slots.SongQuery] = "circles", ["playlist_target"] = "called road trip" }),
             new Context(), CreateUser(), session: null!, CancellationToken.None);
 
         VerifyAddItem(PlaylistId, id => id == SongId, Times.Once());
@@ -288,9 +288,49 @@ public class PlaylistEditIntentHandlerTests : PluginTestBase
             CreateRequest(IntentNames.AddSongToPlaylist, new() { ["playlist_target"] = "called road trip" }),
             new Context(), CreateUser(), session: null!, CancellationToken.None);
 
-        TestHelpers.AssertElicitsSlot(response, "song", IntentNames.AddSongToPlaylist, new[] { IntentNames.Slots.Song, IntentNames.Slots.PlaylistTarget });
-        Assert.Contains("road trip", GetSpeech(response), StringComparison.Ordinal);
-        Assert.DoesNotContain("called road trip", GetSpeech(response), StringComparison.Ordinal);
+        TestHelpers.AssertElicitsSlot(response, "song_query", IntentNames.AddSongToPlaylist, new[] { IntentNames.Slots.SongQuery, IntentNames.Slots.PlaylistTarget });
+        // JF-614 redesign: the song turn asks for the song only (the playlist is
+        // the SECOND dialog turn, asked after the song resolves).
+        Assert.Equal(ResponseStrings.Get("SpecifySongForPlaylistNoPlaylist", "en-US"), GetSpeech(response));
+        VerifyAddItemNever();
+    }
+
+    [Fact]
+    public async void AddSong_GreedyCaptureWithPlaylistClause_SplitsAndAdds()
+    {
+        // JF-614 review: the song-only SearchQuery sample captures the whole
+        // tail ("rapsodia to the playlist road trip"); the handler splits the
+        // playlist clause out and completes the add in one turn.
+        _libraryManagerMock
+            .Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<Audio> { new() { Name = "Rapsodia", Id = SongId } });
+
+        await CreateAddSong().HandleAsync(
+            CreateRequest(IntentNames.AddSongToPlaylist, new() { [IntentNames.Slots.SongQuery] = "rapsodia to the playlist road trip" }),
+            new Context(), CreateUser(), session: null!, CancellationToken.None);
+
+        VerifyAddItem(PlaylistId, id => id == SongId, Times.Once());
+    }
+
+    [Fact]
+    public async void AddSong_SongResolved_PlaylistMissing_ElicitsPlaylistEchoingSong()
+    {
+        // JF-614 review: the playlist elicit runs AFTER the song resolves and
+        // echoes the song value in the updatedIntent so the round-trip cannot
+        // wipe it.
+        _libraryManagerMock
+            .Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<Audio> { new() { Name = "Circles", Id = SongId } });
+
+        SkillResponse response = await CreateAddSong().HandleAsync(
+            CreateRequest(IntentNames.AddSongToPlaylist, new() { [IntentNames.Slots.SongQuery] = "circles" }),
+            new Context(), CreateUser(), session: null!, CancellationToken.None);
+
+        var elicit = response.Response.Directives?.FirstOrDefault(d => d.Type == "Dialog.ElicitSlot") as Jellyfin.Plugin.AlexaSkill.Alexa.Directive.ElicitSlotDirective;
+        Assert.NotNull(elicit);
+        // the directive is internal; assert via the serialized shape instead
+        var json = Newtonsoft.Json.JsonConvert.SerializeObject(elicit);
+        Assert.Contains("\"circles\"", json, StringComparison.Ordinal);
         VerifyAddItemNever();
     }
 
@@ -302,10 +342,10 @@ public class PlaylistEditIntentHandlerTests : PluginTestBase
             .Returns(new List<Audio> { new() { Name = "Circles", Id = SongId } });
 
         SkillResponse response = await CreateAddSong().HandleAsync(
-            CreateRequest(IntentNames.AddSongToPlaylist, new() { ["song"] = "circles" }),
+            CreateRequest(IntentNames.AddSongToPlaylist, new() { [IntentNames.Slots.SongQuery] = "circles" }),
             new Context(), CreateUser(), session: null!, CancellationToken.None);
 
-        TestHelpers.AssertElicitsSlot(response, "playlist_target", IntentNames.AddSongToPlaylist, new[] { IntentNames.Slots.Song, IntentNames.Slots.PlaylistTarget });
+        TestHelpers.AssertElicitsSlot(response, "playlist_target", IntentNames.AddSongToPlaylist, new[] { IntentNames.Slots.SongQuery, IntentNames.Slots.PlaylistTarget });
         // Review round: pin the spoken prompt too, not just the directive shape.
         Assert.Equal(ResponseStrings.Get("SpecifyPlaylistName", "en-US"), GetSpeech(response));
         VerifyAddItemNever();
@@ -317,7 +357,7 @@ public class PlaylistEditIntentHandlerTests : PluginTestBase
         // JF-601 AC#4: an open elicit traps the next utterance into the slot; a
         // bare cancel word must end the flow instead of searching for "stop".
         SkillResponse response = await CreateAddSong().HandleAsync(
-            CreateRequest(IntentNames.AddSongToPlaylist, new() { ["song"] = "stop", ["playlist_target"] = "road trip" }, dialogState: "IN_PROGRESS"),
+            CreateRequest(IntentNames.AddSongToPlaylist, new() { [IntentNames.Slots.SongQuery] = "stop", ["playlist_target"] = "road trip" }, dialogState: "IN_PROGRESS"),
             new Context(), CreateUser(), session: null!, CancellationToken.None);
 
         Assert.Equal(ResponseStrings.Get("FlowCancelled", "en-US"), GetSpeech(response));
@@ -339,7 +379,7 @@ public class PlaylistEditIntentHandlerTests : PluginTestBase
             .Returns(new List<Audio> { new() { Name = "Circles", Id = SongId } });
 
         await CreateAddSong().HandleAsync(
-            CreateRequest(IntentNames.AddSongToPlaylist, new() { ["song"] = "circles", ["playlist_target"] = "called road trip" }),
+            CreateRequest(IntentNames.AddSongToPlaylist, new() { [IntentNames.Slots.SongQuery] = "circles", ["playlist_target"] = "called road trip" }),
             new Context(), CreateUser(), session: null!, CancellationToken.None);
 
         VerifyAddItem(PlaylistId, id => id == SongId, Times.Once());

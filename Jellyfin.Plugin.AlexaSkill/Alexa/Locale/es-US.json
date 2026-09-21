@@ -40,6 +40,7 @@
   "DidNotCatchPlaylistName": "No entendí el nombre de la lista de reproducción. ¿Qué lista te gustaría escuchar?",
   "SpecifyPlaylistName": "No he entendido el nombre de la lista. Inténtalo de nuevo.",
   "SpecifySongForPlaylist": "¿Qué canción quieres añadir a la lista {0}?",
+  "SpecifySongForPlaylistNoPlaylist": "¿Qué canción quieres añadir?",
   "NoFavoriteItems": "No se han encontrado elementos favoritos.",
   "NoNewlyAddedItems": "No se han encontrado elementos nuevos.",
   "NoNewlyAddedItemsTime": "No se encontraron elementos añadidos {0}.",

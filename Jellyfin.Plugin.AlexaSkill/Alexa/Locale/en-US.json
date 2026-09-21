@@ -30,6 +30,7 @@
   "DidNotCatchPlaylistName": "I didn't catch the playlist name. Which playlist would you like to hear?",
   "SpecifyPlaylistName": "I didn't catch the playlist name. Please try again.",
   "SpecifySongForPlaylist": "Which song should I add to the playlist {0}?",
+  "SpecifySongForPlaylistNoPlaylist": "Which song should I add?",
   "NoFavoriteItems": "No favorite items found.",
   "NoNewlyAddedItems": "No newly added items found.",
   "NoNewlyAddedItemsTime": "No items added {0} found.",

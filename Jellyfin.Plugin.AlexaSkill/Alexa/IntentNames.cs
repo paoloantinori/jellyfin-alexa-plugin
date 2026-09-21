@@ -127,13 +127,17 @@ internal static class IntentNames
         public const string Musician = "musician";
         public const string Album = "album";
         public const string Song = "song";
+        // JF-614: the AddSong dialog slot is a pure-text SearchQuery (the
+        // MusicRecording ER slot does not fill from free-text titles during
+        // dialog management), so it needs its own NAME to keep the one-type-
+        // per-name rule with PlaySongIntent's MusicRecording "song".
+        public const string SongQuery = "song_query";
         public const string Station = "station";
 
         /// <summary>
         /// Playlist-name slot on AddSongToPlaylistIntent. Named differently from
         /// <see cref="Playlist"/> because that name is typed AMAZON.SearchQuery in
         /// PlayPlaylist/ShufflePlayIntent, and a slot name must keep one type across
-        /// intents; this one must combine with the song slot in a single sample,
         /// which SearchQuery forbids (CLAUDE.md anti-pattern #2), so it is free-text
         /// AMAZON.MusicRecording like the album slot on the 16 free-text locales.
         /// </summary>

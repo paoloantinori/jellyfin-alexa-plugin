@@ -203,6 +203,7 @@ GROUPS = [
 # group) so the doc can never degrade to raw identifiers.
 SLOT_HINTS = {
     "en": {
+        "song_query": "song title",
         "song": "song title", "musician": "artist name", "album": "album title",
         "book": "audiobook title", "genre": "music genre",
         "decade": "decade (the 80s)", "mood": "mood (relaxed, energetic)",
@@ -225,6 +226,7 @@ SLOT_HINTS = {
         "position_minutes": "minutes", "position_seconds": "seconds",
     },
     "it": {
+        "song_query": "titolo del brano",
         "song": "titolo del brano", "musician": "nome dell'artista",
         "album": "titolo dell'album", "book": "titolo dell'audiolibro",
         "genre": "genere musicale", "decade": "decennio (gli anni ottanta)",
@@ -250,6 +252,7 @@ SLOT_HINTS = {
         "position_minutes": "minuti", "position_seconds": "secondi",
     },
     "de": {
+        "song_query": "Songtitel",
         "song": "Titel des Liedes", "musician": "Name des Künstlers",
         "album": "Titel des Albums", "book": "Titel des Hörbuchs",
         "genre": "Musikgenre", "decade": "Jahrzehnt (die 80er)",
@@ -275,6 +278,7 @@ SLOT_HINTS = {
         "position_minutes": "Minuten", "position_seconds": "Sekunden",
     },
     "es": {
+        "song_query": "título de la canción",
         "song": "título de la canción", "musician": "nombre del artista",
         "album": "título del álbum", "book": "título del audiolibro",
         "genre": "género musical", "decade": "década (los ochenta)",
@@ -302,6 +306,7 @@ SLOT_HINTS = {
         "position_minutes": "minutos", "position_seconds": "segundos",
     },
     "fr": {
+        "song_query": "titre de la chanson",
         "song": "titre de la chanson", "musician": "nom de l'artiste",
         "album": "titre de l'album", "book": "titre du livre audio",
         "genre": "genre musical", "decade": "décennie (les années 80)",
@@ -329,6 +334,7 @@ SLOT_HINTS = {
         "position_minutes": "minutes", "position_seconds": "secondes",
     },
     "pt": {
+        "song_query": "título da música",
         "song": "título da música", "musician": "nome do artista",
         "album": "título do álbum", "book": "título do audiolivro",
         "genre": "gênero musical", "decade": "década (anos 80)",
@@ -354,6 +360,7 @@ SLOT_HINTS = {
         "position_minutes": "minutos", "position_seconds": "segundos",
     },
     "nl": {
+        "song_query": "nummer",
         "song": "titel van het nummer", "musician": "naam van de artiest",
         "album": "titel van het album", "book": "titel van het luisterboek",
         "genre": "muziekgenre", "decade": "decennium (jaren 80)",
@@ -381,6 +388,7 @@ SLOT_HINTS = {
         "position_minutes": "minuten", "position_seconds": "seconden",
     },
     "ja": {
+        "song_query": "曲名",
         "song": "曲名", "musician": "アーティスト名", "album": "アルバム名",
         "book": "オーディオブック名", "genre": "ジャンル",
         "decade": "年代 (80年代)", "mood": "ムード (リラックス、エネルギッシュ)",
@@ -401,6 +409,7 @@ SLOT_HINTS = {
         "position_seconds": "秒",
     },
     "hi": {
+        "song_query": "गाने का नाम",
         "song": "गाने का नाम", "musician": "कलाकार का नाम",
         "album": "एल्बम का नाम", "book": "ऑडियोबुक का नाम",
         "genre": "संगीत शैली", "decade": "दशक (80 का दशक)",
@@ -425,6 +434,7 @@ SLOT_HINTS = {
         "position_minutes": "मिनट", "position_seconds": "सेकंड",
     },
     "ar": {
+        "song_query": "عنوان الأغنية",
         "song": "اسم الأغنية", "musician": "اسم الفنان",
         "album": "عنوان الألبوم", "book": "عنوان الكتاب الصوتي",
         "genre": "النوع الموسيقي", "decade": "العقد (الثمانينيات)",

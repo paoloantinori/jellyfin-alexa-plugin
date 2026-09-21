@@ -30,6 +30,7 @@
   "DidNotCatchPlaylistName": "Non ho capito il nome della playlist. Quale playlist vorresti ascoltare?",
   "SpecifyPlaylistName": "Non ho capito il nome della playlist. Riprova.",
   "SpecifySongForPlaylist": "Quale canzone vuoi aggiungere alla playlist {0}?",
+  "SpecifySongForPlaylistNoPlaylist": "Quale canzone vuoi aggiungere?",
   "NoFavoriteItems": "Nessun contenuto preferito trovato.",
   "NoNewlyAddedItems": "Nessun contenuto aggiunto di recente trovato.",
   "NoNewlyAddedItemsTime": "Nessun contenuto aggiunto {0} trovato.",

@@ -30,6 +30,7 @@
   "DidNotCatchPlaylistName": "Ich habe den Namen der Playlist nicht verstanden. Welche Playlist möchtest du hören?",
   "SpecifyPlaylistName": "Ich habe den Namen der Playlist nicht verstanden. Bitte versuche es erneut.",
   "SpecifySongForPlaylist": "Welchen Song soll ich zur Playlist {0} hinzufügen?",
+  "SpecifySongForPlaylistNoPlaylist": "Welchen Song soll ich hinzufügen?",
   "NoFavoriteItems": "Keine Favoriten gefunden.",
   "NoNewlyAddedItems": "Keine neu hinzugefuegten Elemente gefunden.",
   "NoNewlyAddedItemsTime": "Keine Elemente gefunden, die {0} hinzugefuegt wurden.",

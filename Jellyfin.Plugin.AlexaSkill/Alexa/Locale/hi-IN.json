@@ -30,6 +30,7 @@
   "DidNotCatchPlaylistName": "मुझे प्लेलिस्ट का नाम स्पष्ट नहीं सुनाई दिया। आप कौन सी प्लेलिस्ट सुनना चाहेंगे?",
   "SpecifyPlaylistName": "मुझे प्लेलिस्ट का नाम समझ नहीं आया। फिर से कोशिश करें।",
   "SpecifySongForPlaylist": "प्लेलिस्ट {0} में कौन सा गाना जोड़ना चाहते हैं?",
+  "SpecifySongForPlaylistNoPlaylist": "कौन सा गाना जोड़ना है?",
   "NoFavoriteItems": "कोई पसंदीदा आइटम नहीं मिला।",
   "NoNewlyAddedItems": "कोई नए जोड़े गए आइटम नहीं मिले।",
   "NoNewlyAddedItemsTime": "{0} जोड़े गए कोई आइटम नहीं मिले।",
