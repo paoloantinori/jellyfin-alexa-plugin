@@ -14,6 +14,23 @@ Build the release DLL, hot-swap it into the running Jellyfin container, verify c
 
 ## Steps
 
+### 0. Check the Server Version, Pick the TFM (MANDATORY since 2026-09-21)
+
+The build flavor MUST match the RUNNING Jellyfin major version or changed
+interfaces throw `MissingMethodException` at runtime (live incident 2026-09-21:
+a day of net9.0 deploys on the 12.1 server; the playlist add was the first
+surface touched and blew up with "Something went wrong").
+
+```bash
+SSH_OPTS="-F /dev/null -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa"
+ssh $SSH_OPTS pantinor@minix "curl -sf 'http://localhost:8096/System/Info'   -H 'Authorization: MediaBrowser Token="$JELLYFIN_API_KEY"'" | python3 -c "import json,sys; print(json.load(sys.stdin).get('Version'))"
+```
+
+- Version **12.x** → deploy `bin/Release/net10.0/Jellyfin.Plugin.AlexaSkill.dll` (minix since 2026-09-21: 12.1.0)
+- Version **10.11.x** → deploy `bin/Release/net9.0/Jellyfin.Plugin.AlexaSkill.dll`
+
+Never deploy a flavor on autopilot: read the version first, every time.
+
 ### 1. Backup Plugin Config
 
 **NEVER skip this.** Jellyfin resets plugin config when the DLL changes.
