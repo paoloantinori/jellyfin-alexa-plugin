@@ -3,9 +3,10 @@ id: JF-612
 title: >-
   Phase 8 parity checker matches only inline slot arrays; teach it hoisted
   locals so production code shape stops being dictated by a checker limitation
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-20 21:22'
+updated_date: '2026-09-21 08:38'
 labels: []
 dependencies: []
 priority: medium
@@ -30,3 +31,9 @@ From the /simplify altitude pass on commit 72b1989a: AddSongToPlaylistIntentHand
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Shipped 2026-09-21 (commit 93f04811). The Phase 8 parity checker resolves hoisted allSlotNames declarations per file (cross-file collisions cannot silently satisfy a call), strips comments first, tolerates named-args-in-order and this.-qualified shapes, degrades unresolvable/multi-declared/token-free identifiers to warnings that now actually print (the check's warnings were discarded at the only call site - pre-existing bug fixed), never prints the all-clear over unverified parity, dedupes diagnostics, and covers the BuildDialogElicitResponse sibling loop. The AddSong arrays hoisted to AllSlots with the lifted-constraint rationale; AssertElicitsSlot asserts the updatedIntent slot set. Negative battery verified: wrong same-file array FAILS, named-args wrong array FAILS, doc-comment example harmless, same-name shadow WARNS, clean tree PASSES. Gates: literal /code-review high (10 findings: 8 applied, F6 partial rest filed in JF-613, F7 skipped millisecond-class) + literal /simplify; tests 4189/4189 both TFMs. The deep fix (C#-side slot-set table + validator pytest harness) is JF-613.
+<!-- SECTION:FINAL_SUMMARY:END -->
