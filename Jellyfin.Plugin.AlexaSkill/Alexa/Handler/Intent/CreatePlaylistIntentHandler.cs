@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET;
@@ -63,11 +64,14 @@ public class CreatePlaylistIntentHandler : PlaylistEditHandlerBase
             return userError;
         }
 
-        MediaBrowser.Controller.Playlists.Playlist? existing = FindPlaylist(rawPlaylistName!, playlistName, jellyfinUser!.Id);
+        // JF-615: exact-name duplicate check (raw, then stripped) - a NEW name
+        // that merely CONTAINS an existing one must create, not be refused (the
+        // tiered match is for FINDING; see FindExactPlaylist).
+        MediaBrowser.Controller.Playlists.Playlist? existing = FindExactPlaylist(rawPlaylistName!, playlistName, jellyfinUser!.Id);
         if (existing != null)
         {
-            // Speak the REAL playlist's name: the raw tier may have matched a
-            // web-UI playlist the stripped echo would misname (review round JF-602).
+            // Speak the REAL playlist's name: the raw fill may have matched a
+            // playlist whose stored name differs from the spoken intent.
             return ResponseBuilder.Tell(ResponseStrings.Get("PlaylistAlreadyExists", locale, existing.Name));
         }
 

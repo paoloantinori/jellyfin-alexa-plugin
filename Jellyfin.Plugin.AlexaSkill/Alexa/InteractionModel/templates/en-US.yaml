@@ -433,6 +433,7 @@ intents:
       - add the song {song} to the playlist {playlist_target}
       - add {song} to the playlist {playlist_target}
       - put the song {song} in the playlist {playlist_target}
+      - add to the playlist {playlist_target}
     slots:
       - name: song
         type: AMAZON.MusicRecording

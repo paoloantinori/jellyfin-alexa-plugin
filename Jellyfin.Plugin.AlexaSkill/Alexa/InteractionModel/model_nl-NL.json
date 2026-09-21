@@ -375,7 +375,9 @@
         "name": "AddSongToPlaylistIntent",
         "samples": [
           "Voeg het nummer {song} toe aan de afspeellijst {playlist_target}",
-          "Voeg {song} toe aan de afspeellijst {playlist_target}"
+          "Voeg {song} toe aan de afspeellijst {playlist_target}",
+          "voeg {song} toe aan de afspeellijst {playlist_target}",
+          "voeg toe aan de afspeellijst {playlist_target}"
         ],
         "slots": [
           {

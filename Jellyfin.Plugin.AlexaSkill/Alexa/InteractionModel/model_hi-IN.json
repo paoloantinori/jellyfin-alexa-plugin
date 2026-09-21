@@ -356,7 +356,9 @@
         "name": "AddSongToPlaylistIntent",
         "samples": [
           "गाना {song} को प्लेलिस्ट {playlist_target} में जोड़ो",
-          "{song} को प्लेलिस्ट {playlist_target} में जोड़ें"
+          "{song} को प्लेलिस्ट {playlist_target} में जोड़ें",
+          "प्लेलिस्ट {playlist_target} में {song} जोड़ो",
+          "प्लेलिस्ट {playlist_target} में जोड़ो"
         ],
         "slots": [
           {

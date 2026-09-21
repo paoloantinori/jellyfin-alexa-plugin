@@ -134,6 +134,31 @@ public abstract class PlaylistEditHandlerBase : BaseHandler
     }
 
     /// <summary>
+    /// Exact-name playlist lookup for the CREATE path's duplicate check (JF-615):
+    /// raw first, stripped only when it differs (the hasStripped guard). Deliberately
+    /// NOT the tiered <see cref="FindPlaylist"/>: a new name that merely CONTAINS an
+    /// existing one ("prova echo quattro" vs "prova echo") must create, not be
+    /// refused as a duplicate.
+    /// </summary>
+    /// <param name="rawName">The raw spoken playlist name.</param>
+    /// <param name="strippedName">The carrier-stripped name the caller holds.</param>
+    /// <param name="jellyfinUserId">The linked Jellyfin user id.</param>
+    /// <returns>The exactly-matching playlist, or null.</returns>
+    protected Playlist? FindExactPlaylist(string rawName, string? strippedName, Guid jellyfinUserId)
+    {
+        var playlists = _playlistManager.GetPlaylists(jellyfinUserId).ToList();
+        Playlist? match = playlists.FirstOrDefault(p => string.Equals(p.Name, rawName, StringComparison.OrdinalIgnoreCase));
+        if (match == null
+            && strippedName != null
+            && !string.Equals(strippedName, rawName, StringComparison.OrdinalIgnoreCase))
+        {
+            match = playlists.FirstOrDefault(p => string.Equals(p.Name, strippedName, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return match;
+    }
+
+    /// <summary>
     /// Resolves the currently playing item: the AudioPlayer token (survives
     /// PlaybackStopped clearing the session item) first, session now-playing second.
     /// </summary>

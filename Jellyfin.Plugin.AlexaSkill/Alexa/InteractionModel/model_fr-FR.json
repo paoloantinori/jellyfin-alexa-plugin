@@ -364,7 +364,9 @@
         "name": "AddSongToPlaylistIntent",
         "samples": [
           "Ajoute la chanson {song} à la liste de lecture {playlist_target}",
-          "Ajoute {song} à la liste de lecture {playlist_target}"
+          "Ajoute {song} à la liste de lecture {playlist_target}",
+          "ajoute {song} à la liste de lecture {playlist_target}",
+          "ajoute à la liste de lecture {playlist_target}"
         ],
         "slots": [
           {

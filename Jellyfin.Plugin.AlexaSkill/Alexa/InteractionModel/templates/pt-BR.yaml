@@ -325,6 +325,8 @@ intents:
     samples:
       - Adicione a música {song} à playlist {playlist_target}
       - Adicione {song} à playlist {playlist_target}
+      - adicione {song} à playlist {playlist_target}
+      - adicione à playlist {playlist_target}
     slots:
       - name: song
         type: AMAZON.MusicRecording

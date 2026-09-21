@@ -364,7 +364,8 @@
         "name": "AddSongToPlaylistIntent",
         "samples": [
           "Füge das Lied {song} zur Playlist {playlist_target} hinzu",
-          "Füge {song} zur Playlist {playlist_target} hinzu"
+          "Füge {song} zur Playlist {playlist_target} hinzu",
+          "Füge zur Playlist {playlist_target} hinzu"
         ],
         "slots": [
           {

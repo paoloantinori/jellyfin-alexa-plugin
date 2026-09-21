@@ -341,7 +341,8 @@
         "name": "AddSongToPlaylistIntent",
         "samples": [
           "أضف الأغنية {song} إلى قائمة التشغيل {playlist_target}",
-          "أضف {song} إلى قائمة التشغيل {playlist_target}"
+          "أضف {song} إلى قائمة التشغيل {playlist_target}",
+          "أضف إلى قائمة التشغيل {playlist_target}"
         ],
         "slots": [
           {

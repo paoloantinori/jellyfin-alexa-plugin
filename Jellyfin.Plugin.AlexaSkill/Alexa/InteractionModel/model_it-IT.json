@@ -920,7 +920,9 @@
         "samples": [
           "Aggiungi la canzone {song} alla playlist {playlist_target}",
           "Aggiungi il brano {song} alla playlist {playlist_target}",
-          "Metti la canzone {song} nella playlist {playlist_target}"
+          "Metti la canzone {song} nella playlist {playlist_target}",
+          "Aggiungi {song} alla playlist {playlist_target}",
+          "Aggiungi alla playlist {playlist_target}"
         ],
         "slots": [
           {

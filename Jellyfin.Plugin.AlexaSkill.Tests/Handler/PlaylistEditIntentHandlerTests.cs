@@ -229,6 +229,26 @@ public class PlaylistEditIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
+    public async void CreatePlaylist_SuperstringOfExistingName_Creates()
+    {
+        // JF-615: the duplicate check is EXACT-NAME only. A new name that merely
+        // CONTAINS an existing one ("Road Trip 2" vs "Road Trip") must create;
+        // the tiered FindPlaylist substring tier used to block it as a duplicate.
+        PlaylistCreationRequest? captured = null;
+        _playlistManagerMock
+            .Setup(p => p.CreatePlaylist(It.IsAny<PlaylistCreationRequest>()))
+            .Callback<PlaylistCreationRequest>(r => captured = r)
+            .ReturnsAsync(new PlaylistCreationResult(Guid.NewGuid().ToString("N")));
+
+        await CreateCreate().HandleAsync(
+            CreateRequest(IntentNames.CreatePlaylist, new() { ["playlist"] = "Road Trip 2" }),
+            new Context(), CreateUser(), session: null!, CancellationToken.None);
+
+        Assert.NotNull(captured);
+        Assert.Equal("Road Trip 2", captured!.Name);
+    }
+
+    [Fact]
     public async void CreatePlaylist_NoFolderFailure_AnswersCreateFailed()
     {
         _playlistManagerMock
