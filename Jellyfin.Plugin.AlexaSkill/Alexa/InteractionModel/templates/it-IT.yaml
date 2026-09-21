@@ -292,6 +292,10 @@ explicit_intents:
       - Di suonare il podcast {podcast_name}
       - Di ascoltare il podcast {podcast_name}
       - Di mettere il podcast {podcast_name}
+      - Riprodurre il podcast {podcast_name}
+      - Ascoltare il podcast {podcast_name}
+      - Suonare il podcast {podcast_name}
+      - Mettere il podcast {podcast_name}
     slots:
       - name: podcast_name
         type: AMAZON.SearchQuery

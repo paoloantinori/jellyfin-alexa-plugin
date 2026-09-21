@@ -7426,7 +7426,7 @@ Placeholder legend:
 | `<titolo del video o del film>` | `{title}` |
 | `<parole del titolo del brano>` | `{titleKeywords}` |
 
-Complete phrase list (1455 phrases across 67 commands):
+Complete phrase list (1459 phrases across 67 commands):
 
 #### Play music
 
@@ -8591,6 +8591,10 @@ Complete phrase list (1455 phrases across 67 commands):
 - `Di suonare il podcast <nome del podcast>`
 - `Di ascoltare il podcast <nome del podcast>`
 - `Di mettere il podcast <nome del podcast>`
+- `Riprodurre il podcast <nome del podcast>`
+- `Ascoltare il podcast <nome del podcast>`
+- `Suonare il podcast <nome del podcast>`
+- `Mettere il podcast <nome del podcast>`
 
 #### Audiobooks
 
