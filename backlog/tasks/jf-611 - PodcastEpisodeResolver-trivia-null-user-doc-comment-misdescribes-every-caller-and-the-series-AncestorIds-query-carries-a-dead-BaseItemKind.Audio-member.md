@@ -4,10 +4,10 @@ title: >-
   PodcastEpisodeResolver trivia: null-user doc comment misdescribes every
   caller, and the series AncestorIds query carries a dead BaseItemKind.Audio
   member
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-20 19:20'
-updated_date: '2026-09-21 08:42'
+updated_date: '2026-09-21 10:03'
 labels: []
 dependencies: []
 references:
@@ -29,6 +29,12 @@ Gate review of eefb09ec (JF-599) trivia in the new shared resolver (both confirm
 - [ ] #3 Test changes limited to repinning the series-shape assertion (Episode present, Audio deliberately absent) and its doc; full suite green
 - [ ] #4 While in the file: the two added comment lines using the 'word - word' parenthetical-hyphen shape (PlayPodcastIntentHandler.cs:184/186) are reworded per the user-manual prose rule, or noted as accepted repo style if that is the maintainer's call
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Shipped 2026-09-21 (commit 18cd96d2). Resolver trivia fixed: jellyfinUser params non-nullable with reality docs + ArgumentNullException.ThrowIfNull (machine-checked contract, the RetryHelper idiom); the series query drops the dead Audio member with the live-probed reasoning in the comment; the album arm takes the same Limit 1 + IsVirtualItem=false (a 1500-track community album no longer materializes fully inside the Alexa budget); the TvNextUpService parity claim corrected to the single DateCreated-desc core; the test doc + assertion repinned Episode-present/Audio-absent. The review sweep surfaced and fixed a PRE-EXISTING flag hole: PodcastsEnabled now gates the yes-confirm and the APL series tap too (only the intent handler was gated). AC#3's original 'no test changes needed' was false and corrected in the record. F2 kept-documented (an undocumented third-party Audio-under-Series shape now gets a clean spoken refusal instead of playing); F4 skipped (the query-shape assertion is the executable record). Gates: literal /code-review high (8 findings) + literal /simplify (1 finding applied); tests 4189/4189 both TFMs; Release+warnaserror clean.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
