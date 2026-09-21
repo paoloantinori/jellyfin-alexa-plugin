@@ -7,7 +7,6 @@ using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
-using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
@@ -18,7 +17,6 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Entities;
-using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
@@ -183,42 +181,21 @@ public class PlayPodcastIntentHandler : BaseHandler
 
         BaseItem podcast = podcasts[0];
 
-        // Get the latest episode under the podcast. Two shapes (JF-599): the
-        // MusicAlbum of Audio tracks (direct ParentId, the album-track convention
-        // in PlayAlbumIntentHandler - an Audio track's direct parent is the
-        // MusicAlbum with no intermediate season level) and the Series of Episode
-        // items (AncestorId - episodes nest under season/year folders, so the
-        // series is an ANCESTOR, not the direct parent). The shared resolver is
-        // also what the disambiguation "yes" and the APL carousel tap replay.
-        Logger.LogDebug("PlayPodcast: container='{Name}' id={Id} shape={Shape}", podcast.Name, podcast.Id, Util.PodcastEpisodeResolver.DescribeShape(podcast));
-        var episodeQuery = Util.PodcastEpisodeResolver.BuildLatestEpisodeQuery(podcast, jellyfinUser);
-
-        IReadOnlyList<BaseItem> episodes = await RetryAsync(
-            () => _libraryManager.GetItemList(episodeQuery),
+        // The shared resolve-to-launch tail (JF-605): the intent handler, the
+        // disambiguation yes, and the APL tap all play through the same sequence
+        // (retry-budgeted episode query, NoEpisodesInPodcast empty answer,
+        // codec-routed launch). Fresh play, offset 0.
+        return await Util.PodcastEpisodeResolver.PlayLatestEpisodeAsync(
+            _libraryManager,
+            Launch,
+            Logger,
             "GetPodcastEpisodes",
-            cancellationToken).ConfigureAwait(false);
-
-        if (episodes.Count == 0)
-        {
-            return ResponseBuilder.Tell(ResponseStrings.Get("NoEpisodesInPodcast", locale, podcast.Name));
-        }
-
-        BaseItem episode = episodes[0];
-        string itemId = episode.Id.ToString();
-        Logger.LogDebug("PlayPodcast: newest episode='{EpisodeName}' id={EpisodeId}", episode.Name, episode.Id);
-
-        List<QueueItem> queueItems = new()
-        {
-            new QueueItem { Id = episode.Id }
-        };
-        session.NowPlayingQueue = queueItems;
-        session.FullNowPlayingItem = episode;
-
-        // The codec-routed audio source (JF-507): a series-shape Episode whose audio
-        // codec has no Echo decoder (a TV series matched by name, eac3/ac3) rides the
-        // audio-only HLS transcode instead of a static URL that never starts; an
-        // Audio item resolves to the same static URL GetStreamUrl built.
-        AudioLaunchSource source = Launch.ResolveAudioLaunchSource(episode, itemId, user, 0);
-        return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source, itemId, episode, user, context);
+            podcast,
+            jellyfinUser,
+            user,
+            session,
+            context,
+            locale,
+            cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 }

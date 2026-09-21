@@ -434,6 +434,88 @@ public class AplUserEventHandlerTests : PluginTestBase, IDisposable
     }
 
     [Fact]
+    public async Task HandleAsync_SelectItem_PodcastSeries_AttachesNowPlayingScreen()
+    {
+        // JF-605 review: the intermediate consolidation lost the tap's NowPlaying
+        // screen (the early return skipped TryAttachNowPlayingDirective); the
+        // attachScreen hook restores it. Pin the RenderDocument on an APL context.
+        var seriesId = Guid.NewGuid();
+        var episodeId = Guid.NewGuid();
+        var request = CreateAplEvent("selectItem", seriesId.ToString());
+        var session = CreateSession();
+        var aplContext = TestHelpers.CreateContextWithApl();
+
+        var series = new MediaBrowser.Controller.Entities.TV.Series { Name = "Generazione", Id = seriesId };
+        var episode = new MediaBrowser.Controller.Entities.TV.Episode { Name = "Ep 12", Id = episodeId };
+        _libraryManager.Setup(l => l.GetItemById(seriesId)).Returns(series);
+        _userManager.Setup(u => u.GetUserById(session.UserId)).Returns(TestHelpers.CreateJellyfinUser());
+        _libraryManager
+            .Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == Jellyfin.Data.Enums.BaseItemKind.Episode))))
+            .Returns(new List<BaseItem> { episode });
+
+        var response = await _handler.HandleAsync(request, aplContext, _user, session, CancellationToken.None);
+
+        Assert.NotNull(response.Response.Directives);
+        Assert.Contains(response.Response.Directives, d => d.Type == "Alexa.Presentation.APL.RenderDocument");
+        Assert.Contains(response.Response.Directives, d => d is AudioPlayerPlayDirective);
+    }
+
+    [Fact]
+    public async Task HandleAsync_SelectItem_PodcastSeries_ResumePosition_RidesThePlayDirective()
+    {
+        // JF-605 review: the tap's resume policy rides the offsetFor delegate on
+        // the RESOLVED episode; prime the per-item position state and pin a
+        // nonzero directive offset.
+        var seriesId = Guid.NewGuid();
+        var episodeId = Guid.NewGuid();
+        var request = CreateAplEvent("selectItem", seriesId.ToString());
+        var session = CreateSession();
+        session.DeviceId = "tap-resume-device";
+        var queue = _queueManager.GetOrCreateQueue(session.DeviceId);
+        queue.ItemPositionState[episodeId.ToString("N", System.Globalization.CultureInfo.InvariantCulture)] = TimeSpan.FromSeconds(90).Ticks;
+
+        var series = new MediaBrowser.Controller.Entities.TV.Series { Name = "Generazione", Id = seriesId };
+        var episode = new MediaBrowser.Controller.Entities.TV.Episode { Name = "Ep 12", Id = episodeId };
+        _libraryManager.Setup(l => l.GetItemById(seriesId)).Returns(series);
+        _userManager.Setup(u => u.GetUserById(session.UserId)).Returns(TestHelpers.CreateJellyfinUser());
+        _libraryManager
+            .Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == Jellyfin.Data.Enums.BaseItemKind.Episode))))
+            .Returns(new List<BaseItem> { episode });
+
+        var response = await _handler.HandleAsync(request, _context, _user, session, CancellationToken.None);
+
+        var play = response.Response.Directives.OfType<AudioPlayerPlayDirective>().FirstOrDefault();
+        Assert.NotNull(play);
+        Assert.Equal(90_000, play.AudioItem.Stream.OffsetInMilliseconds);
+    }
+
+    [Fact]
+    public async Task HandleAsync_SelectItem_PodcastSeries_NoEpisodes_SpeaksNoEpisodesInPodcast()
+    {
+        // JF-605 AC#4: every podcast surface speaks the SAME empty answer. The tap
+        // used to answer the folder-generic FolderNoPlayableContent; the shared
+        // tail reconciled it to the podcast-specific key.
+        var seriesId = Guid.NewGuid();
+        var request = CreateAplEvent("selectItem", seriesId.ToString());
+        var session = CreateSession();
+
+        var series = new MediaBrowser.Controller.Entities.TV.Series { Name = "Generazione", Id = seriesId };
+        _libraryManager.Setup(l => l.GetItemById(seriesId)).Returns(series);
+        _userManager.Setup(u => u.GetUserById(session.UserId)).Returns(TestHelpers.CreateJellyfinUser());
+        _libraryManager
+            .Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == Jellyfin.Data.Enums.BaseItemKind.Episode))))
+            .Returns(new List<BaseItem>());
+
+        var response = await _handler.HandleAsync(request, _context, _user, session, CancellationToken.None);
+
+        var speech = ((global::Alexa.NET.Response.PlainTextOutputSpeech?)response.Response.OutputSpeech)?.Text;
+        Assert.NotNull(speech);
+        Assert.Equal(
+            global::Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("NoEpisodesInPodcast", "en-US", "Generazione"),
+            speech);
+    }
+
+    [Fact]
     public async Task HandleAsync_SelectItem_ValidMovieId_PlaysVideo()
     {
         var itemId = Guid.NewGuid();

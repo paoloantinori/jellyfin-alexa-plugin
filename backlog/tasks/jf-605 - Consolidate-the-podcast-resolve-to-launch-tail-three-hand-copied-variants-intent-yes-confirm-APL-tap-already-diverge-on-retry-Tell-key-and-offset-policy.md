@@ -4,9 +4,10 @@ title: >-
   Consolidate the podcast resolve-to-launch tail: three hand-copied variants
   (intent, yes-confirm, APL tap) already diverge on retry, Tell key, and offset
   policy
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-20 19:17'
+updated_date: '2026-09-21 05:35'
 labels: []
 dependencies: []
 references:
@@ -29,6 +30,12 @@ Gate review of eefb09ec (JF-599): the podcast resolve-episodes-then-launch tail 
 - [ ] #3 The APL site's raw GetItemList is either wrapped in the shared retry or the deviation is documented on the helper
 - [ ] #4 Existing PlayPodcast/Yes/APL tests stay green; a new test pins the shared sequence (no-episode Tell key consistency included)
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Implemented 2026-09-21 (uncommitted, under the literal gates): PodcastEpisodeResolver.PlayLatestEpisodeAsync is the ONE tail: retry-budgeted query (RetryHelper.ExecuteWithRequestBudgetAsync, the same engine BaseHandler.RetryAsync wraps), NoEpisodesInPodcast empty answer EVERYWHERE (the tap's FolderNoPlayableContent reconciled away, pinned by the new APL key-consistency test), session queue + codec-routed launch (JF-507), and an offsetFor delegate so the APL tap keeps its resume policy (GetResumeOffset on the resolved episode) while intent/yes play fresh at 0. The three call sites collapse: the intent tail, the Yes arm (private method deleted, inline at the switch), the APL series branch (HandleSelectItem now async, retry added per JF-609 which this absorbs). Policies documented on the helper doc. Suite 4187/4187 both TFMs; Release+warnaserror clean.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

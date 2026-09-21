@@ -128,26 +128,26 @@ public class AplUserEventHandler : BaseHandler
             case "selectItem":
             case "playTrack":
             case "carouselTap":
-                return HandleSelectItem(aplEvent, user, session, context, request);
+                return HandleSelectItem(aplEvent, user, session, context, request, cancellationToken);
             default:
                 return Task.FromResult(ResponseBuilder.Empty());
         }
     }
 
-    private Task<SkillResponse> HandleSelectItem(AplUserEventRequest aplEvent, Entities.User user, SessionInfo session, Context context, Request request)
+    private async Task<SkillResponse> HandleSelectItem(AplUserEventRequest aplEvent, Entities.User user, SessionInfo session, Context context, Request request, CancellationToken cancellationToken)
     {
         string? itemIdStr = aplEvent.Arguments?.ElementAtOrDefault(1)?.ToString();
         if (string.IsNullOrEmpty(itemIdStr) || !Guid.TryParse(itemIdStr, out Guid itemId))
         {
             Logger.LogDebug("AplUserEvent HandleSelectItem: no valid item ID in arguments");
-            return Task.FromResult(ResponseBuilder.Empty());
+            return ResponseBuilder.Empty();
         }
 
         BaseItem? item = _libraryManager.GetItemById(itemId);
         if (item == null)
         {
             Logger.LogDebug("AplUserEvent HandleSelectItem: item {ItemId} not found in library", itemIdStr);
-            return Task.FromResult(ResponseBuilder.Empty());
+            return ResponseBuilder.Empty();
         }
 
         Logger.LogDebug(
@@ -163,16 +163,16 @@ public class AplUserEventHandler : BaseHandler
             var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, session.UserId, locale);
             if (userError != null)
             {
-                return Task.FromResult(userError);
+                return userError;
             }
 
             // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
-            return Task.FromResult(Launch.BuildVideoAppLaunchResponse(
+            return Launch.BuildVideoAppLaunchResponse(
                 context,
                 locale,
                 Launch.GetVideoAppLaunchUrl(item, user),
                 item.Name,
-                Launch.BuildVideoLaunchSpeech(item, locale, _userDataManager, jellyfinUser, Launch.GetAnnounceNowPlaying(user))));
+                Launch.BuildVideoLaunchSpeech(item, locale, _userDataManager, jellyfinUser, Launch.GetAnnounceNowPlaying(user)));
         }
 
         // Folder items (audiobooks, music folders, etc.) need to be resolved to their
@@ -197,24 +197,27 @@ public class AplUserEventHandler : BaseHandler
                 var (seriesUser, seriesUserError) = ResolveJellyfinUser(_userManager, session.UserId, seriesLocale);
                 if (seriesUserError != null)
                 {
-                    return Task.FromResult(seriesUserError);
+                    return seriesUserError;
                 }
 
-                var episodeQuery = Util.PodcastEpisodeResolver.BuildLatestEpisodeQuery(folder, seriesUser);
-                var episodes = _libraryManager.GetItemList(episodeQuery);
-                if (episodes.Count == 0)
-                {
-                    Logger.LogWarning("AplUserEvent HandleSelectItem: podcast series {FolderName} has no episodes", folder.Name);
-                    return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("FolderNoPlayableContent", seriesLocale)));
-                }
-
-                item = episodes[0];
-                itemIdStr = item.Id.ToString();
-                session.NowPlayingQueue = new List<QueueItem> { new() { Id = item.Id } };
-                session.FullNowPlayingItem = item;
-                Logger.LogDebug(
-                    "AplUserEvent HandleSelectItem: resolved podcast series {FolderName} to newest episode {ChildName} ({ChildId})",
-                    folder.Name, item.Name, itemIdStr);
+                // The shared tail (JF-605): retry-budgeted query, the podcast
+                // empty answer, codec-routed launch, and the TAP's resume policy
+                // via the offset delegate (an in-progress episode resumes; the
+                // intent and yes paths play fresh).
+                return await Util.PodcastEpisodeResolver.PlayLatestEpisodeAsync(
+                    _libraryManager,
+                    Launch,
+                    Logger,
+                    "AplPodcastEpisodes",
+                    folder,
+                    seriesUser,
+                    user,
+                    session,
+                    context,
+                    seriesLocale,
+                    offsetFor: episode => GetResumeOffset(episode, session, request),
+                    attachScreen: (response, episode) => Launch.TryAttachNowPlayingDirective(response, episode, episode.Id.ToString(), user, context),
+                    cancellationToken: cancellationToken).ConfigureAwait(false);
             }
             else
             {
@@ -238,7 +241,7 @@ public class AplUserEventHandler : BaseHandler
                 {
                     Logger.LogWarning("AplUserEvent HandleSelectItem: folder {FolderName} has no audio children", folder.Name);
                     string locale = GetLocale(request);
-                    return Task.FromResult(ResponseBuilder.Tell(ResponseStrings.Get("FolderNoPlayableContent", locale)));
+                    return ResponseBuilder.Tell(ResponseStrings.Get("FolderNoPlayableContent", locale));
                 }
 
                 item = children[0];
@@ -270,7 +273,7 @@ public class AplUserEventHandler : BaseHandler
 
         Launch.TryAttachNowPlayingDirective(response, item, itemIdStr, user, context);
 
-        return Task.FromResult(response);
+        return response;
     }
 
     private int GetResumeOffset(BaseItem item, SessionInfo session, Request request)
