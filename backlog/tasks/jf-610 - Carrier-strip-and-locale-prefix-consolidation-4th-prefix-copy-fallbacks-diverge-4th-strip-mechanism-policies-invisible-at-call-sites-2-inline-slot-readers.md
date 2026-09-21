@@ -4,10 +4,10 @@ title: >-
   Carrier-strip and locale-prefix consolidation: 4th prefix copy (fallbacks
   diverge) + 4th strip mechanism (policies invisible at call sites) + 2 inline
   slot readers
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-20 19:20'
-updated_date: '2026-09-21 15:02'
+updated_date: '2026-09-21 16:45'
 labels: []
 dependencies:
   - JF-602
@@ -34,6 +34,12 @@ Gate review of 560b484c (JF-600) consolidated the reuse/altitude findings. Count
 - [ ] #4 PlaylistNameNormalizer's strip loop is the simpler flat shape; hi's dual-table presence (नाम की/नाम का in both leading and trailing) is either unified or documented as deliberate
 - [ ] #5 Full test suite green; each consolidated call site keeps its current behavior (pin with tests before moving)
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Shipped 2026-09-21 (commit be750c68, deployed net10.0, regression simulate battery green: podcast plays, create clean, full-phrase add works). LocalePrefix.Of retired FIVE private prefix copies (the fifth was hiding in EpisodePosition - the exact trigger the old comment named); CarrierPhrase is the single-cut primitive with the review round's real catch fixed at the root (a cut leaving an EMPTY remainder is NO cut - 'chiamato  ' kept the raw value, or the album retry would auto-play an arbitrary album with an empty SearchTerm); three strip mechanisms ride the primitive, video stays bespoke three-state with the family policy table (AC#2's policy-parameter shipped as that table - recorded deviation); the playlist pair-reader hoisted to BaseHandler for all seven readers. Gates: literal /code-review high (10 findings, all applied or pinned) + literal /simplify (8 findings, incl. the phantom-write round caught by post-write verification); suite 4208/4208 both TFMs. Remaining OPEN debt from the review: the play-path raw-first rework (a playlist genuinely named 'Chiamata Sei' is findable by the edit family but not by name on the play path if the stripped form misses) - needs the AlbumPlayService tier design, tracked with the JF-613 family.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
