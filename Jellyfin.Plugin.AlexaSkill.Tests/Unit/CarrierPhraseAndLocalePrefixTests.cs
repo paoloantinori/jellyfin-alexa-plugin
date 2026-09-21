@@ -58,7 +58,7 @@ public class CarrierPhraseAndLocalePrefixTests
     [InlineData("en", "en")] // dashless returns ITSELF (the JF-610 reconciliation)
     [InlineData(null, "")]
     [InlineData("", "")]
-    public void LocalePrefix_Of(string locale, string expected)
+    public void LocalePrefix_Of(string? locale, string expected)
     {
         Assert.Equal(expected, LocalePrefix.Of(locale));
     }
