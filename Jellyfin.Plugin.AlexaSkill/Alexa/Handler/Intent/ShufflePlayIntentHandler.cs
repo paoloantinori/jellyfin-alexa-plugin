@@ -67,7 +67,7 @@ public class ShufflePlayIntentHandler : BaseHandler
     {
         string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
-        string? playlistName = Util.PlaylistNameNormalizer.NormalizePlaylistName(intentRequest.Intent.Slots?.TryGetValue("playlist", out var playlistSlot) == true ? playlistSlot.Value : null, locale);
+        (_, string? playlistName) = ReadPlaylistSlot(intentRequest, "playlist", locale);
         // JF-550 (dead-mic sweep; JF-549 class): the empty-playlist prompt elicits
         // with the mic open (this caller's intent; the shared builder serves both
         // PlayPlaylistIntent and ShufflePlayIntent, so the elicit must name the

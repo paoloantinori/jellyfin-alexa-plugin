@@ -4,9 +4,10 @@ title: >-
   ElicitSlot trap ignored on-device for AddSongToPlaylistIntent (MusicRecording
   slot?): mic opens but the answer routes to general NLU and plays instead of
   adding
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-21 10:37'
+updated_date: '2026-09-21 14:53'
 labels: []
 dependencies: []
 priority: high
@@ -37,3 +38,9 @@ Design direction: the song slot of AddSongToPlaylistIntent must become a pure-te
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Shipped 2026-09-21 (commit c109dd9a, deployed as the net10.0 build + 17/17 model rebuild). The complete redesign: both AddSong dialog slots are pure text (song_query SearchQuery new name; playlist_target renamed type to SearchQuery - unique name, no cross-intent constraint), the greedy song-only capture splits its playlist clause handler-side (per-language markers), the song resolves BEFORE the playlist elicit (fail fast, the recorded design order), the bare verb+SearchQuery catch-all samples removed (anti-pattern #3 vs the queue family), each elicit echoes the other slot's current value in the updatedIntent (ElicitSlotDirective gained optional slot values), hi/ja regained playlist-first samples, fixtures pin capture spans exactly and guard the create-steal. Simulate battery on the real pipeline: the full one-shot phrase ADDS end-to-end ("Rapsodia... aggiunto alla playlist prova echo"), the split logs fire, create is clean, podcast plays. ALSO discovered: minix runs Jellyfin 12.1.0 (a day of net9.0 deploys threw MissingMethod on the playlist interface); the net10.0 build is now the minix deploy line (memory updated). Gates: literal /code-review high (10 findings: 8 applied, F6 mirrors mid-review, F10 filed with JF-613) + literal /simplify (6 findings applied); tests 4192/4192 both TFMs. Remaining device probe: the second elicit turn (say the playlist after the song question) - the only step simulate cannot exercise.
+<!-- SECTION:FINAL_SUMMARY:END -->

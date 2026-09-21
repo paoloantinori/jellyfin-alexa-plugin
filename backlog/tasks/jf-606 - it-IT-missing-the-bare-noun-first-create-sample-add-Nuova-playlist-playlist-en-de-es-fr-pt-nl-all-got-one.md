@@ -3,10 +3,10 @@ id: JF-606
 title: >-
   it-IT missing the bare noun-first create sample: add 'Nuova playlist
   {playlist}' (en/de/es/fr/pt/nl all got one)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-20 19:18'
-updated_date: '2026-09-20 20:54'
+updated_date: '2026-09-20 21:15'
 labels: []
 dependencies: []
 references:
@@ -34,6 +34,12 @@ Gate review of 560b484c (JF-600): the bare noun-first create sample was added to
 <!-- SECTION:NOTES:BEGIN -->
 Implemented 2026-09-20 (uncommitted, under gates): it-IT gained "Nuova playlist {playlist}" (noun-first, matching en/de/es/fr/pt/nl); ar-SA gained "قائمة تشغيل جديدة {playlist}" (the noun-first gap the task flagged, closed by adding the form rather than only a note); both models regenerated, NLU fixture row "nuova playlist prova echo" -> CreatePlaylistIntent added (AC#3).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Fixed 2026-09-20 (commit 72b1989a): it-IT gained "Nuova playlist {playlist}" and ar-SA "قائمة تشغيل جديدة {playlist}"; models regenerated, voice-reference mirrors fresh, NLU fixture row "nuova playlist prova echo" -> CreatePlaylistIntent added and live-verified via profile-nlu on the rebuilt model.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

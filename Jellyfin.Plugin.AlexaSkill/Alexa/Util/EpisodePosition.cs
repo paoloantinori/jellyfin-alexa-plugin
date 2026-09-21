@@ -118,7 +118,7 @@ internal static class EpisodePosition
         }
 
         string normalized = Normalize(word);
-        string prefix = locale.Contains('-', StringComparison.Ordinal) ? locale[..locale.IndexOf('-', StringComparison.Ordinal)] : locale;
+        string prefix = LocalePrefix.Of(locale);
         return LatestWords.TryGetValue(prefix, out FrozenSet<string>? words) && words.Contains(normalized);
     }
 

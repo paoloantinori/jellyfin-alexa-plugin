@@ -4,9 +4,10 @@ title: >-
   APL series-tap TV contamination: any tapped TV Series now plays its newest
   episode audio-only; add a discriminator or document the accepted reach in the
   branch comment
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-20 19:16'
+updated_date: '2026-09-20 21:15'
 labels: []
 dependencies: []
 references:
@@ -29,6 +30,12 @@ Gate review of eefb09ec (JF-599) confirmed end-to-end: AplUserEventHandler's new
 - [ ] #3 If accepted: the APL branch comment names the TV-series reach, not just 'the IlPost carousel surface'
 - [ ] #4 Unit test covers the chosen behavior for both a podcast-shaped and a TV-shaped Series
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Fixed 2026-09-20 (commit 72b1989a): the APL series-tap branch comment now states the full REACH (keys on ANY Series, CollectionType=tvshows indistinguishable; a real TV tap plays newest-episode audio-only where pre-change was FolderNoPlayableContent; tapped Episodes already played audio-only). Shipped in the same remediation commit as JF-601/602.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

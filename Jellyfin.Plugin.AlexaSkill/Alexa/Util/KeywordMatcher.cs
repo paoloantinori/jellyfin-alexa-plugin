@@ -220,7 +220,7 @@ internal static class KeywordMatcher
             return Array.Empty<string>();
         }
 
-        string prefix = GetLocalePrefix(locale);
+        string prefix = LocalePrefix.Of(locale);
         HashSet<string>? stopWordSet = null;
         if (!string.IsNullOrEmpty(prefix))
         {
@@ -456,21 +456,6 @@ internal static class KeywordMatcher
         return results
             .OrderByDescending(r => r.Score)
             .ToList();
-    }
-
-    /// <summary>
-    /// Extracts the locale prefix from a full locale string.
-    /// "en-US" -> "en", "it-IT" -> "it", etc.
-    /// </summary>
-    private static string GetLocalePrefix(string locale)
-    {
-        if (string.IsNullOrEmpty(locale))
-        {
-            return string.Empty;
-        }
-
-        int dashIndex = locale.IndexOf('-');
-        return dashIndex > 0 ? locale.Substring(0, dashIndex) : locale;
     }
 
     /// <summary>

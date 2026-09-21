@@ -826,6 +826,23 @@ public abstract class BaseHandler
     }
 
     /// <summary>
+    /// Reads a playlist-name slot as the (raw, carrier-stripped) pair (JF-600/602,
+    /// hoisted to the one slot-extraction home in JF-610 so the play-path handlers
+    /// share it with the edit family): the raw value feeds raw-first matching, the
+    /// stripped value feeds speech and the create path. The strip lives on
+    /// <see cref="Util.PlaylistNameNormalizer"/>.
+    /// </summary>
+    /// <param name="request">The intent request carrying the slot.</param>
+    /// <param name="slotName">The slot name ("playlist" or "playlist_target").</param>
+    /// <param name="locale">The request locale.</param>
+    /// <returns>The raw and stripped names; both null when the slot is empty.</returns>
+    protected static (string? Raw, string? Name) ReadPlaylistSlot(IntentRequest request, string slotName, string locale)
+    {
+        string? raw = GetSlotValue(request, slotName);
+        return (raw, Util.PlaylistNameNormalizer.NormalizePlaylistName(raw, locale));
+    }
+
+    /// <summary>
     /// Extract a slot's raw spoken value (trimmed), or null when the slot is
     /// absent or whitespace (Alexa delivers partially-matched slots as empty or
     /// whitespace strings; IsNullOrWhiteSpace, not IsNullOrEmpty - CLAUDE.md

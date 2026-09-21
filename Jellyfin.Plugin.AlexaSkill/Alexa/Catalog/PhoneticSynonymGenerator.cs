@@ -28,7 +28,7 @@ public static class PhoneticSynonymGenerator
             return new List<string>();
         }
 
-        string prefix = GetLocalePrefix(locale);
+        string prefix = Util.LocalePrefix.Of(locale);
 
         return prefix switch
         {
@@ -41,12 +41,6 @@ public static class PhoneticSynonymGenerator
             "nl" => DutchPhoneticSynonyms.Generate(name),
             _ => new List<string>()
         };
-    }
-
-    private static string GetLocalePrefix(string locale)
-    {
-        int idx = locale.IndexOf('-', StringComparison.Ordinal);
-        return idx > 0 ? locale[..idx] : locale;
     }
 
     // --- JF-362: pronunciation rules shared by the /ŋ/-absent Romance generators ---

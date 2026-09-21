@@ -4,10 +4,10 @@ title: >-
   Playlist carrier strip regression: preemptive unconditional strip makes
   web-UI-named carrier playlists unaddressable on the edit paths; adopt the
   fallback-only contract
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-20 19:14'
-updated_date: '2026-09-20 19:56'
+updated_date: '2026-09-20 21:15'
 labels: []
 dependencies: []
 references:
@@ -37,6 +37,12 @@ Gate review of 560b484c (JF-600) confirmed a regression: PlaylistNameNormalizer.
 <!-- SECTION:NOTES:BEGIN -->
 Implemented 2026-09-20 (uncommitted, under the literal /code-review gate): FindPlaylist now runs every tier on the RAW spoken name first and retries the tiers on the carrier-stripped form only on a miss (the JF-469 fallback-only contract); the class doc names the web-UI/m3u writer population the review surfaced and drops the false "only writer" claim. AddSong/AddCurrent/RemoveCurrent/Create pass the raw slot value to FindPlaylist and keep the normalized name for speech/creation. Regression test: a playlist genuinely named "Called Road Trip" keeps its exact-tier match. Play paths (PlayPlaylist/ShufflePlay) keep the read-time strip; their SearchTerm-based lookup is JF-610 scope.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Fixed 2026-09-20 (commit 72b1989a). FindPlaylist interleaves the tiers (raw exact, raw prefix, stripped exact, stripped prefix, substring tiers last) so a raw substring hit can never beat a stripped exact hit; the raw+stripped pair rides ReadPlaylistSlot so no caller re-derives it; the create duplicate-check refusal speaks the REAL playlist name (existing.Name); the normalizer class doc states the actual writers (server-wide IPlaylistManager: web UI and .m3u) and the per-path policy. Tests: raw-name-wins regression, interleaving covered, play-path strip echoes pinned (AC#3). Gates: literal /code-review high (2 rounds) + /simplify + tests 4186/4186 both TFMs.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

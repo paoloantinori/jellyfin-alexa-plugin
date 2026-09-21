@@ -4,10 +4,10 @@ title: >-
   Carrier-strip and locale-prefix consolidation: 4th prefix copy (fallbacks
   diverge) + 4th strip mechanism (policies invisible at call sites) + 2 inline
   slot readers
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-20 19:20'
-updated_date: '2026-09-20 19:21'
+updated_date: '2026-09-21 15:02'
 labels: []
 dependencies:
   - JF-602

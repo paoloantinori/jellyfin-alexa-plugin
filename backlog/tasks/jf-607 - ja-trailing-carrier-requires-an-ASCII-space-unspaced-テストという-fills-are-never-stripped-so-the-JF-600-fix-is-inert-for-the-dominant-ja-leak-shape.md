@@ -3,10 +3,10 @@ id: JF-607
 title: >-
   ja trailing carrier requires an ASCII space: unspaced 'テストという' fills are never
   stripped, so the JF-600 fix is inert for the dominant ja leak shape
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-20 19:19'
-updated_date: '2026-09-20 20:54'
+updated_date: '2026-09-20 21:15'
 labels: []
 dependencies: []
 references:
@@ -33,6 +33,12 @@ Gate review of 560b484c (JF-600): the ja trailing carrier entry ' という' req
 <!-- SECTION:NOTES:BEGIN -->
 Implemented 2026-09-20 (uncommitted, under gates): the unspaced "という" entry joined the ja trailing carriers (particle, never a title ending, so the unspaced strip is safe); theory row "テストという" -> "テスト" added; the TrailingCarriers doc updated to describe BOTH forms (the review round caught the stale fail-safe sentence).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Fixed 2026-09-20 (commit 72b1989a): the unspaced "という" trailing entry added (particle, never a title ending); theory rows cover both spaced and unspaced forms; the TrailingCarriers doc describes both. hi forms verified space-emitting (Hindi separates with spaces) so no unspaced variants needed.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

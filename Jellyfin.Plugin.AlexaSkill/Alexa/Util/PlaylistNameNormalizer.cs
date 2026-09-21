@@ -19,8 +19,9 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// beats a raw substring hit; the CREATE path keeps the stripped form for the
 /// new playlist's name (the spoken intent) while the duplicate check runs
 /// raw-first; the PLAY paths (PlayPlaylist/ShufflePlay, SearchTerm-contains
-/// lookup) still apply the strip at read time, whose raw-first rework is JF-610
-/// scope. SIBLING STRIP MECHANISMS (do not merge the word tables, they are
+/// lookup) still apply the strip at read time; their raw-first rework is OPEN
+/// debt (the JF-610 review kept it out: the AlbumPlayService lookup needs its
+/// own tier design). SIBLING STRIP MECHANISMS (do not merge the word tables, they are
 /// per-feature): AlbumPlayService carries the album-slot strip (JF-469) and
 /// PlayVideoIntentHandler the media-noun strip (JF-509).
 /// </summary>
@@ -47,7 +48,11 @@ public static class PlaylistNameNormalizer
 
     /// <summary>
     /// Trailing carriers for the locales whose create samples put the qualifier
-    /// AFTER the name (ja "{playlist} という...", hi "{playlist} नाम की..."). The
+    /// AFTER the name (ja "{playlist} という...", hi "{playlist} नाम की...").
+    /// DELIBERATE dual-table presence: hi ALSO carries leading "नाम की " forms
+    /// because its speech admits both orders ("X नाम की प्लेलिस्ट" and the
+    /// reversed carrier-first fill); the flat loop tries leading first, so the
+    /// leading entry wins when both could apply. The
     /// leading space is baked in for the same reason as above. ja ALSO carries
     /// the unspaced form because Japanese ASR routinely drops the boundary space
     /// (JF-607); という is a particle, never a title ending, so the unspaced
@@ -62,10 +67,10 @@ public static class PlaylistNameNormalizer
     };
 
     /// <summary>
-    /// Strips leaked leading (and ja trailing) "called" carriers from a raw playlist
-    /// slot value. Returns null when nothing survives the strip (the caller's
-    /// missing-slot branch re-prompts). A name that IS the carrier word alone is
-    /// preserved.
+    /// Strips leaked leading (and ja/hi trailing) "called" carriers from a raw
+    /// playlist slot value; a value that IS the bare carrier word (plus optional
+    /// whitespace) is preserved as-is. Returns null only for whitespace-only
+    /// input (the caller's missing-slot branch re-prompts).
     /// </summary>
     /// <param name="raw">The raw slot value (null/whitespace allowed).</param>
     /// <param name="locale">The request locale (carrier table is per language).</param>
@@ -77,10 +82,7 @@ public static class PlaylistNameNormalizer
             return null;
         }
 
-        // Locale-prefix extraction: the fourth private copy of this two-liner
-        // (KeywordMatcher, PhoneticSynonymGenerator, ResponseStrings); retire into
-        // a shared helper when a fifth appears.
-        string prefix = locale.Split('-')[0];
+        string prefix = LocalePrefix.Of(locale);
         if (!LeadingCarriers.TryGetValue(prefix, out string[]? leading))
         {
             return raw.Trim();
@@ -88,35 +90,17 @@ public static class PlaylistNameNormalizer
 
         string name = raw.Trim();
         TrailingCarriers.TryGetValue(prefix, out string[]? trailing);
-        bool stripped;
-        do
+        // The flat strip loop (JF-610): one cut per iteration on the shared
+        // CarrierPhrase primitive until neither direction cuts. Leading first,
+        // then trailing - the same order the old do/while enforced.
+        while (CarrierPhrase.TryStripLeading(ref name, leading)
+            || (trailing != null && CarrierPhrase.TryStripTrailing(ref name, trailing)))
         {
-            stripped = false;
-            foreach (string carrier in leading)
-            {
-                if (name.StartsWith(carrier, StringComparison.OrdinalIgnoreCase))
-                {
-                    name = name[carrier.Length..].TrimStart();
-                    stripped = true;
-                    break;
-                }
-            }
-
-            if (!stripped && trailing != null)
-            {
-                foreach (string carrier in trailing)
-                {
-                    if (name.EndsWith(carrier, StringComparison.OrdinalIgnoreCase))
-                    {
-                        name = name[..^carrier.Length].TrimEnd();
-                        stripped = true;
-                        break;
-                    }
-                }
-            }
         }
-        while (stripped);
 
-        return name.Length == 0 ? null : name;
+        // A fully-carrier value never reaches here: the primitive treats an
+        // empty remainder as no cut, so name always carries at least the raw
+        // carrier text (the bare-carrier keep).
+        return name;
     }
 }

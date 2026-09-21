@@ -409,16 +409,10 @@ public class PlaySongIntentHandler : BaseHandler
     // "la canzone" to bleed into the slot value. Strip them before searching.
     internal static string StripSongCarrierPhrase(string query)
     {
+        // The ONE single-cut primitive (JF-610); returns the ORIGINAL query on
+        // no cut, the stripped remainder on a cut (preemptive policy).
         string trimmed = query.TrimStart();
-        foreach (string phrase in SongCarrierPhrases)
-        {
-            if (trimmed.StartsWith(phrase, StringComparison.OrdinalIgnoreCase))
-            {
-                return trimmed.Substring(phrase.Length).TrimStart();
-            }
-        }
-
-        return query;
+        return Util.CarrierPhrase.TryStripLeading(ref trimmed, SongCarrierPhrases) ? trimmed : query;
     }
 
     /// <summary>

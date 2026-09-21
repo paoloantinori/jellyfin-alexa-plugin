@@ -64,22 +64,6 @@ public abstract class PlaylistEditHandlerBase : BaseHandler
     }
 
     /// <summary>
-    /// Reads a playlist-name slot as the (raw, carrier-stripped) pair (JF-600/602):
-    /// the raw value feeds FindPlaylist's raw-first tiers and the stripped value
-    /// feeds speech and the create path. The strip lives on
-    /// <see cref="Util.PlaylistNameNormalizer"/>.
-    /// </summary>
-    /// <param name="request">The intent request carrying the slot.</param>
-    /// <param name="slotName">The slot name ("playlist" or "playlist_target").</param>
-    /// <param name="locale">The request locale.</param>
-    /// <returns>The raw and stripped names; both null when the slot is empty.</returns>
-    protected static (string? Raw, string? Name) ReadPlaylistSlot(IntentRequest request, string slotName, string locale)
-    {
-        string? raw = GetSlotValue(request, slotName);
-        return (raw, Util.PlaylistNameNormalizer.NormalizePlaylistName(raw, locale));
-    }
-
-    /// <summary>
     /// The edit family's missing-playlist-name answer. Kept a Tell DELIBERATELY
     /// (JF-601 AC#3, the ONE rationale home): the string is a retry imperative
     /// ("Please try again"), not a question, so the user re-issues the full command

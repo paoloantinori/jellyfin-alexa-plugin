@@ -49,10 +49,11 @@ public static class ResponseStrings
             return value;
         }
 
-        // Step 2: Try language root (e.g. "es" for "es-MX")
-        string languageRoot = GetLanguageRoot(locale);
-        if (!string.IsNullOrEmpty(languageRoot)
-            && !string.Equals(languageRoot, locale, StringComparison.OrdinalIgnoreCase)
+        // Step 2: Try language root (e.g. "es" for "es-MX"). LocalePrefix never
+        // returns empty for a non-empty locale (a dashless locale's root equals
+        // the locale itself), so only the inequality guard decides.
+        string languageRoot = Util.LocalePrefix.Of(locale);
+        if (!string.Equals(languageRoot, locale, StringComparison.OrdinalIgnoreCase)
             && TryGetValue(key, languageRoot, out value))
         {
             _logger?.LogDebug("Locale fallback: key '{Key}' not found in '{Locale}', using language root '{LanguageRoot}'", key, locale, languageRoot);
@@ -70,17 +71,6 @@ public static class ResponseStrings
         // Step 4: Key not found anywhere - return the key itself
         _logger?.LogWarning("Locale key '{Key}' not found for locale '{Locale}', en-US, or any language root", key, locale);
         return key;
-    }
-
-    /// <summary>
-    /// Extracts the language root from a locale identifier.
-    /// For example, "es-MX" returns "es", "en-US" returns "en".
-    /// Returns empty string if the locale doesn't contain a hyphen.
-    /// </summary>
-    private static string GetLanguageRoot(string locale)
-    {
-        int separatorIndex = locale.IndexOf('-', StringComparison.Ordinal);
-        return separatorIndex > 0 ? locale.Substring(0, separatorIndex) : string.Empty;
     }
 
     /// <summary>

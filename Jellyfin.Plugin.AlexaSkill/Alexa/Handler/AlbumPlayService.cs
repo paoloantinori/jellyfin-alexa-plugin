@@ -160,21 +160,13 @@ public sealed class AlbumPlayService
             return false;
         }
 
-        foreach (string prefix in prefixes)
+        // The ONE single-cut primitive (JF-610): space-baked entries mean a bare
+        // calling word ("chiamata" alone) never cuts - the raw value stays.
+        string value = slotValue;
+        if (Util.CarrierPhrase.TryStripLeading(ref value, prefixes))
         {
-            if (slotValue.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-            {
-                string remainder = slotValue.Substring(prefix.Length).Trim();
-                if (remainder.Length == 0)
-                {
-                    // The slot IS the bare calling word: nothing to search for once
-                    // stripped, keep the raw value.
-                    return false;
-                }
-
-                stripped = remainder;
-                return true;
-            }
+            stripped = value;
+            return true;
         }
 
         return false;

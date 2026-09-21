@@ -4,10 +4,10 @@ title: >-
   Podcast paths log nothing: add the Debug Logging Policy triage data (shape
   branch decision, matched container and episode IDs) to intent and yes-confirm
   paths
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-20 19:19'
-updated_date: '2026-09-20 20:54'
+updated_date: '2026-09-20 21:23'
 labels: []
 dependencies: []
 references:
@@ -36,6 +36,12 @@ Gate review of eefb09ec (JF-599): PlayPodcastIntentHandler.cs contains zero Logg
 <!-- SECTION:NOTES:BEGIN -->
 Implemented 2026-09-20 (uncommitted, under gates): PlayPodcastIntentHandler logs the series-shape fallback decision (count + first candidate), the matched container (name/id/shape) before the episode query, and the newest episode (name/id); YesIntentHandler.PlayPodcastEpisode logs the confirmed container and the resolved episode with the same shape tag. JF-604's APL reach note also landed in the same diff.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Fixed 2026-09-20 (commit 72b1989a, /simplify pass recorded in-transcript at 734089bc): PlayPodcastIntentHandler logs the series-shape fallback decision, the matched container (name/id/shape via PodcastEpisodeResolver.DescribeShape), and the newest episode; YesIntentHandler.PlayPodcastEpisode logs the confirmed container and resolved episode in the sibling arms' style. A wrong-episode incident is now bisectable from podman logs alone (AC#3). Deployed to minix with the remediation DLL; CI green on 72b1989a.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
