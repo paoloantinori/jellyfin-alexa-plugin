@@ -340,8 +340,10 @@ internal static class KeywordMatcher
     /// NOT Jellyfin.Extensions' RemoveDiacritics: that helper is table-based (Diacritics
     /// 4.x) and folds ligatures/strokes FormD cannot, while FormD folds non-Latin
     /// decomposables the Latin table cannot; the edges differ, do not swap blindly.
+    /// JF-620: internal, the ONE fold in the plugin (CancelWords' trapped-invocation
+    /// detector shares it; callers lowercased-case their input as needed).
     /// </summary>
-    private static string FoldDiacritics(string token)
+    internal static string FoldDiacritics(string token)
     {
         string formD = token.Normalize(NormalizationForm.FormD);
         var sb = new StringBuilder(formD.Length);

@@ -188,14 +188,14 @@ public sealed class DeviceQueueManager : IDisposable
             return (queue.CurrentItemId, DeviceResumeSource.QueuePointer);
         }
 
-        DateTime currentAt = queue.CurrentItemWrittenAt ?? DateTime.MinValue;
-        DateTime lastAt = queue.LastPlayedWrittenAt ?? DateTime.MinValue;
-
         // Legacy files (either stamp null): the old tie rule, queue pointer wins.
-        if (currentAt == DateTime.MinValue || lastAt == DateTime.MinValue)
+        if (queue.CurrentItemWrittenAt is null || queue.LastPlayedWrittenAt is null)
         {
             return (queue.CurrentItemId, DeviceResumeSource.QueuePointer);
         }
+
+        DateTime currentAt = queue.CurrentItemWrittenAt.Value;
+        DateTime lastAt = queue.LastPlayedWrittenAt.Value;
 
         // Fresh stamps: newer wins, with the delayed-stop grace window tilted to the
         // launch-time record (a stop landing just after a newer launch is the pause

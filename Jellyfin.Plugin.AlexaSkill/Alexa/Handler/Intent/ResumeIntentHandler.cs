@@ -154,7 +154,7 @@ public class ResumeIntentHandler : BaseHandler
             // event writers since JF-522 (launch base composed at write time).
             else if (session?.PlayState != null)
             {
-                offset = ResumeMath.TicksToMs(session.PlayState?.PositionTicks ?? 0);
+                offset = ResumeMath.TicksToMs(session.PlayState.PositionTicks ?? 0);
                 Logger.LogDebug(
                     "ResumeIntent: using session playState offset={OffsetMs}ms (ticks={Ticks}, item-absolute since JF-522)",
                     offset, session.PlayState?.PositionTicks);
@@ -192,12 +192,12 @@ public class ResumeIntentHandler : BaseHandler
             string deviceId = context.System.Device.DeviceID;
             (string? winnerId, DeviceQueueManager.DeviceResumeSource winnerSource) = _queueManager.GetDeviceResumePointer(deviceId);
             DeviceQueue? queue = _queueManager.GetQueue(deviceId);
-            string? loserId = winnerSource == DeviceQueueManager.DeviceResumeSource.QueuePointer
-                ? queue?.LastPlayedItemId
-                : queue?.CurrentItemId;
-            DeviceQueueManager.DeviceResumeSource loserSource = winnerSource == DeviceQueueManager.DeviceResumeSource.QueuePointer
-                ? DeviceQueueManager.DeviceResumeSource.LastPlayed
-                : DeviceQueueManager.DeviceResumeSource.QueuePointer;
+            (string? loserId, DeviceQueueManager.DeviceResumeSource loserSource) = winnerSource == DeviceQueueManager.DeviceResumeSource.QueuePointer
+                ? (queue?.LastPlayedItemId, DeviceQueueManager.DeviceResumeSource.LastPlayed)
+                : (queue?.CurrentItemId, DeviceQueueManager.DeviceResumeSource.QueuePointer);
+
+            Jellyfin.Database.Implementations.Entities.User? queueUser =
+                session != null ? ResolveJellyfinUser(_userManager, session.UserId, locale).User : null;
 
             foreach ((string? tryId, DeviceQueueManager.DeviceResumeSource trySource) in
                      new[] { (winnerId, winnerSource), (loserId, loserSource) })
@@ -240,13 +240,6 @@ public class ResumeIntentHandler : BaseHandler
                         "ResumeIntent: device resume candidate {ItemId} (LastPlayed, video kind) left to fallback 4's VideoApp resume",
                         tryId);
                     continue;
-                }
-
-                Jellyfin.Database.Implementations.Entities.User? queueUser = null;
-                if (candidate != null && session != null)
-                {
-                    var (resolvedUser, _) = ResolveJellyfinUser(_userManager, session.UserId, locale);
-                    queueUser = resolvedUser;
                 }
 
                 UserItemData? pointerData = candidate != null && queueUser != null

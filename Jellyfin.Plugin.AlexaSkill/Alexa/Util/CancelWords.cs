@@ -258,7 +258,8 @@ internal static class CancelWords
             new[] { "it", "chiedi a ", "chiedi al ", "chiedi alla ", "chiedi ai ", "domanda a ", "domanda al ", "domanda alla ", "domanda ai " },
             new[] { "en", "ask ", "tell " },
             new[] { "es", "pide a ", "pide al ", "pide a la ", "pide a los ", "dile a ", "dile al ", "pregunta a ", "preguntale a ", "preguntale al " },
-            new[] { "pt", "peca a ", "peca ao ", "peca a ", "pede a ", "pede para ", "diz para " },
+            // "peça a" and "peça à" fold identically; one entry covers both.
+            new[] { "pt", "peca a ", "peca ao ", "pede a ", "pede para ", "diz para " },
             new[] { "fr", "demande a ", "dis a ", "dis au ", "demande au " },
             new[] { "de", "frag ", "frage ", "sag " },
             new[] { "nl", "vraag ", "zeg " },
@@ -270,36 +271,13 @@ internal static class CancelWords
             var carriers = new string[row.Length - 1];
             for (int i = 1; i < row.Length; i++)
             {
-                carriers[i - 1] = FoldDiacritics(row[i]);
+                carriers[i - 1] = KeywordMatcher.FoldDiacritics(row[i]);
             }
 
             folded[row[0]] = carriers;
         }
 
         return folded;
-    }
-
-    /// <summary>
-    /// Lowercases and strips diacritics (NFD, drop combining marks) so accented
-    /// carriers and invocation names still match the unaccented text Alexa ASR
-    /// frequently returns («mi colección» transcribed «mi coleccion»).
-    /// </summary>
-    /// <param name="text">The text to fold.</param>
-    /// <returns>The folded, lowercased text.</returns>
-    private static string FoldDiacritics(string text)
-    {
-        string lowered = text.ToLowerInvariant().Normalize(System.Text.NormalizationForm.FormD);
-        var chars = new char[lowered.Length];
-        int len = 0;
-        foreach (char c in lowered)
-        {
-            if (char.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.NonSpacingMark)
-            {
-                chars[len++] = c;
-            }
-        }
-
-        return new string(chars, 0, len).Normalize(System.Text.NormalizationForm.FormC);
     }
 
     /// <summary>
@@ -324,11 +302,27 @@ internal static class CancelWords
             return false;
         }
 
-        string value = FoldDiacritics(slotValue.Trim());
-        string? matchedName = invocationNames
-            .Where(name => !string.IsNullOrWhiteSpace(name))
-            .FirstOrDefault(name => value.Contains(FoldDiacritics(name), StringComparison.Ordinal));
-        if (matchedName is null)
+        // Fold once per call: the value and each candidate name (the candidates are
+        // pre-lowercased but not folded; folding them here per call keeps Config free
+        // of fold semantics).
+        string value = KeywordMatcher.FoldDiacritics(slotValue.Trim().ToLowerInvariant());
+        string? foldedName = null;
+        foreach (string name in invocationNames)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                continue;
+            }
+
+            string folded = KeywordMatcher.FoldDiacritics(name);
+            if (value.Contains(folded, StringComparison.Ordinal))
+            {
+                foldedName = folded;
+                break;
+            }
+        }
+
+        if (foldedName is null)
         {
             return false;
         }
@@ -343,7 +337,6 @@ internal static class CancelWords
         // Carrier-less locale: the name must LEAD the value and be followed by a
         // command tail; the bare name as the whole answer (a playlist/song named
         // "my collection") stays a real answer.
-        string foldedName = FoldDiacritics(matchedName);
         return !AskCarriersByPrefix.ContainsKey(prefix)
             && value.StartsWith(foldedName, StringComparison.Ordinal)
             && value.Length > foldedName.Length;

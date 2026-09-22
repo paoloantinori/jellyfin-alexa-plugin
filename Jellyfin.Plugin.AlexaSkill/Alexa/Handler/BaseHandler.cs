@@ -817,13 +817,25 @@ public abstract class BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("FlowCancelled", locale));
         }
 
-        // JF-620: a FULL one-shot spoken into the open question is also an escape,
-        // not a slot answer (live incident: «Alexa, chiedi a mia collezione di
-        // attivare loop» captured whole as song_query and answered with a nonsense
-        // not-found). The detection needs the ask-carrier AND the invocation name,
-        // so an answer that merely contains "collezione" stays a real answer. The
-        // escaped command cannot be re-dispatched handler-side (it would need the
-        // NLU again), so the flow ends with an explicit hint to repeat it.
+        return GetTrappedInvocationOneShotEscape(intentRequest, locale, handlerTag);
+    }
+
+    /// <summary>
+    /// JF-620: a FULL one-shot spoken into the open question is an escape, not a
+    /// slot answer (live incident: «Alexa, chiedi a mia collezione di attivare loop»
+    /// captured whole as song_query and answered with a nonsense not-found). The
+    /// detection needs the ask-carrier AND the invocation name, so an answer that
+    /// merely contains "collezione" stays a real answer. The escaped command cannot
+    /// be re-dispatched handler-side (it would need the NLU again), so the flow ends
+    /// with an explicit hint to repeat it. The shared leg for every elicit-opening
+    /// handler; FindSong (own wider hatch) calls it directly.
+    /// </summary>
+    /// <param name="intentRequest">The incoming intent request (dialog must be IN_PROGRESS).</param>
+    /// <param name="locale">The request locale, for the carrier table and invocation names.</param>
+    /// <param name="handlerTag">Handler name for the log line.</param>
+    /// <returns>The escape Tell, or null when the capture is a real slot answer.</returns>
+    protected SkillResponse? GetTrappedInvocationOneShotEscape(IntentRequest intentRequest, string locale, string handlerTag)
+    {
         if (Util.CancelWords.AnySlotIsTrappedInvocationOneShot(
                 intentRequest, locale, Config.RuntimeInvocationNameCandidates(locale)))
         {
