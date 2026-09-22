@@ -20,6 +20,15 @@
             "command": ".claude/hooks/post-release-push-reminder.sh"
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/model-change-guard.sh"
+          }
+        ]
       }
     ]
   }
