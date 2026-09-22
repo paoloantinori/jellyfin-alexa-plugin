@@ -28,16 +28,19 @@ jobs:
             9.0.x
             10.0.x
 
-      - name: Build
-        run: dotnet publish --configuration Debug
+      - name: Build (per TFM; a solution-level publish fails NETSDK1129 on multi-targeted projects)
+        run: |
+          dotnet publish Jellyfin.Plugin.AlexaSkill/Jellyfin.Plugin.AlexaSkill.csproj --configuration Debug -f net9.0
+          dotnet publish Jellyfin.Plugin.AlexaSkill/Jellyfin.Plugin.AlexaSkill.csproj --configuration Debug -f net10.0
 
       - name: Test
         run: dotnet test --verbosity normal
 
-      - name: Create zip
+      - name: Create zip (both ABI lines; the net9.0 DLL throws MissingMethodException on Jellyfin 12.x)
         run: |
-          mkdir -p archive/Jellyfin.Plugin.AlexaSkill
-          cp -r Jellyfin.Plugin.AlexaSkill/bin/Debug/net9.0/publish/* archive/Jellyfin.Plugin.AlexaSkill
+          mkdir -p archive/net9.0 archive/net10.0
+          cp -r Jellyfin.Plugin.AlexaSkill/bin/Debug/net9.0/publish/* archive/net9.0
+          cp -r Jellyfin.Plugin.AlexaSkill/bin/Debug/net10.0/publish/* archive/net10.0
 
       - name: Archive plugin zip
         uses: actions/upload-artifact@v4

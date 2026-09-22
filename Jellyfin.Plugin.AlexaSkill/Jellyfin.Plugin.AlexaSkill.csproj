@@ -1,8 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- JF-307: dual-target. net9.0 + Jellyfin 10.11.x is the shipping line (manifest
-         targetAbi today); net10.0 + Jellyfin 12.0.0-rc7 is the pre-release line. The
+    <!-- JF-307: dual-target. net9.0 + Jellyfin 10.11.x and net10.0 + Jellyfin 12.x
+         are BOTH shipping lines since 1.0 (the release workflow zips each TFM into
+         its own catalog entry; the catalog serves the highest compatible targetAbi).
+         net10.0 references the STABLE 12.1.0 packages (rc7 retired 2026-09-22;
+         production minix runs 12.1.0 live). The
          two TFMs cannot share one Jellyfin package version (12.0.0-rc7 ships
          net10.0-only libs), hence the Condition'd PackageReferences below. 
       Local SDK 9 recipe (when the multi-target build fights you): dotnet restore -p:TargetFramework=net9.0, then dotnet build -f net9.0 with the no-restore flag (see docs/jf307-rc7-spike-findings.md).
@@ -46,10 +49,10 @@
     <PackageReference Include="Jellyfin.Model" Version="10.11.8" Condition="'$(TargetFramework)'=='net9.0'">
       <ExcludeAssets>runtime</ExcludeAssets>
     </PackageReference>
-    <PackageReference Include="Jellyfin.Controller" Version="12.0.0-rc7" Condition="'$(TargetFramework)'=='net10.0'">
+    <PackageReference Include="Jellyfin.Controller" Version="12.0.0" Condition="'$(TargetFramework)'=='net10.0'">
       <ExcludeAssets>runtime</ExcludeAssets>
     </PackageReference>
-    <PackageReference Include="Jellyfin.Model" Version="12.0.0-rc7" Condition="'$(TargetFramework)'=='net10.0'">
+    <PackageReference Include="Jellyfin.Model" Version="12.0.0" Condition="'$(TargetFramework)'=='net10.0'">
       <ExcludeAssets>runtime</ExcludeAssets>
     </PackageReference>
   </ItemGroup>

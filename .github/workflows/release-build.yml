@@ -27,9 +27,8 @@ jobs:
         run: if ! diff <(echo "${GITHUB_REF##*/}") <(echo "${{ steps.version.outputs.VERSION }}"); then exit 1; fi
 
       # JF-307 dual-target: SDK 10 builds both TFMs; 9.0.x provides the net9.0
-      # testhost runtime. The zip below still packs the net9.0 publish (the
-      # manifest's 10.11 targetAbi line; the net10 entry lands with the 12.0
-      # release per the release flow).
+      # testhost runtime. The zip step below packs BOTH publishes (one zip per
+      # ABI line) and the manifest step writes both catalog entries.
       - name: Setup .NET (10.x SDK + 9.x runtime)
         uses: actions/setup-dotnet@v4
         with:
@@ -59,18 +58,17 @@ jobs:
       - name: Validate build.yaml
         run: python3 scripts/validate_build_yaml.py
 
-      - name: Build
-        run: dotnet publish --configuration Release
+      - name: Build (per TFM; a solution-level publish fails NETSDK1129 on multi-targeted projects)
+        run: |
+          dotnet publish Jellyfin.Plugin.AlexaSkill/Jellyfin.Plugin.AlexaSkill.csproj --configuration Release -f net9.0
+          dotnet publish Jellyfin.Plugin.AlexaSkill/Jellyfin.Plugin.AlexaSkill.csproj --configuration Release -f net10.0
 
       - name: Test
         run: dotnet test --verbosity normal
 
-      - name: Create zip
+      - name: "Create zips (one per ABI line, net9.0 for 10.11 and net10.0 for 12.x)"
         run: |
-          cd Jellyfin.Plugin.AlexaSkill/bin/Release/net9.0/publish
-          cp ${GITHUB_WORKSPACE}/Jellyfin.Plugin.AlexaSkill/icon.jpg icon.png
-          zip -j ${GITHUB_WORKSPACE}/AlexaSkill_${{ steps.version.outputs.VERSION }}.zip \
-            Alexa.NET.dll \
+          DLLS="Alexa.NET.dll \
             Alexa.NET.Management.dll \
             Alexa.NET.ProactiveEvents.dll \
             Alexa.NET.Profile.dll \
@@ -78,20 +76,35 @@ jobs:
             Amazon.Lambda.Core.dll \
             Amazon.Lambda.Serialization.Json.dll \
             Jellyfin.Plugin.AlexaSkill.dll \
-            Refit.dll \
-            icon.png
+            Refit.dll"
+          cp ${GITHUB_WORKSPACE}/Jellyfin.Plugin.AlexaSkill/icon.jpg /tmp/icon.png
+          cd Jellyfin.Plugin.AlexaSkill/bin/Release/net9.0/publish
+          cp /tmp/icon.png icon.png
+          zip -j ${GITHUB_WORKSPACE}/AlexaSkill_${{ steps.version.outputs.VERSION }}.zip $DLLS icon.png
+          cd ${GITHUB_WORKSPACE}/Jellyfin.Plugin.AlexaSkill/bin/Release/net10.0/publish
+          cp /tmp/icon.png icon.png
+          zip -j ${GITHUB_WORKSPACE}/AlexaSkill_${{ steps.version.outputs.VERSION }}.net10.zip $DLLS icon.png
+          # zip exits 0 on 'name not matched' (verified): count entries or fail loudly
+          cd ${GITHUB_WORKSPACE}
+          EXPECTED=10
+          for z in AlexaSkill_${{ steps.version.outputs.VERSION }}.zip AlexaSkill_${{ steps.version.outputs.VERSION }}.net10.zip; do
+            COUNT=$(unzip -l "$z" | grep -c '\.dll\|\.png')
+            if [ "$COUNT" -ne "$EXPECTED" ]; then echo "::error::$z has $COUNT entries, expected $EXPECTED"; exit 1; fi
+          done
 
       - name: Create github release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.VERSION }}
-          files: AlexaSkill_${{ steps.version.outputs.VERSION }}.zip
+          files: |
+            AlexaSkill_${{ steps.version.outputs.VERSION }}.zip
+            AlexaSkill_${{ steps.version.outputs.VERSION }}.net10.zip
           generate_release_notes: true
           fail_on_unmatched_files: true
           prerelease: false
 
       - name: Add release to repo manifest
-        run: python3 .github/workflows/add_release_to_manifest.py ${{ steps.version.outputs.VERSION }} AlexaSkill_${{ steps.version.outputs.VERSION }}.zip
+        run: python3 .github/workflows/add_release_to_manifest.py ${{ steps.version.outputs.VERSION }} AlexaSkill_${{ steps.version.outputs.VERSION }}
 
       - name: Commit manifest update
         run: |
