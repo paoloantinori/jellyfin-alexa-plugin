@@ -367,6 +367,23 @@ E2E tests are auto-skipped if no Jellyfin server is configured. Provide connecti
 
 E2E test fixtures are in `tests/integration/fixtures/e2e_*.yaml`. Note that `simulate-skill` routes through Alexa's full NLU which competes with built-in Amazon skills, making some locales (especially en-US) unreliable for automated testing.
 
+### Known simulator limitation: per-locale outages
+
+Amazon's `simulate-skill` service has **recurring partial outages that hit locales selectively** while it-IT and en-US stay healthy (observed 2026-09-13, 09-14, and 09-21/22: es-ES, es-MX, fr-FR, de-DE, ja-JP, pt-BR, nl-NL, hi-IN, and ar-SA all failing in the same minutes it-IT and en-US pass). During an outage window, one-shot E2E probes for the affected locales fail with *"This utterance did not resolve to any intent in your skill"* regardless of invocation name, session mode, or model content (verified by A/B testing both invocation names, `FORCE_NEW_SESSION`, and deploying a known-old model). Amazon's own documentation lists only 8 supported simulator locales, a list that is stale and does not match observed behavior. There is no public SMAPI status page.
+
+**How to check before debugging your own models**: run the it-IT and en-US evergreen one-shot controls ("ask <inv> to play my favorites"; for it-IT, "chiedi a <inv> di riprodurre i miei preferiti"). If those pass and your locale fails, it is the outage class, not your skill. On failure, inspect `consideredIntents` in the simulation result: `<IntentForDifferentSkill>` entries mean the invocation-matching layer failed (Amazon-side); an empty list suggests a payload NLU miss (possibly your model).
+
+**What still works during an outage window**:
+
+| Layer | Tool | Status |
+|-------|------|--------|
+| Model routing (utterance → intent + slots) | `profile-nlu` (Utterance Profiler API) | Works; separate service, unaffected |
+| Handler logic (intent + slots → response) | Plugin Simulator endpoint, 4200+ unit tests | Works; local |
+| Full E2E, it-IT and en-US | `simulate-skill` | Works |
+| Full E2E, other 15 locales | `simulate-skill` | Fails during windows; re-test when the controls pass |
+
+The practical consequence: model changes for the affected locales land "model-verified" (profile-nlu green) but not end-to-end-verified during a window. Ship pinned sample coverage rather than speculative morphology experiments for those locales, and defer wrapper-form (one-shot phrasing) work to a healthy window or on-device testing. The full evidence dossier is in [`claudedocs/research_simulate-skill-per-locale-failures_2026-09-22.md`](claudedocs/research_simulate-skill-per-locale-failures_2026-09-22.md).
+
 ### Using the Alexa Simulator
 
 1. Go to the [Alexa Developer Console](https://developer.amazon.com/alexa/console/ask)
