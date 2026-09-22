@@ -1058,8 +1058,11 @@ WRAPPER_MARKERS: dict[str, list[str]] = {
     "it": ["di riprodu", "di suona", "di metti", "di ascolta", "di pleia", "di fammi",
            # bare infinitives: the it-IT trainer generalizes imperative<->infinitive
            # (live-verified 2026-09-21: radio/random/decade/next route without
-           # explicit twins), and the samples pin that against trainer flips
-           "riprodurre ", "suonare ", "mettere ", "ascoltare "],
+           # explicit twins), and the samples pin that against trainer flips.
+           # "aggiungere" joined 2026-09-22: the trainer does NOT generalize
+           # aggiungi->aggiungere for this sample shape (live FallbackIntent),
+           # unlike metti->mettere; the twin is load-bearing, not a pin.
+           "riprodurre ", "suonare ", "mettere ", "ascoltare ", "aggiungere "],
     "en": ["to play", "to listen", "to hear", "to watch", "to stream", "to queue", "to give"],
     "de": ["abspielen", "wiedergeben", "hören", "anschauen"],
     "es": ["reproducir", "escuchar", "ver ", "poner"],
@@ -1073,9 +1076,14 @@ WRAPPER_MARKERS: dict[str, list[str]] = {
 
 
 def check_wrapper_coverage(all_models: dict[str, dict]) -> list[str]:
-    """WARNING check: every playable custom intent must carry a one-shot wrapper
-    twin in every locale. See WRAPPER_MARKERS above for the failure being caught."""
+    """WARNING check: every playable or additive custom intent must carry a
+    one-shot wrapper twin in every locale. See WRAPPER_MARKERS above for the
+    failure being caught. The Add* family joined 2026-09-22 (review finding):
+    the trainer does not generalize aggiungi->aggiungere (verb-level, not
+    intent-level), so add intents need explicit infinitive twins exactly like
+    play intents, and the marker check must actually examine them."""
     warnings: list[str] = []
+    wrapper_families = ("Play", "Add")
     for locale, lm in sorted(all_models.items()):
         prefix = locale.split("-")[0]
         markers = WRAPPER_MARKERS.get(prefix)
@@ -1083,8 +1091,8 @@ def check_wrapper_coverage(all_models: dict[str, dict]) -> list[str]:
             continue  # locale without a known wrapper construction
         for intent in lm.get("intents", []):
             name = intent.get("name", "")
-            if not name.startswith("Play"):
-                continue  # the wrapper is a play-shape construction
+            if not name.startswith(wrapper_families):
+                continue  # the wrapper is a play/add-shape construction
             samples = intent.get("samples", [])
             if not samples:
                 continue  # zero-sample intents are another check's job

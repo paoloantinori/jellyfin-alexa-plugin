@@ -680,7 +680,7 @@ public sealed class ProgressReporter
     /// <param name="session">The session instance to report progress on.</param>
     /// <param name="mode">The repeat mode to apply.</param>
     /// <param name="label">Log label identifying the calling intent.</param>
-    /// <returns>An empty response, or the no-media tell when nothing is playing.</returns>
+    /// <returns>The spoken repeat-mode confirmation Tell, or the no-media tell when nothing is playing.</returns>
     public async Task<SkillResponse> ApplyRepeatModeAsync(Request request, Context context, SessionInfo session, RepeatMode mode, string label)
     {
         PlaybackState? requestState = context.AudioPlayer;
@@ -708,7 +708,16 @@ public sealed class ProgressReporter
 
         await _sessionManager.OnPlaybackProgress(info, true).ConfigureAwait(false);
 
-        return ResponseBuilder.Empty();
+        // Confirm aloud (live incident 2026-09-22): the repeat mode landed server-side
+        // but the response was speech-less, which reads on-device as "the command did
+        // nothing" (battery test 5: LoopAllOn answered with a bare session end twice).
+        string confirmKey = mode switch
+        {
+            RepeatMode.RepeatAll => "RepeatAllEnabled",
+            RepeatMode.RepeatOne => "RepeatSongEnabled",
+            _ => "RepeatDisabled",
+        };
+        return ResponseBuilder.Tell(ResponseStrings.Get(confirmKey, BaseHandler.GetLocalePublic(request)));
     }
 
     /// <summary>

@@ -224,7 +224,11 @@
           "Segna questo come preferito",
           "Questo mi piace",
           "Mi piace questa canzone",
-          "Salva nei preferiti"
+          "Salva nei preferiti",
+          "aggiungere ai preferiti",
+          "aggiungere questo ai preferiti",
+          "salvare nei preferiti",
+          "Di aggiungere ai preferiti"
         ]
       },
       {
@@ -237,7 +241,10 @@
           "Non mi piace più",
           "Non mi piace piu",
           "Questo non mi piace più",
-          "Questo non mi piace piu"
+          "Questo non mi piace piu",
+          "rimuovere dai preferiti",
+          "togliere dai preferiti",
+          "Di rimuovere dai preferiti"
         ]
       },
       {
@@ -611,7 +618,10 @@
           "accoda {song}",
           "accoda {song} di {musician}",
           "aggiungi {song} di {musician} alla coda",
-          "metti {song} di {musician} in coda"
+          "metti {song} di {musician} in coda",
+          "aggiungere {song} alla coda",
+          "aggiungere {song} di {musician} alla coda",
+          "Di aggiungere {song} alla coda"
         ],
         "slots": [
           {
@@ -929,7 +939,10 @@
         "samples": [
           "Aggiungi questo brano alla playlist {playlist}",
           "Aggiungi questo alla playlist {playlist}",
-          "Metti questo brano nella playlist {playlist}"
+          "Metti questo brano nella playlist {playlist}",
+          "aggiungere questo brano alla playlist {playlist}",
+          "aggiungere questo alla playlist {playlist}",
+          "Di aggiungere questo brano alla playlist {playlist}"
         ],
         "slots": [
           {
@@ -944,7 +957,13 @@
           "Aggiungi la canzone {song_query}",
           "Aggiungi il brano {song_query}",
           "Metti la canzone {song_query}",
-          "Aggiungi alla playlist {playlist_target}"
+          "Aggiungi alla playlist {playlist_target}",
+          "aggiungere la canzone {song_query}",
+          "aggiungere il brano {song_query}",
+          "aggiungere alla playlist {playlist_target}",
+          "Di aggiungere la canzone {song_query}",
+          "Di aggiungere il brano {song_query}",
+          "Di aggiungere alla playlist {playlist_target}"
         ],
         "slots": [
           {

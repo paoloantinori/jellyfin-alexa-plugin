@@ -446,9 +446,14 @@ public class RadioModeTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
-    /// JF-484 count convention, context-seeded path: the RadioStarted announcement's
-    /// track count EXCLUDES the track that starts playing now. One similar track
-    /// queued after the seed must announce "Found 1 similar tracks", not 2.
+    /// JF-484 count convention, context-seeded path since the 2026-09-22 seed
+    /// removal: the radio queue contains ONLY new tracks (the seed no longer
+    /// leads it), so the announcement counts every queued track including the
+    /// one starting now. One similar track found announces "Found 1 similar
+    /// tracks". The genre path keeps the original excludes-first convention
+    /// (its first track IS a queued genre track starting now).
+    /// Also pins the core seed-removal fix: the launched track differs from the
+    /// seed that was mid-playback (review finding: no assertion compared them).
     /// </summary>
     [Fact]
     public async Task PlayRadio_ContextSeed_AnnouncedCountExcludesPlayingTrack()
@@ -471,6 +476,10 @@ public class RadioModeTests : PluginTestBase, IDisposable
         var text = TestHelpers.GetSpeechText(response);
         Assert.Contains("Found 1 similar tracks", text, StringComparison.Ordinal);
         Assert.DoesNotContain("Found 2", text, StringComparison.Ordinal);
+
+        var directive = response.Response.Directives?.OfType<AudioPlayerPlayDirective>().SingleOrDefault();
+        Assert.NotNull(directive);
+        Assert.NotEqual(currentId.ToString(), directive!.AudioItem.Stream.Token);
     }
 
     /// <summary>

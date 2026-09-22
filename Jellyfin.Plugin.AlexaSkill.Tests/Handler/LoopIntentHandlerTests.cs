@@ -114,6 +114,16 @@ public class LoopIntentHandlerTests : PluginTestBase
         Assert.Equal(expectedMode, info!.RepeatMode);
         Assert.Equal(context.AudioPlayer.Token, info.ItemId.ToString());
         Assert.Equal(TimeSpan.FromMilliseconds(context.AudioPlayer.OffsetInMilliseconds).Ticks, info.PositionTicks);
+
+        // Live incident 2026-09-22 (battery test 5): the mode landed server-side but
+        // the response was speech-less, which reads on-device as "nothing happened".
+        string expectedConfirm = expectedMode switch
+        {
+            RepeatMode.RepeatAll => "RepeatAllEnabled",
+            RepeatMode.RepeatOne => "RepeatSongEnabled",
+            _ => "RepeatDisabled",
+        };
+        Assert.Contains(ResponseStrings.Get(expectedConfirm, "en-US"), TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
     }
 
     [Theory]

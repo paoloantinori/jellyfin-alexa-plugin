@@ -5,6 +5,7 @@ using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -46,7 +47,7 @@ public class ShuffleOnIntentHandler : BaseHandler
     /// <param name="user">The user instance.</param>
     /// <param name="session">The session instance.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>Empty response.</returns>
+    /// <returns>The spoken shuffle confirmation Tell.</returns>
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         PlaybackState requestState = context.AudioPlayer;
@@ -80,6 +81,9 @@ public class ShuffleOnIntentHandler : BaseHandler
             ProgressReporter.MirrorQueueToSession(_queueManager.GetOrCreateQueue(deviceId), session);
         }
 
-        return ResponseBuilder.Empty();
+        // Spoken confirmation (review round 2026-09-22): a speech-less session end
+        // reads on-device as "the command did nothing", the same defect the loop
+        // family shipped with until the same evening's battery.
+        return ResponseBuilder.Tell(ResponseStrings.Get("ShuffleEnabled", GetLocale(request)));
     }
 }

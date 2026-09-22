@@ -749,8 +749,8 @@ Invocation name: **"mia collezione"**
 
 | Intent | Utterances |
 |--------|------------|
-| Add Current To Playlist | `Aggiungi questo brano alla playlist {playlist}` · `Aggiungi questo alla playlist {playlist}` · `Metti questo brano nella playlist {playlist}` |
-| Add Song To Playlist | `Aggiungi la canzone {song_query}` · `Aggiungi alla playlist {playlist_target}` · `Aggiungi il brano {song_query}` · `Metti la canzone {song_query}` |
+| Add Current To Playlist | `Aggiungi questo brano alla playlist {playlist}` · `Aggiungi questo alla playlist {playlist}` · `Metti questo brano nella playlist {playlist}` · `aggiungere questo brano alla playlist {playlist}` · `aggiungere questo alla playlist {playlist}` · `Di aggiungere questo brano alla playlist {playlist}` |
+| Add Song To Playlist | `Aggiungi la canzone {song_query}` · `Aggiungi alla playlist {playlist_target}` · `Aggiungi il brano {song_query}` · `Metti la canzone {song_query}` · `aggiungere la canzone {song_query}` · `aggiungere il brano {song_query}` |
 | Add To Queue | `aggiungi {song} alla coda` · `accoda {song} di {musician}` · `metti {song} in coda` · `accoda {song}` · `aggiungi {song} di {musician} alla coda` · `metti {song} di {musician} in coda` |
 | Browse Library | `Sfoglia {browse_category}` · `Sfoglia i generi {filter}` · `Sfoglia i {browse_category}` · `Mostra {browse_category}` · `Mostra i {browse_category}` · `Elenca {browse_category}` |
 | Clear Queue | `svuota la coda` · `pulisci la coda` · `cancella la coda` · `elimina la coda` · `rimuovi tutto dalla coda` · `svuota la mia coda` |

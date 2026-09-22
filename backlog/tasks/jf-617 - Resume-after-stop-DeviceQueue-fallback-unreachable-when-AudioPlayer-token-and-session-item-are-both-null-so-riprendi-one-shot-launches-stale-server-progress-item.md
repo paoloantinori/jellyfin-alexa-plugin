@@ -7,7 +7,7 @@ title: >-
 status: In Progress
 assignee: []
 created_date: '2026-09-22 15:29'
-updated_date: '2026-09-22 15:31'
+updated_date: '2026-09-22 16:36'
 labels: []
 dependencies: []
 references:
@@ -30,6 +30,12 @@ Live incident 2026-09-22 16:43 (device battery test 3): user stopped skill music
 - [ ] #3 A cold queue with empty context still falls through to server-side progress and NoMediaPlaying (existing ResumeIntent_ReturnsNoMedia_WhenSessionHasNoNowPlayingItem stays green)
 - [ ] #4 Full unit suite green on both TFMs; fix deployed to minix (net10.0) and device-verified: after stopping skill music, bare 'riprendi' resumes the same track near its stop position, not an unrelated episode
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-09-22 18:35: fix deployed to minix (net10.0 Release, active DLL size-verified, config survived, 1 user). it-IT model rebuilt SUCCEEDED. The wrapper battery's profile-nlu rows confirm the routing surface is intact post-rebuild (mettere/aggiungere/riprodurre/riprendi all PASS, including the new playlist infinitive twin). Review round applied: materialization through the library (deleted-item fallthrough, Played-elsewhere gate, content-kind gate with the AudioBook-before-Audio type pattern), tail threading of the resolved BaseItem (codec probe + audiobook branch see a real item), GetQueue instead of GetOrCreateQueue, dead disjunct dropped, TicksToMs clamp helper. Two new hardening tests (deleted-item, EAC3-empty-context). Truth-source divergence filed as JF-619. REMAINING: device verification of the post-stop one-shot 'riprendi' (Paolo's battery test 3 re-run).
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

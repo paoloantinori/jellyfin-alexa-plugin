@@ -205,18 +205,17 @@ public class PlayRadioIntentHandler : BaseHandler
 
         List<BaseItem> shuffled = Shuffler.ShuffleAndCap(similarTracks, 20);
 
-        var queue = new List<QueueItem> { new() { Id = currentAudio.Id } };
-        foreach (BaseItem track in shuffled)
-        {
-            if (track.Id != currentAudio.Id)
-            {
-                queue.Add(new QueueItem { Id = track.Id });
-            }
-        }
+        // The seed track does NOT lead the queue (live incident 2026-09-22): prepending
+        // it relaunched the track the user is mid-way through, from position 0, right
+        // after announcing "20 brani simili". Playing the same song again is the
+        // opposite of what "brani simili" asks for. The seed only drives similarity;
+        // RadioTrackSource.FindRadioTracksAsync already excludes it from the results
+        // (excludeId), so playback starts with the first DIFFERENT track.
+        var queue = shuffled.Select(t => new QueueItem { Id = t.Id }).ToList();
 
-        Logger.LogInformation("Radio mode enabled with {Count} similar tracks for {SongName}", queue.Count - 1, currentAudio.Name);
+        Logger.LogInformation("Radio mode enabled with {Count} similar tracks for {SongName}", queue.Count, currentAudio.Name);
 
-        return StartRadioPlayback(currentAudio, queue, session, user, context, locale);
+        return StartRadioPlayback(shuffled[0], queue, queue.Count, session, user, context, locale);
     }
 
     /// <summary>
@@ -354,8 +353,8 @@ public class PlayRadioIntentHandler : BaseHandler
         Logger.LogInformation("PlayRadio: station '{Genre}' resolved as a genre, seeding radio mode with {Count} tracks", genre, shuffled.Count);
 
         BaseItem first = shuffled[0];
-        session.FullNowPlayingItem = first;
-        return StartRadioPlayback(first, shuffled.Select(t => new QueueItem { Id = t.Id }).ToList(), session, user, context, locale);
+        var genreQueue = shuffled.Select(t => new QueueItem { Id = t.Id }).ToList();
+        return StartRadioPlayback(first, genreQueue, genreQueue.Count - 1, session, user, context, locale);
     }
 
     /// <summary>
@@ -365,23 +364,27 @@ public class PlayRadioIntentHandler : BaseHandler
     /// </summary>
     /// <param name="first">The track that starts playing now.</param>
     /// <param name="queue">The full radio queue (first track included).</param>
+    /// <param name="announceCount">The count spoken in the RadioStarted announcement. JF-484, re-derived per path since the 2026-09-22 seed-removal: the context-seeded queue contains ONLY new tracks (the seed no longer leads it), so every queued track is announced; the genre path's first track starts playing now, so its convention excludes it (queue.Count - 1).</param>
     /// <param name="session">The Jellyfin session (queue + radio-mode state).</param>
     /// <param name="user">The plugin user (stream URLs + announce toggles).</param>
     /// <param name="context">The Alexa context (device id for radio-mode state).</param>
     /// <param name="locale">The request locale.</param>
     /// <returns>The AudioPlayer.Play response with the radio announcement.</returns>
     private SkillResponse StartRadioPlayback(
-        BaseItem first, List<QueueItem> queue, SessionInfo session, Entities.User user, Context context, string locale)
+        BaseItem first, List<QueueItem> queue, int announceCount, SessionInfo session, Entities.User user, Context context, string locale)
     {
         session.NowPlayingQueue = queue;
+        // The now-playing pointer must follow the launch (review round 2026-09-22):
+        // every FullNowPlayingItem-first consumer (next/previous, StartOver, the
+        // queue continuation) would otherwise keep acting on the removed seed, and
+        // the fire-and-forget start report that eventually refreshes it can stall
+        // (JF-410) or swallow (JF-477).
+        session.FullNowPlayingItem = first;
         RadioModeState.Enable(session.UserId, context.System.Device.DeviceID);
 
         string? nowPlayingSsml = SpeechBuilder.GetSsml("NowPlayingSsml", locale, SpeechBuilder.EscapeXml(first.Name));
 
-        // JF-484: the announced count is DERIVED here (not a parameter) so both seed
-        // paths share one convention: it EXCLUDES <first>, the track that starts
-        // playing now, i.e. it announces the tracks that follow it.
-        string radioMsg = ResponseStrings.Get("RadioStarted", locale, (queue.Count - 1).ToString(CultureInfo.InvariantCulture));
+        string radioMsg = ResponseStrings.Get("RadioStarted", locale, announceCount.ToString(CultureInfo.InvariantCulture));
 
         var response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(first.Id.ToString(), user), first.Id.ToString(), first, user, context);
         if (Launch.GetAnnounceNowPlaying(user))

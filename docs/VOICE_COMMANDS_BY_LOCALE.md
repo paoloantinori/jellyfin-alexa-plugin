@@ -7429,7 +7429,7 @@ Placeholder legend:
 | `<titolo del video o del film>` | `{title}` |
 | `<parole del titolo del brano>` | `{titleKeywords}` |
 
-Complete phrase list (1477 phrases across 67 commands):
+Complete phrase list (1496 phrases across 67 commands):
 
 #### Play music
 
@@ -8739,6 +8739,9 @@ Complete phrase list (1477 phrases across 67 commands):
 - `accoda <titolo del brano> di <nome dell'artista>`
 - `aggiungi <titolo del brano> di <nome dell'artista> alla coda`
 - `metti <titolo del brano> di <nome dell'artista> in coda`
+- `aggiungere <titolo del brano> alla coda`
+- `aggiungere <titolo del brano> di <nome dell'artista> alla coda`
+- `Di aggiungere <titolo del brano> alla coda`
 
 **Play next**
 
@@ -8759,6 +8762,9 @@ Complete phrase list (1477 phrases across 67 commands):
 - `Aggiungi questo brano alla playlist <nome della playlist>`
 - `Aggiungi questo alla playlist <nome della playlist>`
 - `Metti questo brano nella playlist <nome della playlist>`
+- `aggiungere questo brano alla playlist <nome della playlist>`
+- `aggiungere questo alla playlist <nome della playlist>`
+- `Di aggiungere questo brano alla playlist <nome della playlist>`
 
 **Add a song to a playlist**
 
@@ -8766,6 +8772,12 @@ Complete phrase list (1477 phrases across 67 commands):
 - `Aggiungi il brano <titolo del brano>`
 - `Metti la canzone <titolo del brano>`
 - `Aggiungi alla playlist <nome della playlist>`
+- `aggiungere la canzone <titolo del brano>`
+- `aggiungere il brano <titolo del brano>`
+- `aggiungere alla playlist <nome della playlist>`
+- `Di aggiungere la canzone <titolo del brano>`
+- `Di aggiungere il brano <titolo del brano>`
+- `Di aggiungere alla playlist <nome della playlist>`
 
 **Remove the current song from a playlist**
 
@@ -8887,6 +8899,10 @@ Complete phrase list (1477 phrases across 67 commands):
 - `Questo mi piace`
 - `Mi piace questa canzone`
 - `Salva nei preferiti`
+- `aggiungere ai preferiti`
+- `aggiungere questo ai preferiti`
+- `salvare nei preferiti`
+- `Di aggiungere ai preferiti`
 
 **Remove from favorites**
 
@@ -8898,6 +8914,9 @@ Complete phrase list (1477 phrases across 67 commands):
 - `Non mi piace piu`
 - `Questo non mi piace più`
 - `Questo non mi piace piu`
+- `rimuovere dai preferiti`
+- `togliere dai preferiti`
+- `Di rimuovere dai preferiti`
 
 #### Info and queries
 

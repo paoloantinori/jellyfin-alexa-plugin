@@ -42,7 +42,7 @@ public class LoopOnIntentHandler : BaseHandler
     /// <param name="user">The user instance.</param>
     /// <param name="session">The session instance.</param>
     /// <param name="cancellationToken">Cancellation token for request timeout.</param>
-    /// <returns>Empty response.</returns>
+    /// <returns>The spoken repeat-mode confirmation Tell, or the no-media tell when nothing is playing.</returns>
     /// Ordering note (JF-447): this progress write is AWAITED inside its own request
     /// path, so a later stop cannot overtake it mid-write; that is why loop toggles are
     /// exempt from PlaybackReportOrdering registration (unlike the fire-and-forget

@@ -301,6 +301,38 @@ tests:
     expected_intent: AddSongToPlaylistIntent
     expected_slots:
       song_query: {}
+  # 2026-09-22 battery incident: the infinitive wrapper form ("chiedi a mia
+  # collezione di aggiungere...") hit AMAZON.FallbackIntent on device; the trainer
+  # does not generalize aggiungi->aggiungere for this sample shape (unlike
+  # metti->mettere), so the infinitive twins are explicit in the it-IT template.
+  - utterance: "aggiungere alla playlist prova echo"
+    expected_intent: AddSongToPlaylistIntent
+    expected_slots:
+      playlist_target: {}
+  # Review round 2026-09-22 (JF-549 precedent on standalone Di rows): passes
+  # routinely today; if it flips nondeterministically across identical-content
+  # rebuilds, add skip_reason plus an e2e simulate pin per the memory protocol.
+  - utterance: "di aggiungere la canzone rapsodia"
+    expected_intent: AddSongToPlaylistIntent
+    expected_slots:
+      song_query: {}
+  # The collision pin: "mettere la canzone X" is PLAY vocabulary; the add intent's
+  # twin set deliberately carries NO mettere-canzone form (review finding: it
+  # stole the play utterance).
+  - utterance: "di mettere la canzone rapsodia"
+    expected_intent: PlaySongIntent
+    expected_slots:
+      song: {}
+  # The verb-level fix family (review finding): every aggiungi-carrying add
+  # intent needs its infinitive twin.
+  - utterance: "aggiungere rapsodia alla coda"
+    expected_intent: AddToQueueIntent
+    expected_slots:
+      song: {}
+  - utterance: "di aggiungere questo brano alla playlist rock classico"
+    expected_intent: AddCurrentToPlaylistIntent
+    expected_slots:
+      playlist: {}
   # JF-614 review: the stolen shape guard - the create phrase with BOTH article
   # and carrier must route to CreatePlaylistIntent, not AddSongToPlaylistIntent.
   - utterance: "crea una playlist chiamata prova echo sette"

@@ -237,6 +237,10 @@ explicit_intents:
       - Questo mi piace
       - Mi piace questa canzone
       - Salva nei preferiti
+      - aggiungere ai preferiti
+      - aggiungere questo ai preferiti
+      - salvare nei preferiti
+      - Di aggiungere ai preferiti
   UnmarkFavoriteIntent:
     samples:
       - Rimuovi dai preferiti
@@ -247,6 +251,9 @@ explicit_intents:
       - Non mi piace piu
       - Questo non mi piace più
       - Questo non mi piace piu
+      - rimuovere dai preferiti
+      - togliere dai preferiti
+      - Di rimuovere dai preferiti
   MediaInfoIntent:
     samples:
       - Cosa sta suonando
@@ -548,6 +555,9 @@ explicit_intents:
       - accoda {song} di {musician}
       - aggiungi {song} di {musician} alla coda
       - metti {song} di {musician} in coda
+      - aggiungere {song} alla coda
+      - aggiungere {song} di {musician} alla coda
+      - Di aggiungere {song} alla coda
     slots:
       - name: song
         type: AMAZON.MusicRecording
@@ -965,6 +975,9 @@ templates:
       - Aggiungi questo brano alla playlist {playlist}
       - Aggiungi questo alla playlist {playlist}
       - Metti questo brano nella playlist {playlist}
+      - aggiungere questo brano alla playlist {playlist}
+      - aggiungere questo alla playlist {playlist}
+      - Di aggiungere questo brano alla playlist {playlist}
     slots:
       - name: playlist
         type: AMAZON.SearchQuery
@@ -974,6 +987,12 @@ templates:
       - Aggiungi il brano {song_query}
       - Metti la canzone {song_query}
       - Aggiungi alla playlist {playlist_target}
+      - aggiungere la canzone {song_query}
+      - aggiungere il brano {song_query}
+      - aggiungere alla playlist {playlist_target}
+      - Di aggiungere la canzone {song_query}
+      - Di aggiungere il brano {song_query}
+      - Di aggiungere alla playlist {playlist_target}
     slots:
       - name: song_query
         type: AMAZON.SearchQuery
