@@ -1055,7 +1055,11 @@ def lint_voice_commands_rows(
 # sibling). Marker tokens per language prefix, matched case-insensitively inside
 # a sample; triage gaps as JF-551-class extensions or accepted.
 WRAPPER_MARKERS: dict[str, list[str]] = {
-    "it": ["di riprodu", "di suona", "di metti", "di ascolta", "di pleia", "di fammi"],
+    "it": ["di riprodu", "di suona", "di metti", "di ascolta", "di pleia", "di fammi",
+           # bare infinitives: the it-IT trainer generalizes imperative<->infinitive
+           # (live-verified 2026-09-21: radio/random/decade/next route without
+           # explicit twins), and the samples pin that against trainer flips
+           "riprodurre ", "suonare ", "mettere ", "ascoltare "],
     "en": ["to play", "to listen", "to hear", "to watch", "to stream", "to queue", "to give"],
     "de": ["abspielen", "wiedergeben", "hören", "anschauen"],
     "es": ["reproducir", "escuchar", "ver ", "poner"],

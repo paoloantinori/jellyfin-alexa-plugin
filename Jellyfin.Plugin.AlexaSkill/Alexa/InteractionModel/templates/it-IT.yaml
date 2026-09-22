@@ -197,6 +197,8 @@ explicit_intents:
       - Musica anni {decade}
       - Brani degli anni {decade}
       - Canzoni degli anni {decade}
+      - riprodurre musica degli anni {decade}
+      - ascoltare musica degli anni {decade}
     slots:
       - name: decade
         type: Decade
@@ -438,6 +440,8 @@ explicit_intents:
       - Suonare {media_type} a caso
       - Mettere {media_type} casuali
       - Mettere {media_type} a caso
+      - Ascoltare {media_type} a caso
+      - Ascoltare {media_type} casuali
     slots:
       - name: media_type
         type: MediaType
@@ -593,6 +597,16 @@ explicit_intents:
       - ascolta l'audiolibro {book}
       - suona il libro {book}
       - metti il libro {book}
+      - riprodurre il libro {book}
+      - riprodurre l'audiolibro {book}
+      - ascoltare il libro {book}
+      - ascoltare l'audiolibro {book}
+      - suonare il libro {book}
+      - suonare l'audiolibro {book}
+      - mettere il libro {book}
+      - mettere l'audiolibro {book}
+      - Di riprodurre il libro {book}
+      - Di ascoltare il libro {book}
     slots:
       - name: book
         type: AudiobookTitle
@@ -606,6 +620,9 @@ explicit_intents:
       - voglio ascoltare {song} dopo
       - ascolta {song} dopo
       - metti {song} di {musician} dopo
+      - riprodurre {song} dopo
+      - suonare {song} dopo
+      - mettere {song} dopo
     slots:
       - name: song
         type: AMAZON.MusicRecording
@@ -623,6 +640,8 @@ explicit_intents:
       - continua con musica simile
       - metti musica simile
       - riproduci la stazione radio {station}
+      - ascoltare la radio
+      - suonare la radio
     slots:
       - name: station
         type: AMAZON.SearchQuery

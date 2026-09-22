@@ -7429,7 +7429,7 @@ Placeholder legend:
 | `<titolo del video o del film>` | `{title}` |
 | `<parole del titolo del brano>` | `{titleKeywords}` |
 
-Complete phrase list (1458 phrases across 67 commands):
+Complete phrase list (1477 phrases across 67 commands):
 
 #### Play music
 
@@ -7956,6 +7956,8 @@ Complete phrase list (1458 phrases across 67 commands):
 - `Musica anni <decennio (gli anni ottanta)>`
 - `Brani degli anni <decennio (gli anni ottanta)>`
 - `Canzoni degli anni <decennio (gli anni ottanta)>`
+- `riprodurre musica degli anni <decennio (gli anni ottanta)>`
+- `ascoltare musica degli anni <decennio (gli anni ottanta)>`
 
 **Play music for a mood**
 
@@ -8025,6 +8027,8 @@ Complete phrase list (1458 phrases across 67 commands):
 - `Suonare <tipo di contenuto (musica, video)> a caso`
 - `Mettere <tipo di contenuto (musica, video)> casuali`
 - `Mettere <tipo di contenuto (musica, video)> a caso`
+- `Ascoltare <tipo di contenuto (musica, video)> a caso`
+- `Ascoltare <tipo di contenuto (musica, video)> casuali`
 
 **Play recently added media**
 
@@ -8609,6 +8613,16 @@ Complete phrase list (1458 phrases across 67 commands):
 - `ascolta l'audiolibro <titolo dell'audiolibro>`
 - `suona il libro <titolo dell'audiolibro>`
 - `metti il libro <titolo dell'audiolibro>`
+- `riprodurre il libro <titolo dell'audiolibro>`
+- `riprodurre l'audiolibro <titolo dell'audiolibro>`
+- `ascoltare il libro <titolo dell'audiolibro>`
+- `ascoltare l'audiolibro <titolo dell'audiolibro>`
+- `suonare il libro <titolo dell'audiolibro>`
+- `suonare l'audiolibro <titolo dell'audiolibro>`
+- `mettere il libro <titolo dell'audiolibro>`
+- `mettere l'audiolibro <titolo dell'audiolibro>`
+- `Di riprodurre il libro <titolo dell'audiolibro>`
+- `Di ascoltare il libro <titolo dell'audiolibro>`
 
 #### Radio and live TV
 
@@ -8624,6 +8638,8 @@ Complete phrase list (1458 phrases across 67 commands):
 - `continua con musica simile`
 - `metti musica simile`
 - `riproduci la stazione radio <nome della stazione radio>`
+- `ascoltare la radio`
+- `suonare la radio`
 
 **Turn radio mode on**
 
@@ -8734,6 +8750,9 @@ Complete phrase list (1458 phrases across 67 commands):
 - `voglio ascoltare <titolo del brano> dopo`
 - `ascolta <titolo del brano> dopo`
 - `metti <titolo del brano> di <nome dell'artista> dopo`
+- `riprodurre <titolo del brano> dopo`
+- `suonare <titolo del brano> dopo`
+- `mettere <titolo del brano> dopo`
 
 **Add the current song to a playlist**
 

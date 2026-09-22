@@ -280,6 +280,11 @@ tests:
     expected_intent: CreatePlaylistIntent
     expected_slots:
       playlist: {}
+  # real catalog title required: the book slot is AudiobookTitle catalog-backed
+  - utterance: "riprodurre il libro il gattopardo"
+    expected_intent: PlayBookIntent
+    expected_slots:
+      book: {}
   - utterance: "di riprodurre il podcast generazione"
     expected_intent: PlayPodcastIntent
     expected_slots:
