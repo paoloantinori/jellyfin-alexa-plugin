@@ -87,6 +87,33 @@ public static class Config
            && string.Equals(value, InvocationName, StringComparison.Ordinal);
 
     /// <summary>
+    /// The candidate invocation names a REQUEST-TIME trap detector should accept for
+    /// a locale (JF-620): the locale default (the no-per-user-name variant of
+    /// <see cref="EffectiveInvocationName"/>, the only form available at a detection
+    /// site without the user) and the global default when distinct. RESIDUAL: a
+    /// user's custom per-user invocation name is not among these candidates, so a
+    /// trap phrase carrying it is not detected until this grows a per-user parameter.
+    /// </summary>
+    /// <param name="locale">The request locale (e.g. "it-IT").</param>
+    /// <returns>The distinct candidate names, pre-lowercased for substring matching.</returns>
+    public static IReadOnlyList<string> RuntimeInvocationNameCandidates(string locale)
+    {
+        string localeDefault = EffectiveInvocationName(locale, null);
+        var names = new List<string> { localeDefault };
+        if (!string.Equals(localeDefault, InvocationName, StringComparison.OrdinalIgnoreCase))
+        {
+            names.Add(InvocationName);
+        }
+
+        for (int i = 0; i < names.Count; i++)
+        {
+            names[i] = names[i].ToLowerInvariant();
+        }
+
+        return names;
+    }
+
+    /// <summary>
     /// Length of the CSRF token.
     /// </summary>
     public const int CsrfTokenLength = 1024;

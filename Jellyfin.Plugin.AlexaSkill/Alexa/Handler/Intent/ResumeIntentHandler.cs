@@ -161,31 +161,60 @@ public class ResumeIntentHandler : BaseHandler
             }
         }
 
-        // Fallback 3: DeviceQueue persisted state (survives after AudioPlayer.Stop clears
-        // context AND session; item-absolute per the JF-522 writer contract). HOISTED out
-        // of the item_id!=null guard (live incident 2026-09-22): a one-shot resume
-        // arriving after PlaybackStopped has BOTH a null token and a null session item -
-        // the exact shape this fallback was built for - and the old placement made it
-        // unreachable there, so resume fell straight to server-side progress and
-        // launched a stale unrelated in-progress episode while the queue held the item
-        // stopped seconds earlier. The token guard keeps a DISPLACED token authoritative.
-        // Review round (same session): the adopted queue id is MATERIALIZED through the
-        // library before use. A deleted item falls through to fallback 4 instead of
-        // minting a dead stream URL; an item finished elsewhere (UserData Played) is
-        // skipped the way fallback 4's IsPlayed=false filter would skip it; the resolved
+        // Fallback 3: the device resume truth-source (JF-619: the ONE resolver shared
+        // with the LaunchRequest offer; survives after AudioPlayer.Stop clears context
+        // AND session). HOISTED out of the item_id!=null guard (live incident
+        // 2026-09-22): a one-shot resume arriving after PlaybackStopped has BOTH a null
+        // token and a null session item - the exact shape this fallback was built for -
+        // and the old placement made it unreachable there, so resume fell straight to
+        // server-side progress and launched a stale unrelated in-progress episode while
+        // the queue held the item stopped seconds earlier.
+        //
+        // The resolver names a WINNER (fresher stamp) and this fallback tries the
+        // winner FIRST, then the OTHER arm (review round: a winner with no resumable
+        // position - a launch that never started - must not discard the loser's good
+        // item-absolute position). Per-source gates: the QueuePointer arm holds items
+        // the device played through AudioPlayer (audio, audio-routed episodes, flat
+        // books) with the persisted item-absolute position; the LastPlayed arm is
+        // launch-time and video-inclusive, but a Movie/Episode from it means a VideoApp
+        // play, which only fallback 4's VideoApp branch can resume properly (the tail
+        // here builds an audio-only launch), so those kinds are left to fallback 4.
+        // The adopted id is MATERIALIZED through the library before use; a deleted
+        // item, an item finished elsewhere (Played), or a content-disabled kind falls
+        // through instead of minting a dead or wrong-shaped launch; the resolved
         // BaseItem rides to the tail so the codec probe (JF-507) and the audiobook
-        // branch see a real item. offset==0 is the sole gate because item_id empty
-        // implies offset 0 here (offset is only assigned inside the block above).
+        // branch see a real item. The token guard keeps a DISPLACED token
+        // authoritative. offset==0 is the sole gate because item_id empty implies
+        // offset 0 here (offset is only assigned inside the block above).
         BaseItem? queueItem = null;
         if (offset == 0 && _queueManager != null)
         {
-            DeviceQueue? queue = _queueManager.GetQueue(context.System.Device.DeviceID);
-            if (!string.IsNullOrEmpty(queue?.CurrentItemId) && queue!.CurrentPositionTicks > 0
-                && (string.IsNullOrEmpty(context.AudioPlayer?.Token)
-                    || string.Equals(context.AudioPlayer.Token, queue.CurrentItemId, StringComparison.Ordinal)))
+            string deviceId = context.System.Device.DeviceID;
+            (string? winnerId, DeviceQueueManager.DeviceResumeSource winnerSource) = _queueManager.GetDeviceResumePointer(deviceId);
+            DeviceQueue? queue = _queueManager.GetQueue(deviceId);
+            string? loserId = winnerSource == DeviceQueueManager.DeviceResumeSource.QueuePointer
+                ? queue?.LastPlayedItemId
+                : queue?.CurrentItemId;
+            DeviceQueueManager.DeviceResumeSource loserSource = winnerSource == DeviceQueueManager.DeviceResumeSource.QueuePointer
+                ? DeviceQueueManager.DeviceResumeSource.LastPlayed
+                : DeviceQueueManager.DeviceResumeSource.QueuePointer;
+
+            foreach ((string? tryId, DeviceQueueManager.DeviceResumeSource trySource) in
+                     new[] { (winnerId, winnerSource), (loserId, loserSource) })
             {
-                BaseItem? candidate = Guid.TryParse(queue.CurrentItemId, out Guid queueGuid)
-                    ? _libraryManager.GetItemById(queueGuid)
+                if (string.IsNullOrEmpty(tryId) || queueItem != null)
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrEmpty(context.AudioPlayer?.Token)
+                    && !string.Equals(context.AudioPlayer.Token, tryId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                BaseItem? candidate = Guid.TryParse(tryId, out Guid tryGuid)
+                    ? _libraryManager.GetItemById(tryGuid)
                     : null;
 
                 // The kind mapping is a type pattern, NOT GetBaseItemKind(): that
@@ -204,30 +233,54 @@ public class ResumeIntentHandler : BaseHandler
                     _ => null,
                 };
 
-                bool playedElsewhere = false;
-                if (candidate != null && session != null)
+                if (trySource == DeviceQueueManager.DeviceResumeSource.LastPlayed
+                    && candidateKind is BaseItemKind.Movie or BaseItemKind.Episode)
                 {
-                    var (queueUser, _) = ResolveJellyfinUser(_userManager, session.UserId, locale);
-                    playedElsewhere = queueUser != null
-                        && _userDataManager.GetUserData(queueUser, candidate)?.Played == true;
+                    Logger.LogInformation(
+                        "ResumeIntent: device resume candidate {ItemId} (LastPlayed, video kind) left to fallback 4's VideoApp resume",
+                        tryId);
+                    continue;
                 }
 
-                if (candidate != null && candidateKind != null && !playedElsewhere
+                Jellyfin.Database.Implementations.Entities.User? queueUser = null;
+                if (candidate != null && session != null)
+                {
+                    var (resolvedUser, _) = ResolveJellyfinUser(_userManager, session.UserId, locale);
+                    queueUser = resolvedUser;
+                }
+
+                UserItemData? pointerData = candidate != null && queueUser != null
+                    ? _userDataManager.GetUserData(queueUser, candidate)
+                    : null;
+                bool playedElsewhere = pointerData?.Played == true;
+
+                // Queue-pointer source: the persisted item-absolute position. LastPlayed
+                // source: the offer's discipline (ResolveResumeTicks; a null UserData
+                // seed still lets its plugin-store fallback arm fire, which is what it
+                // was built for on the 2026-09-16 write-loss incident).
+                long pointerTicks = trySource == DeviceQueueManager.DeviceResumeSource.QueuePointer
+                    ? queue?.CurrentPositionTicks ?? 0
+                    : DeviceQueueManager.ResolveResumeTicks(
+                        _queueManager, deviceId, tryId!,
+                        pointerData?.PlaybackPositionTicks ?? 0,
+                        playedElsewhere, Logger, "ResumeIntent");
+
+                if (candidate != null && candidateKind != null && !playedElsewhere && pointerTicks > 0
                     && FilterByContentAccess(new[] { candidateKind.Value }).Length > 0)
                 {
-                    item_id = queue.CurrentItemId;
+                    item_id = tryId;
                     queueItem = candidate;
-                    offset = ResumeMath.TicksToMs(queue.CurrentPositionTicks);
+                    offset = ResumeMath.TicksToMs(pointerTicks);
                     Logger.LogInformation(
-                        "ResumeIntent: using DeviceQueue fallback for device {DeviceId}: item={ItemId}, offset={OffsetMs}ms",
-                        context.System.Device.DeviceID, item_id, offset);
+                        "ResumeIntent: using device resume pointer for device {DeviceId} (source={Source}): item={ItemId}, offset={OffsetMs}ms",
+                        deviceId, trySource, item_id, offset);
                 }
                 else
                 {
                     Logger.LogInformation(
-                        "ResumeIntent: DeviceQueue candidate {ItemId} rejected ({Reason}); falling through to the next fallback",
-                        queue.CurrentItemId,
-                        candidate == null ? "item no longer in the library" : candidateKind == null ? "unsupported item kind" : playedElsewhere ? "marked played elsewhere" : "content type disabled");
+                        "ResumeIntent: device resume candidate {ItemId} (source={Source}) rejected ({Reason}); falling through to the next candidate",
+                        tryId, trySource,
+                        candidate == null ? "item no longer in the library" : candidateKind == null ? "unsupported item kind" : playedElsewhere ? "marked played elsewhere" : pointerTicks <= 0 ? "no resumable position recorded" : "content type disabled");
                 }
             }
         }

@@ -112,8 +112,11 @@ public class LaunchRequestHandler : BaseHandler
             if (_config.NativeControlsForAudio)
             {
                 string? deviceId = context.System?.Device?.DeviceID;
+                // JF-619: the shared device resume truth-source (fresher of the queue
+                // pointer and the last-played record), so this offer and bare
+                // AMAZON.ResumeIntent name the SAME item for one device.
                 string? lastPlayed = !string.IsNullOrEmpty(deviceId)
-                    ? Plugin.Instance?.DeviceQueueManager?.GetLastPlayedItemId(deviceId)
+                    ? Plugin.Instance?.DeviceQueueManager?.GetDeviceResumePointer(deviceId).ItemId
                     : null;
                 if (!string.IsNullOrEmpty(lastPlayed))
                 {
@@ -179,7 +182,10 @@ public class LaunchRequestHandler : BaseHandler
     /// carousel taps) and returns a resume offer for that item if it differs from the
     /// stale AudioPlayer token. Device-specific, so it never surfaces content played on
     /// other clients (e.g. the Jellyfin phone app). Returns null if the token already
-    /// matches the device's last-played item (not stale) or if none is recorded.
+    /// matches either device pointer (the launch-time last-played record or the queue
+    /// pointer: not stale) or if none is recorded. JF-619: the OFFER seed is the shared
+    /// resolver's winner; the staleness equality checks both stores because
+    /// PlaybackNearlyFinished pre-advances the queue pointer near a song's end.
     /// </summary>
     private SkillResponse? ResolveActualLastPlayed(
         Context context, Entities.User user, SessionInfo session, string locale)
@@ -191,7 +197,10 @@ public class LaunchRequestHandler : BaseHandler
             return null;
         }
 
-        string? lastPlayedItemId = Plugin.Instance?.DeviceQueueManager?.GetLastPlayedItemId(deviceId);
+        // JF-619: the shared device resume truth-source, not the last-played record
+        // alone, so a fresher AudioPlayer queue pointer wins the offer the same way
+        // it wins bare AMAZON.ResumeIntent.
+        string? lastPlayedItemId = Plugin.Instance?.DeviceQueueManager?.GetDeviceResumePointer(deviceId).ItemId;
 
         if (string.IsNullOrEmpty(lastPlayedItemId))
         {
@@ -201,9 +210,16 @@ public class LaunchRequestHandler : BaseHandler
 
         string audioPlayerToken = context.AudioPlayer!.Token!;
 
-        if (string.Equals(audioPlayerToken, lastPlayedItemId, StringComparison.Ordinal))
+        // Not-stale means the token names an item EITHER store knows as current
+        // (JF-619 review): PlaybackNearlyFinished pre-advances the queue pointer to
+        // the NEXT track near a song's end while the token (and the launch-time
+        // last-played record) still name the playing one, so comparing against the
+        // resolver's single winner alone misfired as "stale" during every song tail.
+        string? pointerItemId = Plugin.Instance?.DeviceQueueManager?.GetQueue(deviceId)?.CurrentItemId;
+        if (string.Equals(audioPlayerToken, lastPlayedItemId, StringComparison.Ordinal)
+            || string.Equals(audioPlayerToken, pointerItemId, StringComparison.Ordinal))
         {
-            Logger.LogDebug("LaunchResume: NativeControlsForAudio stale-token check: AudioPlayer token matches device last-played '{ItemId}'", lastPlayedItemId);
+            Logger.LogDebug("LaunchResume: NativeControlsForAudio stale-token check: AudioPlayer token matches a device pointer '{ItemId}'", lastPlayedItemId);
             return null;
         }
 

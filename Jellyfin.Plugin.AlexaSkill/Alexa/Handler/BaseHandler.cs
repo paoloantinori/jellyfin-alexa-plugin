@@ -806,10 +806,29 @@ public abstract class BaseHandler
     /// <returns>The cancel Tell, or null when no cancel was captured.</returns>
     protected SkillResponse? BuildCancelDuringOpenElicit(IntentRequest intentRequest, string locale, string handlerTag)
     {
-        if (Util.CancelWords.IsDialogInProgress(intentRequest) && Util.CancelWords.AnySlotIsCancelWord(intentRequest, locale))
+        if (!Util.CancelWords.IsDialogInProgress(intentRequest))
+        {
+            return null;
+        }
+
+        if (Util.CancelWords.AnySlotIsCancelWord(intentRequest, locale))
         {
             Logger.LogInformation("{Handler}: captured cancel word during open elicit, ending flow", handlerTag);
             return ResponseBuilder.Tell(ResponseStrings.Get("FlowCancelled", locale));
+        }
+
+        // JF-620: a FULL one-shot spoken into the open question is also an escape,
+        // not a slot answer (live incident: «Alexa, chiedi a mia collezione di
+        // attivare loop» captured whole as song_query and answered with a nonsense
+        // not-found). The detection needs the ask-carrier AND the invocation name,
+        // so an answer that merely contains "collezione" stays a real answer. The
+        // escaped command cannot be re-dispatched handler-side (it would need the
+        // NLU again), so the flow ends with an explicit hint to repeat it.
+        if (Util.CancelWords.AnySlotIsTrappedInvocationOneShot(
+                intentRequest, locale, Config.RuntimeInvocationNameCandidates(locale)))
+        {
+            Logger.LogInformation("{Handler}: captured a full one-shot with the invocation name during open elicit, ending flow with the repeat hint (JF-620)", handlerTag);
+            return ResponseBuilder.Tell(ResponseStrings.Get("ElicitTrapEscaped", locale));
         }
 
         return null;

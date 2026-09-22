@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Alexa.NET.Request.Type;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
@@ -238,6 +239,146 @@ internal static class CancelWords
 
     // Whitespace separators for the bare-word (single-token) guard below.
     private static readonly char[] WhitespaceChars = { ' ', '\t', '\n', '\r' };
+
+    /// <summary>
+    /// Locale ask-carriers: the verb shapes a full one-shot addressing the skill can
+    /// start with (JF-620). A trapped slot value counts as an escaped command only
+    /// when it contains BOTH a carrier AND the invocation name, so a legitimate
+    /// answer that merely contains the word "collezione" (a lyric, a playlist name)
+    /// never trips the hatch. Stored diacritic-FOLDED and matched against folded
+    /// text (review finding: ASR frequently returns unaccented transcriptions, and
+    /// ToLowerInvariant does not fold á/ç/è).
+    /// </summary>
+    private static readonly Dictionary<string, string[]> AskCarriersByPrefix = BuildAskCarriers();
+
+    private static Dictionary<string, string[]> BuildAskCarriers()
+    {
+        string[][] raw =
+        {
+            new[] { "it", "chiedi a ", "chiedi al ", "chiedi alla ", "chiedi ai ", "domanda a ", "domanda al ", "domanda alla ", "domanda ai " },
+            new[] { "en", "ask ", "tell " },
+            new[] { "es", "pide a ", "pide al ", "pide a la ", "pide a los ", "dile a ", "dile al ", "pregunta a ", "preguntale a ", "preguntale al " },
+            new[] { "pt", "peca a ", "peca ao ", "peca a ", "pede a ", "pede para ", "diz para " },
+            new[] { "fr", "demande a ", "dis a ", "dis au ", "demande au " },
+            new[] { "de", "frag ", "frage ", "sag " },
+            new[] { "nl", "vraag ", "zeg " },
+        };
+
+        var folded = new Dictionary<string, string[]>(raw.Length, StringComparer.OrdinalIgnoreCase);
+        foreach (string[] row in raw)
+        {
+            var carriers = new string[row.Length - 1];
+            for (int i = 1; i < row.Length; i++)
+            {
+                carriers[i - 1] = FoldDiacritics(row[i]);
+            }
+
+            folded[row[0]] = carriers;
+        }
+
+        return folded;
+    }
+
+    /// <summary>
+    /// Lowercases and strips diacritics (NFD, drop combining marks) so accented
+    /// carriers and invocation names still match the unaccented text Alexa ASR
+    /// frequently returns («mi colección» transcribed «mi coleccion»).
+    /// </summary>
+    /// <param name="text">The text to fold.</param>
+    /// <returns>The folded, lowercased text.</returns>
+    private static string FoldDiacritics(string text)
+    {
+        string lowered = text.ToLowerInvariant().Normalize(System.Text.NormalizationForm.FormD);
+        var chars = new char[lowered.Length];
+        int len = 0;
+        foreach (char c in lowered)
+        {
+            if (char.GetUnicodeCategory(c) != System.Globalization.UnicodeCategory.NonSpacingMark)
+            {
+                chars[len++] = c;
+            }
+        }
+
+        return new string(chars, 0, len).Normalize(System.Text.NormalizationForm.FormC);
+    }
+
+    /// <summary>
+    /// Whether the captured slot text embeds a FULL one-shot command addressed to
+    /// the skill by invocation name (JF-620 live incident: with the AddSongToPlaylist
+    /// dialog open, «Alexa, chiedi a mia collezione di attivare loop» was captured
+    /// whole into song_query and answered with a nonsense not-found). Requires the
+    /// locale's ask-carrier AND one of the invocation names. Carrier-less locales
+    /// (ja/hi/ar, non-Latin scripts) instead require the name at the START of the
+    /// value WITH a tail beyond it: those locale-default names are mundane phrases
+    /// ("my collection") a legitimate answer can contain or even equal, while a
+    /// trapped command always has the command text after the name.
+    /// </summary>
+    /// <param name="slotValue">The raw captured slot value.</param>
+    /// <param name="locale">The request locale (e.g. "it-IT").</param>
+    /// <param name="invocationNames">The candidate names, pre-lowercased (Config.RuntimeInvocationNameCandidates).</param>
+    /// <returns>True when the value is a trapped one-shot command.</returns>
+    internal static bool IsTrappedInvocationOneShot(string? slotValue, string locale, IEnumerable<string> invocationNames)
+    {
+        if (string.IsNullOrWhiteSpace(slotValue))
+        {
+            return false;
+        }
+
+        string value = FoldDiacritics(slotValue.Trim());
+        string? matchedName = invocationNames
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .FirstOrDefault(name => value.Contains(FoldDiacritics(name), StringComparison.Ordinal));
+        if (matchedName is null)
+        {
+            return false;
+        }
+
+        string prefix = locale.Contains('-', StringComparison.Ordinal) ? locale[..locale.IndexOf('-', StringComparison.Ordinal)] : locale;
+        if (AskCarriersByPrefix.TryGetValue(prefix, out string[]? carriers)
+            && carriers.Any(c => value.Contains(c, StringComparison.Ordinal)))
+        {
+            return true;
+        }
+
+        // Carrier-less locale: the name must LEAD the value and be followed by a
+        // command tail; the bare name as the whole answer (a playlist/song named
+        // "my collection") stays a real answer.
+        string foldedName = FoldDiacritics(matchedName);
+        return !AskCarriersByPrefix.ContainsKey(prefix)
+            && value.StartsWith(foldedName, StringComparison.Ordinal)
+            && value.Length > foldedName.Length;
+    }
+
+    /// <summary>
+    /// Whether any slot of the incoming request embeds a full one-shot with the
+    /// invocation name (the JF-620 trap shape). Same every-slot discipline as
+    /// <see cref="AnySlotIsCancelWord"/>: the capture can land in any slot.
+    /// </summary>
+    /// <param name="request">The incoming intent request.</param>
+    /// <param name="locale">The request locale.</param>
+    /// <param name="invocationNames">The candidate invocation names.</param>
+    /// <returns>True when any slot value is a trapped one-shot command.</returns>
+    internal static bool AnySlotIsTrappedInvocationOneShot(IntentRequest request, string locale, IEnumerable<string> invocationNames)
+        => AnySlot(request, value => IsTrappedInvocationOneShot(value, locale, invocationNames));
+
+    /// <summary>The shared every-slot walk: the capture can land in any slot (JF-423/JF-620).</summary>
+    private static bool AnySlot(IntentRequest request, Func<string?, bool> predicate)
+    {
+        if (request.Intent.Slots == null)
+        {
+            return false;
+        }
+
+        foreach (var slot in request.Intent.Slots.Values)
+        {
+            if (predicate(slot.Value))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     // JF-445 review hardening (2026-09-03): the STARTED (fresh-dialog) leg of the
     // predicate below consults this NARROWER per-locale vocabulary instead of the

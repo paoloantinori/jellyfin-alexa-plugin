@@ -266,6 +266,7 @@
   "FindSongInvalidPick": "Dat begreep ik niet. Zeg het volgnummer of de titel van het nummer.",
   "FindSongDisambigAbandoned": "Geen probleem. Vraag het me gewoon opnieuw wanneer je een nummer wilt zoeken.",
   "FlowCancelled": "Oké, ik heb het zoeken gestopt.",
+  "ElicitTrapEscaped": "Ik wachtte nog op het antwoord op een vraag. Ik heb het verzoek geannuleerd; je kunt je commando herhalen.",
   "SkillWarmingUp": "Ik ben nog aan het opwarmen. Probeer het over een minuut opnieuw.",
   "PauseSessionSpeech": "Gepauzeerd.",
   "PauseSessionReprompt": "Zeg het maar wanneer je wilt verdergaan.",

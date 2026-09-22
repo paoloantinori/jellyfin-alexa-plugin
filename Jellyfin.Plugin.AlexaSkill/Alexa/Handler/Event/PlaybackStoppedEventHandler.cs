@@ -181,8 +181,7 @@ public class PlaybackStoppedEventHandler : BaseHandler
             // sleep token never matches the queue's bare-GUID ItemIds (MoveTo silently
             // fails) and would park a suffixed pointer that no reader compares equal.
             _queueManager.MoveTo(device, cleanItemId);
-            queue.CurrentPositionTicks = realPositionTicks;
-            queue.CurrentItemId = cleanItemId;
+            queue.SetCurrentItemPointer(cleanItemId, realPositionTicks);
             Logger.LogDebug(
                 "Saved playback position to DeviceQueue: device={DeviceId}, item={ItemId}, offset={OffsetMs}ms",
                 device, req.Token, req.OffsetInMilliseconds);

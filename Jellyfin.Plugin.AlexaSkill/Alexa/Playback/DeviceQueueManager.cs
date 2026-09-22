@@ -117,14 +117,20 @@ public sealed class DeviceQueueManager : IDisposable
 
         // Short-circuit when NOTHING changed: avoids timer churn and redundant
         // disk writes when the same item is replayed or re-issued on the same route.
+        // The FRESHNESS STAMP still refreshes (JF-619 review): a relaunch is a real
+        // "this is what the device is on now" event, and freezing the old stamp would
+        // permanently lose arbitration to an older queue-pointer write.
         if (string.Equals(queue.LastPlayedItemId, itemId, StringComparison.Ordinal)
             && string.Equals(queue.LastPlayedLaunchRoute, routeName, StringComparison.Ordinal))
         {
+            queue.LastPlayedWrittenAt = DateTime.UtcNow;
+            SchedulePersistInternal(deviceId);
             return;
         }
 
         queue.LastPlayedItemId = itemId;
         queue.LastPlayedLaunchRoute = routeName;
+        queue.LastPlayedWrittenAt = DateTime.UtcNow;
         SchedulePersistInternal(deviceId);
 
         _logger.LogDebug(
@@ -144,6 +150,77 @@ public sealed class DeviceQueueManager : IDisposable
         return _queues.TryGetValue(deviceId, out DeviceQueue? queue)
             ? queue.LastPlayedItemId
             : null;
+    }
+
+    /// <summary>
+    /// JF-619: the ONE device resume truth-source. The queue pointer
+    /// (<see cref="DeviceQueue.CurrentItemId"/>, written by AudioPlayer stop events) and
+    /// the last-played record (<see cref="DeviceQueue.LastPlayedItemId"/>, written at
+    /// launch time by <c>RecordLastPlayed</c>, video-inclusive) used to be read by
+    /// DIFFERENT entry points (bare ResumeIntent vs the LaunchRequest offer), so one
+    /// device could offer two different resumes. The resolver picks the pointer with
+    /// the FRESHER write stamp, with a grace window: a stop event for the song a voice
+    /// request just paused can land seconds AFTER the launch it yielded to (the
+    /// documented pause-on-voice-request shape), and within that window the
+    /// LAUNCH-time record wins (launches express user intent; delayed stops are
+    /// bookkeeping). Null stamps (pre-JF-619 files) keep the audio-biased queue
+    /// pointer, matching the live semantics of "riprendi" after an interrupted song;
+    /// UPGRADE-WINDOW TRANSIENT (review finding, accepted): an old file whose offer
+    /// used to read the last-played record alone may name the audio item once after
+    /// upgrade, until the first write to either store restores stamped arbitration.
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID.</param>
+    /// <returns>The winning item id and which store it came from; (null, QueuePointer) when the device has nothing recorded.</returns>
+    public (string? ItemId, DeviceResumeSource Source) GetDeviceResumePointer(string deviceId)
+    {
+        if (!_queues.TryGetValue(deviceId, out DeviceQueue? queue))
+        {
+            return (null, DeviceResumeSource.QueuePointer);
+        }
+
+        if (string.IsNullOrEmpty(queue.CurrentItemId))
+        {
+            return (queue.LastPlayedItemId, DeviceResumeSource.LastPlayed);
+        }
+
+        if (string.IsNullOrEmpty(queue.LastPlayedItemId))
+        {
+            return (queue.CurrentItemId, DeviceResumeSource.QueuePointer);
+        }
+
+        DateTime currentAt = queue.CurrentItemWrittenAt ?? DateTime.MinValue;
+        DateTime lastAt = queue.LastPlayedWrittenAt ?? DateTime.MinValue;
+
+        // Legacy files (either stamp null): the old tie rule, queue pointer wins.
+        if (currentAt == DateTime.MinValue || lastAt == DateTime.MinValue)
+        {
+            return (queue.CurrentItemId, DeviceResumeSource.QueuePointer);
+        }
+
+        // Fresh stamps: newer wins, with the delayed-stop grace window tilted to the
+        // launch-time record (a stop landing just after a newer launch is the pause
+        // that voice request caused, not a fresher truth).
+        return lastAt >= currentAt - LaunchVsStopGrace
+            ? (queue.LastPlayedItemId, DeviceResumeSource.LastPlayed)
+            : (queue.CurrentItemId, DeviceResumeSource.QueuePointer);
+    }
+
+    /// <summary>
+    /// The delayed-stop grace window for <see cref="GetDeviceResumePointer"/>: a
+    /// PlaybackStopped for the song a voice request paused routinely arrives seconds
+    /// after the launch that request triggered, so a queue-pointer stamp inside this
+    /// window after a launch-time record does not outrank it.
+    /// </summary>
+    private static readonly TimeSpan LaunchVsStopGrace = TimeSpan.FromSeconds(30);
+
+    /// <summary>Which store a JF-619 device resume pointer came from.</summary>
+    public enum DeviceResumeSource
+    {
+        /// <summary>The AudioPlayer stop-event queue pointer (audio-biased on ties).</summary>
+        QueuePointer,
+
+        /// <summary>The last-played record, written by launch-time recording (video-inclusive).</summary>
+        LastPlayed,
     }
 
     /// <summary>
@@ -305,8 +382,7 @@ public sealed class DeviceQueueManager : IDisposable
         // The PRODUCTION pointer shape: PlaybackStoppedEventHandler stores the
         // dashed Guid.ToString() form, not "N" (review C1 - the read must stay
         // format-agnostic because this is what it sees in the wild).
-        queue.CurrentItemId = parsed.ToString();
-        queue.CurrentPositionTicks = positionTicks;
+        queue.SetCurrentItemPointer(parsed.ToString(), positionTicks);
     }
 
     /// <summary>

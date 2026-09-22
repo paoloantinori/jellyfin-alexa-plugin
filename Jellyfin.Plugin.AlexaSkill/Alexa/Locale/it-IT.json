@@ -266,6 +266,7 @@
   "FindSongInvalidPick": "Non ho capito. Di' il numero o il titolo della canzone.",
   "FindSongDisambigAbandoned": "Nessun problema. Chiedimi di nuovo quando vuoi cercare una canzone.",
   "FlowCancelled": "Ok, ho interrotto la ricerca.",
+  "ElicitTrapEscaped": "Stavo ancora aspettando la risposta a una domanda. Ho annullato la richiesta: ripeti pure il tuo comando.",
   "SkillWarmingUp": "Mi sto ancora preparando. Riprova tra un minuto.",
   "PauseSessionSpeech": "Pausa.",
   "PauseSessionReprompt": "Dimmi pure quando vuoi riprendere.",

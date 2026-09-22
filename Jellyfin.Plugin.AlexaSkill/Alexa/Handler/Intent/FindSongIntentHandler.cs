@@ -153,6 +153,18 @@ public class FindSongIntentHandler : BaseHandler
                 Logger.LogInformation("FindSong: cancel during open flow (intent={Intent}, dialogState={DialogState}), ending flow", intentRequest.Intent.Name, intentRequest.DialogState);
                 return ResponseBuilder.Tell(ResponseStrings.Get("FlowCancelled", locale));
             }
+
+            // JF-620: this flow keeps its own hatch (wider than the shared
+            // BuildCancelDuringOpenElicit leg), so the trapped-one-shot escape needs
+            // its own disjunct here too - titleKeywords is the greediest capture
+            // surface in the skill and the original elicitation-trap incident's home.
+            if (Util.CancelWords.IsDialogInProgress(intentRequest)
+                && Util.CancelWords.AnySlotIsTrappedInvocationOneShot(
+                    intentRequest, locale, Config.RuntimeInvocationNameCandidates(locale)))
+            {
+                Logger.LogInformation("FindSong: captured a full one-shot with the invocation name during open flow, ending flow with the repeat hint (JF-620)");
+                return ResponseBuilder.Tell(ResponseStrings.Get("ElicitTrapEscaped", locale));
+            }
         }
 
         // JF-467: primary-path music gate (shared contract on IfMediaTypeDisabled):

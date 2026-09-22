@@ -161,6 +161,99 @@ public class CancelWordsTests
         Assert.False(CancelWords.AnySlotIsCancelWord(request, "en-US"));
     }
 
+    // JF-620: a full one-shot spoken into an open question is an escape, not a slot
+    // answer. Detection requires the locale ask-carrier AND the invocation name, so
+    // an answer merely CONTAINING the name's word stays a real answer.
+
+    private static readonly string[] ItInvocation = { "mia collezione" };
+    private static readonly string[] EnInvocation = { "jellyfin player" };
+
+    [Fact]
+    public void IsTrappedInvocationOneShot_LiveIncidentPhrase_IsTrap()
+    {
+        Assert.True(CancelWords.IsTrappedInvocationOneShot(
+            "chiedi a mia collezione di attivare loop", "it-IT", ItInvocation));
+    }
+
+    [Theory]
+    [InlineData("rapsodia")]
+    [InlineData("la canzone della mia collezione")]
+    [InlineData("collezione")]
+    public void IsTrappedInvocationOneShot_PlainAnswerOrNameWordOnly_IsNotTrap(string value)
+    {
+        Assert.False(CancelWords.IsTrappedInvocationOneShot(value, "it-IT", ItInvocation),
+            "an answer that merely contains the name's word must stay a real answer");
+    }
+
+    [Fact]
+    public void IsTrappedInvocationOneShot_CarrierWithoutName_IsNotTrap()
+    {
+        Assert.False(CancelWords.IsTrappedInvocationOneShot("chiedi a nonna la ricetta", "it-IT", ItInvocation));
+    }
+
+    [Fact]
+    public void IsTrappedInvocationOneShot_EnglishOneShot_IsTrap()
+    {
+        Assert.True(CancelWords.IsTrappedInvocationOneShot(
+            "ask jellyfin player to play the next song", "en-US", EnInvocation));
+    }
+
+    [Fact]
+    public void IsTrappedInvocationOneShot_NonLatinLocale_NameLeadingWithTailIsTrap()
+    {
+        Assert.True(CancelWords.IsTrappedInvocationOneShot(
+            "マイコレクションで次の曲を再生して", "ja-JP", new[] { "マイコレクション" }));
+        Assert.True(CancelWords.IsTrappedInvocationOneShot(
+            "मेरी कलेक्शन अगली कॉमेडी चलाओ", "hi-IN", new[] { "मेरी कलेक्शन" }));
+        Assert.True(CancelWords.IsTrappedInvocationOneShot(
+            "مجموعتي شغل الأغنية التالية", "ar-SA", new[] { "مجموعتي" }));
+    }
+
+    [Fact]
+    public void IsTrappedInvocationOneShot_NonLatinLocale_BareNameAloneIsNotTrap()
+    {
+        // JF-620 review K8: the locale-default names are mundane phrases ("my
+        // collection"); an answer that IS the bare name (a playlist named that) must
+        // stay a real answer in carrier-less locales.
+        Assert.False(CancelWords.IsTrappedInvocationOneShot("マイコレクション", "ja-JP", new[] { "マイコレクション" }));
+        Assert.False(CancelWords.IsTrappedInvocationOneShot("मेरी कलेक्शन", "hi-IN", new[] { "मेरी कलेक्शन" }));
+    }
+
+    [Fact]
+    public void IsTrappedInvocationOneShot_NonLatinLocale_NameMidAnswerIsNotTrap()
+    {
+        Assert.False(CancelWords.IsTrappedInvocationOneShot(
+            "私のマイコレクションのベスト", "ja-JP", new[] { "マイコレクション" }));
+    }
+
+    [Fact]
+    public void IsTrappedInvocationOneShot_AccentedCarrierAndName_FoldAndMatch()
+    {
+        // JF-620 review K9: ASR often returns unaccented text; both the carrier
+        // («dile a» / «pregúntale a») and the accented invocation name must match
+        // their folded forms.
+        Assert.True(CancelWords.IsTrappedInvocationOneShot(
+            "dile a mi colección que ponga música", "es-MX", new[] { "mi colección" }));
+        Assert.True(CancelWords.IsTrappedInvocationOneShot(
+            "preguntale a mi coleccion que toque musica", "es-US", new[] { "mi colección" }));
+        Assert.True(CancelWords.IsTrappedInvocationOneShot(
+            "peça à minha coleção para tocar", "pt-BR", new[] { "minha coleção" }));
+    }
+
+    [Fact]
+    public void AnySlotIsTrappedInvocationOneShot_ChecksEverySlot()
+    {
+        var intent = new Intent { Name = "AddSongToPlaylistIntent" };
+        intent.Slots = new System.Collections.Generic.Dictionary<string, Slot>
+        {
+            ["playlist_target"] = new Slot { Name = "playlist_target", Value = "prova echo" },
+            ["song_query"] = new Slot { Name = "song_query", Value = "chiedi a mia collezione di attivare loop" }
+        };
+        var request = new IntentRequest { Intent = intent, Locale = "it-IT" };
+
+        Assert.True(CancelWords.AnySlotIsTrappedInvocationOneShot(request, "it-IT", ItInvocation));
+    }
+
     // JF-445: the force-routed sibling-misroute predicate. A cancel word resolved onto a
     // sibling intent arrives dialogState STARTED (a fresh invocation of that sibling's
     // dialog, per the Alexa Dialog Interface Reference), so this predicate accepts

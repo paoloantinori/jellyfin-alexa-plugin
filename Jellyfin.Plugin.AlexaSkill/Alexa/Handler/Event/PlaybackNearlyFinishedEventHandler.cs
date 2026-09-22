@@ -453,7 +453,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         if (_queueManager.MoveTo(deviceId, itemId))
         {
             var queue = _queueManager.GetOrCreateQueue(deviceId);
-            queue.CurrentItemId = itemId;
+            queue.SetCurrentItemPointer(itemId);
             if (context.AudioPlayer != null
                 && StreamTokenCodec.TryGetItemId(context.AudioPlayer.Token, out Guid finishingItemId)
                 && StreamTokenCodec.TryGetItemId(itemId, out Guid nextItemId)

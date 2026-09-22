@@ -266,6 +266,7 @@
   "FindSongInvalidPick": "聞き取れませんでした。曲の番号か曲名を言ってください。",
   "FindSongDisambigAbandoned": "大丈夫です。曲を探したくなったら、いつでももう一度声をかけてください。",
   "FlowCancelled": "はい、検索を中止しました。",
+  "ElicitTrapEscaped": "質問の答えを待っている状態でした。リクエストをキャンセルしました。コマンドをもう一度言ってください。",
   "SkillWarmingUp": "準備中です。1分後にもう一度お試しください。",
   "PauseSessionSpeech": "一時停止しました。",
   "PauseSessionReprompt": "再開したいときは、声をかけてください。",

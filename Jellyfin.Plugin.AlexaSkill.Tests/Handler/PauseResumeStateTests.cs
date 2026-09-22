@@ -322,6 +322,127 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
     }
 
     [Fact]
+    public async Task ResumeIntent_FresherLastPlayedRecord_WinsOverStaleQueuePointer()
+    {
+        // JF-619 scenario: music X was stopped on this Echo (queue pointer, 10 min
+        // ago), then a VideoApp play recorded item M (now). Bare "riprendi" with
+        // empty context must resume M, the SAME item the LaunchRequest offer would
+        // seed (both entry points route through GetDeviceResumePointer).
+        var stoppedId = Guid.NewGuid();
+        var watchedId = Guid.NewGuid();
+
+        var watched = new Audio { Id = watchedId, Name = "Watched Episode Seed", Path = "/tv/e.mp4" };
+        _fx.LibraryManager.Setup(m => m.GetItemById(watchedId)).Returns(watched);
+
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
+        var sessionUserId = Guid.NewGuid();
+        _fx.UserManager.Setup(x => x.GetUserById(sessionUserId)).Returns(jellyfinUser);
+        _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
+            .Returns(new UserItemData { Key = "test", PlaybackPositionTicks = TimeSpan.FromMinutes(5).Ticks, Played = false });
+
+        var queue = _queueManager.GetOrCreateQueue(DeviceId);
+        queue.CurrentItemId = stoppedId.ToString();
+        queue.CurrentPositionTicks = TimeSpan.FromSeconds(30).Ticks;
+        queue.CurrentItemWrittenAt = DateTime.UtcNow.AddMinutes(-10);
+        _queueManager.RecordLastPlayed(DeviceId, watchedId.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+
+        var handler = new ResumeIntentHandler(
+            _fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory,
+            _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object,
+            _queueManager);
+
+        var context = CreateContext();
+        var session = TestHelpers.CreateTestSession(_fx.SessionManager.Object, _fx.LoggerFactory);
+        session.UserId = sessionUserId;
+        session.PlayState = new PlayerStateInfo();
+
+        var response = await handler.HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "AMAZON.ResumeIntent" } },
+            context,
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        var directive = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+        Assert.Equal(watchedId.ToString(), directive.AudioItem.Stream.Token);
+        Assert.Equal((int)TimeSpan.FromMinutes(5).TotalMilliseconds, directive.AudioItem.Stream.OffsetInMilliseconds);
+    }
+
+    [Fact]
+    public async Task ResumeIntent_LastPlayedVideoKind_LeftToFallback4VideoAppResume()
+    {
+        // JF-619 review K1: a Movie/Episode from the LastPlayed arm is a VideoApp
+        // play; this fallback's tail builds an audio-only launch, so the video kind
+        // must fall through (fallback 4 owns the VideoApp resume with the ?start=
+        // slice), not resume as sound-only.
+        var movieId = Guid.NewGuid();
+        var movie = new MediaBrowser.Controller.Entities.Movies.Movie { Id = movieId, Name = "Test Movie" };
+        _fx.LibraryManager.Setup(m => m.GetItemById(movieId)).Returns(movie);
+
+        var queue = _queueManager.GetOrCreateQueue(DeviceId);
+        queue.CurrentItemId = null;
+        _queueManager.RecordLastPlayed(DeviceId, movieId.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+
+        var handler = new ResumeIntentHandler(
+            _fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory,
+            _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object,
+            _queueManager);
+
+        var context = CreateContext();
+        var session = TestHelpers.CreateTestSession(_fx.SessionManager.Object, _fx.LoggerFactory);
+        session.PlayState = new PlayerStateInfo();
+
+        var response = await handler.HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "AMAZON.ResumeIntent" } },
+            context,
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        // Fallback 4 (empty mock library) has nothing to offer: a Tell, never an
+        // audio-only AudioPlayer launch of the movie.
+        Assert.DoesNotContain(response.Response.Directives ?? new System.Collections.Generic.List<IDirective>(), d => d is AudioPlayerPlayDirective);
+    }
+
+    [Fact]
+    public async Task ResumeIntent_UnusableLastPlayedWinner_RetriesQueuePointerLoser()
+    {
+        // JF-619 review K2: the resolver's winner (a launch that never started, no
+        // position anywhere) must not discard the loser queue pointer's good
+        // item-absolute position.
+        var songId = Guid.NewGuid();
+        SeedTestItemInLibrary();
+        var queue = _queueManager.GetOrCreateQueue(DeviceId);
+        queue.CurrentItemId = TestItemId;
+        queue.CurrentPositionTicks = TimeSpan.FromMinutes(5).Ticks;
+        queue.CurrentItemWrittenAt = DateTime.UtcNow.AddMinutes(-10);
+
+        var neverStarted = Guid.NewGuid();
+        _queueManager.RecordLastPlayed(DeviceId, neverStarted.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        // The winner has no library item (never started): the loser must win.
+
+        var handler = new ResumeIntentHandler(
+            _fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory,
+            _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object,
+            _queueManager);
+
+        var context = CreateContext();
+        var session = TestHelpers.CreateTestSession(_fx.SessionManager.Object, _fx.LoggerFactory);
+        session.PlayState = new PlayerStateInfo();
+
+        var response = await handler.HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "AMAZON.ResumeIntent" } },
+            context,
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        var directive = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+        Assert.Equal(TestItemId, directive.AudioItem.Stream.Token);
+        Assert.Equal((int)TimeSpan.FromMinutes(5).TotalMilliseconds, directive.AudioItem.Stream.OffsetInMilliseconds);
+    }
+
+    [Fact]
     public async Task ResumeIntent_IgnoresDeviceQueue_WhenQueueItemWasDeleted()
     {
         // Review hardening (2026-09-22): a queue pointer to a since-deleted item must

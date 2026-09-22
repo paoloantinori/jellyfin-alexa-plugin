@@ -366,6 +366,21 @@ public class PlaylistEditIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
+    public async void AddSong_TrappedOneShotDuringOpenElicit_EndsFlowWithHint()
+    {
+        // JF-620 live incident: with the song question open, a full one-shot with
+        // the invocation name is captured whole into the slot; it must end the flow
+        // with the repeat hint instead of answering a nonsense not-found.
+        SkillResponse response = await CreateAddSong().HandleAsync(
+            CreateRequest(IntentNames.AddSongToPlaylist, new() { [IntentNames.Slots.SongQuery] = "ask jellyfin player to turn on loop", ["playlist_target"] = "prova echo" }, dialogState: "IN_PROGRESS"),
+            new Context(), CreateUser(), session: null!, CancellationToken.None);
+
+        Assert.Equal(ResponseStrings.Get("ElicitTrapEscaped", "en-US"), GetSpeech(response));
+        Assert.True(response.Response.ShouldEndSession);
+        VerifyAddItemNever();
+    }
+
+    [Fact]
     public async void AddSong_PlaylistGenuinelyNamedWithCarrier_RawNameWins()
     {
         // JF-602: a playlist whose REAL name starts with the carrier word (created

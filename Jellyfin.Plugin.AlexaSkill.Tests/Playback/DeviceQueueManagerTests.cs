@@ -898,6 +898,101 @@ public class DeviceQueueManagerTests : IDisposable
         Assert.Equal(DeviceQueueManager.LaunchRoute.VideoApp, _manager.GetLastPlayedLaunchRoute("dev"));
     }
 
+    // JF-619: the ONE device resume truth-source. The scenario that motivated it:
+    // an AudioPlayer stop writes the queue pointer (X), a later VideoApp play writes
+    // the last-played record (M); both resume entry points must name the SAME item.
+
+    [Fact]
+    public void GetDeviceResumePointer_LastPlayedNewer_WinsLastPlayed()
+    {
+        var stopped = Guid.NewGuid();
+        var watched = Guid.NewGuid();
+        var queue = _manager.GetOrCreateQueue("dev");
+        queue.CurrentItemId = stopped.ToString();
+        queue.CurrentPositionTicks = TimeSpan.FromSeconds(30).Ticks;
+        queue.CurrentItemWrittenAt = DateTime.UtcNow.AddMinutes(-10);
+        _manager.RecordLastPlayed("dev", watched.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+
+        var (itemId, source) = _manager.GetDeviceResumePointer("dev");
+
+        Assert.Equal(watched.ToString(), itemId);
+        Assert.Equal(DeviceQueueManager.DeviceResumeSource.LastPlayed, source);
+    }
+
+    [Fact]
+    public void GetDeviceResumePointer_QueuePointerNewer_WinsQueuePointer()
+    {
+        var stopped = Guid.NewGuid();
+        var watched = Guid.NewGuid();
+        _manager.RecordLastPlayed("dev", watched.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        var queue = _manager.GetOrCreateQueue("dev");
+        queue.CurrentItemId = stopped.ToString();
+        queue.CurrentPositionTicks = TimeSpan.FromSeconds(30).Ticks;
+        // Beyond the delayed-stop grace window, so the stop genuinely outranks the launch.
+        queue.LastPlayedWrittenAt = DateTime.UtcNow.AddSeconds(-45);
+        queue.CurrentItemWrittenAt = DateTime.UtcNow;
+
+        var (itemId, source) = _manager.GetDeviceResumePointer("dev");
+
+        Assert.Equal(stopped.ToString(), itemId);
+        Assert.Equal(DeviceQueueManager.DeviceResumeSource.QueuePointer, source);
+    }
+
+    [Fact]
+    public void GetDeviceResumePointer_StopJustAfterLaunch_LaunchWinsGrace()
+    {
+        // JF-619 review K4: the voice request pauses the song, the episode launch
+        // lands, THEN the paused song's delayed PlaybackStopped stamps the pointer a
+        // few seconds later. The launch-time record must keep winning: delayed stops
+        // are bookkeeping, launches are intent.
+        var song = Guid.NewGuid();
+        var episode = Guid.NewGuid();
+        _manager.RecordLastPlayed("dev", episode.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        var queue = _manager.GetOrCreateQueue("dev");
+        queue.CurrentItemId = song.ToString();
+        queue.CurrentPositionTicks = TimeSpan.FromSeconds(30).Ticks;
+        queue.CurrentItemWrittenAt = DateTime.UtcNow.AddSeconds(5);
+        queue.LastPlayedWrittenAt = DateTime.UtcNow;
+
+        var (itemId, source) = _manager.GetDeviceResumePointer("dev");
+
+        Assert.Equal(episode.ToString(), itemId);
+        Assert.Equal(DeviceQueueManager.DeviceResumeSource.LastPlayed, source);
+    }
+
+    [Fact]
+    public void GetDeviceResumePointer_NullStamps_QueuePointerWins()
+    {
+        // Pre-JF-619 persisted files carry no stamps: the audio-biased queue pointer
+        // must keep winning (the "riprendi after an interrupted song" semantics).
+        var stopped = Guid.NewGuid();
+        var watched = Guid.NewGuid();
+        var queue = _manager.GetOrCreateQueue("dev");
+        queue.CurrentItemId = stopped.ToString();
+        queue.CurrentPositionTicks = TimeSpan.FromSeconds(30).Ticks;
+        queue.LastPlayedItemId = watched.ToString();
+
+        var (itemId, source) = _manager.GetDeviceResumePointer("dev");
+
+        Assert.Equal(stopped.ToString(), itemId);
+        Assert.Equal(DeviceQueueManager.DeviceResumeSource.QueuePointer, source);
+    }
+
+    [Fact]
+    public void GetDeviceResumePointer_OnlyOneStoreRecorded_WinsIt()
+    {
+        var only = Guid.NewGuid();
+        var queue = _manager.GetOrCreateQueue("dev2");
+        queue.LastPlayedItemId = only.ToString();
+
+        var (itemId, source) = _manager.GetDeviceResumePointer("dev2");
+        Assert.Equal(only.ToString(), itemId);
+        Assert.Equal(DeviceQueueManager.DeviceResumeSource.LastPlayed, source);
+
+        var (none, _) = _manager.GetDeviceResumePointer("unknown-device");
+        Assert.Null(none);
+    }
+
     /// <summary>
     /// JF-568 legacy shape: a queue file persisted by a pre-JF-568 plugin carries
     /// no route member, so the read yields null (readers keep the kind-based

@@ -58,6 +58,45 @@ public sealed class DeviceQueue
     public string? CurrentItemId { get; set; }
 
     /// <summary>
+    /// Gets or sets when <see cref="CurrentItemId"/> was last written (UTC).
+    /// JF-619: the resume truth-source resolver compares this against
+    /// <see cref="LastPlayedWrittenAt"/> so both resume entry points (the
+    /// LaunchRequest offer and bare AMAZON.ResumeIntent) pick the SAME, freshest
+    /// device pointer instead of each reading its own store. Null on queues
+    /// persisted before JF-619: the resolver treats unknown stamps as the legacy
+    /// tie (the audio-biased queue pointer wins), so old files behave unchanged.
+    /// Written exclusively through <see cref="SetCurrentItemPointer"/> (the stop and
+    /// nearly-finished event handlers, RecordNowPlaying), never by hand.
+    /// </summary>
+    public DateTime? CurrentItemWrittenAt { get; set; }
+
+    /// <summary>
+    /// Gets or sets when <see cref="LastPlayedItemId"/> was last written (UTC);
+    /// the JF-619 counterpart of <see cref="CurrentItemWrittenAt"/>. Stamped by
+    /// <c>DeviceQueueManager.RecordLastPlayed</c>. Null on pre-JF-619 files.
+    /// </summary>
+    public DateTime? LastPlayedWrittenAt { get; set; }
+
+    /// <summary>
+    /// The ONE writer for the current-item pointer (JF-619): sets the id, optionally
+    /// the position, and the freshness stamp together, so a future writer cannot
+    /// update the pointer without stamping it (an unstamped write would silently
+    /// lose freshness arbitration to an older LastPlayed record).
+    /// </summary>
+    /// <param name="itemId">The item id becoming the device's current pointer.</param>
+    /// <param name="positionTicks">The position when known; null leaves the stored position untouched.</param>
+    public void SetCurrentItemPointer(string itemId, long? positionTicks = null)
+    {
+        CurrentItemId = itemId;
+        if (positionTicks.HasValue)
+        {
+            CurrentPositionTicks = positionTicks.Value;
+        }
+
+        CurrentItemWrittenAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
     /// Gets or sets per-item position state (itemId → ticks). Survives item switches
     /// and bypasses Jellyfin's MinAudiobookResume threshold. Used for alternate-resume:
     /// play A, switch to B, return to A → A resumes from saved position.
