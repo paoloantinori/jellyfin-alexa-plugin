@@ -4,10 +4,10 @@ title: >-
   One-shot wrapper episode-addressing untested in the 8 locales with no
   infinitive family (es-ES/MX/US, pt-BR, nl-NL, ar-SA, hi-IN, ja-JP): probe,
   then add families where the wrapper misroutes
-status: In Progress
+status: To Do
 assignee: []
 created_date: '2026-09-12 16:55'
-updated_date: '2026-09-21 20:59'
+updated_date: '2026-09-21 21:10'
 labels:
   - interaction-model
   - nlu
@@ -43,6 +43,8 @@ PROBE RESULTS 2026-09-13 (the AC#1 probe half is COMPLETE; recorded here because
 2026-09-19: dependency made explicit - the remaining model-side fixes (es-US/pt-BR PlayNext competition, ja-JP PlayVideo steal) and any payload-family work are gated on JF-558 (per-locale localized invocation names, PARKED on Paolo's naming decision 2026-09-18). The probe evidence shows the one-shot invocation layer fails FIRST in all 8 locales with the English name, so model surgery now would be unverifiable end-to-end and risk the es-family-revert class again. Do not pick this task before JF-558 is decided.
 
 2026-09-21 evening matrix (profile-nlu, post-rename): es-ES/MX series-LAST routes perfectly in-session; es-US stolen by PlaySong/PlayNext; pt-BR both orders stolen by PlayNext; ja stolen by PlayByGenre/PlaySong; nl routes (episode_number word-form quirk). Simulator broke for es mid-day (morning-passing open-verb now fails; it-IT control passes). DECISION honoring the 09-13 revert lesson: no model surgery while the wrapper layer is unverifiable. Fix candidates recorded: es SUBJUNCTIVE wrapped form (the morphology the pide-a-X-que wrapper presents; the 09-13 infinitive attempt was wrong morphology), pt/es-US PlayNext carrier qualification or PlayEpisode anchor strengthening, ja anchor probing, nl number vocabulary. GATE to resume: healthy es/de simulate window (poll with the JF-558 battery) or device time.
+
+2026-09-21 late-night CORRECTION (user challenged the diagnosis; old-model cross-check + full matrix run): the outage is PER-LOCALE - it-IT and en-US one-shots PASS in the same minutes that es/fr/de/ja one-shots AND opens all fail; the bare "open X" form fails across ALL locales while one-shots still work. Cross-check: the 09-19 en-US model deployed via set-interaction-model - "open jellyfin player" STILL failed, "ask jellyfin player to play my favorites" PASSED - content-independent (current model restored, byte-verified). Protocol audit: all six response-violation classes clean, zero error-type SessionEndedRequests. The morning "INVOKED (IntentRequest)" opens remain unexplained - dump the full invocation log when the simulator recovers. REFRESHED RESUME CRITERION: target locale's one-shot control passing (bare-open is NOT a usable control during outage windows). Memory: simulate_outage_per_locale.
 
 2026-09-21: JF-558 DECIDED AND DEPLOYED - the gate is LIFTED for es/ja. Native names live (Paolo confirmed). Pure open-verb probe PASSES in simulate for es-ES, es-MX, ja (previously broken with the English name - invocation layer FIXED); their model-side work (payload families, ja PlayVideo steal) is end-to-end testable via simulate. pt-BR/nl-NL/hi-IN/ar-SA remain simulate-BLIND (open probe fails with BOTH names - the documented simulator-outage class, A/B verified 2026-09-21): model-side work lands model-verified (profile-nlu), invocation needs device probes. es-US not probed this round.
 <!-- SECTION:NOTES:END -->
