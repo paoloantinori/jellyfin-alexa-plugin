@@ -131,7 +131,7 @@
                             <div class="fieldDescription">Enable or disable capabilities. Disabled features respond with a polite "not available".</div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="RadioModeEnabled" /> <span>Radio Mode</span></label>
-                                <div class="fieldDescription checkboxFieldDescription">When a song ends, automatically find and play similar tracks from your library — like a Pandora station. Toggle on/off by voice ("turn on/off radio mode") or let PostPlay AutoPlay start it automatically.</div>
+                                <div class="fieldDescription checkboxFieldDescription">Lets the skill find and play similar tracks from your library, like a Pandora station. Used by "play similar tracks" and started automatically by PostPlay AutoPlay when a queue ends. Toggle on/off by voice ("turn on/off radio mode").</div>
                             </div>
                             <div class="checkboxContainer checkboxContainer-withDescription">
                                 <label><input type="checkbox" is="emby-checkbox" id="PodcastsEnabled" /> <span>Podcasts</span></label>
@@ -255,10 +255,10 @@
                             <div class="selectContainer">
                                 <label class="selectLabel" for="DefaultPostPlayBehavior">Post-Play Behavior</label>
                                 <select is="emby-select" id="DefaultPostPlayBehavior" name="DefaultPostPlayBehavior" class="emby-select-withcolor emby-select">
-                                    <option value="Stop">Stop — silence after playback ends</option>
-                                    <option value="AutoPlay">AutoPlay — continue with similar music</option>
+                                    <option value="Stop">Stop: silence after playback ends</option>
+                                    <option value="AutoPlay">AutoPlay: continue with similar music</option>
                                 </select>
-                                <div class="fieldDescription">What happens when a song ends and the queue is exhausted. Stop: silence when a song ends. AutoPlay: the skill finds similar tracks and keeps playing, like a radio station. Can be overridden per-user in the User table below.</div>
+                                <div class="fieldDescription">What happens when the LAST track of an album, playlist, or any queue finishes. Stop: playback ends in silence. AutoPlay: the skill automatically finds similar tracks in your library and keeps playing them like a radio station, so the music does not stop when the album or playlist does. Applies to every queue (albums, playlists, artist radios); users who want different behavior can override it in the User table below.</div>
                             </div>
                             <div class="inputContainer">
                                 <label class="inputLabel inputLabelUnfocused" for="InitialFetchSize">Initial Fetch Size</label>
@@ -1355,7 +1355,7 @@
                     [{v:"Stop",t:"Stop (silence)"},{v:"AutoPlay",t:"AutoPlay (continue)"}],
                     user.PostPlayBehavior || "Stop");
                 pbGroup.appendChild(panelField(null, ppSel,
-                    "Stop: silence when a song ends. AutoPlay: the skill finds similar tracks and keeps playing, like a radio station. Overrides the global default."));
+                    "What happens when the last track of this user's album, playlist, or queue finishes. Stop: playback ends in silence. AutoPlay: the skill automatically finds similar tracks and keeps playing them like a radio station, so the music continues past the end of the album. Overrides the global default."));
 
                 var vaaSel = panelSelect("VideoAppForAudio", "Music Delivery",
                     [{v:"inherit",t:"Use default (global)"},{v:"true",t:"VideoApp (seek bar)"},{v:"false",t:"AudioPlayer (raw stream)"}],
