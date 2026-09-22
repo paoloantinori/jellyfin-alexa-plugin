@@ -30,6 +30,17 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 public static class ResumeMath
 {
     /// <summary>
+    /// Ticks to milliseconds, clamped to int.MaxValue like the LaunchRequestHandler
+    /// idiom (review consistency finding 2026-09-22: three unclamped inline casts in
+    /// ResumeIntentHandler could produce an unspecified cast value on a corrupt or
+    /// buggy device report beyond ~24.86 days of ticks).
+    /// </summary>
+    /// <param name="ticks">The position in .NET ticks.</param>
+    /// <returns>The position in whole milliseconds, clamped to int range.</returns>
+    public static int TicksToMs(long ticks)
+        => (int)Math.Min(TimeSpan.FromTicks(ticks).TotalMilliseconds, int.MaxValue);
+
+    /// <summary>
     /// Combined sort-by-rating + resume-index detection in a single pass over user data.
     /// Eliminates duplicate GetUserData calls when both operations are needed.
     /// </summary>

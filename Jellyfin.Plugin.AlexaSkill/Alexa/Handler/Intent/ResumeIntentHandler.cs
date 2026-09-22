@@ -154,29 +154,80 @@ public class ResumeIntentHandler : BaseHandler
             // event writers since JF-522 (launch base composed at write time).
             else if (session?.PlayState != null)
             {
-                offset = (int)TimeSpan.FromTicks(session.PlayState?.PositionTicks ?? 0).TotalMilliseconds;
+                offset = ResumeMath.TicksToMs(session.PlayState?.PositionTicks ?? 0);
                 Logger.LogDebug(
                     "ResumeIntent: using session playState offset={OffsetMs}ms (ticks={Ticks}, item-absolute since JF-522)",
                     offset, session.PlayState?.PositionTicks);
             }
+        }
 
-            // Fallback 3: DeviceQueue persisted state (survives after AudioPlayer.Stop clears context).
-            // Item-absolute since JF-522 (the stop event composes the launch base into
-            // CurrentPositionTicks).
-            if (offset == 0 && _queueManager != null)
+        // Fallback 3: DeviceQueue persisted state (survives after AudioPlayer.Stop clears
+        // context AND session; item-absolute per the JF-522 writer contract). HOISTED out
+        // of the item_id!=null guard (live incident 2026-09-22): a one-shot resume
+        // arriving after PlaybackStopped has BOTH a null token and a null session item -
+        // the exact shape this fallback was built for - and the old placement made it
+        // unreachable there, so resume fell straight to server-side progress and
+        // launched a stale unrelated in-progress episode while the queue held the item
+        // stopped seconds earlier. The token guard keeps a DISPLACED token authoritative.
+        // Review round (same session): the adopted queue id is MATERIALIZED through the
+        // library before use. A deleted item falls through to fallback 4 instead of
+        // minting a dead stream URL; an item finished elsewhere (UserData Played) is
+        // skipped the way fallback 4's IsPlayed=false filter would skip it; the resolved
+        // BaseItem rides to the tail so the codec probe (JF-507) and the audiobook
+        // branch see a real item. offset==0 is the sole gate because item_id empty
+        // implies offset 0 here (offset is only assigned inside the block above).
+        BaseItem? queueItem = null;
+        if (offset == 0 && _queueManager != null)
+        {
+            DeviceQueue? queue = _queueManager.GetQueue(context.System.Device.DeviceID);
+            if (!string.IsNullOrEmpty(queue?.CurrentItemId) && queue!.CurrentPositionTicks > 0
+                && (string.IsNullOrEmpty(context.AudioPlayer?.Token)
+                    || string.Equals(context.AudioPlayer.Token, queue.CurrentItemId, StringComparison.Ordinal)))
             {
-                var queue = _queueManager.GetOrCreateQueue(context.System.Device.DeviceID);
-                if (!string.IsNullOrEmpty(queue.CurrentItemId) && queue.CurrentPositionTicks > 0)
+                BaseItem? candidate = Guid.TryParse(queue.CurrentItemId, out Guid queueGuid)
+                    ? _libraryManager.GetItemById(queueGuid)
+                    : null;
+
+                // The kind mapping is a type pattern, NOT GetBaseItemKind(): that
+                // helper parses the CLR type NAME into the enum and throws for any
+                // derived type (test subclasses, future entity shapes). The four arms
+                // mirror fallback 4's content kinds exactly.
+                BaseItemKind? candidateKind = candidate switch
                 {
-                    if (string.IsNullOrEmpty(context.AudioPlayer?.Token) ||
-                        string.Equals(context.AudioPlayer.Token, queue.CurrentItemId, StringComparison.Ordinal))
-                    {
-                        item_id = queue.CurrentItemId;
-                        offset = (int)TimeSpan.FromTicks(queue.CurrentPositionTicks).TotalMilliseconds;
-                        Logger.LogInformation(
-                            "ResumeIntent: using DeviceQueue fallback for device {DeviceId}: item={ItemId}, offset={OffsetMs}ms",
-                            context.System.Device.DeviceID, item_id, offset);
-                    }
+                    // AudioBook BEFORE Audio: a book IS an Audio subclass in Jellyfin,
+                    // and the book kind must win so music-content gating cannot
+                    // misclassify a book resume.
+                    AudioBook => BaseItemKind.AudioBook,
+                    MediaBrowser.Controller.Entities.Audio.Audio => BaseItemKind.Audio,
+                    MediaBrowser.Controller.Entities.Movies.Movie => BaseItemKind.Movie,
+                    MediaBrowser.Controller.Entities.TV.Episode => BaseItemKind.Episode,
+                    _ => null,
+                };
+
+                bool playedElsewhere = false;
+                if (candidate != null && session != null)
+                {
+                    var (queueUser, _) = ResolveJellyfinUser(_userManager, session.UserId, locale);
+                    playedElsewhere = queueUser != null
+                        && _userDataManager.GetUserData(queueUser, candidate)?.Played == true;
+                }
+
+                if (candidate != null && candidateKind != null && !playedElsewhere
+                    && FilterByContentAccess(new[] { candidateKind.Value }).Length > 0)
+                {
+                    item_id = queue.CurrentItemId;
+                    queueItem = candidate;
+                    offset = ResumeMath.TicksToMs(queue.CurrentPositionTicks);
+                    Logger.LogInformation(
+                        "ResumeIntent: using DeviceQueue fallback for device {DeviceId}: item={ItemId}, offset={OffsetMs}ms",
+                        context.System.Device.DeviceID, item_id, offset);
+                }
+                else
+                {
+                    Logger.LogInformation(
+                        "ResumeIntent: DeviceQueue candidate {ItemId} rejected ({Reason}); falling through to the next fallback",
+                        queue.CurrentItemId,
+                        candidate == null ? "item no longer in the library" : candidateKind == null ? "unsupported item kind" : playedElsewhere ? "marked played elsewhere" : "content type disabled");
                 }
             }
         }
@@ -219,7 +270,7 @@ public class ResumeIntentHandler : BaseHandler
                     resumeItem.Name, resumeItem.Id, ResumeMath.FormatPosition(resumeTicks));
 
                 item_id = resumeItem.Id.ToString();
-                offset = (int)TimeSpan.FromTicks(resumeTicks).TotalMilliseconds;
+                offset = ResumeMath.TicksToMs(resumeTicks);
 
                 // NativeControlsForBooks (JF-563): an audiobook resumes through the same
                 // VideoApp HLS entry PlayBook uses (the sliced ?start= playlist), not the
@@ -304,7 +355,7 @@ public class ResumeIntentHandler : BaseHandler
             || string.Equals(context.AudioPlayer.Token, session?.FullNowPlayingItem?.Id.ToString(), StringComparison.Ordinal))
         {
             SkillResponse? bookResponse = await TryBuildNativeControlsBookResumeAsync(
-                session?.FullNowPlayingItem,
+                queueItem ?? session?.FullNowPlayingItem,
                 // offset is MILLISECONDS here (every writer of it converts to ms);
                 // the helper's fallback parameter is ticks. Convert once, mirroring
                 // the YesIntent resume-confirm call site (review major, JF-567).
@@ -315,6 +366,12 @@ public class ResumeIntentHandler : BaseHandler
                 return bookResponse;
             }
         }
+
+        // The tail's item: the queue-resolved BaseItem when fallback 3 adopted it
+        // (review finding: the codec probe and the APL metadata need a real item, and
+        // session.FullNowPlayingItem is null in every newly reachable queue shape),
+        // otherwise the session's now-playing item.
+        BaseItem? tailItem = queueItem ?? session?.FullNowPlayingItem;
 
         // The tail's JF-514 correction, adopted from the offer path (JF-520) and
         // re-scoped by JF-522: the AudioPlayer-context offset (Amazon-written) stays
@@ -327,14 +384,14 @@ public class ResumeIntentHandler : BaseHandler
         // before the resolve/directive that overwrites it (JF-520; was
         // comment-enforced here in JF-514).
         AudioLaunchSource source = Launch.ResolveResumedAudioLaunch(
-            session?.FullNowPlayingItem, item_id!, user, offset, offsetIsStreamRelative,
+            tailItem, item_id!, user, offset, offsetIsStreamRelative,
             context?.System?.Device?.DeviceID, _queueManager, "ResumeIntent");
 
         var response = Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll,
             source,
             item_id!,
-            session?.FullNowPlayingItem,
+            tailItem,
             user,
             context,
             queueManager: _queueManager);

@@ -86,6 +86,23 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
         return session;
     }
 
+    /// <summary>
+    /// Registers the TestItemId audio in the mock library: since the 2026-09-22
+    /// hardening, the ResumeIntent DeviceQueue fallback materializes the queued id
+    /// through ILibraryManager.GetItemById before adopting it (a deleted item falls
+    /// through), so queue-based tests must serve the item.
+    /// </summary>
+    private void SeedTestItemInLibrary()
+    {
+        var audio = new Audio
+        {
+            Id = Guid.Parse(TestItemId),
+            Name = "Test Song",
+            Path = "/music/test.mp3"
+        };
+        _fx.LibraryManager.Setup(m => m.GetItemById(audio.Id)).Returns(audio);
+    }
+
     private static Context CreateContext(string? audioPlayerToken = null, long audioPlayerOffset = 0)
     {
         var context = TestHelpers.CreateTestContext();
@@ -239,6 +256,7 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
         var queue = _queueManager.GetOrCreateQueue(DeviceId);
         queue.CurrentItemId = TestItemId;
         queue.CurrentPositionTicks = TimeSpan.FromSeconds(45).Ticks;
+        SeedTestItemInLibrary();
 
         var handler = new ResumeIntentHandler(
             _fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory,
@@ -263,6 +281,77 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
         var directive = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
         Assert.Equal(45000, directive.AudioItem.Stream.OffsetInMilliseconds);
         Assert.True(response.Response.ShouldEndSession);
+    }
+
+    [Fact]
+    public async Task ResumeIntent_FallsBackToDeviceQueue_WhenTokenAndSessionItemAreBothNull()
+    {
+        // Live incident 2026-09-22: a one-shot resume arriving after PlaybackStopped
+        // carries a null AudioPlayer token AND a null session now-playing item. The
+        // queue lookup used to sit inside the item_id!=null guard, so this shape fell
+        // straight to server-side progress and resumed a stale unrelated episode.
+        var queue = _queueManager.GetOrCreateQueue(DeviceId);
+        queue.CurrentItemId = TestItemId;
+        queue.CurrentPositionTicks = TimeSpan.FromMilliseconds(14763).Ticks;
+        SeedTestItemInLibrary();
+
+        var handler = new ResumeIntentHandler(
+            _fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory,
+            _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object,
+            _queueManager);
+
+        var context = CreateContext();
+        var session = TestHelpers.CreateTestSession(_fx.SessionManager.Object, _fx.LoggerFactory);
+        session.PlayState = new PlayerStateInfo();
+
+        var response = await handler.HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "AMAZON.ResumeIntent" } },
+            context,
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.Contains(response.Response.Directives, d => d is AudioPlayerPlayDirective);
+
+        // The queue's item plays at the queue's position, not a server-progress item
+        var directive = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+        Assert.Equal(TestItemId, directive.AudioItem.Stream.Token);
+        Assert.Equal(14763, directive.AudioItem.Stream.OffsetInMilliseconds);
+        Assert.True(response.Response.ShouldEndSession);
+    }
+
+    [Fact]
+    public async Task ResumeIntent_IgnoresDeviceQueue_WhenQueueItemWasDeleted()
+    {
+        // Review hardening (2026-09-22): a queue pointer to a since-deleted item must
+        // not mint a dead stream URL; the resume falls through to the next fallback
+        // (here: nothing playing -> NoMediaPlaying).
+        var queue = _queueManager.GetOrCreateQueue(DeviceId);
+        queue.CurrentItemId = TestItemId;
+        queue.CurrentPositionTicks = TimeSpan.FromSeconds(45).Ticks;
+        // No GetItemById setup: the mock library does not know the item.
+
+        var handler = new ResumeIntentHandler(
+            _fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory,
+            _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object,
+            _queueManager);
+
+        var context = CreateContext();
+        var session = TestHelpers.CreateTestSession(_fx.SessionManager.Object, _fx.LoggerFactory);
+        session.PlayState = new PlayerStateInfo();
+
+        var response = await handler.HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "AMAZON.ResumeIntent" } },
+            context,
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.NotNull(response.Response.OutputSpeech);
+        Assert.True(response.Response.ShouldEndSession);
+        Assert.DoesNotContain(response.Response.Directives, d => d is AudioPlayerPlayDirective);
     }
 
     [Fact]
@@ -387,6 +476,7 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
         var stoppedRequest = CreateStoppedRequest(TestItemId, stoppedOffsetMs);
         var context = CreateContext();
         var session = CreateSessionWithNowPlaying(TestItemId);
+        SeedTestItemInLibrary();
 
         await stoppedHandler.HandleAsync(stoppedRequest, context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
 

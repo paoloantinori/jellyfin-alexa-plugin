@@ -177,6 +177,7 @@ public class ResumeIntentAudioVariantOffsetTests : PluginTestBase, IDisposable
         var queue = _queueManager.GetOrCreateQueue("test-device");
         queue.CurrentItemId = id.ToString();
         queue.CurrentPositionTicks = TimeSpan.FromMinutes(20).Ticks;
+        _fx.LibraryManager.Setup(m => m.GetItemById(id)).Returns(episode);
 
         var context = CreateContext(id.ToString(), 0);
 
@@ -193,6 +194,44 @@ public class ResumeIntentAudioVariantOffsetTests : PluginTestBase, IDisposable
             directive.AudioItem.Stream.Url,
             StringComparison.Ordinal);
         Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
+    }
+
+    [Fact]
+    public async Task Resume_Eac3Episode_ViaDeviceQueue_WithEmptyContext_MintsTranscodeUrl()
+    {
+        // Live-incident shape (2026-09-22) + review finding: the one-shot resume after
+        // PlaybackStopped has a null token AND a null session item, and the tail only
+        // probes codecs when it holds a real BaseItem. The queue item is materialized
+        // through the library, so the EAC3 episode routes to the audio-only transcode
+        // instead of the raw static /Audio URL the Echo cannot decode.
+        var id = Guid.NewGuid();
+        var episode = new TestHelpers.TestEpisodeWithStreams(
+            "Ribs",
+            id,
+            TestHelpers.TestStream(MediaStreamType.Video, "h264"),
+            TestHelpers.TestStream(MediaStreamType.Audio, "eac3"));
+        _fx.LibraryManager.Setup(m => m.GetItemById(id)).Returns(episode);
+
+        var session = TestHelpers.CreateTestSession(_fx.SessionManager.Object, _fx.LoggerFactory);
+        session.PlayState = new PlayerStateInfo();
+        // FullNowPlayingItem stays null (the post-stop shape).
+
+        var queue = _queueManager.GetOrCreateQueue("test-device");
+        queue.CurrentItemId = id.ToString();
+        queue.CurrentPositionTicks = TimeSpan.FromMinutes(20).Ticks;
+
+        var context = CreateContext(null!, 0);
+
+        var response = await CreateHandler().HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "AMAZON.ResumeIntent" } },
+            context,
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        var directive = SinglePlayDirective(response);
+        Assert.Contains($"/alexaskill/api/video-audio/episode/{id}/audio.m3u8?start=", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.DoesNotContain($"stream?static=true&api_key=", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -312,6 +351,7 @@ public class ResumeIntentAudioVariantOffsetTests : PluginTestBase, IDisposable
         var queue = _queueManager.GetOrCreateQueue("test-device");
         queue.CurrentItemId = id.ToString();
         queue.CurrentPositionTicks = TimeSpan.FromMinutes(5).Ticks;
+        _fx.LibraryManager.Setup(m => m.GetItemById(id)).Returns(episode);
 
         var context = CreateContext(id.ToString(), 0);
 
