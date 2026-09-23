@@ -1,7 +1,7 @@
 ---
 name: Alexa Skill
 guid: c5df7de0-8777-4b3c-a70d-5c3dae359c9e
-version: 0.12.1.0
+version: 1.0.0.0
 targetAbi: 10.11.0.0
 framework: net9.0
 overview: Alexa skill plugin for Jellyfin
@@ -20,4 +20,4 @@ artifacts:
   - Amazon.Lambda.Serialization.Json.dll
   - Jellyfin.Plugin.AlexaSkill.dll
   - Refit.dll
-changelog: "Fixes artist and playlist playback for users who restrict the skill to specific libraries: with a per-user library restriction configured, every artist request returned no results and playlists could not be found at all. Asking for an artist, a playlist or a song now behaves the same with or without library restrictions. Playlist requests no longer apply the library filter, since playlists live outside libraries. Song search by name is also faster again for restricted users: it was silently falling back to the slower library-wide search path."
+changelog: "The first major release. Works on both Jellyfin 10.11 and Jellyfin 12 servers (one download per server line, the catalog picks the right one automatically). Sleep timers now understand the duration you say: ask to stop after thirty seconds, half an hour or one hour and that is exactly what you get, with a truthful confirmation when the stop will land at the end of the current track. Asking to resume now reliably continues what you last listened to on that device, whether it was music, a podcast or an audiobook, instead of jumping to something unrelated. Shuffle, repeat and loop commands now answer with a spoken confirmation so you know they took effect, and shuffle works when asked in Italian, German and French. Radio mode plays similar tracks you have not just heard instead of restarting the current song. If you ask for a new command while the skill is waiting for an answer to a question, it now cancels the question cleanly and tells you to repeat the command. Video requests finally accept being asked without a title first (the skill asks which one) and accept the film name in one shot. Artist information no longer reads punctuation aloud when listing genres. Many smaller routing fixes for one-shot phrasings across all supported languages."
