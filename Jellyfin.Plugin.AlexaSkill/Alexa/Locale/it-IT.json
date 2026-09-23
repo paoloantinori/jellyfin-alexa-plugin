@@ -99,6 +99,7 @@
   "RecommendPlayingSsml": "Ecco una raccomandazione per te<break time=\"300ms\"/>riproduco {0}",
   "DidNotCatchSleepTimer": "Per quanto devo impostare il timer di spegnimento? Dì per esempio cinque minuti, trenta secondi o mezz'ora.",
   "SleepTimerSetFor": "Timer di spegnimento impostato per {0}. La riproduzione si fermerà.",
+  "SleepTimerSetTrackEnd": "Timer di spegnimento impostato per {0}: la musica si fermerà al termine del brano in corso.",
   "SleepTimerUnitSecond": "un secondo",
   "SleepTimerUnitMinute": "un minuto",
   "SleepTimerUnitMinutes": "{0} minuti",

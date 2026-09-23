@@ -198,6 +198,7 @@
   "SeriesTitle": "{0}: {1}",
   "ServerUnavailable": "I'm having trouble reaching your media server right now. Please try again in a moment.",
   "SleepTimerSetFor": "Sleep timer set for {0}. Playback will stop.",
+  "SleepTimerSetTrackEnd": "Sleep timer set for {0}: the music will stop at the end of the current track.",
   "SleepTimerUnitSecond": "one second",
   "SleepTimerUnitMinute": "one minute",
   "SleepTimerUnitMinutes": "{0} minutes",

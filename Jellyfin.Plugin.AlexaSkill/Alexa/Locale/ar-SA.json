@@ -99,6 +99,7 @@
   "RecommendPlayingSsml": "إليك توصية لك<break time=\"300ms\"/>جاري تشغيل {0}",
   "DidNotCatchSleepTimer": "لمدة كم أضبط مؤقت الإيقاف؟ قل مثلاً خمس دقائق أو ثلاثين ثانية أو نصف ساعة.",
   "SleepTimerSetFor": "تم ضبط مؤقت الإيقاف على {0}. سيتوقف التشغيل عندها.",
+  "SleepTimerSetTrackEnd": "تم ضبط مؤقت الإيقاف على {0}: سيتوقف تشغيل الموسيقى في نهاية المقطع الحالي.",
   "SleepTimerUnitSecond": "ثانية واحدة",
   "SleepTimerUnitMinute": "دقيقة واحدة",
   "SleepTimerUnitMinutes": "{0} دقائق",

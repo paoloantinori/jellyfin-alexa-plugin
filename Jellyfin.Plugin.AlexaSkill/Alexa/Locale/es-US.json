@@ -112,6 +112,7 @@
   "RecommendPlayingSsml": "Aquí tienes una recomendación<break time=\"300ms\"/>reproduciendo {0}",
   "DidNotCatchSleepTimer": "¿Para cuánto tiempo establezco el temporizador? Di por ejemplo cinco minutos, treinta segundos o media hora.",
   "SleepTimerSetFor": "Temporizador de apagado establecido para {0}. La reproducción se detendrá.",
+  "SleepTimerSetTrackEnd": "Temporizador de apagado establecido para {0}: la música se detendrá al terminar la canción actual.",
   "SleepTimerUnitSecond": "un segundo",
   "SleepTimerUnitMinute": "un minuto",
   "SleepTimerUnitMinutes": "{0} minutos",

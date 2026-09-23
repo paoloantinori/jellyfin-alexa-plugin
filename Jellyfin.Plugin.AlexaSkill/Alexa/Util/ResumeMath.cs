@@ -90,6 +90,8 @@ public static class ResumeMath
     /// <returns>The localized phrase, e.g. "trenta secondi" / "un minuto" / "2 ore".</returns>
     public static string FormatSpokenLargestUnit(TimeSpan duration, string locale)
     {
+        // Seconds arm first: sub-minute asks ("trenta secondi") speak seconds; the
+        // plural form reuses SecondsOnly.
         if (duration.TotalSeconds < 59.5)
         {
             int seconds = (int)Math.Round(duration.TotalSeconds, MidpointRounding.AwayFromZero);
@@ -98,18 +100,35 @@ public static class ResumeMath
                 seconds.ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
 
-        if (duration.TotalMinutes < 599.5)
+        double totalMinutes = duration.TotalMinutes;
+
+        // Whole-hour asks ("un'ora", "due ore") speak hours even though the ISO
+        // value is exact minutes; +-3 minutes tolerance keeps 57-63 minutes in the
+        // hours phrase while 45 or 90 minutes stay minutes.
+        if (totalMinutes >= 57)
         {
-            int minutes = (int)Math.Round(duration.TotalMinutes, MidpointRounding.AwayFromZero);
+            double hoursRounded = Math.Round(duration.TotalHours, MidpointRounding.AwayFromZero);
+            if (Math.Abs(totalMinutes - (hoursRounded * 60)) <= 3)
+            {
+                int hours = (int)hoursRounded;
+                return Locale.ResponseStrings.Get(
+                    hours == 1 ? "SleepTimerUnitHour" : "SleepTimerUnitHours", locale,
+                    hours.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            }
+        }
+
+        if (totalMinutes < 600)
+        {
+            int minutes = (int)Math.Round(totalMinutes, MidpointRounding.AwayFromZero);
             return Locale.ResponseStrings.Get(
                 minutes == 1 ? "SleepTimerUnitMinute" : "SleepTimerUnitMinutes", locale,
                 minutes.ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
 
-        int hours = (int)Math.Round(duration.TotalHours, MidpointRounding.AwayFromZero);
+        int fallbackHours = (int)Math.Round(duration.TotalHours, MidpointRounding.AwayFromZero);
         return Locale.ResponseStrings.Get(
-            hours == 1 ? "SleepTimerUnitHour" : "SleepTimerUnitHours", locale,
-            hours.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            fallbackHours == 1 ? "SleepTimerUnitHour" : "SleepTimerUnitHours", locale,
+            fallbackHours.ToString(System.Globalization.CultureInfo.InvariantCulture));
     }
 
     /// <summary>

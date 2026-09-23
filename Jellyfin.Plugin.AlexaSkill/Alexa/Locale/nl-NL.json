@@ -99,6 +99,7 @@
   "RecommendPlayingSsml": "Hier is een aanbeveling voor je<break time=\"300ms\"/>{0} wordt afgespeeld",
   "DidNotCatchSleepTimer": "Voor hoe lang stel ik de slaaptimer in? Zeg bijvoorbeeld vijf minuten, dertig seconden of een half uur.",
   "SleepTimerSetFor": "Slaaptimer ingesteld op {0}. Het afspelen stopt dan.",
+  "SleepTimerSetTrackEnd": "Slaaptimer ingesteld op {0}: de muziek stopt aan het einde van het huidige nummer.",
   "SleepTimerUnitSecond": "één seconde",
   "SleepTimerUnitMinute": "één minuut",
   "SleepTimerUnitMinutes": "{0} minuten",

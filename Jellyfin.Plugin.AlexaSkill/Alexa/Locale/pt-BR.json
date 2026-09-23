@@ -99,6 +99,7 @@
   "RecommendPlayingSsml": "Aqui está uma recomendação para você<break time=\"300ms\"/>tocando {0}",
   "DidNotCatchSleepTimer": "Por quanto tempo devo definir o timer de desligamento? Diga por exemplo cinco minutos, trinta segundos ou meia hora.",
   "SleepTimerSetFor": "Timer de desligamento definido para {0}. A reprodução vai parar.",
+  "SleepTimerSetTrackEnd": "Timer de desligamento definido para {0}: a música vai parar no fim da faixa atual.",
   "SleepTimerUnitSecond": "um segundo",
   "SleepTimerUnitMinute": "um minuto",
   "SleepTimerUnitMinutes": "{0} minutos",

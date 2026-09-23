@@ -99,6 +99,7 @@
   "RecommendPlayingSsml": "Here's a recommendation for you<break time=\"300ms\"/>playing {0}",
   "DidNotCatchSleepTimer": "How long should I set the sleep timer for? Say for example five minutes, thirty seconds, or half an hour.",
   "SleepTimerSetFor": "Sleep timer set for {0}. Playback will stop.",
+  "SleepTimerSetTrackEnd": "Sleep timer set for {0}: the music will stop at the end of the current track.",
   "SleepTimerUnitSecond": "one second",
   "SleepTimerUnitMinute": "one minute",
   "SleepTimerUnitMinutes": "{0} minutes",

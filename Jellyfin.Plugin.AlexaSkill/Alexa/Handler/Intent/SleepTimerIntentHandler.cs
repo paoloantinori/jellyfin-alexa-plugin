@@ -204,6 +204,23 @@ public class SleepTimerIntentHandler : BaseHandler
             }
         };
 
+        // JF-618 platform-truth (live 2026-09-23, log corr f560baa9): the sleep
+        // deadline is enforced ONLY at track boundaries (PlaybackNearlyFinished);
+        // mid-track there are NO events, and AudioPlayer.Stop exists only inside a
+        // response, so a deadline inside the current track stops the music at that
+        // track's END. When the runtime is known and the deadline lands mid-track,
+        // say so instead of promising a mid-song stop the platform cannot deliver.
+        bool stopsAtTrackEnd = false;
+        long? runtimeTicks = session.FullNowPlayingItem.RunTimeTicks;
+        if (runtimeTicks is > 0)
+        {
+            long remainingTicks = runtimeTicks.Value - (offsetInMilliseconds * TimeSpan.TicksPerMillisecond);
+            long remainingMs = remainingTicks / TimeSpan.TicksPerMillisecond;
+            stopsAtTrackEnd = duration.Value <= TimeSpan.FromMilliseconds(remainingMs);
+        }
+
+        string confirmKey = stopsAtTrackEnd ? "SleepTimerSetTrackEnd" : "SleepTimerSetFor";
+
         return Task.FromResult<SkillResponse>(new SkillResponse
         {
             Version = "1.0",
@@ -211,7 +228,7 @@ public class SleepTimerIntentHandler : BaseHandler
             {
                 ShouldEndSession = true,
                 OutputSpeech = new PlainTextOutputSpeech(
-                    ResponseStrings.Get("SleepTimerSetFor", locale, Util.ResumeMath.FormatSpokenLargestUnit(duration.Value, locale))),
+                    ResponseStrings.Get(confirmKey, locale, Util.ResumeMath.FormatSpokenLargestUnit(duration.Value, locale))),
                 Directives = new List<IDirective> { directive }
             }
         });

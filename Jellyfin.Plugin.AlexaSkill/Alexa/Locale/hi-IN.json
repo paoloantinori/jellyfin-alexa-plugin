@@ -99,6 +99,7 @@
   "RecommendPlayingSsml": "यह रही आपके लिए एक सिफारिश<break time=\"300ms\"/>चला रहा हूँ {0}",
   "DidNotCatchSleepTimer": "स्लीप टाइमर कितने समय के लिए सेट करूँ? जैसे पाँच मिनट, तीस सेकंड या आधा घंटा बोलें।",
   "SleepTimerSetFor": "स्लीप टाइमर {0} के लिए सेट कर दिया गया है। प्लेबैक तब रुक जाएगा।",
+  "SleepTimerSetTrackEnd": "स्लीप टाइमर {0} के लिए सेट कर दिया गया है: म्यूज़िक मौजूदा गाने के अंत में रुक जाएगी।",
   "SleepTimerUnitSecond": "एक सेकंड",
   "SleepTimerUnitMinute": "एक मिनट",
   "SleepTimerUnitMinutes": "{0} मिनट",

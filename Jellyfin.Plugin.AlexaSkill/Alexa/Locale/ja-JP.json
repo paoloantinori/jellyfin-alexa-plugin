@@ -99,6 +99,7 @@
   "RecommendPlayingSsml": "おすすめです<break time=\"300ms\"/>{0} を再生します",
   "DidNotCatchSleepTimer": "スリープタイマーをどのくらいに設定しますか？5分、30秒、30分などと言ってください。",
   "SleepTimerSetFor": "スリープタイマーを{0}に設定しました。再生はその時点で停止します。",
+  "SleepTimerSetTrackEnd": "スリープタイマーを{0}に設定しました。現在の曲の終わりで再生が止まります。",
   "SleepTimerUnitSecond": "1秒",
   "SleepTimerUnitMinute": "1分",
   "SleepTimerUnitMinutes": "{0}分",

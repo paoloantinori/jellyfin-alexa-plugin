@@ -99,6 +99,7 @@
   "RecommendPlayingSsml": "Hier ist eine Empfehlung für dich<break time=\"300ms\"/>spiele {0}",
   "DidNotCatchSleepTimer": "Für wie lange soll der Ausschalt-Timer gelten? Sag zum Beispiel fünf Minuten, dreißig Sekunden oder eine halbe Stunde.",
   "SleepTimerSetFor": "Ausschalt-Timer eingestellt für {0}. Die Wiedergabe wird gestoppt.",
+  "SleepTimerSetTrackEnd": "Ausschalt-Timer eingestellt für {0}: Die Musik stoppt am Ende des aktuellen Titels.",
   "SleepTimerUnitSecond": "eine Sekunde",
   "SleepTimerUnitMinute": "eine Minute",
   "SleepTimerUnitMinutes": "{0} Minuten",

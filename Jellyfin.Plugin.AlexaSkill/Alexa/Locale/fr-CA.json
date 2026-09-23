@@ -105,6 +105,7 @@
   "RecommendPlayingSsml": "Voici une recommandation pour vous<break time=\"300ms\"/>lecture de {0}",
   "DidNotCatchSleepTimer": "Pour combien de temps dois-je régler la minuterie ? Dis par exemple cinq minutes, trente secondes ou une demi-heure.",
   "SleepTimerSetFor": "Minuterie d'extinction définie pour {0}. La lecture s'arrêtera.",
+  "SleepTimerSetTrackEnd": "Minuterie d'extinction définie pour {0} : la musique s'arrêtera à la fin du titre en cours.",
   "SleepTimerUnitSecond": "une seconde",
   "SleepTimerUnitMinute": "une minute",
   "SleepTimerUnitMinutes": "{0} minutes",

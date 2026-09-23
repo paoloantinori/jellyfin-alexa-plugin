@@ -219,6 +219,53 @@ public class SleepTimerIntentHandlerTests : PluginTestBase
         Assert.DoesNotContain("1 minutes", speech.Text, StringComparison.Ordinal);
     }
 
+    // JF-618 platform truth (live log corr f560baa9): the deadline is enforced only
+    // at track boundaries; mid-track there are no events and no proactive Stop
+    // channel. When the deadline lands inside the current track, the confirmation
+    // says so instead of promising a mid-song stop.
+
+
+    [Fact]
+    public async Task HandleAsync_DeadlineInsideTrack_SpeaksTrackEndTruth()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(durationValue: "PT30S");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        // A 7-minute track 2 minutes in: 30 seconds cannot stop it mid-song.
+        var audioItem = new Audio { Name = "Test Song", Id = Guid.NewGuid(), RunTimeTicks = TimeSpan.FromMinutes(7).Ticks };
+        session.FullNowPlayingItem = audioItem;
+        session.PlayState = new PlayerStateInfo { PositionTicks = TimeSpan.FromMinutes(2).Ticks };
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response!.OutputSpeech);
+        Assert.Contains("30 seconds", speech.Text, StringComparison.Ordinal);
+        Assert.Contains("end of the current track", speech.Text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task HandleAsync_DeadlineBeyondTrack_SpeaksPlainSet()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(durationValue: "PT2H");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        var audioItem = new Audio { Name = "Test Song", Id = Guid.NewGuid(), RunTimeTicks = TimeSpan.FromMinutes(7).Ticks };
+        session.FullNowPlayingItem = audioItem;
+        session.PlayState = new PlayerStateInfo { PositionTicks = TimeSpan.FromMinutes(2).Ticks };
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response!.OutputSpeech);
+        Assert.Contains("2 hours", speech.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("end of the current track", speech.Text, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task HandleAsync_ZeroDuration_CancelsTimer()
     {
