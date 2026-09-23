@@ -224,6 +224,7 @@ SLOT_HINTS = {
         "seek_amount": "number", "seek_direction": "forward or back",
         "seek_unit": "seconds or minutes", "position_hours": "hours",
         "position_minutes": "minutes", "position_seconds": "seconds",
+            "sleep_duration": "duration (5 minutes, 30 seconds, half an hour)"
     },
     "it": {
         "song_query": "titolo del brano",
@@ -250,6 +251,7 @@ SLOT_HINTS = {
         "seek_amount": "quantità", "seek_direction": "avanti o indietro",
         "seek_unit": "secondi o minuti", "position_hours": "ore",
         "position_minutes": "minuti", "position_seconds": "secondi",
+            "sleep_duration": "durata (5 minuti, 30 secondi, mezz'ora)"
     },
     "de": {
         "song_query": "Songtitel",
@@ -276,6 +278,7 @@ SLOT_HINTS = {
         "seek_amount": "Anzahl", "seek_direction": "vor oder zurück",
         "seek_unit": "Sekunden oder Minuten", "position_hours": "Stunden",
         "position_minutes": "Minuten", "position_seconds": "Sekunden",
+            "sleep_duration": "Dauer (5 Minuten, 30 Sekunden, eine halbe Stunde)"
     },
     "es": {
         "song_query": "título de la canción",
@@ -304,6 +307,7 @@ SLOT_HINTS = {
         "seek_amount": "cantidad", "seek_direction": "adelante o atrás",
         "seek_unit": "segundos o minutos", "position_hours": "horas",
         "position_minutes": "minutos", "position_seconds": "segundos",
+            "sleep_duration": "duración (5 minutos, 30 segundos, media hora)"
     },
     "fr": {
         "song_query": "titre de la chanson",
@@ -332,6 +336,7 @@ SLOT_HINTS = {
         "seek_amount": "quantité", "seek_direction": "en avant ou en arrière",
         "seek_unit": "secondes ou minutes", "position_hours": "heures",
         "position_minutes": "minutes", "position_seconds": "secondes",
+            "sleep_duration": "durée (5 minutes, 30 secondes, une demi-heure)"
     },
     "pt": {
         "song_query": "título da música",
@@ -358,6 +363,7 @@ SLOT_HINTS = {
         "seek_amount": "quantidade", "seek_direction": "avançar ou voltar",
         "seek_unit": "segundos ou minutos", "position_hours": "horas",
         "position_minutes": "minutos", "position_seconds": "segundos",
+            "sleep_duration": "duração (5 minutos, 30 segundos, meia hora)"
     },
     "nl": {
         "song_query": "nummer",
@@ -386,6 +392,7 @@ SLOT_HINTS = {
         "seek_amount": "aantal", "seek_direction": "vooruit of terug",
         "seek_unit": "seconden of minuten", "position_hours": "uren",
         "position_minutes": "minuten", "position_seconds": "seconden",
+            "sleep_duration": "duur (5 minuten, 30 seconden, een half uur)"
     },
     "ja": {
         "song_query": "曲名",
@@ -407,6 +414,7 @@ SLOT_HINTS = {
         "seek_direction": "前または後ろ", "seek_unit": "秒または分",
         "position_hours": "時間", "position_minutes": "分",
         "position_seconds": "秒",
+            "sleep_duration": "時間（5分、30秒、30分）"
     },
     "hi": {
         "song_query": "गाने का नाम",
@@ -432,6 +440,7 @@ SLOT_HINTS = {
         "seek_amount": "संख्या", "seek_direction": "आगे या पीछे",
         "seek_unit": "सेकंड या मिनट", "position_hours": "घंटे",
         "position_minutes": "मिनट", "position_seconds": "सेकंड",
+            "sleep_duration": "अवधि (5 मिनट, 30 सेकंड, आधा घंटा)"
     },
     "ar": {
         "song_query": "عنوان الأغنية",
@@ -457,6 +466,7 @@ SLOT_HINTS = {
         "seek_amount": "عدد", "seek_direction": "للأمام أو للخلف",
         "seek_unit": "ثوانٍ أو دقائق", "position_hours": "ساعات",
         "position_minutes": "دقائق", "position_seconds": "ثوانٍ",
+            "sleep_duration": "المدة (5 دقائق، 30 ثانية، نصف ساعة)"
     },
 }
 

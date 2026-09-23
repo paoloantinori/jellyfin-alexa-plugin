@@ -576,15 +576,15 @@
         "name": "SleepTimerIntent",
         "slots": [
           {
-            "name": "duration_minutes",
-            "type": "AMAZON.NUMBER"
+            "name": "sleep_duration",
+            "type": "AMAZON.DURATION"
           }
         ],
         "samples": [
-          "{duration_minutes} 分後に止めて",
-          "スリープタイマー {duration_minutes} 分",
-          "{duration_minutes} 分後におやすみタイマー",
-          "{duration_minutes} 分でスリープタイマーをセットして"
+          "{sleep_duration} 後に止めて",
+          "スリープタイマー {sleep_duration}",
+          "{sleep_duration} 後におやすみタイマー",
+          "{sleep_duration} でスリープタイマーをセットして"
         ]
       },
       {
@@ -1545,8 +1545,8 @@
         "confirmationRequired": false,
         "slots": [
           {
-            "name": "duration_minutes",
-            "type": "AMAZON.NUMBER",
+            "name": "sleep_duration",
+            "type": "AMAZON.DURATION",
             "confirmationRequired": false,
             "elicitationRequired": false
           }

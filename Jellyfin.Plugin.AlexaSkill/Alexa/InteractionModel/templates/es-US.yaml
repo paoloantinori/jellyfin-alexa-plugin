@@ -434,13 +434,13 @@ intents:
       - recomienda {media_type}
   - name: SleepTimerIntent
     slots:
-      - name: duration_minutes
-        type: AMAZON.NUMBER
+      - name: sleep_duration
+        type: AMAZON.DURATION
     samples:
-      - detener en {duration_minutes} minutos
-      - temporizador {duration_minutes} minutos
-      - parar después de {duration_minutes} minutos
-      - apagar en {duration_minutes} minutos
+      - detener en {sleep_duration}
+      - temporizador {sleep_duration}
+      - parar después de {sleep_duration}
+      - apagar en {sleep_duration}
   - name: SetReminderIntent
     slots:
       - name: duration_minutes
@@ -949,8 +949,8 @@ dialog:
     - name: SleepTimerIntent
       confirmationRequired: false
       slots:
-        - name: duration_minutes
-          type: AMAZON.NUMBER
+        - name: sleep_duration
+          type: AMAZON.DURATION
           confirmationRequired: false
           elicitationRequired: false
     - name: SetReminderIntent

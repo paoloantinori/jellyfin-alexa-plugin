@@ -33047,7 +33047,7 @@
           {
             "source": "Idle",
             "target": "Sleep",
-            "label": "أوقف التشغيل بعد {n} دقيقة",
+            "label": "أوقف التشغيل بعد {sleep_duration}",
             "style": "solid"
           },
           {
@@ -33368,7 +33368,7 @@
           {
             "source": "Idle",
             "target": "Sleep",
-            "label": "stoppe in {duration_minutes} minuten",
+            "label": "stoppe in {sleep_duration}",
             "style": "solid"
           },
           {
@@ -33689,7 +33689,7 @@
           {
             "source": "Idle",
             "target": "Sleep",
-            "label": "set a sleep timer for {n} minutes",
+            "label": "set a sleep timer for {sleep_duration}",
             "style": "solid"
           },
           {
@@ -34010,7 +34010,7 @@
           {
             "source": "Idle",
             "target": "Sleep",
-            "label": "set a sleep timer for {n} minutes",
+            "label": "set a sleep timer for {sleep_duration}",
             "style": "solid"
           },
           {
@@ -34331,7 +34331,7 @@
           {
             "source": "Idle",
             "target": "Sleep",
-            "label": "set a sleep timer for {n} minutes",
+            "label": "set a sleep timer for {sleep_duration}",
             "style": "solid"
           },
           {
@@ -34652,7 +34652,7 @@
           {
             "source": "Idle",
             "target": "Sleep",
-            "label": "set a sleep timer for {n} minutes",
+            "label": "set a sleep timer for {sleep_duration}",
             "style": "solid"
           },
           {
@@ -34973,7 +34973,7 @@
           {
             "source": "Idle",
             "target": "Sleep",
-            "label": "set a sleep timer for {n} minutes",
+            "label": "set a sleep timer for {sleep_duration}",
             "style": "solid"
           },
           {
@@ -35294,7 +35294,7 @@
           {
             "source": "Idle",
             "target": "Sleep",
-            "label": "detener en {duration_minutes} minutos",
+            "label": "detener en {sleep_duration}",
             "style": "solid"
           },
           {
@@ -35615,7 +35615,7 @@
           {
             "source": "Idle",
             "target": "Sleep",
-            "label": "detener en {duration_minutes} minutos",
+            "label": "detener en {sleep_duration}",
             "style": "solid"
           },
           {
@@ -35936,7 +35936,7 @@
           {
             "source": "Idle",
             "target": "Sleep",
-            "label": "detener en {duration_minutes} minutos",
+            "label": "detener en {sleep_duration}",
             "style": "solid"
           },
           {
@@ -36257,7 +36257,7 @@
           {
             "source": "Idle",
             "target": "Sleep",
-            "label": "arrêter dans {duration_minutes} minutes",
+            "label": "arrêter dans {sleep_duration}",
             "style": "solid"
           },
           {
@@ -36578,7 +36578,7 @@
           {
             "source": "Idle",
             "target": "Sleep",
-            "label": "arrêter dans {duration_minutes} minutes",
+            "label": "arrêter dans {sleep_duration}",
             "style": "solid"
           },
           {
@@ -36899,7 +36899,7 @@
           {
             "source": "Idle",
             "target": "Sleep",
-            "label": "{duration_minutes} मिनट में बंद करो",
+            "label": "{sleep_duration} में बंद करो",
             "style": "solid"
           },
           {
@@ -37220,7 +37220,7 @@
           {
             "source": "Idle",
             "target": "Sleep",
-            "label": "Imposta timer {duration_minutes}",
+            "label": "Imposta timer {sleep_duration}",
             "style": "solid"
           },
           {
@@ -37541,7 +37541,7 @@
           {
             "source": "Idle",
             "target": "Sleep",
-            "label": "{duration_minutes} 分後に止めて",
+            "label": "{sleep_duration} 後に止めて",
             "style": "solid"
           },
           {
@@ -37862,7 +37862,7 @@
           {
             "source": "Idle",
             "target": "Sleep",
-            "label": "stop met afspelen over {duration_minutes} minuten",
+            "label": "stop met afspelen over {sleep_duration}",
             "style": "solid"
           },
           {
@@ -38183,7 +38183,7 @@
           {
             "source": "Idle",
             "target": "Sleep",
-            "label": "parar de tocar em {duration_minutes} minutos",
+            "label": "parar de tocar em {sleep_duration}",
             "style": "solid"
           },
           {

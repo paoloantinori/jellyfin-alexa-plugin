@@ -58,6 +58,7 @@ Placeholder legend:
 | `<الوقت (الساعة السابعة)>` | `{reminder_time}` |
 | `<رقم الموسم>` | `{season_number}` |
 | `<اسم المسلسل>` | `{series_name}` |
+| `<المدة (5 دقائق، 30 ثانية، نصف ساعة)>` | `{sleep_duration}` |
 | `<اسم الأغنية>` | `{song}` |
 | `<عنوان الأغنية>` | `{song_query}` |
 | `<اسم محطة الراديو>` | `{station}` |
@@ -529,10 +530,10 @@ Complete phrase list (314 phrases across 64 commands):
 
 **Set a sleep timer**
 
-- `أوقف التشغيل بعد <عدد الدقائق> دقيقة`
-- `اضبط مؤقت النوم لـ <عدد الدقائق> دقيقة`
-- `مؤقت نوم <عدد الدقائق> دقيقة`
-- `أوقف بعد <عدد الدقائق> دقيقة`
+- `أوقف التشغيل بعد <المدة (5 دقائق، 30 ثانية، نصف ساعة)>`
+- `اضبط مؤقت النوم لـ <المدة (5 دقائق، 30 ثانية، نصف ساعة)>`
+- `مؤقت نوم <المدة (5 دقائق، 30 ثانية، نصف ساعة)>`
+- `أوقف بعد <المدة (5 دقائق، 30 ثانية، نصف ساعة)>`
 
 **Set a reminder**
 
@@ -597,6 +598,7 @@ Placeholder legend:
 | `<tijdstip (om 7 uur)>` | `{reminder_time}` |
 | `<seizoensnummer>` | `{season_number}` |
 | `<naam van de serie>` | `{series_name}` |
+| `<duur (5 minuten, 30 seconden, een half uur)>` | `{sleep_duration}` |
 | `<titel van het nummer>` | `{song}` |
 | `<nummer>` | `{song_query}` |
 | `<naam van het radiostation>` | `{station}` |
@@ -1129,11 +1131,11 @@ Complete phrase list (377 phrases across 64 commands):
 
 **Set a sleep timer**
 
-- `stop met afspelen over <aantal minuten> minuten`
-- `stel een slaaptimer in voor <aantal minuten> minuten`
-- `slaaptimer <aantal minuten> minuten`
-- `stop na <aantal minuten> minuten`
-- `zet uit over <aantal minuten> minuten`
+- `stop met afspelen over <duur (5 minuten, 30 seconden, een half uur)>`
+- `stel een slaaptimer in voor <duur (5 minuten, 30 seconden, een half uur)>`
+- `slaaptimer <duur (5 minuten, 30 seconden, een half uur)>`
+- `stop na <duur (5 minuten, 30 seconden, een half uur)>`
+- `zet uit over <duur (5 minuten, 30 seconden, een half uur)>`
 
 **Set a reminder**
 
@@ -1199,6 +1201,7 @@ Placeholder legend:
 | `<time (7 pm)>` | `{reminder_time}` |
 | `<season number>` | `{season_number}` |
 | `<series name>` | `{series_name}` |
+| `<duration (5 minutes, 30 seconds, half an hour)>` | `{sleep_duration}` |
 | `<song title>` | `{song}` |
 | `<song title>` | `{song_query}` |
 | `<radio station name>` | `{station}` |
@@ -1820,12 +1823,12 @@ Complete phrase list (469 phrases across 64 commands):
 
 **Set a sleep timer**
 
-- `stop playing in <number of minutes> minutes`
-- `set a sleep timer for <number of minutes> minutes`
-- `sleep timer <number of minutes> minutes`
-- `stop after <number of minutes> minutes`
-- `turn off in <number of minutes> minutes`
-- `set sleep timer <number of minutes>`
+- `stop playing in <duration (5 minutes, 30 seconds, half an hour)>`
+- `set a sleep timer for <duration (5 minutes, 30 seconds, half an hour)>`
+- `sleep timer <duration (5 minutes, 30 seconds, half an hour)>`
+- `stop after <duration (5 minutes, 30 seconds, half an hour)>`
+- `turn off in <duration (5 minutes, 30 seconds, half an hour)>`
+- `set sleep timer <duration (5 minutes, 30 seconds, half an hour)>`
 
 **Set a reminder**
 
@@ -1892,6 +1895,7 @@ Placeholder legend:
 | `<time (7 pm)>` | `{reminder_time}` |
 | `<season number>` | `{season_number}` |
 | `<series name>` | `{series_name}` |
+| `<duration (5 minutes, 30 seconds, half an hour)>` | `{sleep_duration}` |
 | `<song title>` | `{song}` |
 | `<song title>` | `{song_query}` |
 | `<radio station name>` | `{station}` |
@@ -2506,12 +2510,12 @@ Complete phrase list (462 phrases across 64 commands):
 
 **Set a sleep timer**
 
-- `stop playing in <number of minutes> minutes`
-- `set a sleep timer for <number of minutes> minutes`
-- `sleep timer <number of minutes> minutes`
-- `stop after <number of minutes> minutes`
-- `turn off in <number of minutes> minutes`
-- `set sleep timer <number of minutes>`
+- `stop playing in <duration (5 minutes, 30 seconds, half an hour)>`
+- `set a sleep timer for <duration (5 minutes, 30 seconds, half an hour)>`
+- `sleep timer <duration (5 minutes, 30 seconds, half an hour)>`
+- `stop after <duration (5 minutes, 30 seconds, half an hour)>`
+- `turn off in <duration (5 minutes, 30 seconds, half an hour)>`
+- `set sleep timer <duration (5 minutes, 30 seconds, half an hour)>`
 
 **Set a reminder**
 
@@ -2578,6 +2582,7 @@ Placeholder legend:
 | `<time (7 pm)>` | `{reminder_time}` |
 | `<season number>` | `{season_number}` |
 | `<series name>` | `{series_name}` |
+| `<duration (5 minutes, 30 seconds, half an hour)>` | `{sleep_duration}` |
 | `<song title>` | `{song}` |
 | `<song title>` | `{song_query}` |
 | `<radio station name>` | `{station}` |
@@ -3288,12 +3293,12 @@ Complete phrase list (558 phrases across 64 commands):
 
 **Set a sleep timer**
 
-- `stop playing in <number of minutes> minutes`
-- `set a sleep timer for <number of minutes> minutes`
-- `sleep timer <number of minutes> minutes`
-- `stop after <number of minutes> minutes`
-- `turn off in <number of minutes> minutes`
-- `set sleep timer <number of minutes>`
+- `stop playing in <duration (5 minutes, 30 seconds, half an hour)>`
+- `set a sleep timer for <duration (5 minutes, 30 seconds, half an hour)>`
+- `sleep timer <duration (5 minutes, 30 seconds, half an hour)>`
+- `stop after <duration (5 minutes, 30 seconds, half an hour)>`
+- `turn off in <duration (5 minutes, 30 seconds, half an hour)>`
+- `set sleep timer <duration (5 minutes, 30 seconds, half an hour)>`
 
 **Set a reminder**
 
@@ -3360,6 +3365,7 @@ Placeholder legend:
 | `<time (7 pm)>` | `{reminder_time}` |
 | `<season number>` | `{season_number}` |
 | `<series name>` | `{series_name}` |
+| `<duration (5 minutes, 30 seconds, half an hour)>` | `{sleep_duration}` |
 | `<song title>` | `{song}` |
 | `<song title>` | `{song_query}` |
 | `<radio station name>` | `{station}` |
@@ -3975,12 +3981,12 @@ Complete phrase list (463 phrases across 64 commands):
 
 **Set a sleep timer**
 
-- `stop playing in <number of minutes> minutes`
-- `set a sleep timer for <number of minutes> minutes`
-- `sleep timer <number of minutes> minutes`
-- `stop after <number of minutes> minutes`
-- `turn off in <number of minutes> minutes`
-- `set sleep timer <number of minutes>`
+- `stop playing in <duration (5 minutes, 30 seconds, half an hour)>`
+- `set a sleep timer for <duration (5 minutes, 30 seconds, half an hour)>`
+- `sleep timer <duration (5 minutes, 30 seconds, half an hour)>`
+- `stop after <duration (5 minutes, 30 seconds, half an hour)>`
+- `turn off in <duration (5 minutes, 30 seconds, half an hour)>`
+- `set sleep timer <duration (5 minutes, 30 seconds, half an hour)>`
 
 **Set a reminder**
 
@@ -4053,6 +4059,7 @@ Placeholder legend:
 | `<forward or back>` | `{seek_direction}` |
 | `<seconds or minutes>` | `{seek_unit}` |
 | `<series name>` | `{series_name}` |
+| `<duration (5 minutes, 30 seconds, half an hour)>` | `{sleep_duration}` |
 | `<song title>` | `{song}` |
 | `<song title>` | `{song_query}` |
 | `<radio station name>` | `{station}` |
@@ -4785,12 +4792,12 @@ Complete phrase list (573 phrases across 66 commands):
 
 **Set a sleep timer**
 
-- `stop playing in <number of minutes> minutes`
-- `set a sleep timer for <number of minutes> minutes`
-- `sleep timer <number of minutes> minutes`
-- `stop after <number of minutes> minutes`
-- `turn off in <number of minutes> minutes`
-- `set sleep timer <number of minutes>`
+- `stop playing in <duration (5 minutes, 30 seconds, half an hour)>`
+- `set a sleep timer for <duration (5 minutes, 30 seconds, half an hour)>`
+- `sleep timer <duration (5 minutes, 30 seconds, half an hour)>`
+- `stop after <duration (5 minutes, 30 seconds, half an hour)>`
+- `turn off in <duration (5 minutes, 30 seconds, half an hour)>`
+- `set sleep timer <duration (5 minutes, 30 seconds, half an hour)>`
 
 **Set a reminder**
 
@@ -4857,6 +4864,7 @@ Placeholder legend:
 | `<heure (à 19 heures)>` | `{reminder_time}` |
 | `<numéro de saison>` | `{season_number}` |
 | `<nom de la série>` | `{series_name}` |
+| `<durée (5 minutes, 30 secondes, une demi-heure)>` | `{sleep_duration}` |
 | `<titre de la chanson>` | `{song}` |
 | `<titre de la chanson>` | `{song_query}` |
 | `<nom de la station de radio>` | `{station}` |
@@ -5445,10 +5453,10 @@ Complete phrase list (425 phrases across 67 commands):
 
 **Set a sleep timer**
 
-- `arrêter dans <nombre de minutes> minutes`
-- `minuterie <nombre de minutes> minutes`
-- `arrêter après <nombre de minutes> minutes`
-- `éteindre dans <nombre de minutes> minutes`
+- `arrêter dans <durée (5 minutes, 30 secondes, une demi-heure)>`
+- `minuterie <durée (5 minutes, 30 secondes, une demi-heure)>`
+- `arrêter après <durée (5 minutes, 30 secondes, une demi-heure)>`
+- `éteindre dans <durée (5 minutes, 30 secondes, une demi-heure)>`
 
 **Set a reminder**
 
@@ -5515,6 +5523,7 @@ Placeholder legend:
 | `<heure (à 19 heures)>` | `{reminder_time}` |
 | `<numéro de saison>` | `{season_number}` |
 | `<nom de la série>` | `{series_name}` |
+| `<durée (5 minutes, 30 secondes, une demi-heure)>` | `{sleep_duration}` |
 | `<titre de la chanson>` | `{song}` |
 | `<titre de la chanson>` | `{song_query}` |
 | `<nom de la station de radio>` | `{station}` |
@@ -6114,10 +6123,10 @@ Complete phrase list (436 phrases across 67 commands):
 
 **Set a sleep timer**
 
-- `arrêter dans <nombre de minutes> minutes`
-- `minuterie <nombre de minutes> minutes`
-- `arrêter après <nombre de minutes> minutes`
-- `éteindre dans <nombre de minutes> minutes`
+- `arrêter dans <durée (5 minutes, 30 secondes, une demi-heure)>`
+- `minuterie <durée (5 minutes, 30 secondes, une demi-heure)>`
+- `arrêter après <durée (5 minutes, 30 secondes, une demi-heure)>`
+- `éteindre dans <durée (5 minutes, 30 secondes, une demi-heure)>`
 
 **Set a reminder**
 
@@ -6184,6 +6193,7 @@ Placeholder legend:
 | `<Uhrzeit (um 19 Uhr)>` | `{reminder_time}` |
 | `<Staffelnummer>` | `{season_number}` |
 | `<Name der Serie>` | `{series_name}` |
+| `<Dauer (5 Minuten, 30 Sekunden, eine halbe Stunde)>` | `{sleep_duration}` |
 | `<Titel des Liedes>` | `{song}` |
 | `<Songtitel>` | `{song_query}` |
 | `<Name des Radiosenders>` | `{station}` |
@@ -6792,10 +6802,10 @@ Complete phrase list (445 phrases across 67 commands):
 
 **Set a sleep timer**
 
-- `stoppe in <Anzahl Minuten> minuten`
-- `schlaf-timer <Anzahl Minuten> minuten`
-- `stoppe nach <Anzahl Minuten> minuten`
-- `ausschalten in <Anzahl Minuten> minuten`
+- `stoppe in <Dauer (5 Minuten, 30 Sekunden, eine halbe Stunde)>`
+- `schlaf-timer <Dauer (5 Minuten, 30 Sekunden, eine halbe Stunde)>`
+- `stoppe nach <Dauer (5 Minuten, 30 Sekunden, eine halbe Stunde)>`
+- `ausschalten in <Dauer (5 Minuten, 30 Sekunden, eine halbe Stunde)>`
 
 **Set a reminder**
 
@@ -6862,6 +6872,7 @@ Placeholder legend:
 | `<समय (शाम 7 बजे)>` | `{reminder_time}` |
 | `<सीज़न नंबर>` | `{season_number}` |
 | `<सीरीज़ का नाम>` | `{series_name}` |
+| `<अवधि (5 मिनट, 30 सेकंड, आधा घंटा)>` | `{sleep_duration}` |
 | `<गाने का नाम>` | `{song}` |
 | `<गाने का नाम>` | `{song_query}` |
 | `<रेडियो स्टेशन का नाम>` | `{station}` |
@@ -7352,10 +7363,10 @@ Complete phrase list (334 phrases across 64 commands):
 
 **Set a sleep timer**
 
-- `<मिनट की संख्या> मिनट में बंद करो`
-- `स्लीप टाइमर <मिनट की संख्या> मिनट सेट करो`
-- `स्लीप टाइमर <मिनट की संख्या> मिनट`
-- `<मिनट की संख्या> मिनट बाद बंद करो`
+- `<अवधि (5 मिनट, 30 सेकंड, आधा घंटा)> में बंद करो`
+- `स्लीप टाइमर <अवधि (5 मिनट, 30 सेकंड, आधा घंटा)> सेट करो`
+- `स्लीप टाइमर <अवधि (5 मिनट, 30 सेकंड, आधा घंटा)>`
+- `<अवधि (5 मिनट, 30 सेकंड, आधा घंटा)> बाद बंद करो`
 
 **Set a reminder**
 
@@ -7422,6 +7433,7 @@ Placeholder legend:
 | `<ora (alle sette)>` | `{reminder_time}` |
 | `<numero della stagione>` | `{season_number}` |
 | `<nome della serie>` | `{series_name}` |
+| `<durata (5 minuti, 30 secondi, mezz'ora)>` | `{sleep_duration}` |
 | `<titolo del brano>` | `{song}` |
 | `<titolo del brano>` | `{song_query}` |
 | `<nome della stazione radio>` | `{station}` |
@@ -9085,10 +9097,10 @@ Complete phrase list (1496 phrases across 67 commands):
 
 **Set a sleep timer**
 
-- `Imposta timer <numero di minuti>`
-- `Timer per dormire <numero di minuti>`
-- `Spegimento automatico <numero di minuti>`
-- `Ferma dopo <numero di minuti>`
+- `Imposta timer <durata (5 minuti, 30 secondi, mezz'ora)>`
+- `Timer per dormire <durata (5 minuti, 30 secondi, mezz'ora)>`
+- `Spegimento automatico <durata (5 minuti, 30 secondi, mezz'ora)>`
+- `Ferma dopo <durata (5 minuti, 30 secondi, mezz'ora)>`
 
 **Set a reminder**
 
@@ -9154,6 +9166,7 @@ Placeholder legend:
 | `<時刻 (7時)>` | `{reminder_time}` |
 | `<シーズン番号>` | `{season_number}` |
 | `<シリーズ名>` | `{series_name}` |
+| `<時間（5分、30秒、30分）>` | `{sleep_duration}` |
 | `<曲名>` | `{song}` |
 | `<曲名>` | `{song_query}` |
 | `<ラジオ局名>` | `{station}` |
@@ -9622,10 +9635,10 @@ Complete phrase list (312 phrases across 64 commands):
 
 **Set a sleep timer**
 
-- `<分数> 分後に止めて`
-- `スリープタイマー <分数> 分`
-- `<分数> 分後におやすみタイマー`
-- `<分数> 分でスリープタイマーをセットして`
+- `<時間（5分、30秒、30分）> 後に止めて`
+- `スリープタイマー <時間（5分、30秒、30分）>`
+- `<時間（5分、30秒、30分）> 後におやすみタイマー`
+- `<時間（5分、30秒、30分）> でスリープタイマーをセットして`
 
 **Set a reminder**
 
@@ -9691,6 +9704,7 @@ Placeholder legend:
 | `<hora (às sete)>` | `{reminder_time}` |
 | `<número da temporada>` | `{season_number}` |
 | `<nome da série>` | `{series_name}` |
+| `<duração (5 minutos, 30 segundos, meia hora)>` | `{sleep_duration}` |
 | `<título da música>` | `{song}` |
 | `<título da música>` | `{song_query}` |
 | `<nome da estação de rádio>` | `{station}` |
@@ -10234,12 +10248,12 @@ Complete phrase list (390 phrases across 64 commands):
 
 **Set a sleep timer**
 
-- `parar de tocar em <número de minutos> minutos`
-- `definir timer de sono para <número de minutos> minutos`
-- `timer de sono <número de minutos> minutos`
-- `parar após <número de minutos> minutos`
-- `desligar em <número de minutos> minutos`
-- `definir timer de sono <número de minutos>`
+- `parar de tocar em <duração (5 minutos, 30 segundos, meia hora)>`
+- `definir timer de sono para <duração (5 minutos, 30 segundos, meia hora)>`
+- `timer de sono <duração (5 minutos, 30 segundos, meia hora)>`
+- `parar após <duração (5 minutos, 30 segundos, meia hora)>`
+- `desligar em <duração (5 minutos, 30 segundos, meia hora)>`
+- `definir timer de sono <duração (5 minutos, 30 segundos, meia hora)>`
 
 **Set a reminder**
 
@@ -10306,6 +10320,7 @@ Placeholder legend:
 | `<hora (a las siete)>` | `{reminder_time}` |
 | `<número de temporada>` | `{season_number}` |
 | `<nombre de la serie>` | `{series_name}` |
+| `<duración (5 minutos, 30 segundos, media hora)>` | `{sleep_duration}` |
 | `<título de la canción>` | `{song}` |
 | `<título de la canción>` | `{song_query}` |
 | `<nombre de la emisora>` | `{station}` |
@@ -10880,10 +10895,10 @@ Complete phrase list (420 phrases across 64 commands):
 
 **Set a sleep timer**
 
-- `detener en <número de minutos> minutos`
-- `temporizador <número de minutos> minutos`
-- `parar después de <número de minutos> minutos`
-- `apagar en <número de minutos> minutos`
+- `detener en <duración (5 minutos, 30 segundos, media hora)>`
+- `temporizador <duración (5 minutos, 30 segundos, media hora)>`
+- `parar después de <duración (5 minutos, 30 segundos, media hora)>`
+- `apagar en <duración (5 minutos, 30 segundos, media hora)>`
 
 **Set a reminder**
 
@@ -10950,6 +10965,7 @@ Placeholder legend:
 | `<hora (a las siete)>` | `{reminder_time}` |
 | `<número de temporada>` | `{season_number}` |
 | `<nombre de la serie>` | `{series_name}` |
+| `<duración (5 minutos, 30 segundos, media hora)>` | `{sleep_duration}` |
 | `<título de la canción>` | `{song}` |
 | `<título de la canción>` | `{song_query}` |
 | `<nombre de la emisora>` | `{station}` |
@@ -11518,10 +11534,10 @@ Complete phrase list (414 phrases across 64 commands):
 
 **Set a sleep timer**
 
-- `detener en <número de minutos> minutos`
-- `temporizador <número de minutos> minutos`
-- `parar después de <número de minutos> minutos`
-- `apagar en <número de minutos> minutos`
+- `detener en <duración (5 minutos, 30 segundos, media hora)>`
+- `temporizador <duración (5 minutos, 30 segundos, media hora)>`
+- `parar después de <duración (5 minutos, 30 segundos, media hora)>`
+- `apagar en <duración (5 minutos, 30 segundos, media hora)>`
 
 **Set a reminder**
 
@@ -11588,6 +11604,7 @@ Placeholder legend:
 | `<hora (a las siete)>` | `{reminder_time}` |
 | `<número de temporada>` | `{season_number}` |
 | `<nombre de la serie>` | `{series_name}` |
+| `<duración (5 minutos, 30 segundos, media hora)>` | `{sleep_duration}` |
 | `<título de la canción>` | `{song}` |
 | `<título de la canción>` | `{song_query}` |
 | `<nombre de la emisora>` | `{station}` |
@@ -12150,10 +12167,10 @@ Complete phrase list (408 phrases across 64 commands):
 
 **Set a sleep timer**
 
-- `detener en <número de minutos> minutos`
-- `temporizador <número de minutos> minutos`
-- `parar después de <número de minutos> minutos`
-- `apagar en <número de minutos> minutos`
+- `detener en <duración (5 minutos, 30 segundos, media hora)>`
+- `temporizador <duración (5 minutos, 30 segundos, media hora)>`
+- `parar después de <duración (5 minutos, 30 segundos, media hora)>`
+- `apagar en <duración (5 minutos, 30 segundos, media hora)>`
 
 **Set a reminder**
 

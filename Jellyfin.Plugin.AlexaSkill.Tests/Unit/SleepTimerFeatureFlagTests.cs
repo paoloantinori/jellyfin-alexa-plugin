@@ -48,7 +48,7 @@ public class SleepTimerFeatureFlagTests : PluginTestBase, IDisposable
                 Name = "SleepTimerIntent",
                 Slots = new Dictionary<string, Slot>
                 {
-                    { "duration_minutes", new Slot { Value = minutes } }
+                    { "sleep_duration", new Slot { Value = minutes } }
                 }
             }
         };

@@ -594,15 +594,15 @@
         "name": "SleepTimerIntent",
         "slots": [
           {
-            "name": "duration_minutes",
-            "type": "AMAZON.NUMBER"
+            "name": "sleep_duration",
+            "type": "AMAZON.DURATION"
           }
         ],
         "samples": [
-          "{duration_minutes} मिनट में बंद करो",
-          "स्लीप टाइमर {duration_minutes} मिनट सेट करो",
-          "स्लीप टाइमर {duration_minutes} मिनट",
-          "{duration_minutes} मिनट बाद बंद करो"
+          "{sleep_duration} में बंद करो",
+          "स्लीप टाइमर {sleep_duration} सेट करो",
+          "स्लीप टाइमर {sleep_duration}",
+          "{sleep_duration} बाद बंद करो"
         ]
       },
       {
@@ -1577,8 +1577,8 @@
         "confirmationRequired": false,
         "slots": [
           {
-            "name": "duration_minutes",
-            "type": "AMAZON.NUMBER",
+            "name": "sleep_duration",
+            "type": "AMAZON.DURATION",
             "confirmationRequired": false,
             "elicitationRequired": false
           }

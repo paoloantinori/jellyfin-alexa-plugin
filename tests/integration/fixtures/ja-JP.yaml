@@ -65,7 +65,7 @@ tests:
   - utterance: "十分後に止めて"
     expected_intent: SleepTimerIntent
     expected_slots:
-      duration_minutes: {}
+      sleep_duration: {}
 
   # ------------------------------------------------------------------------
   # JF-399 English-inertia resolution (2026-09-12): FindSong/FindSongByArtist

@@ -614,15 +614,15 @@
         "name": "SleepTimerIntent",
         "slots": [
           {
-            "name": "duration_minutes",
-            "type": "AMAZON.NUMBER"
+            "name": "sleep_duration",
+            "type": "AMAZON.DURATION"
           }
         ],
         "samples": [
-          "stoppe in {duration_minutes} minuten",
-          "schlaf-timer {duration_minutes} minuten",
-          "stoppe nach {duration_minutes} minuten",
-          "ausschalten in {duration_minutes} minuten"
+          "stoppe in {sleep_duration}",
+          "schlaf-timer {sleep_duration}",
+          "stoppe nach {sleep_duration}",
+          "ausschalten in {sleep_duration}"
         ]
       },
       {
@@ -1766,8 +1766,8 @@
         "confirmationRequired": false,
         "slots": [
           {
-            "name": "duration_minutes",
-            "type": "AMAZON.NUMBER",
+            "name": "sleep_duration",
+            "type": "AMAZON.DURATION",
             "confirmationRequired": false,
             "elicitationRequired": false
           }

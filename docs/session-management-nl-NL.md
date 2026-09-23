@@ -47,7 +47,7 @@ graph TD
     TransferOK --> Playing
     NoTransfer --> Idle
 
-    Idle -->|"stop met afspelen over {duration_minutes} minuten"| Sleep["SleepTimerIntent<br/>Stoppen met afspelen inplannen"]
+    Idle -->|"stop met afspelen over {sleep_duration}"| Sleep["SleepTimerIntent<br/>Stoppen met afspelen inplannen"]
     Sleep --> Idle
 
     style Playing fill:#4CAF50,color:#fff

@@ -66,7 +66,7 @@ Invocation name: **"jellyfin player"**
 | Set Reminder | `ذكرني بعد {duration_minutes} دقيقة` · `ذكرني الساعة {reminder_time}` · `اضبط منبها بعد {duration_minutes} دقيقة` · `اضبط منبها الساعة {reminder_time}` |
 | Show More | `أظهر المزيد` · `المزيد` · `الصفحة التالية` · `استمر` · `ماذا أيضا` · `المزيد من النتائج` |
 | Shuffle Play | `شغل قائمة التشغيل {playlist} بشكل عشوائي` · `اخلط قائمة التشغيل {playlist}` · `شغل قائمة التشغيل {playlist} في وضع الخلط` |
-| Sleep Timer | `أوقف التشغيل بعد {duration_minutes} دقيقة` · `اضبط مؤقت النوم لـ {duration_minutes} دقيقة` · `مؤقت نوم {duration_minutes} دقيقة` · `أوقف بعد {duration_minutes} دقيقة` |
+| Sleep Timer | `أوقف التشغيل بعد {sleep_duration}` · `اضبط مؤقت النوم لـ {sleep_duration}` · `مؤقت نوم {sleep_duration}` · `أوقف بعد {sleep_duration}` |
 | Turn Radio Off | `أوقف وضع الراديو` · `عطّل وضع الراديو` · `وضع الراديو متوقف` · `أوقف الراديو` |
 | Turn Radio On | `شغل وضع الراديو` · `فعّل وضع الراديو` · `وضع الراديو قيد التشغيل` · `شغل الراديو` |
 | Unmark Favorite | `لم يعجبني هذا` · `لم يعجبني الفيديو` · `لم يعجبني الأغنية` · `أزل الفيديو من المفضلة` · `أزل الأغنية من المفضلة` |
@@ -124,7 +124,7 @@ Invocation name: **"jellyfin player"**
 | Set Reminder | `erinnere mich in {duration_minutes} minuten` · `erinnere mich um {reminder_time}` · `stelle eine erinnerung für {duration_minutes} minuten` · `setze eine erinnerung auf {reminder_time}` |
 | Show More | `zeig mehr` · `noch mehr` · `weiter` · `nächste seite` · `mehr ergebnisse` · `was gibt es noch` |
 | Shuffle Play | `spiele die Playlist {playlist} in zufälliger Reihenfolge` · `mische die Playlist {playlist}` · `spiele die Playlist {playlist} im Zufallsmodus` |
-| Sleep Timer | `stoppe in {duration_minutes} minuten` · `schlaf-timer {duration_minutes} minuten` · `stoppe nach {duration_minutes} minuten` · `ausschalten in {duration_minutes} minuten` |
+| Sleep Timer | `stoppe in {sleep_duration}` · `schlaf-timer {sleep_duration}` · `stoppe nach {sleep_duration}` · `ausschalten in {sleep_duration}` |
 | Turn Radio Off | `Schalte den Radiomodus aus` · `Deaktiviere den Radiomodus` · `Radiomodus aus` · `Schalte Radio aus` · `Deaktiviere Radio` · `Stoppe den Radiomodus` |
 | Turn Radio On | `Schalte den Radiomodus ein` · `Aktiviere den Radiomodus` · `Radiomodus an` · `Schalte Radio ein` · `Aktiviere Radio` |
 | Unmark Favorite | `Das gefaellt mir nicht` · `Das Video gefaellt mir nicht` · `Das Lied gefaellt mir nicht` · `Die Musik gefaellt mir nicht` · `Entferne das Video aus meinen Favoriten` · `Entferne das Lied aus meinen Favoriten` |
@@ -179,7 +179,7 @@ Invocation name: **"jellyfin player"**
 | Set Reminder | `remind me in {duration_minutes} minutes` · `remind me at {reminder_time}` · `set a reminder for {duration_minutes} minutes` · `set a reminder for {reminder_time}` |
 | Show More | `show more` · `next page` · `more results` · `see more` · `more` · `what else` |
 | Shuffle Play | `shuffle the playlist {playlist}` · `play the playlist {playlist} in shuffle mode` · `play the playlist {playlist} on shuffle` · `play {playlist} shuffled` |
-| Sleep Timer | `stop playing in {duration_minutes} minutes` · `set a sleep timer for {duration_minutes} minutes` · `sleep timer {duration_minutes} minutes` · `stop after {duration_minutes} minutes` · `turn off in {duration_minutes} minutes` · `set sleep timer {duration_minutes}` |
+| Sleep Timer | `stop playing in {sleep_duration}` · `set a sleep timer for {sleep_duration}` · `sleep timer {sleep_duration}` · `stop after {sleep_duration}` · `turn off in {sleep_duration}` · `set sleep timer {sleep_duration}` |
 | Turn Radio Off | `turn off radio mode` · `disable radio mode` · `radio mode off` · `turn off radio` · `disable radio` · `stop radio mode` |
 | Turn Radio On | `turn on radio mode` · `enable radio mode` · `radio mode on` · `turn on radio` · `enable radio` |
 | Unmark Favorite | `I don't like this` · `I don't like the video` · `I don't like song` · `I don't like music` · `Remove the video from my favorites` · `Remove the song from my favorites` |
@@ -234,7 +234,7 @@ Invocation name: **"jellyfin player"**
 | Set Reminder | `remind me in {duration_minutes} minutes` · `remind me at {reminder_time}` · `set a reminder for {duration_minutes} minutes` · `set a reminder for {reminder_time}` |
 | Show More | `show more` · `next page` · `more results` · `see more` · `more` · `what else` |
 | Shuffle Play | `shuffle the playlist {playlist}` · `play the playlist {playlist} in shuffle mode` · `play the playlist {playlist} on shuffle` · `play {playlist} shuffled` |
-| Sleep Timer | `stop playing in {duration_minutes} minutes` · `set a sleep timer for {duration_minutes} minutes` · `sleep timer {duration_minutes} minutes` · `stop after {duration_minutes} minutes` · `turn off in {duration_minutes} minutes` · `set sleep timer {duration_minutes}` |
+| Sleep Timer | `stop playing in {sleep_duration}` · `set a sleep timer for {sleep_duration}` · `sleep timer {sleep_duration}` · `stop after {sleep_duration}` · `turn off in {sleep_duration}` · `set sleep timer {sleep_duration}` |
 | Turn Radio Off | `turn off radio mode` · `disable radio mode` · `radio mode off` · `turn off radio` · `disable radio` · `stop radio mode` |
 | Turn Radio On | `turn on radio mode` · `enable radio mode` · `radio mode on` · `turn on radio` · `enable radio` |
 | Unmark Favorite | `I don't like this` · `I don't like the video` · `I don't like song` · `I don't like music` · `Remove the video from my favorites` · `Remove the song from my favorites` |
@@ -289,7 +289,7 @@ Invocation name: **"jellyfin player"**
 | Set Reminder | `remind me in {duration_minutes} minutes` · `remind me at {reminder_time}` · `set a reminder for {duration_minutes} minutes` · `set a reminder for {reminder_time}` |
 | Show More | `show more` · `next page` · `more results` · `see more` · `more` · `what else` |
 | Shuffle Play | `shuffle the playlist {playlist}` · `play the playlist {playlist} in shuffle mode` · `play the playlist {playlist} on shuffle` · `play {playlist} shuffled` |
-| Sleep Timer | `stop playing in {duration_minutes} minutes` · `set a sleep timer for {duration_minutes} minutes` · `sleep timer {duration_minutes} minutes` · `stop after {duration_minutes} minutes` · `turn off in {duration_minutes} minutes` · `set sleep timer {duration_minutes}` |
+| Sleep Timer | `stop playing in {sleep_duration}` · `set a sleep timer for {sleep_duration}` · `sleep timer {sleep_duration}` · `stop after {sleep_duration}` · `turn off in {sleep_duration}` · `set sleep timer {sleep_duration}` |
 | Turn Radio Off | `turn off radio mode` · `disable radio mode` · `radio mode off` · `turn off radio` · `disable radio` · `stop radio mode` |
 | Turn Radio On | `turn on radio mode` · `enable radio mode` · `radio mode on` · `turn on radio` · `enable radio` |
 | Unmark Favorite | `I don't like this` · `I don't like the video` · `I don't like song` · `I don't like music` · `Remove the video from my favorites` · `Remove the song from my favorites` |
@@ -344,7 +344,7 @@ Invocation name: **"jellyfin player"**
 | Set Reminder | `remind me in {duration_minutes} minutes` · `remind me at {reminder_time}` · `set a reminder for {duration_minutes} minutes` · `set a reminder for {reminder_time}` |
 | Show More | `show more` · `next page` · `more results` · `see more` · `more` · `what else` |
 | Shuffle Play | `shuffle the playlist {playlist}` · `play the playlist {playlist} in shuffle mode` · `play the playlist {playlist} on shuffle` · `play {playlist} shuffled` |
-| Sleep Timer | `stop playing in {duration_minutes} minutes` · `set a sleep timer for {duration_minutes} minutes` · `sleep timer {duration_minutes} minutes` · `stop after {duration_minutes} minutes` · `turn off in {duration_minutes} minutes` · `set sleep timer {duration_minutes}` |
+| Sleep Timer | `stop playing in {sleep_duration}` · `set a sleep timer for {sleep_duration}` · `sleep timer {sleep_duration}` · `stop after {sleep_duration}` · `turn off in {sleep_duration}` · `set sleep timer {sleep_duration}` |
 | Turn Radio Off | `turn off radio mode` · `disable radio mode` · `radio mode off` · `turn off radio` · `disable radio` · `stop radio mode` |
 | Turn Radio On | `turn on radio mode` · `enable radio mode` · `radio mode on` · `turn on radio` · `enable radio` |
 | Unmark Favorite | `I don't like this` · `I don't like the video` · `I don't like song` · `I don't like music` · `Remove the video from my favorites` · `Remove the song from my favorites` |
@@ -401,7 +401,7 @@ Invocation name: **"jellyfin player"**
 | Show More | `show more` · `next page` · `more results` · `see more` · `more` · `what else` |
 | Shuffle Play | `shuffle the playlist {playlist}` · `play the playlist {playlist} in shuffle mode` · `play the playlist {playlist} on shuffle` · `play {playlist} shuffled` |
 | Skip Forward Back | `skip forward {seek_amount} {seek_unit}` · `skip {seek_direction} {seek_amount} {seek_unit}` · `skip {seek_direction}` · `skip forward` · `skip {seek_amount} seconds` · `skip back {seek_amount} {seek_unit}` |
-| Sleep Timer | `stop playing in {duration_minutes} minutes` · `set a sleep timer for {duration_minutes} minutes` · `sleep timer {duration_minutes} minutes` · `stop after {duration_minutes} minutes` · `turn off in {duration_minutes} minutes` · `set sleep timer {duration_minutes}` |
+| Sleep Timer | `stop playing in {sleep_duration}` · `set a sleep timer for {sleep_duration}` · `sleep timer {sleep_duration}` · `stop after {sleep_duration}` · `turn off in {sleep_duration}` · `set sleep timer {sleep_duration}` |
 | Turn Radio Off | `turn off radio mode` · `disable radio mode` · `radio mode off` · `turn off radio` · `disable radio` · `stop radio mode` |
 | Turn Radio On | `turn on radio mode` · `enable radio mode` · `radio mode on` · `turn on radio` · `enable radio` |
 | Unmark Favorite | `I don't like this` · `I don't like the video` · `I don't like song` · `I don't like music` · `Remove the video from my favorites` · `Remove the song from my favorites` |
@@ -456,7 +456,7 @@ Invocation name: **"jellyfin player"**
 | Set Reminder | `recuérdame en {duration_minutes} minutos` · `recuérdame a las {reminder_time}` · `pon un recordatorio de {duration_minutes} minutos` · `crea un recordatorio para las {reminder_time}` |
 | Show More | `mostrar más` · `más resultados` · `siguiente` · `continúa` · `qué más` · `ver más` |
 | Shuffle Play | `reproduce la lista {playlist} en modo aleatorio` · `mezcla la lista {playlist}` · `reproduce la lista de reproducción {playlist} en modo aleatorio` |
-| Sleep Timer | `detener en {duration_minutes} minutos` · `temporizador {duration_minutes} minutos` · `parar después de {duration_minutes} minutos` · `apagar en {duration_minutes} minutos` |
+| Sleep Timer | `detener en {sleep_duration}` · `temporizador {sleep_duration}` · `parar después de {sleep_duration}` · `apagar en {sleep_duration}` |
 | Turn Radio Off | `Desactiva el modo radio` · `Apaga el modo radio` · `Modo radio apagado` · `Desactiva la radio` · `Apaga la radio` · `Detén el modo radio` |
 | Turn Radio On | `Activa el modo radio` · `Enciende el modo radio` · `Modo radio encendido` · `Activa la radio` · `Enciende la radio` |
 | Unmark Favorite | `No me gusta esto` · `No me gusta el vídeo` · `No me gusta la canción` · `No me gusta la música` · `Quita el vídeo de mis favoritos` · `Quita la canción de mis favoritos` |
@@ -511,7 +511,7 @@ Invocation name: **"jellyfin player"**
 | Set Reminder | `recuérdame en {duration_minutes} minutos` · `recuérdame a las {reminder_time}` · `pon un recordatorio de {duration_minutes} minutos` · `crea un recordatorio para las {reminder_time}` |
 | Show More | `mostrar más` · `más resultados` · `siguiente` · `continúa` · `qué más` · `ver más` |
 | Shuffle Play | `reproduce la lista {playlist} en modo aleatorio` · `mezcla la lista {playlist}` · `reproduce la lista de reproducción {playlist} en modo aleatorio` |
-| Sleep Timer | `detener en {duration_minutes} minutos` · `temporizador {duration_minutes} minutos` · `parar después de {duration_minutes} minutos` · `apagar en {duration_minutes} minutos` |
+| Sleep Timer | `detener en {sleep_duration}` · `temporizador {sleep_duration}` · `parar después de {sleep_duration}` · `apagar en {sleep_duration}` |
 | Turn Radio Off | `Desactiva el modo radio` · `Apaga el modo radio` · `Modo radio apagado` · `Desactiva la radio` · `Apaga la radio` · `Detén el modo radio` |
 | Turn Radio On | `Activa el modo radio` · `Enciende el modo radio` · `Modo radio encendido` · `Activa la radio` · `Enciende la radio` |
 | Unmark Favorite | `No me gusta esto` · `No me gusta el vídeo` · `No me gusta la canción` · `No me gusta la música` · `Quita el vídeo de mis favoritos` · `Quita la canción de mis favoritos` |
@@ -566,7 +566,7 @@ Invocation name: **"jellyfin player"**
 | Set Reminder | `recuérdame en {duration_minutes} minutos` · `recuérdame a las {reminder_time}` · `pon un recordatorio de {duration_minutes} minutos` · `crea un recordatorio para las {reminder_time}` |
 | Show More | `mostrar más` · `más resultados` · `siguiente` · `continúa` · `qué más` · `ver más` |
 | Shuffle Play | `reproduce la lista {playlist} en modo aleatorio` · `mezcla la lista {playlist}` · `reproduce la lista de reproducción {playlist} en modo aleatorio` |
-| Sleep Timer | `detener en {duration_minutes} minutos` · `temporizador {duration_minutes} minutos` · `parar después de {duration_minutes} minutos` · `apagar en {duration_minutes} minutos` |
+| Sleep Timer | `detener en {sleep_duration}` · `temporizador {sleep_duration}` · `parar después de {sleep_duration}` · `apagar en {sleep_duration}` |
 | Turn Radio Off | `Desactiva el modo radio` · `Apaga el modo radio` · `Modo radio apagado` · `Desactiva la radio` · `Apaga la radio` · `Detén el modo radio` |
 | Turn Radio On | `Activa el modo radio` · `Enciende el modo radio` · `Modo radio encendido` · `Activa la radio` · `Enciende la radio` |
 | Unmark Favorite | `No me gusta esto` · `No me gusta el vídeo` · `No me gusta la canción` · `No me gusta la música` · `Quita el vídeo de mis favoritos` · `Quita la canción de mis favoritos` |
@@ -624,7 +624,7 @@ Invocation name: **"jellyfin player"**
 | Set Reminder | `rappelle-moi dans {duration_minutes} minutes` · `rappelle-moi à {reminder_time}` · `mets un rappel de {duration_minutes} minutes` · `crée un rappel pour {reminder_time}` |
 | Show More | `montre plus` · `encore` · `plus de résultats` · `continuer` · `suivant` · `quoi d'autre` |
 | Shuffle Play | `lis la playlist {playlist} en mode aléatoire` · `mélange la playlist {playlist}` · `mets la playlist {playlist} en mode aléatoire` |
-| Sleep Timer | `arrêter dans {duration_minutes} minutes` · `minuterie {duration_minutes} minutes` · `arrêter après {duration_minutes} minutes` · `éteindre dans {duration_minutes} minutes` |
+| Sleep Timer | `arrêter dans {sleep_duration}` · `minuterie {sleep_duration}` · `arrêter après {sleep_duration}` · `éteindre dans {sleep_duration}` |
 | Turn Radio Off | `Désactive le mode radio` · `Éteins le mode radio` · `Mode radio désactivé` · `Désactive la radio` · `Éteins la radio` · `Arrête le mode radio` |
 | Turn Radio On | `Active le mode radio` · `Allume le mode radio` · `Mode radio activé` · `Active la radio` · `Allume la radio` |
 | Unmark Favorite | `Je n'aime pas ça` · `Je n'aime pas cette vidéo` · `Je n'aime pas cette chanson` · `Je n'aime pas cette musique` · `Retire la vidéo des favoris` · `Retire la chanson des favoris` |
@@ -682,7 +682,7 @@ Invocation name: **"jellyfin player"**
 | Set Reminder | `rappelle-moi dans {duration_minutes} minutes` · `rappelle-moi à {reminder_time}` · `mets un rappel de {duration_minutes} minutes` · `crée un rappel pour {reminder_time}` |
 | Show More | `montre plus` · `encore` · `plus de résultats` · `continuer` · `suivant` · `quoi d'autre` |
 | Shuffle Play | `lis la playlist {playlist} en mode aléatoire` · `mélange la playlist {playlist}` · `mets la playlist {playlist} en mode aléatoire` |
-| Sleep Timer | `arrêter dans {duration_minutes} minutes` · `minuterie {duration_minutes} minutes` · `arrêter après {duration_minutes} minutes` · `éteindre dans {duration_minutes} minutes` |
+| Sleep Timer | `arrêter dans {sleep_duration}` · `minuterie {sleep_duration}` · `arrêter après {sleep_duration}` · `éteindre dans {sleep_duration}` |
 | Turn Radio Off | `Désactive le mode radio` · `Éteins le mode radio` · `Mode radio désactivé` · `Désactive la radio` · `Éteins la radio` · `Arrête le mode radio` |
 | Turn Radio On | `Active le mode radio` · `Allume le mode radio` · `Mode radio activé` · `Active la radio` · `Allume la radio` |
 | Unmark Favorite | `Je n'aime pas ça` · `Je n'aime pas cette vidéo` · `Je n'aime pas cette chanson` · `Je n'aime pas cette musique` · `Retire la vidéo des favoris` · `Retire la chanson des favoris` |
@@ -737,7 +737,7 @@ Invocation name: **"jellyfin player"**
 | Set Reminder | `{duration_minutes} मिनट में मुझे याद दिलाओ` · `{reminder_time} पर मुझे याद दिलाओ` · `{duration_minutes} मिनट का रिमाइंडर सेट करो` · `{reminder_time} का रिमाइंडर सेट करो` |
 | Show More | `और दिखाओ` · `अगला पेज` · `और` · `जारी रखो` · `आगे` · `क्या और है` |
 | Shuffle Play | `प्लेलिस्ट {playlist} शफल में चलाओ` · `प्लेलिस्ट {playlist} शफल करो` |
-| Sleep Timer | `{duration_minutes} मिनट में बंद करो` · `स्लीप टाइमर {duration_minutes} मिनट सेट करो` · `स्लीप टाइमर {duration_minutes} मिनट` · `{duration_minutes} मिनट बाद बंद करो` |
+| Sleep Timer | `{sleep_duration} में बंद करो` · `स्लीप टाइमर {sleep_duration} सेट करो` · `स्लीप टाइमर {sleep_duration}` · `{sleep_duration} बाद बंद करो` |
 | Turn Radio Off | `रेडियो मोड बंद करो` · `रेडियो मोड डिसेबल करो` · `रेडियो मोड ऑफ` · `रेडियो बंद करो` · `रेडियो डिसेबल करो` |
 | Turn Radio On | `रेडियो मोड चालू करो` · `रेडियो मोड एनेबल करो` · `रेडियो मोड ऑन` · `रेडियो चालू करो` · `रेडियो एनेबल करो` |
 | Unmark Favorite | `मुझे यह पसंद नहीं है` · `मुझे वीडियो पसंद नहीं है` · `मुझे गाना पसंद नहीं है` · `मुझे म्यूज़िक पसंद नहीं है` · `वीडियो को पसंदीदा से हटाओ` · `गाने को पसंदीदा से हटाओ` |
@@ -795,7 +795,7 @@ Invocation name: **"mia collezione"**
 | Set Reminder | `Ricordami tra {duration_minutes} minuti` · `Ricordami alle {reminder_time}` · `Imposta un promemoria tra {duration_minutes} minuti` · `Imposta un promemoria per le {reminder_time}` |
 | Show More | `mostra di più` · `altra pagina` · `più risultati` · `vedi altro` · `altro` · `cos'altro` |
 | Shuffle Play | `Mescola la playlist {playlist}` · `Mescola playlist {playlist}` · `Riproduci la playlist {playlist} in modalità casuale` · `Riproduci la playlist {playlist} a caso` · `Suona la playlist {playlist} in modalità casuale` |
-| Sleep Timer | `Imposta timer {duration_minutes}` · `Timer per dormire {duration_minutes}` · `Spegimento automatico {duration_minutes}` · `Ferma dopo {duration_minutes}` |
+| Sleep Timer | `Imposta timer {sleep_duration}` · `Timer per dormire {sleep_duration}` · `Spegimento automatico {sleep_duration}` · `Ferma dopo {sleep_duration}` |
 | Turn Radio Off | `disattiva la radio` · `spegni la radio` · `disattiva modalità radio` · `modalità radio spenta` · `ferma riproduzione radio` · `radio spenta` |
 | Turn Radio On | `attiva la radio` · `accendi la radio` · `attiva modalità radio` · `modalità radio accesa` · `radio accesa` · `abilita radio` |
 | Unmark Favorite | `Rimuovi dai preferiti` · `Togli dai preferiti` · `Rimuovi questo dai preferiti` · `Togli questo dai preferiti` · `Non mi piace più` · `Non mi piace piu` |
@@ -850,7 +850,7 @@ Invocation name: **"jellyfin player"**
 | Set Reminder | `{duration_minutes} 分後にリマインドして` · `{reminder_time} にリマインドして` · `{duration_minutes} 分のリマインダーを設定して` · `{reminder_time} のリマインダーを設定して` |
 | Show More | `もっと見せて` · `次のページ` · `もっと` · `続き` · `他に何がある` · `もっと結果` |
 | Shuffle Play | `プレイリスト {playlist} をシャッフルで再生して` · `シャッフルでプレイリスト {playlist} を再生して` |
-| Sleep Timer | `{duration_minutes} 分後に止めて` · `スリープタイマー {duration_minutes} 分` · `{duration_minutes} 分後におやすみタイマー` · `{duration_minutes} 分でスリープタイマーをセットして` |
+| Sleep Timer | `{sleep_duration} 後に止めて` · `スリープタイマー {sleep_duration}` · `{sleep_duration} 後におやすみタイマー` · `{sleep_duration} でスリープタイマーをセットして` |
 | Turn Radio Off | `ラジオモードをオフにして` · `ラジオモードを無効にして` · `ラジオをオフにして` · `ラジオを無効にして` · `ラジオモードを止めて` |
 | Turn Radio On | `ラジオモードをオンにして` · `ラジオモードを有効にして` · `ラジオをオンにして` · `ラジオを有効にして` |
 | Unmark Favorite | `これ嫌い` · `ビデオ嫌い` · `曲嫌い` · `音楽嫌い` · `ビデオをお気に入りから削除して` · `曲をお気に入りから削除して` |
@@ -905,7 +905,7 @@ Invocation name: **"jellyfin player"**
 | Set Reminder | `herinner me over {duration_minutes} minuten` · `herinner me om {reminder_time}` · `stel een herinnering in voor {duration_minutes} minuten` · `zet een herinnering op {reminder_time}` |
 | Show More | `toon meer` · `meer resultaten` · `volgende` · `doorgaan` · `wat nog meer` · `meer` |
 | Shuffle Play | `speel de playlist {playlist} in willekeurige volgorde` · `shuffle de playlist {playlist}` |
-| Sleep Timer | `stop met afspelen over {duration_minutes} minuten` · `stel een slaaptimer in voor {duration_minutes} minuten` · `slaaptimer {duration_minutes} minuten` · `stop na {duration_minutes} minuten` · `zet uit over {duration_minutes} minuten` |
+| Sleep Timer | `stop met afspelen over {sleep_duration}` · `stel een slaaptimer in voor {sleep_duration}` · `slaaptimer {sleep_duration}` · `stop na {sleep_duration}` · `zet uit over {sleep_duration}` |
 | Turn Radio Off | `zet radiomodus uit` · `schakel radiomodus uit` · `radiomodus uit` · `zet radio uit` · `schakel radio uit` · `stop radiomodus` |
 | Turn Radio On | `zet radiomodus aan` · `schakel radiomodus in` · `radiomodus aan` · `zet radio aan` · `schakel radio in` |
 | Unmark Favorite | `ik vind dit niet leuk` · `ik vind de video niet leuk` · `ik vind het nummer niet leuk` · `verwijder de video uit favorieten` · `verwijder het nummer uit favorieten` |
@@ -960,7 +960,7 @@ Invocation name: **"jellyfin player"**
 | Set Reminder | `me lembre em {duration_minutes} minutos` · `me lembre às {reminder_time}` · `crie um lembrete de {duration_minutes} minutos` · `crie um lembrete para as {reminder_time}` |
 | Show More | `mostrar mais` · `mais resultados` · `próximo` · `continuar` · `o que mais` · `ver mais` |
 | Shuffle Play | `toque a playlist {playlist} em modo aleatório` · `embaralhe a playlist {playlist}` |
-| Sleep Timer | `parar de tocar em {duration_minutes} minutos` · `definir timer de sono para {duration_minutes} minutos` · `timer de sono {duration_minutes} minutos` · `parar após {duration_minutes} minutos` · `desligar em {duration_minutes} minutos` · `definir timer de sono {duration_minutes}` |
+| Sleep Timer | `parar de tocar em {sleep_duration}` · `definir timer de sono para {sleep_duration}` · `timer de sono {sleep_duration}` · `parar após {sleep_duration}` · `desligar em {sleep_duration}` · `definir timer de sono {sleep_duration}` |
 | Turn Radio Off | `desativar modo rádio` · `desabilitar modo rádio` · `modo rádio desligado` · `desligar rádio` · `desabilitar rádio` · `parar modo rádio` |
 | Turn Radio On | `ativar modo rádio` · `habilitar modo rádio` · `modo rádio ligado` · `ligar rádio` · `habilitar rádio` |
 | Unmark Favorite | `eu não gostei disso` · `eu não gostei do vídeo` · `eu não gostei da música` · `remover o vídeo dos favoritos` · `remover a música dos favoritos` · `tirar dos favoritos` |

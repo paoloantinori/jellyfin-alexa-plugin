@@ -289,12 +289,12 @@ tests:
   - utterance: "Stop playing in thirty minutes"
     expected_intent: SleepTimerIntent
     expected_slots:
-      duration_minutes: {}
+      sleep_duration: {}
 
   - utterance: "Set a sleep timer for sixty minutes"
     expected_intent: SleepTimerIntent
     expected_slots:
-      duration_minutes: {}
+      sleep_duration: {}
 
   # ------------------------------------------------------------------------
   # SetReminderIntent (duration_minutes / reminder_time), JF-451

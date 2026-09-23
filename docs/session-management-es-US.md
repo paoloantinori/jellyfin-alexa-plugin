@@ -47,7 +47,7 @@ graph TD
     TransferOK --> Playing
     NoTransfer --> Idle
 
-    Idle -->|"detener en {duration_minutes} minutos"| Sleep["SleepTimerIntent<br/>Programar parada de reproduccion"]
+    Idle -->|"detener en {sleep_duration}"| Sleep["SleepTimerIntent<br/>Programar parada de reproduccion"]
     Sleep --> Idle
 
     style Playing fill:#4CAF50,color:#fff

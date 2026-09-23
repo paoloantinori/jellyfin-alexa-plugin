@@ -47,7 +47,7 @@ graph TD
     TransferOK --> Playing
     NoTransfer --> Idle
 
-    Idle -->|"set a sleep timer for {n} minutes"| Sleep["SleepTimerIntent<br/>Schedule playback stop"]
+    Idle -->|"set a sleep timer for {sleep_duration}"| Sleep["SleepTimerIntent<br/>Schedule playback stop"]
     Sleep --> Idle
 
     style Playing fill:#4CAF50,color:#fff

@@ -455,13 +455,13 @@ intents:
       - شغل شيئاً قد يعجبني
   - name: SleepTimerIntent
     slots:
-      - name: duration_minutes
-        type: AMAZON.NUMBER
+      - name: sleep_duration
+        type: AMAZON.DURATION
     samples:
-      - أوقف التشغيل بعد {duration_minutes} دقيقة
-      - اضبط مؤقت النوم لـ {duration_minutes} دقيقة
-      - مؤقت نوم {duration_minutes} دقيقة
-      - أوقف بعد {duration_minutes} دقيقة
+      - أوقف التشغيل بعد {sleep_duration}
+      - اضبط مؤقت النوم لـ {sleep_duration}
+      - مؤقت نوم {sleep_duration}
+      - أوقف بعد {sleep_duration}
   - name: SetReminderIntent
     slots:
       - name: duration_minutes
@@ -891,8 +891,8 @@ dialog:
     - name: SleepTimerIntent
       confirmationRequired: false
       slots:
-        - name: duration_minutes
-          type: AMAZON.NUMBER
+        - name: sleep_duration
+          type: AMAZON.DURATION
           confirmationRequired: false
           elicitationRequired: false
     - name: SetReminderIntent

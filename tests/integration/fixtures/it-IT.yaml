@@ -605,17 +605,29 @@ tests:
     expected_slots: {}
 
   # -------------------------------------------------------------------------
-  # 16. SleepTimerIntent (duration_minutes)
+  # 16. SleepTimerIntent (sleep_duration, JF-618: AMAZON.DURATION carries the unit)
   # -------------------------------------------------------------------------
-  - utterance: "Imposta timer trenta"
+  - utterance: "Imposta timer trenta minuti"
     expected_intent: SleepTimerIntent
     expected_slots:
-      duration_minutes: {}
+      sleep_duration: {value: PT30M}
 
-  - utterance: "Ferma dopo sessanta"
+  - utterance: "Ferma dopo sessanta minuti"
     expected_intent: SleepTimerIntent
     expected_slots:
-      duration_minutes: {}
+      sleep_duration: {value: PT60M}
+
+  # JF-618 live incident: seconds used to be swallowed into a 5-MINUTE timer by
+  # the number-typed minutes slot; the duration slot must carry the unit now.
+  - utterance: "Ferma dopo trenta secondi"
+    expected_intent: SleepTimerIntent
+    expected_slots:
+      sleep_duration: {value: PT30S}
+
+  - utterance: "Ferma dopo mezz'ora"
+    expected_intent: SleepTimerIntent
+    expected_slots:
+      sleep_duration: {value: PT30M}
 
   # ------------------------------------------------------------------------
   # SetReminderIntent (duration_minutes / reminder_time), JF-451

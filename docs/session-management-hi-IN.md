@@ -47,7 +47,7 @@ graph TD
     TransferOK --> Playing
     NoTransfer --> Idle
 
-    Idle -->|"{duration_minutes} मिनट में बंद करो"| Sleep["SleepTimerIntent<br/>प्लेबैक बंद करने की निर्धारित करो"]
+    Idle -->|"{sleep_duration} में बंद करो"| Sleep["SleepTimerIntent<br/>प्लेबैक बंद करने की निर्धारित करो"]
     Sleep --> Idle
 
     style Playing fill:#4CAF50,color:#fff

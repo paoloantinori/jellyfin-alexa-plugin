@@ -47,7 +47,7 @@ graph TD
     TransferOK --> Playing
     NoTransfer --> Idle
 
-    Idle -->|"أوقف التشغيل بعد {n} دقيقة"| Sleep["SleepTimerIntent<br/>جدولة إيقاف التشغيل"]
+    Idle -->|"أوقف التشغيل بعد {sleep_duration}"| Sleep["SleepTimerIntent<br/>جدولة إيقاف التشغيل"]
     Sleep --> Idle
 
     style Playing fill:#4CAF50,color:#fff

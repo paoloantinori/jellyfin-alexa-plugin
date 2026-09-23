@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Threading;
+
 using System.Threading.Tasks;
 using Alexa.NET;
 using Alexa.NET.Request;
@@ -63,10 +64,11 @@ public class SleepTimerIntentHandler : BaseHandler
         string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
 
-        // Extract the duration_minutes slot.
+        // Extract the sleep_duration slot (JF-618: AMAZON.DURATION; carries its own
+        // unit, resolving "cinque minuti"/"trenta secondi"/"mezz'ora" to ISO 8601).
         string? durationSlot = null;
         if (intentRequest.Intent.Slots != null
-            && intentRequest.Intent.Slots.TryGetValue("duration_minutes", out Slot? slot))
+            && intentRequest.Intent.Slots.TryGetValue("sleep_duration", out Slot? slot))
         {
             durationSlot = slot.Value;
         }
@@ -79,10 +81,11 @@ public class SleepTimerIntentHandler : BaseHandler
             return Task.FromResult(elicitCancel);
         }
 
-        if (string.IsNullOrEmpty(durationSlot) || !int.TryParse(durationSlot, NumberStyles.Integer, CultureInfo.InvariantCulture, out int durationMinutes))
+        TimeSpan? duration = Util.ResumeMath.ParseAlexaDuration(durationSlot);
+        if (duration is null)
         {
             Logger.LogDebug("SleepTimer: invalid duration, eliciting");
-            return Task.FromResult(BuildDialogElicitResponse("DidNotCatchSleepTimer", locale, "duration_minutes", IntentNames.SleepTimer, Util.ElicitSlots.For(IntentNames.SleepTimer)));
+            return Task.FromResult(BuildDialogElicitResponse("DidNotCatchSleepTimer", locale, "sleep_duration", IntentNames.SleepTimer, Util.ElicitSlots.For(IntentNames.SleepTimer)));
         }
 
         // Nothing currently playing.
@@ -128,8 +131,11 @@ public class SleepTimerIntentHandler : BaseHandler
             offsetInMilliseconds = (int)TimeSpan.FromTicks(session.PlayState.PositionTicks.Value).TotalMilliseconds;
         }
 
-        // Cancel mode: duration <= 0 replays without a sleep deadline.
-        if (durationMinutes <= 0)
+        // Cancel mode: a zero duration ("ferma dopo zero", the legacy "0") replays
+        // without a sleep deadline. The comparison is on the TimeSpan, NOT a rounded
+        // minute count (review finding: PT29S rounded to 0 minutes and CANCELLED
+        // instead of arming a 29-second timer).
+        if (duration.Value <= TimeSpan.Zero)
         {
             // No-token tell: an unparseable token (and no id left to fall back to)
             // must not mint a replay directive from Guid.Empty, whose stream URL
@@ -140,7 +146,7 @@ public class SleepTimerIntentHandler : BaseHandler
                 return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale)));
             }
 
-            Logger.LogDebug("SleepTimer: cancel mode (durationMinutes={DurationMinutes}), replaying without deadline", durationMinutes);
+            Logger.LogDebug("SleepTimer: cancel mode (duration={Duration}), replaying without deadline", duration.Value);
             var cancelDirective = new AudioPlayerPlayDirective
             {
                 PlayBehavior = PlayBehavior.ReplaceAll,
@@ -175,11 +181,11 @@ public class SleepTimerIntentHandler : BaseHandler
         // (JF-447: the format's one owner; the event handlers parse it with the same
         // codec), from the CLEAN id canonicalized above (minting from a suffixed id
         // would stack a second suffix whose deadline parse then fails).
-        long deadlineTicks = DateTimeOffset.UtcNow.AddMinutes(durationMinutes).UtcTicks;
+        long deadlineTicks = (DateTimeOffset.UtcNow + duration.Value).UtcTicks;
 
         string token = StreamTokenCodec.MintSleepTimerToken(itemGuid, deadlineTicks);
 
-        Logger.LogDebug("SleepTimer: setting {DurationMinutes} minute timer, token={Token}", durationMinutes, token);
+        Logger.LogDebug("SleepTimer: setting {Duration} timer, token={Token}", duration.Value, token);
 
         var directive = new AudioPlayerPlayDirective
         {
@@ -205,9 +211,10 @@ public class SleepTimerIntentHandler : BaseHandler
             {
                 ShouldEndSession = true,
                 OutputSpeech = new PlainTextOutputSpeech(
-                    ResponseStrings.Get("SleepTimerSet", locale, durationMinutes.ToString(CultureInfo.InvariantCulture))),
+                    ResponseStrings.Get("SleepTimerSetFor", locale, Util.ResumeMath.FormatSpokenLargestUnit(duration.Value, locale))),
                 Directives = new List<IDirective> { directive }
             }
         });
     }
+
 }

@@ -47,7 +47,7 @@ graph TD
     TransferOK --> Playing
     NoTransfer --> Idle
 
-    Idle -->|"Imposta timer {duration_minutes}"| Sleep["SleepTimerIntent<br/>Programma arresto riproduzione"]
+    Idle -->|"Imposta timer {sleep_duration}"| Sleep["SleepTimerIntent<br/>Programma arresto riproduzione"]
     Sleep --> Idle
 
     style Playing fill:#4CAF50,color:#fff

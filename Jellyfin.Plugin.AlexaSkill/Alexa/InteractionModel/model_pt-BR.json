@@ -636,17 +636,17 @@
         "name": "SleepTimerIntent",
         "slots": [
           {
-            "name": "duration_minutes",
-            "type": "AMAZON.NUMBER"
+            "name": "sleep_duration",
+            "type": "AMAZON.DURATION"
           }
         ],
         "samples": [
-          "parar de tocar em {duration_minutes} minutos",
-          "definir timer de sono para {duration_minutes} minutos",
-          "timer de sono {duration_minutes} minutos",
-          "parar após {duration_minutes} minutos",
-          "desligar em {duration_minutes} minutos",
-          "definir timer de sono {duration_minutes}"
+          "parar de tocar em {sleep_duration}",
+          "definir timer de sono para {sleep_duration}",
+          "timer de sono {sleep_duration}",
+          "parar após {sleep_duration}",
+          "desligar em {sleep_duration}",
+          "definir timer de sono {sleep_duration}"
         ]
       },
       {
@@ -1672,8 +1672,8 @@
         "confirmationRequired": false,
         "slots": [
           {
-            "name": "duration_minutes",
-            "type": "AMAZON.NUMBER",
+            "name": "sleep_duration",
+            "type": "AMAZON.DURATION",
             "confirmationRequired": false,
             "elicitationRequired": false
           }

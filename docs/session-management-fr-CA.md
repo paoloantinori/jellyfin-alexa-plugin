@@ -47,7 +47,7 @@ graph TD
     TransferOK --> Playing
     NoTransfer --> Idle
 
-    Idle -->|"arrêter dans {duration_minutes} minutes"| Sleep["SleepTimerIntent<br/>Programmer l'arrêt de la lecture"]
+    Idle -->|"arrêter dans {sleep_duration}"| Sleep["SleepTimerIntent<br/>Programmer l'arrêt de la lecture"]
     Sleep --> Idle
 
     style Playing fill:#4CAF50,color:#fff

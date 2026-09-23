@@ -622,16 +622,16 @@
         "name": "SleepTimerIntent",
         "slots": [
           {
-            "name": "duration_minutes",
-            "type": "AMAZON.NUMBER"
+            "name": "sleep_duration",
+            "type": "AMAZON.DURATION"
           }
         ],
         "samples": [
-          "stop met afspelen over {duration_minutes} minuten",
-          "stel een slaaptimer in voor {duration_minutes} minuten",
-          "slaaptimer {duration_minutes} minuten",
-          "stop na {duration_minutes} minuten",
-          "zet uit over {duration_minutes} minuten"
+          "stop met afspelen over {sleep_duration}",
+          "stel een slaaptimer in voor {sleep_duration}",
+          "slaaptimer {sleep_duration}",
+          "stop na {sleep_duration}",
+          "zet uit over {sleep_duration}"
         ]
       },
       {
@@ -1643,8 +1643,8 @@
         "confirmationRequired": false,
         "slots": [
           {
-            "name": "duration_minutes",
-            "type": "AMAZON.NUMBER",
+            "name": "sleep_duration",
+            "type": "AMAZON.DURATION",
             "confirmationRequired": false,
             "elicitationRequired": false
           }

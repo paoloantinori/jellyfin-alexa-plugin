@@ -114,11 +114,31 @@ public class LocaleStringsTests
                 continue;
             }
 
+            if (IdenticalCrossLanguageValues.TryGetValue((locale, key), out string? expected))
+            {
+                // Exempted pairs stay PINNED to the known-good identity: if either
+                // side later changes, this asserts instead of trusting forever.
+                Assert.Equal(Normalize(expected), Normalize(value));
+                continue;
+            }
+
             Assert.False(
                 Normalize(value) == Normalize(enValue),
                 $"{key} [{locale}] is en-US prose (possibly a stale pre-contraction copy): '{value}'");
         }
     }
+
+    /// <summary>
+    /// Values that equal en-US because the WORD itself is the same in that language
+    /// (French "minutes" is spelled like English; JF-618's SleepTimerUnitMinutes),
+    /// pinned to the known-good literal: a later change on either side asserts here
+    /// instead of passing as a trusted identity.
+    /// </summary>
+    private static readonly Dictionary<(string Locale, string Key), string> IdenticalCrossLanguageValues = new()
+    {
+        [("fr-FR", "SleepTimerUnitMinutes")] = "{0} minutes",
+        [("fr-CA", "SleepTimerUnitMinutes")] = "{0} minutes",
+    };
 
     /// <summary>
     /// Collapses contraction and punctuation drift so a stale English copy that

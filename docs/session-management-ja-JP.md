@@ -47,7 +47,7 @@ graph TD
     TransferOK --> Playing
     NoTransfer --> Idle
 
-    Idle -->|"{duration_minutes} 分後に止めて"| Sleep["SleepTimerIntent<br/>再生停止をスケジュール"]
+    Idle -->|"{sleep_duration} 後に止めて"| Sleep["SleepTimerIntent<br/>再生停止をスケジュール"]
     Sleep --> Idle
 
     style Playing fill:#4CAF50,color:#fff

@@ -479,15 +479,15 @@ intents:
       - suggest {media_type}
   - name: SleepTimerIntent
     slots:
-      - name: duration_minutes
-        type: AMAZON.NUMBER
+      - name: sleep_duration
+        type: AMAZON.DURATION
     samples:
-      - stop playing in {duration_minutes} minutes
-      - set a sleep timer for {duration_minutes} minutes
-      - sleep timer {duration_minutes} minutes
-      - stop after {duration_minutes} minutes
-      - turn off in {duration_minutes} minutes
-      - set sleep timer {duration_minutes}
+      - stop playing in {sleep_duration}
+      - set a sleep timer for {sleep_duration}
+      - sleep timer {sleep_duration}
+      - stop after {sleep_duration}
+      - turn off in {sleep_duration}
+      - set sleep timer {sleep_duration}
   - name: SetReminderIntent
     slots:
       - name: duration_minutes
@@ -1020,8 +1020,8 @@ dialog:
     - name: SleepTimerIntent
       confirmationRequired: false
       slots:
-        - name: duration_minutes
-          type: AMAZON.NUMBER
+        - name: sleep_duration
+          type: AMAZON.DURATION
           confirmationRequired: false
           elicitationRequired: false
     - name: SetReminderIntent

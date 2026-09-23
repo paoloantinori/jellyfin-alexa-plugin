@@ -404,15 +404,15 @@
       {
         "name": "SleepTimerIntent",
         "samples": [
-          "Imposta timer {duration_minutes}",
-          "Timer per dormire {duration_minutes}",
-          "Spegimento automatico {duration_minutes}",
-          "Ferma dopo {duration_minutes}"
+          "Imposta timer {sleep_duration}",
+          "Timer per dormire {sleep_duration}",
+          "Spegimento automatico {sleep_duration}",
+          "Ferma dopo {sleep_duration}"
         ],
         "slots": [
           {
-            "name": "duration_minutes",
-            "type": "ItalianNumber"
+            "name": "sleep_duration",
+            "type": "AMAZON.DURATION"
           }
         ]
       },
@@ -3076,8 +3076,8 @@
         "confirmationRequired": false,
         "slots": [
           {
-            "name": "duration_minutes",
-            "type": "ItalianNumber",
+            "name": "sleep_duration",
+            "type": "AMAZON.DURATION",
             "confirmationRequired": false,
             "elicitationRequired": false
           }

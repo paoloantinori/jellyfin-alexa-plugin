@@ -79,7 +79,7 @@ public class DeadMicSweepElicitTests : PluginTestBase
         => AssertElicitsAsync(
             () => new SleepTimerIntentHandler(_sessionManager.Object, _config, NullLoggerFactory.Instance)
                 .HandleAsync(Request(IntentNames.SleepTimer), Context(), User(), Session(_sessionManager.Object), CancellationToken.None),
-            "duration_minutes", IntentNames.SleepTimer);
+            "sleep_duration", IntentNames.SleepTimer);
 
     [Fact]
     public Task SetReminder_EmptyTime_ElicitsReminderTime()

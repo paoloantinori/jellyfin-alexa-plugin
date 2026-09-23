@@ -30,6 +30,89 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 public static class ResumeMath
 {
     /// <summary>
+    /// JF-618: parses an AMAZON.DURATION slot value (the shared home, so the
+    /// SetReminder migration will not have to copy this). ISO 8601 through
+    /// XmlConvert, with three live-probed accommodations: week forms (P1W) are valid
+    /// ISO 8601 but NOT valid XSD duration, so they map to days first («ferma dopo
+    /// una settimana» delivered P1W and dead-ended in the elicit loop); the catch
+    /// covers OverflowException too (a P100000000D probe escapes as overflow, not
+    /// format); and a bare whole number means minutes (AMAZON.DURATION's
+    /// raw-value passthrough can carry unresolved spoken text where a bare number
+    /// keeps the pre-JF-618 semantic). Null when unparseable.
+    /// </summary>
+    /// <param name="raw">The raw slot value.</param>
+    /// <returns>The parsed duration, or null.</returns>
+    public static TimeSpan? ParseAlexaDuration(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        string value = raw.Trim();
+
+        // PnW week form: XmlConvert rejects it, ISO 8601 allows it. Bounded so an
+        // absurd week count cannot overflow FromDays (anything past ~29,000 years
+        // overflows TimeSpan; 520,000 weeks is 10,000 years, far past any real ask).
+        if (value.Length >= 3
+            && (value[0] == 'P' || value[0] == 'p')
+            && (value[^1] == 'W' || value[^1] == 'w')
+            && int.TryParse(value[1..^1], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int weeks))
+        {
+            return weeks >= 1 && weeks <= 520_000 ? TimeSpan.FromDays(7d * weeks) : null;
+        }
+
+        try
+        {
+            return System.Xml.XmlConvert.ToTimeSpan(value);
+        }
+        catch (Exception ex) when (ex is FormatException or OverflowException)
+        {
+            // Not an XSD duration: fall through to the bare-number shape.
+        }
+
+        return int.TryParse(value, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out int minutes)
+            ? TimeSpan.FromMinutes(minutes)
+            : null;
+    }
+
+    /// <summary>
+    /// JF-618: the sleep-timer confirmation's spoken duration, largest whole unit
+    /// with singular/plural (SleepTimerUnit* keys; the plural-seconds arm reuses
+    /// SecondsOnly). Boundary snap (review finding): a PT59.5S timer speaks "one
+    /// minute", not "60 seconds" (the arms hand off where rounding would cross 60).
+    /// Distinct from <see cref="FormatTimeSpan"/> on purpose: that formatter emits
+    /// two-unit composites ("1 hours and 30 minutes") for progress announcements,
+    /// this one a single natural phrase for a just-set timer.
+    /// </summary>
+    /// <param name="duration">The parsed duration (must be positive).</param>
+    /// <param name="locale">The request locale.</param>
+    /// <returns>The localized phrase, e.g. "trenta secondi" / "un minuto" / "2 ore".</returns>
+    public static string FormatSpokenLargestUnit(TimeSpan duration, string locale)
+    {
+        if (duration.TotalSeconds < 59.5)
+        {
+            int seconds = (int)Math.Round(duration.TotalSeconds, MidpointRounding.AwayFromZero);
+            return Locale.ResponseStrings.Get(
+                seconds == 1 ? "SleepTimerUnitSecond" : "SecondsOnly", locale,
+                seconds.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        if (duration.TotalMinutes < 599.5)
+        {
+            int minutes = (int)Math.Round(duration.TotalMinutes, MidpointRounding.AwayFromZero);
+            return Locale.ResponseStrings.Get(
+                minutes == 1 ? "SleepTimerUnitMinute" : "SleepTimerUnitMinutes", locale,
+                minutes.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        int hours = (int)Math.Round(duration.TotalHours, MidpointRounding.AwayFromZero);
+        return Locale.ResponseStrings.Get(
+            hours == 1 ? "SleepTimerUnitHour" : "SleepTimerUnitHours", locale,
+            hours.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>
     /// Ticks to milliseconds, clamped to int.MaxValue like the LaunchRequestHandler
     /// idiom (review consistency finding 2026-09-22: three unclamped inline casts in
     /// ResumeIntentHandler could produce an unspecified cast value on a corrupt or
