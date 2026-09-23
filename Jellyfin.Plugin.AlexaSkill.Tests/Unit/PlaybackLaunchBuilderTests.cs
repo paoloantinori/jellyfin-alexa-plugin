@@ -67,17 +67,15 @@ public class PlaybackLaunchBuilderTests : PluginTestBase
     [Fact]
     public void NowPlaying_AplDevice_AudioPlayerResponse_AppendsNowPlayingDirective()
     {
+        // JF-623: a ReplaceAll music play auto-attaches the NowPlaying screen (the
+        // Echo Show's own player persists stale metadata when nothing replaces it).
         var song = TestHelpers.CreateSong();
         var user = CreateUser();
         var context = TestHelpers.CreateContextWithApl();
-        var (response, itemId) = CreatePlayResponse(song, user, context);
-
-        var playDirective = Assert.Single(response.Response.Directives);
-        Assert.IsType<AudioPlayerPlayDirective>(playDirective);
-
-        _launch.TryAttachNowPlayingDirective(response, song, itemId, user, context);
+        var (response, _) = CreatePlayResponse(song, user, context);
 
         Assert.Equal(2, response.Response.Directives.Count);
+        Assert.IsType<AudioPlayerPlayDirective>(response.Response.Directives[0]);
         var apl = Assert.IsType<AplRenderDocumentDirective>(response.Response.Directives[1]);
         Assert.Equal("nowPlaying", apl.Token);
     }
@@ -89,8 +87,6 @@ public class PlaybackLaunchBuilderTests : PluginTestBase
         var user = CreateUser(token: "my-api-key");
         var context = TestHelpers.CreateContextWithApl();
         var (response, itemId) = CreatePlayResponse(song, user, context);
-
-        _launch.TryAttachNowPlayingDirective(response, song, itemId, user, context);
 
         var apl = Assert.IsType<AplRenderDocumentDirective>(response.Response.Directives[1]);
         Assert.NotNull(apl.DataSources);
@@ -106,9 +102,7 @@ public class PlaybackLaunchBuilderTests : PluginTestBase
         var song = TestHelpers.CreateSong();
         var user = CreateUser();
         var context = TestHelpers.CreateContextWithoutApl();
-        var (response, itemId) = CreatePlayResponse(song, user, context);
-
-        _launch.TryAttachNowPlayingDirective(response, song, itemId, user, context);
+        var (response, _) = CreatePlayResponse(song, user, context);
 
         var playDirective = Assert.Single(response.Response.Directives);
         Assert.IsType<AudioPlayerPlayDirective>(playDirective);
@@ -130,9 +124,7 @@ public class PlaybackLaunchBuilderTests : PluginTestBase
             var song = TestHelpers.CreateSong();
             var user = CreateUser();
             var context = TestHelpers.CreateContextWithApl();
-            var (response, itemId) = CreatePlayResponse(song, user, context);
-
-            _launch.TryAttachNowPlayingDirective(response, song, itemId, user, context);
+            var (response, _) = CreatePlayResponse(song, user, context);
 
             Assert.Single(response.Response.Directives);
         }
@@ -168,10 +160,24 @@ public class PlaybackLaunchBuilderTests : PluginTestBase
         var song = TestHelpers.CreateSong(name: string.Empty);
         var user = CreateUser();
         var context = TestHelpers.CreateContextWithApl();
-        var (response, itemId) = CreatePlayResponse(song, user, context);
-
-        _launch.TryAttachNowPlayingDirective(response, song, itemId, user, context);
+        var (response, _) = CreatePlayResponse(song, user, context);
 
         Assert.Single(response.Response.Directives);
+    }
+
+    [Fact]
+    public void NowPlaying_EnqueuePlay_DoesNotAutoAttach()
+    {
+        // JF-623: only ReplaceAll re-renders the screen; an Enqueue plays over the
+        // track that is still running and must not replace its display.
+        var song = TestHelpers.CreateSong();
+        var user = CreateUser();
+        var context = TestHelpers.CreateContextWithApl();
+
+        var response = _launch.BuildAudioPlayerResponse(
+            PlayBehavior.Enqueue, "http://x/stream", song.Id.ToString(), song, user, context);
+
+        var playDirective = Assert.Single(response.Response.Directives);
+        Assert.IsType<AudioPlayerPlayDirective>(playDirective);
     }
 }

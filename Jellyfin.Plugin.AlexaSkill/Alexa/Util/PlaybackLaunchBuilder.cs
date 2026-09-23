@@ -1390,6 +1390,18 @@ public sealed class PlaybackLaunchBuilder
         }
 
         AttachAnnounceIfEnabled(response, item, user, announceLocale, offsetInMilliseconds);
+
+        // JF-623 (live incident 2026-09-23): a fresh ReplaceAll play renders our
+        // NowPlaying APL screen on capable devices. The Echo Show's own full-screen
+        // player persists the LAST metadata it ever saw when nothing replaces it, so
+        // without this the screen keeps showing a previous session's track while the
+        // audio changes underneath. ReplaceAll only: an Enqueue must not re-render
+        // the screen over the track that is still playing.
+        if (playBehavior == PlayBehavior.ReplaceAll && item != null)
+        {
+            TryAttachNowPlayingDirective(response, item, itemId, user, context);
+        }
+
         return response;
     }
 

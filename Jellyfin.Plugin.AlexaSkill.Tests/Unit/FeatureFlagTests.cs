@@ -413,10 +413,13 @@ public class AplVisualsFeatureFlagTests : PluginTestBase, IDisposable
     }
 
     [Fact]
-    public void BuildAudioPlayerResponse_NoAplDirective_WhenAplVisualsEnabled()
+    public void BuildAudioPlayerResponse_AplDirective_WhenAplVisualsEnabled()
     {
-        // APL NowPlaying overlay was removed — Echo's built-in player takes
-        // visual priority, so BuildAudioPlayerResponse only emits AudioPlayer.
+        // JF-623 REVERSES the old overlay-removal decision (2026-09-23, Paolo's call):
+        // the Echo Show's built-in full-screen player persists stale metadata across
+        // plays (live incident: Magnolia playing, the screen kept showing a previous
+        // session's Adele track), so every ReplaceAll music play renders OUR NowPlaying
+        // screen again.
         _config.AplVisualsEnabled = true;
         Plugin.Instance!.Configuration.AplVisualsEnabled = true;
 
@@ -432,9 +435,9 @@ public class AplVisualsFeatureFlagTests : PluginTestBase, IDisposable
             itemId.ToString(), item, user, context);
 
         Assert.NotNull(response);
-        // No APL directive even when visuals enabled — overlay removed
-        Assert.Single(response.Response.Directives);
+        Assert.Equal(2, response.Response.Directives.Count);
         Assert.IsType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>(response.Response.Directives[0]);
+        Assert.IsType<Jellyfin.Plugin.AlexaSkill.Alexa.Directive.AplRenderDocumentDirective>(response.Response.Directives[1]);
         Assert.True(response.Response.ShouldEndSession);
     }
 

@@ -129,10 +129,12 @@ public class AplHelperTests : PluginTestBase
     }
 
     [Fact]
-    public async Task BuildAudioPlayerResponse_WithAplContext_NoAplDirective()
+    public async Task BuildAudioPlayerResponse_WithAplContext_AttachesNowPlaying()
     {
-        // APL NowPlaying overlay was removed — Echo's built-in player takes
-        // visual priority, so BuildAudioPlayerResponse only emits AudioPlayer.
+        // JF-623 (2026-09-23, reverses the old overlay removal): every ReplaceAll
+        // music play renders our NowPlaying screen on APL-capable devices, because
+        // the Echo Show's built-in full-screen player persists stale metadata when
+        // nothing replaces it (live incident: Magnolia playing, Adele still shown).
         EnsureVisualsEnabled();
 
         var sessionManagerMock = new Mock<ISessionManager>();
@@ -175,9 +177,9 @@ public class AplHelperTests : PluginTestBase
         SkillResponse response = await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
 
         Assert.NotNull(response);
-        // No APL directive even on APL-capable device — overlay removed
-        Assert.Single(response.Response.Directives);
+        Assert.Equal(2, response.Response.Directives.Count);
         Assert.Equal("AudioPlayer.Play", response.Response.Directives[0].Type);
+        Assert.Equal("Alexa.Presentation.APL.RenderDocument", response.Response.Directives[1].Type);
     }
 
     [Fact]

@@ -222,7 +222,6 @@ public class AplUserEventHandler : BaseHandler
                     context,
                     seriesLocale,
                     offsetFor: episode => GetResumeOffset(episode, session, request),
-                    attachScreen: (response, episode) => Launch.TryAttachNowPlayingDirective(response, episode, episode.Id.ToString(), user, context),
                     cancellationToken: cancellationToken).ConfigureAwait(false);
             }
             else
@@ -275,11 +274,10 @@ public class AplUserEventHandler : BaseHandler
         // codec has no Echo decoder rides the audio-only transcode; every other
         // resolved item keeps the static URL GetStreamUrl built.
         AudioLaunchSource source = Launch.ResolveAudioLaunchSource(item, itemIdStr, user, offsetMs);
-        var response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source, itemIdStr, item, user, context);
-
-        Launch.TryAttachNowPlayingDirective(response, item, itemIdStr, user, context);
-
-        return response;
+        // The NowPlaying screen rides the BuildAudioPlayerResponse chokepoint since
+        // JF-623 (every ReplaceAll play auto-attaches); the manual attach here was the
+        // carousel-only leftover and would double-render.
+        return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source, itemIdStr, item, user, context);
     }
 
     private int GetResumeOffset(BaseItem item, SessionInfo session, Request request)
