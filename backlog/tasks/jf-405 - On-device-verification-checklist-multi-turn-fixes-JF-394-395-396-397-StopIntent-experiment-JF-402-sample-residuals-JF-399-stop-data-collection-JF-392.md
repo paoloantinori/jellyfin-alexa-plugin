@@ -7,7 +7,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-08-23 07:09'
-updated_date: '2026-09-07 21:46'
+updated_date: '2026-09-23 15:08'
 labels:
   - testing
   - on-device
@@ -54,4 +54,6 @@ Review-pass update (deploy 348b171): items 1-4 now test the FULL routing (the fi
 CHECKLIST REFRESHED 2026-08-29 for tonight's change set: docs/manual-verification-2026-08-29.md (committed). Covers the Koop flow (routing, fast-speech ASR, artist-question fallback, context retention), cancel words during open questions (both regimes), the PlaySong elicit round-trip incl. musician survival, stop decomposition (informational), the en-* Musician canonicalization check, the duplicate-track regression, and the PlaybackStarted stall telemetry. The original multi-turn items (JF-394-397) remain from the previous checklist; sample residuals JF-399 partially superseded by JF-414's multilingual push; stop data collection JF-392 CLOSED (two failure modes identified and fixed/documented).
 
 Added to this checklist (2026-09-07, from JF-270's non-automatable remainder): FollowMe hardware verification with 2 Echos - (a) start playback on device A, say 'ask <invocation> to follow me' on device B: confirm the current track resumes on B, device A stops, and the resume is at offset 0 (by-design limitation, documented); (b) after transfer, confirm voice commands (pause/next) work on device B from the transferred queue.
+
+2026-09-23 census update (the 1.0 device-verification ledger): CLOSED this round with battery evidence - JF-269 (radio e2e), JF-277 (sleep timer), JF-279 (queue manipulation, 3.5/5), JF-284 (AutoPlay), JF-621 (FollowMe), JF-617 (resume; AC4 device half covered by the 13:54 battery's resume tests 4-5, the empty-context queue path unit-pinned), JF-618 (AC1-3 device-verified incl. the platform-truth follow-up; AC4 complete with the boundary-stop observation), JF-620 (the trap escape heard live: «Stavo ancora aspettando la risposta a una domanda...», corr 5da1c2f7), JF-614/JF-601 second-turn playlist (live: «Rapsodia su un tema di Paganini aggiunto alla playlist prova echo», corr c28c01be). REMAINING device items on this checklist: the residuals noted on the closed tasks (ListQueue voice probe, current-track-after-clear), JF-405's own original items (multi-turn JF-394-397, StopIntent JF-402, JF-399, JF-392 - many now incidentally covered by the batteries' observed behavior), JF-516 (video+chiudi), JF-280 (behavioral loop/shuffle effects), JF-271/272 (proactive events, reminders - or mark experimental in release notes), and the favorite-adding phrase Paolo reported failing (the common forms route per profile-nlu; his exact utterance unknown - needs his phrase).
 <!-- SECTION:NOTES:END -->
