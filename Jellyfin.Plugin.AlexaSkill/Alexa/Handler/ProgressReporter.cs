@@ -697,6 +697,25 @@ public sealed class ProgressReporter
 
         long positionTicks = ComposeEventPositionTicks(
             context?.System?.Device?.DeviceID, itemId, requestState.OffsetInMilliseconds, "LoopMode");
+
+        // Live behavioral test 2026-09-23 (JF-280): the session-report write does NOT
+        // reach our Alexa session's PlayState on Jellyfin 12.1 (the JF-581 write-loss
+        // class - verified live: RepeatNone still read back minutes after LoopAllOn),
+        // and PlaybackNearlyFinished resolves the next track FROM session.PlayState.
+        // RepeatMode, so the loop never repeated. Write the mode DIRECTLY into the
+        // in-memory truth the resolver reads, then fire the report for dashboard sync
+        // (best-effort, same discipline as the JF-581 direct UserData write).
+        session.PlayState ??= new PlayerStateInfo();
+        session.PlayState.RepeatMode = mode;
+
+        // JF-424.1 class: loop changes which item follows the current one, so any
+        // pre-computed sequential next-track entry for this device is stale (the
+        // shuffle toggles already invalidate; loop must too).
+        if (!string.IsNullOrEmpty(context?.System?.Device?.DeviceID))
+        {
+            Playback.NextTrackPrecomputeCache.Invalidate(context.System.Device.DeviceID);
+        }
+
         PlaybackProgressInfo info = new PlaybackProgressInfo
         {
             SessionId = session.Id,
