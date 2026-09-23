@@ -3,9 +3,10 @@ id: JF-615
 title: >-
   Derive the Phase 9 bare-infinitive markers from the it-IT template vocabulary
   (the JF-549 F3 residual)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-22 08:07'
+updated_date: '2026-09-23 15:03'
 labels: []
 dependencies: []
 priority: low
@@ -30,3 +31,9 @@ From the JF-551 it-IT simplify round (2026-09-21): the Phase 9 WRAPPER_MARKERS h
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Implemented 2026-09-23: the Phase 9 it bare-infinitive markers are now DERIVED at check time from templates/it-IT.yaml's vocabulary.infinitive (entry minus the 'Di ' prefix, lowercased, trailing space), with the Di-stems hand-listed (deliberate truncations) plus the two live-probed exceptions the vocabulary cannot express (aggiungere: the trainer does NOT generalize the imperative, twin load-bearing; leggere: the PlayBook family outside the core verb list). The template path rides the generator's canonical MODELS_DIR (the first attempt used a wrong scripts-relative path, caught by the fallback warning during verification and fixed). Drift-catch proven mechanically: injecting a dead vocabulary verb (Di zumpare) surfaced a new wrapper warning naming it (2 mentions in the verbose run); removing it restored the baseline. Validator PASS before and after.
+<!-- SECTION:FINAL_SUMMARY:END -->

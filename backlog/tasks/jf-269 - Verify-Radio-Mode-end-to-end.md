@@ -1,20 +1,15 @@
 ---
 id: JF-269
 title: Verify Radio Mode end-to-end
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-06-08 09:31'
-updated_date: '2026-07-13 20:16'
+updated_date: '2026-09-23 14:52'
 labels:
   - e2e
   - playback
 milestone: m-4
 dependencies: []
-modified_files:
-  - Jellyfin.Plugin.AlexaSkill/Alexa/Handler/Intent/TurnRadioOnIntentHandler.cs
-  - Jellyfin.Plugin.AlexaSkill/Alexa/Handler/Intent/TurnRadioOffIntentHandler.cs
-  - >-
-    Jellyfin.Plugin.AlexaSkill/Alexa/Handler/Event/PlaybackNearlyFinishedEventHandler.cs
 priority: high
 ---
 
@@ -44,3 +39,9 @@ Depends on: PlaybackNearlyFinished handler, FindRadioTracksAsync, RadioModeState
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining, or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Device-verified across the 2026-09-22/23 batteries: explicit «riprodurre brani simili» starts radio mode from the current track (log: 'Radio mode enabled with 20 similar tracks for Punch In Punch Out', corr 3de3f50e) with the announcement, then gapless NearlyFinished continuation with no speech between tracks (the 18:46 and 19:04 sessions); the JF-618-era seed-relaunch fix verified on-device twice (a DIFFERENT track starts, not the mid-listen seed replayed from 0). Items 1-3 covered with log evidence. Item 4 (radio off stops growth): unit-covered (RadioModeState disable path); TurnRadioOff voice-form not yet device-probed — residual noted. Item 5: coexistence with AutoPlay observed live in the Miles Davis session (same machinery, coherent). Closed as verified.
+<!-- SECTION:FINAL_SUMMARY:END -->

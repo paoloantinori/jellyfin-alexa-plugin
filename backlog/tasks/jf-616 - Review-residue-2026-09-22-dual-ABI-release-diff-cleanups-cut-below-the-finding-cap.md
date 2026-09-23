@@ -3,9 +3,10 @@ id: JF-616
 title: >-
   Review residue 2026-09-22: dual-ABI release diff cleanups cut below the
   finding cap
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-22 12:56'
+updated_date: '2026-09-23 15:00'
 labels:
   - code-review-residue
   - release-pipeline
@@ -39,3 +40,9 @@ Items:
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+All four residue items closed (2026-09-23): (1) publish_dir key was already absent (dropped in an earlier pass); (2) csproj parenthetical restated version-free ("the 12.x line ships net10.0-only libs"); (3) RepeatIntentHandler verification pin updated to v12.0.0; (4) CLAUDE.md now describes BOTH shipping lines (header + dual-target paragraph at 12.0.0 stable) and the Release section documents the two-zip/two-entry flow (placeholder entry text + icon-in-EACH-zip wording). Solution builds 0 warnings.
+<!-- SECTION:FINAL_SUMMARY:END -->

@@ -1,10 +1,10 @@
 # Jellyfin Alexa Skill Plugin
 
-C# Jellyfin plugin exposing an Alexa skill for media playback, search, and library management. Dual-target: net9.0 (Jellyfin 10.11.x, the shipping line) + net10.0 (Jellyfin 12.0, pre-release line).
+C# Jellyfin plugin exposing an Alexa skill for media playback, search, and library management. Dual-target: net9.0 (Jellyfin 10.11.x) + net10.0 (Jellyfin 12.x) - BOTH shipping lines since 1.0 (one zip per ABI line, two manifest entries; the 12.x catalog entry must be FIRST, equal versions resolve first-listed).
 
 ## Build & Test
 
-**Dual-target build (JF-307 Phase-2, landed 2026-09-09):** both csprojs are `net9.0;net10.0` with Condition'd Jellyfin refs (10.11.8 for net9.0, 12.0.0-rc7 for net10.0). The system `/usr/bin/dotnet` is SDK 10.0.111 (verified 2026-09-13), so full dual-target builds and BOTH testhost flavors run with plain `dotnet build/test`; if a machine still carries SDK 9, use `~/.dotnet-jf307` (10.0.400) or the system-SDK net9.0 recipe: `dotnet restore <proj> -p:TargetFramework=net9.0` then `dotnet build <proj> -f net9.0 --no-restore`. XML comments in csproj files must NOT contain `--` (MSB4025). NoWarn: CS1591;CS1573;CA1873 (519-site log-argument churn contradicts the debug-logging policy); NU1904 (Refit 4.7.51 GHSA advisory, pinned by Alexa.NET.Management - the library update is the tracked fix, NOT bumped: SMAPI runtime risk). CA2025 is NOT suppressed: fixed properly (JF-307 Phase-2).
+**Dual-target build (JF-307 Phase-2, landed 2026-09-09):** both csprojs are `net9.0;net10.0` with Condition'd Jellyfin refs (10.11.8 for net9.0, 12.0.0 stable for net10.0). The system `/usr/bin/dotnet` is SDK 10.0.111 (verified 2026-09-13), so full dual-target builds and BOTH testhost flavors run with plain `dotnet build/test`; if a machine still carries SDK 9, use `~/.dotnet-jf307` (10.0.400) or the system-SDK net9.0 recipe: `dotnet restore <proj> -p:TargetFramework=net9.0` then `dotnet build <proj> -f net9.0 --no-restore`. XML comments in csproj files must NOT contain `--` (MSB4025). NoWarn: CS1591;CS1573;CA1873 (519-site log-argument churn contradicts the debug-logging policy); NU1904 (Refit 4.7.51 GHSA advisory, pinned by Alexa.NET.Management - the library update is the tracked fix, NOT bumped: SMAPI runtime risk). CA2025 is NOT suppressed: fixed properly (JF-307 Phase-2).
 
 **Jellyfin 12.0 auth change (live-verified 2026-09-09 on the production 12.0.0 box):** the `X-Emby-Token` header and lowercase `api_key` query are REJECTED (401) on the general API surface; working shapes are `?ApiKey=<key>` (capital) and `Authorization: MediaBrowser Token="<key>"`. The e2e/simulator tooling needed this switch. CAVEAT (re-verified 2026-09-10): BOTH stream endpoints (`/Audio/{id}/stream` and `/Videos/{id}/stream`) serve media with NO key at all (206, real bytes; general API correctly 401s). This is NOT a 12.0 regression to report: it is a long-standing upstream design gap, already tracked as jellyfin/jellyfin#13984 (open since 2025-04, split from #5415, labels bug+security; 12.0 tightened header auth while leaving streams open). Do not draft a duplicate report. Plugin stream URLs keep working regardless; our signed-token gate (JF-309) covers only our own `/alexaskill` endpoints, never Jellyfin's native stream routes.
 
@@ -628,10 +628,10 @@ The CI workflow (`release-build.yml`) handles building, testing, zipping, creati
 
 1. **Bump version** in `Directory.Build.props` AND `build.yaml` (4-part format, e.g. `0.5.0.0`)
 2. **Update `build.yaml` changelog** — this becomes the manifest changelog and GitHub release description
-3. **Add placeholder entry to `manifest.json`** — add a new version object with `"checksum": "placeholder"`, `"changelog": "placeholder"`, correct `sourceUrl` and `targetAbi`. The CI replaces checksum and changelog after building the zip.
+3. **Add placeholder entry to `manifest.json`** (a new version object with `"checksum": "placeholder"`, `"changelog": "placeholder"`, correct `sourceUrl` and `targetAbi`). The CI replaces checksum and changelog after building the zips and writes BOTH entries: net10 targetAbi 12.0.0.0 first, then the net9 build.yaml targetAbi; the script drops every same-version entry first.
 4. **Run `python3 scripts/validate_versions.py`** — must show all 3 sources match
 5. **Build and test locally**: `dotnet build` (0 warnings) + `dotnet test` (all pass)
-6. **Verify `icon.jpg` exists** at `Jellyfin.Plugin.AlexaSkill/icon.jpg` — the release workflow copies it as `icon.png` into the zip
+6. **Verify `icon.jpg` exists** at `Jellyfin.Plugin.AlexaSkill/icon.jpg` (the release workflow copies it as `icon.png` into EACH of the two zips)
 
 **Tag and push:**
 

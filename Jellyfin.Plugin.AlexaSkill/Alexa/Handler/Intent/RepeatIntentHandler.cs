@@ -142,7 +142,7 @@ public class RepeatIntentHandler : BaseHandler
         }
 
         // MUSIC restarts. AudioBook subclasses Audio (verified against the
-        // Jellyfin.Controller source at v10.11.8 and v12.0-rc7), so the exclusion
+        // Jellyfin.Controller source at v10.11.8 and v12.0.0), so the exclusion
         // must come first: a book is not a repeatable track.
         if (item is MediaBrowser.Controller.Entities.Audio.Audio
             && !AudiobookItems.IsAudioBook(item))

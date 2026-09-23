@@ -49,6 +49,8 @@ Exit code: 0 if all checks pass, 1 if any error found. Warnings alone exit 0.
 import json
 import re
 import sys
+
+import yaml
 from pathlib import Path
 
 from generate_interaction_model import MODELS_DIR  # the one layout owner
@@ -1054,15 +1056,41 @@ def lint_voice_commands_rows(
 # (live 2026-09-21: three device beeps on PlayPodcastIntent, JF-551's episode
 # sibling). Marker tokens per language prefix, matched case-insensitively inside
 # a sample; triage gaps as JF-551-class extensions or accepted.
+
+def _it_markers() -> list[str]:
+    """JF-615: the it bare-infinitive markers DERIVED from the template's own
+    vocabulary.infinitive list (entry minus the 'Di ' prefix, lowercased,
+    trailing space - the convention the hand list used), so the marker set can
+    never drift from the vocabulary again (the JF-549 F3 residual: the hand list
+    once carried a dead verb with zero referent samples and missed a vocabulary
+    verb in the same commit). The Di- stems stay hand-listed (deliberate
+    truncations), plus the two live-probed exceptions the vocabulary cannot
+    express: 'aggiungere ' (the trainer does NOT generalize aggiungi->
+    aggiungere, live FallbackIntent 2026-09-22; the twin is load-bearing) and
+    'leggere ' (JF-551's PlayBook family, not in the core verb vocabulary)."""
+    di_stems = ["di riprodu", "di suona", "di metti", "di ascolta", "di pleia", "di fammi"]
+    derived: list[str] = []
+    template = MODELS_DIR / "templates" / "it-IT.yaml"
+    try:
+        with open(template) as f:
+            vocab = (yaml.safe_load(f) or {}).get("vocabulary") or {}
+        for entry in vocab.get("infinitive") or []:
+            bare = entry.strip()
+            if bare.lower().startswith("di "):
+                bare = bare[3:]
+            marker = bare.lower().strip() + " "
+            if marker.strip() and marker not in derived:
+                derived.append(marker)
+    except Exception as e:  # noqa: BLE001 - degrade loudly, never block the check
+        print(f"  WARNING: could not derive it markers from template ({e}); "
+              "falling back to the hand list")
+        return di_stems + ["riprodurre ", "suonare ", "mettere ", "ascoltare ",
+                           "aggiungere ", "leggere "]
+    return di_stems + derived + ["aggiungere ", "leggere "]
+
+
 WRAPPER_MARKERS: dict[str, list[str]] = {
-    "it": ["di riprodu", "di suona", "di metti", "di ascolta", "di pleia", "di fammi",
-           # bare infinitives: the it-IT trainer generalizes imperative<->infinitive
-           # (live-verified 2026-09-21: radio/random/decade/next route without
-           # explicit twins), and the samples pin that against trainer flips.
-           # "aggiungere" joined 2026-09-22: the trainer does NOT generalize
-           # aggiungi->aggiungere for this sample shape (live FallbackIntent),
-           # unlike metti->mettere; the twin is load-bearing, not a pin.
-           "riprodurre ", "suonare ", "mettere ", "ascoltare ", "aggiungere "],
+    "it": _it_markers(),
     "en": ["to play", "to listen", "to hear", "to watch", "to stream", "to queue", "to give"],
     "de": ["abspielen", "wiedergeben", "hören", "anschauen"],
     "es": ["reproducir", "escuchar", "ver ", "poner"],

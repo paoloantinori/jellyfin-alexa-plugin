@@ -4,16 +4,12 @@ title: Verify shuffle/repeat/loop controls on live device
 status: To Do
 assignee: []
 created_date: '2026-06-08 09:32'
-updated_date: '2026-07-13 20:16'
+updated_date: '2026-09-23 14:52'
 labels:
   - e2e
   - playback
 milestone: m-5
 dependencies: []
-modified_files:
-  - Jellyfin.Plugin.AlexaSkill/Alexa/Handler/Intent/ShuffleOnIntentHandler.cs
-  - Jellyfin.Plugin.AlexaSkill/Alexa/Handler/Intent/ShuffleOffIntentHandler.cs
-  - Jellyfin.Plugin.AlexaSkill/Alexa/Handler/Intent/LoopOnIntentHandler.cs
 priority: medium
 ---
 
@@ -41,3 +37,9 @@ ShuffleOn/Off, LoopOn/Off, LoopSongOn, and RepeatIntent modify PlaybackInfo stat
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining, or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-09-23 progress (battery evidence, task stays OPEN): the handler-firing + spoken-confirmation legs are verified live — LoopAllOn arrived and answered «Riproduzione in loop attivata» (2026-09-22 19:04:27 corr c5e3fe11), and the shuffle steal is fixed with ShuffleAllOn twins (profile-nlu verified on the deployed model in it/de/fr; device re-test pending Paolo). The BEHAVIORAL effects (items 1-5: next track actually random / same track actually repeats / order restored / mode interplay / persistence) remain unverified — this task now tracks exactly that device session: loop on then let a track END; shuffle on then let 2-3 tracks pass; observe.
+<!-- SECTION:NOTES:END -->
