@@ -94,6 +94,19 @@ intents:
   - AMAZON.PreviousIntent
   - AMAZON.YesIntent
   - AMAZON.NoIntent
+  - name: ShuffleAllOnIntent
+    samples:
+      # Live-probed 2026-09-23: local shuffle words do NOT route via the built-in
+      # (active la lecture aléatoire -> FollowMeIntent, mélange la file ->
+      # ClearQueueIntent); custom twins per the loop-family precedent (JF-450).
+      - active la lecture aléatoire
+      - mélange la file d'attente
+      - mets en lecture aléatoire
+      - lecture aléatoire
+  - name: ShuffleAllOffIntent
+    samples:
+      - désactive la lecture aléatoire
+      - arrête la lecture aléatoire
   - name: LoopAllOffIntent
     samples:
       - Désactive la boucle
@@ -927,6 +940,13 @@ types:
         synonyms: []
 dialog:
   intents:
+    - name: PlayVideoIntent
+      confirmationRequired: false
+      slots:
+        - name: title
+          type: AMAZON.SearchQuery
+          confirmationRequired: false
+          elicitationRequired: false
     - name: FindSongIntent
       confirmationRequired: false
       slots:

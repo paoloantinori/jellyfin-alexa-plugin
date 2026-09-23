@@ -96,6 +96,36 @@ public class MediaInfoIntentHandlerTests : PluginTestBase
 
     private static string GetSpeechText(SkillResponse response) => TestHelpers.GetSpeechText(response);
 
+
+    /// <summary>
+    /// Live incident 2026-09-23: the artist-info line spoke the raw genre entries,
+    /// whose first item itself carried embedded semicolons from library tagging
+    /// («Alternative Rock;Indie Rock;Post-Grunge;Rock, Folk Rock, Rock»), and the
+    /// TTS read the punctuation aloud. The list must be split, trimmed, deduped.
+    /// </summary>
+    [Fact]
+    public async Task Handle_AudioItem_SemicolonGenreSoup_IsNormalizedForSpeech()
+    {
+        SetupArtistLookup("Three Fish", null, new[] { "Alternative Rock;Indie Rock;Post-Grunge;Rock", "Folk Rock", "Rock" });
+        var handler = CreateHandler();
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Name = "Can I Come Along",
+            Type = BaseItemKind.Audio,
+            AlbumArtist = "Three Fish",
+            Album = "no title"
+        };
+
+        var text = GetSpeechText(await handler.HandleAsync(
+            CreateMediaInfoRequest(), CreateContext(),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
+
+        Assert.Contains("Alternative Rock, Indie Rock", text, StringComparison.Ordinal);
+        Assert.DoesNotContain(";", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("Post-Grunge;Rock", text, StringComparison.Ordinal);
+    }
+
     private void SetupArtistLookup(string artistName, string? overview, string[]? genres)
     {
         var artistItem = new MusicArtist { Name = artistName, Id = Guid.NewGuid() };

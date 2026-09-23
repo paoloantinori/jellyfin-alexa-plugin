@@ -75,6 +75,25 @@ explicit_intents:
     samples:
       - Disattiva loop
       - Disattiva ripetizione
+  ShuffleAllOnIntent:
+    samples:
+      # Live incident 2026-09-23: «mescola la coda» statistically landed on
+      # ClearQueueIntent (the AMAZON.ShuffleOn built-in carries no custom samples,
+      # anti-pattern #5). Custom twins per the LoopAllOn precedent (JF-450/JF-562).
+      - Attiva mescolamento
+      - Attiva il casuale
+      - Mescola la coda
+      - Mescola la riproduzione
+      - attivare il mescolamento
+      - mescolare la coda
+      - Di attivare il mescolamento
+  ShuffleAllOffIntent:
+    samples:
+      - Disattiva mescolamento
+      - Disattiva il casuale
+      - Ripristina l'ordine della coda
+      - disattivare il mescolamento
+      - Di disattivare il mescolamento
   LoopAllOnIntent:
     samples:
       - Attiva loop
@@ -119,6 +138,18 @@ explicit_intents:
       - Suona {title}
       - Metti {title}
       - Pleia {title}
+      # Live battery 2026-09-23: 'riprodurre il film ada' hit FallbackIntent (the
+      # bare-infinitive NOUN-CARRYING twin was missing; the JF-541 removal only
+      # condemned the NOUN-LESS 'riprodurre {title}') and 'riprodurre un film'
+      # was stolen by RecommendIntent's greedy media_type ('1 film'). The
+      # title-less forms are legal per the JF-403 boundary: the empty title
+      # now ELICITS (the dead-mic Tell was the JF-549-class defect).
+      - Riproduci un film
+      - Riproduci un video
+      - riprodurre un film
+      - di riprodurre un film
+      - riprodurre il film {title}
+      - riprodurre un video {title}
       # JF-541 (2026-09-11): the bare INFINITIVE pair 'Di riprodurre {title}' /
       # 'Di suonare {title}' is REMOVED. JF-504 already proved them inert for
       # pure movie titles ('di riprodurre ada' -> no selection, 'di riprodurre
@@ -1233,6 +1264,13 @@ dialog:
       confirmationRequired: false
       slots:
         - name: playlist
+          type: AMAZON.SearchQuery
+          confirmationRequired: false
+          elicitationRequired: false
+    - name: PlayVideoIntent
+      confirmationRequired: false
+      slots:
+        - name: title
           type: AMAZON.SearchQuery
           confirmationRequired: false
           elicitationRequired: false

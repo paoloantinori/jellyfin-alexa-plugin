@@ -824,6 +824,13 @@ types:
         synonyms: []
 dialog:
   intents:
+    - name: PlayVideoIntent
+      confirmationRequired: false
+      slots:
+        - name: title
+          type: AMAZON.SearchQuery
+          confirmationRequired: false
+          elicitationRequired: false
     - name: PlayEpisodeIntent
       confirmationRequired: false
       slots:

@@ -313,6 +313,10 @@ tests:
     expected_slots:
       sleep_duration: {}
 
+  - utterance: "active la lecture aléatoire"
+    expected_intent: ShuffleAllOnIntent
+    expected_slots: {}
+
   - utterance: "minuterie soixante minutes"
     expected_intent: SleepTimerIntent
     expected_slots:

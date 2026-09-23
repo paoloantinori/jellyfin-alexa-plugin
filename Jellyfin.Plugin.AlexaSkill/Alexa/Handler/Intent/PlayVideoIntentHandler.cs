@@ -61,7 +61,17 @@ public class PlayVideoIntentHandler : BaseHandler
 
         string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
-        string? titleQuery = intentRequest.Intent.Slots?.TryGetValue("title", out var slot) == true ? slot.Value : null;
+
+        // The JF-550 hatch (review finding): this handler elicits since the 2026-09-23
+        // title-less samples, so it joined the elicitation-trap regime and needs the
+        // shared escape legs like its 18 siblings - a captured «ferma» or a trapped
+        // full one-shot must end the flow, not search for a movie with that name.
+        if (BuildCancelDuringOpenElicit(intentRequest, locale, "PlayVideo") is { } elicitCancel)
+        {
+            return elicitCancel;
+        }
+
+        string? titleQuery = GetSlotValue(intentRequest, "title");
 
         // JF-509: the AMAZON.SearchQuery title has no catalog to anchor its fill boundary,
         // and the statistical fill drifts between builds: 'voglio guardare il film ada'
@@ -73,7 +83,11 @@ public class PlayVideoIntentHandler : BaseHandler
 
         if (string.IsNullOrWhiteSpace(titleQuery))
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("DidNotCatchVideoTitle", locale));
+            // Live battery 2026-09-23: the title-less ask («riprodurre un film»,
+            // stolen from Recommend's greedy media_type by the new title-less
+            // samples) ELICITS the title instead of the dead-mic Tell (JF-549
+            // class: a question-shaped response that closed the mic).
+            return BuildDialogElicitResponse("DidNotCatchVideoTitle", locale, "title", IntentNames.PlayVideo, Util.ElicitSlots.For(IntentNames.PlayVideo));
         }
 
         RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)));
@@ -232,6 +246,10 @@ public class PlayVideoIntentHandler : BaseHandler
     {
         // it
         "il film", "un film", "il movie", "un movie", "film", "movie",
+        // it/en video carriers (review finding: the 2026-23 title-less samples added
+        // «Riproduci un video»/«riprodurre un video {title}», whose swallowed fill
+        // ('un video ada') had no rescue entry)
+        "il video", "un video", "the video", "a video", "video",
         // en
         "the movie", "a movie", "movie",
         // de

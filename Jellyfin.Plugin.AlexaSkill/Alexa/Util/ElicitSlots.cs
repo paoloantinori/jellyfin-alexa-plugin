@@ -21,6 +21,7 @@ public static class ElicitSlots
     {
         [IntentNames.AddSongToPlaylist] = new[] { IntentNames.Slots.SongQuery, IntentNames.Slots.PlaylistTarget },
         [IntentNames.AddToQueue] = new[] { IntentNames.Slots.Song, IntentNames.Slots.Musician },
+        [IntentNames.PlayVideo] = new[] { "title" },
         [IntentNames.BrowseLibrary] = new[] { "browse_category", "filter" },
         [IntentNames.FindSongIntent] = new[] { IntentNames.Slots.TitleKeywords },
         [IntentNames.FindSongByArtistIntent] = new[] { IntentNames.Slots.Musician },

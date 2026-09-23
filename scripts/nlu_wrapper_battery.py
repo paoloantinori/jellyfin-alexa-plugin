@@ -54,6 +54,8 @@ BATTERY: dict[str, list[tuple[str, str, str]]] = {
         ("simulate", "chiedi a mia collezione di mettere rapsodia in coda", "AddToQueueIntent"),
         ("simulate", "chiedi a mia collezione di riprodurre rapsodia dopo", "PlayNextIntent"),
         ("simulate", "chiedi a mia collezione di attivare loop", "LoopAllOnIntent"),
+        ("simulate", "chiedi a mia collezione di attivare il mescolamento", "ShuffleAllOnIntent"),
+        ("simulate", "chiedi a mia collezione di riprodurre il film ada", "PlayVideoIntent"),
         ("simulate", "chiedi a mia collezione di riprodurre brani simili", "PlayRadioIntent"),
         ("simulate", "chiedi a mia collezione di fermare dopo un minuto", "SleepTimerIntent"),
         ("simulate", "chiedi a mia collezione di aggiungere alla playlist prova echo", "AddSongToPlaylistIntent"),

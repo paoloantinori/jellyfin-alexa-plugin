@@ -66,6 +66,28 @@
         ]
       },
       {
+        "name": "ShuffleAllOnIntent",
+        "samples": [
+          "Attiva mescolamento",
+          "Attiva il casuale",
+          "Mescola la coda",
+          "Mescola la riproduzione",
+          "attivare il mescolamento",
+          "mescolare la coda",
+          "Di attivare il mescolamento"
+        ]
+      },
+      {
+        "name": "ShuffleAllOffIntent",
+        "samples": [
+          "Disattiva mescolamento",
+          "Disattiva il casuale",
+          "Ripristina l'ordine della coda",
+          "disattivare il mescolamento",
+          "Di disattivare il mescolamento"
+        ]
+      },
+      {
         "name": "LoopAllOnIntent",
         "samples": [
           "Attiva loop",
@@ -116,6 +138,12 @@
           "Suona {title}",
           "Metti {title}",
           "Pleia {title}",
+          "Riproduci un film",
+          "Riproduci un video",
+          "riprodurre un film",
+          "di riprodurre un film",
+          "riprodurre il film {title}",
+          "riprodurre un video {title}",
           "voglio guardare {title}",
           "fai vedere {title}",
           "fammi vedere {title}",
@@ -2963,6 +2991,18 @@
         "slots": [
           {
             "name": "playlist",
+            "type": "AMAZON.SearchQuery",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
+      {
+        "name": "PlayVideoIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "title",
             "type": "AMAZON.SearchQuery",
             "confirmationRequired": false,
             "elicitationRequired": false

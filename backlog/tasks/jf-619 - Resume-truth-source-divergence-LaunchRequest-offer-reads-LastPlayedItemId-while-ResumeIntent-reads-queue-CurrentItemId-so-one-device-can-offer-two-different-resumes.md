@@ -4,9 +4,10 @@ title: >-
   Resume truth-source divergence: LaunchRequest offer reads LastPlayedItemId
   while ResumeIntent reads queue CurrentItemId, so one device can offer two
   different resumes
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-22 16:21'
+updated_date: '2026-09-22 20:09'
 labels: []
 dependencies: []
 references:
@@ -28,6 +29,12 @@ From the JF-617 review round (2026-09-22, finding CONFIRMED): bare AMAZON.Resume
 - [ ] #2 The scenario 'AudioPlayer stop writes CurrentItemId=X, later VideoApp play writes LastPlayedItemId=M' yields the SAME resume target from LaunchRequest's offer and from bare AMAZON.ResumeIntent
 - [ ] #3 Unit tests pin the cross-entry-point consistency on the above scenario
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-09-22 23:05: SHIPPED (commit 8bb5e511, deployed to minix net10.0). One resolver, GetDeviceResumePointer: fresher write stamp wins; a 30s delayed-stop grace window tilts same-window ties to the launch-time record (a PlaybackStopped landing just after a newer launch is the pause the voice request caused); null stamps (pre-JF-619 files) keep the queue-pointer tie, with the upgrade-window offer flip documented and self-healing. Writers: DeviceQueue.SetCurrentItemPointer is the one writer for the pointer (stop event, nearly-finished, RecordNowPlaying); RecordLastPlayed refreshes its stamp even on the unchanged-item short-circuit. Consumers: LaunchRequestHandler's two offer sites (stale-token equality now checks BOTH stores: NearlyFinished pre-advances the pointer near a song's end) and ResumeIntentHandler fallback 3 (resolver winner THEN loser, per-source kind gating: Movie/Episode from the launch-time arm go to fallback 4's VideoApp resume; ResolveResumeTicks' plugin-store fallback arm always reachable). Review below-cap residuals recorded: per-user custom invocation name not among trap candidates (RuntimeInvocationNameCandidates doc); unlocked id/stamp writes vs unlocked resolver read (the class's own JF-522 two-thread rationale applies); old-DLL rollback strips the stamp members on re-persist (benign: null stamps keep legacy ties). Gates: simplify (equivalent + literal) + code-review high (10 findings: 9 applied, 1 documented) + tests 4231/4231 x both TFMs. Device verification pending (user).
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

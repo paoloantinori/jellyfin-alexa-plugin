@@ -4872,7 +4872,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (425 phrases across 67 commands):
+Complete phrase list (430 phrases across 69 commands):
 
 #### Play music
 
@@ -5267,6 +5267,17 @@ Complete phrase list (425 phrases across 67 commands):
 - `Active la boucle`
 - `Active la répétition`
 
+**Shuffle queue**
+
+- `active la lecture aléatoire`
+- `mélange la file d'attente`
+- `lecture aléatoire`
+
+**Turn shuffle off**
+
+- `désactive la lecture aléatoire`
+- `arrête la lecture aléatoire`
+
 **Turn repeat off**
 
 - `Désactive la boucle`
@@ -5531,7 +5542,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (436 phrases across 67 commands):
+Complete phrase list (442 phrases across 69 commands):
 
 #### Play music
 
@@ -5934,6 +5945,18 @@ Complete phrase list (436 phrases across 67 commands):
 - `Active la boucle`
 - `Active la répétition`
 
+**Shuffle queue**
+
+- `active la lecture aléatoire`
+- `mélange la file d'attente`
+- `mets en lecture aléatoire`
+- `lecture aléatoire`
+
+**Turn shuffle off**
+
+- `désactive la lecture aléatoire`
+- `arrête la lecture aléatoire`
+
 **Turn repeat off**
 
 - `Désactive la boucle`
@@ -6201,7 +6224,7 @@ Placeholder legend:
 | `<Wörter aus dem Songtitel>` | `{titleKeywords}` |
 | `<Benutzername>` | `{username}` |
 
-Complete phrase list (445 phrases across 67 commands):
+Complete phrase list (451 phrases across 69 commands):
 
 #### Play music
 
@@ -6612,6 +6635,18 @@ Complete phrase list (445 phrases across 67 commands):
 
 - `Wiederholung an`
 - `Schleife an`
+
+**Shuffle queue**
+
+- `zufallswiedergabe aktivieren`
+- `zufallswiedergabe einschalten`
+- `musik zufällig abspielen`
+- `zufällige wiedergabe an`
+
+**Turn shuffle off**
+
+- `zufallswiedergabe ausschalten`
+- `zufällige wiedergabe aus`
 
 **Turn repeat off**
 
@@ -7441,7 +7476,7 @@ Placeholder legend:
 | `<titolo del video o del film>` | `{title}` |
 | `<parole del titolo del brano>` | `{titleKeywords}` |
 
-Complete phrase list (1496 phrases across 67 commands):
+Complete phrase list (1514 phrases across 69 commands):
 
 #### Play music
 
@@ -8542,6 +8577,12 @@ Complete phrase list (1496 phrases across 67 commands):
 - `Suona <titolo del video o del film>`
 - `Metti <titolo del video o del film>`
 - `Pleia <titolo del video o del film>`
+- `Riproduci un film`
+- `Riproduci un video`
+- `riprodurre un film`
+- `di riprodurre un film`
+- `riprodurre il film <titolo del video o del film>`
+- `riprodurre un video <titolo del video o del film>`
 - `voglio guardare <titolo del video o del film>`
 - `fai vedere <titolo del video o del film>`
 - `fammi vedere <titolo del video o del film>`
@@ -8858,6 +8899,24 @@ Complete phrase list (1496 phrases across 67 commands):
 
 - `Attiva loop`
 - `Attiva ripetizione`
+
+**Shuffle queue**
+
+- `Attiva mescolamento`
+- `Attiva il casuale`
+- `Mescola la coda`
+- `Mescola la riproduzione`
+- `attivare il mescolamento`
+- `mescolare la coda`
+- `Di attivare il mescolamento`
+
+**Turn shuffle off**
+
+- `Disattiva mescolamento`
+- `Disattiva il casuale`
+- `Ripristina l'ordine della coda`
+- `disattivare il mescolamento`
+- `Di disattivare il mescolamento`
 
 **Turn repeat off**
 
@@ -12243,6 +12302,8 @@ The body above is user-facing and never names intents or handlers. This table ma
 | Queue and repeat | Loop the current song | `LoopSongOnIntent` |
 | Queue and repeat | Repeat the current track | `RepeatSingleOnIntent` |
 | Queue and repeat | Repeat all | `LoopAllOnIntent` |
+| Queue and repeat | Shuffle queue | `ShuffleAllOnIntent` |
+| Queue and repeat | Turn shuffle off | `ShuffleAllOffIntent` |
 | Queue and repeat | Turn repeat off | `LoopAllOffIntent` |
 | Favorites | Play favorites | `PlayFavoritesIntent` |
 | Favorites | Mark as favorite | `MarkFavoriteIntent` |

@@ -54,6 +54,21 @@
         "name": "AMAZON.NoIntent"
       },
       {
+        "name": "ShuffleAllOnIntent",
+        "samples": [
+          "active la lecture aléatoire",
+          "mélange la file d'attente",
+          "lecture aléatoire"
+        ]
+      },
+      {
+        "name": "ShuffleAllOffIntent",
+        "samples": [
+          "désactive la lecture aléatoire",
+          "arrête la lecture aléatoire"
+        ]
+      },
+      {
         "name": "LoopAllOffIntent",
         "samples": [
           "Désactive la boucle",
@@ -1559,6 +1574,18 @@
   },
   "dialog": {
     "intents": [
+      {
+        "name": "PlayVideoIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "title",
+            "type": "AMAZON.SearchQuery",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
       {
         "name": "FindSongIntent",
         "confirmationRequired": false,

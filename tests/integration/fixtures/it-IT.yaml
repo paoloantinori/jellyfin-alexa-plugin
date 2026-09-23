@@ -679,6 +679,26 @@ tests:
       mood: {}
 
   # -------------------------------------------------------------------------
+  # Live battery 2026-09-23 round: the shuffle steal (ClearQueue won «mescola la
+  # coda») and the PlayVideo infinitive/twin gaps («riprodurre il film ada» ->
+  # FallbackIntent, «riprodurre un film» -> Recommend media_type='1 film').
+  - utterance: "mescola la coda"
+    expected_intent: ShuffleAllOnIntent
+    expected_slots: {}
+  - utterance: "attivare il mescolamento"
+    expected_intent: ShuffleAllOnIntent
+    expected_slots: {}
+  - utterance: "disattivare il mescolamento"
+    expected_intent: ShuffleAllOffIntent
+    expected_slots: {}
+  - utterance: "riprodurre un film"
+    expected_intent: PlayVideoIntent
+    expected_slots: {}
+  - utterance: "riprodurre il film ada"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title: {value: ada}
+
   # 18. PlayRandomIntent (media_type)
   # -------------------------------------------------------------------------
   - utterance: "Riproduci film casuali"

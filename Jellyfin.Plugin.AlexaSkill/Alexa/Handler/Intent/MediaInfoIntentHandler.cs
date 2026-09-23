@@ -201,7 +201,13 @@ public class MediaInfoIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("MediaInfoGenreUnavailable", locale));
         }
 
-        string genreList = string.Join(", ", item.Genres.Take(3));
+        string[] normalizedGenres = Util.GenreListNormalizer.Normalize(item.Genres);
+        if (normalizedGenres.Length == 0)
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("MediaInfoGenreUnavailable", locale));
+        }
+
+        string genreList = string.Join(", ", normalizedGenres.Take(3));
         string response = ResponseStrings.Get("MediaInfoGenre", locale, genreList);
         return ResponseBuilder.Tell(response);
     }
@@ -495,10 +501,11 @@ public class MediaInfoIntentHandler : BaseHandler
     private static string? BuildArtistInfoResponse(string artistName, string? bio, string[] genres, int albumCount, string locale)
     {
         bool hasBio = !string.IsNullOrWhiteSpace(bio);
-        bool hasGenres = genres.Length > 0;
+        string[] normalizedGenres = Util.GenreListNormalizer.Normalize(genres);
+        bool hasGenres = normalizedGenres.Length > 0;
         bool hasAlbums = albumCount > 0;
 
-        string genreList = hasGenres ? string.Join(", ", genres.Take(3)) : string.Empty;
+        string genreList = hasGenres ? string.Join(", ", normalizedGenres.Take(3)) : string.Empty;
 
         if (hasBio && hasGenres && hasAlbums)
         {

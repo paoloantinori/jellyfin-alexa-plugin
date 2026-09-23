@@ -10,6 +10,7 @@ using global::Alexa.NET.Response;
 using Alexa.NET.Assertions;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Entities;
@@ -85,7 +86,7 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
             _fx.LoggerFactory);
     }
 
-    private static IntentRequest CreatePlayVideoRequest(string? title = "The Matrix")
+    private static IntentRequest CreatePlayVideoRequest(string? title = "The Matrix", string? dialogState = null)
     {
         var slots = new Dictionary<string, Slot>();
         if (title != null)
@@ -99,7 +100,8 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
             {
                 Name = "PlayVideoIntent",
                 Slots = slots
-            }
+            },
+            DialogState = dialogState
         };
     }
 
@@ -138,6 +140,11 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
 
         Assert.Contains("didn't catch", speech.Text);
+
+        // 2026-09-23 review: lock the ELICIT shape, not just the prompt text (the
+        // text is byte-identical to the old dead-mic Tell; the shape is the fix).
+        Assert.Contains(response.Response.Directives, d => d.Type == "Dialog.ElicitSlot");
+        Assert.False(response.Response.ShouldEndSession);
     }
 
     [Fact]
@@ -152,6 +159,25 @@ public class PlayVideoIntentHandlerTests : PluginTestBase
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
 
         Assert.Contains("didn't catch", speech.Text);
+        Assert.Contains(response.Response.Directives, d => d.Type == "Dialog.ElicitSlot");
+        Assert.False(response.Response.ShouldEndSession);
+    }
+
+    [Fact]
+    public async Task Handle_CancelWordDuringOpenElicit_EndsFlow()
+    {
+        // 2026-09-23 review: the elicit conversion joined the trap regime; the
+        // shared hatch must fire (JF-550/JF-620), not search a movie named "stop".
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreatePlayVideoRequest("stop", dialogState: "IN_PROGRESS"),
+            _fx.CreateContext(),
+            TestHelpers.CreateTestUser(),
+            _fx.CreateSession(), CancellationToken.None);
+        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+
+        Assert.Equal(ResponseStrings.Get("FlowCancelled", "en-US"), speech.Text);
+        Assert.True(response.Response.ShouldEndSession);
     }
 
     [Fact]

@@ -142,6 +142,8 @@ GROUPS = [
         ("LoopSongOnIntent", "Loop the current song", False),
         ("RepeatSingleOnIntent", "Repeat the current track", False),
         ("LoopAllOnIntent", "Repeat all", False),
+        ("ShuffleAllOnIntent", "Shuffle queue", False),
+        ("ShuffleAllOffIntent", "Turn shuffle off", False),
         ("LoopAllOffIntent", "Turn repeat off", False),
     ]),
     ("Favorites", [

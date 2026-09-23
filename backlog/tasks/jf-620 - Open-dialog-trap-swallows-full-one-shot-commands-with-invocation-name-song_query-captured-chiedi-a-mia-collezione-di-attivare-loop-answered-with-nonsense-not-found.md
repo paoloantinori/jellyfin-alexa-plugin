@@ -4,9 +4,10 @@ title: >-
   Open-dialog trap swallows full one-shot commands with invocation name
   (song_query captured 'chiedi a mia collezione di attivare loop', answered with
   nonsense not-found)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-22 16:52'
+updated_date: '2026-09-22 20:09'
 labels: []
 dependencies: []
 references:
@@ -28,6 +29,12 @@ Live incident 2026-09-22 18:34 (battery test 9 collision): with the AddSongToPla
 - [ ] #2 The escape does not break legitimate slot answers that merely contain the word 'collezione' or similar
 - [ ] #3 Unit test pins the invocation-phrase detection on the slot capture
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-09-22 23:05: SHIPPED (commit 8bb5e511, deployed to minix net10.0). Implementation: CancelWords.IsTrappedInvocationOneShot (locale ask-carrier AND invocation name, both diacritic-folded for unaccented ASR text; carrier-less ja/hi/ar require the name to LEAD the value with a command tail so a playlist named 'my collection' stays a real answer) + AnySlotIsTrappedInvocationOneShot on the shared AnySlot walk; BaseHandler.BuildCancelDuringOpenElicit gains the escape leg (ElicitTrapEscaped, 17 locales) and FindSong's own wider hatch gained the same disjunct (review K6: it does not use the shared leg). Candidates from Config.RuntimeInvocationNameCandidates (the first runtime invocation-name consumer; per-user custom name is a documented residual). Gates: simplify (equivalent pass 4/5 applied + literal 4-angle pass run as gate evidence), code-review high (10 findings: 9 applied incl. carriers gaps es/it/pt/fr + accent folding + name-only tightening; 1 documented), tests 4231/4231 x both TFMs. Device verification pending (user).
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

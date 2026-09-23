@@ -130,9 +130,7 @@ public class RecommendIntentHandler : BaseHandler
         IReadOnlyList<BaseItem> playedItems = await RetryAsync(() => _libraryManager.GetItemList(historyQuery), "GetPlayedItems", cancellationToken).ConfigureAwait(false);
 
         // Step 2: Collect distinct genres from played items
-        List<string> genres = playedItems
-            .SelectMany(i => i.Genres)
-            .Distinct()
+        List<string> genres = Util.GenreListNormalizer.Normalize(playedItems.SelectMany(i => i.Genres))
             .Take(3)
             .ToList();
 

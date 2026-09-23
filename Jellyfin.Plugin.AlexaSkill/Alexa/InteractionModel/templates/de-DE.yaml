@@ -92,6 +92,19 @@ intents:
   - AMAZON.PreviousIntent
   - AMAZON.YesIntent
   - AMAZON.NoIntent
+  - name: ShuffleAllOnIntent
+    samples:
+      # Live-probed 2026-09-23: local shuffle words do NOT route via the built-in
+      # (zufallswiedergabe aktivieren -> NO_SELECTION, musik zufällig abspielen ->
+      # FollowMeIntent); custom twins per the loop-family precedent (JF-450).
+      - zufallswiedergabe aktivieren
+      - zufallswiedergabe einschalten
+      - musik zufällig abspielen
+      - zufällige wiedergabe an
+  - name: ShuffleAllOffIntent
+    samples:
+      - zufallswiedergabe ausschalten
+      - zufällige wiedergabe aus
   - name: LoopAllOffIntent
     samples:
       - Wiederholung aus
@@ -945,6 +958,13 @@ modelConfiguration:
     level: LOW
 dialog:
   intents:
+    - name: PlayVideoIntent
+      confirmationRequired: false
+      slots:
+        - name: title
+          type: AMAZON.SearchQuery
+          confirmationRequired: false
+          elicitationRequired: false
     - name: FindSongIntent
       confirmationRequired: false
       slots:

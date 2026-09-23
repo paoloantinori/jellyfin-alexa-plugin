@@ -56,6 +56,22 @@
         "name": "AMAZON.NoIntent"
       },
       {
+        "name": "ShuffleAllOnIntent",
+        "samples": [
+          "zufallswiedergabe aktivieren",
+          "zufallswiedergabe einschalten",
+          "musik zufällig abspielen",
+          "zufällige wiedergabe an"
+        ]
+      },
+      {
+        "name": "ShuffleAllOffIntent",
+        "samples": [
+          "zufallswiedergabe ausschalten",
+          "zufällige wiedergabe aus"
+        ]
+      },
+      {
         "name": "LoopAllOffIntent",
         "samples": [
           "Wiederholung aus",
@@ -1623,6 +1639,18 @@
   },
   "dialog": {
     "intents": [
+      {
+        "name": "PlayVideoIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "title",
+            "type": "AMAZON.SearchQuery",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
       {
         "name": "FindSongIntent",
         "confirmationRequired": false,

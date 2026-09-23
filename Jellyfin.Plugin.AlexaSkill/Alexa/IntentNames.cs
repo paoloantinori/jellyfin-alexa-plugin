@@ -55,6 +55,14 @@ internal static class IntentNames
     public const string RepeatSingleOn = "RepeatSingleOnIntent";
     public const string LoopAllOn = "LoopAllOnIntent";
     public const string LoopAllOff = "LoopAllOffIntent";
+
+    // ShuffleAllOn/OffIntent pair with the AMAZON.ShuffleOn/OffIntent built-ins the
+    // same way the loop family does (live incident 2026-09-23: «mescola la coda»
+    // statistically landed on ClearQueueIntent because the it-IT built-in carries no
+    // custom samples and anti-pattern #5 forbids adding them; custom twins are the
+    // loop-family precedent). Handlers accept BOTH names per mode.
+    public const string ShuffleAllOn = "ShuffleAllOnIntent";
+    public const string ShuffleAllOff = "ShuffleAllOffIntent";
     public const string AddToQueue = "AddToQueueIntent";
     public const string PlayNext = "PlayNextIntent";
     public const string ClearQueue = "ClearQueueIntent";

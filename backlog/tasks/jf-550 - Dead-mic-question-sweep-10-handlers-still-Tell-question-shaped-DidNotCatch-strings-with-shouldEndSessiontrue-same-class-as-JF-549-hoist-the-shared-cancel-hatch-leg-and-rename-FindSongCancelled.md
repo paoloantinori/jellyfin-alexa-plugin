@@ -76,3 +76,7 @@ COMPLETED and DEPLOYED 2026-09-13 13:30-14:05. All 13 dead-mic Tell-question sit
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Amendment 2026-09-23 (battery round)
+
+DidNotCatchVideoTitle was reclassified from "legitimately Tell-shaped" to elicit: the PlayVideo title-less samples («riprodurre un film», added to win back the phrase from RecommendIntent's greedy media_type) make the ask reachable mid-session, and the elicit conversion carries the JF-550 cancel hatch and the JF-620 one-shot escape (review finding). The old classification below described the pre-title-less-samples era where the empty title arrived only as a fresh one-shot miss.

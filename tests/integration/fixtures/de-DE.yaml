@@ -325,6 +325,10 @@ tests:
     expected_slots:
       sleep_duration: {}
 
+  - utterance: "zufallswiedergabe aktivieren"
+    expected_intent: ShuffleAllOnIntent
+    expected_slots: {}
+
   - utterance: "schlaf-timer sechzig minuten"
     expected_intent: SleepTimerIntent
     expected_slots:

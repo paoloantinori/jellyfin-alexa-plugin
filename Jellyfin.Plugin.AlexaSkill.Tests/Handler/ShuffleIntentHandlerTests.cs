@@ -52,6 +52,27 @@ public class ShuffleIntentHandlerTests : IDisposable
         GC.SuppressFinalize(this);
     }
 
+
+    // Live battery 2026-09-23: «mescola la coda» needs the custom it-IT twin name;
+    // both names must route to the same shuffle handlers (the LoopAllOn precedent).
+    [Theory]
+    [InlineData("ShuffleAllOnIntent")]
+    [InlineData("AMAZON.ShuffleOnIntent")]
+    public void CanHandle_AcceptsBothShuffleOnNames(string intentName)
+    {
+        var onHandler = new ShuffleOnIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory);
+        Assert.True(onHandler.CanHandle(ShuffleRequest(intentName)));
+    }
+
+    [Theory]
+    [InlineData("ShuffleAllOffIntent")]
+    [InlineData("AMAZON.ShuffleOffIntent")]
+    public void CanHandle_AcceptsBothShuffleOffNames(string intentName)
+    {
+        var offHandler = new ShuffleOffIntentHandler(_sessionManagerMock.Object, _config, _loggerFactory);
+        Assert.True(offHandler.CanHandle(ShuffleRequest(intentName)));
+    }
+
     private static IntentRequest ShuffleRequest(string intentName) =>
         new() { Intent = new Intent { Name = intentName }, Locale = "en-US", RequestId = "test" };
 

@@ -123,6 +123,8 @@ Invocation name: **"jellyfin player"**
 | Search Media | `Suche nach einem Film {query}` · `Suche nach einem Video {query}` · `Suche nach einer Serie {query}` · `Suche nach Inhalt {query}` · `Finde einen Film {query}` · `Finde einen Inhalt {query}` |
 | Set Reminder | `erinnere mich in {duration_minutes} minuten` · `erinnere mich um {reminder_time}` · `stelle eine erinnerung für {duration_minutes} minuten` · `setze eine erinnerung auf {reminder_time}` |
 | Show More | `zeig mehr` · `noch mehr` · `weiter` · `nächste seite` · `mehr ergebnisse` · `was gibt es noch` |
+| Shuffle All Off | `zufallswiedergabe ausschalten` · `zufällige wiedergabe aus` |
+| Shuffle All On | `zufallswiedergabe aktivieren` · `zufallswiedergabe einschalten` · `musik zufällig abspielen` · `zufällige wiedergabe an` |
 | Shuffle Play | `spiele die Playlist {playlist} in zufälliger Reihenfolge` · `mische die Playlist {playlist}` · `spiele die Playlist {playlist} im Zufallsmodus` |
 | Sleep Timer | `stoppe in {sleep_duration}` · `schlaf-timer {sleep_duration}` · `stoppe nach {sleep_duration}` · `ausschalten in {sleep_duration}` |
 | Turn Radio Off | `Schalte den Radiomodus aus` · `Deaktiviere den Radiomodus` · `Radiomodus aus` · `Schalte Radio aus` · `Deaktiviere Radio` · `Stoppe den Radiomodus` |
@@ -623,6 +625,8 @@ Invocation name: **"jellyfin player"**
 | Search Media | `Cherche un film {query}` · `Cherche un contenu {query}` · `Cherche une série {query}` · `Cherche un vidéo {query}` · `Trouve un film {query}` · `Trouve un contenu {query}` |
 | Set Reminder | `rappelle-moi dans {duration_minutes} minutes` · `rappelle-moi à {reminder_time}` · `mets un rappel de {duration_minutes} minutes` · `crée un rappel pour {reminder_time}` |
 | Show More | `montre plus` · `encore` · `plus de résultats` · `continuer` · `suivant` · `quoi d'autre` |
+| Shuffle All Off | `désactive la lecture aléatoire` · `arrête la lecture aléatoire` |
+| Shuffle All On | `active la lecture aléatoire` · `mélange la file d'attente` · `lecture aléatoire` |
 | Shuffle Play | `lis la playlist {playlist} en mode aléatoire` · `mélange la playlist {playlist}` · `mets la playlist {playlist} en mode aléatoire` |
 | Sleep Timer | `arrêter dans {sleep_duration}` · `minuterie {sleep_duration}` · `arrêter après {sleep_duration}` · `éteindre dans {sleep_duration}` |
 | Turn Radio Off | `Désactive le mode radio` · `Éteins le mode radio` · `Mode radio désactivé` · `Désactive la radio` · `Éteins la radio` · `Arrête le mode radio` |
@@ -681,6 +685,8 @@ Invocation name: **"jellyfin player"**
 | Search Media | `Cherche un film {query}` · `Cherche un contenu {query}` · `Cherche une série {query}` · `Cherche un vidéo {query}` · `Trouve un film {query}` · `Trouve un contenu {query}` |
 | Set Reminder | `rappelle-moi dans {duration_minutes} minutes` · `rappelle-moi à {reminder_time}` · `mets un rappel de {duration_minutes} minutes` · `crée un rappel pour {reminder_time}` |
 | Show More | `montre plus` · `encore` · `plus de résultats` · `continuer` · `suivant` · `quoi d'autre` |
+| Shuffle All Off | `désactive la lecture aléatoire` · `arrête la lecture aléatoire` |
+| Shuffle All On | `active la lecture aléatoire` · `mélange la file d'attente` · `mets en lecture aléatoire` · `lecture aléatoire` |
 | Shuffle Play | `lis la playlist {playlist} en mode aléatoire` · `mélange la playlist {playlist}` · `mets la playlist {playlist} en mode aléatoire` |
 | Sleep Timer | `arrêter dans {sleep_duration}` · `minuterie {sleep_duration}` · `arrêter après {sleep_duration}` · `éteindre dans {sleep_duration}` |
 | Turn Radio Off | `Désactive le mode radio` · `Éteins le mode radio` · `Mode radio désactivé` · `Désactive la radio` · `Éteins la radio` · `Arrête le mode radio` |
@@ -785,7 +791,7 @@ Invocation name: **"mia collezione"**
 | Play Radio | `riproduci radio` · `riproduci la stazione radio {station}` · `suona radio` · `metti radio` · `attiva la radio` · `modalità radio` |
 | Play Random | `Riproduci {media_type} casuali` · `Riproduci {media_type} a caso` · `Suona {media_type} casuali` · `Suona {media_type} a caso` · `Metti {media_type} casuali` · `Metti {media_type} a caso` |
 | Play Song | `Riproduci il brano {song}` · `Riproduci {song} di {musician}` · `Riproduci la canzone {song}` · `Riproduci il pezzo {song}` · `Riproduci la traccia {song}` · `Suona il brano {song}` |
-| Play Video | `Riproduci {title}` · `Suona {title}` · `Metti {title}` · `Pleia {title}` · `voglio guardare {title}` · `fai vedere {title}` |
+| Play Video | `Riproduci {title}` · `Riproduci un film` · `Suona {title}` · `Metti {title}` · `Pleia {title}` · `Riproduci un video` |
 | Query Artist Library | `Quali brani abbiamo di {musician}` · `Quali {query_type} abbiamo di {musician}` · `Quali canzoni abbiamo di {musician}` · `Che brani abbiamo di {musician}` · `Che canzoni abbiamo di {musician}` · `Quali album abbiamo di {musician}` |
 | Query Recently Added | `cosa c'è di nuovo` · `cosa è stato aggiunto di recente` · `quali novità ci sono` · `mostra le novità` · `mostrami gli ultimi aggiunti` · `ci sono novità` |
 | Recommend | `Consiglia {media_type}` · `Suggerisci una canzone` · `Raccomanda {media_type}` · `Suggerisci {media_type}` · `Di consigliare {media_type}` · `Di raccomandare {media_type}` |
@@ -794,6 +800,8 @@ Invocation name: **"mia collezione"**
 | Search Media | `Cerca il contenuto {query}` · `Cerca un film {query}` · `Cerca un video {query}` · `Cerca una serie {query}` · `Cerca un audiolibro {query}` · `Trova il contenuto {query}` |
 | Set Reminder | `Ricordami tra {duration_minutes} minuti` · `Ricordami alle {reminder_time}` · `Imposta un promemoria tra {duration_minutes} minuti` · `Imposta un promemoria per le {reminder_time}` |
 | Show More | `mostra di più` · `altra pagina` · `più risultati` · `vedi altro` · `altro` · `cos'altro` |
+| Shuffle All Off | `Disattiva mescolamento` · `Disattiva il casuale` · `Ripristina l'ordine della coda` · `disattivare il mescolamento` · `Di disattivare il mescolamento` |
+| Shuffle All On | `Attiva mescolamento` · `Attiva il casuale` · `Mescola la coda` · `Mescola la riproduzione` · `attivare il mescolamento` · `mescolare la coda` |
 | Shuffle Play | `Mescola la playlist {playlist}` · `Mescola playlist {playlist}` · `Riproduci la playlist {playlist} in modalità casuale` · `Riproduci la playlist {playlist} a caso` · `Suona la playlist {playlist} in modalità casuale` |
 | Sleep Timer | `Imposta timer {sleep_duration}` · `Timer per dormire {sleep_duration}` · `Spegimento automatico {sleep_duration}` · `Ferma dopo {sleep_duration}` |
 | Turn Radio Off | `disattiva la radio` · `spegni la radio` · `disattiva modalità radio` · `modalità radio spenta` · `ferma riproduzione radio` · `radio spenta` |

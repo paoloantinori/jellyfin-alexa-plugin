@@ -60,8 +60,11 @@ public sealed class RadioTrackSource
         Entities.User user,
         ILibraryManager libraryManager,
         CancellationToken cancellationToken)
+        // GenreListNormalizer (2026-09-23 review): the raw pool can carry entries
+        // with embedded semicolons from library tagging, which match nothing in the
+        // exact-CleanValue genre filter and starve the primary path.
         => await FindRadioTracksByGenreAsync(
-            current.Genres ?? Array.Empty<string>(),
+            GenreListNormalizer.Normalize(current.Genres),
             jellyfinUser,
             user,
             libraryManager,
