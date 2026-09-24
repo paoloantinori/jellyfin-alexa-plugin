@@ -254,7 +254,7 @@ internal static class AplHelper
             ""type"": ""AlexaBackground"",
             ""backgroundImageSource"": ""${payload.jellyfinData.properties.backgroundUrl}"",
             ""backgroundBlur"": true,
-            ""backgroundOverlayColor"": ""rgba(0,0,0,0.4)""
+            ""colorOverlay"": true
           },
           {
             ""type"": ""Container"",
