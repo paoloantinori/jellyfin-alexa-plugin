@@ -918,7 +918,11 @@
           "Di ascoltare {song} di {musician}",
           "Di ascoltare {song} dei {musician}",
           "Di ascoltare {song} degli {musician}",
-          "Di ascoltare {song} delle {musician}"
+          "Di ascoltare {song} delle {musician}",
+          "riprodurre {song}",
+          "suonare {song}",
+          "mettere {song}",
+          "ascoltare {song}"
         ],
         "slots": [
           {

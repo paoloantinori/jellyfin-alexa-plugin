@@ -7,7 +7,7 @@ title: >-
 status: In Progress
 assignee: []
 created_date: '2026-09-23 19:50'
-updated_date: '2026-09-24 06:34'
+updated_date: '2026-09-24 13:28'
 labels: []
 dependencies: []
 references:
@@ -48,6 +48,8 @@ Constraints (verified in the research): no push updates outside a request (re-re
 2026-09-24 spike shipped (commit e3b5ed08): AplEnhancedScreens flag added (default false, PATCH-whitelisted), the enhanced NowPlaying template carries import alexa-layouts 1.7.0 + AlexaBackground(backgroundBlur) + AlexaProgressBar, transport row and datasources deliberately untouched to isolate the compatibility question. Deployed to minix, flag ON. RECON finding: the transport TouchWrappers (prev/pause/next) and their AplUserEventHandler routing already exist from the JF-582 era - the task's touch scope (plan items 2) is mostly DONE already; remaining device items are the tappable lists (items 3-4). AWAITING: the on-device spike gate check (one music play, screen must render with blurred art and progress bar, no black screen).
 
 2026-09-24 spike gate PASSED (round 2, commit 92e00930): the enhanced document renders on the live Show, no black screen. Round-1 black screen root cause: I passed backgroundOverlayColor (a parameter that exists on AlexaPaginatedList, NOT on AlexaBackground); the documented AlexaBackground scrim knobs are colorOverlay/overlayGradient/overlayNoise, all Boolean. Verdict on the load-bearing history: the 2026-05-10 incompatibility does NOT reproduce with layouts 1.7.0 + document version 1.7 - the import is usable on-device. Paolo notes the enhanced screen LOOKS like the old one: expected and by design (the spike changed exactly background dimming->blur and the hand-made progress Frame->AlexaProgressBar, both visually subtle); the visibly-different upgrades (official transport states, tappable lists, ratings) are the next plan items. Flag left ON on minix.
+
+2026-09-24 rounds 3-5 on the live bar, honest stop: (r3) real values threaded - static fill at render time only (no push channel); (r4) elapsedTime data-binding - INERT, bindings do not re-evaluate on document-clock ticks (my misread of the docs); (r5) the documented tick handler (handleTick + SetValue on npProgressBar, minimumDelay 1000) - deployed, VERIFIED ON THE WIRE in the 15:25 response (handleTick + id present), and the device still shows a non-advancing bar (Paolo: 'same bar as before'). Three rounds matching the documentation without visible movement = stop per discipline; next diagnostic requires SEEING the render (APL Authoring Tool with Paolo's logged-in session in the instrumented browser - offered), not another blind deploy. Alternative unexplored: handleTick at the DOCUMENT level (top-level APL handleTick property) instead of component-level - one shape variant worth testing inside the tool, not on-device. Sub-item PARKED pending either the tool session or a decision to ship the bar as static-at-render (the old hand-rolled bar was equally static; nothing regressed). The bar sweep seen in round 2 (0/0 degenerate) was actually the most visible animation the bar ever had.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done

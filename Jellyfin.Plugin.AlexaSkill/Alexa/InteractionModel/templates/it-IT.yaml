@@ -991,6 +991,15 @@ templates:
       - "{infinitive} {song_noun} {song}"
       - "{imperative} {song} {artist_article} {musician}"
       - "{infinitive} {song} {artist_article} {musician}"
+      # Live battery 2026-09-24: the NOUN-LESS bare infinitive («riprodurre
+      # magnolia») hit NO_SELECTION (the trainer does not generalize
+      # riproduci->riprodurre for this shape, the aggiungere class); the noun-less
+      # bare IMPERATIVE («riproduci magnolia») already routes. These are the
+      # wrapper twins for the one-shot remainder form.
+      - riprodurre {song}
+      - suonare {song}
+      - mettere {song}
+      - ascoltare {song}
     slots:
       - name: song
         type: AMAZON.MusicRecording
