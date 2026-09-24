@@ -7,7 +7,7 @@ title: >-
 status: In Progress
 assignee: []
 created_date: '2026-09-23 19:50'
-updated_date: '2026-09-24 05:52'
+updated_date: '2026-09-24 06:34'
 labels: []
 dependencies: []
 references:
@@ -41,6 +41,14 @@ Constraints (verified in the research): no push updates outside a request (re-re
 - [ ] #4 Abort criterion documented in the task: any silent rendering failure (black screen, missing document) on the live 1024x600 hub = revert the specific screen to the hand-rolled template immediately, file the incompatibility, and do not retry without a documented platform change
 - [ ] #5 Each adopted component lands as its own commit with its own device verification (one screen per step, never a batch)
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-09-24 spike shipped (commit e3b5ed08): AplEnhancedScreens flag added (default false, PATCH-whitelisted), the enhanced NowPlaying template carries import alexa-layouts 1.7.0 + AlexaBackground(backgroundBlur) + AlexaProgressBar, transport row and datasources deliberately untouched to isolate the compatibility question. Deployed to minix, flag ON. RECON finding: the transport TouchWrappers (prev/pause/next) and their AplUserEventHandler routing already exist from the JF-582 era - the task's touch scope (plan items 2) is mostly DONE already; remaining device items are the tappable lists (items 3-4). AWAITING: the on-device spike gate check (one music play, screen must render with blurred art and progress bar, no black screen).
+
+2026-09-24 spike gate PASSED (round 2, commit 92e00930): the enhanced document renders on the live Show, no black screen. Round-1 black screen root cause: I passed backgroundOverlayColor (a parameter that exists on AlexaPaginatedList, NOT on AlexaBackground); the documented AlexaBackground scrim knobs are colorOverlay/overlayGradient/overlayNoise, all Boolean. Verdict on the load-bearing history: the 2026-05-10 incompatibility does NOT reproduce with layouts 1.7.0 + document version 1.7 - the import is usable on-device. Paolo notes the enhanced screen LOOKS like the old one: expected and by design (the spike changed exactly background dimming->blur and the hand-made progress Frame->AlexaProgressBar, both visually subtle); the visibly-different upgrades (official transport states, tappable lists, ratings) are the next plan items. Flag left ON on minix.
+<!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
