@@ -309,6 +309,12 @@ internal static class AplHelper
                         ""componentId"": ""npProgressBar"",
                         ""property"": ""progressValue"",
                         ""value"": ""${Math.min(payload.jellyfinData.properties.progressBaseMs + elapsedTime, payload.jellyfinData.properties.totalValue)}""
+                      },
+                      {
+                        ""type"": ""SetValue"",
+                        ""componentId"": ""npTime"",
+                        ""property"": ""text"",
+                        ""value"": ""tick ${elapsedTime}""
                       }
                     ]
                   }
@@ -316,7 +322,7 @@ internal static class AplHelper
               },
               {
                 ""type"": ""Text"",
-                ""text"": ""${payload.jellyfinData.properties.elapsedTime} / ${payload.jellyfinData.properties.totalTime}"",
+                ""id"": ""npTime"", ""text"": ""${payload.jellyfinData.properties.elapsedTime} / ${payload.jellyfinData.properties.totalTime}"",
                 ""fontSize"": ""${subtitleSize}"",
                 ""color"": ""#B0B0B0"",
                 ""textAlign"": ""center"",
