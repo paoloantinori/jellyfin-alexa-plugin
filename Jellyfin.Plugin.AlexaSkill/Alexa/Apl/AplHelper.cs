@@ -302,11 +302,15 @@ internal static class AplHelper
                 ""paddingBottom"": 5,
                 ""handleTick"": [
                   {
-                    ""type"": ""SetValue"",
-                    ""componentId"": ""npProgressBar"",
-                    ""property"": ""progressValue"",
-                    ""value"": ""${Math.min(payload.jellyfinData.properties.progressBaseMs + elapsedTime, payload.jellyfinData.properties.totalValue)}"",
-                    ""minimumDelay"": 1000
+                    ""minimumDelay"": 1000,
+                    ""commands"": [
+                      {
+                        ""type"": ""SetValue"",
+                        ""componentId"": ""npProgressBar"",
+                        ""property"": ""progressValue"",
+                        ""value"": ""${Math.min(payload.jellyfinData.properties.progressBaseMs + elapsedTime, payload.jellyfinData.properties.totalValue)}""
+                      }
+                    ]
                   }
                 ]
               },
