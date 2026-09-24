@@ -1399,7 +1399,12 @@ public sealed class PlaybackLaunchBuilder
         // the screen over the track that is still playing.
         if (playBehavior == PlayBehavior.ReplaceAll && item != null)
         {
-            TryAttachNowPlayingDirective(response, item, itemId, user, context);
+            // JF-624 round 3: the bar needs REAL values. With the defaults (0/0) the
+            // determinate AlexaProgressBar cannot compute a fill fraction and renders
+            // the sweeping activity animation instead (live report: "un effetto che
+            // scorre da sx a dx"). Thread the directive offset and the item runtime.
+            long durationMs = (item.RunTimeTicks ?? 0) / TimeSpan.TicksPerMillisecond;
+            TryAttachNowPlayingDirective(response, item, itemId, user, context, offsetInMilliseconds, durationMs);
         }
 
         return response;
@@ -1765,7 +1770,9 @@ public sealed class PlaybackLaunchBuilder
         MediaBrowser.Controller.Entities.BaseItem item,
         string itemId,
         Entities.User user,
-        Context? context)
+        Context? context,
+        long progressMs = 0,
+        long durationMs = 0)
     {
         if (!Apl.AplHelper.VisualsEnabled || !Apl.AplHelper.DeviceSupportsApl(context))
         {
@@ -1780,7 +1787,7 @@ public sealed class PlaybackLaunchBuilder
         }
 
         string imageUrl = GetImageUrl(itemId, user);
-        var directive = Apl.AplHelper.BuildNowPlayingDirective(item, imageUrl, imageUrl, context);
+        var directive = Apl.AplHelper.BuildNowPlayingDirective(item, imageUrl, imageUrl, context, progressMs, durationMs);
         if (directive != null)
         {
             response.Response.Directives.Add(directive);

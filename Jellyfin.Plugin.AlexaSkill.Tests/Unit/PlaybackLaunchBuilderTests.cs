@@ -165,6 +165,29 @@ public class PlaybackLaunchBuilderTests : PluginTestBase
         Assert.Single(response.Response.Directives);
     }
 
+
+    [Fact]
+    public void NowPlaying_Enhanced_ProgressValues_ReachTheDatasource()
+    {
+        // JF-624 round 3: 0/0 defaults made the determinate AlexaProgressBar render
+        // the sweeping activity animation; the play's offset and the item runtime
+        // must reach the datasource.
+        var song = TestHelpers.CreateSong();
+        song.RunTimeTicks = TimeSpan.FromMinutes(4).Ticks;
+        var user = CreateUser();
+        var context = TestHelpers.CreateContextWithApl();
+
+        var response = _launch.BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll, "http://x/stream", song.Id.ToString(), song, user, context, offsetInMilliseconds: 30_000);
+
+        var apl = Assert.IsType<Jellyfin.Plugin.AlexaSkill.Alexa.Directive.AplRenderDocumentDirective>(
+            response.Response.Directives[1]);
+        string? progress = apl.DataSources?["jellyfinData"]?["properties"]?["progressValue"]?.ToString();
+        string? total = apl.DataSources?["jellyfinData"]?["properties"]?["totalValue"]?.ToString();
+        Assert.Equal("30000", progress);
+        Assert.Equal(TimeSpan.FromMinutes(4).Ticks.ToString(), total == null ? null : (long.Parse(total) * TimeSpan.TicksPerMillisecond).ToString());
+    }
+
     [Fact]
     public void NowPlaying_EnqueuePlay_DoesNotAutoAttach()
     {
