@@ -133,6 +133,17 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool BrowseLibraryEnabled { get; set; } = true;
     public bool RecommendationsEnabled { get; set; } = true;
     public bool AplVisualsEnabled { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets whether the enhanced Echo Show screens (the alexa-layouts responsive
+    /// catalog: blurred art background, progress bar, transport buttons) replace the
+    /// hand-rolled NowPlaying document. Default FALSE and OUT of the release critical
+    /// path by design (JF-624): the last attempt at the layouts import (1.5.0, May 10
+    /// 2026, commit 29d49e16) failed SILENTLY with a black screen, so the catalog is
+    /// re-adopted one screen per commit behind this flag, verified on-device each step.
+    /// Flag off must keep the hand-rolled documents byte-identical.
+    /// </summary>
+    public bool AplEnhancedScreens { get; set; } = false;
     public bool VideoPlaybackEnabled { get; set; } = true;
     public bool ResumeOfferEnabled { get; set; } = true;
     public bool ResumeAnnounceTitle { get; set; } = true;

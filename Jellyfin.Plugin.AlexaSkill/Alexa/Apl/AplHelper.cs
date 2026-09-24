@@ -196,6 +196,176 @@ internal static class AplHelper
 
     private static readonly JObject NowPlayingDocument = JObject.Parse(NowPlayingTemplate);
 
+    // JF-624 SPIKE: the enhanced NowPlaying variant behind AplEnhancedScreens (default
+    // false, OUT of the critical path by task mandate). Differences from the hand-rolled
+    // baseline: (1) the alexa-layouts 1.7.0 import is BACK (removed 2026-05-10 in
+    // 29d49e16 after the 1.5.0-era silent black screen; this is the compatibility
+    // re-verification, one screen, one flag); (2) AlexaBackground with backgroundBlur
+    // replaces the hand-rolled opacity-0.3 background Image; (3) AlexaProgressBar
+    // replaces the hand-rolled Frame-width progress bar. The TouchWrapper transport row
+    // and the jellyfinData datasource are UNCHANGED (they are the already-working
+    // JF-582 wiring; the spike must not touch them).
+    private static readonly string NowPlayingEnhancedTemplate = @"{
+  ""type"": ""APL"",
+  ""version"": ""1.7"",
+  ""theme"": ""dark"",
+  ""import"": [
+    {
+      ""name"": ""alexa-layouts"",
+      ""version"": ""1.7.0""
+    }
+  ],
+  ""extensions"": [
+    {
+      ""name"": ""Back"",
+      ""uri"": ""aplext:backstack:10""
+    }
+  ],
+  ""resources"": [
+    {
+      ""dimensions"": {
+        ""artSize"": 280,
+        ""titleSize"": 36,
+        ""subtitleSize"": 24,
+        ""controlSize"": 56,
+        ""controlSpacing"": 40
+      }
+    },
+    {
+      ""when"": ""${viewport.shape == 'round'}"",
+      ""dimensions"": {
+        ""artSize"": 200,
+        ""titleSize"": 28,
+        ""subtitleSize"": 20,
+        ""controlSize"": 48,
+        ""controlSpacing"": 30
+      }
+    }
+  ],
+  ""mainTemplate"": {
+    ""parameters"": [""payload""],
+    ""items"": [
+      {
+        ""type"": ""Container"",
+        ""height"": ""100vh"",
+        ""width"": ""100vw"",
+        ""items"": [
+          {
+            ""type"": ""AlexaBackground"",
+            ""backgroundImageSource"": ""${payload.jellyfinData.properties.backgroundUrl}"",
+            ""backgroundBlur"": true,
+            ""backgroundOverlayColor"": ""rgba(0,0,0,0.4)""
+          },
+          {
+            ""type"": ""Container"",
+            ""justifyContent"": ""center"",
+            ""alignItems"": ""center"",
+            ""height"": ""100vh"",
+            ""width"": ""100vw"",
+            ""paddingLeft"": ""5vw"",
+            ""paddingRight"": ""5vw"",
+            ""items"": [
+              {
+                ""type"": ""Image"",
+                ""source"": ""${payload.jellyfinData.properties.artUrl}"",
+                ""width"": ""${artSize}"",
+                ""height"": ""${artSize}"",
+                ""borderRadius"": 10,
+                ""scale"": ""best-fill""
+              },
+              {
+                ""type"": ""Text"",
+                ""text"": ""${payload.jellyfinData.properties.title}"",
+                ""fontSize"": ""${titleSize}"",
+                ""fontWeight"": ""bold"",
+                ""color"": ""white"",
+                ""textAlign"": ""center"",
+                ""maxLines"": 2,
+                ""paddingTop"": 20
+              },
+              {
+                ""type"": ""Text"",
+                ""text"": ""${payload.jellyfinData.properties.subtitle}"",
+                ""fontSize"": ""${subtitleSize}"",
+                ""color"": ""#B0B0B0"",
+                ""textAlign"": ""center"",
+                ""maxLines"": 1,
+                ""paddingTop"": 5
+              },
+              {
+                ""type"": ""AlexaProgressBar"",
+                ""progressValue"": ""${payload.jellyfinData.properties.progressValue}"",
+                ""totalValue"": ""${payload.jellyfinData.properties.totalValue}"",
+                ""width"": ""${Math.min(90, artSize / 3)}%"",
+                ""paddingTop"": 15,
+                ""paddingBottom"": 5
+              },
+              {
+                ""type"": ""Text"",
+                ""text"": ""${payload.jellyfinData.properties.elapsedTime} / ${payload.jellyfinData.properties.totalTime}"",
+                ""fontSize"": ""${subtitleSize}"",
+                ""color"": ""#B0B0B0"",
+                ""textAlign"": ""center"",
+                ""paddingTop"": 5
+              },
+              {
+                ""type"": ""Container"",
+                ""direction"": ""row"",
+                ""justifyContent"": ""center"",
+                ""alignItems"": ""center"",
+                ""paddingTop"": 20,
+                ""items"": [
+                  {
+                    ""type"": ""TouchWrapper"",
+                    ""onPress"": [{ ""type"": ""SendEvent"", ""arguments"": [ ""prev"" ] }],
+                    ""width"": ""${controlSize}"",
+                    ""height"": ""${controlSize}"",
+                    ""item"": {
+                      ""type"": ""Text"",
+                      ""text"": ""⏮"",
+                      ""fontSize"": ""${controlSize}"",
+                      ""textAlign"": ""center"",
+                      ""color"": ""white""
+                    }
+                  },
+                  {
+                    ""type"": ""TouchWrapper"",
+                    ""onPress"": [{ ""type"": ""SendEvent"", ""arguments"": [ ""pause"" ] }],
+                    ""width"": ""${controlSize}"",
+                    ""height"": ""${controlSize}"",
+                    ""item"": {
+                      ""type"": ""Text"",
+                      ""text"": ""⏸"",
+                      ""fontSize"": ""${controlSize}"",
+                      ""textAlign"": ""center"",
+                      ""color"": ""white""
+                    }
+                  },
+                  {
+                    ""type"": ""TouchWrapper"",
+                    ""onPress"": [{ ""type"": ""SendEvent"", ""arguments"": [ ""next"" ] }],
+                    ""width"": ""${controlSize}"",
+                    ""height"": ""${controlSize}"",
+                    ""item"": {
+                      ""type"": ""Text"",
+                      ""text"": ""⏭"",
+                      ""fontSize"": ""${controlSize}"",
+                      ""textAlign"": ""center"",
+                      ""color"": ""white""
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}";
+
+    private static readonly JObject NowPlayingEnhancedDocument = JObject.Parse(NowPlayingEnhancedTemplate);
+
     // List APL template with datasource binding and data array iteration.
     // Sequence.data iterates over ${payload.listData.properties.items},
     // creating a ${data} context for each element.
@@ -704,11 +874,16 @@ internal static class AplHelper
 
         var subtitle = GetSubtitle(item);
 
+        // JF-624 spike gate: the enhanced (alexa-layouts) variant only when the
+        // dedicated flag is on; the hand-rolled baseline stays the default and the
+        // flag-off path is byte-identical to before.
+        bool enhanced = Plugin.Instance?.Configuration?.AplEnhancedScreens == true;
+
         return new AplRenderDocumentDirective
         {
             Token = "nowPlaying",
             TimeoutType = TimeoutShort,
-            Document = NowPlayingDocument,
+            Document = enhanced ? NowPlayingEnhancedDocument : NowPlayingDocument,
             DataSources = new JObject
             {
                 ["jellyfinData"] = new JObject

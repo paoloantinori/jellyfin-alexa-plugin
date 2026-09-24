@@ -511,6 +511,9 @@ public class ConfigurationController : ControllerBase
         if (req.TryGetValue("AplVisualsEnabled", out var aplToken) && aplToken.Type == JTokenType.Boolean)
         { config.AplVisualsEnabled = aplToken.Value<bool>(); updated = true; }
 
+        if (req.TryGetValue("AplEnhancedScreens", out var aplEnhancedToken) && aplEnhancedToken.Type == JTokenType.Boolean)
+        { config.AplEnhancedScreens = aplEnhancedToken.Value<bool>(); updated = true; }
+
         if (req.TryGetValue("VideoPlaybackEnabled", out var videoToken) && videoToken.Type == JTokenType.Boolean)
         { config.VideoPlaybackEnabled = videoToken.Value<bool>(); updated = true; }
 

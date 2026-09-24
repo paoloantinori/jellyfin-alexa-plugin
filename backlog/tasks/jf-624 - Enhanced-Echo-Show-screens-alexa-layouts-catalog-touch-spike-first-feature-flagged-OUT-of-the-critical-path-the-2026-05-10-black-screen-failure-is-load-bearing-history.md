@@ -4,9 +4,10 @@ title: >-
   Enhanced Echo Show screens (alexa-layouts catalog + touch) - spike-first,
   feature-flagged, OUT of the critical path (the 2026-05-10 black-screen failure
   is load-bearing history)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-23 19:50'
+updated_date: '2026-09-24 05:52'
 labels: []
 dependencies: []
 references:
