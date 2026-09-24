@@ -580,7 +580,13 @@ public sealed class AlbumPlayService
             && albumResponse.Response.OutputSpeech is not null
             && albumResponse.Response.Directives.Any(d => d is Directive.VideoAppLaunchDirective))
         {
-            albumResponse.Response.OutputSpeech = await _launch.SpeakVideoLaunchAnnounceAsync(context, request, albumResponse.Response.OutputSpeech).ConfigureAwait(false);
+            // The vehicle speech: the caller's announcement when one was applied (the
+            // load-bearing correction), else the ALBUM name - what an album play
+            // announces, not the resume track the builder's attach named.
+            IOutputSpeech? carried = announcement != null
+                ? albumResponse.Response.OutputSpeech
+                : SpeechBuilder.BuildNowPlayingSpeech(album.Name, locale, announceOn: true);
+            albumResponse.Response.OutputSpeech = await _launch.SpeakVideoLaunchAnnounceAsync(context, request, carried).ConfigureAwait(false);
         }
 
         return albumResponse;
