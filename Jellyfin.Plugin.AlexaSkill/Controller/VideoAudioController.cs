@@ -81,6 +81,10 @@ public class VideoAudioController : ControllerBase
     /// prewrite/serve/stale-delete sites within the same cache directory.
     /// </summary>
     private const string PrewrittenPlaylistFileName = "playlist-full.m3u8";
+        /// <summary>JF-625: below this runtime the pre-written full listing is SKIPPED (the
+        /// encode finishes before the device's first fetch; see the StreamHlsVideoAudioCore
+        /// prewrite branch for the phantom-tail failure it prevents).</summary>
+        private static readonly long PrewriteListingMinRuntimeTicks = TimeSpan.FromMinutes(10).Ticks;
 
     /// <summary>
     /// The episode HLS <c>-hls_time</c> in seconds (JF-531). LOAD-BEARING COUPLING:
@@ -524,13 +528,31 @@ public class VideoAudioController : ControllerBase
                 // so the encode window is minutes, not seconds. When the encode
                 // completes, ffmpeg's own ENDLIST playlist takes over via the
                 // cache-hit paths above.
-                if (validation.Item.RunTimeTicks > 0)
+                // JF-625 (live 2026-09-24, Magnolia): the pre-written listing is only
+                // safe when the encode outlasts the device's first playlist fetch. Its
+                // segment count is a CEIL estimate; ffmpeg can produce one fewer, and a
+                // song's whole stream prefetched in ~1s reaches the promised-but-missing
+                // tail segment, 404s, and kills the player before playback starts (green
+                // first frame, no audio, no controls). Long encodes need the listing
+                // (JF-536/JF-531: a no-ENDLIST growing playlist joins at the live edge);
+                // short content encodes to ENDLIST before the device's first fetch, so
+                // skipping the listing serves the correct VOD playlist directly.
+                if (validation.Item.RunTimeTicks > PrewriteListingMinRuntimeTicks)
                 {
                     WriteVideoAudioPlaylist(
                         prewrittenPath,
                         hlsBaseUrl,
                         validation.Item.RunTimeTicks.Value,
                         overrideToken ?? HttpContext.Request.Query["token"]);
+                }
+                else if (validation.Item.RunTimeTicks > 0)
+                {
+                    // Short content (JF-625): runtime known but below the prewrite
+                    // threshold - a deliberate skip, not the missing-runtime case below.
+                    TryDelete(prewrittenPath);
+                    _logger.LogDebug(
+                        "VideoAudio HLS: item {ItemId} is short content ({RuntimeMin:F1} min), skipping the pre-written listing; the ENDLIST playlist completes before the device's first fetch",
+                        itemId, TimeSpan.FromTicks(validation.Item.RunTimeTicks.Value).TotalMinutes);
                 }
                 else
                 {
