@@ -1027,7 +1027,7 @@ public sealed class PlaybackLaunchBuilder
     /// default (false, i.e. audio plays are silent by default, JF-352.4). Per-user setting takes
     /// precedence. Video/book launches use the <see cref="GetAnnounceNowPlaying"/> resolver instead.
     /// </summary>
-    private bool GetAnnounceAudioPlays(Entities.User? user)
+    internal bool GetAnnounceAudioPlays(Entities.User? user)
     {
         if (user?.AnnounceAudioPlays is { } userPref)
         {

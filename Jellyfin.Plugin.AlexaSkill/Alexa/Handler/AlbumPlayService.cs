@@ -411,6 +411,7 @@ public sealed class AlbumPlayService
             announcement: _config.AnnounceCrossMediaSubstitution
                 ? ResponseStrings.Get("FoundAlbumInstead", locale, match.Item.Name)
                 : null,
+            request: null,
             cancellationToken).ConfigureAwait(false);
     }
 
@@ -448,6 +449,7 @@ public sealed class AlbumPlayService
         Playback.DeviceQueueManager? queueManager,
         string logLabel,
         string? announcement = null,
+        global::Alexa.NET.Request.Type.Request? request = null,
         CancellationToken cancellationToken = default)
     {
         // Get the first page of album tracks for fast time-to-audio.
@@ -560,7 +562,31 @@ public sealed class AlbumPlayService
             albumStartTicks += albumItems[i].RunTimeTicks ?? 0;
         }
 
-        SkillResponse albumResponse = _launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, _launch.GetStreamUrl(item_id, user), item_id, albumItems[startIndex], user, context, announceLocale: locale, collectionParentId: album.Id, collectionStartTicks: albumStartTicks);
+        // JF-625 (live 2026-09-24): in seek mode the VideoApp player steals the audio
+        // channel before a FINAL-response announce finishes ("In riproduzione" and then
+        // cut, the JF-501 observation on fast-start HLS). The album announce rides the
+        // progressive-response vehicle instead (spoken BEFORE the launch response, the
+        // book-path mechanism) and says the ALBUM name, which is what an album play
+        // announces; SpeakVideoLaunchAnnounceAsync falls back to riding the final
+        // response when the vehicle cannot serve it (screenless degrade, send failure).
+        SkillResponse albumResponse;
+        if (request != null
+            && _launch.GetVideoAppForAudio(user)
+            && Interface.VideoAppCapabilities.DeviceSupportsVideoApp(context)
+            && _launch.GetAnnounceAudioPlays(user))
+        {
+            IOutputSpeech? albumAnnounce = SpeechBuilder.BuildNowPlayingSpeech(album.Name, locale, announceOn: true);
+            IOutputSpeech? fallbackAnnounce = await _launch.SpeakVideoLaunchAnnounceAsync(context, request, albumAnnounce).ConfigureAwait(false);
+            albumResponse = _launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, _launch.GetStreamUrl(item_id, user), item_id, albumItems[startIndex], user, context, collectionParentId: album.Id, collectionStartTicks: albumStartTicks);
+            if (fallbackAnnounce != null && albumResponse.Response.OutputSpeech is null)
+            {
+                albumResponse.Response.OutputSpeech = fallbackAnnounce;
+            }
+        }
+        else
+        {
+            albumResponse = _launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, _launch.GetStreamUrl(item_id, user), item_id, albumItems[startIndex], user, context, announceLocale: locale, collectionParentId: album.Id, collectionStartTicks: albumStartTicks);
+        }
 
         // The caller may pass an announcement (fuzzy name correction in PlayAlbum,
         // cross-media substitution in the JF-345 cascade) so the user knows what is

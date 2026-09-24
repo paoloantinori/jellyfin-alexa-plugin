@@ -585,6 +585,7 @@ public class PlayAlbumIntentHandler : BaseHandler
             // matched name so the user knows what's playing (same mechanism as the
             // artist fallback's announcement in BuildArtistSongsResponseAsync, JF-339).
             announcement: fuzzyAlbumAnnouncement,
+            request: intentRequest,
             cancellationToken).ConfigureAwait(false);
     }
 
