@@ -471,13 +471,16 @@ intents:
       - '{sleep_duration} でスリープタイマーをセットして'
   - name: SetReminderIntent
     slots:
-      - name: duration_minutes
-        type: AMAZON.NUMBER
+      - name: reminder_duration
+        type: AMAZON.DURATION
       - name: reminder_time
         type: AMAZON.TIME
     samples:
-      - '{duration_minutes} 分後にリマインドして'
-      - '{duration_minutes} 分のリマインダーを設定して'
+      # The space after the slot is load-bearing (JF-513 glued-slot class, the
+      # JF-618 sleep-timer lesson): a slot glued to the following character fails
+      # the SMAPI build.
+      - '{reminder_duration} 後にリマインドして'
+      - '{reminder_duration} のリマインダーを設定して'
       - '{reminder_time} にリマインドして'
       - '{reminder_time} のリマインダーを設定して'
   - name: PlayMoodMusicIntent
@@ -914,8 +917,8 @@ dialog:
     - name: SetReminderIntent
       confirmationRequired: false
       slots:
-        - name: duration_minutes
-          type: AMAZON.NUMBER
+        - name: reminder_duration
+          type: AMAZON.DURATION
           confirmationRequired: false
           elicitationRequired: false
         - name: reminder_time

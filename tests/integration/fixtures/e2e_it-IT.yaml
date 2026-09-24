@@ -674,5 +674,5 @@ tests:
   - utterance: "ricordami tra trenta minuti"
     expected_intent: SetReminderIntent
     expected_slots:
-      duration_minutes: {}
+      reminder_duration: {}
     expected_response_type: any

@@ -630,12 +630,19 @@ tests:
       sleep_duration: {value: PT30M}
 
   # ------------------------------------------------------------------------
-  # SetReminderIntent (duration_minutes / reminder_time), JF-451
+  # SetReminderIntent (reminder_duration, JF-622: AMAZON.DURATION carries the unit)
   # ------------------------------------------------------------------------
   - utterance: "ricordami tra trenta minuti"
     expected_intent: SetReminderIntent
     expected_slots:
-      duration_minutes: {}
+      reminder_duration: {value: PT30M}
+
+  # JF-622 live incident: seconds used to be swallowed into a 30-MINUTE reminder
+  # by the number-typed minutes slot; the duration slot must carry the unit now.
+  - utterance: "Ricordami tra trenta secondi"
+    expected_intent: SetReminderIntent
+    expected_slots:
+      reminder_duration: {value: PT30S}
 
   - utterance: "ricordami alle otto"
     expected_intent: SetReminderIntent

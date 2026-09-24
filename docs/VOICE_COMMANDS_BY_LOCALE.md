@@ -41,7 +41,6 @@ Placeholder legend:
 | `<اسم القناة>` | `{channel}` |
 | `<رقم الفصل>` | `{chapter_number}` |
 | `<العقد (الثمانينيات)>` | `{decade}` |
-| `<عدد الدقائق>` | `{duration_minutes}` |
 | `<رقم الحلقة>` | `{episode_number}` |
 | `<الموضع (التالية، الأحدث)>` | `{episode_position}` |
 | `<عامل التصفية (روك، جاز)>` | `{filter}` |
@@ -55,6 +54,7 @@ Placeholder legend:
 | `<اسم البودكاست>` | `{podcast_name}` |
 | `<نص البحث>` | `{query}` |
 | `<أغانٍ أو ألبومات>` | `{query_type}` |
+| `<المدة (5 دقائق، 30 ثانية، نص ساعة)>` | `{reminder_duration}` |
 | `<الوقت (الساعة السابعة)>` | `{reminder_time}` |
 | `<رقم الموسم>` | `{season_number}` |
 | `<اسم المسلسل>` | `{series_name}` |
@@ -537,8 +537,8 @@ Complete phrase list (314 phrases across 64 commands):
 
 **Set a reminder**
 
-- `ذكرني بعد <عدد الدقائق> دقيقة`
-- `اضبط منبها بعد <عدد الدقائق> دقيقة`
+- `ذكرني بعد <المدة (5 دقائق، 30 ثانية، نص ساعة)>`
+- `اضبط منبها بعد <المدة (5 دقائق، 30 ثانية، نص ساعة)>`
 - `ذكرني الساعة <الوقت (الساعة السابعة)>`
 - `اضبط منبها الساعة <الوقت (الساعة السابعة)>`
 
@@ -581,7 +581,6 @@ Placeholder legend:
 | `<naam van het kanaal>` | `{channel}` |
 | `<hoofdstuknummer>` | `{chapter_number}` |
 | `<decennium (jaren 80)>` | `{decade}` |
-| `<aantal minuten>` | `{duration_minutes}` |
 | `<afleveringsnummer>` | `{episode_number}` |
 | `<positie (volgende, nieuwste)>` | `{episode_position}` |
 | `<filterwoord (rock, jazz)>` | `{filter}` |
@@ -595,6 +594,7 @@ Placeholder legend:
 | `<naam van de podcast>` | `{podcast_name}` |
 | `<zoektekst>` | `{query}` |
 | `<nummers of albums>` | `{query_type}` |
+| `<duur (5 minuten, 30 seconden, een half uur)>` | `{reminder_duration}` |
 | `<tijdstip (om 7 uur)>` | `{reminder_time}` |
 | `<seizoensnummer>` | `{season_number}` |
 | `<naam van de serie>` | `{series_name}` |
@@ -1139,8 +1139,8 @@ Complete phrase list (377 phrases across 64 commands):
 
 **Set a reminder**
 
-- `herinner me over <aantal minuten> minuten`
-- `stel een herinnering in voor <aantal minuten> minuten`
+- `herinner me over <duur (5 minuten, 30 seconden, een half uur)>`
+- `stel een herinnering in voor <duur (5 minuten, 30 seconden, een half uur)>`
 - `herinner me om <tijdstip (om 7 uur)>`
 - `zet een herinnering op <tijdstip (om 7 uur)>`
 
@@ -1184,7 +1184,6 @@ Placeholder legend:
 | `<channel name>` | `{channel}` |
 | `<chapter number>` | `{chapter_number}` |
 | `<decade (the 80s)>` | `{decade}` |
-| `<number of minutes>` | `{duration_minutes}` |
 | `<episode number>` | `{episode_number}` |
 | `<position (next, latest)>` | `{episode_position}` |
 | `<filter word (rock, jazz)>` | `{filter}` |
@@ -1198,6 +1197,7 @@ Placeholder legend:
 | `<podcast name>` | `{podcast_name}` |
 | `<what to search for>` | `{query}` |
 | `<tracks or albums>` | `{query_type}` |
+| `<duration (5 minutes, 30 seconds, half an hour)>` | `{reminder_duration}` |
 | `<time (7 pm)>` | `{reminder_time}` |
 | `<season number>` | `{season_number}` |
 | `<series name>` | `{series_name}` |
@@ -1832,8 +1832,8 @@ Complete phrase list (469 phrases across 64 commands):
 
 **Set a reminder**
 
-- `remind me in <number of minutes> minutes`
-- `set a reminder for <number of minutes> minutes`
+- `remind me in <duration (5 minutes, 30 seconds, half an hour)>`
+- `set a reminder for <duration (5 minutes, 30 seconds, half an hour)>`
 - `remind me at <time (7 pm)>`
 - `set a reminder for <time (7 pm)>`
 
@@ -1878,7 +1878,6 @@ Placeholder legend:
 | `<channel name>` | `{channel}` |
 | `<chapter number>` | `{chapter_number}` |
 | `<decade (the 80s)>` | `{decade}` |
-| `<number of minutes>` | `{duration_minutes}` |
 | `<episode number>` | `{episode_number}` |
 | `<position (next, latest)>` | `{episode_position}` |
 | `<filter word (rock, jazz)>` | `{filter}` |
@@ -1892,6 +1891,7 @@ Placeholder legend:
 | `<podcast name>` | `{podcast_name}` |
 | `<what to search for>` | `{query}` |
 | `<tracks or albums>` | `{query_type}` |
+| `<duration (5 minutes, 30 seconds, half an hour)>` | `{reminder_duration}` |
 | `<time (7 pm)>` | `{reminder_time}` |
 | `<season number>` | `{season_number}` |
 | `<series name>` | `{series_name}` |
@@ -2519,8 +2519,8 @@ Complete phrase list (462 phrases across 64 commands):
 
 **Set a reminder**
 
-- `remind me in <number of minutes> minutes`
-- `set a reminder for <number of minutes> minutes`
+- `remind me in <duration (5 minutes, 30 seconds, half an hour)>`
+- `set a reminder for <duration (5 minutes, 30 seconds, half an hour)>`
 - `remind me at <time (7 pm)>`
 - `set a reminder for <time (7 pm)>`
 
@@ -2565,7 +2565,6 @@ Placeholder legend:
 | `<channel name>` | `{channel}` |
 | `<chapter number>` | `{chapter_number}` |
 | `<decade (the 80s)>` | `{decade}` |
-| `<number of minutes>` | `{duration_minutes}` |
 | `<episode number>` | `{episode_number}` |
 | `<position (next, latest)>` | `{episode_position}` |
 | `<filter word (rock, jazz)>` | `{filter}` |
@@ -2579,6 +2578,7 @@ Placeholder legend:
 | `<podcast name>` | `{podcast_name}` |
 | `<what to search for>` | `{query}` |
 | `<tracks or albums>` | `{query_type}` |
+| `<duration (5 minutes, 30 seconds, half an hour)>` | `{reminder_duration}` |
 | `<time (7 pm)>` | `{reminder_time}` |
 | `<season number>` | `{season_number}` |
 | `<series name>` | `{series_name}` |
@@ -3302,8 +3302,8 @@ Complete phrase list (558 phrases across 64 commands):
 
 **Set a reminder**
 
-- `remind me in <number of minutes> minutes`
-- `set a reminder for <number of minutes> minutes`
+- `remind me in <duration (5 minutes, 30 seconds, half an hour)>`
+- `set a reminder for <duration (5 minutes, 30 seconds, half an hour)>`
 - `remind me at <time (7 pm)>`
 - `set a reminder for <time (7 pm)>`
 
@@ -3348,7 +3348,6 @@ Placeholder legend:
 | `<channel name>` | `{channel}` |
 | `<chapter number>` | `{chapter_number}` |
 | `<decade (the 80s)>` | `{decade}` |
-| `<number of minutes>` | `{duration_minutes}` |
 | `<episode number>` | `{episode_number}` |
 | `<position (next, latest)>` | `{episode_position}` |
 | `<filter word (rock, jazz)>` | `{filter}` |
@@ -3362,6 +3361,7 @@ Placeholder legend:
 | `<podcast name>` | `{podcast_name}` |
 | `<what to search for>` | `{query}` |
 | `<tracks or albums>` | `{query_type}` |
+| `<duration (5 minutes, 30 seconds, half an hour)>` | `{reminder_duration}` |
 | `<time (7 pm)>` | `{reminder_time}` |
 | `<season number>` | `{season_number}` |
 | `<series name>` | `{series_name}` |
@@ -3990,8 +3990,8 @@ Complete phrase list (463 phrases across 64 commands):
 
 **Set a reminder**
 
-- `remind me in <number of minutes> minutes`
-- `set a reminder for <number of minutes> minutes`
+- `remind me in <duration (5 minutes, 30 seconds, half an hour)>`
+- `set a reminder for <duration (5 minutes, 30 seconds, half an hour)>`
 - `remind me at <time (7 pm)>`
 - `set a reminder for <time (7 pm)>`
 
@@ -4036,7 +4036,6 @@ Placeholder legend:
 | `<channel name>` | `{channel}` |
 | `<chapter number>` | `{chapter_number}` |
 | `<decade (the 80s)>` | `{decade}` |
-| `<number of minutes>` | `{duration_minutes}` |
 | `<episode number>` | `{episode_number}` |
 | `<position (next, latest)>` | `{episode_position}` |
 | `<filter word (rock, jazz)>` | `{filter}` |
@@ -4053,6 +4052,7 @@ Placeholder legend:
 | `<seconds>` | `{position_seconds}` |
 | `<what to search for>` | `{query}` |
 | `<tracks or albums>` | `{query_type}` |
+| `<duration (5 minutes, 30 seconds, half an hour)>` | `{reminder_duration}` |
 | `<time (7 pm)>` | `{reminder_time}` |
 | `<season number>` | `{season_number}` |
 | `<number>` | `{seek_amount}` |
@@ -4801,8 +4801,8 @@ Complete phrase list (573 phrases across 66 commands):
 
 **Set a reminder**
 
-- `remind me in <number of minutes> minutes`
-- `set a reminder for <number of minutes> minutes`
+- `remind me in <duration (5 minutes, 30 seconds, half an hour)>`
+- `set a reminder for <duration (5 minutes, 30 seconds, half an hour)>`
 - `remind me at <time (7 pm)>`
 - `set a reminder for <time (7 pm)>`
 
@@ -4847,7 +4847,6 @@ Placeholder legend:
 | `<nom de la chaîne>` | `{channel}` |
 | `<numéro de chapitre>` | `{chapter_number}` |
 | `<décennie (les années 80)>` | `{decade}` |
-| `<nombre de minutes>` | `{duration_minutes}` |
 | `<numéro d'épisode>` | `{episode_number}` |
 | `<position (prochain, dernier)>` | `{episode_position}` |
 | `<filtre (rock, jazz)>` | `{filter}` |
@@ -4861,6 +4860,7 @@ Placeholder legend:
 | `<nom du podcast>` | `{podcast_name}` |
 | `<texte à rechercher>` | `{query}` |
 | `<chansons ou albums>` | `{query_type}` |
+| `<durée (5 minutes, 30 secondes, une demi-heure)>` | `{reminder_duration}` |
 | `<heure (à 19 heures)>` | `{reminder_time}` |
 | `<numéro de saison>` | `{season_number}` |
 | `<nom de la série>` | `{series_name}` |
@@ -5471,8 +5471,8 @@ Complete phrase list (430 phrases across 69 commands):
 
 **Set a reminder**
 
-- `rappelle-moi dans <nombre de minutes> minutes`
-- `mets un rappel de <nombre de minutes> minutes`
+- `rappelle-moi dans <durée (5 minutes, 30 secondes, une demi-heure)>`
+- `mets un rappel de <durée (5 minutes, 30 secondes, une demi-heure)>`
 - `rappelle-moi à <heure (à 19 heures)>`
 - `crée un rappel pour <heure (à 19 heures)>`
 
@@ -5517,7 +5517,6 @@ Placeholder legend:
 | `<nom de la chaîne>` | `{channel}` |
 | `<numéro de chapitre>` | `{chapter_number}` |
 | `<décennie (les années 80)>` | `{decade}` |
-| `<nombre de minutes>` | `{duration_minutes}` |
 | `<numéro d'épisode>` | `{episode_number}` |
 | `<position (prochain, dernier)>` | `{episode_position}` |
 | `<filtre (rock, jazz)>` | `{filter}` |
@@ -5531,6 +5530,7 @@ Placeholder legend:
 | `<nom du podcast>` | `{podcast_name}` |
 | `<texte à rechercher>` | `{query}` |
 | `<chansons ou albums>` | `{query_type}` |
+| `<durée (5 minutes, 30 secondes, une demi-heure)>` | `{reminder_duration}` |
 | `<heure (à 19 heures)>` | `{reminder_time}` |
 | `<numéro de saison>` | `{season_number}` |
 | `<nom de la série>` | `{series_name}` |
@@ -6153,8 +6153,8 @@ Complete phrase list (442 phrases across 69 commands):
 
 **Set a reminder**
 
-- `rappelle-moi dans <nombre de minutes> minutes`
-- `mets un rappel de <nombre de minutes> minutes`
+- `rappelle-moi dans <durée (5 minutes, 30 secondes, une demi-heure)>`
+- `mets un rappel de <durée (5 minutes, 30 secondes, une demi-heure)>`
 - `rappelle-moi à <heure (à 19 heures)>`
 - `crée un rappel pour <heure (à 19 heures)>`
 
@@ -6199,7 +6199,6 @@ Placeholder legend:
 | `<Name des Senders>` | `{channel}` |
 | `<Kapitelnummer>` | `{chapter_number}` |
 | `<Jahrzehnt (die 80er)>` | `{decade}` |
-| `<Anzahl Minuten>` | `{duration_minutes}` |
 | `<Episodennummer>` | `{episode_number}` |
 | `<Position (nächste, neueste)>` | `{episode_position}` |
 | `<Filterwort (Rock, Jazz)>` | `{filter}` |
@@ -6213,6 +6212,7 @@ Placeholder legend:
 | `<Name des Podcasts>` | `{podcast_name}` |
 | `<Suchbegriff>` | `{query}` |
 | `<Titel oder Alben>` | `{query_type}` |
+| `<Dauer (5 Minuten, 30 Sekunden, eine halbe Stunde)>` | `{reminder_duration}` |
 | `<Uhrzeit (um 19 Uhr)>` | `{reminder_time}` |
 | `<Staffelnummer>` | `{season_number}` |
 | `<Name der Serie>` | `{series_name}` |
@@ -6844,8 +6844,8 @@ Complete phrase list (451 phrases across 69 commands):
 
 **Set a reminder**
 
-- `erinnere mich in <Anzahl Minuten> minuten`
-- `stelle eine erinnerung für <Anzahl Minuten> minuten`
+- `erinnere mich in <Dauer (5 Minuten, 30 Sekunden, eine halbe Stunde)>`
+- `stelle eine erinnerung für <Dauer (5 Minuten, 30 Sekunden, eine halbe Stunde)>`
 - `erinnere mich um <Uhrzeit (um 19 Uhr)>`
 - `setze eine erinnerung auf <Uhrzeit (um 19 Uhr)>`
 
@@ -6890,7 +6890,6 @@ Placeholder legend:
 | `<चैनल का नाम>` | `{channel}` |
 | `<अध्याय नंबर>` | `{chapter_number}` |
 | `<दशक (80 का दशक)>` | `{decade}` |
-| `<मिनट की संख्या>` | `{duration_minutes}` |
 | `<एपिसोड नंबर>` | `{episode_number}` |
 | `<स्थिति (अगला, नवीनतम)>` | `{episode_position}` |
 | `<फ़िल्टर (रॉक, जैज़)>` | `{filter}` |
@@ -6904,6 +6903,7 @@ Placeholder legend:
 | `<पॉडकास्ट का नाम>` | `{podcast_name}` |
 | `<खोजने के लिए शब्द>` | `{query}` |
 | `<गाने या एल्बम>` | `{query_type}` |
+| `<अवधि (5 मिनट, 30 सेकंड, आधा घंटा)>` | `{reminder_duration}` |
 | `<समय (शाम 7 बजे)>` | `{reminder_time}` |
 | `<सीज़न नंबर>` | `{season_number}` |
 | `<सीरीज़ का नाम>` | `{series_name}` |
@@ -7405,8 +7405,8 @@ Complete phrase list (334 phrases across 64 commands):
 
 **Set a reminder**
 
-- `<मिनट की संख्या> मिनट में मुझे याद दिलाओ`
-- `<मिनट की संख्या> मिनट का रिमाइंडर सेट करो`
+- `<अवधि (5 मिनट, 30 सेकंड, आधा घंटा)> में मुझे याद दिलाओ`
+- `<अवधि (5 मिनट, 30 सेकंड, आधा घंटा)> का रिमाइंडर सेट करो`
 - `<समय (शाम 7 बजे)> पर मुझे याद दिलाओ`
 - `<समय (शाम 7 बजे)> का रिमाइंडर सेट करो`
 
@@ -7451,7 +7451,6 @@ Placeholder legend:
 | `<numero del capitolo>` | `{chapter_number}` |
 | `<decennio (gli anni ottanta)>` | `{decade}` |
 | `<ordinale (primo, secondo)>` | `{direction}` |
-| `<numero di minuti>` | `{duration_minutes}` |
 | `<numero dell'episodio>` | `{episode_number}` |
 | `<posizione (prossimo, ultimo)>` | `{episode_position}` |
 | `<filtro (rock, jazz)>` | `{filter}` |
@@ -7465,6 +7464,7 @@ Placeholder legend:
 | `<nome del podcast>` | `{podcast_name}` |
 | `<testo da cercare>` | `{query}` |
 | `<brani o album>` | `{query_type}` |
+| `<durata (5 minuti, 30 secondi, mezz'ora)>` | `{reminder_duration}` |
 | `<ora (alle sette)>` | `{reminder_time}` |
 | `<numero della stagione>` | `{season_number}` |
 | `<nome della serie>` | `{series_name}` |
@@ -9167,8 +9167,8 @@ Complete phrase list (1518 phrases across 69 commands):
 
 **Set a reminder**
 
-- `Ricordami tra <numero di minuti> minuti`
-- `Imposta un promemoria tra <numero di minuti> minuti`
+- `Ricordami tra <durata (5 minuti, 30 secondi, mezz'ora)>`
+- `Imposta un promemoria tra <durata (5 minuti, 30 secondi, mezz'ora)>`
 - `Ricordami alle <ora (alle sette)>`
 - `Imposta un promemoria per le <ora (alle sette)>`
 
@@ -9212,7 +9212,6 @@ Placeholder legend:
 | `<チャンネル名>` | `{channel}` |
 | `<チャプター番号>` | `{chapter_number}` |
 | `<年代 (80年代)>` | `{decade}` |
-| `<分数>` | `{duration_minutes}` |
 | `<エピソード番号>` | `{episode_number}` |
 | `<位置（次、最新）>` | `{episode_position}` |
 | `<フィルター（ロック、ジャズ）>` | `{filter}` |
@@ -9226,6 +9225,7 @@ Placeholder legend:
 | `<ポッドキャスト名>` | `{podcast_name}` |
 | `<検索したい言葉>` | `{query}` |
 | `<トラックまたはアルバム>` | `{query_type}` |
+| `<時間（5分、30秒、30分）>` | `{reminder_duration}` |
 | `<時刻 (7時)>` | `{reminder_time}` |
 | `<シーズン番号>` | `{season_number}` |
 | `<シリーズ名>` | `{series_name}` |
@@ -9705,8 +9705,8 @@ Complete phrase list (312 phrases across 64 commands):
 
 **Set a reminder**
 
-- `<分数> 分後にリマインドして`
-- `<分数> 分のリマインダーを設定して`
+- `<時間（5分、30秒、30分）> 後にリマインドして`
+- `<時間（5分、30秒、30分）> のリマインダーを設定して`
 - `<時刻 (7時)> にリマインドして`
 - `<時刻 (7時)> のリマインダーを設定して`
 
@@ -9750,7 +9750,6 @@ Placeholder legend:
 | `<nome do canal>` | `{channel}` |
 | `<número do capítulo>` | `{chapter_number}` |
 | `<década (anos 80)>` | `{decade}` |
-| `<número de minutos>` | `{duration_minutes}` |
 | `<número do episódio>` | `{episode_number}` |
 | `<posição (próximo, último)>` | `{episode_position}` |
 | `<filtro (rock, jazz)>` | `{filter}` |
@@ -9764,6 +9763,7 @@ Placeholder legend:
 | `<nome do podcast>` | `{podcast_name}` |
 | `<texto a procurar>` | `{query}` |
 | `<faixas ou álbuns>` | `{query_type}` |
+| `<duração (5 minutos, 30 segundos, meia hora)>` | `{reminder_duration}` |
 | `<hora (às sete)>` | `{reminder_time}` |
 | `<número da temporada>` | `{season_number}` |
 | `<nome da série>` | `{series_name}` |
@@ -10320,8 +10320,8 @@ Complete phrase list (390 phrases across 64 commands):
 
 **Set a reminder**
 
-- `me lembre em <número de minutos> minutos`
-- `crie um lembrete de <número de minutos> minutos`
+- `me lembre em <duração (5 minutos, 30 segundos, meia hora)>`
+- `crie um lembrete de <duração (5 minutos, 30 segundos, meia hora)>`
 - `me lembre às <hora (às sete)>`
 - `crie um lembrete para as <hora (às sete)>`
 
@@ -10366,7 +10366,6 @@ Placeholder legend:
 | `<nombre del canal>` | `{channel}` |
 | `<número de capítulo>` | `{chapter_number}` |
 | `<década (los ochenta)>` | `{decade}` |
-| `<número de minutos>` | `{duration_minutes}` |
 | `<número de episodio>` | `{episode_number}` |
 | `<posición (próximo, último)>` | `{episode_position}` |
 | `<filtro (rock, jazz)>` | `{filter}` |
@@ -10380,6 +10379,7 @@ Placeholder legend:
 | `<nombre del pódcast>` | `{podcast_name}` |
 | `<texto a buscar>` | `{query}` |
 | `<canciones o álbumes>` | `{query_type}` |
+| `<duración (5 minutos, 30 segundos, media hora)>` | `{reminder_duration}` |
 | `<hora (a las siete)>` | `{reminder_time}` |
 | `<número de temporada>` | `{season_number}` |
 | `<nombre de la serie>` | `{series_name}` |
@@ -10965,8 +10965,8 @@ Complete phrase list (420 phrases across 64 commands):
 
 **Set a reminder**
 
-- `recuérdame en <número de minutos> minutos`
-- `pon un recordatorio de <número de minutos> minutos`
+- `recuérdame en <duración (5 minutos, 30 segundos, media hora)>`
+- `pon un recordatorio de <duración (5 minutos, 30 segundos, media hora)>`
 - `recuérdame a las <hora (a las siete)>`
 - `crea un recordatorio para las <hora (a las siete)>`
 
@@ -11011,7 +11011,6 @@ Placeholder legend:
 | `<nombre del canal>` | `{channel}` |
 | `<número de capítulo>` | `{chapter_number}` |
 | `<década (los ochenta)>` | `{decade}` |
-| `<número de minutos>` | `{duration_minutes}` |
 | `<número de episodio>` | `{episode_number}` |
 | `<posición (próximo, último)>` | `{episode_position}` |
 | `<filtro (rock, jazz)>` | `{filter}` |
@@ -11025,6 +11024,7 @@ Placeholder legend:
 | `<nombre del pódcast>` | `{podcast_name}` |
 | `<texto a buscar>` | `{query}` |
 | `<canciones o álbumes>` | `{query_type}` |
+| `<duración (5 minutos, 30 segundos, media hora)>` | `{reminder_duration}` |
 | `<hora (a las siete)>` | `{reminder_time}` |
 | `<número de temporada>` | `{season_number}` |
 | `<nombre de la serie>` | `{series_name}` |
@@ -11604,8 +11604,8 @@ Complete phrase list (414 phrases across 64 commands):
 
 **Set a reminder**
 
-- `recuérdame en <número de minutos> minutos`
-- `pon un recordatorio de <número de minutos> minutos`
+- `recuérdame en <duración (5 minutos, 30 segundos, media hora)>`
+- `pon un recordatorio de <duración (5 minutos, 30 segundos, media hora)>`
 - `recuérdame a las <hora (a las siete)>`
 - `crea un recordatorio para las <hora (a las siete)>`
 
@@ -11650,7 +11650,6 @@ Placeholder legend:
 | `<nombre del canal>` | `{channel}` |
 | `<número de capítulo>` | `{chapter_number}` |
 | `<década (los ochenta)>` | `{decade}` |
-| `<número de minutos>` | `{duration_minutes}` |
 | `<número de episodio>` | `{episode_number}` |
 | `<posición (próximo, último)>` | `{episode_position}` |
 | `<filtro (rock, jazz)>` | `{filter}` |
@@ -11664,6 +11663,7 @@ Placeholder legend:
 | `<nombre del pódcast>` | `{podcast_name}` |
 | `<texto a buscar>` | `{query}` |
 | `<canciones o álbumes>` | `{query_type}` |
+| `<duración (5 minutos, 30 segundos, media hora)>` | `{reminder_duration}` |
 | `<hora (a las siete)>` | `{reminder_time}` |
 | `<número de temporada>` | `{season_number}` |
 | `<nombre de la serie>` | `{series_name}` |
@@ -12237,8 +12237,8 @@ Complete phrase list (408 phrases across 64 commands):
 
 **Set a reminder**
 
-- `recuérdame en <número de minutos> minutos`
-- `pon un recordatorio de <número de minutos> minutos`
+- `recuérdame en <duración (5 minutos, 30 segundos, media hora)>`
+- `pon un recordatorio de <duración (5 minutos, 30 segundos, media hora)>`
 - `recuérdame a las <hora (a las siete)>`
 - `crea un recordatorio para las <hora (a las siete)>`
 

@@ -194,7 +194,7 @@
   "ErrorSkillError": "Algo salió mal. Por favor, inténtalo de nuevo.",
   "ErrorTimeout": "Eso tardó demasiado. Por favor, inténtalo de nuevo.",
   "DidNotCatchReminderTime": "Cuando debo recordartelo? Dime una hora o un numero de minutos.",
-  "ReminderSetRelative": "Recordatorio configurado para {0} minutos.",
+  "ReminderSetRelativeFor": "Recordatorio configurado para {0}.",
   "ReminderSetAbsolute": "Recordatorio configurado para las {0}.",
   "ReminderError": "Lo siento, no pude configurar el recordatorio. Por favor, intenta de nuevo.",
   "ReminderPermissionRequired": "Para configurar recordatorios, necesito permiso. Ve a la app de Alexa para conceder los permisos de recordatorio.",

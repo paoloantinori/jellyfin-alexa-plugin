@@ -472,13 +472,13 @@ intents:
       - apagar en {sleep_duration}
   - name: SetReminderIntent
     slots:
-      - name: duration_minutes
-        type: AMAZON.NUMBER
+      - name: reminder_duration
+        type: AMAZON.DURATION
       - name: reminder_time
         type: AMAZON.TIME
     samples:
-      - recuérdame en {duration_minutes} minutos
-      - pon un recordatorio de {duration_minutes} minutos
+      - recuérdame en {reminder_duration}
+      - pon un recordatorio de {reminder_duration}
       - recuérdame a las {reminder_time}
       - crea un recordatorio para las {reminder_time}
   - name: PlayMoodMusicIntent
@@ -994,8 +994,8 @@ dialog:
     - name: SetReminderIntent
       confirmationRequired: false
       slots:
-        - name: duration_minutes
-          type: AMAZON.NUMBER
+        - name: reminder_duration
+          type: AMAZON.DURATION
           confirmationRequired: false
           elicitationRequired: false
         - name: reminder_time

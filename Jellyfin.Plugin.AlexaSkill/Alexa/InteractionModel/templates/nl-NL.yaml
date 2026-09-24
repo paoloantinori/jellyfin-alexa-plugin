@@ -502,13 +502,13 @@ intents:
       - zet uit over {sleep_duration}
   - name: SetReminderIntent
     slots:
-      - name: duration_minutes
-        type: AMAZON.NUMBER
+      - name: reminder_duration
+        type: AMAZON.DURATION
       - name: reminder_time
         type: AMAZON.TIME
     samples:
-      - herinner me over {duration_minutes} minuten
-      - stel een herinnering in voor {duration_minutes} minuten
+      - herinner me over {reminder_duration}
+      - stel een herinnering in voor {reminder_duration}
       - herinner me om {reminder_time}
       - zet een herinnering op {reminder_time}
   - name: PlayMoodMusicIntent
@@ -967,8 +967,8 @@ dialog:
     - name: SetReminderIntent
       confirmationRequired: false
       slots:
-        - name: duration_minutes
-          type: AMAZON.NUMBER
+        - name: reminder_duration
+          type: AMAZON.DURATION
           confirmationRequired: false
           elicitationRequired: false
         - name: reminder_time

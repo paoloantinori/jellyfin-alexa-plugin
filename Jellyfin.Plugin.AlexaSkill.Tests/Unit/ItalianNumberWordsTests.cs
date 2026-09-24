@@ -9,8 +9,10 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 
 /// <summary>
 /// The ItalianNumberWords table must mirror the ItalianNumber slot values exactly
-/// (JF-451): every word Alexa can return for duration_minutes must parse, and digit
-/// strings (the AMAZON.NUMBER behavior in the other 16 locales) keep parsing.
+/// (JF-451): every word Alexa can return for chapter_number / season_number /
+/// episode_number must parse, and digit strings (the AMAZON.NUMBER behavior in
+/// the other 16 locales) keep parsing. The former duration_minutes users moved
+/// to unit-carrying AMAZON.DURATION slots (JF-618 sleep timer, JF-622 reminder).
 /// </summary>
 public class ItalianNumberWordsTests
 {

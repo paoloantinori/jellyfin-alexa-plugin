@@ -591,8 +591,8 @@
         "name": "SetReminderIntent",
         "slots": [
           {
-            "name": "duration_minutes",
-            "type": "AMAZON.NUMBER"
+            "name": "reminder_duration",
+            "type": "AMAZON.DURATION"
           },
           {
             "name": "reminder_time",
@@ -600,8 +600,8 @@
           }
         ],
         "samples": [
-          "{duration_minutes} 分後にリマインドして",
-          "{duration_minutes} 分のリマインダーを設定して",
+          "{reminder_duration} 後にリマインドして",
+          "{reminder_duration} のリマインダーを設定して",
           "{reminder_time} にリマインドして",
           "{reminder_time} のリマインダーを設定して"
         ]
@@ -1569,8 +1569,8 @@
         "confirmationRequired": false,
         "slots": [
           {
-            "name": "duration_minutes",
-            "type": "AMAZON.NUMBER",
+            "name": "reminder_duration",
+            "type": "AMAZON.DURATION",
             "confirmationRequired": false,
             "elicitationRequired": false
           },

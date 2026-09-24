@@ -645,8 +645,8 @@
         "name": "SetReminderIntent",
         "slots": [
           {
-            "name": "duration_minutes",
-            "type": "AMAZON.NUMBER"
+            "name": "reminder_duration",
+            "type": "AMAZON.DURATION"
           },
           {
             "name": "reminder_time",
@@ -654,8 +654,8 @@
           }
         ],
         "samples": [
-          "erinnere mich in {duration_minutes} minuten",
-          "stelle eine erinnerung für {duration_minutes} minuten",
+          "erinnere mich in {reminder_duration}",
+          "stelle eine erinnerung für {reminder_duration}",
           "erinnere mich um {reminder_time}",
           "setze eine erinnerung auf {reminder_time}"
         ]
@@ -1806,8 +1806,8 @@
         "confirmationRequired": false,
         "slots": [
           {
-            "name": "duration_minutes",
-            "type": "AMAZON.NUMBER",
+            "name": "reminder_duration",
+            "type": "AMAZON.DURATION",
             "confirmationRequired": false,
             "elicitationRequired": false
           },

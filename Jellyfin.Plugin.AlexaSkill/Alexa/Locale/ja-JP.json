@@ -191,7 +191,7 @@
   "ErrorSkillError": "エラーが発生しました。もう一度お試しください。",
   "ErrorTimeout": "時間がかかりすぎました。もう一度お試しください。",
   "DidNotCatchReminderTime": "いつリマインドしますか？時間または分数を言ってください。",
-  "ReminderSetRelative": "{0} 分後にリマインダーを設定しました。",
+  "ReminderSetRelativeFor": "{0}後にリマインダーを設定しました。",
   "ReminderSetAbsolute": "{0} にリマインダーを設定しました。",
   "ReminderError": "申し訳ありませんが、リマインダーを設定できませんでした。もう一度お試しください。",
   "ReminderPermissionRequired": "リマインダーを設定するには許可が必要です。Alexaアプリでリマインダーの許可を付与してください。",

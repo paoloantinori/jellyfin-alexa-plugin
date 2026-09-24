@@ -476,13 +476,13 @@ intents:
       - '{sleep_duration} बाद बंद करो'
   - name: SetReminderIntent
     slots:
-      - name: duration_minutes
-        type: AMAZON.NUMBER
+      - name: reminder_duration
+        type: AMAZON.DURATION
       - name: reminder_time
         type: AMAZON.TIME
     samples:
-      - '{duration_minutes} मिनट में मुझे याद दिलाओ'
-      - '{duration_minutes} मिनट का रिमाइंडर सेट करो'
+      - '{reminder_duration} में मुझे याद दिलाओ'
+      - '{reminder_duration} का रिमाइंडर सेट करो'
       - '{reminder_time} पर मुझे याद दिलाओ'
       - '{reminder_time} का रिमाइंडर सेट करो'
   - name: PlayMoodMusicIntent
@@ -924,8 +924,8 @@ dialog:
     - name: SetReminderIntent
       confirmationRequired: false
       slots:
-        - name: duration_minutes
-          type: AMAZON.NUMBER
+        - name: reminder_duration
+          type: AMAZON.DURATION
           confirmationRequired: false
           elicitationRequired: false
         - name: reminder_time

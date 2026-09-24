@@ -41,16 +41,16 @@ public class SetReminderIntentHandlerTests
     }
 
     private static IntentRequest CreateIntentRequest(
-        string? durationMinutes = null,
+        string? durationValue = null,
         string? reminderTime = null,
         string? reminderMessage = null)
     {
         var intent = new Intent { Name = "SetReminderIntent" };
         intent.Slots = new Dictionary<string, global::Alexa.NET.Request.Slot>();
 
-        if (durationMinutes != null)
+        if (durationValue != null)
         {
-            intent.Slots["duration_minutes"] = new global::Alexa.NET.Request.Slot { Name = "duration_minutes", Value = durationMinutes };
+            intent.Slots["reminder_duration"] = new global::Alexa.NET.Request.Slot { Name = "reminder_duration", Value = durationValue };
         }
 
         if (reminderTime != null)
@@ -90,7 +90,7 @@ public class SetReminderIntentHandlerTests
     public void CanHandle_MatchingIntent_ReturnsTrue()
     {
         var handler = CreateHandler();
-        var request = CreateIntentRequest(durationMinutes: "30");
+        var request = CreateIntentRequest(durationValue: "30");
 
         Assert.True(handler.CanHandle(request));
     }
@@ -118,7 +118,7 @@ public class SetReminderIntentHandlerTests
     public async Task HandleAsync_MissingApiAccessToken_ReturnsError()
     {
         var handler = CreateHandler();
-        var request = CreateIntentRequest(durationMinutes: "30");
+        var request = CreateIntentRequest(durationValue: "30");
         var context = CreateContext(token: null);
 
         var response = await handler.HandleAsync(request, context, CreateUser(), CreateSession(), CancellationToken.None);
@@ -145,7 +145,7 @@ public class SetReminderIntentHandlerTests
     public async Task HandleAsync_WithDurationSlot_AttemptsReminderCreation()
     {
         var handler = CreateHandler();
-        var request = CreateIntentRequest(durationMinutes: "30");
+        var request = CreateIntentRequest(durationValue: "30");
         var context = CreateContext();
 
         var response = await handler.HandleAsync(request, context, CreateUser(), CreateSession(), CancellationToken.None);
@@ -159,18 +159,88 @@ public class SetReminderIntentHandlerTests
     }
 
     [Fact]
-    public async Task HandleAsync_WithItalianWordDuration_AttemptsReminderCreation()
+    public async Task HandleAsync_WithIsoDuration_AttemptsReminderCreation()
     {
-        // it-IT types duration_minutes as ItalianNumber, so the spoken "trenta"
-        // arrives as a word (JF-451 review finding: the relative path was dead).
+        // JF-622: reminder_duration is AMAZON.DURATION, so the value arrives as
+        // ISO 8601 carrying the spoken unit (the JF-618 defect class fixed here:
+        // "trenta secondi" used to be swallowed into a 30-MINUTE reminder).
         var handler = CreateHandler();
-        var request = CreateIntentRequest(durationMinutes: "trenta");
+        var request = CreateIntentRequest(durationValue: "PT30S");
         var context = CreateContext();
 
         var response = await handler.HandleAsync(request, context, CreateUser(), CreateSession(), CancellationToken.None);
 
         string output = TestHelpers.GetSpeechText(response);
         Assert.DoesNotContain("When should I remind you", output, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task HandleAsync_WithBareNumberDuration_KeepsMinutesSemantic()
+    {
+        // AMAZON.DURATION's raw-value passthrough can carry a bare number; the
+        // shared parser keeps the pre-JF-622 minutes semantic (the JF-618 rule).
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(durationValue: "30");
+        var context = CreateContext();
+
+        var response = await handler.HandleAsync(request, context, CreateUser(), CreateSession(), CancellationToken.None);
+
+        string output = TestHelpers.GetSpeechText(response);
+        Assert.DoesNotContain("When should I remind you", output, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task HandleAsync_WithWordOnlyDuration_PromptsForTime()
+    {
+        // A bare Italian number word no longer parses: AMAZON.DURATION carries the
+        // unit, so the pre-JF-622 ItalianNumber shape ("trenta" with no unit)
+        // elicits instead of arming. The unitful spoken forms ("trenta minuti")
+        // arrive as ISO 8601 and never hit this path.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(durationValue: "trenta");
+        var context = CreateContext();
+
+        var response = await handler.HandleAsync(request, context, CreateUser(), CreateSession(), CancellationToken.None);
+
+        string output = TestHelpers.GetSpeechText(response);
+        Assert.Contains("When", output, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // JF-622: the offset must carry the parsed unit. The live incident:
+    // «ricordami tra trenta secondi» armed a 30-MINUTE reminder because the old
+    // number-typed slot swallowed the unit and BuildRelativeReminder multiplied
+    // by 60 unconditionally.
+    [Theory]
+    [InlineData("PT30S", 30)]         // thirty seconds: THE live incident
+    [InlineData("PT5M", 300)]         // five minutes
+    [InlineData("PT1H", 3600)]        // an hour
+    [InlineData("PT1H30M", 5400)]     // an hour and a half
+    [InlineData("PT0S", 0)]           // zero: still arms (pre-JF-622 behavior kept)
+    [InlineData("30", 1800)]          // bare number: minutes (raw-passthrough shape)
+    [InlineData("P1W", 604800)]       // week form (ISO 8601, not XSD)
+    public void BuildRelativeReminder_CarriesTheParsedUnit(string raw, int expectedSeconds)
+    {
+        TimeSpan? duration = Jellyfin.Plugin.AlexaSkill.Alexa.Util.ResumeMath.ParseAlexaDuration(raw);
+        Assert.NotNull(duration);
+
+        var reminder = SetReminderIntentHandler.BuildRelativeReminder(duration!.Value, "msg", "en-US");
+        var trigger = Assert.IsType<global::Alexa.NET.Reminders.RelativeTrigger>(reminder.Trigger);
+        Assert.Equal(expectedSeconds, trigger.OffsetInSeconds);
+    }
+
+    [Theory]
+    [InlineData("PT30S", "30 seconds")]
+    [InlineData("PT5M", "5 minutes")]
+    [InlineData("PT1H", "one hour")]
+    [InlineData("PT1H30M", "90 minutes")]
+    public void SpokenConfirmation_NamesTheCorrectUnit(string raw, string expectedPhrase)
+    {
+        // The confirmation template (ReminderSetRelativeFor) plus the shared
+        // spoken-duration formatter must name the SAME unit the trigger carries.
+        TimeSpan duration = Jellyfin.Plugin.AlexaSkill.Alexa.Util.ResumeMath.ParseAlexaDuration(raw)!.Value;
+        string spoken = Jellyfin.Plugin.AlexaSkill.Alexa.Util.ResumeMath.FormatSpokenLargestUnit(duration, "en-US");
+        string confirmation = ResponseStrings.Get("ReminderSetRelativeFor", "en-US", spoken);
+        Assert.Contains(expectedPhrase, confirmation, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -194,7 +264,7 @@ public class SetReminderIntentHandlerTests
     public async Task HandleAsync_WithCustomMessage_ReturnsResponse()
     {
         var handler = CreateHandler();
-        var request = CreateIntentRequest(durationMinutes: "15", reminderMessage: "check new episodes");
+        var request = CreateIntentRequest(durationValue: "15", reminderMessage: "check new episodes");
         var context = CreateContext();
 
         var response = await handler.HandleAsync(request, context, CreateUser(), CreateSession(), CancellationToken.None);
@@ -205,7 +275,7 @@ public class SetReminderIntentHandlerTests
     public async Task HandleAsync_InvalidDuration_PromptsForTime()
     {
         var handler = CreateHandler();
-        var request = CreateIntentRequest(durationMinutes: "abc");
+        var request = CreateIntentRequest(durationValue: "abc");
         var context = CreateContext();
 
         var response = await handler.HandleAsync(request, context, CreateUser(), CreateSession(), CancellationToken.None);
@@ -232,13 +302,13 @@ public class ReminderLocaleStringsTests
     }
 
     [Theory]
-    [InlineData("en-US", "ReminderSetRelative")]
+    [InlineData("en-US", "ReminderSetRelativeFor")]
     [InlineData("en-US", "ReminderSetAbsolute")]
     [InlineData("en-US", "DidNotCatchReminderTime")]
     [InlineData("en-US", "ReminderPermissionRequired")]
     [InlineData("en-US", "ReminderDefaultMessage")]
-    [InlineData("de-DE", "ReminderSetRelative")]
-    [InlineData("it-IT", "ReminderSetRelative")]
+    [InlineData("de-DE", "ReminderSetRelativeFor")]
+    [InlineData("it-IT", "ReminderSetRelativeFor")]
     [InlineData("es-ES", "ReminderError")]
     [InlineData("fr-FR", "ReminderPermissionRequired")]
     public void ReminderString_HasValue(string locale, string key)
@@ -246,5 +316,36 @@ public class ReminderLocaleStringsTests
         string value = ResponseStrings.Get(key, locale);
         Assert.NotEqual(key, value);
         Assert.NotEmpty(value);
+    }
+
+    /// <summary>
+    /// JF-622: the unit-aware relative confirmation must resolve in EVERY locale
+    /// (the {0} arg is a spoken duration phrase, so the key must keep its format
+    /// arg too; the old minutes-templated ReminderSetRelative is gone).
+    /// </summary>
+    [Theory]
+    [InlineData("ar-SA")]
+    [InlineData("de-DE")]
+    [InlineData("en-AU")]
+    [InlineData("en-CA")]
+    [InlineData("en-GB")]
+    [InlineData("en-IN")]
+    [InlineData("en-US")]
+    [InlineData("es-ES")]
+    [InlineData("es-MX")]
+    [InlineData("es-US")]
+    [InlineData("fr-CA")]
+    [InlineData("fr-FR")]
+    [InlineData("hi-IN")]
+    [InlineData("it-IT")]
+    [InlineData("ja-JP")]
+    [InlineData("nl-NL")]
+    [InlineData("pt-BR")]
+    public void ReminderSetRelativeFor_ResolvesAllLocales(string locale)
+    {
+        string value = ResponseStrings.Get("ReminderSetRelativeFor", locale);
+        Assert.NotEqual("ReminderSetRelativeFor", value);
+        Assert.NotEmpty(value);
+        Assert.Contains("{0}", value);
     }
 }

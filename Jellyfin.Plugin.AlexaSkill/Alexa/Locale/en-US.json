@@ -191,7 +191,7 @@
   "ErrorSkillError": "Something went wrong. Please try again.",
   "ErrorTimeout": "That took too long. Please try again.",
   "DidNotCatchReminderTime": "When should I remind you? Please say a time or a number of minutes.",
-  "ReminderSetRelative": "Reminder set for {0} minutes from now.",
+  "ReminderSetRelativeFor": "Reminder set for {0} from now.",
   "ReminderSetAbsolute": "Reminder set for {0}.",
   "ReminderError": "Sorry, I couldn't set that reminder. Please try again.",
   "ReminderPermissionRequired": "To set reminders, I need permission. Please go to the Alexa app to grant reminder permissions.",

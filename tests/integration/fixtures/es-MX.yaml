@@ -290,15 +290,15 @@ tests:
       sleep_duration: {}
 
   # ------------------------------------------------------------------------
-  # SetReminderIntent (duration_minutes / reminder_time), JF-451
+  # SetReminderIntent (reminder_duration / reminder_time), JF-451/JF-622
   # ------------------------------------------------------------------------
   # Live re-probe 2026-09-23 (JF-618 model): with the unit-free SleepTimer samples
-  # the reminder wording reclaims this utterance (SetReminderIntent, duration_minutes=30);
+  # the reminder wording reclaims this utterance (SetReminderIntent, PT30M);
   # the 2026-09-20 trainer re-roll note described the old unit-bearing geometry.
   - utterance: "recuérdame en 30 minutos"
     expected_intent: SetReminderIntent
     expected_slots:
-      duration_minutes: {}
+      reminder_duration: {}
 
   - utterance: "recuérdame a las ocho"
     expected_intent: SetReminderIntent

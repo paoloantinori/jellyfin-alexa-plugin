@@ -191,7 +191,7 @@
   "ErrorSkillError": "Algo deu errado. Por favor, tente novamente.",
   "ErrorTimeout": "Isso demorou muito. Por favor, tente novamente.",
   "DidNotCatchReminderTime": "Quando devo lembrar você? Por favor, diga um horário ou número de minutos.",
-  "ReminderSetRelative": "Lembrete definido para {0} minutos a partir de agora.",
+  "ReminderSetRelativeFor": "Lembrete definido para {0} a partir de agora.",
   "ReminderSetAbsolute": "Lembrete definido para {0}.",
   "ReminderError": "Desculpe, não consegui definir esse lembrete. Por favor, tente novamente.",
   "ReminderPermissionRequired": "Para definir lembretes, preciso de permissão. Vá para o app Alexa para conceder permissões de lembrete.",

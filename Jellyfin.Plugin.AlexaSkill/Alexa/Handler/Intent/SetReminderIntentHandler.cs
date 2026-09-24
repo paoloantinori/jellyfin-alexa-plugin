@@ -69,7 +69,7 @@ public class SetReminderIntentHandler : BaseHandler
         string? apiEndpoint = context?.System?.ApiEndpoint ?? "https://api.amazonalexa.com";
 
         string? message = GetSlotValue(intentRequest, "reminder_message");
-        string? durationText = GetSlotValue(intentRequest, "duration_minutes");
+        string? durationText = GetSlotValue(intentRequest, "reminder_duration");
         string? timeText = GetSlotValue(intentRequest, "reminder_time");
 
         // JF-550 (dead-mic sweep; JF-549 class).
@@ -88,15 +88,20 @@ public class SetReminderIntentHandler : BaseHandler
             : ResponseStrings.Get("ReminderDefaultMessage", locale);
 
         Reminder? reminder = null;
-        int? relativeMinutes = null;
+        TimeSpan? relativeDuration = null;
         try
         {
-            // duration_minutes is AMAZON.NUMBER in 16 locales ("30") but the custom
-            // ItalianNumber type in it-IT, where the spoken "trenta" arrives as a word.
-            if (ItalianNumberWords.TryParse(durationText, out int minutes))
+            // JF-622: reminder_duration is AMAZON.DURATION, so ISO 8601 carries the
+            // spoken unit through the shared JF-618 parser («trenta secondi» is PT30S,
+            // not 30 minutes); a bare number keeps the pre-JF-622 minutes semantic.
+            // The int bound mirrors the parser's overflow stance: OffsetInSeconds is
+            // a 32-bit API field, so an absurd week form must elicit, not throw at
+            // the API boundary.
+            TimeSpan? duration = Util.ResumeMath.ParseAlexaDuration(durationText);
+            if (duration is { } parsed && parsed.TotalSeconds <= int.MaxValue)
             {
-                relativeMinutes = minutes;
-                reminder = BuildRelativeReminder(minutes, spokenText, locale);
+                relativeDuration = parsed;
+                reminder = BuildRelativeReminder(parsed, spokenText, locale);
             }
             else if (!string.IsNullOrEmpty(timeText))
             {
@@ -124,8 +129,8 @@ public class SetReminderIntentHandler : BaseHandler
             {
                 Logger.LogInformation("Reminder created with token {Token}", response.AlertToken);
 
-                string confirmMsg = relativeMinutes.HasValue
-                    ? ResponseStrings.Get("ReminderSetRelative", locale, relativeMinutes.Value.ToString(CultureInfo.InvariantCulture))
+                string confirmMsg = relativeDuration.HasValue
+                    ? ResponseStrings.Get("ReminderSetRelativeFor", locale, Util.ResumeMath.FormatSpokenLargestUnit(relativeDuration.Value, locale))
                     : ResponseStrings.Get("ReminderSetAbsolute", locale, timeText ?? string.Empty);
 
                 return ResponseBuilder.Tell(confirmMsg);
@@ -151,10 +156,19 @@ public class SetReminderIntentHandler : BaseHandler
         }
     }
 
-    private static Reminder BuildRelativeReminder(int minutes, string spokenText, string locale)
+    /// <summary>
+    /// Internal for the InternalsVisibleTo test seam (the JF-618 sleep-deadline
+    /// precedent): JF-622 tests assert the offset carries the parsed unit (PT30S
+    /// arms 30 seconds, not the old minutes * 60).
+    /// </summary>
+    /// <param name="duration">The parsed spoken duration (unit included).</param>
+    /// <param name="spokenText">The reminder's spoken message.</param>
+    /// <param name="locale">The request locale.</param>
+    /// <returns>The reminder with a relative trigger.</returns>
+    internal static Reminder BuildRelativeReminder(TimeSpan duration, string spokenText, string locale)
     {
         var reminder = BuildReminderBase(spokenText, locale);
-        reminder.Trigger = new RelativeTrigger { OffsetInSeconds = minutes * 60 };
+        reminder.Trigger = new RelativeTrigger { OffsetInSeconds = (int)duration.TotalSeconds };
         return reminder;
     }
 

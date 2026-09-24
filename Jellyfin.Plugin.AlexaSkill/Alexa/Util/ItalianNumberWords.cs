@@ -5,12 +5,14 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 
 /// <summary>
 /// Parses Italian number words to integers. The it-IT interaction model types every
-/// number slot (<c>duration_minutes</c>, <c>chapter_number</c>, <c>season_number</c>,
-/// <c>episode_number</c>) as the custom <c>ItalianNumber</c> slot type, whose values
-/// are word forms, and Alexa returns slot values verbatim, so a spoken "trenta"
-/// arrives as text where AMAZON.NUMBER locales resolve the same speech to "30"
-/// (JF-451). The table mirrors the ItalianNumber slot values exactly. Digit strings
-/// parse too, so the same helper serves the 16 AMAZON.NUMBER locales.
+/// number slot (<c>chapter_number</c>, <c>season_number</c>, <c>episode_number</c>)
+/// as the custom <c>ItalianNumber</c> slot type, whose values are word forms, and
+/// Alexa returns slot values verbatim, so a spoken "trenta" arrives as text where
+/// AMAZON.NUMBER locales resolve the same speech to "30" (JF-451; the former
+/// <c>duration_minutes</c> users moved to unit-carrying durations, sleep timer
+/// JF-618 and reminder JF-622). The table mirrors the ItalianNumber slot values
+/// exactly. Digit strings parse too, so the same helper serves the 16
+/// AMAZON.NUMBER locales.
 /// </summary>
 internal static class ItalianNumberWords
 {

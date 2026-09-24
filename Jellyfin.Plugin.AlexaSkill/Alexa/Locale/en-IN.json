@@ -180,7 +180,7 @@
   "ReminderError": "Sorry, I couldn't set that reminder. Please try again.",
   "ReminderPermissionRequired": "To set reminders, I need permission. Please go to the Alexa app to grant reminder permissions.",
   "ReminderSetAbsolute": "Reminder set for {0}.",
-  "ReminderSetRelative": "Reminder set for {0} minutes from now.",
+  "ReminderSetRelativeFor": "Reminder set for {0} from now.",
   "RemovedFromFavorites": "Media removed from the favorites list.",
   "ResumePrompt": "You were listening to {0}. Would you like to resume?",
   "ResumePromptSsml": "You were listening to {0}.<break time=\"200ms\"/>Would you like to resume?",

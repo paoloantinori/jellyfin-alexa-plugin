@@ -287,12 +287,12 @@ tests:
       sleep_duration: {}
 
   # ------------------------------------------------------------------------
-  # SetReminderIntent (duration_minutes / reminder_time), JF-451
+  # SetReminderIntent (reminder_duration / reminder_time), JF-451/JF-622
   # ------------------------------------------------------------------------
   - utterance: "recuérdame en treinta minutos"
     expected_intent: SetReminderIntent
     expected_slots:
-      duration_minutes: {}
+      reminder_duration: {}
 
   - utterance: "recuérdame a las ocho"
     expected_intent: SetReminderIntent
