@@ -294,11 +294,21 @@ internal static class AplHelper
               },
               {
                 ""type"": ""AlexaProgressBar"",
-                ""progressValue"": ""${Math.min(payload.jellyfinData.properties.progressBaseMs + elapsedTime, payload.jellyfinData.properties.totalValue)}"",
+                ""id"": ""npProgressBar"",
+                ""progressValue"": ""${payload.jellyfinData.properties.progressBaseMs}"",
                 ""totalValue"": ""${payload.jellyfinData.properties.totalValue}"",
                 ""width"": ""${Math.min(90, artSize / 3)}%"",
                 ""paddingTop"": 15,
-                ""paddingBottom"": 5
+                ""paddingBottom"": 5,
+                ""handleTick"": [
+                  {
+                    ""type"": ""SetValue"",
+                    ""componentId"": ""npProgressBar"",
+                    ""property"": ""progressValue"",
+                    ""value"": ""${Math.min(payload.jellyfinData.properties.progressBaseMs + elapsedTime, payload.jellyfinData.properties.totalValue)}"",
+                    ""minimumDelay"": 1000
+                  }
+                ]
               },
               {
                 ""type"": ""Text"",
