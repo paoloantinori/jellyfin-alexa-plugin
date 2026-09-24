@@ -506,6 +506,44 @@ public sealed class AlbumPlayService
         (int startIndex, _) = ResumeMath.FindResumeTrackIndex(
             albumItems, jellyfinUser, userDataManager, resumePosition: false);
 
+        // JF-625 (criterion 3): in seek mode the album's whole-album stream records
+        // progress in the AudiobookPositionTracker under the album GUID (segment
+        // fetches; VideoApp emits no playback events, so UserData never moves on
+        // that route). When the tracker has a position, IT is the resume truth for
+        // the video route and overrides the audio-route UserData answer: map the
+        // absolute album position onto the track timeline by walking the runtime
+        // prefix. The in-track partial rides collectionStartTicks below (exact on a
+        // warm cache; the cold-serve guard drops it to the track start).
+        long trackedInTrackTicks = 0;
+        if (_launch.GetVideoAppForAudio(user)
+            && Interface.VideoAppCapabilities.DeviceSupportsVideoApp(context)
+            && Plugin.Instance?.AudiobookPositionTracker?.GetPositionTicks(album.Id.ToString()) is long tracked and > 0)
+        {
+            long prefix = 0;
+            int trackedIndex = 0;
+            for (int i = 0; i < albumItems.Count; i++)
+            {
+                long runtime = albumItems[i].RunTimeTicks ?? 0;
+                if (tracked < prefix + runtime)
+                {
+                    trackedIndex = i;
+                    trackedInTrackTicks = tracked - prefix;
+                    break;
+                }
+
+                prefix += runtime;
+                trackedIndex = i + 1;
+            }
+
+            if (trackedIndex < albumItems.Count)
+            {
+                startIndex = trackedIndex;
+                _logger.LogInformation(
+                    "{Label}: seek-mode album resume from tracker: track {Index} ({Name}), album position {Position}s (in-track {Partial}s)",
+                    logLabel, startIndex, albumItems[startIndex].Name, tracked / TimeSpan.TicksPerSecond, trackedInTrackTicks / TimeSpan.TicksPerSecond);
+            }
+        }
+
         if (startIndex > 0)
         {
             _logger.LogInformation(
@@ -559,6 +597,9 @@ public sealed class AlbumPlayService
         // track's beginning, matching the AudioPlayer queue behavior of starting the
         // queue at startIndex).
         long albumStartTicks = albumItems.Take(startIndex).Sum(i => i.RunTimeTicks ?? 0);
+        // The seek-mode tracker path's in-track partial (tracked - prefix at the resume
+        // track): added so a warm-cache slice lands mid-track where listening stopped.
+        albumStartTicks += trackedInTrackTicks;
 
         SkillResponse albumResponse = _launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, _launch.GetStreamUrl(item_id, user), item_id, albumItems[startIndex], user, context, announceLocale: locale, collectionParentId: album.Id, collectionStartTicks: albumStartTicks);
 

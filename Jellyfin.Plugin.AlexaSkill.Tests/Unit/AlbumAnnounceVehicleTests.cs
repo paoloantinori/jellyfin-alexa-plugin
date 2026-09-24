@@ -34,6 +34,11 @@ public class AlbumAnnounceVehicleTests : PluginTestBase
 {
     private readonly ILoggerFactory _loggerFactory = LoggerFactory.Create(b => { });
 
+    public AlbumAnnounceVehicleTests()
+    {
+        TestHelpers.EnsurePluginInstance(new PluginConfiguration(), _loggerFactory, c => { }, "album-announce-vehicle");
+    }
+
     private static MusicAlbum Album()
         => new() { Name = "Temple of the Dog", Id = Guid.NewGuid() };
 
@@ -146,5 +151,49 @@ public class AlbumAnnounceVehicleTests : PluginTestBase
 
         Assert.Empty(captured);
         Assert.NotNull(response.Response.OutputSpeech);
+    }
+
+    // ---------------------------------------------------------------------
+    // JF-625 criterion 3: the seek-mode album resume reads the position tracker
+    // ---------------------------------------------------------------------
+
+    [Fact]
+    public async Task SeekModeAlbumResume_TrackerPosition_MapsOntoTrackAndOffset()
+    {
+        var config = new PluginConfiguration { ServerAddress = "http://localhost:8096/", NativeControlsForAudio = true, AnnounceAudioPlays = true };
+        var captured = new List<string>();
+        var svc = CreateService(config, captured, vehicleResult: () => true);
+        var album = Album();
+        var tracks = Tracks(); // 3 tracks x 4 min = 720s total
+        var library = new Mock<ILibraryManager>();
+        SetupLibrary(library, album, tracks);
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
+
+        // Tracker: 5 minutes into the album (30 segments x 10s) = track 2, 60s in.
+        var tracker = TestHelpers.CreatePositionTracker("vehicle-album-resume");
+        for (int seg = 1; seg <= 31; seg++)
+        {
+            tracker.RecordSegment(album.Id.ToString(), seg);
+        }
+
+        Plugin.Instance!.AudiobookPositionTracker = tracker;
+        try
+        {
+            var response = await svc.BuildAlbumPlayResponseAsync(
+                album, jellyfinUser, TestHelpers.CreateTestUser(), Session(),
+                TestHelpers.CreateContextWithVideoApp(), "it-IT",
+                library.Object, new Mock<IUserDataManager>().Object, null, "AlbumAnnounceVehicle",
+                request: new IntentRequest());
+
+            var launch = Assert.Single(response.Response.Directives.OfType<VideoAppLaunchDirective>());
+            // Offset = track 1 runtime (4 min) + the 60s in-track partial.
+            Assert.Contains($"start={TimeSpan.FromMinutes(4).Ticks + TimeSpan.FromSeconds(60).Ticks}", launch.VideoItem.Source, StringComparison.Ordinal);
+            // The metadata names the resume TRACK (track 2), not track 1.
+            Assert.Equal("Track 2", launch.VideoItem.Metadata?.Title);
+        }
+        finally
+        {
+            Plugin.Instance.AudiobookPositionTracker = null;
+        }
     }
 }
