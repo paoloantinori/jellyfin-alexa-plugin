@@ -294,7 +294,7 @@ internal static class AplHelper
               },
               {
                 ""type"": ""AlexaProgressBar"",
-                ""progressValue"": ""${payload.jellyfinData.properties.progressValue}"",
+                ""progressValue"": ""${Math.min(payload.jellyfinData.properties.progressBaseMs + elapsedTime, payload.jellyfinData.properties.totalValue)}"",
                 ""totalValue"": ""${payload.jellyfinData.properties.totalValue}"",
                 ""width"": ""${Math.min(90, artSize / 3)}%"",
                 ""paddingTop"": 15,
@@ -896,6 +896,12 @@ internal static class AplHelper
                         ["artUrl"] = imageUrl,
                         ["backgroundUrl"] = backgroundImageUrl,
                         ["progressValue"] = progressMs,
+                        // JF-624 round 4: the render-time base for the live-advancing
+                        // bar. elapsedTime (the APL document clock, ms since render)
+                        // is added in the template binding and clamped to the total,
+                        // so the bar fills in real time while the screen is visible.
+                        // The hand-rolled baseline still reads plain progressValue.
+                        ["progressBaseMs"] = progressMs,
                         ["totalValue"] = durationMs,
                         ["elapsedTime"] = FormatTime(progressMs),
                         ["totalTime"] = FormatTime(durationMs)
