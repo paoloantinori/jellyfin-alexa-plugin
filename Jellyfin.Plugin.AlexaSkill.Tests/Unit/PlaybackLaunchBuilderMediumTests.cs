@@ -125,11 +125,30 @@ public class PlaybackLaunchBuilderMediumTests : PluginTestBase
     [Fact]
     public void Medium_LedgerMusicAudio_YieldsAudioAndNullRefusal()
     {
+        // The ordinary music shape: the AudioPlayer pipeline owns the stream (route
+        // Audio), so transport directives genuinely work.
         var song = new Audio { Name = "Song", Id = Guid.NewGuid() };
-        var (library, queue) = LedgerWith(song);
+        var (library, queue) = LedgerWith(song, route: DeviceQueueManager.LaunchRoute.Audio);
 
         Assert.Equal("Audio", _builder.ResolvePlayingMedium(TestHelpers.CreateTestContext(), library.Object, queue).ToString());
         Assert.Null(PlaybackLaunchBuilder.BuildVideoAppTransportRefusal(_builder.ResolvePlayingMedium(TestHelpers.CreateTestContext(), library.Object, queue), "en-US"));
+    }
+
+    /// <summary>
+    /// JF-625 seek mode: a song recorded on the VideoApp route (a single-song launch or
+    /// the album concat's ledger entry) classifies VideoAppAudio, and the transport
+    /// intents answer the honest refusal: an AudioPlayer.Play over the stream would be
+    /// a second, unstoppable audio (no VideoApp.Stop exists).
+    /// </summary>
+    [Fact]
+    public void Medium_LedgerMusicVideoApp_YieldsVideoAppAudioAndRefusal()
+    {
+        var song = new Audio { Name = "Song", Id = Guid.NewGuid() };
+        var (library, queue) = LedgerWith(song);
+
+        var medium = _builder.ResolvePlayingMedium(TestHelpers.CreateTestContext(), library.Object, queue);
+        Assert.Equal("VideoAppAudio", medium.ToString());
+        Assert.NotNull(PlaybackLaunchBuilder.BuildVideoAppTransportRefusal(medium, "en-US"));
     }
 
     /// <summary>

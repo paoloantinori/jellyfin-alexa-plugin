@@ -82,9 +82,12 @@ public class VideoAppGapHonestResponseTests : PluginTestBase, IDisposable
     /// with the library mock resolving every given item by id.
     /// </summary>
     private DeviceQueueManager CreateLedger(string deviceId, BaseItem lastPlayed, params BaseItem[] resolve)
+        => CreateLedger(deviceId, DeviceQueueManager.LaunchRoute.VideoApp, lastPlayed, resolve);
+
+    private DeviceQueueManager CreateLedger(string deviceId, DeviceQueueManager.LaunchRoute route, BaseItem lastPlayed, params BaseItem[] resolve)
     {
         var queueManager = TestHelpers.CreateDeviceQueueManager("jf564-" + deviceId);
-        queueManager.RecordLastPlayed(deviceId, lastPlayed.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        queueManager.RecordLastPlayed(deviceId, lastPlayed.Id.ToString(), route);
         _fx.LibraryManager.Setup(x => x.GetItemById(lastPlayed.Id)).Returns(lastPlayed);
         foreach (BaseItem item in resolve)
         {
@@ -378,7 +381,7 @@ public class VideoAppGapHonestResponseTests : PluginTestBase, IDisposable
         var song = Song("Current Song");
 
         string deviceId = "jf564-pause-audio";
-        DeviceQueueManager ledger = CreateLedger(deviceId, song);
+        DeviceQueueManager ledger = CreateLedger(deviceId, DeviceQueueManager.LaunchRoute.Audio, song);
         var handler = CreatePauseHandler(ledger);
 
         var response = await handler.HandleAsync(
@@ -404,7 +407,7 @@ public class VideoAppGapHonestResponseTests : PluginTestBase, IDisposable
         var track2 = Song("Album Track Two");
 
         string deviceId = "jf564-next-audio";
-        DeviceQueueManager ledger = CreateLedger(deviceId, track1, track2);
+        DeviceQueueManager ledger = CreateLedger(deviceId, DeviceQueueManager.LaunchRoute.Audio, track1, track2);
         var handler = CreateNextHandler(ledger);
 
         var response = await handler.HandleAsync(

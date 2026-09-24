@@ -8,6 +8,7 @@
   "NoMediaPlaying": "現在再生中のものはありません。",
   "CannotRepeatContent": "申し訳ありませんが、ここからビデオ、テレビ、オーディオブックを繰り返すことはできません。音楽は繰り返せます。",
   "CannotNavigateVideoByVoice": "申し訳ありませんが、音声では動画を切り替えることができません。観たい作品はタッチ画面で選んでください。",
+  "CannotNavigateMusicByVoice": "申し訳ありません。 progress bar を使った再生中は音声で曲をスキップできません。画面のバーを使ってキューを移動してください。",
   "CannotNavigateLiveTvByVoice": "ライブTVは自動的に続きます。チャンネルを変えるにはタッチ画面をお使いください。",
   "CannotPauseVideoByVoice": "申し訳ありませんが、音声では動画を一時停止できません。タッチ画面で一時停止するか、戻るボタンで終了してください。",
   "PlaybackFailed": "メディアの再生中にエラーが発生しました。もう一度お試しください。",

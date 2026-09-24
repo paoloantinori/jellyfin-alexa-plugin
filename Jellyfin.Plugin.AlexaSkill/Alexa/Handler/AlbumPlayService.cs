@@ -330,7 +330,8 @@ public sealed class AlbumPlayService
         IUserDataManager userDataManager,
         Playback.DeviceQueueManager? queueManager,
         string logLabel,
-        CancellationToken cancellationToken)
+        global::Alexa.NET.Request.Type.Request? request = null,
+        CancellationToken cancellationToken = default)
     {
         // JF-464: same music-disabled gate as the artist fallback. This cascade's
         // whole payoff is playing an album of music, and its queries skip
@@ -412,6 +413,7 @@ public sealed class AlbumPlayService
             announcement: _config.AnnounceCrossMediaSubstitution
                 ? ResponseStrings.Get("FoundAlbumInstead", locale, match.Item.Name)
                 : null,
+            request: request,
             cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
@@ -553,36 +555,33 @@ public sealed class AlbumPlayService
         // concat stream keyed by the album GUID; the seek bar spans the whole album.
         // Album-level resume offset = the summed runtime of the tracks BEFORE the
         // resume track (the sliced-playlist ?start= mechanism; the in-track partial
-        // position is not carried in this first cut - playback resumes at the resume
+        // position is not carried in this first cut: playback resumes at the resume
         // track's beginning, matching the AudioPlayer queue behavior of starting the
         // queue at startIndex).
         long albumStartTicks = albumItems.Take(startIndex).Sum(i => i.RunTimeTicks ?? 0);
 
         SkillResponse albumResponse = _launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, _launch.GetStreamUrl(item_id, user), item_id, albumItems[startIndex], user, context, announceLocale: locale, collectionParentId: album.Id, collectionStartTicks: albumStartTicks);
 
-        // JF-625 (live 2026-09-24): when the response actually took the VideoApp route
-        // (observed on the directive, not re-derived from the builder's gates) and the
-        // announce attached (the speech's presence IS the toggle), the announce swaps
-        // onto the progressive-response vehicle: the fast-start VideoApp player steals
-        // the audio channel before a FINAL-response announce finishes ("In
-        // riproduzione" and then cut, the JF-501 observation), while a progressive
-        // speech completes BEFORE the launch response reaches the device. The vehicle
-        // speech names the ALBUM (what an album play announces); on success it returns
-        // null, clearing the track-name speech the builder attached, and on vehicle
-        // failure (screenless degrade path, send error) it returns the speech to ride
-        // the final response.
-        if (request != null
-            && albumResponse.Response.OutputSpeech is not null
-            && albumResponse.Response.Directives.Any(d => d is Directive.VideoAppLaunchDirective))
-        {
-            IOutputSpeech? albumAnnounce = SpeechBuilder.BuildNowPlayingSpeech(album.Name, locale, announceOn: true);
-            albumResponse.Response.OutputSpeech = await _launch.SpeakVideoLaunchAnnounceAsync(context, request, albumAnnounce).ConfigureAwait(false);
-        }
-
         // The caller may pass an announcement (fuzzy name correction in PlayAlbum,
         // cross-media substitution in the JF-345 cascade) so the user knows what is
         // playing instead of what was asked (JF-339).
         CrossMediaFallback.ApplyAnnouncement(albumResponse, announcement);
+
+        // JF-625 (live 2026-09-24 + review): whatever speech the final response now
+        // carries (the album announce, or the announcement override above, which is the
+        // load-bearing correction) swaps onto the progressive-response vehicle WHEN the
+        // response actually took the VideoApp route (observed on the directive, not
+        // re-derived from the builder's gates): the fast-start VideoApp player steals
+        // the audio channel before a FINAL-response speech finishes, while a progressive
+        // speech completes BEFORE the launch response reaches the device. On success the
+        // vehicle returns null (final response speechless); on failure (screenless
+        // degrade path, send error) it returns the speech to ride the final response.
+        if (request != null
+            && albumResponse.Response.OutputSpeech is not null
+            && albumResponse.Response.Directives.Any(d => d is Directive.VideoAppLaunchDirective))
+        {
+            albumResponse.Response.OutputSpeech = await _launch.SpeakVideoLaunchAnnounceAsync(context, request, albumResponse.Response.OutputSpeech).ConfigureAwait(false);
+        }
 
         return albumResponse;
     }

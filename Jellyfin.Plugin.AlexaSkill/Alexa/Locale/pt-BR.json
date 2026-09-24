@@ -8,6 +8,7 @@
   "NoMediaPlaying": "Nada está tocando no momento.",
   "CannotRepeatContent": "Desculpe, não consigo repetir vídeos, TV ou audiolivros daqui. Posso repetir música.",
   "CannotNavigateVideoByVoice": "Desculpe, não consigo alternar entre vídeos por voz. Use a tela touch para escolher o que assistir.",
+  "CannotNavigateMusicByVoice": "Desculpe, não posso pular a faixa por voz durante a reprodução com a barra de progresso. Use a barra na tela para navegar na fila.",
   "CannotNavigateLiveTvByVoice": "A TV ao vivo continua sozinha. Use a tela touch para mudar de canal.",
   "CannotPauseVideoByVoice": "Desculpe, não dá para pausar o vídeo por voz. Use a tela touch ou o botão voltar para sair.",
   "PlaybackFailed": "Algo deu errado ao reproduzir sua mídia. Por favor, tente novamente.",

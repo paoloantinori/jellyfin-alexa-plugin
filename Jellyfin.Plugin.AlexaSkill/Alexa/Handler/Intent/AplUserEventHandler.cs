@@ -280,6 +280,10 @@ public class AplUserEventHandler : BaseHandler
         // JF-625: albumFolderId (set in the folder branch above) makes an album FOLDER
         // tap play the whole-album concat stream in seek mode, same seek bar as the
         // voice ask (the parallel-dispatch rule); null for every non-album tap.
+        // Deliberate choice (review #10): the tap starts the album from its BEGINNING
+        // (collectionStartTicks stays 0) while the voice ask resumes mid-album. A tap
+        // is a fresh visual pick; the voice "play album" is a continuation. If this
+        // reads wrong on the device, thread the resolved child's prefix sum here.
 
         // The codec-routed audio source (JF-507): a resolved Episode whose audio
         // codec has no Echo decoder rides the audio-only transcode; every other

@@ -295,6 +295,12 @@ public sealed class PlaybackLaunchBuilder
 
         /// <summary>An audiobook riding the VideoApp HLS path (NativeControlsForBooks).</summary>
         VideoAppAudiobook,
+
+        /// <summary>Music riding the VideoApp HLS path (the JF-625 seek mode: a song
+        /// or a whole-album concat). AudioPlayer directives cannot touch the stream and
+        /// track navigation is seek-only, so the transport intents answer the honest
+        /// refusal instead of emitting a parallel AudioPlayer.Play over it.</summary>
+        VideoAppAudio,
     }
 
     /// <summary>
@@ -304,7 +310,7 @@ public sealed class PlaybackLaunchBuilder
     /// <param name="medium">The classified medium.</param>
     /// <returns>True for Video, LiveTv and VideoAppAudiobook.</returns>
     internal static bool IsVideoAppMedium(PlayingMedium medium)
-        => medium is PlayingMedium.Video or PlayingMedium.LiveTv or PlayingMedium.VideoAppAudiobook;
+        => medium is PlayingMedium.Video or PlayingMedium.LiveTv or PlayingMedium.VideoAppAudiobook or PlayingMedium.VideoAppAudio;
 
     /// <summary>
     /// Whether the request context reports the stream as actively playing: the
@@ -395,7 +401,8 @@ public sealed class PlaybackLaunchBuilder
         // is Audio whatever the item kind and the resolve is skipped, mirroring the
         // token-ownership arm above. Only a VideoApp-routed (or legacy null-routed)
         // entry falls through to the kind-based rules below.
-        if (ledgerManager?.GetLastPlayedLaunchRoute(deviceId!) == DeviceQueueManager.LaunchRoute.Audio)
+        DeviceQueueManager.LaunchRoute? recordedRoute = ledgerManager?.GetLastPlayedLaunchRoute(deviceId!);
+        if (recordedRoute == DeviceQueueManager.LaunchRoute.Audio)
         {
             return PlayingMedium.Audio;
         }
@@ -420,6 +427,18 @@ public sealed class PlaybackLaunchBuilder
         if (AudiobookItems.IsAudioBook(item))
         {
             return PlayingMedium.VideoAppAudiobook;
+        }
+
+        // JF-625 seek mode: an EXPLICITLY VideoApp-routed ledger entry that resolves to
+        // a plain Audio track is the video-audio launch (a song or the album concat);
+        // it must NOT fall through to Audio, whose queue-advance emits an
+        // AudioPlayer.Play the platform cannot stop (double audio; no VideoApp.Stop
+        // exists). A NULL route is the pre-JF-568 legacy shape, when music only ever
+        // played on AudioPlayer: those keep Audio.
+        if (recordedRoute == DeviceQueueManager.LaunchRoute.VideoApp
+            && item is MediaBrowser.Controller.Entities.Audio.Audio)
+        {
+            return PlayingMedium.VideoAppAudio;
         }
 
         // Music: RecordLastPlayed pins the user-initiated play while Enqueue-advanced
@@ -454,6 +473,7 @@ public sealed class PlaybackLaunchBuilder
             PlayingMedium.Video => ResponseBuilder.Tell(ResponseStrings.Get("CannotNavigateVideoByVoice", locale)),
             PlayingMedium.LiveTv => ResponseBuilder.Tell(ResponseStrings.Get("CannotNavigateLiveTvByVoice", locale)),
             PlayingMedium.VideoAppAudiobook => ResponseBuilder.Empty(),
+            PlayingMedium.VideoAppAudio => ResponseBuilder.Tell(ResponseStrings.Get("CannotNavigateMusicByVoice", locale)),
             _ => null,
         };
 

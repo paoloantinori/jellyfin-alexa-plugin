@@ -335,7 +335,7 @@ public class PlaySongIntentHandler : BaseHandler
             SkillResponse? albumFallback = await AlbumPlay.TryAlbumFallbackAsync(
                 songQuery, jellyfinUser!, user, session, context, locale,
                 _libraryManager, _userDataManager, _queueManager,
-                "PlaySong", cancellationToken).ConfigureAwait(false);
+                "PlaySong", request, cancellationToken).ConfigureAwait(false);
             if (albumFallback != null)
             {
                 return albumFallback;

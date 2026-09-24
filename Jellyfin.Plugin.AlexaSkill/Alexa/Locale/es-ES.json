@@ -14,6 +14,7 @@
   "NoMediaPlaying": "No se está reproduciendo nada en este momento.",
   "CannotRepeatContent": "Lo siento, no puedo repetir vídeos, TV ni audiolibros desde aquí. Puedo repetir música.",
   "CannotNavigateVideoByVoice": "Lo siento, no puedo pasar de un vídeo a otro con la voz. Usa la pantalla táctil para elegir qué ver.",
+  "CannotNavigateMusicByVoice": "Lo siento, no puedo saltar la canción por voz durante la reproducción con la barra de progreso. Usa la barra en la pantalla para moverte por la cola.",
   "CannotNavigateLiveTvByVoice": "La TV en directo sigue sola. Usa la pantalla táctil para cambiar de canal.",
   "CannotPauseVideoByVoice": "Lo siento, no se puede pausar el vídeo con la voz. Usa la pantalla táctil o el botón atrás para salir.",
   "PlaybackFailed": "Algo salió mal al reproducir tu contenido. Por favor, inténtalo de nuevo.",

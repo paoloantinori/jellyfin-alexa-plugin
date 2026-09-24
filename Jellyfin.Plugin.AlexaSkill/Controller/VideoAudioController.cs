@@ -22,7 +22,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
-using SortOrder = Jellyfin.Database.Implementations.Enums.SortOrder;
 
 namespace Jellyfin.Plugin.AlexaSkill.Controller;
 
@@ -519,7 +518,7 @@ public class VideoAudioController : ControllerBase
             var ffmpegProcess = await StartFfmpegProcessGatedAsync(
                 validation.FfmpegPath,
                 ffmpegArgs,
-                EstimateEncodeBytes(validation.Item.RunTimeTicks ?? 0),
+                useBlackFrame ? EstimateEncodeBytes(validation.Item.RunTimeTicks ?? 0) : EstimateArtEncodeBytes(validation.Item.RunTimeTicks ?? 0),
                 hlsDir).ConfigureAwait(false);
 
             string prewrittenPath = Path.Combine(hlsDir, PrewrittenPlaylistFileName);
@@ -951,7 +950,14 @@ public class VideoAudioController : ControllerBase
                 // When the encode completes, ffmpeg's own ENDLIST playlist takes
                 // over via the cache-hit paths above.
                 string prewrittenPath = Path.Combine(hlsDir, PrewrittenPlaylistFileName);
-                if (runtimeTicks is > 0 && ShouldPrewriteFullListing(runtimeTicks))
+                // JF-625 review: episodes ALWAYS pre-write when the runtime is known.
+                // The 10-minute threshold is calibrated on the song path's audio-copy
+                // encode (faster than the device's first fetch); an episode's remux/
+                // transcode outlasts the first fetch even for short episodes, and
+                // serving the live listing there is the documented JF-531 live-edge
+                // failure (playback joins mid-content, resume slices a growing listing
+                // into an empty playlist). The song path keeps the threshold gate.
+                if (runtimeTicks > 0)
                 {
                     WriteEpisodePlaylist(prewrittenPath, hlsBaseUrl, runtimeTicks, HttpContext.Request.Query["token"]);
                 }
@@ -1543,16 +1549,32 @@ public class VideoAudioController : ControllerBase
         };
         if (isMusicAlbum)
         {
-            // Album track order: disc (ParentIndexNumber), then track (IndexNumber).
-            childrenQuery.OrderBy = new[]
-            {
-                (ItemSortBy.ParentIndexNumber, SortOrder.Ascending),
-                (ItemSortBy.IndexNumber, SortOrder.Ascending),
-            };
+            // The ONE album-track order (QueueContinuationFetcher.AlbumTrackOrder):
+            // AlbumPlayService sums the resume offset against this order and the
+            // concat timeline below encodes in it - a second copy here is the drift
+            // risk the constant exists to kill (wrong-track resume slices).
+            childrenQuery.OrderBy = Alexa.QueueContinuationFetcher.AlbumTrackOrder;
         }
 
         IReadOnlyList<MediaBrowser.Controller.Entities.BaseItem> chapters =
             _libraryManager.GetItemList(childrenQuery);
+
+        // JF-625 review: split/malformed-folder albums (the JF-338 'Jazz Cafe' shape)
+        // resolve in AlbumPlayService via an AlbumIds fallback; the endpoint's
+        // ParentId-only query would 404 the very URL that service launched. Mirror
+        // the fallback so the concat always finds the tracks the queue math summed.
+        if (chapters.Count == 0 && isMusicAlbum)
+        {
+            var albumIdsQuery = new InternalItemsQuery
+            {
+                AlbumIds = [parentGuid],
+                IncludeItemTypes = new[] { BaseItemKind.Audio },
+                Recursive = true,
+                DtoOptions = new DtoOptions(true),
+                OrderBy = Alexa.QueueContinuationFetcher.AlbumTrackOrder,
+            };
+            chapters = _libraryManager.GetItemList(albumIdsQuery);
+        }
 
         if (chapters.Count == 0)
         {
@@ -1625,6 +1647,17 @@ public class VideoAudioController : ControllerBase
                 string livePath = Path.Combine(hlsDir, "stream.m3u8");
                 if (System.IO.File.Exists(livePath))
                 {
+                    // Same cold-entry resume rule as the first fetch below: slicing a
+                    // still-growing listing at a not-yet-encoded segment yields an
+                    // empty playlist, so the offset drops on EVERY cold serve path.
+                    if (startTicks is > 0)
+                    {
+                        _logger.LogInformation(
+                            "VideoAudio album HLS: concurrent cold serve for parent {ParentId} drops startTicks={StartTicks}",
+                            parentId, startTicks);
+                        startTicks = null;
+                    }
+
                     return await ServeAudiobookPlaylistAsync(livePath, startTicks).ConfigureAwait(false);
                 }
             }
@@ -1733,8 +1766,31 @@ public class VideoAudioController : ControllerBase
             string hlsBaseUrl = $"/alexaskill/api/video-audio/{parentId}/segments/";
 
             string? collectionArtUrl = isMusicAlbum ? ResolveArtUrl(parent, serverUrl) : null;
+            // JF-625 review (empirically verified with ffmpeg 8.1.2): -c:a copy across a
+            // concat of MIXED codecs declares the first input's codec in the PMT and
+            // silently truncates the whole output at the first non-matching track (exit 0,
+            // no error - a single iTunes M4A among MP3s ends the album early). Copy ONLY
+            // when every child's codec is copy-compatible; any mixed or unknown codec
+            // transcodes the whole concat to AAC (slower but complete).
+            bool albumAudioCopy = false;
+            if (isMusicAlbum)
+            {
+                albumAudioCopy = sortedChapters.Count > 0
+                    && sortedChapters.All(c => ResolveSourceAudioCodec(c) is { } codec && CopyCompatibleAudioCodecs.Contains(codec));
+                if (!albumAudioCopy)
+                {
+                    _logger.LogInformation(
+                        "VideoAudio album HLS: mixed or non-copy audio codecs in '{AlbumName}', transcoding the concat to AAC ({TrackCount} tracks)",
+                        parent.Name, sortedChapters.Count);
+                }
+            }
+            else
+            {
+                albumAudioCopy = true;
+            }
+
             var ffmpegArgs = BuildHlsAudiobookFfmpegArguments(
-                concatListPath, collectionArtUrl, collectionArtUrl == null, playlistPath, segmentPath, hlsBaseUrl);
+                concatListPath, collectionArtUrl, collectionArtUrl == null, playlistPath, segmentPath, hlsBaseUrl, albumAudioCopy);
 
             if (_logger.IsEnabled(LogLevel.Debug))
             {
@@ -1745,7 +1801,9 @@ public class VideoAudioController : ControllerBase
             var ffmpegProcess = await StartFfmpegProcessGatedAsync(
                 ffmpeg,
                 ffmpegArgs,
-                EstimateEncodeBytes(chapters.Sum(c => c.RunTimeTicks ?? 0)),
+                isMusicAlbum && collectionArtUrl != null
+                    ? EstimateArtEncodeBytes(chapters.Sum(c => c.RunTimeTicks ?? 0))
+                    : EstimateEncodeBytes(chapters.Sum(c => c.RunTimeTicks ?? 0)),
                 hlsDir).ConfigureAwait(false);
 
             // Pre-write a complete HLS playlist to a SEPARATE file from what ffmpeg
@@ -1840,6 +1898,21 @@ public class VideoAudioController : ControllerBase
             // settles to the full album duration once the ENDLIST playlist takes over
             // via the cache-hit paths. Audiobooks keep the pre-write: their
             // verified-live flow depends on it.
+            // JF-625 review: a failed first segment (unreadable art input, cold network
+            // library, early ffmpeg death) must NOT fall through to serving a missing
+            // playlist file (unhandled FileNotFoundException -> bare 500); mirror the
+            // song path's controlled failure.
+#pragma warning disable CA3003 // firstSegmentPath derives from the GUID-validated parentId
+            if (!System.IO.File.Exists(firstSegmentPath))
+            {
+                _logger.LogWarning(
+                    "VideoAudio album HLS: no first segment appeared for parent {ParentId}, failing the request cleanly",
+                    parentId);
+                try { if (!ffmpegProcess.HasExited) { ffmpegProcess.Kill(); } } catch { /* already exited */ }
+                return StatusCode(500, new { error = "Album encode failed to start" });
+            }
+#pragma warning restore CA3003
+
             if (isMusicAlbum)
             {
                 // Cold-cache resume guard: the resume slice applies to the COMPLETE
@@ -2784,7 +2857,8 @@ public class VideoAudioController : ControllerBase
         bool useBlackFrame,
         string playlistPath,
         string segmentPath,
-        string hlsBaseUrl)
+        string hlsBaseUrl,
+        bool audioCopy = true)
     {
         var args = new List<string>();
 
@@ -2843,8 +2917,12 @@ public class VideoAudioController : ControllerBase
             "-pix_fmt", "yuv420p"
         ]);
 
-        // Audio: copy without re-encoding (MP3 remux is instant, no quality loss)
-        args.AddRange(["-c:a", "copy"]);
+        // Audio: copy without re-encoding (MP3 remux is instant, no quality loss);
+        // the caller drops to AAC when the concat's children have mixed codecs (the
+        // silent-truncation hazard documented at the album call site).
+        args.AddRange(audioCopy
+            ? ["-c:a", "copy"]
+            : ["-c:a", "aac", "-b:a", "192k"]);
 
         // HLS-specific flags: 10-second segments required by ExoPlayer (Echo Show).
         // Longer segments (e.g. 250s) cause buffer stalls after seeking. The value is
@@ -3884,6 +3962,16 @@ public class VideoAudioController : ControllerBase
     /// <param name="runtimeTicks">Total content duration (item runtime or chapters sum).</param>
     internal static long EstimateEncodeBytes(long runtimeTicks)
         => FlatHourlyEncodeBytes(runtimeTicks, 64L * 1024 * 1024);
+
+    /// <summary>
+    /// JF-625 review (measured with ffmpeg 8.1.2 on the exact args): the 64MB/h base
+    /// is calibrated on the black-frame output (~12MB/h measured); photographic album
+    /// art at 1fps 720p IDR keyframes writes ~130-200MB/h, so the art encodes (the
+    /// single-item song path and the album concat) must reserve at the higher rate or
+    /// the pre-encode sweep under-evicts and the shared LRU cap is silently exceeded.
+    /// </summary>
+    internal static long EstimateArtEncodeBytes(long runtimeTicks)
+        => FlatHourlyEncodeBytes(runtimeTicks, 192L * 1024 * 1024);
 
     /// <summary>
     /// JF-519: the guarded first-segment-wait exit-code read. <see cref="Process.ExitCode"/>
