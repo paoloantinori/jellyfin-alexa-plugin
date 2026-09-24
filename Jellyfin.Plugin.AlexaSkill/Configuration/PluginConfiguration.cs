@@ -260,8 +260,13 @@ public class PluginConfiguration : BasePluginConfiguration
     public int MaxConcurrentFfmpegEncodes { get; set; } = 2;
 
     /// <summary>
-    /// Use VideoApp.Launch for audio playback instead of AudioPlayer.Play.
-    /// Gives native progress bar/scrubber on Echo Show but without album art.
+    /// Use VideoApp.Launch for audio playback instead of AudioPlayer.Play: the Echo Show
+    /// gets its native player with a REAL seek bar (the AudioPlayer surface has no
+    /// scrubber for custom skills and covers skill APL documents during playback, JF-624
+    /// verdict 2026-09-24). The video track is the album cover (stillimage encode; black
+    /// frame only when no art resolves). Costs: a few seconds of first-play encode
+    /// latency, and the VideoApp path emits no playback events to the skill (position is
+    /// tracked server-side). Per-user override: <see cref="Entities.User.VideoAppForAudio"/>.
     /// </summary>
     public bool NativeControlsForAudio { get; set; } = false;
 

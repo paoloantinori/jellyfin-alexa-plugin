@@ -6,7 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-24 16:16'
-updated_date: '2026-09-24 16:16'
+updated_date: '2026-09-24 16:30'
 labels: []
 milestone: 1.0 polish
 dependencies: []
@@ -42,8 +42,6 @@ Known costs to state in the config UI: a few seconds of first-play encode latenc
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
-
-
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
 - [ ] #1 [ ] SPIKE gate: one song plays via video-audio with the album cover as the video track on the live Show: audio correct, cover visible, seek bar PRESENT and a mid-track seek lands correctly, no black screen
@@ -53,3 +51,9 @@ Known costs to state in the config UI: a few seconds of first-play encode latenc
 - [ ] #5 [ ] Radio extension: the event playlist appends segments before exhaustion and playback continues seamlessly
 - [ ] #6 [ ] First-play latency measured and documented (encode start to audio out)
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-09-24 SPIKE REDUCTION TO ZERO CODE: while wiring a new MusicSeekMode flag I discovered the feature ALREADY EXISTS END TO END - PluginConfiguration.NativeControlsForAudio (global) + User.VideoAppForAudio (per-user) + GetVideoAppForAudio resolver + the routing site inside BuildAudioPlayerResponse (item is Audio -> BuildVideoAppAudioResponse, with the JF-505 screenless degrade). The video-audio controller's single-item path resolves the album cover as the video track (useBlackFrame only as fallback), audio-copy for mp3/aac, encode gate + prewritten playlist (JF-536) all included. My duplicate flag/helper/test were reverted uncommitted. Spike = flip the EXISTING flag on minix (done 2026-09-24, PATCH verified NativeControlsForAudio: true) + device verification. The stale flag doc ('without album art') was corrected. AWAITING DEVICE TEST: one song play must show cover as video, native player with REAL seek bar, a mid-track seek, correct audio; then the queue/radio-extension steps (plan items 2-3) evaluate against what the launch path already does.
+<!-- SECTION:NOTES:END -->
