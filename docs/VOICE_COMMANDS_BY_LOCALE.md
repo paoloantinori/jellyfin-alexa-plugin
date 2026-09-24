@@ -7476,7 +7476,7 @@ Placeholder legend:
 | `<titolo del video o del film>` | `{title}` |
 | `<parole del titolo del brano>` | `{titleKeywords}` |
 
-Complete phrase list (1514 phrases across 69 commands):
+Complete phrase list (1518 phrases across 69 commands):
 
 #### Play music
 
@@ -7562,6 +7562,10 @@ Complete phrase list (1514 phrases across 69 commands):
 - `Di ascoltare <titolo del brano> dei <nome dell'artista>`
 - `Di ascoltare <titolo del brano> degli <nome dell'artista>`
 - `Di ascoltare <titolo del brano> delle <nome dell'artista>`
+- `riprodurre <titolo del brano>`
+- `suonare <titolo del brano>`
+- `mettere <titolo del brano>`
+- `ascoltare <titolo del brano>`
 
 **Play an artist**
 
