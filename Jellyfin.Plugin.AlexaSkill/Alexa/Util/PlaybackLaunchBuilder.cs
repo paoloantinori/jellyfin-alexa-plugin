@@ -1405,6 +1405,19 @@ public sealed class PlaybackLaunchBuilder
             // scorre da sx a dx"). Thread the directive offset and the item runtime.
             long durationMs = (item.RunTimeTicks ?? 0) / TimeSpan.TicksPerMillisecond;
             TryAttachNowPlayingDirective(response, item, itemId, user, context, offsetInMilliseconds, durationMs);
+
+            // JF-624 round 7: when our NowPlaying APL is attached, drop the StandardCard.
+            // On Echo Show the device synthesizes its own full-screen now-playing surface
+            // (CardRenderer.PlayerInfo, observed 1s after PlaybackStarted) from the card
+            // and stream metadata, and that surface covers our document during playback -
+            // the launch "flash" is the only moment our screen is visible (live evidence:
+            // the time line has NEVER been visible on the device, and five template
+            // rounds changed nothing the user could see). With no card in the response
+            // the native surface has nothing to build from and our document stays.
+            if (response.Response.Directives.Any(d => d is Directive.AplRenderDocumentDirective))
+            {
+                response.Response.Card = null;
+            }
         }
 
         return response;
