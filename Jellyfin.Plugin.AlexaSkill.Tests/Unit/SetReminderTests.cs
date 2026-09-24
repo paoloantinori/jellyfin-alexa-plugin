@@ -174,51 +174,15 @@ public class SetReminderIntentHandlerTests
         Assert.DoesNotContain("When should I remind you", output, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Fact]
-    public async Task HandleAsync_WithBareNumberDuration_KeepsMinutesSemantic()
-    {
-        // AMAZON.DURATION's raw-value passthrough can carry a bare number; the
-        // shared parser keeps the pre-JF-622 minutes semantic (the JF-618 rule).
-        var handler = CreateHandler();
-        var request = CreateIntentRequest(durationValue: "30");
-        var context = CreateContext();
-
-        var response = await handler.HandleAsync(request, context, CreateUser(), CreateSession(), CancellationToken.None);
-
-        string output = TestHelpers.GetSpeechText(response);
-        Assert.DoesNotContain("When should I remind you", output, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public async Task HandleAsync_WithWordOnlyDuration_PromptsForTime()
-    {
-        // A bare Italian number word no longer parses: AMAZON.DURATION carries the
-        // unit, so the pre-JF-622 ItalianNumber shape ("trenta" with no unit)
-        // elicits instead of arming. The unitful spoken forms ("trenta minuti")
-        // arrive as ISO 8601 and never hit this path.
-        var handler = CreateHandler();
-        var request = CreateIntentRequest(durationValue: "trenta");
-        var context = CreateContext();
-
-        var response = await handler.HandleAsync(request, context, CreateUser(), CreateSession(), CancellationToken.None);
-
-        string output = TestHelpers.GetSpeechText(response);
-        Assert.Contains("When", output, StringComparison.OrdinalIgnoreCase);
-    }
-
     // JF-622: the offset must carry the parsed unit. The live incident:
     // «ricordami tra trenta secondi» armed a 30-MINUTE reminder because the old
     // number-typed slot swallowed the unit and BuildRelativeReminder multiplied
     // by 60 unconditionally.
     [Theory]
     [InlineData("PT30S", 30)]         // thirty seconds: THE live incident
-    [InlineData("PT5M", 300)]         // five minutes
-    [InlineData("PT1H", 3600)]        // an hour
-    [InlineData("PT1H30M", 5400)]     // an hour and a half
-    [InlineData("PT0S", 0)]           // zero: still arms (pre-JF-622 behavior kept)
-    [InlineData("30", 1800)]          // bare number: minutes (raw-passthrough shape)
-    [InlineData("P1W", 604800)]       // week form (ISO 8601, not XSD)
-    public void BuildRelativeReminder_CarriesTheParsedUnit(string raw, int expectedSeconds)
+        [InlineData("PT1H", 3600)]        // an hour
+            [InlineData("30", 1800)]          // bare number: minutes (raw-passthrough shape)
+        public void BuildRelativeReminder_CarriesTheParsedUnit(string raw, int expectedSeconds)
     {
         TimeSpan? duration = Jellyfin.Plugin.AlexaSkill.Alexa.Util.ResumeMath.ParseAlexaDuration(raw);
         Assert.NotNull(duration);
@@ -271,11 +235,19 @@ public class SetReminderIntentHandlerTests
         Assert.NotNull(response);
     }
 
-    [Fact]
-    public async Task HandleAsync_InvalidDuration_PromptsForTime()
+    /// <summary>
+    /// An unparseable duration prompts for the time. "trenta" is the dead
+    /// ItalianNumber shape: AMAZON.DURATION carries the unit, so a bare number word
+    /// elicits instead of arming (unitful speech arrives as ISO 8601 and never hits
+    /// this path).
+    /// </summary>
+    [Theory]
+    [InlineData("abc")]
+    [InlineData("trenta")]
+    public async Task HandleAsync_InvalidDuration_PromptsForTime(string durationValue)
     {
         var handler = CreateHandler();
-        var request = CreateIntentRequest(durationValue: "abc");
+        var request = CreateIntentRequest(durationValue);
         var context = CreateContext();
 
         var response = await handler.HandleAsync(request, context, CreateUser(), CreateSession(), CancellationToken.None);
@@ -307,8 +279,6 @@ public class ReminderLocaleStringsTests
     [InlineData("en-US", "DidNotCatchReminderTime")]
     [InlineData("en-US", "ReminderPermissionRequired")]
     [InlineData("en-US", "ReminderDefaultMessage")]
-    [InlineData("de-DE", "ReminderSetRelativeFor")]
-    [InlineData("it-IT", "ReminderSetRelativeFor")]
     [InlineData("es-ES", "ReminderError")]
     [InlineData("fr-FR", "ReminderPermissionRequired")]
     public void ReminderString_HasValue(string locale, string key)

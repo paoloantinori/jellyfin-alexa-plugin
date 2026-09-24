@@ -77,7 +77,7 @@ public static class ResumeMath
     }
 
     /// <summary>
-    /// JF-618: the sleep-timer confirmation's spoken duration, largest whole unit
+    /// The spoken-duration phrase shared by the sleep-timer (JF-618) and reminder (JF-622) confirmations:, largest whole unit
     /// with singular/plural (SleepTimerUnit* keys; the plural-seconds arm reuses
     /// SecondsOnly). Boundary snap (review finding): a PT59.5S timer speaks "one
     /// minute", not "60 seconds" (the arms hand off where rounding would cross 60).
