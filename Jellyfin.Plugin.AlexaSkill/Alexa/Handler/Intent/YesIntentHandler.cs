@@ -327,7 +327,13 @@ public class YesIntentHandler : BaseHandler
         session.NowPlayingQueue = queueItems;
         session.FullNowPlayingItem = albumItems[0];
         string itemId = albumItems[0].Id.ToString();
-        return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, albumItems[0], user, context);
+        // JF-625: a confirmed MUSIC album plays the whole-album concat stream in seek
+        // mode, same as a direct PlayAlbum request (the parallel-dispatch rule; a
+        // confirm must not produce a different seek bar than the original ask).
+        // MusicAlbum only: the JF-361 single-file audiobooks that also arrive here
+        // have a non-album ParentId and must not build a collection URL.
+        Guid? collectionParent = album is MediaBrowser.Controller.Entities.Audio.MusicAlbum ? album.Id : null;
+        return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, albumItems[0], user, context, collectionParentId: collectionParent);
     }
 
     /// <summary>

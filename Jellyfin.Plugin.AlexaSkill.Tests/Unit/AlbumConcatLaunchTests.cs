@@ -67,10 +67,11 @@ public class AlbumConcatLaunchTests : PluginTestBase
         var song = new Audio { Name = "Magnolia", Id = Guid.NewGuid() };
         var user = TestHelpers.CreateTestUser();
 
-        var response = Launch(song, user, album, 257_770 * TimeSpan.TicksPerSecond / TimeSpan.TicksPerSecond);
+        long ticks = TimeSpan.FromSeconds(257770).Ticks;
+        var response = Launch(song, user, album, ticks);
 
         var launch = Assert.Single(response.Response.Directives.OfType<VideoAppLaunchDirective>());
-        Assert.Contains("start=257770", launch.VideoItem.Source, StringComparison.Ordinal);
+        Assert.Contains($"start={ticks}", launch.VideoItem.Source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -90,21 +91,14 @@ public class AlbumConcatLaunchTests : PluginTestBase
     public void SeekModeOff_CollectionParentIsIgnored_AudioPlayerPlay()
     {
         _fx.Config.NativeControlsForAudio = false;
-        try
-        {
-            var album = Guid.NewGuid();
-            var song = new Audio { Name = "Magnolia", Id = Guid.NewGuid() };
-            var user = TestHelpers.CreateTestUser();
+        var album = Guid.NewGuid();
+        var song = new Audio { Name = "Magnolia", Id = Guid.NewGuid() };
+        var user = TestHelpers.CreateTestUser();
 
-            var response = Launch(song, user, album, 0);
+        var response = Launch(song, user, album, 0);
 
-            Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
-            Assert.Empty(response.Response.Directives.OfType<VideoAppLaunchDirective>());
-        }
-        finally
-        {
-            _fx.Config.NativeControlsForAudio = true;
-        }
+        Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+        Assert.Empty(response.Response.Directives.OfType<VideoAppLaunchDirective>());
     }
 
     [Fact]

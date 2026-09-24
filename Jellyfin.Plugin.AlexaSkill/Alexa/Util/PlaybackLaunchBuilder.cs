@@ -1027,7 +1027,7 @@ public sealed class PlaybackLaunchBuilder
     /// default (false, i.e. audio plays are silent by default, JF-352.4). Per-user setting takes
     /// precedence. Video/book launches use the <see cref="GetAnnounceNowPlaying"/> resolver instead.
     /// </summary>
-    internal bool GetAnnounceAudioPlays(Entities.User? user)
+    private bool GetAnnounceAudioPlays(Entities.User? user)
     {
         if (user?.AnnounceAudioPlays is { } userPref)
         {
@@ -1444,7 +1444,9 @@ public sealed class PlaybackLaunchBuilder
         Entities.User user,
         Context? context,
         string? announceLocale = null,
-        DeviceQueueManager? queueManager = null)
+        DeviceQueueManager? queueManager = null,
+        Guid? collectionParentId = null,
+        long collectionStartTicks = 0)
         => BuildAudioPlayerResponse(
             playBehavior,
             source.Url,
@@ -1455,7 +1457,9 @@ public sealed class PlaybackLaunchBuilder
             source.OffsetMs,
             announceLocale,
             queueManager,
-            source.LaunchBaseMs);
+            source.LaunchBaseMs,
+            collectionParentId,
+            collectionStartTicks);
 
     /// <summary>
     /// Build a VideoApp.Launch response for audio playback using the video-audio

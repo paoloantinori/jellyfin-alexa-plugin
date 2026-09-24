@@ -83,9 +83,21 @@ public class VideoAudioController : ControllerBase
     /// </summary>
     private const string PrewrittenPlaylistFileName = "playlist-full.m3u8";
         /// <summary>JF-625: below this runtime the pre-written full listing is SKIPPED (the
-        /// encode finishes before the device's first fetch; see the StreamHlsVideoAudioCore
-        /// prewrite branch for the phantom-tail failure it prevents).</summary>
+        /// encode finishes before the device's first fetch; see ShouldPrewriteFullListing
+        /// for the phantom-tail failure it prevents).</summary>
         private static readonly long PrewriteListingMinRuntimeTicks = TimeSpan.FromMinutes(10).Ticks;
+
+        /// <summary>
+        /// JF-625: the ONE pre-write decision, shared by every prewrite site (the song
+        /// path and the episode path). A pre-written full listing CEIL-estimates the
+        /// segment count; ffmpeg can produce one fewer, and short content's whole
+        /// stream prefetches in ~1s, reaches the promised-but-missing tail segment,
+        /// 404s, and kills the player before playback starts. Below the threshold the
+        /// encode completes to ENDLIST before the device's first fetch, so the correct
+        /// VOD playlist is served directly.
+        /// </summary>
+        private static bool ShouldPrewriteFullListing(long runtimeTicks)
+            => runtimeTicks > PrewriteListingMinRuntimeTicks;
 
     /// <summary>
     /// The episode HLS <c>-hls_time</c> in seconds (JF-531). LOAD-BEARING COUPLING:
@@ -538,7 +550,7 @@ public class VideoAudioController : ControllerBase
                 // (JF-536/JF-531: a no-ENDLIST growing playlist joins at the live edge);
                 // short content encodes to ENDLIST before the device's first fetch, so
                 // skipping the listing serves the correct VOD playlist directly.
-                if (validation.Item.RunTimeTicks > PrewriteListingMinRuntimeTicks)
+                if (validation.Item.RunTimeTicks is > 0 && ShouldPrewriteFullListing(validation.Item.RunTimeTicks.Value))
                 {
                     WriteVideoAudioPlaylist(
                         prewrittenPath,
@@ -939,7 +951,7 @@ public class VideoAudioController : ControllerBase
                 // When the encode completes, ffmpeg's own ENDLIST playlist takes
                 // over via the cache-hit paths above.
                 string prewrittenPath = Path.Combine(hlsDir, PrewrittenPlaylistFileName);
-                if (runtimeTicks > 0)
+                if (runtimeTicks is > 0 && ShouldPrewriteFullListing(runtimeTicks))
                 {
                     WriteEpisodePlaylist(prewrittenPath, hlsBaseUrl, runtimeTicks, HttpContext.Request.Query["token"]);
                 }
@@ -1605,6 +1617,18 @@ public class VideoAudioController : ControllerBase
                 return await ServeAudiobookPlaylistAsync(prewrittenPath, startTicks).ConfigureAwait(false);
             }
 
+            // JF-625: album encodes write NO pre-written listing (the live-edge rule
+            // at the prewrite site); their concurrent path serves ffmpeg's live listing,
+            // whose edge tracks the encode instead of sitting at the album's end.
+            if (isMusicAlbum)
+            {
+                string livePath = Path.Combine(hlsDir, "stream.m3u8");
+                if (System.IO.File.Exists(livePath))
+                {
+                    return await ServeAudiobookPlaylistAsync(livePath, startTicks).ConfigureAwait(false);
+                }
+            }
+
             _logger.LogWarning("VideoAudio audiobook HLS: pre-written playlist not available for {ParentId}, returning 503", parentId);
             return StatusCode(503, "Encode in progress");
         }
@@ -1738,17 +1762,25 @@ public class VideoAudioController : ControllerBase
             // flag-set-implies-listing-on-disk invariant (it 503s otherwise) holds.
             string prewrittenPath = Path.Combine(hlsDir, PrewrittenPlaylistFileName);
             string? token = HttpContext.Request.Query["token"];
-            try
+            // JF-625: albums SKIP the pre-written full listing entirely. The Echo joins
+            // a no-ENDLIST listing at its LIVE EDGE, so a full listing puts the edge at
+            // the album's end (the dead-player shape, live 2026-09-24); albums serve the
+            // ffmpeg live listing on every in-progress path instead (the first fetch and
+            // the concurrent-encode guard). Audiobooks keep the pre-write.
+            if (!isMusicAlbum)
             {
-                WriteAudiobookPlaylist(prewrittenPath, hlsBaseUrl, sortedChapters, token);
-            }
-            catch
-            {
-                // Pre-handoff failure: this scope still owns the process (no monitor
-                // was started yet), so kill it instead of leaking a running ffmpeg.
-                try { ffmpegProcess.Kill(); } catch { /* already exited */ }
-                ffmpegProcess.Dispose();
-                throw;
+                try
+                {
+                    WriteAudiobookPlaylist(prewrittenPath, hlsBaseUrl, sortedChapters, token);
+                }
+                catch
+                {
+                    // Pre-handoff failure: this scope still owns the process (no monitor
+                    // was started yet), so kill it instead of leaking a running ffmpeg.
+                    try { ffmpegProcess.Kill(); } catch { /* already exited */ }
+                    ffmpegProcess.Dispose();
+                    throw;
+                }
             }
 
             // Register the HLS directory for segment lookups immediately.

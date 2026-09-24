@@ -136,6 +136,9 @@ public class AplUserEventHandler : BaseHandler
 
     private async Task<SkillResponse> HandleSelectItem(AplUserEventRequest aplEvent, Entities.User user, SessionInfo session, Context context, Request request, CancellationToken cancellationToken)
     {
+        // JF-625: set when the tapped folder is a MusicAlbum; drives the whole-album
+        // concat stream in seek mode (same seek bar as the voice ask).
+        Guid? albumFolderId = null;
         string? itemIdStr = aplEvent.Arguments?.ElementAtOrDefault(1)?.ToString();
         if (string.IsNullOrEmpty(itemIdStr) || !Guid.TryParse(itemIdStr, out Guid itemId))
         {
@@ -258,6 +261,10 @@ public class AplUserEventHandler : BaseHandler
 
                 // Queue remaining children
                 var queueItems = children.Select(c => new QueueItem { Id = c.Id }).ToList();
+                if (isAlbum)
+                {
+                    albumFolderId = folder.Id;
+                }
                 session.NowPlayingQueue = queueItems;
                 session.FullNowPlayingItem = item;
             }
@@ -270,6 +277,10 @@ public class AplUserEventHandler : BaseHandler
 
         int offsetMs = GetResumeOffset(item, session, request);
 
+        // JF-625: albumFolderId (set in the folder branch above) makes an album FOLDER
+        // tap play the whole-album concat stream in seek mode, same seek bar as the
+        // voice ask (the parallel-dispatch rule); null for every non-album tap.
+
         // The codec-routed audio source (JF-507): a resolved Episode whose audio
         // codec has no Echo decoder rides the audio-only transcode; every other
         // resolved item keeps the static URL GetStreamUrl built.
@@ -277,7 +288,7 @@ public class AplUserEventHandler : BaseHandler
         // The NowPlaying screen rides the BuildAudioPlayerResponse chokepoint since
         // JF-623 (every ReplaceAll play auto-attaches); the manual attach here was the
         // carousel-only leftover and would double-render.
-        return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source, itemIdStr, item, user, context);
+        return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source, itemIdStr, item, user, context, collectionParentId: albumFolderId);
     }
 
     private int GetResumeOffset(BaseItem item, SessionInfo session, Request request)

@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET;
 using Alexa.NET.Request;
+using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
@@ -359,7 +360,7 @@ public sealed class AlbumPlayService
         IReadOnlyList<BaseItem> candidates = await RetryAsync(
             () => libraryManager.GetItemList(BuildAlbumQuery(libraryManager, jellyfinUser, user, query, artistIds: null)),
             logLabel + ":GetAlbumsFallbackExact",
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken: cancellationToken).ConfigureAwait(false);
 
         // Tier 2 (bounded fuzzy): only on an exact miss, one cheap-DTO scan of the album
         // catalog (hundreds of rows, not the Audio catalog's thousands; JF-446 shape).
@@ -370,7 +371,7 @@ public sealed class AlbumPlayService
             candidates = await RetryAsync(
                 () => libraryManager.GetItemList(fuzzyQuery),
                 logLabel + ":GetAlbumsFallbackFuzzy",
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken: cancellationToken).ConfigureAwait(false);
         }
 
         if (candidates.Count == 0)
@@ -411,8 +412,7 @@ public sealed class AlbumPlayService
             announcement: _config.AnnounceCrossMediaSubstitution
                 ? ResponseStrings.Get("FoundAlbumInstead", locale, match.Item.Name)
                 : null,
-            request: null,
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -449,7 +449,7 @@ public sealed class AlbumPlayService
         Playback.DeviceQueueManager? queueManager,
         string logLabel,
         string? announcement = null,
-        global::Alexa.NET.Request.Type.Request? request = null,
+        Request? request = null,
         CancellationToken cancellationToken = default)
     {
         // Get the first page of album tracks for fast time-to-audio.
@@ -467,7 +467,7 @@ public sealed class AlbumPlayService
                 Limit = ProgressiveQueueConstants.GetInitialFetchSize()
             }),
             logLabel + ":GetAlbumTracks",
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken: cancellationToken).ConfigureAwait(false);
         _logger.LogDebug("{Label}: Jellyfin returned {TrackCount} tracks (total={TotalCount})", logLabel, albumResult.Items.Count, albumResult.TotalRecordCount);
         if (albumResult.TotalRecordCount == 0)
         {
@@ -489,7 +489,7 @@ public sealed class AlbumPlayService
                     Limit = ProgressiveQueueConstants.GetInitialFetchSize()
                 }),
                 logLabel + ":GetAlbumTracksByAlbumIds",
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken: cancellationToken).ConfigureAwait(false);
             _logger.LogDebug("{Label}: AlbumIds fallback returned {TrackCount} tracks (total={TotalCount})", logLabel, albumResult.Items.Count, albumResult.TotalRecordCount);
         }
 
@@ -556,36 +556,27 @@ public sealed class AlbumPlayService
         // position is not carried in this first cut - playback resumes at the resume
         // track's beginning, matching the AudioPlayer queue behavior of starting the
         // queue at startIndex).
-        long albumStartTicks = 0;
-        for (int i = 0; i < startIndex; i++)
-        {
-            albumStartTicks += albumItems[i].RunTimeTicks ?? 0;
-        }
+        long albumStartTicks = albumItems.Take(startIndex).Sum(i => i.RunTimeTicks ?? 0);
 
-        // JF-625 (live 2026-09-24): in seek mode the VideoApp player steals the audio
-        // channel before a FINAL-response announce finishes ("In riproduzione" and then
-        // cut, the JF-501 observation on fast-start HLS). The album announce rides the
-        // progressive-response vehicle instead (spoken BEFORE the launch response, the
-        // book-path mechanism) and says the ALBUM name, which is what an album play
-        // announces; SpeakVideoLaunchAnnounceAsync falls back to riding the final
-        // response when the vehicle cannot serve it (screenless degrade, send failure).
-        SkillResponse albumResponse;
+        SkillResponse albumResponse = _launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, _launch.GetStreamUrl(item_id, user), item_id, albumItems[startIndex], user, context, announceLocale: locale, collectionParentId: album.Id, collectionStartTicks: albumStartTicks);
+
+        // JF-625 (live 2026-09-24): when the response actually took the VideoApp route
+        // (observed on the directive, not re-derived from the builder's gates) and the
+        // announce attached (the speech's presence IS the toggle), the announce swaps
+        // onto the progressive-response vehicle: the fast-start VideoApp player steals
+        // the audio channel before a FINAL-response announce finishes ("In
+        // riproduzione" and then cut, the JF-501 observation), while a progressive
+        // speech completes BEFORE the launch response reaches the device. The vehicle
+        // speech names the ALBUM (what an album play announces); on success it returns
+        // null, clearing the track-name speech the builder attached, and on vehicle
+        // failure (screenless degrade path, send error) it returns the speech to ride
+        // the final response.
         if (request != null
-            && _launch.GetVideoAppForAudio(user)
-            && Interface.VideoAppCapabilities.DeviceSupportsVideoApp(context)
-            && _launch.GetAnnounceAudioPlays(user))
+            && albumResponse.Response.OutputSpeech is not null
+            && albumResponse.Response.Directives.Any(d => d is Directive.VideoAppLaunchDirective))
         {
             IOutputSpeech? albumAnnounce = SpeechBuilder.BuildNowPlayingSpeech(album.Name, locale, announceOn: true);
-            IOutputSpeech? fallbackAnnounce = await _launch.SpeakVideoLaunchAnnounceAsync(context, request, albumAnnounce).ConfigureAwait(false);
-            albumResponse = _launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, _launch.GetStreamUrl(item_id, user), item_id, albumItems[startIndex], user, context, collectionParentId: album.Id, collectionStartTicks: albumStartTicks);
-            if (fallbackAnnounce != null && albumResponse.Response.OutputSpeech is null)
-            {
-                albumResponse.Response.OutputSpeech = fallbackAnnounce;
-            }
-        }
-        else
-        {
-            albumResponse = _launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, _launch.GetStreamUrl(item_id, user), item_id, albumItems[startIndex], user, context, announceLocale: locale, collectionParentId: album.Id, collectionStartTicks: albumStartTicks);
+            albumResponse.Response.OutputSpeech = await _launch.SpeakVideoLaunchAnnounceAsync(context, request, albumAnnounce).ConfigureAwait(false);
         }
 
         // The caller may pass an announcement (fuzzy name correction in PlayAlbum,
