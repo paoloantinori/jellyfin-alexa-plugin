@@ -547,7 +547,20 @@ public sealed class AlbumPlayService
         _logger.LogDebug(
             "{Label}: returning AudioPlayer, itemId={ItemId}, album='{AlbumName}', startIndex={StartIndex}, queueSize={QueueSize}",
             logLabel, item_id, album.Name, startIndex, queueItems.Count);
-        SkillResponse albumResponse = _launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, _launch.GetStreamUrl(item_id, user), item_id, albumItems[startIndex], user, context, announceLocale: locale);
+        // JF-625 queue-as-concat: in seek mode the album launches as ONE video-audio
+        // concat stream keyed by the album GUID; the seek bar spans the whole album.
+        // Album-level resume offset = the summed runtime of the tracks BEFORE the
+        // resume track (the sliced-playlist ?start= mechanism; the in-track partial
+        // position is not carried in this first cut - playback resumes at the resume
+        // track's beginning, matching the AudioPlayer queue behavior of starting the
+        // queue at startIndex).
+        long albumStartTicks = 0;
+        for (int i = 0; i < startIndex; i++)
+        {
+            albumStartTicks += albumItems[i].RunTimeTicks ?? 0;
+        }
+
+        SkillResponse albumResponse = _launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, _launch.GetStreamUrl(item_id, user), item_id, albumItems[startIndex], user, context, announceLocale: locale, collectionParentId: album.Id, collectionStartTicks: albumStartTicks);
 
         // The caller may pass an announcement (fuzzy name correction in PlayAlbum,
         // cross-media substitution in the JF-345 cascade) so the user knows what is

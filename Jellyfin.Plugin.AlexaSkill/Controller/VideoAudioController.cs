@@ -22,6 +22,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using SortOrder = Jellyfin.Database.Implementations.Enums.SortOrder;
 
 namespace Jellyfin.Plugin.AlexaSkill.Controller;
 
@@ -1516,14 +1517,27 @@ public class VideoAudioController : ControllerBase
             return NotFound(new { error = "Parent item not found" });
         }
 
-        // Get all AudioBook children.
+        // JF-625: the concat endpoint also serves MUSIC ALBUMS (queue-as-concat in seek
+        // mode): a MusicAlbum parent resolves its Audio children in disc/track order and
+        // encodes with the album cover as the video track. Audiobook folders keep the
+        // AudioBook children query and the black-frame encode.
+        bool isMusicAlbum = parent is MediaBrowser.Controller.Entities.Audio.MusicAlbum;
         var childrenQuery = new InternalItemsQuery
         {
             ParentId = parentGuid,
-            IncludeItemTypes = new[] { BaseItemKind.AudioBook },
+            IncludeItemTypes = new[] { isMusicAlbum ? BaseItemKind.Audio : BaseItemKind.AudioBook },
             Recursive = true,
             DtoOptions = new DtoOptions(true)
         };
+        if (isMusicAlbum)
+        {
+            // Album track order: disc (ParentIndexNumber), then track (IndexNumber).
+            childrenQuery.OrderBy = new[]
+            {
+                (ItemSortBy.ParentIndexNumber, SortOrder.Ascending),
+                (ItemSortBy.IndexNumber, SortOrder.Ascending),
+            };
+        }
 
         IReadOnlyList<MediaBrowser.Controller.Entities.BaseItem> chapters =
             _libraryManager.GetItemList(childrenQuery);
@@ -1626,7 +1640,9 @@ public class VideoAudioController : ControllerBase
                 "Audiobook chapter sort: first item Name={Name}, Path={Path}, Id={Id}",
                 chapters[0].Name, chapters[0].Path, chapters[0].Id);
 
-            var sortedChapters = chapters
+            var sortedChapters = isMusicAlbum
+                ? chapters.ToList()
+                : chapters
                 .OrderBy(c =>
                 {
                     string? path = c.Path;
@@ -1692,8 +1708,9 @@ public class VideoAudioController : ControllerBase
             // Segments served by existing GetSegment endpoint using parentId as key
             string hlsBaseUrl = $"/alexaskill/api/video-audio/{parentId}/segments/";
 
+            string? collectionArtUrl = isMusicAlbum ? ResolveArtUrl(parent, serverUrl) : null;
             var ffmpegArgs = BuildHlsAudiobookFfmpegArguments(
-                concatListPath, null, true, playlistPath, segmentPath, hlsBaseUrl);
+                concatListPath, collectionArtUrl, collectionArtUrl == null, playlistPath, segmentPath, hlsBaseUrl);
 
             if (_logger.IsEnabled(LogLevel.Debug))
             {
@@ -2740,6 +2757,15 @@ public class VideoAudioController : ControllerBase
 
         // Video: 1fps black frame at minimum quality — fast to encode, provides keyframes every
         // second for accurate seeking. VideoApp.Launch requires a video track for the seek bar.
+        // JF-625: with real art (music-album concats), the source image has arbitrary
+        // dimensions; the scale+pad filter (the single-item path's) normalizes to 1280x720
+        // so libx264 gets even dimensions. The black-frame input is already 1280x720 and
+        // deliberately takes no filter: the audiobook encode args are the live-proven set.
+        if (!useBlackFrame)
+        {
+            args.AddRange(VideoFilterArgs);
+        }
+
         args.AddRange([
             "-c:v", "libx264",
             "-tune", "stillimage",

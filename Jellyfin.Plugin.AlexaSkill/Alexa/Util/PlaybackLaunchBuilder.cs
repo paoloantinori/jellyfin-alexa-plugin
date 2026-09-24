@@ -1224,7 +1224,7 @@ public sealed class PlaybackLaunchBuilder
     /// <param name="queueManager">Optional per-device queue manager holding the launch-scope store (JF-522); null falls back to <c>Plugin.Instance</c>'s (pass one explicitly to keep unit tests off the shared plugin instance).</param>
     /// <param name="launchBaseMs">The item-absolute launch base of the stream this directive plays (<see cref="AudioLaunchSource.LaunchBaseMs"/>; 0 for raw-static/precomputed launches). Recorded at this chokepoint so the playback event writers can persist item-absolute positions (JF-522).</param>
     /// <returns>A SkillResponse containing the AudioPlayer directive.</returns>
-    public SkillResponse BuildAudioPlayerResponse(PlayBehavior playBehavior, string streamUrl, string itemId, MediaBrowser.Controller.Entities.BaseItem? item, Entities.User user, Context? context, int offsetInMilliseconds = 0, string? announceLocale = null, DeviceQueueManager? queueManager = null, long launchBaseMs = 0)
+    public SkillResponse BuildAudioPlayerResponse(PlayBehavior playBehavior, string streamUrl, string itemId, MediaBrowser.Controller.Entities.BaseItem? item, Entities.User user, Context? context, int offsetInMilliseconds = 0, string? announceLocale = null, DeviceQueueManager? queueManager = null, long launchBaseMs = 0, Guid? collectionParentId = null, long collectionStartTicks = 0)
     {
         // Record the last user-initiated play for this device (ReplaceAll = a new item starts).
         // This is the universal chokepoint: every play path flows through here, including APL
@@ -1267,7 +1267,7 @@ public sealed class PlaybackLaunchBuilder
             // break for BuildVideoAppAudioResponse's own screenless fallback.
             if (wantsNativeControls && Interface.VideoAppCapabilities.DeviceSupportsVideoApp(context))
             {
-                return BuildVideoAppAudioResponse(itemId, item, user, announceLocale, context);
+                return BuildVideoAppAudioResponse(itemId, item, user, announceLocale, context, collectionParentId, collectionStartTicks);
             }
         }
 
@@ -1474,7 +1474,7 @@ public sealed class PlaybackLaunchBuilder
     /// <param name="announceLocale">Optional locale for the now-playing announce.</param>
     /// <param name="context">The Alexa context, for the screenless-device check. Null (or a context without capability data) keeps the VideoApp path.</param>
     /// <returns>A VideoApp.Launch response, or an AudioPlayer response on a screenless device.</returns>
-    public SkillResponse BuildVideoAppAudioResponse(string itemId, BaseItem? item, Entities.User user, string? announceLocale = null, Context? context = null)
+    public SkillResponse BuildVideoAppAudioResponse(string itemId, BaseItem? item, Entities.User user, string? announceLocale = null, Context? context = null, Guid? collectionParentId = null, long collectionStartTicks = 0)
     {
         if (!Interface.VideoAppCapabilities.DeviceSupportsVideoApp(context))
         {
@@ -1519,6 +1519,17 @@ public sealed class PlaybackLaunchBuilder
             videoAudioUrl = GetAudiobookVideoAudioUrl(item.ParentId.ToString());
             // JF-580: the URL carries the signed JF-309 stream token; log it masked.
             _logger.LogDebug("BuildVideoAppAudioResponse: itemId={ItemId}, parentId={ParentId}, title={Title}, url={Url} (audiobook concat)", itemId, item.ParentId, item.Name, RequestLogRedactor.RedactUrl(videoAudioUrl));
+        }
+        else if (collectionParentId is Guid concatParent)
+        {
+            // JF-625 queue-as-concat: a music-album play in seek mode launches the
+            // WHOLE album as one continuous video-audio stream (the audiobook chapter
+            // shape with tracks), keyed by the album GUID. The seek bar spans the full
+            // album; collectionStartTicks is the album-level resume offset (the summed
+            // runtime of the tracks before the resume track) threaded by the album play
+            // service.
+            videoAudioUrl = GetAudiobookResumeUrl(concatParent.ToString(), collectionStartTicks);
+            _logger.LogDebug("BuildVideoAppAudioResponse: itemId={ItemId}, collectionParent={ParentId}, startTicks={StartTicks}, title={Title}, url={Url} (album concat)", itemId, concatParent, collectionStartTicks, item?.Name, RequestLogRedactor.RedactUrl(videoAudioUrl));
         }
         else
         {
