@@ -191,6 +191,7 @@
   "ErrorSkillError": "Algo deu errado. Por favor, tente novamente.",
   "ErrorTimeout": "Isso demorou muito. Por favor, tente novamente.",
   "DidNotCatchReminderTime": "Quando devo lembrar você? Por favor, diga um horário ou número de minutos.",
+  "ReminderAskDuration": "Quando devo lembrá-lo? Diga uma duração, por exemplo cinco minutos.",
   "ReminderSetRelativeFor": "Lembrete definido para {0} a partir de agora.",
   "ReminderSetAbsolute": "Lembrete definido para {0}.",
   "ReminderError": "Desculpe, não consegui definir esse lembrete. Por favor, tente novamente.",

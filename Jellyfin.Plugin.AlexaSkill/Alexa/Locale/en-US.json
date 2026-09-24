@@ -191,6 +191,7 @@
   "ErrorSkillError": "Something went wrong. Please try again.",
   "ErrorTimeout": "That took too long. Please try again.",
   "DidNotCatchReminderTime": "When should I remind you? Please say a time or a number of minutes.",
+  "ReminderAskDuration": "When should I remind you? Say a duration, for example five minutes.",
   "ReminderSetRelativeFor": "Reminder set for {0} from now.",
   "ReminderSetAbsolute": "Reminder set for {0}.",
   "ReminderError": "Sorry, I couldn't set that reminder. Please try again.",

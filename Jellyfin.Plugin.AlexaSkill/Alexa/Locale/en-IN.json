@@ -37,6 +37,7 @@
   "DidNotCatchPodcastName": "I didn't catch the podcast name. Which podcast would you like to listen to?",
   "DidNotCatchQueueItem": "What would you like to add to your queue?",
   "DidNotCatchReminderTime": "When should I remind you? Please say a time or a number of minutes.",
+  "ReminderAskDuration": "When should I remind you? Say a duration, for example five minutes.",
   "DidNotCatchSeriesName": "I didn't catch the series name. Which series would you like to watch?",
   "DidNotCatchSleepTimer": "How long should I set the sleep timer for? Say for example five minutes, thirty seconds, or half an hour.",
   "DidNotCatchVideoTitle": "I didn't catch the video title. Please try again.",

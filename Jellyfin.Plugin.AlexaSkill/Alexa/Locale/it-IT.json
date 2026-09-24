@@ -191,6 +191,7 @@
   "ErrorSkillError": "Qualcosa è andato storto. Per favore riprova.",
   "ErrorTimeout": "Ci ho messo troppo. Per favore riprova.",
   "DidNotCatchReminderTime": "Quando devo ricordartelo? Dimmi un orario o un numero di minuti.",
+  "ReminderAskDuration": "Quando devo ricordartelo? Dimmi una durata, per esempio cinque minuti.",
   "ReminderSetRelativeFor": "Promemoria impostato tra {0}.",
   "ReminderSetAbsolute": "Promemoria impostato per le {0}.",
   "ReminderError": "Mi dispiace, non ho potuto impostare il promemoria. Riprova.",

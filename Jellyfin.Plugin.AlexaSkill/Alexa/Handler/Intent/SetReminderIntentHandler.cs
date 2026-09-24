@@ -98,7 +98,10 @@ public class SetReminderIntentHandler : BaseHandler
             // a 32-bit API field, so an absurd week form must elicit, not throw at
             // the API boundary.
             TimeSpan? duration = Util.ResumeMath.ParseAlexaDuration(durationText);
-            if (duration is { } parsed && parsed.TotalSeconds <= int.MaxValue)
+            // JF-622 review: XmlConvert and int.TryParse both accept a sign, so a
+            // negative value would arm a past reminder (or a generic API rejection);
+            // a non-positive duration is treated as no answer and elicits.
+            if (duration is { } parsed && parsed > TimeSpan.Zero && parsed.TotalSeconds <= int.MaxValue)
             {
                 relativeDuration = parsed;
                 reminder = BuildRelativeReminder(parsed, spokenText, locale);
@@ -115,9 +118,20 @@ public class SetReminderIntentHandler : BaseHandler
 
         if (reminder is null)
         {
-            // One elicit for every no-time shape: both slots empty, an unparseable
-            // duration, or an invalid time string (JF-550 dead-mic sweep).
-            return BuildDialogElicitResponse("DidNotCatchReminderTime", locale, "reminder_time", IntentNames.SetReminder, Util.ElicitSlots.For(IntentNames.SetReminder));
+            // JF-622 review: the elicit target follows the FAILED slot. An unparseable
+            // or non-positive duration re-elicits reminder_duration with the honest
+            // duration-inviting string (the old single elicit targeted reminder_time
+            // while inviting "a number of minutes" - an answer that slot can never
+            // accept, a dead-end loop); only a malformed TIME string re-elicts
+            // reminder_time (JF-550 dead-mic sweep: one elicit for every no-time
+            // shape otherwise).
+            bool timeAttempted = !string.IsNullOrEmpty(timeText);
+            return BuildDialogElicitResponse(
+                timeAttempted ? "DidNotCatchReminderTime" : "ReminderAskDuration",
+                locale,
+                timeAttempted ? "reminder_time" : "reminder_duration",
+                IntentNames.SetReminder,
+                Util.ElicitSlots.For(IntentNames.SetReminder));
         }
 
         try
@@ -129,6 +143,11 @@ public class SetReminderIntentHandler : BaseHandler
             {
                 Logger.LogInformation("Reminder created with token {Token}", response.AlertToken);
 
+                // Argument-kind contract for translators: ReminderSetRelativeFor's {0}
+                // is a fully-formed localized spoken phrase (the shared duration
+                // formatter's output), while ReminderSetAbsolute's {0} is the raw
+                // AMAZON.TIME slot string verbatim. Rewording one key must not assume
+                // the other's contract.
                 string confirmMsg = relativeDuration.HasValue
                     ? ResponseStrings.Get("ReminderSetRelativeFor", locale, Util.ResumeMath.FormatSpokenLargestUnit(relativeDuration.Value, locale))
                     : ResponseStrings.Get("ReminderSetAbsolute", locale, timeText ?? string.Empty);

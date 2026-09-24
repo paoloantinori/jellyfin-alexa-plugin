@@ -191,6 +191,7 @@
   "ErrorSkillError": "Etwas ist schiefgelaufen. Bitte versuche es erneut.",
   "ErrorTimeout": "Das hat zu lange gedauert. Bitte versuche es erneut.",
   "DidNotCatchReminderTime": "Wann soll ich dich erinnern? Bitte nenne eine Uhrzeit oder eine Anzahl Minuten.",
+  "ReminderAskDuration": "Wann soll ich dich erinnern? Sag eine Dauer, zum Beispiel fünf Minuten.",
   "ReminderSetRelativeFor": "Erinnerung in {0} eingestellt.",
   "ReminderSetAbsolute": "Erinnerung fuer {0} eingestellt.",
   "ReminderError": "Sorry, ich konnte die Erinnerung nicht setzen. Bitte versuche es erneut.",

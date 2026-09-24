@@ -191,6 +191,7 @@
   "ErrorSkillError": "Er is iets misgegaan. Probeer het opnieuw.",
   "ErrorTimeout": "Dat duurde te lang. Probeer het opnieuw.",
   "DidNotCatchReminderTime": "Wanneer moet ik je herinneren? Zeg een tijd of een aantal minuten.",
+  "ReminderAskDuration": "Wanneer moet ik je eraan herinneren? Noem een duur, bijvoorbeeld vijf minuten.",
   "ReminderSetRelativeFor": "Herinnering ingesteld over {0}.",
   "ReminderSetAbsolute": "Herinnering ingesteld voor {0}.",
   "ReminderError": "Sorry, ik kon die herinnering niet instellen. Probeer het opnieuw.",

@@ -191,6 +191,7 @@
   "ErrorSkillError": "エラーが発生しました。もう一度お試しください。",
   "ErrorTimeout": "時間がかかりすぎました。もう一度お試しください。",
   "DidNotCatchReminderTime": "いつリマインドしますか？時間または分数を言ってください。",
+  "ReminderAskDuration": "いつリマインドしましょうか？期間を言ってください。例：5分。",
   "ReminderSetRelativeFor": "{0}後にリマインダーを設定しました。",
   "ReminderSetAbsolute": "{0} にリマインダーを設定しました。",
   "ReminderError": "申し訳ありませんが、リマインダーを設定できませんでした。もう一度お試しください。",
