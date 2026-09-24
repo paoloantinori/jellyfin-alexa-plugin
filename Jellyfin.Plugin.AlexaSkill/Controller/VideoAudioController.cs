@@ -1795,6 +1795,41 @@ public class VideoAudioController : ControllerBase
                 await Task.Delay(100).ConfigureAwait(false);
             }
 
+            // JF-625 (live 2026-09-24, Temple of the Dog): for MUSIC ALBUMS serve
+            // ffmpeg's LIVE playlist on the first fetch, NOT the pre-written full
+            // listing. The Echo joins a no-ENDLIST playlist at its LIVE EDGE: a full
+            // pre-write (every album segment listed) put the edge at the album's END,
+            // and the player immediately requested the not-yet-encoded tail segment
+            // (seg_0335 at encode segment 0, three 404s, dead player). ffmpeg's live
+            // listing names only encoded-so-far segments, so the edge is ~0 and the
+            // player starts at the album's beginning; event-playlist reloads extend
+            // the listing forward while the encode runs. The seek bar shows the
+            // encoded-so-far window during the encode (the JF-531 cosmetic cost) and
+            // settles to the full album duration once the ENDLIST playlist takes over
+            // via the cache-hit paths. Audiobooks keep the pre-write: their
+            // verified-live flow depends on it.
+            if (isMusicAlbum)
+            {
+                // Cold-cache resume guard: the resume slice applies to the COMPLETE
+                // listing (the cache-hit paths); slicing the still-growing live listing
+                // at a not-yet-encoded segment would yield an empty playlist and a dead
+                // player. Dropping the offset here (start from the album's beginning)
+                // is the benign degradation; the common resume case replays an already
+                // encoded album and takes the cache-hit path with the correct slice.
+                if (startTicks is > 0)
+                {
+                    _logger.LogInformation(
+                        "VideoAudio album HLS: cold-cache resume for parent {ParentId} (startTicks={StartTicks}) dropped; serving the live playlist from the album's beginning",
+                        parentId, startTicks);
+                    startTicks = null;
+                }
+
+                _logger.LogDebug(
+                    "VideoAudio album HLS: serving ffmpeg live playlist for parent {ParentId} ({TrackCount} tracks)",
+                    parentId, sortedChapters.Count);
+                return await ServeAudiobookPlaylistAsync(playlistPath, startTicks).ConfigureAwait(false);
+            }
+
             _logger.LogDebug(
                 "VideoAudio audiobook HLS: serving pre-written playlist for parent {ParentId} ({ChapterCount} chapters)",
                 parentId, sortedChapters.Count);
