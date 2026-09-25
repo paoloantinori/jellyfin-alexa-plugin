@@ -3,10 +3,10 @@ id: JF-631
 title: >-
   Mechanical roster guard: every AudioPlayerPlayDirective construction site must
   record ledger + launch base (IL scan)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-25 03:04'
-updated_date: '2026-09-25 11:02'
+updated_date: '2026-09-25 11:54'
 labels:
   - tech-debt
   - tests
@@ -30,14 +30,20 @@ Ask: extend the existing IL-scanning machinery (IlCallScanner, which already fee
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress
+- [x] #6 NLU test fixtures updated if interaction model changed
+- [x] #7 E2E test added for new intent or handler logic
+- [x] #8 Locale response strings added to all 17 locales
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+JF-631 complete: the IL roster guard. IlCallScanner gained newobj detection (ConstructsType; AudioPlayerPlayDirective resolves as a cross-assembly MemberRef); AudioPlayerPlayConstructionRosterTests holds two facts: roster equality (bidirectional, so neither an empty nor an extra discovery passes) and the writes invariant (every discovered site calls BOTH RecordLastPlayed and RecordLaunchBase, presence-level, one-level same-type helper allowance, aggregated failure message). The implementer PROVED the negative control (commenting the write fails both TFMs with the what-to-do message, restored byte-identical). The review hardened two probe-confirmed escapes: derived directives (IsAssignableFrom now, a subclass still serializes as AudioPlayer.Play) and double-nested compiler names (async lambda/local-function state machines); the docs now state the newobj-only boundary and the presence-level limit honestly. The simplify pass folded the scanner walk (OperandTokens) and hoisted TryResolveMethod (was in its third copy); JF-634 filed same-turn for the remaining scaffolding hoist. Test-only: no production changes, no deploy needed. Gates both in the orchestrator transcript. Suite 4334x2, PUSHED.
+<!-- SECTION:FINAL_SUMMARY:END -->
