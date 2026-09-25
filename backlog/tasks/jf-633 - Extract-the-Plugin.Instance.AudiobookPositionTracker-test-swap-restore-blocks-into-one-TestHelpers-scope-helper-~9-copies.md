@@ -3,10 +3,10 @@ id: JF-633
 title: >-
   Extract the Plugin.Instance.AudiobookPositionTracker test swap/restore blocks
   into one TestHelpers scope helper (~9 copies)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-25 05:23'
-updated_date: '2026-09-25 05:51'
+updated_date: '2026-09-25 13:01'
 labels:
   - tech-debt
   - tests
@@ -47,16 +47,16 @@ Mechanical change; full suite verifies.
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress
+- [x] #6 NLU test fixtures updated if interaction model changed
+- [x] #7 E2E test added for new intent or handler logic
+- [x] #8 Locale response strings added to all 17 locales
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
 ## Implementation Notes
@@ -64,3 +64,9 @@ Mechanical change; full suite verifies.
 <!-- SECTION:NOTES:BEGIN -->
 2026-09-25 JF-630 code-review additions to this plan: (a) the extraction must use ONE shared private core (capture/assign/restore-before-dispose) with two thin named wrappers (SwapPluginQueueManager + SwapPluginPositionTracker), so the load-bearing ordering invariant lives in exactly one place instead of two hand-copied scope classes; (b) the two method-level JF-630 conversion sites (ResumeIntentHandlerServerProgressTests ~563, StartOverIntentHandlerTests ~504) split one test's teardown across the explicit finally (tracker + config flag) and the using-at-exit (manager) - when this task lands a tracker scope, let those usings chain ALL resource teardown and drop the split; also the new scope should use the loud Plugin.Instance! guards (the JF-630 review's verdict on silent no-op swaps).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+JF-633 complete: ONE swap core for both plugin test-swap families. PluginInstanceSwap<T> (capture/assign/restore-before-dispose, loud guards) with the thin wrappers SwapPluginQueueManager and SwapPluginPositionTracker; the census re-verified (10 tracker sites converted, no new sites, the JF-527 harness documented as the sanctioned exception beside the core) and the production-assignment equivalence proven (SkillStartup is the only assigner, never runs in the test host). The review hardened the core: the null-previous assumption is now an enforced assertion (a foreign assignment fails loudly at the next swap instead of silently re-installing disposed state), Dispose survives a throwing restore, the two chained sites dispose in the old literal order with the comment saying it is deliberate, and CreatePositionTracker's doc states its own disposal rule. Test-only; suite count stayed exactly 4334x2. Gates: /simplify (clean, one micro-nit dropped) + code-review high (5 findings, all applied) in the orchestrator transcript. PUSHED.
+<!-- SECTION:FINAL_SUMMARY:END -->
