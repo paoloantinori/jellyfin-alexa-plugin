@@ -136,7 +136,10 @@ public class SetReminderIntentHandler : BaseHandler
 
         try
         {
-            var client = new RemindersClient(apiAccessToken, apiEndpoint);
+            // JF-622 device round (2026-09-25): the ctor signature is (endpointUrl, accessToken);
+            // the args were swapped, feeding the JWT to new Uri() (UriFormatException,
+            // live: 'non ho potuto impostare il promemoria' on every attempt).
+            var client = new RemindersClient(apiEndpoint, apiAccessToken);
             ReminderChangedResponse response = await client.Create(reminder).ConfigureAwait(false);
 
             if (!string.IsNullOrEmpty(response?.AlertToken))
