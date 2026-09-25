@@ -83,18 +83,9 @@ public class WarmingGateCoverageTests
         // GuardIndexReady/EnsureReady overload by name instead of hardcoding the
         // current two-plus-two, so a future overload (a third index type) cannot
         // silently escape the scan and leave a stale roster behind a green suite.
-        HashSet<int> gateTokens = new();
-        const BindingFlags allDeclared =
-            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
-        foreach (MethodInfo m in typeof(BaseHandler).GetMethods(allDeclared).Where(m => m.Name == "GuardIndexReady"))
-        {
-            gateTokens.Add(m.MetadataToken);
-        }
-
-        foreach (MethodInfo m in typeof(IndexWarmingGate).GetMethods(allDeclared).Where(m => m.Name == nameof(IndexWarmingGate.EnsureReady)))
-        {
-            gateTokens.Add(m.MetadataToken);
-        }
+        HashSet<int> gateTokens = IlCallScanner.MethodTokens(typeof(BaseHandler), "GuardIndexReady")
+            .Concat(IlCallScanner.MethodTokens(typeof(IndexWarmingGate), nameof(IndexWarmingGate.EnsureReady)))
+            .ToHashSet();
 
         var gated = new HashSet<Type>();
         foreach (Type handlerType in pluginAssembly.GetTypes())
@@ -107,37 +98,16 @@ public class WarmingGateCoverageTests
             // Walk the base chain up to (excluding) BaseHandler: a gate call in an
             // intermediate base class belongs to every concrete handler under it
             // (JF-465 review: DeclaredOnly on the handler alone missed that shape).
-            for (Type? chainType = handlerType; chainType != null && chainType != typeof(BaseHandler); chainType = chainType.BaseType)
+            foreach (MethodBase method in IlCallScanner.HandlerChainMethods(handlerType, typeof(BaseHandler)))
             {
-                foreach (Type type in NestedTypeClosure(chainType!))
+                if (IlCallScanner.ContainsCallToAnyToken(method, gateTokens))
                 {
-                    foreach (MethodBase method in IlCallScanner.DeclaredCallableMethods(type))
-                    {
-                        if (IlCallScanner.ContainsCallToAnyToken(method, gateTokens))
-                        {
-                            gated.Add(handlerType);
-                            break;
-                        }
-                    }
+                    gated.Add(handlerType);
+                    break;
                 }
             }
         }
 
         return gated;
-    }
-
-    private static IEnumerable<Type> NestedTypeClosure(Type root)
-    {
-        var queue = new Queue<Type>();
-        queue.Enqueue(root);
-        while (queue.Count > 0)
-        {
-            Type current = queue.Dequeue();
-            yield return current;
-            foreach (Type nested in current.GetNestedTypes(BindingFlags.Public | BindingFlags.NonPublic))
-            {
-                queue.Enqueue(nested);
-            }
-        }
     }
 }

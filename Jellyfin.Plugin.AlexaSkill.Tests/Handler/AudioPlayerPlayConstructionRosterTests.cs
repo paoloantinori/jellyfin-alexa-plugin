@@ -91,8 +91,13 @@ public class AudioPlayerPlayConstructionRosterTests
     public void PlayDirectiveConstructionSites_RecordLedgerAndLaunchBase()
     {
         Module pluginModule = typeof(BaseHandler).Module;
-        HashSet<int> ledgerTokens = WriteTokens(nameof(DeviceQueueManager.RecordLastPlayed));
-        HashSet<int> baseTokens = WriteTokens(nameof(DeviceQueueManager.RecordLaunchBase));
+
+        // Open-world over the write surface (the WarmingGateCoverageTests
+        // technique, JF-634 hoisted as MethodTokens): a future overload cannot
+        // silently escape the check. Same-assembly methoddef tokens, compared
+        // verbatim by the scanner.
+        HashSet<int> ledgerTokens = IlCallScanner.MethodTokens(typeof(DeviceQueueManager), nameof(DeviceQueueManager.RecordLastPlayed)).ToHashSet();
+        HashSet<int> baseTokens = IlCallScanner.MethodTokens(typeof(DeviceQueueManager), nameof(DeviceQueueManager.RecordLaunchBase)).ToHashSet();
 
         // Aggregate EVERY failing site into one message (the review's finding: a
         // per-site Assert aborts on the first, so a multi-site change needs one
@@ -124,39 +129,16 @@ public class AudioPlayerPlayConstructionRosterTests
         Module pluginModule = typeof(BaseHandler).Module;
         var sites = new List<(MethodBase Method, Site Site)>();
 
-        foreach (Type type in typeof(BaseHandler).Assembly.GetTypes())
+        foreach ((Type type, MethodBase method) in IlCallScanner.DeclaredMethods(typeof(BaseHandler).Assembly))
         {
-            foreach (MethodBase method in IlCallScanner.DeclaredCallableMethods(type))
+            if (IlCallScanner.ConstructsType(method, pluginModule, typeof(AudioPlayerPlayDirective)))
             {
-                if (IlCallScanner.ConstructsType(method, pluginModule, typeof(AudioPlayerPlayDirective)))
-                {
-                    Type owner = IlCallScanner.TopLevelType(method.DeclaringType ?? type);
-                    sites.Add((method, new Site(owner, LogicalMethodName(method))));
-                }
+                Type owner = IlCallScanner.TopLevelType(method.DeclaringType ?? type);
+                sites.Add((method, new Site(owner, LogicalMethodName(method))));
             }
         }
 
         return sites;
-    }
-
-    /// <summary>
-    /// The metadata tokens of every <see cref="DeviceQueueManager"/> method with
-    /// the given name (open-world over the write surface, the WarmingGate
-    /// CoverageTests technique: a future overload cannot silently escape the
-    /// check). Same-assembly methoddef tokens, compared verbatim by the scanner.
-    /// </summary>
-    private static HashSet<int> WriteTokens(string writeMethodName)
-    {
-        const BindingFlags allDeclared =
-            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
-
-        var tokens = new HashSet<int>();
-        foreach (MethodInfo m in typeof(DeviceQueueManager).GetMethods(allDeclared).Where(m => m.Name == writeMethodName))
-        {
-            tokens.Add(m.MetadataToken);
-        }
-
-        return tokens;
     }
 
     /// <summary>

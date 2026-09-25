@@ -185,15 +185,11 @@ public class SessionQueueReaderRosterTests
         MethodInfo getter = property.GetMethod ?? throw new InvalidOperationException("Property has no getter");
         var readers = new HashSet<Type>();
 
-        foreach (Type type in typeof(BaseHandler).Assembly.GetTypes())
+        foreach ((Type type, MethodBase method) in IlCallScanner.DeclaredMethods(typeof(BaseHandler).Assembly))
         {
-            foreach (MethodBase method in IlCallScanner.DeclaredCallableMethods(type))
+            if (IlCallScanner.CallsGetter(method, pluginModule, getter))
             {
-                if (IlCallScanner.CallsGetter(method, pluginModule, getter))
-                {
-                    readers.Add(IlCallScanner.TopLevelType(method.DeclaringType ?? type));
-                    break;
-                }
+                readers.Add(IlCallScanner.TopLevelType(method.DeclaringType ?? type));
             }
         }
 
@@ -211,15 +207,11 @@ public class SessionQueueReaderRosterTests
         int targetToken = target.MetadataToken;
         var callers = new HashSet<Type>();
 
-        foreach (Type type in typeof(BaseHandler).Assembly.GetTypes())
+        foreach ((Type type, MethodBase method) in IlCallScanner.DeclaredMethods(typeof(BaseHandler).Assembly))
         {
-            foreach (MethodBase method in IlCallScanner.DeclaredCallableMethods(type))
+            if (IlCallScanner.ContainsCallToToken(method, targetToken))
             {
-                if (IlCallScanner.ContainsCallToToken(method, targetToken))
-                {
-                    callers.Add(IlCallScanner.TopLevelType(method.DeclaringType ?? type));
-                    break;
-                }
+                callers.Add(IlCallScanner.TopLevelType(method.DeclaringType ?? type));
             }
         }
 

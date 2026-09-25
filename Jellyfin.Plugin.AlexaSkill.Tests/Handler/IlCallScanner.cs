@@ -7,18 +7,32 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
 /// <summary>
 /// JF-582 (the JF-579 /simplify T1): the ONE raw-IL call scanner shared by the
-/// roster tests (WarmingGateCoverageTests, SessionQueueReaderRosterTests), which
-/// had each carried a private copy of the walking logic. It walks a method body's
-/// IL bytes and reports the metadata token of every call (0x28) / callvirt
-/// (0x6F) instruction, and since JF-631 also every newobj (0x73) construction.
+/// roster tests (WarmingGateCoverageTests, SessionQueueReaderRosterTests,
+/// AudioPlayerPlayConstructionRosterTests), which had each carried a private
+/// copy of the walking logic. It walks a method body's IL bytes and reports the
+/// metadata token of every call (0x28) / callvirt (0x6F) instruction, and since
+/// JF-631 also every newobj (0x73) construction.
 /// The operand window is checked at every byte offset, so a
 /// coincidental token match inside another instruction's operand could only ADD
 /// a type to a discovered set, which fails a roster equality loudly; it can never
 /// silently hide a real caller. Uses only MethodBase.GetMethodBody IL bytes and
 /// MetadataToken resolution, so no IL disassembler dependency is needed.
+/// Since JF-634 it also owns the walk scaffolding the roster scans iterate
+/// (the flat assembly walk <see cref="DeclaredMethods"/>, the handler base-chain
+/// walk <see cref="HandlerChainMethods"/>) and the open-world by-name target
+/// collection <see cref="MethodTokens"/>, which had lived as four + two private
+/// copies across the roster tests.
 /// </summary>
 internal static class IlCallScanner
 {
+    /// <summary>
+    /// Every method/constructor binding flag without <see cref="BindingFlags.DeclaredOnly"/>;
+    /// the ONE copy (JF-634: the third duplicate lived in the roster tests' by-name
+    /// token collection).
+    /// </summary>
+    private const BindingFlags AllDeclared =
+        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
+
     /// <summary>
     /// The methods and constructors a type declares itself (its callable surface).
     /// Lambdas and local functions compiled to nested types are reached by
@@ -27,12 +41,71 @@ internal static class IlCallScanner
     /// <param name="type">The type whose declared methods and constructors to enumerate.</param>
     /// <returns>The declared methods and constructors, including private ones.</returns>
     internal static IEnumerable<MethodBase> DeclaredCallableMethods(Type type)
-    {
-        const BindingFlags allDeclared =
-            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
+        => type.GetMethods(AllDeclared | BindingFlags.DeclaredOnly).Cast<MethodBase>()
+            .Concat(type.GetConstructors(AllDeclared | BindingFlags.DeclaredOnly));
 
-        return type.GetMethods(allDeclared | BindingFlags.DeclaredOnly).Cast<MethodBase>()
-            .Concat(type.GetConstructors(allDeclared | BindingFlags.DeclaredOnly));
+    /// <summary>
+    /// Every declared method/constructor in the assembly, as (declaring type,
+    /// method) pairs in assembly/type order (JF-634: the flat assembly walk the
+    /// roster scans iterate; the private copies lived in the roster tests).
+    /// </summary>
+    /// <param name="assembly">The assembly whose types to walk.</param>
+    /// <returns>The (type, method) pairs, including nested and private types.</returns>
+    internal static IEnumerable<(Type Type, MethodBase Method)> DeclaredMethods(Assembly assembly)
+    {
+        foreach (Type type in assembly.GetTypes())
+        {
+            foreach (MethodBase method in DeclaredCallableMethods(type))
+            {
+                yield return (type, method);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Every method a concrete handler reaches through its base chain, up to
+    /// (excluding) the shared base: each chain type plus its nested-type closure
+    /// (async state machines, closures, local functions), so a call placed on an
+    /// intermediate base class is attributed to every concrete handler under it
+    /// (the JF-465 review shape; JF-634 hoisted the walk from the warming-gate
+    /// roster test).
+    /// </summary>
+    /// <param name="handlerType">The concrete handler whose chain to walk.</param>
+    /// <param name="exclusiveBase">The shared base type at which the chain stops.</param>
+    /// <returns>The chain's declared methods and constructors, including nested types'.</returns>
+    internal static IEnumerable<MethodBase> HandlerChainMethods(Type handlerType, Type exclusiveBase)
+    {
+        for (Type? chainType = handlerType; chainType != null && chainType != exclusiveBase; chainType = chainType.BaseType)
+        {
+            foreach (Type type in NestedTypeClosure(chainType!))
+            {
+                foreach (MethodBase method in DeclaredCallableMethods(type))
+                {
+                    yield return method;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// A type and every type nested under it, transitively (lambdas and local
+    /// functions compiled to nested types are part of the declaring type's body).
+    /// </summary>
+    /// <param name="root">The type whose nested closure to enumerate.</param>
+    /// <returns>The root type and every transitively nested type.</returns>
+    private static IEnumerable<Type> NestedTypeClosure(Type root)
+    {
+        var queue = new Queue<Type>();
+        queue.Enqueue(root);
+        while (queue.Count > 0)
+        {
+            Type current = queue.Dequeue();
+            yield return current;
+            foreach (Type nested in current.GetNestedTypes(BindingFlags.Public | BindingFlags.NonPublic))
+            {
+                queue.Enqueue(nested);
+            }
+        }
     }
 
     /// <summary>
@@ -79,6 +152,25 @@ internal static class IlCallScanner
     /// <returns>The newobj operand tokens, in IL order.</returns>
     internal static IEnumerable<int> NewobjTokens(MethodBase method)
         => OperandTokens(method, 0x73);
+
+    /// <summary>
+    /// The metadata tokens of every method the given type exposes with the given
+    /// name, across every overload (JF-634: the open-world by-name target
+    /// collection the roster tests build their same-assembly target sets from,
+    /// so a future overload cannot silently escape a scan and leave a stale
+    /// roster behind a green suite). GetMethods without DeclaredOnly, so
+    /// inherited overloads are included.
+    /// </summary>
+    /// <param name="type">The type whose methods to enumerate by name.</param>
+    /// <param name="methodName">The method name; every overload is included.</param>
+    /// <returns>The matching methods' metadata tokens.</returns>
+    internal static IEnumerable<int> MethodTokens(Type type, string methodName)
+    {
+        foreach (MethodInfo m in type.GetMethods(AllDeclared).Where(m => m.Name == methodName))
+        {
+            yield return m.MetadataToken;
+        }
+    }
 
     /// <summary>
     /// The ONE method-token resolver (JF-631 /simplify: the third hand copy of this
