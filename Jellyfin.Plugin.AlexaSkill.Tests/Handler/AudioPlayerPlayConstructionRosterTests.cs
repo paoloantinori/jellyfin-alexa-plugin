@@ -167,21 +167,7 @@ public class AudioPlayerPlayConstructionRosterTests
         Type owner = IlCallScanner.TopLevelType(method.DeclaringType!);
         foreach (int token in IlCallScanner.CallTokens(method))
         {
-            int table = unchecked((int)((uint)token >> 24));
-            if (table != 0x06 && table != 0x0A)
-            {
-                continue;
-            }
-
-            MethodBase? callee;
-            try
-            {
-                callee = module.ResolveMethod(token, null, null) as MethodBase;
-            }
-            catch (ArgumentException)
-            {
-                continue;
-            }
+            MethodBase? callee = IlCallScanner.TryResolveMethod(module, token);
 
             if (callee?.DeclaringType != null
                 && IlCallScanner.TopLevelType(callee.DeclaringType) == owner

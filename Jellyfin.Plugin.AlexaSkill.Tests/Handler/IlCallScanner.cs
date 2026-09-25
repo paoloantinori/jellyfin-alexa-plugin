@@ -42,22 +42,7 @@ internal static class IlCallScanner
     /// <param name="method">The method whose IL to walk.</param>
     /// <returns>The call/callvirt operand tokens, in IL order.</returns>
     internal static IEnumerable<int> CallTokens(MethodBase method)
-    {
-        MethodBody? body = method.GetMethodBody();
-        if (body == null)
-        {
-            yield break;
-        }
-
-        byte[] il = body.GetILAsByteArray() ?? Array.Empty<byte>();
-        for (int i = 0; i + 5 <= il.Length; i++)
-        {
-            if (il[i] == 0x28 || il[i] == 0x6F)
-            {
-                yield return BitConverter.ToInt32(il, i + 1);
-            }
-        }
-    }
+        => OperandTokens(method, 0x28, 0x6F);
 
     /// <summary>
     /// True when any call/callvirt token equals the given same-assembly methoddef
@@ -90,6 +75,40 @@ internal static class IlCallScanner
     /// <param name="method">The method whose IL to walk.</param>
     /// <returns>The newobj operand tokens, in IL order.</returns>
     internal static IEnumerable<int> NewobjTokens(MethodBase method)
+        => OperandTokens(method, 0x73);
+
+    /// <summary>
+    /// The ONE method-token resolver (JF-631 /simplify: the third hand copy of this
+    /// block lived in the roster test): only MethodDef (0x06) and MemberRef (0x0A)
+    /// tokens can name a method; a failed resolution returns null, which callers
+    /// treat as SKIP-a-candidate (loud-only failure: resolution misses can never
+    /// hide a real site from the roster-equality fact).
+    /// </summary>
+    internal static MethodBase? TryResolveMethod(Module module, int token)
+    {
+        int table = unchecked((int)((uint)token >> 24));
+        if (table != 0x06 && table != 0x0A)
+        {
+            return null;
+        }
+
+        try
+        {
+            return module.ResolveMethod(token, null, null) as MethodBase;
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The ONE byte-walk under <see cref="CallTokens"/> and <see cref="NewobjTokens"/>:
+    /// operand tokens for the given opcodes, checked at every byte offset so a
+    /// coincidental byte match can only ADD a candidate (the loud-only failure
+    /// philosophy this scanner follows).
+    /// </summary>
+    private static IEnumerable<int> OperandTokens(MethodBase method, params byte[] opcodes)
     {
         MethodBody? body = method.GetMethodBody();
         if (body == null)
@@ -100,7 +119,7 @@ internal static class IlCallScanner
         byte[] il = body.GetILAsByteArray() ?? Array.Empty<byte>();
         for (int i = 0; i + 5 <= il.Length; i++)
         {
-            if (il[i] == 0x73)
+            if (opcodes.Contains(il[i]))
             {
                 yield return BitConverter.ToInt32(il, i + 1);
             }
@@ -126,23 +145,7 @@ internal static class IlCallScanner
     {
         foreach (int token in NewobjTokens(method))
         {
-            int table = unchecked((int)((uint)token >> 24));
-            if (table != 0x06 && table != 0x0A)
-            {
-                continue;
-            }
-
-            MemberInfo? resolved;
-            try
-            {
-                resolved = module.ResolveMethod(token, null, null);
-            }
-            catch (ArgumentException)
-            {
-                continue;
-            }
-
-            if (resolved is MethodBase constructor && constructor.DeclaringType == constructedType)
+            if (TryResolveMethod(module, token)?.DeclaringType == constructedType)
             {
                 return true;
             }
@@ -168,24 +171,12 @@ internal static class IlCallScanner
     {
         foreach (int token in CallTokens(method))
         {
-            int table = unchecked((int)((uint)token >> 24));
-            if (table != 0x06 && table != 0x0A)
+            if (TryResolveMethod(module, token) is not MethodInfo m)
             {
                 continue;
             }
 
-            MemberInfo? resolved;
-            try
-            {
-                resolved = module.ResolveMethod(token, null, null);
-            }
-            catch (ArgumentException)
-            {
-                continue;
-            }
-
-            if (resolved is MethodInfo m
-                && m.Name == getter.Name
+            if (m.Name == getter.Name
                 && m.DeclaringType == getter.DeclaringType)
             {
                 return true;
