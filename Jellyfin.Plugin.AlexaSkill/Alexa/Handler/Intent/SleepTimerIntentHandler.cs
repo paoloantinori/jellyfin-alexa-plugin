@@ -163,22 +163,13 @@ public class SleepTimerIntentHandler : BaseHandler
             queues.RecordLaunchBase(deviceId, itemGuid.ToString(), 0, enqueued: false);
 
             // JF-628: the same chokepoint-skipping site owes the chokepoint's OTHER
-            // write. RecordLastPlayed's invariant (ResolvePlayingMedium's doc: the
-            // ledger is written by every launch site) applies because the re-issue IS
-            // a user-initiated ReplaceAll play of this item: without this record the
-            // ledger stays pinned on the older launch track while the composite token
-            // names the armed track, desyncing every ledger reader (the
-            // ResolvePlayingMedium/ResolveCurrentPlayingItem snapshot reads and the
-            // JF-619 GetDeviceResumePointer stamp arbitration). The ONE exception is
-            // a ledger entry another launch recorded on the VideoApp route for a
-            // DIFFERENT item: that shape is a VideoApp launch on screen (which never
-            // touches context.AudioPlayer.Token) with the sleep arm resolving the
-            // STALE audio token/session, and overwriting the truthful VideoApp record
-            // with (stale item, Audio) would poison the medium readers persistently
-            // (no event ever re-writes the ledger; review finding on JF-628). The
-            // JF-632 medium gate above already refuses the RESOLVABLE shapes of this
-            // scenario before any write; this guard stays as the belt for the ones
-            // the classifier cannot see (no library manager, unresolvable item).
+            // write - the re-issue IS a user-initiated play, so the ledger must name
+            // the armed track (the full rationale lives in the JF-628 commit). The
+            // JF-632 medium gate above already refuses the resolvable VideoApp shapes
+            // before any write; this guard is the BELT for the one live production
+            // shape the classifier cannot see (a ledger item that no longer resolves),
+            // where the stale-token write must still not overwrite the truthful
+            // VideoApp record (no event ever re-writes the ledger).
             (string? ledgerItemId, DeviceQueueManager.LaunchRoute? ledgerRoute) =
                 queues.GetLastPlayedSnapshot(deviceId);
             bool ledgerNamesOtherVideoAppItem =

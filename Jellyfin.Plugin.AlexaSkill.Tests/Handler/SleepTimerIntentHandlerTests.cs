@@ -484,7 +484,7 @@ public class SleepTimerIntentHandlerTests : PluginTestBase, IDisposable
         // video-family line (the PauseIntentHandler JF-564 precedent gives books no
         // line of their own) and the ledger keeps the truthful book record.
         Guid staleSongId = Guid.NewGuid();
-        var book = new MediaBrowser.Controller.Entities.AudioBook
+        var book = new AudioBook
         {
             Name = "Test Book",
             Id = Guid.NewGuid(),
