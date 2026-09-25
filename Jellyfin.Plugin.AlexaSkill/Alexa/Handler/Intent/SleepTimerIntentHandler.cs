@@ -116,10 +116,11 @@ public class SleepTimerIntentHandler : BaseHandler
         // URL (base 0, the item timeline), and without this write a transcode-launched
         // stream's stale base would compose over the replay's offsets at its events
         // (review JF-522; the double-add is otherwise bounded only by the runtime guard).
-        if (itemGuid != Guid.Empty && context.GetDeviceId() is { Length: > 0 } deviceId)
+        if (itemGuid != Guid.Empty
+            && context.GetDeviceId() is { Length: > 0 } deviceId
+            && Plugin.Instance?.DeviceQueueManager is { } queues)
         {
-            DeviceQueueManager? queues = Plugin.Instance?.DeviceQueueManager;
-            queues?.RecordLaunchBase(deviceId, itemGuid.ToString(), 0, enqueued: false);
+            queues.RecordLaunchBase(deviceId, itemGuid.ToString(), 0, enqueued: false);
 
             // JF-628: the same chokepoint-skipping site owes the chokepoint's OTHER
             // write. RecordLastPlayed's invariant (ResolvePlayingMedium's doc: the
@@ -136,14 +137,14 @@ public class SleepTimerIntentHandler : BaseHandler
             // with (stale item, Audio) would poison the medium readers persistently
             // (no event ever re-writes the ledger; review finding on JF-628).
             (string? ledgerItemId, DeviceQueueManager.LaunchRoute? ledgerRoute) =
-                queues?.GetLastPlayedSnapshot(deviceId) ?? (null, null);
+                queues.GetLastPlayedSnapshot(deviceId);
             bool ledgerNamesOtherVideoAppItem =
                 ledgerRoute == DeviceQueueManager.LaunchRoute.VideoApp
                 && Guid.TryParse(ledgerItemId, out Guid ledgerGuid)
                 && ledgerGuid != itemGuid;
             if (!ledgerNamesOtherVideoAppItem)
             {
-                queues?.RecordLastPlayed(
+                queues.RecordLastPlayed(
                     deviceId, itemGuid.ToString(), DeviceQueueManager.LaunchRoute.Audio);
             }
         }
