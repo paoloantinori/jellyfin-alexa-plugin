@@ -10,7 +10,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// roster tests (WarmingGateCoverageTests, SessionQueueReaderRosterTests), which
 /// had each carried a private copy of the walking logic. It walks a method body's
 /// IL bytes and reports the metadata token of every call (0x28) / callvirt
-/// (0x6F) instruction. The operand window is checked at every byte offset, so a
+/// (0x6F) instruction, and since JF-631 also every newobj (0x73) construction.
+/// The operand window is checked at every byte offset, so a
 /// coincidental token match inside another instruction's operand could only ADD
 /// a type to a discovered set, which fails a roster equality loudly; it can never
 /// silently hide a real caller. Uses only MethodBase.GetMethodBody IL bytes and
@@ -77,6 +78,78 @@ internal static class IlCallScanner
     /// <returns>True when the method calls any token's method.</returns>
     internal static bool ContainsCallToAnyToken(MethodBase method, IReadOnlyCollection<int> targetTokens)
         => CallTokens(method).Any(targetTokens.Contains);
+
+    /// <summary>
+    /// The metadata tokens of every newobj (0x73) instruction in the method body
+    /// (empty for abstract/extern methods with no IL body), the construction
+    /// counterpart of <see cref="CallTokens"/> with the same operand-window
+    /// discipline: a coincidental token match inside another instruction's
+    /// operand can only ADD a construction site, which fails a roster equality
+    /// loudly; it can never silently hide a real site.
+    /// </summary>
+    /// <param name="method">The method whose IL to walk.</param>
+    /// <returns>The newobj operand tokens, in IL order.</returns>
+    internal static IEnumerable<int> NewobjTokens(MethodBase method)
+    {
+        MethodBody? body = method.GetMethodBody();
+        if (body == null)
+        {
+            yield break;
+        }
+
+        byte[] il = body.GetILAsByteArray() ?? Array.Empty<byte>();
+        for (int i = 0; i + 5 <= il.Length; i++)
+        {
+            if (il[i] == 0x73)
+            {
+                yield return BitConverter.ToInt32(il, i + 1);
+            }
+        }
+    }
+
+    /// <summary>
+    /// True when any newobj token names a constructor of the given type. The
+    /// constructed type is usually plugin-EXTERNAL (JF-631: Alexa.NET's
+    /// AudioPlayerPlayDirective), so each candidate token is resolved through the
+    /// module like <see cref="CallsGetter"/>: only MethodDef (0x06) and MemberRef
+    /// (0x0A) tokens can name it, and a failed resolution can only SKIP a
+    /// candidate, which fails the roster equality loudly. Object-initializer
+    /// syntax needs no special case: the compiler emits it as a newobj on the
+    /// (parameterless) constructor followed by property setcalls, so the newobj
+    /// is still detected here.
+    /// </summary>
+    /// <param name="method">The method whose IL to walk.</param>
+    /// <param name="module">The module the IL tokens resolve against.</param>
+    /// <param name="constructedType">The type whose construction to look for.</param>
+    /// <returns>True when the method constructs the type.</returns>
+    internal static bool ConstructsType(MethodBase method, Module module, Type constructedType)
+    {
+        foreach (int token in NewobjTokens(method))
+        {
+            int table = unchecked((int)((uint)token >> 24));
+            if (table != 0x06 && table != 0x0A)
+            {
+                continue;
+            }
+
+            MemberInfo? resolved;
+            try
+            {
+                resolved = module.ResolveMethod(token, null, null);
+            }
+            catch (ArgumentException)
+            {
+                continue;
+            }
+
+            if (resolved is MethodBase constructor && constructor.DeclaringType == constructedType)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// True when any call/callvirt token names the getter of the given property.
