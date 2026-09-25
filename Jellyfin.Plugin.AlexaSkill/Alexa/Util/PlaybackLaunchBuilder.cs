@@ -1995,6 +1995,42 @@ public sealed class PlaybackLaunchBuilder
             return;
         }
 
+        AttachNowPlayingCore(response, item, itemId, user, context, progressMs, durationMs);
+    }
+
+    /// <summary>
+    /// JF-635 (live 2026-09-25): attach the NowPlaying APL document to a Q&amp;A/writer
+    /// Tell that answers DURING VideoApp seek-mode playback. Device evidence: a one-shot
+    /// Tell with no visual directive dismisses the playing video surface (RateItem's
+    /// plain Tell closed the album), while a Tell carrying a RenderDocument (MediaInfo)
+    /// left the audio stream running. The doc is the screen-content keep-alive; the
+    /// attach is medium-gated by the caller (only when a VideoApp-routed ledger entry
+    /// says a video-audio stream owns the screen).
+    /// </summary>
+    public void AttachNowPlayingKeepAlive(
+        SkillResponse response,
+        MediaBrowser.Controller.Entities.BaseItem item,
+        string itemId,
+        Entities.User user,
+        Context? context)
+    {
+        if (!Apl.AplHelper.VisualsEnabled || !Apl.AplHelper.DeviceSupportsApl(context))
+        {
+            return;
+        }
+
+        AttachNowPlayingCore(response, item, itemId, user, context, 0, 0);
+    }
+
+    private void AttachNowPlayingCore(
+        SkillResponse response,
+        MediaBrowser.Controller.Entities.BaseItem item,
+        string itemId,
+        Entities.User user,
+        Context? context,
+        long progressMs,
+        long durationMs)
+    {
         string imageUrl = GetImageUrl(itemId, user);
         var directive = Apl.AplHelper.BuildNowPlayingDirective(item, imageUrl, imageUrl, context, progressMs, durationMs);
         if (directive != null)

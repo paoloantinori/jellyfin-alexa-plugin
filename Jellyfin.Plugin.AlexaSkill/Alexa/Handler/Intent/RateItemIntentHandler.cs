@@ -142,6 +142,28 @@ public class RateItemIntentHandler : BaseHandler
         _userDataManager.SaveUserData(resolvedUser, item, data, UserDataSaveReason.UpdateUserRating, CancellationToken.None);
 
         Logger.LogInformation("RateItem: rated '{ItemName}' ({ItemId}) {Stars}/{Max} stars (stored {Stored})", item.Name, item.Id, stars, MaxStars, storedRating);
-        return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("RatingSet", locale, stars, item.Name)));
+
+        SkillResponse confirmation = ResponseBuilder.Tell(ResponseStrings.Get("RatingSet", locale, stars, item.Name));
+
+        // JF-635: a plain Tell with no screen content dismisses the seek-mode player
+        // (live evidence: this very confirmation closed the album). Attach the
+        // NowPlaying doc as the keep-alive when a VideoApp-routed stream owns the screen.
+        if (PlayingMediumIsVideoAppAudio(context))
+        {
+            Launch.AttachNowPlayingKeepAlive(confirmation, item, item.Id.ToString(), user, context);
+        }
+
+        return Task.FromResult<SkillResponse>(confirmation);
+    }
+
+    /// <summary>
+    /// True when a VideoApp-routed ledger entry says a video-audio stream owns the
+    /// screen (the JF-632/JF-635 evidence class; no item resolution needed).
+    /// </summary>
+    private bool PlayingMediumIsVideoAppAudio(Context? context)
+    {
+        string? deviceId = context != null && context.GetDeviceId() is { Length: > 0 } id ? id : null;
+        return deviceId != null
+            && _queueManager?.GetLastPlayedSnapshot(deviceId).Route == DeviceQueueManager.LaunchRoute.VideoApp;
     }
 }
