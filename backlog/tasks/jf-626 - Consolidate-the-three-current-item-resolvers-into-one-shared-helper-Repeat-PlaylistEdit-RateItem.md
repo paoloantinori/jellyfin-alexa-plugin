@@ -3,10 +3,10 @@ id: JF-626
 title: >-
   Consolidate the three current-item resolvers into one shared helper (Repeat /
   PlaylistEdit / RateItem)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-25 00:05'
-updated_date: '2026-09-25 01:00'
+updated_date: '2026-09-25 02:21'
 labels:
   - refactor
   - tech-debt
@@ -48,3 +48,9 @@ Goal: ONE item-returning resolver (beside PlaybackLaunchBuilder.ResolvePlayingMe
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+JF-626 complete: ResolveCurrentPlayingItem is the ONE current-item resolver (beside ResolvePlayingMedium in PlaybackLaunchBuilder), the kind ladder extracted to ClassifyLedgerItemKind so the classifier and the displacement predicate cannot drift again. Repeat drops its inline arbitration and gains the seek-mode medium gate (CannotRepeat instead of double audio); RateItem deletes its private copy; PlaylistEdit delegates with the ledger arm off. REAL BUG fixed: the sleep re-launch never records the ledger, so Repeat's raw token parse restarted the OLDER track mid-album with a composite token armed (pinned by test); GetLastPlayedSnapshot closes the torn ledger read. Worker ran both gates in-turn (/simplify 4 agents; code-review high, 9 findings: 6 applied, JF-627/628/629 filed). Merged state re-verified 4315x2 and deployed.
+<!-- SECTION:FINAL_SUMMARY:END -->

@@ -3,9 +3,10 @@ id: JF-628
 title: >-
   Sleep timer re-launch must record the device ledger (RecordLastPlayed) like
   every other launch site
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-25 02:09'
+updated_date: '2026-09-25 02:21'
 labels:
   - bug
   - tech-debt
