@@ -499,9 +499,11 @@ public class StartOverIntentHandlerTests : PluginTestBase, IDisposable
     {
         Plugin.Instance!.Configuration.NativeControlsForBooks = true;
         var tracker = TestHelpers.CreatePositionTracker("startover-ab");
-        using var trackerSwap = TestHelpers.SwapPluginPositionTracker(tracker);
         var ledger = TestHelpers.CreateDeviceQueueManager("startover-ab-ledger");
         using var pluginQueueSwap = TestHelpers.SwapPluginQueueManager(ledger);
+        // Declaration order is deliberate (the JF-633 review): reverse-declaration
+        // disposal runs the TRACKER first, the ledger second, the old literal order.
+        using var trackerSwap = TestHelpers.SwapPluginPositionTracker(tracker);
         try
         {
             var handler = CreateHandler();

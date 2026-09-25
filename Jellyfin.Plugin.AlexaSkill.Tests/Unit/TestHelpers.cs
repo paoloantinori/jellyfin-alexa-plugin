@@ -370,11 +370,10 @@ internal static class TestHelpers
 
     /// <summary>
     /// A real <see cref="AudiobookPositionTracker"/> on a registered temp dir (the class
-    /// is sealed, so tests use the real thing). Wire it via
-    /// <see cref="SwapPluginPositionTracker"/>, whose scope owns the tracker's disposal
-    /// (the CreateDeviceQueueManager / SwapPluginQueueManager pair's contract: the
-    /// factory mints on a registered dir, the swap scope disposes, so the persist
-    /// debounce never outlives the test).
+    /// is sealed, so tests use the real thing). Disposal: via
+    /// <see cref="SwapPluginPositionTracker"/> when the tracker is swapped onto the
+    /// plugin (the scope owns it), or manually (Dispose in a finally) when used
+    /// off-plugin; the swap scope disposes ONLY swapped-in instances.
     /// </summary>
     internal static AudiobookPositionTracker CreatePositionTracker(string nameSuffix)
         => new(
@@ -451,15 +450,47 @@ internal static class TestHelpers
             _previous = get(plugin);
             _swappedIn = swappedIn;
             _assign = assign;
+
+            // The restore contract's assumption made LOUD (the JF-633 review): every
+            // swap site starts from a null previous (SkillStartup, the only production
+            // assigner, never runs in the test host). A future test that installs one
+            // of these properties without this scope would make the NEXT swap capture
+            // it as previous and re-install it at teardown, possibly disposed; this
+            // assertion fires at the moment that first happens instead.
+            if (_previous is not null)
+            {
+                throw new InvalidOperationException(
+                    $"Plugin.Instance already holds a {_previous.GetType().Name} (a non-swap assignment leaked). The swap scopes assume a null previous; assign via the swap helpers only.");
+            }
+
             assign(plugin, swappedIn);
         }
 
         public void Dispose()
         {
-            _assign(Plugin.Instance!, _previous);
-            _swappedIn.Dispose();
+            // The dispose is guaranteed even when the restore throws (the JF-633
+            // review: a null Instance at teardown previously skipped it, leaking the
+            // armed persist debounce the scope exists to tear down).
+            try
+            {
+                _assign(Plugin.Instance!, _previous);
+            }
+            finally
+            {
+                _swappedIn.Dispose();
+            }
         }
     }
+
+    /// <summary>
+    /// The SANCTIONED EXCEPTION to the swap core (JF-527 harness,
+    /// EventHandlerTests.RecordPreviousPlayOnHarnessDevice): that site deliberately
+    /// assigns and disposes a manager in place, leaving the disposed-but-readable
+    /// instance attached for the handler under test. It must NOT convert to the
+    /// swap scopes (restore-before-dispose would unplug it before the handler
+    /// reads); any new swap call in its class will trip the null-previous
+    /// assertion above, pointing here.
+    /// </summary>
 
     /// <summary>
     /// Sets Plugin.Instance with the provided configuration so IfFeatureDisabled

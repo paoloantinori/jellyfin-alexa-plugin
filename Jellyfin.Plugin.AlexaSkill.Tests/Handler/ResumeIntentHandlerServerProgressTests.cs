@@ -558,9 +558,11 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
     {
         Plugin.Instance!.Configuration.NativeControlsForBooks = true;
         var tracker = TestHelpers.CreatePositionTracker("resume-ab");
-        using var trackerSwap = TestHelpers.SwapPluginPositionTracker(tracker);
         var ledger = TestHelpers.CreateDeviceQueueManager("resume-ab-ledger");
         using var pluginQueueSwap = TestHelpers.SwapPluginQueueManager(ledger);
+        // Declaration order is deliberate (the JF-633 review): reverse-declaration
+        // disposal runs the TRACKER first, the ledger second, the old literal order.
+        using var trackerSwap = TestHelpers.SwapPluginPositionTracker(tracker);
         try
         {
             var handler = CreateHandler();
