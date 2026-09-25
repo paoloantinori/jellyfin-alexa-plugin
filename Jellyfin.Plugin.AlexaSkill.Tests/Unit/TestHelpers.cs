@@ -418,21 +418,19 @@ internal static class TestHelpers
 
         internal PluginQueueManagerSwap(DeviceQueueManager manager)
         {
+            // Loud by design (the review's call): a swap issued before
+            // EnsurePluginInstance must THROW, not silently skip the assign while
+            // Dispose still disposes the manager (a green test never exercising the
+            // swapped manager). Every call site runs EnsurePluginInstance first.
+            Plugin plugin = Plugin.Instance!;
+            _previous = plugin.DeviceQueueManager;
             _manager = manager;
-            if (Plugin.Instance is { } plugin)
-            {
-                _previous = plugin.DeviceQueueManager;
-                plugin.DeviceQueueManager = manager;
-            }
+            plugin.DeviceQueueManager = manager;
         }
 
         public void Dispose()
         {
-            if (Plugin.Instance is { } plugin)
-            {
-                plugin.DeviceQueueManager = _previous;
-            }
-
+            Plugin.Instance!.DeviceQueueManager = _previous;
             _manager.Dispose();
         }
     }

@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-25 05:23'
+updated_date: '2026-09-25 05:51'
 labels:
   - tech-debt
   - tests
@@ -57,3 +58,9 @@ Mechanical change; full suite verifies.
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-09-25 JF-630 code-review additions to this plan: (a) the extraction must use ONE shared private core (capture/assign/restore-before-dispose) with two thin named wrappers (SwapPluginQueueManager + SwapPluginPositionTracker), so the load-bearing ordering invariant lives in exactly one place instead of two hand-copied scope classes; (b) the two method-level JF-630 conversion sites (ResumeIntentHandlerServerProgressTests ~563, StartOverIntentHandlerTests ~504) split one test's teardown across the explicit finally (tracker + config flag) and the using-at-exit (manager) - when this task lands a tracker scope, let those usings chain ALL resource teardown and drop the split; also the new scope should use the loud Plugin.Instance! guards (the JF-630 review's verdict on silent no-op swaps).
+<!-- SECTION:NOTES:END -->

@@ -397,22 +397,11 @@ public class TvNextUpServiceTests : PluginTestBase
         var service = CreateService();
 
         // JF-630: the ONE swap scope (using-on-null is a no-op, so the unseeded
-        // shape needs no branch).
-        using IDisposable? queueSwap = queueSeeding != null ? Swap(queueSeeding) : null;
-        return await PlayCore();
-
-        IDisposable? Swap(Action<DeviceQueue> seed)
-        {
-            TestHelpers.EnsurePluginInstance(
-                new PluginConfiguration(), _loggerFactory, _ => { }, nameof(TvNextUpServiceTests));
-            DeviceQueueManager queue = TestHelpers.CreateDeviceQueueManager("tvnextup-jf565");
-            seed(queue.GetOrCreateQueue("test-device"));
-            return TestHelpers.SwapPluginQueueManager(queue);
-        }
-
-        async Task<SkillResponse> PlayCore()
-        {
-            return await service.PlayNextUpEpisodeAsync(
+        // shape needs no branch). SwapAndSeed acquires the scope BEFORE seeding so a
+        // throwing seed cannot leak the manager (the catch disposes the just-acquired
+        // scope; the review's teardown-property finding).
+        using IDisposable? queueSwap = SwapAndSeed(queueSeeding);
+        return await service.PlayNextUpEpisodeAsync(
                 tv.Object,
                 library.Object,
                 userDataMock.Object,
@@ -424,6 +413,28 @@ public class TvNextUpServiceTests : PluginTestBase
                 context ?? TestHelpers.CreateTestContext(),
                 new IntentRequest { Locale = "en-US" },
                 CancellationToken.None);
+
+        IDisposable? SwapAndSeed(Action<DeviceQueue>? seed)
+        {
+            if (seed == null)
+            {
+                return null;
+            }
+
+            TestHelpers.EnsurePluginInstance(
+                new PluginConfiguration(), _loggerFactory, _ => { }, nameof(TvNextUpServiceTests));
+            DeviceQueueManager queue = TestHelpers.CreateDeviceQueueManager("tvnextup-jf565");
+            IDisposable scope = TestHelpers.SwapPluginQueueManager(queue);
+            try
+            {
+                seed(queue.GetOrCreateQueue("test-device"));
+                return scope;
+            }
+            catch
+            {
+                scope.Dispose();
+                throw;
+            }
         }
     }
 
