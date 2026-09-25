@@ -166,7 +166,15 @@ internal static class IlCallScanner
     /// <returns>The matching methods' metadata tokens.</returns>
     internal static IEnumerable<int> MethodTokens(Type type, string methodName)
     {
-        foreach (MethodInfo m in type.GetMethods(AllDeclared).Where(m => m.Name == methodName))
+        // SAME-MODULE tokens only (the JF-634 review's latent hazard): a same-named
+        // overload inherited from a type in ANOTHER assembly carries that module's
+        // token, which collides with an unrelated plugin methoddef when compared
+        // against plugin IL bytes - an acceptance-set consumer would then pass a
+        // site that has no write at all, the exact silent miss these rosters exist
+        // to catch. All current targets declare the scanned names themselves, so
+        // this filter removes nothing today and keeps every future token comparable.
+        foreach (MethodInfo m in type.GetMethods(AllDeclared).Where(m =>
+                 m.Name == methodName && m.DeclaringType?.Module == type.Module))
         {
             yield return m.MetadataToken;
         }

@@ -83,7 +83,7 @@ public class WarmingGateCoverageTests
         // GuardIndexReady/EnsureReady overload by name instead of hardcoding the
         // current two-plus-two, so a future overload (a third index type) cannot
         // silently escape the scan and leave a stale roster behind a green suite.
-        HashSet<int> gateTokens = IlCallScanner.MethodTokens(typeof(BaseHandler), "GuardIndexReady")
+        HashSet<int> gateTokens = IlCallScanner.MethodTokens(typeof(BaseHandler), "GuardIndexReady" /* protected on BaseHandler: nameof is inaccessible here; a rename surfaces as the full-roster drift failure below, check this string first */)
             .Concat(IlCallScanner.MethodTokens(typeof(IndexWarmingGate), nameof(IndexWarmingGate.EnsureReady)))
             .ToHashSet();
 
