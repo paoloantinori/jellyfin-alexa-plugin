@@ -30,7 +30,7 @@ public class SleepTimerIntentHandlerTests : PluginTestBase, IDisposable
     private readonly PluginConfiguration _config;
     private readonly ILoggerFactory _loggerFactory;
     private readonly DeviceQueueManager _queueManager;
-    private readonly DeviceQueueManager? _previousPluginQueueManager;
+    private readonly IDisposable _pluginQueueSwap;
 
     public SleepTimerIntentHandlerTests()
     {
@@ -39,9 +39,9 @@ public class SleepTimerIntentHandlerTests : PluginTestBase, IDisposable
         _loggerFactory = LoggerFactory.Create(b => { });
 
         // The ledger/launch-scope writes go through Plugin.Instance's manager (the
-        // handler has no injected queue manager); point the plugin at this suite's
-        // manager and restore the previous value on dispose (the temp dir is owned
-        // by the registered sweep).
+        // handler has no injected queue manager); the swap scope below points the
+        // plugin at this suite's manager and restores + disposes on teardown (the
+        // temp dir is owned by the registered sweep).
         _queueManager = TestHelpers.CreateDeviceQueueManager("sleep-timer-tests");
         TestHelpers.EnsurePluginInstance(
             _config,
@@ -54,21 +54,12 @@ public class SleepTimerIntentHandlerTests : PluginTestBase, IDisposable
         // returns this instance), so a pin placed before it is silently dead.
         TestHelpers.SetServerAddress(_config, "https://test.example.com");
 
-        _previousPluginQueueManager = Jellyfin.Plugin.AlexaSkill.Plugin.Instance?.DeviceQueueManager;
-        if (Jellyfin.Plugin.AlexaSkill.Plugin.Instance != null)
-        {
-            Jellyfin.Plugin.AlexaSkill.Plugin.Instance.DeviceQueueManager = _queueManager;
-        }
+        _pluginQueueSwap = TestHelpers.SwapPluginQueueManager(_queueManager);
     }
 
     public void Dispose()
     {
-        if (Jellyfin.Plugin.AlexaSkill.Plugin.Instance != null)
-        {
-            Jellyfin.Plugin.AlexaSkill.Plugin.Instance.DeviceQueueManager = _previousPluginQueueManager;
-        }
-
-        _queueManager.Dispose();
+        _pluginQueueSwap.Dispose();
         GC.SuppressFinalize(this);
     }
 

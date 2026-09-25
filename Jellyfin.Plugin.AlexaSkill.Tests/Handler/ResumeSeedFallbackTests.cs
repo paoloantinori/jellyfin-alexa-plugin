@@ -35,7 +35,7 @@ public class ResumeSeedFallbackTests : PluginTestBase, IDisposable
 
     private readonly HandlerTestFixture _fx = new();
     private readonly DeviceQueueManager _queueManager;
-    private readonly DeviceQueueManager? _previousPluginQueueManager;
+    private readonly IDisposable _pluginQueueSwap;
 
     public ResumeSeedFallbackTests()
     {
@@ -50,21 +50,12 @@ public class ResumeSeedFallbackTests : PluginTestBase, IDisposable
             c => { c.NativeControlsForAudio = true; c.ResumeOfferEnabled = true; },
             "resume-seed-fallback");
 
-        _previousPluginQueueManager = Jellyfin.Plugin.AlexaSkill.Plugin.Instance?.DeviceQueueManager;
-        if (Jellyfin.Plugin.AlexaSkill.Plugin.Instance != null)
-        {
-            Jellyfin.Plugin.AlexaSkill.Plugin.Instance.DeviceQueueManager = _queueManager;
-        }
+        _pluginQueueSwap = TestHelpers.SwapPluginQueueManager(_queueManager);
     }
 
     public void Dispose()
     {
-        if (Jellyfin.Plugin.AlexaSkill.Plugin.Instance != null)
-        {
-            Jellyfin.Plugin.AlexaSkill.Plugin.Instance.DeviceQueueManager = _previousPluginQueueManager;
-        }
-
-        _queueManager.Dispose();
+        _pluginQueueSwap.Dispose();
         GC.SuppressFinalize(this);
     }
 

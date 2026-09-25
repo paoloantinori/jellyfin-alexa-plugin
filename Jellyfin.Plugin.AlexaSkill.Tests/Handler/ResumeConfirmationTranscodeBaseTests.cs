@@ -47,7 +47,7 @@ public class ResumeConfirmationTranscodeBaseTests : PluginTestBase, IDisposable
     private readonly HandlerTestFixture _fx = new();
     private readonly DeviceQueueManager _queueManager;
     private readonly string _tempDir;
-    private readonly DeviceQueueManager? _previousPluginQueueManager;
+    private readonly IDisposable _pluginQueueSwap;
 
     public ResumeConfirmationTranscodeBaseTests()
     {
@@ -61,23 +61,15 @@ public class ResumeConfirmationTranscodeBaseTests : PluginTestBase, IDisposable
             "resume-transcode-base-tests");
 
         // The device-last-played offer path reads the ledger through Plugin.Instance
-        // (LaunchRequestHandler has no injected queue manager); point it at this
-        // suite's manager and restore the previous value on dispose.
-        _previousPluginQueueManager = Jellyfin.Plugin.AlexaSkill.Plugin.Instance?.DeviceQueueManager;
-        if (Jellyfin.Plugin.AlexaSkill.Plugin.Instance != null)
-        {
-            Jellyfin.Plugin.AlexaSkill.Plugin.Instance.DeviceQueueManager = _queueManager;
-        }
+        // (LaunchRequestHandler has no injected queue manager); the swap scope points
+        // it at this suite's manager and restores + disposes on teardown.
+        _pluginQueueSwap = TestHelpers.SwapPluginQueueManager(_queueManager);
     }
 
     public void Dispose()
     {
-        if (Jellyfin.Plugin.AlexaSkill.Plugin.Instance != null)
-        {
-            Jellyfin.Plugin.AlexaSkill.Plugin.Instance.DeviceQueueManager = _previousPluginQueueManager;
-        }
+        _pluginQueueSwap.Dispose();
 
-        _queueManager.Dispose();
         try
         {
             if (System.IO.Directory.Exists(_tempDir))

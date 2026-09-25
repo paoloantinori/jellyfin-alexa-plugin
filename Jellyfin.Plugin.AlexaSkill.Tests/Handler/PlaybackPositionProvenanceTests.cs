@@ -42,7 +42,7 @@ public class PlaybackPositionProvenanceTests : PluginTestBase, IDisposable
 
     private readonly HandlerTestFixture _fx = new();
     private readonly DeviceQueueManager _queueManager;
-    private readonly DeviceQueueManager? _previousPluginQueueManager;
+    private readonly IDisposable _pluginQueueSwap;
 
     public PlaybackPositionProvenanceTests()
     {
@@ -56,23 +56,14 @@ public class PlaybackPositionProvenanceTests : PluginTestBase, IDisposable
 
         // The PlaybackStarted promote/compose and the enqueue directive's chokepoint
         // record run through Plugin.Instance when the handler was constructed without
-        // an injected manager; point the plugin at this suite's manager and restore
-        // the previous value on dispose (the temp dir is owned by the registered sweep).
-        _previousPluginQueueManager = Jellyfin.Plugin.AlexaSkill.Plugin.Instance?.DeviceQueueManager;
-        if (Jellyfin.Plugin.AlexaSkill.Plugin.Instance != null)
-        {
-            Jellyfin.Plugin.AlexaSkill.Plugin.Instance.DeviceQueueManager = _queueManager;
-        }
+        // an injected manager; point the plugin at this suite's manager (the temp dir
+        // is owned by the registered sweep) and let the swap scope restore + dispose.
+        _pluginQueueSwap = TestHelpers.SwapPluginQueueManager(_queueManager);
     }
 
     public void Dispose()
     {
-        if (Jellyfin.Plugin.AlexaSkill.Plugin.Instance != null)
-        {
-            Jellyfin.Plugin.AlexaSkill.Plugin.Instance.DeviceQueueManager = _previousPluginQueueManager;
-        }
-
-        _queueManager.Dispose();
+        _pluginQueueSwap.Dispose();
         GC.SuppressFinalize(this);
     }
 

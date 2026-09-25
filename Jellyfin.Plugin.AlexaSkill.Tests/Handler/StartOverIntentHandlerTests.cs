@@ -501,7 +501,7 @@ public class StartOverIntentHandlerTests : PluginTestBase, IDisposable
         var tracker = TestHelpers.CreatePositionTracker("startover-ab");
         Plugin.Instance.AudiobookPositionTracker = tracker;
         var ledger = TestHelpers.CreateDeviceQueueManager("startover-ab-ledger");
-        Plugin.Instance.DeviceQueueManager = ledger;
+        using var pluginQueueSwap = TestHelpers.SwapPluginQueueManager(ledger);
         try
         {
             var handler = CreateHandler();
@@ -571,8 +571,6 @@ public class StartOverIntentHandlerTests : PluginTestBase, IDisposable
         {
             Plugin.Instance.AudiobookPositionTracker = null;
             tracker.Dispose();
-            Plugin.Instance.DeviceQueueManager = null;
-            ledger.Dispose();
             Plugin.Instance.Configuration.NativeControlsForBooks = false;
         }
     }

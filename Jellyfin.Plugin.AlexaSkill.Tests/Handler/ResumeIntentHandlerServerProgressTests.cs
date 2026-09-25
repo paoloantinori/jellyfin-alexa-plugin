@@ -560,7 +560,7 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
         var tracker = TestHelpers.CreatePositionTracker("resume-ab");
         Plugin.Instance.AudiobookPositionTracker = tracker;
         var ledger = TestHelpers.CreateDeviceQueueManager("resume-ab-ledger");
-        Plugin.Instance.DeviceQueueManager = ledger;
+        using var pluginQueueSwap = TestHelpers.SwapPluginQueueManager(ledger);
         try
         {
             var handler = CreateHandler();
@@ -621,8 +621,6 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
         {
             Plugin.Instance.AudiobookPositionTracker = null;
             tracker.Dispose();
-            Plugin.Instance.DeviceQueueManager = null;
-            ledger.Dispose();
             Plugin.Instance.Configuration.NativeControlsForBooks = false;
         }
     }

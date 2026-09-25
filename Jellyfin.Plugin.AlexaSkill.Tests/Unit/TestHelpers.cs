@@ -395,6 +395,49 @@ internal static class TestHelpers
             logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<DeviceQueueManager>.Instance);
 
     /// <summary>
+    /// JF-630: the ONE Plugin.Instance.DeviceQueueManager swap scope (was four
+    /// suite-level capture/assign/restore/dispose copies plus two method-level
+    /// swap-to-null pairs). Points the plugin at <paramref name="manager"/> and on
+    /// Dispose restores the captured previous value BEFORE disposing the swapped-in
+    /// manager (nothing may read a disposed manager through the plugin). The scope
+    /// owns the swapped-in manager's disposal: pass a manager whose lifetime ends
+    /// with the scope (every site creates a fresh one for exactly this shape).
+    /// Restoring the captured previous value honestly covers the former
+    /// swap-to-null sites too: the test host's plugin instance is minted per test
+    /// class and only SkillStartup, which never runs here, assigns the manager, so
+    /// the captured previous value IS null there.
+    /// </summary>
+    internal static IDisposable SwapPluginQueueManager(DeviceQueueManager manager)
+        => new PluginQueueManagerSwap(manager);
+
+    /// <summary>The scope object behind <see cref="SwapPluginQueueManager"/>.</summary>
+    private sealed class PluginQueueManagerSwap : IDisposable
+    {
+        private readonly DeviceQueueManager? _previous;
+        private readonly DeviceQueueManager _manager;
+
+        internal PluginQueueManagerSwap(DeviceQueueManager manager)
+        {
+            _previous = Plugin.Instance?.DeviceQueueManager;
+            _manager = manager;
+            if (Plugin.Instance != null)
+            {
+                Plugin.Instance.DeviceQueueManager = manager;
+            }
+        }
+
+        public void Dispose()
+        {
+            if (Plugin.Instance != null)
+            {
+                Plugin.Instance.DeviceQueueManager = _previous;
+            }
+
+            _manager.Dispose();
+        }
+    }
+
+    /// <summary>
     /// Sets Plugin.Instance with the provided configuration so IfFeatureDisabled
     /// can read from Plugin.Instance.Configuration. When the instance already exists,
     /// only the specific flag is synced via <paramref name="syncFlag"/>. The temp
