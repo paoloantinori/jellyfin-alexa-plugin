@@ -3,9 +3,10 @@ id: JF-631
 title: >-
   Mechanical roster guard: every AudioPlayerPlayDirective construction site must
   record ledger + launch base (IL scan)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-25 03:04'
+updated_date: '2026-09-25 11:02'
 labels:
   - tech-debt
   - tests

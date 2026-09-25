@@ -55,7 +55,10 @@ public class AudioPlayerPlayConstructionRosterTests
     /// A NEW site here means a new AudioPlayer.Play launch exists: route it
     /// through the chokepoint, or add both writes at the site and extend this
     /// list WITH a justification comment after review (the second fact below
-    /// still enforces the writes mechanically, whitelisted or not).
+/// checks the writes' PRESENCE (not execution: a conditional write block or a
+    /// coincidental same-type callee passes; the accepted limit, since the shipped
+    /// sleep site's own writes are conditional) in the construction method or a
+    /// one-level same-type helper
     /// </summary>
     private static readonly HashSet<Site> ExpectedSites = new()
     {
@@ -91,16 +94,24 @@ public class AudioPlayerPlayConstructionRosterTests
         HashSet<int> ledgerTokens = WriteTokens(nameof(DeviceQueueManager.RecordLastPlayed));
         HashSet<int> baseTokens = WriteTokens(nameof(DeviceQueueManager.RecordLaunchBase));
 
+        // Aggregate EVERY failing site into one message (the review's finding: a
+        // per-site Assert aborts on the first, so a multi-site change needs one
+        // full-suite cycle per offender to discover them all).
+        var failures = new List<string>();
         foreach ((MethodBase method, Site site) in ScanConstructionSites())
         {
-            Assert.True(
-                CallsDirectlyOrViaSameTypeHelper(method, pluginModule, ledgerTokens),
-                $"{Format(site)} constructs an AudioPlayerPlayDirective but never calls DeviceQueueManager.RecordLastPlayed (directly or via a same-type helper). This is the JF-628 miss shape: the device ledger would not name the launched track, desyncing resume arbitration and medium classification. Add the write beside the construction (see PlaybackLaunchBuilder.BuildAudioPlayerResponse) or route through the chokepoint.");
+            if (!CallsDirectlyOrViaSameTypeHelper(method, pluginModule, ledgerTokens))
+            {
+                failures.Add($"{Format(site)}: missing DeviceQueueManager.RecordLastPlayed (the JF-628 miss shape: the ledger would not name the launched track, desyncing resume arbitration and medium classification). Add the write beside the construction (see PlaybackLaunchBuilder.BuildAudioPlayerResponse) or route through the chokepoint.");
+            }
 
-            Assert.True(
-                CallsDirectlyOrViaSameTypeHelper(method, pluginModule, baseTokens),
-                $"{Format(site)} constructs an AudioPlayerPlayDirective but never calls DeviceQueueManager.RecordLaunchBase (directly or via a same-type helper). This is the JF-522 miss shape: a transcode-launched stream's stale base would compose over this directive's offsets at its playback events. Add the write beside the construction (see PlaybackLaunchBuilder.BuildAudioPlayerResponse) or route through the chokepoint.");
+            if (!CallsDirectlyOrViaSameTypeHelper(method, pluginModule, baseTokens))
+            {
+                failures.Add($"{Format(site)}: missing DeviceQueueManager.RecordLaunchBase (the JF-522 miss shape: a transcode-launched stream's stale base would compose over this directive's offsets at its playback events). Add the write beside the construction (see PlaybackLaunchBuilder.BuildAudioPlayerResponse) or route through the chokepoint.");
+            }
         }
+
+        Assert.True(failures.Count == 0, string.Join("\n", failures));
     }
 
     /// <summary>
@@ -203,6 +214,16 @@ public class AudioPlayerPlayConstructionRosterTests
 
     private static string? ExtractCompilerGeneratedOwner(string name)
     {
+        // Double-nested compiler names (the review's probe-confirmed mangling):
+        // an async LAMBDA's state machine is <<Owner>b__12_0>d and an async LOCAL
+        // FUNCTION's is <<LocalFn>g__Make|0_1>d. A leading "<<"" must strip one
+        // bracket before extraction, or the owner parses as "<Owner" and the
+        // whitelist needs a malformed hardcoded string.
+        if (name.StartsWith("<<", StringComparison.Ordinal))
+        {
+            name = name.Substring(1);
+        }
+
         if (name.Length == 0 || name[0] != '<')
         {
             return null;

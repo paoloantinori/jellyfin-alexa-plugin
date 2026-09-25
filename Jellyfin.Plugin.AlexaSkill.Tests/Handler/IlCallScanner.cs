@@ -71,6 +71,9 @@ internal static class IlCallScanner
     /// discipline: a coincidental token match inside another instruction's
     /// operand can only ADD a construction site, which fails a roster equality
     /// loudly; it can never silently hide a real site.
+    /// BOUNDARY (JF-631 review): discovery is NEWOBJ-ONLY - late-bound construction
+    /// (Activator.CreateInstance, generic new() constraints, Expression.Compile,
+    /// deserialized templates) emits no newobj and is invisible to these scans.
     /// </summary>
     /// <param name="method">The method whose IL to walk.</param>
     /// <returns>The newobj operand tokens, in IL order.</returns>
@@ -145,7 +148,11 @@ internal static class IlCallScanner
     {
         foreach (int token in NewobjTokens(method))
         {
-            if (TryResolveMethod(module, token)?.DeclaringType == constructedType)
+            // IsAssignableFrom, not exact equality (the review's probe-confirmed escape):
+            // a DERIVED directive (SleepReplayDirective : AudioPlayerPlayDirective)
+            // serializes as the base type's directive JSON while escaping an
+            // exact-type scan entirely - the guard must see subclass constructions.
+            if (constructedType.IsAssignableFrom(TryResolveMethod(module, token)?.DeclaringType))
             {
                 return true;
             }
