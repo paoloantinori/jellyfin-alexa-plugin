@@ -148,7 +148,6 @@ public class MediaInfoIntentHandlerTests : PluginTestBase
             Path = "/movies/c.mkv",
             ProductionYear = 2024
         };
-        _libraryManagerMock.Setup(l => l.GetItemById(song.Id)).Returns(song);
         _libraryManagerMock.Setup(l => l.GetItemById(movie.Id)).Returns(movie);
         string deviceId = "mediainfo-displace-device";
         queueManager.RecordLastPlayed(
@@ -172,6 +171,114 @@ public class MediaInfoIntentHandlerTests : PluginTestBase
         Assert.Contains("2024", text);
         Assert.DoesNotContain("Old Song", text);
     }
+
+    /// <summary>
+    /// JF-629 review: the Episode projection path (the displaced-episode answer
+    /// 'series season N episode M') was unpinned - only Audio and Movie projections
+    /// had tests. Also pins the cross-item position drop: the session holds the stale
+    /// song's PlayState, the resolved item is the episode, so the position line must
+    /// NOT pair the song's elapsed with the episode's runtime.
+    /// </summary>
+    [Fact]
+    public async Task Handle_DisplacedEpisode_ReportsSeriesSeasonEpisode_WithoutStalePosition()
+    {
+        TestHelpers.SetServerAddress(_config, "https://test.example.com");
+        var queueManager = TestHelpers.CreateDeviceQueueManager("mediainfo-ep");
+        var song = new Audio { Name = "Old Song", Id = Guid.NewGuid(), Path = "/music/o.mp3" };
+        var episode = new MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "The One With the Pin",
+            Id = Guid.NewGuid(),
+            Path = "/tv/e.mkv",
+            SeriesName = "Friends",
+            ParentIndexNumber = 2,
+            IndexNumber = 7,
+        };
+        _libraryManagerMock.Setup(l => l.GetItemById(episode.Id)).Returns(episode);
+        string deviceId = "mediainfo-ep-device";
+        queueManager.RecordLastPlayed(deviceId, episode.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        var handler = CreateHandler(queueManager);
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Id = song.Id,
+            Name = "Old Song",
+            Type = BaseItemKind.Audio,
+            RunTimeTicks = TimeSpan.FromMinutes(4).Ticks,
+        };
+        session.PlayState = new PlayerStateInfo { PositionTicks = TimeSpan.FromMinutes(2).Ticks };
+
+        var text = GetSpeechText(await handler.HandleAsync(
+            CreateMediaInfoRequest(),
+            TestHelpers.CreateContextWithToken(song.Id.ToString(), deviceId),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
+
+        Assert.Contains("Friends", text);
+        Assert.Contains("The One With the Pin", text);
+        Assert.DoesNotContain("Old Song", text);
+        // The cross-item guard: the song's 2-minute position never rides the episode answer.
+        Assert.DoesNotContain("2 minutes", text);
+    }
+
+    /// <summary>
+    /// JF-629 review: the AudioBook projection path (the ladder's AudioBook-before-Audio
+    /// ordering through the projected DTO) was unpinned; a miswired ladder arm would
+    /// give a book the music-track shape and pass the whole suite.
+    /// </summary>
+    [Fact]
+    public async Task Handle_ResolvedAudioBook_AnswersTheBookShape()
+    {
+        TestHelpers.SetServerAddress(_config, "https://test.example.com");
+        var book = new AudioBook
+        {
+            Name = "The Pragmatic Programmer",
+            Id = Guid.NewGuid(),
+            Path = "/books/pp.m4b",
+        };
+        _libraryManagerMock.Setup(l => l.GetItemById(book.Id)).Returns(book);
+        var handler = CreateHandler();
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto { Id = book.Id, Name = book.Name, Type = BaseItemKind.AudioBook };
+
+        var text = GetSpeechText(await handler.HandleAsync(
+            CreateMediaInfoRequest(),
+            TestHelpers.CreateContextWithToken(book.Id.ToString(), "mediainfo-book-device"),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
+
+        Assert.Contains("The Pragmatic Programmer", text);
+    }
+
+    /// <summary>
+    /// JF-629 review: the IDLE shape (no token, no session item, populated ledger) must
+    /// answer NoMediaPlaying; the resolver's unbounded ledger tail would otherwise
+    /// report the device's days-old persisted last-played item as currently playing.
+    /// </summary>
+    [Fact]
+    public async Task Handle_IdleDeviceWithStaleLedger_AnswersNothingPlaying()
+    {
+        TestHelpers.SetServerAddress(_config, "https://test.example.com");
+        var queueManager = TestHelpers.CreateDeviceQueueManager("mediainfo-idle");
+        var oldMovie = new MediaBrowser.Controller.Entities.Movies.Movie
+        {
+            Name = "Last Week Movie",
+            Id = Guid.NewGuid(),
+            Path = "/movies/old.mkv",
+            ProductionYear = 2020,
+        };
+        _libraryManagerMock.Setup(l => l.GetItemById(oldMovie.Id)).Returns(oldMovie);
+        queueManager.RecordLastPlayed("mediainfo-idle-device", oldMovie.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        var handler = CreateHandler(queueManager);
+
+        var text = GetSpeechText(await handler.HandleAsync(
+            CreateMediaInfoRequest(),
+            TestHelpers.CreateTestContext("mediainfo-idle-device"),
+            TestHelpers.CreateTestUser(),
+            CreateSession(),
+            CancellationToken.None));
+
+        Assert.DoesNotContain("Last Week Movie", text);
+    }
+
 
     /// <summary>
     /// Ensure APL visuals are enabled so "WithApl" tests pass regardless of

@@ -88,6 +88,17 @@ public class MediaInfoIntentHandler : BaseHandler
     {
         string locale = GetLocale(request);
 
+        // JF-629 review: "what is playing" is PRESENT TENSE. With neither an AudioPlayer
+        // token nor a session now-playing item, nothing is playing NOW, and the resolver's
+        // unbounded ledger tail (days-old persisted last-played) must not answer it; the
+        // ledger arms only arbitrate when current evidence exists (the token leg, or the
+        // session item the seek-mode VideoApp route sets before launching).
+        if (string.IsNullOrEmpty(context.AudioPlayer?.Token) && session.NowPlayingItem == null)
+        {
+            Logger.LogInformation("MediaInfoIntent: no media currently playing");
+            return ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale));
+        }
+
         // The ONE current-item resolver; the arbitration rationale lives on it.
         BaseItem? current = Launch.ResolveCurrentPlayingItem(context, session, _libraryManager, _queueManager, "MediaInfo");
         BaseItemDto? item = ResolveDisplayItem(current, session.NowPlayingItem);
@@ -446,7 +457,16 @@ public class MediaInfoIntentHandler : BaseHandler
             description = BuildMediaDescription(item, locale, out descriptionSsml);
         }
 
-        string position = ResumeMath.BuildPositionDisplay(session, locale);
+        // JF-629 review: the session position belongs to the session's OWN item. In the
+        // id-less informational shape keeps the position too (the display item IS the
+        // session's report). In the displacement shape (the display item is the resolver's video, the session still
+        // holds the stale audio's PlayState), pairing the stale position with the resolved
+        // runtime would speak a cross-item "X of Y" line and draw a wrong card bar; the
+        // position is dropped unless the session names the same item being displayed.
+        bool positionBelongsToDisplay = session.NowPlayingItem == null
+            || item.Id == Guid.Empty
+            || session.NowPlayingItem.Id == item.Id;
+        string position = positionBelongsToDisplay ? ResumeMath.BuildPositionDisplay(session, locale) : string.Empty;
         var response = string.IsNullOrEmpty(position)
             ? SpeechBuilder.GetSsml("NowPlayingSsml", locale, descriptionSsml ?? SpeechBuilder.EscapeXml(description)) is { } ssml
                 ? SpeechBuilder.TellSsml(ssml)
@@ -699,9 +719,17 @@ public class MediaInfoIntentHandler : BaseHandler
         long progressMs = 0, durationMs = 0;
         long progressTicks = 0, durationTicks = 0;
 
+        // The cross-item guard (JF-629 review): the session position only pairs with
+        // this item's runtime when the session names this item.
+        bool positionBelongsToDisplayCard = session.NowPlayingItem == null
+            || item.Id == Guid.Empty
+            || session.NowPlayingItem.Id == item.Id;
+
         if (seekEnabled)
         {
-            if (session.PlayState?.PositionTicks != null)
+            // The same cross-item guard as the speech position: only when the session
+            // names the displayed item (see BuildNowPlayingResponse).
+            if (positionBelongsToDisplayCard && session.PlayState?.PositionTicks != null)
             {
                 progressTicks = session.PlayState.PositionTicks.Value;
                 progressMs = (long)TimeSpan.FromTicks(progressTicks).TotalMilliseconds;

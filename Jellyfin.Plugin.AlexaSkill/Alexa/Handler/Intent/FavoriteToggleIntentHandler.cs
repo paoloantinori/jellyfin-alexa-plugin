@@ -84,6 +84,17 @@ public abstract class FavoriteToggleIntentHandler : BaseHandler
     {
         string locale = GetLocale(request);
 
+        // JF-629 review: "this" (the favorite target) needs CURRENT evidence - an
+        // AudioPlayer token or a session now-playing item. With neither, the resolver's
+        // unbounded ledger tail would silently favorite the idle device's days-old
+        // persisted last-played item where the pre-migration code answered MediaNotFound;
+        // the ledger arms only arbitrate displacement while something is actually active.
+        if (string.IsNullOrEmpty(context.AudioPlayer?.Token) && session.NowPlayingItem == null)
+        {
+            Logger.LogDebug("FavoriteToggle ({IntentName}): idle device (no token, no session item), returning MediaNotFound", IntentName);
+            return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale)));
+        }
+
         // The ONE current-item resolver; the arbitration rationale lives on it.
         BaseItem? item = Launch.ResolveCurrentPlayingItem(context, session, _libraryManager, _queueManager, IntentName);
         if (item == null)

@@ -226,7 +226,6 @@ public class RateItemIntentHandlerTests : PluginTestBase
         var oldSong = new Audio { Name = "Old Song", Id = Guid.NewGuid(), Path = "/music/o.mp3" };
         var nowSong = new Audio { Name = "Seek Mode Song", Id = Guid.NewGuid(), Path = "/music/n.mp3" };
         var data = SetupHappyPath(nowSong);
-        _fx.LibraryManager.Setup(l => l.GetItemById(oldSong.Id)).Returns(oldSong);
         string deviceId = "rate-seek-device";
         queueManager.RecordLastPlayed(deviceId, nowSong.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
         var handler = CreateHandler(queueManager);
