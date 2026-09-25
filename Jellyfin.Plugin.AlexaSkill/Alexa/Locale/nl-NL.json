@@ -15,7 +15,7 @@
   "CannotNavigateMusicByVoice": "Sorry, ik kan het nummer niet overslaan met mijn stem tijdens het afspelen met de voortgangsbalk. Gebruik de balk op het scherm om door de wachtrij te navigeren.",
   "CannotNavigateLiveTvByVoice": "Live-tv gaat vanzelf door. Gebruik het aanraakscherm om van kanaal te wisselen.",
   "CannotPauseVideoByVoice": "Sorry, je kunt video niet met je stem pauzeren. Gebruik het aanraakscherm of de terugknop om af te sluiten.",
-  "CannotSetSleepTimerOverVideo": "Sorry, de slaaptimer werkt alleen bij muziek. Video's, live-tv en luisterboeken kan hij niet met je stem stoppen.",
+  "CannotSetSleepTimerOverVideo": "Sorry, ik kan geen slaaptimer instellen terwijl een video, live tv of een boek wordt afgespeeld.",
   "CannotSetSleepTimerInSeekMode": "Sorry, ik kan geen slaaptimer instellen terwijl muziek afspeelt met de voortgangsbalk.",
   "PlaybackFailed": "Er is iets misgegaan bij het afspelen van je media. Probeer het opnieuw.",
   "FolderNoPlayableContent": "Deze map bevat geen afspeelbare inhoud.",

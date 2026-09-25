@@ -118,7 +118,7 @@
   "CannotNavigateMusicByVoice": "Sorry, I can't skip the track by voice while playing with the progress bar. Use the bar on the screen to move through the queue.",
   "CannotNavigateLiveTvByVoice": "Live TV goes on by itself. Use the touchscreen to change the channel.",
   "CannotPauseVideoByVoice": "Sorry, I can't pause video by voice. Use the touchscreen or the back button to exit.",
-  "CannotSetSleepTimerOverVideo": "Sorry, a sleep timer only works with music. It can't stop videos, live TV, or books by voice.",
+  "CannotSetSleepTimerOverVideo": "Sorry, I can't set a sleep timer while a video, live TV, or a book is playing.",
   "CannotSetSleepTimerInSeekMode": "Sorry, I can't set a sleep timer while music plays with the progress bar.",
   "NoMoreMatches": "Sorry, there are no more matches.",
   "NoNewlyAddedItems": "No newly added items found.",

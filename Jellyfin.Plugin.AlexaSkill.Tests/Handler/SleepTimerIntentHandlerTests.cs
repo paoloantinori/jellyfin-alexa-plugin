@@ -534,9 +534,57 @@ public class SleepTimerIntentHandlerTests : PluginTestBase, IDisposable
         Assert.True(response.Response?.ShouldEndSession);
         // The seek-mode line, not the video-family line.
         Assert.Contains("progress bar", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+
         Assert.DoesNotContain("live TV", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
 
         Assert.Equal(seekModeTrack.Id.ToString(), itemId);
         Assert.Equal(DeviceQueueManager.LaunchRoute.VideoApp, route);
     }
+
+    /// <summary>
+    /// JF-632 review hole (a), probe-proven: the SAME track re-launched in seek mode
+    /// re-records its ledger entry on the VideoApp route while the AudioPlayer token
+    /// keeps naming it, so the classifier's token-ownership arm answers Audio. The
+    /// route-level ledger check must refuse anyway: without it the handler minted
+    /// parallel audio of the same track AND the belt wrote (T, Audio), re-poisoning
+    /// the truthful VideoApp record.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_SameItemSeekModeReLaunch_RefusesAndKeepsTheVideoAppRoute()
+    {
+        var track = new Audio { Name = "Same Track", Id = Guid.NewGuid(), Path = "/music/same.flac" };
+
+        (SkillResponse response, string? itemId, DeviceQueueManager.LaunchRoute? route) =
+            await ReissueAndReadLedgerAsync("PT30S", track.Id.ToString(), track.Id,
+                seedRoute: DeviceQueueManager.LaunchRoute.VideoApp,
+                seedLedgerItem: track);
+
+        TestHelpers.AssertNoAudioPlayDirective(response);
+        Assert.Contains("progress bar", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+        // The ledger keeps the truthful VideoApp record (the probe showed the old
+        // belt flipping this to Audio).
+        Assert.Equal(DeviceQueueManager.LaunchRoute.VideoApp, route);
+    }
+
+    /// <summary>
+    /// JF-632 review hole (b), probe-proven: an UNRESOLVABLE VideoApp ledger item
+    /// (deleted movie/book) answers Unknown, and the re-issue used to ship with a
+    /// deadline that could never fire. The route-level check refuses without needing
+    /// the item to resolve.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_UnresolvableVideoAppLedgerItem_RefusesInsteadOfShippingTheReIssue()
+    {
+        Guid deletedItemId = Guid.NewGuid();
+
+        (SkillResponse response, string? itemId, DeviceQueueManager.LaunchRoute? route) =
+            await ReissueAndReadLedgerAsync("PT30M", Guid.NewGuid().ToString(), deletedItemId,
+                seedRoute: DeviceQueueManager.LaunchRoute.VideoApp,
+                seedLedgerItem: null);
+
+        TestHelpers.AssertNoAudioPlayDirective(response);
+        Assert.DoesNotContain("Sleep timer set", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        Assert.Equal(DeviceQueueManager.LaunchRoute.VideoApp, route);
+    }
+
 }

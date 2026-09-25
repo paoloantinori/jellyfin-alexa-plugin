@@ -15,7 +15,7 @@
   "CannotNavigateMusicByVoice": "Mi dispiace, non posso saltare il brano a voce durante la riproduzione con la barra. Usa la barra sullo schermo per spostarti nella coda.",
   "CannotNavigateLiveTvByVoice": "La TV in diretta va avanti da sola. Usa lo schermo touch per cambiare canale.",
   "CannotPauseVideoByVoice": "Mi dispiace, non puoi mettere in pausa il video a voce. Usa lo schermo touch oppure il pulsante indietro per uscire.",
-  "CannotSetSleepTimerOverVideo": "Mi dispiace, il timer di spegnimento funziona solo con la musica. Non può fermare video, TV in diretta o audiolibri a voce.",
+  "CannotSetSleepTimerOverVideo": "Mi dispiace, non posso impostare un timer di spegnimento mentre sono in riproduzione un video, la TV dal vivo o un libro.",
   "CannotSetSleepTimerInSeekMode": "Mi dispiace, non posso impostare il timer di spegnimento durante la riproduzione con la barra.",
   "PlaybackFailed": "Qualcosa è andato storto durante la riproduzione. Per favore riprova.",
   "FolderNoPlayableContent": "Questa cartella non contiene contenuti riproducibili.",

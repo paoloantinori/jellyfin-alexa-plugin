@@ -127,13 +127,46 @@ public class SleepTimerIntentHandler : BaseHandler
         // Unknown (cold ledger, no library manager, unresolvable item) keeps the
         // audio paths unchanged.
         PlaybackLaunchBuilder.PlayingMedium medium = Launch.ResolvePlayingMedium(context, _libraryManager, _queueManager);
-        if (PlaybackLaunchBuilder.IsVideoAppMedium(medium))
+
+        // The review's two proven holes close here: (a) the same-item seek-mode
+        // shape - the native-controls delegation re-records the SAME track on the
+        // VideoApp route while the token keeps naming it, so the classifier's
+        // token-ownership arm answers Audio and the gate above passes (probe-proven:
+        // parallel audio of the same track plus the ledger route re-poisoned to
+        // Audio); (b) the unresolvable ledger item (deleted movie/book) answers
+        // Unknown. ANY VideoApp-routed ledger entry means a VideoApp stream owns the
+        // screen, so the re-issue must not ship: this route check needs no item
+        // resolution and absorbs the JF-628 belt below entirely.
+        string? deviceIdForLedger = context.GetDeviceId() is { Length: > 0 } id ? id : null;
+        DeviceQueueManager? queuesForLedger = deviceIdForLedger != null ? _queueManager : null;
+        (string? ledgerItemId, DeviceQueueManager.LaunchRoute? ledgerRoute) =
+            deviceIdForLedger != null ? queuesForLedger!.GetLastPlayedSnapshot(deviceIdForLedger) : (null, null);
+        bool ledgerVideoRouted = ledgerRoute == DeviceQueueManager.LaunchRoute.VideoApp;
+        if (PlaybackLaunchBuilder.IsVideoAppMedium(medium) || ledgerVideoRouted)
         {
-            Logger.LogDebug("SleepTimer: {Medium} playing, refusing the re-issue honestly", medium);
-            string refusalKey = medium == PlaybackLaunchBuilder.PlayingMedium.VideoAppAudio
+            Logger.LogDebug("SleepTimer: {Medium} playing (ledgerVideoRouted={LedgerVideoRouted}), refusing the re-issue honestly", medium, ledgerVideoRouted);
+
+            // The line follows the SHAPE of what is on screen: the seek-mode line
+            // when music is the VideoApp payload (the classifier's VideoAppAudio, or
+            // the same-item shape where the classifier answers Audio because the
+            // token still names the seek-launched track), the video-family line
+            // otherwise (an unresolvable ledger item defaults there).
+            MediaBrowser.Controller.Entities.BaseItem? ledgerKindItem = ledgerVideoRouted && _libraryManager != null && Guid.TryParse(ledgerItemId, out Guid ledgerGuid)
+                ? _libraryManager.GetItemById(ledgerGuid)
+                : null;
+            bool musicShaped = medium == PlaybackLaunchBuilder.PlayingMedium.VideoAppAudio
+                || (ledgerVideoRouted && ledgerKindItem is MediaBrowser.Controller.Entities.Audio.Audio);
+            string refusalKey = musicShaped
                 ? "CannotSetSleepTimerInSeekMode"
                 : "CannotSetSleepTimerOverVideo";
-            return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get(refusalKey, locale)));
+
+            // The JF-564 pause-refusal shape: the honest line rides a response that
+            // still carries AudioPlayer.Stop, so any DISPLACED audio under the video
+            // (the stale stream this very scenario describes) is cleaned up instead
+            // of left running behind the refusal.
+            SkillResponse refusal = BaseHandler.BuildPauseResponse(keepSessionOpen: false, locale);
+            refusal.Response.OutputSpeech = new PlainTextOutputSpeech(ResponseStrings.Get(refusalKey, locale));
+            return Task.FromResult(refusal);
         }
 
         string itemId = context.AudioPlayer?.Token ?? session.FullNowPlayingItem.Id.ToString();
@@ -162,25 +195,11 @@ public class SleepTimerIntentHandler : BaseHandler
         {
             queues.RecordLaunchBase(deviceId, itemGuid.ToString(), 0, enqueued: false);
 
-            // JF-628: the same chokepoint-skipping site owes the chokepoint's OTHER
-            // write - the re-issue IS a user-initiated play, so the ledger must name
-            // the armed track (the full rationale lives in the JF-628 commit). The
-            // JF-632 medium gate above already refuses the resolvable VideoApp shapes
-            // before any write; this guard is the BELT for the one live production
-            // shape the classifier cannot see (a ledger item that no longer resolves),
-            // where the stale-token write must still not overwrite the truthful
-            // VideoApp record (no event ever re-writes the ledger).
-            (string? ledgerItemId, DeviceQueueManager.LaunchRoute? ledgerRoute) =
-                queues.GetLastPlayedSnapshot(deviceId);
-            bool ledgerNamesOtherVideoAppItem =
-                ledgerRoute == DeviceQueueManager.LaunchRoute.VideoApp
-                && Guid.TryParse(ledgerItemId, out Guid ledgerGuid)
-                && ledgerGuid != itemGuid;
-            if (!ledgerNamesOtherVideoAppItem)
-            {
-                queues.RecordLastPlayed(
-                    deviceId, itemGuid.ToString(), DeviceQueueManager.LaunchRoute.Audio);
-            }
+            // JF-628: the re-issue IS a user-initiated play, so the ledger names the
+            // armed track. The route guard the review proved necessary now lives in
+            // the GATE above (it refuses on ANY VideoApp-routed entry, absorbed from
+            // this belt); only audio-routed shapes reach this write.
+            queues.RecordLastPlayed(deviceId, itemGuid.ToString(), DeviceQueueManager.LaunchRoute.Audio);
         }
 
         int offsetInMilliseconds = 0;

@@ -3,10 +3,10 @@ id: JF-630
 title: >-
   Extract the Plugin.Instance.DeviceQueueManager test swap/restore block into
   one TestHelpers scope helper (4 copies)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-25 02:34'
-updated_date: '2026-09-25 05:23'
+updated_date: '2026-09-25 05:52'
 labels:
   - tech-debt
   - tests
@@ -31,16 +31,16 @@ The save/swap/restore block that points Plugin.Instance.DeviceQueueManager at a 
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress
+- [x] #6 NLU test fixtures updated if interaction model changed
+- [x] #7 E2E test added for new intent or handler logic
+- [x] #8 Locale response strings added to all 17 locales
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
 ## Implementation Notes
@@ -52,3 +52,9 @@ Examined and correctly NOT a conversion site: EventHandlerTests.cs:1070 (RecordP
 
 Optional nit from the same pass: the scope's `Plugin.Instance != null` guards are dead at all seven sites (EnsurePluginInstance runs before every swap; the method-level sites deref Plugin.Instance!.Configuration first). A future mis-ordered call would silently skip the swap yet still dispose the manager; `Plugin.Instance!` would fail loudly at the swap line (house style on silent failures). Pre-existing defensive shape carried over; not blocking.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+JF-630 complete: TestHelpers.SwapPluginQueueManager is the ONE swap scope (capture+assign+restore-before-dispose, loud Plugin.Instance! guards). Seven conversions: four suite-level blocks, two method-level swap-to-null pairs (equivalence proven constructively), and the TvNextUp conditional straggler the simplify census caught (restructured leak-proof by the review: the scope is acquired before the seed and disposed on a seed throw). No production code; suite count stayed exactly 4318x2 throughout. Gates: /simplify (2 combined agents) and code-review high (6 findings: 4 applied, 2 folded into JF-633's plan) both in this transcript; JF-633 filed for the AudiobookPositionTracker sibling family with the shared-core requirement.
+<!-- SECTION:FINAL_SUMMARY:END -->
