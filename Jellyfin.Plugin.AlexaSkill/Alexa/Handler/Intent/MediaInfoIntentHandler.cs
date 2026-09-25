@@ -12,6 +12,7 @@ using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Apl;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Exceptions;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -25,13 +26,21 @@ using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
 /// <summary>
-/// Handler for MediaInfoIntent requests.
+/// Handler for MediaInfoIntent requests. WHICH item is current comes from the ONE
+/// shared resolver (<see cref="PlaybackLaunchBuilder.ResolveCurrentPlayingItem"/>,
+/// JF-626/JF-629): the composite-safe AudioPlayer token, the session item, and the
+/// device ledger's displacement arbitration, so "what's playing" answers the
+/// displaced video during a VideoApp launch and the token's track after
+/// PlaybackStopped cleared the session DTO. The ANSWER still speaks the session's
+/// now-playing DTO when it names the resolved item (richer fields), a projection
+/// of the resolved <see cref="BaseItem"/> otherwise.
 /// </summary>
 public class MediaInfoIntentHandler : BaseHandler
 {
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
     private readonly IArtistIndex? _artistIndex;
+    private readonly DeviceQueueManager? _queueManager;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MediaInfoIntentHandler"/> class.
@@ -42,17 +51,20 @@ public class MediaInfoIntentHandler : BaseHandler
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
     /// <param name="artistIndex">Optional in-memory artist index for fast search.</param>
+    /// <param name="queueManager">The device queue manager owning the last-played ledger the shared resolver reads; null disables the ledger arms (no <c>Plugin.Instance</c> fallback).</param>
     public MediaInfoIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILibraryManager libraryManager,
         IUserManager userManager,
         ILoggerFactory loggerFactory,
-        IArtistIndex? artistIndex = null) : base(sessionManager, config, loggerFactory)
+        IArtistIndex? artistIndex = null,
+        DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
         _artistIndex = artistIndex;
+        _queueManager = queueManager;
     }
 
     /// <inheritdoc/>
@@ -76,7 +88,12 @@ public class MediaInfoIntentHandler : BaseHandler
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         string locale = GetLocale(request);
-        BaseItemDto? item = session.NowPlayingItem;
+
+        // The ONE current-item resolver (JF-629): the codec-safe AudioPlayer token,
+        // the session item, and the device-ledger displacement arbitration whose
+        // predicate and rationale live in PlaybackLaunchBuilder.ResolveCurrentPlayingItem.
+        BaseItem? current = Launch.ResolveCurrentPlayingItem(context, session, _libraryManager, _queueManager, "MediaInfo");
+        BaseItemDto? item = ResolveDisplayItem(current, session.NowPlayingItem);
         if (item == null)
         {
             Logger.LogInformation("MediaInfoIntent: no media currently playing");
@@ -96,6 +113,73 @@ public class MediaInfoIntentHandler : BaseHandler
         // Default: return full now-playing info
         Logger.LogInformation("MediaInfoIntent: reporting {ItemName}", item.Name);
         return await BuildNowPlayingResponse(item, session, locale, context, user, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The display DTO for the resolver's verdict (JF-629): the session's
+    /// now-playing DTO when it names the SAME item (it is the richer source the
+    /// per-medium answers have always read), a projection of the resolved
+    /// <see cref="BaseItem"/> when the resolver found something the DTO does not
+    /// name (the token track after PlaybackStopped, the displaced video), and the
+    /// raw DTO itself when the resolver found nothing at all (its DTO leg already
+    /// tried: an id-empty or library-unresolvable item the session still reports
+    /// as playing keeps its informational answer rather than "nothing playing").
+    /// Only the ITEM RESOLUTION changed; every per-medium answer below is untouched.
+    /// </summary>
+    /// <param name="current">The shared resolver's current-item verdict.</param>
+    /// <param name="sessionDto">The session's now-playing DTO, if any.</param>
+    /// <returns>The DTO the answers speak from, or null when nothing is reportable.</returns>
+    private static BaseItemDto? ResolveDisplayItem(BaseItem? current, BaseItemDto? sessionDto)
+        => current == null
+            ? sessionDto
+            : sessionDto is { } dto && dto.Id == current.Id
+                ? dto
+                : ProjectToDto(current);
+
+    /// <summary>
+    /// Project a resolved <see cref="BaseItem"/> onto exactly the fields the
+    /// per-medium answers read (the server's DTO service stays out of the ctor on
+    /// purpose: the RateItem sibling shape). The kind ladder is a type pattern,
+    /// NOT <c>GetBaseItemKind()</c> (which parses the CLR type NAME and throws for
+    /// derived shapes, the ResumeIntentHandler lesson), with AudioBook BEFORE Audio
+    /// so a book keeps its non-track answer shape. The answers only branch on
+    /// Audio, Episode and Movie (everything else takes the name-only arm), so the
+    /// ladder's tail carries the generic <see cref="BaseItemKind.Video"/> marker,
+    /// which no answer branch reads: channels, album-concat launches and any other
+    /// kind keep the name-only shape exactly as an unknown DTO kind always did.
+    /// People is deliberately not projected: the people queries re-resolve the
+    /// full item through the library when the DTO carries none.
+    /// </summary>
+    /// <param name="item">The resolved current item.</param>
+    /// <returns>The display DTO for the answer builders.</returns>
+    private static BaseItemDto ProjectToDto(BaseItem item)
+    {
+        BaseItemKind kind = item switch
+        {
+            AudioBook => BaseItemKind.AudioBook,
+            MediaBrowser.Controller.Entities.Audio.Audio => BaseItemKind.Audio,
+            MediaBrowser.Controller.Entities.Movies.Movie => BaseItemKind.Movie,
+            MediaBrowser.Controller.Entities.TV.Episode => BaseItemKind.Episode,
+            _ => BaseItemKind.Video,
+        };
+
+        MediaBrowser.Controller.Entities.Audio.Audio? audio = item as MediaBrowser.Controller.Entities.Audio.Audio;
+
+        return new BaseItemDto
+        {
+            Id = item.Id,
+            Name = item.Name,
+            Type = kind,
+            AlbumArtist = audio?.AlbumArtists is { Count: > 0 } ? audio.AlbumArtists[0] : null,
+            Album = item.Album,
+            ProductionYear = item.ProductionYear,
+            RunTimeTicks = item.RunTimeTicks,
+            Genres = item.Genres,
+            ParentIndexNumber = item.ParentIndexNumber,
+            IndexNumber = item.IndexNumber,
+            SeriesName = item is MediaBrowser.Controller.Entities.TV.Episode episode ? episode.SeriesName : null,
+            CommunityRating = item.CommunityRating,
+        };
     }
 
     private static string? GetInfoType(IntentRequest? intentRequest)

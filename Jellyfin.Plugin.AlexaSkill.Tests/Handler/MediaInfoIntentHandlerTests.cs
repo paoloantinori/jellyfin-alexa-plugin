@@ -43,14 +43,15 @@ public class MediaInfoIntentHandlerTests : PluginTestBase
 
     private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
 
-    private MediaInfoIntentHandler CreateHandler()
+    private MediaInfoIntentHandler CreateHandler(Jellyfin.Plugin.AlexaSkill.Alexa.Playback.DeviceQueueManager? queueManager = null)
     {
         return new MediaInfoIntentHandler(
             _sessionManagerMock.Object,
             _config,
             _libraryManagerMock.Object,
             _userManagerMock.Object,
-            _loggerFactory);
+            _loggerFactory,
+            queueManager: queueManager);
     }
 
     private static IntentRequest CreateMediaInfoRequest()
@@ -81,6 +82,95 @@ public class MediaInfoIntentHandlerTests : PluginTestBase
     }
 
     private static Context CreateContext() => TestHelpers.CreateTestContext();
+
+    // --- Shared current-item resolver shapes (JF-629, mirroring RateItemIntentHandlerTests) ---
+
+    /// <summary>
+    /// The token-survives-PlaybackStopped shape (JF-629): Jellyfin clears the
+    /// session's now-playing DTO when playback stops, but the device's
+    /// AudioPlayer token survives. The pre-migration handler read ONLY the DTO
+    /// and answered "nothing playing" here; the shared resolver resolves the
+    /// track from the token and the answer speaks it (per-medium Audio shape,
+    /// track by artist, from the projection).
+    /// </summary>
+    [Fact]
+    public async Task Handle_StoppedClearedDto_TokenResolves_ReportsTokenTrack()
+    {
+        TestHelpers.SetServerAddress(_config, "https://test.example.com");
+        var song = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Super Bon Bon",
+            Id = Guid.NewGuid(),
+            Path = "/music/s.mp3",
+            Album = "Irresistible Bliss",
+            AlbumArtists = new List<string> { "Soul Coughing" }
+        };
+        _libraryManagerMock.Setup(l => l.GetItemById(song.Id)).Returns(song);
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+        var handler = CreateHandler();
+        var session = CreateSession();
+        Assert.Null(session.NowPlayingItem);
+
+        var text = GetSpeechText(await handler.HandleAsync(
+            CreateMediaInfoRequest(),
+            TestHelpers.CreateContextWithToken(song.Id.ToString(), "mediainfo-stopped-device"),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
+
+        Assert.Contains("Super Bon Bon", text);
+        Assert.Contains("Soul Coughing", text);
+    }
+
+    /// <summary>
+    /// The VideoApp displacement shape (JF-629, the Repeat/RateItem precedent):
+    /// the stale music token names the last SONG while a VideoApp-routed movie
+    /// plays. The video is current, so the answer speaks the MOVIE in its
+    /// per-medium shape (title with year), never the stale song the session DTO
+    /// still names.
+    /// </summary>
+    [Fact]
+    public async Task Handle_StaleTokenVideoDisplacement_ReportsTheVideo()
+    {
+        TestHelpers.SetServerAddress(_config, "https://test.example.com");
+        var queueManager = TestHelpers.CreateDeviceQueueManager("mediainfo-displace");
+        var song = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Old Song",
+            Id = Guid.NewGuid(),
+            Path = "/music/o.mp3"
+        };
+        var movie = new MediaBrowser.Controller.Entities.Movies.Movie
+        {
+            Name = "Current Movie",
+            Id = Guid.NewGuid(),
+            Path = "/movies/c.mkv",
+            ProductionYear = 2024
+        };
+        _libraryManagerMock.Setup(l => l.GetItemById(song.Id)).Returns(song);
+        _libraryManagerMock.Setup(l => l.GetItemById(movie.Id)).Returns(movie);
+        string deviceId = "mediainfo-displace-device";
+        queueManager.RecordLastPlayed(
+            deviceId, movie.Id.ToString(), Jellyfin.Plugin.AlexaSkill.Alexa.Playback.DeviceQueueManager.LaunchRoute.VideoApp);
+        var handler = CreateHandler(queueManager);
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto
+        {
+            Id = song.Id,
+            Name = "Old Song",
+            Type = BaseItemKind.Audio,
+            AlbumArtist = "Some Artist"
+        };
+
+        var text = GetSpeechText(await handler.HandleAsync(
+            CreateMediaInfoRequest(),
+            TestHelpers.CreateContextWithToken(song.Id.ToString(), deviceId),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
+
+        Assert.Contains("Current Movie", text);
+        Assert.Contains("2024", text);
+        Assert.DoesNotContain("Old Song", text);
+    }
 
     /// <summary>
     /// Ensure APL visuals are enabled so "WithApl" tests pass regardless of

@@ -6,23 +6,32 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
+using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
-using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
 /// <summary>
-/// Base handler for toggling favorite status on the currently playing item.
+/// Base handler for toggling favorite status on the currently playing item. The
+/// current item comes from the ONE shared resolver
+/// (<see cref="PlaybackLaunchBuilder.ResolveCurrentPlayingItem"/>, JF-626/JF-629):
+/// the composite-safe AudioPlayer token, the session item, and the device ledger's
+/// displacement arbitration, so "metti questa nei preferiti" resolves the same
+/// item "ripeti" and "valuta" do after PlaybackStopped cleared the session DTO
+/// or a VideoApp launch displaced the audio.
 /// </summary>
 public abstract class FavoriteToggleIntentHandler : BaseHandler
 {
     private readonly IUserDataManager _userDataManager;
     private readonly IUserManager _userManager;
     private readonly ILibraryManager _libraryManager;
+    private readonly DeviceQueueManager? _queueManager;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="FavoriteToggleIntentHandler"/> class.
@@ -33,17 +42,20 @@ public abstract class FavoriteToggleIntentHandler : BaseHandler
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
+    /// <param name="queueManager">The device queue manager owning the last-played ledger the shared resolver reads; null disables the ledger arms (no <c>Plugin.Instance</c> fallback).</param>
     protected FavoriteToggleIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         IUserDataManager userDataManager,
         IUserManager userManager,
         ILibraryManager libraryManager,
-        ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
+        ILoggerFactory loggerFactory,
+        DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
     {
         _userDataManager = userDataManager;
         _userManager = userManager;
         _libraryManager = libraryManager;
+        _queueManager = queueManager;
     }
 
     /// <summary>
@@ -71,10 +83,15 @@ public abstract class FavoriteToggleIntentHandler : BaseHandler
     public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         string locale = GetLocale(request);
-        BaseItemDto? item = session.NowPlayingItem;
+
+        // The ONE current-item resolver (JF-629, the RateItem sibling): the
+        // codec-safe AudioPlayer token, the session item, and the device-ledger
+        // displacement arbitration whose predicate and rationale live in
+        // PlaybackLaunchBuilder.ResolveCurrentPlayingItem.
+        BaseItem? item = Launch.ResolveCurrentPlayingItem(context, session, _libraryManager, _queueManager, IntentName);
         if (item == null)
         {
-            Logger.LogDebug("FavoriteToggle ({IntentName}): no now-playing item, returning MediaNotFound", IntentName);
+            Logger.LogDebug("FavoriteToggle ({IntentName}): no resolvable current item, returning MediaNotFound", IntentName);
             return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale)));
         }
 
@@ -88,20 +105,14 @@ public abstract class FavoriteToggleIntentHandler : BaseHandler
 
         Jellyfin.Database.Implementations.Entities.User resolvedUser = jellyfinUser!;
 
-        var baseItem = _libraryManager.GetItemById(item.Id);
-        if (baseItem == null)
-        {
-            return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale)));
-        }
-
-        var data = _userDataManager.GetUserData(resolvedUser, baseItem);
+        var data = _userDataManager.GetUserData(resolvedUser, item);
         if (data == null)
         {
             return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale)));
         }
 
         data.IsFavorite = FavoriteValue;
-        _userDataManager.SaveUserData(resolvedUser, baseItem, data, UserDataSaveReason.UpdateUserRating, CancellationToken.None);
+        _userDataManager.SaveUserData(resolvedUser, item, data, UserDataSaveReason.UpdateUserRating, CancellationToken.None);
 
         return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get(ResponseKey, locale)));
     }

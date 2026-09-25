@@ -1,5 +1,6 @@
 using System.Threading;
 using System.Threading.Tasks;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
@@ -21,13 +22,15 @@ public class UnmarkFavoriteIntentHandler : FavoriteToggleIntentHandler
     /// <param name="userManager">The user manager.</param>
     /// <param name="libraryManager">The library manager.</param>
     /// <param name="loggerFactory">Logger factory instance.</param>
+    /// <param name="queueManager">The device queue manager owning the last-played ledger the shared resolver reads; null disables the ledger arms.</param>
     public UnmarkFavoriteIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         IUserDataManager userDataManager,
         IUserManager userManager,
         ILibraryManager libraryManager,
-        ILoggerFactory loggerFactory) : base(sessionManager, config, userDataManager, userManager, libraryManager, loggerFactory)
+        ILoggerFactory loggerFactory,
+        DeviceQueueManager? queueManager = null) : base(sessionManager, config, userDataManager, userManager, libraryManager, loggerFactory, queueManager)
     {
     }
 

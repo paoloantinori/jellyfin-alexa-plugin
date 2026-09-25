@@ -1,5 +1,6 @@
 using System.Threading;
 using System.Threading.Tasks;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
@@ -21,13 +22,15 @@ public class MarkFavoriteIntentHandler : FavoriteToggleIntentHandler
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
+    /// <param name="queueManager">The device queue manager owning the last-played ledger the shared resolver reads; null disables the ledger arms.</param>
     public MarkFavoriteIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         IUserDataManager userDataManager,
         IUserManager userManager,
         ILibraryManager libraryManager,
-        ILoggerFactory loggerFactory) : base(sessionManager, config, userDataManager, userManager, libraryManager, loggerFactory)
+        ILoggerFactory loggerFactory,
+        DeviceQueueManager? queueManager = null) : base(sessionManager, config, userDataManager, userManager, libraryManager, loggerFactory, queueManager)
     {
     }
 
