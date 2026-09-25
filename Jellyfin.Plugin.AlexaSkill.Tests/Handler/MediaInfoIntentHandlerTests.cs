@@ -8,6 +8,7 @@ using global::Alexa.NET.Request.Type;
 using global::Alexa.NET.Response;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Dto;
@@ -43,7 +44,7 @@ public class MediaInfoIntentHandlerTests : PluginTestBase
 
     private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
 
-    private MediaInfoIntentHandler CreateHandler(Jellyfin.Plugin.AlexaSkill.Alexa.Playback.DeviceQueueManager? queueManager = null)
+    private MediaInfoIntentHandler CreateHandler(DeviceQueueManager? queueManager = null)
     {
         return new MediaInfoIntentHandler(
             _sessionManagerMock.Object,
@@ -151,7 +152,7 @@ public class MediaInfoIntentHandlerTests : PluginTestBase
         _libraryManagerMock.Setup(l => l.GetItemById(movie.Id)).Returns(movie);
         string deviceId = "mediainfo-displace-device";
         queueManager.RecordLastPlayed(
-            deviceId, movie.Id.ToString(), Jellyfin.Plugin.AlexaSkill.Alexa.Playback.DeviceQueueManager.LaunchRoute.VideoApp);
+            deviceId, movie.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
         var handler = CreateHandler(queueManager);
         var session = CreateSession();
         session.NowPlayingItem = new BaseItemDto

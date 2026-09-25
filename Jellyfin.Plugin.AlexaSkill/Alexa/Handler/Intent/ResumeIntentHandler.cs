@@ -217,21 +217,9 @@ public class ResumeIntentHandler : BaseHandler
                     ? _libraryManager.GetItemById(tryGuid)
                     : null;
 
-                // The kind mapping is a type pattern, NOT GetBaseItemKind(): that
-                // helper parses the CLR type NAME into the enum and throws for any
-                // derived type (test subclasses, future entity shapes). The four arms
-                // mirror fallback 4's content kinds exactly.
-                BaseItemKind? candidateKind = candidate switch
-                {
-                    // AudioBook BEFORE Audio: a book IS an Audio subclass in Jellyfin,
-                    // and the book kind must win so music-content gating cannot
-                    // misclassify a book resume.
-                    AudioBook => BaseItemKind.AudioBook,
-                    MediaBrowser.Controller.Entities.Audio.Audio => BaseItemKind.Audio,
-                    MediaBrowser.Controller.Entities.Movies.Movie => BaseItemKind.Movie,
-                    MediaBrowser.Controller.Entities.TV.Episode => BaseItemKind.Episode,
-                    _ => null,
-                };
+                // The ONE kind ladder (JF-629); the null tail (a shape outside the
+                // four content kinds) skips the candidate, this consumer's meaning.
+                Jellyfin.Data.Enums.BaseItemKind? candidateKind = Util.ItemKindLadder.TryKind(candidate);
 
                 if (trySource == DeviceQueueManager.DeviceResumeSource.LastPlayed
                     && candidateKind is BaseItemKind.Movie or BaseItemKind.Episode)

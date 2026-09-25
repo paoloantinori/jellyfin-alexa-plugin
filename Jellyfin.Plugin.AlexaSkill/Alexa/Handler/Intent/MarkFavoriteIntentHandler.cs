@@ -22,7 +22,7 @@ public class MarkFavoriteIntentHandler : FavoriteToggleIntentHandler
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
-    /// <param name="queueManager">The device queue manager owning the last-played ledger the shared resolver reads; null disables the ledger arms.</param>
+    /// <param name="queueManager">The device queue manager owning the last-played ledger the shared resolver reads; null disables the ledger arms (no Plugin.Instance fallback).</param>
     public MarkFavoriteIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,

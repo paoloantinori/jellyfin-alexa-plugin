@@ -12,8 +12,6 @@ using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Entities.Movies;
-using MediaBrowser.Controller.Library;
-using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Entities;
 using Moq;
 using Xunit;
@@ -136,7 +134,6 @@ public class FavoriteToggleIntentHandlerTests : PluginTestBase
         var song = new Audio { Name = "Old Song", Id = Guid.NewGuid(), Path = "/music/o.mp3" };
         var movie = new Movie { Name = "Current Movie", Id = Guid.NewGuid(), Path = "/movies/c.mkv" };
         var data = SetupHappyPath(movie);
-        _fx.LibraryManager.Setup(l => l.GetItemById(song.Id)).Returns(song);
         string deviceId = "fav-displace-device";
         queueManager.RecordLastPlayed(deviceId, movie.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
         var handler = CreateHandler(queueManager);

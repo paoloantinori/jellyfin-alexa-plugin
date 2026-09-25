@@ -19,7 +19,6 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Dto;
-using MediaBrowser.Model.Entities;
 using Microsoft.Extensions.Logging;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 
@@ -89,9 +88,7 @@ public class MediaInfoIntentHandler : BaseHandler
     {
         string locale = GetLocale(request);
 
-        // The ONE current-item resolver (JF-629): the codec-safe AudioPlayer token,
-        // the session item, and the device-ledger displacement arbitration whose
-        // predicate and rationale live in PlaybackLaunchBuilder.ResolveCurrentPlayingItem.
+        // The ONE current-item resolver; the arbitration rationale lives on it.
         BaseItem? current = Launch.ResolveCurrentPlayingItem(context, session, _libraryManager, _queueManager, "MediaInfo");
         BaseItemDto? item = ResolveDisplayItem(current, session.NowPlayingItem);
         if (item == null)
@@ -154,14 +151,9 @@ public class MediaInfoIntentHandler : BaseHandler
     /// <returns>The display DTO for the answer builders.</returns>
     private static BaseItemDto ProjectToDto(BaseItem item)
     {
-        BaseItemKind kind = item switch
-        {
-            AudioBook => BaseItemKind.AudioBook,
-            MediaBrowser.Controller.Entities.Audio.Audio => BaseItemKind.Audio,
-            MediaBrowser.Controller.Entities.Movies.Movie => BaseItemKind.Movie,
-            MediaBrowser.Controller.Entities.TV.Episode => BaseItemKind.Episode,
-            _ => BaseItemKind.Video,
-        };
+        // The ONE kind ladder (JF-629); the null tail (a shape outside the four content
+        // kinds) projects as the video-name-only answer marker, this consumer's meaning.
+        BaseItemKind kind = Util.ItemKindLadder.TryKind(item) ?? BaseItemKind.Video;
 
         MediaBrowser.Controller.Entities.Audio.Audio? audio = item as MediaBrowser.Controller.Entities.Audio.Audio;
 

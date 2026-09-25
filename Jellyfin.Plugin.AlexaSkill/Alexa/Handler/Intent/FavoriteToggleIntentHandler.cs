@@ -84,10 +84,7 @@ public abstract class FavoriteToggleIntentHandler : BaseHandler
     {
         string locale = GetLocale(request);
 
-        // The ONE current-item resolver (JF-629, the RateItem sibling): the
-        // codec-safe AudioPlayer token, the session item, and the device-ledger
-        // displacement arbitration whose predicate and rationale live in
-        // PlaybackLaunchBuilder.ResolveCurrentPlayingItem.
+        // The ONE current-item resolver; the arbitration rationale lives on it.
         BaseItem? item = Launch.ResolveCurrentPlayingItem(context, session, _libraryManager, _queueManager, IntentName);
         if (item == null)
         {
