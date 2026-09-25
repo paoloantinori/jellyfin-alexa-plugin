@@ -866,7 +866,7 @@ Invocation name: **"jellyfin player"**
 | Play Video | `ビデオ {title} を再生して` · `動画 {title} を流して` · `{title} を見たい` · `{title} を見せて` · `映画 {title} を再生して` · `ビデオ {title} をスタートして` |
 | Query Artist Library | `{musician} のトラックは何がある` · `{musician} の {query_type} を見せて` · `{musician} の曲は何がある` · `{musician} のアルバムは何がある` · `{musician} には何がある` · `{musician} のトラックを見せて` |
 | Query Recently Added | `新着はある` · `最近追加されたものは` · `ライブラリの新着は` · `最近追加されたものを見せて` · `最近何か新しいものある` · `最新のアイテムは何` |
-| Rate Item | `これを星{star_rating}で評価して` · `この曲を星{star_rating}で評価して` · `これに星{star_rating}をつけて` · `この曲に星{star_rating}をつけて` · `星{star_rating}で評価して` |
+| Rate Item | `これを星 {star_rating} で評価して` · `この曲を星 {star_rating} で評価して` · `これに星 {star_rating} をつけて` · `この曲に星 {star_rating} をつけて` · `星 {star_rating} で評価して` |
 | Recommend | `何かおすすめは` · `{media_type} をおすすめして` · `音楽のおすすめは` · `映画のおすすめは` · `何か見るものを提案して` |
 | Remove Current From Playlist | `この曲をプレイリスト {playlist} から削除して` · `今の曲をプレイリスト {playlist} から消して` |
 | Search Media | `映画 {query} を検索して` · `コンテンツ {query} を検索して` · `ビデオ {query} を検索して` · `映画 {query} を見つけて` · `コンテンツ {query} を見つけて` · `映画 {query} を探して` |
