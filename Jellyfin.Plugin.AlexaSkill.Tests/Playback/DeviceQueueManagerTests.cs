@@ -877,7 +877,7 @@ public class DeviceQueueManagerTests : IDisposable
 
         using var reloaded = new DeviceQueueManager(_tempDir, _logger);
         Assert.Equal(itemId.ToString(), reloaded.GetLastPlayedItemId("dev"));
-        Assert.Equal(DeviceQueueManager.LaunchRoute.VideoApp, reloaded.GetLastPlayedLaunchRoute("dev"));
+        Assert.Equal(DeviceQueueManager.LaunchRoute.VideoApp, reloaded.GetLastPlayedSnapshot("dev").Route);
     }
 
     /// <summary>
@@ -895,7 +895,7 @@ public class DeviceQueueManagerTests : IDisposable
         _manager.RecordLastPlayed("dev", itemId.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
 
         Assert.Equal(itemId.ToString(), _manager.GetLastPlayedItemId("dev"));
-        Assert.Equal(DeviceQueueManager.LaunchRoute.VideoApp, _manager.GetLastPlayedLaunchRoute("dev"));
+        Assert.Equal(DeviceQueueManager.LaunchRoute.VideoApp, _manager.GetLastPlayedSnapshot("dev").Route);
     }
 
     // JF-619: the ONE device resume truth-source. The scenario that motivated it:
@@ -999,7 +999,7 @@ public class DeviceQueueManagerTests : IDisposable
     /// classification) and the unknown-member JSON still deserializes.
     /// </summary>
     [Fact]
-    public void GetLastPlayedLaunchRoute_LegacyFileWithoutRoute_Null()
+    public void GetLastPlayedSnapshot_LegacyFileWithoutRoute_NullRoute()
     {
         var itemId = Guid.NewGuid();
         string dir = TestHelpers.CreateRegisteredTempDir("dq-legacy");
@@ -1012,7 +1012,7 @@ public class DeviceQueueManagerTests : IDisposable
 
         using var manager = new DeviceQueueManager(dir, _logger);
         Assert.Equal(itemId.ToString(), manager.GetLastPlayedItemId("legacy"));
-        Assert.Null(manager.GetLastPlayedLaunchRoute("legacy"));
+        Assert.Null(manager.GetLastPlayedSnapshot("legacy").Route);
     }
 
     /// <summary>
@@ -1021,11 +1021,11 @@ public class DeviceQueueManagerTests : IDisposable
     /// (legacy semantics) instead of throwing.
     /// </summary>
     [Fact]
-    public void GetLastPlayedLaunchRoute_UnknownRouteName_Null()
+    public void GetLastPlayedSnapshot_UnknownRouteName_NullRoute()
     {
         _manager.GetOrCreateQueue("dev").LastPlayedItemId = Guid.NewGuid().ToString();
         _manager.GetOrCreateQueue("dev").LastPlayedLaunchRoute = "Hologram";
 
-        Assert.Null(_manager.GetLastPlayedLaunchRoute("dev"));
+        Assert.Null(_manager.GetLastPlayedSnapshot("dev").Route);
     }
 }

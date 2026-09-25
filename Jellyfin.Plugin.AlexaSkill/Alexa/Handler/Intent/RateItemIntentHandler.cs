@@ -19,10 +19,10 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 
 /// <summary>
 /// Handler for RateItemIntent: writes a 1-5 star user rating on the item the
-/// device is playing. The current item is resolved with RepeatIntentHandler's
-/// JF-562/JF-568 token-vs-ledger arbitration (see
-/// <see cref="ResolveCurrentItem"/> for the order and the deltas from Repeat:
-/// the composite-safe token codec, and the plugin-instance ledger fallback).
+/// device is playing. The current item comes from the ONE shared resolver
+/// (<see cref="PlaybackLaunchBuilder.ResolveCurrentPlayingItem"/>, JF-626):
+/// the composite-safe AudioPlayer token, the session item, and the device
+/// ledger's JF-562/JF-568/JF-625 displacement arbitration.
 /// </summary>
 public class RateItemIntentHandler : BaseHandler
 {
@@ -56,7 +56,7 @@ public class RateItemIntentHandler : BaseHandler
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
-    /// <param name="queueManager">The device queue manager owning the last-played ledger; null falls back to <c>Plugin.Instance</c>'s.</param>
+    /// <param name="queueManager">The device queue manager owning the last-played ledger the shared resolver reads; null disables the ledger arms (no <c>Plugin.Instance</c> fallback).</param>
     public RateItemIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
@@ -117,10 +117,9 @@ public class RateItemIntentHandler : BaseHandler
             return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("RatingOutOfRange", locale)));
         }
 
-        BaseItem? item = ResolveCurrentItem(context, session);
+        BaseItem? item = Launch.ResolveCurrentPlayingItem(context, session, _libraryManager, _queueManager, "RateItem");
         if (item == null)
         {
-            Logger.LogDebug("RateItem: no resolvable current item");
             return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("RatingNoItem", locale)));
         }
 
@@ -144,89 +143,5 @@ public class RateItemIntentHandler : BaseHandler
 
         Logger.LogInformation("RateItem: rated '{ItemName}' ({ItemId}) {Stars}/{Max} stars (stored {Stored})", item.Name, item.Id, stars, MaxStars, storedRating);
         return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("RatingSet", locale, stars, item.Name)));
-    }
-
-    /// <summary>
-    /// Resolves the item to rate, mirroring RepeatIntentHandler's JF-562/JF-568
-    /// arbitration: the AudioPlayer token first (via the composite-safe codec,
-    /// so a sleep-timer token still resolves), the session's full now-playing
-    /// item second (free; no re-resolve by id), and the device last-played
-    /// ledger last (the only record a VideoApp launch leaves, required for the
-    /// seek-mode video route). When the token and the ledger disagree, a
-    /// VideoApp-routed video-kind or audiobook ledger entry means the video
-    /// displaced the audio: the stale music token must lose (rating it would
-    /// write the rating on the wrong item), while an audio-routed disagreement
-    /// is the ordinary queue-advance shape where the fresher token wins. The
-    /// cheap displacement guards run BEFORE the ledger resolve (the
-    /// ResolvePlayingMedium doctrine), so the ordinary music path pays one
-    /// item resolve, not two.
-    /// </summary>
-    /// <param name="context">The Alexa request context.</param>
-    /// <param name="session">The Jellyfin session.</param>
-    /// <returns>The item to rate, or null when nothing is resolvable.</returns>
-    private BaseItem? ResolveCurrentItem(Context? context, SessionInfo? session)
-    {
-        string? deviceId = context?.System?.Device?.DeviceID;
-        DeviceQueueManager? ledgerManager = deviceId != null ? _queueManager : null;
-        string? lastPlayedId = ledgerManager?.GetLastPlayedItemId(deviceId!);
-        DeviceQueueManager.LaunchRoute? recordedRoute = ledgerManager?.GetLastPlayedLaunchRoute(deviceId!);
-        string? token = context?.AudioPlayer?.Token;
-
-        BaseItem? ResolveId(string? id) =>
-            !string.IsNullOrEmpty(id) && Guid.TryParse(id, out Guid guid)
-                ? _libraryManager.GetItemById(guid)
-                : null;
-
-        // The three data-in-hand guards before the ledger item's kind can
-        // matter: when any fails (the modal music shape: audio-routed ledger,
-        // resolvable token) the resolve is skipped, mirroring ResolvePlayingMedium.
-        bool displacementPossible =
-            !string.IsNullOrEmpty(token)
-            && !string.Equals(token, lastPlayedId, StringComparison.Ordinal)
-            && recordedRoute != DeviceQueueManager.LaunchRoute.Audio;
-
-        BaseItem? ledgerItem = displacementPossible ? ResolveId(lastPlayedId) : null;
-        // The JF-625 VideoAppAudio arm (mirrors ResolvePlayingMedium's classifier):
-        // a VideoApp-routed ledger entry that resolves to a plain Audio track is the
-        // seek-mode video-audio launch; the stale AudioPlayer token names the
-        // PRE-VideoApp track and must not win the rating.
-        bool videoDisplacedAudio =
-            ledgerItem != null
-            && recordedRoute == DeviceQueueManager.LaunchRoute.VideoApp
-            && (PlaybackLaunchBuilder.IsVideoAppLaunchItem(ledgerItem)
-                || AudiobookItems.IsAudioBook(ledgerItem)
-                || ledgerItem is MediaBrowser.Controller.Entities.Audio.Audio);
-
-        if (videoDisplacedAudio)
-        {
-            Logger.LogDebug(
-                "RateItem: AudioPlayer token displaced by the VideoApp launch of '{ItemName}'; the video is current",
-                ledgerItem!.Name);
-            return ledgerItem;
-        }
-
-        // The shared codec, not raw Guid.TryParse: tokens can be composite
-        // ("{guid}|sleep:{ticks}", JF-447), and a raw parse would silently
-        // decline to the session fallback while a sleep timer is armed.
-        if (Playback.StreamTokenCodec.TryGetItemId(token, out Guid tokenId))
-        {
-            BaseItem? tokenItem = _libraryManager.GetItemById(tokenId);
-            if (tokenItem != null)
-            {
-                return tokenItem;
-            }
-        }
-
-        // A full BaseItem the session already holds; no re-resolve by id.
-        if (session?.FullNowPlayingItem is { } sessionItem)
-        {
-            return sessionItem;
-        }
-
-        // The displacement-path resolve already missed this id (deleted/stale ledger
-        // item); re-resolving the same known-absent GUID is a second DB miss for
-        // nothing. Only the non-displacement tail (audio-routed ledger, no token,
-        // no session item) resolves here.
-        return ledgerItem ?? (displacementPossible ? null : ResolveId(lastPlayedId));
     }
 }

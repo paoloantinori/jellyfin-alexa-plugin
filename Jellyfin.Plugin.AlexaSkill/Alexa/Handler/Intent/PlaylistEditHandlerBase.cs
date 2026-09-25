@@ -7,6 +7,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -143,33 +144,17 @@ public abstract class PlaylistEditHandlerBase : BaseHandler
     }
 
     /// <summary>
-    /// Resolves the currently playing item: the AudioPlayer token (survives
-    /// PlaybackStopped clearing the session item) first, session now-playing second.
+    /// Resolves the currently playing item through the ONE shared resolver
+    /// (<see cref="PlaybackLaunchBuilder.ResolveCurrentPlayingItem"/>, JF-626).
+    /// The one local fact: this family deliberately passes NO queue manager
+    /// (null disables the resolver's device-ledger arms), keeping its
+    /// token+session-only semantics.
     /// </summary>
     /// <param name="context">The Alexa request context.</param>
     /// <param name="session">The Jellyfin session.</param>
     /// <returns>The library item, or null when nothing is resolvable.</returns>
     protected BaseItem? ResolveCurrentItem(Context? context, SessionInfo? session)
-    {
-        // The shared codec, not raw Guid.TryParse: tokens can be composite
-        // ("{guid}|sleep:{ticks}", JF-447), and a raw parse would silently
-        // decline to the session fallback while a sleep timer is armed.
-        if (Playback.StreamTokenCodec.TryGetItemId(context?.AudioPlayer?.Token, out Guid tokenId))
-        {
-            BaseItem? tokenItem = _libraryManager.GetItemById(tokenId);
-            if (tokenItem != null)
-            {
-                return tokenItem;
-            }
-        }
-
-        if (session?.NowPlayingItem != null)
-        {
-            return _libraryManager.GetItemById(session.NowPlayingItem.Id);
-        }
-
-        return null;
-    }
+        => Launch.ResolveCurrentPlayingItem(context, session, _libraryManager, queueManager: null);
 
     /// <summary>
     /// Adds an item to a playlist across the two Jellyfin API lines: 12.0 added a

@@ -134,6 +134,27 @@ public class PlaylistEditIntentHandlerTests : PluginTestBase
         VerifyAddItem(PlaylistId, id => id == OtherSongId, Times.Once());
     }
 
+    /// <summary>
+    /// JF-626 fix (b): a held <c>FullNowPlayingItem</c> returns free; the
+    /// pre-JF-626 shape re-resolved the session DTO's id through the library
+    /// even though the full item was already in hand.
+    /// </summary>
+    [Fact]
+    public async void AddCurrent_FullNowPlayingItemHeld_NoLibraryReResolve()
+    {
+        Guid sessionItemId = Guid.NewGuid();
+        var sessionItem = new Audio { Name = "Held Item", Id = sessionItemId };
+        SessionInfo session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
+        session.FullNowPlayingItem = sessionItem;
+
+        await CreateAddCurrent().HandleAsync(
+            CreateRequest(IntentNames.AddCurrentToPlaylist, new() { ["playlist"] = "road trip" }),
+            new Context(), CreateUser(), session, CancellationToken.None);
+
+        _libraryManagerMock.Verify(l => l.GetItemById(It.IsAny<Guid>()), Times.Never);
+        VerifyAddItem(PlaylistId, id => id == sessionItemId, Times.Once());
+    }
+
     [Fact]
     public async void AddCurrent_NothingPlaying_AnswersNoMediaPlaying()
     {

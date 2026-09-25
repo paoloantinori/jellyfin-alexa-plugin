@@ -35,7 +35,9 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// launch response chokepoints with their capability gates, the live-TV channel
 /// launch, the audiobook resume, the JF-501 progressive announce, and the
 /// resume-aware announce speech pair that feeds it), the
-/// JF-564 medium classification the transport intents answer from, and the APL
+/// JF-564 medium classification the transport intents answer from, the JF-626
+/// current-item resolver the item-needing intents (Repeat, RateItem, the
+/// playlist-edit family) resolve through, and the APL
 /// now-playing attacher that rides play responses.
 /// STATELESS by construction (readonly config + logger + the composition-time
 /// progressive-send delegate), so the singleton-handlers constraint BaseHandler
@@ -357,9 +359,10 @@ public sealed class PlaybackLaunchBuilder
     /// (channel vs other video) and the AudioBook test, and any remaining item kind
     /// (music) is audio whose token merely moved with the queue advance. A NULL route
     /// (a queue persisted before JF-568) falls through to the kind rules exactly as
-    /// before, so legacy files keep the pre-JF-568 classification. RepeatIntentHandler
-    /// keeps its own token-first resolution because it needs the resolved item back
-    /// to restart it.
+    /// before, so legacy files keep the pre-JF-568 classification. Handlers that need
+    /// the resolved ITEM back (not just the medium) call
+    /// <see cref="ResolveCurrentPlayingItem"/>, the item-returning sibling of this
+    /// classification.
     /// Moved here from BaseHandler (JF-315 batch 5).
     /// </summary>
     /// <param name="context">The Alexa context (device id for the ledger read, AudioPlayer token).</param>
@@ -377,7 +380,9 @@ public sealed class PlaybackLaunchBuilder
         DeviceQueueManager? ledgerManager = deviceId != null
             ? queueManager ?? Plugin.Instance?.DeviceQueueManager
             : null;
-        string? lastPlayedId = ledgerManager?.GetLastPlayedItemId(deviceId!);
+        (string? lastPlayedId, DeviceQueueManager.LaunchRoute? recordedRoute) =
+            ledgerManager?.GetLastPlayedSnapshot(deviceId!)
+            ?? (null, null);
         if (!Guid.TryParse(lastPlayedId, out Guid lastPlayedItemId))
         {
             return PlayingMedium.Unknown;
@@ -401,7 +406,6 @@ public sealed class PlaybackLaunchBuilder
         // is Audio whatever the item kind and the resolve is skipped, mirroring the
         // token-ownership arm above. Only a VideoApp-routed (or legacy null-routed)
         // entry falls through to the kind-based rules below.
-        DeviceQueueManager.LaunchRoute? recordedRoute = ledgerManager?.GetLastPlayedLaunchRoute(deviceId!);
         if (recordedRoute == DeviceQueueManager.LaunchRoute.Audio)
         {
             return PlayingMedium.Audio;
@@ -413,6 +417,24 @@ public sealed class PlaybackLaunchBuilder
             return PlayingMedium.Unknown;
         }
 
+        return ClassifyLedgerItemKind(item, recordedRoute);
+    }
+
+    /// <summary>
+    /// The ONE ledger-item kind ladder (JF-626), the shared kernel of
+    /// <see cref="ResolvePlayingMedium"/> and the displacement predicate in
+    /// <see cref="ResolveCurrentPlayingItem"/>: given a resolved ledger item and
+    /// its recorded launch route, which VideoApp-family medium is it? The JF-625
+    /// lesson lives here: the VideoAppAudio arm was added to the classifier and to
+    /// one of the (then three) hand-rolled item resolvers but missed the second,
+    /// proving cross-reference comments do not keep parallel ladders in sync; a
+    /// future launch kind lands here once and both readers follow.
+    /// </summary>
+    /// <param name="item">The resolved ledger item.</param>
+    /// <param name="recordedRoute">The route recorded beside it (null = pre-JF-568 legacy).</param>
+    /// <returns>The medium the item's kind and route classify as.</returns>
+    private static PlayingMedium ClassifyLedgerItemKind(BaseItem item, DeviceQueueManager.LaunchRoute? recordedRoute)
+    {
         // The ONE VideoApp kind predicate (JF-505: "do not hand-write the type list
         // again"), so a future launch kind added there classifies correctly here
         // instead of silently falling through to Audio; LiveTvChannel needs its own
@@ -441,10 +463,152 @@ public sealed class PlaybackLaunchBuilder
             return PlayingMedium.VideoAppAudio;
         }
 
-        // Music: RecordLastPlayed pins the user-initiated play while Enqueue-advanced
-        // queues move only the token, so a token mismatch here is the ordinary
-        // queue-advance shape, not displacement (the RepeatIntentHandler precedent).
+        // Music (and any non-VideoApp-kind item): RecordLastPlayed pins the
+        // user-initiated play while Enqueue-advanced queues move only the token, so
+        // a token mismatch here is the ordinary queue-advance shape, not
+        // displacement (the RepeatIntentHandler precedent).
         return PlayingMedium.Audio;
+    }
+
+    /// <summary>
+    /// The ONE "resolve the currently playing item" resolver (JF-626), the
+    /// item-returning sibling of <see cref="ResolvePlayingMedium"/>: it answers
+    /// WHICH library item is current, not which medium, and every intent handler
+    /// that needs the item (Repeat, RateItem, the playlist-edit family) consumes
+    /// this instead of hand-rolling the arbitration (three drifted copies preceded
+    /// it). Resolution order, mirroring the classifier's policy: the device
+    /// last-played ledger DISPLACEMENT arm first (see below), then the AudioPlayer
+    /// token via <see cref="StreamTokenCodec"/>, then the session's
+    /// <c>FullNowPlayingItem</c> (a full <see cref="BaseItem"/> the session already
+    /// holds: free, never re-resolved by id, JF-626), then the session's
+    /// now-playing DTO (re-resolved by id: the server can report the DTO without
+    /// the full item), then the ledger's last-played item as the final fallback.
+    /// THE DISPLACEMENT ARM (one predicate, one home): the ledger is the only
+    /// record a VideoApp launch leaves (those launches never touch
+    /// <c>context.AudioPlayer.Token</c>), so when a NON-empty token DIFFERS from
+    /// the ledger id and the recorded route is not Audio, the ledger item decides
+    /// through the ONE kind kernel (<see cref="ClassifyLedgerItemKind"/>, shared
+    /// with <see cref="ResolvePlayingMedium"/>): any VideoApp-family medium means
+    /// the launch displaced the audio and IS what is playing (video-kind items and
+    /// audiobooks, including the legacy null-route shape, plus the VideoApp-routed
+    /// plain Audio track: the JF-625 seek-mode launch whose stale token names the
+    /// pre-launch track), so the stale token must lose. Any other mismatch is the
+    /// ordinary queue-advance shape (RecordLastPlayed pins the user-initiated play;
+    /// the Enqueue directives that advance the queue never record), where the
+    /// fresher token wins. The cheap displacement guards (token present, mismatched,
+    /// route not Audio) run BEFORE the ledger item resolve (the
+    /// ResolvePlayingMedium doctrine), so the modal music path pays one item
+    /// resolve, not two.
+    /// The ledger arm requires the caller's <paramref name="queueManager"/>: null
+    /// DISABLES it (deliberately NOT the <c>Plugin.Instance</c> fallback this
+    /// class's other queue reads use, because the playlist-edit family holds no
+    /// device queue and keeps its token+session-only semantics).
+    /// </summary>
+    /// <param name="context">The Alexa context (device id for the ledger read, AudioPlayer token).</param>
+    /// <param name="session">The Jellyfin session (full now-playing item first, DTO second).</param>
+    /// <param name="libraryManager">The library manager, to resolve item ids.</param>
+    /// <param name="queueManager">The caller's device queue manager (Repeat, RateItem pass theirs); the parameter has NO default so every caller states its choice: null deliberately disables the ledger arms (the playlist-edit family).</param>
+    /// <param name="logLabel">Caller identity for the displacement log line.</param>
+    /// <returns>The currently playing item, or null when nothing is resolvable.</returns>
+    internal BaseItem? ResolveCurrentPlayingItem(
+        Context? context,
+        SessionInfo? session,
+        ILibraryManager libraryManager,
+        DeviceQueueManager? queueManager,
+        string logLabel = "CurrentItem")
+    {
+        string? deviceId = context?.System?.Device?.DeviceID;
+        (string? lastPlayedId, DeviceQueueManager.LaunchRoute? recordedRoute) =
+            deviceId != null && queueManager != null
+                ? queueManager.GetLastPlayedSnapshot(deviceId)
+                : (null, null);
+        string? token = context?.AudioPlayer?.Token;
+
+        BaseItem? ResolveId(string? id) =>
+            !string.IsNullOrEmpty(id) && Guid.TryParse(id, out Guid guid)
+                ? libraryManager.GetItemById(guid)
+                : null;
+
+        // The three data-in-hand guards before the ledger item's kind can matter:
+        // when any fails (the modal music shape: audio-routed ledger, resolvable
+        // token) the resolve is skipped, mirroring ResolvePlayingMedium. The
+        // ownership compare is CODEC-safe (the same shape ResolvePlayingMedium's
+        // ownership arm uses, review finding on the first JF-626 cut): a composite
+        // sleep token naming the ledger item reads as OWNED, not as a mismatch, so
+        // a re-armed token cannot manufacture a displacement verdict (and its
+        // wasted ledger resolve plus misleading displacement log line).
+        bool tokenNamesLedgerItem =
+            StreamTokenCodec.TryGetItemId(token, out Guid tokenItemId)
+            && Guid.TryParse(lastPlayedId, out Guid ledgerGuid)
+            && tokenItemId == ledgerGuid;
+
+        bool displacementPossible =
+            queueManager != null
+            && !string.IsNullOrEmpty(token)
+            && !tokenNamesLedgerItem
+            && recordedRoute != DeviceQueueManager.LaunchRoute.Audio;
+
+        BaseItem? ledgerItem = displacementPossible ? ResolveId(lastPlayedId) : null;
+        // The classifier's kind kernel decides (JF-626: the one ladder, shared with
+        // ResolvePlayingMedium): anything the ledger classifies as a VideoApp-family
+        // medium displaced the stale audio token; Audio (the queue-advance shape)
+        // did not.
+        bool videoDisplacedAudio =
+            ledgerItem != null
+            && ClassifyLedgerItemKind(ledgerItem, recordedRoute) != PlayingMedium.Audio;
+
+        if (videoDisplacedAudio)
+        {
+            _logger.LogInformation(
+                "{Label}: AudioPlayer token {Token} was displaced by the {Route} launch of '{ItemName}' ({ItemId}); the ledger item is current",
+                logLabel, token, recordedRoute, ledgerItem!.Name, lastPlayedId);
+            return ledgerItem;
+        }
+
+        // The shared codec, not raw Guid.TryParse: tokens can be composite
+        // ("{guid}|sleep:{ticks}", JF-447), and a raw parse would silently
+        // decline to the session fallback while a sleep timer is armed.
+        if (StreamTokenCodec.TryGetItemId(token, out Guid tokenId))
+        {
+            BaseItem? tokenItem = libraryManager.GetItemById(tokenId);
+            if (tokenItem != null)
+            {
+                return tokenItem;
+            }
+        }
+
+        // A full BaseItem the session already holds; no re-resolve by id (JF-626:
+        // the playlist-edit family used to re-resolve this same item by id).
+        if (session?.FullNowPlayingItem is { } sessionItem)
+        {
+            return sessionItem;
+        }
+
+        // The DTO tail: the server can report a now-playing DTO without the full
+        // item (the shape the playlist-edit family has always covered); the id is
+        // the only handle, so this leg re-resolves through the library.
+        if (session?.NowPlayingItem is { } nowPlayingDto && nowPlayingDto.Id != Guid.Empty)
+        {
+            BaseItem? dtoItem = libraryManager.GetItemById(nowPlayingDto.Id);
+            if (dtoItem != null)
+            {
+                return dtoItem;
+            }
+        }
+
+        // The displacement-path resolve already missed this id (deleted/stale ledger
+        // item); re-resolving the same known-absent GUID is a second DB miss for
+        // nothing. Only the non-displacement tail (audio-routed ledger, no token,
+        // no session item) resolves here.
+        BaseItem? resolved = ledgerItem ?? (displacementPossible ? null : ResolveId(lastPlayedId));
+        if (resolved is null)
+        {
+            _logger.LogDebug(
+                "{Label}: no resolvable current item (token={Token}, lastPlayed={LastPlayed}, sessionItem={SessionItem})",
+                logLabel, token, lastPlayedId, session?.FullNowPlayingItem?.Id);
+        }
+
+        return resolved;
     }
 
     /// <summary>

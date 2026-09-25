@@ -9,6 +9,7 @@ using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Session;
 using Moq;
 using Xunit;
 using Audio = MediaBrowser.Controller.Entities.Audio.Audio;
@@ -32,6 +33,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 /// VideoApp kind predicate, and the PLAYING/BUFFER_UNDERRUN activity reading.
 /// The medium names are pinned as STRINGS: the enum member names are the
 /// classification contract the transport handlers switch on.
+/// JF-626 added the ResolveCurrentPlayingItem section: the item-returning
+/// sibling the Repeat/RateItem/playlist-edit resolvers consolidated onto.
 /// </summary>
 [Collection("Plugin")]
 public class PlaybackLaunchBuilderMediumTests : PluginTestBase
@@ -285,6 +288,111 @@ public class PlaybackLaunchBuilderMediumTests : PluginTestBase
         library.Setup(l => l.GetItemById(deletedId)).Returns((BaseItem?)null);
 
         Assert.Equal("Unknown", _builder.ResolvePlayingMedium(TestHelpers.CreateTestContext(), library.Object, queue).ToString());
+    }
+
+    // ---- ResolveCurrentPlayingItem: the ONE item resolver (JF-626) ----
+
+    /// <summary>A session already holding the full now-playing item (the free-resolution shape).</summary>
+    private static SessionInfo SessionHolding(BaseItem item)
+    {
+        SessionInfo session = TestHelpers.CreateTestSession(
+            new Mock<ISessionManager>().Object,
+            Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance);
+        session.FullNowPlayingItem = item;
+        return session;
+    }
+
+    /// <summary>
+    /// JF-626 fix (b): a held <c>FullNowPlayingItem</c> returns without ANY library
+    /// resolve (the pre-JF-626 playlist-edit shape re-resolved the session DTO's id).
+    /// </summary>
+    [Fact]
+    public void CurrentItem_FullNowPlayingItemHeld_ReturnedWithoutLibraryResolve()
+    {
+        var song = new Audio { Name = "Held Song", Id = Guid.NewGuid() };
+        var library = new Mock<ILibraryManager>();
+
+        BaseItem? item = _builder.ResolveCurrentPlayingItem(
+            TestHelpers.CreateTestContext(), SessionHolding(song), library.Object, queueManager: null);
+
+        Assert.Same(song, item);
+        library.Verify(l => l.GetItemById(It.IsAny<Guid>()), Times.Never);
+    }
+
+    /// <summary>
+    /// JF-625 seek-mode arm of the shared resolver: a VideoApp-routed ledger entry
+    /// that resolves to a plain Audio track displaced the stale AudioPlayer token
+    /// (which names the pre-launch track); the ledger track is current.
+    /// </summary>
+    [Fact]
+    public void CurrentItem_VideoAppRoutedAudioLedger_StaleToken_LedgerTrackWins()
+    {
+        var nowSong = new Audio { Name = "Seek Mode Song", Id = Guid.NewGuid() };
+        var (library, queue) = LedgerWith(nowSong);
+        Context staleToken = TestHelpers.CreateContextWithToken(Guid.NewGuid().ToString());
+
+        Assert.Same(nowSong, _builder.ResolveCurrentPlayingItem(staleToken, null, library.Object, queue));
+    }
+
+    /// <summary>
+    /// JF-447 codec arm: a sleep-timer composite token still names its track, and
+    /// the audio-routed ledger pin (the sleep launch is an inline directive that
+    /// never records, so the ledger still names the older launch track) neither
+    /// displaces it nor even resolves (the cheap guards run before the resolve).
+    /// </summary>
+    [Fact]
+    public void CurrentItem_CompositeSleepToken_ResolvesOverLedgerPin()
+    {
+        var armedTrack = new Audio { Name = "Armed Track", Id = Guid.NewGuid() };
+        var launchTrack = new Audio { Name = "Launch Track", Id = Guid.NewGuid() };
+        var (library, queue) = LedgerWith(launchTrack, route: DeviceQueueManager.LaunchRoute.Audio);
+        library.Setup(l => l.GetItemById(armedTrack.Id)).Returns(armedTrack);
+        Context compositeToken = TestHelpers.CreateContextWithToken($"{armedTrack.Id}|sleep:638800000000000000");
+
+        Assert.Same(armedTrack, _builder.ResolveCurrentPlayingItem(compositeToken, null, library.Object, queue));
+        library.Verify(l => l.GetItemById(launchTrack.Id), Times.Never);
+    }
+
+    /// <summary>
+    /// The playlist-edit shape: no queue manager means no ledger arm at all (no
+    /// Plugin.Instance fallback), so a token that misses the library falls to the
+    /// session's held item.
+    /// </summary>
+    [Fact]
+    public void CurrentItem_WithoutQueueManager_TokenMissFallsToSessionItem()
+    {
+        var sessionSong = new Audio { Name = "Session Song", Id = Guid.NewGuid() };
+        var library = new Mock<ILibraryManager>();
+        library.Setup(l => l.GetItemById(It.IsAny<Guid>())).Returns((BaseItem?)null);
+        Context unresolvableToken = TestHelpers.CreateContextWithToken(Guid.NewGuid().ToString());
+
+        Assert.Same(
+            sessionSong,
+            _builder.ResolveCurrentPlayingItem(unresolvableToken, SessionHolding(sessionSong), library.Object, queueManager: null));
+    }
+
+    /// <summary>
+    /// JF-626 review pin: the shared predicate widened RateItem's old
+    /// route == VideoApp requirement to the classifier's null-route doctrine
+    /// (a legacy pre-JF-568 file with no route member classifies by KIND, so a
+    /// video-kind ledger entry displaces exactly as a VideoApp-routed one does).
+    /// The legacy JSON is hand-written to the pre-JF-568 persisted shape and
+    /// loaded through the ctor's disk path, mirroring Medium_LegacyQueueFileWithoutRoute.
+    /// </summary>
+    [Fact]
+    public void CurrentItem_LegacyNullRouteVideoLedger_DisplacesLikeVideoAppRoute()
+    {
+        var movie = new Movie { Name = "Legacy Movie", Id = Guid.NewGuid() };
+        var library = new Mock<ILibraryManager>();
+        library.Setup(l => l.GetItemById(movie.Id)).Returns(movie);
+
+        string dir = TestHelpers.CreateRegisteredTempDir("current-item-legacy");
+        File.WriteAllText(Path.Combine(dir, "queue_ci-legacy-device.json"), LegacyQueueJson(movie.Id));
+        using var queue = new DeviceQueueManager(dir, Microsoft.Extensions.Logging.Abstractions.NullLogger<DeviceQueueManager>.Instance);
+
+        Context staleToken = TestHelpers.CreateContextWithToken(Guid.NewGuid().ToString(), "ci-legacy-device");
+
+        Assert.Same(movie, _builder.ResolveCurrentPlayingItem(staleToken, null, library.Object, queue));
     }
 
     // ---- IsVideoAppMedium ----

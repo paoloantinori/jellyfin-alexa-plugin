@@ -80,64 +80,32 @@ public class RepeatIntentHandler : BaseHandler
     {
         string locale = GetLocale(request);
 
-        // Resolve the CURRENT item. The AudioPlayer token is the primary signal (it
-        // survives the PlaybackStopped cleanup that clears FullNowPlayingItem, the
-        // documented resume gotcha), cross-checked against the per-device last-played
-        // record only for the displacement shape: a NON-AudioPlayer launch (movie,
-        // episode, live TV) never updates the token but IS recorded as the device's
-        // last play, so "token differs from the last play AND the recorded item is
-        // video" means the video displaced the audio and is what is playing. Any
-        // other mismatch is the ordinary queue-advance shape instead
-        // (RecordLastPlayed pins the user-initiated play; the Enqueue directives
-        // that advance the queue never record), where the newer token wins.
-        // JF-568: the recorded LAUNCH ROUTE gates the displacement read, the same
-        // signal ResolvePlayingMedium uses: a video-kind ledger entry recorded on
-        // the AUDIO route (the JF-507 audio-only transcode, the JF-589 audio-route
-        // episodes) was launched by the audio pipeline, so its token moving on is
-        // queue advance, not displacement; only a VideoApp-routed (or legacy
-        // null-routed, pre-JF-568) video-kind entry displaces.
-        string? deviceId = context?.System?.Device?.DeviceID;
-        string? lastPlayedId = deviceId != null ? _queueManager?.GetLastPlayedItemId(deviceId) : null;
-        DeviceQueueManager.LaunchRoute? recordedRoute = deviceId != null ? _queueManager?.GetLastPlayedLaunchRoute(deviceId) : null;
-        string? token = context?.AudioPlayer?.Token;
-
-        BaseItem? ResolveItem(string? id) =>
-            !string.IsNullOrEmpty(id) && Guid.TryParse(id, out Guid guid)
-                ? _libraryManager.GetItemById(guid)
-                : null;
-
-        BaseItem? lastPlayedItem = ResolveItem(lastPlayedId);
-        // JF-566: a VideoApp-routed AUDIOBOOK launch displaces the audio token the
-        // same way a video launch does (the book never sets a token; the stale music
-        // token would otherwise win resolution and restart the wrong track). The
-        // route guard keeps a FLAT audio-path book (route Audio) on the
-        // token-first resolution, where its own token names it.
-        bool videoDisplacedAudio =
-            lastPlayedItem != null
-            && !string.IsNullOrEmpty(token)
-            && !string.Equals(token, lastPlayedId, StringComparison.Ordinal)
-            && recordedRoute != DeviceQueueManager.LaunchRoute.Audio
-            && (PlaybackLaunchBuilder.IsVideoAppLaunchItem(lastPlayedItem)
-                || AudiobookItems.IsAudioBook(lastPlayedItem));
-
-        BaseItem? item;
-        if (videoDisplacedAudio)
+        // JF-626 review: during a VideoApp-family medium the only restart mechanism
+        // Repeat has (AudioPlayer.Play ReplaceAll) would be a parallel stream the
+        // platform cannot stop (no VideoApp.Stop exists; for the JF-625 seek-mode
+        // VideoAppAudio medium the shared resolver now correctly hands back the
+        // seek-mode track, and restarting it would double the audio of the very
+        // item playing), so the honest answer is the same cannot-repeat tell the
+        // non-restartable kinds get below (the PauseIntentHandler JF-564 precedent).
+        // Unknown (no ledger record) keeps the audio paths unchanged.
+        PlaybackLaunchBuilder.PlayingMedium medium = Launch.ResolvePlayingMedium(context, _libraryManager, _queueManager);
+        if (PlaybackLaunchBuilder.IsVideoAppMedium(medium))
         {
-            Logger.LogInformation(
-                "RepeatIntent: AudioPlayer token {Token} was displaced by the VideoApp launch of '{ItemName}' ({ItemId}); the video is current",
-                token, lastPlayedItem!.Name, lastPlayedId);
-            item = lastPlayedItem;
+            Logger.LogDebug("RepeatIntent: {Medium} playing, cannot honestly restart", medium);
+            return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("CannotRepeatContent", locale)));
         }
-        else
-        {
-            item = ResolveItem(token) ?? session?.FullNowPlayingItem ?? lastPlayedItem;
-        }
+
+        // The ONE current-item resolver (JF-626): the codec-safe AudioPlayer token
+        // (a sleep-timer composite token still parses, JF-447; the pre-JF-626 raw
+        // Guid.TryParse silently declined to the session/ledger legs while a timer
+        // was armed), the session item, and the device-ledger displacement
+        // arbitration whose predicate and rationale live in
+        // PlaybackLaunchBuilder.ResolveCurrentPlayingItem.
+        BaseItem? item = Launch.ResolveCurrentPlayingItem(
+            context, session, _libraryManager, _queueManager, "RepeatIntent");
 
         if (item == null)
         {
-            Logger.LogDebug(
-                "RepeatIntent: no resolvable current item (token={Token}, lastPlayed={LastPlayed}, sessionItem={SessionItem})",
-                token, lastPlayedId, session?.FullNowPlayingItem?.Id);
             return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale)));
         }
 

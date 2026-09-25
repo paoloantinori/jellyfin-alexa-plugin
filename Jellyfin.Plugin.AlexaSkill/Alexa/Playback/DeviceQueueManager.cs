@@ -146,10 +146,27 @@ public sealed class DeviceQueueManager : IDisposable
     /// <param name="deviceId">The Alexa device ID.</param>
     /// <returns>The last-played item ID, or null if none recorded.</returns>
     public string? GetLastPlayedItemId(string deviceId)
+        => GetLastPlayedSnapshot(deviceId).ItemId;
+
+    /// <summary>
+    /// JF-626: the ledger's item id and route as ONE snapshot, read off a single
+    /// queue lookup. The arbitration readers (PlaybackLaunchBuilder.ResolvePlayingMedium
+    /// and ResolveCurrentPlayingItem) pair the two values into one verdict, and two
+    /// independent reads could straddle a concurrent write, so every id+route
+    /// consumer reads this snapshot instead. HONEST BOUNDS (JF-626 review): the
+    /// single lookup removes the torn-READ shape entirely, but the pair is still
+    /// not atomic against the write side (RecordLastPlayed assigns the id and the
+    /// route in sequence), so a request thread interleaving between those two
+    /// assignments can still observe the old id with the new route; only an
+    /// immutable ledger entry (assigned as one reference) would close that.
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID.</param>
+    /// <returns>The recorded item id and route; (null, null) when the device has nothing recorded.</returns>
+    public (string? ItemId, LaunchRoute? Route) GetLastPlayedSnapshot(string deviceId)
     {
         return _queues.TryGetValue(deviceId, out DeviceQueue? queue)
-            ? queue.LastPlayedItemId
-            : null;
+            ? (queue.LastPlayedItemId, ParseRoute(queue.LastPlayedLaunchRoute))
+            : (null, null);
     }
 
     /// <summary>
@@ -223,23 +240,9 @@ public sealed class DeviceQueueManager : IDisposable
         LastPlayed,
     }
 
-    /// <summary>
-    /// JF-568 read side: the launch route recorded beside
-    /// <see cref="DeviceQueue.LastPlayedItemId"/>, without creating a queue entry.
-    /// Null means no route is known (a queue persisted before JF-568, a
-    /// pre-upgrade launch, or a route name a newer plugin wrote that this one
-    /// cannot parse); callers treat null as legacy and fall back to the item-kind
-    /// rule, preserving the pre-JF-568 classification.
-    /// </summary>
-    /// <param name="deviceId">The Alexa device ID.</param>
-    /// <returns>The recorded launch route, or null when none is recorded.</returns>
-    public LaunchRoute? GetLastPlayedLaunchRoute(string deviceId)
-    {
-        return _queues.TryGetValue(deviceId, out DeviceQueue? queue)
-            && Enum.TryParse<LaunchRoute>(queue.LastPlayedLaunchRoute, out LaunchRoute route)
-                ? route
-                : null;
-    }
+    /// <summary>The route-name parse shared by the snapshot read (null on legacy or unparsable names).</summary>
+    private static LaunchRoute? ParseRoute(string? routeName)
+        => Enum.TryParse<LaunchRoute>(routeName, out LaunchRoute route) ? route : null;
 
     /// <summary>
     /// JF-522 launch-scope write: records the item-absolute base of the

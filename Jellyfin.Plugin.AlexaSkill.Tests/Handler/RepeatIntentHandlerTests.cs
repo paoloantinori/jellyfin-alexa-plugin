@@ -455,6 +455,53 @@ public class RepeatIntentHandlerTests : PluginTestBase, IDisposable
         Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
     }
 
+    /// <summary>
+    /// JF-626 fix (a), the real broken shape: the sleep launch is an INLINE
+    /// directive (SleepTimerIntentHandler builds it without the
+    /// BuildAudioPlayerResponse chokepoint), so it never records the ledger;
+    /// arming the timer mid-album leaves the ledger pinning the launch track
+    /// while the composite token names the armed track. The pre-JF-626 raw
+    /// Guid.TryParse on the composite form silently declined to the ledger leg
+    /// and restarted the OLDER track once the session item was cleared (the
+    /// documented PlaybackStopped cleanup); the shared codec keeps the token
+    /// track.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_CompositeSleepToken_QueueAdvanced_RepeatsTokenTrackNotLedgerPin()
+    {
+        var queueManager = TestHelpers.CreateDeviceQueueManager("repeat-sleep");
+        var handler = CreateHandler(queueManager);
+        var request = CreateRepeatRequest();
+        var user = TestHelpers.CreateTestUser();
+
+        var track1 = new Audio
+        {
+            Name = "Ledger Track",
+            Id = Guid.NewGuid(),
+            Path = "/music/t1.mp3"
+        };
+        var track2 = new Audio
+        {
+            Name = "Armed Track",
+            Id = Guid.NewGuid(),
+            Path = "/music/t2.mp3"
+        };
+
+        string deviceId = "repeat-sleep-device";
+        queueManager.RecordLastPlayed(deviceId, track1.Id.ToString(), DeviceQueueManager.LaunchRoute.Audio);
+        _fx.LibraryManager.Setup(x => x.GetItemById(track1.Id)).Returns(track1);
+        _fx.LibraryManager.Setup(x => x.GetItemById(track2.Id)).Returns(track2);
+
+        var context = CreateContextWithToken($"{track2.Id}|sleep:638800000000000000", deviceId);
+        var response = await handler.HandleAsync(request, context, user, null!, CancellationToken.None);
+
+        Assert.NotNull(response);
+        var directive = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+        Assert.Equal(PlayBehavior.ReplaceAll, directive.PlayBehavior);
+        Assert.Equal(track2.Id.ToString(), directive.AudioItem.Stream.Token);
+        Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
+    }
+
     [Fact]
     public async Task HandleAsync_NoToken_DeviceLastPlayedVideo_HonestTell()
     {
@@ -477,6 +524,48 @@ public class RepeatIntentHandlerTests : PluginTestBase, IDisposable
         _fx.LibraryManager.Setup(x => x.GetItemById(movie.Id)).Returns(movie);
 
         var context = TestHelpers.CreateTestContext(deviceId);
+        var response = await handler.HandleAsync(request, context, user, null!, CancellationToken.None);
+
+        Assert.NotNull(response);
+        AssertNoAudioPlayDirective(response);
+        Assert.Contains("can't repeat", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// JF-626 review: the seek-mode shape (a VideoApp-routed Audio ledger entry with
+    /// a stale music token) is the one the consolidated resolver's JF-625 arm
+    /// newly routes into Repeat's restart branch. Repeat's only restart mechanism
+    /// is AudioPlayer.Play, which over a running VideoApp stream is a parallel
+    /// unstoppable audio, so the honest answer is the CannotRepeatContent tell
+    /// (the PauseIntentHandler JF-564 transport precedent), never a directive.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_SeekModeVideoAppAudioPlaying_AnswersCannotRepeatNotParallelPlay()
+    {
+        var queueManager = TestHelpers.CreateDeviceQueueManager("repeat-seek");
+        var handler = CreateHandler(queueManager);
+        var request = CreateRepeatRequest();
+        var user = TestHelpers.CreateTestUser();
+
+        var oldSong = new Audio
+        {
+            Name = "Old Song",
+            Id = Guid.NewGuid(),
+            Path = "/music/old.mp3"
+        };
+        var seekSong = new Audio
+        {
+            Name = "Seek Mode Song",
+            Id = Guid.NewGuid(),
+            Path = "/music/seek.mp3"
+        };
+
+        string deviceId = "repeat-seek-device";
+        queueManager.RecordLastPlayed(deviceId, seekSong.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        _fx.LibraryManager.Setup(x => x.GetItemById(seekSong.Id)).Returns(seekSong);
+        _fx.LibraryManager.Setup(x => x.GetItemById(oldSong.Id)).Returns(oldSong);
+
+        var context = CreateContextWithToken(oldSong.Id.ToString(), deviceId);
         var response = await handler.HandleAsync(request, context, user, null!, CancellationToken.None);
 
         Assert.NotNull(response);
