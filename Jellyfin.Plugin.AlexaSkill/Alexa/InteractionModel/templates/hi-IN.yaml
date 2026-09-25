@@ -356,6 +356,16 @@ intents:
       - मुझे म्यूज़िक पसंद नहीं है
       - वीडियो को पसंदीदा से हटाओ
       - गाने को पसंदीदा से हटाओ
+  - name: RateItemIntent
+    samples:
+      - इसे {star_rating} स्टार दो
+      - इस गाने को {star_rating} स्टार दो
+      - इसे {star_rating} स्टार से रेट करो
+      - इस गाने को {star_rating} स्टार रेटिंग दो
+      - इस वीडियो को {star_rating} स्टार दो
+    slots:
+      - name: star_rating
+        type: AMAZON.NUMBER
   - name: MediaInfoIntent
     slots:
       - name: media_info_type
@@ -824,6 +834,13 @@ types:
         synonyms: []
 dialog:
   intents:
+    - name: RateItemIntent
+      confirmationRequired: false
+      slots:
+        - name: star_rating
+          type: AMAZON.NUMBER
+          confirmationRequired: false
+          elicitationRequired: false
     - name: PlayVideoIntent
       confirmationRequired: false
       slots:

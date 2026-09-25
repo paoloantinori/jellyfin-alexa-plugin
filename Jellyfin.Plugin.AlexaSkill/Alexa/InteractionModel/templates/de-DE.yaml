@@ -377,6 +377,16 @@ intents:
       - Die Musik gefaellt mir nicht
       - Entferne das Video aus meinen Favoriten
       - Entferne das Lied aus meinen Favoriten
+  - name: RateItemIntent
+    samples:
+      - Bewerte dies mit {star_rating} Sternen
+      - Bewerte dieses Lied mit {star_rating} Sternen
+      - Bewerte das Video mit {star_rating} Sternen
+      - Gib diesem Lied {star_rating} Sterne
+      - Gib {star_rating} Sterne
+    slots:
+      - name: star_rating
+        type: AMAZON.NUMBER
   - name: MediaInfoIntent
     slots:
       - name: media_info_type
@@ -958,6 +968,13 @@ modelConfiguration:
     level: LOW
 dialog:
   intents:
+    - name: RateItemIntent
+      confirmationRequired: false
+      slots:
+        - name: star_rating
+          type: AMAZON.NUMBER
+          confirmationRequired: false
+          elicitationRequired: false
     - name: PlayVideoIntent
       confirmationRequired: false
       slots:

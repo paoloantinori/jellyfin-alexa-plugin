@@ -346,6 +346,17 @@ intents:
       - No me gusta la música
       - Quita el vídeo de mis favoritos
       - Quita la canción de mis favoritos
+  - name: RateItemIntent
+    samples:
+      - Ponle {star_rating} estrellas a esto
+      - Ponle {star_rating} estrellas a esta canción
+      - Dale {star_rating} estrellas a esta canción
+      - Califica esto con {star_rating} estrellas
+      - Califica esta canción con {star_rating} estrellas
+      - Pon {star_rating} estrellas
+    slots:
+      - name: star_rating
+        type: AMAZON.NUMBER
   - name: MediaInfoIntent
     slots:
       - name: media_info_type
@@ -894,6 +905,13 @@ types:
         synonyms: []
 dialog:
   intents:
+    - name: RateItemIntent
+      confirmationRequired: false
+      slots:
+        - name: star_rating
+          type: AMAZON.NUMBER
+          confirmationRequired: false
+          elicitationRequired: false
     - name: PlayVideoIntent
       confirmationRequired: false
       slots:

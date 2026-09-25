@@ -351,6 +351,16 @@ intents:
       - 音楽嫌い
       - ビデオをお気に入りから削除して
       - 曲をお気に入りから削除して
+  - name: RateItemIntent
+    samples:
+      - これを星{star_rating}で評価して
+      - この曲を星{star_rating}で評価して
+      - これに星{star_rating}をつけて
+      - この曲に星{star_rating}をつけて
+      - 星{star_rating}で評価して
+    slots:
+      - name: star_rating
+        type: AMAZON.NUMBER
   - name: MediaInfoIntent
     slots:
       - name: media_info_type
@@ -817,6 +827,13 @@ types:
         synonyms: []
 dialog:
   intents:
+    - name: RateItemIntent
+      confirmationRequired: false
+      slots:
+        - name: star_rating
+          type: AMAZON.NUMBER
+          confirmationRequired: false
+          elicitationRequired: false
     - name: PlayVideoIntent
       confirmationRequired: false
       slots:

@@ -60,6 +60,7 @@ Invocation name: **"jellyfin player"**
 | Play Video | `شغل الفيديو {title}` · `شغل {title}` · `شاهد {title}` · `هل يمكنك تشغيل {title}` · `أريد مشاهدة {title}` · `شغل الفيلم {title}` |
 | Query Artist Library | `ما الأغاني لدينا لـ {musician}` · `ما {query_type} لدينا لـ {musician}` · `ما الألبومات لدينا لـ {musician}` · `ما الذي لدينا لـ {musician}` · `أعرض الأغاني لـ {musician}` · `أعرض الألبومات لـ {musician}` |
 | Query Recently Added | `ما الجديد` · `ما الذي أضيف مؤخراً` · `ما الجديد في مكتبتي` · `أرني ما أضيف مؤخراً` · `هل هناك شيء جديد` · `ما الذي تمت إضافته مؤخراً` |
+| Rate Item | `أعط هذا {star_rating} نجوم` · `أعط هذه الأغنية {star_rating} نجوم` · `قيّم هذا بـ {star_rating} نجوم` · `قيّم هذه الأغنية بـ {star_rating} نجوم` |
 | Recommend | `أوصني بشيء` · `اقترح {media_type}` · `أوصني بموسيقى` · `أوصني بفيلم` · `اقترح شيئاً لمشاهدته` · `شغل شيئاً قد يعجبني` |
 | Remove Current From Playlist | `أزل هذه الأغنية من قائمة التشغيل {playlist}` · `احذف الحالي من قائمة التشغيل {playlist}` |
 | Search Media | `ابحث عن فيلم {query}` · `ابحث عن محتوى {query}` · `ابحث عن فيديو {query}` · `ابحث عن مسلسل {query}` · `جد فيلم {query}` · `جد محتوى {query}` |
@@ -117,6 +118,7 @@ Invocation name: **"jellyfin player"**
 | Play Video | `Spiele das Video {title}` · `Ich möchte {title} sehen` · `Lass uns {title} schauen` · `Ich will {title} anschauen` · `Zeig mir {title}` · `Kannst du {title} zeigen` |
 | Query Artist Library | `Welche Titel haben wir von {musician}` · `Welche {query_type} haben wir von {musician}` · `Welche Lieder haben wir von {musician}` · `Welche Alben haben wir von {musician}` · `Was haben wir von {musician}` · `Zeige Titel von {musician}` |
 | Query Recently Added | `was ist neu` · `was wurde kürzlich hinzugefügt` · `zeige mir die Neuzugänge` · `gibt es etwas Neues` · `was ist neu in meiner Bibliothek` · `die neuesten Elemente` |
+| Rate Item | `Bewerte dies mit {star_rating} Sternen` · `Bewerte dieses Lied mit {star_rating} Sternen` · `Bewerte das Video mit {star_rating} Sternen` · `Gib diesem Lied {star_rating} Sterne` · `Gib {star_rating} Sterne` |
 | Recommend | `empfehle etwas` · `empfehle {media_type}` · `empfehle musik` · `empfehle einen film` · `schlage etwas vor` · `spiele etwas das mir gefällt` |
 | Remove Current From Playlist | `Entferne dieses Lied aus der Playlist {playlist}` · `Entferne das aktuelle Lied aus der Playlist {playlist}` · `Nimm dieses Lied von der Playlist {playlist}` |
 | Repeat Single On | `Lied wiederholen` · `Titel wiederholen` · `Video wiederholen` · `Das wiederholen` |
@@ -175,6 +177,7 @@ Invocation name: **"jellyfin player"**
 | Play Video | `Play the video {title}` · `put on the video {title}` · `start playing {title}` · `watch {title}` · `can you play {title}` · `I want to watch {title}` |
 | Query Artist Library | `which tracks do we have by {musician}` · `which {query_type} do we have by {musician}` · `which songs do we have by {musician}` · `what tracks are available from {musician}` · `what songs are available from {musician}` · `which albums do we have by {musician}` |
 | Query Recently Added | `what's new` · `what was recently added` · `what's new in my library` · `show me recently added` · `what's on deck` · `anything new lately` |
+| Rate Item | `rate this {star_rating} stars` · `rate this song {star_rating} stars` · `rate the song {star_rating} stars` · `rate the video {star_rating} stars` · `give this {star_rating} stars` · `give this song {star_rating} stars` |
 | Recommend | `recommend something` · `recommend {media_type}` · `recommend some music` · `recommend a movie` · `suggest something to watch` · `suggest some music` |
 | Remove Current From Playlist | `remove this song from the playlist {playlist}` · `remove this from the playlist {playlist}` · `take this song off the playlist {playlist}` |
 | Search Media | `Search for a movie {query}` · `Search for content {query}` · `Find a movie {query}` · `Find content {query}` · `Look for a movie {query}` · `Look for content {query}` |
@@ -230,6 +233,7 @@ Invocation name: **"jellyfin player"**
 | Play Video | `Play the video {title}` · `put on the video {title}` · `start playing {title}` · `watch {title}` · `can you play {title}` · `I want to watch {title}` |
 | Query Artist Library | `which tracks do we have by {musician}` · `which {query_type} do we have by {musician}` · `which songs do we have by {musician}` · `what tracks are available from {musician}` · `what songs are available from {musician}` · `which albums do we have by {musician}` |
 | Query Recently Added | `what's new` · `what was recently added` · `what's new in my library` · `show me recently added` · `what's on deck` · `anything new lately` |
+| Rate Item | `rate this {star_rating} stars` · `rate this song {star_rating} stars` · `rate the song {star_rating} stars` · `rate the video {star_rating} stars` · `give this {star_rating} stars` · `give this song {star_rating} stars` |
 | Recommend | `recommend something` · `recommend {media_type}` · `recommend some music` · `recommend a movie` · `suggest something to watch` · `suggest some music` |
 | Remove Current From Playlist | `remove this song from the playlist {playlist}` · `remove this from the playlist {playlist}` · `take this song off the playlist {playlist}` |
 | Search Media | `Search for a movie {query}` · `Search for content {query}` · `Find a movie {query}` · `Find content {query}` · `Look for a movie {query}` · `Look for content {query}` |
@@ -285,6 +289,7 @@ Invocation name: **"jellyfin player"**
 | Play Video | `Play the video {title}` · `put on the video {title}` · `start playing {title}` · `watch {title}` · `can you play {title}` · `I want to watch {title}` |
 | Query Artist Library | `which tracks do we have by {musician}` · `which {query_type} do we have by {musician}` · `which songs do we have by {musician}` · `what tracks are available from {musician}` · `what songs are available from {musician}` · `which albums do we have by {musician}` |
 | Query Recently Added | `what's new` · `what was recently added` · `what's new in my library` · `show me recently added` · `what's on deck` · `anything new lately` |
+| Rate Item | `rate this {star_rating} stars` · `rate this song {star_rating} stars` · `rate the song {star_rating} stars` · `rate the video {star_rating} stars` · `give this {star_rating} stars` · `give this song {star_rating} stars` |
 | Recommend | `recommend something` · `recommend {media_type}` · `recommend some music` · `recommend a movie` · `suggest something to watch` · `suggest some music` |
 | Remove Current From Playlist | `remove this song from the playlist {playlist}` · `remove this from the playlist {playlist}` · `take this song off the playlist {playlist}` |
 | Search Media | `Search for a movie {query}` · `Search for content {query}` · `Find a movie {query}` · `Find content {query}` · `Look for a movie {query}` · `Look for content {query}` |
@@ -340,6 +345,7 @@ Invocation name: **"jellyfin player"**
 | Play Video | `Play the video {title}` · `put on the video {title}` · `start playing {title}` · `watch {title}` · `can you play {title}` · `I want to watch {title}` |
 | Query Artist Library | `which tracks do we have by {musician}` · `which {query_type} do we have by {musician}` · `which songs do we have by {musician}` · `what tracks are available from {musician}` · `what songs are available from {musician}` · `which albums do we have by {musician}` |
 | Query Recently Added | `what's new` · `what was recently added` · `what's new in my library` · `show me recently added` · `what's on deck` · `anything new lately` |
+| Rate Item | `rate this {star_rating} stars` · `rate this song {star_rating} stars` · `rate the song {star_rating} stars` · `rate the video {star_rating} stars` · `give this {star_rating} stars` · `give this song {star_rating} stars` |
 | Recommend | `recommend something` · `recommend {media_type}` · `recommend some music` · `recommend a movie` · `suggest something to watch` · `suggest some music` |
 | Remove Current From Playlist | `remove this song from the playlist {playlist}` · `remove this from the playlist {playlist}` · `take this song off the playlist {playlist}` |
 | Search Media | `Search for a movie {query}` · `Search for content {query}` · `Find a movie {query}` · `Find content {query}` · `Look for a movie {query}` · `Look for content {query}` |
@@ -396,6 +402,7 @@ Invocation name: **"jellyfin player"**
 | Play Video | `Play the video {title}` · `put on the video {title}` · `start playing {title}` · `watch {title}` · `can you play {title}` · `I want to watch {title}` |
 | Query Artist Library | `which tracks do we have by {musician}` · `which {query_type} do we have by {musician}` · `which songs do we have by {musician}` · `what tracks are available from {musician}` · `what songs are available from {musician}` · `which albums do we have by {musician}` |
 | Query Recently Added | `what's new` · `what was recently added` · `what's new in my library` · `show me recently added` · `what's on deck` · `anything new lately` |
+| Rate Item | `rate this {star_rating} stars` · `rate this song {star_rating} stars` · `rate the song {star_rating} stars` · `rate the video {star_rating} stars` · `give this {star_rating} stars` · `give this song {star_rating} stars` |
 | Recommend | `recommend something` · `recommend {media_type}` · `recommend some music` · `recommend a movie` · `suggest something to watch` · `suggest some music` |
 | Remove Current From Playlist | `remove this song from the playlist {playlist}` · `remove this from the playlist {playlist}` · `take this song off the playlist {playlist}` |
 | Search Media | `Search for a movie {query}` · `Search for content {query}` · `Find a movie {query}` · `Find content {query}` · `Look for a movie {query}` · `Look for content {query}` |
@@ -452,6 +459,7 @@ Invocation name: **"jellyfin player"**
 | Play Video | `Reproduce el vídeo {title}` · `Mete el vídeo {title}` · `Pon el vídeo {title}` · `Ver el vídeo {title}` · `Quiero ver el vídeo {title}` · `Reproduce la película {title}` |
 | Query Artist Library | `Qué canciones tenemos de {musician}` · `Qué {query_type} tenemos de {musician}` · `Qué temas tenemos de {musician}` · `Qué álbumes tenemos de {musician}` · `Qué discos tenemos de {musician}` · `Qué tenemos de {musician}` |
 | Query Recently Added | `qué hay de nuevo` · `qué se añadió recientemente` · `muéstrame las novedades` · `hay algo nuevo` · `cuáles son los últimos añadidos` · `qué hay de nuevo en mi biblioteca` |
+| Rate Item | `Ponle {star_rating} estrellas a esto` · `Ponle {star_rating} estrellas a esta canción` · `Dale {star_rating} estrellas a esta canción` · `Califica esto con {star_rating} estrellas` · `Califica esta canción con {star_rating} estrellas` · `Pon {star_rating} estrellas` |
 | Recommend | `recomienda algo` · `recomienda {media_type}` · `recomienda música` · `recomienda una película` · `sugiere algo` · `reproduce algo que me guste` |
 | Remove Current From Playlist | `Quita esta canción de la lista {playlist}` · `Elimina esto de la lista {playlist}` · `Saca esta canción de la lista {playlist}` |
 | Search Media | `Busca una película {query}` · `Busca un video {query}` · `Busca una serie {query}` · `Busca contenido {query}` · `Encuentra una película {query}` · `Encuentra contenido {query}` |
@@ -507,6 +515,7 @@ Invocation name: **"jellyfin player"**
 | Play Video | `Reproduce el vídeo {title}` · `Mete el vídeo {title}` · `Pon el vídeo {title}` · `Ver el vídeo {title}` · `Quiero ver el vídeo {title}` · `Reproduce la película {title}` |
 | Query Artist Library | `Qué canciones tenemos de {musician}` · `Qué {query_type} tenemos de {musician}` · `Qué temas tenemos de {musician}` · `Qué álbumes tenemos de {musician}` · `Qué discos tenemos de {musician}` · `Qué tenemos de {musician}` |
 | Query Recently Added | `qué hay de nuevo` · `qué se añadió recientemente` · `muéstrame las novedades` · `hay algo nuevo` · `cuáles son los últimos añadidos` · `qué hay de nuevo en mi biblioteca` |
+| Rate Item | `Ponle {star_rating} estrellas a esto` · `Ponle {star_rating} estrellas a esta canción` · `Dale {star_rating} estrellas a esta canción` · `Califica esto con {star_rating} estrellas` · `Califica esta canción con {star_rating} estrellas` · `Pon {star_rating} estrellas` |
 | Recommend | `recomienda algo` · `recomienda {media_type}` · `recomienda música` · `recomienda una película` · `sugiere algo` · `reproduce algo que me guste` |
 | Remove Current From Playlist | `Quita esta canción de la lista {playlist}` · `Elimina esto de la lista {playlist}` · `Saca esta canción de la lista {playlist}` |
 | Search Media | `Busca una película {query}` · `Busca un video {query}` · `Busca una serie {query}` · `Busca contenido {query}` · `Encuentra una película {query}` · `Encuentra contenido {query}` |
@@ -562,6 +571,7 @@ Invocation name: **"jellyfin player"**
 | Play Video | `Reproduce el vídeo {title}` · `Mete el vídeo {title}` · `Pon el vídeo {title}` · `Ver el vídeo {title}` · `Quiero ver el vídeo {title}` · `Reproduce la película {title}` |
 | Query Artist Library | `Qué canciones tenemos de {musician}` · `Qué {query_type} tenemos de {musician}` · `Qué temas tenemos de {musician}` · `Qué álbumes tenemos de {musician}` · `Qué discos tenemos de {musician}` · `Qué tenemos de {musician}` |
 | Query Recently Added | `qué hay de nuevo` · `qué se añadió recientemente` · `muéstrame las novedades` · `hay algo nuevo` · `cuáles son los últimos añadidos` · `qué hay de nuevo en mi biblioteca` |
+| Rate Item | `Ponle {star_rating} estrellas a esto` · `Ponle {star_rating} estrellas a esta canción` · `Dale {star_rating} estrellas a esta canción` · `Califica esto con {star_rating} estrellas` · `Califica esta canción con {star_rating} estrellas` · `Pon {star_rating} estrellas` |
 | Recommend | `recomienda algo` · `recomienda {media_type}` · `recomienda música` · `recomienda una película` · `sugiere algo` · `reproduce algo que me guste` |
 | Remove Current From Playlist | `Quita esta canción de la lista {playlist}` · `Elimina esto de la lista {playlist}` · `Saca esta canción de la lista {playlist}` |
 | Search Media | `Busca una película {query}` · `Busca un video {query}` · `Busca una serie {query}` · `Busca contenido {query}` · `Encuentra una película {query}` · `Encuentra contenido {query}` |
@@ -619,6 +629,7 @@ Invocation name: **"jellyfin player"**
 | Play Video | `Lis la vidéo {title}` · `Je veux regarder {title}` · `On regarde {title}` · `Je voudrais voir {title}` · `montre-moi {title}` · `peux-tu me montrer {title}` |
 | Query Artist Library | `Quelles chansons avons-nous de {musician}` · `Quels {query_type} avons-nous de {musician}` · `Quels titres avons-nous de {musician}` · `Quels albums avons-nous de {musician}` · `Quels disques avons-nous de {musician}` · `Qu'avons-nous de {musician}` |
 | Query Recently Added | `quoi de neuf` · `qu'est-ce qui a été ajouté récemment` · `montre-moi les nouveautés` · `y a-t-il du nouveau` · `quels sont les derniers ajouts` · `quoi de neuf dans ma bibliothèque` |
+| Rate Item | `Mets {star_rating} étoiles` · `Mets {star_rating} étoiles à cette chanson` · `Donne {star_rating} étoiles à cette chanson` · `Évalue cette chanson avec {star_rating} étoiles` · `Mets {star_rating} étoiles à ce titre` |
 | Recommend | `recommande quelque chose` · `recommande {media_type}` · `recommande de la musique` · `recommande un film` · `suggère quelque chose` · `joue quelque chose que j'aimerais` |
 | Remove Current From Playlist | `Retire ce titre de la liste de lecture {playlist}` · `Enlève la chanson en cours de la liste de lecture {playlist}` |
 | Repeat Single On | `Répète la chanson` · `Répète le morceau` · `Répète la vidéo` · `Répète` |
@@ -679,6 +690,7 @@ Invocation name: **"jellyfin player"**
 | Play Video | `Lis la vidéo {title}` · `Je veux regarder {title}` · `On regarde {title}` · `Je voudrais voir {title}` · `montre-moi {title}` · `peux-tu me montrer {title}` |
 | Query Artist Library | `Quelles chansons avons-nous de {musician}` · `Quels {query_type} avons-nous de {musician}` · `Quels titres avons-nous de {musician}` · `Quels albums avons-nous de {musician}` · `Quels disques avons-nous de {musician}` · `Qu'avons-nous de {musician}` |
 | Query Recently Added | `quoi de neuf` · `qu'est-ce qui a été ajouté récemment` · `montre-moi les nouveautés` · `y a-t-il du nouveau` · `quels sont les derniers ajouts` · `quoi de neuf dans ma bibliothèque` |
+| Rate Item | `Mets {star_rating} étoiles` · `Mets {star_rating} étoiles à cette chanson` · `Donne {star_rating} étoiles à cette chanson` · `Évalue cette chanson avec {star_rating} étoiles` · `Mets {star_rating} étoiles à ce titre` |
 | Recommend | `recommande quelque chose` · `recommande {media_type}` · `recommande de la musique` · `recommande un film` · `suggère quelque chose` · `joue quelque chose que j'aimerais` |
 | Remove Current From Playlist | `Retire ce titre de la liste de lecture {playlist}` · `Enlève la chanson en cours de la liste de lecture {playlist}` |
 | Repeat Single On | `Répète la chanson` · `Répète le morceau` · `Répète la vidéo` · `Répète` |
@@ -737,6 +749,7 @@ Invocation name: **"jellyfin player"**
 | Play Video | `वीडियो {title} चलाओ` · `वीडियो {title} लगाओ` · `{title} शुरू करो` · `{title} देखो` · `क्या तुम {title} चला सकते हो` · `मैं {title} देखना चाहता हूँ` |
 | Query Artist Library | `{musician} के कौन से ट्रैक हैं` · `{musician} के {query_type} दिखाओ` · `{musician} के कौन से गाने हैं` · `{musician} के कौन से एल्बम हैं` · `{musician} के पास क्या है` · `{musician} के ट्रैक दिखाओ` |
 | Query Recently Added | `क्या नया है` · `हाल ही में क्या जोड़ा गया` · `मेरी लाइब्रेरी में क्या नया है` · `हाल ही में जोड़े गए दिखाओ` · `कुछ नया है क्या` · `नए जोड़े गए आइटम दिखाओ` |
+| Rate Item | `इसे {star_rating} स्टार दो` · `इस गाने को {star_rating} स्टार दो` · `इसे {star_rating} स्टार से रेट करो` · `इस गाने को {star_rating} स्टार रेटिंग दो` · `इस वीडियो को {star_rating} स्टार दो` |
 | Recommend | `कुछ सुझाव दो` · `{media_type} सुझाओ` · `कुछ म्यूज़िक सुझाओ` · `एक फिल्म सुझाओ` · `देखने के लिए कुछ सुझाओ` |
 | Remove Current From Playlist | `यह गाना प्लेलिस्ट {playlist} से हटाओ` · `मौजूदा गाना प्लेलिस्ट {playlist} से हटाओ` |
 | Search Media | `एक फिल्म {query} खोजो` · `कंटेंट {query} खोजो` · `एक वीडियो {query} खोजो` · `एक फिल्म {query} ढूंढो` · `कंटेंट {query} ढूंढो` · `एक वीडियो {query} ढूंढो` |
@@ -794,6 +807,7 @@ Invocation name: **"mia collezione"**
 | Play Video | `Riproduci {title}` · `Riproduci un film` · `Suona {title}` · `Metti {title}` · `Pleia {title}` · `Riproduci un video` |
 | Query Artist Library | `Quali brani abbiamo di {musician}` · `Quali {query_type} abbiamo di {musician}` · `Quali canzoni abbiamo di {musician}` · `Che brani abbiamo di {musician}` · `Che canzoni abbiamo di {musician}` · `Quali album abbiamo di {musician}` |
 | Query Recently Added | `cosa c'è di nuovo` · `cosa è stato aggiunto di recente` · `quali novità ci sono` · `mostra le novità` · `mostrami gli ultimi aggiunti` · `ci sono novità` |
+| Rate Item | `Metti {star_rating} stelle` · `Dai {star_rating} stelle` · `Metti {star_rating} stelle a questa canzone` · `Dai {star_rating} stelle a questa canzone` · `Metti {star_rating} stelle a questo` · `Dai {star_rating} stelle a questo` |
 | Recommend | `Consiglia {media_type}` · `Suggerisci una canzone` · `Raccomanda {media_type}` · `Suggerisci {media_type}` · `Di consigliare {media_type}` · `Di raccomandare {media_type}` |
 | Remove Current From Playlist | `Rimuovi questo brano dalla playlist {playlist}` · `Rimuovi questo dalla playlist {playlist}` · `Togli questo brano dalla playlist {playlist}` |
 | Repeat Single On | `Ripeti la canzone` · `Ripeti la traccia` · `Ripeti il brano` · `Ripeti il video` · `di ripeter la canzone` · `di ripeter la traccia` |
@@ -852,6 +866,7 @@ Invocation name: **"jellyfin player"**
 | Play Video | `ビデオ {title} を再生して` · `動画 {title} を流して` · `{title} を見たい` · `{title} を見せて` · `映画 {title} を再生して` · `ビデオ {title} をスタートして` |
 | Query Artist Library | `{musician} のトラックは何がある` · `{musician} の {query_type} を見せて` · `{musician} の曲は何がある` · `{musician} のアルバムは何がある` · `{musician} には何がある` · `{musician} のトラックを見せて` |
 | Query Recently Added | `新着はある` · `最近追加されたものは` · `ライブラリの新着は` · `最近追加されたものを見せて` · `最近何か新しいものある` · `最新のアイテムは何` |
+| Rate Item | `これを星{star_rating}で評価して` · `この曲を星{star_rating}で評価して` · `これに星{star_rating}をつけて` · `この曲に星{star_rating}をつけて` · `星{star_rating}で評価して` |
 | Recommend | `何かおすすめは` · `{media_type} をおすすめして` · `音楽のおすすめは` · `映画のおすすめは` · `何か見るものを提案して` |
 | Remove Current From Playlist | `この曲をプレイリスト {playlist} から削除して` · `今の曲をプレイリスト {playlist} から消して` |
 | Search Media | `映画 {query} を検索して` · `コンテンツ {query} を検索して` · `ビデオ {query} を検索して` · `映画 {query} を見つけて` · `コンテンツ {query} を見つけて` · `映画 {query} を探して` |
@@ -907,6 +922,7 @@ Invocation name: **"jellyfin player"**
 | Play Video | `speel de video {title}` · `zet de video {title} op` · `start {title}` · `kijk {title}` · `kun je {title} afspelen` · `ik wil {title} kijken` |
 | Query Artist Library | `welke tracks hebben we van {musician}` · `welke {query_type} hebben we van {musician}` · `welke nummers hebben we van {musician}` · `welke albums hebben we van {musician}` · `wat hebben we van {musician}` · `laat tracks zien van {musician}` |
 | Query Recently Added | `wat is er nieuw` · `wat is er recentelijk toegevoegd` · `wat is er nieuw in mijn bibliotheek` · `laat recent toegevoegde zien` · `iets nieuws onlangs` · `laat de nieuwste items zien` |
+| Rate Item | `Geef dit {star_rating} sterren` · `Geef dit nummer {star_rating} sterren` · `Geef {star_rating} sterren` · `Beoordeel dit nummer met {star_rating} sterren` · `Beoordeel dit met {star_rating} sterren` |
 | Recommend | `beveel iets aan` · `beveel {media_type} aan` · `beveel wat muziek aan` · `beveel een film aan` · `stel iets voor om te kijken` · `stel wat muziek voor` |
 | Remove Current From Playlist | `Verwijder dit nummer uit de afspeellijst {playlist}` · `Haal het huidige nummer van de afspeellijst {playlist}` |
 | Search Media | `zoek naar een film {query}` · `zoek naar content {query}` · `zoek naar een video {query}` · `zoek naar een serie {query}` · `vind een film {query}` · `vind content {query}` |
@@ -962,6 +978,7 @@ Invocation name: **"jellyfin player"**
 | Play Video | `tocar o vídeo {title}` · `colocar o vídeo {title}` · `começar a tocar {title}` · `assistir {title}` · `pode tocar {title}` · `quero assistir {title}` |
 | Query Artist Library | `quais faixas temos de {musician}` · `quais {query_type} temos de {musician}` · `quais músicas temos de {musician}` · `quais álbuns temos de {musician}` · `o que temos de {musician}` · `mostrar faixas de {musician}` |
 | Query Recently Added | `o que há de novo` · `o que foi adicionado recentemente` · `o que há de novo na minha biblioteca` · `mostrar adicionados recentemente` · `alguma novidade` · `mostrar os itens mais recentes` |
+| Rate Item | `Dê {star_rating} estrelas` · `Dê {star_rating} estrelas para esta música` · `Ponha {star_rating} estrelas` · `Avalie esta música com {star_rating} estrelas` · `Avalie isto com {star_rating} estrelas` |
 | Recommend | `recomendar algo` · `recomendar {media_type}` · `recomendar uma música` · `recomendar um filme` · `sugerir algo para assistir` · `sugerir uma música` |
 | Remove Current From Playlist | `Remova esta música da playlist {playlist}` · `Tire esta música da playlist {playlist}` |
 | Search Media | `procurar um filme {query}` · `procurar conteúdo {query}` · `procurar um vídeo {query}` · `procurar uma série {query}` · `encontrar um filme {query}` · `encontrar conteúdo {query}` |

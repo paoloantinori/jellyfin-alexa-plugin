@@ -465,6 +465,22 @@
         ]
       },
       {
+        "name": "RateItemIntent",
+        "samples": [
+          "Geef dit {star_rating} sterren",
+          "Geef dit nummer {star_rating} sterren",
+          "Geef {star_rating} sterren",
+          "Beoordeel dit nummer met {star_rating} sterren",
+          "Beoordeel dit met {star_rating} sterren"
+        ],
+        "slots": [
+          {
+            "name": "star_rating",
+            "type": "AMAZON.NUMBER"
+          }
+        ]
+      },
+      {
         "name": "MediaInfoIntent",
         "slots": [
           {
@@ -1500,6 +1516,18 @@
   },
   "dialog": {
     "intents": [
+      {
+        "name": "RateItemIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "star_rating",
+            "type": "AMAZON.NUMBER",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
       {
         "name": "PlayVideoIntent",
         "confirmationRequired": false,

@@ -68,6 +68,17 @@ tests:
     expected_slots: {}
     expected_response_type: any
 
+  # JF-326: the rating one-shot routes with the spoken count in star_rating;
+  # nothing plays in a fresh simulate session, so the deterministic answer is
+  # the RatingNoItem apology (the user-data write itself is unit-pinned).
+  - utterance: "metti cinque stelle a questa canzone"
+    expected_intent: RateItemIntent
+    expected_slots:
+      star_rating: {}
+    expected_response_type: any
+    expected_speech_contains: "valutare"
+    expected_end_session: true
+
   # JF-562 pin attempt, SKIPPED: AMAZON.RepeatIntent is declared (samples []) in
   # all 17 models with a RepeatIntentHandler behind it (music restarts the
   # current track; no playback in a fresh simulate session answers

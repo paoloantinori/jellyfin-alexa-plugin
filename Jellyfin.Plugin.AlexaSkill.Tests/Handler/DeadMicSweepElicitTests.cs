@@ -153,6 +153,31 @@ public class DeadMicSweepElicitTests : PluginTestBase
             "playlist", IntentNames.ShufflePlay);
 
     [Fact]
+    public Task RateItem_EmptyStars_ElicitsStarRating()
+        => AssertElicitsAsync(
+            () => new RateItemIntentHandler(_sessionManager.Object, _config, Mock.Of<MediaBrowser.Controller.Library.IUserDataManager>(), Mock.Of<IUserManager>(), Mock.Of<ILibraryManager>(), NullLoggerFactory.Instance)
+                .HandleAsync(Request(IntentNames.RateItem, ("star_rating", null)), Context(), User(), Session(_sessionManager.Object), CancellationToken.None),
+            "star_rating", IntentNames.RateItem);
+
+    [Fact]
+    public Task RateItem_CapturedCancelWord_EndsSessionWithoutWriting()
+    {
+        var userData = new Mock<MediaBrowser.Controller.Library.IUserDataManager>();
+        var handler = new RateItemIntentHandler(_sessionManager.Object, _config, userData.Object, Mock.Of<IUserManager>(), Mock.Of<ILibraryManager>(), NullLoggerFactory.Instance);
+        var request = Request(IntentNames.RateItem, ("star_rating", "stop"));
+        request.DialogState = "IN_PROGRESS";
+
+        return Task.Run(async () =>
+        {
+            SkillResponse response = await handler.HandleAsync(request, Context(), User(), Session(_sessionManager.Object), CancellationToken.None);
+            Assert.NotNull(response);
+            Assert.True(response.Response.ShouldEndSession);
+            Assert.DoesNotContain(response.Response.Directives ?? new List<IDirective>(), d => d.Type == "Dialog.ElicitSlot");
+            userData.VerifyNoOtherCalls();
+        });
+    }
+
+    [Fact]
     public Task BrowseLibrary_GenresWithoutFilter_ElicitsCategory()
     {
         var userManager = new Mock<IUserManager>();

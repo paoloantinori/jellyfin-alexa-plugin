@@ -375,6 +375,16 @@ intents:
       - ik vind het nummer niet leuk
       - verwijder de video uit favorieten
       - verwijder het nummer uit favorieten
+  - name: RateItemIntent
+    samples:
+      - Geef dit {star_rating} sterren
+      - Geef dit nummer {star_rating} sterren
+      - Geef {star_rating} sterren
+      - Beoordeel dit nummer met {star_rating} sterren
+      - Beoordeel dit met {star_rating} sterren
+    slots:
+      - name: star_rating
+        type: AMAZON.NUMBER
   - name: MediaInfoIntent
     slots:
       - name: media_info_type
@@ -867,6 +877,13 @@ types:
         synonyms: []
 dialog:
   intents:
+    - name: RateItemIntent
+      confirmationRequired: false
+      slots:
+        - name: star_rating
+          type: AMAZON.NUMBER
+          confirmationRequired: false
+          elicitationRequired: false
     - name: PlayVideoIntent
       confirmationRequired: false
       slots:

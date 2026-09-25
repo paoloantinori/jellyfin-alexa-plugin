@@ -340,6 +340,15 @@ intents:
       - لم يعجبني الأغنية
       - أزل الفيديو من المفضلة
       - أزل الأغنية من المفضلة
+  - name: RateItemIntent
+    samples:
+      - أعط هذا {star_rating} نجوم
+      - أعط هذه الأغنية {star_rating} نجوم
+      - قيّم هذا بـ {star_rating} نجوم
+      - قيّم هذه الأغنية بـ {star_rating} نجوم
+    slots:
+      - name: star_rating
+        type: AMAZON.NUMBER
   - name: MediaInfoIntent
     slots:
       - name: media_info_type
@@ -805,6 +814,13 @@ types:
         synonyms: []
 dialog:
   intents:
+    - name: RateItemIntent
+      confirmationRequired: false
+      slots:
+        - name: star_rating
+          type: AMAZON.NUMBER
+          confirmationRequired: false
+          elicitationRequired: false
     - name: PlayVideoIntent
       confirmationRequired: false
       slots:

@@ -12,6 +12,7 @@ internal static class IntentNames
 {
     public const string MarkFavorite = "MarkFavoriteIntent";
     public const string UnmarkFavorite = "UnmarkFavoriteIntent";
+    public const string RateItem = "RateItemIntent";
     public const string MediaInfo = "MediaInfoIntent";
     public const string PlayFavorites = "PlayFavoritesIntent";
     public const string PlayAlbum = "PlayAlbumIntent";
@@ -151,5 +152,12 @@ internal static class IntentNames
         /// </summary>
         public const string PlaylistTarget = "playlist_target";
         public const string Playlist = "playlist";
+
+        /// <summary>
+        /// Star-count slot on RateItemIntent: AMAZON.NUMBER in the 16 digit
+        /// locales, ItalianNumber in it-IT (whose ASR delivers "cinque"), parsed
+        /// by ItalianNumberWords on both shapes.
+        /// </summary>
+        public const string StarRating = "star_rating";
     }
 }

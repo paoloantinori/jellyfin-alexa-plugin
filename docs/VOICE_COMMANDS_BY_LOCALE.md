@@ -61,13 +61,14 @@ Placeholder legend:
 | `<المدة (5 دقائق، 30 ثانية، نصف ساعة)>` | `{sleep_duration}` |
 | `<اسم الأغنية>` | `{song}` |
 | `<عنوان الأغنية>` | `{song_query}` |
+| `<عدد النجوم (1 إلى 5)>` | `{star_rating}` |
 | `<اسم محطة الراديو>` | `{station}` |
 | `<الفترة (اليوم، هذا الأسبوع)>` | `{time_period}` |
 | `<عنوان الفيديو أو الفيلم>` | `{title}` |
 | `<كلمات من عنوان الأغنية>` | `{titleKeywords}` |
 | `<اسم المستخدم>` | `{username}` |
 
-Complete phrase list (314 phrases across 64 commands):
+Complete phrase list (318 phrases across 65 commands):
 
 #### Play music
 
@@ -402,6 +403,13 @@ Complete phrase list (314 phrases across 64 commands):
 - `أزل الفيديو من المفضلة`
 - `أزل الأغنية من المفضلة`
 
+**Rate what is playing**
+
+- `أعط هذا <عدد النجوم (1 إلى 5)> نجوم`
+- `أعط هذه الأغنية <عدد النجوم (1 إلى 5)> نجوم`
+- `قيّم هذا بـ <عدد النجوم (1 إلى 5)> نجوم`
+- `قيّم هذه الأغنية بـ <عدد النجوم (1 إلى 5)> نجوم`
+
 #### Info and queries
 
 **Ask about what is playing**
@@ -601,13 +609,14 @@ Placeholder legend:
 | `<duur (5 minuten, 30 seconden, een half uur)>` | `{sleep_duration}` |
 | `<titel van het nummer>` | `{song}` |
 | `<nummer>` | `{song_query}` |
+| `<aantal sterren (1 tot 5)>` | `{star_rating}` |
 | `<naam van het radiostation>` | `{station}` |
 | `<periode (vandaag, deze week)>` | `{time_period}` |
 | `<titel van de video of film>` | `{title}` |
 | `<woorden uit de songtitel>` | `{titleKeywords}` |
 | `<gebruikersnaam>` | `{username}` |
 
-Complete phrase list (377 phrases across 64 commands):
+Complete phrase list (382 phrases across 65 commands):
 
 #### Play music
 
@@ -994,6 +1003,14 @@ Complete phrase list (377 phrases across 64 commands):
 - `verwijder de video uit favorieten`
 - `verwijder het nummer uit favorieten`
 
+**Rate what is playing**
+
+- `Geef dit <aantal sterren (1 tot 5)> sterren`
+- `Geef dit nummer <aantal sterren (1 tot 5)> sterren`
+- `Geef <aantal sterren (1 tot 5)> sterren`
+- `Beoordeel dit nummer met <aantal sterren (1 tot 5)> sterren`
+- `Beoordeel dit met <aantal sterren (1 tot 5)> sterren`
+
 #### Info and queries
 
 **Ask about what is playing**
@@ -1204,12 +1221,13 @@ Placeholder legend:
 | `<duration (5 minutes, 30 seconds, half an hour)>` | `{sleep_duration}` |
 | `<song title>` | `{song}` |
 | `<song title>` | `{song_query}` |
+| `<number of stars (1 to 5)>` | `{star_rating}` |
 | `<radio station name>` | `{station}` |
 | `<video or movie title>` | `{title}` |
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (469 phrases across 64 commands):
+Complete phrase list (475 phrases across 65 commands):
 
 #### Play music
 
@@ -1658,6 +1676,15 @@ Complete phrase list (469 phrases across 64 commands):
 - `Remove the video from my favorites`
 - `Remove the song from my favorites`
 
+**Rate what is playing**
+
+- `rate this <number of stars (1 to 5)> stars`
+- `rate this song <number of stars (1 to 5)> stars`
+- `rate the song <number of stars (1 to 5)> stars`
+- `rate the video <number of stars (1 to 5)> stars`
+- `give this <number of stars (1 to 5)> stars`
+- `give this song <number of stars (1 to 5)> stars`
+
 #### Info and queries
 
 **Ask about what is playing**
@@ -1898,12 +1925,13 @@ Placeholder legend:
 | `<duration (5 minutes, 30 seconds, half an hour)>` | `{sleep_duration}` |
 | `<song title>` | `{song}` |
 | `<song title>` | `{song_query}` |
+| `<number of stars (1 to 5)>` | `{star_rating}` |
 | `<radio station name>` | `{station}` |
 | `<video or movie title>` | `{title}` |
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (462 phrases across 64 commands):
+Complete phrase list (468 phrases across 65 commands):
 
 #### Play music
 
@@ -2349,6 +2377,15 @@ Complete phrase list (462 phrases across 64 commands):
 - `Remove the video from my favorites`
 - `Remove the song from my favorites`
 
+**Rate what is playing**
+
+- `rate this <number of stars (1 to 5)> stars`
+- `rate this song <number of stars (1 to 5)> stars`
+- `rate the song <number of stars (1 to 5)> stars`
+- `rate the video <number of stars (1 to 5)> stars`
+- `give this <number of stars (1 to 5)> stars`
+- `give this song <number of stars (1 to 5)> stars`
+
 #### Info and queries
 
 **Ask about what is playing**
@@ -2585,12 +2622,13 @@ Placeholder legend:
 | `<duration (5 minutes, 30 seconds, half an hour)>` | `{sleep_duration}` |
 | `<song title>` | `{song}` |
 | `<song title>` | `{song_query}` |
+| `<number of stars (1 to 5)>` | `{star_rating}` |
 | `<radio station name>` | `{station}` |
 | `<video or movie title>` | `{title}` |
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (558 phrases across 64 commands):
+Complete phrase list (564 phrases across 65 commands):
 
 #### Play music
 
@@ -3125,6 +3163,15 @@ Complete phrase list (558 phrases across 64 commands):
 - `Remove the video from my favorites`
 - `Remove the song from my favorites`
 
+**Rate what is playing**
+
+- `rate this <number of stars (1 to 5)> stars`
+- `rate this song <number of stars (1 to 5)> stars`
+- `rate the song <number of stars (1 to 5)> stars`
+- `rate the video <number of stars (1 to 5)> stars`
+- `give this <number of stars (1 to 5)> stars`
+- `give this song <number of stars (1 to 5)> stars`
+
 #### Info and queries
 
 **Ask about what is playing**
@@ -3368,12 +3415,13 @@ Placeholder legend:
 | `<duration (5 minutes, 30 seconds, half an hour)>` | `{sleep_duration}` |
 | `<song title>` | `{song}` |
 | `<song title>` | `{song_query}` |
+| `<number of stars (1 to 5)>` | `{star_rating}` |
 | `<radio station name>` | `{station}` |
 | `<video or movie title>` | `{title}` |
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (463 phrases across 64 commands):
+Complete phrase list (469 phrases across 65 commands):
 
 #### Play music
 
@@ -3818,6 +3866,15 @@ Complete phrase list (463 phrases across 64 commands):
 - `Remove the video from my favorites`
 - `Remove the song from my favorites`
 
+**Rate what is playing**
+
+- `rate this <number of stars (1 to 5)> stars`
+- `rate this song <number of stars (1 to 5)> stars`
+- `rate the song <number of stars (1 to 5)> stars`
+- `rate the video <number of stars (1 to 5)> stars`
+- `give this <number of stars (1 to 5)> stars`
+- `give this song <number of stars (1 to 5)> stars`
+
 #### Info and queries
 
 **Ask about what is playing**
@@ -4062,13 +4119,14 @@ Placeholder legend:
 | `<duration (5 minutes, 30 seconds, half an hour)>` | `{sleep_duration}` |
 | `<song title>` | `{song}` |
 | `<song title>` | `{song_query}` |
+| `<number of stars (1 to 5)>` | `{star_rating}` |
 | `<radio station name>` | `{station}` |
 | `<time period (today, this week)>` | `{time_period}` |
 | `<video or movie title>` | `{title}` |
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (573 phrases across 66 commands):
+Complete phrase list (579 phrases across 67 commands):
 
 #### Play music
 
@@ -4588,6 +4646,15 @@ Complete phrase list (573 phrases across 66 commands):
 - `Remove the video from my favorites`
 - `Remove the song from my favorites`
 
+**Rate what is playing**
+
+- `rate this <number of stars (1 to 5)> stars`
+- `rate this song <number of stars (1 to 5)> stars`
+- `rate the song <number of stars (1 to 5)> stars`
+- `rate the video <number of stars (1 to 5)> stars`
+- `give this <number of stars (1 to 5)> stars`
+- `give this song <number of stars (1 to 5)> stars`
+
 #### Info and queries
 
 **Ask about what is playing**
@@ -4867,12 +4934,13 @@ Placeholder legend:
 | `<durée (5 minutes, 30 secondes, une demi-heure)>` | `{sleep_duration}` |
 | `<titre de la chanson>` | `{song}` |
 | `<titre de la chanson>` | `{song_query}` |
+| `<nombre d'étoiles (1 à 5)>` | `{star_rating}` |
 | `<nom de la station de radio>` | `{station}` |
 | `<titre de la vidéo ou du film>` | `{title}` |
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (430 phrases across 69 commands):
+Complete phrase list (435 phrases across 70 commands):
 
 #### Play music
 
@@ -5313,6 +5381,14 @@ Complete phrase list (430 phrases across 69 commands):
 - `Retire la vidéo des favoris`
 - `Retire la chanson des favoris`
 
+**Rate what is playing**
+
+- `Mets <nombre d'étoiles (1 à 5)> étoiles`
+- `Mets <nombre d'étoiles (1 à 5)> étoiles à cette chanson`
+- `Donne <nombre d'étoiles (1 à 5)> étoiles à cette chanson`
+- `Évalue cette chanson avec <nombre d'étoiles (1 à 5)> étoiles`
+- `Mets <nombre d'étoiles (1 à 5)> étoiles à ce titre`
+
 #### Info and queries
 
 **Ask about what is playing**
@@ -5537,12 +5613,13 @@ Placeholder legend:
 | `<durée (5 minutes, 30 secondes, une demi-heure)>` | `{sleep_duration}` |
 | `<titre de la chanson>` | `{song}` |
 | `<titre de la chanson>` | `{song_query}` |
+| `<nombre d'étoiles (1 à 5)>` | `{star_rating}` |
 | `<nom de la station de radio>` | `{station}` |
 | `<titre de la vidéo ou du film>` | `{title}` |
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (442 phrases across 69 commands):
+Complete phrase list (447 phrases across 70 commands):
 
 #### Play music
 
@@ -5992,6 +6069,14 @@ Complete phrase list (442 phrases across 69 commands):
 - `Retire la vidéo des favoris`
 - `Retire la chanson des favoris`
 
+**Rate what is playing**
+
+- `Mets <nombre d'étoiles (1 à 5)> étoiles`
+- `Mets <nombre d'étoiles (1 à 5)> étoiles à cette chanson`
+- `Donne <nombre d'étoiles (1 à 5)> étoiles à cette chanson`
+- `Évalue cette chanson avec <nombre d'étoiles (1 à 5)> étoiles`
+- `Mets <nombre d'étoiles (1 à 5)> étoiles à ce titre`
+
 #### Info and queries
 
 **Ask about what is playing**
@@ -6219,12 +6304,13 @@ Placeholder legend:
 | `<Dauer (5 Minuten, 30 Sekunden, eine halbe Stunde)>` | `{sleep_duration}` |
 | `<Titel des Liedes>` | `{song}` |
 | `<Songtitel>` | `{song_query}` |
+| `<Sternezahl (1 bis 5)>` | `{star_rating}` |
 | `<Name des Radiosenders>` | `{station}` |
 | `<Titel des Videos oder Films>` | `{title}` |
 | `<Wörter aus dem Songtitel>` | `{titleKeywords}` |
 | `<Benutzername>` | `{username}` |
 
-Complete phrase list (451 phrases across 69 commands):
+Complete phrase list (456 phrases across 70 commands):
 
 #### Play music
 
@@ -6684,6 +6770,14 @@ Complete phrase list (451 phrases across 69 commands):
 - `Entferne das Video aus meinen Favoriten`
 - `Entferne das Lied aus meinen Favoriten`
 
+**Rate what is playing**
+
+- `Bewerte dies mit <Sternezahl (1 bis 5)> Sternen`
+- `Bewerte dieses Lied mit <Sternezahl (1 bis 5)> Sternen`
+- `Bewerte das Video mit <Sternezahl (1 bis 5)> Sternen`
+- `Gib diesem Lied <Sternezahl (1 bis 5)> Sterne`
+- `Gib <Sternezahl (1 bis 5)> Sterne`
+
 #### Info and queries
 
 **Ask about what is playing**
@@ -6910,13 +7004,14 @@ Placeholder legend:
 | `<अवधि (5 मिनट, 30 सेकंड, आधा घंटा)>` | `{sleep_duration}` |
 | `<गाने का नाम>` | `{song}` |
 | `<गाने का नाम>` | `{song_query}` |
+| `<स्टार संख्या (1 से 5)>` | `{star_rating}` |
 | `<रेडियो स्टेशन का नाम>` | `{station}` |
 | `<समयावधि (आज, इस सप्ताह)>` | `{time_period}` |
 | `<वीडियो या फिल्म का नाम>` | `{title}` |
 | `<गाने के नाम के शब्द>` | `{titleKeywords}` |
 | `<उपयोगकर्ता का नाम>` | `{username}` |
 
-Complete phrase list (334 phrases across 64 commands):
+Complete phrase list (339 phrases across 65 commands):
 
 #### Play music
 
@@ -7266,6 +7361,14 @@ Complete phrase list (334 phrases across 64 commands):
 - `वीडियो को पसंदीदा से हटाओ`
 - `गाने को पसंदीदा से हटाओ`
 
+**Rate what is playing**
+
+- `इसे <स्टार संख्या (1 से 5)> स्टार दो`
+- `इस गाने को <स्टार संख्या (1 से 5)> स्टार दो`
+- `इसे <स्टार संख्या (1 से 5)> स्टार से रेट करो`
+- `इस गाने को <स्टार संख्या (1 से 5)> स्टार रेटिंग दो`
+- `इस वीडियो को <स्टार संख्या (1 से 5)> स्टार दो`
+
 #### Info and queries
 
 **Ask about what is playing**
@@ -7471,12 +7574,13 @@ Placeholder legend:
 | `<durata (5 minuti, 30 secondi, mezz'ora)>` | `{sleep_duration}` |
 | `<titolo del brano>` | `{song}` |
 | `<titolo del brano>` | `{song_query}` |
+| `<numero di stelle (da 1 a 5)>` | `{star_rating}` |
 | `<nome della stazione radio>` | `{station}` |
 | `<periodo (oggi, questa settimana)>` | `{time_period}` |
 | `<titolo del video o del film>` | `{title}` |
 | `<parole del titolo del brano>` | `{titleKeywords}` |
 
-Complete phrase list (1518 phrases across 69 commands):
+Complete phrase list (1527 phrases across 70 commands):
 
 #### Play music
 
@@ -8993,6 +9097,18 @@ Complete phrase list (1518 phrases across 69 commands):
 - `togliere dai preferiti`
 - `Di rimuovere dai preferiti`
 
+**Rate what is playing**
+
+- `Metti <numero di stelle (da 1 a 5)> stelle`
+- `Dai <numero di stelle (da 1 a 5)> stelle`
+- `Metti <numero di stelle (da 1 a 5)> stelle a questa canzone`
+- `Dai <numero di stelle (da 1 a 5)> stelle a questa canzone`
+- `Metti <numero di stelle (da 1 a 5)> stelle a questo`
+- `Dai <numero di stelle (da 1 a 5)> stelle a questo`
+- `Valuta questo brano con <numero di stelle (da 1 a 5)> stelle`
+- `dare <numero di stelle (da 1 a 5)> stelle`
+- `dare <numero di stelle (da 1 a 5)> stelle a questa canzone`
+
 #### Info and queries
 
 **Ask about what is playing**
@@ -9232,13 +9348,14 @@ Placeholder legend:
 | `<時間（5分、30秒、30分）>` | `{sleep_duration}` |
 | `<曲名>` | `{song}` |
 | `<曲名>` | `{song_query}` |
+| `<星の数 (1〜5)>` | `{star_rating}` |
 | `<ラジオ局名>` | `{station}` |
 | `<期間 (今日、今週)>` | `{time_period}` |
 | `<動画または映画のタイトル>` | `{title}` |
 | `<曲名のキーワード>` | `{titleKeywords}` |
 | `<ユーザー名>` | `{username}` |
 
-Complete phrase list (312 phrases across 64 commands):
+Complete phrase list (317 phrases across 65 commands):
 
 #### Play music
 
@@ -9570,6 +9687,14 @@ Complete phrase list (312 phrases across 64 commands):
 - `ビデオをお気に入りから削除して`
 - `曲をお気に入りから削除して`
 
+**Rate what is playing**
+
+- `これを星<星の数 (1〜5)>で評価して`
+- `この曲を星<星の数 (1〜5)>で評価して`
+- `これに星<星の数 (1〜5)>をつけて`
+- `この曲に星<星の数 (1〜5)>をつけて`
+- `星<星の数 (1〜5)>で評価して`
+
 #### Info and queries
 
 **Ask about what is playing**
@@ -9770,13 +9895,14 @@ Placeholder legend:
 | `<duração (5 minutos, 30 segundos, meia hora)>` | `{sleep_duration}` |
 | `<título da música>` | `{song}` |
 | `<título da música>` | `{song_query}` |
+| `<número de estrelas (1 a 5)>` | `{star_rating}` |
 | `<nome da estação de rádio>` | `{station}` |
 | `<período (hoje, esta semana)>` | `{time_period}` |
 | `<título do vídeo ou do filme>` | `{title}` |
 | `<palavras do título da música>` | `{titleKeywords}` |
 | `<nome do usuário>` | `{username}` |
 
-Complete phrase list (390 phrases across 64 commands):
+Complete phrase list (395 phrases across 65 commands):
 
 #### Play music
 
@@ -10175,6 +10301,14 @@ Complete phrase list (390 phrases across 64 commands):
 - `remover a música dos favoritos`
 - `tirar dos favoritos`
 
+**Rate what is playing**
+
+- `Dê <número de estrelas (1 a 5)> estrelas`
+- `Dê <número de estrelas (1 a 5)> estrelas para esta música`
+- `Ponha <número de estrelas (1 a 5)> estrelas`
+- `Avalie esta música com <número de estrelas (1 a 5)> estrelas`
+- `Avalie isto com <número de estrelas (1 a 5)> estrelas`
+
 #### Info and queries
 
 **Ask about what is playing**
@@ -10386,12 +10520,13 @@ Placeholder legend:
 | `<duración (5 minutos, 30 segundos, media hora)>` | `{sleep_duration}` |
 | `<título de la canción>` | `{song}` |
 | `<título de la canción>` | `{song_query}` |
+| `<número de estrellas (1 a 5)>` | `{star_rating}` |
 | `<nombre de la emisora>` | `{station}` |
 | `<título del vídeo o de la película>` | `{title}` |
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (420 phrases across 64 commands):
+Complete phrase list (426 phrases across 65 commands):
 
 #### Play music
 
@@ -10806,6 +10941,15 @@ Complete phrase list (420 phrases across 64 commands):
 - `Quita el vídeo de mis favoritos`
 - `Quita la canción de mis favoritos`
 
+**Rate what is playing**
+
+- `Ponle <número de estrellas (1 a 5)> estrellas a esto`
+- `Ponle <número de estrellas (1 a 5)> estrellas a esta canción`
+- `Dale <número de estrellas (1 a 5)> estrellas a esta canción`
+- `Califica esto con <número de estrellas (1 a 5)> estrellas`
+- `Califica esta canción con <número de estrellas (1 a 5)> estrellas`
+- `Pon <número de estrellas (1 a 5)> estrellas`
+
 #### Info and queries
 
 **Ask about what is playing**
@@ -11031,12 +11175,13 @@ Placeholder legend:
 | `<duración (5 minutos, 30 segundos, media hora)>` | `{sleep_duration}` |
 | `<título de la canción>` | `{song}` |
 | `<título de la canción>` | `{song_query}` |
+| `<número de estrellas (1 a 5)>` | `{star_rating}` |
 | `<nombre de la emisora>` | `{station}` |
 | `<título del vídeo o de la película>` | `{title}` |
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (414 phrases across 64 commands):
+Complete phrase list (420 phrases across 65 commands):
 
 #### Play music
 
@@ -11447,6 +11592,15 @@ Complete phrase list (414 phrases across 64 commands):
 - `Quita el vídeo de mis favoritos`
 - `Quita la canción de mis favoritos`
 
+**Rate what is playing**
+
+- `Ponle <número de estrellas (1 a 5)> estrellas a esto`
+- `Ponle <número de estrellas (1 a 5)> estrellas a esta canción`
+- `Dale <número de estrellas (1 a 5)> estrellas a esta canción`
+- `Califica esto con <número de estrellas (1 a 5)> estrellas`
+- `Califica esta canción con <número de estrellas (1 a 5)> estrellas`
+- `Pon <número de estrellas (1 a 5)> estrellas`
+
 #### Info and queries
 
 **Ask about what is playing**
@@ -11670,12 +11824,13 @@ Placeholder legend:
 | `<duración (5 minutos, 30 segundos, media hora)>` | `{sleep_duration}` |
 | `<título de la canción>` | `{song}` |
 | `<título de la canción>` | `{song_query}` |
+| `<número de estrellas (1 a 5)>` | `{star_rating}` |
 | `<nombre de la emisora>` | `{station}` |
 | `<título del vídeo o de la película>` | `{title}` |
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (408 phrases across 64 commands):
+Complete phrase list (414 phrases across 65 commands):
 
 #### Play music
 
@@ -12083,6 +12238,15 @@ Complete phrase list (408 phrases across 64 commands):
 - `Quita el vídeo de mis favoritos`
 - `Quita la canción de mis favoritos`
 
+**Rate what is playing**
+
+- `Ponle <número de estrellas (1 a 5)> estrellas a esto`
+- `Ponle <número de estrellas (1 a 5)> estrellas a esta canción`
+- `Dale <número de estrellas (1 a 5)> estrellas a esta canción`
+- `Califica esto con <número de estrellas (1 a 5)> estrellas`
+- `Califica esta canción con <número de estrellas (1 a 5)> estrellas`
+- `Pon <número de estrellas (1 a 5)> estrellas`
+
 #### Info and queries
 
 **Ask about what is playing**
@@ -12312,6 +12476,7 @@ The body above is user-facing and never names intents or handlers. This table ma
 | Favorites | Play favorites | `PlayFavoritesIntent` |
 | Favorites | Mark as favorite | `MarkFavoriteIntent` |
 | Favorites | Remove from favorites | `UnmarkFavoriteIntent` |
+| Favorites | Rate what is playing | `RateItemIntent` |
 | Info and queries | Ask about what is playing | `MediaInfoIntent` |
 | Info and queries | Ask what the library has by an artist | `QueryArtistLibraryIntent` |
 | Browse and discover | Browse the library | `BrowseLibraryIntent` |

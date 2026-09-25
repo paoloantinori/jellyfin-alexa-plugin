@@ -276,6 +276,26 @@
         ]
       },
       {
+        "name": "RateItemIntent",
+        "samples": [
+          "Metti {star_rating} stelle",
+          "Dai {star_rating} stelle",
+          "Metti {star_rating} stelle a questa canzone",
+          "Dai {star_rating} stelle a questa canzone",
+          "Metti {star_rating} stelle a questo",
+          "Dai {star_rating} stelle a questo",
+          "Valuta questo brano con {star_rating} stelle",
+          "dare {star_rating} stelle",
+          "dare {star_rating} stelle a questa canzone"
+        ],
+        "slots": [
+          {
+            "name": "star_rating",
+            "type": "ItalianNumber"
+          }
+        ]
+      },
+      {
         "name": "MediaInfoIntent",
         "samples": [
           "Cosa sta suonando",
@@ -2965,6 +2985,18 @@
   },
   "dialog": {
     "intents": [
+      {
+        "name": "RateItemIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "star_rating",
+            "type": "ItalianNumber",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
       {
         "name": "FindSongIntent",
         "confirmationRequired": false,

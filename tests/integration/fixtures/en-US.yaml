@@ -814,3 +814,21 @@ tests:
     expected_intent: PlayNextEpisodeIntent
     expected_slots:
       series_name: {}
+
+  # -------------------------------------------------------------------------
+  # RateItemIntent (star_rating)
+  # -------------------------------------------------------------------------
+  - utterance: "rate this five stars"
+    expected_intent: RateItemIntent
+    expected_slots:
+      star_rating: {}
+
+  - utterance: "give this song two stars"
+    expected_intent: RateItemIntent
+    expected_slots:
+      star_rating: {}
+
+  - utterance: "rate the video four stars"
+    expected_intent: RateItemIntent
+    expected_slots:
+      star_rating: {}

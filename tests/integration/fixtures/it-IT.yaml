@@ -1356,3 +1356,21 @@ tests:
   - utterance: "Di mettere il prossimo episodio di adolescence"
     expected_intent: PlayNextEpisodeIntent
     expected_slots: {}
+
+  # -------------------------------------------------------------------------
+  # RateItemIntent (star_rating)
+  # -------------------------------------------------------------------------
+  - utterance: "Metti cinque stelle a questa canzone"
+    expected_intent: RateItemIntent
+    expected_slots:
+      star_rating: {}
+
+  - utterance: "Dai quattro stelle a questo"
+    expected_intent: RateItemIntent
+    expected_slots:
+      star_rating: {}
+
+  - utterance: "dare due stelle a questa canzone"
+    expected_intent: RateItemIntent
+    expected_slots:
+      star_rating: {}

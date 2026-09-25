@@ -376,6 +376,16 @@ intents:
       - Je n'aime pas cette musique
       - Retire la vidéo des favoris
       - Retire la chanson des favoris
+  - name: RateItemIntent
+    samples:
+      - Mets {star_rating} étoiles
+      - Mets {star_rating} étoiles à cette chanson
+      - Donne {star_rating} étoiles à cette chanson
+      - Évalue cette chanson avec {star_rating} étoiles
+      - Mets {star_rating} étoiles à ce titre
+    slots:
+      - name: star_rating
+        type: AMAZON.NUMBER
   - name: MediaInfoIntent
     slots:
       - name: media_info_type
@@ -940,6 +950,13 @@ types:
         synonyms: []
 dialog:
   intents:
+    - name: RateItemIntent
+      confirmationRequired: false
+      slots:
+        - name: star_rating
+          type: AMAZON.NUMBER
+          confirmationRequired: false
+          elicitationRequired: false
     - name: PlayVideoIntent
       confirmationRequired: false
       slots:

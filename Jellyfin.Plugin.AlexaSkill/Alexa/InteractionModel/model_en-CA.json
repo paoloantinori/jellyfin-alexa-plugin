@@ -450,6 +450,23 @@
         ]
       },
       {
+        "name": "RateItemIntent",
+        "samples": [
+          "rate this {star_rating} stars",
+          "rate this song {star_rating} stars",
+          "rate the song {star_rating} stars",
+          "rate the video {star_rating} stars",
+          "give this {star_rating} stars",
+          "give this song {star_rating} stars"
+        ],
+        "slots": [
+          {
+            "name": "star_rating",
+            "type": "AMAZON.NUMBER"
+          }
+        ]
+      },
+      {
         "name": "MediaInfoIntent",
         "slots": [
           {
@@ -1616,6 +1633,18 @@
   },
   "dialog": {
     "intents": [
+      {
+        "name": "RateItemIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "star_rating",
+            "type": "AMAZON.NUMBER",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
       {
         "name": "PlayVideoIntent",
         "confirmationRequired": false,
