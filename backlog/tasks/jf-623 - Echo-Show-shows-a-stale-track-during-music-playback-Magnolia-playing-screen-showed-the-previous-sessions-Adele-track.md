@@ -3,10 +3,10 @@ id: JF-623
 title: >-
   Echo Show shows a stale track during music playback (Magnolia playing, screen
   showed the previous session's Adele track)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-23 17:04'
-updated_date: '2026-09-23 18:24'
+updated_date: '2026-09-23 19:32'
 labels: []
 dependencies: []
 priority: low
@@ -30,7 +30,15 @@ Live observation 2026-09-23 18:41 (Paolo's loop test): while Magnolia (Negrita) 
 2026-09-23 device detail (Paolo): the stale screen was FULL-SCREEN, not the Echo's bottom now-playing bar. That rules out the stream-metadata widget hypothesis (it renders the small bar UI). A full-screen display can only be (a) our APL NowPlaying document rendered by an earlier play and never replaced, or (b) a VideoApp.Launch surface. Live config shows AplVisualsEnabled unset/false, so today's plays attach nothing; the document on screen must date from a play made while visuals were on (or from the VideoApp audio route if NativeControlsForAudio was on at some point). Next diagnostic step when at the device: note the exact moment a fresh music play starts and whether the screen changes AT ALL; then check whether enabling AplVisualsEnabled makes the card track the current track (the attacher path exists but is carousel-only - extending TryAttachNowPlayingDirective to the BuildAudioPlayerResponse chokepoint is the likely fix either way, since a fresh card per play would also mask the stale-document problem).
 
 2026-09-23 follow-up: the full-screen detail plus config facts narrow it down. NativeControlsForAudio=True globally but DefaultVideoAppForAudio=None (off): both the Adele (PlayFavorites) and Magnolia (FindSong) plays pass the item through BuildAudioPlayerResponse, so either BOTH route VideoApp (then the screen would track the title, contradiction) or the delegation is off for both. Since neither play logged a RenderDocument and the APL visuals flag is off, our code rendered NOTHING on either play: the full-screen surface must be the Echo Show's OWN AudioPlayer full-screen player, which persists across plays when the stream carries no metadata (Alexa.NET's AudioItemStream has no metadata support - probe found no metadata/title/art surface on it). Fix direction: extend TryAttachNowPlayingDirective to the BuildAudioPlayerResponse chokepoint (our APL card on every music play, full control of the display); requires AplVisualsEnabled on, so the launch behavior becomes config-dependent - Paolo should decide whether he wants the screen card back on.
+
+Root cause (settled by elimination + the probe): neither play rendered anything of ours (0 RenderDocument in the day's log; APL visuals off; the attacher was carousel-only), Alexa.NET's AudioItemStream has no metadata surface (string probe: no metadata/title/art), so the Show's built-in full-screen player kept the last metadata it ever had. The chosen fix gives us a deterministic screen per play instead.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Fixed 2026-09-23 evening (Paolo chose the our-screen option): every ReplaceAll music play auto-attaches the NowPlaying APL document at the BuildAudioPlayerResponse chokepoint (reversing the old overlay-removal decision the FeatureFlagTests documented); Enqueue plays deliberately do not re-render; the carousel-only manual attaches removed as double-render leftovers; AplVisualsEnabled switched ON live via the partial config PATCH (Users intact). Full suite 4254/4254 x both TFMs; deployed and verified. Device confirmation pending (Paolo re-runs a music play and watches the screen track the track).
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

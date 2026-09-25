@@ -1,10 +1,10 @@
 ---
 id: JF-326
 title: 'Feature: Star ratings by voice ("rate this 5 stars")'
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-12 15:00'
-updated_date: '2026-07-13 20:18'
+updated_date: '2026-09-25 00:59'
 labels:
   - feature
   - ratings
@@ -31,6 +31,12 @@ New intent: resolve the current item from context.AudioPlayer.Token, parse a 0â€
 - [ ] #4 Alexa confirms the rating back to the user
 - [ ] #5 Samples + response strings across all 17 locales; unit and NLU tests included
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+JF-326 complete: RateItemIntent in all 17 locales ('metti cinque stelle a questa canzone'), handler-side 1-5 validation, spoken stars mapped x2 onto Jellyfin's 0-10 UserItemData.Rating (Nullable<double>, verified on both SDK lines; the doc states it is the plugin's own convention - no first-party client writes the field), displacement-aware current-item resolution with the JF-625 VideoAppAudio arm (the review's live-class finding: seek-mode's VideoApp-routed Audio ledger must beat the stale token) plus the ledger fallback so ratings work on the seek-mode route, Dialog.ElicitSlot empty-slot prompt with the full anti-pattern #9 lockstep, 17 locale strings, fixtures, mirrors. All 17 models rebuilt live (ja-JP needed the JF-513 slot-spacing fix after SMAPI rejected the first samples); profile-nlu verifies the rating utterances on it-IT/en-US/de-DE/ja-JP/es-ES/fr-FR with the numeric slot filled. Both gates ran (/simplify light + internal 3-agent pass; code-review high: 6 applied incl. the real displacement bug, 2 filed in JF-626). The review probe's side-effect rating on Comfortably Numb was cleared via the API (verified None). Awaiting the device round: 'metti cinque stelle a questa canzone' during playback (AudioPlayer and seek-mode both).
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
