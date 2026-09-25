@@ -3,9 +3,10 @@ id: JF-632
 title: >-
   Sleep-timer re-issue over VideoApp-routed media must refuse honestly instead
   of minting an AudioPlayer.Play of the stale audio item
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-25 03:04'
+updated_date: '2026-09-25 07:13'
 labels:
   - bug
 dependencies: []
@@ -26,14 +27,20 @@ SleepTimerIntentHandler mints a ReplaceAll AudioPlayer.Play re-issue of whatever
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress
+- [x] #6 NLU test fixtures updated if interaction model changed
+- [x] #7 E2E test added for new intent or handler logic
+- [x] #8 Locale response strings added to all 17 locales
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+JF-632 complete: the sleep re-issue refuses honestly over ANY VideoApp-routed medium. The gate (ResolvePlayingMedium + IsVideoAppMedium, then the ledger-route check that needs no item resolution) absorbed the JF-628 belt entirely; the code review PROBED and closed two real holes (the same-item seek-mode shape that flipped the ledger route back to Audio while double-audioing the same track; the unresolvable deleted-item shape that shipped a deadline that could never fire). The refusal rides BuildPauseResponse (AudioPlayer.Stop for displaced audio, the JF-564 precedent), the line follows the on-screen shape (seek-mode vs video family), and CannotSetSleepTimerOverVideo was reworded in all 17 locales to the honest boundary after the review flagged the over-claim. Gates: /simplify (2 combined agents) + code-review high (6 findings: all applied) in the orchestrator transcript. Suite 4322x2, locales PASS, DEPLOYED; the push is parked behind the deploy-gate hook's demand for evidence on the older device-verification units (their gates can only run at the device round) - rides the next session's push.
+<!-- SECTION:FINAL_SUMMARY:END -->

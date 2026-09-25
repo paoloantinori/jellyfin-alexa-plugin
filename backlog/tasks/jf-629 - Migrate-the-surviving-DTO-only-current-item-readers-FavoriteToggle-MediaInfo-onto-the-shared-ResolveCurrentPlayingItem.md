@@ -3,9 +3,10 @@ id: JF-629
 title: >-
   Migrate the surviving DTO-only current-item readers (FavoriteToggle,
   MediaInfo) onto the shared ResolveCurrentPlayingItem
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-25 02:09'
+updated_date: '2026-09-25 07:14'
 labels:
   - refactor
   - tech-debt
