@@ -15,6 +15,8 @@
   "CannotNavigateMusicByVoice": "Desculpe, não posso pular a faixa por voz durante a reprodução com a barra de progresso. Use a barra na tela para navegar na fila.",
   "CannotNavigateLiveTvByVoice": "A TV ao vivo continua sozinha. Use a tela touch para mudar de canal.",
   "CannotPauseVideoByVoice": "Desculpe, não dá para pausar o vídeo por voz. Use a tela touch ou o botão voltar para sair.",
+  "CannotSetSleepTimerOverVideo": "Desculpe, o timer de desligamento só funciona com música. Ele não consegue parar vídeos, TV ao vivo nem audiolivros por voz.",
+  "CannotSetSleepTimerInSeekMode": "Desculpe, não dá para definir o timer de desligamento enquanto a música toca com a barra de progresso.",
   "PlaybackFailed": "Algo deu errado ao reproduzir sua mídia. Por favor, tente novamente.",
   "FolderNoPlayableContent": "Esta pasta não tem conteúdo reproduzível.",
   "SomethingWrong": "Algo deu errado, por favor tente novamente.",

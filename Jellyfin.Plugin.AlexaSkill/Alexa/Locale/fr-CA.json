@@ -21,6 +21,8 @@
   "CannotNavigateMusicByVoice": "Désolé, je ne peux pas passer à la piste suivante à la voix pendant la lecture avec la barre de progression. Utilise la barre à l'écran pour naviguer dans la file.",
   "CannotNavigateLiveTvByVoice": "La TV en direct continue toute seule. Utilisez l'écran tactile pour changer de chaîne.",
   "CannotPauseVideoByVoice": "Désolé, on ne peut pas mettre la vidéo en pause à la voix. Utilisez l'écran tactile ou le bouton retour pour quitter.",
+  "CannotSetSleepTimerOverVideo": "Désolé, la minuterie d'extinction ne fonctionne qu'avec la musique. Elle ne peut pas arrêter les vidéos, la TV en direct ni les livres audio à la voix.",
+  "CannotSetSleepTimerInSeekMode": "Désolé, je ne peux pas définir de minuterie d'extinction pendant la lecture de musique avec la barre de progression.",
   "PlaybackFailed": "Un problème est survenu lors de la lecture. Veuillez réessayer.",
   "FolderNoPlayableContent": "Ce dossier ne contient aucun contenu lisible.",
   "SomethingWrong": "Un problème est survenu, veuillez réessayer.",

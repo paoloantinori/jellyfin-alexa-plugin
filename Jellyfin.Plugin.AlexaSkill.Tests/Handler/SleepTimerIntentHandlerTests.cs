@@ -12,7 +12,9 @@ using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
+using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
@@ -27,6 +29,7 @@ public class SleepTimerIntentHandlerTests : PluginTestBase, IDisposable
     private const string DeviceId = "test-device";
 
     private readonly Mock<ISessionManager> _sessionManagerMock;
+    private readonly Mock<ILibraryManager> _libraryManagerMock;
     private readonly PluginConfiguration _config;
     private readonly ILoggerFactory _loggerFactory;
     private readonly DeviceQueueManager _queueManager;
@@ -35,12 +38,13 @@ public class SleepTimerIntentHandlerTests : PluginTestBase, IDisposable
     public SleepTimerIntentHandlerTests()
     {
         _sessionManagerMock = new Mock<ISessionManager>();
+        _libraryManagerMock = new Mock<ILibraryManager>();
         _config = new PluginConfiguration();
         _loggerFactory = LoggerFactory.Create(b => { });
 
         // The ledger/launch-scope writes go through Plugin.Instance's manager (the
-        // handler has no injected queue manager); the swap scope below points the
-        // plugin at this suite's manager.
+        // JF-522/JF-628 block has no injected queue manager); the swap scope below
+        // points the plugin at this suite's manager.
         _queueManager = TestHelpers.CreateDeviceQueueManager("sleep-timer-tests");
         TestHelpers.EnsurePluginInstance(
             _config,
@@ -67,7 +71,9 @@ public class SleepTimerIntentHandlerTests : PluginTestBase, IDisposable
         return new SleepTimerIntentHandler(
             _sessionManagerMock.Object,
             _config,
-            _loggerFactory);
+            _loggerFactory,
+            _libraryManagerMock.Object,
+            _queueManager);
     }
 
     private static IntentRequest CreateIntentRequest(string? durationValue = null)
@@ -356,14 +362,23 @@ public class SleepTimerIntentHandlerTests : PluginTestBase, IDisposable
     /// <summary>
     /// Shared JF-628 arrange: pre-pins the device ledger on an EARLIER launch's record,
     /// runs the sleep handler over the re-issued track's token/session, and returns the
-    /// ledger snapshot the handler left behind. The arm and cancel branches differ only
-    /// in duration and token shape; the VideoApp branch differs only in the seed route.
+    /// response plus the ledger snapshot the handler left behind. The arm and cancel
+    /// branches differ only in duration and token shape; the VideoApp branches differ
+    /// in the seed route and (JF-632) a library-resolvable seed item, which is what
+    /// lets the medium gate classify. Directive shape is asserted by the callers: the
+    /// audio routes mint the re-issue, the VideoApp routes refuse with none.
     /// </summary>
-    private async Task<(string? ItemId, DeviceQueueManager.LaunchRoute? Route)> ReissueAndReadLedgerAsync(
+    private async Task<(SkillResponse Response, string? ItemId, DeviceQueueManager.LaunchRoute? Route)> ReissueAndReadLedgerAsync(
         string durationValue, string reissuedTrackToken, Guid reissuedTrackId,
-        DeviceQueueManager.LaunchRoute seedRoute = DeviceQueueManager.LaunchRoute.Audio)
+        DeviceQueueManager.LaunchRoute seedRoute = DeviceQueueManager.LaunchRoute.Audio,
+        BaseItem? seedLedgerItem = null)
     {
-        Guid earlierLaunchId = Guid.NewGuid();
+        Guid earlierLaunchId = seedLedgerItem?.Id ?? Guid.NewGuid();
+        if (seedLedgerItem != null)
+        {
+            _libraryManagerMock.Setup(x => x.GetItemById(seedLedgerItem.Id)).Returns(seedLedgerItem);
+        }
+
         var handler = CreateHandler();
         var request = CreateIntentRequest(durationValue: durationValue);
         var context = CreateContext();
@@ -387,8 +402,8 @@ public class SleepTimerIntentHandlerTests : PluginTestBase, IDisposable
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
         Assert.NotNull(response);
-        Assert.NotEmpty(response.Response!.Directives);
-        return _queueManager.GetLastPlayedSnapshot(DeviceId);
+        (string? itemId, DeviceQueueManager.LaunchRoute? route) = _queueManager.GetLastPlayedSnapshot(DeviceId);
+        return (response, itemId, route);
     }
 
     [Fact]
@@ -396,8 +411,11 @@ public class SleepTimerIntentHandlerTests : PluginTestBase, IDisposable
     {
         Guid armedTrackId = Guid.NewGuid();
 
-        (string? itemId, DeviceQueueManager.LaunchRoute? route) =
+        (SkillResponse response, string? itemId, DeviceQueueManager.LaunchRoute? route) =
             await ReissueAndReadLedgerAsync("PT30S", armedTrackId.ToString(), armedTrackId);
+
+        // The audio-routed re-issue still mints the directive.
+        Assert.NotEmpty(response.Response!.Directives);
 
         // The ledger names the ARMED item on the audio route, agreeing with the
         // composite token instead of the older launch track.
@@ -413,9 +431,10 @@ public class SleepTimerIntentHandlerTests : PluginTestBase, IDisposable
         Guid armedTrackId = Guid.NewGuid();
         string compositeToken = $"{armedTrackId}|sleep:{DateTimeOffset.UtcNow.AddMinutes(30).UtcTicks}";
 
-        (string? itemId, DeviceQueueManager.LaunchRoute? route) =
+        (SkillResponse response, string? itemId, DeviceQueueManager.LaunchRoute? route) =
             await ReissueAndReadLedgerAsync("0", compositeToken, armedTrackId);
 
+        Assert.NotEmpty(response.Response!.Directives);
         Assert.Equal(armedTrackId.ToString(), itemId);
         Assert.Equal(DeviceQueueManager.LaunchRoute.Audio, route);
     }
@@ -423,20 +442,101 @@ public class SleepTimerIntentHandlerTests : PluginTestBase, IDisposable
     [Fact]
     public async Task HandleAsync_ArmingOverVideoAppRoutedLedger_KeepsTheVideoAppRecord()
     {
-        // Review finding on JF-628: a VideoApp launch on screen never touches
-        // context.AudioPlayer.Token, so a sleep arm there resolves the STALE audio
-        // token/session. The ledger write must not overwrite the truthful
-        // (video item, VideoApp) record with (stale audio item, Audio): no event
-        // ever re-writes the ledger, so the poison would persist and break the
-        // medium readers (pause/next refusals, resume arbitration).
+        // Review finding on JF-628, re-pinned by JF-632: a VideoApp launch on screen
+        // never touches context.AudioPlayer.Token, so a sleep arm there resolves the
+        // STALE audio token/session. JF-632 gates the whole re-issue on the medium:
+        // over the resolvable VideoApp-routed movie the arm answers the honest
+        // refusal Tell and mints NO AudioPlayer.Play (the old shape re-issued the
+        // stale audio item over the running video: parallel audio the platform
+        // cannot stop), and the truthful (movie, VideoApp) ledger record survives:
+        // no event ever re-writes the ledger, so an overwrite would poison the
+        // medium readers (pause/next refusals, resume arbitration) persistently.
         Guid staleSongId = Guid.NewGuid();
+        var movie = new MediaBrowser.Controller.Entities.Movies.Movie
+        {
+            Name = "New Movie",
+            Id = Guid.NewGuid(),
+            Path = "/movies/new.mkv"
+        };
 
-        (string? itemId, DeviceQueueManager.LaunchRoute? route) =
+        (SkillResponse response, string? itemId, DeviceQueueManager.LaunchRoute? route) =
             await ReissueAndReadLedgerAsync("PT30S", staleSongId.ToString(), staleSongId,
-                seedRoute: DeviceQueueManager.LaunchRoute.VideoApp);
+                seedRoute: DeviceQueueManager.LaunchRoute.VideoApp,
+                seedLedgerItem: movie);
+
+        // The honest refusal: speech, session end, NO re-issue directive.
+        TestHelpers.AssertNoAudioPlayDirective(response);
+        Assert.True(response.Response?.ShouldEndSession);
+        Assert.Contains("sleep timer", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Sleep timer set", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
 
         // The seeded VideoApp entry survives the arm untouched.
-        Assert.NotEqual(staleSongId.ToString(), itemId);
+        Assert.Equal(movie.Id.ToString(), itemId);
+        Assert.Equal(DeviceQueueManager.LaunchRoute.VideoApp, route);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ArmingOverVideoAppBook_RefusesInsteadOfParallelAudioPlay()
+    {
+        // JF-632, the book arm of the refusal family: a NativeControlsForBooks book
+        // rides the VideoApp HLS path, which never touches the AudioPlayer token and
+        // emits no events the deadline could ride, so the arm refuses with the same
+        // video-family line (the PauseIntentHandler JF-564 precedent gives books no
+        // line of their own) and the ledger keeps the truthful book record.
+        Guid staleSongId = Guid.NewGuid();
+        var book = new MediaBrowser.Controller.Entities.AudioBook
+        {
+            Name = "Test Book",
+            Id = Guid.NewGuid(),
+            Path = "/books/test.m4b"
+        };
+
+        (SkillResponse response, string? itemId, DeviceQueueManager.LaunchRoute? route) =
+            await ReissueAndReadLedgerAsync("PT30S", staleSongId.ToString(), staleSongId,
+                seedRoute: DeviceQueueManager.LaunchRoute.VideoApp,
+                seedLedgerItem: book);
+
+        TestHelpers.AssertNoAudioPlayDirective(response);
+        Assert.True(response.Response?.ShouldEndSession);
+        Assert.Contains("sleep timer", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+
+        Assert.Equal(book.Id.ToString(), itemId);
+        Assert.Equal(DeviceQueueManager.LaunchRoute.VideoApp, route);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ArmingOverSeekModeMusic_RefusesInsteadOfDoubleAudio()
+    {
+        // JF-632, the judgment the task asked for: the JF-625 seek-mode music IS
+        // audio, and a sleep timer over it is a legitimate wish, but the medium gate
+        // must refuse anyway. Two independent reasons: the re-issue directive is an
+        // AudioPlayer.Play ReplaceAll of the STALE pre-launch token (the seek-mode
+        // launch never touched it), which doubles the audio of the very track
+        // playing with no VideoApp.Stop to clean it up; and even a correct re-issue
+        // could never honor the deadline, because VideoApp playback emits no events
+        // and the sleep deadline is enforced only at PlaybackNearlyFinished on the
+        // AudioPlayer path. The refusal speaks the seek-mode line, not the
+        // music-less video line, because the medium IS music.
+        Guid preLaunchSongId = Guid.NewGuid();
+        var seekModeTrack = new Audio
+        {
+            Name = "Seek Mode Track",
+            Id = Guid.NewGuid(),
+            Path = "/music/seek.flac"
+        };
+
+        (SkillResponse response, string? itemId, DeviceQueueManager.LaunchRoute? route) =
+            await ReissueAndReadLedgerAsync("PT30S", preLaunchSongId.ToString(), seekModeTrack.Id,
+                seedRoute: DeviceQueueManager.LaunchRoute.VideoApp,
+                seedLedgerItem: seekModeTrack);
+
+        TestHelpers.AssertNoAudioPlayDirective(response);
+        Assert.True(response.Response?.ShouldEndSession);
+        // The seek-mode line, not the video-family line.
+        Assert.Contains("progress bar", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("live TV", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+
+        Assert.Equal(seekModeTrack.Id.ToString(), itemId);
         Assert.Equal(DeviceQueueManager.LaunchRoute.VideoApp, route);
     }
 }

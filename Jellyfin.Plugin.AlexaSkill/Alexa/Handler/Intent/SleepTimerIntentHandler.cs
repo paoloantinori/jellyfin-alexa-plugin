@@ -13,6 +13,7 @@ using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
 
@@ -21,21 +22,33 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// <summary>
 /// Handler for SleepTimerIntent. Encodes a stop deadline into the current
 /// AudioPlayer token so that <c>PlaybackNearlyFinishedEventHandler</c> can
-/// check it and stop playback when the deadline passes.
+/// check it and stop playback when the deadline passes. JF-632: over a
+/// VideoApp-routed medium no deadline can ever fire and the re-issue would be
+/// parallel unstoppable audio, so the handler answers the honest refusal Tell
+/// instead (the PauseIntentHandler JF-564 precedent).
 /// </summary>
 public class SleepTimerIntentHandler : BaseHandler
 {
+    private readonly ILibraryManager? _libraryManager;
+    private readonly DeviceQueueManager? _queueManager;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="SleepTimerIntentHandler"/> class.
     /// </summary>
     /// <param name="sessionManager">Session manager instance.</param>
     /// <param name="config">The plugin configuration.</param>
     /// <param name="loggerFactory">Logger factory instance.</param>
+    /// <param name="libraryManager">The library manager, to resolve the ledger item of the JF-632 medium classification. Null keeps the pre-JF-632 behavior.</param>
+    /// <param name="queueManager">Optional per-device queue manager (the last-played ledger the JF-632 medium classification reads).</param>
     public SleepTimerIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
-        ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
+        ILoggerFactory loggerFactory,
+        ILibraryManager? libraryManager = null,
+        DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
     {
+        _libraryManager = libraryManager;
+        _queueManager = queueManager;
     }
 
     /// <inheritdoc/>
@@ -47,7 +60,8 @@ public class SleepTimerIntentHandler : BaseHandler
     }
 
     /// <summary>
-    /// Set (or cancel) a sleep timer for the currently playing media.
+    /// Set (or cancel) a sleep timer for the currently playing media, or refuse
+    /// honestly when the playing medium is VideoApp-routed (JF-632).
     /// </summary>
     /// <param name="request">The skill request which should be handled.</param>
     /// <param name="context">The context of the skill intent request.</param>
@@ -96,6 +110,32 @@ public class SleepTimerIntentHandler : BaseHandler
             return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale)));
         }
 
+        // JF-632: the re-issue below is a ReplaceAll AudioPlayer.Play, and a VideoApp
+        // launch never touches context.AudioPlayer.Token, so over a VideoApp-routed
+        // medium (movie, episode, live TV, a NativeControlsForBooks book, JF-625
+        // seek-mode music) this handler would re-issue the STALE audio item over the
+        // running video: parallel audio the platform cannot stop (no VideoApp.Stop
+        // exists), and no deadline could ever fire anyway (VideoApp playback emits no
+        // events; the sleep deadline is enforced only at PlaybackNearlyFinished on the
+        // AudioPlayer path). The gate reads the SAME evidence the JF-628 ledger guard
+        // below reads (the device ledger, through the ONE classifier), so the refusal
+        // and the ledger protection cannot drift; the PauseIntentHandler JF-564
+        // transport refusal is the precedent. The seek-mode judgment: that medium IS
+        // audio and a timer over it is a legitimate wish, but the re-issue directive
+        // would double the audio of the very track playing, and its deadline could
+        // not fire on the eventless VideoApp path, so it refuses too (seek-mode line).
+        // Unknown (cold ledger, no library manager, unresolvable item) keeps the
+        // audio paths unchanged.
+        PlaybackLaunchBuilder.PlayingMedium medium = Launch.ResolvePlayingMedium(context, _libraryManager, _queueManager);
+        if (PlaybackLaunchBuilder.IsVideoAppMedium(medium))
+        {
+            Logger.LogDebug("SleepTimer: {Medium} playing, refusing the re-issue honestly", medium);
+            string refusalKey = medium == PlaybackLaunchBuilder.PlayingMedium.VideoAppAudio
+                ? "CannotSetSleepTimerInSeekMode"
+                : "CannotSetSleepTimerOverVideo";
+            return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get(refusalKey, locale)));
+        }
+
         string itemId = context.AudioPlayer?.Token ?? session.FullNowPlayingItem.Id.ToString();
 
         // The item id is CANONICALIZED through the shared StreamTokenCodec before use
@@ -135,7 +175,10 @@ public class SleepTimerIntentHandler : BaseHandler
             // touches context.AudioPlayer.Token) with the sleep arm resolving the
             // STALE audio token/session, and overwriting the truthful VideoApp record
             // with (stale item, Audio) would poison the medium readers persistently
-            // (no event ever re-writes the ledger; review finding on JF-628).
+            // (no event ever re-writes the ledger; review finding on JF-628). The
+            // JF-632 medium gate above already refuses the RESOLVABLE shapes of this
+            // scenario before any write; this guard stays as the belt for the ones
+            // the classifier cannot see (no library manager, unresolvable item).
             (string? ledgerItemId, DeviceQueueManager.LaunchRoute? ledgerRoute) =
                 queues.GetLastPlayedSnapshot(deviceId);
             bool ledgerNamesOtherVideoAppItem =

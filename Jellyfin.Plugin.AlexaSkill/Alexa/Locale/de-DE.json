@@ -15,6 +15,8 @@
   "CannotNavigateMusicByVoice": "Tut mir leid, ich kann den Titel während der Wiedergabe mit der Fortschrittsleiste nicht per Sprache überspringen. Nutze die Leiste auf dem Bildschirm, um in der Warteschlange zu navigieren.",
   "CannotNavigateLiveTvByVoice": "Live-TV läuft von selbst weiter. Benutze den Touchscreen, um den Sender zu wechseln.",
   "CannotPauseVideoByVoice": "Leider kannst du Videos nicht per Stimme pausieren. Benutze den Touchscreen oder die Zurück-Taste, um zu beenden.",
+  "CannotSetSleepTimerOverVideo": "Tut mir leid, der Ausschalt-Timer funktioniert nur bei Musik. Videos, Live-TV und Hörbücher kann er nicht per Stimme stoppen.",
+  "CannotSetSleepTimerInSeekMode": "Tut mir leid, ich kann keinen Ausschalt-Timer setzen, während Musik mit der Fortschrittsleiste läuft.",
   "PlaybackFailed": "Beim Abspielen ist etwas schiefgelaufen. Bitte versuche es erneut.",
   "FolderNoPlayableContent": "Dieser Ordner enthält keinen abspielbaren Inhalt.",
   "SomethingWrong": "Etwas ist schiefgelaufen, bitte versuche es erneut.",

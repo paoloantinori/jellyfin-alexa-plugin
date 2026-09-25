@@ -21,6 +21,8 @@
   "CannotNavigateMusicByVoice": "Lo siento, no puedo saltar la canción por voz durante la reproducción con la barra de progreso. Usa la barra en la pantalla para moverte por la cola.",
   "CannotNavigateLiveTvByVoice": "La TV en vivo sigue sola. Usa la pantalla táctil para cambiar de canal.",
   "CannotPauseVideoByVoice": "Lo siento, no se puede pausar el video con la voz. Usa la pantalla táctil o el botón atrás para salir.",
+  "CannotSetSleepTimerOverVideo": "Lo siento, el temporizador de apagado solo funciona con música. No puede detener videos, TV en vivo ni audiolibros por voz.",
+  "CannotSetSleepTimerInSeekMode": "Lo siento, no puedo establecer el temporizador de apagado mientras suena música con la barra de progreso.",
   "PlaybackFailed": "Algo salió mal al reproducir tu contenido. Por favor, inténtalo de nuevo.",
   "FolderNoPlayableContent": "Esta carpeta no tiene contenido reproducible.",
   "SomethingWrong": "Algo salió mal, por favor inténtalo de nuevo.",

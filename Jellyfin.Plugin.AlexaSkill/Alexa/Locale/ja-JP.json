@@ -15,6 +15,8 @@
   "CannotNavigateMusicByVoice": "申し訳ありません。 progress bar を使った再生中は音声で曲をスキップできません。画面のバーを使ってキューを移動してください。",
   "CannotNavigateLiveTvByVoice": "ライブTVは自動的に続きます。チャンネルを変えるにはタッチ画面をお使いください。",
   "CannotPauseVideoByVoice": "申し訳ありませんが、音声では動画を一時停止できません。タッチ画面で一時停止するか、戻るボタンで終了してください。",
+  "CannotSetSleepTimerOverVideo": "申し訳ありません、スリープタイマーは音楽専用です。動画、ライブTV、オーディオブックを音声で停止することはできません。",
+  "CannotSetSleepTimerInSeekMode": "申し訳ありません、プログレスバーでの再生中はスリープタイマーを設定できません。",
   "PlaybackFailed": "メディアの再生中にエラーが発生しました。もう一度お試しください。",
   "FolderNoPlayableContent": "このフォルダーには再生できるコンテンツがありません。",
   "SomethingWrong": "エラーが発生しました。もう一度お試しください。",
