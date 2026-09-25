@@ -146,22 +146,15 @@ public class ResumeMathTests : IDisposable
     public void GetAudiobookStartTicks_TrackedPositionBeatsFallback()
     {
         var tracker = TestHelpers.CreatePositionTracker("resume-math");
-        Plugin.Instance!.AudiobookPositionTracker = tracker;
-        try
-        {
-            string key = Guid.NewGuid().ToString("N");
-            // Segment 31 -> conservative (31-1)*10s = 5 min, must beat the 2 min fallback.
-            tracker.RecordSegment(key, 31);
+        using var trackerSwap = TestHelpers.SwapPluginPositionTracker(tracker);
 
-            Assert.Equal(
-                TimeSpan.FromMinutes(5).Ticks,
-                ResumeMath.GetAudiobookStartTicks(key, TimeSpan.FromMinutes(2).Ticks));
-        }
-        finally
-        {
-            Plugin.Instance.AudiobookPositionTracker = null;
-            tracker.Dispose();
-        }
+        string key = Guid.NewGuid().ToString("N");
+        // Segment 31 -> conservative (31-1)*10s = 5 min, must beat the 2 min fallback.
+        tracker.RecordSegment(key, 31);
+
+        Assert.Equal(
+            TimeSpan.FromMinutes(5).Ticks,
+            ResumeMath.GetAudiobookStartTicks(key, TimeSpan.FromMinutes(2).Ticks));
     }
 
     // ---- SortAndFindResumeIndex: single-pass favorites/rating sort + resume detection ----

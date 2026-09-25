@@ -176,24 +176,18 @@ public class AlbumAnnounceVehicleTests : PluginTestBase
             tracker.RecordSegment(album.Id.ToString(), seg);
         }
 
-        Plugin.Instance!.AudiobookPositionTracker = tracker;
-        try
-        {
-            var response = await svc.BuildAlbumPlayResponseAsync(
-                album, jellyfinUser, TestHelpers.CreateTestUser(), Session(),
-                TestHelpers.CreateContextWithVideoApp(), "it-IT",
-                library.Object, new Mock<IUserDataManager>().Object, null, "AlbumAnnounceVehicle",
-                request: new IntentRequest());
+        using var trackerSwap = TestHelpers.SwapPluginPositionTracker(tracker);
 
-            var launch = Assert.Single(response.Response.Directives.OfType<VideoAppLaunchDirective>());
-            // Offset = track 1 runtime (4 min) + the 60s in-track partial.
-            Assert.Contains($"start={TimeSpan.FromMinutes(4).Ticks + TimeSpan.FromSeconds(60).Ticks}", launch.VideoItem.Source, StringComparison.Ordinal);
-            // The metadata names the resume TRACK (track 2), not track 1.
-            Assert.Equal("Track 2", launch.VideoItem.Metadata?.Title);
-        }
-        finally
-        {
-            Plugin.Instance.AudiobookPositionTracker = null;
-        }
+        var response = await svc.BuildAlbumPlayResponseAsync(
+            album, jellyfinUser, TestHelpers.CreateTestUser(), Session(),
+            TestHelpers.CreateContextWithVideoApp(), "it-IT",
+            library.Object, new Mock<IUserDataManager>().Object, null, "AlbumAnnounceVehicle",
+            request: new IntentRequest());
+
+        var launch = Assert.Single(response.Response.Directives.OfType<VideoAppLaunchDirective>());
+        // Offset = track 1 runtime (4 min) + the 60s in-track partial.
+        Assert.Contains($"start={TimeSpan.FromMinutes(4).Ticks + TimeSpan.FromSeconds(60).Ticks}", launch.VideoItem.Source, StringComparison.Ordinal);
+        // The metadata names the resume TRACK (track 2), not track 1.
+        Assert.Equal("Track 2", launch.VideoItem.Metadata?.Title);
     }
 }

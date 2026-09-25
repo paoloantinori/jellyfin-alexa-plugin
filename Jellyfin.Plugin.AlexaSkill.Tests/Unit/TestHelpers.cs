@@ -370,9 +370,11 @@ internal static class TestHelpers
 
     /// <summary>
     /// A real <see cref="AudiobookPositionTracker"/> on a registered temp dir (the class
-    /// is sealed, so tests use the real thing). Wire it into
-    /// <c>Plugin.Instance.AudiobookPositionTracker</c> and Dispose it in finally so the
-    /// persist debounce never outlives the test.
+    /// is sealed, so tests use the real thing). Wire it via
+    /// <see cref="SwapPluginPositionTracker"/>, whose scope owns the tracker's disposal
+    /// (the CreateDeviceQueueManager / SwapPluginQueueManager pair's contract: the
+    /// factory mints on a registered dir, the swap scope disposes, so the persist
+    /// debounce never outlives the test).
     /// </summary>
     internal static AudiobookPositionTracker CreatePositionTracker(string nameSuffix)
         => new(
@@ -397,41 +399,65 @@ internal static class TestHelpers
     /// <summary>
     /// JF-630: the ONE Plugin.Instance.DeviceQueueManager swap scope (was four
     /// suite-level capture/assign/restore/dispose copies plus two method-level
-    /// swap-to-null pairs). Points the plugin at <paramref name="manager"/> and on
-    /// Dispose restores the captured previous value BEFORE disposing the swapped-in
-    /// manager (nothing may read a disposed manager through the plugin). The scope
-    /// owns the swapped-in manager's disposal: pass a manager whose lifetime ends
-    /// with the scope (every site creates a fresh one for exactly this shape).
-    /// Restoring the captured previous value honestly covers the former
-    /// swap-to-null sites too: the test host's plugin instance is minted per test
-    /// class and only SkillStartup, which never runs here, assigns the manager, so
-    /// the captured previous value IS null there.
+    /// swap-to-null pairs). Contract lives on the shared core
+    /// <see cref="PluginInstanceSwap{T}"/>: restore-before-dispose, scope-owned
+    /// disposal, and restore-previous honestly covers the former swap-to-null sites
+    /// (the test host's plugin instance is minted per test class and only
+    /// SkillStartup, which never runs here, assigns the manager, so the captured
+    /// previous value IS null there).
     /// </summary>
     internal static IDisposable SwapPluginQueueManager(DeviceQueueManager manager)
-        => new PluginQueueManagerSwap(manager);
+        => new PluginInstanceSwap<DeviceQueueManager>(
+            manager, p => p.DeviceQueueManager, (p, v) => p.DeviceQueueManager = v);
 
-    /// <summary>The scope object behind <see cref="SwapPluginQueueManager"/>.</summary>
-    private sealed class PluginQueueManagerSwap : IDisposable
+    /// <summary>
+    /// JF-633: the ONE Plugin.Instance.AudiobookPositionTracker swap scope (was ten
+    /// method-level assign / restore-null / dispose finallys). Same shared-core
+    /// contract as <see cref="SwapPluginQueueManager"/>: restore-before-dispose and
+    /// scope-owned tracker disposal (the persist debounce teardown), with
+    /// restore-previous honestly covering the former restore-to-null sites (only
+    /// SkillStartup.StartAsync, which never runs in the test host, assigns the
+    /// tracker in production, so the captured previous value IS null here too).
+    /// </summary>
+    internal static IDisposable SwapPluginPositionTracker(AudiobookPositionTracker tracker)
+        => new PluginInstanceSwap<AudiobookPositionTracker>(
+            tracker, p => p.AudiobookPositionTracker, (p, v) => p.AudiobookPositionTracker = v);
+
+    /// <summary>
+    /// The ONE Plugin.Instance swap core behind <see cref="SwapPluginQueueManager"/>
+    /// and <see cref="SwapPluginPositionTracker"/> (JF-633: the ordering invariant
+    /// lives in exactly one place, not one hand-copied scope class per property).
+    /// Captures the previous value via <paramref name="get"/>, assigns
+    /// <paramref name="swappedIn"/> via <paramref name="assign"/>, and on Dispose
+    /// restores the captured previous value BEFORE disposing the swapped-in instance
+    /// (nothing may read a disposed instance through the plugin). The scope owns the
+    /// swapped-in instance's disposal: pass one whose lifetime ends with the scope
+    /// (every site creates a fresh one for exactly this shape).
+    /// </summary>
+    private sealed class PluginInstanceSwap<T> : IDisposable
+        where T : class, IDisposable
     {
-        private readonly DeviceQueueManager? _previous;
-        private readonly DeviceQueueManager _manager;
+        private readonly Action<Plugin, T?> _assign;
+        private readonly T? _previous;
+        private readonly T _swappedIn;
 
-        internal PluginQueueManagerSwap(DeviceQueueManager manager)
+        internal PluginInstanceSwap(T swappedIn, Func<Plugin, T?> get, Action<Plugin, T?> assign)
         {
-            // Loud by design (the review's call): a swap issued before
+            // Loud by design (the JF-630 review's call): a swap issued before
             // EnsurePluginInstance must THROW, not silently skip the assign while
-            // Dispose still disposes the manager (a green test never exercising the
-            // swapped manager). Every call site runs EnsurePluginInstance first.
+            // Dispose still disposes the instance (a green test never exercising the
+            // swapped value). Every call site runs EnsurePluginInstance first.
             Plugin plugin = Plugin.Instance!;
-            _previous = plugin.DeviceQueueManager;
-            _manager = manager;
-            plugin.DeviceQueueManager = manager;
+            _previous = get(plugin);
+            _swappedIn = swappedIn;
+            _assign = assign;
+            assign(plugin, swappedIn);
         }
 
         public void Dispose()
         {
-            Plugin.Instance!.DeviceQueueManager = _previous;
-            _manager.Dispose();
+            _assign(Plugin.Instance!, _previous);
+            _swappedIn.Dispose();
         }
     }
 

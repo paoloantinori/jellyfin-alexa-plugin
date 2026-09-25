@@ -558,7 +558,7 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
     {
         Plugin.Instance!.Configuration.NativeControlsForBooks = true;
         var tracker = TestHelpers.CreatePositionTracker("resume-ab");
-        Plugin.Instance.AudiobookPositionTracker = tracker;
+        using var trackerSwap = TestHelpers.SwapPluginPositionTracker(tracker);
         var ledger = TestHelpers.CreateDeviceQueueManager("resume-ab-ledger");
         using var pluginQueueSwap = TestHelpers.SwapPluginQueueManager(ledger);
         try
@@ -619,8 +619,9 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
         }
         finally
         {
-            Plugin.Instance.AudiobookPositionTracker = null;
-            tracker.Dispose();
+            // Config flag only (not resource teardown): the tracker and ledger
+            // teardown lives in the swap scopes above (JF-633 chained all resource
+            // teardown through the usings).
             Plugin.Instance.Configuration.NativeControlsForBooks = false;
         }
     }
@@ -749,7 +750,7 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
     {
         Plugin.Instance!.Configuration.NativeControlsForBooks = true;
         var tracker = TestHelpers.CreatePositionTracker("resume-ab-tail");
-        Plugin.Instance.AudiobookPositionTracker = tracker;
+        using var trackerSwap = TestHelpers.SwapPluginPositionTracker(tracker);
         try
         {
             var handler = CreateHandler();
@@ -796,8 +797,8 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
         }
         finally
         {
-            Plugin.Instance.AudiobookPositionTracker = null;
-            tracker.Dispose();
+            // Config flag only (not resource teardown): the tracker teardown lives
+            // in the swap scope above (JF-633).
             Plugin.Instance.Configuration.NativeControlsForBooks = false;
         }
     }
@@ -863,7 +864,7 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
     {
         Plugin.Instance!.Configuration.NativeControlsForBooks = true;
         var tracker = TestHelpers.CreatePositionTracker("resume-ab-displaced");
-        Plugin.Instance.AudiobookPositionTracker = tracker;
+        using var trackerSwap = TestHelpers.SwapPluginPositionTracker(tracker);
         try
         {
             var handler = CreateHandler();
@@ -918,8 +919,8 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
         }
         finally
         {
-            Plugin.Instance.AudiobookPositionTracker = null;
-            tracker.Dispose();
+            // Config flag only (not resource teardown): the tracker teardown lives
+            // in the swap scope above (JF-633).
             Plugin.Instance.Configuration.NativeControlsForBooks = false;
         }
     }
@@ -934,7 +935,7 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
     {
         Plugin.Instance!.Configuration.NativeControlsForBooks = true;
         var tracker = TestHelpers.CreatePositionTracker("resume-ab-screenless");
-        Plugin.Instance.AudiobookPositionTracker = tracker;
+        using var trackerSwap = TestHelpers.SwapPluginPositionTracker(tracker);
         try
         {
             var handler = CreateHandler();
@@ -975,8 +976,8 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
         }
         finally
         {
-            Plugin.Instance.AudiobookPositionTracker = null;
-            tracker.Dispose();
+            // Config flag only (not resource teardown): the tracker teardown lives
+            // in the swap scope above (JF-633).
             Plugin.Instance.Configuration.NativeControlsForBooks = false;
         }
     }

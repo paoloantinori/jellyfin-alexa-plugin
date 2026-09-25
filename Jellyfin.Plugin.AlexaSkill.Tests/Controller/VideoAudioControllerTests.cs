@@ -4151,22 +4151,15 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         _cache.RegisterHlsDirectory(bookIdStr, 0);
 
         var tracker = CreatePositionTracker("jf499-tracker-folder");
-        Plugin.Instance!.AudiobookPositionTracker = tracker;
-        try
-        {
-            var controller = CreateController(bookIdStr);
+        using var trackerSwap = SwapPluginPositionTracker(tracker);
 
-            ActionResult result = await controller.GetSegment(bookIdStr, "seg_0005.ts");
+        var controller = CreateController(bookIdStr);
 
-            Assert.IsType<PhysicalFileResult>(result);
-            // The tracker's conservative resume position: (highWaterMark - 1) * 10s.
-            Assert.Equal(4 * 10 * TimeSpan.TicksPerSecond, tracker.GetPositionTicks(bookIdStr));
-        }
-        finally
-        {
-            Plugin.Instance.AudiobookPositionTracker = null;
-            tracker.Dispose();
-        }
+        ActionResult result = await controller.GetSegment(bookIdStr, "seg_0005.ts");
+
+        Assert.IsType<PhysicalFileResult>(result);
+        // The tracker's conservative resume position: (highWaterMark - 1) * 10s.
+        Assert.Equal(4 * 10 * TimeSpan.TicksPerSecond, tracker.GetPositionTicks(bookIdStr));
     }
 
     /// <summary>
@@ -4193,21 +4186,14 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         _cache.RegisterHlsDirectory(episodeIdStr, 0);
 
         var tracker = CreatePositionTracker("jf499-tracker-episode");
-        Plugin.Instance!.AudiobookPositionTracker = tracker;
-        try
-        {
-            var controller = CreateController(episodeIdStr);
+        using var trackerSwap = SwapPluginPositionTracker(tracker);
 
-            ActionResult result = await controller.GetSegment(episodeIdStr, "seg_0005.ts");
+        var controller = CreateController(episodeIdStr);
 
-            Assert.IsType<PhysicalFileResult>(result);
-            Assert.Equal(0, tracker.GetPositionTicks(episodeIdStr));
-        }
-        finally
-        {
-            Plugin.Instance.AudiobookPositionTracker = null;
-            tracker.Dispose();
-        }
+        ActionResult result = await controller.GetSegment(episodeIdStr, "seg_0005.ts");
+
+        Assert.IsType<PhysicalFileResult>(result);
+        Assert.Equal(0, tracker.GetPositionTicks(episodeIdStr));
     }
 
     // ---- W2a: evidence-based monitor budget ----

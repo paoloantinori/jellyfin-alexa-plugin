@@ -499,7 +499,7 @@ public class StartOverIntentHandlerTests : PluginTestBase, IDisposable
     {
         Plugin.Instance!.Configuration.NativeControlsForBooks = true;
         var tracker = TestHelpers.CreatePositionTracker("startover-ab");
-        Plugin.Instance.AudiobookPositionTracker = tracker;
+        using var trackerSwap = TestHelpers.SwapPluginPositionTracker(tracker);
         var ledger = TestHelpers.CreateDeviceQueueManager("startover-ab-ledger");
         using var pluginQueueSwap = TestHelpers.SwapPluginQueueManager(ledger);
         try
@@ -569,8 +569,9 @@ public class StartOverIntentHandlerTests : PluginTestBase, IDisposable
         }
         finally
         {
-            Plugin.Instance.AudiobookPositionTracker = null;
-            tracker.Dispose();
+            // Config flag only (not resource teardown): the tracker and ledger
+            // teardown lives in the swap scopes above (JF-633 chained all resource
+            // teardown through the usings).
             Plugin.Instance.Configuration.NativeControlsForBooks = false;
         }
     }
