@@ -342,8 +342,10 @@ public sealed class PlaybackLaunchBuilder
     /// is the only record a VideoApp launch leaves (those launches never touch
     /// <c>context.AudioPlayer.Token</c>), and it is written by every launch site: the
     /// BuildAudioPlayerResponse chokepoint, the LastPlayedResponseInterceptor
-    /// (movie/episode directives) and the VideoApp builders (channel, video-audio,
-    /// audiobook), each recording its route beside the item. Classification rules,
+    /// (movie/episode directives), the VideoApp builders (channel, video-audio,
+    /// audiobook) and the sleep-timer re-issue (JF-628, the one AudioPlayer.Play
+    /// minted outside the chokepoint), each recording its route beside the item.
+    /// Classification rules,
     /// in order: an EMPTY ledger (or an unresolvable item) yields
     /// <see cref="PlayingMedium.Unknown"/> so a cold handler keeps its existing
     /// behavior; a token naming the ledger item yields <see cref="PlayingMedium.Audio"/>

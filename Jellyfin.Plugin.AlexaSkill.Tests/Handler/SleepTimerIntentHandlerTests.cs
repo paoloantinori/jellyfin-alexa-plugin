@@ -9,6 +9,7 @@ using global::Alexa.NET.Request.Type;
 using global::Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Entities.Audio;
@@ -21,18 +22,54 @@ using Xunit;
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
 [Collection("Plugin")]
-public class SleepTimerIntentHandlerTests : PluginTestBase
+public class SleepTimerIntentHandlerTests : PluginTestBase, IDisposable
 {
+    private const string DeviceId = "test-device";
+
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly PluginConfiguration _config;
     private readonly ILoggerFactory _loggerFactory;
+    private readonly DeviceQueueManager _queueManager;
+    private readonly DeviceQueueManager? _previousPluginQueueManager;
 
     public SleepTimerIntentHandlerTests()
     {
         _sessionManagerMock = new Mock<ISessionManager>();
         _config = new PluginConfiguration();
-        TestHelpers.SetServerAddress(_config, "https://test.example.com");
         _loggerFactory = LoggerFactory.Create(b => { });
+
+        // The ledger/launch-scope writes go through Plugin.Instance's manager (the
+        // handler has no injected queue manager); point the plugin at this suite's
+        // manager and restore the previous value on dispose (the temp dir is owned
+        // by the registered sweep).
+        _queueManager = TestHelpers.CreateDeviceQueueManager("sleep-timer-tests");
+        TestHelpers.EnsurePluginInstance(
+            _config,
+            _loggerFactory,
+            c => { },
+            "sleep-timer-tests");
+
+        // AFTER EnsurePluginInstance: the helper's create path overwrites
+        // ServerAddress on the SAME config reference (its mocked deserializer
+        // returns this instance), so a pin placed before it is silently dead.
+        TestHelpers.SetServerAddress(_config, "https://test.example.com");
+
+        _previousPluginQueueManager = Jellyfin.Plugin.AlexaSkill.Plugin.Instance?.DeviceQueueManager;
+        if (Jellyfin.Plugin.AlexaSkill.Plugin.Instance != null)
+        {
+            Jellyfin.Plugin.AlexaSkill.Plugin.Instance.DeviceQueueManager = _queueManager;
+        }
+    }
+
+    public void Dispose()
+    {
+        if (Jellyfin.Plugin.AlexaSkill.Plugin.Instance != null)
+        {
+            Jellyfin.Plugin.AlexaSkill.Plugin.Instance.DeviceQueueManager = _previousPluginQueueManager;
+        }
+
+        _queueManager.Dispose();
+        GC.SuppressFinalize(this);
     }
 
     private SleepTimerIntentHandler CreateHandler()
@@ -317,5 +354,99 @@ public class SleepTimerIntentHandlerTests : PluginTestBase
         Assert.Contains(songId.ToString(), directive.AudioItem.Stream.Url, StringComparison.Ordinal);
         Assert.DoesNotContain("|sleep:", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
         Assert.Equal(90_000, directive.AudioItem.Stream.OffsetInMilliseconds);
+    }
+
+    // JF-628: the re-issue directive is a ReplaceAll AudioPlayer.Play minted OUTSIDE
+    // the BuildAudioPlayerResponse chokepoint (its own comment says so), so it owes
+    // the chokepoint's ledger write itself (RecordLastPlayed's invariant: every launch
+    // site records). Arming mid-album must move the device ledger onto the ARMED item;
+    // pre-JF-628 it stayed pinned on the older launch track the chokepoint recorded
+    // when the album started, desyncing from the composite token.
+
+    /// <summary>
+    /// Shared JF-628 arrange: pre-pins the device ledger on an EARLIER launch's record,
+    /// runs the sleep handler over the re-issued track's token/session, and returns the
+    /// ledger snapshot the handler left behind. The arm and cancel branches differ only
+    /// in duration and token shape; the VideoApp branch differs only in the seed route.
+    /// </summary>
+    private async Task<(string? ItemId, DeviceQueueManager.LaunchRoute? Route)> ReissueAndReadLedgerAsync(
+        string durationValue, string reissuedTrackToken, Guid reissuedTrackId,
+        DeviceQueueManager.LaunchRoute seedRoute = DeviceQueueManager.LaunchRoute.Audio)
+    {
+        Guid earlierLaunchId = Guid.NewGuid();
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(durationValue: durationValue);
+        var context = CreateContext();
+        context.AudioPlayer = new PlaybackState
+        {
+            // The queue advanced past the earlier launch, so the token (and the
+            // session's now-playing item) name the track being re-issued.
+            Token = reissuedTrackToken,
+            OffsetInMilliseconds = 90_000
+        };
+        var user = CreateUser();
+        var session = CreateSession();
+
+        var audioItem = new Audio { Name = "Reissued Track", Id = reissuedTrackId, RunTimeTicks = TimeSpan.FromMinutes(7).Ticks };
+        session.FullNowPlayingItem = audioItem;
+        session.PlayState = new PlayerStateInfo { PositionTicks = TimeSpan.FromMinutes(1).Ticks };
+
+        _queueManager.RecordLastPlayed(DeviceId, earlierLaunchId.ToString(), seedRoute);
+        Assert.Equal(earlierLaunchId.ToString(), _queueManager.GetLastPlayedItemId(DeviceId));
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.NotEmpty(response.Response!.Directives);
+        return _queueManager.GetLastPlayedSnapshot(DeviceId);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ArmingMidAlbum_RecordsLedgerOnArmedItem()
+    {
+        Guid armedTrackId = Guid.NewGuid();
+
+        (string? itemId, DeviceQueueManager.LaunchRoute? route) =
+            await ReissueAndReadLedgerAsync("PT30S", armedTrackId.ToString(), armedTrackId);
+
+        // The ledger names the ARMED item on the audio route, agreeing with the
+        // composite token instead of the older launch track.
+        Assert.Equal(armedTrackId.ToString(), itemId);
+        Assert.Equal(DeviceQueueManager.LaunchRoute.Audio, route);
+    }
+
+    [Fact]
+    public async Task HandleAsync_CancelReplayMidSleepComposite_RecordsLedgerOnReplayedItem()
+    {
+        // The cancel replay re-issues the item too (same ReplaceAll directive, clean
+        // token), so the shared write site must cover this branch as well.
+        Guid armedTrackId = Guid.NewGuid();
+        string compositeToken = $"{armedTrackId}|sleep:{DateTimeOffset.UtcNow.AddMinutes(30).UtcTicks}";
+
+        (string? itemId, DeviceQueueManager.LaunchRoute? route) =
+            await ReissueAndReadLedgerAsync("0", compositeToken, armedTrackId);
+
+        Assert.Equal(armedTrackId.ToString(), itemId);
+        Assert.Equal(DeviceQueueManager.LaunchRoute.Audio, route);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ArmingOverVideoAppRoutedLedger_KeepsTheVideoAppRecord()
+    {
+        // Review finding on JF-628: a VideoApp launch on screen never touches
+        // context.AudioPlayer.Token, so a sleep arm there resolves the STALE audio
+        // token/session. The ledger write must not overwrite the truthful
+        // (video item, VideoApp) record with (stale audio item, Audio): no event
+        // ever re-writes the ledger, so the poison would persist and break the
+        // medium readers (pause/next refusals, resume arbitration).
+        Guid staleSongId = Guid.NewGuid();
+
+        (string? itemId, DeviceQueueManager.LaunchRoute? route) =
+            await ReissueAndReadLedgerAsync("PT30S", staleSongId.ToString(), staleSongId,
+                seedRoute: DeviceQueueManager.LaunchRoute.VideoApp);
+
+        // The seeded VideoApp entry survives the arm untouched.
+        Assert.NotEqual(staleSongId.ToString(), itemId);
+        Assert.Equal(DeviceQueueManager.LaunchRoute.VideoApp, route);
     }
 }

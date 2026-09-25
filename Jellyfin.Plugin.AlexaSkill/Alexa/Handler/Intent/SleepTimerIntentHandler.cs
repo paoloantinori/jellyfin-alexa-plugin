@@ -11,6 +11,7 @@ using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
@@ -115,10 +116,36 @@ public class SleepTimerIntentHandler : BaseHandler
         // URL (base 0, the item timeline), and without this write a transcode-launched
         // stream's stale base would compose over the replay's offsets at its events
         // (review JF-522; the double-add is otherwise bounded only by the runtime guard).
-        if (itemGuid != Guid.Empty)
+        if (itemGuid != Guid.Empty && context.GetDeviceId() is { Length: > 0 } deviceId)
         {
-            Plugin.Instance?.DeviceQueueManager?.RecordLaunchBase(
-                context.System?.Device?.DeviceID ?? string.Empty, itemGuid.ToString(), 0, enqueued: false);
+            DeviceQueueManager? queues = Plugin.Instance?.DeviceQueueManager;
+            queues?.RecordLaunchBase(deviceId, itemGuid.ToString(), 0, enqueued: false);
+
+            // JF-628: the same chokepoint-skipping site owes the chokepoint's OTHER
+            // write. RecordLastPlayed's invariant (ResolvePlayingMedium's doc: the
+            // ledger is written by every launch site) applies because the re-issue IS
+            // a user-initiated ReplaceAll play of this item: without this record the
+            // ledger stays pinned on the older launch track while the composite token
+            // names the armed track, desyncing every ledger reader (the
+            // ResolvePlayingMedium/ResolveCurrentPlayingItem snapshot reads and the
+            // JF-619 GetDeviceResumePointer stamp arbitration). The ONE exception is
+            // a ledger entry another launch recorded on the VideoApp route for a
+            // DIFFERENT item: that shape is a VideoApp launch on screen (which never
+            // touches context.AudioPlayer.Token) with the sleep arm resolving the
+            // STALE audio token/session, and overwriting the truthful VideoApp record
+            // with (stale item, Audio) would poison the medium readers persistently
+            // (no event ever re-writes the ledger; review finding on JF-628).
+            (string? ledgerItemId, DeviceQueueManager.LaunchRoute? ledgerRoute) =
+                queues?.GetLastPlayedSnapshot(deviceId) ?? (null, null);
+            bool ledgerNamesOtherVideoAppItem =
+                ledgerRoute == DeviceQueueManager.LaunchRoute.VideoApp
+                && Guid.TryParse(ledgerItemId, out Guid ledgerGuid)
+                && ledgerGuid != itemGuid;
+            if (!ledgerNamesOtherVideoAppItem)
+            {
+                queues?.RecordLastPlayed(
+                    deviceId, itemGuid.ToString(), DeviceQueueManager.LaunchRoute.Audio);
+            }
         }
 
         int offsetInMilliseconds = 0;

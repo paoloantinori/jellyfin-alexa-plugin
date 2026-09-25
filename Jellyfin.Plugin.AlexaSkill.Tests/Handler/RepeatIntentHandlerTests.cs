@@ -458,9 +458,14 @@ public class RepeatIntentHandlerTests : PluginTestBase, IDisposable
     /// <summary>
     /// JF-626 fix (a), the real broken shape: the sleep launch is an INLINE
     /// directive (SleepTimerIntentHandler builds it without the
-    /// BuildAudioPlayerResponse chokepoint), so it never records the ledger;
-    /// arming the timer mid-album leaves the ledger pinning the launch track
-    /// while the composite token names the armed track. The pre-JF-626 raw
+    /// BuildAudioPlayerResponse chokepoint), so pre-JF-628 it never recorded
+    /// the ledger; arming the timer mid-album left the ledger pinning the
+    /// launch track while the composite token names the armed track. JF-628
+    /// closed the write side (the sleep handler now records the ledger too, so
+    /// in production both agree on the armed item); this test now pins the
+    /// READER-side compensation on the still-reachable divergent shape (the
+    /// pre-JF-628 upgrade window, and the token-wins-over-stale-ledger
+    /// discipline the bare queue-advance shape shares). The pre-JF-626 raw
     /// Guid.TryParse on the composite form silently declined to the ledger leg
     /// and restarted the OLDER track once the session item was cleared (the
     /// documented PlaybackStopped cleanup); the shared codec keeps the token
