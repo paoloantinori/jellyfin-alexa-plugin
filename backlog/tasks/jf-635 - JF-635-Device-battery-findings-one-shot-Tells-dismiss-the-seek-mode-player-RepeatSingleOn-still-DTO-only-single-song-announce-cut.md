@@ -6,6 +6,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-25 15:31'
+updated_date: '2026-09-25 16:23'
 labels:
   - bug
   - platform
@@ -41,3 +42,9 @@ Three findings from the battery's failing items, each with log-verified root cau
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-09-25 17:51 REFINEMENT (second battery): the simple 'one-shot Tells dismiss the player' hypothesis is DEAD. MediaInfo answered a session.new=TRUE one-shot during seek-mode playback (17:51:47) with shouldEndSession=TRUE, card, AND an APL RenderDocument directive - and the playback SURVIVED (the follow-up 17:52:16 MediaInfo came in a continuing session with music still going). The RateItem Tell that closed playback (17:14:53) had PlainText + shouldEndSession=true and NO visual directive. Refined hypothesis: during VideoApp playback, a one-shot response with NO screen content (no VideoApp.Launch, no RenderDocument) dismisses the player surface; a response carrying ANY visual directive preserves the audio stream. MITIGATION DIRECTION (cheap): Q&A/writer handlers answering during a VideoAppAudio medium attach the existing NowPlaying APL document (AplHelper.BuildNowPlayingDirective, the same doc MediaInfo already attaches - which is WHY MediaInfo survived). OPEN CONFIRMATION (asked Paolo): did the music actually continue right after 'cosa sta suonando' answered at 17:51:47, before the 17:52:04 re-launch? Also JF-622's INVALID_ALERT_INFO second fix deployed 17:55: content[].text added alongside ssml (the canonical helper populates text; the API reference names it the default field); reminder retest pending.
+<!-- SECTION:NOTES:END -->

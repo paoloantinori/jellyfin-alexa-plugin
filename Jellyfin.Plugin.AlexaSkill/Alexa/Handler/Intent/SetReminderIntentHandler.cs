@@ -225,6 +225,11 @@ public class SetReminderIntentHandler : BaseHandler
                         new()
                         {
                             Locale = locale,
+                            // JF-622 device round: the API's INVALID_ALERT_INFO with
+                            // ssml-only content; the canonical helper (Alexa.NET.Reminders)
+                            // populates TEXT as the primary field and the API reference
+                            // names content[].text the default - send both.
+                            Text = spokenText,
                             Ssml = $"<speak>{SpeechBuilder.EscapeXml(spokenText)}</speak>"
                         }
                     }
