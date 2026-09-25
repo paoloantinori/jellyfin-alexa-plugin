@@ -16,7 +16,6 @@ using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Entities;
-using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
 

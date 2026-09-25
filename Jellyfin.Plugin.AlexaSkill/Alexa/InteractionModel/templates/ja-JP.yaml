@@ -352,12 +352,14 @@ intents:
       - ビデオをお気に入りから削除して
       - 曲をお気に入りから削除して
   - name: RateItemIntent
+    # JF-513: ja-JP slots MUST be space-delimited (SMAPI rejects slot-glued samples
+    # with InvalidCharInSamples; the JF-326 first cut hit exactly this on 星{star_rating}).
     samples:
-      - これを星{star_rating}で評価して
-      - この曲を星{star_rating}で評価して
-      - これに星{star_rating}をつけて
-      - この曲に星{star_rating}をつけて
-      - 星{star_rating}で評価して
+      - これを星 {star_rating} で評価して
+      - この曲を星 {star_rating} で評価して
+      - これに星 {star_rating} をつけて
+      - この曲に星 {star_rating} をつけて
+      - 星 {star_rating} で評価して
     slots:
       - name: star_rating
         type: AMAZON.NUMBER
