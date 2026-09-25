@@ -57,7 +57,7 @@ public class PlaybackPositionProvenanceTests : PluginTestBase, IDisposable
         // The PlaybackStarted promote/compose and the enqueue directive's chokepoint
         // record run through Plugin.Instance when the handler was constructed without
         // an injected manager; point the plugin at this suite's manager (the temp dir
-        // is owned by the registered sweep) and let the swap scope restore + dispose.
+        // is owned by the registered sweep).
         _pluginQueueSwap = TestHelpers.SwapPluginQueueManager(_queueManager);
     }
 

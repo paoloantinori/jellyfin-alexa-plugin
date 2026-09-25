@@ -62,7 +62,7 @@ public class ResumeConfirmationTranscodeBaseTests : PluginTestBase, IDisposable
 
         // The device-last-played offer path reads the ledger through Plugin.Instance
         // (LaunchRequestHandler has no injected queue manager); the swap scope points
-        // it at this suite's manager and restores + disposes on teardown.
+        // it at this suite's manager.
         _pluginQueueSwap = TestHelpers.SwapPluginQueueManager(_queueManager);
     }
 

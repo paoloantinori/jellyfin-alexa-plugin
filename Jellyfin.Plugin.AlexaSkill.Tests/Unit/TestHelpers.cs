@@ -418,19 +418,19 @@ internal static class TestHelpers
 
         internal PluginQueueManagerSwap(DeviceQueueManager manager)
         {
-            _previous = Plugin.Instance?.DeviceQueueManager;
             _manager = manager;
-            if (Plugin.Instance != null)
+            if (Plugin.Instance is { } plugin)
             {
-                Plugin.Instance.DeviceQueueManager = manager;
+                _previous = plugin.DeviceQueueManager;
+                plugin.DeviceQueueManager = manager;
             }
         }
 
         public void Dispose()
         {
-            if (Plugin.Instance != null)
+            if (Plugin.Instance is { } plugin)
             {
-                Plugin.Instance.DeviceQueueManager = _previous;
+                plugin.DeviceQueueManager = _previous;
             }
 
             _manager.Dispose();

@@ -3,9 +3,10 @@ id: JF-630
 title: >-
   Extract the Plugin.Instance.DeviceQueueManager test swap/restore block into
   one TestHelpers scope helper (4 copies)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-25 02:34'
+updated_date: '2026-09-25 05:23'
 labels:
   - tech-debt
   - tests
@@ -41,3 +42,13 @@ The save/swap/restore block that points Plugin.Instance.DeviceQueueManager at a 
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+/simplify REUSE+ALTITUDE pass (2026-09-25, over commit 0b31ac7e): one census miss found. TvNextUpServiceTests.cs:404-434 (PlayNextUpAsync) still hand-rolls the exact swap shape: capture `previous`, guarded assign, finally restore-then-dispose. It is conditional (only when queueSeeding != null) but mechanically convertible: `using IDisposable? swap = queue != null ? TestHelpers.SwapPluginQueueManager(queue) : null;` (using-on-null is a no-op, preserving the shape). Convert it in this task so the helper doc's 'the ONE swap scope' claim is true; grep `DeviceQueueManager = ` to confirm zero hand-rolled copies remain.
+
+Examined and correctly NOT a conversion site: EventHandlerTests.cs:1070 (RecordPreviousPlayOnHarnessDevice, JF-527) assigns and deliberately disposes the manager in place WITHOUT restore (disposed-manager-still-attached is the point; reads hit the in-memory queue). The swap scope would change its semantics; leave it.
+
+Optional nit from the same pass: the scope's `Plugin.Instance != null` guards are dead at all seven sites (EnsurePluginInstance runs before every swap; the method-level sites deref Plugin.Instance!.Configuration first). A future mis-ordered call would silently skip the swap yet still dispose the manager; `Plugin.Instance!` would fail loudly at the swap line (house style on silent failures). Pre-existing defensive shape carried over; not blocking.
+<!-- SECTION:NOTES:END -->

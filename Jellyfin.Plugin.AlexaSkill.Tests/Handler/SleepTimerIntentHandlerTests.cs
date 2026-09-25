@@ -40,8 +40,7 @@ public class SleepTimerIntentHandlerTests : PluginTestBase, IDisposable
 
         // The ledger/launch-scope writes go through Plugin.Instance's manager (the
         // handler has no injected queue manager); the swap scope below points the
-        // plugin at this suite's manager and restores + disposes on teardown (the
-        // temp dir is owned by the registered sweep).
+        // plugin at this suite's manager.
         _queueManager = TestHelpers.CreateDeviceQueueManager("sleep-timer-tests");
         TestHelpers.EnsurePluginInstance(
             _config,

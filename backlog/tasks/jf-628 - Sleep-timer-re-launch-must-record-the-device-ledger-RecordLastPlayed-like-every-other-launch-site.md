@@ -3,10 +3,10 @@ id: JF-628
 title: >-
   Sleep timer re-launch must record the device ledger (RecordLastPlayed) like
   every other launch site
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-25 02:09'
-updated_date: '2026-09-25 02:21'
+updated_date: '2026-09-25 03:23'
 labels:
   - bug
   - tech-debt
@@ -41,3 +41,9 @@ The fix is one line in the sleep handler: RecordLastPlayed(deviceId, itemGuid, L
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+JF-628 complete: the sleep re-issue now calls RecordLastPlayed beside RecordLaunchBase (the invariant 'written by every launch site' restored), with the review-caught guard: the write SKIPS when the ledger holds a VideoApp-routed record for a different item (arming over video resolves the STALE audio item; overwriting the truthful video record would never be repaired). Three tests incl. the VideoApp gate with a negative control against the pre-fix handler. Gates: code-review high in the worker turn (8 findings: 4 applied, JF-630/631/632 filed) + the /simplify gate in the orchestrator transcript (4 angles: 3 clean, the null-fold applied, the 4th-swap-copy skip = JF-630). Merged 4318x2, deployed, pushed. The resume offer after a mid-album arm now names the ARMED track.
+<!-- SECTION:FINAL_SUMMARY:END -->

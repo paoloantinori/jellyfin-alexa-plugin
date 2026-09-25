@@ -396,20 +396,22 @@ public class TvNextUpServiceTests : PluginTestBase
         var session = TestHelpers.CreateTestSession(new Mock<ISessionManager>().Object, _loggerFactory);
         var service = CreateService();
 
-        DeviceQueueManager? queue = null;
-        DeviceQueueManager? previous = null;
-        try
-        {
-            if (queueSeeding != null)
-            {
-                TestHelpers.EnsurePluginInstance(
-                    new PluginConfiguration(), _loggerFactory, _ => { }, nameof(TvNextUpServiceTests));
-                queue = TestHelpers.CreateDeviceQueueManager("tvnextup-jf565");
-                queueSeeding(queue.GetOrCreateQueue("test-device"));
-                previous = Plugin.Instance!.DeviceQueueManager;
-                Plugin.Instance!.DeviceQueueManager = queue;
-            }
+        // JF-630: the ONE swap scope (using-on-null is a no-op, so the unseeded
+        // shape needs no branch).
+        using IDisposable? queueSwap = queueSeeding != null ? Swap(queueSeeding) : null;
+        return await PlayCore();
 
+        IDisposable? Swap(Action<DeviceQueue> seed)
+        {
+            TestHelpers.EnsurePluginInstance(
+                new PluginConfiguration(), _loggerFactory, _ => { }, nameof(TvNextUpServiceTests));
+            DeviceQueueManager queue = TestHelpers.CreateDeviceQueueManager("tvnextup-jf565");
+            seed(queue.GetOrCreateQueue("test-device"));
+            return TestHelpers.SwapPluginQueueManager(queue);
+        }
+
+        async Task<SkillResponse> PlayCore()
+        {
             return await service.PlayNextUpEpisodeAsync(
                 tv.Object,
                 library.Object,
@@ -422,14 +424,6 @@ public class TvNextUpServiceTests : PluginTestBase
                 context ?? TestHelpers.CreateTestContext(),
                 new IntentRequest { Locale = "en-US" },
                 CancellationToken.None);
-        }
-        finally
-        {
-            if (queue != null)
-            {
-                Plugin.Instance!.DeviceQueueManager = previous;
-                queue.Dispose();
-            }
         }
     }
 
