@@ -3,9 +3,10 @@ id: JF-634
 title: >-
   JF-634 - Hoist the IL-test scaffolding: the assembly walk (4 copies) and the
   by-name token collection (2 copies) into IlCallScanner
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-25 11:45'
+updated_date: '2026-09-25 13:40'
 labels:
   - tech-debt
   - tests
@@ -29,14 +30,20 @@ Mechanical test-infra change; full suite verifies. Fold naturally with any futur
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress
+- [x] #6 NLU test fixtures updated if interaction model changed
+- [x] #7 E2E test added for new intent or handler logic
+- [x] #8 Locale response strings added to all 17 locales
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+JF-634 complete: the IL-test scaffolding hoisted into IlCallScanner. DeclaredMethods(assembly) (the flat walk, was 3 copies), HandlerChainMethods(handlerType, exclusiveBase) (the BaseHandler chain walk with NestedTypeClosure moved in from the warming-gate test), and MethodTokens(type, name) (the by-name open-world token collection, was 2 copies + a 3rd allDeclared const; now same-module-only after the review's latent foreign-token hazard finding). All three roster consumers converted; the roster tests' bidirectional equality asserts prove the converted scaffolding rediscovers identical rosters. The GuardIndexReady literal keeps its string (protected member, nameof inaccessible) with the diagnostic note. Skips below the bar noted in the commits. Test-only; suite count stayed exactly 4334x2. Gates: /simplify (clean, 3 sub-bar findings) + code-review high (2 findings: same-module filter applied, nameof reverted-with-reason) in the orchestrator transcript. PUSHED.
+<!-- SECTION:FINAL_SUMMARY:END -->
