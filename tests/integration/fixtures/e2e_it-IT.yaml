@@ -76,7 +76,11 @@ tests:
     expected_slots:
       star_rating: {}
     expected_response_type: any
-    expected_speech_contains: "valutare"
+    # JF-326 review (live-proven): the simulate device's ledger is warm (this very
+    # file's earlier play tests write it), so the resolver finds a current item and
+    # the answer is the CONFIRMATION naming it, not the no-item apology. The apology
+    # branch stays unit-tested (HandleAsync_NoResolvableItem_ApologizesWithoutWriting).
+    expected_speech_contains: "Voto"
     expected_end_session: true
 
   # JF-562 pin attempt, SKIPPED: AMAZON.RepeatIntent is declared (samples []) in

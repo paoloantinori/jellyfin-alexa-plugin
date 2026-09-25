@@ -199,17 +199,53 @@ public class RateItemIntentHandlerTests : PluginTestBase
         queueManager.RecordLastPlayed(deviceId, movie.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
         var handler = CreateHandler(queueManager);
 
-        await handler.HandleAsync(
+        var response = await handler.HandleAsync(
             Request("2"), ContextWithToken(song.Id.ToString(), deviceId),
             TestHelpers.CreateTestUser(), null!, CancellationToken.None);
 
         Assert.Equal(4.0, data.Rating);
+        // Pin the WRITE TARGET (not just that a write happened: the shared-data
+        // mock made It.IsAny unable to fail for the inverted resolver) and the
+        // spoken title: the movie is current, never the stale song.
         _fx.UserDataManager.Verify(u => u.SaveUserData(
             It.IsAny<Jellyfin.Database.Implementations.Entities.User>(),
-            It.IsAny<BaseItem>(),
+            It.Is<BaseItem>(i => i.Id == movie.Id),
             It.IsAny<UserItemData>(),
             It.IsAny<UserDataSaveReason>(),
             It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Contains("Current Movie", TestHelpers.GetSpeechText(response!), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-625 seek mode: a VideoApp-routed ledger entry that resolves to a plain
+    /// Audio track is the video-audio launch; the stale AudioPlayer token names the
+    /// PRE-VideoApp track and must not win the rating (the ResolvePlayingMedium
+    /// VideoAppAudio arm, mirrored here).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_VideoAppAudioLedger_LedgerTrackWinsOverStaleToken()
+    {
+        var queueManager = TestHelpers.CreateDeviceQueueManager("rate-seek");
+        var oldSong = new Audio { Name = "Old Song", Id = Guid.NewGuid(), Path = "/music/o.mp3" };
+        var nowSong = new Audio { Name = "Seek Mode Song", Id = Guid.NewGuid(), Path = "/music/n.mp3" };
+        var data = SetupHappyPath(nowSong);
+        _fx.LibraryManager.Setup(l => l.GetItemById(oldSong.Id)).Returns(oldSong);
+        string deviceId = "rate-seek-device";
+        queueManager.RecordLastPlayed(deviceId, nowSong.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        var handler = CreateHandler(queueManager);
+
+        var response = await handler.HandleAsync(
+            Request("4"), ContextWithToken(oldSong.Id.ToString(), deviceId),
+            TestHelpers.CreateTestUser(), null!, CancellationToken.None);
+
+        Assert.Equal(8.0, data.Rating);
+        _fx.UserDataManager.Verify(u => u.SaveUserData(
+            It.IsAny<Jellyfin.Database.Implementations.Entities.User>(),
+            It.Is<BaseItem>(i => i.Id == nowSong.Id),
+            It.IsAny<UserItemData>(),
+            It.IsAny<UserDataSaveReason>(),
+            It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Contains("Seek Mode Song", TestHelpers.GetSpeechText(response!), StringComparison.Ordinal);
     }
 
     /// <summary>

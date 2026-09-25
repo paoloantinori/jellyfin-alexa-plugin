@@ -29,12 +29,14 @@ public class RateItemIntentHandler : BaseHandler
     /// <summary>
     /// Jellyfin stores UserItemData.Rating as a bare double with no server-side
     /// scale (Emby.Server.Implementations UserDataManager copies the DTO value
-    /// verbatim), so the range is client convention: the classic 5-star UI maps
-    /// one star onto 2.0 of the 0-10 decimal scale CommunityRating also uses
-    /// (half-star steps of 1.0). Spoken stars are therefore written as
-    /// <c>stars * 2.0</c> ("3 stars" becomes 6.0), which keeps our own
-    /// rating-first sorting (ResumeMath) monotonic and matches the scale other
-    /// Jellyfin tooling assumes for the field.
+    /// verbatim) and NO first-party client writes the field today (jellyfin-web's
+    /// rating button is favorite-only; verified master/v10.4.0/v10.0.0): the 0-10
+    /// mapping is THIS PLUGIN'S OWN convention, chosen to align with the decimal
+    /// 0-10 scale CommunityRating lives on and the legacy Emby 5-star UI's x2
+    /// mapping. Spoken stars are written as <c>stars * 2.0</c> ("3 stars" becomes
+    /// 6.0), which keeps our own rating-first sorting (ResumeMath) monotonic. If a
+    /// first-party client ever writes the field on a different scale, the two
+    /// conventions interleave silently in rating-sorted ordering; nothing flags it.
     /// </summary>
     private const double RatingPerStar = 2.0;
 
@@ -165,11 +167,9 @@ public class RateItemIntentHandler : BaseHandler
     private BaseItem? ResolveCurrentItem(Context? context, SessionInfo? session)
     {
         string? deviceId = context?.System?.Device?.DeviceID;
-        DeviceQueueManager? ledgerManager = deviceId != null
-            ? _queueManager ?? Plugin.Instance?.DeviceQueueManager
-            : null;
-        string? lastPlayedId = deviceId != null ? ledgerManager?.GetLastPlayedItemId(deviceId) : null;
-        DeviceQueueManager.LaunchRoute? recordedRoute = deviceId != null ? ledgerManager?.GetLastPlayedLaunchRoute(deviceId) : null;
+        DeviceQueueManager? ledgerManager = deviceId != null ? _queueManager : null;
+        string? lastPlayedId = ledgerManager?.GetLastPlayedItemId(deviceId!);
+        DeviceQueueManager.LaunchRoute? recordedRoute = ledgerManager?.GetLastPlayedLaunchRoute(deviceId!);
         string? token = context?.AudioPlayer?.Token;
 
         BaseItem? ResolveId(string? id) =>
@@ -186,10 +186,16 @@ public class RateItemIntentHandler : BaseHandler
             && recordedRoute != DeviceQueueManager.LaunchRoute.Audio;
 
         BaseItem? ledgerItem = displacementPossible ? ResolveId(lastPlayedId) : null;
+        // The JF-625 VideoAppAudio arm (mirrors ResolvePlayingMedium's classifier):
+        // a VideoApp-routed ledger entry that resolves to a plain Audio track is the
+        // seek-mode video-audio launch; the stale AudioPlayer token names the
+        // PRE-VideoApp track and must not win the rating.
         bool videoDisplacedAudio =
             ledgerItem != null
+            && recordedRoute == DeviceQueueManager.LaunchRoute.VideoApp
             && (PlaybackLaunchBuilder.IsVideoAppLaunchItem(ledgerItem)
-                || AudiobookItems.IsAudioBook(ledgerItem));
+                || AudiobookItems.IsAudioBook(ledgerItem)
+                || ledgerItem is MediaBrowser.Controller.Entities.Audio.Audio);
 
         if (videoDisplacedAudio)
         {
@@ -217,6 +223,10 @@ public class RateItemIntentHandler : BaseHandler
             return sessionItem;
         }
 
-        return ledgerItem ?? ResolveId(lastPlayedId);
+        // The displacement-path resolve already missed this id (deleted/stale ledger
+        // item); re-resolving the same known-absent GUID is a second DB miss for
+        // nothing. Only the non-displacement tail (audio-routed ledger, no token,
+        // no session item) resolves here.
+        return ledgerItem ?? (displacementPossible ? null : ResolveId(lastPlayedId));
     }
 }
