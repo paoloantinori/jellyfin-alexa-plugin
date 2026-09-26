@@ -435,6 +435,12 @@ explicit_intents:
       - Timer per dormire {sleep_duration}
       - Spegimento automatico {sleep_duration}
       - Ferma dopo {sleep_duration}
+      # JF-635 device round (2026-09-26): 'fermare la riproduzione tra trenta secondi'
+      # fell to FallbackIntent (live 08:51:13); the 'tra X' relative form joins the
+      # carriers so the natural stop phrasing routes.
+      - Fermare la riproduzione tra {sleep_duration}
+      - Ferma la riproduzione tra {sleep_duration}
+      - Fermare tra {sleep_duration}
       # JF-618: the duration slot carries its own unit (AMAZON.DURATION resolves
       # "cinque minuti"/"trenta secondi"/"mezz'ora" to ISO 8601), so the samples
       # say no unit; a number-typed minutes slot swallowed the spoken unit and

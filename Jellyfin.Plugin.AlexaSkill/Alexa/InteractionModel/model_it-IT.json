@@ -455,7 +455,10 @@
           "Imposta timer {sleep_duration}",
           "Timer per dormire {sleep_duration}",
           "Spegimento automatico {sleep_duration}",
-          "Ferma dopo {sleep_duration}"
+          "Ferma dopo {sleep_duration}",
+          "Fermare la riproduzione tra {sleep_duration}",
+          "Ferma la riproduzione tra {sleep_duration}",
+          "Fermare tra {sleep_duration}"
         ],
         "slots": [
           {
