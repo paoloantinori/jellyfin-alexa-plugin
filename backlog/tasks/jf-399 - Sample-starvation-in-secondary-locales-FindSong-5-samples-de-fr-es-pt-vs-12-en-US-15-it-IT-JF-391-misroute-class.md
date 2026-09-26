@@ -6,7 +6,7 @@ title: >-
 status: In Progress
 assignee: []
 created_date: '2026-08-23 05:56'
-updated_date: '2026-09-12 15:24'
+updated_date: '2026-09-26 22:04'
 labels:
   - nlu
   - interaction-model
@@ -66,4 +66,6 @@ STILL OPEN in this task: (a) the en-US scope note (523 samples vs 1250 it-IT; wh
 2026-09-12 EXECUTABLE HALF DONE (commit c9f07328, deployed, live-verified): the English-inertia samples in nl-NL/ja-JP/hi-IN/ar-SA are translated to native Dutch/Japanese/Hindi/Arabic (PlayBook 8 + FindSong 12 + FindSongByArtist 4 per locale, each using its own established vocabulary). Live verification: 4/4 model rebuilds SUCCEEDED, profile-nlu confirms openers route + slotted forms fill; NLU fixtures extended, live slices green (nl 4/4 new, ja 13/13, hi 6/6, ar 4/4). Documented divergences (JF-406 class, in the fixtures): ja PlayBook carriers all stolen by PlayVideo/PlaySong free-form slots; nl speel-form and hi/ar titled PlayBook carriers stolen by PlayArtistSongs. hi-IN Decade values stay English-with-Devanagari-synonyms (swap needs handler-side decade-resolution work; noted in the template header). BONUS pre-existing finding documented+skipped with evidence: de-DE 'spiele staffel X folge Y von Z' leaves episode_number EMPTY on the live model (word AND digit forms; season+series fill) - German PlayEpisode carrier needs model work.
 
 REMAINING in this task: (a) the en-US scope decision (carrier-noun expansion of PlaySong 38/PlayArtistSongs 34 toward the it-IT density), (b) the es-US market decision (Spanish FindSong or English-in-es-US; JF-406 tracks the routing side), (c) the hi-IN Decade value/synonym swap after handler work. All product calls.
+
+2026-09-27 FindSongByArtist parity pass (commit 28195a24, deployed, models rebuilt 17/17 SUCCEEDED, live-probed en/de/fr -> FindSongByArtistIntent; the ja probe hit FindSong, the openers overlap as designed): the dispatched headline starvation was stale (959dfcc fixed it); the audit found the real gap - FindSongByArtistIntent 16 in it-IT vs 3-4 in all 16 others. Brought every locale to its natural carrier space (7-12 new samples, all openers from each locale's own FindSong vocabulary; skipped carriers documented per header: morphological gaps, noun-axis limits, no invented grammar). NLU-competition safe (find/search verbs only). 9 new fixture expectations (the deploy probe). Audit residue for a future pass (not acted): PlayPlaylistIntent thin ar 6/hi 7/en-IN 6/en-CA 7/es-MX 8 vs en-US 20; PlayArtistSongsIntent ja 13/hi 15/ar 14 vs 34-43. One-line cleanup candidate: the ElicitSlots entry for FindSongByArtistIntent has no eliciting call site (pre-existing warning). REMAINING product calls unchanged: (a) en-US carrier-noun expansion, (b) es-US market decision, (c) hi-IN Decade swap.
 <!-- SECTION:NOTES:END -->
