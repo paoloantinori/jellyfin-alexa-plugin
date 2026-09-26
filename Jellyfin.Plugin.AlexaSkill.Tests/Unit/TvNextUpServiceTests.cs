@@ -74,6 +74,233 @@ public class TvNextUpServiceTests : PluginTestBase
     }
 
     // ---------------------------------------------------------------------
+    // JF-639: podcast episode continuation stays on the AUDIO route
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// JF-639 (live incident 2026-09-26): the production podcast shape is a Series
+    /// of .strm Episode items (IlPost) with MP3 inside a video-typed Episode and
+    /// ZERO persisted media streams, so neither the codec routing nor the JF-589
+    /// audio-only streams probe proves anything, and the next-episode ask used to
+    /// launch VideoApp on a screen device, silently switching the listening
+    /// surface (speed, transport, sleep timer all stop working). The JF-639
+    /// audio-source discriminator (shortcut to an http audio URL) must route the
+    /// launch through AudioPlayer on the VideoApp-capable device, with the user's
+    /// standing podcast rate honored exactly like the PlayPodcast launch.
+    /// </summary>
+    [Fact]
+    public async Task PlayNextUp_PodcastShortcutEpisode_LaunchesAudioPlayerWithStandingRate()
+    {
+        var episodeId = Guid.NewGuid();
+        var episode = new global::MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "Gio 26 set - la puntata",
+            Id = episodeId,
+            IsShortcut = true,
+            ShortcutPath = "http://192.168.20.201:8096/IlPost/audio/2922135.mp3",
+            RunTimeTicks = TimeSpan.FromMinutes(30).Ticks
+        };
+        var series = new global::MediaBrowser.Controller.Entities.TV.Series { Name = "10 risposte sui migranti", Id = Guid.NewGuid() };
+        var user = TestHelpers.CreateTestUser();
+        user.PodcastSpeedPerMille = 1500;
+
+        SkillResponse response = await PlayNextUpAsync(
+            episode, series,
+            new UserItemData { Key = "test", Played = false, PlaybackPositionTicks = 0 },
+            queueSeeding: null,
+            context: TestHelpers.CreateContextWithVideoApp(),
+            user: user);
+
+        var directive = Assert.IsType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>(Assert.Single(response.Response.Directives));
+        Assert.Contains($"/alexaskill/api/audio-speed/{episodeId}/1500/stream.m3u8?token=", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.Equal(episodeId.ToString(), directive.AudioItem.Stream.Token);
+        Assert.True(response.Response.ShouldEndSession, "JF-299: the AudioPlayer play ends the session");
+    }
+
+    /// <summary>
+    /// JF-639: with no standing rate (the default), the podcast continuation
+    /// lands on the plain static /Audio stream URL, the same launch PlayPodcast
+    /// mints for the same item (byte-identical to the pre-JF-639 audio routes).
+    /// </summary>
+    [Fact]
+    public async Task PlayNextUp_PodcastShortcutEpisode_NoStandingRate_UsesStaticAudioStream()
+    {
+        var episodeId = Guid.NewGuid();
+        var episode = new global::MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "Gio 26 set - la puntata",
+            Id = episodeId,
+            IsShortcut = true,
+            ShortcutPath = "http://192.168.20.201:8096/IlPost/audio/2922135.mp3",
+            RunTimeTicks = TimeSpan.FromMinutes(30).Ticks
+        };
+        var series = new global::MediaBrowser.Controller.Entities.TV.Series { Name = "10 risposte sui migranti", Id = Guid.NewGuid() };
+
+        SkillResponse response = await PlayNextUpAsync(
+            episode, series,
+            new UserItemData { Key = "test", Played = false, PlaybackPositionTicks = 0 },
+            queueSeeding: null,
+            context: TestHelpers.CreateContextWithVideoApp());
+
+        var directive = Assert.IsType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>(Assert.Single(response.Response.Directives));
+        Assert.Contains($"/Audio/{episodeId}/stream?static=true&api_key=", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
+        Assert.True(response.Response.ShouldEndSession, "JF-299: the AudioPlayer play ends the session");
+    }
+
+    /// <summary>
+    /// JF-639 + JF-636: an IN-PROGRESS podcast episode continues at the standing
+    /// rate from the stored position: the content position moves into the speed
+    /// URL (?start=, the endpoint's input seek) and the directive offset is 0.
+    /// </summary>
+    [Fact]
+    public async Task PlayNextUp_PodcastShortcutEpisode_InProgress_ContinuesAtRateFromStoredPosition()
+    {
+        var episodeId = Guid.NewGuid();
+        var episode = new global::MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "Gio 26 set - la puntata",
+            Id = episodeId,
+            IsShortcut = true,
+            ShortcutPath = "http://192.168.20.201:8096/IlPost/audio/2922135.mp3",
+            RunTimeTicks = TimeSpan.FromMinutes(30).Ticks
+        };
+        var series = new global::MediaBrowser.Controller.Entities.TV.Series { Name = "10 risposte sui migranti", Id = Guid.NewGuid() };
+        long resumeTicks = TimeSpan.FromMinutes(10).Ticks;
+        var user = TestHelpers.CreateTestUser();
+        user.PodcastSpeedPerMille = 1250;
+
+        SkillResponse response = await PlayNextUpAsync(
+            episode, series,
+            new UserItemData { Key = "test", Played = false, PlaybackPositionTicks = resumeTicks },
+            queueSeeding: null,
+            context: TestHelpers.CreateContextWithVideoApp(),
+            user: user);
+
+        var directive = Assert.IsType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>(Assert.Single(response.Response.Directives));
+        Assert.Contains($"/alexaskill/api/audio-speed/{episodeId}/1250/stream.m3u8?start={resumeTicks}&token=", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
+    }
+
+    /// <summary>
+    /// JF-639, the second entry: the "latest episode" recency core must answer
+    /// the same way as the NextUp core for a podcast listen (both cores share the
+    /// launch tail; this pins the recency entry against a future fork).
+    /// </summary>
+    [Fact]
+    public async Task PlayLatest_PodcastShortcutEpisode_LaunchesAudioPlayerWithStandingRate()
+    {
+        var episodeId = Guid.NewGuid();
+        var episode = new global::MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "Gio 26 set - la puntata",
+            Id = episodeId,
+            IsShortcut = true,
+            ShortcutPath = "http://192.168.20.201:8096/IlPost/audio/2922135.mp3",
+            RunTimeTicks = TimeSpan.FromMinutes(30).Ticks
+        };
+        var series = new global::MediaBrowser.Controller.Entities.TV.Series { Name = "10 risposte sui migranti", Id = Guid.NewGuid() };
+        var user = TestHelpers.CreateTestUser();
+        user.PodcastSpeedPerMille = 1750;
+
+        SkillResponse response = await PlayLatestAsync(
+            episode, series,
+            new UserItemData { Key = "test", Played = false, PlaybackPositionTicks = 0 },
+            TestHelpers.CreateContextWithVideoApp(),
+            user: user);
+
+        var directive = Assert.IsType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>(Assert.Single(response.Response.Directives));
+        Assert.Contains($"/alexaskill/api/audio-speed/{episodeId}/1750/stream.m3u8?token=", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.DoesNotContain(response.Response.Directives, d => d is VideoAppLaunchDirective);
+    }
+
+    /// <summary>
+    /// JF-639 TV pin: a REAL TV episode (a video stream present) keeps the
+    /// VideoApp launch on a capable device, byte-identical to today.
+    /// </summary>
+    [Fact]
+    public async Task PlayNextUp_TvVideoEpisode_KeepsVideoAppRoute()
+    {
+        var episodeId = Guid.NewGuid();
+        var episode = new TestHelpers.TestEpisodeWithStreams(
+            "The Convention",
+            episodeId,
+            TestHelpers.TestStream(MediaStreamType.Video, "h264"),
+            TestHelpers.TestStream(MediaStreamType.Audio, "aac"))
+        {
+            RunTimeTicks = TimeSpan.FromMinutes(30).Ticks
+        };
+        var series = new global::MediaBrowser.Controller.Entities.TV.Series { Name = "The Office", Id = Guid.NewGuid() };
+        var user = TestHelpers.CreateTestUser();
+        user.PodcastSpeedPerMille = 2000;
+
+        SkillResponse response = await PlayNextUpAsync(
+            episode, series,
+            new UserItemData { Key = "test", Played = false, PlaybackPositionTicks = 0 },
+            queueSeeding: null,
+            context: TestHelpers.CreateContextWithVideoApp(),
+            user: user);
+
+        var directive = Assert.IsType<VideoAppLaunchDirective>(Assert.Single(response.Response.Directives));
+        Assert.Contains($"/Videos/{episodeId}/stream?static=true&api_key=", directive.VideoItem.Source, StringComparison.Ordinal);
+        Assert.DoesNotContain(response.Response.Directives, d => d is global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective);
+    }
+
+    /// <summary>
+    /// JF-639 fail-open: a shortcut to a VIDEO source (an HLS playlist, the IPTV
+    /// .strm shape) proves no audio content, so the launch keeps today's VideoApp
+    /// route on a capable device.
+    /// </summary>
+    [Fact]
+    public async Task PlayNextUp_ShortcutToVideoPlaylist_KeepsVideoAppRoute()
+    {
+        var episode = new global::MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "Live stream",
+            Id = Guid.NewGuid(),
+            IsShortcut = true,
+            ShortcutPath = "https://example.com/live/master.m3u8",
+            RunTimeTicks = TimeSpan.FromMinutes(30).Ticks
+        };
+        var series = new global::MediaBrowser.Controller.Entities.TV.Series { Name = "Live", Id = Guid.NewGuid() };
+
+        SkillResponse response = await PlayNextUpAsync(
+            episode, series,
+            new UserItemData { Key = "test", Played = false, PlaybackPositionTicks = 0 },
+            queueSeeding: null,
+            context: TestHelpers.CreateContextWithVideoApp());
+
+        Assert.IsType<VideoAppLaunchDirective>(Assert.Single(response.Response.Directives));
+    }
+
+    /// <summary>
+    /// JF-639 fail-open: an episode whose probes prove NOTHING (no readable
+    /// streams, no shortcut, no audio file path) keeps today's VideoApp route on
+    /// a capable device. This is the exact unprobed .strm shape minus the
+    /// audio-URL evidence: the audio route fires only on positive evidence,
+    /// never on a guess, so TV can never be misrouted.
+    /// </summary>
+    [Fact]
+    public async Task PlayNextUp_NoEvidenceEpisode_KeepsVideoAppRoute()
+    {
+        var episode = new global::MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "The Convention",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromMinutes(30).Ticks
+        };
+        var series = new global::MediaBrowser.Controller.Entities.TV.Series { Name = "The Office", Id = Guid.NewGuid() };
+
+        SkillResponse response = await PlayNextUpAsync(
+            episode, series,
+            new UserItemData { Key = "test", Played = false, PlaybackPositionTicks = 0 },
+            queueSeeding: null,
+            context: TestHelpers.CreateContextWithVideoApp());
+
+        Assert.IsType<VideoAppLaunchDirective>(Assert.Single(response.Response.Directives));
+    }
+
+    // ---------------------------------------------------------------------
     // the composition seam
     // ---------------------------------------------------------------------
 
@@ -382,7 +609,8 @@ public class TvNextUpServiceTests : PluginTestBase
         BaseItem series,
         UserItemData userData,
         Action<DeviceQueue>? queueSeeding,
-        global::Alexa.NET.Request.Context? context = null)
+        global::Alexa.NET.Request.Context? context = null,
+        Entities.User? user = null)
     {
         var tv = new Mock<MediaBrowser.Controller.TV.ITVSeriesManager>();
         tv.Setup(t => t.GetNextUp(It.IsAny<NextUpQuery>(), It.IsAny<DtoOptions>()))
@@ -406,7 +634,7 @@ public class TvNextUpServiceTests : PluginTestBase
                 library.Object,
                 userDataMock.Object,
                 TestHelpers.CreateJellyfinUser(),
-                TestHelpers.CreateTestUser(),
+                user ?? TestHelpers.CreateTestUser(),
                 session,
                 series,
                 "en-US",
@@ -447,7 +675,8 @@ public class TvNextUpServiceTests : PluginTestBase
         BaseItem series,
         UserItemData userData,
         global::Alexa.NET.Request.Context context,
-        SessionInfo? session = null)
+        SessionInfo? session = null,
+        Entities.User? user = null)
     {
         var library = new Mock<ILibraryManager>();
         library.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
@@ -464,7 +693,7 @@ public class TvNextUpServiceTests : PluginTestBase
             library.Object,
             userDataMock.Object,
             TestHelpers.CreateJellyfinUser(),
-            TestHelpers.CreateTestUser(),
+            user ?? TestHelpers.CreateTestUser(),
             session,
             series,
             "en-US",
