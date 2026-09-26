@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Frozen;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -784,9 +785,10 @@ public sealed class PlaybackLaunchBuilder
     /// degrade (AudioPlayer playback does not steal the audio channel the way a
     /// fast-start VideoApp player does, the JF-501 observation; on that route the
     /// announce stays progressive inside <see cref="BuildVideoAppLaunchResponseAsync"/>
-    /// exactly as today). On a VideoApp-capable device this builder is a pure
-    /// pass-through to that method, so the capable path (codec-routed URL, progressive
-    /// announce, shouldEndSession omitted) is byte-identical.
+    /// exactly as today). On a VideoApp-capable device the builder passes through
+    /// to that method for every episode EXCEPT a podcast listen (the JF-639 arm
+    /// in the remarks below), so the capable TV path (codec-routed URL,
+    /// progressive announce, shouldEndSession omitted) is byte-identical.
     /// SCOPE (JF-586): only an EPISODE degrades; a Movie (or any other item routed
     /// here by <see cref="IsVideoAppLaunchItem"/>) keeps the capability refusal on a
     /// screenless device, the pre-existing behavior. The caller's
@@ -798,8 +800,8 @@ public sealed class PlaybackLaunchBuilder
     /// <param name="context">The Alexa context, for the JF-505 screenless-device check.</param>
     /// <param name="request">The skill request (JF-501 progressive announce vehicle on the capable route).</param>
     /// <param name="locale">The request locale, for the capability Tell string a non-Episode keeps.</param>
-    /// <param name="item">The Movie/Episode item being launched; only an Episode degrades.</param>
-    /// <param name="user">The plugin user (static stream URL on the degrade).</param>
+    /// <param name="item">The Movie/Episode item being launched; only an Episode leaves the VideoApp route.</param>
+    /// <param name="user">The plugin user (static stream URL on the degrade; standing podcast rate on the JF-639 arm).</param>
     /// <param name="sourceUrl">The VideoApp source URL the caller already resolved (capable route only).</param>
     /// <param name="resumeTicks">The resume position the caller resolved (the JF-565 slice input; feeds the degrade's offset).</param>
     /// <remarks>
@@ -814,16 +816,27 @@ public sealed class PlaybackLaunchBuilder
     /// pre-launch offset). AudioPlayer tracks the position correctly, so position
     /// tracking wins over the seek bar for audio content: the trade-off is that
     /// these items lose the VideoApp scrubber they technically could have had.
-    /// A REAL TV episode (a video stream present) keeps the VideoApp path
-    /// unchanged, and the probe FAILS OPEN: a thrown probe or a shape that proves
-    /// nothing (no streams, no audio stream) keeps today's VideoApp behavior on
-    /// capable devices - the audio-route only fires on positive audio-only
-    /// evidence. Probe cost: one <c>GetMediaStreams</c> read on the Episode
-    /// capable path, a second in-memory read of the streams the caller's codec routing already fetched
-    /// once for the VideoApp URL; no new network I/O.
+    /// JF-639 PODCAST LISTEN (2026-09-26): the streams probe above only fires on
+    /// PROBED items; an unprobed .strm podcast episode persists ZERO media
+    /// streams, so the next-episode continuation of a listened podcast still
+    /// launched VideoApp and silently switched the listening surface (speed,
+    /// transport and sleep timer all stop working over VideoApp). The
+    /// podcast-listen discriminator widens the audio-only evidence with the
+    /// AUDIO-SOURCE shape (see <see cref="IsPodcastListenEpisode"/>), and the
+    /// launch it mints honors the user's standing podcast rate
+    /// (JF-636), matching the PlayPodcast launch of the same item.
+    /// A REAL TV episode (a video stream present, a video-file or video-URL
+    /// source) keeps the VideoApp path unchanged, and every probe FAILS OPEN: a
+    /// thrown probe or a shape that proves nothing (no streams, no audio stream,
+    /// a non-audio source) keeps today's VideoApp behavior on capable devices -
+    /// the audio-route only fires on positive audio-content evidence. Probe
+    /// cost: one <c>GetMediaStreams</c> read on the Episode capable path, a
+    /// second in-memory read of the streams the caller's codec routing already
+    /// fetched once for the VideoApp URL, plus string reads of item properties
+    /// the DB already holds; no new network I/O.
     /// </remarks>
     /// <param name="outputSpeech">The caller-chosen announce (fresh play keeps the now-playing/next/latest wording; the caller's resumeDelivered gate already picked the position-bearing form where the caller runs one (the arms that pass ungated ticks, e.g. PlayVideo, keep the informational-position-only semantics their capable route has always had) where the VideoApp route delivers it).</param>
-    /// <returns>The VideoApp.Launch response on a capable device; the AudioPlayer.Play degrade for an Episode on a screenless one; the VideoRequiresScreen Tell for every other item on a screenless one.</returns>
+    /// <returns>The VideoApp.Launch response on a capable device; the AudioPlayer.Play launch for a podcast-listen Episode on every device and for any Episode on a screenless one; the VideoRequiresScreen Tell for every other item on a screenless one.</returns>
     internal async Task<SkillResponse> BuildEpisodeLaunchResponseAsync(
         Context? context,
         Request? request,
@@ -836,42 +849,139 @@ public sealed class PlaybackLaunchBuilder
     {
         bool capable = Interface.VideoAppCapabilities.DeviceSupportsVideoApp(context);
         bool isEpisode = item is MediaBrowser.Controller.Entities.TV.Episode;
+
+        // JF-639 PODCAST LISTEN (supersedes the JF-589 capable-device arm, whose
+        // audio-only streams shape is one of this discriminator's two evidence
+        // arms): an episode whose content is an AUDIO listen rides the AudioPlayer
+        // route on EVERY device, with the user's standing podcast rate honored
+        // exactly like the PlayPodcast launch of the same item. The user's podcast
+        // continuation must not switch surface: over VideoApp there is no speed
+        // re-launch, no transport control, no sleep timer, and no position
+        // tracking (JF-589's position-blindness, the same reason this arm fires on
+        // capable devices too).
+        if (isEpisode && IsPodcastListenEpisode(item))
+        {
+            int standingRate = Util.PlaybackSpeed.ResolveStandingRate(user);
+            _logger.LogInformation(
+                "Episode launch of '{Title}' ({ItemId}) on device {DeviceId} is a podcast listen (audio content): continuing on the AudioPlayer route with the standing rate {RatePerMille}/1000 (JF-639)",
+                item.Name,
+                item.Id,
+                context?.System?.Device?.DeviceID ?? "unknown",
+                standingRate);
+            return BuildEpisodeAudioLaunch(item, user, context, resumeTicks, outputSpeech, standingRate);
+        }
+
         if (isEpisode && !capable)
         {
             _logger.LogDebug(
                 "Episode launch of '{Title}' on device {DeviceId} without the VideoApp interface: degrading to the AudioPlayer audio-only route (JF-586)",
                 item.Name,
                 context?.System?.Device?.DeviceID ?? "unknown");
-            return BuildEpisodeAudioDegrade(item, user, context, resumeTicks, outputSpeech);
-        }
-
-        // JF-589: audio-only content (the .strm podcast shape) must NOT ride the
-        // position-blind VideoApp player even on a capable device; see the remarks
-        // on this method's doc. The degrade body is the JF-586 one, verbatim.
-        if (isEpisode && capable && IsAudioOnlyEpisode(item))
-        {
-            _logger.LogInformation(
-                "Episode launch of '{Title}' ({ItemId}) on device {DeviceId} is audio-only content: routing AudioPlayer for position tracking instead of the position-blind VideoApp player (JF-589)",
-                item.Name,
-                item.Id,
-                context?.System?.Device?.DeviceID ?? "unknown");
-            return BuildEpisodeAudioDegrade(item, user, context, resumeTicks, outputSpeech);
+            return BuildEpisodeAudioLaunch(item, user, context, resumeTicks, outputSpeech);
         }
 
         return await BuildVideoAppLaunchResponseAsync(context, request, locale, sourceUrl, item.Name, outputSpeech).ConfigureAwait(false);
     }
 
     /// <summary>
-    /// The JF-586/JF-589 episode AudioPlayer degrade body, shared by the two entry
-    /// conditions (screenless device, audio-only shape on a capable device) so the
-    /// clamp, the audio-source resolution and the announce ride cannot drift.
+    /// The JF-639 podcast-listen discriminator: POSITIVE evidence that an Episode's
+    /// content is an AUDIO listen, so its launch belongs on the AudioPlayer route
+    /// whatever the device (see the remarks on
+    /// <see cref="BuildEpisodeLaunchResponseAsync"/>). Jellyfin has NO podcast
+    /// item type and NO podcasts library CollectionType (verified against the
+    /// 10.11.8 and 12.0.0 SDK enums and the live 12.1 server), and the production
+    /// podcast library is CollectionType=tvshows exactly like a real TV library,
+    /// so the discriminator reads the episode's own CONTENT truth instead. Two
+    /// evidence arms, both fail-open (anything ambiguous keeps the VideoApp
+    /// route; the audio route only fires on positive audio-content evidence, so
+    /// TV can never be misrouted by a guess):
+    /// <list type="number">
+    /// <item>The JF-589 audio-only media-streams shape: readable streams with at
+    /// least one audio stream and NO video stream (a probed .strm podcast, a
+    /// radio-drama rip).</item>
+    /// <item>The JF-639 audio-source shape: the item's SOURCE is audio - a
+    /// shortcut (.strm) whose target is an http(s) URL with an audio file
+    /// extension (the unprobed IlPost podcast shape: MP3 inside a video-typed
+    /// Episode with ZERO persisted media streams, live-verified 2026-09-26), or a
+    /// non-shortcut item whose own path carries an audio file extension (a
+    /// podcast library of local MP3s). A REAL TV episode (an .mkv/.mp4 local
+    /// file, an HLS .m3u8 URL) proves nothing here and keeps the VideoApp
+    /// route.</item>
+    /// </list>
+    /// Probe cost: one media-streams DB read plus string reads of DB-held item
+    /// properties; no file I/O, no network.
     /// </summary>
-    private SkillResponse BuildEpisodeAudioDegrade(
+    /// <param name="item">The Episode being launched.</param>
+    /// <returns>True when the episode's content is positively audio.</returns>
+    private bool IsPodcastListenEpisode(BaseItem item)
+        // String-source arm FIRST: the .strm podcast shape resolves without the
+        // media-streams DB read, so the podcast path pays strings only.
+        => IsAudioSourceEpisode(item) || IsAudioOnlyEpisode(item);
+
+    /// <summary>
+    /// The JF-639 audio-source arm of <see cref="IsPodcastListenEpisode"/>: see
+    /// that method's doc for the evidence contract and the fail-open direction.
+    /// </summary>
+    private static bool IsAudioSourceEpisode(BaseItem item)
+    {
+        if (item.IsShortcut)
+        {
+            // A .strm whose payload URL is http(s) audio (the IlPost shape). A
+            // shortcut to anything else (a local path, an HLS playlist, an
+            // extensionless URL) proves nothing: fail open to the VideoApp route.
+            return IsHttpAudioUrl(item.ShortcutPath);
+        }
+
+        // A local audio file inside a video-typed library (a podcast library of
+        // downloaded MP3s). A video extension (.mkv/.mp4/...) proves nothing.
+        return !string.IsNullOrWhiteSpace(item.Path)
+            && AudioFileExtensions.Contains(System.IO.Path.GetExtension(item.Path));
+    }
+
+    /// <summary>
+    /// Whether the given string is an absolute http(s) URL whose path carries an
+    /// audio file extension (<see cref="AudioFileExtensions"/>). Query strings and
+    /// fragments are ignored (the extension is read off the URL path); a null,
+    /// non-URL, non-http(s) or extensionless value proves nothing.
+    /// </summary>
+    private static bool IsHttpAudioUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url)
+            || !Uri.TryCreate(url, UriKind.Absolute, out Uri? uri))
+        {
+            return false;
+        }
+
+        return (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+            && AudioFileExtensions.Contains(System.IO.Path.GetExtension(uri.AbsolutePath));
+    }
+
+    /// <summary>
+    /// The audio file extensions that positively identify AUDIO content for the
+    /// JF-639 podcast-listen discriminator (source URLs and local paths). Video
+    /// containers (.mp4/.mkv/.avi/.webm/...) and playlist forms (.m3u8/.m3u) are
+    /// deliberately absent: those do not prove an audio listen.
+    /// </summary>
+    private static readonly FrozenSet<string> AudioFileExtensions = new[]
+    {
+        ".mp3", ".m4a", ".m4b", ".aac", ".ogg", ".oga", ".opus", ".flac", ".wav", ".wma"
+    }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The JF-586/JF-589/JF-639 episode AudioPlayer launch body, shared by the two
+    /// entry conditions (screenless device, podcast-listen content on any device)
+    /// so the clamp, the audio-source resolution and the announce ride cannot
+    /// drift. JF-636: the podcast-listen entry threads the user's standing rate
+    /// (the PlayPodcast launch shape); the screenless degrade of VIDEO content
+    /// keeps the identity rate, today's behavior.
+    /// </summary>
+    private SkillResponse BuildEpisodeAudioLaunch(
         BaseItem item,
         Entities.User user,
         Context? context,
         long resumeTicks,
-        IOutputSpeech? outputSpeech)
+        IOutputSpeech? outputSpeech,
+        int ratePerMille = Util.PlaybackSpeed.NormalPerMille)
     {
         // The JF-565 clamp, audio-route mirror: a stored position at or beyond
         // the runtime cannot be a legitimate mid-episode resume (only stale
@@ -879,10 +989,10 @@ public sealed class PlaybackLaunchBuilder
         // is within the content (the zero-runtime .strm shape), so both fail
         // closed to a fresh start rather than minting an offset the stream
         // cannot serve.
-        long safeTicks = ClampResumeTicksToRuntime(item, resumeTicks, "Episode audio degrade");
+        long safeTicks = ClampResumeTicksToRuntime(item, resumeTicks, "Episode audio route");
         int offsetMs = (int)Math.Min(TimeSpan.FromTicks(safeTicks).TotalMilliseconds, int.MaxValue);
         string itemId = item.Id.ToString();
-        AudioLaunchSource source = ResolveAudioLaunchSource(item, itemId, user, offsetMs);
+        AudioLaunchSource source = ResolveAudioLaunchSource(item, itemId, user, offsetMs, ratePerMille: ratePerMille);
         SkillResponse response = BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll,
             source,

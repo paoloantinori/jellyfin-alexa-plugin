@@ -186,7 +186,10 @@ public sealed class TvNextUpService
     /// in-progress episode counts as the next one, which is what both "next episode"
     /// and "continue watching" mean to a viewer who stopped mid-episode), falls back to
     /// the most recently created episode when NextUp is empty (nothing unwatched left),
-    /// and launches the winner via VideoApp with the resume-aware announce. Used by
+    /// and launches the winner through the shared episode launch tail with the
+    /// resume-aware announce (VideoApp for TV; the JF-639 podcast-listen episodes
+    /// launch AudioPlayer with the standing rate, so a listened podcast's episode
+    /// continuation never switches surface). Used by
     /// PlayNextEpisodeIntentHandler and PlayEpisodeIntentHandler's series-only
     /// fallback. Library and content gating happen in the caller's series resolution
     /// (<see cref="ResolveSeriesForPlaybackAsync"/>); this core only needs the
@@ -263,8 +266,9 @@ public sealed class TvNextUpService
     /// with DateCreated desc as the tiebreak (items without a metadata date), NO
     /// played filter (the newest episode is the ask even when already watched),
     /// and launches the winner through the SAME launch tail the NextUp path uses
-    /// (<see cref="LaunchEpisodeAsync"/>), announcing it with the latest-episode
-    /// wording (PlayingLatestEpisode, the JF-324 family).
+    /// (<see cref="LaunchEpisodeAsync"/>; VideoApp for TV, AudioPlayer with the
+    /// standing rate for the JF-639 podcast-listen episodes), announcing it with
+    /// the latest-episode wording (PlayingLatestEpisode, the JF-324 family).
     /// </summary>
     /// <param name="libraryManager">The library manager (recency query).</param>
     /// <param name="userDataManager">The user data manager (resume-aware announce).</param>
@@ -325,7 +329,12 @@ public sealed class TvNextUpService
     /// The shared episode launch tail (extracted JF-583 so the NextUp and recency
     /// cores cannot fork the launch): now-playing queue seeding, the resume-aware
     /// position resolution (JF-565/JF-581), the URL-first announce gate, and the
-    /// VideoApp launch response (JF-498/JF-501/JF-505).
+    /// episode launch response (JF-498/JF-501/JF-505): VideoApp for TV episodes,
+    /// and AudioPlayer with the user's standing rate when the episode is a
+    /// podcast listen (JF-639: the podcast continuation must not switch surface;
+    /// the discriminator and the audio launch live in the shared
+    /// <see cref="PlaybackLaunchBuilder.BuildEpisodeLaunchResponseAsync"/>
+    /// chokepoint so every episode launch site answers the same way).
     /// </summary>
     /// <param name="userDataManager">The user data manager (resume-aware announce).</param>
     /// <param name="jellyfinUser">The Jellyfin user (per-user resume state).</param>
