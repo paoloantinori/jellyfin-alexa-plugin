@@ -3,10 +3,10 @@ id: JF-640
 title: >-
   JF-640 - Podcast search: cross-type fuzzy acceptance plays music albums
   ('morning' -> Euphoria Morning -> Steel Rain) and the prefix tier is missing
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-26 17:47'
-updated_date: '2026-09-26 19:02'
+updated_date: '2026-09-26 21:19'
 labels:
   - bug
   - podcasts
@@ -48,3 +48,9 @@ SCOPE: PlayPodcastIntentHandler's search chain (+ GetPodcastEpisodes' container 
 <!-- SECTION:NOTES:BEGIN -->
 2026-09-26 20:58 PREMISE CORRECTED + root cause nailed (second device round): the user's podcast IS named exactly 'Morning' (/data/media/podcasts/morning; the file listing confirmed it; the original 'Morning Weekend' reading was the EPISODE title). The slot carried the EXACT name and the play still went to Steel Rain. Live query reproduction: SearchTerm=morning + Series returns exactly ['Morning'] (the right answer!); SearchTerm=morning + MusicAlbum returns 4 albums (incl. Euphoria Morning). THE BUG: PlayPodcastIntentHandler queries MusicAlbum FIRST and only queries the Series shape when the album query returns ZERO (the JF-599 fallback chain). With any album matching the search term, the Series query never runs, so the exact-name podcast is unreachable; the flow then falls to SearchItemsFuzzyAsync where the album scores 90 and auto-accepts. FIX SHAPE (both needed): (1) run BOTH shape queries unconditionally (two cheap queries) and prefer the EXACT case-insensitive name match across the UNION before any fuzzy (exact beats fuzzy, Series exact beats album fuzzy); (2) the cross-type fuzzy guard from the original filing stands for the non-exact case (a podcast query must not auto-play a music album at 90 - prompt instead, the JF-377 shape). Tests: exact-name Series wins over album fuzzy-hit; album-only fuzzy-hit prompts instead of auto-playing; exact album (community-plugin shape) still auto-plays.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+JF-640 complete: PlayPodcastIntentHandler runs BOTH shape queries unconditionally (the JF-599 two-shape contract kept, the zero-albums conditional dropped - the live proof it was broken: SearchTerm=morning returned 4 albums, so the Series query containing the user's exactly-named 'Morning' podcast never ran); an exact case-insensitive name pass over the UNION wins before any fuzzy; the cross-type guard downgrades a music-album fuzzy best to the JF-377 prompt (auto-accept reserved for Series and exact names). 6 new + 1 rewritten test (the inverted JF-599 pin) + 8 existing fixtures updated. Suite 4468x2, DEPLOYED. Worker ran both gates in-turn (simplify 4 agents + code-review high 6 findings: applied 4, JF-637/JF-641 filed). Device round: 'riproduci il podcast morning' should now play Morning the series.
+<!-- SECTION:FINAL_SUMMARY:END -->
