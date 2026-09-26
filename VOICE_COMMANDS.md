@@ -884,7 +884,7 @@ Invocation name: **"jellyfin player"**
 | Recommend | `何かおすすめは` · `{media_type} をおすすめして` · `音楽のおすすめは` · `映画のおすすめは` · `何か見るものを提案して` |
 | Remove Current From Playlist | `この曲をプレイリスト {playlist} から削除して` · `今の曲をプレイリスト {playlist} から消して` |
 | Search Media | `映画 {query} を検索して` · `コンテンツ {query} を検索して` · `ビデオ {query} を検索して` · `映画 {query} を見つけて` · `コンテンツ {query} を見つけて` · `映画 {query} を探して` |
-| Set Playback Speed | `速度{speed}` · `速度を{speed}にして` · `再生速度{speed}` · `{speed}にして` |
+| Set Playback Speed | `速度 {speed}` · `速度を {speed} にして` · `再生速度 {speed}` · `{speed} にして` |
 | Set Reminder | `{reminder_duration} 後にリマインドして` · `{reminder_time} にリマインドして` · `{reminder_duration} のリマインダーを設定して` · `{reminder_time} のリマインダーを設定して` |
 | Show More | `もっと見せて` · `次のページ` · `もっと` · `続き` · `他に何がある` · `もっと結果` |
 | Shuffle Play | `プレイリスト {playlist} をシャッフルで再生して` · `シャッフルでプレイリスト {playlist} を再生して` |

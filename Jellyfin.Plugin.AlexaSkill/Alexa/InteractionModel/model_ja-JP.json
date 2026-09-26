@@ -558,10 +558,10 @@
           }
         ],
         "samples": [
-          "速度{speed}",
-          "速度を{speed}にして",
-          "再生速度{speed}",
-          "{speed}にして"
+          "速度 {speed}",
+          "速度を {speed} にして",
+          "再生速度 {speed}",
+          "{speed} にして"
         ]
       },
       {

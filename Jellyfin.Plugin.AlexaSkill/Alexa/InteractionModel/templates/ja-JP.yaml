@@ -445,10 +445,12 @@ intents:
       - name: speed
         type: SpeedRate
     samples:
-      - 速度{speed}
-      - 速度を{speed}にして
-      - 再生速度{speed}
-      - "{speed}にして"
+      # JF-513 (again, the JF-326 lesson): ja-JP slots MUST be space-delimited
+      # (SMAPI InvalidCharInSamples on slot-glued samples).
+      - 速度 {speed}
+      - 速度を {speed} にして
+      - 再生速度 {speed}
+      - "{speed} にして"
   - name: BrowseLibraryIntent
     slots:
       - name: browse_category
