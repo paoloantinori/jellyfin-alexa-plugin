@@ -400,10 +400,19 @@ public sealed class TvNextUpService
                 && StreamTokenCodec.TryGetItemId(residual.Token, out Guid residualItemId)
                 && residualItemId == episode.Id)
             {
-                resumeTicks = residual.OffsetInMilliseconds * TimeSpan.TicksPerMillisecond;
+                // JF-639 review F1: the residual offset is STREAM-relative; when the
+                // same item was playing through a rate-adjusted stream (the JF-636
+                // audio-speed URL), the content position is offset x rate (PlaybackSpeed
+                // .StreamMsToContent - the same conversion ComposeItemAbsolutePosition
+                // applies to the event chain). Seeding the raw offset would replay
+                // content at 1.5x or skip ahead at 0.75x.
+                int seedRate = Plugin.Instance?.DeviceQueueManager?.GetActivePlaybackRate(
+                    context.System?.Device?.DeviceID ?? string.Empty, episode.Id.ToString()) ?? 1000;
+                resumeTicks = PlaybackSpeed.StreamMsToContent(residual.OffsetInMilliseconds, seedRate)
+                    * TimeSpan.TicksPerMillisecond;
                 _logger.LogInformation(
-                    "EpisodeLaunch: both position stores were empty; seeded resume from the request context's residual AudioPlayer state of the same item: {OffsetMs}ms",
-                    residual.OffsetInMilliseconds);
+                    "EpisodeLaunch: both position stores were empty; seeded resume from the request context's residual AudioPlayer state of the same item: {OffsetMs}ms (rate {Rate})",
+                    residual.OffsetInMilliseconds, seedRate);
             }
         }
         // JF-565 review finding: resolve the launch URL FIRST and gate the resume

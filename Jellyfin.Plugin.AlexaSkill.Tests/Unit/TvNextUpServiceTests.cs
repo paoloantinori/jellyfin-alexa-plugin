@@ -702,6 +702,54 @@ public class TvNextUpServiceTests : PluginTestBase
             CancellationToken.None);
     }
 
+    /// <summary>
+    /// JF-639 review F1: the residual AudioPlayer offset is STREAM-relative; when the
+    /// same item was playing through a rate-adjusted stream, seeding the raw offset
+    /// would replay (1.5x) or skip (0.75x) content. The seed must scale by the
+    /// device's active playback rate for the item.
+    /// </summary>
+    [Fact]
+    public async Task PlayNextUp_ResidualSeedOnSpeedStream_ScalesByActiveRate()
+    {
+        var episodeId = Guid.NewGuid();
+        var episode = new global::MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "Gio 26 set - la puntata",
+            Id = episodeId,
+            IsShortcut = true,
+            ShortcutPath = "http://192.168.20.201:8096/IlPost/audio/2922135.mp3",
+            RunTimeTicks = TimeSpan.FromMinutes(30).Ticks
+        };
+        var series = new global::MediaBrowser.Controller.Entities.TV.Series { Name = "10 risposte sui migranti", Id = Guid.NewGuid() };
+        var user = TestHelpers.CreateTestUser();
+        user.PodcastSpeedPerMille = 1500;
+
+        // The context carries a residual offset of the SAME item: stream 10min.
+        // The active launch scope says rate 1500, so the content position is 15min.
+        global::Alexa.NET.Request.Context context = TestHelpers.CreateContextWithToken(episodeId.ToString(), "f1-seed-device");
+        context.AudioPlayer.OffsetInMilliseconds = 10 * 60 * 1000;
+
+        SkillResponse response = await PlayNextUpAsync(
+            episode, series,
+            new UserItemData { Key = "test", Played = false, PlaybackPositionTicks = 0 },
+            queueSeeding: q =>
+            {
+                // RecordLaunchBase is manager-level (deviceId-keyed); inside SwapAndSeed
+                // the swapped manager is live on Plugin.Instance.
+                Plugin.Instance!.DeviceQueueManager!.RecordLaunchBase(
+                    "f1-seed-device", episodeId.ToString(), 0, enqueued: false, ratePerMille: 1500);
+            },
+            context: context,
+            user: user);
+
+        var directive = Assert.IsType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>(Assert.Single(response.Response.Directives));
+        // The audio-speed URL's ?start= carries the CONTENT-relative position:
+        // 15 minutes in .NET ticks (9e9), not the raw stream 10min (6e9) the
+        // pre-F1 seed would have used.
+        Assert.Contains("start=9000000000", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.DoesNotContain("start=6000000000&", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+    }
+
     // ---------------------------------------------------------------------
     // helpers
     // ---------------------------------------------------------------------
@@ -717,3 +765,4 @@ public class TvNextUpServiceTests : PluginTestBase
             requestTimeoutMs: 6000);
     }
 }
+
