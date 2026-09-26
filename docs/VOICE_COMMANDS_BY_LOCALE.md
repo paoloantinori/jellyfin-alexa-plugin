@@ -7580,7 +7580,7 @@ Placeholder legend:
 | `<titolo del video o del film>` | `{title}` |
 | `<parole del titolo del brano>` | `{titleKeywords}` |
 
-Complete phrase list (1527 phrases across 70 commands):
+Complete phrase list (1530 phrases across 70 commands):
 
 #### Play music
 
@@ -9280,6 +9280,9 @@ Complete phrase list (1527 phrases across 70 commands):
 - `Timer per dormire <durata (5 minuti, 30 secondi, mezz'ora)>`
 - `Spegimento automatico <durata (5 minuti, 30 secondi, mezz'ora)>`
 - `Ferma dopo <durata (5 minuti, 30 secondi, mezz'ora)>`
+- `Fermare la riproduzione tra <durata (5 minuti, 30 secondi, mezz'ora)>`
+- `Ferma la riproduzione tra <durata (5 minuti, 30 secondi, mezz'ora)>`
+- `Fermare tra <durata (5 minuti, 30 secondi, mezz'ora)>`
 
 **Set a reminder**
 
