@@ -447,6 +447,70 @@ public sealed class PlaybackLaunchBuilder
     }
 
     /// <summary>
+    /// The ONE belt-inclusive "does a VideoApp stream own the screen" answer
+    /// (JF-632/JF-635): <see cref="ResolvePlayingMedium"/> first, then the raw
+    /// ledger-route belt. The belt closes the classifier's two proven holes
+    /// (the SleepTimer JF-632 evidence): (a) the SAME-ITEM seek-mode shape, where
+    /// the native-controls delegation re-records the same track on the VideoApp
+    /// route while the AudioPlayer token keeps naming it, so the classifier's
+    /// token-ownership arm answers Audio; (b) the unresolvable ledger item
+    /// (deleted movie/book), which answers Unknown. For both, ANY VideoApp-routed
+    /// ledger entry means a VideoApp stream owns the screen: the ledger item is
+    /// re-resolved THROUGH the ONE kind kernel (<see cref="ClassifyLedgerItemKind"/>,
+    /// which also owns the audiobook-before-Audio precedence), and an item that no
+    /// longer resolves defaults to the video family (<see cref="PlayingMedium.Video"/>).
+    /// Consumers that only need "video owns the screen, and is the payload music"
+    /// reduce to <see cref="IsVideoAppMedium"/> plus a
+    /// <c>medium == PlayingMedium.VideoAppAudio</c> check; the refusal STRINGS stay
+    /// per action family (the BuildVideoAppTransportRefusal pattern: one shared
+    /// shape answer, per-family wording). Current consumers: the loop-family gate
+    /// (ProgressReporter.ApplyRepeatModeAsync) and the sleep-timer re-issue gate
+    /// (SleepTimerIntentHandler); Pause/Repeat/next-previous still carry the
+    /// classifier-only flat gate and migrate deliberately.
+    /// Cost note (inherited, not by construction): the classifier resolves the
+    /// ledger item internally without exposing the outcome, so on the
+    /// deleted-item path the belt re-resolves the same known-absent GUID once
+    /// (the class <see cref="ResolveCurrentPlayingItem"/>'s tail guards against),
+    /// and the snapshot is read twice (in-memory dictionary reads). The deeper
+    /// fix, a classifier variant returning medium + snapshot + resolve outcome,
+    /// is a family-wide refactor deliberately not taken here.
+    /// </summary>
+    /// <param name="context">The Alexa context (device id for the ledger read, AudioPlayer token).</param>
+    /// <param name="libraryManager">The library manager, to resolve the ledger item id. Null keeps the classifier's answer (the belt cannot resolve).</param>
+    /// <param name="queueManager">The caller's device queue manager (the last-played ledger); null disables the BELT. The classifier half keeps its own inherited <c>Plugin.Instance</c> fallback (<see cref="ResolvePlayingMedium"/>), so null does not make the whole helper ledger-free; production callers pass their DI manager.</param>
+    /// <returns>The belt-corrected playing medium; the same values <see cref="ResolvePlayingMedium"/> yields, except the two belt holes resolve to their VideoApp-family mediums.</returns>
+    internal PlayingMedium ResolveScreenOwningMedium(
+        Context? context,
+        ILibraryManager? libraryManager,
+        DeviceQueueManager? queueManager)
+    {
+        PlayingMedium medium = ResolvePlayingMedium(context, libraryManager, queueManager);
+        if (IsVideoAppMedium(medium))
+        {
+            return medium;
+        }
+
+        // The belt: a VideoApp-RECORDED route wins even when the classifier just
+        // answered Audio (the same-item shape) or Unknown (nothing resolvable).
+        string? deviceId = context?.System?.Device?.DeviceID;
+        (string? lastPlayedId, DeviceQueueManager.LaunchRoute? recordedRoute) =
+            deviceId != null && queueManager != null
+                ? queueManager.GetLastPlayedSnapshot(deviceId)
+                : (null, null);
+        if (recordedRoute != DeviceQueueManager.LaunchRoute.VideoApp)
+        {
+            return medium;
+        }
+
+        BaseItem? ledgerItem = libraryManager != null && Guid.TryParse(lastPlayedId, out Guid ledgerGuid)
+            ? libraryManager.GetItemById(ledgerGuid)
+            : null;
+        return ledgerItem != null
+            ? ClassifyLedgerItemKind(ledgerItem, recordedRoute)
+            : PlayingMedium.Video;
+    }
+
+    /// <summary>
     /// The ONE ledger-item kind ladder (JF-626), the shared kernel of
     /// <see cref="ResolvePlayingMedium"/> and the displacement predicate in
     /// <see cref="ResolveCurrentPlayingItem"/>: given a resolved ledger item and
@@ -529,6 +593,14 @@ public sealed class PlaybackLaunchBuilder
     /// DISABLES it (deliberately NOT the <c>Plugin.Instance</c> fallback this
     /// class's other queue reads use, because the playlist-edit family holds no
     /// device queue and keeps its token+session-only semantics).
+    /// The ledger tail is UNBOUNDED with respect to recency: on a device whose
+    /// last playback was days ago it still answers that item (RateItem's
+    /// deliberate stance, JF-626). A caller whose WRITE is stateful on "this is
+    /// playing now" (favorite, media info, the loop toggle) must guard current
+    /// evidence itself first (the JF-629 idle guard: no AudioPlayer token AND no
+    /// session now-playing item means answer not-found); see
+    /// FavoriteToggleIntentHandler/MediaInfoIntentHandler/ProgressReporter.ApplyRepeatModeAsync
+    /// for the guard and its rationale.
     /// </summary>
     /// <param name="context">The Alexa context (device id for the ledger read, AudioPlayer token).</param>
     /// <param name="session">The Jellyfin session (full now-playing item first, DTO second).</param>

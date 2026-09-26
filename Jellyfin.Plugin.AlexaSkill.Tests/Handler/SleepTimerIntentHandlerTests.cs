@@ -9,6 +9,7 @@ using global::Alexa.NET.Request.Type;
 using global::Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
@@ -499,6 +500,15 @@ public class SleepTimerIntentHandlerTests : PluginTestBase, IDisposable
         TestHelpers.AssertNoAudioPlayDirective(response);
         Assert.True(response.Response?.ShouldEndSession);
         Assert.Contains("sleep timer", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+        // JF-635 (the shared screen-owner classifier): a book is NOT music, so the
+        // video-family line must answer even though AudioBook subclasses Audio and
+        // a naive "ledger item is Audio" check would pick the seek-mode music line.
+        Assert.Contains(
+            ResponseStrings.Get("CannotSetSleepTimerOverVideo", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(
+            ResponseStrings.Get("CannotSetSleepTimerInSeekMode", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
 
         Assert.Equal(book.Id.ToString(), itemId);
         Assert.Equal(DeviceQueueManager.LaunchRoute.VideoApp, route);
