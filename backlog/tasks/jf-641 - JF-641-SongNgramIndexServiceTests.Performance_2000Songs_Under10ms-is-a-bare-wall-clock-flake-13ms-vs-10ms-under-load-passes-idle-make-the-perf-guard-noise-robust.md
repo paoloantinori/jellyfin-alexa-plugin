@@ -4,9 +4,10 @@ title: >-
   JF-641 - SongNgramIndexServiceTests.Performance_2000Songs_Under10ms is a bare
   wall-clock flake (13ms vs 10ms under load, passes idle) - make the perf guard
   noise-robust
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-26 19:48'
+updated_date: '2026-09-26 19:55'
 labels:
   - tests
   - flaky

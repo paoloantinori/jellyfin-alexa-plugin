@@ -291,11 +291,14 @@ public class SongNgramIndexServiceTests : PluginTestBase
         var service = CreateService(songs);
         await service.StartAsync(CancellationToken.None);
 
-        var sw = Stopwatch.StartNew();
-        var results = service.Search(new[] { "soul", "coughing" }, "en-US");
-        sw.Stop();
+        // JF-641: the guard is noise-robust (warmup + one retry) while keeping the
+        // order-of-magnitude regression teeth (a lost index shape breaches every attempt).
+        PerfGuard.UnderMs(
+            () => Assert.Single(service.Search(new[] { "soul", "coughing" }, "en-US")),
+            budgetMs: 10,
+            label: "SongNgram search (2000 songs)");
 
-        Assert.True(sw.ElapsedMilliseconds < 10, $"Search took {sw.ElapsedMilliseconds}ms, expected < 10ms");
+        var results = service.Search(new[] { "soul", "coughing" }, "en-US");
         Assert.Single(results);
         Assert.Equal(targetSong.Id, results[0].Item.Id);
     }

@@ -468,20 +468,28 @@ public class ArtistIndexServiceTests : PluginTestBase
         await service.StartAsync(CancellationToken.None);
 
         var allArtists = service.GetArtists();
-        var sw = System.Diagnostics.Stopwatch.StartNew();
 
         // Simulate the 4-tier search
         string query = "soul coughin"; // misspelling
-        var tier1 = allArtists.Where(a => a.Name.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
-        string firstWord = query.Split(' ')[0];
-        var prefix = allArtists.Where(a => a.Name.StartsWith(firstWord, StringComparison.OrdinalIgnoreCase)).ToList();
-        var fuzzy = FuzzyMatcher.FindBestMatch(query, prefix, a => a.Name, 60);
 
-        sw.Stop();
+        // JF-641: the guard is noise-robust (warmup + one retry) while keeping the
+        // order-of-magnitude regression teeth (same latent flake as the song test).
+        PerfGuard.UnderMs(
+            () =>
+            {
+                var tier1 = allArtists.Where(a => a.Name.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
+                string firstWord = query.Split(' ')[0];
+                var prefix = allArtists.Where(a => a.Name.StartsWith(firstWord, StringComparison.OrdinalIgnoreCase)).ToList();
+                var fuzzy = FuzzyMatcher.FindBestMatch(query, prefix, a => a.Name, 60);
+                Assert.NotNull(fuzzy);
+                Assert.Equal("Soul Coughing", fuzzy!.Name);
+            },
+            budgetMs: 10,
+            label: "Artist 4-tier search (2000 artists)");
 
-        Assert.True(sw.ElapsedMilliseconds < 10, $"Artist search took {sw.ElapsedMilliseconds}ms, expected < 10ms");
-        Assert.NotNull(fuzzy);
-        Assert.Equal("Soul Coughing", fuzzy.Name);
+        var fuzzyCheck = FuzzyMatcher.FindBestMatch(query, allArtists.Where(a => a.Name.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList(), a => a.Name, 60);
+        Assert.NotNull(fuzzyCheck);
+        Assert.Equal("Soul Coughing", fuzzyCheck.Name);
     }
 
     // --- Phonetic code pre-computation tests ---
