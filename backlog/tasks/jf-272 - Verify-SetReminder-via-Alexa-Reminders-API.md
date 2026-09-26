@@ -1,10 +1,10 @@
 ---
 id: JF-272
 title: Verify SetReminder via Alexa Reminders API
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-06-08 09:31'
-updated_date: '2026-09-02 16:49'
+updated_date: '2026-09-26 13:17'
 labels:
   - e2e
   - smapi
@@ -42,3 +42,9 @@ SetReminderIntent uses Alexa's Reminders API. No tests exist. Need to:
 <!-- SECTION:NOTES:BEGIN -->
 JF-450/451 follow-up (2026-09-02): SleepTimerIntentHandler still int.Parse-only for its duration slot, so it-IT word numbers ('trenta') fail exactly like SetReminder's did before the fix; adopting Alexa/Util/ItalianNumberWords.TryParse is a one-liner (the parser + its model-mirror test landed with JF-451). Also known limit: the ItalianNumber slot type has no compounds ('venticinque'), so only its 22 values are speakable for relative durations; extending the slot type auto-fails the mirror test until the parser grows.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+JF-272 CLOSED by device verification (2026-09-26 14:48, Paolo's Echo Show): 'ricordami tra trenta secondi' armed, confirmed 'promemoria impostato tra 30 secondi', and FIRED as a real Alexa reminder. The feature had never worked on any device: two live fixes landed during the verification round (the RemindersClient ctor args were swapped since inception, feeding the JWT to new Uri(); then content[].text joined ssml for the INVALID_ALERT_INFO the API answered after the first fix). The reminder is now fully verified end-to-end: routing (SetReminderIntent PT30S), creation (alert token), device delivery.
+<!-- SECTION:FINAL_SUMMARY:END -->
