@@ -574,6 +574,23 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         return controller;
     }
 
+    /// <summary>
+    /// CreateController variant that also carries the JF-636 <c>?d=</c> device hint
+    /// (the speed endpoint's supersede-kill reads it to stay device-scoped).
+    /// </summary>
+    private VideoAudioController CreateController(string itemIdForToken, string deviceHint, string? ffmpegPath = null)
+    {
+        var controller = CreateController(itemIdForToken, ffmpegPath: ffmpegPath);
+        var existing = controller.ControllerContext.HttpContext.Request.Query;
+        var query = new Dictionary<string, Microsoft.Extensions.Primitives.StringValues>(
+            existing.ToDictionary(kv => kv.Key, kv => kv.Value), StringComparer.OrdinalIgnoreCase)
+        {
+            ["d"] = deviceHint
+        };
+        controller.ControllerContext.HttpContext.Request.Query = new QueryCollection(query);
+        return controller;
+    }
+
     // ========== HLS Tests ==========
 
     /// <summary>
@@ -3151,6 +3168,306 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         var anonymous = CreateController();
         ActionResult rejected = await anonymous.GetEpisodeAudioSegment(itemId, startTicks, "seg_0000.ts");
         Assert.IsType<UnauthorizedObjectResult>(rejected);
+    }
+
+    /// <summary>
+    /// JF-636 atempo arguments: the CONTENT-relative input seek before -i, audio-only
+    /// mapping, atempo at perMille/1000, the ALWAYS-AAC encode (a filter forbids
+    /// stream copy), 10-second MPEG-TS segments, and the base URL pointing at the
+    /// dedicated speed-segments route with rate and start position in the path.
+    /// </summary>
+    [Fact]
+    public void BuildAudioSpeedHlsFfmpegArguments_SeekAndAtempo_ShapeTheEncode()
+    {
+        string sourceUrl = "http://localhost:8096/Audio/abc/stream?static=true";
+        long startTicks = TimeSpan.FromMinutes(20).Ticks;
+
+        List<string> args = VideoAudioController.BuildAudioSpeedHlsFfmpegArguments(
+            sourceUrl, startTicks, 1500, "/tmp/hls/stream.m3u8", "/tmp/hls/seg_%04d.ts",
+            "/alexaskill/api/audio-speed/abc/1500/segments/12000000000/");
+
+        // Content-relative input seek BEFORE -i
+        int ssIdx = args.IndexOf("-ss");
+        Assert.True(ssIdx >= 0, "expected -ss for a start-shifted speed encode");
+        Assert.Equal(
+            (startTicks / (double)TimeSpan.TicksPerSecond).ToString("0.###", System.Globalization.CultureInfo.InvariantCulture),
+            args[ssIdx + 1]);
+        Assert.Equal("-i", args[ssIdx + 2]);
+        Assert.Equal(sourceUrl, args[ssIdx + 3]);
+
+        // ONE map: audio only.
+        Assert.Equal("0:a:0", args[args.IndexOf("-map") + 1]);
+        Assert.Equal(1, args.Count(a => a == "-map"));
+
+        // atempo at the per-mille rate, then AAC 192k stereo: atempo is a filter,
+        // so copy is impossible regardless of the source codec.
+        Assert.Equal("atempo=1.5", args[args.IndexOf("-af") + 1]);
+        Assert.Equal("aac", args[args.IndexOf("-c:a") + 1]);
+        Assert.Equal("2", args[args.IndexOf("-ac") + 1]);
+        Assert.Equal("192k", args[args.IndexOf("-b:a") + 1]);
+        Assert.DoesNotContain("copy", args);
+
+        // 10-second MPEG-TS segments, event growth, the speed-segments base URL.
+        Assert.Equal("10", args[args.IndexOf("-hls_time") + 1]);
+        Assert.Equal("append_list", args[args.IndexOf("-hls_flags") + 1]);
+        Assert.Equal("mpegts", args[args.IndexOf("-hls_segment_type") + 1]);
+        Assert.Equal("/alexaskill/api/audio-speed/abc/1500/segments/12000000000/", args[args.IndexOf("-hls_base_url") + 1]);
+        Assert.Equal("/tmp/hls/stream.m3u8", args[^1]);
+    }
+
+    /// <summary>
+    /// The six quarter steps all fit ONE atempo instance (range 0.5-2.0): no
+    /// chaining, no locale decimal separators in the filter value.
+    /// </summary>
+    [Theory]
+    [InlineData(750, "atempo=0.75")]
+    [InlineData(1000, "atempo=1")]
+    [InlineData(1250, "atempo=1.25")]
+    [InlineData(1500, "atempo=1.5")]
+    [InlineData(1750, "atempo=1.75")]
+    [InlineData(2000, "atempo=2")]
+    public void BuildAudioSpeedHlsFfmpegArguments_EveryServedRate_SingleAtempoInstance(int ratePerMille, string expectedFilter)
+    {
+        List<string> args = VideoAudioController.BuildAudioSpeedHlsFfmpegArguments(
+            "http://localhost:8096/Audio/abc/stream?static=true", 0, ratePerMille,
+            "/tmp/hls/stream.m3u8", "/tmp/hls/seg_%04d.ts", "/base/");
+
+        Assert.Equal(expectedFilter, args[args.IndexOf("-af") + 1]);
+        Assert.Equal(1, args.Count(a => a.StartsWith("atempo=", StringComparison.Ordinal)));
+    }
+
+    /// <summary>A from-zero speed encode carries no -ss (the fresh-launch shape).</summary>
+    [Fact]
+    public void BuildAudioSpeedHlsFfmpegArguments_FromZero_HasNoSeek()
+    {
+        List<string> args = VideoAudioController.BuildAudioSpeedHlsFfmpegArguments(
+            "http://localhost:8096/Audio/abc/stream?static=true", 0, 2000,
+            "/tmp/hls/stream.m3u8", "/tmp/hls/seg_%04d.ts", "/base/");
+
+        Assert.DoesNotContain("-ss", args);
+        Assert.Equal("-i", args[0]);
+    }
+
+    /// <summary>
+    /// The variant cache key is distinct per rate AND start position and from every
+    /// other variant of the same item (the bare remux key and the audio-only twin).
+    /// </summary>
+    [Fact]
+    public void AudioSpeedCacheKey_DistinctPerRateAndStart_AndFromSiblingVariants()
+    {
+        string id = Guid.NewGuid().ToString();
+        long startTicks = TimeSpan.FromMinutes(5).Ticks;
+
+        Assert.Equal($"{id}-speed-1500", VideoAudioController.AudioSpeedCacheKey(id, 1500, 0));
+        Assert.Equal($"{id}-speed-1500-{startTicks}", VideoAudioController.AudioSpeedCacheKey(id, 1500, startTicks));
+        Assert.NotEqual(
+            VideoAudioController.AudioSpeedCacheKey(id, 1500, startTicks),
+            VideoAudioController.AudioSpeedCacheKey(id, 1750, startTicks));
+        Assert.NotEqual(
+            VideoAudioController.AudioSpeedCacheKey(id, 1500, startTicks),
+            VideoAudioController.EpisodeAudioCacheKey(id, startTicks));
+        Assert.NotEqual(id, VideoAudioController.AudioSpeedCacheKey(id, 1500, 0));
+    }
+
+    /// <summary>A bare-GUID speed playlist request with no token must be rejected (401).</summary>
+    [Fact]
+    public async Task StreamHlsAudioSpeed_NoToken_Returns401()
+    {
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+
+        var controller = CreateController();
+
+        ActionResult result = await controller.StreamHlsAudioSpeed(Guid.NewGuid().ToString(), 1500);
+
+        Assert.IsType<UnauthorizedObjectResult>(result);
+    }
+
+    /// <summary>Invalid GUID: 400 before anything else; unserved rate: 400 after the token.</summary>
+    [Fact]
+    public async Task StreamHlsAudioSpeed_InvalidItemId_Returns400()
+    {
+        var controller = CreateController();
+
+        ActionResult result = await controller.StreamHlsAudioSpeed("not-a-guid", 1500);
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.NotNull(badRequest.Value);
+    }
+
+    /// <summary>An unserved rate (off the six-step ladder) is rejected even with a valid token.</summary>
+    [Fact]
+    public async Task StreamHlsAudioSpeed_UnservedRate_Returns400()
+    {
+        string itemId = Guid.NewGuid().ToString();
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+
+        var controller = CreateController(itemId);
+
+        ActionResult result = await controller.StreamHlsAudioSpeed(itemId, 1337);
+
+        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+        Assert.NotNull(badRequest.Value);
+    }
+
+    /// <summary>
+    /// Cache-miss flow of the speed variant: an AUDIO item's static /Audio/ stream is
+    /// fed to ffmpeg with atempo + AAC, the encode lands in the variant directory,
+    /// and the partial playlist is served with the token injected into the
+    /// speed-segments URLs.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudioSpeed_CacheMiss_EncodesAtempoIntoVariantDirectory()
+    {
+        var episode = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "IlPost episode",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromMinutes(45).Ticks
+        };
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(episode.Id)).Returns(episode);
+
+        long startTicks = TimeSpan.FromMinutes(10).Ticks;
+        string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-audio-speed",
+            "for last_arg in \"$@\"; do :; done\n" +
+            "dir=$(dirname \"$last_arg\")\n" +
+            "printf '%s\\n' \"$@\" > \"$dir/audio-speed-args.txt\"\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0000.ts\" 2>/dev/null\n" +
+            "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:10.000,\\nseg_0000.ts\\n' > \"$last_arg\"\n" +
+            "exit 0\n");
+
+        var controller = CreateController(episode.Id.ToString());
+        controller.FfmpegPath = fakeFfmpegPath;
+
+        ActionResult result = await controller.StreamHlsAudioSpeed(episode.Id.ToString(), 1500, startTicks);
+
+        var content = Assert.IsType<ContentResult>(result);
+        Assert.Equal("application/vnd.apple.mpegurl", content.ContentType);
+        Assert.Contains("seg_0000.ts?token=", content.Content, StringComparison.Ordinal);
+
+        // The encode ran in the VARIANT directory with the atempo arguments and the
+        // audio-kind source URL.
+        string hlsDir = _cache.GetHlsDirectoryPath(VideoAudioController.AudioSpeedCacheKey(episode.Id.ToString(), 1500, startTicks), 0);
+        string recordedArgs = File.ReadAllText(Path.Combine(hlsDir, "audio-speed-args.txt"));
+
+        Assert.Contains($"/Audio/{episode.Id}/stream?static=true", recordedArgs, StringComparison.Ordinal);
+        Assert.Contains("-ss", recordedArgs, StringComparison.Ordinal);
+        Assert.Contains("atempo=1.5", recordedArgs, StringComparison.Ordinal);
+        Assert.Contains("0:a:0", recordedArgs, StringComparison.Ordinal);
+        Assert.DoesNotContain("-c:v", recordedArgs, StringComparison.Ordinal);
+        Assert.Contains($"/alexaskill/api/audio-speed/{episode.Id}/1500/segments/{startTicks}/", recordedArgs, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The speed-segments route resolves the VARIANT directory (rate + start in the
+    /// path), serves its segments, and rejects a missing token.
+    /// </summary>
+    [Fact]
+    public async Task GetAudioSpeedSegment_ServesVariantDirectory_AndRejectsMissingToken()
+    {
+        string itemId = Guid.NewGuid().ToString();
+        long startTicks = TimeSpan.FromMinutes(10).Ticks;
+
+        string hlsDir = _cache.GetHlsDirectoryPath(VideoAudioController.AudioSpeedCacheKey(itemId, 1500, startTicks), 0);
+        Directory.CreateDirectory(hlsDir);
+        string segPath = Path.Combine(hlsDir, "seg_0000.ts");
+        File.WriteAllText(segPath, "segment-bytes");
+
+        var authorized = CreateController(itemId);
+        ActionResult served = await authorized.GetAudioSpeedSegment(itemId, 1500, startTicks, "seg_0000.ts");
+        var file = Assert.IsType<PhysicalFileResult>(served);
+        Assert.Equal("video/mp2t", file.ContentType);
+
+        // A different rate is a DIFFERENT directory: not found
+        ActionResult wrongRate = await authorized.GetAudioSpeedSegment(itemId, 1750, startTicks, "seg_0000.ts");
+        Assert.IsType<NotFoundObjectResult>(wrongRate);
+
+        // No token: rejected
+        var anonymous = CreateController();
+        ActionResult rejected = await anonymous.GetAudioSpeedSegment(itemId, 1500, startTicks, "seg_0000.ts");
+        Assert.IsType<UnauthorizedObjectResult>(rejected);
+    }
+
+    /// <summary>
+    /// JF-636 efficiency review: a speed change mints a NEW (rate, start) encode
+    /// while the previous variant's ffmpeg is still running; the new encode must
+    /// KILL the superseded one minted by the SAME device (it can never be played
+    /// again by that launch), so quick speed cycling cannot strand abandoned
+    /// ~49x-realtime encodes on the shared encode gate. A different device's
+    /// variant of the same item must SURVIVE (tokens are item-scoped, queues
+    /// per-device). The fake ffmpeg records its PID, writes the first segment,
+    /// then sleeps.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudioSpeed_NewLaunch_KillsSameDeviceSupersededEncode_SparesOtherDevices()
+    {
+        var episode = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Cycling episode",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromMinutes(60).Ticks
+        };
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(episode.Id)).Returns(episode);
+
+        string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-audio-speed-sleeper",
+            "for last_arg in \"$@\"; do :; done\n" +
+            "dir=$(dirname \"$last_arg\")\n" +
+            "echo $$ > \"$dir/ffmpeg.pid\"\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0000.ts\" 2>/dev/null\n" +
+            "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:10.000,\\nseg_0000.ts\\n' > \"$last_arg\"\n" +
+            "sleep 300\n");
+
+        // Device A starts the 1.5x variant.
+        var first = CreateController(episode.Id.ToString(), "device-A", fakeFfmpegPath);
+        ActionResult firstResult = await first.StreamHlsAudioSpeed(episode.Id.ToString(), 1500, 0);
+        Assert.IsType<ContentResult>(firstResult);
+
+        string hlsDir = _cache.GetHlsDirectoryPath(VideoAudioController.AudioSpeedCacheKey(episode.Id.ToString(), 1500, 0), 0);
+        string pidPath = Path.Combine(hlsDir, "ffmpeg.pid");
+        Assert.True(File.Exists(pidPath), "the fake ffmpeg never ran");
+        int pid = int.Parse(File.ReadAllText(pidPath).Trim());
+
+        static bool ProcessDead(int p)
+        {
+            try
+            {
+                using var probe = System.Diagnostics.Process.GetProcessById(p);
+                return probe.HasExited;
+            }
+            catch (ArgumentException)
+            {
+                return true;
+            }
+        }
+
+        // Device B launches a different variant of the SAME item: A's encode must
+        // survive (a different Echo may be actively consuming it).
+        var other = CreateController(episode.Id.ToString(), "device-B", fakeFfmpegPath);
+        ActionResult otherResult = await other.StreamHlsAudioSpeed(episode.Id.ToString(), 1750, 0);
+        Assert.IsType<ContentResult>(otherResult);
+        Assert.False(ProcessDead(pid), "another device's launch must not kill device A's live variant");
+
+        // Device A cycles to a new rate: its own 1.5x encode is superseded and dies.
+        var second = CreateController(episode.Id.ToString(), "device-A", fakeFfmpegPath);
+        ActionResult secondResult = await second.StreamHlsAudioSpeed(episode.Id.ToString(), 2000, 0);
+        Assert.IsType<ContentResult>(secondResult);
+
+        bool dead = false;
+        for (int i = 0; i < 50; i++)
+        {
+            if (ProcessDead(pid))
+            {
+                dead = true;
+                break;
+            }
+
+            await Task.Delay(100);
+        }
+
+        Assert.True(dead, $"the superseded speed encode (pid {pid}) survived the new launch");
     }
 
     /// <summary>

@@ -564,6 +564,16 @@ intents:
     slots:
       - name: podcast_name
         type: AMAZON.SearchQuery
+  - name: SetPlaybackSpeedIntent
+    slots:
+      - name: speed
+        type: SpeedRate
+    samples:
+      - à vitesse {speed}
+      - vitesse {speed}
+      - mets la vitesse à {speed}
+      - lis à vitesse {speed}
+      - "mets {speed}"
   - name: SearchMediaIntent
     slots:
       - name: query
@@ -795,6 +805,34 @@ intents:
       - name: playlist
         type: AMAZON.SearchQuery
 types:
+  # JF-636: playback-speed vocabulary (the JF-354 Mood architecture). Ids are
+  # the shared cross-locale key space (per-mille strings + faster/slower).
+  SpeedRate:
+    values:
+      - value: trois quarts
+        id: "750"
+        synonyms: ["0,75", "0.75"]
+      - value: vitesse normale
+        id: "1000"
+        synonyms: [normale, "vitesse un", un, "1", "1,0"]
+      - value: un et quart
+        id: "1250"
+        synonyms: ["1,25", "1.25", "une et quart"]
+      - value: un et demi
+        id: "1500"
+        synonyms: ["une et demie", "1,5", "1.5"]
+      - value: un et trois quarts
+        id: "1750"
+        synonyms: ["1,75", "1.75", "une et trois quarts"]
+      - value: vitesse double
+        id: "2000"
+        synonyms: [double, "le double", deux, "2"]
+      - value: "plus vite"
+        id: faster
+        synonyms: [accélère, "plus rapidement"]
+      - value: "plus lentement"
+        id: slower
+        synonyms: ["plus lent", ralentis]
   Mood:
     values:
       - value: détendant
@@ -950,6 +988,13 @@ types:
         synonyms: []
 dialog:
   intents:
+    - name: SetPlaybackSpeedIntent
+      confirmationRequired: false
+      slots:
+        - name: speed
+          type: SpeedRate
+          confirmationRequired: false
+          elicitationRequired: false
     - name: RateItemIntent
       confirmationRequired: false
       slots:

@@ -290,5 +290,15 @@
   "PlaylistAlreadyExists": "Já existe uma playlist chamada {0}.",
   "PlaylistCreateFailed": "Não consegui criar a playlist. Verifique se a sua biblioteca do Jellyfin inclui uma pasta de playlists.",
   "FollowMeSuccessResume": "Continuando {0} neste dispositivo, de onde você parou.",
-  "FollowMeSuccessResumeSsml": "<say-as interpret-as=\"interjection\">entendi</say-as><break time=\"200ms\"/>Continuando {0} neste dispositivo, de onde você parou."
+  "FollowMeSuccessResumeSsml": "<say-as interpret-as=\"interjection\">entendi</say-as><break time=\"200ms\"/>Continuando {0} neste dispositivo, de onde você parou.",
+  "DidNotCatchSpeed": "A que velocidade? Diga, por exemplo: mais rápido, ou: a velocidade de um e meio.",
+  "PlaybackSpeedSet": "Velocidade {0}.",
+  "SpeedName750": "três quartos",
+  "SpeedName1000": "um",
+  "SpeedName1250": "um e um quarto",
+  "SpeedName1500": "um e meio",
+  "SpeedName1750": "um e três quartos",
+  "SpeedName2000": "dupla",
+  "CannotChangeSpeedOverVideo": "Desculpe, não posso mudar a velocidade de reprodução durante a reprodução de um vídeo ou com a barra de progresso.",
+  "CannotChangeSpeedForBook": "Desculpe, não posso mudar a velocidade dos audiolivros."
 }

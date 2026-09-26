@@ -120,7 +120,7 @@ public class QueueIntentHandlerTests : PluginTestBase
             new IntentRequest { Intent = new Intent { Name = "ClearQueueIntent" }, Locale = "en-US", RequestId = "clear-req" },
             TestHelpers.CreateTestContext(deviceId), TestHelpers.CreateTestUser(), session, CancellationToken.None);
 
-        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, currentItemId.ToString(), out _, out _, out _));
+        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, currentItemId.ToString(), out _, out _, out _, out _));
     }
 
     [Fact]
@@ -242,6 +242,6 @@ public class QueueIntentHandlerTests : PluginTestBase
         Assert.Equal(insertedSongId, session.NowPlayingQueue[1].Id);
 
         // ...and the pre-computed entry for the displaced successor is gone.
-        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, currentId.ToString(), out _, out _, out _));
+        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, currentId.ToString(), out _, out _, out _, out _));
     }
 }

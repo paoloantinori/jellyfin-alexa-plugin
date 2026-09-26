@@ -440,6 +440,15 @@ intents:
     slots:
       - name: podcast_name
         type: AMAZON.SearchQuery
+  - name: SetPlaybackSpeedIntent
+    slots:
+      - name: speed
+        type: SpeedRate
+    samples:
+      - 速度{speed}
+      - 速度を{speed}にして
+      - 再生速度{speed}
+      - "{speed}にして"
   - name: BrowseLibraryIntent
     slots:
       - name: browse_category
@@ -670,6 +679,30 @@ intents:
       - name: playlist
         type: AMAZON.SearchQuery
 types:
+  # JF-636: playback-speed vocabulary (the JF-354 Mood architecture). Ids are
+  # the shared cross-locale key space (per-mille strings + faster/slower).
+  SpeedRate:
+    values:
+      - value: 0.75倍
+        id: "750"
+      - value: 通常速度
+        id: "1000"
+        synonyms: [通常, 等速, 1倍]
+      - value: 1.25倍
+        id: "1250"
+      - value: 1.5倍
+        id: "1500"
+      - value: 1.75倍
+        id: "1750"
+      - value: 2倍
+        id: "2000"
+        synonyms: [二倍]
+      - value: 速く
+        id: faster
+        synonyms: ["もっと速く"]
+      - value: 遅く
+        id: slower
+        synonyms: ["もっと遅く"]
   Mood:
     values:
       - value: リラックス
@@ -829,6 +862,13 @@ types:
         synonyms: []
 dialog:
   intents:
+    - name: SetPlaybackSpeedIntent
+      confirmationRequired: false
+      slots:
+        - name: speed
+          type: SpeedRate
+          confirmationRequired: false
+          elicitationRequired: false
     - name: RateItemIntent
       confirmationRequired: false
       slots:

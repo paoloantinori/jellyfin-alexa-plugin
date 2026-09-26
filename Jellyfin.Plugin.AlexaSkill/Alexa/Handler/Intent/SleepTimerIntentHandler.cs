@@ -140,7 +140,7 @@ public class SleepTimerIntentHandler : BaseHandler
         string? deviceIdForLedger = context.GetDeviceId() is { Length: > 0 } id ? id : null;
         DeviceQueueManager? queuesForLedger = deviceIdForLedger != null ? _queueManager : null;
         (string? ledgerItemId, DeviceQueueManager.LaunchRoute? ledgerRoute) =
-            deviceIdForLedger != null ? queuesForLedger!.GetLastPlayedSnapshot(deviceIdForLedger) : (null, null);
+            deviceIdForLedger != null && queuesForLedger != null ? queuesForLedger.GetLastPlayedSnapshot(deviceIdForLedger) : (null, null);
         bool ledgerVideoRouted = ledgerRoute == DeviceQueueManager.LaunchRoute.VideoApp;
         if (PlaybackLaunchBuilder.IsVideoAppMedium(medium) || ledgerVideoRouted)
         {
@@ -183,33 +183,50 @@ public class SleepTimerIntentHandler : BaseHandler
             ? parsed
             : Guid.TryParse(itemId, out Guid bare) ? bare : Guid.Empty;
 
-        // JF-522: the sleep re-issue/replay builds its AudioPlayerPlayDirective directly
-        // (the one production site outside the BuildAudioPlayerResponse chokepoint), so
-        // it must retire the item's launch scope itself: the replay rides the RAW STATIC
-        // URL (base 0, the item timeline), and without this write a transcode-launched
-        // stream's stale base would compose over the replay's offsets at its events
-        // (review JF-522; the double-add is otherwise bounded only by the runtime guard).
+        // JF-522/JF-636: the sleep re-issue/replay builds its AudioPlayerPlayDirective
+        // directly (the one production site outside the BuildAudioPlayerResponse
+        // chokepoint), so it owns its launch scope itself. The replay source is
+        // resolved through the ONE resume resolver first (JF-520 doctrine): a
+        // device-derived offset counts the OUTPUT timeline of the stream that
+        // produced it (an atempo speed stream OR a transcode launch), so it must be
+        // rebased against the launch scope's base+rate before it can seek the
+        // replay, and a speed-routed item keeps its rate instead of silently
+        // reverting to 1x. The scope write below then records the RESOLVED source's
+        // base and rate (never a hand-pinned 0 over a speed stream).
+        int offsetInMilliseconds = 0;
+        bool offsetIsDeviceDerived = context.AudioPlayer != null && context.AudioPlayer.OffsetInMilliseconds > 0;
+        if (offsetIsDeviceDerived)
+        {
+            offsetInMilliseconds = (int)context.AudioPlayer!.OffsetInMilliseconds;
+        }
+        else if (session.PlayState?.PositionTicks != null)
+        {
+            offsetInMilliseconds = (int)TimeSpan.FromTicks(session.PlayState.PositionTicks.Value).TotalMilliseconds;
+        }
+
+        AudioLaunchSource replaySource = itemGuid == Guid.Empty
+            ? new AudioLaunchSource(Launch.GetStreamUrl(Guid.Empty.ToString(), user), offsetInMilliseconds, LaunchBaseMs: 0)
+            : Launch.ResolveResumedAudioLaunch(
+                session.FullNowPlayingItem,
+                itemGuid.ToString(),
+                user,
+                offsetInMilliseconds,
+                offsetIsDeviceDerived,
+                context.GetDeviceId() is { Length: > 0 } scopeDeviceId ? scopeDeviceId : null,
+                _queueManager,
+                "SleepTimer re-issue");
+
         if (itemGuid != Guid.Empty
             && context.GetDeviceId() is { Length: > 0 } deviceId
             && Plugin.Instance?.DeviceQueueManager is { } queues)
         {
-            queues.RecordLaunchBase(deviceId, itemGuid.ToString(), 0, enqueued: false);
+            queues.RecordLaunchBase(deviceId, itemGuid.ToString(), replaySource.LaunchBaseMs, enqueued: false, replaySource.RatePerMille);
 
             // JF-628: the re-issue IS a user-initiated play, so the ledger names the
             // armed track. The route guard the review proved necessary now lives in
             // the GATE above (it refuses on ANY VideoApp-routed entry, absorbed from
             // this belt); only audio-routed shapes reach this write.
             queues.RecordLastPlayed(deviceId, itemGuid.ToString(), DeviceQueueManager.LaunchRoute.Audio);
-        }
-
-        int offsetInMilliseconds = 0;
-        if (context.AudioPlayer != null && context.AudioPlayer.OffsetInMilliseconds > 0)
-        {
-            offsetInMilliseconds = (int)context.AudioPlayer.OffsetInMilliseconds;
-        }
-        else if (session.PlayState?.PositionTicks != null)
-        {
-            offsetInMilliseconds = (int)TimeSpan.FromTicks(session.PlayState.PositionTicks.Value).TotalMilliseconds;
         }
 
         // Cancel mode: a zero duration ("ferma dopo zero", the legacy "0") replays
@@ -239,9 +256,9 @@ public class SleepTimerIntentHandler : BaseHandler
                         // in the URL path is unmatchable), and the replay Token is the
                         // CLEAN id string with NO sleep suffix: a cancel replays with
                         // no deadline, so PlaybackNearlyFinished sees nothing to enforce.
-                        Url = Launch.GetStreamUrl(itemGuid.ToString(), user),
+                        Url = replaySource.Url,
                         Token = itemGuid.ToString(),
-                        OffsetInMilliseconds = offsetInMilliseconds
+                        OffsetInMilliseconds = replaySource.OffsetMs
                     }
                 }
             };
@@ -278,9 +295,9 @@ public class SleepTimerIntentHandler : BaseHandler
                     // The canonicalized GUID also feeds the stream URL: during sleep
                     // playback the raw token carries the sleep suffix, which would put a
                     // composite id into the URL path (the same re-arm defect family).
-                    Url = Launch.GetStreamUrl(itemGuid.ToString(), user),
+                    Url = replaySource.Url,
                     Token = token,
-                    OffsetInMilliseconds = offsetInMilliseconds
+                    OffsetInMilliseconds = replaySource.OffsetMs
                 }
             }
         };
@@ -291,11 +308,15 @@ public class SleepTimerIntentHandler : BaseHandler
         // response, so a deadline inside the current track stops the music at that
         // track's END. When the runtime is known and the deadline lands mid-track,
         // say so instead of promising a mid-song stop the platform cannot deliver.
+        // JF-636: the remaining-time math needs the CONTENT position; on a
+        // transcode/speed stream the resolved source carries it as
+        // LaunchBaseMs + OffsetMs (the raw device offset is stream-relative).
         bool stopsAtTrackEnd = false;
         long? runtimeTicks = session.FullNowPlayingItem.RunTimeTicks;
         if (runtimeTicks is > 0)
         {
-            long remainingTicks = runtimeTicks.Value - (offsetInMilliseconds * TimeSpan.TicksPerMillisecond);
+            long contentPositionMs = replaySource.LaunchBaseMs + replaySource.OffsetMs;
+            long remainingTicks = runtimeTicks.Value - (contentPositionMs * TimeSpan.TicksPerMillisecond);
             long remainingMs = remainingTicks / TimeSpan.TicksPerMillisecond;
             stopsAtTrackEnd = duration.Value <= TimeSpan.FromMilliseconds(remainingMs);
         }

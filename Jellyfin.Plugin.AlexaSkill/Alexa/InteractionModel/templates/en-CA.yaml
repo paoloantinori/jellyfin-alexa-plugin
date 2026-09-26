@@ -550,6 +550,17 @@ intents:
     slots:
       - name: podcast_name
         type: AMAZON.SearchQuery
+  - name: SetPlaybackSpeedIntent
+    slots:
+      - name: speed
+        type: SpeedRate
+    samples:
+      - at speed {speed}
+      - speed {speed}
+      - set the speed to {speed}
+      - set speed {speed}
+      - play at speed {speed}
+      - "go {speed}"
   - name: SearchMediaIntent
     slots:
       - name: query
@@ -782,6 +793,36 @@ intents:
       - name: playlist
         type: AMAZON.SearchQuery
 types:
+  # JF-636: playback-speed vocabulary (the JF-354 Mood architecture: a
+  # restricted custom type so only speed phrases match). Ids are the shared
+  # cross-locale key space the handler's entity resolution reads (per-mille
+  # strings + faster/slower); PlaybackSpeed.cs is the consuming half.
+  SpeedRate:
+    values:
+      - value: three quarters
+        id: "750"
+        synonyms: ["0.75", "three quarter speed"]
+      - value: normal speed
+        id: "1000"
+        synonyms: [normal, "speed one", one, "1", "1.0"]
+      - value: one and a quarter
+        id: "1250"
+        synonyms: ["1.25", "one point two five"]
+      - value: one and a half
+        id: "1500"
+        synonyms: ["1.5", "one point five", "one and a half speed"]
+      - value: one and three quarters
+        id: "1750"
+        synonyms: ["1.75", "one point seven five"]
+      - value: double speed
+        id: "2000"
+        synonyms: [double, "twice the speed", "two times", two, "2"]
+      - value: faster
+        id: faster
+        synonyms: ["speed up", "play faster"]
+      - value: slower
+        id: slower
+        synonyms: ["slow down", "play slower"]
   Mood:
     values:
       - value: relaxing
@@ -946,6 +987,13 @@ modelConfiguration:
     level: LOW
 dialog:
   intents:
+    - name: SetPlaybackSpeedIntent
+      confirmationRequired: false
+      slots:
+        - name: speed
+          type: SpeedRate
+          confirmationRequired: false
+          elicitationRequired: false
     - name: RateItemIntent
       confirmationRequired: false
       slots:

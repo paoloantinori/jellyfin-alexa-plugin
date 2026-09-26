@@ -568,6 +568,21 @@
         ]
       },
       {
+        "name": "SetPlaybackSpeedIntent",
+        "slots": [
+          {
+            "name": "speed",
+            "type": "SpeedRate"
+          }
+        ],
+        "samples": [
+          "गति {speed}",
+          "गति {speed} पर",
+          "{speed} गति पर",
+          "{speed} करो"
+        ]
+      },
+      {
         "name": "BrowseLibraryIntent",
         "slots": [
           {
@@ -907,6 +922,75 @@
       }
     ],
     "types": [
+      {
+        "name": "SpeedRate",
+        "values": [
+          {
+            "name": {
+              "value": "तीन चौथाई"
+            },
+            "id": "750"
+          },
+          {
+            "name": {
+              "value": "सामान्य गति",
+              "synonyms": [
+                "सामान्य",
+                "एक गति"
+              ]
+            },
+            "id": "1000"
+          },
+          {
+            "name": {
+              "value": "एक और एक चौथाई"
+            },
+            "id": "1250"
+          },
+          {
+            "name": {
+              "value": "डेढ़",
+              "synonyms": [
+                "एक और आधा"
+              ]
+            },
+            "id": "1500"
+          },
+          {
+            "name": {
+              "value": "एक और तीन चौथाई"
+            },
+            "id": "1750"
+          },
+          {
+            "name": {
+              "value": "दोगुनी गति",
+              "synonyms": [
+                "दोगुना"
+              ]
+            },
+            "id": "2000"
+          },
+          {
+            "name": {
+              "value": "तेज़",
+              "synonyms": [
+                "और तेज़"
+              ]
+            },
+            "id": "faster"
+          },
+          {
+            "name": {
+              "value": "धीमा",
+              "synonyms": [
+                "और धीमा"
+              ]
+            },
+            "id": "slower"
+          }
+        ]
+      },
       {
         "name": "Mood",
         "values": [
@@ -1450,6 +1534,18 @@
   },
   "dialog": {
     "intents": [
+      {
+        "name": "SetPlaybackSpeedIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "speed",
+            "type": "SpeedRate",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
       {
         "name": "RateItemIntent",
         "confirmationRequired": false,

@@ -261,7 +261,7 @@ public class ShuffleIntentHandlerTests : IDisposable
             ContextWithToken(current.ToString(), deviceId),
             TestHelpers.CreateTestUser(), NewSession(new[] { current }), default);
 
-        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, current.ToString(), out _, out _, out _));
+        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, current.ToString(), out _, out _, out _, out _));
     }
 
     // JF-424.1: restoring the original order on shuffle-off equally changes which item
@@ -291,6 +291,6 @@ public class ShuffleIntentHandlerTests : IDisposable
             ContextWithToken(current.ToString(), deviceId),
             TestHelpers.CreateTestUser(), NewSession(new[] { current }), default);
 
-        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, current.ToString(), out _, out _, out _));
+        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, current.ToString(), out _, out _, out _, out _));
     }
 }

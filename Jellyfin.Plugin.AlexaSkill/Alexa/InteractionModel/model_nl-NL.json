@@ -591,6 +591,22 @@
         ]
       },
       {
+        "name": "SetPlaybackSpeedIntent",
+        "slots": [
+          {
+            "name": "speed",
+            "type": "SpeedRate"
+          }
+        ],
+        "samples": [
+          "op snelheid {speed}",
+          "snelheid {speed}",
+          "zet de snelheid op {speed}",
+          "speel op snelheid {speed}",
+          "speel {speed}"
+        ]
+      },
+      {
         "name": "BrowseLibraryIntent",
         "slots": [
           {
@@ -950,6 +966,95 @@
       }
     ],
     "types": [
+      {
+        "name": "SpeedRate",
+        "values": [
+          {
+            "name": {
+              "value": "drie kwart",
+              "synonyms": [
+                "0,75",
+                "0.75"
+              ]
+            },
+            "id": "750"
+          },
+          {
+            "name": {
+              "value": "normale snelheid",
+              "synonyms": [
+                "normaal",
+                "snelheid een",
+                "een",
+                "1",
+                "1,0"
+              ]
+            },
+            "id": "1000"
+          },
+          {
+            "name": {
+              "value": "een en een kwart",
+              "synonyms": [
+                "1,25",
+                "1.25"
+              ]
+            },
+            "id": "1250"
+          },
+          {
+            "name": {
+              "value": "anderhalf",
+              "synonyms": [
+                "1,5",
+                "1.5",
+                "een en een half"
+              ]
+            },
+            "id": "1500"
+          },
+          {
+            "name": {
+              "value": "een en drie kwart",
+              "synonyms": [
+                "1,75",
+                "1.75"
+              ]
+            },
+            "id": "1750"
+          },
+          {
+            "name": {
+              "value": "dubbele snelheid",
+              "synonyms": [
+                "dubbel",
+                "twee keer",
+                "twee",
+                "2"
+              ]
+            },
+            "id": "2000"
+          },
+          {
+            "name": {
+              "value": "sneller",
+              "synonyms": [
+                "speel sneller"
+              ]
+            },
+            "id": "faster"
+          },
+          {
+            "name": {
+              "value": "langzamer",
+              "synonyms": [
+                "speel langzamer"
+              ]
+            },
+            "id": "slower"
+          }
+        ]
+      },
       {
         "name": "Mood",
         "values": [
@@ -1516,6 +1621,18 @@
   },
   "dialog": {
     "intents": [
+      {
+        "name": "SetPlaybackSpeedIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "speed",
+            "type": "SpeedRate",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
       {
         "name": "RateItemIntent",
         "confirmationRequired": false,

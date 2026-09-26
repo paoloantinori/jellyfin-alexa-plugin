@@ -290,5 +290,15 @@
   "PlaylistAlreadyExists": "Er bestaat al een afspeellijst met de naam {0}.",
   "PlaylistCreateFailed": "Ik kon de afspeellijst niet aanmaken. Zorg dat je Jellyfin-bibliotheek een map voor afspeellijsten heeft.",
   "FollowMeSuccessResume": "Ik ga verder met {0} op dit apparaat, waar je gebleven was.",
-  "FollowMeSuccessResumeSsml": "<say-as interpret-as=\"interjection\">begrepen</say-as><break time=\"200ms\"/>Ik ga verder met {0} op dit apparaat, waar je gebleven was."
+  "FollowMeSuccessResumeSsml": "<say-as interpret-as=\"interjection\">begrepen</say-as><break time=\"200ms\"/>Ik ga verder met {0} op dit apparaat, waar je gebleven was.",
+  "DidNotCatchSpeed": "Met welke snelheid? Zeg bijvoorbeeld: sneller, of: op snelheid anderhalf.",
+  "PlaybackSpeedSet": "Snelheid {0}.",
+  "SpeedName750": "drie kwart",
+  "SpeedName1000": "normaal",
+  "SpeedName1250": "een en een kwart",
+  "SpeedName1500": "anderhalf",
+  "SpeedName1750": "een en drie kwart",
+  "SpeedName2000": "dubbel",
+  "CannotChangeSpeedOverVideo": "Sorry, ik kan de afspeelsnelheid niet wijzigen terwijl een video of de weergave met voortgangsbalk wordt afgespeeld.",
+  "CannotChangeSpeedForBook": "Sorry, ik kan de snelheid van luisterboeken niet wijzigen."
 }

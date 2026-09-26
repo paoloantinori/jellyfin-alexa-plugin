@@ -356,10 +356,14 @@ public class PlaybackStartedEventHandler : BaseHandler
         // JF-507: codec-gated audio-launch decision; an EAC3-family video item in the
         // queue routes to the audio-only transcode instead of dying on the raw static
         // bytes when the cache hit is served (JF-505 does not apply: audio-shaped launch).
-        AudioLaunchSource source = Launch.ResolveAudioLaunchSource(item, nextId.ToString(), user, 0);
+        // JF-636: the precomputed advance CONTINUES the current item's launch-scope
+        // rate (a podcast session at 1.5x precomputes its successor at 1.5x); the
+        // rate is stored with the URL so the serve site records the SAME launch scope.
+        int ratePerMille = Launch.GetActivePlaybackRate(deviceId, currentId.ToString(), _queueManager) ?? Util.PlaybackSpeed.NormalPerMille;
+        AudioLaunchSource source = Launch.ResolveAudioLaunchSource(item, nextId.ToString(), user, 0, ratePerMille: ratePerMille);
         string streamUrl = source.Url;
 
-        NextTrackPrecomputeCache.Store(deviceId, currentToken, nextId, item, streamUrl);
+        NextTrackPrecomputeCache.Store(deviceId, currentToken, nextId, item, streamUrl, source.RatePerMille);
         Logger.LogInformation(
             "PlaybackStarted: pre-computed next track='{NextItem}' for device={DeviceId} (current='{CurrentToken}', queue position {Position}/{QueueSize})",
             item.Name, deviceId, currentToken, currentIndex + 2, session.NowPlayingQueue.Count);

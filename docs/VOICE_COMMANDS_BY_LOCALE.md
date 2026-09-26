@@ -61,6 +61,7 @@ Placeholder legend:
 | `<المدة (5 دقائق، 30 ثانية، نصف ساعة)>` | `{sleep_duration}` |
 | `<اسم الأغنية>` | `{song}` |
 | `<عنوان الأغنية>` | `{song_query}` |
+| `<السرعة (عادية، واحدة ونصف، مضاعفة، أسرع)>` | `{speed}` |
 | `<عدد النجوم (1 إلى 5)>` | `{star_rating}` |
 | `<اسم محطة الراديو>` | `{station}` |
 | `<الفترة (اليوم، هذا الأسبوع)>` | `{time_period}` |
@@ -68,7 +69,7 @@ Placeholder legend:
 | `<كلمات من عنوان الأغنية>` | `{titleKeywords}` |
 | `<اسم المستخدم>` | `{username}` |
 
-Complete phrase list (318 phrases across 65 commands):
+Complete phrase list (321 phrases across 66 commands):
 
 #### Play music
 
@@ -526,6 +527,12 @@ Complete phrase list (318 phrases across 65 commands):
 - `انتقل إلى الفصل <رقم الفصل>`
 - `تخطى فصلاً`
 
+**Change the playback speed**
+
+- `بسرعة <السرعة (عادية، واحدة ونصف، مضاعفة، أسرع)>`
+- `السرعة <السرعة (عادية، واحدة ونصف، مضاعفة، أسرع)>`
+- `اجعل السرعة <السرعة (عادية، واحدة ونصف، مضاعفة، أسرع)>`
+
 **Follow me (move playback here)**
 
 - `تابعني`
@@ -609,6 +616,7 @@ Placeholder legend:
 | `<duur (5 minuten, 30 seconden, een half uur)>` | `{sleep_duration}` |
 | `<titel van het nummer>` | `{song}` |
 | `<nummer>` | `{song_query}` |
+| `<snelheid (normaal, anderhalf, dubbel, sneller)>` | `{speed}` |
 | `<aantal sterren (1 tot 5)>` | `{star_rating}` |
 | `<naam van het radiostation>` | `{station}` |
 | `<periode (vandaag, deze week)>` | `{time_period}` |
@@ -616,7 +624,7 @@ Placeholder legend:
 | `<woorden uit de songtitel>` | `{titleKeywords}` |
 | `<gebruikersnaam>` | `{username}` |
 
-Complete phrase list (382 phrases across 65 commands):
+Complete phrase list (387 phrases across 66 commands):
 
 #### Play music
 
@@ -1135,6 +1143,14 @@ Complete phrase list (382 phrases across 65 commands):
 - `een hoofdstuk terug`
 - `hoofdstuk overslaan`
 
+**Change the playback speed**
+
+- `op snelheid <snelheid (normaal, anderhalf, dubbel, sneller)>`
+- `snelheid <snelheid (normaal, anderhalf, dubbel, sneller)>`
+- `zet de snelheid op <snelheid (normaal, anderhalf, dubbel, sneller)>`
+- `speel op snelheid <snelheid (normaal, anderhalf, dubbel, sneller)>`
+- `speel <snelheid (normaal, anderhalf, dubbel, sneller)>`
+
 **Follow me (move playback here)**
 
 - `volg me`
@@ -1221,13 +1237,14 @@ Placeholder legend:
 | `<duration (5 minutes, 30 seconds, half an hour)>` | `{sleep_duration}` |
 | `<song title>` | `{song}` |
 | `<song title>` | `{song_query}` |
+| `<speed (normal, one and a half, double, faster)>` | `{speed}` |
 | `<number of stars (1 to 5)>` | `{star_rating}` |
 | `<radio station name>` | `{station}` |
 | `<video or movie title>` | `{title}` |
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (475 phrases across 65 commands):
+Complete phrase list (481 phrases across 66 commands):
 
 #### Play music
 
@@ -1835,6 +1852,15 @@ Complete phrase list (475 phrases across 65 commands):
 - `Go back a chapter`
 - `Skip chapter`
 
+**Change the playback speed**
+
+- `at speed <speed (normal, one and a half, double, faster)>`
+- `speed <speed (normal, one and a half, double, faster)>`
+- `set the speed to <speed (normal, one and a half, double, faster)>`
+- `set speed <speed (normal, one and a half, double, faster)>`
+- `play at speed <speed (normal, one and a half, double, faster)>`
+- `go <speed (normal, one and a half, double, faster)>`
+
 **Follow me (move playback here)**
 
 - `follow me`
@@ -1925,13 +1951,14 @@ Placeholder legend:
 | `<duration (5 minutes, 30 seconds, half an hour)>` | `{sleep_duration}` |
 | `<song title>` | `{song}` |
 | `<song title>` | `{song_query}` |
+| `<speed (normal, one and a half, double, faster)>` | `{speed}` |
 | `<number of stars (1 to 5)>` | `{star_rating}` |
 | `<radio station name>` | `{station}` |
 | `<video or movie title>` | `{title}` |
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (468 phrases across 65 commands):
+Complete phrase list (474 phrases across 66 commands):
 
 #### Play music
 
@@ -2533,6 +2560,15 @@ Complete phrase list (468 phrases across 65 commands):
 - `Go back a chapter`
 - `Skip chapter`
 
+**Change the playback speed**
+
+- `at speed <speed (normal, one and a half, double, faster)>`
+- `speed <speed (normal, one and a half, double, faster)>`
+- `set the speed to <speed (normal, one and a half, double, faster)>`
+- `set speed <speed (normal, one and a half, double, faster)>`
+- `play at speed <speed (normal, one and a half, double, faster)>`
+- `go <speed (normal, one and a half, double, faster)>`
+
 **Follow me (move playback here)**
 
 - `follow me`
@@ -2622,13 +2658,14 @@ Placeholder legend:
 | `<duration (5 minutes, 30 seconds, half an hour)>` | `{sleep_duration}` |
 | `<song title>` | `{song}` |
 | `<song title>` | `{song_query}` |
+| `<speed (normal, one and a half, double, faster)>` | `{speed}` |
 | `<number of stars (1 to 5)>` | `{star_rating}` |
 | `<radio station name>` | `{station}` |
 | `<video or movie title>` | `{title}` |
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (564 phrases across 65 commands):
+Complete phrase list (570 phrases across 66 commands):
 
 #### Play music
 
@@ -3321,6 +3358,15 @@ Complete phrase list (564 phrases across 65 commands):
 - `Go back a chapter`
 - `Skip chapter`
 
+**Change the playback speed**
+
+- `at speed <speed (normal, one and a half, double, faster)>`
+- `speed <speed (normal, one and a half, double, faster)>`
+- `set the speed to <speed (normal, one and a half, double, faster)>`
+- `set speed <speed (normal, one and a half, double, faster)>`
+- `play at speed <speed (normal, one and a half, double, faster)>`
+- `go <speed (normal, one and a half, double, faster)>`
+
 **Follow me (move playback here)**
 
 - `follow me`
@@ -3415,13 +3461,14 @@ Placeholder legend:
 | `<duration (5 minutes, 30 seconds, half an hour)>` | `{sleep_duration}` |
 | `<song title>` | `{song}` |
 | `<song title>` | `{song_query}` |
+| `<speed (normal, one and a half, double, faster)>` | `{speed}` |
 | `<number of stars (1 to 5)>` | `{star_rating}` |
 | `<radio station name>` | `{station}` |
 | `<video or movie title>` | `{title}` |
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (469 phrases across 65 commands):
+Complete phrase list (475 phrases across 66 commands):
 
 #### Play music
 
@@ -4025,6 +4072,15 @@ Complete phrase list (469 phrases across 65 commands):
 - `Go back a chapter`
 - `Skip chapter`
 
+**Change the playback speed**
+
+- `at speed <speed (normal, one and a half, double, faster)>`
+- `speed <speed (normal, one and a half, double, faster)>`
+- `set the speed to <speed (normal, one and a half, double, faster)>`
+- `set speed <speed (normal, one and a half, double, faster)>`
+- `play at speed <speed (normal, one and a half, double, faster)>`
+- `go <speed (normal, one and a half, double, faster)>`
+
 **Follow me (move playback here)**
 
 - `follow me`
@@ -4119,6 +4175,7 @@ Placeholder legend:
 | `<duration (5 minutes, 30 seconds, half an hour)>` | `{sleep_duration}` |
 | `<song title>` | `{song}` |
 | `<song title>` | `{song_query}` |
+| `<speed (normal, one and a half, double, faster)>` | `{speed}` |
 | `<number of stars (1 to 5)>` | `{star_rating}` |
 | `<radio station name>` | `{station}` |
 | `<time period (today, this week)>` | `{time_period}` |
@@ -4126,7 +4183,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (579 phrases across 67 commands):
+Complete phrase list (585 phrases across 68 commands):
 
 #### Play music
 
@@ -4840,6 +4897,15 @@ Complete phrase list (579 phrases across 67 commands):
 - `fast forward to <minutes> minutes`
 - `fast forward to <hours> hours`
 
+**Change the playback speed**
+
+- `at speed <speed (normal, one and a half, double, faster)>`
+- `speed <speed (normal, one and a half, double, faster)>`
+- `set the speed to <speed (normal, one and a half, double, faster)>`
+- `set speed <speed (normal, one and a half, double, faster)>`
+- `play at speed <speed (normal, one and a half, double, faster)>`
+- `go <speed (normal, one and a half, double, faster)>`
+
 **Follow me (move playback here)**
 
 - `follow me`
@@ -4934,13 +5000,14 @@ Placeholder legend:
 | `<durée (5 minutes, 30 secondes, une demi-heure)>` | `{sleep_duration}` |
 | `<titre de la chanson>` | `{song}` |
 | `<titre de la chanson>` | `{song_query}` |
+| `<vitesse (normale, un et demi, double, plus vite)>` | `{speed}` |
 | `<nombre d'étoiles (1 à 5)>` | `{star_rating}` |
 | `<nom de la station de radio>` | `{station}` |
 | `<titre de la vidéo ou du film>` | `{title}` |
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (435 phrases across 70 commands):
+Complete phrase list (440 phrases across 71 commands):
 
 #### Play music
 
@@ -5527,6 +5594,14 @@ Complete phrase list (435 phrases across 70 commands):
 - `Avancer d'un chapitre`
 - `Reculer d'un chapitre`
 
+**Change the playback speed**
+
+- `à vitesse <vitesse (normale, un et demi, double, plus vite)>`
+- `vitesse <vitesse (normale, un et demi, double, plus vite)>`
+- `mets la vitesse à <vitesse (normale, un et demi, double, plus vite)>`
+- `lis à vitesse <vitesse (normale, un et demi, double, plus vite)>`
+- `mets <vitesse (normale, un et demi, double, plus vite)>`
+
 **Follow me (move playback here)**
 
 - `suis-moi`
@@ -5613,13 +5688,14 @@ Placeholder legend:
 | `<durée (5 minutes, 30 secondes, une demi-heure)>` | `{sleep_duration}` |
 | `<titre de la chanson>` | `{song}` |
 | `<titre de la chanson>` | `{song_query}` |
+| `<vitesse (normale, un et demi, double, plus vite)>` | `{speed}` |
 | `<nombre d'étoiles (1 à 5)>` | `{star_rating}` |
 | `<nom de la station de radio>` | `{station}` |
 | `<titre de la vidéo ou du film>` | `{title}` |
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (447 phrases across 70 commands):
+Complete phrase list (452 phrases across 71 commands):
 
 #### Play music
 
@@ -6217,6 +6293,14 @@ Complete phrase list (447 phrases across 70 commands):
 - `Avancer d'un chapitre`
 - `Reculer d'un chapitre`
 
+**Change the playback speed**
+
+- `à vitesse <vitesse (normale, un et demi, double, plus vite)>`
+- `vitesse <vitesse (normale, un et demi, double, plus vite)>`
+- `mets la vitesse à <vitesse (normale, un et demi, double, plus vite)>`
+- `lis à vitesse <vitesse (normale, un et demi, double, plus vite)>`
+- `mets <vitesse (normale, un et demi, double, plus vite)>`
+
 **Follow me (move playback here)**
 
 - `suis-moi`
@@ -6304,13 +6388,14 @@ Placeholder legend:
 | `<Dauer (5 Minuten, 30 Sekunden, eine halbe Stunde)>` | `{sleep_duration}` |
 | `<Titel des Liedes>` | `{song}` |
 | `<Songtitel>` | `{song_query}` |
+| `<Geschwindigkeit (normal, eineinhalb, doppelt, schneller)>` | `{speed}` |
 | `<Sternezahl (1 bis 5)>` | `{star_rating}` |
 | `<Name des Radiosenders>` | `{station}` |
 | `<Titel des Videos oder Films>` | `{title}` |
 | `<Wörter aus dem Songtitel>` | `{titleKeywords}` |
 | `<Benutzername>` | `{username}` |
 
-Complete phrase list (456 phrases across 70 commands):
+Complete phrase list (461 phrases across 71 commands):
 
 #### Play music
 
@@ -6916,6 +7001,14 @@ Complete phrase list (456 phrases across 70 commands):
 - `Ein Kapitel vor`
 - `Ein Kapitel zurück`
 
+**Change the playback speed**
+
+- `mit geschwindigkeit <Geschwindigkeit (normal, eineinhalb, doppelt, schneller)>`
+- `geschwindigkeit <Geschwindigkeit (normal, eineinhalb, doppelt, schneller)>`
+- `setze die geschwindigkeit auf <Geschwindigkeit (normal, eineinhalb, doppelt, schneller)>`
+- `spiele mit geschwindigkeit <Geschwindigkeit (normal, eineinhalb, doppelt, schneller)>`
+- `mach <Geschwindigkeit (normal, eineinhalb, doppelt, schneller)>`
+
 **Follow me (move playback here)**
 
 - `folge mir`
@@ -7004,6 +7097,7 @@ Placeholder legend:
 | `<अवधि (5 मिनट, 30 सेकंड, आधा घंटा)>` | `{sleep_duration}` |
 | `<गाने का नाम>` | `{song}` |
 | `<गाने का नाम>` | `{song_query}` |
+| `<गति (सामान्य, डेढ़, दोगुनी, तेज़)>` | `{speed}` |
 | `<स्टार संख्या (1 से 5)>` | `{star_rating}` |
 | `<रेडियो स्टेशन का नाम>` | `{station}` |
 | `<समयावधि (आज, इस सप्ताह)>` | `{time_period}` |
@@ -7011,7 +7105,7 @@ Placeholder legend:
 | `<गाने के नाम के शब्द>` | `{titleKeywords}` |
 | `<उपयोगकर्ता का नाम>` | `{username}` |
 
-Complete phrase list (339 phrases across 65 commands):
+Complete phrase list (343 phrases across 66 commands):
 
 #### Play music
 
@@ -7489,6 +7583,13 @@ Complete phrase list (339 phrases across 65 commands):
 - `एक चैप्टर पीछे जाओ`
 - `चैप्टर स्किप करो`
 
+**Change the playback speed**
+
+- `गति <गति (सामान्य, डेढ़, दोगुनी, तेज़)>`
+- `गति <गति (सामान्य, डेढ़, दोगुनी, तेज़)> पर`
+- `<गति (सामान्य, डेढ़, दोगुनी, तेज़)> गति पर`
+- `<गति (सामान्य, डेढ़, दोगुनी, तेज़)> करो`
+
 **Follow me (move playback here)**
 
 - `मेरे साथ आओ`
@@ -7574,13 +7675,14 @@ Placeholder legend:
 | `<durata (5 minuti, 30 secondi, mezz'ora)>` | `{sleep_duration}` |
 | `<titolo del brano>` | `{song}` |
 | `<titolo del brano>` | `{song_query}` |
+| `<velocità (normale, uno e mezzo, doppia, più veloce)>` | `{speed}` |
 | `<numero di stelle (da 1 a 5)>` | `{star_rating}` |
 | `<nome della stazione radio>` | `{station}` |
 | `<periodo (oggi, questa settimana)>` | `{time_period}` |
 | `<titolo del video o del film>` | `{title}` |
 | `<parole del titolo del brano>` | `{titleKeywords}` |
 
-Complete phrase list (1530 phrases across 70 commands):
+Complete phrase list (1536 phrases across 71 commands):
 
 #### Play music
 
@@ -9249,6 +9351,15 @@ Complete phrase list (1530 phrases across 70 commands):
 - `Capitolo <numero del capitolo>`
 - `Capitolo <ordinale (primo, secondo)>`
 
+**Change the playback speed**
+
+- `a velocità <velocità (normale, uno e mezzo, doppia, più veloce)>`
+- `velocità <velocità (normale, uno e mezzo, doppia, più veloce)>`
+- `imposta la velocità <velocità (normale, uno e mezzo, doppia, più veloce)>`
+- `metti la velocità <velocità (normale, uno e mezzo, doppia, più veloce)>`
+- `riproduci a velocità <velocità (normale, uno e mezzo, doppia, più veloce)>`
+- `vai <velocità (normale, uno e mezzo, doppia, più veloce)>`
+
 **Follow me (move playback here)**
 
 - `seguimi`
@@ -9351,6 +9462,7 @@ Placeholder legend:
 | `<時間（5分、30秒、30分）>` | `{sleep_duration}` |
 | `<曲名>` | `{song}` |
 | `<曲名>` | `{song_query}` |
+| `<速度（通常、1.5倍、2倍、速く）>` | `{speed}` |
 | `<星の数 (1〜5)>` | `{star_rating}` |
 | `<ラジオ局名>` | `{station}` |
 | `<期間 (今日、今週)>` | `{time_period}` |
@@ -9358,7 +9470,7 @@ Placeholder legend:
 | `<曲名のキーワード>` | `{titleKeywords}` |
 | `<ユーザー名>` | `{username}` |
 
-Complete phrase list (317 phrases across 65 commands):
+Complete phrase list (321 phrases across 66 commands):
 
 #### Play music
 
@@ -9813,6 +9925,13 @@ Complete phrase list (317 phrases across 65 commands):
 - `チャプター <チャプター番号> へスキップして`
 - `チャプターをスキップして`
 
+**Change the playback speed**
+
+- `速度<速度（通常、1.5倍、2倍、速く）>`
+- `速度を<速度（通常、1.5倍、2倍、速く）>にして`
+- `再生速度<速度（通常、1.5倍、2倍、速く）>`
+- `<速度（通常、1.5倍、2倍、速く）>にして`
+
 **Follow me (move playback here)**
 
 - `ついてきて`
@@ -9898,6 +10017,7 @@ Placeholder legend:
 | `<duração (5 minutos, 30 segundos, meia hora)>` | `{sleep_duration}` |
 | `<título da música>` | `{song}` |
 | `<título da música>` | `{song_query}` |
+| `<velocidade (normal, um e meio, dupla, mais rápido)>` | `{speed}` |
 | `<número de estrelas (1 a 5)>` | `{star_rating}` |
 | `<nome da estação de rádio>` | `{station}` |
 | `<período (hoje, esta semana)>` | `{time_period}` |
@@ -9905,7 +10025,7 @@ Placeholder legend:
 | `<palavras do título da música>` | `{titleKeywords}` |
 | `<nome do usuário>` | `{username}` |
 
-Complete phrase list (395 phrases across 65 commands):
+Complete phrase list (400 phrases across 66 commands):
 
 #### Play music
 
@@ -10435,6 +10555,14 @@ Complete phrase list (395 phrases across 65 commands):
 - `voltar um capítulo`
 - `pular capítulo`
 
+**Change the playback speed**
+
+- `a velocidade <velocidade (normal, um e meio, dupla, mais rápido)>`
+- `velocidade <velocidade (normal, um e meio, dupla, mais rápido)>`
+- `põe a velocidade em <velocidade (normal, um e meio, dupla, mais rápido)>`
+- `toca a velocidade <velocidade (normal, um e meio, dupla, mais rápido)>`
+- `põe <velocidade (normal, um e meio, dupla, mais rápido)>`
+
 **Follow me (move playback here)**
 
 - `me siga`
@@ -10523,13 +10651,14 @@ Placeholder legend:
 | `<duración (5 minutos, 30 segundos, media hora)>` | `{sleep_duration}` |
 | `<título de la canción>` | `{song}` |
 | `<título de la canción>` | `{song_query}` |
+| `<velocidad (normal, uno y medio, doble, más rápido)>` | `{speed}` |
 | `<número de estrellas (1 a 5)>` | `{star_rating}` |
 | `<nombre de la emisora>` | `{station}` |
 | `<título del vídeo o de la película>` | `{title}` |
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (426 phrases across 65 commands):
+Complete phrase list (431 phrases across 66 commands):
 
 #### Play music
 
@@ -11091,6 +11220,14 @@ Complete phrase list (426 phrases across 65 commands):
 - `Avanzar un capítulo`
 - `Retroceder un capítulo`
 
+**Change the playback speed**
+
+- `a velocidad <velocidad (normal, uno y medio, doble, más rápido)>`
+- `velocidad <velocidad (normal, uno y medio, doble, más rápido)>`
+- `pon la velocidad en <velocidad (normal, uno y medio, doble, más rápido)>`
+- `reproduce a velocidad <velocidad (normal, uno y medio, doble, más rápido)>`
+- `pon <velocidad (normal, uno y medio, doble, más rápido)>`
+
 **Follow me (move playback here)**
 
 - `sígueme`
@@ -11178,13 +11315,14 @@ Placeholder legend:
 | `<duración (5 minutos, 30 segundos, media hora)>` | `{sleep_duration}` |
 | `<título de la canción>` | `{song}` |
 | `<título de la canción>` | `{song_query}` |
+| `<velocidad (normal, uno y medio, doble, más rápido)>` | `{speed}` |
 | `<número de estrellas (1 a 5)>` | `{star_rating}` |
 | `<nombre de la emisora>` | `{station}` |
 | `<título del vídeo o de la película>` | `{title}` |
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (420 phrases across 65 commands):
+Complete phrase list (425 phrases across 66 commands):
 
 #### Play music
 
@@ -11741,6 +11879,14 @@ Complete phrase list (420 phrases across 65 commands):
 - `Avanzar un capítulo`
 - `Retroceder un capítulo`
 
+**Change the playback speed**
+
+- `a velocidad <velocidad (normal, uno y medio, doble, más rápido)>`
+- `velocidad <velocidad (normal, uno y medio, doble, más rápido)>`
+- `pon la velocidad en <velocidad (normal, uno y medio, doble, más rápido)>`
+- `reproduce a velocidad <velocidad (normal, uno y medio, doble, más rápido)>`
+- `pon <velocidad (normal, uno y medio, doble, más rápido)>`
+
 **Follow me (move playback here)**
 
 - `sígueme`
@@ -11827,13 +11973,14 @@ Placeholder legend:
 | `<duración (5 minutos, 30 segundos, media hora)>` | `{sleep_duration}` |
 | `<título de la canción>` | `{song}` |
 | `<título de la canción>` | `{song_query}` |
+| `<velocidad (normal, uno y medio, doble, más rápido)>` | `{speed}` |
 | `<número de estrellas (1 a 5)>` | `{star_rating}` |
 | `<nombre de la emisora>` | `{station}` |
 | `<título del vídeo o de la película>` | `{title}` |
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (414 phrases across 65 commands):
+Complete phrase list (419 phrases across 66 commands):
 
 #### Play music
 
@@ -12384,6 +12531,14 @@ Complete phrase list (414 phrases across 65 commands):
 - `Avanzar un capítulo`
 - `Retroceder un capítulo`
 
+**Change the playback speed**
+
+- `a velocidad <velocidad (normal, uno y medio, doble, más rápido)>`
+- `velocidad <velocidad (normal, uno y medio, doble, más rápido)>`
+- `pon la velocidad en <velocidad (normal, uno y medio, doble, más rápido)>`
+- `reproduce a velocidad <velocidad (normal, uno y medio, doble, más rápido)>`
+- `pon <velocidad (normal, uno y medio, doble, más rápido)>`
+
 **Follow me (move playback here)**
 
 - `sígueme`
@@ -12491,6 +12646,7 @@ The body above is user-facing and never names intents or handlers. This table ma
 | Playback control | Go to a chapter | `GoToChapterIntent` |
 | Playback control | Skip forward or back | `SkipForwardBackIntent` |
 | Playback control | Jump to a position | `JumpToPositionIntent` |
+| Playback control | Change the playback speed | `SetPlaybackSpeedIntent` |
 | Playback control | Follow me (move playback here) | `FollowMeIntent` |
 | Playback control | Pause | `AMAZON.PauseIntent` |
 | Playback control | Resume | `AMAZON.ResumeIntent` |

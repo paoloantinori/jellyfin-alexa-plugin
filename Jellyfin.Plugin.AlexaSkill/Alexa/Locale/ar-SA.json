@@ -290,5 +290,15 @@
   "PlaylistAlreadyExists": "توجد بالفعل قائمة تشغيل باسم {0}.",
   "PlaylistCreateFailed": "لم أتمكن من إنشاء قائمة التشغيل. تأكد من أن مكتبة Jellyfin لديك تتضمن مجلد قوائم التشغيل.",
   "FollowMeSuccessResume": "أكمل {0} على هذا الجهاز من حيث توقفت.",
-  "FollowMeSuccessResumeSsml": "<say-as interpret-as=\"interjection\">فهمت</say-as><break time=\"200ms\"/>أكمل {0} على هذا الجهاز من حيث توقفت."
+  "FollowMeSuccessResumeSsml": "<say-as interpret-as=\"interjection\">فهمت</say-as><break time=\"200ms\"/>أكمل {0} على هذا الجهاز من حيث توقفت.",
+  "DidNotCatchSpeed": "بأي سرعة؟ قل مثلاً: أسرع، أو: بسرعة واحدة ونصف.",
+  "PlaybackSpeedSet": "السرعة {0}.",
+  "SpeedName750": "ثلاثة أرباع",
+  "SpeedName1000": "عادية",
+  "SpeedName1250": "واحد وربع",
+  "SpeedName1500": "واحدة ونصف",
+  "SpeedName1750": "واحد وثلاثة أرباع",
+  "SpeedName2000": "مضاعفة",
+  "CannotChangeSpeedOverVideo": "عذراً، لا أستطيع تغيير سرعة التشغيل أثناء تشغيل مقطع فيديو أو عرض شريط التقدم.",
+  "CannotChangeSpeedForBook": "عذراً، لا أستطيع تغيير سرعة تشغيل الكتب الصوتية."
 }

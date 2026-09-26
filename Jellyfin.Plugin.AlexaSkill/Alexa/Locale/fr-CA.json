@@ -290,5 +290,15 @@
   "PlaylistAlreadyExists": "Une liste de lecture nommée {0} existe déjà.",
   "PlaylistCreateFailed": "Je n'ai pas pu créer la liste de lecture. Vérifiez que votre bibliothèque Jellyfin contient un dossier de listes de lecture.",
   "FollowMeSuccessResume": "Je continue {0} sur cet appareil, là où vous l'aviez laissé.",
-  "FollowMeSuccessResumeSsml": "<say-as interpret-as=\"interjection\">allons-y</say-as><break time=\"200ms\"/>Je continue {0} sur cet appareil, là où vous l'aviez laissé."
+  "FollowMeSuccessResumeSsml": "<say-as interpret-as=\"interjection\">allons-y</say-as><break time=\"200ms\"/>Je continue {0} sur cet appareil, là où vous l'aviez laissé.",
+  "DidNotCatchSpeed": "À quelle vitesse ? Dis par exemple : plus vite, ou : à vitesse un et demi.",
+  "PlaybackSpeedSet": "Vitesse {0}.",
+  "SpeedName750": "trois quarts",
+  "SpeedName1000": "normale",
+  "SpeedName1250": "un et quart",
+  "SpeedName1500": "un et demi",
+  "SpeedName1750": "un et trois quarts",
+  "SpeedName2000": "au double",
+  "CannotChangeSpeedOverVideo": "Désolé, je ne peux pas changer la vitesse de lecture pendant la lecture d'une vidéo ou en mode barre de progression.",
+  "CannotChangeSpeedForBook": "Désolé, je ne peux pas changer la vitesse des livres audio."
 }

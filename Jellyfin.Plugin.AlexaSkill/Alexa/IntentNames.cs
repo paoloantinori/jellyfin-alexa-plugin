@@ -84,6 +84,7 @@ internal static class IntentNames
     public const string ShowMore = "ShowMoreIntent";
     public const string FindSongIntent = "FindSongIntent";
     public const string FindSongByArtistIntent = "FindSongByArtistIntent";
+    public const string SetPlaybackSpeed = "SetPlaybackSpeedIntent";
 
     public const string AmazonFallback = "AMAZON.FallbackIntent";
     public const string AmazonLoopOff = "AMAZON.LoopOffIntent";
@@ -142,6 +143,9 @@ internal static class IntentNames
         // per-name rule with PlaySongIntent's MusicRecording "song".
         public const string SongQuery = "song_query";
         public const string Station = "station";
+
+        /// <summary>JF-636: the SpeedRate slot on SetPlaybackSpeedIntent.</summary>
+        public const string Speed = "speed";
 
         /// <summary>
         /// Playlist-name slot on AddSongToPlaylistIntent. Named differently from

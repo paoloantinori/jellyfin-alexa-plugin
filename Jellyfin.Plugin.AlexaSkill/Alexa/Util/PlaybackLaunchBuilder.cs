@@ -141,6 +141,29 @@ public sealed class PlaybackLaunchBuilder
     }
 
     /// <summary>
+    /// Get the PLAYBACK-SPEED atempo HLS URL (JF-636): the item's audio
+    /// time-stretched server-side (<c>ffmpeg -af atempo</c>, pitch-preserving)
+    /// for the AudioPlayer path, which has no native rate control (the same
+    /// MSAPI-only platform limit as the scrubber). The <c>?start=</c> ticks are
+    /// CONTENT-relative: the endpoint input-seeks the source there (<c>-ss</c>)
+    /// and atempo runs over the remainder, so the served output timeline starts
+    /// at position 0 (= content position <paramref name="startTicks"/>) and the
+    /// directive offset is always 0 for it; the content position rides out as
+    /// the launch base instead. The token is the same item-scoped JF-309 HMAC
+    /// as every other alexaskill stream endpoint.
+    /// </summary>
+    /// <param name="itemId">Id of the item to stream.</param>
+    /// <param name="ratePerMille">Playback rate in per-mille form (750..2000; the endpoint validates against the same table).</param>
+    /// <param name="startTicks">CONTENT resume position in .NET ticks (0 plays from the start).</param>
+    /// <returns>URL to the audio-speed HLS endpoint.</returns>
+    internal string GetAudioSpeedUrl(string itemId, int ratePerMille, long startTicks = 0)
+    {
+        string token = StreamTokenHelper.Mint(itemId, _config.StreamTokenSecret);
+        string query = startTicks > 0 ? $"?start={startTicks}&token={token}" : $"?token={token}";
+        return new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/audio-speed/{itemId}/{ratePerMille}/stream.m3u8{query}").ToString();
+    }
+
+    /// <summary>
     /// The JF-565 fail-closed resume clamp, defined ONCE: a position at or beyond
     /// the runtime cannot be a legitimate mid-item resume (only stale state
     /// reaches it), and an UNKNOWN runtime cannot prove the position is within
@@ -747,7 +770,7 @@ public sealed class PlaybackLaunchBuilder
     /// <c>VideoRequiresScreen</c> refusal, because an episode is AUDIO content a
     /// speaker can still play (the <see cref="BuildVideoAppAudioResponse"/> degrade
     /// precedent, the JF-505 family). The degrade rides
-    /// <see cref="ResolveAudioLaunchSource(BaseItem, string, Entities.User, int, string?)"/>
+    /// <see cref="ResolveAudioLaunchSource"/>
     /// (JF-507): an episode whose audio codec has no Echo decoder (eac3/ac3/truehd/
     /// dts) routes to the audio-only episode HLS transcode with the resume position
     /// minted as <c>?start=</c> (directive offset 0); a decodable episode keeps the
@@ -1409,8 +1432,9 @@ public sealed class PlaybackLaunchBuilder
     /// <param name="announceLocale">Optional locale for the now-playing announce.</param>
     /// <param name="queueManager">Optional per-device queue manager holding the launch-scope store (JF-522); null falls back to <c>Plugin.Instance</c>'s (pass one explicitly to keep unit tests off the shared plugin instance).</param>
     /// <param name="launchBaseMs">The item-absolute launch base of the stream this directive plays (<see cref="AudioLaunchSource.LaunchBaseMs"/>; 0 for raw-static/precomputed launches). Recorded at this chokepoint so the playback event writers can persist item-absolute positions (JF-522).</param>
+    /// <param name="ratePerMille">The stream's playback rate in per-mille form (JF-636: 1000 = identity). Recorded beside the launch base so the event writers scale the stream's raw offsets; also disables the native-controls VideoApp delegation, which has no rate support and would silently drop the speed.</param>
     /// <returns>A SkillResponse containing the AudioPlayer directive.</returns>
-    public SkillResponse BuildAudioPlayerResponse(PlayBehavior playBehavior, string streamUrl, string itemId, MediaBrowser.Controller.Entities.BaseItem? item, Entities.User user, Context? context, int offsetInMilliseconds = 0, string? announceLocale = null, DeviceQueueManager? queueManager = null, long launchBaseMs = 0, Guid? collectionParentId = null, long collectionStartTicks = 0)
+    public SkillResponse BuildAudioPlayerResponse(PlayBehavior playBehavior, string streamUrl, string itemId, MediaBrowser.Controller.Entities.BaseItem? item, Entities.User user, Context? context, int offsetInMilliseconds = 0, string? announceLocale = null, DeviceQueueManager? queueManager = null, long launchBaseMs = 0, Guid? collectionParentId = null, long collectionStartTicks = 0, int ratePerMille = 1000)
     {
         // Record the last user-initiated play for this device (ReplaceAll = a new item starts).
         // This is the universal chokepoint: every play path flows through here, including APL
@@ -1432,7 +1456,12 @@ public sealed class PlaybackLaunchBuilder
         // (audiobook resume is handled separately via a resume-aware HLS playlist).
         // AudioBook items use a special concat HLS endpoint that joins all chapters into
         // one continuous stream, giving the full book duration in the seek bar.
-        if (playBehavior == PlayBehavior.ReplaceAll && offsetInMilliseconds == 0)
+        // JF-636: a non-identity rate stays on AudioPlayer too. The atempo stream is
+        // an AudioPlayer re-launch by design, and the VideoApp delegation below would
+        // rebuild the URL from the plain video-audio endpoint, silently dropping the
+        // speed (speed on the VideoApp seek path is refused honestly by the
+        // SetPlaybackSpeed handler instead of being dropped here).
+        if (playBehavior == PlayBehavior.ReplaceAll && offsetInMilliseconds == 0 && ratePerMille == 1000)
         {
             bool wantsNativeControls = false;
             if (item != null)
@@ -1470,7 +1499,8 @@ public sealed class PlaybackLaunchBuilder
                 deviceId,
                 itemId,
                 launchBaseMs,
-                playBehavior is PlayBehavior.Enqueue or PlayBehavior.ReplaceEnqueued);
+                playBehavior is PlayBehavior.Enqueue or PlayBehavior.ReplaceEnqueued,
+                ratePerMille);
         }
 
         _logger.LogDebug("BuildAudioPlayerResponse: itemId={ItemId}, behavior={Behavior}, offsetMs={OffsetMs}, title={Title}, streamUrl={StreamUrl}",
@@ -1481,9 +1511,21 @@ public sealed class PlaybackLaunchBuilder
             Sources = new List<AudioItemSource> { new() { Url = imageUrl } }
         };
 
+        // JF-636: a speed-stream URL carries the launching device as a ?d= hint so
+        // the atempo endpoint can supersede only THIS device's abandoned variants
+        // (tokens are item-scoped, queues per-device: another Echo may be consuming
+        // another variant of the same item). Opaque, non-secret, and only ever
+        // appended to atempo URLs.
+        string directiveUrl = streamUrl;
+        if (ratePerMille != 1000 && !string.IsNullOrEmpty(deviceId)
+            && !streamUrl.Contains("?d=", StringComparison.Ordinal) && !streamUrl.Contains("&d=", StringComparison.Ordinal))
+        {
+            directiveUrl = streamUrl + (streamUrl.Contains('?', StringComparison.Ordinal) ? "&" : "?") + "d=" + Uri.EscapeDataString(deviceId);
+        }
+
         var stream = new AudioItemStream
         {
-            Url = streamUrl,
+            Url = directiveUrl,
             Token = itemId,
             OffsetInMilliseconds = offsetInMilliseconds
         };
@@ -1645,7 +1687,8 @@ public sealed class PlaybackLaunchBuilder
             queueManager,
             source.LaunchBaseMs,
             collectionParentId,
-            collectionStartTicks);
+            collectionStartTicks,
+            source.RatePerMille);
 
     /// <summary>
     /// Build a VideoApp.Launch response for audio playback using the video-audio
@@ -1789,9 +1832,26 @@ public sealed class PlaybackLaunchBuilder
     /// <param name="user">The user, for the raw static URL's api_key.</param>
     /// <param name="offsetMs">The resume offset the caller wants (item-relative). MUST be known item-absolute when the caller suspects the item routes to the transcode: a device/stream-relative offset minted into <c>?start=</c> seeks the wrong position (resume callers holding a stream-relative offset go through <see cref="ResolveResumedAudioLaunch"/> instead).</param>
     /// <param name="knownAudioCodec">A codec the caller already resolved (JF-520: <see cref="ResolveResumedAudioLaunch"/> probes before delegating); null probes here. A legitimately-null fail-open probe result also arrives as null and re-probes - one extra read only in that rare case.</param>
+    /// <param name="ratePerMille">Playback rate in per-mille form (JF-636: 1000 keeps the codec-routed/static decision unchanged; any other served rate routes to the atempo speed endpoint, which supersedes the codec decision because atempo requires re-encoding anyway).</param>
     /// <returns>The launch source for the AudioPlayer.Play directive (URL + directive offset + launch base).</returns>
-    public AudioLaunchSource ResolveAudioLaunchSource(BaseItem? item, string itemId, Entities.User user, int offsetMs, string? knownAudioCodec = null)
+    public AudioLaunchSource ResolveAudioLaunchSource(BaseItem? item, string itemId, Entities.User user, int offsetMs, string? knownAudioCodec = null, int ratePerMille = 1000)
     {
+        // JF-636 speed route FIRST: a rate other than identity redirects the launch
+        // to the atempo endpoint regardless of item kind or codec (the filter
+        // re-encodes to AAC, so the EAC3-family concern the JF-507 branch solves is
+        // solved here too). The caller's offset is item-absolute CONTENT position:
+        // it moves into the URL (?start=, an input seek) so a progressive encode
+        // never stalls on a deep offset, and the directive offset is 0 (the served
+        // output timeline starts at the seek point).
+        if (ratePerMille != 1000 && Util.PlaybackSpeed.IsValidPerMille(ratePerMille))
+        {
+            long startTicks = Math.Max((long)offsetMs * TimeSpan.TicksPerMillisecond, 0);
+            _logger.LogDebug(
+                "Audio launch of item {ItemId} at rate {RatePerMille}/1000: routing to the atempo speed endpoint (start={StartTicks} content ticks)",
+                itemId, ratePerMille, startTicks);
+            return new AudioLaunchSource(GetAudioSpeedUrl(itemId, ratePerMille, startTicks), 0, LaunchBaseMs: offsetMs, RatePerMille: ratePerMille);
+        }
+
         if (item is MediaBrowser.Controller.Entities.Movies.Movie
             or MediaBrowser.Controller.Entities.TV.Episode)
         {
@@ -1860,50 +1920,66 @@ public sealed class PlaybackLaunchBuilder
     {
         int effectiveOffsetMs = offsetMs;
         string? probedCodec = null;
-        if (offsetIsStreamRelative && offsetMs > 0 && RoutesToAudioTranscode(item, out probedCodec))
+
+        // JF-636: the launch scope's rate decides whether the device-derived offset
+        // counts a rate-adjusted output timeline (an atempo stream) that must scale
+        // BEFORE the base composes, and whether the resume itself relaunches at that
+        // rate (the item continues at whatever rate this device last played it).
+        // Base and rate are read as ONE snapshot (a concurrent record must not pair
+        // base1 with rate2).
+        (long? scopeBaseMs, int? scopeRate) = GetActiveLaunchScope(deviceId, itemId, queueManager);
+        int activeRate = scopeRate ?? Util.PlaybackSpeed.NormalPerMille;
+        bool rateAdjustedScope = activeRate != Util.PlaybackSpeed.NormalPerMille;
+        long scaledOffsetMs = Util.PlaybackSpeed.StreamMsToContent(offsetMs, activeRate);
+
+        if (offsetIsStreamRelative && offsetMs > 0
+            && (rateAdjustedScope || RoutesToAudioTranscode(item, out probedCodec)))
         {
-            long? transcodeBaseMs = GetActiveLaunchBaseMs(deviceId, itemId, queueManager);
-            if (transcodeBaseMs.HasValue)
+            if (scopeBaseMs.HasValue)
             {
-                long composedMs = Math.Min(transcodeBaseMs.Value + offsetMs, int.MaxValue);
+                long composedMs = Math.Min(scopeBaseMs.Value + scaledOffsetMs, int.MaxValue);
                 // JF-521 hard clamp: a legitimate composition can never reach the item's
                 // runtime (the stream-relative offset counts at most the REMAINING
                 // runtime past the base), so a composed ?start= at or beyond it means a
                 // stale base or a foreign position is in play (the JF-520 review's F1/F2
-                // shapes). Never mint it; the caller's raw offset is the more
-                // conservative truth. Also bounds the F2 retry walk (a resolve whose
-                // directive never played advances the launch scope while the offset
-                // source stays frozen): once a walk's composition reaches the runtime it
-                // clamps and stops growing.
+                // shapes). Never mint it; the rate-adjusted offset WITHOUT the base is
+                // the more conservative truth (JF-636 review: the unscaled raw offset is
+                // not in content units on an atempo stream, and below 1x it is LARGER
+                // than the composition being guarded, which could mint a past-runtime
+                // seek). Also bounds the F2 retry walk (a resolve whose directive never
+                // played advances the launch scope while the offset source stays
+                // frozen): once a walk's composition reaches the runtime it clamps and
+                // stops growing.
                 long? runtimeTicks = item?.RunTimeTicks;
                 if (runtimeTicks is > 0 && composedMs * TimeSpan.TicksPerMillisecond >= runtimeTicks.Value)
                 {
-                    // effectiveOffsetMs keeps the initializer's raw offsetMs: the raw
-                    // offset is the conservative truth when the composition is stale.
+                    effectiveOffsetMs = (int)Math.Min(scaledOffsetMs, int.MaxValue);
                     _logger.LogInformation(
-                        "{Label}: composed ?start= of {ComposedMs}ms (launch base {BaseMs}ms + stream-relative offset {OffsetMs}ms) for item {ItemId} reaches or exceeds the item runtime ({RuntimeMs}ms); a legitimate composition cannot, so a stale base or foreign position is in play; clamping to the raw {OffsetMs}ms offset as the more conservative truth",
-                        logLabel, composedMs, transcodeBaseMs.Value, offsetMs, itemId, runtimeTicks.Value / TimeSpan.TicksPerMillisecond, offsetMs);
+                        "{Label}: composed ?start= of {ComposedMs}ms (launch base {BaseMs}ms + stream-relative offset {OffsetMs}ms at rate {RatePerMille}/1000) for item {ItemId} reaches or exceeds the item runtime ({RuntimeMs}ms); a legitimate composition cannot, so a stale base or foreign position is in play; clamping to the rate-adjusted {ScaledMs}ms offset without the base as the more conservative truth",
+                        logLabel, composedMs, scopeBaseMs.Value, offsetMs, activeRate, itemId, runtimeTicks.Value / TimeSpan.TicksPerMillisecond, effectiveOffsetMs);
                 }
                 else
                 {
                     effectiveOffsetMs = (int)composedMs;
                     _logger.LogInformation(
-                        "{Label}: item {ItemId} routes to the audio-only transcode and the resume offset ({OffsetMs}ms) is device-derived (stream-relative); recorded launch base {BaseMs}ms, minting ?start={StartMs}ms (item-absolute)",
-                        logLabel, itemId, offsetMs, transcodeBaseMs.Value, effectiveOffsetMs);
+                        "{Label}: item {ItemId} resume offset ({OffsetMs}ms) is device-derived (stream-relative at rate {RatePerMille}/1000); recorded launch base {BaseMs}ms, minting ?start={StartMs}ms (item-absolute)",
+                        logLabel, itemId, offsetMs, activeRate, scopeBaseMs.Value, effectiveOffsetMs);
                 }
             }
             else
             {
                 effectiveOffsetMs = 0;
                 _logger.LogInformation(
-                    "{Label}: item {ItemId} routes to the audio-only transcode but the resume offset ({OffsetMs}ms) is device-derived (stream-relative) and no launch base is recorded for device {DeviceId}; dropping it so playback restarts instead of minting a false ?start=",
+                    "{Label}: item {ItemId} has a transcode/speed-routed resume offset ({OffsetMs}ms) that is device-derived (stream-relative) but no launch base is recorded for device {DeviceId}; dropping it so playback restarts instead of minting a false ?start=",
                     logLabel, itemId, offsetMs, deviceId);
             }
         }
 
         // probedCodec (null on the fail-open path, where the resolve re-probes) saves
         // the resolve's second media-streams DB read (JF-520 simplify finding E1).
-        return ResolveAudioLaunchSource(item, itemId, user, effectiveOffsetMs, probedCodec);
+        return ResolveAudioLaunchSource(
+            item, itemId, user, effectiveOffsetMs, probedCodec,
+            rateAdjustedScope ? activeRate : Util.PlaybackSpeed.NormalPerMille);
     }
 
     /// <summary>
@@ -1941,6 +2017,49 @@ public sealed class PlaybackLaunchBuilder
         }
 
         return (queueManager ?? Plugin.Instance?.DeviceQueueManager)?.GetActiveLaunchBase(deviceId, itemId);
+    }
+
+    /// <summary>
+    /// JF-636 rate half of the launch-scope read side: the ACTIVE playback rate
+    /// for an item on a device (the rate of the stream whose device offsets the
+    /// callers are about to interpret), normal-null when no scope is recorded.
+    /// Wrapper shape mirrors <see cref="GetActiveLaunchBaseMs"/>; the two reads
+    /// always describe the SAME launch scope.
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID, or null to read null.</param>
+    /// <param name="itemId">The item ID in any GUID format.</param>
+    /// <param name="queueManager">The caller's queue manager, or null to use <c>Plugin.Instance</c>'s.</param>
+    /// <returns>The active playback rate in per-mille form, or null when none is recorded.</returns>
+    internal int? GetActivePlaybackRate(string? deviceId, string itemId, DeviceQueueManager? queueManager = null)
+    {
+        if (string.IsNullOrEmpty(deviceId))
+        {
+            return null;
+        }
+
+        return (queueManager ?? Plugin.Instance?.DeviceQueueManager)?.GetActivePlaybackRate(deviceId, itemId);
+    }
+
+    /// <summary>
+    /// JF-636 combined launch-scope read: base AND rate in one lock acquisition,
+    /// for every caller that uses both (the event-side composition, the resume
+    /// rebase). Two individual reads can straddle a concurrent
+    /// <see cref="DeviceQueueManager.RecordLaunchBase"/> and pair base1 with
+    /// rate2; this snapshot cannot.
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID, or null to read nulls.</param>
+    /// <param name="itemId">The item ID in any GUID format.</param>
+    /// <param name="queueManager">The caller's queue manager, or null to use <c>Plugin.Instance</c>'s.</param>
+    /// <returns>The active launch base in milliseconds and the active playback rate in per-mille form, null when not recorded.</returns>
+    internal (long? BaseMs, int? RatePerMille) GetActiveLaunchScope(string? deviceId, string itemId, DeviceQueueManager? queueManager = null)
+    {
+        if (string.IsNullOrEmpty(deviceId))
+        {
+            return (null, null);
+        }
+
+        return (queueManager ?? Plugin.Instance?.DeviceQueueManager)?.GetActiveLaunchScope(deviceId, itemId)
+            ?? (null, null);
     }
 
     /// <summary>
@@ -2051,7 +2170,8 @@ public sealed class PlaybackLaunchBuilder
 /// directive without its launch base reaching the launch-scope store - pass the
 /// whole struct to the AudioLaunchSource overload of BuildAudioPlayerResponse.
 /// </summary>
-/// <param name="Url">The stream URL (raw static or the audio-only episode transcode).</param>
+/// <param name="Url">The stream URL (raw static, the audio-only episode transcode, or the JF-636 atempo speed stream).</param>
 /// <param name="OffsetMs">The offsetInMilliseconds the AudioPlayer.Play directive must carry with that URL (0 on the transcode route, where the seek lives in the URL).</param>
 /// <param name="LaunchBaseMs">The item-absolute base of the resolved stream (the minted <c>?start=</c> on the transcode route, 0 on the raw-static route).</param>
-public readonly record struct AudioLaunchSource(string Url, int OffsetMs, long LaunchBaseMs);
+/// <param name="RatePerMille">The stream's playback rate in per-mille form (JF-636: 1000 = identity; an atempo stream's device offsets scale by this at every playback event, so the launch-scope write the chokepoint performs carries it).</param>
+public readonly record struct AudioLaunchSource(string Url, int OffsetMs, long LaunchBaseMs, int RatePerMille = 1000);

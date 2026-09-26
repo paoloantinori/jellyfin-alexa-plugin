@@ -724,6 +724,22 @@
         ]
       },
       {
+        "name": "SetPlaybackSpeedIntent",
+        "slots": [
+          {
+            "name": "speed",
+            "type": "SpeedRate"
+          }
+        ],
+        "samples": [
+          "mit geschwindigkeit {speed}",
+          "geschwindigkeit {speed}",
+          "setze die geschwindigkeit auf {speed}",
+          "spiele mit geschwindigkeit {speed}",
+          "mach {speed}"
+        ]
+      },
+      {
         "name": "SearchMediaIntent",
         "slots": [
           {
@@ -1051,6 +1067,100 @@
       }
     ],
     "types": [
+      {
+        "name": "SpeedRate",
+        "values": [
+          {
+            "name": {
+              "value": "dreiviertel",
+              "synonyms": [
+                "0,75",
+                "0.75"
+              ]
+            },
+            "id": "750"
+          },
+          {
+            "name": {
+              "value": "normale geschwindigkeit",
+              "synonyms": [
+                "normal",
+                "geschwindigkeit eins",
+                "eins",
+                "1",
+                "1,0"
+              ]
+            },
+            "id": "1000"
+          },
+          {
+            "name": {
+              "value": "eins und ein viertel",
+              "synonyms": [
+                "1,25",
+                "1.25",
+                "eine und ein viertel"
+              ]
+            },
+            "id": "1250"
+          },
+          {
+            "name": {
+              "value": "eineinhalb",
+              "synonyms": [
+                "eins komma fünf",
+                "1,5",
+                "1.5",
+                "eine und eine halbe"
+              ]
+            },
+            "id": "1500"
+          },
+          {
+            "name": {
+              "value": "eins und drei viertel",
+              "synonyms": [
+                "1,75",
+                "1.75",
+                "eine und drei viertel"
+              ]
+            },
+            "id": "1750"
+          },
+          {
+            "name": {
+              "value": "doppelte geschwindigkeit",
+              "synonyms": [
+                "doppelt",
+                "zweifache geschwindigkeit",
+                "zwei",
+                "2"
+              ]
+            },
+            "id": "2000"
+          },
+          {
+            "name": {
+              "value": "schneller",
+              "synonyms": [
+                "spiel schneller",
+                "geschwindigkeit erhöhen"
+              ]
+            },
+            "id": "faster"
+          },
+          {
+            "name": {
+              "value": "langsamer",
+              "synonyms": [
+                "spiel langsamer",
+                "geschwindigkeit verringern"
+              ]
+            },
+            "id": "slower"
+          }
+        ]
+      },
       {
         "name": "Mood",
         "values": [
@@ -1655,6 +1765,18 @@
   },
   "dialog": {
     "intents": [
+      {
+        "name": "SetPlaybackSpeedIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "speed",
+            "type": "SpeedRate",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
       {
         "name": "RateItemIntent",
         "confirmationRequired": false,

@@ -213,6 +213,28 @@ public class ConfigurationController : ControllerBase
             }
         }
 
+        // Handle PodcastSpeedPerMille (JF-636: one of the six served 0.25x steps in
+        // per-mille form, or null to clear the standing preference back to normal).
+        if (req.TryGetValue("PodcastSpeedPerMille", out var speedToken))
+        {
+            if (speedToken.Type == JTokenType.Integer)
+            {
+                int speedVal = speedToken.Value<int>();
+                if (!Alexa.Util.PlaybackSpeed.IsValidPerMille(speedVal))
+                {
+                    return new JsonResult(new { error = "PodcastSpeedPerMille must be one of " + string.Join(", ", Alexa.Util.PlaybackSpeed.RatesPerMille) }) { StatusCode = 400 };
+                }
+
+                pluginUser!.PodcastSpeedPerMille = speedVal;
+                updated = true;
+            }
+            else if (speedToken.Type == JTokenType.Null)
+            {
+                pluginUser!.PodcastSpeedPerMille = null;
+                updated = true;
+            }
+        }
+
         // Handle AnnounceNowPlaying (boolean, or null to inherit the global DefaultAnnounceNowPlaying)
         if (req.TryGetValue("AnnounceNowPlaying", out var anpToken))
         {

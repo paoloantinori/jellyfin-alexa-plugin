@@ -197,7 +197,7 @@ public class PreEnqueueOnStartTests : PluginTestBase, IDisposable
 
         // But the cache has the pre-computed next track
         Assert.True(Jellyfin.Plugin.AlexaSkill.Alexa.Playback.NextTrackPrecomputeCache.TryGet(
-            deviceId, currentId.ToString(), out Guid cachedId, out _, out _));
+            deviceId, currentId.ToString(), out Guid cachedId, out _, out _, out _));
         Assert.Equal(nextId, cachedId);
 
         // Cleanup
@@ -252,7 +252,7 @@ public class PreEnqueueOnStartTests : PluginTestBase, IDisposable
         var nextId = Guid.NewGuid();
         NextTrackPrecomputeCache.Store(deviceId, tokenA, nextId, new Audio { Name = "Next", Id = nextId }, "https://stream/next");
 
-        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, tokenB, out _, out _, out _));
+        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, tokenB, out _, out _, out _, out _));
 
     }
 
@@ -271,10 +271,10 @@ public class PreEnqueueOnStartTests : PluginTestBase, IDisposable
         NextTrackPrecomputeCache.Store(deviceId, tokenB, nextId, new Audio { Name = "Next", Id = nextId }, "https://stream/next");
 
         // Late/duplicate NearlyFinished for the PREVIOUS track: miss, and must NOT consume.
-        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, tokenA, out _, out _, out _));
+        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, tokenA, out _, out _, out _, out _));
 
         // The fresh entry survives for the CURRENT track's real NearlyFinished.
-        Assert.True(NextTrackPrecomputeCache.TryGet(deviceId, tokenB, out Guid cachedId, out _, out string? streamUrl));
+        Assert.True(NextTrackPrecomputeCache.TryGet(deviceId, tokenB, out Guid cachedId, out _, out string? streamUrl, out _));
         Assert.Equal(nextId, cachedId);
         Assert.Equal("https://stream/next", streamUrl);
 
@@ -297,11 +297,11 @@ public class PreEnqueueOnStartTests : PluginTestBase, IDisposable
 
         // One minute past the 15-minute TTL: dead entry, matching token.
         fake.SetUtcNow(t0 + TimeSpan.FromMinutes(16));
-        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, tokenA, out _, out _, out _));
+        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, tokenA, out _, out _, out _, out _));
 
         // Back inside the window: still a miss, so the entry was reclaimed above.
         fake.SetUtcNow(t0 + TimeSpan.FromMinutes(1));
-        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, tokenA, out _, out _, out _));
+        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, tokenA, out _, out _, out _, out _));
     }
 
     // JF-424.2 (AC#3): the TTL check runs BEFORE the token check, so an expired entry
@@ -321,13 +321,13 @@ public class PreEnqueueOnStartTests : PluginTestBase, IDisposable
 
         // One minute past the 15-minute TTL: dead entry, mismatched token.
         fake.SetUtcNow(t0 + TimeSpan.FromMinutes(16));
-        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, tokenA, out _, out _, out _));
+        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, tokenA, out _, out _, out _, out _));
 
         // Back inside the window, the entry's OWN token must miss too: the expired
         // mismatched read reclaimed the dead entry instead of leaving it for a
         // later (wrongly fresh-looking) serve.
         fake.SetUtcNow(t0 + TimeSpan.FromMinutes(1));
-        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, tokenB, out _, out _, out _));
+        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, tokenB, out _, out _, out _, out _));
     }
 
     // JF-424.2 (AC#4): the JF-424 retention invariant pinned at an EXPLICIT clock
@@ -348,11 +348,11 @@ public class PreEnqueueOnStartTests : PluginTestBase, IDisposable
 
         // Inside the window, mismatched token: miss, entry retained (JF-424).
         fake.SetUtcNow(t0 + TimeSpan.FromMinutes(14));
-        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, tokenA, out _, out _, out _));
+        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, tokenA, out _, out _, out _, out _));
 
         // Still inside the window: the matching consumer hits the retained entry.
         fake.SetUtcNow(t0 + TimeSpan.FromMinutes(14) + TimeSpan.FromSeconds(30));
-        Assert.True(NextTrackPrecomputeCache.TryGet(deviceId, tokenB, out Guid cachedId, out _, out string? streamUrl));
+        Assert.True(NextTrackPrecomputeCache.TryGet(deviceId, tokenB, out Guid cachedId, out _, out string? streamUrl, out _));
         Assert.Equal(nextId, cachedId);
         Assert.Equal("https://stream/next", streamUrl);
     }
@@ -420,7 +420,7 @@ public class PreEnqueueOnStartTests : PluginTestBase, IDisposable
         var nextId = Guid.NewGuid();
         NextTrackPrecomputeCache.Store(deviceId, tokenA, nextId, new Audio { Name = "Next", Id = nextId }, "https://stream/next");
 
-        Assert.True(NextTrackPrecomputeCache.TryGet(deviceId, tokenA, out Guid cachedId, out _, out string? streamUrl));
+        Assert.True(NextTrackPrecomputeCache.TryGet(deviceId, tokenA, out Guid cachedId, out _, out string? streamUrl, out _));
         Assert.Equal(nextId, cachedId);
         Assert.Equal("https://stream/next", streamUrl);
 
@@ -437,8 +437,8 @@ public class PreEnqueueOnStartTests : PluginTestBase, IDisposable
         var nextId = Guid.NewGuid();
         NextTrackPrecomputeCache.Store(deviceId, tokenA, nextId, new Audio { Name = "Next", Id = nextId }, "https://stream/next");
 
-        Assert.True(NextTrackPrecomputeCache.TryGet(deviceId, tokenA, out _, out _, out _));
-        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, tokenA, out _, out _, out _));
+        Assert.True(NextTrackPrecomputeCache.TryGet(deviceId, tokenA, out _, out _, out _, out _));
+        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, tokenA, out _, out _, out _, out _));
 
     }
 
@@ -465,7 +465,7 @@ public class PreEnqueueOnStartTests : PluginTestBase, IDisposable
             CreateSession(queue, trackA), CancellationToken.None);
 
         // 2) NearlyFinished(trackA) consumes the precomputed entry
-        Assert.True(NextTrackPrecomputeCache.TryGet(deviceId, trackA.ToString(), out Guid consumedId, out _, out _));
+        Assert.True(NextTrackPrecomputeCache.TryGet(deviceId, trackA.ToString(), out Guid consumedId, out _, out _, out _));
         Assert.Equal(trackB, consumedId);
 
         // 3) Started(trackB): last item of the (not yet extended) queue -> nothing stored
@@ -476,7 +476,7 @@ public class PreEnqueueOnStartTests : PluginTestBase, IDisposable
             CreateSession(queue, trackB), CancellationToken.None);
 
         // 4) NearlyFinished(trackB) must NOT get a hit (the live bug re-enqueued trackB here)
-        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, trackB.ToString(), out _, out _, out _));
+        Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, trackB.ToString(), out _, out _, out _, out _));
 
     }
 

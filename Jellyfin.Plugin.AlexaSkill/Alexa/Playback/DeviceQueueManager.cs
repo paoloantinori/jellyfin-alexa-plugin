@@ -261,7 +261,10 @@ public sealed class DeviceQueueManager : IDisposable
     /// <param name="baseMs">The item-absolute launch base in milliseconds (the minted
     /// <c>?start=</c> on the transcode route, 0 on the raw-static route).</param>
     /// <param name="enqueued">True when the directive plays <c>Enqueue</c>/<c>ReplaceEnqueued</c>.</param>
-    public void RecordLaunchBase(string deviceId, string itemId, long baseMs, bool enqueued)
+    /// <param name="ratePerMille">The stream's playback rate in per-mille form (JF-636:
+    /// 1000 = identity, the raw-static/transcode streams; 750..2000 = an atempo
+    /// stream whose device offsets must scale before composing the base).</param>
+    public void RecordLaunchBase(string deviceId, string itemId, long baseMs, bool enqueued, int ratePerMille = 1000)
     {
         if (!StreamTokenCodec.TryGetItemId(itemId, out Guid parsedItemId))
         {
@@ -275,23 +278,33 @@ public sealed class DeviceQueueManager : IDisposable
 
             if (enqueued)
             {
-                if (queue.PendingLaunchBaseMs.TryGetValue(key, out long existingPending) && existingPending == baseMs)
+                if (queue.PendingLaunchBaseMs.TryGetValue(key, out long existingPending) && existingPending == baseMs
+                    && queue.PendingPlaybackRatePerMille.TryGetValue(key, out int existingPendingRate) && existingPendingRate == ratePerMille)
                 {
                     return;
                 }
 
                 queue.PendingLaunchBaseMs[key] = baseMs;
+                queue.PendingPlaybackRatePerMille[key] = ratePerMille;
             }
             else
             {
+                // The short-circuit considers the RATE too (JF-636): a speed change
+                // re-launches from the same content position, so base and rate are
+                // independent (base 0 at 1.5x, then base 0 at 2.0x); skipping on an
+                // unchanged base alone would leave the stale rate composing the new
+                // stream's offsets.
                 if (queue.ActiveLaunchBaseMs.TryGetValue(key, out long existingActive) && existingActive == baseMs
+                    && queue.ActivePlaybackRatePerMille.TryGetValue(key, out int existingRate) && existingRate == ratePerMille
                     && !queue.PendingLaunchBaseMs.ContainsKey(key))
                 {
                     return;
                 }
 
                 queue.ActiveLaunchBaseMs[key] = baseMs;
+                queue.ActivePlaybackRatePerMille[key] = ratePerMille;
                 queue.PendingLaunchBaseMs.Remove(key);
+                queue.PendingPlaybackRatePerMille.Remove(key);
             }
 
             TrimLaunchBaseIfNeeded(queue);
@@ -300,8 +313,8 @@ public sealed class DeviceQueueManager : IDisposable
         SchedulePersistInternal(deviceId);
 
         _logger.LogDebug(
-            "Recorded {Scope} launch base for device {DeviceId}: item={ItemId}, base={BaseMs}ms",
-            enqueued ? "pending" : "active", deviceId, itemId, baseMs);
+            "Recorded {Scope} launch base for device {DeviceId}: item={ItemId}, base={BaseMs}ms, rate={RatePerMille}/1000",
+            enqueued ? "pending" : "active", deviceId, itemId, baseMs, ratePerMille);
     }
 
     /// <summary>
@@ -324,6 +337,7 @@ public sealed class DeviceQueueManager : IDisposable
 
         string key = parsedItemId.ToString("N");
         long baseMs;
+        int ratePerMille;
         lock (_launchScopeLock)
         {
             if (!queue.PendingLaunchBaseMs.Remove(key, out baseMs))
@@ -332,13 +346,19 @@ public sealed class DeviceQueueManager : IDisposable
             }
 
             queue.ActiveLaunchBaseMs[key] = baseMs;
+            // JF-636: the rate rides with its base (an atempo stream enqueued into a
+            // wrapped queue scales its offsets from the moment it starts).
+            ratePerMille = queue.PendingPlaybackRatePerMille.Remove(key, out int pendingRate)
+                ? pendingRate
+                : 1000;
+            queue.ActivePlaybackRatePerMille[key] = ratePerMille;
         }
 
         SchedulePersistInternal(deviceId);
 
         _logger.LogDebug(
-            "Promoted pending launch base to active for device {DeviceId}: item={ItemId}, base={BaseMs}ms",
-            deviceId, itemId, baseMs);
+            "Promoted pending launch base to active for device {DeviceId}: item={ItemId}, base={BaseMs}ms, rate={RatePerMille}/1000",
+            deviceId, itemId, baseMs, ratePerMille);
     }
 
     /// <summary>
@@ -363,6 +383,46 @@ public sealed class DeviceQueueManager : IDisposable
             return queue.ActiveLaunchBaseMs.TryGetValue(parsedItemId.ToString("N"), out long baseMs)
                 ? baseMs
                 : null;
+        }
+    }
+
+    /// <summary>
+    /// JF-636 rate half of the launch-scope read: the ACTIVE playback rate for an
+    /// item on a device, the rate of the stream whose events must scale their raw
+    /// device offsets. Null means no rate entry exists (a pre-JF-636 or identity
+    /// stream); callers treat null and 1000 identically (no scaling).
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID.</param>
+    /// <param name="itemId">The item ID in any GUID format (normalized to "N").</param>
+    /// <returns>The active playback rate in per-mille form, or null when none.</returns>
+    public int? GetActivePlaybackRate(string deviceId, string itemId)
+        => GetActiveLaunchScope(deviceId, itemId).RatePerMille;
+
+    /// <summary>
+    /// JF-636: BOTH halves of the launch scope in ONE lock acquisition. The base
+    /// and its rate are written together under <c>_launchScopeLock</c>; reading
+    /// them through the two individual getters can straddle a concurrent
+    /// <see cref="RecordLaunchBase"/> and pair base1 with rate2, so every reader
+    /// that uses both values (the event-side composition, the resume rebase)
+    /// reads them through this combined snapshot instead.
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID.</param>
+    /// <param name="itemId">The item ID in any GUID format (normalized to "N").</param>
+    /// <returns>The active launch base in milliseconds (null when none) and the active playback rate in per-mille form (null when none).</returns>
+    public (long? BaseMs, int? RatePerMille) GetActiveLaunchScope(string deviceId, string itemId)
+    {
+        if (!StreamTokenCodec.TryGetItemId(itemId, out Guid parsedItemId)
+            || !_queues.TryGetValue(deviceId, out DeviceQueue? queue))
+        {
+            return (null, null);
+        }
+
+        string key = parsedItemId.ToString("N");
+        lock (_launchScopeLock)
+        {
+            long? baseMs = queue.ActiveLaunchBaseMs.TryGetValue(key, out long b) ? b : null;
+            int? rate = queue.ActivePlaybackRatePerMille.TryGetValue(key, out int r) ? r : null;
+            return (baseMs, rate);
         }
     }
 
@@ -491,7 +551,9 @@ public sealed class DeviceQueueManager : IDisposable
     private static void TrimLaunchBaseIfNeeded(DeviceQueue queue)
     {
         if (queue.ActiveLaunchBaseMs.Count <= MaxLaunchBaseEntries
-            && queue.PendingLaunchBaseMs.Count <= MaxLaunchBaseEntries)
+            && queue.PendingLaunchBaseMs.Count <= MaxLaunchBaseEntries
+            && queue.ActivePlaybackRatePerMille.Count <= MaxLaunchBaseEntries
+            && queue.PendingPlaybackRatePerMille.Count <= MaxLaunchBaseEntries)
         {
             return;
         }
@@ -499,6 +561,8 @@ public sealed class DeviceQueueManager : IDisposable
         HashSet<string> queuedItems = new(queue.ItemIds, StringComparer.OrdinalIgnoreCase);
         TrimPositionMap(queue.ActiveLaunchBaseMs, queuedItems, MaxLaunchBaseEntries);
         TrimPositionMap(queue.PendingLaunchBaseMs, queuedItems, MaxLaunchBaseEntries);
+        TrimPositionMap(queue.ActivePlaybackRatePerMille, queuedItems, MaxLaunchBaseEntries);
+        TrimPositionMap(queue.PendingPlaybackRatePerMille, queuedItems, MaxLaunchBaseEntries);
     }
 
     /// <summary>
@@ -511,7 +575,8 @@ public sealed class DeviceQueueManager : IDisposable
     /// <param name="map">The bounded dictionary.</param>
     /// <param name="queuedItems">The queued item ids (any key format; compared case-insensitively).</param>
     /// <param name="cap">The maximum entry count.</param>
-    internal static void TrimPositionMap(Dictionary<string, long> map, IEnumerable<string> queuedItems, int cap)
+    /// <typeparam name="T">The map's value type (position ticks, launch bases, per-mille rates).</typeparam>
+    internal static void TrimPositionMap<T>(Dictionary<string, T> map, IEnumerable<string> queuedItems, int cap)
     {
         if (map.Count <= cap)
         {
@@ -549,6 +614,8 @@ public sealed class DeviceQueueManager : IDisposable
         queue.ItemPositionState = oldQueue?.ItemPositionState ?? new Dictionary<string, long>();
         queue.ActiveLaunchBaseMs = oldQueue?.ActiveLaunchBaseMs ?? new Dictionary<string, long>();
         queue.PendingLaunchBaseMs = oldQueue?.PendingLaunchBaseMs ?? new Dictionary<string, long>();
+        queue.ActivePlaybackRatePerMille = oldQueue?.ActivePlaybackRatePerMille ?? new Dictionary<string, int>();
+        queue.PendingPlaybackRatePerMille = oldQueue?.PendingPlaybackRatePerMille ?? new Dictionary<string, int>();
     }
 
     /// <summary>

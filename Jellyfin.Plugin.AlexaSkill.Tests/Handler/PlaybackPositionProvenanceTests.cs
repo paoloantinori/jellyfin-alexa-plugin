@@ -460,4 +460,219 @@ public class PlaybackPositionProvenanceTests : PluginTestBase, IDisposable
             StringComparison.Ordinal);
         Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
     }
+
+    // ========== JF-636: the atempo rate rides the SAME launch scope the base does ==========
+
+    /// <summary>
+    /// The rate half of the launch-scope contract: RecordLaunchBase stores the
+    /// rate beside the base, a same-base different-rate re-launch (the speed
+    /// change from the same content position) OVERWRITES it (the short-circuit
+    /// considers rate, not base alone), GetActivePlaybackRate reads it back,
+    /// and the pending/active promote carries it like the base.
+    /// </summary>
+    [Fact]
+    public async Task LaunchScope_RateRecordsBesideBase_AndSurvivesSameBaseOverwrite()
+    {
+        var id = Guid.NewGuid();
+
+        _queueManager.RecordLaunchBase(DeviceId, id.ToString(), MinutesToMs(20), enqueued: false, ratePerMille: 1500);
+        Assert.Equal(1500, _queueManager.GetActivePlaybackRate(DeviceId, id.ToString()));
+
+        // A speed change from the SAME content position: base identical, rate new.
+        // A base-only short-circuit would leave the stale 1500 composing the new
+        // stream's offsets.
+        _queueManager.RecordLaunchBase(DeviceId, id.ToString(), MinutesToMs(20), enqueued: false, ratePerMille: 2000);
+        Assert.Equal(2000, _queueManager.GetActivePlaybackRate(DeviceId, id.ToString()));
+        Assert.Equal(MinutesToMs(20), _queueManager.GetActiveLaunchBase(DeviceId, id.ToString()));
+
+        // The pending/active promote carries the rate (the wrapped-queue shape).
+        _queueManager.RecordLaunchBase(DeviceId, id.ToString(), 0, enqueued: true, ratePerMille: 1750);
+        await CreateStartHandler().HandleAsync(
+            EventRequest("AudioPlayer.PlaybackStarted", id, 0),
+            TestHelpers.CreateTestContext(DeviceId),
+            TestHelpers.CreateTestUser(),
+            CreateSession(),
+            CancellationToken.None);
+        Assert.Equal(0, _queueManager.GetActiveLaunchBase(DeviceId, id.ToString()));
+        Assert.Equal(1750, _queueManager.GetActivePlaybackRate(DeviceId, id.ToString()));
+    }
+
+    /// <summary>
+    /// The default rate is identity: a launch recorded without a rate (every
+    /// pre-JF-636 call site) reads 1000, and the composition never scales.
+    /// </summary>
+    [Fact]
+    public void LaunchScope_NoRateGiven_RecordsIdentity()
+    {
+        var id = Guid.NewGuid();
+
+        _queueManager.RecordLaunchBase(DeviceId, id.ToString(), MinutesToMs(20), enqueued: false);
+
+        Assert.Equal(1000, _queueManager.GetActivePlaybackRate(DeviceId, id.ToString()));
+    }
+
+    /// <summary>
+    /// The core JF-636 writer pin: the device stops an atempo stream 5:00 into a
+    /// stream minted at content ?start=20:00 playing at 1.5x; the 5:00 of STREAM
+    /// covered 7:30 of content, so every store persists 27:30 (base + raw x rate),
+    /// not the raw 5:00 and not the unscaled 25:00.
+    /// </summary>
+    [Fact]
+    public async Task PlaybackStopped_AtempoLaunchedStream_PersistsRateComposedPositionEverywhere()
+    {
+        var id = Guid.NewGuid();
+        var episode = Eac3Episode(id);
+        var session = CreateSession();
+        session.PlayState = new PlayerStateInfo();
+        session.FullNowPlayingItem = episode;
+        _fx.LibraryManager.Setup(lm => lm.GetItemById(id)).Returns(episode);
+        _fx.UserManager.Setup(u => u.GetUserById(It.IsAny<Guid>()))
+            .Returns(TestHelpers.CreateJellyfinUser());
+        _fx.UserDataManager.Setup(u => u.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.Is<BaseItem>(i => i.Id == id)))
+            .Returns(new UserItemData { Key = id.ToString("N") });
+        _queueManager.RecordLaunchBase(DeviceId, id.ToString(), MinutesToMs(20), enqueued: false, ratePerMille: 1500);
+
+        var context = TestHelpers.CreateTestContext(DeviceId);
+        context.AudioPlayer = new PlaybackState { Token = id.ToString(), OffsetInMilliseconds = MinutesToMs(5) };
+
+        await CreateStopHandler().HandleAsync(
+            EventRequest("AudioPlayer.PlaybackStopped", id, MinutesToMs(5)),
+            context,
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        long expected = TimeSpan.FromMinutes(27.5).Ticks;
+        _fx.SessionManager.Verify(
+            s => s.OnPlaybackStopped(It.Is<PlaybackStopInfo>(i => i.ItemId == id && i.PositionTicks == expected)),
+            Times.Once);
+        DeviceQueue queue = _queueManager.GetOrCreateQueue(DeviceId);
+        Assert.Equal(expected, queue.CurrentPositionTicks);
+        Assert.Equal(expected, queue.ItemPositionState[id.ToString("N")]);
+    }
+
+    /// <summary>
+    /// The rate-1000 identity pin: the same stop on a rate-1000 scope composes the
+    /// pre-JF-636 arithmetic byte-identically (base + raw, no scaling).
+    /// </summary>
+    [Fact]
+    public async Task PlaybackStopped_IdentityRate_ComposesTheClassicArithmetic()
+    {
+        var id = Guid.NewGuid();
+        var episode = Eac3Episode(id);
+        var session = CreateSession();
+        session.PlayState = new PlayerStateInfo();
+        session.FullNowPlayingItem = episode;
+        _fx.LibraryManager.Setup(lm => lm.GetItemById(id)).Returns(episode);
+        _fx.UserManager.Setup(u => u.GetUserById(It.IsAny<Guid>()))
+            .Returns(TestHelpers.CreateJellyfinUser());
+        _fx.UserDataManager.Setup(u => u.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.Is<BaseItem>(i => i.Id == id)))
+            .Returns(new UserItemData { Key = id.ToString("N") });
+        _queueManager.RecordLaunchBase(DeviceId, id.ToString(), MinutesToMs(20), enqueued: false, ratePerMille: 1000);
+
+        var context = TestHelpers.CreateTestContext(DeviceId);
+        context.AudioPlayer = new PlaybackState { Token = id.ToString(), OffsetInMilliseconds = MinutesToMs(5) };
+
+        await CreateStopHandler().HandleAsync(
+            EventRequest("AudioPlayer.PlaybackStopped", id, MinutesToMs(5)),
+            context,
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        Assert.Equal(MinutesToTicks(25), _queueManager.GetOrCreateQueue(DeviceId).CurrentPositionTicks);
+    }
+
+    /// <summary>
+    /// The reader side: resuming an item this device last played at 1.5x relaunches
+    /// the atempo stream at that rate, composing the stream-relative context offset
+    /// with the rate (base 20:00 + 5:00 stream x 1.5 = 27:30 content) instead of the
+    /// unscaled 25:00.
+    /// </summary>
+    [Fact]
+    public async Task ResumeTail_AtempoLaunchedStop_ComposesRateIntoTheSeek()
+    {
+        var id = Guid.NewGuid();
+        var episode = Eac3Episode(id);
+        var session = CreateSession();
+        session.PlayState = new PlayerStateInfo();
+        session.FullNowPlayingItem = episode;
+        _fx.LibraryManager.Setup(lm => lm.GetItemById(id)).Returns(episode);
+        _queueManager.RecordLaunchBase(DeviceId, id.ToString(), MinutesToMs(20), enqueued: false, ratePerMille: 1500);
+
+        var handler = new ResumeIntentHandler(
+            _fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory,
+            _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object,
+            _queueManager);
+
+        var context = TestHelpers.CreateTestContext(DeviceId);
+        context.AudioPlayer = new PlaybackState
+        {
+            Token = id.ToString(),
+            OffsetInMilliseconds = MinutesToMs(5),
+            PlayerActivity = "IDLE"
+        };
+
+        SkillResponse response = await handler.HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "AMAZON.ResumeIntent" } },
+            context,
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        AudioPlayerPlayDirective directive = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+        Assert.Contains($"/alexaskill/api/audio-speed/{id}/1500/stream.m3u8", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.Contains(
+            $"?start={TimeSpan.FromMinutes(27.5).Ticks}&",
+            directive.AudioItem.Stream.Url,
+            StringComparison.Ordinal);
+        Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
+    }
+
+    /// <summary>
+    /// The 0.75x clamp pin (the JF-636 review inversion): a composed base + raw x
+    /// rate that reaches the runtime drops the BASE but keeps the rate scaling,
+    /// minting ?start= at the scaled offset, never the LARGER unscaled raw (a
+    /// past-runtime seek on the slow-rate shape).
+    /// </summary>
+    [Fact]
+    public async Task ResumeTail_SlowRateStaleComposition_SeeksTheScaledOffsetNotTheRaw()
+    {
+        var id = Guid.NewGuid();
+        var episode = Eac3Episode(id);
+        episode.RunTimeTicks = MinutesToTicks(30);
+        var session = CreateSession();
+        session.PlayState = new PlayerStateInfo();
+        session.FullNowPlayingItem = episode;
+        _fx.LibraryManager.Setup(lm => lm.GetItemById(id)).Returns(episode);
+        // base 25:00 at 0.75x; raw context offset 10:00 of stream = 7:30 content;
+        // composed 32:30 >= runtime 30 -> clamp -> ?start= at the SCALED 7:30.
+        _queueManager.RecordLaunchBase(DeviceId, id.ToString(), MinutesToMs(25), enqueued: false, ratePerMille: 750);
+
+        var handler = new ResumeIntentHandler(
+            _fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory,
+            _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object,
+            _queueManager);
+
+        var context = TestHelpers.CreateTestContext(DeviceId);
+        context.AudioPlayer = new PlaybackState
+        {
+            Token = id.ToString(),
+            OffsetInMilliseconds = MinutesToMs(10),
+            PlayerActivity = "IDLE"
+        };
+
+        SkillResponse response = await handler.HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = "AMAZON.ResumeIntent" } },
+            context,
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        AudioPlayerPlayDirective directive = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+        Assert.Contains(
+            $"?start={TimeSpan.FromMinutes(7.5).Ticks}&",
+            directive.AudioItem.Stream.Url,
+            StringComparison.Ordinal);
+    }
 }

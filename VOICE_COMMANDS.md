@@ -64,6 +64,7 @@ Invocation name: **"jellyfin player"**
 | Recommend | `أوصني بشيء` · `اقترح {media_type}` · `أوصني بموسيقى` · `أوصني بفيلم` · `اقترح شيئاً لمشاهدته` · `شغل شيئاً قد يعجبني` |
 | Remove Current From Playlist | `أزل هذه الأغنية من قائمة التشغيل {playlist}` · `احذف الحالي من قائمة التشغيل {playlist}` |
 | Search Media | `ابحث عن فيلم {query}` · `ابحث عن محتوى {query}` · `ابحث عن فيديو {query}` · `ابحث عن مسلسل {query}` · `جد فيلم {query}` · `جد محتوى {query}` |
+| Set Playback Speed | `بسرعة {speed}` · `السرعة {speed}` · `اجعل السرعة {speed}` |
 | Set Reminder | `ذكرني بعد {reminder_duration}` · `ذكرني الساعة {reminder_time}` · `اضبط منبها بعد {reminder_duration}` · `اضبط منبها الساعة {reminder_time}` |
 | Show More | `أظهر المزيد` · `المزيد` · `الصفحة التالية` · `استمر` · `ماذا أيضا` · `المزيد من النتائج` |
 | Shuffle Play | `شغل قائمة التشغيل {playlist} بشكل عشوائي` · `اخلط قائمة التشغيل {playlist}` · `شغل قائمة التشغيل {playlist} في وضع الخلط` |
@@ -123,6 +124,7 @@ Invocation name: **"jellyfin player"**
 | Remove Current From Playlist | `Entferne dieses Lied aus der Playlist {playlist}` · `Entferne das aktuelle Lied aus der Playlist {playlist}` · `Nimm dieses Lied von der Playlist {playlist}` |
 | Repeat Single On | `Lied wiederholen` · `Titel wiederholen` · `Video wiederholen` · `Das wiederholen` |
 | Search Media | `Suche nach einem Film {query}` · `Suche nach einem Video {query}` · `Suche nach einer Serie {query}` · `Suche nach Inhalt {query}` · `Finde einen Film {query}` · `Finde einen Inhalt {query}` |
+| Set Playback Speed | `mit geschwindigkeit {speed}` · `geschwindigkeit {speed}` · `setze die geschwindigkeit auf {speed}` · `spiele mit geschwindigkeit {speed}` · `mach {speed}` |
 | Set Reminder | `erinnere mich in {reminder_duration}` · `erinnere mich um {reminder_time}` · `stelle eine erinnerung für {reminder_duration}` · `setze eine erinnerung auf {reminder_time}` |
 | Show More | `zeig mehr` · `noch mehr` · `weiter` · `nächste seite` · `mehr ergebnisse` · `was gibt es noch` |
 | Shuffle All Off | `zufallswiedergabe ausschalten` · `zufällige wiedergabe aus` |
@@ -181,6 +183,7 @@ Invocation name: **"jellyfin player"**
 | Recommend | `recommend something` · `recommend {media_type}` · `recommend some music` · `recommend a movie` · `suggest something to watch` · `suggest some music` |
 | Remove Current From Playlist | `remove this song from the playlist {playlist}` · `remove this from the playlist {playlist}` · `take this song off the playlist {playlist}` |
 | Search Media | `Search for a movie {query}` · `Search for content {query}` · `Find a movie {query}` · `Find content {query}` · `Look for a movie {query}` · `Look for content {query}` |
+| Set Playback Speed | `at speed {speed}` · `speed {speed}` · `set the speed to {speed}` · `set speed {speed}` · `play at speed {speed}` · `go {speed}` |
 | Set Reminder | `remind me in {reminder_duration}` · `remind me at {reminder_time}` · `set a reminder for {reminder_duration}` · `set a reminder for {reminder_time}` |
 | Show More | `show more` · `next page` · `more results` · `see more` · `more` · `what else` |
 | Shuffle Play | `shuffle the playlist {playlist}` · `play the playlist {playlist} in shuffle mode` · `play the playlist {playlist} on shuffle` · `play {playlist} shuffled` |
@@ -237,6 +240,7 @@ Invocation name: **"jellyfin player"**
 | Recommend | `recommend something` · `recommend {media_type}` · `recommend some music` · `recommend a movie` · `suggest something to watch` · `suggest some music` |
 | Remove Current From Playlist | `remove this song from the playlist {playlist}` · `remove this from the playlist {playlist}` · `take this song off the playlist {playlist}` |
 | Search Media | `Search for a movie {query}` · `Search for content {query}` · `Find a movie {query}` · `Find content {query}` · `Look for a movie {query}` · `Look for content {query}` |
+| Set Playback Speed | `at speed {speed}` · `speed {speed}` · `set the speed to {speed}` · `set speed {speed}` · `play at speed {speed}` · `go {speed}` |
 | Set Reminder | `remind me in {reminder_duration}` · `remind me at {reminder_time}` · `set a reminder for {reminder_duration}` · `set a reminder for {reminder_time}` |
 | Show More | `show more` · `next page` · `more results` · `see more` · `more` · `what else` |
 | Shuffle Play | `shuffle the playlist {playlist}` · `play the playlist {playlist} in shuffle mode` · `play the playlist {playlist} on shuffle` · `play {playlist} shuffled` |
@@ -293,6 +297,7 @@ Invocation name: **"jellyfin player"**
 | Recommend | `recommend something` · `recommend {media_type}` · `recommend some music` · `recommend a movie` · `suggest something to watch` · `suggest some music` |
 | Remove Current From Playlist | `remove this song from the playlist {playlist}` · `remove this from the playlist {playlist}` · `take this song off the playlist {playlist}` |
 | Search Media | `Search for a movie {query}` · `Search for content {query}` · `Find a movie {query}` · `Find content {query}` · `Look for a movie {query}` · `Look for content {query}` |
+| Set Playback Speed | `at speed {speed}` · `speed {speed}` · `set the speed to {speed}` · `set speed {speed}` · `play at speed {speed}` · `go {speed}` |
 | Set Reminder | `remind me in {reminder_duration}` · `remind me at {reminder_time}` · `set a reminder for {reminder_duration}` · `set a reminder for {reminder_time}` |
 | Show More | `show more` · `next page` · `more results` · `see more` · `more` · `what else` |
 | Shuffle Play | `shuffle the playlist {playlist}` · `play the playlist {playlist} in shuffle mode` · `play the playlist {playlist} on shuffle` · `play {playlist} shuffled` |
@@ -349,6 +354,7 @@ Invocation name: **"jellyfin player"**
 | Recommend | `recommend something` · `recommend {media_type}` · `recommend some music` · `recommend a movie` · `suggest something to watch` · `suggest some music` |
 | Remove Current From Playlist | `remove this song from the playlist {playlist}` · `remove this from the playlist {playlist}` · `take this song off the playlist {playlist}` |
 | Search Media | `Search for a movie {query}` · `Search for content {query}` · `Find a movie {query}` · `Find content {query}` · `Look for a movie {query}` · `Look for content {query}` |
+| Set Playback Speed | `at speed {speed}` · `speed {speed}` · `set the speed to {speed}` · `set speed {speed}` · `play at speed {speed}` · `go {speed}` |
 | Set Reminder | `remind me in {reminder_duration}` · `remind me at {reminder_time}` · `set a reminder for {reminder_duration}` · `set a reminder for {reminder_time}` |
 | Show More | `show more` · `next page` · `more results` · `see more` · `more` · `what else` |
 | Shuffle Play | `shuffle the playlist {playlist}` · `play the playlist {playlist} in shuffle mode` · `play the playlist {playlist} on shuffle` · `play {playlist} shuffled` |
@@ -406,6 +412,7 @@ Invocation name: **"jellyfin player"**
 | Recommend | `recommend something` · `recommend {media_type}` · `recommend some music` · `recommend a movie` · `suggest something to watch` · `suggest some music` |
 | Remove Current From Playlist | `remove this song from the playlist {playlist}` · `remove this from the playlist {playlist}` · `take this song off the playlist {playlist}` |
 | Search Media | `Search for a movie {query}` · `Search for content {query}` · `Find a movie {query}` · `Find content {query}` · `Look for a movie {query}` · `Look for content {query}` |
+| Set Playback Speed | `at speed {speed}` · `speed {speed}` · `set the speed to {speed}` · `set speed {speed}` · `play at speed {speed}` · `go {speed}` |
 | Set Reminder | `remind me in {reminder_duration}` · `remind me at {reminder_time}` · `set a reminder for {reminder_duration}` · `set a reminder for {reminder_time}` |
 | Show More | `show more` · `next page` · `more results` · `see more` · `more` · `what else` |
 | Shuffle Play | `shuffle the playlist {playlist}` · `play the playlist {playlist} in shuffle mode` · `play the playlist {playlist} on shuffle` · `play {playlist} shuffled` |
@@ -463,6 +470,7 @@ Invocation name: **"jellyfin player"**
 | Recommend | `recomienda algo` · `recomienda {media_type}` · `recomienda música` · `recomienda una película` · `sugiere algo` · `reproduce algo que me guste` |
 | Remove Current From Playlist | `Quita esta canción de la lista {playlist}` · `Elimina esto de la lista {playlist}` · `Saca esta canción de la lista {playlist}` |
 | Search Media | `Busca una película {query}` · `Busca un video {query}` · `Busca una serie {query}` · `Busca contenido {query}` · `Encuentra una película {query}` · `Encuentra contenido {query}` |
+| Set Playback Speed | `a velocidad {speed}` · `velocidad {speed}` · `pon la velocidad en {speed}` · `reproduce a velocidad {speed}` · `pon {speed}` |
 | Set Reminder | `recuérdame en {reminder_duration}` · `recuérdame a las {reminder_time}` · `pon un recordatorio de {reminder_duration}` · `crea un recordatorio para las {reminder_time}` |
 | Show More | `mostrar más` · `más resultados` · `siguiente` · `continúa` · `qué más` · `ver más` |
 | Shuffle Play | `reproduce la lista {playlist} en modo aleatorio` · `mezcla la lista {playlist}` · `reproduce la lista de reproducción {playlist} en modo aleatorio` |
@@ -519,6 +527,7 @@ Invocation name: **"jellyfin player"**
 | Recommend | `recomienda algo` · `recomienda {media_type}` · `recomienda música` · `recomienda una película` · `sugiere algo` · `reproduce algo que me guste` |
 | Remove Current From Playlist | `Quita esta canción de la lista {playlist}` · `Elimina esto de la lista {playlist}` · `Saca esta canción de la lista {playlist}` |
 | Search Media | `Busca una película {query}` · `Busca un video {query}` · `Busca una serie {query}` · `Busca contenido {query}` · `Encuentra una película {query}` · `Encuentra contenido {query}` |
+| Set Playback Speed | `a velocidad {speed}` · `velocidad {speed}` · `pon la velocidad en {speed}` · `reproduce a velocidad {speed}` · `pon {speed}` |
 | Set Reminder | `recuérdame en {reminder_duration}` · `recuérdame a las {reminder_time}` · `pon un recordatorio de {reminder_duration}` · `crea un recordatorio para las {reminder_time}` |
 | Show More | `mostrar más` · `más resultados` · `siguiente` · `continúa` · `qué más` · `ver más` |
 | Shuffle Play | `reproduce la lista {playlist} en modo aleatorio` · `mezcla la lista {playlist}` · `reproduce la lista de reproducción {playlist} en modo aleatorio` |
@@ -575,6 +584,7 @@ Invocation name: **"jellyfin player"**
 | Recommend | `recomienda algo` · `recomienda {media_type}` · `recomienda música` · `recomienda una película` · `sugiere algo` · `reproduce algo que me guste` |
 | Remove Current From Playlist | `Quita esta canción de la lista {playlist}` · `Elimina esto de la lista {playlist}` · `Saca esta canción de la lista {playlist}` |
 | Search Media | `Busca una película {query}` · `Busca un video {query}` · `Busca una serie {query}` · `Busca contenido {query}` · `Encuentra una película {query}` · `Encuentra contenido {query}` |
+| Set Playback Speed | `a velocidad {speed}` · `velocidad {speed}` · `pon la velocidad en {speed}` · `reproduce a velocidad {speed}` · `pon {speed}` |
 | Set Reminder | `recuérdame en {reminder_duration}` · `recuérdame a las {reminder_time}` · `pon un recordatorio de {reminder_duration}` · `crea un recordatorio para las {reminder_time}` |
 | Show More | `mostrar más` · `más resultados` · `siguiente` · `continúa` · `qué más` · `ver más` |
 | Shuffle Play | `reproduce la lista {playlist} en modo aleatorio` · `mezcla la lista {playlist}` · `reproduce la lista de reproducción {playlist} en modo aleatorio` |
@@ -634,6 +644,7 @@ Invocation name: **"jellyfin player"**
 | Remove Current From Playlist | `Retire ce titre de la liste de lecture {playlist}` · `Enlève la chanson en cours de la liste de lecture {playlist}` |
 | Repeat Single On | `Répète la chanson` · `Répète le morceau` · `Répète la vidéo` · `Répète` |
 | Search Media | `Cherche un film {query}` · `Cherche un contenu {query}` · `Cherche une série {query}` · `Cherche un vidéo {query}` · `Trouve un film {query}` · `Trouve un contenu {query}` |
+| Set Playback Speed | `à vitesse {speed}` · `vitesse {speed}` · `mets la vitesse à {speed}` · `lis à vitesse {speed}` · `mets {speed}` |
 | Set Reminder | `rappelle-moi dans {reminder_duration}` · `rappelle-moi à {reminder_time}` · `mets un rappel de {reminder_duration}` · `crée un rappel pour {reminder_time}` |
 | Show More | `montre plus` · `encore` · `plus de résultats` · `continuer` · `suivant` · `quoi d'autre` |
 | Shuffle All Off | `désactive la lecture aléatoire` · `arrête la lecture aléatoire` |
@@ -695,6 +706,7 @@ Invocation name: **"jellyfin player"**
 | Remove Current From Playlist | `Retire ce titre de la liste de lecture {playlist}` · `Enlève la chanson en cours de la liste de lecture {playlist}` |
 | Repeat Single On | `Répète la chanson` · `Répète le morceau` · `Répète la vidéo` · `Répète` |
 | Search Media | `Cherche un film {query}` · `Cherche un contenu {query}` · `Cherche une série {query}` · `Cherche un vidéo {query}` · `Trouve un film {query}` · `Trouve un contenu {query}` |
+| Set Playback Speed | `à vitesse {speed}` · `vitesse {speed}` · `mets la vitesse à {speed}` · `lis à vitesse {speed}` · `mets {speed}` |
 | Set Reminder | `rappelle-moi dans {reminder_duration}` · `rappelle-moi à {reminder_time}` · `mets un rappel de {reminder_duration}` · `crée un rappel pour {reminder_time}` |
 | Show More | `montre plus` · `encore` · `plus de résultats` · `continuer` · `suivant` · `quoi d'autre` |
 | Shuffle All Off | `désactive la lecture aléatoire` · `arrête la lecture aléatoire` |
@@ -753,6 +765,7 @@ Invocation name: **"jellyfin player"**
 | Recommend | `कुछ सुझाव दो` · `{media_type} सुझाओ` · `कुछ म्यूज़िक सुझाओ` · `एक फिल्म सुझाओ` · `देखने के लिए कुछ सुझाओ` |
 | Remove Current From Playlist | `यह गाना प्लेलिस्ट {playlist} से हटाओ` · `मौजूदा गाना प्लेलिस्ट {playlist} से हटाओ` |
 | Search Media | `एक फिल्म {query} खोजो` · `कंटेंट {query} खोजो` · `एक वीडियो {query} खोजो` · `एक फिल्म {query} ढूंढो` · `कंटेंट {query} ढूंढो` · `एक वीडियो {query} ढूंढो` |
+| Set Playback Speed | `गति {speed}` · `गति {speed} पर` · `{speed} गति पर` · `{speed} करो` |
 | Set Reminder | `{reminder_duration} में मुझे याद दिलाओ` · `{reminder_time} पर मुझे याद दिलाओ` · `{reminder_duration} का रिमाइंडर सेट करो` · `{reminder_time} का रिमाइंडर सेट करो` |
 | Show More | `और दिखाओ` · `अगला पेज` · `और` · `जारी रखो` · `आगे` · `क्या और है` |
 | Shuffle Play | `प्लेलिस्ट {playlist} शफल में चलाओ` · `प्लेलिस्ट {playlist} शफल करो` |
@@ -812,6 +825,7 @@ Invocation name: **"mia collezione"**
 | Remove Current From Playlist | `Rimuovi questo brano dalla playlist {playlist}` · `Rimuovi questo dalla playlist {playlist}` · `Togli questo brano dalla playlist {playlist}` |
 | Repeat Single On | `Ripeti la canzone` · `Ripeti la traccia` · `Ripeti il brano` · `Ripeti il video` · `di ripeter la canzone` · `di ripeter la traccia` |
 | Search Media | `Cerca il contenuto {query}` · `Cerca un film {query}` · `Cerca un video {query}` · `Cerca una serie {query}` · `Cerca un audiolibro {query}` · `Trova il contenuto {query}` |
+| Set Playback Speed | `a velocità {speed}` · `velocità {speed}` · `imposta la velocità {speed}` · `metti la velocità {speed}` · `riproduci a velocità {speed}` · `vai {speed}` |
 | Set Reminder | `Ricordami tra {reminder_duration}` · `Ricordami alle {reminder_time}` · `Imposta un promemoria tra {reminder_duration}` · `Imposta un promemoria per le {reminder_time}` |
 | Show More | `mostra di più` · `altra pagina` · `più risultati` · `vedi altro` · `altro` · `cos'altro` |
 | Shuffle All Off | `Disattiva mescolamento` · `Disattiva il casuale` · `Ripristina l'ordine della coda` · `disattivare il mescolamento` · `Di disattivare il mescolamento` |
@@ -870,6 +884,7 @@ Invocation name: **"jellyfin player"**
 | Recommend | `何かおすすめは` · `{media_type} をおすすめして` · `音楽のおすすめは` · `映画のおすすめは` · `何か見るものを提案して` |
 | Remove Current From Playlist | `この曲をプレイリスト {playlist} から削除して` · `今の曲をプレイリスト {playlist} から消して` |
 | Search Media | `映画 {query} を検索して` · `コンテンツ {query} を検索して` · `ビデオ {query} を検索して` · `映画 {query} を見つけて` · `コンテンツ {query} を見つけて` · `映画 {query} を探して` |
+| Set Playback Speed | `速度{speed}` · `速度を{speed}にして` · `再生速度{speed}` · `{speed}にして` |
 | Set Reminder | `{reminder_duration} 後にリマインドして` · `{reminder_time} にリマインドして` · `{reminder_duration} のリマインダーを設定して` · `{reminder_time} のリマインダーを設定して` |
 | Show More | `もっと見せて` · `次のページ` · `もっと` · `続き` · `他に何がある` · `もっと結果` |
 | Shuffle Play | `プレイリスト {playlist} をシャッフルで再生して` · `シャッフルでプレイリスト {playlist} を再生して` |
@@ -926,6 +941,7 @@ Invocation name: **"jellyfin player"**
 | Recommend | `beveel iets aan` · `beveel {media_type} aan` · `beveel wat muziek aan` · `beveel een film aan` · `stel iets voor om te kijken` · `stel wat muziek voor` |
 | Remove Current From Playlist | `Verwijder dit nummer uit de afspeellijst {playlist}` · `Haal het huidige nummer van de afspeellijst {playlist}` |
 | Search Media | `zoek naar een film {query}` · `zoek naar content {query}` · `zoek naar een video {query}` · `zoek naar een serie {query}` · `vind een film {query}` · `vind content {query}` |
+| Set Playback Speed | `op snelheid {speed}` · `snelheid {speed}` · `zet de snelheid op {speed}` · `speel op snelheid {speed}` · `speel {speed}` |
 | Set Reminder | `herinner me over {reminder_duration}` · `herinner me om {reminder_time}` · `stel een herinnering in voor {reminder_duration}` · `zet een herinnering op {reminder_time}` |
 | Show More | `toon meer` · `meer resultaten` · `volgende` · `doorgaan` · `wat nog meer` · `meer` |
 | Shuffle Play | `speel de playlist {playlist} in willekeurige volgorde` · `shuffle de playlist {playlist}` |
@@ -982,6 +998,7 @@ Invocation name: **"jellyfin player"**
 | Recommend | `recomendar algo` · `recomendar {media_type}` · `recomendar uma música` · `recomendar um filme` · `sugerir algo para assistir` · `sugerir uma música` |
 | Remove Current From Playlist | `Remova esta música da playlist {playlist}` · `Tire esta música da playlist {playlist}` |
 | Search Media | `procurar um filme {query}` · `procurar conteúdo {query}` · `procurar um vídeo {query}` · `procurar uma série {query}` · `encontrar um filme {query}` · `encontrar conteúdo {query}` |
+| Set Playback Speed | `a velocidade {speed}` · `velocidade {speed}` · `põe a velocidade em {speed}` · `toca a velocidade {speed}` · `põe {speed}` |
 | Set Reminder | `me lembre em {reminder_duration}` · `me lembre às {reminder_time}` · `crie um lembrete de {reminder_duration}` · `crie um lembrete para as {reminder_time}` |
 | Show More | `mostrar mais` · `mais resultados` · `próximo` · `continuar` · `o que mais` · `ver mais` |
 | Shuffle Play | `toque a playlist {playlist} em modo aleatório` · `embaralhe a playlist {playlist}` |

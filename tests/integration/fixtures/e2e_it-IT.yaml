@@ -691,3 +691,15 @@ tests:
     expected_slots:
       reminder_duration: {}
     expected_response_type: any
+
+  # --- SetPlaybackSpeed (JF-636): no-media Tell on a fresh session ---
+  # The speed re-launch needs a currently playing item; a fresh simulate
+  # session has none, so the handler answers NoMediaPlaying. The mid-play
+  # re-launch math (position carry, rate cycling) is unit-pinned
+  # (SetPlaybackSpeedIntentHandlerTests).
+  - utterance: "a velocità uno e mezzo"
+    expected_intent: SetPlaybackSpeedIntent
+    expected_slots:
+      speed: {}
+    expected_response_type: any
+    expected_speech_contains: "Nessun contenuto in riproduzione"

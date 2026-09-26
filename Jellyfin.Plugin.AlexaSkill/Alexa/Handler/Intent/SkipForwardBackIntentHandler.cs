@@ -64,7 +64,15 @@ public class SkipForwardBackIntentHandler : BaseHandler
         long currentTicks = session.PlayState?.PositionTicks ?? 0;
         if (currentTicks == 0 && context.AudioPlayer?.OffsetInMilliseconds > 0)
         {
-            currentTicks = TimeSpan.FromMilliseconds(context.AudioPlayer.OffsetInMilliseconds).Ticks;
+            // JF-636: the device offset counts the stream's OUTPUT timeline (rate-
+            // adjusted on an atempo stream), so it composes through the shared
+            // event-side chokepoint (launch-scope base + rate) instead of being read
+            // as raw content ticks.
+            currentTicks = Progress.ComposeEventPositionTicks(
+                context.GetDeviceId(),
+                session.FullNowPlayingItem.Id,
+                context.AudioPlayer.OffsetInMilliseconds,
+                "SkipForwardBack");
         }
 
         long runtimeTicks = session.NowPlayingItem?.RunTimeTicks ?? 0;
@@ -123,12 +131,11 @@ public class SkipForwardBackIntentHandler : BaseHandler
             int endOffsetMs = (int)TimeSpan.FromTicks(targetTicks).TotalMilliseconds;
             var endResponse = Launch.BuildAudioPlayerResponse(
                 PlayBehavior.ReplaceAll,
-                Launch.GetStreamUrl(session.FullNowPlayingItem.Id.ToString(), user),
+                SeekLaunchSource(user, context, session.FullNowPlayingItem, endOffsetMs),
                 session.FullNowPlayingItem.Id.ToString(),
                 session.FullNowPlayingItem,
                 user,
-                context,
-                endOffsetMs);
+                context);
 
             endResponse.Response.OutputSpeech = new PlainTextOutputSpeech
             {
@@ -144,12 +151,11 @@ public class SkipForwardBackIntentHandler : BaseHandler
 
         var response = Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll,
-            Launch.GetStreamUrl(session.FullNowPlayingItem.Id.ToString(), user),
+            SeekLaunchSource(user, context, session.FullNowPlayingItem, offsetMs),
             session.FullNowPlayingItem.Id.ToString(),
             session.FullNowPlayingItem,
             user,
-            context,
-            offsetMs);
+            context);
 
         response.Response.OutputSpeech = new PlainTextOutputSpeech
         {
@@ -157,5 +163,25 @@ public class SkipForwardBackIntentHandler : BaseHandler
         };
 
         return Task.FromResult(response);
+    }
+
+    /// <summary>
+    /// The ONE skip re-launch source (JF-636): resolves through the shared
+    /// codec-gated decision WITH the item's launch-scope rate, so a skip during
+    /// atempo listening keeps the speed (the target position is CONTENT-absolute
+    /// and mints straight into the speed URL's ?start=) instead of silently
+    /// reverting to 1x. A rate-1000 scope keeps the pre-JF-636 static URL +
+    /// directive-offset shape byte-identically.
+    /// </summary>
+    /// <param name="user">The user for the raw static URL.</param>
+    /// <param name="context">The Alexa context (device id for the launch-scope read).</param>
+    /// <param name="item">The item being seeked.</param>
+    /// <param name="contentOffsetMs">The CONTENT-absolute seek target in milliseconds.</param>
+    /// <returns>The resolved launch source.</returns>
+    private AudioLaunchSource SeekLaunchSource(Entities.User user, Context context, MediaBrowser.Controller.Entities.BaseItem item, int contentOffsetMs)
+    {
+        int ratePerMille = Launch.GetActivePlaybackRate(context.GetDeviceId(), item.Id.ToString())
+            ?? Util.PlaybackSpeed.NormalPerMille;
+        return Launch.ResolveAudioLaunchSource(item, item.Id.ToString(), user, contentOffsetMs, ratePerMille: ratePerMille);
     }
 }

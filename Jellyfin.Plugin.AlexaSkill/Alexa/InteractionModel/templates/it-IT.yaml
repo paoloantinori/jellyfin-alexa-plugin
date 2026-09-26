@@ -57,6 +57,17 @@ static_intents:
 # Intents with explicit samples (not generated from templates).
 # Each has a "samples" list and optional "slots" list.
 explicit_intents:
+  SetPlaybackSpeedIntent:
+    samples:
+      - a velocità {speed}
+      - velocità {speed}
+      - imposta la velocità {speed}
+      - metti la velocità {speed}
+      - riproduci a velocità {speed}
+      - "vai {speed}"
+    slots:
+      - name: speed
+        type: SpeedRate
   # DELIBERATE EXCEPTION to anti-pattern #5 ("never add custom samples to AMAZON.*
   # built-ins", see CLAUDE.md): these it-IT samples make the imperative "ferma" route
   # one-shot to StopIntent on Italian Echos. Added in the early template era (May 2026,
@@ -754,6 +765,36 @@ explicit_intents:
 # Key order is load-bearing for byte-identity: `value` first emits the name
 # subtree first, `id` first emits id first (see generate_interaction_model.py).
 types:
+  # JF-636: playback-speed vocabulary (the JF-354 Mood architecture: a
+  # restricted custom type so only speed phrases match). Ids are the shared
+  # cross-locale key space the handler's entity resolution reads (per-mille
+  # strings + faster/slower); PlaybackSpeed.cs is the consuming half.
+  SpeedRate:
+    values:
+      - value: tre quarti
+        id: "750"
+        synonyms: ["0,75", "0.75"]
+      - value: velocità normale
+        id: "1000"
+        synonyms: [normale, "velocità uno", uno, "1", "1,0"]
+      - value: uno e un quarto
+        id: "1250"
+        synonyms: ["1,25", "1.25", "una volta e un quarto"]
+      - value: uno e mezzo
+        id: "1500"
+        synonyms: ["uno e mezza", "una volta e mezza", "1,5", "1.5", "un e mezzo"]
+      - value: uno e tre quarti
+        id: "1750"
+        synonyms: ["1,75", "1.75", "una volta e tre quarti"]
+      - value: doppia velocità
+        id: "2000"
+        synonyms: [doppia, "il doppio", "due volte", due, "2"]
+      - value: più veloce
+        id: faster
+        synonyms: [accelera, velocizza, "più rapidamente"]
+      - value: più lentamente
+        id: slower
+        synonyms: [rallenta, "più lento", "più piano"]
   Mood:
     values:
       - rilassante
@@ -1273,6 +1314,13 @@ templates:
 # the user's follow-up utterance through general NLU (→ Amazon Music).
 dialog:
   intents:
+    - name: SetPlaybackSpeedIntent
+      confirmationRequired: false
+      slots:
+        - name: speed
+          type: SpeedRate
+          confirmationRequired: false
+          elicitationRequired: false
     - name: RateItemIntent
       confirmationRequired: false
       slots:

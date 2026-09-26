@@ -718,6 +718,23 @@
         ]
       },
       {
+        "name": "SetPlaybackSpeedIntent",
+        "slots": [
+          {
+            "name": "speed",
+            "type": "SpeedRate"
+          }
+        ],
+        "samples": [
+          "at speed {speed}",
+          "speed {speed}",
+          "set the speed to {speed}",
+          "set speed {speed}",
+          "play at speed {speed}",
+          "go {speed}"
+        ]
+      },
+      {
         "name": "SearchMediaIntent",
         "slots": [
           {
@@ -1039,6 +1056,98 @@
       }
     ],
     "types": [
+      {
+        "name": "SpeedRate",
+        "values": [
+          {
+            "name": {
+              "value": "three quarters",
+              "synonyms": [
+                "0.75",
+                "three quarter speed"
+              ]
+            },
+            "id": "750"
+          },
+          {
+            "name": {
+              "value": "normal speed",
+              "synonyms": [
+                "normal",
+                "speed one",
+                "one",
+                "1",
+                "1.0"
+              ]
+            },
+            "id": "1000"
+          },
+          {
+            "name": {
+              "value": "one and a quarter",
+              "synonyms": [
+                "1.25",
+                "one point two five"
+              ]
+            },
+            "id": "1250"
+          },
+          {
+            "name": {
+              "value": "one and a half",
+              "synonyms": [
+                "1.5",
+                "one point five",
+                "one and a half speed"
+              ]
+            },
+            "id": "1500"
+          },
+          {
+            "name": {
+              "value": "one and three quarters",
+              "synonyms": [
+                "1.75",
+                "one point seven five"
+              ]
+            },
+            "id": "1750"
+          },
+          {
+            "name": {
+              "value": "double speed",
+              "synonyms": [
+                "double",
+                "twice the speed",
+                "two times",
+                "two",
+                "2"
+              ]
+            },
+            "id": "2000"
+          },
+          {
+            "name": {
+              "value": "faster",
+              "synonyms": [
+                "speed up",
+                "play faster"
+              ]
+            },
+            "id": "faster"
+          },
+          {
+            "name": {
+              "value": "slower",
+              "synonyms": [
+                "slow down",
+                "play slower"
+              ]
+            },
+            "id": "slower"
+          }
+        ]
+      },
       {
         "name": "Mood",
         "values": [
@@ -1634,6 +1743,18 @@
   },
   "dialog": {
     "intents": [
+      {
+        "name": "SetPlaybackSpeedIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "speed",
+            "type": "SpeedRate",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
       {
         "name": "RateItemIntent",
         "confirmationRequired": false,

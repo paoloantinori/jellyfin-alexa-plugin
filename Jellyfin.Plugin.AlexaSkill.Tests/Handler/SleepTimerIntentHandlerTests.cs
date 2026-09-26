@@ -587,4 +587,46 @@ public class SleepTimerIntentHandlerTests : PluginTestBase, IDisposable
         Assert.Equal(DeviceQueueManager.LaunchRoute.VideoApp, route);
     }
 
+
+    /// <summary>
+    /// JF-636: arming a sleep timer during atempo playback keeps the speed and the
+    /// position. The device offset counts the atempo OUTPUT timeline, so the re-issue
+    /// resolves through the ONE resume resolver: content = base + raw x rate
+    /// (20:00 + 5:00 x 1.5 = 27:30), minted as the speed URL's ?start= with directive
+    /// offset 0, and the re-recorded launch scope carries base 27:30 + rate 1500.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_ArmingDuringAtempoPlayback_KeepsRateAndComposesPosition()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(durationValue: "PT20M");
+        var user = CreateUser();
+        var session = CreateSession();
+
+        var audioItem = new Audio { Name = "Podcast episode", Id = Guid.NewGuid(), RunTimeTicks = TimeSpan.FromMinutes(60).Ticks };
+        session.FullNowPlayingItem = audioItem;
+
+        var context = CreateContext();
+        context.AudioPlayer = new PlaybackState
+        {
+            Token = audioItem.Id.ToString(),
+            OffsetInMilliseconds = (long)TimeSpan.FromMinutes(5).TotalMilliseconds,
+            PlayerActivity = "PLAYING"
+        };
+
+        string deviceId = context.System.Device.DeviceID!;
+        _queueManager.RecordLaunchBase(deviceId, audioItem.Id.ToString(), (long)TimeSpan.FromMinutes(20).TotalMilliseconds, enqueued: false, ratePerMille: 1500);
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        var directive = Assert.Single(response.Response!.Directives.OfType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>());
+        Assert.Contains($"/alexaskill/api/audio-speed/{audioItem.Id}/1500/stream.m3u8", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.Contains($"?start={TimeSpan.FromMinutes(27.5).Ticks}&", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
+
+        // The re-recorded launch scope matches the stream actually issued.
+        Assert.Equal((long)TimeSpan.FromMinutes(27.5).TotalMilliseconds, _queueManager.GetActiveLaunchBase(deviceId, audioItem.Id.ToString()));
+        Assert.Equal(1500, _queueManager.GetActivePlaybackRate(deviceId, audioItem.Id.ToString()));
+    }
 }
+

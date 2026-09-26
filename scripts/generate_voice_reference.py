@@ -170,6 +170,7 @@ GROUPS = [
         ("GoToChapterIntent", "Go to a chapter", False),
         ("SkipForwardBackIntent", "Skip forward or back", False),
         ("JumpToPositionIntent", "Jump to a position", False),
+        ("SetPlaybackSpeedIntent", "Change the playback speed", False),
         ("FollowMeIntent", "Follow me (move playback here)", False),
         ("AMAZON.PauseIntent", "Pause", True),
         ("AMAZON.ResumeIntent", "Resume", True),
@@ -228,6 +229,7 @@ SLOT_HINTS = {
         "seek_amount": "number", "seek_direction": "forward or back",
         "seek_unit": "seconds or minutes", "position_hours": "hours",
         "position_minutes": "minutes", "position_seconds": "seconds",
+            "speed": "speed (normal, one and a half, double, faster)",
             "sleep_duration": "duration (5 minutes, 30 seconds, half an hour)"
     },
     "it": {
@@ -256,6 +258,7 @@ SLOT_HINTS = {
         "seek_amount": "quantità", "seek_direction": "avanti o indietro",
         "seek_unit": "secondi o minuti", "position_hours": "ore",
         "position_minutes": "minuti", "position_seconds": "secondi",
+            "speed": "velocità (normale, uno e mezzo, doppia, più veloce)",
             "sleep_duration": "durata (5 minuti, 30 secondi, mezz'ora)"
     },
     "de": {
@@ -284,6 +287,7 @@ SLOT_HINTS = {
         "seek_amount": "Anzahl", "seek_direction": "vor oder zurück",
         "seek_unit": "Sekunden oder Minuten", "position_hours": "Stunden",
         "position_minutes": "Minuten", "position_seconds": "Sekunden",
+            "speed": "Geschwindigkeit (normal, eineinhalb, doppelt, schneller)",
             "sleep_duration": "Dauer (5 Minuten, 30 Sekunden, eine halbe Stunde)"
     },
     "es": {
@@ -314,6 +318,7 @@ SLOT_HINTS = {
         "seek_amount": "cantidad", "seek_direction": "adelante o atrás",
         "seek_unit": "segundos o minutos", "position_hours": "horas",
         "position_minutes": "minutos", "position_seconds": "segundos",
+            "speed": "velocidad (normal, uno y medio, doble, más rápido)",
             "sleep_duration": "duración (5 minutos, 30 segundos, media hora)"
     },
     "fr": {
@@ -344,6 +349,7 @@ SLOT_HINTS = {
         "seek_amount": "quantité", "seek_direction": "en avant ou en arrière",
         "seek_unit": "secondes ou minutes", "position_hours": "heures",
         "position_minutes": "minutes", "position_seconds": "secondes",
+            "speed": "vitesse (normale, un et demi, double, plus vite)",
             "sleep_duration": "durée (5 minutes, 30 secondes, une demi-heure)"
     },
     "pt": {
@@ -372,6 +378,7 @@ SLOT_HINTS = {
         "seek_amount": "quantidade", "seek_direction": "avançar ou voltar",
         "seek_unit": "segundos ou minutos", "position_hours": "horas",
         "position_minutes": "minutos", "position_seconds": "segundos",
+            "speed": "velocidade (normal, um e meio, dupla, mais rápido)",
             "sleep_duration": "duração (5 minutos, 30 segundos, meia hora)"
     },
     "nl": {
@@ -402,6 +409,7 @@ SLOT_HINTS = {
         "seek_amount": "aantal", "seek_direction": "vooruit of terug",
         "seek_unit": "seconden of minuten", "position_hours": "uren",
         "position_minutes": "minuten", "position_seconds": "seconden",
+            "speed": "snelheid (normaal, anderhalf, dubbel, sneller)",
             "sleep_duration": "duur (5 minuten, 30 seconden, een half uur)"
     },
     "ja": {
@@ -425,6 +433,7 @@ SLOT_HINTS = {
         "seek_direction": "前または後ろ", "seek_unit": "秒または分",
         "position_hours": "時間", "position_minutes": "分",
         "position_seconds": "秒",
+            "speed": "速度（通常、1.5倍、2倍、速く）",
             "sleep_duration": "時間（5分、30秒、30分）"
     },
     "hi": {
@@ -452,6 +461,7 @@ SLOT_HINTS = {
         "seek_amount": "संख्या", "seek_direction": "आगे या पीछे",
         "seek_unit": "सेकंड या मिनट", "position_hours": "घंटे",
         "position_minutes": "मिनट", "position_seconds": "सेकंड",
+            "speed": "गति (सामान्य, डेढ़, दोगुनी, तेज़)",
             "sleep_duration": "अवधि (5 मिनट, 30 सेकंड, आधा घंटा)"
     },
     "ar": {
@@ -479,6 +489,7 @@ SLOT_HINTS = {
         "seek_amount": "عدد", "seek_direction": "للأمام أو للخلف",
         "seek_unit": "ثوانٍ أو دقائق", "position_hours": "ساعات",
         "position_minutes": "دقائق", "position_seconds": "ثوانٍ",
+            "speed": "السرعة (عادية، واحدة ونصف، مضاعفة، أسرع)",
             "sleep_duration": "المدة (5 دقائق، 30 ثانية، نصف ساعة)"
     },
 }

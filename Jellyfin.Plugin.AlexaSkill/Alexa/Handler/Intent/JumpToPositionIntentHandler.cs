@@ -110,8 +110,13 @@ public class JumpToPositionIntentHandler : BaseHandler
         // JF-507: shared codec-gated audio-launch decision. The jump target is
         // item-absolute, which is exactly the ?start= the transcoded shape wants; an
         // audio item keeps the raw static URL and the directive offset.
+        // JF-636: a seek during atempo listening continues at the stream's launch-scope
+        // rate (the target is CONTENT-absolute, so it mints straight into the speed
+        // URL's ?start=); without this the seek silently reverted the speed to 1x.
         string itemId = session.FullNowPlayingItem.Id.ToString();
-        AudioLaunchSource source = Launch.ResolveAudioLaunchSource(session.FullNowPlayingItem, itemId, user, offsetMs);
+        int launchRatePerMille = Launch.GetActivePlaybackRate(context.GetDeviceId(), itemId)
+            ?? Util.PlaybackSpeed.NormalPerMille;
+        AudioLaunchSource source = Launch.ResolveAudioLaunchSource(session.FullNowPlayingItem, itemId, user, offsetMs, ratePerMille: launchRatePerMille);
         var response = Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll,
             source,

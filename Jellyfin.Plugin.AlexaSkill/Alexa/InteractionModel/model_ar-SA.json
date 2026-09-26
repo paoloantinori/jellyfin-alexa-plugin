@@ -552,6 +552,20 @@
         ]
       },
       {
+        "name": "SetPlaybackSpeedIntent",
+        "slots": [
+          {
+            "name": "speed",
+            "type": "SpeedRate"
+          }
+        ],
+        "samples": [
+          "بسرعة {speed}",
+          "السرعة {speed}",
+          "اجعل السرعة {speed}"
+        ]
+      },
+      {
         "name": "BrowseLibraryIntent",
         "slots": [
           {
@@ -886,6 +900,69 @@
       }
     ],
     "types": [
+      {
+        "name": "SpeedRate",
+        "values": [
+          {
+            "name": {
+              "value": "ثلاثة أرباع"
+            },
+            "id": "750"
+          },
+          {
+            "name": {
+              "value": "سرعة عادية",
+              "synonyms": [
+                "عادية"
+              ]
+            },
+            "id": "1000"
+          },
+          {
+            "name": {
+              "value": "واحد وربع"
+            },
+            "id": "1250"
+          },
+          {
+            "name": {
+              "value": "سرعة واحدة ونصف",
+              "synonyms": [
+                "واحدة ونصف"
+              ]
+            },
+            "id": "1500"
+          },
+          {
+            "name": {
+              "value": "واحد وثلاثة أرباع"
+            },
+            "id": "1750"
+          },
+          {
+            "name": {
+              "value": "سرعة مضاعفة",
+              "synonyms": [
+                "الضعف",
+                "مضاعفة"
+              ]
+            },
+            "id": "2000"
+          },
+          {
+            "name": {
+              "value": "أسرع"
+            },
+            "id": "faster"
+          },
+          {
+            "name": {
+              "value": "أبطأ"
+            },
+            "id": "slower"
+          }
+        ]
+      },
       {
         "name": "Mood",
         "values": [
@@ -1426,6 +1503,18 @@
   },
   "dialog": {
     "intents": [
+      {
+        "name": "SetPlaybackSpeedIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "speed",
+            "type": "SpeedRate",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
       {
         "name": "RateItemIntent",
         "confirmationRequired": false,

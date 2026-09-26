@@ -215,6 +215,86 @@ public class PlayPodcastIntentHandlerTests : PluginTestBase
         response.HasDirective<AudioPlayerPlayDirective>();
     }
 
+    /// <summary>
+    /// JF-636: the standing podcast rate redirects the fresh play to the atempo
+    /// speed endpoint (no ?start=, from-zero encode); a null preference keeps the
+    /// plain codec-routed/static launch byte-identical to the pre-JF-636 path.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_StandingSpeedPreference_LaunchesTheSpeedEndpoint()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(podcastName: "Serial");
+        var context = CreateContext();
+        var user = CreateUser();
+        user.PodcastSpeedPerMille = 1500;
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var podcast = new MusicAlbum
+        {
+            Name = "Serial",
+            Id = Guid.NewGuid()
+        };
+
+        var episode = new Audio
+        {
+            Name = "Episode 1",
+            Id = Guid.NewGuid(),
+        };
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum))))
+            .Returns(new List<BaseItem> { podcast });
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))))
+            .Returns(new List<BaseItem> { episode });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        var directive = response.Response.Directives.OfType<AudioPlayerPlayDirective>().Single();
+        Assert.Contains($"/alexaskill/api/audio-speed/{episode.Id}/1500/stream.m3u8", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.DoesNotContain("start=", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
+    }
+
+    /// <summary>The null-preference twin: no speed endpoint in the launch URL.</summary>
+    [Fact]
+    public async Task HandleAsync_NoStandingSpeedPreference_KeepsThePlainLaunch()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(podcastName: "Serial");
+        var context = CreateContext();
+        var user = CreateUser();
+        user.PodcastSpeedPerMille = null;
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var podcast = new MusicAlbum
+        {
+            Name = "Serial",
+            Id = Guid.NewGuid()
+        };
+
+        var episode = new Audio
+        {
+            Name = "Episode 1",
+            Id = Guid.NewGuid(),
+        };
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum))))
+            .Returns(new List<BaseItem> { podcast });
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))))
+            .Returns(new List<BaseItem> { episode });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        var directive = response.Response.Directives.OfType<AudioPlayerPlayDirective>().Single();
+        Assert.DoesNotContain("audio-speed", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task HandleAsync_MultipleEpisodes_PicksMostRecent()
     {

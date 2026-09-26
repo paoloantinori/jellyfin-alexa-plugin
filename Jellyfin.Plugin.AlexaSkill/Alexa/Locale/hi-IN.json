@@ -290,5 +290,15 @@
   "PlaylistAlreadyExists": "{0} नाम की प्लेलिस्ट पहले से मौजूद है।",
   "PlaylistCreateFailed": "प्लेलिस्ट नहीं बना पाया। सुनिश्चित करें कि आपकी Jellyfin लाइब्रेरी में प्लेलिस्ट फ़ोल्डर हो।",
   "FollowMeSuccessResume": "{0} को इसी डिवाइस पर वहीं से जारी रखता हूँ जहाँ आप छोड़े थे।",
-  "FollowMeSuccessResumeSsml": "<say-as interpret-as=\"interjection\">समझ गया</say-as><break time=\"200ms\"/>{0} को इसी डिवाइस पर वहीं से जारी रखता हूँ जहाँ आप छोड़े थे।"
+  "FollowMeSuccessResumeSsml": "<say-as interpret-as=\"interjection\">समझ गया</say-as><break time=\"200ms\"/>{0} को इसी डिवाइस पर वहीं से जारी रखता हूँ जहाँ आप छोड़े थे।",
+  "DidNotCatchSpeed": "किस गति पर? कहें जैसे: तेज़, या: एक और आधी गति पर।",
+  "PlaybackSpeedSet": "गति {0}।",
+  "SpeedName750": "तीन चौथाई",
+  "SpeedName1000": "सामान्य",
+  "SpeedName1250": "एक और एक चौथाई",
+  "SpeedName1500": "डेढ़",
+  "SpeedName1750": "एक और तीन चौथाई",
+  "SpeedName2000": "दोगुनी",
+  "CannotChangeSpeedOverVideo": "क्षमा करें, वीडियो या प्रगति पट्टी वाले दृश्य के चलने के दौरान मैं गति नहीं बदल सकता।",
+  "CannotChangeSpeedForBook": "क्षमा करें, मैं ऑडियोबुक की गति नहीं बदल सकता।"
 }

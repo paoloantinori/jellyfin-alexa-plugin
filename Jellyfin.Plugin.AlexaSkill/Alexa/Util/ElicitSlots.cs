@@ -38,6 +38,7 @@ public static class ElicitSlots
         [IntentNames.QueryArtistLibrary] = new[] { IntentNames.Slots.Musician, "query_type" },
         [IntentNames.RateItem] = new[] { IntentNames.Slots.StarRating },
         [IntentNames.SetReminder] = new[] { "reminder_duration", "reminder_time" },
+        [IntentNames.SetPlaybackSpeed] = new[] { IntentNames.Slots.Speed },
         [IntentNames.ShufflePlay] = new[] { IntentNames.Slots.Playlist },
         [IntentNames.SleepTimer] = new[] { "sleep_duration" },
     };

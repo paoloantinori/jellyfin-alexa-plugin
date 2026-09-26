@@ -683,6 +683,22 @@
         ]
       },
       {
+        "name": "SetPlaybackSpeedIntent",
+        "slots": [
+          {
+            "name": "speed",
+            "type": "SpeedRate"
+          }
+        ],
+        "samples": [
+          "a velocidad {speed}",
+          "velocidad {speed}",
+          "pon la velocidad en {speed}",
+          "reproduce a velocidad {speed}",
+          "pon {speed}"
+        ]
+      },
+      {
         "name": "SearchMediaIntent",
         "slots": [
           {
@@ -996,6 +1012,98 @@
       }
     ],
     "types": [
+      {
+        "name": "SpeedRate",
+        "values": [
+          {
+            "name": {
+              "value": "tres cuartos",
+              "synonyms": [
+                "0,75",
+                "0.75"
+              ]
+            },
+            "id": "750"
+          },
+          {
+            "name": {
+              "value": "velocidad normal",
+              "synonyms": [
+                "normal",
+                "velocidad uno",
+                "uno",
+                "1",
+                "1,0"
+              ]
+            },
+            "id": "1000"
+          },
+          {
+            "name": {
+              "value": "uno y cuarto",
+              "synonyms": [
+                "1,25",
+                "1.25",
+                "una y cuarto"
+              ]
+            },
+            "id": "1250"
+          },
+          {
+            "name": {
+              "value": "uno y medio",
+              "synonyms": [
+                "una y media",
+                "1,5",
+                "1.5"
+              ]
+            },
+            "id": "1500"
+          },
+          {
+            "name": {
+              "value": "uno y tres cuartos",
+              "synonyms": [
+                "1,75",
+                "1.75",
+                "una y tres cuartos"
+              ]
+            },
+            "id": "1750"
+          },
+          {
+            "name": {
+              "value": "velocidad doble",
+              "synonyms": [
+                "doble",
+                "el doble",
+                "dos",
+                "2"
+              ]
+            },
+            "id": "2000"
+          },
+          {
+            "name": {
+              "value": "más rápido",
+              "synonyms": [
+                "acelera"
+              ]
+            },
+            "id": "faster"
+          },
+          {
+            "name": {
+              "value": "más lento",
+              "synonyms": [
+                "más despacio",
+                "ralentiza"
+              ]
+            },
+            "id": "slower"
+          }
+        ]
+      },
       {
         "name": "Mood",
         "values": [
@@ -1556,6 +1664,18 @@
   },
   "dialog": {
     "intents": [
+      {
+        "name": "SetPlaybackSpeedIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "speed",
+            "type": "SpeedRate",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
       {
         "name": "RateItemIntent",
         "confirmationRequired": false,

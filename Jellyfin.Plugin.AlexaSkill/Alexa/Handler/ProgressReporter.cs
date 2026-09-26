@@ -104,27 +104,41 @@ public sealed class ProgressReporter
     /// <param name="launchBaseMs">The stream's ACTIVE launch base in milliseconds (0 when none).</param>
     /// <param name="runtimeTicks">The item's runtime in ticks when known, else null (guard skipped).</param>
     /// <param name="logLabel">Caller identity for the composition/guard log lines.</param>
+    /// <param name="ratePerMille">The stream's playback rate in per-mille form (JF-636: 1000
+    /// = identity; an atempo stream's raw offset counts the RATE-ADJUSTED output
+    /// timeline, so it scales by the rate BEFORE the base composes:
+    /// content = base + raw x R).</param>
     /// <returns>The item-absolute position in ticks.</returns>
-    public long ComposeItemAbsolutePosition(long rawTicks, long launchBaseMs, long? runtimeTicks = null, string logLabel = "PlaybackEvent")
+    public long ComposeItemAbsolutePosition(long rawTicks, long launchBaseMs, long? runtimeTicks = null, string logLabel = "PlaybackEvent", int ratePerMille = Util.PlaybackSpeed.NormalPerMille)
     {
+        // JF-636: scale BEFORE the base early-returns, so a from-zero atempo
+        // launch (base 0, rate != 1000) still converts its offsets; rate 1000
+        // is the identity and keeps the pre-JF-636 arithmetic byte-identical.
+        long contentTicks = Util.PlaybackSpeed.StreamTicksToContent(rawTicks, ratePerMille);
         if (launchBaseMs <= 0)
         {
-            return rawTicks;
+            return contentTicks;
         }
 
         long baseTicks = launchBaseMs * TimeSpan.TicksPerMillisecond;
-        long composed = rawTicks + baseTicks;
+        long composed = contentTicks + baseTicks;
         if (runtimeTicks is > 0 && composed > runtimeTicks.Value)
         {
             _logger.LogInformation(
-                "{Label}: composed item-absolute position of {ComposedTicks} ticks (launch base {BaseMs}ms + raw {RawTicks} ticks) passes the item runtime ({RuntimeTicks} ticks); a legitimate composition cannot, so a stale launch scope is in play; persisting the raw offset as the more conservative truth",
-                logLabel, composed, launchBaseMs, rawTicks, runtimeTicks.Value);
-            return rawTicks;
+                "{Label}: composed item-absolute position of {ComposedTicks} ticks (launch base {BaseMs}ms + rate-adjusted {ContentTicks} ticks (raw {RawTicks} at {RatePerMille}/1000)) passes the item runtime ({RuntimeTicks} ticks); a legitimate composition cannot, so a stale launch scope is in play; persisting the rate-adjusted offset WITHOUT the base as the more conservative truth",
+                logLabel, composed, launchBaseMs, contentTicks, rawTicks, ratePerMille, runtimeTicks.Value);
+
+            // JF-636 review: drop the BASE, keep the rate scaling. The unscaled raw
+            // offset is not in content units on an atempo stream, and below 1x it is
+            // LARGER than the composition being guarded (raw = scaled / 0.75), so
+            // returning it could persist a past-runtime position - the exact anomaly
+            // this guard exists to suppress.
+            return contentTicks;
         }
 
         _logger.LogDebug(
-            "{Label}: persisting item-absolute position {ComposedTicks} ticks (launch base {BaseMs}ms + raw {RawTicks} ticks)",
-            logLabel, composed, launchBaseMs, rawTicks);
+            "{Label}: persisting item-absolute position {ComposedTicks} ticks (launch base {BaseMs}ms + rate-adjusted {ContentTicks} ticks (raw {RawTicks} at {RatePerMille}/1000))",
+            logLabel, composed, launchBaseMs, contentTicks, rawTicks, ratePerMille);
         return composed;
     }
 
@@ -154,12 +168,23 @@ public sealed class ProgressReporter
         DeviceQueueManager? queueManager = null,
         ILibraryManager? libraryManager = null)
     {
-        long launchBaseMs = itemId != Guid.Empty
-            ? _launch.GetActiveLaunchBaseMs(deviceId, itemId.ToString(), queueManager) ?? 0
-            : 0;
+        // JF-636: the base and rate halves of the launch scope are read as ONE
+        // snapshot (a concurrent RecordLaunchBase must not pair base1 with rate2).
+        // The runtime guard follows the base's gate (advisory bound; a rate
+        // without a base is a from-zero atempo launch, and the pre-JF-636 "guard
+        // only when a base exists" policy keeps null-base writes unguarded).
+        long launchBaseMs = 0;
+        int ratePerMille = Util.PlaybackSpeed.NormalPerMille;
+        if (itemId != Guid.Empty)
+        {
+            (long? scopeBaseMs, int? scopeRate) = _launch.GetActiveLaunchScope(deviceId, itemId.ToString(), queueManager);
+            launchBaseMs = scopeBaseMs ?? 0;
+            ratePerMille = scopeRate ?? Util.PlaybackSpeed.NormalPerMille;
+        }
+
         long? runtimeTicks = launchBaseMs > 0 ? TryGetRuntimeTicksForGuard(libraryManager, itemId) : null;
         return ComposeItemAbsolutePosition(
-            TimeSpan.FromMilliseconds(rawOffsetMs).Ticks, launchBaseMs, runtimeTicks, logLabel);
+            TimeSpan.FromMilliseconds(rawOffsetMs).Ticks, launchBaseMs, runtimeTicks, logLabel, ratePerMille);
     }
 
     /// <summary>

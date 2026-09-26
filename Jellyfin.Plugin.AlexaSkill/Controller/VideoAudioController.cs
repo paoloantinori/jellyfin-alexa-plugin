@@ -64,6 +64,24 @@ public class VideoAudioController : ControllerBase
     private static readonly ConcurrentDictionary<string, bool> _activeAudiobookEncodes = new();
 
     /// <summary>
+    /// JF-636: live ffmpeg processes of the audio-speed variant, keyed by its
+    /// cache key, with the Alexa device id whose launch minted them (the
+    /// <c>?d=</c> hint BuildAudioPlayerResponse appends to speed URLs). A speed
+    /// change re-launches the item at a NEW (rate, start) key while the previous
+    /// variant's encode is still running; the launching Echo stops fetching its
+    /// segments but nothing else would stop it, and an audio-only encode at ~49x
+    /// realtime holds its encode-gate slot for up to minutes (three quick "faster"
+    /// asks starve the gate the third stream start waits on). A new speed encode
+    /// therefore kills the OTHER speed encodes of the same item minted by the SAME
+    /// device (the review finding: tokens are item-scoped and queues per-device,
+    /// so another Echo may be actively consuming a different variant of the same
+    /// item; an ownerless entry is never killed - conservative). Entries are
+    /// removed by an exit watcher when the process ends, so the registry only ever
+    /// names live encodes.
+    /// </summary>
+    private static readonly ConcurrentDictionary<string, (Process Process, string? OwnerDeviceId)> _activeAudioSpeedEncodeProcesses = new();
+
+    /// <summary>
     /// Compiled regex for extracting trailing chapter number from audiobook filenames
     /// (e.g. "The Upside of Irrationality 065.mp3" → 65).
     /// </summary>
@@ -1470,6 +1488,393 @@ public class VideoAudioController : ControllerBase
         }
 
         string cacheKey = EpisodeAudioCacheKey(itemId, startTicks);
+        string? segmentPath = _cache.FindSegmentPath(cacheKey, segmentName);
+        if (segmentPath == null)
+        {
+            segmentPath = await TryHoldForNearAheadSegmentAsync(cacheKey, segmentName, HttpContext.RequestAborted).ConfigureAwait(false);
+            if (segmentPath == null)
+            {
+                return NotFound(new { error = "Segment not found" });
+            }
+        }
+
+#pragma warning disable CA3003 // segmentPath validated via GUID itemId + strict segment name pattern upstream
+        return PhysicalFile(segmentPath, "video/mp2t", enableRangeProcessing: true);
+#pragma warning restore CA3003
+    }
+
+    /// <summary>
+    /// Cache key of the PLAYBACK-SPEED atempo variant (JF-636): deliberately
+    /// distinct from every other variant of the same item (the bare itemId the
+    /// video remux keys on, the <see cref="EpisodeAudioCacheKey"/> audio-only
+    /// twin), and distinct per rate AND start position (each (rate, start)
+    /// pair serves a different timeline). The art component is deliberately
+    /// NOT part of the key: the encode renders no art, so an art change never
+    /// invalidates a speed encode.
+    /// </summary>
+    /// <param name="itemId">GUID-validated item ID.</param>
+    /// <param name="ratePerMille">Playback rate in per-mille form (750..2000).</param>
+    /// <param name="startTicks">The encode's CONTENT start position (0 = from the beginning).</param>
+    /// <returns>The variant cache key string.</returns>
+    internal static string AudioSpeedCacheKey(string itemId, int ratePerMille, long startTicks)
+    {
+        string tail = startTicks > 0 ? $"-{startTicks}" : string.Empty;
+        return $"{itemId}-speed-{ratePerMille}{tail}";
+    }
+
+    /// <summary>
+    /// Stream a PLAYBACK-SPEED atempo HLS transcode of an item's audio (JF-636):
+    /// the first audio stream alone (<c>-map 0:a:0</c>) time-stretched by
+    /// <c>ffmpeg -af atempo</c> (pitch-preserving; 0.5-2.0 per instance, so every
+    /// served 0.75x..2.0x step needs exactly one). Custom skills have no native
+    /// rate control (the MSAPI-only platform limit), so speed changes re-launch
+    /// the item at this endpoint on the AudioPlayer path. The optional
+    /// <c>?start=&lt;ticks&gt;</c> is CONTENT-relative: it input-seeks the source
+    /// (<c>-ss</c> before <c>-i</c>) and the atempo filter runs over the
+    /// remainder, so the served output timeline starts at position 0 and the
+    /// paired AudioPlayer.Play directive offset must be 0 (the JF-507 shape; the
+    /// launch-side content position rides the launch base instead).
+    /// Mirrors <see cref="StreamHlsEpisodeAudioCore"/>: per-key cache dir,
+    /// per-key lock, first-segment wait, partial playlist, background monitor,
+    /// encode gate. Rate 1000 is accepted and encodes transparently (atempo at
+    /// identity): the launch side never mints it (rate 1000 launches keep the
+    /// static/codec-routed URL), but the endpoint must not 404 a URL its own
+    /// table calls valid.
+    /// </summary>
+    /// <param name="itemId">The Jellyfin item ID (GUID-validated, token-scoped).</param>
+    /// <param name="ratePerMille">Playback rate in per-mille form; must be one of the six served steps.</param>
+    /// <param name="startTicks">Optional CONTENT resume position in .NET ticks (0 to play from the start).</param>
+    /// <returns>An HLS playlist (.m3u8) file.</returns>
+    [HttpGet("~/alexaskill/api/audio-speed/{itemId}/{ratePerMille:int}/stream.m3u8")]
+    [AllowAnonymous]
+    public async Task<ActionResult> StreamHlsAudioSpeed(
+        [FromRoute] string itemId,
+        [FromRoute] int ratePerMille,
+        [FromQuery(Name = "start")] long? startTicks = null)
+    {
+        if (Guid.TryParse(itemId, out _))
+        {
+            ActionResult? tokenError = ValidateStreamToken(itemId);
+            if (tokenError != null)
+            {
+                return tokenError;
+            }
+        }
+
+        return await StreamHlsAudioSpeedCore(itemId, ratePerMille, startTicks ?? 0).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Build and serve the atempo speed playlist: the same cache/lock/gate/monitor
+    /// machinery as the audio-only episode variant, with the atempo arguments and
+    /// the (rate, start)-keyed variant cache key.
+    /// </summary>
+    /// <param name="itemId">GUID-validated item ID.</param>
+    /// <param name="ratePerMille">Playback rate in per-mille form (validated against the served steps).</param>
+    /// <param name="startTicks">CONTENT encode start position in ticks (0 = from the beginning).</param>
+    /// <returns>The playlist, or an error result.</returns>
+    private async Task<ActionResult> StreamHlsAudioSpeedCore(string itemId, int ratePerMille, long startTicks)
+    {
+        if (!Alexa.Util.PlaybackSpeed.IsValidPerMille(ratePerMille))
+        {
+            _logger.LogWarning("AudioSpeed HLS: rejected unserved rate {RatePerMille}/1000 for item {ItemId}", ratePerMille, itemId);
+            return BadRequest(new { error = "Unsupported playback rate" });
+        }
+
+        var validation = ValidateVideoAudioRequest(itemId);
+        if (validation.Error != null)
+        {
+            return validation.Error;
+        }
+
+        if (startTicks < 0)
+        {
+            startTicks = 0;
+        }
+
+        long artModifiedTicks = 0; // art-irrelevant: the encode renders no art (JF-636)
+        string cacheKey = AudioSpeedCacheKey(itemId, ratePerMille, startTicks);
+
+        // Same cache-validity rule as the siblings: completed (ENDLIST) or actively encoding.
+        FileInfo? cached = await _cache.GetCachedHlsPlaylist(cacheKey, artModifiedTicks).ConfigureAwait(false);
+        if (cached != null)
+        {
+            ActionResult? fastServed = await TryServeValidatedEpisodeCacheAsync(
+                cached,
+                cacheKey,
+                "VideoAudio audio-speed HLS",
+                () =>
+                {
+                    _logger.LogDebug("VideoAudio audio-speed HLS: serving cached playlist for item {ItemId} (rate={RatePerMille}/1000, start={StartTicks})", itemId, ratePerMille, startTicks);
+#pragma warning disable CA3003 // path derived from GUID-validated itemId
+                    return ServePlaylistWithToken(cached.FullName);
+#pragma warning restore CA3003
+                }).ConfigureAwait(false);
+            if (fastServed != null)
+            {
+                return fastServed;
+            }
+        }
+
+        using (await _cache.LockItemAsync(cacheKey, artModifiedTicks).ConfigureAwait(false))
+        {
+            _cache.CleanupHlsStub(cacheKey, artModifiedTicks);
+
+            cached = await _cache.GetCachedHlsPlaylist(cacheKey, artModifiedTicks).ConfigureAwait(false);
+            if (cached != null)
+            {
+                cached = await ValidateEpisodeCacheAsync(cached, cacheKey).ConfigureAwait(false);
+                if (cached != null)
+                {
+                    _logger.LogDebug("VideoAudio audio-speed HLS: serving playlist generated by concurrent request for item {ItemId} (rate={RatePerMille}/1000, start={StartTicks})", itemId, ratePerMille, startTicks);
+#pragma warning disable CA3003
+                    return ServePlaylistWithToken(cached.FullName);
+#pragma warning restore CA3003
+                }
+            }
+
+            _logger.LogDebug(
+                "VideoAudio audio-speed HLS: itemId={ItemId}, rate={RatePerMille}/1000, startTicks={StartTicks}",
+                itemId, ratePerMille, startTicks);
+
+#pragma warning disable CA3003 // paths derived from GUID-validated itemId
+            string hlsDir = _cache.GetHlsDirectoryPath(cacheKey, artModifiedTicks);
+            Directory.CreateDirectory(hlsDir);
+
+            string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
+            // 10-second segments (the audio-rate value shared with the audio-only
+            // episode variant; %04d caps at 9999 = ~27h of output).
+            string segmentPath = Path.Combine(hlsDir, "seg_%04d.ts");
+            // Segment URLs point at the dedicated speed-segments route: it embeds the
+            // rate and start position (the directory key) in the path, never touching
+            // the generic or episode segments routes.
+            string hlsBaseUrl = $"/alexaskill/api/audio-speed/{itemId}/{ratePerMille}/segments/{startTicks}/";
+
+            // The atempo filter decodes whatever container the item lives in (an
+            // Audio item's MP3/FLAC or a series-shape Episode's MKV audio track), so
+            // the source URL follows the item's own kind: audio items via /Audio,
+            // video items via /Videos.
+            bool videoKind = validation.Item is MediaBrowser.Controller.Entities.Movies.Movie
+                or MediaBrowser.Controller.Entities.TV.Episode;
+            string sourceUrl = videoKind
+                ? $"{validation.ServerUrl}/Videos/{itemId}/stream?static=true"
+                : $"{validation.ServerUrl}/Audio/{itemId}/stream?static=true";
+
+            var ffmpegArgs = BuildAudioSpeedHlsFfmpegArguments(sourceUrl, startTicks, ratePerMille, playlistPath, segmentPath, hlsBaseUrl);
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug("VideoAudio audio-speed HLS: ffmpeg arguments: {Args}", string.Join(" ", ffmpegArgs));
+            }
+
+            // Per-file debris cleanup so ffmpeg always starts over a clean target (the
+            // JF-498 review I1 concern, same as every sibling path).
+            _cache.DeleteHlsEncodeDebris(cacheKey, artModifiedTicks);
+
+            // JF-636: supersede this DEVICE's other speed encodes of this item (see
+            // _activeAudioSpeedEncodeProcesses). Runs INSIDE the per-key lock, after
+            // the cache fast paths: a variant that had a valid cache entry returned
+            // already, so anything still running here is abandoned by this launch.
+            KillSupersededSpeedEncodes(itemId, cacheKey, HttpContext.Request.Query["d"]);
+
+            // Same scope-(c) decision as the audio-only episode variant (JF-536): NO
+            // pre-written full listing. This path is consumed by AudioPlayer on
+            // screenless devices, where custom skills get no seek bar or progress UI,
+            // so the prewrite's live-edge exposure has no surface here.
+            _activeEpisodeEncodes.TryAdd(cacheKey, true);
+
+            Process ffmpegProcess;
+            try
+            {
+                // JF-636 review: the budget must estimate the OUTPUT, not the content:
+                // atempo stretches (0.75x writes 1.33x the content duration of AAC) and
+                // compresses (2x writes half), so the flat content-runtime estimate is
+                // scaled by the inverse rate.
+                ffmpegProcess = await StartFfmpegProcessGatedAsync(
+                    validation.FfmpegPath,
+                    ffmpegArgs,
+                    EstimateEpisodeAudioEncodeBytes(validation.Item.RunTimeTicks ?? 0) * 1000L / ratePerMille,
+                    hlsDir).ConfigureAwait(false);
+            }
+            catch
+            {
+                _activeEpisodeEncodes.TryRemove(cacheKey, out _);
+                throw;
+            }
+
+            try
+            {
+                // atempo + AAC encodes well above realtime (audio-only pipeline), so
+                // the first 10s segment lands quickly; the ceiling guards
+                // pathological cases only.
+                string firstSegmentPath = Path.Combine(hlsDir, "seg_0000.ts");
+                bool segmentAppeared = false;
+                for (int i = 0; i < 200; i++)
+                {
+                    if (System.IO.File.Exists(firstSegmentPath) && System.IO.File.Exists(playlistPath))
+                    {
+                        segmentAppeared = true;
+                        break;
+                    }
+
+                    if (ffmpegProcess.HasExited)
+                    {
+                        break;
+                    }
+
+                    await Task.Delay(100).ConfigureAwait(false);
+                }
+
+                if (!segmentAppeared)
+                {
+                    _logger.LogWarning("VideoAudio audio-speed HLS: ffmpeg failed to create first segment for item {ItemId} (rate={RatePerMille}/1000, exit code {ExitCode})", itemId, ratePerMille, SafeExitCode(ffmpegProcess));
+                    try { ffmpegProcess.Kill(); } catch { /* already exited */ }
+                    ffmpegProcess.Dispose();
+                    _activeEpisodeEncodes.TryRemove(cacheKey, out _);
+                    return StatusCode(500, new { error = "Audio speed HLS generation failed" });
+                }
+
+                _cache.RegisterHlsDirectory(cacheKey, artModifiedTicks);
+
+                // Registered only once the encode is provably live (the wait above
+                // succeeded); the failure paths above never enter the registry, so a
+                // registry entry always names a running encode to supersede later.
+                // The exit watcher keeps the registry to live encodes only (the
+                // monitor owns the process disposal and knows nothing of it).
+                string? ownerDeviceId = HttpContext.Request.Query["d"];
+                _activeAudioSpeedEncodeProcesses[cacheKey] = (ffmpegProcess, ownerDeviceId);
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        while (!ffmpegProcess.HasExited)
+                        {
+                            await Task.Delay(1000, CancellationToken.None).ConfigureAwait(false);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug(ex, "VideoAudio audio-speed HLS: exit watcher raced the disposal of {CacheKey}", cacheKey);
+                    }
+
+                    _activeAudioSpeedEncodeProcesses.TryRemove(cacheKey, out _);
+                });
+            }
+            catch
+            {
+                // Pre-handoff failure: this scope still owns the process.
+                try { ffmpegProcess.Kill(); } catch { /* already exited */ }
+                ffmpegProcess.Dispose();
+                _activeEpisodeEncodes.TryRemove(cacheKey, out _);
+                throw;
+            }
+
+            // CA2025: monitor started via the boundary helper AFTER the disposing scope
+            // above closed; the monitor's finally owns the flag clear and the disposal.
+            StartHlsMonitor(ffmpegProcess, hlsDir, cacheKey, artModifiedTicks, "AudioSpeed", _activeEpisodeEncodes);
+
+            _logger.LogDebug("VideoAudio audio-speed HLS: serving partial playlist for item {ItemId} (rate={RatePerMille}/1000, start={StartTicks})", itemId, ratePerMille, startTicks);
+            return ServePlaylistWithToken(playlistPath);
+#pragma warning restore CA3003
+        }
+    }
+
+    /// <summary>
+    /// JF-636: kill the RUNNING speed encodes of <paramref name="itemId"/> that the
+    /// SAME device minted, other than <paramref name="activeCacheKey"/> (the launch
+    /// this request is about to start supersedes them; see
+    /// <see cref="_activeAudioSpeedEncodeProcesses"/>). Device-scoped by the
+    /// <c>?d=</c> hint: another Echo may be actively consuming a different variant
+    /// of the same item (tokens are item-scoped, queues per-device), and an entry
+    /// without owner evidence is never killed (conservative). The killed encodes'
+    /// own finally paths (gate release, unpin, flag clear, the monitor's disposal)
+    /// react to the exit.
+    /// </summary>
+    /// <param name="itemId">GUID-validated item ID whose variants to supersede.</param>
+    /// <param name="activeCacheKey">The cache key about to run; never killed.</param>
+    /// <param name="requestingDeviceId">The <c>?d=</c> device hint of THIS launch; null disables the kill entirely.</param>
+    private void KillSupersededSpeedEncodes(string itemId, string activeCacheKey, string? requestingDeviceId)
+    {
+        if (string.IsNullOrEmpty(requestingDeviceId))
+        {
+            return;
+        }
+
+        string prefix = $"{itemId}-speed-";
+        foreach (var entry in _activeAudioSpeedEncodeProcesses)
+        {
+            if (!entry.Key.StartsWith(prefix, StringComparison.Ordinal)
+                || entry.Key == activeCacheKey
+                || string.IsNullOrEmpty(entry.Value.OwnerDeviceId)
+                || !string.Equals(entry.Value.OwnerDeviceId, requestingDeviceId, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            _activeAudioSpeedEncodeProcesses.TryRemove(entry.Key, out _);
+            try
+            {
+                if (!entry.Value.Process.HasExited)
+                {
+                    _logger.LogInformation(
+                        "VideoAudio audio-speed HLS: killing superseded speed encode {CacheKey} for item {ItemId} (device {DeviceId} launched a new rate/start)",
+                        entry.Key, itemId, requestingDeviceId);
+                    entry.Value.Process.Kill();
+                }
+            }
+            catch (Exception ex)
+            {
+                // Already exited/disposed between the check and the kill, or an
+                // ESRCH-class kill failure: the encode finishes on its own and the
+                // registry entry is gone either way.
+                _logger.LogDebug(ex, "VideoAudio audio-speed HLS: supersede kill raced the exit of {CacheKey}", entry.Key);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Serve an individual HLS segment of the atempo speed variant (JF-636). A
+    /// dedicated route because the cache directory is keyed by the variant key,
+    /// which embeds the rate and start position: the path carries both so the
+    /// key can be recomputed. Mirrors <see cref="GetEpisodeAudioSegment"/>
+    /// (token validation, segment-name validation, hold-for-near-ahead-segment
+    /// of a running encode).
+    /// </summary>
+    /// <param name="itemId">The Jellyfin item ID (GUID-validated, token-scoped).</param>
+    /// <param name="ratePerMille">The playback rate carried in the playlist's segment URLs.</param>
+    /// <param name="startTicks">The encode start position carried in the playlist's segment URLs.</param>
+    /// <param name="segmentName">The segment file name (e.g. "seg_0000.ts").</param>
+    /// <returns>The segment file.</returns>
+    [HttpGet("~/alexaskill/api/audio-speed/{itemId}/{ratePerMille:int}/segments/{startTicks:long}/{segmentName}")]
+    [AllowAnonymous]
+    public async Task<ActionResult> GetAudioSpeedSegment(
+        [FromRoute] string itemId,
+        [FromRoute] int ratePerMille,
+        [FromRoute] long startTicks,
+        [FromRoute] string segmentName)
+    {
+        if (string.IsNullOrWhiteSpace(itemId) || !Guid.TryParse(itemId, out _))
+        {
+            return BadRequest(new { error = "Invalid itemId format" });
+        }
+
+        if (!Alexa.Util.PlaybackSpeed.IsValidPerMille(ratePerMille))
+        {
+            return BadRequest(new { error = "Unsupported playback rate" });
+        }
+
+        ActionResult? tokenError = ValidateStreamToken(itemId);
+        if (tokenError != null)
+        {
+            return tokenError;
+        }
+
+        if (!VideoAudioCache.IsValidSegmentName(segmentName))
+        {
+            _logger.LogWarning("VideoAudio audio-speed HLS: rejected invalid segment name '{SegmentName}' for item {ItemId}", segmentName, itemId);
+            return BadRequest(new { error = "Invalid segment name" });
+        }
+
+        string cacheKey = AudioSpeedCacheKey(itemId, ratePerMille, startTicks);
         string? segmentPath = _cache.FindSegmentPath(cacheKey, segmentName);
         if (segmentPath == null)
         {
@@ -3371,26 +3776,7 @@ public class VideoAudioController : ControllerBase
         // as the remux; the stereo downmix matters for the 5.1 EAC3 family).
         args.AddRange(BuildEpisodeAudioCodecArgs(sourceAudioCodec));
 
-        // 10-second segments: the audio-rate value (a 45min episode is ~270 segments;
-        // %04d caps at 9999 = ~27h). append_list keeps written segments listed while
-        // the playlist grows (the event-playlist shape the Echo family tolerates).
-        args.Add("-hls_time");
-        args.Add("10");
-        args.Add("-hls_list_size");
-        args.Add("0");
-        args.Add("-hls_flags");
-        args.Add("append_list");
-        args.Add("-hls_segment_type");
-        args.Add("mpegts");
-
-        args.Add("-hls_segment_filename");
-        args.Add(segmentPath);
-
-        args.Add("-hls_base_url");
-        args.Add(hlsBaseUrl);
-
-        // No -shortest: one finite input, one mapped stream.
-        args.Add(playlistPath);
+        AppendEventAudioHlsTail(args, playlistPath, segmentPath, hlsBaseUrl);
 
         return args;
     }
@@ -3417,6 +3803,101 @@ public class VideoAudioController : ControllerBase
     /// <returns>Estimated bytes the encode writes.</returns>
     internal static long EstimateEpisodeAudioEncodeBytes(long runtimeTicks)
         => FlatHourlyEncodeBytes(runtimeTicks, 96L * 1024 * 1024);
+
+    /// <summary>
+    /// Build ffmpeg argument list for the PLAYBACK-SPEED atempo HLS variant
+    /// (JF-636): the item's first audio stream ALONE mapped into MPEG-TS
+    /// (<c>-map 0:a:0</c>, no video track), time-stretched by
+    /// <c>-af atempo=&lt;rate&gt;</c> (pitch-preserving; the 0.75..2.0 steps all
+    /// fit one filter instance, range 0.5-2.0) and re-encoded to AAC 192k stereo
+    /// (<c>atempo</c> is a filter, so stream copy is impossible regardless of the
+    /// source codec; the AAC target matches
+    /// <see cref="EpisodeAudioCodecArgs"/>). Optional <paramref name="startTicks"/>
+    /// is a CONTENT-relative input seek (<c>-ss</c> BEFORE <c>-i</c>, the JF-507
+    /// shape): the output timeline starts at position 0 for that content
+    /// position. 10-second segments, event-style growth (append_list), no
+    /// -shortest.
+    /// </summary>
+    /// <param name="sourceUrl">Static stream URL of the source item (ffmpeg input; its first audio stream is what gets stretched).</param>
+    /// <param name="startTicks">CONTENT start position in .NET ticks (0 to encode from the beginning).</param>
+    /// <param name="ratePerMille">Playback rate in per-mille form (atempo = perMille/1000).</param>
+    /// <param name="playlistPath">Output playlist file path.</param>
+    /// <param name="segmentPath">Segment filename template (e.g. "seg_%04d.ts").</param>
+    /// <param name="hlsBaseUrl">Base URL prefix for segment references in the playlist.</param>
+    /// <returns>List of ffmpeg arguments (one token per entry).</returns>
+    internal static List<string> BuildAudioSpeedHlsFfmpegArguments(
+        string sourceUrl,
+        long startTicks,
+        int ratePerMille,
+        string playlistPath,
+        string segmentPath,
+        string hlsBaseUrl)
+    {
+        var args = new List<string>();
+
+        // Input seek BEFORE -i: starts reading at the CONTENT position. The output
+        // timeline starts at 0 for it, so the paired AudioPlayer.Play directive
+        // carries offset 0 and the launch base records the content position.
+        if (startTicks > 0)
+        {
+            args.Add("-ss");
+            args.Add(FormatSecondsInvariant(startTicks));
+        }
+
+        args.Add("-i");
+        args.Add(sourceUrl);
+
+        // Audio ONLY: no video mapping (the AudioPlayer surface has no video).
+        args.Add("-map");
+        args.Add("0:a:0");
+
+        // atempo, then AAC 192k stereo: a filter forbids stream copy, so the copy
+        // branch of the sibling audio paths does not exist here.
+        args.Add("-af");
+        args.Add($"atempo={(ratePerMille / 1000.0).ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)}");
+        args.AddRange(EpisodeAudioCodecArgs);
+
+        AppendEventAudioHlsTail(args, playlistPath, segmentPath, hlsBaseUrl);
+
+        return args;
+    }
+
+    /// <summary>
+    /// The SHARED HLS tail of the audio-rate event variants (the JF-507
+    /// audio-only episode encode and the JF-636 atempo speed encode, which differ
+    /// only in their seek/codec heads): 10-second MPEG-TS segments with
+    /// append_list event growth, the segment filename template, the segment base
+    /// URL, and the playlist as the positional output. One definition so a
+    /// segment-duration or flag change lands once for both variants.
+    /// </summary>
+    /// <param name="args">The argument list under construction.</param>
+    /// <param name="playlistPath">Output playlist file path.</param>
+    /// <param name="segmentPath">Segment filename template (e.g. "seg_%04d.ts").</param>
+    /// <param name="hlsBaseUrl">Base URL prefix for segment references in the playlist.</param>
+    private static void AppendEventAudioHlsTail(List<string> args, string playlistPath, string segmentPath, string hlsBaseUrl)
+    {
+        // 10-second segments (the audio-rate value; a 45min episode is ~270 segments
+        // and %04d caps at 9999 = ~27h). append_list keeps written segments listed
+        // while the playlist grows (the event-playlist shape the Echo family
+        // tolerates), and audio-only has no keyframe constraint.
+        args.Add("-hls_time");
+        args.Add("10");
+        args.Add("-hls_list_size");
+        args.Add("0");
+        args.Add("-hls_flags");
+        args.Add("append_list");
+        args.Add("-hls_segment_type");
+        args.Add("mpegts");
+
+        args.Add("-hls_segment_filename");
+        args.Add(segmentPath);
+
+        args.Add("-hls_base_url");
+        args.Add(hlsBaseUrl);
+
+        // No -shortest: one finite input, one mapped stream.
+        args.Add(playlistPath);
+    }
 
     /// <summary>
     /// Pre-write a complete HLS playlist for an audiobook with all segment durations.

@@ -290,5 +290,15 @@
   "PlaylistAlreadyExists": "{0} という名前のプレイリストは既に存在します。",
   "PlaylistCreateFailed": "プレイリストを作成できませんでした。Jellyfin のライブラリにプレイリストフォルダーがあることを確認してください。",
   "FollowMeSuccessResume": "{0} をこの端末で、前回の位置から再開します。",
-  "FollowMeSuccessResumeSsml": "<say-as interpret-as=\"interjection\">了解</say-as><break time=\"200ms\"/>{0} をこの端末で、前回の位置から再開します。"
+  "FollowMeSuccessResumeSsml": "<say-as interpret-as=\"interjection\">了解</say-as><break time=\"200ms\"/>{0} をこの端末で、前回の位置から再開します。",
+  "DidNotCatchSpeed": "どの速度にしますか? 例えば「速く」、または「速度1.5倍」と言ってください。",
+  "PlaybackSpeedSet": "速度{0}。",
+  "SpeedName750": "0.75倍",
+  "SpeedName1000": "通常",
+  "SpeedName1250": "1.25倍",
+  "SpeedName1500": "1.5倍",
+  "SpeedName1750": "1.75倍",
+  "SpeedName2000": "2倍",
+  "CannotChangeSpeedOverVideo": "申し訳ありません、動画やシークバー表示の再生中は再生速度を変更できません。",
+  "CannotChangeSpeedForBook": "申し訳ありません、オーディオブックの再生速度は変更できません。"
 }

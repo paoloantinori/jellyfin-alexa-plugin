@@ -152,6 +152,22 @@ public class User
     public bool? VideoAppForAudio { get; set; }
 
     /// <summary>
+    /// Gets or sets the user's standing podcast playback rate in per-mille form
+    /// (JF-636: 750/1000/1250/1500/1750/2000, i.e. 0.75x..2.0x in 0.25x steps).
+    /// Applied when a podcast play launches (fresh plays start at this rate)
+    /// and updated whenever a speed request names or cycles a rate. CROSS-MEDIUM
+    /// BY DESIGN: the ONE rate preference is the last rate the user asked for
+    /// explicitly, whatever medium it was spoken over (a "faster" during a song
+    /// sets the podcast rate too; no reliable discriminator exists between
+    /// album-shape podcast episodes and music tracks, and guessing wrong on
+    /// music is the worse failure). Null (not explicitly set) plays at normal
+    /// speed; the AudioPlayer path only, since the atempo stream is an
+    /// AudioPlayer re-launch (a VideoApp-routed medium refuses the change
+    /// honestly instead).
+    /// </summary>
+    public int? PodcastSpeedPerMille { get; set; }
+
+    /// <summary>
     /// Gets or sets a per-user override enabling diagnostic interaction logging (JF-393):
     /// one greppable "[diag]" log line per Alexa request and playback event, with elapsed
     /// times since playback start, to troubleshoot intermittent routing issues (JF-392

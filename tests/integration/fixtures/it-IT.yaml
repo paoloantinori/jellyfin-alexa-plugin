@@ -1374,3 +1374,31 @@ tests:
     expected_intent: RateItemIntent
     expected_slots:
       star_rating: {}
+
+  # -------------------------------------------------------------------------
+  # SetPlaybackSpeedIntent (JF-636, SpeedRate slot)
+  # -------------------------------------------------------------------------
+  - utterance: "a velocità uno e mezzo"
+    expected_intent: SetPlaybackSpeedIntent
+    expected_slots:
+      speed: {}
+
+  - utterance: "imposta la velocità doppia velocità"
+    expected_intent: SetPlaybackSpeedIntent
+    expected_slots:
+      speed: {}
+
+  - utterance: "vai più veloce"
+    expected_intent: SetPlaybackSpeedIntent
+    expected_slots:
+      speed: {}
+
+  - utterance: "vai più lentamente"
+    expected_intent: SetPlaybackSpeedIntent
+    expected_slots:
+      speed: {}
+
+  - utterance: "velocità normale"
+    expected_intent: SetPlaybackSpeedIntent
+    expected_slots:
+      speed: {}

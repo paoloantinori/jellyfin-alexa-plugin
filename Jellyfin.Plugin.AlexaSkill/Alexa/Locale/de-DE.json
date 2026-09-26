@@ -290,5 +290,15 @@
   "PlaylistAlreadyExists": "Eine Playlist namens {0} existiert bereits.",
   "PlaylistCreateFailed": "Ich konnte die Playlist nicht erstellen. Stelle sicher, dass deine Jellyfin-Mediathek einen Playlist-Ordner enthält.",
   "FollowMeSuccessResume": "Mache auf diesem Gerät weiter, genau da, wo du warst: {0}.",
-  "FollowMeSuccessResumeSsml": "<say-as interpret-as=\"interjection\">verstanden</say-as><break time=\"200ms\"/>Mache auf diesem Gerät weiter, genau da, wo du warst: {0}."
+  "FollowMeSuccessResumeSsml": "<say-as interpret-as=\"interjection\">verstanden</say-as><break time=\"200ms\"/>Mache auf diesem Gerät weiter, genau da, wo du warst: {0}.",
+  "DidNotCatchSpeed": "Mit welcher Geschwindigkeit? Sag zum Beispiel: schneller, oder: mit Geschwindigkeit eineinhalb.",
+  "PlaybackSpeedSet": "Geschwindigkeit {0}.",
+  "SpeedName750": "dreiviertel",
+  "SpeedName1000": "eins",
+  "SpeedName1250": "eins und ein viertel",
+  "SpeedName1500": "eineinhalb",
+  "SpeedName1750": "eins und drei viertel",
+  "SpeedName2000": "doppelt",
+  "CannotChangeSpeedOverVideo": "Entschuldigung, ich kann die Geschwindigkeit nicht ändern, während ein Video oder die Ansicht mit Fortschrittsleiste läuft.",
+  "CannotChangeSpeedForBook": "Entschuldigung, ich kann die Geschwindigkeit bei Hörbüchern nicht ändern."
 }

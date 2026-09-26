@@ -128,6 +128,27 @@ public sealed class DeviceQueue
     public Dictionary<string, long> PendingLaunchBaseMs { get; set; } = new();
 
     /// <summary>
+    /// Gets or sets per-item ACTIVE playback rates (itemId ("N" format) → per-mille,
+    /// JF-636: 750..2000), the rate half of the launch scope the base maps own. An
+    /// atempo stream's output timeline runs at rate R, so the playback event writers
+    /// scale raw device offsets by this value before composing the launch base
+    /// (content = base + offset x R). Written ONLY beside
+    /// <see cref="ActiveLaunchBaseMs"/>/<see cref="PendingLaunchBaseMs"/> by
+    /// <c>DeviceQueueManager.RecordLaunchBase</c> (default 1000 = identity, no
+    /// scaling), so an absent entry means a pre-JF-636 raw-static or transcode
+    /// stream whose offsets never scale. Additive in the persisted JSON (missing on
+    /// pre-JF-636 files).
+    /// </summary>
+    public Dictionary<string, int> ActivePlaybackRatePerMille { get; set; } = new();
+
+    /// <summary>
+    /// Gets or sets per-item PENDING playback rates (the enqueued twin of
+    /// <see cref="ActivePlaybackRatePerMille"/>): promoted to active at the item's
+    /// next PlaybackStarted together with its pending launch base.
+    /// </summary>
+    public Dictionary<string, int> PendingPlaybackRatePerMille { get; set; } = new();
+
+    /// <summary>
     /// Gets or sets the item ID of the last user-initiated play on this device.
     /// Recorded at two sites: audio (incl. audiobooks, with chapter precision) in
     /// <c>PlaybackLaunchBuilder.BuildAudioPlayerResponse</c>, and video (movies/episodes) in

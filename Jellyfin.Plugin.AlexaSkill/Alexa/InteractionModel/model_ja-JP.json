@@ -550,6 +550,21 @@
         ]
       },
       {
+        "name": "SetPlaybackSpeedIntent",
+        "slots": [
+          {
+            "name": "speed",
+            "type": "SpeedRate"
+          }
+        ],
+        "samples": [
+          "速度{speed}",
+          "速度を{speed}にして",
+          "再生速度{speed}",
+          "{speed}にして"
+        ]
+      },
+      {
         "name": "BrowseLibraryIntent",
         "slots": [
           {
@@ -885,6 +900,73 @@
       }
     ],
     "types": [
+      {
+        "name": "SpeedRate",
+        "values": [
+          {
+            "name": {
+              "value": "0.75倍"
+            },
+            "id": "750"
+          },
+          {
+            "name": {
+              "value": "通常速度",
+              "synonyms": [
+                "通常",
+                "等速",
+                "1倍"
+              ]
+            },
+            "id": "1000"
+          },
+          {
+            "name": {
+              "value": "1.25倍"
+            },
+            "id": "1250"
+          },
+          {
+            "name": {
+              "value": "1.5倍"
+            },
+            "id": "1500"
+          },
+          {
+            "name": {
+              "value": "1.75倍"
+            },
+            "id": "1750"
+          },
+          {
+            "name": {
+              "value": "2倍",
+              "synonyms": [
+                "二倍"
+              ]
+            },
+            "id": "2000"
+          },
+          {
+            "name": {
+              "value": "速く",
+              "synonyms": [
+                "もっと速く"
+              ]
+            },
+            "id": "faster"
+          },
+          {
+            "name": {
+              "value": "遅く",
+              "synonyms": [
+                "もっと遅く"
+              ]
+            },
+            "id": "slower"
+          }
+        ]
+      },
       {
         "name": "Mood",
         "values": [
@@ -1418,6 +1500,18 @@
   },
   "dialog": {
     "intents": [
+      {
+        "name": "SetPlaybackSpeedIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "speed",
+            "type": "SpeedRate",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
       {
         "name": "RateItemIntent",
         "confirmationRequired": false,

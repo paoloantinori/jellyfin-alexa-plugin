@@ -129,7 +129,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             && resolvedOrder == PlaybackOrder.Default)
         {
             if (NextTrackPrecomputeCache.TryGet(deviceId, currentToken ?? string.Empty,
-                    out Guid cachedNextId, out BaseItem? cachedItem, out string? cachedUrl)
+                    out Guid cachedNextId, out BaseItem? cachedItem, out string? cachedUrl, out int cachedRatePerMille)
                 && cachedItem != null && cachedUrl != null)
             {
                 // JF-424.1: the cache key (device) and its validation token (the bare
@@ -148,7 +148,9 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
 
                     UpdateRecoveryPointer(deviceId, cachedNextId.ToString(), context, cachedItem.Name);
 
-                    return Launch.BuildAudioPlayerResponse(PlayBehavior.Enqueue, cachedUrl, cachedNextId.ToString(), cachedItem, user, context);
+                    // JF-636: the stored rate rides the launch so the chokepoint records
+                    // the launch scope the cached URL actually serves.
+                    return Launch.BuildAudioPlayerResponse(PlayBehavior.Enqueue, cachedUrl, cachedNextId.ToString(), cachedItem, user, context, ratePerMille: cachedRatePerMille);
                 }
 
                 Logger.LogInformation(
@@ -253,7 +255,19 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         // queue routes to the audio-only transcode instead of dying on the raw static
         // bytes (JF-505 does not apply: this launch is audio-shaped). Offset 0: a fresh
         // queue advance always plays from the item start.
-        AudioLaunchSource source = Launch.ResolveAudioLaunchSource(item, itemId, user, 0);
+        // JF-636: the advance CONTINUES the finishing item's launch-scope rate, so a
+        // podcast session started at 1.5x stays at 1.5x on every episode boundary
+        // instead of silently falling back to 1x; a rate-1000 (or absent) scope keeps
+        // music queues byte-identical to the pre-JF-636 advance. The finishing item
+        // resolves from the AudioPlayer token (codec-parsed, composite-sleep safe)
+        // with the session now-playing item as fallback (the shared resolution shape).
+        BaseItem? finishingItem = StreamTokenCodec.TryGetItemId(context.AudioPlayer?.Token, out Guid finishingItemId)
+            ? _libraryManager.GetItemById(finishingItemId)
+            : session.FullNowPlayingItem;
+        int advanceRatePerMille = finishingItem != null
+            ? Launch.GetActivePlaybackRate(deviceId, finishingItem.Id.ToString(), _queueManager) ?? Util.PlaybackSpeed.NormalPerMille
+            : Util.PlaybackSpeed.NormalPerMille;
+        AudioLaunchSource source = Launch.ResolveAudioLaunchSource(item, itemId, user, 0, ratePerMille: advanceRatePerMille);
 
         Logger.LogInformation(
             "Pre-fetching next track for gapless playback: {ItemName} ({ItemId}), loop={LoopMode}, shuffle={Shuffle} (reshuffledQueue={Reshuffled})",

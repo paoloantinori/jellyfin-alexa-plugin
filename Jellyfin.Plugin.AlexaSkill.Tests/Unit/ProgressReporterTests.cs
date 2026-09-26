@@ -209,4 +209,99 @@ public class ProgressReporterTests : PluginTestBase, IDisposable
 
         Assert.Null(CreateReporter().TryGetRuntimeTicksForGuard(_fx.LibraryManager.Object, Guid.NewGuid()));
     }
+
+    // ---- ComposeItemAbsolutePosition: the JF-636 atempo rate ----
+
+    /// <summary>
+    /// The load-bearing JF-636 composition: on an atempo stream the raw device
+    /// offset counts the rate-adjusted OUTPUT timeline, so it scales by the rate
+    /// BEFORE the base composes (content = base + raw x R).
+    /// </summary>
+    [Fact]
+    public void Compose_RateAdjustedStream_ScalesBeforeAddingBase()
+    {
+        // base 20:00, raw 5:00 of stream at 1.5x = 7:30 of content -> 27:30.
+        long raw = MinutesToTicks(5);
+        long composed = CreateReporter().ComposeItemAbsolutePosition(
+            raw, MinutesToMs(20), MinutesToTicks(60), "RateCompose", ratePerMille: 1500);
+
+        Assert.Equal(MinutesToTicks(27.5), composed);
+    }
+
+    /// <summary>A from-zero atempo launch (base 0, rate 2x) still converts its offsets.</summary>
+    [Fact]
+    public void Compose_RateAdjustedStreamZeroBase_ScalesTheRawOffset()
+    {
+        long raw = MinutesToTicks(30);
+        long composed = CreateReporter().ComposeItemAbsolutePosition(
+            raw, 0, MinutesToTicks(60), "RateCompose", ratePerMille: 2000);
+
+        Assert.Equal(MinutesToTicks(60), composed);
+    }
+
+    /// <summary>Rate 1000 is the identity: the pre-JF-636 arithmetic, byte-identical.</summary>
+    [Fact]
+    public void Compose_IdentityRate_KeepsTheClassicArithmetic()
+    {
+        long raw = MinutesToTicks(5);
+        long composed = CreateReporter().ComposeItemAbsolutePosition(
+            raw, MinutesToMs(20), MinutesToTicks(60), "RateCompose", ratePerMille: 1000);
+
+        Assert.Equal(MinutesToTicks(25), composed);
+    }
+
+    /// <summary>
+    /// The stale-scope guard still bounds the SCALED composition: a base + raw x rate
+    /// strictly past the runtime persists the RATE-ADJUSTED offset WITHOUT the base
+    /// as the conservative truth (JF-636 review: the unscaled raw offset is not in
+    /// content units on an atempo stream).
+    /// </summary>
+    [Fact]
+    public void Compose_RateAdjustedCompositionPastRuntime_PersistsScaledWithoutBase()
+    {
+        // base 50:00, raw 20:00 of stream at 2x = 40:00 content -> 90:00 > runtime 60.
+        long raw = MinutesToTicks(20);
+        long composed = CreateReporter().ComposeItemAbsolutePosition(
+            raw, MinutesToMs(50), MinutesToTicks(60), "RateCompose", ratePerMille: 2000);
+
+        Assert.Equal(MinutesToTicks(40), composed);
+    }
+
+    /// <summary>
+    /// The 0.75x inversion the JF-636 review caught: below 1x the unscaled raw
+    /// offset is LARGER than the composition being guarded (raw = scaled / 0.75),
+    /// so the guard must return the SCALED value, never the raw one (persisting
+    /// raw would write a past-runtime position: the anomaly the guard exists to
+    /// suppress).
+    /// </summary>
+    [Fact]
+    public void Compose_SlowRateCompositionPastRuntime_NeverPersistsTheLargerRawOffset()
+    {
+        // base 25:00, raw 10:00 of stream at 0.75x = 7:30 content -> 32:30 > runtime 30.
+        long raw = MinutesToTicks(10);
+        long composed = CreateReporter().ComposeItemAbsolutePosition(
+            raw, MinutesToMs(25), MinutesToTicks(30), "RateCompose", ratePerMille: 750);
+
+        Assert.Equal(MinutesToTicks(7.5), composed);
+        Assert.True(composed < raw, "the conservative value must never exceed the guarded composition's scaled term");
+    }
+
+    /// <summary>
+    /// ComposeEventPositionTicks reads the rate from the SAME launch scope as the
+    /// base: seeding the queue manager's scope (base + rate) makes the entry-point
+    /// compose the fully converted position.
+    /// </summary>
+    [Fact]
+    public void ComposeEvent_ScopeRate_ScalesTheDeviceOffset()
+    {
+        var id = Guid.NewGuid();
+        _fx.LibraryManager.Setup(lm => lm.GetItemById(id))
+            .Returns(new MediaBrowser.Controller.Entities.Audio.Audio { Id = id, RunTimeTicks = MinutesToTicks(60) });
+        _queueManager.RecordLaunchBase(DeviceId, id.ToString(), MinutesToMs(20), enqueued: false, ratePerMille: 1500);
+
+        long composed = CreateReporter().ComposeEventPositionTicks(
+            DeviceId, id, MinutesToMs(5), "RateCompose", _queueManager, _fx.LibraryManager.Object);
+
+        Assert.Equal(MinutesToTicks(27.5), composed);
+    }
 }

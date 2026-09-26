@@ -48,6 +48,23 @@
         "name": "AMAZON.RepeatIntent"
       },
       {
+        "name": "SetPlaybackSpeedIntent",
+        "samples": [
+          "a velocità {speed}",
+          "velocità {speed}",
+          "imposta la velocità {speed}",
+          "metti la velocità {speed}",
+          "riproduci a velocità {speed}",
+          "vai {speed}"
+        ],
+        "slots": [
+          {
+            "name": "speed",
+            "type": "SpeedRate"
+          }
+        ]
+      },
+      {
         "name": "AMAZON.StopIntent",
         "samples": [
           "ferma",
@@ -2117,6 +2134,104 @@
     ],
     "types": [
       {
+        "name": "SpeedRate",
+        "values": [
+          {
+            "name": {
+              "value": "tre quarti",
+              "synonyms": [
+                "0,75",
+                "0.75"
+              ]
+            },
+            "id": "750"
+          },
+          {
+            "name": {
+              "value": "velocità normale",
+              "synonyms": [
+                "normale",
+                "velocità uno",
+                "uno",
+                "1",
+                "1,0"
+              ]
+            },
+            "id": "1000"
+          },
+          {
+            "name": {
+              "value": "uno e un quarto",
+              "synonyms": [
+                "1,25",
+                "1.25",
+                "una volta e un quarto"
+              ]
+            },
+            "id": "1250"
+          },
+          {
+            "name": {
+              "value": "uno e mezzo",
+              "synonyms": [
+                "uno e mezza",
+                "una volta e mezza",
+                "1,5",
+                "1.5",
+                "un e mezzo"
+              ]
+            },
+            "id": "1500"
+          },
+          {
+            "name": {
+              "value": "uno e tre quarti",
+              "synonyms": [
+                "1,75",
+                "1.75",
+                "una volta e tre quarti"
+              ]
+            },
+            "id": "1750"
+          },
+          {
+            "name": {
+              "value": "doppia velocità",
+              "synonyms": [
+                "doppia",
+                "il doppio",
+                "due volte",
+                "due",
+                "2"
+              ]
+            },
+            "id": "2000"
+          },
+          {
+            "name": {
+              "value": "più veloce",
+              "synonyms": [
+                "accelera",
+                "velocizza",
+                "più rapidamente"
+              ]
+            },
+            "id": "faster"
+          },
+          {
+            "name": {
+              "value": "più lentamente",
+              "synonyms": [
+                "rallenta",
+                "più lento",
+                "più piano"
+              ]
+            },
+            "id": "slower"
+          }
+        ]
+      },
+      {
         "name": "Mood",
         "values": [
           {
@@ -2988,6 +3103,18 @@
   },
   "dialog": {
     "intents": [
+      {
+        "name": "SetPlaybackSpeedIntent",
+        "confirmationRequired": false,
+        "slots": [
+          {
+            "name": "speed",
+            "type": "SpeedRate",
+            "confirmationRequired": false,
+            "elicitationRequired": false
+          }
+        ]
+      },
       {
         "name": "RateItemIntent",
         "confirmationRequired": false,

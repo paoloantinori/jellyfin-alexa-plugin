@@ -114,9 +114,13 @@ public static class PodcastEpisodeResolver
         // The codec-routed audio source (JF-507): a series-shape Episode whose
         // audio codec has no Echo decoder (a TV series matched by name, eac3/ac3)
         // rides the audio-only HLS transcode; an Audio item resolves to the same
-        // static URL GetStreamUrl built.
+        // static URL GetStreamUrl built. JF-636: the user's standing podcast rate
+        // redirects the launch to the atempo speed endpoint when set (the speed
+        // branch supersedes the codec branch there); rate 1000 keeps this path
+        // byte-identical to the pre-JF-636 launch.
         int offsetMs = offsetFor?.Invoke(episode) ?? 0;
-        AudioLaunchSource source = launch.ResolveAudioLaunchSource(episode, itemId, user, offsetMs);
+        AudioLaunchSource source = launch.ResolveAudioLaunchSource(
+            episode, itemId, user, offsetMs, ratePerMille: PlaybackSpeed.ResolveStandingRate(user));
         SkillResponse response = launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source, itemId, episode, user, context);
         attachScreen?.Invoke(response, episode);
         return response;

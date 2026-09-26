@@ -27,7 +27,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 /// </summary>
 internal static class NextTrackPrecomputeCache
 {
-    private sealed record PrecomputedEntry(string CurrentTrackToken, Guid NextItemId, BaseItem Item, string StreamUrl, DateTimeOffset ComputedAt);
+    private sealed record PrecomputedEntry(string CurrentTrackToken, Guid NextItemId, BaseItem Item, string StreamUrl, int RatePerMille, DateTimeOffset ComputedAt);
 
     private static readonly ConcurrentDictionary<string, PrecomputedEntry> Cache = new(StringComparer.Ordinal);
 
@@ -58,9 +58,10 @@ internal static class NextTrackPrecomputeCache
     /// <param name="nextItemId">The resolved next queue item's ID.</param>
     /// <param name="item">The next item's library metadata (pre-fetched).</param>
     /// <param name="streamUrl">The pre-built stream URL for the next item.</param>
-    public static void Store(string deviceId, string currentTrackToken, Guid nextItemId, BaseItem item, string streamUrl)
+    /// <param name="ratePerMille">The playback rate the URL was minted for (JF-636: the serve site must record the SAME rate into the launch scope it writes, or the served stream's events would compose unscaled).</param>
+    public static void Store(string deviceId, string currentTrackToken, Guid nextItemId, BaseItem item, string streamUrl, int ratePerMille = 1000)
     {
-        Cache[deviceId] = new PrecomputedEntry(currentTrackToken, nextItemId, item, streamUrl, Time.GetUtcNow());
+        Cache[deviceId] = new PrecomputedEntry(currentTrackToken, nextItemId, item, streamUrl, ratePerMille, Time.GetUtcNow());
     }
 
     /// <summary>
@@ -74,12 +75,14 @@ internal static class NextTrackPrecomputeCache
     /// <param name="nextItemId">The next item's ID if found.</param>
     /// <param name="item">The next item's metadata if found.</param>
     /// <param name="streamUrl">The pre-built stream URL if found.</param>
+    /// <param name="ratePerMille">The rate the stored URL was minted for (JF-636), or 1000.</param>
     /// <returns>True if a valid entry was found (and consumed).</returns>
-    public static bool TryGet(string deviceId, string currentTrackToken, out Guid nextItemId, out BaseItem? item, out string? streamUrl)
+    public static bool TryGet(string deviceId, string currentTrackToken, out Guid nextItemId, out BaseItem? item, out string? streamUrl, out int ratePerMille)
     {
         nextItemId = Guid.Empty;
         item = null;
         streamUrl = null;
+        ratePerMille = 1000;
 
         if (string.IsNullOrEmpty(deviceId) || string.IsNullOrEmpty(currentTrackToken))
         {
@@ -131,6 +134,7 @@ internal static class NextTrackPrecomputeCache
         nextItemId = entry.NextItemId;
         item = entry.Item;
         streamUrl = entry.StreamUrl;
+        ratePerMille = entry.RatePerMille;
         return true;
     }
 
