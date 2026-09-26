@@ -3,10 +3,10 @@ id: JF-635
 title: >-
   JF-635 - Device battery findings: one-shot Tells dismiss the seek-mode player;
   RepeatSingleOn still DTO-only; single-song announce cut
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-25 15:31'
-updated_date: '2026-09-26 20:14'
+updated_date: '2026-09-26 21:20'
 labels:
   - bug
   - platform
