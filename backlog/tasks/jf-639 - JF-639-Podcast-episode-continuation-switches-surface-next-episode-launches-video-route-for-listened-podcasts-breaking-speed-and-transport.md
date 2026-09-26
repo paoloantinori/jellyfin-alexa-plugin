@@ -3,9 +3,10 @@ id: JF-639
 title: >-
   JF-639 - Podcast episode continuation switches surface: 'next episode'
   launches video route for listened podcasts, breaking speed and transport
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-26 17:25'
+updated_date: '2026-09-26 17:36'
 labels:
   - bug
   - podcasts
