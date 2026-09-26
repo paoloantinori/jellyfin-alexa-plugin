@@ -10,6 +10,11 @@
 #
 # Run: python3 scripts/generate_interaction_model.py hi-IN
 #
+# JF-399 (2026-09-26): FindSongByArtistIntent enriched 4 -> 8 (FindSong
+# openers crossed with the ka-gaana tail). Skipped carrier family: no
+# second song noun exists in this vocabulary (गाना only; गीत is unused),
+# so it-IT's brano twin has no equivalent.
+#
 # Invariants carried by this file:
 # - The intent order is IDENTICAL to pt-BR's: PlayByDecade right after
 #   PlayByGenre (before ContinueWatching), PlayPodcast after
@@ -672,6 +677,16 @@ intents:
       - '{musician} का गाना खोजने में मदद करो'
       - '{musician} का गाना ढूंढो'
       - 'मैं {musician} का गाना खोज रहा हूँ'
+      # JF-399 FindSongByArtist parity: it-IT carries 16 samples here while
+      # this locale sat at 4 (the JF-391 starvation class). The additions are
+      # this locale's own FindSong openers (मुझे खोजना है / खोजना चाहता हूँ /
+      # मेरे लिए खोजो / एक गाना खोजो) crossed with the का गाना tail. This
+      # template's noun axis is गाना only (गीत unused), so there is no it-IT
+      # brano twin here, see the header.
+      - 'मुझे {musician} का गाना खोजना है'
+      - 'मैं {musician} का गाना खोजना चाहता हूँ'
+      - 'मेरे लिए {musician} का गाना खोजो'
+      - '{musician} का एक गाना खोजो'
     slots:
       - name: musician
         type: AMAZON.Musician

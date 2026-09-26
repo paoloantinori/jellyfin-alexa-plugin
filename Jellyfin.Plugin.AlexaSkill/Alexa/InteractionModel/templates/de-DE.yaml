@@ -9,6 +9,12 @@
 #
 # Run: python3 scripts/generate_interaction_model.py de-DE
 #
+# JF-399 (2026-09-26): FindSongByArtistIntent enriched 4 -> 8 (FindSong
+# openers crossed with the von-artist tail; both hilf-mir word orders).
+# Skipped carrier family: no second song noun exists in this vocabulary,
+# so it-IT's brano twin has no equivalent ("titel" appears only inside
+# "im titel" and as a slot-type synonym, never as a FindSong noun).
+#
 # Invariants carried by this file:
 # - de-DE carries CUSTOM loop intents (a shape it shares with the fr
 #   family since JF-316 milestone 4):
@@ -799,6 +805,18 @@ intents:
       - hilf mir ein lied zu finden von {musician}
       - suche ein lied von {musician}
       - ich suche ein lied von {musician}
+      # JF-399 FindSongByArtist parity: it-IT carries 16 samples here while
+      # this locale sat at 4 (the JF-391 starvation class). The additions are
+      # this locale's own FindSong openers (ich will / ich moechte / the
+      # verb-final infinitive shape) crossed with the von-artist tail; the
+      # non-extraposed hilf-mir order doubles the existing extraposed twin
+      # the same way it-IT's article variants do. No second noun exists in
+      # this template's vocabulary (it-IT's brano twin has no lied-family
+      # equivalent; titel appears only inside 'im titel'), see the header.
+      - ich will ein lied von {musician} finden
+      - ich moechte ein lied von {musician} finden
+      - ein lied von {musician} finden
+      - hilf mir ein lied von {musician} zu finden
     slots:
       - name: musician
         type: AMAZON.Musician

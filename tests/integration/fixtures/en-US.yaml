@@ -704,6 +704,20 @@ tests:
     expected_slots:
       musician: {}
 
+  # JF-399 FindSongByArtist parity pass (2026-09-26): new carrier families
+  # (want/need openers, the track noun, the plural). These require the model
+  # deploy; the first live suite run after it is the probe. The shared
+  # English sample set also covers en-GB/AU/CA/IN and es-US (byte-equal).
+  - utterance: "find a track by metallica"
+    expected_intent: FindSongByArtistIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "I want to find a song by radiohead"
+    expected_intent: FindSongByArtistIntent
+    expected_slots:
+      musician: {}
+
   - utterance: "search for a song called bohemian rhapsody"
     expected_intent: FindSongIntent
     expected_slots:

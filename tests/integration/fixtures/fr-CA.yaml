@@ -392,6 +392,14 @@ tests:
     expected_slots:
       titleKeywords: "belle"
 
+  # JF-399 FindSongByArtist parity pass (2026-09-26): the je-veux carrier
+  # family. Requires the model deploy; the first live suite run after it is
+  # the probe.
+  - utterance: "je veux trouver une chanson de queen"
+    expected_intent: FindSongByArtistIntent
+    expected_slots:
+      musician: {}
+
   # JF-414: indefinite album-by-artist forms
   - utterance: "un album de queen"
     expected_intent: PlayAlbumIntent

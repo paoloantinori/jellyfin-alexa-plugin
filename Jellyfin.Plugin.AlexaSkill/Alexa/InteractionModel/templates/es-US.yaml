@@ -9,13 +9,16 @@
 #
 # es-US diverges from es-ES (otherwise identical: intent sequence,
 # key orders, types, dialog, Mood block) in exactly five ways:
-# - FindSongIntent (12 samples) and FindSongByArtistIntent (4) carry
-#   the ENGLISH sample sets, byte-equal to en-GB's, not Spanish.
+# - FindSongIntent (12 samples) and FindSongByArtistIntent (12 since
+#   the JF-399 2026-09-26 parity pass) carry the ENGLISH sample sets,
+#   byte-equal to en-GB's, not Spanish.
 #   That is unreviewed inertia from the intent's birth (036f7eae), not a market decision; JF-399 never scoped es-US (the FindSong
 #   conversation openers are English while the rest of the model is
 #   Spanish); do not "translate" them back without a routing
 #   decision, and do not assume the es-ES FindSong parity work
-#   (JF-399) applies here.
+#   (JF-399) applies here. The 2026-09-26 FindSongByArtist enrichment
+#   followed the en family's English set (byte-equality preserved)
+#   precisely so this open market decision stays untouched.
 # - BrowseLibrary drops the three leading samples "{browse_category}"
 #   / "solo {browse_category}" / "quiero {browse_category}", keeping
 #   the five verb-carried ones (es-ES keeps all 8, including the bare
@@ -716,6 +719,22 @@ intents:
       - help me find a song by {musician}
       - search for a song by {musician}
       - I'm looking for a song by {musician}
+      # JF-399 FindSongByArtist parity: it-IT carries 16 samples here while
+      # every other locale sat at 3-4 (the JF-391 starvation class). The
+      # additions are this locale's own FindSong openers crossed with the
+      # by-artist tail; the song/track noun pair mirrors it-IT's
+      # canzone/brano. Skipped families are noted in the template header.
+      # The set stays English and byte-equal to the en family's (the
+      # documented English-inertia status quo; the Spanish-vs-English
+      # market decision remains open in JF-399/JF-406).
+      - I want to find a song by {musician}
+      - I need to find a song by {musician}
+      - find me a song by {musician}
+      - help me search for a song by {musician}
+      - find a track by {musician}
+      - search for a track by {musician}
+      - I'm looking for a track by {musician}
+      - find songs by {musician}
     slots:
       - name: musician
         type: AMAZON.Musician

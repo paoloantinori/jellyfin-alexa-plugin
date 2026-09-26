@@ -12,6 +12,13 @@
 #
 # Run: python3 scripts/generate_interaction_model.py ja-JP
 #
+# JF-399 (2026-09-26): FindSongByArtistIntent enriched 4 -> 7 (FindSong
+# openers crossed with the no-uta tail). Skipped carrier families:
+# Japanese carries no article or plural morphology (the axis that
+# inflates it-IT to 16 samples), and this template's noun axis is
+# 曲 only, so there is no it-IT brano twin; the natural carrier space
+# exhausts at 7.
+#
 # Invariants carried by this file:
 # - The intent order is IDENTICAL to pt-BR's: PlayByDecade right after
 #   PlayByGenre (before ContinueWatching), PlayPodcast after
@@ -670,6 +677,16 @@ intents:
       - '{musician} の曲を探すのを手伝って'
       - '{musician} の曲を検索して'
       - '{musician} の曲を探しているの'
+      # JF-399 FindSongByArtist parity: it-IT carries 16 samples here while
+      # this locale sat at 4 (the JF-391 starvation class). The additions are
+      # this locale's own FindSong openers (見つけたい / 探してちょうだい /
+      # 検索するのを手伝って) crossed with the の曲 tail. Japanese carries no
+      # article or plural morphology (the axis that inflates it-IT to 16) and
+      # this template's noun axis is 曲 only, so the natural carrier space
+      # exhausts at 7, see the header.
+      - '{musician} の曲を見つけたい'
+      - '{musician} の曲を探してちょうだい'
+      - '{musician} の曲を検索するのを手伝って'
     slots:
       - name: musician
         type: AMAZON.Musician

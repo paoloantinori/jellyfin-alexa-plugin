@@ -69,7 +69,7 @@ Placeholder legend:
 | `<كلمات من عنوان الأغنية>` | `{titleKeywords}` |
 | `<اسم المستخدم>` | `{username}` |
 
-Complete phrase list (321 phrases across 66 commands):
+Complete phrase list (325 phrases across 66 commands):
 
 #### Play music
 
@@ -314,6 +314,10 @@ Complete phrase list (321 phrases across 66 commands):
 - `ساعدني في البحث عن أغنية لـ <اسم الفنان>`
 - `اعثر على أغنية لـ <اسم الفنان>`
 - `أبحث عن أغنية لـ <اسم الفنان>`
+- `ابحث لي عن أغنية لـ <اسم الفنان>`
+- `أريد أن أجد أغنية لـ <اسم الفنان>`
+- `أريد البحث عن أغنية لـ <اسم الفنان>`
+- `ساعدني في العثور على أغنية لـ <اسم الفنان>`
 
 #### Queue and repeat
 
@@ -624,7 +628,7 @@ Placeholder legend:
 | `<woorden uit de songtitel>` | `{titleKeywords}` |
 | `<gebruikersnaam>` | `{username}` |
 
-Complete phrase list (387 phrases across 66 commands):
+Complete phrase list (393 phrases across 66 commands):
 
 #### Play music
 
@@ -911,6 +915,12 @@ Complete phrase list (387 phrases across 66 commands):
 - `help me een nummer te vinden van <naam van de artiest>`
 - `zoek een nummer van <naam van de artiest>`
 - `ik zoek een nummer van <naam van de artiest>`
+- `ik moet een nummer van <naam van de artiest> vinden`
+- `vind me een nummer van <naam van de artiest>`
+- `help me een nummer te zoeken van <naam van de artiest>`
+- `ik wil een nummer van <naam van de artiest> vinden`
+- `vind een liedje van <naam van de artiest>`
+- `zoek een liedje van <naam van de artiest>`
 
 #### Queue and repeat
 
@@ -1244,7 +1254,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (481 phrases across 66 commands):
+Complete phrase list (489 phrases across 66 commands):
 
 #### Play music
 
@@ -1582,6 +1592,14 @@ Complete phrase list (481 phrases across 66 commands):
 - `help me find a song by <artist name>`
 - `search for a song by <artist name>`
 - `I'm looking for a song by <artist name>`
+- `I want to find a song by <artist name>`
+- `I need to find a song by <artist name>`
+- `find me a song by <artist name>`
+- `help me search for a song by <artist name>`
+- `find a track by <artist name>`
+- `search for a track by <artist name>`
+- `I'm looking for a track by <artist name>`
+- `find songs by <artist name>`
 
 #### Queue and repeat
 
@@ -1958,7 +1976,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (474 phrases across 66 commands):
+Complete phrase list (482 phrases across 66 commands):
 
 #### Play music
 
@@ -2293,6 +2311,14 @@ Complete phrase list (474 phrases across 66 commands):
 - `help me find a song by <artist name>`
 - `search for a song by <artist name>`
 - `I'm looking for a song by <artist name>`
+- `I want to find a song by <artist name>`
+- `I need to find a song by <artist name>`
+- `find me a song by <artist name>`
+- `help me search for a song by <artist name>`
+- `find a track by <artist name>`
+- `search for a track by <artist name>`
+- `I'm looking for a track by <artist name>`
+- `find songs by <artist name>`
 
 #### Queue and repeat
 
@@ -2665,7 +2691,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (570 phrases across 66 commands):
+Complete phrase list (578 phrases across 66 commands):
 
 #### Play music
 
@@ -3077,6 +3103,14 @@ Complete phrase list (570 phrases across 66 commands):
 - `help me find a song by <artist name>`
 - `search for a song by <artist name>`
 - `I'm looking for a song by <artist name>`
+- `I want to find a song by <artist name>`
+- `I need to find a song by <artist name>`
+- `find me a song by <artist name>`
+- `help me search for a song by <artist name>`
+- `find a track by <artist name>`
+- `search for a track by <artist name>`
+- `I'm looking for a track by <artist name>`
+- `find songs by <artist name>`
 
 #### Queue and repeat
 
@@ -3468,7 +3502,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (475 phrases across 66 commands):
+Complete phrase list (483 phrases across 66 commands):
 
 #### Play music
 
@@ -3802,6 +3836,14 @@ Complete phrase list (475 phrases across 66 commands):
 - `help me find a song by <artist name>`
 - `search for a song by <artist name>`
 - `I'm looking for a song by <artist name>`
+- `I want to find a song by <artist name>`
+- `I need to find a song by <artist name>`
+- `find me a song by <artist name>`
+- `help me search for a song by <artist name>`
+- `find a track by <artist name>`
+- `search for a track by <artist name>`
+- `I'm looking for a track by <artist name>`
+- `find songs by <artist name>`
 
 #### Queue and repeat
 
@@ -4183,7 +4225,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (585 phrases across 68 commands):
+Complete phrase list (593 phrases across 68 commands):
 
 #### Play music
 
@@ -4583,6 +4625,14 @@ Complete phrase list (585 phrases across 68 commands):
 - `help me find a song by <artist name>`
 - `search for a song by <artist name>`
 - `I'm looking for a song by <artist name>`
+- `I want to find a song by <artist name>`
+- `I need to find a song by <artist name>`
+- `find me a song by <artist name>`
+- `help me search for a song by <artist name>`
+- `find a track by <artist name>`
+- `search for a track by <artist name>`
+- `I'm looking for a track by <artist name>`
+- `find songs by <artist name>`
 
 #### Queue and repeat
 
@@ -5007,7 +5057,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (440 phrases across 71 commands):
+Complete phrase list (448 phrases across 71 commands):
 
 #### Play music
 
@@ -5316,6 +5366,14 @@ Complete phrase list (440 phrases across 71 commands):
 - `trouve une chanson de <nom de l'artiste>`
 - `aide moi a trouver une chanson de <nom de l'artiste>`
 - `je cherche une chanson de <nom de l'artiste>`
+- `cherche une chanson de <nom de l'artiste>`
+- `je veux trouver une chanson de <nom de l'artiste>`
+- `je voudrais trouver une chanson de <nom de l'artiste>`
+- `aide moi a chercher une chanson de <nom de l'artiste>`
+- `trouve un morceau de <nom de l'artiste>`
+- `cherche un morceau de <nom de l'artiste>`
+- `je cherche un morceau de <nom de l'artiste>`
+- `une chanson de <nom de l'artiste>`
 
 #### Queue and repeat
 
@@ -5695,7 +5753,7 @@ Placeholder legend:
 | `<mots du titre de la chanson>` | `{titleKeywords}` |
 | `<nom d'utilisateur>` | `{username}` |
 
-Complete phrase list (452 phrases across 71 commands):
+Complete phrase list (460 phrases across 71 commands):
 
 #### Play music
 
@@ -6012,6 +6070,14 @@ Complete phrase list (452 phrases across 71 commands):
 - `trouve une chanson de <nom de l'artiste>`
 - `aide moi a trouver une chanson de <nom de l'artiste>`
 - `je cherche une chanson de <nom de l'artiste>`
+- `cherche une chanson de <nom de l'artiste>`
+- `je veux trouver une chanson de <nom de l'artiste>`
+- `je voudrais trouver une chanson de <nom de l'artiste>`
+- `aide moi a chercher une chanson de <nom de l'artiste>`
+- `trouve un morceau de <nom de l'artiste>`
+- `cherche un morceau de <nom de l'artiste>`
+- `je cherche un morceau de <nom de l'artiste>`
+- `une chanson de <nom de l'artiste>`
 
 #### Queue and repeat
 
@@ -6395,7 +6461,7 @@ Placeholder legend:
 | `<Wörter aus dem Songtitel>` | `{titleKeywords}` |
 | `<Benutzername>` | `{username}` |
 
-Complete phrase list (461 phrases across 71 commands):
+Complete phrase list (465 phrases across 71 commands):
 
 #### Play music
 
@@ -6717,6 +6783,10 @@ Complete phrase list (461 phrases across 71 commands):
 - `hilf mir ein lied zu finden von <Name des Künstlers>`
 - `suche ein lied von <Name des Künstlers>`
 - `ich suche ein lied von <Name des Künstlers>`
+- `ich will ein lied von <Name des Künstlers> finden`
+- `ich moechte ein lied von <Name des Künstlers> finden`
+- `ein lied von <Name des Künstlers> finden`
+- `hilf mir ein lied von <Name des Künstlers> zu finden`
 
 #### Queue and repeat
 
@@ -7105,7 +7175,7 @@ Placeholder legend:
 | `<गाने के नाम के शब्द>` | `{titleKeywords}` |
 | `<उपयोगकर्ता का नाम>` | `{username}` |
 
-Complete phrase list (343 phrases across 66 commands):
+Complete phrase list (347 phrases across 66 commands):
 
 #### Play music
 
@@ -7361,6 +7431,10 @@ Complete phrase list (343 phrases across 66 commands):
 - `<कलाकार का नाम> का गाना खोजने में मदद करो`
 - `<कलाकार का नाम> का गाना ढूंढो`
 - `मैं <कलाकार का नाम> का गाना खोज रहा हूँ`
+- `मुझे <कलाकार का नाम> का गाना खोजना है`
+- `मैं <कलाकार का नाम> का गाना खोजना चाहता हूँ`
+- `मेरे लिए <कलाकार का नाम> का गाना खोजो`
+- `<कलाकार का नाम> का एक गाना खोजो`
 
 #### Queue and repeat
 
@@ -9470,7 +9544,7 @@ Placeholder legend:
 | `<曲名のキーワード>` | `{titleKeywords}` |
 | `<ユーザー名>` | `{username}` |
 
-Complete phrase list (321 phrases across 66 commands):
+Complete phrase list (324 phrases across 66 commands):
 
 #### Play music
 
@@ -9710,6 +9784,9 @@ Complete phrase list (321 phrases across 66 commands):
 - `<アーティスト名> の曲を探すのを手伝って`
 - `<アーティスト名> の曲を検索して`
 - `<アーティスト名> の曲を探しているの`
+- `<アーティスト名> の曲を見つけたい`
+- `<アーティスト名> の曲を探してちょうだい`
+- `<アーティスト名> の曲を検索するのを手伝って`
 
 #### Queue and repeat
 
@@ -10025,7 +10102,7 @@ Placeholder legend:
 | `<palavras do título da música>` | `{titleKeywords}` |
 | `<nome do usuário>` | `{username}` |
 
-Complete phrase list (400 phrases across 66 commands):
+Complete phrase list (406 phrases across 66 commands):
 
 #### Play music
 
@@ -10316,6 +10393,12 @@ Complete phrase list (400 phrases across 66 commands):
 - `encontre uma musica de <nome do artista>`
 - `me ajude a encontrar uma musica de <nome do artista>`
 - `estou procurando uma musica de <nome do artista>`
+- `procure uma musica de <nome do artista>`
+- `quero encontrar uma musica de <nome do artista>`
+- `quero achar uma musica de <nome do artista>`
+- `me ajuda a achar uma musica de <nome do artista>`
+- `me ajuda a procurar uma musica de <nome do artista>`
+- `uma musica de <nome do artista>`
 
 #### Queue and repeat
 
@@ -10658,7 +10741,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (431 phrases across 66 commands):
+Complete phrase list (439 phrases across 66 commands):
 
 #### Play music
 
@@ -10965,6 +11048,14 @@ Complete phrase list (431 phrases across 66 commands):
 - `busca una cancion de <nombre del artista>`
 - `ayudame a encontrar una cancion de <nombre del artista>`
 - `estoy buscando una cancion de <nombre del artista>`
+- `encuentra una cancion de <nombre del artista>`
+- `quiero encontrar una cancion de <nombre del artista>`
+- `busco una cancion de <nombre del artista>`
+- `ayudame a buscar una cancion de <nombre del artista>`
+- `busca un tema de <nombre del artista>`
+- `encuentra un tema de <nombre del artista>`
+- `busco un tema de <nombre del artista>`
+- `una cancion de <nombre del artista>`
 
 #### Queue and repeat
 
@@ -11322,7 +11413,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (425 phrases across 66 commands):
+Complete phrase list (433 phrases across 66 commands):
 
 #### Play music
 
@@ -11625,6 +11716,14 @@ Complete phrase list (425 phrases across 66 commands):
 - `busca una cancion de <nombre del artista>`
 - `ayudame a encontrar una cancion de <nombre del artista>`
 - `estoy buscando una cancion de <nombre del artista>`
+- `encuentra una cancion de <nombre del artista>`
+- `quiero encontrar una cancion de <nombre del artista>`
+- `busco una cancion de <nombre del artista>`
+- `ayudame a buscar una cancion de <nombre del artista>`
+- `busca un tema de <nombre del artista>`
+- `encuentra un tema de <nombre del artista>`
+- `busco un tema de <nombre del artista>`
+- `una cancion de <nombre del artista>`
 
 #### Queue and repeat
 
@@ -11980,7 +12079,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (419 phrases across 66 commands):
+Complete phrase list (427 phrases across 66 commands):
 
 #### Play music
 
@@ -12280,6 +12379,14 @@ Complete phrase list (419 phrases across 66 commands):
 - `help me find a song by <nombre del artista>`
 - `search for a song by <nombre del artista>`
 - `I'm looking for a song by <nombre del artista>`
+- `I want to find a song by <nombre del artista>`
+- `I need to find a song by <nombre del artista>`
+- `find me a song by <nombre del artista>`
+- `help me search for a song by <nombre del artista>`
+- `find a track by <nombre del artista>`
+- `search for a track by <nombre del artista>`
+- `I'm looking for a track by <nombre del artista>`
+- `find songs by <nombre del artista>`
 
 #### Queue and repeat
 

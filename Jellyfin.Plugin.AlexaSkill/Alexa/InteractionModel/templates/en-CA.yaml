@@ -10,6 +10,13 @@
 #
 # Run: python3 scripts/generate_interaction_model.py en-CA
 #
+# JF-399 (2026-09-26): FindSongByArtistIntent enriched 4 -> 12 with this
+# locale's own FindSong openers crossed with the by-artist tail (the
+# song/track noun pair mirrors it-IT's canzone/brano). Skipped carrier
+# families: it-IT's article/plural morphology (di/dei/degli/delle) has no
+# English equivalent, and the is-there opener ("c'e una canzone di X") is
+# not part of this locale's FindSong opener set.
+#
 # Invariants carried by this file:
 # - en-CA diverges from en-US structurally, not just in vocabulary:
 #   no SkipForwardBackIntent / JumpToPositionIntent (hence no
@@ -780,6 +787,19 @@ intents:
       - help me find a song by {musician}
       - search for a song by {musician}
       - I'm looking for a song by {musician}
+      # JF-399 FindSongByArtist parity: it-IT carries 16 samples here while
+      # every other locale sat at 3-4 (the JF-391 starvation class). The
+      # additions are this locale's own FindSong openers crossed with the
+      # by-artist tail; the song/track noun pair mirrors it-IT's
+      # canzone/brano. Skipped families are noted in the template header.
+      - I want to find a song by {musician}
+      - I need to find a song by {musician}
+      - find me a song by {musician}
+      - help me search for a song by {musician}
+      - find a track by {musician}
+      - search for a track by {musician}
+      - I'm looking for a track by {musician}
+      - find songs by {musician}
     slots:
       - name: musician
         type: JellyfinArtist

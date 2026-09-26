@@ -9,6 +9,13 @@
 #
 # Run: python3 scripts/generate_interaction_model.py pt-BR
 #
+# JF-399 (2026-09-26): FindSongByArtistIntent enriched 3 -> 9 (FindSong
+# openers crossed with the de-artist tail; bare-noun wrapper shape).
+# Skipped carrier families: no second song noun exists in this vocabulary
+# (only "musica"; "cancao" is unused), so it-IT's brano twin has no
+# equivalent, and the is-there opener ("c'e una canzone di X") is not
+# part of this locale's FindSong opener set.
+#
 # Invariants carried by this file:
 # - The loop shape follows the en/es families (bare
 #   AMAZON.LoopOnIntent / AMAZON.LoopOffIntent + LoopSongOnIntent
@@ -721,6 +728,20 @@ intents:
       - encontre uma musica de {musician}
       - me ajude a encontrar uma musica de {musician}
       - estou procurando uma musica de {musician}
+      # JF-399 FindSongByArtist parity: it-IT carries 16 samples here while
+      # this locale sat at 3 (the JF-391 starvation class). The additions are
+      # this locale's own FindSong openers (procure / quero encontrar / quero
+      # achar / me ajuda a achar / me ajuda a procurar) crossed with the
+      # de-artist tail, plus the bare-noun wrapper shape this locale's
+      # FindSong already uses (uma musica chamada {titleKeywords}). No second
+      # noun exists in this template's vocabulary (only musica; cancao is
+      # unused), so there is no it-IT brano twin here, see the header.
+      - procure uma musica de {musician}
+      - quero encontrar uma musica de {musician}
+      - quero achar uma musica de {musician}
+      - me ajuda a achar uma musica de {musician}
+      - me ajuda a procurar uma musica de {musician}
+      - uma musica de {musician}
     slots:
       - name: musician
         type: AMAZON.Musician

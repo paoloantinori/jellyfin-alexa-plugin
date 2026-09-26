@@ -942,7 +942,13 @@
           "vind een nummer van {musician}",
           "help me een nummer te vinden van {musician}",
           "zoek een nummer van {musician}",
-          "ik zoek een nummer van {musician}"
+          "ik zoek een nummer van {musician}",
+          "ik moet een nummer van {musician} vinden",
+          "vind me een nummer van {musician}",
+          "help me een nummer te zoeken van {musician}",
+          "ik wil een nummer van {musician} vinden",
+          "vind een liedje van {musician}",
+          "zoek een liedje van {musician}"
         ],
         "slots": [
           {

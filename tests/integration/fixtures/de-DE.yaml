@@ -409,6 +409,14 @@ tests:
     expected_slots:
       titleKeywords: "liebe"
 
+  # JF-399 FindSongByArtist parity pass (2026-09-26): the ich-will carrier
+  # family. Requires the model deploy; the first live suite run after it is
+  # the probe.
+  - utterance: "ich will ein lied von queen finden"
+    expected_intent: FindSongByArtistIntent
+    expected_slots:
+      musician: {}
+
   # JF-414: indefinite album-by-artist forms
   - utterance: "ein Album von queen"
     expected_intent: PlayAlbumIntent

@@ -876,7 +876,10 @@
           "{musician} の曲を探して",
           "{musician} の曲を探すのを手伝って",
           "{musician} の曲を検索して",
-          "{musician} の曲を探しているの"
+          "{musician} の曲を探しているの",
+          "{musician} の曲を見つけたい",
+          "{musician} の曲を探してちょうだい",
+          "{musician} の曲を検索するのを手伝って"
         ],
         "slots": [
           {

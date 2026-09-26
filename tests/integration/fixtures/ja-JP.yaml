@@ -82,3 +82,11 @@ tests:
     expected_intent: FindSongByArtistIntent
     expected_slots:
       musician: {}
+
+  # JF-399 FindSongByArtist parity pass (2026-09-26): the mitshituketai
+  # carrier family. Requires the model deploy; the first live suite run
+  # after it is the probe.
+  - utterance: "クイーン の曲を見つけたい"
+    expected_intent: FindSongByArtistIntent
+    expected_slots:
+      musician: {}

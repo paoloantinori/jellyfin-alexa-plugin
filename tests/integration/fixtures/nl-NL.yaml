@@ -51,6 +51,14 @@ tests:
     expected_slots:
       musician: {}
 
+  # JF-399 FindSongByArtist parity pass (2026-09-26): the ik-wil carrier
+  # family. Requires the model deploy; the first live suite run after it is
+  # the probe.
+  - utterance: "ik wil een nummer van queen vinden"
+    expected_intent: FindSongByArtistIntent
+    expected_slots:
+      musician: {}
+
   - utterance: "luister naar luisterboek een kunstenaar"
     expected_intent: PlayBookIntent
     expected_slots: {}

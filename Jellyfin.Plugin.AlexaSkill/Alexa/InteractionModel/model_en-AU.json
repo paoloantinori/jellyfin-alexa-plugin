@@ -1036,7 +1036,15 @@
           "find a song by {musician}",
           "help me find a song by {musician}",
           "search for a song by {musician}",
-          "I'm looking for a song by {musician}"
+          "I'm looking for a song by {musician}",
+          "I want to find a song by {musician}",
+          "I need to find a song by {musician}",
+          "find me a song by {musician}",
+          "help me search for a song by {musician}",
+          "find a track by {musician}",
+          "search for a track by {musician}",
+          "I'm looking for a track by {musician}",
+          "find songs by {musician}"
         ],
         "slots": [
           {

@@ -31,7 +31,7 @@ Invocation name: **"jellyfin player"**
 | Continue Watching | `أكمل المشاهدة` · `أكمل الاستماع` · `أكمل من حيث توقفت` · `ما كنت أشاهده` · `أكمل` |
 | Create Playlist | `أنشئ قائمة تشغيل باسم {playlist}` · `أنشئ قائمة تشغيل جديدة باسم {playlist}` · `أنشئ قائمة تشغيل {playlist}` · `قائمة تشغيل جديدة {playlist}` |
 | Find Song | `ابحث عن أغنية` · `ابحث عن أغنية اسمها {titleKeywords}` · `ساعدني في البحث عن أغنية` · `ابحث لي عن أغنية` · `أبحث عن أغنية` · `أريد أن أجد أغنية` |
-| Find Song By Artist | `ابحث عن أغنية لـ {musician}` · `ساعدني في البحث عن أغنية لـ {musician}` · `اعثر على أغنية لـ {musician}` · `أبحث عن أغنية لـ {musician}` |
+| Find Song By Artist | `ابحث عن أغنية لـ {musician}` · `ساعدني في البحث عن أغنية لـ {musician}` · `اعثر على أغنية لـ {musician}` · `أبحث عن أغنية لـ {musician}` · `ابحث لي عن أغنية لـ {musician}` · `أريد أن أجد أغنية لـ {musician}` |
 | Follow Me | `تابعني` · `استمر في التشغيل` · `انقل التشغيل` |
 | Go To Chapter | `الفصل التالي` · `اذهب إلى الفصل {chapter_number}` · `الفصل السابق` · `انتقل إلى الفصل {chapter_number}` · `تخطى فصلاً` |
 | In Progress Media List | `ماذا كنت أستمع` · `ماذا كنت أشاهد` · `ما الذي قيد التقدم` · `أظهر تقدمي` · `ما كنت ألعب` · `ما الذي بدأته` |
@@ -88,7 +88,7 @@ Invocation name: **"jellyfin player"**
 | Continue Watching | `Weiter schauen` · `Weiter hören` · `Mach da weiter wo ich war` · `Weiter` |
 | Create Playlist | `Erstelle eine Playlist namens {playlist}` · `Erstelle eine neue Playlist namens {playlist}` · `Neue Playlist namens {playlist}` · `Erstelle eine Playlist {playlist}` · `Erstelle Playlist {playlist}` · `Neue Playlist {playlist}` |
 | Find Song | `finde ein lied` · `finde ein lied namens {titleKeywords}` · `hilf mir ein lied zu finden` · `suche ein lied` · `ich suche ein lied` · `suche ein lied namens {titleKeywords}` |
-| Find Song By Artist | `finde ein lied von {musician}` · `hilf mir ein lied zu finden von {musician}` · `suche ein lied von {musician}` · `ich suche ein lied von {musician}` |
+| Find Song By Artist | `finde ein lied von {musician}` · `hilf mir ein lied zu finden von {musician}` · `suche ein lied von {musician}` · `ich suche ein lied von {musician}` · `ich will ein lied von {musician} finden` · `ich moechte ein lied von {musician} finden` |
 | Follow Me | `folge mir` · `weiterhören` · `Wiedergabe fortsetzen` · `Wiedergabe übernehmen` · `weiter abspielen` · `musik mitnehmen` |
 | Go To Chapter | `Nächstes Kapitel` · `Gehe zu Kapitel {chapter_number}` · `Vorheriges Kapitel` · `Springe zu Kapitel {chapter_number}` · `Ein Kapitel vor` · `Ein Kapitel zurück` |
 | In Progress Media List | `was höre ich gerade` · `was schaue ich gerade` · `was ist in bearbeitung` · `zeige meinen fortschritt` · `was habe ich angefangen` |
@@ -150,7 +150,7 @@ Invocation name: **"jellyfin player"**
 | Continue Watching | `Continue watching` · `Continue listening` · `Resume where I left off` · `What was I watching` · `Keep playing` · `Continue` |
 | Create Playlist | `create a playlist called {playlist}` · `create a new playlist called {playlist}` · `make a playlist called {playlist}` · `create a playlist {playlist}` · `create playlist {playlist}` · `new playlist {playlist}` |
 | Find Song | `find a song` · `find a song called {titleKeywords}` · `help me find a song` · `search for a song` · `I'm looking for a song` · `I need to find a song` |
-| Find Song By Artist | `find a song by {musician}` · `help me find a song by {musician}` · `search for a song by {musician}` · `I'm looking for a song by {musician}` |
+| Find Song By Artist | `find a song by {musician}` · `help me find a song by {musician}` · `search for a song by {musician}` · `I'm looking for a song by {musician}` · `I want to find a song by {musician}` · `I need to find a song by {musician}` |
 | Follow Me | `follow me` · `continue playing` · `resume from where I left off` · `take over playback` · `keep playing` · `pick up where I left off` |
 | Go To Chapter | `Next chapter` · `Go to chapter {chapter_number}` · `Previous chapter` · `Skip to chapter {chapter_number}` · `Go forward a chapter` · `Go back a chapter` |
 | In Progress Media List | `what am i listening to` · `what am i watching` · `what's in progress` · `what is in progress` · `show my progress` · `what was i playing` |
@@ -207,7 +207,7 @@ Invocation name: **"jellyfin player"**
 | Continue Watching | `Continue watching` · `Continue listening` · `Resume where I left off` · `What was I watching` · `Keep playing` · `Continue` |
 | Create Playlist | `create a playlist called {playlist}` · `create a new playlist called {playlist}` · `make a playlist called {playlist}` · `create a playlist {playlist}` · `create playlist {playlist}` · `new playlist {playlist}` |
 | Find Song | `find a song` · `find a song called {titleKeywords}` · `help me find a song` · `search for a song` · `I'm looking for a song` · `I need to find a song` |
-| Find Song By Artist | `find a song by {musician}` · `help me find a song by {musician}` · `search for a song by {musician}` · `I'm looking for a song by {musician}` |
+| Find Song By Artist | `find a song by {musician}` · `help me find a song by {musician}` · `search for a song by {musician}` · `I'm looking for a song by {musician}` · `I want to find a song by {musician}` · `I need to find a song by {musician}` |
 | Follow Me | `follow me` · `continue playing` · `resume from where I left off` · `take over playback` · `keep playing` |
 | Go To Chapter | `Next chapter` · `Go to chapter {chapter_number}` · `Previous chapter` · `Skip to chapter {chapter_number}` · `Go forward a chapter` · `Go back a chapter` |
 | In Progress Media List | `what am i listening to` · `what am i watching` · `what's in progress` · `what is in progress` · `show my progress` · `what was i playing` |
@@ -264,7 +264,7 @@ Invocation name: **"jellyfin player"**
 | Continue Watching | `Continue watching` · `Continue listening` · `Resume where I left off` · `What was I watching` · `Keep playing` · `Continue` |
 | Create Playlist | `create a playlist called {playlist}` · `create a new playlist called {playlist}` · `make a playlist called {playlist}` · `create a playlist {playlist}` · `create playlist {playlist}` · `new playlist {playlist}` |
 | Find Song | `find a song` · `find a song called {titleKeywords}` · `help me find a song` · `search for a song` · `I'm looking for a song` · `I need to find a song` |
-| Find Song By Artist | `find a song by {musician}` · `help me find a song by {musician}` · `search for a song by {musician}` · `I'm looking for a song by {musician}` |
+| Find Song By Artist | `find a song by {musician}` · `help me find a song by {musician}` · `search for a song by {musician}` · `I'm looking for a song by {musician}` · `I want to find a song by {musician}` · `I need to find a song by {musician}` |
 | Follow Me | `follow me` · `continue playing` · `resume from where I left off` · `take over playback` · `move playback here` · `keep playing` |
 | Go To Chapter | `Next chapter` · `Go to chapter {chapter_number}` · `Previous chapter` · `Skip to chapter {chapter_number}` · `Go forward a chapter` · `Go back a chapter` |
 | In Progress Media List | `what am i listening to` · `what am i watching` · `what's in progress` · `what is in progress` · `show my progress` · `what was i playing` |
@@ -321,7 +321,7 @@ Invocation name: **"jellyfin player"**
 | Continue Watching | `Continue watching` · `Continue listening` · `Resume where I left off` · `What was I watching` · `Keep playing` · `Continue` |
 | Create Playlist | `create a playlist called {playlist}` · `create a new playlist called {playlist}` · `make a playlist called {playlist}` · `create a playlist {playlist}` · `create playlist {playlist}` · `new playlist {playlist}` |
 | Find Song | `find a song` · `find a song called {titleKeywords}` · `help me find a song` · `search for a song` · `I'm looking for a song` · `I need to find a song` |
-| Find Song By Artist | `find a song by {musician}` · `help me find a song by {musician}` · `search for a song by {musician}` · `I'm looking for a song by {musician}` |
+| Find Song By Artist | `find a song by {musician}` · `help me find a song by {musician}` · `search for a song by {musician}` · `I'm looking for a song by {musician}` · `I want to find a song by {musician}` · `I need to find a song by {musician}` |
 | Follow Me | `follow me` · `continue playing` · `resume from where I left off` · `take over playback` |
 | Go To Chapter | `Next chapter` · `Go to chapter {chapter_number}` · `Previous chapter` · `Skip to chapter {chapter_number}` · `Go forward a chapter` · `Go back a chapter` |
 | In Progress Media List | `what am i listening to` · `what am i watching` · `what's in progress` · `what is in progress` · `show my progress` · `what was i playing` |
@@ -378,7 +378,7 @@ Invocation name: **"jellyfin player"**
 | Continue Watching | `Continue watching` · `Continue listening` · `Resume where I left off` · `What was I watching` · `Keep playing` · `Continue` |
 | Create Playlist | `create a playlist called {playlist}` · `create a new playlist called {playlist}` · `make a playlist called {playlist}` · `create a playlist {playlist}` · `create playlist {playlist}` · `new playlist {playlist}` |
 | Find Song | `find a song` · `find a song called {titleKeywords}` · `help me find a song` · `search for a song` · `I'm looking for a song` · `I need to find a song` |
-| Find Song By Artist | `find a song by {musician}` · `help me find a song by {musician}` · `search for a song by {musician}` · `I'm looking for a song by {musician}` |
+| Find Song By Artist | `find a song by {musician}` · `help me find a song by {musician}` · `search for a song by {musician}` · `I'm looking for a song by {musician}` · `I want to find a song by {musician}` · `I need to find a song by {musician}` |
 | Follow Me | `follow me` · `continue playing` · `resume from where I left off` · `take over playback` · `move playback here` · `keep playing` |
 | Go To Chapter | `Next chapter` · `Go to chapter {chapter_number}` · `Previous chapter` · `Skip to chapter {chapter_number}` · `Go forward a chapter` · `Go back a chapter` |
 | In Progress Media List | `what am i listening to` · `what am i watching` · `what's in progress` · `what is in progress` · `show my progress` · `what was i playing` |
@@ -437,7 +437,7 @@ Invocation name: **"jellyfin player"**
 | Continue Watching | `Continuar viendo` · `Continuar escuchando` · `Seguir donde lo dejé` · `Continuar` |
 | Create Playlist | `Crea una lista llamada {playlist}` · `Crea una nueva lista llamada {playlist}` · `Nueva lista llamada {playlist}` · `Crea una lista {playlist}` · `Crea lista {playlist}` · `Nueva lista {playlist}` |
 | Find Song | `busca una cancion` · `busca una cancion llamada {titleKeywords}` · `ayudame a encontrar una cancion` · `estoy buscando una cancion` · `encuentra una cancion llamada {titleKeywords}` · `encuentra una cancion` |
-| Find Song By Artist | `busca una cancion de {musician}` · `ayudame a encontrar una cancion de {musician}` · `estoy buscando una cancion de {musician}` |
+| Find Song By Artist | `busca una cancion de {musician}` · `ayudame a encontrar una cancion de {musician}` · `estoy buscando una cancion de {musician}` · `encuentra una cancion de {musician}` · `quiero encontrar una cancion de {musician}` · `busco una cancion de {musician}` |
 | Follow Me | `sígueme` · `continuar reproduciendo` · `seguir escuchando` · `retomar reproducción` · `transferir la música` |
 | Go To Chapter | `Siguiente capítulo` · `Ir al capítulo {chapter_number}` · `Capítulo anterior` · `Saltar al capítulo {chapter_number}` · `Avanzar un capítulo` · `Retroceder un capítulo` |
 | In Progress Media List | `qué estoy escuchando` · `qué estoy viendo` · `qué está en progreso` · `muestra mi progreso` · `qué he empezado` |
@@ -494,7 +494,7 @@ Invocation name: **"jellyfin player"**
 | Continue Watching | `Continuar viendo` · `Continuar escuchando` · `Seguir donde lo dejé` · `Continuar` |
 | Create Playlist | `Crea una lista llamada {playlist}` · `Crea una nueva lista llamada {playlist}` · `Nueva lista llamada {playlist}` · `Crea una lista {playlist}` · `Crea lista {playlist}` · `Nueva lista {playlist}` |
 | Find Song | `busca una cancion` · `busca una cancion llamada {titleKeywords}` · `ayudame a encontrar una cancion` · `estoy buscando una cancion` · `encuentra una cancion llamada {titleKeywords}` · `encuentra una cancion` |
-| Find Song By Artist | `busca una cancion de {musician}` · `ayudame a encontrar una cancion de {musician}` · `estoy buscando una cancion de {musician}` |
+| Find Song By Artist | `busca una cancion de {musician}` · `ayudame a encontrar una cancion de {musician}` · `estoy buscando una cancion de {musician}` · `encuentra una cancion de {musician}` · `quiero encontrar una cancion de {musician}` · `busco una cancion de {musician}` |
 | Follow Me | `sígueme` · `continuar reproduciendo` · `seguir escuchando` · `retomar reproducción` |
 | Go To Chapter | `Siguiente capítulo` · `Ir al capítulo {chapter_number}` · `Capítulo anterior` · `Saltar al capítulo {chapter_number}` · `Avanzar un capítulo` · `Retroceder un capítulo` |
 | In Progress Media List | `qué estoy escuchando` · `qué estoy viendo` · `qué está en progreso` · `muestra mi progreso` · `qué he empezado` |
@@ -551,7 +551,7 @@ Invocation name: **"jellyfin player"**
 | Continue Watching | `Continuar viendo` · `Continuar escuchando` · `Seguir donde lo dejé` · `Continuar` |
 | Create Playlist | `Crea una lista llamada {playlist}` · `Crea una nueva lista llamada {playlist}` · `Nueva lista llamada {playlist}` · `Crea una lista {playlist}` · `Crea lista {playlist}` · `Nueva lista {playlist}` |
 | Find Song | `find a song` · `find a song called {titleKeywords}` · `help me find a song` · `search for a song` · `I'm looking for a song` · `I need to find a song` |
-| Find Song By Artist | `find a song by {musician}` · `help me find a song by {musician}` · `search for a song by {musician}` · `I'm looking for a song by {musician}` |
+| Find Song By Artist | `find a song by {musician}` · `help me find a song by {musician}` · `search for a song by {musician}` · `I'm looking for a song by {musician}` · `I want to find a song by {musician}` · `I need to find a song by {musician}` |
 | Follow Me | `sígueme` · `continuar reproduciendo` · `seguir escuchando` · `retomar reproducción` |
 | Go To Chapter | `Siguiente capítulo` · `Ir al capítulo {chapter_number}` · `Capítulo anterior` · `Saltar al capítulo {chapter_number}` · `Avanzar un capítulo` · `Retroceder un capítulo` |
 | In Progress Media List | `qué estoy escuchando` · `qué estoy viendo` · `qué está en progreso` · `muestra mi progreso` · `qué he empezado` |
@@ -608,7 +608,7 @@ Invocation name: **"jellyfin player"**
 | Continue Watching | `Continuer à regarder` · `Continuer à écouter` · `Reprendre où j'en étais` · `Continuer` |
 | Create Playlist | `Crée une liste de lecture appelée {playlist}` · `Crée une nouvelle liste de lecture appelée {playlist}` · `Crée une liste de lecture {playlist}` · `Nouvelle liste de lecture {playlist}` |
 | Find Song | `trouve une chanson` · `trouve une chanson appelee {titleKeywords}` · `aide moi a trouver une chanson` · `je cherche une chanson` · `cherche une chanson appelee {titleKeywords}` · `cherche une chanson` |
-| Find Song By Artist | `trouve une chanson de {musician}` · `aide moi a trouver une chanson de {musician}` · `je cherche une chanson de {musician}` |
+| Find Song By Artist | `trouve une chanson de {musician}` · `aide moi a trouver une chanson de {musician}` · `je cherche une chanson de {musician}` · `cherche une chanson de {musician}` · `je veux trouver une chanson de {musician}` · `je voudrais trouver une chanson de {musician}` |
 | Follow Me | `suis-moi` · `continuer la lecture` · `reprendre la lecture` · `transférer la lecture` |
 | Go To Chapter | `Chapitre suivant` · `Aller au chapitre {chapter_number}` · `Chapitre précédent` · `Sauter au chapitre {chapter_number}` · `Avancer d'un chapitre` · `Reculer d'un chapitre` |
 | In Progress Media List | `qu'est-ce que j'écoute` · `qu'est-ce que je regarde` · `quoi en cours` · `afficher ma progression` · `qu'ai-je commencé` |
@@ -670,7 +670,7 @@ Invocation name: **"jellyfin player"**
 | Continue Watching | `Continuer à regarder` · `Continuer à écouter` · `Reprendre où j'en étais` · `Continuer` |
 | Create Playlist | `Crée une liste de lecture appelée {playlist}` · `Crée une nouvelle liste de lecture appelée {playlist}` · `Crée une liste de lecture {playlist}` · `Nouvelle liste de lecture {playlist}` |
 | Find Song | `trouve une chanson` · `trouve une chanson appelee {titleKeywords}` · `aide moi a trouver une chanson` · `je cherche une chanson` · `cherche une chanson appelee {titleKeywords}` · `cherche une chanson` |
-| Find Song By Artist | `trouve une chanson de {musician}` · `aide moi a trouver une chanson de {musician}` · `je cherche une chanson de {musician}` |
+| Find Song By Artist | `trouve une chanson de {musician}` · `aide moi a trouver une chanson de {musician}` · `je cherche une chanson de {musician}` · `cherche une chanson de {musician}` · `je veux trouver une chanson de {musician}` · `je voudrais trouver une chanson de {musician}` |
 | Follow Me | `suis-moi` · `continuer la lecture` · `reprendre la lecture` · `transférer la lecture` · `reprendre où j'en étais` |
 | Go To Chapter | `Chapitre suivant` · `Aller au chapitre {chapter_number}` · `Chapitre précédent` · `Sauter au chapitre {chapter_number}` · `Avancer d'un chapitre` · `Reculer d'un chapitre` |
 | In Progress Media List | `qu'est-ce que j'écoute` · `qu'est-ce que je regarde` · `quoi en cours` · `afficher ma progression` · `qu'ai-je commencé` |
@@ -732,7 +732,7 @@ Invocation name: **"jellyfin player"**
 | Continue Watching | `देखना जारी रखो` · `सुनना जारी रखो` · `जहाँ छोड़ा था वहाँ से फिर से शुरू करो` · `मैं क्या देख रहा था` · `जारी रखो` · `जारी` |
 | Create Playlist | `{playlist} नाम की प्लेलिस्ट बनाओ` · `नई प्लेलिस्ट {playlist} बनाओ` · `प्लेलिस्ट {playlist} बनाओ` |
 | Find Song | `गाना खोजो` · `{titleKeywords} नाम का गाना खोजो` · `मेरे गाना खोजने में मदद करो` · `गाना खोजना है` · `मैं गाना खोज रहा हूँ` · `मुझे गाना खोजना है` |
-| Find Song By Artist | `{musician} का गाना खोजो` · `{musician} का गाना खोजने में मदद करो` · `{musician} का गाना ढूंढो` · `मैं {musician} का गाना खोज रहा हूँ` |
+| Find Song By Artist | `{musician} का गाना खोजो` · `{musician} का गाना खोजने में मदद करो` · `{musician} का गाना ढूंढो` · `मैं {musician} का गाना खोज रहा हूँ` · `मुझे {musician} का गाना खोजना है` · `मैं {musician} का गाना खोजना चाहता हूँ` |
 | Follow Me | `मेरे साथ आओ` · `चलाना जारी रखो` · `जहां छोड़ा थे वहां से शुरू करो` |
 | Go To Chapter | `अगला चैप्टर` · `चैप्टर {chapter_number} पर जाओ` · `पिछला चैप्टर` · `चैप्टर {chapter_number} पर स्किप करो` · `एक चैप्टर आगे जाओ` · `एक चैप्टर पीछे जाओ` |
 | In Progress Media List | `मैं क्या सुन रहा हूँ` · `मैं क्या देख रहा हूँ` · `क्या प्रगति पर है` · `मेरी प्रगति दिखाओ` · `मैं क्या चला रहा था` · `मेरी प्रगति पर मीडिया दिखाओ` |
@@ -851,7 +851,7 @@ Invocation name: **"jellyfin player"**
 | Continue Watching | `続きを見て` · `続きを聴いて` · `途中から再開して` · `何を見てたっけ` · `続き` |
 | Create Playlist | `{playlist} というプレイリストを作って` · `新しいプレイリスト {playlist} を作成して` · `プレイリスト {playlist} を作って` |
 | Find Song | `曲を探して` · `{titleKeywords} という曲を探して` · `曲を探すのを手伝って` · `曲を検索して` · `曲を探しているの` · `曲を見つけたいの` |
-| Find Song By Artist | `{musician} の曲を探して` · `{musician} の曲を探すのを手伝って` · `{musician} の曲を検索して` · `{musician} の曲を探しているの` |
+| Find Song By Artist | `{musician} の曲を探して` · `{musician} の曲を探すのを手伝って` · `{musician} の曲を検索して` · `{musician} の曲を探しているの` · `{musician} の曲を見つけたい` · `{musician} の曲を探してちょうだい` |
 | Follow Me | `ついてきて` · `再生を続けて` · `続きから再生` · `再生を引き継ぐ` |
 | Go To Chapter | `次のチャプター` · `チャプター {chapter_number} へ行って` · `前のチャプター` · `チャプター {chapter_number} へスキップして` · `チャプターをスキップして` |
 | In Progress Media List | `何聴いてたっけ` · `何見てたっけ` · `進行中のものは` · `進捗を見せて` · `何再生してたっけ` · `開始したものは何` |
@@ -908,7 +908,7 @@ Invocation name: **"jellyfin player"**
 | Continue Watching | `verder kijken` · `verder luisteren` · `hervat waar ik was gebleven` · `wat was ik aan het kijken` · `doorgaan` · `verder gaan` |
 | Create Playlist | `Maak een afspeellijst genaamd {playlist}` · `Maak een nieuwe afspeellijst genaamd {playlist}` · `Maak een afspeellijst {playlist}` · `Nieuwe afspeellijst {playlist}` |
 | Find Song | `vind een nummer` · `vind een nummer genaamd {titleKeywords}` · `help me een nummer te vinden` · `zoek een nummer` · `ik zoek een nummer` · `ik moet een nummer vinden` |
-| Find Song By Artist | `vind een nummer van {musician}` · `help me een nummer te vinden van {musician}` · `zoek een nummer van {musician}` · `ik zoek een nummer van {musician}` |
+| Find Song By Artist | `vind een nummer van {musician}` · `help me een nummer te vinden van {musician}` · `zoek een nummer van {musician}` · `ik zoek een nummer van {musician}` · `ik moet een nummer van {musician} vinden` · `vind me een nummer van {musician}` |
 | Follow Me | `volg me` · `verder met afspelen` · `neem het over` · `doorgaan met luisteren` |
 | Go To Chapter | `volgend hoofdstuk` · `ga naar hoofdstuk {chapter_number}` · `vorig hoofdstuk` · `spring naar hoofdstuk {chapter_number}` · `een hoofdstuk vooruit` · `een hoofdstuk terug` |
 | In Progress Media List | `waar was ik naar aan het luisteren` · `waar was ik naar aan het kijken` · `wat is in behandeling` · `laat mijn voortgang zien` · `wat was ik aan het afspelen` · `wat heb ik gestart` |
@@ -965,7 +965,7 @@ Invocation name: **"jellyfin player"**
 | Continue Watching | `continuar assistindo` · `continuar ouvindo` · `retomar de onde parei` · `o que eu estava assistindo` · `continuar tocando` · `continuar` |
 | Create Playlist | `Crie uma playlist chamada {playlist}` · `Crie uma nova playlist chamada {playlist}` · `Crie uma playlist {playlist}` · `Crie playlist {playlist}` · `Nova playlist {playlist}` |
 | Find Song | `encontre uma musica` · `encontre uma musica chamada {titleKeywords}` · `me ajude a encontrar uma musica` · `estou procurando uma musica` · `procure uma musica chamada {titleKeywords}` · `procure uma musica` |
-| Find Song By Artist | `encontre uma musica de {musician}` · `me ajude a encontrar uma musica de {musician}` · `estou procurando uma musica de {musician}` |
+| Find Song By Artist | `encontre uma musica de {musician}` · `me ajude a encontrar uma musica de {musician}` · `estou procurando uma musica de {musician}` · `procure uma musica de {musician}` · `quero encontrar uma musica de {musician}` · `quero achar uma musica de {musician}` |
 | Follow Me | `me siga` · `continuar tocando` · `retomar a reprodução` · `transferir a música` |
 | Go To Chapter | `próximo capítulo` · `ir para o capítulo {chapter_number}` · `capítulo anterior` · `pular para o capítulo {chapter_number}` · `avançar um capítulo` · `voltar um capítulo` |
 | In Progress Media List | `o que eu estava ouvindo` · `o que eu estava assistindo` · `o que está em andamento` · `mostrar meu progresso` · `o que eu estava tocando` · `listar mídias em andamento` |

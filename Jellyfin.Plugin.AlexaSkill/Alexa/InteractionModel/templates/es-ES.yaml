@@ -9,6 +9,12 @@
 #
 # Run: python3 scripts/generate_interaction_model.py es-ES
 #
+# JF-399 (2026-09-26): FindSongByArtistIntent enriched 3 -> 11 (FindSong
+# openers crossed with the de-artist tail; the cancion/tema noun pair
+# mirrors it-IT's canzone/brano; bare-noun wrapper shape). Skipped carrier
+# family: the is-there opener ("c'e una canzone di X") is not part of this
+# locale's FindSong opener set.
+#
 # Invariants carried by this file:
 # - The intent sequence is IDENTICAL to en-GB's (same 59 names, same
 #   order). The structural divergences from en-GB are exactly three:
@@ -747,6 +753,21 @@ intents:
       - busca una cancion de {musician}
       - ayudame a encontrar una cancion de {musician}
       - estoy buscando una cancion de {musician}
+      # JF-399 FindSongByArtist parity: it-IT carries 16 samples here while
+      # this locale sat at 3 (the JF-391 starvation class). The additions are
+      # this locale's own FindSong openers (encuentra / quiero encontrar /
+      # busco / ayudame a buscar) crossed with the de-artist tail, plus the
+      # cancion/tema noun pair mirroring it-IT's canzone/brano and the
+      # bare-noun wrapper shape this locale's FindSong already uses (una
+      # cancion llamada {titleKeywords}).
+      - encuentra una cancion de {musician}
+      - quiero encontrar una cancion de {musician}
+      - busco una cancion de {musician}
+      - ayudame a buscar una cancion de {musician}
+      - busca un tema de {musician}
+      - encuentra un tema de {musician}
+      - busco un tema de {musician}
+      - una cancion de {musician}
     slots:
       - name: musician
         type: AMAZON.Musician

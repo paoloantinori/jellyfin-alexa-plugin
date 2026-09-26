@@ -36,3 +36,11 @@ tests:
   - utterance: "ابحث عن أغنية"
     expected_intent: FindSongIntent
     expected_slots: {}
+
+  # JF-399 FindSongByArtist parity pass (2026-09-26): the ibhtagh-li carrier
+  # family. Requires the model deploy; the first live suite run after it is
+  # the probe.
+  - utterance: "ابحث لي عن أغنية لـ queen"
+    expected_intent: FindSongByArtistIntent
+    expected_slots:
+      musician: {}

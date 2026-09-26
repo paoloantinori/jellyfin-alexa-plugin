@@ -955,7 +955,13 @@
         "samples": [
           "encontre uma musica de {musician}",
           "me ajude a encontrar uma musica de {musician}",
-          "estou procurando uma musica de {musician}"
+          "estou procurando uma musica de {musician}",
+          "procure uma musica de {musician}",
+          "quero encontrar uma musica de {musician}",
+          "quero achar uma musica de {musician}",
+          "me ajuda a achar uma musica de {musician}",
+          "me ajuda a procurar uma musica de {musician}",
+          "uma musica de {musician}"
         ],
         "slots": [
           {

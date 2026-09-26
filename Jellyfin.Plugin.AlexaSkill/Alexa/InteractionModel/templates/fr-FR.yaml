@@ -9,6 +9,12 @@
 #
 # Run: python3 scripts/generate_interaction_model.py fr-FR
 #
+# JF-399 (2026-09-26): FindSongByArtistIntent enriched 3 -> 11 (FindSong
+# openers crossed with the de-artist tail; the chanson/morceau noun pair
+# mirrors it-IT's canzone/brano; bare-noun wrapper shape). Skipped carrier
+# family: the is-there opener ("c'e una canzone di X") is not part of this
+# locale's FindSong opener set.
+#
 # Invariants carried by this file:
 # - The intent sequence is IDENTICAL to de-DE's (same 63 names, same
 #   order), including the CUSTOM loop trio LoopAllOffIntent /
@@ -793,6 +799,21 @@ intents:
       - trouve une chanson de {musician}
       - aide moi a trouver une chanson de {musician}
       - je cherche une chanson de {musician}
+      # JF-399 FindSongByArtist parity: it-IT carries 16 samples here while
+      # this locale sat at 3 (the JF-391 starvation class). The additions are
+      # this locale's own FindSong openers (cherche / je veux trouver / je
+      # voudrais trouver / aide moi a chercher) crossed with the de-artist
+      # tail, plus the chanson/morceau noun pair mirroring it-IT's
+      # canzone/brano and the bare-noun wrapper shape this locale's FindSong
+      # already uses (une chanson appelee {titleKeywords}).
+      - cherche une chanson de {musician}
+      - je veux trouver une chanson de {musician}
+      - je voudrais trouver une chanson de {musician}
+      - aide moi a chercher une chanson de {musician}
+      - trouve un morceau de {musician}
+      - cherche un morceau de {musician}
+      - je cherche un morceau de {musician}
+      - une chanson de {musician}
     slots:
       - name: musician
         type: AMAZON.Musician
