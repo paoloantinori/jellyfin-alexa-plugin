@@ -18,6 +18,7 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
+using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Alexa.NET.Assertions;
@@ -168,8 +169,7 @@ public class PlayPodcastIntentHandlerTests : PluginTestBase
             Id = Guid.NewGuid()
         };
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum))))
-            .Returns(new List<BaseItem> { podcast });
+        SetupShapeQueries(new List<BaseItem> { podcast }, new List<BaseItem>());
 
         _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))))
             .Returns(new List<BaseItem>());
@@ -203,8 +203,7 @@ public class PlayPodcastIntentHandlerTests : PluginTestBase
             Id = Guid.NewGuid(),
         };
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum))))
-            .Returns(new List<BaseItem> { podcast });
+        SetupShapeQueries(new List<BaseItem> { podcast }, new List<BaseItem>());
 
         _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))))
             .Returns(new List<BaseItem> { episode });
@@ -244,8 +243,7 @@ public class PlayPodcastIntentHandlerTests : PluginTestBase
             Id = Guid.NewGuid(),
         };
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum))))
-            .Returns(new List<BaseItem> { podcast });
+        SetupShapeQueries(new List<BaseItem> { podcast }, new List<BaseItem>());
 
         _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))))
             .Returns(new List<BaseItem> { episode });
@@ -283,8 +281,7 @@ public class PlayPodcastIntentHandlerTests : PluginTestBase
             Id = Guid.NewGuid(),
         };
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum))))
-            .Returns(new List<BaseItem> { podcast });
+        SetupShapeQueries(new List<BaseItem> { podcast }, new List<BaseItem>());
 
         _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))))
             .Returns(new List<BaseItem> { episode });
@@ -326,8 +323,7 @@ public class PlayPodcastIntentHandlerTests : PluginTestBase
             DateCreated = DateTime.UtcNow.AddDays(-1)
         };
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum))))
-            .Returns(new List<BaseItem> { podcast });
+        SetupShapeQueries(new List<BaseItem> { podcast }, new List<BaseItem>());
 
         _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))))
             .Returns(new List<BaseItem> { newEpisode, oldEpisode });
@@ -364,8 +360,7 @@ public class PlayPodcastIntentHandlerTests : PluginTestBase
             Id = Guid.NewGuid(),
         };
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum))))
-            .Returns(new List<BaseItem> { podcast });
+        SetupShapeQueries(new List<BaseItem> { podcast }, new List<BaseItem>());
 
         _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))))
             .Returns(new List<BaseItem> { episode });
@@ -469,8 +464,7 @@ public class PlayPodcastIntentHandlerTests : PluginTestBase
 
         // Two distinct Setups by IncludeItemTypes, matching the sibling-test pattern:
         // album discovery (MusicAlbum) returns the album; episode query (Audio) captures itself.
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum))))
-            .Returns(new List<BaseItem> { album });
+        SetupShapeQueries(new List<BaseItem> { album }, new List<BaseItem>());
 
         InternalItemsQuery? capturedEpisodeQuery = null;
         _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))))
@@ -484,6 +478,37 @@ public class PlayPodcastIntentHandlerTests : PluginTestBase
         Assert.Contains(BaseItemKind.Audio, capturedEpisodeQuery.IncludeItemTypes);
         Assert.DoesNotContain(BaseItemKind.Episode, capturedEpisodeQuery.IncludeItemTypes);
         Assert.Equal(album.Id, capturedEpisodeQuery.ParentId);
+    }
+
+    /// <summary>
+    /// Wires the JF-640 both-shapes discovery mocks: the MusicAlbum query returns
+    /// <paramref name="albums"/> and the Series query returns <paramref name="series"/>
+    /// (both queries always run since JF-640).
+    /// </summary>
+    private void SetupShapeQueries(IReadOnlyList<BaseItem> albums, IReadOnlyList<BaseItem> series)
+    {
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum))))
+            .Returns(albums);
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Length == 1 && q.IncludeItemTypes[0] == BaseItemKind.Series)))
+            .Returns(series);
+    }
+
+    /// <summary>
+    /// Wires the JF-640 fuzzy-fallback mocks: both SearchTerm shape queries miss,
+    /// and the SearchItemsFuzzyAsync query (no SearchTerm, both kinds) returns
+    /// <paramref name="fuzzyCandidates"/>.
+    /// </summary>
+    private void SetupSearchTermMiss_FuzzyHits(IReadOnlyList<BaseItem> fuzzyCandidates)
+    {
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.SearchTerm != null && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum))))
+            .Returns(new List<BaseItem>());
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.SearchTerm != null && q.IncludeItemTypes != null && q.IncludeItemTypes.Length == 1 && q.IncludeItemTypes[0] == BaseItemKind.Series)))
+            .Returns(new List<BaseItem>());
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.SearchTerm == null && q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum))))
+            .Returns(fuzzyCandidates);
     }
 
     /// <summary>
@@ -595,12 +620,14 @@ public class PlayPodcastIntentHandlerTests : PluginTestBase
     }
 
     /// <summary>
-    /// JF-599 contract: the album shape stays primary. When MusicAlbum matches, the
-    /// Series fallback query is never issued (community-plugin libraries keep their
-    /// exact previous behavior).
+    /// JF-640 contract (replaces the JF-599 "never queries Series" pin): BOTH shape
+    /// queries always run, even when the MusicAlbum query matched. The old
+    /// conditional fallback made the Series shape unreachable whenever any album
+    /// matched the search term, so the user's exactly-named 'Morning' podcast series
+    /// was never even queried (the live JF-640 incident).
     /// </summary>
     [Fact]
-    public async Task HandleAsync_AlbumMatch_NeverQueriesSeries()
+    public async Task HandleAsync_AlbumMatch_StillQueriesSeries()
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest(podcastName: "Serial");
@@ -612,8 +639,7 @@ public class PlayPodcastIntentHandlerTests : PluginTestBase
 
         var album = new MusicAlbum { Name = "Serial", Id = Guid.NewGuid() };
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum))))
-            .Returns(new List<BaseItem> { album });
+        SetupShapeQueries(new List<BaseItem> { album }, new List<BaseItem>());
 
         _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))))
             .Returns(new List<BaseItem> { new Audio { Name = "Episode 1", Id = Guid.NewGuid() } });
@@ -624,7 +650,7 @@ public class PlayPodcastIntentHandlerTests : PluginTestBase
         response.HasDirective<AudioPlayerPlayDirective>();
         _libraryManagerMock.Verify(
             l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Length == 1 && q.IncludeItemTypes[0] == BaseItemKind.Series)),
-            Times.Never);
+            Times.Once);
     }
 
     /// <summary>
@@ -679,8 +705,7 @@ public class PlayPodcastIntentHandlerTests : PluginTestBase
             Id = Guid.NewGuid()
         };
 
-        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicAlbum))))
-            .Returns(new List<BaseItem> { podcast1, podcast2 });
+        SetupShapeQueries(new List<BaseItem> { podcast1, podcast2 }, new List<BaseItem>());
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -689,5 +714,237 @@ public class PlayPodcastIntentHandlerTests : PluginTestBase
         Assert.NotNull(response.SessionAttributes);
         Assert.True(response.SessionAttributes.ContainsKey("disambig_matches"));
         Assert.True(response.SessionAttributes.ContainsKey("disambig_type"));
+    }
+
+    /// <summary>
+    /// JF-640 (the live incident shape): the album query returns music albums AND the
+    /// series query returns the exactly-named podcast; asking 'morning' must play the
+    /// SERIES, never fuzzy-accept an album (live: 'Euphoria Morning' scored 90 and
+    /// played a song). Proven via the episode query shape: the series container
+    /// resolves episodes by AncestorIds, never ParentId.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_ExactSeriesName_WinsOverAlbumMatches_PlaysTheSeries()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(podcastName: "morning");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var album = new MusicAlbum { Name = "Euphoria Morning", Id = Guid.NewGuid() };
+        var series = new MediaBrowser.Controller.Entities.TV.Series { Name = "Morning", Id = Guid.NewGuid() };
+        var newestEpisode = new MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "Morning Weekend",
+            Id = Guid.NewGuid(),
+            DateCreated = DateTime.UtcNow.AddDays(-1)
+        };
+
+        SetupShapeQueries(new List<BaseItem> { album }, new List<BaseItem> { series });
+
+        InternalItemsQuery? capturedEpisodeQuery = null;
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Episode))))
+            .Callback<InternalItemsQuery>(q => capturedEpisodeQuery = q)
+            .Returns(new List<BaseItem> { newestEpisode });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        response.HasDirective<AudioPlayerPlayDirective>();
+        Assert.NotNull(session.NowPlayingQueue);
+        Assert.Single(session.NowPlayingQueue);
+        Assert.Equal(newestEpisode.Id, session.NowPlayingQueue[0].Id);
+        // The played container is the SERIES: episodes resolve by ancestor, not parent.
+        Assert.NotNull(capturedEpisodeQuery);
+        Assert.NotNull(capturedEpisodeQuery.AncestorIds);
+        Assert.Contains(series.Id, capturedEpisodeQuery.AncestorIds);
+        Assert.Equal(Guid.Empty, capturedEpisodeQuery.ParentId);
+    }
+
+    /// <summary>
+    /// JF-640 cross-type fuzzy guard (single-candidate shape): when the fuzzy
+    /// fallback's best is a MusicAlbum ('Euphoria Morning' at the live score 90 for
+    /// 'morning', both SearchTerm shape queries missed), the handler must PROMPT
+    /// instead of auto-playing a music album for a podcast query. The yes/no confirm
+    /// rides the podcast disambiguation state (YesIntentHandler plays it on "yes").
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_AlbumOnlyFuzzyHit_PromptsInsteadOfAutoPlaying()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(podcastName: "morning");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var album = new MusicAlbum { Name = "Euphoria Morning", Id = Guid.NewGuid() };
+
+        SetupSearchTermMiss_FuzzyHits(new List<BaseItem> { album });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.False(response.Response.ShouldEndSession);
+        Assert.NotNull(response.SessionAttributes);
+        Assert.True(response.SessionAttributes.ContainsKey("disambig_matches"));
+        Assert.Equal("podcast", response.SessionAttributes["disambig_type"]?.ToString());
+        Assert.Empty(response.Response.Directives?.OfType<AudioPlayerPlayDirective>() ?? Enumerable.Empty<AudioPlayerPlayDirective>());
+        Assert.Empty(session.NowPlayingQueue ?? new List<QueueItem>());
+    }
+
+    /// <summary>
+    /// JF-640 community-plugin shape boundary pin: an EXACT album name still
+    /// auto-plays even when a second album fuzzy-matches the same query (the exact
+    /// pass picks the exact name before any fuzzy or guard logic runs). Lowercase
+    /// slot value proves the comparison is OrdinalIgnoreCase.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_ExactAlbumName_StillAutoPlays()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(podcastName: "serial");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var exactAlbum = new MusicAlbum { Name = "Serial", Id = Guid.NewGuid() };
+        var otherAlbum = new MusicAlbum { Name = "Something Serial", Id = Guid.NewGuid() };
+
+        SetupShapeQueries(new List<BaseItem> { exactAlbum, otherAlbum }, new List<BaseItem>());
+
+        InternalItemsQuery? capturedEpisodeQuery = null;
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Audio))))
+            .Callback<InternalItemsQuery>(q => capturedEpisodeQuery = q)
+            .Returns(new List<BaseItem> { new Audio { Name = "Episode 1", Id = Guid.NewGuid() } });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        response.HasDirective<AudioPlayerPlayDirective>();
+        // The EXACT album played (ParentId scoping), not the fuzzy alternative.
+        Assert.NotNull(capturedEpisodeQuery);
+        Assert.Equal(exactAlbum.Id, capturedEpisodeQuery.ParentId);
+    }
+
+    /// <summary>
+    /// JF-640: a SERIES fuzzy hit keeps the >= 90 auto-accept (only MusicAlbum hits
+    /// downgrade to the confirm prompt). Search-term miss, fuzzy finds the series.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_SeriesFuzzyHit_StillAutoAccepts()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(podcastName: "GENERAZIONE");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var series = new MediaBrowser.Controller.Entities.TV.Series { Name = "Generazione", Id = Guid.NewGuid() };
+        var newestEpisode = new MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "Episode 12",
+            Id = Guid.NewGuid(),
+            DateCreated = DateTime.UtcNow.AddDays(-1)
+        };
+
+        SetupSearchTermMiss_FuzzyHits(new List<BaseItem> { series });
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Episode))))
+            .Returns(new List<BaseItem> { newestEpisode });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        response.HasDirective<AudioPlayerPlayDirective>();
+        Assert.NotNull(session.NowPlayingQueue);
+        Assert.Single(session.NowPlayingQueue);
+        Assert.Equal(newestEpisode.Id, session.NowPlayingQueue[0].Id);
+    }
+
+    /// <summary>
+    /// JF-640 cross-type fuzzy guard (multi-candidate shape, the live incident minus
+    /// the series): several music albums match the search term with no exact name;
+    /// the fuzzy best would have auto-accepted at the containment score (90,
+    /// 'Euphoria Morning' for 'morning') but must now confirm instead of silently
+    /// playing an album.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_MultipleAlbumMatches_NoExact_ConfirmsInsteadOfAutoPlaying()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(podcastName: "morning");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var euphoria = new MusicAlbum { Name = "Euphoria Morning", Id = Guid.NewGuid() };
+        var phase = new MusicAlbum { Name = "Morning Phase", Id = Guid.NewGuid() };
+
+        SetupShapeQueries(new List<BaseItem> { euphoria, phase }, new List<BaseItem>());
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.False(response.Response.ShouldEndSession);
+        Assert.NotNull(response.SessionAttributes);
+        Assert.True(response.SessionAttributes.ContainsKey("disambig_matches"));
+        Assert.Equal("podcast", response.SessionAttributes["disambig_type"]?.ToString());
+        Assert.Empty(response.Response.Directives?.OfType<AudioPlayerPlayDirective>() ?? Enumerable.Empty<AudioPlayerPlayDirective>());
+        Assert.Empty(session.NowPlayingQueue ?? new List<QueueItem>());
+    }
+
+    /// <summary>
+    /// JF-640 guard boundary: with a MusicAlbum in the candidate set, a SERIES that
+    /// wins the fuzzy scoring keeps the auto-accept (the guard targets albums only).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_MultiCandidate_SeriesBest_StillAutoAccepts()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(podcastName: "daily");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var album = new MusicAlbum { Name = "Euphoria Morning", Id = Guid.NewGuid() };
+        var series = new MediaBrowser.Controller.Entities.TV.Series { Name = "The Daily", Id = Guid.NewGuid() };
+        var newestEpisode = new MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "Episode 12",
+            Id = Guid.NewGuid(),
+            DateCreated = DateTime.UtcNow.AddDays(-1)
+        };
+
+        SetupShapeQueries(new List<BaseItem> { album }, new List<BaseItem> { series });
+
+        InternalItemsQuery? capturedEpisodeQuery = null;
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Episode))))
+            .Callback<InternalItemsQuery>(q => capturedEpisodeQuery = q)
+            .Returns(new List<BaseItem> { newestEpisode });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        response.HasDirective<AudioPlayerPlayDirective>();
+        Assert.NotNull(session.NowPlayingQueue);
+        Assert.Single(session.NowPlayingQueue);
+        Assert.Equal(newestEpisode.Id, session.NowPlayingQueue[0].Id);
+        // The SERIES won the fuzzy pick (ancestor-scoped episode query), not the album.
+        Assert.NotNull(capturedEpisodeQuery);
+        Assert.NotNull(capturedEpisodeQuery.AncestorIds);
+        Assert.Contains(series.Id, capturedEpisodeQuery.AncestorIds);
     }
 }
