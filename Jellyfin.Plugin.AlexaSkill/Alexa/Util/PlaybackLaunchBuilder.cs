@@ -830,7 +830,9 @@ public sealed class PlaybackLaunchBuilder
     /// thrown probe or a shape that proves nothing (no streams, no audio stream,
     /// a non-audio source) keeps today's VideoApp behavior on capable devices -
     /// the audio-route only fires on positive audio-content evidence. Probe
-    /// cost: one <c>GetMediaStreams</c> read on the Episode capable path, a
+    /// cost: one <c>GetMediaStreams</c> read on every episode launch the
+    /// audio-source arm does not short-circuit (JF-639 widened the probe past
+    /// the capable-only gate), a
     /// second in-memory read of the streams the caller's codec routing already
     /// fetched once for the VideoApp URL, plus string reads of item properties
     /// the DB already holds; no new network I/O.
