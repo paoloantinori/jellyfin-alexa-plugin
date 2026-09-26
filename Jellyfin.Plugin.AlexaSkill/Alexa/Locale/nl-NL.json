@@ -11,6 +11,7 @@
   "RatingNoItem": "Er speelt nu niets dat ik kan beoordelen.",
   "NoMediaPlaying": "Er wordt momenteel niets afgespeeld.",
   "CannotRepeatContent": "Sorry, ik kan video's, tv of luisterboeken hier niet herhalen. Muziek kan ik wel herhalen.",
+  "CannotRepeatInSeekMode": "Sorry, ik kan de herhalingsmodus niet instellen terwijl muziek afspeelt met de voortgangsbalk.",
   "CannotNavigateVideoByVoice": "Sorry, ik kan niet met mijn stem tussen video's wisselen. Gebruik het aanraakscherm om te kiezen wat je wilt kijken.",
   "CannotNavigateMusicByVoice": "Sorry, ik kan het nummer niet overslaan met mijn stem tijdens het afspelen met de voortgangsbalk. Gebruik de balk op het scherm om door de wachtrij te navigeren.",
   "CannotNavigateLiveTvByVoice": "Live-tv gaat vanzelf door. Gebruik het aanraakscherm om van kanaal te wisselen.",

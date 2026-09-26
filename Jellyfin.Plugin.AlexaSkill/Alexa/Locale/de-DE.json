@@ -11,6 +11,7 @@
   "RatingNoItem": "Gerade läuft nichts, das ich bewerten könnte.",
   "NoMediaPlaying": "Es wird gerade nichts abgespielt.",
   "CannotRepeatContent": "Leider kann ich Videos, TV oder Hörbücher von hier nicht wiederholen. Musik kann ich wiederholen.",
+  "CannotRepeatInSeekMode": "Tut mir leid, ich kann den Wiederholungsmodus nicht aktivieren, während Musik mit der Fortschrittsleiste läuft.",
   "CannotNavigateVideoByVoice": "Leider kann ich per Stimme nicht zwischen Videos wechseln. Benutze den Touchscreen, um auszuwählen, was du sehen möchtest.",
   "CannotNavigateMusicByVoice": "Tut mir leid, ich kann den Titel während der Wiedergabe mit der Fortschrittsleiste nicht per Sprache überspringen. Nutze die Leiste auf dem Bildschirm, um in der Warteschlange zu navigieren.",
   "CannotNavigateLiveTvByVoice": "Live-TV läuft von selbst weiter. Benutze den Touchscreen, um den Sender zu wechseln.",

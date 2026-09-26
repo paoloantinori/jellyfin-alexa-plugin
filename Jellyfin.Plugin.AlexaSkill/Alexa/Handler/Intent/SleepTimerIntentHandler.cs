@@ -117,46 +117,21 @@ public class SleepTimerIntentHandler : BaseHandler
         // running video: parallel audio the platform cannot stop (no VideoApp.Stop
         // exists), and no deadline could ever fire anyway (VideoApp playback emits no
         // events; the sleep deadline is enforced only at PlaybackNearlyFinished on the
-        // AudioPlayer path). The gate reads the SAME evidence the JF-628 ledger guard
-        // below reads (the device ledger, through the ONE classifier), so the refusal
-        // and the ledger protection cannot drift; the PauseIntentHandler JF-564
-        // transport refusal is the precedent. The seek-mode judgment: that medium IS
-        // audio and a timer over it is a legitimate wish, but the re-issue directive
-        // would double the audio of the very track playing, and its deadline could
-        // not fire on the eventless VideoApp path, so it refuses too (seek-mode line).
-        // Unknown (cold ledger, no library manager, unresolvable item) keeps the
-        // audio paths unchanged.
-        PlaybackLaunchBuilder.PlayingMedium medium = Launch.ResolvePlayingMedium(context, _libraryManager, _queueManager);
-
-        // The review's two proven holes close here: (a) the same-item seek-mode
-        // shape - the native-controls delegation re-records the SAME track on the
-        // VideoApp route while the token keeps naming it, so the classifier's
-        // token-ownership arm answers Audio and the gate above passes (probe-proven:
-        // parallel audio of the same track plus the ledger route re-poisoned to
-        // Audio); (b) the unresolvable ledger item (deleted movie/book) answers
-        // Unknown. ANY VideoApp-routed ledger entry means a VideoApp stream owns the
-        // screen, so the re-issue must not ship: this route check needs no item
-        // resolution and absorbs the JF-628 belt below entirely.
-        string? deviceIdForLedger = context.GetDeviceId() is { Length: > 0 } id ? id : null;
-        DeviceQueueManager? queuesForLedger = deviceIdForLedger != null ? _queueManager : null;
-        (string? ledgerItemId, DeviceQueueManager.LaunchRoute? ledgerRoute) =
-            deviceIdForLedger != null ? queuesForLedger!.GetLastPlayedSnapshot(deviceIdForLedger) : (null, null);
-        bool ledgerVideoRouted = ledgerRoute == DeviceQueueManager.LaunchRoute.VideoApp;
-        if (PlaybackLaunchBuilder.IsVideoAppMedium(medium) || ledgerVideoRouted)
+        // AudioPlayer path). The ONE belt-inclusive screen-owner answer (classifier
+        // + raw ledger route + kind kernel, which also separates a VideoApp-routed
+        // audiobook from seek-mode music) lives on
+        // PlaybackLaunchBuilder.ResolveScreenOwningMedium (JF-635 extraction, shared
+        // with the loop-family gate so the two cannot drift); the seek-mode judgment:
+        // that medium IS audio and a timer over it is a legitimate wish, but the
+        // re-issue directive would double the audio of the very track playing, and
+        // its deadline could not fire on the eventless VideoApp path, so it refuses
+        // too (seek-mode line). Unknown (cold ledger, no library manager,
+        // unresolvable item) keeps the audio paths unchanged.
+        PlaybackLaunchBuilder.PlayingMedium medium = Launch.ResolveScreenOwningMedium(context, _libraryManager, _queueManager);
+        if (PlaybackLaunchBuilder.IsVideoAppMedium(medium))
         {
-            Logger.LogDebug("SleepTimer: {Medium} playing (ledgerVideoRouted={LedgerVideoRouted}), refusing the re-issue honestly", medium, ledgerVideoRouted);
-
-            // The line follows the SHAPE of what is on screen: the seek-mode line
-            // when music is the VideoApp payload (the classifier's VideoAppAudio, or
-            // the same-item shape where the classifier answers Audio because the
-            // token still names the seek-launched track), the video-family line
-            // otherwise (an unresolvable ledger item defaults there).
-            MediaBrowser.Controller.Entities.BaseItem? ledgerKindItem = ledgerVideoRouted && _libraryManager != null && Guid.TryParse(ledgerItemId, out Guid ledgerGuid)
-                ? _libraryManager.GetItemById(ledgerGuid)
-                : null;
-            bool musicShaped = medium == PlaybackLaunchBuilder.PlayingMedium.VideoAppAudio
-                || (ledgerVideoRouted && ledgerKindItem is MediaBrowser.Controller.Entities.Audio.Audio);
-            string refusalKey = musicShaped
+            Logger.LogDebug("SleepTimer: {Medium} playing, refusing the re-issue honestly", medium);
+            string refusalKey = medium == PlaybackLaunchBuilder.PlayingMedium.VideoAppAudio
                 ? "CannotSetSleepTimerInSeekMode"
                 : "CannotSetSleepTimerOverVideo";
 

@@ -11,6 +11,7 @@
   "RatingNoItem": "There is nothing playing right now for me to rate.",
   "NoMediaPlaying": "Nothing is currently playing.",
   "CannotRepeatContent": "Sorry, I can't repeat videos, TV, or audiobooks from here. I can repeat music.",
+  "CannotRepeatInSeekMode": "Sorry, I can't set repeat mode while music plays with the progress bar.",
   "CannotNavigateVideoByVoice": "Sorry, I can't move between videos by voice. Use the touchscreen to choose what to watch.",
   "CannotNavigateMusicByVoice": "Sorry, I can't skip the track by voice while playing with the progress bar. Use the bar on the screen to move through the queue.",
   "CannotNavigateLiveTvByVoice": "Live TV goes on by itself. Use the touchscreen to change the channel.",

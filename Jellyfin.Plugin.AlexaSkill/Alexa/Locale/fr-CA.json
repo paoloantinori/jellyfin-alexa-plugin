@@ -17,6 +17,7 @@
   "RatingNoItem": "Il n'y a rien en lecture à noter pour le moment.",
   "NoMediaPlaying": "Rien n'est en cours de lecture.",
   "CannotRepeatContent": "Désolé, je ne peux pas répéter les vidéos, la TV ou les livres audio d'ici. Je peux répéter la musique.",
+  "CannotRepeatInSeekMode": "Désolé, je ne peux pas activer la répétition pendant la lecture de musique avec la barre de progression.",
   "CannotNavigateVideoByVoice": "Désolé, je ne peux pas passer d'une vidéo à l'autre à la voix. Utilisez l'écran tactile pour choisir quoi regarder.",
   "CannotNavigateMusicByVoice": "Désolé, je ne peux pas passer à la piste suivante à la voix pendant la lecture avec la barre de progression. Utilise la barre à l'écran pour naviguer dans la file.",
   "CannotNavigateLiveTvByVoice": "La TV en direct continue toute seule. Utilisez l'écran tactile pour changer de chaîne.",

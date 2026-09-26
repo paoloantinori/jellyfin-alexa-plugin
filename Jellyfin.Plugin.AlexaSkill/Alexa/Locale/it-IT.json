@@ -11,6 +11,7 @@
   "RatingNoItem": "Non c'è nulla in riproduzione da poter valutare.",
   "NoMediaPlaying": "Nessun contenuto in riproduzione.",
   "CannotRepeatContent": "Mi dispiace, non posso ripetere video, TV o audiolibri da qui. Posso ripetere la musica.",
+  "CannotRepeatInSeekMode": "Mi dispiace, non posso attivare la ripetizione durante la riproduzione con la barra.",
   "CannotNavigateVideoByVoice": "Mi dispiace, non posso cambiare video a voce. Usa lo schermo touch per scegliere cosa guardare.",
   "CannotNavigateMusicByVoice": "Mi dispiace, non posso saltare il brano a voce durante la riproduzione con la barra. Usa la barra sullo schermo per spostarti nella coda.",
   "CannotNavigateLiveTvByVoice": "La TV in diretta va avanti da sola. Usa lo schermo touch per cambiare canale.",

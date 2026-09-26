@@ -671,32 +671,100 @@ public sealed class ProgressReporter
     /// <summary>
     /// Shared body of the loop-mode intents (LoopOn/LoopOff/LoopSongOn, JF-450):
     /// attaches the given repeat mode to the currently playing item via the
-    /// session manager's progress reporting. The intent can arrive from
-    /// an open session with nothing playing: there is no item to attach the mode
-    /// to, so the localized no-media tell is returned instead of throwing.
+    /// session manager's progress reporting. JF-635 item 2 moved the body onto the
+    /// JF-626/JF-629 family evidence: the JF-632 medium gate refuses honestly when
+    /// a VideoApp-routed stream owns the screen (the mode write only matters at
+    /// PlaybackNearlyFinished on the AudioPlayer path, which a VideoApp launch
+    /// never emits, so confirming "repeat enabled" would lie), the JF-629 idle
+    /// guard keeps an idle device on the no-media tell, and the ONE current-item
+    /// resolver (<see cref="PlaybackLaunchBuilder.ResolveCurrentPlayingItem"/>)
+    /// replaced the DTO-only AudioPlayer-token read that answered no-media for
+    /// every one-shot arriving during seek-mode playback (live 2026-09-25 17:12).
     /// </summary>
-    /// <param name="request">The skill request (locale source for the no-media tell).</param>
-    /// <param name="context">The context of the skill intent request (AudioPlayer token).</param>
+    /// <param name="request">The skill request (locale source for the tells).</param>
+    /// <param name="context">The context of the skill intent request (AudioPlayer token, device-ledger key).</param>
     /// <param name="session">The session instance to report progress on.</param>
     /// <param name="mode">The repeat mode to apply.</param>
     /// <param name="label">Log label identifying the calling intent.</param>
-    /// <returns>The spoken repeat-mode confirmation Tell, or the no-media tell when nothing is playing.</returns>
-    public async Task<SkillResponse> ApplyRepeatModeAsync(Request request, Context context, SessionInfo session, RepeatMode mode, string label)
+    /// <param name="libraryManager">The caller's library manager (the medium classification and the resolver read it).</param>
+    /// <param name="queueManager">The caller's device queue manager (the last-played ledger); null disables the ledger arms.</param>
+    /// <returns>The spoken repeat-mode confirmation Tell, the honest refusal Tell over a VideoApp-routed medium, or the no-media tell when nothing is playing.</returns>
+    public async Task<SkillResponse> ApplyRepeatModeAsync(
+        Request request,
+        Context context,
+        SessionInfo session,
+        RepeatMode mode,
+        string label,
+        ILibraryManager libraryManager,
+        DeviceQueueManager? queueManager)
     {
+        string locale = BaseHandler.GetLocalePublic(request);
         PlaybackState? requestState = context.AudioPlayer;
 
         _logger.LogDebug("{Label}: entered, token={Token}, offset={OffsetMs}ms", label, requestState?.Token, requestState?.OffsetInMilliseconds);
 
-        // The intent can arrive from an open session with nothing playing: there is
-        // no item to attach the repeat mode to. Composite sleep tokens
-        // ("{guid}|sleep:{ticks}") must resolve too; raw Guid.TryParse fails them.
-        if (requestState?.Token == null || !StreamTokenCodec.TryGetItemId(requestState.Token, out Guid itemId))
+        // JF-632 medium gate, loop-family edition: it runs BEFORE the idle guard
+        // because the live incident shape (a one-shot over seek-mode playback)
+        // carries NO AudioPlayer token and an empty session, so the device
+        // ledger's recorded route is the only evidence and the honest answer is
+        // the refusal, not no-media. KNOWN TRADEOFF (deliberate, the
+        // RepeatIntentHandler gate's shipped parity): the ledger carries no
+        // recency read, so an IDLE device whose last skill playback was a
+        // VideoApp launch days ago answers this refusal instead of the no-media
+        // tell; the failure mode is a harmless refusal line, and bounding it
+        // would fork the family's ledger semantics (Repeat/RateItem act on the
+        // same unbounded tail).
+        // The ONE belt-inclusive screen-owner answer
+        // (classifier + raw ledger route + kind kernel) lives on
+        // PlaybackLaunchBuilder.ResolveScreenOwningMedium; the refusal STRINGS
+        // are this family's own: seek-mode music (VideoAppAudio) gets the loop
+        // line, the video family (and a VideoApp-routed audiobook, whose kind the
+        // kernel separates from plain Audio) keeps the RepeatIntentHandler gate's
+        // CannotRepeatContent wording.
+        PlaybackLaunchBuilder.PlayingMedium medium = _launch.ResolveScreenOwningMedium(context, libraryManager, queueManager);
+        if (PlaybackLaunchBuilder.IsVideoAppMedium(medium))
         {
-            return ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", BaseHandler.GetLocalePublic(request)));
+            _logger.LogDebug("{Label}: {Medium} playing, refusing the repeat-mode write", label, medium);
+            string refusalKey = medium == PlaybackLaunchBuilder.PlayingMedium.VideoAppAudio
+                ? "CannotRepeatInSeekMode"
+                : "CannotRepeatContent";
+            return ResponseBuilder.Tell(ResponseStrings.Get(refusalKey, locale));
         }
 
+        string? deviceId = context.System?.Device?.DeviceID;
+
+        // JF-629 idle guard: with neither an AudioPlayer token nor a session
+        // now-playing item, nothing is playing NOW, and the resolver's unbounded
+        // ledger tail (a days-old audio-routed last-played) must not take the mode
+        // write where the pre-migration code answered no-media; the ledger arms
+        // only arbitrate while current evidence exists.
+        if (string.IsNullOrEmpty(context.AudioPlayer?.Token) && session.NowPlayingItem == null)
+        {
+            _logger.LogDebug("{Label}: idle device (no token, no session item), returning the no-media tell", label);
+            return ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale));
+        }
+
+        // The ONE current-item resolver (JF-626/JF-629): the codec-safe AudioPlayer
+        // token (composite sleep tokens still parse), the session item, and the
+        // device-ledger displacement arbitration whose rationale lives on
+        // PlaybackLaunchBuilder.ResolveCurrentPlayingItem. The intent can still
+        // arrive with nothing resolvable (an open session, a deleted item): there
+        // is no item to attach the repeat mode to, so the localized no-media tell
+        // is returned instead of throwing.
+        BaseItem? item = _launch.ResolveCurrentPlayingItem(context, session, libraryManager, queueManager, label);
+        if (item == null)
+        {
+            return ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale));
+        }
+
+        Guid itemId = item.Id;
+
+        // No libraryManager here (pre-migration shape): the runtime guard would
+        // re-resolve by id the very item resolved above, and the loop body never
+        // ran it. Only the caller's queueManager is threaded (production-identical
+        // launch-base read, hermetic in tests).
         long positionTicks = ComposeEventPositionTicks(
-            context?.System?.Device?.DeviceID, itemId, requestState.OffsetInMilliseconds, "LoopMode");
+            deviceId, itemId, requestState?.OffsetInMilliseconds ?? 0, "LoopMode", queueManager);
 
         // Live behavioral test 2026-09-23 (JF-280): the session-report write does NOT
         // reach our Alexa session's PlayState on Jellyfin 12.1 (the JF-581 write-loss
@@ -711,9 +779,9 @@ public sealed class ProgressReporter
         // JF-424.1 class: loop changes which item follows the current one, so any
         // pre-computed sequential next-track entry for this device is stale (the
         // shuffle toggles already invalidate; loop must too).
-        if (!string.IsNullOrEmpty(context?.System?.Device?.DeviceID))
+        if (!string.IsNullOrEmpty(deviceId))
         {
-            Playback.NextTrackPrecomputeCache.Invalidate(context.System.Device.DeviceID);
+            Playback.NextTrackPrecomputeCache.Invalidate(deviceId!);
         }
 
         PlaybackProgressInfo info = new PlaybackProgressInfo
@@ -736,7 +804,7 @@ public sealed class ProgressReporter
             RepeatMode.RepeatOne => "RepeatSongEnabled",
             _ => "RepeatDisabled",
         };
-        return ResponseBuilder.Tell(ResponseStrings.Get(confirmKey, BaseHandler.GetLocalePublic(request)));
+        return ResponseBuilder.Tell(ResponseStrings.Get(confirmKey, locale));
     }
 
     /// <summary>
