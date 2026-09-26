@@ -354,7 +354,7 @@ public class PlaySongIntentHandler : BaseHandler
                 best => new List<(Guid, string)> { (best.Id, best.Name) },
                 DisambiguationHelper.MediaTypeSong,
                 locale,
-                best =>
+                async best =>
                 {
                     songs = new List<BaseItem> { best };
                     var qi = new List<QueueItem> { new() { Id = best.Id } };
@@ -369,7 +369,8 @@ public class PlaySongIntentHandler : BaseHandler
                             best.Name, fuzzOffset);
                     }
 
-                    return Task.FromResult<SkillResponse>(Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(iid, user), iid, best, user, context, fuzzOffset, announceLocale: locale));
+                    SkillResponse fuzzyPlay = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(iid, user), iid, best, user, context, fuzzOffset, announceLocale: locale);
+                    return await SwapOntoAnnounceVehicleAsync(fuzzyPlay, request, context, user).ConfigureAwait(false);
                 },
                 user: user).ConfigureAwait(false);
 
@@ -402,7 +403,33 @@ public class PlaySongIntentHandler : BaseHandler
         Logger.LogDebug(
             "PlaySong: returning AudioPlayer, itemId={ItemId}, song='{SongName}', offsetMs={OffsetMs}",
             item_id, songs[0].Name, offsetMs);
-        return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(item_id, user), item_id, songs[0], user, context, offsetMs, announceLocale: locale);
+        SkillResponse playResponse = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(item_id, user), item_id, songs[0], user, context, offsetMs, announceLocale: locale);
+
+        // JF-635 item 3 (live: 'magnolia' announce cut): on the VideoApp route the
+        // fast-start player steals the channel before a FINAL-response speech finishes
+        // (the JF-501 shape); whatever speech the response carries rides the progressive
+        // vehicle, the album path's mechanism.
+        return await SwapOntoAnnounceVehicleAsync(playResponse, request, context, user).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// JF-635: the single-song announce vehicle swap (the AlbumPlayService pattern):
+    /// when the response actually took the VideoApp route and carries speech, the speech
+    /// moves to a progressive response so it completes BEFORE the launch response opens
+    /// the player; on vehicle failure it stays on the final response. No-ops for the
+    /// AudioPlayer route (no directive, no swap).
+    /// </summary>
+    private async Task<SkillResponse> SwapOntoAnnounceVehicleAsync(SkillResponse response, Request? request, Context? context, Entities.User user)
+    {
+        if (request == null
+            || response.Response.OutputSpeech is null
+            || !response.Response.Directives.Any(d => d is Directive.VideoAppLaunchDirective))
+        {
+            return response;
+        }
+
+        response.Response.OutputSpeech = await Launch.SpeakVideoLaunchAnnounceAsync(context, request, response.Response.OutputSpeech).ConfigureAwait(false);
+        return response;
     }
 
     // Alexa's NLU can misalign slot boundaries, causing carrier phrases like
