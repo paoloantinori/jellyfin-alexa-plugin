@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
 
@@ -29,6 +30,15 @@ public static class JapanesePhoneticSynonyms
         }
 
         string trimmed = name.Trim();
+
+        // JF-646 review: a kana-containing name is already the naturalized
+        // spoken form; the Latin tail-rules below (especially AppendFinalVowel)
+        // would graft a Latin 'u' onto a kana final ('クイーン' -> 'クイーンu').
+        // Same entry-guard shape as the kana generator's ContainsKana check.
+        if (KatakanaRomanizer.ContainsKana(trimmed))
+        {
+            return new List<string>();
+        }
 
         if (IsJapaneseOrigin(trimmed))
         {

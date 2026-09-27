@@ -32,6 +32,10 @@ public class KatakanaSynonymGeneratorTests
     [InlineData("Led Zeppelin", "レッド・ゼッペリン|レッド ゼッペリン")] // final d geminated after a short vowel; the conventional ゼッペリン shape
     [InlineData("Backstreet Boys", "バックストリート・ボイズ|バックストリート ボイズ")] // ck + st cluster + long ee
     [InlineData("Soul", "ソウル")]                                  // ou diphthong keeps two morae
+    [InlineData("Myers", "マース")]                                 // no-yoon fallback folds the vowel unit once (review: never マーアース)
+    [InlineData("Ryerson", "ラーソン")]                             // the Xye shape through the same fallback
+    [InlineData("Whitney", "ウィトニー")]                           // final 'ey' is /iː/ (review: never ウィトネユ)
+    [InlineData("Buckley", "ブックリー")]                           // final 'ey' after the ck geminate
     public void Generate_RepresentativeNames_ExactTable(string name, string expectedPipeJoined)
     {
         var expected = expectedPipeJoined.Split('|');
@@ -58,6 +62,33 @@ public class KatakanaSynonymGeneratorTests
         // pass would only duplicate it.
         Assert.Empty(KatakanaSynonymGenerator.Generate("クイーン"));
         Assert.Empty(KatakanaSynonymGenerator.Generate("Queen クイーン"));
+    }
+
+    // --- review round: reverse-syllabary determinism + kana-input passthrough ---
+
+    [Fact]
+    public void TryKatakana_CollidingValues_ResolveToTheModernKanaDeterministically()
+    {
+        // The tie-break is explicit by construction (no same-priority pairs), so
+        // dictionary enumeration order can never decide: ジ over the historical
+        // ヂ, ズ over ヅ, and the modern ジャ digraph over the ヂャ shape.
+        Assert.True(KatakanaRomanizer.TryKatakana("ji", out string? ji));
+        Assert.Equal("ジ", ji);
+        Assert.True(KatakanaRomanizer.TryKatakana("zu", out string? zu));
+        Assert.Equal("ズ", zu);
+        Assert.True(KatakanaRomanizer.TryKatakana("ja", out string? ja));
+        Assert.Equal("ジャ", ja);
+    }
+
+    [Fact]
+    public void GenerateSynonyms_KanaOrMixedNames_ProduceNoSynonyms()
+    {
+        // A kana name IS the naturalized spoken form; the romaji arm's Latin
+        // tail-rules (AppendFinalVowel) used to graft a Latin 'u' onto the kana
+        // final ('クイーンu'). Both arms now skip kana-containing names.
+        Assert.Empty(JapanesePhoneticSynonyms.Generate("クイーン"));
+        Assert.Empty(PhoneticSynonymGenerator.GenerateSynonyms("クイーン", "ja-JP"));
+        Assert.Empty(PhoneticSynonymGenerator.GenerateSynonyms("Queen クイーン", "ja-JP"));
     }
 
     [Fact]
@@ -117,7 +148,13 @@ public class KatakanaSynonymGeneratorTests
         "Kiss",
         "Jazz",
         "Simon & Garfunkel",
-        "The Backstreet Boys"
+        "The Backstreet Boys",
+        "Myers",
+        "Ryerson",
+        "Sofya",
+        "Whitney",
+        "Buckley",
+        "Carey"
     };
 
     [Theory]

@@ -241,6 +241,15 @@ public static class KatakanaSynonymGenerator
             return (new List<(string, bool)> { ("e", false), ("i", false) }, 2);
         }
 
+        // 'ey' before a vowel is /eɪ/ ("beyonce"-class); final or checked 'ey'
+        // is /iː/ in names ("whitney" -> ウィトニー, "carey", "buckley").
+        if (next == 'y' && v == 'e')
+        {
+            return (after != '\0' && IsVowelLetter(after)
+                ? new List<(string, bool)> { ("e", false), ("i", false) }
+                : new List<(string, bool)> { ("i", true) }, 2);
+        }
+
         if ((next == 'i' && v == 'o') || (next == 'y' && v == 'o'))
         {
             return (new List<(string, bool)> { ("o", false), ("i", false) }, 2);
@@ -563,10 +572,13 @@ public static class KatakanaSynonymGenerator
         }
         else
         {
-            // No yoon key for this shape ("kyi"); fall back to the plain CV and
-            // let the vowel stand as its own mora.
+            // No yoon key for this shape ("kyi"); fall back to the plain CV,
+            // which FOLDS the whole vowel unit into the emitted mora
+            // ("myers" -> the my- unit folds into マー), so the scan must skip
+            // the consumed vowel too or the outer loop would re-emit it
+            // ("マーアース" instead of "マース").
             EmitComposed(builder, sound, morae, alt);
-            return pos + 1;
+            return pos + 1 + consumed;
         }
 
         foreach (var (key, longV) in morae.Skip(1))

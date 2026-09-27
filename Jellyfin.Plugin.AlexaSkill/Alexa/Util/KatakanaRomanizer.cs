@@ -103,10 +103,15 @@ internal static class KatakanaRomanizer
     /// Field order is load-bearing: static field initializers run in textual
     /// order, so this field MUST stay after the two tables it reads.
     /// Canonical choice on value collisions (several kana share one romaji
-    /// value: "a" is both ア and ァ, "ji" is both ジ and ヂ): the full-size
-    /// modern unigram wins; small kana (ァィゥェォ ャュョ ヮ) and the obsolete
-    /// ヰヱヲ rank lower; the two-kana loanword digraph ranks lowest and is the
-    /// only form for values with no unigram ("fa", "ti", "wi").
+    /// value: "a" is both ア and ァ, "ji" is both ジ and ヂ): the tie-break is
+    /// explicit and exhaustive, so dictionary enumeration order can never
+    /// decide it. Priority 0 is the modern full-size unigram; priority 1 is
+    /// every non-canonical unigram (small kana ァィゥェォ ャュョ ヮ, the obsolete
+    /// ヰヱヲ, and the historical-use ヂヅ that modern loanwords never use);
+    /// digraphs take 2 plus their first kana's priority, so the modern ジャ
+    /// outranks the ヂャ shape. No romaji value has two candidates at the SAME
+    /// priority, which is what makes the resolution deterministic by
+    /// construction.
     /// </summary>
     private static readonly Dictionary<string, string> ReverseSyllables = BuildReverseSyllables();
 
@@ -122,7 +127,7 @@ internal static class KatakanaRomanizer
         var canonical = new Dictionary<string, (string Kana, int Priority)>(StringComparer.Ordinal);
         foreach (var kv in Digraphs)
         {
-            KeepCanonical(canonical, kv.Value, string.Concat(kv.Key.First, kv.Key.Second), priority: 2);
+            KeepCanonical(canonical, kv.Value, string.Concat(kv.Key.First, kv.Key.Second), priority: 2 + KanaPriority(kv.Key.First));
         }
 
         foreach (var kv in Syllables)
@@ -149,7 +154,7 @@ internal static class KatakanaRomanizer
 
     private static int KanaPriority(char kana)
         => kana is 'ァ' or 'ィ' or 'ゥ' or 'ェ' or 'ォ' or 'ャ' or 'ュ' or 'ョ' or 'ヮ'
-           || kana is 'ヰ' or 'ヱ' or 'ヲ' ? 1 : 0;
+           || kana is 'ヰ' or 'ヱ' or 'ヲ' or 'ヂ' or 'ヅ' ? 1 : 0;
 
     /// <summary>
     /// Romanizes every kana run of the input, passing every other character
