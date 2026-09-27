@@ -245,6 +245,57 @@ public sealed class DeviceQueueManager : IDisposable
         => Enum.TryParse<LaunchRoute>(routeName, out LaunchRoute route) ? route : null;
 
     /// <summary>
+    /// The ONE writer family for a launch-scope base/rate pair (JF-637, hardening
+    /// the JF-636 lockstep that comments previously enforced at every write site):
+    /// a base map and its rate map are WRITTEN, removed at write time, and carried
+    /// only in pairs, so a future single-map write cannot break the invariant "a
+    /// rate entry exists iff its base entry exists" at the write sites. The
+    /// lockstep is load-bearing: <see cref="RecordLaunchBase"/>'s active
+    /// short-circuit checks only the BASE map for a stale pending entry, so an
+    /// orphan rate written beside no base would silently survive it and later
+    /// scale a new stream's offsets with the wrong rate. Two paths remain
+    /// convention-enforced rather than structural (same as pre-JF-637): the trim
+    /// (<see cref="TrimLaunchBaseIfNeeded"/>) evicts each map by its own
+    /// insertion order, which can in principle orphan a rate half on legacy
+    /// mixed-age files near the cap, and <see cref="CopySurvivingStores"/> must
+    /// keep carrying all four maps; the structural fix is the single
+    /// scope-per-key map the JF-637 review named as the follow-up. One tolerated
+    /// legacy shape: a pre-JF-636 file can carry a base WITHOUT a rate
+    /// (<see cref="PromotePendingLaunchBase"/> defaults those to 1000); the
+    /// reverse direction must never exist.
+    /// </summary>
+    private static void WritePendingLaunchScope(DeviceQueue queue, string key, long baseMs, int ratePerMille)
+    {
+        queue.PendingLaunchBaseMs[key] = baseMs;
+        queue.PendingPlaybackRatePerMille[key] = ratePerMille;
+    }
+
+    /// <summary>
+    /// Active-map half of the paired-write family (see
+    /// <see cref="WritePendingLaunchScope"/> for the lockstep invariant): writes
+    /// the active base+rate pair. Pair it with
+    /// <see cref="RetirePendingLaunchScope"/> when the write supersedes a
+    /// still-pending enqueue (the <see cref="RecordLaunchBase"/> active branch);
+    /// <see cref="PromotePendingLaunchBase"/> needs only this half, having
+    /// already extracted the pending pair's values with its own removes.
+    /// </summary>
+    private static void WriteActiveLaunchScope(DeviceQueue queue, string key, long baseMs, int ratePerMille)
+    {
+        queue.ActiveLaunchBaseMs[key] = baseMs;
+        queue.ActivePlaybackRatePerMille[key] = ratePerMille;
+    }
+
+    /// <summary>
+    /// Pending-retire half of the paired-write family: removes the item's pending
+    /// base+rate pair together (the new stream supersedes the enqueued one).
+    /// </summary>
+    private static void RetirePendingLaunchScope(DeviceQueue queue, string key)
+    {
+        queue.PendingLaunchBaseMs.Remove(key);
+        queue.PendingPlaybackRatePerMille.Remove(key);
+    }
+
+    /// <summary>
     /// JF-522 launch-scope write: records the item-absolute base of the
     /// <c>AudioPlayer.Play</c> directive just issued for an item on a device. An
     /// ENQUEUED directive routes to <see cref="DeviceQueue.PendingLaunchBaseMs"/>
@@ -284,8 +335,7 @@ public sealed class DeviceQueueManager : IDisposable
                     return;
                 }
 
-                queue.PendingLaunchBaseMs[key] = baseMs;
-                queue.PendingPlaybackRatePerMille[key] = ratePerMille;
+                WritePendingLaunchScope(queue, key, baseMs, ratePerMille);
             }
             else
             {
@@ -301,10 +351,8 @@ public sealed class DeviceQueueManager : IDisposable
                     return;
                 }
 
-                queue.ActiveLaunchBaseMs[key] = baseMs;
-                queue.ActivePlaybackRatePerMille[key] = ratePerMille;
-                queue.PendingLaunchBaseMs.Remove(key);
-                queue.PendingPlaybackRatePerMille.Remove(key);
+                WriteActiveLaunchScope(queue, key, baseMs, ratePerMille);
+                RetirePendingLaunchScope(queue, key);
             }
 
             TrimLaunchBaseIfNeeded(queue);
@@ -345,13 +393,14 @@ public sealed class DeviceQueueManager : IDisposable
                 return;
             }
 
-            queue.ActiveLaunchBaseMs[key] = baseMs;
             // JF-636: the rate rides with its base (an atempo stream enqueued into a
-            // wrapped queue scales its offsets from the moment it starts).
+            // wrapped queue scales its offsets from the moment it starts). The
+            // 1000 default is the tolerated pre-JF-636 legacy shape (pending base
+            // persisted before the rate map existed); see WritePendingLaunchScope.
             ratePerMille = queue.PendingPlaybackRatePerMille.Remove(key, out int pendingRate)
                 ? pendingRate
                 : 1000;
-            queue.ActivePlaybackRatePerMille[key] = ratePerMille;
+            WriteActiveLaunchScope(queue, key, baseMs, ratePerMille);
         }
 
         SchedulePersistInternal(deviceId);
@@ -542,9 +591,15 @@ public sealed class DeviceQueueManager : IDisposable
     }
 
     /// <summary>
-    /// Bounds both launch-scope dictionaries exactly like the sibling trims
-    /// (JF-514/JF-522): over the cap, remove the oldest entries whose item is not in
-    /// the current queue; entries for queued items all stay.
+    /// Bounds the four launch-scope dictionaries (the base/rate map family)
+    /// exactly like the sibling trims (JF-514/JF-522): over the cap, remove the
+    /// oldest entries whose item is not in the current queue; entries for queued
+    /// items all stay. RESIDUAL (pre-existing, JF-637 review): each map is evicted
+    /// by its own insertion order, so a base/rate pair whose halves entered at
+    /// different times (a pre-JF-636 base with a later rate) can be split near
+    /// the cap; harmless while promotion defaults a missing rate to 1000 and the
+    /// writers keep every NEW pair inserted together. The structural fix is the
+    /// single scope-per-key map named in <see cref="WritePendingLaunchScope"/>.
     /// </summary>
     private const int MaxLaunchBaseEntries = 200;
 
@@ -602,10 +657,12 @@ public sealed class DeviceQueueManager : IDisposable
     }
 
     /// <summary>
-    /// Carries the reset-surviving per-item stores (positions and both launch-scope
-    /// maps) from an old queue into its replacement (JF-522: one definition for the
-    /// surviving-store set, so a fourth surviving store is wired once, not per reset
-    /// path).
+    /// Carries the reset-surviving per-item stores (positions and the launch-scope
+    /// base/rate map family) from an old queue into its replacement (JF-522: one
+    /// definition for the surviving-store set, so a fourth surviving store is
+    /// wired once, not per reset path). The base and rate maps must be carried
+    /// together (the pairing invariant <see cref="WritePendingLaunchScope"/> owns:
+    /// a rate entry exists iff its base entry exists).
     /// </summary>
     /// <param name="oldQueue">The queue being replaced (null starts everything empty).</param>
     /// <param name="queue">The fresh queue to populate.</param>

@@ -464,9 +464,11 @@ public sealed class PlaybackLaunchBuilder
     /// <c>medium == PlayingMedium.VideoAppAudio</c> check; the refusal STRINGS stay
     /// per action family (the BuildVideoAppTransportRefusal pattern: one shared
     /// shape answer, per-family wording). Current consumers: the loop-family gate
-    /// (ProgressReporter.ApplyRepeatModeAsync) and the sleep-timer re-issue gate
-    /// (SleepTimerIntentHandler); Pause/Repeat/next-previous still carry the
-    /// classifier-only flat gate and migrate deliberately.
+    /// (ProgressReporter.ApplyRepeatModeAsync), the sleep-timer re-issue gate
+    /// (SleepTimerIntentHandler), and the playback-speed re-launch gate
+    /// (SetPlaybackSpeedIntentHandler, migrated JF-637); Pause/Repeat/
+    /// next-previous still carry the classifier-only flat gate and migrate
+    /// deliberately.
     /// Cost note (inherited, not by construction): the classifier resolves the
     /// ledger item internally without exposing the outcome, so on the
     /// deleted-item path the belt re-resolves the same known-absent GUID once
