@@ -266,7 +266,7 @@ public class PlayByGenreIntentHandler : BaseHandler
             g => g.Name!,
             g => g.Id,
             id => codes.TryGetValue(id, out var code) ? code : null,
-            FuzzyMatcher.DefaultThreshold);
+            FuzzyMatcher.GetDefaultThreshold(user));
 
         return best?.Name;
     }
