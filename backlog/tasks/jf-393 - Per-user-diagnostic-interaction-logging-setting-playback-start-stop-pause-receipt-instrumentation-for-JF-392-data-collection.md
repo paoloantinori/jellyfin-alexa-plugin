@@ -3,10 +3,10 @@ id: JF-393
 title: >-
   Per-user diagnostic interaction logging setting (playback-start + stop/pause
   receipt instrumentation for JF-392 data collection)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-08-22 19:26'
-updated_date: '2026-08-22 19:53'
+updated_date: '2026-09-27 06:01'
 labels:
   - observability
   - playback
@@ -57,5 +57,5 @@ Design: reuse the existing per-user override to global default pattern (like Get
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Implemented, reviewed, and committed (7b91214). Per-user DiagnosticInteractionLogging (tri-state) + global DefaultDiagnosticInteractionLogging (false); [diag] lines at controller choke point (requestId, sincePlaybackStarted) and PlaybackStarted/Stopped; config UI in new Diagnostics section + user panel; PATCH endpoints whitelisted. Build 0 warn/err, 2677/2677 tests. /simplify and /code-review high both run; review caught 2 real config-page bugs (dilSel ReferenceError aborting user saves; global flag missing from generalConfig PATCH), both fixed pre-commit. Deploy to minix + live data collection still pending (JF-392 discriminator needs N>20 instances).
+JF-393 complete: the per-user (with global default) diagnostic interaction logging. The controller logs a [diag] line per request (play-initiating requests recorded as the new playback origin; every other request with elapsed-since-playback-started), PlaybackStarted/Stopped handlers log their events with the since-start/since-request deltas, and the last missing event class landed (commit a26e4d78): every AudioPlayer.Play issued at the BuildAudioPlayerResponse chokepoint logs '[diag] play issued: itemId/behavior/offsetMs/token', flag-gated like the rest. All four event classes from the task's spec are now live on the deployed build; the JF-392 reconstruction chain (play request -> play issued -> playback started -> stop attempt receipt -> playback stopped) is greppable per device. Deployed; device evidence flowing in every battery since (the [diag] lines appear throughout the session logs).
 <!-- SECTION:FINAL_SUMMARY:END -->
