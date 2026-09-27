@@ -5,16 +5,13 @@ JF-326 star_rating, JF-636 speed) must fail the validator before any deploy.
 The check lives inside validate_single_model (error-level), so the harness
 feeds synthetic languageModels and asserts the error list; no repo mutation.
 """
-import json
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 
+from test_elicit_checker import _models  # noqa: E402
 from validate_interaction_models import validate_single_model  # noqa: E402
-
-REPO = Path(__file__).resolve().parents[2]
-MODELS_DIR = REPO / "Jellyfin.Plugin.AlexaSkill" / "Alexa" / "InteractionModel"
 
 
 def _lm(samples: list[str]) -> dict:
@@ -23,7 +20,6 @@ def _lm(samples: list[str]) -> dict:
         "intents": [
             {"name": "PlaySongIntent", "samples": list(samples), "slots": []},
         ],
-        "types": [{"name": "T", "values": [{"id": "a", "name": "a"}]}],
     }
 
 
@@ -110,12 +106,8 @@ def test_latin_glue_is_out_of_class():
 
 
 def test_all_committed_models_have_no_glued_slots():
-    total = 0
-    for path in sorted(MODELS_DIR.glob("model_*.json")):
-        locale = path.name[6:-5]
-        doc = json.loads(path.read_text(encoding="utf-8"))
-        lm = doc.get("interactionModel", doc)["languageModel"]
+    models = _models()
+    assert len(models) == 17, len(models)
+    for locale, lm in models.items():
         errors, _ = validate_single_model(locale, lm)
         assert not any("JF-638" in e for e in errors), errors
-        total += 1
-    assert total == 17, total

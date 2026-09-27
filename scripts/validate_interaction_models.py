@@ -144,24 +144,18 @@ ALBUM_CARRIER_NOUNS: dict[str, list[str]] = {
     "hi": ["एल्बम"],
 }
 
-# CJK blocks that make a slot ref glued to adjacent text an SMAPI build
-# failure (JF-638; live InvalidCharInSamples/InvalidSample hits: JF-513
-# {musician}を再生, JF-326 星{star_rating}で, JF-636 速度{speed}). The
-# documented rule (templates/ja-JP.yaml header) allows ONLY a regular ASCII
-# space between a slot and adjacent CJK text, so there is no legitimate glued
-# form to exempt. U+3000 (ideographic space) sits inside the punctuation
-# block on purpose: the same header bans it in samples entirely, so a U+3000
-# "separator" must flag, not pass.
-CJK_ADJACENT_RANGES: tuple[tuple[int, int], ...] = (
-    (0x3000, 0x303F),  # CJK Symbols and Punctuation (、。「」々, U+3000 space)
-    (0x3040, 0x309F),  # Hiragana
-    (0x30A0, 0x30FF),  # Katakana (incl. ー U+30FC)
-    (0x4E00, 0x9FFF),  # CJK Unified Ideographs
-)
-
-
+# CJK text glued to a slot ref is an SMAPI build failure (JF-638; live
+# InvalidCharInSamples/InvalidSample hits: JF-513 {musician}を再生, JF-326
+# 星{star_rating}で, JF-636 速度{speed}). The documented rule
+# (templates/ja-JP.yaml header) allows ONLY a regular ASCII space between a
+# slot and adjacent CJK text, so there is no legitimate glued form to exempt.
+# U+3000 (ideographic space) sits inside the span on purpose: the same header
+# bans it in samples entirely, so a U+3000 "separator" must flag, not pass.
 def _is_cjk(ch: str) -> bool:
-    return any(lo <= ord(ch) <= hi for lo, hi in CJK_ADJACENT_RANGES)
+    # One contiguous span covers CJK punctuation (U+3000-U+303F, including
+    # U+3000), Hiragana (U+3040-U+309F), and Katakana (U+30A0-U+30FF, incl.
+    # ー U+30FC); the second covers CJK Unified Ideographs.
+    return 0x3000 <= ord(ch) <= 0x30FF or 0x4E00 <= ord(ch) <= 0x9FFF
 
 
 # BrowseCategory slot-value id conventions (JF-468). Every locale carries the
