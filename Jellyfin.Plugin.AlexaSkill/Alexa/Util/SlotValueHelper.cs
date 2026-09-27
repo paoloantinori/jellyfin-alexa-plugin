@@ -1,5 +1,7 @@
 #nullable enable
 
+using Alexa.NET.Request;
+
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 
 /// <summary>
@@ -28,5 +30,33 @@ public static class SlotValueHelper
 
         int cutAt = value.LastIndexOf(' ', MaxSlotValueLength - 1);
         return cutAt > 0 ? value[..cutAt] : value[..MaxSlotValueLength];
+    }
+
+    /// <summary>
+    /// Canonical value of the first ER_SUCCESS_MATCH authority on the slot, or
+    /// null when no authority matched. A custom slot type resolves the spoken
+    /// form ('ジャズ') to its canonical value ('Jazz', JF-642's ja-JP GenreType);
+    /// free-text types and unmatched values return null so the caller keeps the
+    /// raw slot value.
+    /// </summary>
+    /// <param name="slot">The slot to read entity resolution from.</param>
+    /// <returns>The canonical slot value, or null when no authority matched.</returns>
+    public static string? GetCanonicalValue(Slot slot)
+    {
+        if (slot.Resolution?.Authorities is { Length: > 0 } authorities)
+        {
+            foreach (var authority in authorities)
+            {
+                if (authority.Status?.Code == "ER_SUCCESS_MATCH"
+                    && authority.Values is { Length: > 0 }
+                    && authority.Values[0].Value?.Name is string canonical
+                    && !string.IsNullOrWhiteSpace(canonical))
+                {
+                    return canonical;
+                }
+            }
+        }
+
+        return null;
     }
 }

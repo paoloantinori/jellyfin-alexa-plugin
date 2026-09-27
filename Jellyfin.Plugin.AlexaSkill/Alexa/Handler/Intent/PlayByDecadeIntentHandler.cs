@@ -11,6 +11,7 @@ using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
 using Jellyfin.Database.Implementations.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -123,7 +124,10 @@ public class PlayByDecadeIntentHandler : BaseHandler
         // Optional genre filter if provided
         if (intentRequest.Intent.Slots != null && intentRequest.Intent.Slots.TryGetValue("genre", out Slot? genreSlotObj) && !string.IsNullOrWhiteSpace(genreSlotObj.Value))
         {
-            query.Genres = new[] { genreSlotObj.Value };
+            // JF-642: ja-JP's GenreType canonical ('Jazz') is the exact library
+            // tag; it wins over the spoken form. Other locales carry no
+            // resolution (raw kept).
+            query.Genres = new[] { SlotValueHelper.GetCanonicalValue(genreSlotObj) ?? genreSlotObj.Value };
         }
 
         IReadOnlyList<BaseItem> items = await RetryAsync(() => _libraryManager.GetItemList(query), "GetDecadeItems", cancellationToken).ConfigureAwait(false);

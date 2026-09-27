@@ -241,7 +241,7 @@
           },
           {
             "name": "genre",
-            "type": "AMAZON.Genre"
+            "type": "GenreType"
           }
         ]
       },
@@ -258,7 +258,7 @@
         "slots": [
           {
             "name": "genre",
-            "type": "AMAZON.Genre"
+            "type": "GenreType"
           }
         ]
       },
@@ -279,7 +279,7 @@
           },
           {
             "name": "genre",
-            "type": "AMAZON.Genre"
+            "type": "GenreType"
           }
         ]
       },
@@ -1503,6 +1503,211 @@
             "name": {
               "value": "オーディオブック",
               "synonyms": []
+            }
+          }
+        ]
+      },
+      {
+        "name": "GenreType",
+        "values": [
+          {
+            "name": {
+              "value": "Rock",
+              "synonyms": [
+                "ロック",
+                "rokku"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "Pop",
+              "synonyms": [
+                "ポップ",
+                "poppu"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "Jazz",
+              "synonyms": [
+                "ジャズ",
+                "jazu"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "Classical",
+              "synonyms": [
+                "クラシック",
+                "kurashikku"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "Hip Hop",
+              "synonyms": [
+                "ヒップホップ",
+                "hippu hoppu"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "Rap",
+              "synonyms": [
+                "ラップ",
+                "rappu"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "Electronic",
+              "synonyms": [
+                "エレクトロニック",
+                "エレクトロ",
+                "erekutoronikku",
+                "erekutoro"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "Dance",
+              "synonyms": [
+                "ダンス",
+                "dansu"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "Folk",
+              "synonyms": [
+                "フォーク",
+                "foku"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "Country",
+              "synonyms": [
+                "カントリー",
+                "kantori"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "Metal",
+              "synonyms": [
+                "メタル",
+                "metaru",
+                "ヘヴィメタル",
+                "ヘビーメタル"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "Punk",
+              "synonyms": [
+                "パンク",
+                "panku"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "Reggae",
+              "synonyms": [
+                "レゲエ",
+                "regee"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "Blues",
+              "synonyms": [
+                "ブルース",
+                "burusu"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "Soul",
+              "synonyms": [
+                "ソウル",
+                "souru"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "Funk",
+              "synonyms": [
+                "ファンク",
+                "fanku"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "Latin",
+              "synonyms": [
+                "ラテン",
+                "raten"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "R&B",
+              "synonyms": [
+                "アールアンドビー",
+                "リズムアンドブルース"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "Soundtrack",
+              "synonyms": [
+                "サウンドトラック",
+                "サントラ"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "J-Pop",
+              "synonyms": [
+                "ジェイポップ",
+                "jeipoppu"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "Anime",
+              "synonyms": [
+                "アニメ"
+              ]
+            }
+          },
+          {
+            "name": {
+              "value": "Enka",
+              "synonyms": [
+                "演歌"
+              ]
             }
           }
         ]
