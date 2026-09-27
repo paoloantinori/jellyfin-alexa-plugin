@@ -7,7 +7,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-27 06:19'
-updated_date: '2026-09-27 07:02'
+updated_date: '2026-09-27 10:49'
 labels:
   - nlu
   - ja-JP
@@ -164,4 +164,6 @@ AMAZON.Genre ER shape (F1); (b) a long-tail ja genre utterance, e.g. ボサノ�
 known to not-found on the ER path by design (F2); (d) the wrapper battery
 (nlu_wrapper_battery.py) for the ja one-shot forms, per the interaction-model
 hook reminder.
+
+2026-09-27 LIVE BATTERY OUTCOME (deployed d4ba78fd, ja-JP model rebuilt SUCCEEDED, live model verified carrying GenreType on all 3 slots): the GENRE half works - ジャズ routes PlayByGenre with ER canonical (the tier bypass saves the round trip), ロック routes genre, Latin queen unchanged, and the en-US probe (play jazz music -> PlayRandom genre=jazz with NO resolution) supports the unconditional-read design assumption. THE HEADLINE STEAL ROW FAILED: クイーン の曲を再生して selects PlayByGenre genre=クイーン deterministically (3/3 probes) and ビートルズ の曲を再生して likewise - the Mood-precedent premise (a restricted custom type cannot steal) is REFUTED at NLU selection: custom slot types are OPEN for filling; the type changes resolution, not selection. The end-to-end user outcome still lands through the handler chain (raw kana -> JF-463 fallback -> JF-643 romanizer), with the JF-652 precision caveat. The routing-layer steal fix is therefore JF-646 (catalog-side katakana synonyms so AMAZON.Musician wins selection via ER, the en-US/hi-IN shape), priority raised there. This task's shipped value stands: genre canonicalization, the divergence guard, the sibling canonical reads, and the refutation itself (which redirects the steal fix to the catalog layer before more model-layer work was spent).
 <!-- SECTION:NOTES:END -->

@@ -7,6 +7,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-27 08:01'
+updated_date: '2026-09-27 10:49'
 labels:
   - catalog
   - i18n
@@ -22,7 +23,7 @@ references:
   - >-
     backlog/tasks/jf-643 -
     JF-643-katakana-query-values-never-match-Latin-library-names-script-gap-in-fuzzy-phonetic-search-naturalized-ja-JP-artist-and-genre-requests-all-end-not-found.md
-priority: medium
+priority: high
 ---
 
 ## Description
@@ -52,3 +53,9 @@ VERIFICATION BAR: profile-nlu selection probes as above; catalog upload logs sho
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-09-27 PRIORITY RAISED to high + scope note: the JF-642 live battery refuted the custom-type steal fix at NLU selection (single-word katakana still selects PlayByGenre deterministically; the evidence is in JF-642's notes), so THIS task is now the demonstrated routing-layer fix for the steal, not a complement: with katakana variants in the ja JellyfinArtist catalog, AMAZON.Musician ER resolves naturalized ja artist names and wins selection the way en-US/hi-IN do today. The description's interplay sentence (JF-642 stops the genre steal) is superseded by JF-642's battery note.
+<!-- SECTION:NOTES:END -->
