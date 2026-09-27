@@ -145,7 +145,7 @@ internal static class FuzzyMatcher
             return null;
         }
 
-        string normalizedQuery = Normalize(KatakanaRomanizer.Romanize(query));
+        string normalizedQuery = NormalizeQuery(query);
         int maxLenDiff = Math.Max(normalizedQuery.Length * 2, 15);
         T? bestMatch = null;
         int bestScore = 0;
@@ -431,7 +431,7 @@ internal static class FuzzyMatcher
             return new List<T>();
         }
 
-        string normalizedQuery = Normalize(KatakanaRomanizer.Romanize(query));
+        string normalizedQuery = NormalizeQuery(query);
 
         var scored = new List<(T Item, int Score)>();
         foreach (T candidate in candidates)
@@ -570,7 +570,7 @@ internal static class FuzzyMatcher
     /// <returns>The matcher score for this candidate (0 when the length band excludes it).</returns>
     internal static int Score(string query, string candidateText)
     {
-        string normalizedQuery = Normalize(KatakanaRomanizer.Romanize(query));
+        string normalizedQuery = NormalizeQuery(query);
         string normalizedCandidate = Normalize(candidateText);
         int maxLenDiff = Math.Max(normalizedQuery.Length * 2, 15);
         if (Math.Abs(normalizedCandidate.Length - normalizedQuery.Length) > maxLenDiff)
@@ -631,5 +631,15 @@ internal static class FuzzyMatcher
     private static string Normalize(string input)
     {
         return input.Trim().ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// The query-side entry normalization (JF-643): romanize kana, then case-fold.
+    /// The phonetic overload keeps its own two-consumer local because Double
+    /// Metaphone encodes the romanized form BEFORE case folding.
+    /// </summary>
+    private static string NormalizeQuery(string query)
+    {
+        return Normalize(KatakanaRomanizer.Romanize(query));
     }
 }

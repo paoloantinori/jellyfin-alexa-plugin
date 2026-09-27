@@ -28,6 +28,14 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// - hiragana maps with the same syllable values; kanji and every other
 ///   non-kana character pass through unchanged (no dictionary: a kanji run
 ///   cannot be romanized here, accepted and documented).
+/// KNOWN NARROWING (JF-643 review): normalization is asymmetric (query only,
+/// library values never), so a kana query against a KATAKANA-TAGGED library
+/// name, which previously exact-matched on the Contains tier, now misses on
+/// every tier ('クイーン' romanizes to 'kuin', which cannot equal the kana
+/// name, and Double Metaphone keeps kana, so the phonetic floor cannot
+/// rescue it). Accepted for Latin-tagged libraries (the common shape); the
+/// deeper fix for native-script-tagged libraries is symmetric index-side
+/// normalization at index-build time (tracked with the JF-643 residuals).
 /// </summary>
 internal static class KatakanaRomanizer
 {
@@ -94,7 +102,7 @@ internal static class KatakanaRomanizer
     /// </summary>
     /// <param name="input">The raw query text (slot value).</param>
     /// <returns>The romanized query, or the input unchanged when it has no kana.</returns>
-    public static string Romanize(string input)
+    internal static string Romanize(string input)
     {
         if (string.IsNullOrEmpty(input) || !ContainsKana(input))
         {

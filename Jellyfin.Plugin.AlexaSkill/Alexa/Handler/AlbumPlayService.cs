@@ -346,18 +346,20 @@ public sealed class AlbumPlayService
             return null;
         }
 
+        // JF-643: mirror of the artist gate's entry romanization, before the guard
+        // to match its ordering (the SearchTerm tier and the fuzzy tier below
+        // compare against Latin album names).
+        slotText = Util.KatakanaRomanizer.Romanize(slotText);
+
         if (!_crossMedia.PassesCrossMediaWordGuard(slotText, locale, fallbackNoun: "album", logLabel, out _))
         {
             return null;
         }
 
-        // JF-643: mirror of the artist gate's entry romanization (the SearchTerm tier
-        // and the fuzzy tier below compare against Latin album names).
-        slotText = Util.KatakanaRomanizer.Romanize(slotText);
-
-        // The query is the RAW trimmed slot text, deliberately NOT the stop-word-
-        // stripped token join the artist gate uses: album titles are rarely article-
-        // prefixed, and both the SearchTerm index and full-name fuzzy favor raw text.
+        // The query is the raw-and-romanized trimmed slot text, deliberately NOT the
+        // stop-word-stripped token join the artist gate uses: album titles are rarely
+        // article-prefixed, and both the SearchTerm index and full-name fuzzy favor
+        // raw text.
         string query = slotText.Trim();
 
         // Tier 1 (indexed): exact SearchTerm over MusicAlbum, the same query PlayAlbum's

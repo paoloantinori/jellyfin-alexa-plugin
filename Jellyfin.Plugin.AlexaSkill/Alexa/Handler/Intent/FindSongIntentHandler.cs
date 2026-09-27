@@ -566,7 +566,7 @@ public class FindSongIntentHandler : BaseHandler
             if (!sessionData.HasResolvedArtist)
             {
                 SkillResponse? artistFallback = await CrossMedia.TryEntityFallbackAsync(
-                    sessionData.Keywords ?? string.Empty, jellyfinUser!, user, session, context, locale,
+                    keywords, jellyfinUser!, user, session, context, locale,
                     _libraryManager, _userDataManager, _queueManager, _artistIndex,
                     "FindSong artist fallback", cancellationToken).ConfigureAwait(false);
                 if (artistFallback != null)

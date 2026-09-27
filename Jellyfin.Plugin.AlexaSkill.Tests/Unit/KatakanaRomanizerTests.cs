@@ -104,8 +104,8 @@ public class KatakanaRomanizerTests
         // entry, so the phonetic overload (the artist path's tier-4 matcher)
         // resolves 'クイーン' to 'Queen' through the pre-computed index codes,
         // exactly as the Latin ASR-drift query 'kuin' does.
-        var queen = new TestCandidate(Guid.NewGuid(), "Queen");
-        var decoy = new TestCandidate(Guid.NewGuid(), "Porcupine Tree");
+        var queen = new TestCandidate("Queen", Guid.NewGuid());
+        var decoy = new TestCandidate("Porcupine Tree", Guid.NewGuid());
         var candidates = new[] { queen, decoy };
         var codes = new Dictionary<Guid, (string Primary, string? Alternate)>
         {
@@ -132,7 +132,7 @@ public class KatakanaRomanizerTests
         // 25 (below the 60 threshold), so the plain overload returns no match for a
         // katakana query even after romanization. The Double Metaphone layer is the
         // bridge; production artist paths use the phonetic overload.
-        var queen = new TestCandidate(Guid.NewGuid(), "Queen");
+        var queen = new TestCandidate("Queen", Guid.NewGuid());
 
         TestCandidate? match = FuzzyMatcher.FindBestMatch(
             "クイーン",
@@ -142,6 +142,4 @@ public class KatakanaRomanizerTests
 
         Assert.Null(match);
     }
-
-    internal sealed record TestCandidate(Guid Id, string Name);
 }
