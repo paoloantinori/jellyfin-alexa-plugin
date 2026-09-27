@@ -102,7 +102,12 @@
 #   the built-in free-text genre slot stole ja noun-qualified artist
 #   carriers ('クイーン の曲を再生して' routed to PlayByGenre with
 #   genre='クイーン'); a restricted custom type cannot steal (the Mood
-#   proof from the JF-642 investigation). The validator's within-locale
+#   proof from the JF-642 investigation). GenreType is STATIC BY DESIGN
+#   (22 curated values): catalog-backing is intentionally NOT adopted (it
+#   sits outside the JF-96.2 catalog family despite the AlbumName precedent
+#   cited above); the JF-643 vocabulary-resolution tier is the dynamic
+#   long-tail path and is wired on PlayByGenre only (the sibling handlers
+#   read the ER canonical but not the tier; see JF-645). The validator's within-locale
 #   slot-type consistency rule (same slot name, same type, per locale)
 #   forces ALL THREE genre slots to convert together. Canonical values are
 #   Latin library genre names; synonyms carry the katakana spoken forms

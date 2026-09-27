@@ -85,6 +85,10 @@ public class PlayRandomIntentHandler : BaseHandler
             if (intentRequest.Intent.Slots.TryGetValue("genre", out Slot? genreSlotObj))
             {
                 genreSlot = genreSlotObj.Value;
+                // JF-642: ja-JP's genre slot is the custom GenreType; the ER
+                // canonical ('Jazz') is the exact library tag, so it wins over
+                // the spoken form. Other locales carry no resolution (raw kept).
+                genreSlot = SlotValueHelper.GetCanonicalValue(genreSlotObj) ?? genreSlot;
             }
         }
 

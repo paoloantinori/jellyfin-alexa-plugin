@@ -567,6 +567,15 @@ PlayAlbumIntent.album type: AlbumName  →  AMAZON.MusicRecording
 #      album catalog upload reaches a declared type ONLY in it-IT; in the other 16
 #      locales it is inert. Do NOT "restore" a uniform-AlbumName assumption.
 
+Second deliberate per-locale type divergence (JF-642, 2026-09-27): ja-JP's genre slots are the
+custom STATIC `GenreType` (22-value vocabulary, NOT catalog-backed by design; the JF-643
+vocabulary-resolution tier is the dynamic long-tail path, wired on PlayByGenre only so far).
+The other 16 locales keep AMAZON.Genre (it-IT SearchQuery) as a DEFERRED decision, not an
+inconsistency: ja was the only selection-broken locale (the free-text steal evidence is in
+JF-642). Do not revert ja to AMAZON.Genre to silence the 16 cross-locale warnings, and do not
+convert the other 16 without the JF-642 evidence; do not wire GenreType into catalog sync
+(it deliberately sits outside the JF-96.2 catalog family).
+
 # ✅ RIGHT — fix the catalog population, keep the architecture
 #    Investigate why CatalogSyncTask isn't filling AlbumName with the user's real
 #    albums (+ phonetic synonyms). One-shot routing for arbitrary items comes from

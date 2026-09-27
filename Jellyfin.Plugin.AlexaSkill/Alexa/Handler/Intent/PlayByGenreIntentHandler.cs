@@ -128,12 +128,16 @@ public class PlayByGenreIntentHandler : BaseHandler
         // (the user's own words).
         // JF-642: ja-JP's genre slot is the custom GenreType, so a matched genre
         // arrives with the canonical Latin tag name ('Jazz') in entity resolution.
-        // The canonical feeds the query directly (romanization is a no-op on it)
-        // and the kana tier below never fires for it: an ER-resolved query is exact
-        // by construction. The raw value keeps driving the speech and the JF-463
-        // artist fallback. The other locales (AMAZON.Genre, it-IT SearchQuery)
-        // resolve no matching authority and keep the raw-value path unchanged.
-        string genreQuery = Util.KatakanaRomanizer.Romanize(canonicalGenre ?? genreSlot);
+        // The canonical feeds the query VERBATIM (never romanized: the exact tag
+        // match is the point) and the kana tier below never fires for it: an
+        // ER-resolved query is exact by construction. The raw value keeps driving
+        // the speech and the JF-463 artist fallback. For the other locales the
+        // DESIGN ASSUMPTION is that AMAZON.Genre and it-IT's SearchQuery resolve
+        // no matching authority and keep the raw-value path (the en-US ER probe
+        // in the JF-642 battery verifies this; if Amazon's built-in canonical
+        // rewrites the spoken text there, the miss falls through to the raw-keyed
+        // artist fallback, which is the pre-JF-642 outcome for a genre miss).
+        string genreQuery = canonicalGenre ?? Util.KatakanaRomanizer.Romanize(genreSlot);
 
         Task<IReadOnlyList<BaseItem>> GetGenreItemsAsync(string genre)
         {
