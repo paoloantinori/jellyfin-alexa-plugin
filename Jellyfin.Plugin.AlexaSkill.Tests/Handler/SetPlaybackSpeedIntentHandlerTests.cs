@@ -32,7 +32,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// preference write, and the JF-632 VideoApp-medium honest refusal.
 /// </summary>
 [Collection("Plugin")]
-public class SetPlaybackSpeedIntentHandlerTests : PluginTestBase
+public class SetPlaybackSpeedIntentHandlerTests : PluginTestBase, IDisposable
 {
     private const string DeviceId = "speed-tests-device";
 
