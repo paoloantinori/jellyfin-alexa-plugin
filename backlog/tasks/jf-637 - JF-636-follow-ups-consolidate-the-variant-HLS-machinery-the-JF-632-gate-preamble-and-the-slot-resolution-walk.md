@@ -3,9 +3,10 @@ id: JF-637
 title: >-
   JF-636 follow-ups: consolidate the variant-HLS machinery, the JF-632 gate
   preamble, and the slot-resolution walk
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-26 14:48'
+updated_date: '2026-09-27 09:20'
 labels:
   - tech-debt
   - refactor
@@ -77,3 +78,9 @@ Orchestrator /simplify round (2026-09-27, four fresh reviewers on the final stat
 - SKIPPED with reasons: S1 (the 5 wording members -> 2 with core-owned templates, byte-identical rendered text): preserves structured placeholders (StartTicks/RatePerMille) that carry triage value in structured logging, and the deeper form (VariantHlsKind enum + core-owned wording table) has an explicit trigger, the THIRD variant, recorded here and in JF-650; taking it now inverts the extension point with only two variants. deviceIdForLedger rename: name is stale but live (three reviewers confirmed the local is consumed); zero-behavior churn skipped.
 - DEFERRAL-NOTE CORRECTION (altitude reviewer): item 4's shared shape, at the fourth ER walk, is a lazy IEnumerable<ResolutionValue> enumerator with each caller a FirstOrDefault(predicate) keeping its own semantics; a walk-mode enum parameter would be the WRONG depth.
 - FILED same-turn: JF-650 (serve-strategy-spec consolidation for the triplicated skeleton), JF-651 (the ~9x Guid.TryParse+ValidateStreamToken route preamble extraction, from the altitude review's item-4 verification).
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Landed 2026-09-27 as merge a39eb2a8 (pushed; CI green on both halves: 36307503605 for JF-643, 36308038213 for this merge): ServeVariantHlsAsync + VariantHlsSpec own the shared variant-HLS serve machinery once (W3 guard, debris cleanup, CA2025 monitor boundary, flag double-cleanup, first-segment wait); WaitForFirstSegmentOrKillAsync + KillEncodeAndClearFlag collapse the four inline poll/failure copies; the speed gate rides ResolveScreenOwningMedium (the last inline belt copy gone); the DeviceQueue Write/Retire family owns the base/rate lockstep. Gates: /simplify four angles (EstimateScalePerMille collapse applied; the always-true-Guid premise of my own dispatch refused by the worker and verified twice independently), code-review high PASS by an independent reviewer (line-by-line pre-image comparison, 434/434 targeted both TFMs) plus the gate-marker re-review of the merged state (verdict: faithful; all five findings land in existing trackers or accepted-divergence records: JF-647/648/649 by ID, the one semantic narrowing accepted in the merge message as unreachable-today with the JF-626 kind-ladder comment as the standing warning, the wording-shape trigger filed in JF-650). Suites green at every step (4468 worktree, 4496 merged main twice). Live sanity on the deployed box: the migrated speed-gate path decided cleanly for the Audio medium (1.25x re-launch, correct response shape).
+<!-- SECTION:FINAL_SUMMARY:END -->
