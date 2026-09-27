@@ -115,21 +115,19 @@ public class SetPlaybackSpeedIntentHandler : BaseHandler
             return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale)));
         }
 
-        // JF-632 gate (the SleepTimer precedent): a VideoApp-routed medium cannot
-        // take the re-issue (parallel unstoppable audio; no VideoApp.Stop exists)
-        // and the VideoApp seek path tolerates no launch interaction mid-stream,
-        // so the honest refusal answers instead. The route check needs no item
-        // resolution and closes the same-item seek-mode hole the classifier's
-        // token-ownership arm leaves open.
+        // JF-632 gate (the SleepTimer precedent), on the ONE shared screen-owner
+        // resolver since JF-637 (this block previously inlined the classifier +
+        // raw ledger-route belt the resolver now owns): a VideoApp-routed medium
+        // cannot take the re-issue (parallel unstoppable audio; no VideoApp.Stop
+        // exists) and the VideoApp seek path tolerates no launch interaction
+        // mid-stream, so the honest refusal answers instead. The resolver's belt
+        // closes the same-item seek-mode hole the classifier's token-ownership
+        // arm leaves open.
         string? deviceIdForLedger = context.GetDeviceId() is { Length: > 0 } id ? id : null;
-        DeviceQueueManager? queuesForLedger = deviceIdForLedger != null ? _queueManager : null;
-        (string? ledgerItemId, DeviceQueueManager.LaunchRoute? ledgerRoute) =
-            deviceIdForLedger != null && queuesForLedger != null ? queuesForLedger.GetLastPlayedSnapshot(deviceIdForLedger) : (null, null);
-        bool ledgerVideoRouted = ledgerRoute == DeviceQueueManager.LaunchRoute.VideoApp;
-        PlaybackLaunchBuilder.PlayingMedium medium = Launch.ResolvePlayingMedium(context, _libraryManager, _queueManager);
-        if (PlaybackLaunchBuilder.IsVideoAppMedium(medium) || ledgerVideoRouted)
+        PlaybackLaunchBuilder.PlayingMedium medium = Launch.ResolveScreenOwningMedium(context, _libraryManager, _queueManager);
+        if (PlaybackLaunchBuilder.IsVideoAppMedium(medium))
         {
-            Logger.LogDebug("SetPlaybackSpeed: {Medium} playing (ledgerVideoRouted={LedgerVideoRouted}), refusing the re-launch honestly", medium, ledgerVideoRouted);
+            Logger.LogDebug("SetPlaybackSpeed: {Medium} playing, refusing the re-launch honestly", medium);
 
             // The JF-564/JF-632 refusal shape: the honest line rides a response
             // that still carries AudioPlayer.Stop, so any DISPLACED audio under
