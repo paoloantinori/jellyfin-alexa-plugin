@@ -404,6 +404,11 @@ public sealed class PlaybackLaunchBuilder
     /// delivers Started(new) before the displaced old stream's terminal event. A
     /// different item needs no generation (item identity already classifies its
     /// displacement); an absent or unattributed current token mints conservatively.
+    /// Round-3 review finding: the gate is <see cref="IsAudioPlaybackActive"/> itself
+    /// (flag OR context player report), the SAME evidence the re-launch gates accept,
+    /// so a re-launch admitted via the context arm alone (the plugin-restart shape:
+    /// the in-memory flag boots clear while the Echo still plays) still mints; the
+    /// shared call also owns the manager+device-key resolution once.
     /// </summary>
     /// <param name="context">The Alexa context (device id for the flag read, current token for the same-item check).</param>
     /// <param name="itemId">The bare item GUID being launched.</param>
@@ -411,9 +416,7 @@ public sealed class PlaybackLaunchBuilder
     /// <returns>The stream token: the bare item id, or the generation-carrying composite.</returns>
     internal static string MintStreamToken(Context? context, string itemId, DeviceQueueManager? queueManager)
     {
-        DeviceQueueManager? manager = queueManager ?? Plugin.Instance?.DeviceQueueManager;
-        string deviceId = context?.GetDeviceId() ?? string.Empty;
-        if (manager is null || !manager.IsAudioPlaybackActive(deviceId))
+        if (!IsAudioPlaybackActive(context, queueManager))
         {
             return itemId;
         }

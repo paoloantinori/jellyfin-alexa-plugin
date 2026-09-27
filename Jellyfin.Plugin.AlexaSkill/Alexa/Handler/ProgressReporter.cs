@@ -437,7 +437,7 @@ public sealed class ProgressReporter
         // the queue routes to the audio-only transcode instead of dying on the raw
         // static bytes (JF-505 does not apply: this launch is audio-shaped).
         AudioLaunchSource source = _launch.ResolveAudioLaunchSource(adjacentItem, itemId, user, 0);
-        return _launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source, itemId, adjacentItem, user, context);
+        return _launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source, itemId, adjacentItem, user, context, queueManager: queueManager);
     }
 
     /// <summary>

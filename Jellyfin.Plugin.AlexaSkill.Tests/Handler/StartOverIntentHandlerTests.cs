@@ -69,8 +69,9 @@ public class StartOverIntentHandlerTests : PluginTestBase, IDisposable
         IUserManager userManager,
         IUserDataManager userDataManager,
         global::Jellyfin.Plugin.AlexaSkill.Alexa.Util.ILiveTvStreamResolver streamResolver,
-        ILoggerFactory loggerFactory)
-        : StartOverIntentHandler(sessionManager, config, libraryManager, userManager, userDataManager, streamResolver, loggerFactory)
+        ILoggerFactory loggerFactory,
+        Jellyfin.Plugin.AlexaSkill.Alexa.Playback.DeviceQueueManager? queueManager = null)
+        : StartOverIntentHandler(sessionManager, config, libraryManager, userManager, userDataManager, streamResolver, loggerFactory, queueManager)
     {
         public ProgressiveSpeechCapture Progressive { get; } = new();
 
@@ -773,5 +774,89 @@ public class StartOverIntentHandlerTests : PluginTestBase, IDisposable
         {
             Plugin.Instance!.Configuration.LiveTvEnabled = true;
         }
+    }
+
+    // ---- the JF-655 round-3 review: the non-speed mint shapes ----
+
+    /// <summary>
+    /// The coordinator round-3 pin for a NON-speed same-item re-launch: StartOver
+    /// of the ACTIVELY-playing item mints a launch generation into its directive
+    /// token, so the displaced old stream's late bare stop (delivered after the
+    /// new stream's PlaybackStarted) classifies displacement and the active-audio
+    /// flag survives.
+    /// </summary>
+    [Fact]
+    public async Task StartOverRelaunch_LateOldStreamStopAfterNewStart_KeepsFlagActive()
+    {
+        var audioItem = new Audio { Name = "Restart Song", Id = Guid.NewGuid(), Path = "/music/restart.mp3" };
+        _fx.LibraryManager.Setup(x => x.GetItemById(audioItem.Id)).Returns(audioItem);
+        string deviceId = $"jf655-startover-{Guid.NewGuid():N}";
+        using var queues = TestHelpers.CreateDeviceQueueManager("startover-jf655", _fx.LoggerFactory.CreateLogger<Jellyfin.Plugin.AlexaSkill.Alexa.Playback.DeviceQueueManager>());
+
+        var startHandler = new PlaybackStartedEventHandler(
+            _fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory, _fx.LibraryManager.Object, queues);
+        Context deviceContext = TestHelpers.CreateTestContext(deviceId);
+        SessionInfo eventSession = TestHelpers.CreateTestSession(_fx.SessionManager.Object, _fx.LoggerFactory);
+        eventSession.PlayState = new MediaBrowser.Model.Session.PlayerStateInfo();
+        await startHandler.HandleAsync(
+            new AudioPlayerRequest { Type = "AudioPlayer.PlaybackStarted", Token = audioItem.Id.ToString() },
+            deviceContext, TestHelpers.CreateTestUser(), eventSession, CancellationToken.None);
+        Assert.True(queues.IsAudioPlaybackActive(deviceId));
+
+        var handler = new RecordingStartOverHandler(
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object,
+            _fx.UserManager.Object, _fx.UserDataManager.Object, _resolverMock.Object,
+            _fx.LoggerFactory, queues);
+        Context playingContext = TestHelpers.CreateTestContext(deviceId);
+        playingContext.AudioPlayer = new PlaybackState
+        {
+            Token = audioItem.Id.ToString(),
+            PlayerActivity = "PLAYING"
+        };
+        SkillResponse response = await handler.HandleAsync(
+            CreateStartOverRequest(), playingContext, TestHelpers.CreateTestUser(),
+            CreateSessionWithNowPlaying(audioItem), CancellationToken.None);
+
+        var directive = Assert.Single(response.Response!.Directives!.OfType<AudioPlayerPlayDirective>());
+        string relaunchedToken = directive.AudioItem.Stream.Token;
+        Assert.NotEqual(audioItem.Id.ToString(), relaunchedToken);
+        Assert.True(Jellyfin.Plugin.AlexaSkill.Alexa.Playback.StreamTokenCodec.TryGetItemId(relaunchedToken, out Guid relaunchedItem));
+        Assert.Equal(audioItem.Id, relaunchedItem);
+
+        await startHandler.HandleAsync(
+            new AudioPlayerRequest { Type = "AudioPlayer.PlaybackStarted", Token = relaunchedToken },
+            deviceContext, TestHelpers.CreateTestUser(), eventSession, CancellationToken.None);
+
+        var stopHandler = new PlaybackStoppedEventHandler(
+            _fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory, queues,
+            _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object);
+        await stopHandler.HandleAsync(
+            new AudioPlayerRequest { Type = "AudioPlayer.PlaybackStopped", Token = audioItem.Id.ToString() },
+            deviceContext, TestHelpers.CreateTestUser(), eventSession, CancellationToken.None);
+
+        Assert.True(queues.IsAudioPlaybackActive(deviceId));
+    }
+
+    /// <summary>
+    /// The conditional mint's bare side on an IDLE device: with no active playback
+    /// evidence (flag clear, context not playing), the StartOver directive keeps
+    /// the bare item id every ordinary launch carried.
+    /// </summary>
+    [Fact]
+    public async Task StartOver_IdleDevice_KeepsTheBareItemToken()
+    {
+        var audioItem = new Audio { Name = "Idle Song", Id = Guid.NewGuid(), Path = "/music/idle.mp3" };
+        using var queues = TestHelpers.CreateDeviceQueueManager("startover-jf655-idle", _fx.LoggerFactory.CreateLogger<Jellyfin.Plugin.AlexaSkill.Alexa.Playback.DeviceQueueManager>());
+
+        var handler = new RecordingStartOverHandler(
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object,
+            _fx.UserManager.Object, _fx.UserDataManager.Object, _resolverMock.Object,
+            _fx.LoggerFactory, queues);
+        SkillResponse response = await handler.HandleAsync(
+            CreateStartOverRequest(), TestHelpers.CreateTestContext($"jf655-idle-{Guid.NewGuid():N}"),
+            TestHelpers.CreateTestUser(), CreateSessionWithNowPlaying(audioItem), CancellationToken.None);
+
+        var directive = Assert.Single(response.Response!.Directives!.OfType<AudioPlayerPlayDirective>());
+        Assert.Equal(audioItem.Id.ToString(), directive.AudioItem.Stream.Token);
     }
 }

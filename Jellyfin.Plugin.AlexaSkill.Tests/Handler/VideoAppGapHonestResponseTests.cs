@@ -418,7 +418,10 @@ public class VideoAppGapHonestResponseTests : PluginTestBase, IDisposable
             CancellationToken.None);
 
         var directive = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
-        Assert.Equal(track2.Id.ToString(), directive.AudioItem.Stream.Token);
+        // Round-3: the advance replaces the actively-playing stream the context names
+        // (this shape's token IS the next track), so the directive may carry the
+        // JF-655 launch generation; the pin is that it plays track2.
+        Assert.True(StreamTokenCodec.NamesItem(directive.AudioItem.Stream.Token, track2.Id.ToString()));
     }
 
     [Fact]

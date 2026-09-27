@@ -112,6 +112,58 @@ point of the DI-side home); the dictionary's doc comment now carries the drift g
 (a new terminal-event path must update BOTH stores) and this note records the
 acceptance.
 
+**Round-3 coordinator review (applied as the review(jf655) round 3 commit):**
+(1+3) RAW TOKEN CONSUMERS, APPLIED. The generation suffix broke every consumer that
+parsed or compared the raw AudioPlayer token: ShuffleOnIntentHandler and
+ShuffleOffIntentHandler (raw Guid.TryParse; a suffixed token made the physical
+reshuffle/restore silently skip while speaking success; both now parse through
+StreamTokenCodec and pass the PARSED id to ShuffleRemaining/MoveTo, whose queue
+lookups compare bare ids) and ResumeIntentHandler (two raw Ordinal equality guards,
+the queue-candidate skip at ~:211 and the book branch at ~:389; both now compare
+through the new StreamTokenCodec.NamesItem(token, itemId), the ONE comparison helper)
+plus LaunchRequestHandler's stale-token check (~:219-220, also NamesItem). SWEEP of
+every Guid.TryParse and token-equality site in the plugin: fixed the four above;
+left deliberately, each because its input is NOT a stream token: SleepTimerIntentHandler's
+raw fallback (its codec arm runs first; the fallback only sees unsuffixed unparseables);
+ProgressReporter :250/:512, LaunchRequestHandler :158/:249, FollowMe, Fallback/Yes
+resume-state ids, ListPagination, LibraryFilter, AplUserEvent (queue/ledger/session/list
+stores, bare by construction); NextTrackPrecomputeCache :121 (compares its OWN stored raw
+token to the current raw token, same generation by construction); the chokepoint's
+ExpectedPreviousToken echo (verbatim previous token, correct as-is); all Controller and
+StreamTokenHelper/LastPlayedResponseInterceptor parses (URL-space ids, never directive
+tokens); PlaybackLaunchBuilder's ledger parses (bare stores).
+(2) MINT GATE, APPLIED: MintStreamToken now gates on IsAudioPlaybackActive itself
+(flag OR context player report), the SAME evidence the re-launch gates accept, so a
+re-launch admitted via the context arm alone (plugin restart mid-playback) still mints;
+this also resolves finding 7 (the mint calls the shared gate instead of re-implementing
+the manager+device-key resolution, the tightest possible non-drift form; the resolved
+values are internal to the shared call). Consequence, one JF-655-added test adjusted:
+the round-2 ColdDevice_SpeedDirective_KeepsTheBareItemToken pin asserted the bare
+token under a PLAYING context with the flag clear, the exact premise finding 2 removes;
+it is now PlayingContextReport_FlagClear_SpeedDirective_MintsGeneration (same shape,
+inverted assertion), and the bare-side pin moved to StartOver_IdleDevice_KeepsTheBareItemToken
+(idle device, no evidence at all).
+(4) SAME-ITEM DISPLACEMENT POSITION, APPLIED: PlaybackReportOrdering.ClassifyStop
+returns the three-way kind (Real / DisplacedDifferentItem / DisplacedSameItem;
+IsDisplacementStop delegates), and the Stopped handler reports the event's own raw
+offset for the same-item kind (the item's real position at displacement for
+identity-rate streams; composing through the launch scope would use the NEW stream's
+base/rate, the wrong generation's) while the different-item zeroing keeps the JF-447
+rationale.
+(5) TEST-VS-PRODUCTION DIVERGENCE, APPLIED: the same-item re-launch call sites now
+thread their manager into the chokepoint (StartOver ctor param, ProgressReporter's
+queue advance, both NearlyFinished enqueue sites, JumpToPosition, SkipForwardBack x2;
+Repeat already threaded), and the non-speed mint shape is pinned by
+StartOverRelaunch_LateOldStreamStopAfterNewStart_KeepsFlagActive. Left on the
+Plugin.Instance singleton fallback (production-correct; the divergence is test-only
+and each site's launch is cross-item by construction): GoToChapter and the remaining
+first-play handlers.
+(6) TORN-WRITE HARDENING, APPLIED (trivial under the existing machinery): the latest
+start publishes as ONE immutable volatile StartMarker(Info, LaunchGeneration) record,
+so a concurrent classifier can never read the new start paired with the old
+generation; BeginStart is the single writer.
+(7) covered by (2).
+
 **Review gates:** /simplify (4 parallel angles) returned clean; two minor items skipped
 with reasons (the inline DeviceID chain matched 12 pre-existing sites in the same file
 and was then fixed anyway under code-review; the gate-after-item-resolve one-bounded-read
@@ -139,10 +191,18 @@ mid-playback device probe is Paolo's call. (4) the paused-device refusal line
 paused-shape string would need 17-locale additions, which this task's constraints forbid
 (no locale strings); if it grates on-device, file it with new strings.
 
-**Verification tail:** build 0 errors 0 warnings both TFMs; full suite green both TFMs
-(summary line per TFM: `Passed!  - Failed:     0, Passed:  4523, Skipped:     0, Total:  4523`
-= 4507 prior + 4 speed-gate tests + 6 flag-lifecycle tests + 2 coordinator-review speed
-tests + 4 codec launch-generation tests); new pins: stale-ledger+cold -> refusal (the e2e row's shape), flag-set -> re-launch,
+**Verification tail (round 3):** build 0 errors 0 warnings both TFMs; full suite green
+both TFMs (summary line per TFM: `Passed!  - Failed:     0, Passed:  4525, Skipped:     0, Total:  4525`
+= the 4523 after round 2 + the 2 StartOver pins). Finding 2's mandated gate change
+collided with six stale pre-existing pins that assert BARE directive tokens under
+PLAYING contexts (TestHelpers.CreateContextWithToken defaults playerActivity=PLAYING):
+five in RepeatIntentHandlerTests and one in VideoAppGapHonestResponseTests
+(Next_DuringAudio_QueueAdvance, whose shape legitimately mints); each was converted to
+the codec item-naming assertion (the test's actual intent, "the directive replays THIS
+item"), the same conversion class as the JF-447 composite-token migration, and the one
+round-2 JF-655 test whose premise finding 2 removed was rewritten to pin the NEW
+semantics (PlayingContextReport_FlagClear_SpeedDirective_MintsGeneration). Every other
+pre-existing test is unmodified and green. New pins: stale-ledger+cold -> refusal (the e2e row's shape), flag-set -> re-launch,
 PLAYING-context -> re-launch, VideoApp+flag -> still refuses, flag lifecycle (Started sets,
 Stopped/Finished/Failed clear, fresh manager boots clear). VideoApp behavior byte-identical
 (no VideoApp code path touched). The orchestrator runs the isolated e2e row

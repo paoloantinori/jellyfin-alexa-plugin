@@ -601,12 +601,15 @@ public class SetPlaybackSpeedIntentHandlerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
-    /// The conditional mint's bare side: with NO active same-item playback on the
-    /// device (the flag clear), the directive keeps the bare item id every earlier
-    /// launch carried; the generation suffix exists only on same-item replacements.
+    /// The context arm of the mint gate (round-3 finding 2): a re-launch admitted
+    /// via the request's own PLAYING report alone (the plugin-restart shape: the
+    /// in-memory flag boots clear while the Echo still plays) MINTS the generation,
+    /// because the mint gate now accepts exactly the evidence the re-launch gate
+    /// accepts. The pre-round-3 shape (bare token on this evidence) was the
+    /// misclassification surviving a plugin restart.
     /// </summary>
     [Fact]
-    public async Task ColdDevice_SpeedDirective_KeepsTheBareItemToken()
+    public async Task PlayingContextReport_FlagClear_SpeedDirective_MintsGeneration()
     {
         Audio episode = CreateEpisode(60);
         SetupItemLookup(episode);
@@ -622,7 +625,9 @@ public class SetPlaybackSpeedIntentHandlerTests : PluginTestBase, IDisposable
 
         AudioPlayerPlayDirective? directive = TestHelpers.GetPlayDirective(response);
         Assert.NotNull(directive);
-        Assert.Equal(episode.Id.ToString(), directive.AudioItem.Stream.Token);
+        Assert.NotEqual(episode.Id.ToString(), directive.AudioItem.Stream.Token);
+        Assert.True(StreamTokenCodec.TryGetItemId(directive.AudioItem.Stream.Token, out Guid mintedItem));
+        Assert.Equal(episode.Id, mintedItem);
     }
 
     private static string SpeechText(SkillResponse response)

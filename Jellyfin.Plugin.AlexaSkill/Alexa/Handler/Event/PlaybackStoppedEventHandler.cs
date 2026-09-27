@@ -94,7 +94,8 @@ public class PlaybackStoppedEventHandler : BaseHandler
         // displaced Stopped(old)), so clearing here would flag an actively-playing
         // device inactive; the newer stream's own start owns the flag.
         var queue = _queueManager.GetOrCreateQueue(device);
-        bool isDisplacement = PlaybackReportOrdering.IsDisplacementStop(device, req.Token);
+        PlaybackReportOrdering.StopKind stopKind = PlaybackReportOrdering.ClassifyStop(device, req.Token);
+        bool isDisplacement = stopKind != PlaybackReportOrdering.StopKind.Real;
         if (!isDisplacement)
         {
             _queueManager.MarkAudioPlaybackStopped(device);
@@ -129,7 +130,21 @@ public class PlaybackStoppedEventHandler : BaseHandler
         long realPositionTicks = Progress.ComposeEventPositionTicks(
             device, stopItemId, req.OffsetInMilliseconds, "PlaybackStopped", _queueManager, _libraryManager);
 
-        long positionTicks = isDisplacement ? 0 : realPositionTicks;
+        // Round-3 finding: the displacement zeroing splits by kind. A DIFFERENT-item
+        // displacement keeps it (the near-zero offset counts the new track's
+        // timeline, the JF-447 rationale). A SAME-item displacement reports the
+        // event's own raw offset: it IS the item's real position at displacement
+        // for identity-rate streams, and composing it through the launch scope
+        // would mis-scale it with the NEW stream's base/rate (the wrong
+        // generation's scope); an atempo old stream's raw offset keeps a
+        // proportional error, still bounded below discarding the position
+        // entirely as the old shape did.
+        long positionTicks = stopKind switch
+        {
+            PlaybackReportOrdering.StopKind.DisplacedDifferentItem => 0,
+            PlaybackReportOrdering.StopKind.DisplacedSameItem => TimeSpan.FromMilliseconds(Math.Max(req.OffsetInMilliseconds, 0)).Ticks,
+            _ => realPositionTicks,
+        };
 
         // JF-447 review hardening (event-order race): the classification above reads the
         // device's LATEST START, which is only written once PlaybackStarted(new) has been

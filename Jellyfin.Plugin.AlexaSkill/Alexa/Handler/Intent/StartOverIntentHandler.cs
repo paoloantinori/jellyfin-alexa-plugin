@@ -32,6 +32,13 @@ public class StartOverIntentHandler : BaseHandler
     private readonly ILiveTvStreamResolver _streamResolver;
 
     /// <summary>
+    /// Round-3 review: the same-item re-launch below threads its manager into the
+    /// chokepoint so the launch-token mint reads the same store the event handlers
+    /// write (the JF-522 per-call idiom; null keeps the Plugin.Instance fallback).
+    /// </summary>
+    private readonly Alexa.Playback.DeviceQueueManager? _queueManager;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="StartOverIntentHandler"/> class.
     /// </summary>
     /// <param name="sessionManager">Instance of the <see cref="ISessionManager"/> interface.</param>
@@ -48,12 +55,14 @@ public class StartOverIntentHandler : BaseHandler
         IUserManager userManager,
         IUserDataManager userDataManager,
         ILiveTvStreamResolver streamResolver,
-        ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
+        ILoggerFactory loggerFactory,
+        Alexa.Playback.DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
         _userDataManager = userDataManager;
         _streamResolver = streamResolver;
+        _queueManager = queueManager;
     }
 
     /// <inheritdoc/>
@@ -183,6 +192,7 @@ public class StartOverIntentHandler : BaseHandler
         }
 
         return Launch.BuildAudioPlayerResponse(
-            PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, item, user, context);
+            PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, item, user, context,
+            queueManager: _queueManager);
     }
 }

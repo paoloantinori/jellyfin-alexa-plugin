@@ -70,6 +70,18 @@ public class RepeatIntentHandlerTests : PluginTestBase, IDisposable
     private static Context CreateContextWithToken(string token, string deviceId = "test-device")
         => TestHelpers.CreateContextWithToken(token, deviceId);
 
+    /// <summary>
+    /// Round-3: the repeat re-launch of the actively-playing item may mint a launch
+    /// generation into its stream token (the JF-655 same-item displacement fix; this
+    /// file's contexts default to PlayerActivity=PLAYING), so "the directive replays
+    /// THIS item" is asserted through the codec's item-naming comparison, not raw
+    /// string equality a suffixed token silently fails.
+    /// </summary>
+    private static void AssertDirectiveReplaysItem(AudioPlayerPlayDirective directive, string expectedItemId)
+        => Assert.True(
+            StreamTokenCodec.NamesItem(directive.AudioItem.Stream.Token, expectedItemId),
+            $"the directive must replay item {expectedItemId}, got token '{directive.AudioItem.Stream.Token}'");
+
     private SessionInfo CreateSessionWithNowPlaying(BaseItem item)
     {
         var session = TestHelpers.CreateTestSession(_fx.SessionManager.Object, _fx.LoggerFactory);
@@ -128,7 +140,7 @@ public class RepeatIntentHandlerTests : PluginTestBase, IDisposable
         var directive = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
         Assert.Equal(PlayBehavior.ReplaceAll, directive.PlayBehavior);
         Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
-        Assert.Equal(song.Id.ToString(), directive.AudioItem.Stream.Token);
+        AssertDirectiveReplaysItem(directive, song.Id.ToString());
 
         // Play responses end the session (the JF-299 rule) and are silent unless
         // AnnounceAudioPlays is on (opt-in default off, JF-352.4).
@@ -180,7 +192,7 @@ public class RepeatIntentHandlerTests : PluginTestBase, IDisposable
 
         Assert.NotNull(response);
         var directive = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
-        Assert.Equal(song.Id.ToString(), directive.AudioItem.Stream.Token);
+        AssertDirectiveReplaysItem(directive, song.Id.ToString());
         Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
     }
 
@@ -330,7 +342,7 @@ public class RepeatIntentHandlerTests : PluginTestBase, IDisposable
         Assert.NotNull(response);
         var directive = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
         Assert.Equal(PlayBehavior.ReplaceAll, directive.PlayBehavior);
-        Assert.Equal(radioTrack.Id.ToString(), directive.AudioItem.Stream.Token);
+        AssertDirectiveReplaysItem(directive, radioTrack.Id.ToString());
     }
 
     /// <summary>
@@ -411,7 +423,7 @@ public class RepeatIntentHandlerTests : PluginTestBase, IDisposable
         // The token's song restarts (the flat-path book recorded route Audio is
         // not displacement evidence): a music restart, not CannotRepeatContent.
         var directive = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
-        Assert.Equal(song.Id.ToString(), directive.AudioItem.Stream.Token);
+        AssertDirectiveReplaysItem(directive, song.Id.ToString());
     }
 
     [Fact]
@@ -451,7 +463,7 @@ public class RepeatIntentHandlerTests : PluginTestBase, IDisposable
         Assert.NotNull(response);
         var directive = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
         Assert.Equal(PlayBehavior.ReplaceAll, directive.PlayBehavior);
-        Assert.Equal(track2.Id.ToString(), directive.AudioItem.Stream.Token);
+        AssertDirectiveReplaysItem(directive, track2.Id.ToString());
         Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
     }
 
@@ -503,7 +515,7 @@ public class RepeatIntentHandlerTests : PluginTestBase, IDisposable
         Assert.NotNull(response);
         var directive = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
         Assert.Equal(PlayBehavior.ReplaceAll, directive.PlayBehavior);
-        Assert.Equal(track2.Id.ToString(), directive.AudioItem.Stream.Token);
+        AssertDirectiveReplaysItem(directive, track2.Id.ToString());
         Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
     }
 

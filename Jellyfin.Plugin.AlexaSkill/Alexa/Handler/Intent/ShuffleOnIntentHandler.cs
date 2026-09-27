@@ -6,6 +6,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -56,7 +57,10 @@ public class ShuffleOnIntentHandler : BaseHandler
         string deviceId = context.System.Device.DeviceID;
         string? currentToken = requestState.Token;
         Guid currentId = Guid.Empty;
-        bool tokenValid = currentToken != null && Guid.TryParse(currentToken, out currentId);
+        // Round-3 sweep: the shared codec, not raw Guid.TryParse, so a
+        // generation- or sleep-suffixed token still resolves (the raw parse fails
+        // composites and the physical reshuffle below would silently skip).
+        bool tokenValid = StreamTokenCodec.TryGetItemId(currentToken, out currentId);
 
         Logger.LogDebug("ShuffleOn: entered, token={Token}, offset={OffsetMs}ms", currentToken, requestState.OffsetInMilliseconds);
 
@@ -79,7 +83,7 @@ public class ShuffleOnIntentHandler : BaseHandler
         // effect does not depend on the indirect Jellyfin PlayState flag being read.
         if (_queueManager != null && tokenValid)
         {
-            _queueManager.ShuffleRemaining(deviceId, currentToken!);
+            _queueManager.ShuffleRemaining(deviceId, currentId.ToString());
             ProgressReporter.MirrorQueueToSession(_queueManager.GetOrCreateQueue(deviceId), session);
         }
 

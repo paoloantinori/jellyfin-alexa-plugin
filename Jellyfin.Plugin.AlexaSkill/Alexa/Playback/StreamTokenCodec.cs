@@ -151,4 +151,19 @@ internal static class StreamTokenCodec
                 CultureInfo.InvariantCulture,
                 out deadlineUtcTicks);
     }
+
+    /// <summary>
+    /// Whether a stream token NAMES the given item (the JF-655 round-3 sweep's ONE
+    /// comparison helper): both sides parse through <see cref="TryGetItemId"/>, so a
+    /// generation- or sleep-suffixed token compares equal to the bare store id it
+    /// was minted from. Every token-vs-id comparison goes through this instead of
+    /// raw string equality, which a suffixed token silently fails.
+    /// </summary>
+    /// <param name="token">The raw stream token from the event or directive.</param>
+    /// <param name="itemId">The bare item id from a store (ledger, queue pointer, session).</param>
+    /// <returns>True when both parse and name the same item.</returns>
+    internal static bool NamesItem(string? token, string? itemId)
+        => TryGetItemId(token, out Guid tokenItem)
+            && TryGetItemId(itemId, out Guid namedItem)
+            && tokenItem == namedItem;
 }
