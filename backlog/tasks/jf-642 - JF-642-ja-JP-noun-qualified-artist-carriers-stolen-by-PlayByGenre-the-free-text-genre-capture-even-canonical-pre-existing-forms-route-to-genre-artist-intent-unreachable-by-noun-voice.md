@@ -56,6 +56,8 @@ PRIORITY: medium. ja-JP artist intent is effectively unreachable by naturalized 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
+2026-09-27 orchestrator simplify round SUPERSEDES two earlier holds: the two sibling genre slots (PlayRandom, PlayByDecade) now read the ER canonical at their Genres feeds (raw kept for speech, the code-review F-1 fix), so the F4 hold ("siblings unwired") and the template RESIDUAL paragraph from the worker round no longer describe the code. What remains unwired is the JF-643 kana resolution TIER on the siblings (the JF-645 residual, already tracked).
+
 DESIGN SETTLED by the orchestrator 2026-09-27 (post-investigation, pre-dispatch; dispatch waits for JF-643 to merge because both touch PlayByGenreIntentHandler):
 
 SCOPE: ja-JP ONLY. The steal is selection-broken only in ja; the other 16 locales have working discriminators (catalog ER in en/it; PlaySong selection + cross-media fallback in es/pt/de). Converting all 17 in one change risks genre-recall regressions in 16 healthy locales and needs 17 vocabularies. Per-locale type divergence has precedent (it-IT AlbumName, anti-pattern #10 note). The all-17 latent collision stays documented in this task as the follow-up decision.

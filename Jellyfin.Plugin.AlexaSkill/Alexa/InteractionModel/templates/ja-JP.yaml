@@ -115,10 +115,10 @@
 #   Jazz, which PlayByGenreIntentHandler feeds directly to the exact
 #   Genres query. Long-tail genres the vocabulary misses arrive as
 #   ER_SUCCESS_NO_MATCH raw text and keep the JF-643 kana resolution tier.
-#   RESIDUAL: only PlayByGenreIntentHandler reads the canonical; the
-#   PlayRandom/PlayByDecade handlers still read raw Slot.Value, so their
-#   kana genre queries keep missing until those sites are wired (the
-#   JF-643 residual list).
+#   All three sibling handlers read the ER canonical at their Genres feed
+#   (raw kept for speech); the JF-643 kana resolution tier remains wired on
+#   PlayByGenre only (the siblings' long-tail coverage is the JF-645
+#   residual).
 invocationName: マイコレクション
 intents:
   - name: QueryRecentlyAddedIntent

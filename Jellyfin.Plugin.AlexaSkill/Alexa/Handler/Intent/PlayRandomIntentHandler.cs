@@ -74,6 +74,7 @@ public class PlayRandomIntentHandler : BaseHandler
 
         string? mediaTypeSlot = null;
         string? genreSlot = null;
+        string? genreCanonical = null;
 
         if (intentRequest.Intent.Slots != null)
         {
@@ -85,10 +86,10 @@ public class PlayRandomIntentHandler : BaseHandler
             if (intentRequest.Intent.Slots.TryGetValue("genre", out Slot? genreSlotObj))
             {
                 genreSlot = genreSlotObj.Value;
-                // JF-642: ja-JP's genre slot is the custom GenreType; the ER
-                // canonical ('Jazz') is the exact library tag, so it wins over
-                // the spoken form. Other locales carry no resolution (raw kept).
-                genreSlot = SlotValueHelper.GetCanonicalValue(genreSlotObj) ?? genreSlot;
+                // JF-642: ja-JP's GenreType canonical ('Jazz') is the exact
+                // library tag; kept separate from genreSlot, which feeds the
+                // not-found speech and must speak the user's own words.
+                genreCanonical = SlotValueHelper.GetCanonicalValue(genreSlotObj);
             }
         }
 
@@ -128,7 +129,7 @@ public class PlayRandomIntentHandler : BaseHandler
 
         if (!string.IsNullOrWhiteSpace(genreSlot))
         {
-            query.Genres = new[] { genreSlot };
+            query.Genres = new[] { genreCanonical ?? genreSlot };
         }
 
         IReadOnlyList<BaseItem> items = await RetryAsync(() => _libraryManager.GetItemList(query), "GetRandomItems", cancellationToken).ConfigureAwait(false);

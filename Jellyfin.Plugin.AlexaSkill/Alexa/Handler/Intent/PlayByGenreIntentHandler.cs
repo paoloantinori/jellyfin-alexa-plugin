@@ -134,7 +134,7 @@ public class PlayByGenreIntentHandler : BaseHandler
         // the speech and the JF-463 artist fallback. For the other locales the
         // DESIGN ASSUMPTION is that AMAZON.Genre and it-IT's SearchQuery resolve
         // no matching authority and keep the raw-value path (the en-US ER probe
-        // in the JF-642 battery verifies this; if Amazon's built-in canonical
+        // in the JF-642 battery is designated to verify this; if Amazon's built-in canonical
         // rewrites the spoken text there, the miss falls through to the raw-keyed
         // artist fallback, which is the pre-JF-642 outcome for a genre miss).
         string genreQuery = canonicalGenre ?? Util.KatakanaRomanizer.Romanize(genreSlot);
