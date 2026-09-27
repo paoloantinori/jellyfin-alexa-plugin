@@ -94,6 +94,26 @@
 # 'next' (NextUp, the empty-slot default) from 'latest' (recency,
 # PremiereDate desc); see the intent and type blocks for this locale's
 # values.
+# - JF-642 (2026-09-27): the genre slot (PlayByGenre, PlayRandom,
+#   PlayByDecade) is the custom GenreType in THIS LOCALE ONLY. The other
+#   16 locales keep the built-in AMAZON.Genre and it-IT keeps
+#   AMAZON.SearchQuery; this is the per-locale type-divergence precedent
+#   of it-IT's catalog-backed AlbumName (anti-pattern #10 note). Rationale:
+#   the built-in free-text genre slot stole ja noun-qualified artist
+#   carriers ('クイーン の曲を再生して' routed to PlayByGenre with
+#   genre='クイーン'); a restricted custom type cannot steal (the Mood
+#   proof from the JF-642 investigation). The validator's within-locale
+#   slot-type consistency rule (same slot name, same type, per locale)
+#   forces ALL THREE genre slots to convert together. Canonical values are
+#   Latin library genre names; synonyms carry the katakana spoken forms
+#   plus romaji variants, so entity resolution maps ジャズ to canonical
+#   Jazz, which PlayByGenreIntentHandler feeds directly to the exact
+#   Genres query. Long-tail genres the vocabulary misses arrive as
+#   ER_SUCCESS_NO_MATCH raw text and keep the JF-643 kana resolution tier.
+#   RESIDUAL: only PlayByGenreIntentHandler reads the canonical; the
+#   PlayRandom/PlayByDecade handlers still read raw Slot.Value, so their
+#   kana genre queries keep missing until those sites are wired (the
+#   JF-643 residual list).
 invocationName: マイコレクション
 intents:
   - name: QueryRecentlyAddedIntent
@@ -257,7 +277,7 @@ intents:
       - name: media_type
         type: MediaType
       - name: genre
-        type: AMAZON.Genre
+        type: GenreType
   - name: PlayByGenreIntent
     samples:
       - '{genre} の音楽を再生して'
@@ -268,7 +288,7 @@ intents:
       - '{genre} のストリーム'
     slots:
       - name: genre
-        type: AMAZON.Genre
+        type: GenreType
   - name: PlayByDecadeIntent
     samples:
       - '{decade} の曲を再生して'
@@ -281,7 +301,7 @@ intents:
       - name: decade
         type: Decade
       - name: genre
-        type: AMAZON.Genre
+        type: GenreType
   - name: ContinueWatchingIntent
     samples:
       - 続きを見て
@@ -900,6 +920,57 @@ types:
     values:
       - value: オーディオブック
         synonyms: []
+  # JF-642: restricted genre vocabulary (the JF-354 Mood architecture applied
+  # to genre) on this locale's three genre slots; see the header's divergence
+  # note for the rationale and the ja-only scope. Romaji synonyms derive from
+  # KatakanaRomanizer's Hepburn syllable values, word boundaries spaced as
+  # spoken (e.g. 'hippu hoppu').
+  GenreType:
+    values:
+      - value: Rock
+        synonyms: [ロック, rokku]
+      - value: Pop
+        synonyms: [ポップ, poppu]
+      - value: Jazz
+        synonyms: [ジャズ, jazu]
+      - value: Classical
+        synonyms: [クラシック, kurashikku]
+      - value: Hip Hop
+        synonyms: [ヒップホップ, hippu hoppu]
+      - value: Rap
+        synonyms: [ラップ, rappu]
+      - value: Electronic
+        synonyms: [エレクトロニック, エレクトロ, erekutoronikku, erekutoro]
+      - value: Dance
+        synonyms: [ダンス, dansu]
+      - value: Folk
+        synonyms: [フォーク, foku]
+      - value: Country
+        synonyms: [カントリー, kantori]
+      - value: Metal
+        synonyms: [メタル, metaru, ヘヴィメタル, ヘビーメタル]
+      - value: Punk
+        synonyms: [パンク, panku]
+      - value: Reggae
+        synonyms: [レゲエ, regee]
+      - value: Blues
+        synonyms: [ブルース, burusu]
+      - value: Soul
+        synonyms: [ソウル, souru]
+      - value: Funk
+        synonyms: [ファンク, fanku]
+      - value: Latin
+        synonyms: [ラテン, raten]
+      - value: R&B
+        synonyms: [アールアンドビー, リズムアンドブルース]
+      - value: Soundtrack
+        synonyms: [サウンドトラック, サントラ]
+      - value: J-Pop
+        synonyms: [ジェイポップ, jeipoppu]
+      - value: Anime
+        synonyms: [アニメ]
+      - value: Enka
+        synonyms: [演歌]
 dialog:
   intents:
     - name: SetPlaybackSpeedIntent

@@ -69,4 +69,97 @@ THE CHANGE (Mood/JF-354 mechanics applied to genre):
 ORCHESTRATOR VERIFICATION BATTERY (post-merge, post-deploy): profile-nlu ja: クイーン の曲を再生して -> PlayArtistSongsIntent (steal gone); クイーン のトラックを再生して -> PlayArtistSongsIntent; ジャズ の曲を再生して -> PlayByGenreIntent with ER canonical Jazz; queen の曲を再生して -> PlayArtistSongsIntent unchanged; then minix simulator: genre=ジャズ plays jazz. Failure of any row = the fix does not ship.
 
 2026-09-27 orchestrator: investigation phase closed (evidence in Description); design settled as ja-JP-only custom GenreType (plan section); dispatch sequenced after JF-643 merges (shared handler file). CI-red incident on main fixed in passing (14a84a40: xUnit1013 IDisposable one-word).
+
+## Implementation Notes (worker, 2026-09-27, landed on the worktree branch)
+
+EXECUTED per the settled design, one mechanical extension the validator forced:
+the within-locale slot-type consistency rule (same slot name = same type per
+locale, validator ERROR) required converting ALL THREE ja genre slots
+(PlayByGenre, PlayRandom, PlayByDecade), not PlayByGenre alone. The handler
+change stays scoped to PlayByGenreIntentHandler as designed; the two sibling
+handlers keep raw-value reads (the JF-643 residual list + the template header
+RESIDUAL note record it).
+
+1. templates/ja-JP.yaml: genre slot type AMAZON.Genre -> GenreType on the three
+   intents; new GenreType block appended after AudiobookTitle; header carries
+   the divergence note (ja-only type, the it-IT AlbumName precedent). Model
+   regenerated via the generator; regen-equality byte-identical; no samples
+   changed, so VOICE_COMMANDS.md and the docs mirrors are untouched (verified:
+   the voice-reference generator run produced no diff).
+2. PlayByGenreIntentHandler: canonicalGenre = SlotValueHelper.GetCanonicalValue
+   (ER_SUCCESS_MATCH canonical, raw fallback) read at slot extraction; the
+   canonical feeds Romanize -> the exact Genres query; the JF-643 kana tier
+   gate gained canonicalGenre == null (an ER-resolved query is exact by
+   construction; the interplay note's documented bypass). Speech and the
+   JF-463 artist fallback stay raw-keyed. The GetCanonicalSlotValue pattern
+   was hoisted into Alexa/Util/SlotValueHelper.GetCanonicalValue (shared with
+   BrowseLibraryIntentHandler; the fourth-copy decision JF-637 deferred, made
+   here as 'hoist'); it also rejects empty/whitespace canonicals (review F5).
+3. VALIDATOR OUTCOME (the gate): PASS, no ERROR. 294 warnings vs the 278
+   baseline; the +16 are exactly one 'Missing slot type present in other
+   locales: GenreType' warning per non-ja locale (the documented divergence,
+   warning-level per the design's acceptance). validate_locales: PASS, no new
+   gaps. validate_versions: PASS (1.0.0.0).
+4. tests/integration/fixtures/ja-JP.yaml: header divergence paragraph updated
+   (DIVERGENCE CLOSED note) + 4 rows matching the orchestrator battery:
+   クイーン の曲を再生して -> PlayArtistSongsIntent, クイーン のトラックを再生して
+   -> PlayArtistSongsIntent, queen の曲を再生して -> PlayArtistSongsIntent (control),
+   ジャズ の曲を再生して -> PlayByGenreIntent genre filled. Marked 'requires the
+   model deploy; first live suite run is the probe' (the JF-399 precedent).
+
+VOCABULARY AS LANDED (22 values; canonical = Latin library genre name,
+synonyms = katakana spoken forms + romaji variants derived from
+KatakanaRomanizer's Hepburn syllable values, word boundaries spaced as spoken):
+Rock [ロック, rokku]; Pop [ポップ, poppu]; Jazz [ジャズ, jazu]; Classical
+[クラシック, kurashikku]; Hip Hop [ヒップホップ, hippu hoppu]; Rap [ラップ, rappu];
+Electronic [エレクトロニック, エレクトロ, erekutoronikku, erekutoro]; Dance [ダンス,
+dansu]; Folk [フォーク, foku]; Country [カントリー, kantori]; Metal [メタル, metaru,
+ヘヴィメタル, ヘビーメタル]; Punk [パンク, panku]; Reggae [レゲエ, regee]; Blues
+[ブルース, burusu]; Soul [ソウル, souru]; Funk [ファンク, fanku]; Latin [ラテン,
+raten]; R&B [アールアンドビー, リズムアンドブルース]; Soundtrack [サウンドトラック,
+サントラ]; J-Pop [ジェイポップ, jeipoppu]; Anime [アニメ]; Enka [演歌]. All value and
+synonym strings <= 14 chars (140 cap), fullwidth katakana only (no halfwidth
+kana, no fullwidth alphanumerics, no U+3000; machine-checked).
+
+VERIFICATION (this worktree): dotnet build 0 warnings 0 errors both TFMs;
+dotnet test 'Passed! - Failed: 0, Passed: 4498, Skipped: 0, Total: 4498' on
+BOTH net9.0 and net10.0 (baseline 4496 + 2 new JF-642 tests:
+HandleAsync_ErMatchedGenre_FeedsCanonicalToQuery_SingleExactQuery_JF642 pins
+the canonical-only query sequence + tier never firing;
+HandleAsync_ErMatchedGenre_TagMissingFromLibrary_SkipsKanaTier_JF642 pins the
+bypass on tag-miss with raw-value speech). NLU dry-run: 8 passed, 1132
+skipped (fixtures valid).
+
+GATES: /simplify four angles (reuse/simplification/efficiency/altitude
+dispatched): applied the SlotValueHelper hoist (3 angles converged), the
+DispatchGenreFlow vocabulary-hook reuse in the new tests, the duplicated
+tier-rationale comment merge, the template block-comment trim + header
+RESIDUAL clause; skipped the request-builder merge (per-class builders are
+the suite idiom, verified by the simplification angle). Efficiency angle:
+nothing measurable added; the ja hot path is a net work REDUCTION (ER-matched
+requests run one exact query instead of miss + vocabulary scan + re-query).
+code-review high: 6 findings; APPLIED F5 (empty/whitespace canonical guard in
+SlotValueHelper.GetCanonicalValue) and F6 (CLAUDE.md ER-pattern pointer
+updated to the shared helper; BrowseLibrary's private copy is gone). HELD
+with reasons: F1 (unconditional ER-canonical read in the 16 AMAZON.Genre
+locales; any delta requires Amazon's canonical to differ substantively from
+the spoken text while the spoken text matched the tag; recommend an en-US
+genre battery probe, e.g. 'play jazz music', to close it live), F2 (the
+canonical-miss tier bypass IS the interplay note's documented semantics;
+named residual: a library whose tags differ in spelling from the canonicals,
+e.g. 'Hip-Hop' vs canonical 'Hip Hop', not-founds on the ER path; one-line
+follow-up if wanted: drop the canonicalGenre == null term and pass the
+romanized raw to the tier), F3 (long-tail genre recall: an unmatched custom
+value still fills the slot with raw text via ER_SUCCESS_NO_MATCH, the
+Mood-クイーン evidence in this task's Description; recommend a ボサノバ
+long-tail battery probe before trusting it end-to-end), F4 (PlayRandom /
+PlayByDecade unwired: the settled scope + documented residual).
+
+BATTERY-RISK ROWS for the orchestrator's live verification: (a) the en-US
+AMAZON.Genre ER shape (F1); (b) a long-tail ja genre utterance, e.g. ボサノバ
+の音楽を再生して, still routing to PlayByGenre with the slot filled (F3);
+(c) a tag-variant library genre (e.g. tag 'Hip-Hop') spoken as ヒップホップ
+known to not-found on the ER path by design (F2); (d) the wrapper battery
+(nlu_wrapper_battery.py) for the ja one-shot forms, per the interaction-model
+hook reminder.
 <!-- SECTION:NOTES:END -->

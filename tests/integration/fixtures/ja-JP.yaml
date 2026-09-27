@@ -5,16 +5,23 @@ tests:
   # until JF-513 declared it in the manifest). Seeded 2026-09-12, every entry
   # probe-verified against the live model BEFORE asserting (the JF-400 program rule).
   #
-  # DOCUMENTED DIVERGENCE (the JF-406 class, found while seeding): the artist path is
+  # DOCUMENTED DIVERGENCE (the JF-406 class, found while seeding): the artist path was
   # systematically stolen in ja-JP. Every carrier that is a verbatim PlayArtistSongs
-  # sample loses the statistical race to PlayVideoIntent's free-form '{title}
+  # sample lost the statistical race to PlayVideoIntent's free-form '{title}
   # を再生して' or to PlayByGenreIntent: 'クイーン の曲を再生して' -> PlayVideoIntent
   # title='クイーンの曲'; 'クイーン を再生して' -> PlayVideoIntent title='クイーン';
   # 'クイーン の音楽/トラックを再生して' -> PlayVideoIntent; 'ビートルズ の曲を聴かせて'
   # and 'クイーン の曲を流して' -> PlayByGenreIntent genre=<artist>. Only carries that
   # NAME the media noun survive (曲/アルバム/プレイリスト prefixes), which is why this
-  # fixture asserts song/album/playlist but no musician slot. The media-noun-named
+  # fixture asserted song/album/playlist but no musician slot. The media-noun-named
   # carriers are the intended ASR shape (anti-pattern #11's ja analog).
+  #
+  # DIVERGENCE CLOSED (2026-09-27): the PlayVideo bare '{title} を再生して' thief was
+  # removed by JF-551, and the PlayByGenre steal is closed by JF-642 (the genre slot
+  # is now the custom GenreType, so a non-genre word cannot fill it; the rows below
+  # assert the post-fix artist routing). Katakana genre voice resolves through the
+  # type's ER synonyms to the canonical Latin tag (JF-642) or, for long-tail genres,
+  # through the JF-643 kana resolution tier.
 
   - utterance: "イマジン を再生して"
     expected_intent: PlaySongIntent
@@ -90,3 +97,31 @@ tests:
     expected_intent: FindSongByArtistIntent
     expected_slots:
       musician: {}
+
+  # ------------------------------------------------------------------------
+  # JF-642 (2026-09-27): the genre slot is the custom GenreType, so the
+  # noun-qualified artist carriers below must reach PlayArtistSongsIntent
+  # (the PlayByGenre steal is gone) and the katakana genre carrier must fill
+  # the genre slot through the type's ER synonyms. Requires the model deploy;
+  # the first live suite run after it is the probe (the same rows as the
+  # orchestrator's post-merge battery).
+  # ------------------------------------------------------------------------
+  - utterance: "クイーン の曲を再生して"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "クイーン のトラックを再生して"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "queen の曲を再生して"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}
+
+  - utterance: "ジャズ の曲を再生して"
+    expected_intent: PlayByGenreIntent
+    expected_slots:
+      genre: {}

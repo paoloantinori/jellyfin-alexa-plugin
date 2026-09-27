@@ -83,9 +83,11 @@ public class PlayByGenreIntentHandler : BaseHandler
         IntentRequest intentRequest = (IntentRequest)request;
 
         string? genreSlot = null;
+        string? canonicalGenre = null;
         if (intentRequest.Intent.Slots != null && intentRequest.Intent.Slots.TryGetValue("genre", out Slot? genreSlotObj))
         {
             genreSlot = genreSlotObj.Value;
+            canonicalGenre = Util.SlotValueHelper.GetCanonicalValue(genreSlotObj);
         }
 
         if (string.IsNullOrWhiteSpace(genreSlot))
@@ -124,7 +126,14 @@ public class PlayByGenreIntentHandler : BaseHandler
         // tags; a ja-JP slot value arrives as katakana ('ジャズ' vs 'Jazz'), so the
         // QUERY is romanized. The not-found speech below keeps the raw slot value
         // (the user's own words).
-        string genreQuery = Util.KatakanaRomanizer.Romanize(genreSlot);
+        // JF-642: ja-JP's genre slot is the custom GenreType, so a matched genre
+        // arrives with the canonical Latin tag name ('Jazz') in entity resolution.
+        // The canonical feeds the query directly (romanization is a no-op on it)
+        // and the kana tier below never fires for it: an ER-resolved query is exact
+        // by construction. The raw value keeps driving the speech and the JF-463
+        // artist fallback. The other locales (AMAZON.Genre, it-IT SearchQuery)
+        // resolve no matching authority and keep the raw-value path unchanged.
+        string genreQuery = Util.KatakanaRomanizer.Romanize(canonicalGenre ?? genreSlot);
 
         Task<IReadOnlyList<BaseItem>> GetGenreItemsAsync(string genre)
         {
@@ -145,16 +154,17 @@ public class PlayByGenreIntentHandler : BaseHandler
 
         IReadOnlyList<BaseItem> items = await GetGenreItemsAsync(genreQuery).ConfigureAwait(false);
 
-        if (items.Count == 0 && Util.KatakanaRomanizer.ContainsKana(genreSlot))
+        if (items.Count == 0 && canonicalGenre == null && Util.KatakanaRomanizer.ContainsKana(genreSlot))
         {
             // JF-643: romanization puts the query in Latin script, but the server-side
             // Genres filter is exact CleanValue equality, so 'jazu' still misses the tag
-            // 'Jazz'. This resolution tier fires ONLY for kana slots (a Latin query keeps
-            // its exact-match behavior byte-for-byte): match the romanized value against
-            // the library's genre vocabulary through the shared phonetic matcher (the
-            // same Double Metaphone bridge the artist path uses via its pre-computed
-            // index), then re-query with the canonical tag. No match falls through to the
-            // existing artist fallback and not-found unchanged.
+            // 'Jazz'. This resolution tier fires ONLY for kana slots that did not
+            // resolve through entity resolution (the gate above). Match the
+            // romanized value against the library's genre vocabulary through the
+            // shared phonetic matcher (the same Double Metaphone bridge the artist
+            // path uses via its pre-computed index), then re-query with the canonical
+            // tag. No match falls through to the existing artist fallback and
+            // not-found unchanged.
             string? resolvedGenre = await ResolveGenreTagAsync(genreQuery, jellyfinUser!, user, cancellationToken).ConfigureAwait(false);
             if (resolvedGenre != null)
             {
@@ -168,11 +178,12 @@ public class PlayByGenreIntentHandler : BaseHandler
         if (items.Count == 0)
         {
             // JF-463: the genre slot is free-text (AMAZON.Genre in 16 locales,
-            // AMAZON.SearchQuery in it-IT), so bare verb+title utterances
-            // ("Reproduce abbey road", es) can land here with a title captured as the
-            // genre. Mirror the PlayMoodMusic recovery: try the shared cross-media
-            // artist fallback (word-count guard + threshold inside); on a miss fall
-            // through to the genre not-found unchanged.
+            // AMAZON.SearchQuery in it-IT, and ja-JP's custom GenreType still passes
+            // unmatched words through as raw ER_NO_MATCH text), so bare verb+title
+            // utterances ("Reproduce abbey road", es) can land here with a title
+            // captured as the genre. Mirror the PlayMoodMusic recovery: try the shared
+            // cross-media artist fallback (word-count guard + threshold inside); on a
+            // miss fall through to the genre not-found unchanged.
             SkillResponse? artistFallback = await CrossMedia.TryEntityFallbackAsync(
                 genreSlot, jellyfinUser!, user, session, context, locale,
                 _libraryManager, _userDataManager, _queueManager, _artistIndex,

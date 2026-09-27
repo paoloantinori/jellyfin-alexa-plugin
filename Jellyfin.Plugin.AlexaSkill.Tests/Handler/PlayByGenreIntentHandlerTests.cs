@@ -242,14 +242,17 @@ public class PlayByGenreIntentHandlerTests : PluginTestBase
     /// Mock dispatcher for the genre flow: audio-kind genre queries resolve
     /// through the genre table below (exact Genres equality, empty = miss); the
     /// genre-vocabulary query (Genre/MusicGenre kinds) returns the vocabulary
-    /// rows. The resolver only reads Name/Id from vocabulary rows, so any
-    /// BaseItem stand-in is faithful to what the mock returns.
+    /// rows and reports itself through <paramref name="onVocabularyQuery"/> when
+    /// the test pins that the tier never ran. The resolver only reads Name/Id
+    /// from vocabulary rows, so any BaseItem stand-in is faithful to what the
+    /// mock returns.
     /// </summary>
-    private static IReadOnlyList<BaseItem> DispatchGenreFlow(InternalItemsQuery q, Dictionary<string, Audio> genreTable, List<string> audioQueriesSeen)
+    private static IReadOnlyList<BaseItem> DispatchGenreFlow(InternalItemsQuery q, Dictionary<string, Audio> genreTable, List<string> audioQueriesSeen, Action? onVocabularyQuery = null)
     {
         if (q.IncludeItemTypes.Contains(Jellyfin.Data.Enums.BaseItemKind.Genre)
             || q.IncludeItemTypes.Contains(Jellyfin.Data.Enums.BaseItemKind.MusicGenre))
         {
+            onVocabularyQuery?.Invoke();
             return new List<BaseItem>
             {
                 new MusicArtist { Name = "Jazz", Id = Guid.NewGuid() },
@@ -358,5 +361,103 @@ public class PlayByGenreIntentHandlerTests : PluginTestBase
         Assert.False(vocabularyQueried);
         Assert.NotNull(response.Response?.OutputSpeech);
         Assert.True(response.Response.ShouldEndSession);
+    }
+
+    // --- JF-642: ER-canonical genre path (ja-JP's custom GenreType) ---
+
+    /// <summary>
+    /// Builds a genre slot carrying an ER_SUCCESS_MATCH authority, the shape
+    /// ja-JP's GenreType produces for a spoken synonym ('ジャズ' resolving to
+    /// the canonical 'Jazz').
+    /// </summary>
+    private static IntentRequest CreateIntentRequestWithResolution(string rawValue, string canonical)
+    {
+        var intent = new Intent { Name = IntentNames.PlayByGenre };
+        intent.Slots = new Dictionary<string, Slot>
+        {
+            ["genre"] = new Slot
+            {
+                Name = "genre",
+                Value = rawValue,
+                Resolution = new global::Alexa.NET.Request.Resolution
+                {
+                    Authorities = new[]
+                    {
+                        new global::Alexa.NET.Request.ResolutionAuthority
+                        {
+                            Status = new global::Alexa.NET.Request.ResolutionStatus { Code = "ER_SUCCESS_MATCH" },
+                            Values = new[]
+                            {
+                                new global::Alexa.NET.Request.ResolutionValueContainer
+                                {
+                                    Value = new global::Alexa.NET.Request.ResolutionValue { Name = canonical }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        return new IntentRequest { Intent = intent, Locale = "ja-JP", RequestId = "test-req" };
+    }
+
+    [Fact]
+    public async Task HandleAsync_ErMatchedGenre_FeedsCanonicalToQuery_SingleExactQuery_JF642()
+    {
+        // The canonical feeds the Genres query DIRECTLY: one query carrying
+        // 'Jazz', no romanized first attempt, and the kana resolution tier never
+        // runs (an ER-resolved query is exact by construction).
+        var handler = CreateHandler();
+        var request = CreateIntentRequestWithResolution("ジャズ", "Jazz");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
+        _fx.SetupUserMock();
+
+        var jazzSong = new Audio { Name = "Jazz Song", Id = Guid.NewGuid() };
+        var genreTable = new Dictionary<string, Audio> { ["Jazz"] = jazzSong };
+        var audioQueries = new List<string>();
+        bool vocabularyQueried = false;
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) => DispatchGenreFlow(q, genreTable, audioQueries, () => vocabularyQueried = true));
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.NotNull(response.Response?.Directives);
+        Assert.NotEmpty(response.Response.Directives);
+        Assert.False(vocabularyQueried);
+        Assert.Equal(new[] { "Jazz" }, audioQueries);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ErMatchedGenre_TagMissingFromLibrary_SkipsKanaTier_JF642()
+    {
+        // A canonical the library lacks (tag miss) must NOT fall into the JF-643
+        // kana tier even though the raw slot is katakana: the tier is the
+        // ER_NO_MATCH long-tail path. The plain not-found tell answers, speaking
+        // the RAW slot value (the user's own words).
+        var handler = CreateHandler();
+        var request = CreateIntentRequestWithResolution("ジャズ", "Jazz");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
+        _fx.SetupUserMock();
+
+        var genreTable = new Dictionary<string, Audio>();
+        var audioQueries = new List<string>();
+        bool vocabularyQueried = false;
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) => DispatchGenreFlow(q, genreTable, audioQueries, () => vocabularyQueried = true));
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.False(vocabularyQueried);
+        Assert.Equal(new[] { "Jazz" }, audioQueries);
+        Assert.NotNull(response.Response?.OutputSpeech);
+        Assert.True(response.Response.ShouldEndSession);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("ジャズ", speech, StringComparison.Ordinal);
     }
 }
