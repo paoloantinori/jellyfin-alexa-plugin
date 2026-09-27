@@ -90,6 +90,11 @@ public class PlayVideoIntentHandler : BaseHandler
             return BuildDialogElicitResponse("DidNotCatchVideoTitle", locale, "title", IntentNames.PlayVideo, Util.ElicitSlots.For(IntentNames.PlayVideo));
         }
 
+        // JF-643: the title feeds the SearchTerm query, the calling-word-stripped
+        // retry, and the fuzzy pass below, all against Latin library names; romanize
+        // the query once (a ja-JP title slot arrives as katakana).
+        titleQuery = Util.KatakanaRomanizer.Romanize(titleQuery);
+
         RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)));
 
         var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, session.UserId, locale);

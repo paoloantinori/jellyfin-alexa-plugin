@@ -188,6 +188,10 @@ public class PlaySongIntentHandler : BaseHandler
         }
 
         songQuery = StripSongCarrierPhrase(songQuery);
+        // JF-643: the song title feeds the SearchTerm index and the keyword-matcher
+        // fallbacks below, both Latin-script; romanize the query once (a ja-JP title
+        // slot arrives as katakana).
+        songQuery = Util.KatakanaRomanizer.Romanize(songQuery);
 
         RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)));
 

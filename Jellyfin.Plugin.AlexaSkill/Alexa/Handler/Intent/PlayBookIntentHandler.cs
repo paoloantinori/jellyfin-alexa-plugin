@@ -86,6 +86,10 @@ public class PlayBookIntentHandler : BaseHandler
                 new Reprompt(ResponseStrings.Get("ElicitBookName", locale)));
         }
 
+        // JF-643: the book title feeds the SearchTerm query and the fuzzy cascade
+        // below, both against Latin library names; romanize the query once.
+        book = Util.KatakanaRomanizer.Romanize(book);
+
         RunFireAndForget(SendProgressiveResponse(
             context, request, ResponseStrings.Get("SearchingBook", locale)));
 

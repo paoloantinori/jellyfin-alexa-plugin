@@ -96,6 +96,12 @@ public class PlayAlbumIntentHandler : BaseHandler
         string? musician = intentRequest.Intent.Slots?.TryGetValue("musician", out var musicianSlot) == true ? musicianSlot.Value : null;
         // JF-426: strip a leading Italian article Amazon failed to strip (see PlayArtistSongs).
         musician = musician is null ? null : Util.ArtistSearch.StripLeadingArticle(musician, locale);
+        // JF-643: both slots feed SearchTerm album queries and the fuzzy cascade below
+        // (the musician slot also feeds the JF-489/JF-492 title retries), all comparing
+        // against Latin library names; romanize once at the entry, before the calling
+        // word logic (a romanized value is plain Latin input for it).
+        album = album is null ? null : Util.KatakanaRomanizer.Romanize(album);
+        musician = musician is null ? null : Util.KatakanaRomanizer.Romanize(musician);
 
         Logger.LogDebug("PlayAlbum: entered, locale={Locale}", locale);
 
