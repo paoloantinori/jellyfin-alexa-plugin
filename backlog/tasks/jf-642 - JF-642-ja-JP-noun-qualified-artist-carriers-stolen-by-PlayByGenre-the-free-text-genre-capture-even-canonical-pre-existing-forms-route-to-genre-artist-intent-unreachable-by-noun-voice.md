@@ -7,7 +7,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-27 06:19'
-updated_date: '2026-09-27 06:38'
+updated_date: '2026-09-27 07:02'
 labels:
   - nlu
   - ja-JP
@@ -52,3 +52,21 @@ PRIORITY: medium. ja-JP artist intent is effectively unreachable by naturalized 
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+DESIGN SETTLED by the orchestrator 2026-09-27 (post-investigation, pre-dispatch; dispatch waits for JF-643 to merge because both touch PlayByGenreIntentHandler):
+
+SCOPE: ja-JP ONLY. The steal is selection-broken only in ja; the other 16 locales have working discriminators (catalog ER in en/it; PlaySong selection + cross-media fallback in es/pt/de). Converting all 17 in one change risks genre-recall regressions in 16 healthy locales and needs 17 vocabularies. Per-locale type divergence has precedent (it-IT AlbumName, anti-pattern #10 note). The all-17 latent collision stays documented in this task as the follow-up decision.
+
+THE CHANGE (Mood/JF-354 mechanics applied to genre):
+1. templates/ja-JP.yaml: PlayByGenreIntent's genre slot type AMAZON.Genre -> new custom type (name: GenreType). Values ~20-24, canonical = library-friendly Latin genre names (Rock, Pop, Jazz, Classical, Hip Hop, Rap, Electronic, Dance, Folk, Country, Metal, Punk, Reggae, Blues, Soul, Funk, Latin, R&B, Soundtrack, J-Pop, Anime, Enka); synonyms carry the katakana spoken forms (ロック, ジャズ, クラシック...) plus romaji variants, so NLU-side ER resolves ジャズ -> canonical Jazz. Regenerate model_ja-JP.json via the generator. Document the divergence in the template header (the per-locale header convention).
+2. PlayByGenreIntentHandler: on ER_SUCCESS_MATCH read the canonical value (the BrowseLibraryIntentHandler.GetCanonicalSlotValue pattern), raw value as fallback. Composes with JF-643's query normalization: canonical feeds the Genres query directly; residual raw katakana still romanized as the safety net.
+3. Validator gate: run scripts/validate_interaction_models.py. If the cross-locale type divergence (16x AMAZON.Genre vs ja GenreType) raises an ERROR, STOP and report back (a validator exception/decision is needed first); a warning is acceptable with the divergence documented.
+4. NLU fixtures: tests/integration/fixtures/ja-JP.yaml genre rows + katakana artist carrier rows updated to the expected post-fix routing.
+
+ORCHESTRATOR VERIFICATION BATTERY (post-merge, post-deploy): profile-nlu ja: クイーン の曲を再生して -> PlayArtistSongsIntent (steal gone); クイーン のトラックを再生して -> PlayArtistSongsIntent; ジャズ の曲を再生して -> PlayByGenreIntent with ER canonical Jazz; queen の曲を再生して -> PlayArtistSongsIntent unchanged; then minix simulator: genre=ジャズ plays jazz. Failure of any row = the fix does not ship.
+
+2026-09-27 orchestrator: investigation phase closed (evidence in Description); design settled as ja-JP-only custom GenreType (plan section); dispatch sequenced after JF-643 merges (shared handler file). CI-red incident on main fixed in passing (14a84a40: xUnit1013 IDisposable one-word).
+<!-- SECTION:NOTES:END -->
