@@ -120,19 +120,50 @@ public class PlayByGenreIntentHandler : BaseHandler
             return userError;
         }
 
-        var query = new InternalItemsQuery
-        {
-            User = jellyfinUser,
-            Recursive = true,
-            Limit = MaxQueryResults,
-            Genres = new[] { genreSlot },
-            IncludeItemTypes = FilterByContentAccess(new[] { BaseItemKind.Audio }),
-            OrderBy = new[] { (ItemSortBy.Random, SortOrder.Ascending) },
-            DtoOptions = new DtoOptions(true)
-        };
-        ApplyLibraryFilter(query, user, _libraryManager);
+        // JF-643: the Genres filter is exact-match against the library's Latin genre
+        // tags; a ja-JP slot value arrives as katakana ('ジャズ' vs 'Jazz'), so the
+        // QUERY is romanized. The not-found speech below keeps the raw slot value
+        // (the user's own words).
+        string genreQuery = Util.KatakanaRomanizer.Romanize(genreSlot);
 
-        IReadOnlyList<BaseItem> items = await RetryAsync(() => _libraryManager.GetItemList(query), "GetGenreItems", cancellationToken).ConfigureAwait(false);
+        Task<IReadOnlyList<BaseItem>> GetGenreItemsAsync(string genre)
+        {
+            var query = new InternalItemsQuery
+            {
+                User = jellyfinUser,
+                Recursive = true,
+                Limit = MaxQueryResults,
+                Genres = new[] { genre },
+                IncludeItemTypes = FilterByContentAccess(new[] { BaseItemKind.Audio }),
+                OrderBy = new[] { (ItemSortBy.Random, SortOrder.Ascending) },
+                DtoOptions = new DtoOptions(true)
+            };
+            ApplyLibraryFilter(query, user, _libraryManager);
+
+            return RetryAsync(() => _libraryManager.GetItemList(query), "GetGenreItems", cancellationToken);
+        }
+
+        IReadOnlyList<BaseItem> items = await GetGenreItemsAsync(genreQuery).ConfigureAwait(false);
+
+        if (items.Count == 0 && Util.KatakanaRomanizer.ContainsKana(genreSlot))
+        {
+            // JF-643: romanization puts the query in Latin script, but the server-side
+            // Genres filter is exact CleanValue equality, so 'jazu' still misses the tag
+            // 'Jazz'. This resolution tier fires ONLY for kana slots (a Latin query keeps
+            // its exact-match behavior byte-for-byte): match the romanized value against
+            // the library's genre vocabulary through the shared phonetic matcher (the
+            // same Double Metaphone bridge the artist path uses via its pre-computed
+            // index), then re-query with the canonical tag. No match falls through to the
+            // existing artist fallback and not-found unchanged.
+            string? resolvedGenre = await ResolveGenreTagAsync(genreQuery, jellyfinUser!, user, cancellationToken).ConfigureAwait(false);
+            if (resolvedGenre != null)
+            {
+                Logger.LogInformation(
+                    "PlayByGenre: kana genre '{Query}' resolved to library tag '{Genre}' (JF-643)",
+                    genreQuery, resolvedGenre);
+                items = await GetGenreItemsAsync(resolvedGenre).ConfigureAwait(false);
+            }
+        }
 
         if (items.Count == 0)
         {
@@ -166,5 +197,77 @@ public class PlayByGenreIntentHandler : BaseHandler
         string itemId = items[0].Id.ToString();
 
         return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, items[0], user, context);
+    }
+
+    /// <summary>
+    /// Bound on the genre-vocabulary query of the JF-643 kana resolution tier:
+    /// distinct genre tags are low-cardinality (dozens to low hundreds), so 500
+    /// rows covers every realistic library; a pathological auto-tagging library
+    /// beyond the cap resolves to not-found, the tier's no-match outcome.
+    /// </summary>
+    private const int MaxGenreVocabulary = 500;
+
+    /// <summary>
+    /// JF-643: resolves a romanized katakana genre value ('jazu') to the library's
+    /// canonical Latin tag ('Jazz') through the shared phonetic fuzzy matcher. Genre
+    /// items carry no pre-computed phonetic codes (only the artist index has those),
+    /// so the codes are computed here once per vocabulary scan; candidates are
+    /// deduplicated by NAME because Genre and MusicGenre items can both exist for the
+    /// same tag. Returns null on no vocabulary or no match above threshold.
+    /// </summary>
+    /// <param name="romanizedGenre">The romanized genre query.</param>
+    /// <param name="jellyfinUser">The Jellyfin user (query scoping).</param>
+    /// <param name="user">The plugin user (library filter).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The canonical library genre tag, or null.</returns>
+    private async Task<string?> ResolveGenreTagAsync(
+        string romanizedGenre,
+        Jellyfin.Database.Implementations.Entities.User jellyfinUser,
+        Entities.User user,
+        CancellationToken cancellationToken)
+    {
+        var vocabularyQuery = new InternalItemsQuery
+        {
+            User = jellyfinUser,
+            Recursive = true,
+            IncludeItemTypes = new[] { BaseItemKind.Genre, BaseItemKind.MusicGenre },
+            Limit = MaxGenreVocabulary,
+            DtoOptions = new DtoOptions(false) { EnableImages = false, EnableUserData = false }
+        };
+        ApplyLibraryFilter(vocabularyQuery, user, _libraryManager);
+
+        IReadOnlyList<BaseItem> genres = await RetryAsync(
+            () => _libraryManager.GetItemList(vocabularyQuery),
+            "GetGenreVocabulary",
+            cancellationToken).ConfigureAwait(false);
+        if (genres.Count == 0)
+        {
+            return null;
+        }
+
+        // Deduplicate by name (Genre + MusicGenre twins), computing one phonetic code set per tag.
+        var codes = new Dictionary<Guid, (string Primary, string? Alternate)>(genres.Count);
+        var candidates = new List<BaseItem>(genres.Count);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (BaseItem genre in genres)
+        {
+            if (string.IsNullOrEmpty(genre.Name) || !seen.Add(genre.Name))
+            {
+                continue;
+            }
+
+            codes[genre.Id] = DoubleMetaphone.Encode(genre.Name);
+            candidates.Add(genre);
+        }
+
+        BaseItem? best = FuzzyMatcher.FindBestMatch(
+            romanizedGenre,
+            candidates,
+            g => g.Name!,
+            g => g.Id,
+            id => codes.TryGetValue(id, out var code) ? code : null,
+            FuzzyMatcher.GetDefaultThreshold(user));
+
+        return best?.Name;
     }
 }

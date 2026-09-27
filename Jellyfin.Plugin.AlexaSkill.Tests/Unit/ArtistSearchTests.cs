@@ -980,4 +980,101 @@ public class ArtistSearchTests
         Assert.Equal(ArtistSearch.MaxAlbumScopeChecks, result.Count);
         Assert.Equal(artists.Take(ArtistSearch.MaxAlbumScopeChecks), result);
     }
+
+    // --- JF-643: katakana query vs Latin library (query-side romanization) ---
+
+    /// <summary>
+    /// Ready index carrying production-shaped phonetic codes: the index encodes
+    /// the LIBRARY NAME at build time (Latin, untouched by JF-643); the katakana
+    /// query must be romanized on the way in so the tier-4 phonetic floor bridges
+    /// 'クイーン' to 'Queen' exactly like the documented ASR-accent case 'kuin'.
+    /// </summary>
+    private static FakeArtistIndex RomanizingIndexWith(params MusicArtist[] artists)
+    {
+        var codes = new Dictionary<Guid, (string Primary, string? Alternate)>();
+        foreach (MusicArtist artist in artists)
+        {
+            codes[artist.Id] = DoubleMetaphone.Encode(artist.Name!);
+        }
+
+        return new FakeArtistIndex(artists, codes);
+    }
+
+    [Fact]
+    public async Task SearchAsync_KatakanaQuery_Tier4PhoneticFindsLatinArtist()
+    {
+        var queen = new MusicArtist { Name = "Queen", Id = Guid.NewGuid() };
+        var decoy1 = new MusicArtist { Name = "Porcupine Tree", Id = Guid.NewGuid() };
+        var decoy2 = new MusicArtist { Name = "Miles Davis", Id = Guid.NewGuid() };
+        var index = RomanizingIndexWith(queen, decoy1, decoy2);
+
+        var result = await ArtistSearch.SearchAsync(
+            "クイーン",
+            user: null,
+            libraryManager: Mock.Of<ILibraryManager>(),
+            artistIndex: index,
+            logger: Logger,
+            dbQuery: NotCalled,
+            locale: "ja-JP",
+            cancellationToken: CancellationToken.None);
+
+        var match = Assert.Single(result);
+        Assert.Equal("Queen", match.Name);
+    }
+
+    [Fact]
+    public async Task SearchAsync_LatinQuery_BehaviorUnchanged()
+    {
+        // The no-regression lock for the Latin/Latin case: an exact Latin query
+        // resolves through the same tiers as before the romanization entry
+        // (romanize is a same-instance no-op for kana-free input).
+        var queen = new MusicArtist { Name = "Queen", Id = Guid.NewGuid() };
+        var index = RomanizingIndexWith(queen);
+
+        var result = await ArtistSearch.SearchAsync(
+            "queen",
+            user: null,
+            libraryManager: Mock.Of<ILibraryManager>(),
+            artistIndex: index,
+            logger: Logger,
+            dbQuery: NotCalled,
+            locale: "en-US",
+            cancellationToken: CancellationToken.None);
+
+        var match = Assert.Single(result);
+        Assert.Equal("Queen", match.Name);
+    }
+
+    [Fact]
+    public async Task SearchAsync_KatakanaQuery_DbSearchTermCarriesRomanizedValue()
+    {
+        // Cold-index (database) path: every tier's server-side query must carry
+        // the romanized value; raw katakana against the Latin search index is the
+        // original JF-643 failure shape. A null index (not a warming one, which
+        // the layer-2 gate refuses) selects the database branch.
+        string? capturedSearchTerm = null;
+
+        Task<IReadOnlyList<BaseItem>> DbQuery(InternalItemsQuery q, CancellationToken t)
+        {
+            if (q.SearchTerm != null)
+            {
+                capturedSearchTerm = q.SearchTerm;
+            }
+
+            return Task.FromResult<IReadOnlyList<BaseItem>>(Array.Empty<BaseItem>());
+        }
+
+        await ArtistSearch.SearchAsync(
+            "クイーン",
+            user: null,
+            libraryManager: Mock.Of<ILibraryManager>(),
+            artistIndex: null,
+            logger: Logger,
+            dbQuery: DbQuery,
+            locale: "ja-JP",
+            cancellationToken: CancellationToken.None);
+
+        Assert.NotNull(capturedSearchTerm);
+        Assert.Equal("kuin", capturedSearchTerm);
+    }
 }

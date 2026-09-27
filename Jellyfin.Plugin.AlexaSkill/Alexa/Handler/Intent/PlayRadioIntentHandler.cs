@@ -158,7 +158,12 @@ public class PlayRadioIntentHandler : BaseHandler
                 return userError;
             }
 
-            BaseItem? channel = await FindRadioChannelAsync(station!, jellyfinUser!, user, locale, cancellationToken).ConfigureAwait(false);
+            // JF-643: the channel lookup and the genre seed below compare against
+            // Latin-script channel names and genre tags; romanize the query once.
+            // The not-found speech keeps the raw station (the user's own words).
+            string stationQuery = Util.KatakanaRomanizer.Romanize(station!);
+
+            BaseItem? channel = await FindRadioChannelAsync(stationQuery, jellyfinUser!, user, locale, cancellationToken).ConfigureAwait(false);
             if (channel != null)
             {
                 Logger.LogInformation("PlayRadio: station '{ChannelName}' matched live-TV radio channel {ChannelId}", channel.Name, channel.Id);
@@ -169,8 +174,8 @@ public class PlayRadioIntentHandler : BaseHandler
             // ("musica jazz", "il jazz", "jazz music") and the Genres filter is exact
             // CleanValue equality, so strip locale stop-words before the genre query
             // (the same Tokenize discipline TryEntityFallbackAsync uses for artists).
-            string[] contentWords = Util.KeywordMatcher.Tokenize(station!, locale);
-            string genreQuery = contentWords.Length > 0 ? string.Join(" ", contentWords) : station!;
+            string[] contentWords = Util.KeywordMatcher.Tokenize(stationQuery, locale);
+            string genreQuery = contentWords.Length > 0 ? string.Join(" ", contentWords) : stationQuery;
             IReadOnlyList<BaseItem> genreTracks = await Radio.FindRadioTracksByGenreAsync(
                 new[] { genreQuery }, jellyfinUser!, user, _libraryManager, cancellationToken).ConfigureAwait(false);
             if (genreTracks.Count > 0)

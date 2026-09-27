@@ -451,7 +451,13 @@ public class FindSongIntentHandler : BaseHandler
             return userError;
         }
 
-        string[] keywordTokens = KeywordMatcher.Tokenize(sessionData.Keywords, locale);
+        // JF-643: romanize the query-side keywords for the search below (n-gram index,
+        // NameContains filter, KeywordMatcher). sessionData.Keywords keeps the raw
+        // spoken words for speech and logging. Null keywords romanize to empty and
+        // take the too-vague path, exactly like the pre-romanization Tokenize(null).
+        string keywords = Util.KatakanaRomanizer.Romanize(sessionData.Keywords ?? string.Empty);
+
+        string[] keywordTokens = KeywordMatcher.Tokenize(keywords, locale);
 
         if (keywordTokens.Length == 0)
         {
@@ -560,7 +566,7 @@ public class FindSongIntentHandler : BaseHandler
             if (!sessionData.HasResolvedArtist)
             {
                 SkillResponse? artistFallback = await CrossMedia.TryEntityFallbackAsync(
-                    sessionData.Keywords ?? string.Empty, jellyfinUser!, user, session, context, locale,
+                    keywords, jellyfinUser!, user, session, context, locale,
                     _libraryManager, _userDataManager, _queueManager, _artistIndex,
                     "FindSong artist fallback", cancellationToken).ConfigureAwait(false);
                 if (artistFallback != null)

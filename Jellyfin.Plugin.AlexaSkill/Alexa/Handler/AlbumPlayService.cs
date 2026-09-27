@@ -346,14 +346,20 @@ public sealed class AlbumPlayService
             return null;
         }
 
+        // JF-643: mirror of the artist gate's entry romanization, before the guard
+        // to match its ordering (the SearchTerm tier and the fuzzy tier below
+        // compare against Latin album names).
+        slotText = Util.KatakanaRomanizer.Romanize(slotText);
+
         if (!_crossMedia.PassesCrossMediaWordGuard(slotText, locale, fallbackNoun: "album", logLabel, out _))
         {
             return null;
         }
 
-        // The query is the RAW trimmed slot text, deliberately NOT the stop-word-
-        // stripped token join the artist gate uses: album titles are rarely article-
-        // prefixed, and both the SearchTerm index and full-name fuzzy favor raw text.
+        // The query is the raw-and-romanized trimmed slot text, deliberately NOT the
+        // stop-word-stripped token join the artist gate uses: album titles are rarely
+        // article-prefixed, and both the SearchTerm index and full-name fuzzy favor
+        // raw text.
         string query = slotText.Trim();
 
         // Tier 1 (indexed): exact SearchTerm over MusicAlbum, the same query PlayAlbum's
@@ -672,6 +678,11 @@ public sealed class AlbumPlayService
         _logger.LogDebug("BuildPlaylistPlayResponseAsync: entered, locale={Locale}, shuffle={Shuffle}", locale, shuffle);
 
         _logger.LogDebug("Play playlist: {0}", playlistName);
+
+        // JF-643: the SearchTerm index, the fuzzy fallback, and the coverage gate all
+        // compare against Latin-script playlist names; romanize the query once at the
+        // shared entry.
+        playlistName = Util.KatakanaRomanizer.Romanize(playlistName);
 
         var (jellyfinUser, userError) = BaseHandler.ResolveJellyfinUser(userManager, session.UserId, locale);
         if (userError != null)

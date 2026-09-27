@@ -265,6 +265,11 @@ public sealed class SearchService
             return null;
         }
 
+        // JF-643: romanize before BOTH consumers below: the fuzzy matcher and the
+        // JF-508/JF-526 coverage gate (which tokenizes the query); a katakana query
+        // against Latin library names fails both otherwise.
+        query = KatakanaRomanizer.Romanize(query);
+
         var fallbackQuery = new InternalItemsQuery
         {
             User = jellyfinUser,

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa;
@@ -10,6 +11,11 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa;
 /// Uses Levenshtein distance to score and rank candidate matches, with an
 /// optional Double Metaphone phonetic pre-filter to promote candidates that
 /// sound similar even when their spelling diverges.
+/// JF-643: the QUERY argument of every public entry is romanized (kana to
+/// romaji, <see cref="KatakanaRomanizer"/>) before scoring, so a Japanese-ASR
+/// katakana query competes on the same footing as a Latin one. Candidate text
+/// is never transliterated; every caller's first argument is the user query
+/// (verified across all call sites when this was added).
 /// </summary>
 internal static class FuzzyMatcher
 {
@@ -139,7 +145,7 @@ internal static class FuzzyMatcher
             return null;
         }
 
-        string normalizedQuery = Normalize(query);
+        string normalizedQuery = NormalizeQuery(query);
         int maxLenDiff = Math.Max(normalizedQuery.Length * 2, 15);
         T? bestMatch = null;
         int bestScore = 0;
@@ -291,11 +297,15 @@ internal static class FuzzyMatcher
             return null;
         }
 
-        string normalizedQuery = Normalize(query);
+        // JF-643: romanize the query once; the Levenshtein loop and the phonetic
+        // encoding below must see the same romanized form (a katakana query against
+        // the index's Latin pre-computed codes is a guaranteed code miss otherwise).
+        string romanizedQuery = KatakanaRomanizer.Romanize(query);
+        string normalizedQuery = Normalize(romanizedQuery);
         int maxLenDiff = Math.Max(normalizedQuery.Length * 2, 15);
 
         // Encode the query's phonetic code once for all comparisons
-        var queryPhonetic = DoubleMetaphone.Encode(query);
+        var queryPhonetic = DoubleMetaphone.Encode(romanizedQuery);
 
         T? bestMatch = null;
         int bestScore = 0;
@@ -421,7 +431,7 @@ internal static class FuzzyMatcher
             return new List<T>();
         }
 
-        string normalizedQuery = Normalize(query);
+        string normalizedQuery = NormalizeQuery(query);
 
         var scored = new List<(T Item, int Score)>();
         foreach (T candidate in candidates)
@@ -560,7 +570,7 @@ internal static class FuzzyMatcher
     /// <returns>The matcher score for this candidate (0 when the length band excludes it).</returns>
     internal static int Score(string query, string candidateText)
     {
-        string normalizedQuery = Normalize(query);
+        string normalizedQuery = NormalizeQuery(query);
         string normalizedCandidate = Normalize(candidateText);
         int maxLenDiff = Math.Max(normalizedQuery.Length * 2, 15);
         if (Math.Abs(normalizedCandidate.Length - normalizedQuery.Length) > maxLenDiff)
@@ -621,5 +631,15 @@ internal static class FuzzyMatcher
     private static string Normalize(string input)
     {
         return input.Trim().ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// The query-side entry normalization (JF-643): romanize kana, then case-fold.
+    /// The phonetic overload keeps its own two-consumer local because Double
+    /// Metaphone encodes the romanized form BEFORE case folding.
+    /// </summary>
+    private static string NormalizeQuery(string query)
+    {
+        return Normalize(KatakanaRomanizer.Romanize(query));
     }
 }

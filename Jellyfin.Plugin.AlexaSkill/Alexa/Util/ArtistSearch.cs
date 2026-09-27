@@ -359,6 +359,13 @@ internal static class ArtistSearch
         string locale,
         CancellationToken cancellationToken)
     {
+        // JF-643: the ONE query-side romanization for the artist chain (both the
+        // in-memory tiers and every database tier below search Latin library names;
+        // Japanese ASR delivers the musician slot as katakana). Idempotent for
+        // already-Latin queries (same instance back), so callers that romanized
+        // earlier add no cost.
+        musician = KatakanaRomanizer.Romanize(musician);
+
         // JF-419.2 choke point: see IndexWarmingGate (layer 2 of the warming gate)
         IndexWarmingGate.EnsureReady(artistIndex);
 

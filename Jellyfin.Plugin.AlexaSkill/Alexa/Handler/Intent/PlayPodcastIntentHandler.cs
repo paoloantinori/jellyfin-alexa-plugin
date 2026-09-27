@@ -81,6 +81,11 @@ public class PlayPodcastIntentHandler : BaseHandler
             return BuildDialogElicitResponse("DidNotCatchPodcastName", locale, "podcast_name", IntentNames.PlayPodcast, Util.ElicitSlots.For(IntentNames.PlayPodcast));
         }
 
+        // JF-643: the podcast name feeds the SearchTerm query, the exact-name pass,
+        // and the fuzzy cascade below, all against Latin library names; romanize the
+        // query once.
+        podcastName = Util.KatakanaRomanizer.Romanize(podcastName);
+
         RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingPodcast", locale)));
 
         var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, session.UserId, locale);

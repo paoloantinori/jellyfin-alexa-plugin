@@ -125,6 +125,11 @@ public class SearchMediaIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("CouldNotUnderstand", locale));
         }
 
+        // JF-643: the query feeds the SearchTerm index, the artist fallback, the fuzzy
+        // pass, and the n-gram song-title retry; all compare against Latin-script
+        // library names, so a katakana query is romanized once here.
+        query = Util.KatakanaRomanizer.Romanize(query);
+
         // Layer-1 gate (GuardIndexReady): before the "searching" announcement.
         GuardIndexReady(_artistIndex);
 

@@ -1158,6 +1158,12 @@ public abstract class BaseHandler
             return (FuzzyMissOutcome.NotFound, null);
         }
 
+        // JF-643: the shared disambiguation/auto-play decision block is a query-side
+        // choke point for every handler that delegates to it; romanizing here keeps
+        // the matcher call and the full-keyword-coverage gate (which tokenizes the
+        // query below) on the same Latin-script footing.
+        query = Util.KatakanaRomanizer.Romanize(query);
+
         var bestWithScore = FuzzyMatcher.FindBestMatchWithScore(query, candidates, selector);
 
         if (bestWithScore == null || bestWithScore.Value.Item == null || bestWithScore.Value.Score < FuzzyMatcher.GetSuggestionThreshold(user))

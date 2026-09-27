@@ -495,6 +495,10 @@ public sealed class CrossMediaFallback
             return null;
         }
 
+        // JF-643: the tokens feed the Latin-built n-gram index and KeywordMatcher,
+        // so the query-side romanization happens before tokenization.
+        musician = KatakanaRomanizer.Romanize(musician);
+
         var keywordTokens = KeywordMatcher.Tokenize(musician, locale);
         if (keywordTokens.Length == 0)
         {
@@ -672,6 +676,12 @@ public sealed class CrossMediaFallback
         _logger.LogDebug(
             "{Label}: no results found, trying artist fallback with query='{Query}'",
             logLabel, slotText);
+
+        // JF-643: romanize once at the shared entry so the word guard, the SearchAsync
+        // chain, the phonetic confirm, and the word-coverage valve all interpret the
+        // same Latin-script query (the raw value above keeps the user's spoken words
+        // for triage; downstream speech may speak the romanized form).
+        slotText = KatakanaRomanizer.Romanize(slotText);
 
         // JF-464: the fallback's whole payoff is playing music (artist songs), and its
         // artist queries skip FilterByContentAccess, so the global music flag must gate

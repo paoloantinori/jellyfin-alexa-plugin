@@ -174,6 +174,10 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         // JF-426: strip a leading Italian article Amazon failed to strip for an
         // out-of-catalog artist ("suona i 24 grana" arrived raw as 'i 24 grana').
         musician = musician is null ? null : Util.ArtistSearch.StripLeadingArticle(musician, locale);
+        // JF-643: this handler runs its own inline tier chain (the JF-382 duplicate)
+        // that bypasses ArtistSearch.SearchAsync's entry romanization, so the
+        // katakana-to-romaji normalization happens here too.
+        musician = musician is null ? null : Util.KatakanaRomanizer.Romanize(musician);
 
         Logger.LogDebug("PlayArtistSongs: entered, locale={Locale}", locale);
 
