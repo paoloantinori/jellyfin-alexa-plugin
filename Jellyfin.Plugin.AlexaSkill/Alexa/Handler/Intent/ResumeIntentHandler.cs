@@ -208,7 +208,7 @@ public class ResumeIntentHandler : BaseHandler
                 }
 
                 if (!string.IsNullOrEmpty(context.AudioPlayer?.Token)
-                    && !string.Equals(context.AudioPlayer.Token, tryId, StringComparison.Ordinal))
+                    && !StreamTokenCodec.NamesItem(context.AudioPlayer.Token, tryId))
                 {
                     continue;
                 }
@@ -386,7 +386,7 @@ public class ResumeIntentHandler : BaseHandler
         // sliced-resume seek bar. The token guard keeps a DISPLACED token authoritative
         // (a different item playing), mirroring the DeviceQueue fallback's discipline.
         if (string.IsNullOrEmpty(context.AudioPlayer?.Token)
-            || string.Equals(context.AudioPlayer.Token, session?.FullNowPlayingItem?.Id.ToString(), StringComparison.Ordinal))
+            || StreamTokenCodec.NamesItem(context.AudioPlayer.Token, session?.FullNowPlayingItem?.Id.ToString()))
         {
             SkillResponse? bookResponse = await TryBuildNativeControlsBookResumeAsync(
                 queueItem ?? session?.FullNowPlayingItem,

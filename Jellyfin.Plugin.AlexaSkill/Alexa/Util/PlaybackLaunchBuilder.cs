@@ -361,6 +361,77 @@ public sealed class PlaybackLaunchBuilder
     }
 
     /// <summary>
+    /// The JF-655 active-audio signal: whether CURRENT evidence says the device is
+    /// playing AudioPlayer audio. Two arms, either suffices: (a) the per-request
+    /// platform report (<see cref="IsActivelyPlaying"/>, the context's own
+    /// playerActivity), and (b) the event-owned flag on the device queue manager
+    /// (set by <c>PlaybackStarted</c>, cleared by Stopped/Finished/Failed, in-memory
+    /// so a fresh boot reads clear). This is the corroboration the re-launch gates
+    /// demand because the medium classifier's Audio verdict comes from the
+    /// PERSISTENT last-played ledger, which reads Audio long after playback stops
+    /// (the live e2e finding: a speed ask on an idle device re-launched the stale
+    /// track at the new rate). VideoApp mediums never consult this helper: those
+    /// launches emit no events at all (the documented platform limit), so no flag
+    /// can exist for them; their gates keep the honest VideoApp refusals.
+    /// </summary>
+    /// <param name="context">The Alexa context (device id for the flag read, playerActivity for the platform report).</param>
+    /// <param name="queueManager">The caller's device queue manager (the flag store); null falls back to <c>Plugin.Instance</c>'s (the classifier-half idiom), and a null there simply leaves the platform-report arm.</param>
+    /// <returns>True when the device is actively playing audio per its events or this request's player report.</returns>
+    internal static bool IsAudioPlaybackActive(Context? context, DeviceQueueManager? queueManager)
+    {
+        if (IsActivelyPlaying(context))
+        {
+            return true;
+        }
+
+        // The ONE device-key extraction (the event writers' idiom), so the reader
+        // and the writers can never drift onto different keys; the empty-string
+        // fallback for an unattributed request lands on the shared slot the
+        // manager's own guard rejects.
+        string deviceId = context?.GetDeviceId() ?? string.Empty;
+        return (queueManager ?? Plugin.Instance?.DeviceQueueManager)?.IsAudioPlaybackActive(deviceId) == true;
+    }
+
+    /// <summary>
+    /// The JF-655 review launch-token mint: the AudioPlayer.Play stream token an
+    /// AudioPlayer.Play directive carries. CONDITIONAL by construction: a launch on a
+    /// device with NO active same-item playback keeps the bare item id every earlier
+    /// directive carried (dozens of pinned suites assert that exact shape), and only a
+    /// launch REPLACING the actively-playing stream of the SAME item (the speed
+    /// re-launch, the sleep re-issue, repeat-one) mints a launch-generation suffix
+    /// (see <see cref="StreamTokenCodec.WithLaunchGeneration"/>) so the displacement
+    /// classifier can tell the two same-item stream generations apart when Amazon
+    /// delivers Started(new) before the displaced old stream's terminal event. A
+    /// different item needs no generation (item identity already classifies its
+    /// displacement); an absent or unattributed current token mints conservatively.
+    /// Round-3 review finding: the gate is <see cref="IsAudioPlaybackActive"/> itself
+    /// (flag OR context player report), the SAME evidence the re-launch gates accept,
+    /// so a re-launch admitted via the context arm alone (the plugin-restart shape:
+    /// the in-memory flag boots clear while the Echo still plays) still mints; the
+    /// shared call also owns the manager+device-key resolution once.
+    /// </summary>
+    /// <param name="context">The Alexa context (device id for the flag read, current token for the same-item check).</param>
+    /// <param name="itemId">The bare item GUID being launched.</param>
+    /// <param name="queueManager">The caller's device queue manager (the flag store); null falls back to <c>Plugin.Instance</c>'s.</param>
+    /// <returns>The stream token: the bare item id, or the generation-carrying composite.</returns>
+    internal static string MintStreamToken(Context? context, string itemId, DeviceQueueManager? queueManager)
+    {
+        if (!IsAudioPlaybackActive(context, queueManager))
+        {
+            return itemId;
+        }
+
+        if (StreamTokenCodec.TryGetItemId(context?.AudioPlayer?.Token, out Guid playingItemId)
+            && Guid.TryParse(itemId, out Guid launchingItemId)
+            && launchingItemId != playingItemId)
+        {
+            return itemId;
+        }
+
+        return StreamTokenCodec.WithLaunchGeneration(itemId);
+    }
+
+    /// <summary>
     /// Classify what a device is playing from the JF-563 device last-played ledger plus
     /// the AudioPlayer token (JF-564) and the JF-568 recorded launch route. The ledger
     /// is the only record a VideoApp launch leaves (those launches never touch
@@ -1723,7 +1794,10 @@ public sealed class PlaybackLaunchBuilder
         var stream = new AudioItemStream
         {
             Url = directiveUrl,
-            Token = itemId,
+            // JF-655 review: same-item re-launches mint a launch-generation suffix so
+            // their displaced old stream's late terminal event cannot classify REAL
+            // and dark the active-audio flag; every other launch keeps the bare id.
+            Token = MintStreamToken(context, itemId, queueManager),
             OffsetInMilliseconds = offsetInMilliseconds
         };
 

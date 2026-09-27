@@ -150,7 +150,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
 
                     // JF-636: the stored rate rides the launch so the chokepoint records
                     // the launch scope the cached URL actually serves.
-                    return Launch.BuildAudioPlayerResponse(PlayBehavior.Enqueue, cachedUrl, cachedNextId.ToString(), cachedItem, user, context, ratePerMille: cachedRatePerMille);
+                    return Launch.BuildAudioPlayerResponse(PlayBehavior.Enqueue, cachedUrl, cachedNextId.ToString(), cachedItem, user, context, ratePerMille: cachedRatePerMille, queueManager: _queueManager);
                 }
 
                 Logger.LogInformation(
@@ -277,7 +277,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             resolvedOrder,
             resolvedReshuffled);
 
-        return Launch.BuildAudioPlayerResponse(PlayBehavior.Enqueue, source, itemId, item, user, context);
+        return Launch.BuildAudioPlayerResponse(PlayBehavior.Enqueue, source, itemId, item, user, context, queueManager: _queueManager);
     }
 
     /// <summary>

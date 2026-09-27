@@ -1303,4 +1303,135 @@ public class EventHandlerTests : PluginTestBase, IDisposable
         Assert.False(intentContinues);
         Assert.NotNull(intentContext.Response?.Response?.OutputSpeech);
     }
+
+    // ---- JF-655: the per-device active-audio flag lifecycle ----
+
+    /// <summary>
+    /// The event handlers that own the flag must be constructed on THIS class's
+    /// manager so the assertions read the same store the events wrote (the file's
+    /// Create*Handler helpers deliberately omit the manager for their own concerns).
+    /// </summary>
+    private PlaybackStartedEventHandler CreateStartHandlerOnClassManager()
+        => new(_sessionManagerMock.Object, _config, _loggerFactory, _libraryManagerMock.Object, _queueManager);
+
+    private PlaybackFinishedEventHandler CreateFinishedHandlerOnClassManager()
+        => new(_sessionManagerMock.Object, _config, _loggerFactory, _queueManager, _libraryManagerMock.Object);
+
+    private PlaybackFailedEventHandler CreateFailedHandlerOnClassManager()
+        => new(_sessionManagerMock.Object, _config, _loggerFactory, _queueManager);
+
+    /// <summary>
+    /// The flag is a plugin-start-cleared signal: a FRESH manager on the SAME data
+    /// directory (a boot) reloads the persisted stores (the ledger entry written
+    /// before the restart survives) while the flag reads clear, so a restart can
+    /// never re-launch stale audio off a persisted-looking active state (the flag
+    /// never reaches the queue files at all). Review finding: the earlier form
+    /// re-created the manager on a DIFFERENT directory, which could not detect the
+    /// flag being persisted.
+    /// </summary>
+    [Fact]
+    public void AudioActiveFlag_FreshManager_BootsClear()
+    {
+        Context context = CreateContextForFreshDevice();
+        string deviceId = context.System.Device.DeviceID!;
+        Guid item = Guid.NewGuid();
+        string dir = TestHelpers.CreateRegisteredTempDir("jf655-boot");
+        var logger = _loggerFactory.CreateLogger<DeviceQueueManager>();
+        using (DeviceQueueManager first = new(dir, logger))
+        {
+            first.MarkAudioPlaybackStarted(deviceId);
+            first.RecordLastPlayed(deviceId, item.ToString(), DeviceQueueManager.LaunchRoute.Audio);
+        } // Dispose flushes the debounced persist to disk.
+
+        using DeviceQueueManager booted = new(dir, logger);
+        Assert.Equal(item.ToString(), booted.GetLastPlayedItemId(deviceId));
+        Assert.False(booted.IsAudioPlaybackActive(deviceId));
+    }
+
+    [Fact]
+    public async Task AudioActiveFlag_PlaybackStartedEvent_MarksDeviceActive()
+    {
+        Context context = CreateContextForFreshDevice();
+        string deviceId = context.System.Device.DeviceID!;
+        Assert.False(_queueManager.IsAudioPlaybackActive(deviceId));
+
+        await CreateStartHandlerOnClassManager().HandleAsync(
+            CreateAudioPlayerRequest("AudioPlayer.PlaybackStarted", Guid.NewGuid().ToString()),
+            context, TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.True(_queueManager.IsAudioPlaybackActive(deviceId));
+    }
+
+    [Fact]
+    public async Task AudioActiveFlag_PlaybackStoppedEvent_ClearsDeviceActive()
+    {
+        Context context = CreateContextForFreshDevice();
+        string deviceId = context.System.Device.DeviceID!;
+        string token = Guid.NewGuid().ToString();
+        await CreateStartHandlerOnClassManager().HandleAsync(
+            CreateAudioPlayerRequest("AudioPlayer.PlaybackStarted", token),
+            context, TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        await CreateStopHandler().HandleAsync(
+            CreateAudioPlayerRequest("AudioPlayer.PlaybackStopped", token),
+            context, TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.False(_queueManager.IsAudioPlaybackActive(deviceId));
+    }
+
+    /// <summary>
+    /// The code-review ordering pin: a displacement stop (the OLD stream's stop
+    /// arriving after the NEW stream's PlaybackStarted was processed) must NOT
+    /// clear the flag, or an actively-playing device would read inactive until the
+    /// next start event.
+    /// </summary>
+    [Fact]
+    public async Task AudioActiveFlag_DisplacedStopAfterNewStart_KeepsDeviceActive()
+    {
+        Context context = CreateContextForFreshDevice();
+        string deviceId = context.System.Device.DeviceID!;
+        string oldToken = Guid.NewGuid().ToString();
+        string newToken = Guid.NewGuid().ToString();
+        await CreateStartHandlerOnClassManager().HandleAsync(
+            CreateAudioPlayerRequest("AudioPlayer.PlaybackStarted", oldToken),
+            context, TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+        await CreateStartHandlerOnClassManager().HandleAsync(
+            CreateAudioPlayerRequest("AudioPlayer.PlaybackStarted", newToken),
+            context, TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        // The displaced OLD stream's stop, delivered after the new start.
+        await CreateStopHandler().HandleAsync(
+            CreateAudioPlayerRequest("AudioPlayer.PlaybackStopped", oldToken),
+            context, TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.True(_queueManager.IsAudioPlaybackActive(deviceId));
+    }
+
+    [Fact]
+    public async Task AudioActiveFlag_PlaybackFinishedEvent_ClearsDeviceActive()
+    {
+        Context context = CreateContextForFreshDevice();
+        string deviceId = context.System.Device.DeviceID!;
+        _queueManager.MarkAudioPlaybackStarted(deviceId);
+
+        await CreateFinishedHandlerOnClassManager().HandleAsync(
+            CreateAudioPlayerRequest("AudioPlayer.PlaybackFinished", Guid.NewGuid().ToString()),
+            context, TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.False(_queueManager.IsAudioPlaybackActive(deviceId));
+    }
+
+    [Fact]
+    public async Task AudioActiveFlag_PlaybackFailedEvent_ClearsDeviceActive()
+    {
+        Context context = CreateContextForFreshDevice();
+        string deviceId = context.System.Device.DeviceID!;
+        _queueManager.MarkAudioPlaybackStarted(deviceId);
+
+        await CreateFailedHandlerOnClassManager().HandleAsync(
+            CreateAudioPlayerRequest("AudioPlayer.PlaybackFailed", Guid.NewGuid().ToString()),
+            context, TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.False(_queueManager.IsAudioPlaybackActive(deviceId));
+    }
 }

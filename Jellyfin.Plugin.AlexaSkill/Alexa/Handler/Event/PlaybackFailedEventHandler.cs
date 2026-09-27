@@ -20,19 +20,25 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 public class PlaybackFailedEventHandler : BaseHandler
 #pragma warning restore CA1711
 {
+    private readonly DeviceQueueManager? _queueManager;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="PlaybackFailedEventHandler"/> class.
     /// JF-447: the displacement classification reads the report-ordering state (the
-    /// device's latest start), not the device queue, so no queue manager is needed.
+    /// device's latest start), not the device queue. The optional queue manager
+    /// (JF-655) carries the active-audio flag clear below; DI injects the singleton.
     /// </summary>
     /// <param name="sessionManager">Instance of the <see cref="ISessionManager"/> interface.</param>
     /// <param name="config">The plugin configuration.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
+    /// <param name="queueManager">Optional per-device queue manager holding the JF-655 active-audio flag.</param>
     public PlaybackFailedEventHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
-        ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
+        ILoggerFactory loggerFactory,
+        DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
     {
+        _queueManager = queueManager;
     }
 
     /// <inheritdoc/>
@@ -54,6 +60,15 @@ public class PlaybackFailedEventHandler : BaseHandler
             req.OffsetInMilliseconds,
             request.RequestId,
             deviceId);
+
+        // JF-655: a failed stream is not an active one; the re-launch gates'
+        // event-owned signal clears (a retry launch's PlaybackStarted re-sets it).
+        // A displacement failure (a newer stream already started) keeps the flag,
+        // the same exemption the Stopped handler owns (code-review finding).
+        if (!PlaybackReportOrdering.IsDisplacementStop(deviceId, req.Token))
+        {
+            (_queueManager ?? Plugin.Instance?.DeviceQueueManager)?.MarkAudioPlaybackStopped(deviceId);
+        }
 
         // Sleep-timer streams carry composite tokens ("{guid}|sleep:{ticks}", minted by
         // SleepTimerIntentHandler); the shared StreamTokenCodec is the one owner of the

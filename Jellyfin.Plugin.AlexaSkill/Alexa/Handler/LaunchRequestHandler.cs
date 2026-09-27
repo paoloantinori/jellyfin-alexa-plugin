@@ -216,8 +216,8 @@ public class LaunchRequestHandler : BaseHandler
         // last-played record) still name the playing one, so comparing against the
         // resolver's single winner alone misfired as "stale" during every song tail.
         string? pointerItemId = Plugin.Instance?.DeviceQueueManager?.GetQueue(deviceId)?.CurrentItemId;
-        if (string.Equals(audioPlayerToken, lastPlayedItemId, StringComparison.Ordinal)
-            || string.Equals(audioPlayerToken, pointerItemId, StringComparison.Ordinal))
+        if (StreamTokenCodec.NamesItem(audioPlayerToken, lastPlayedItemId)
+            || StreamTokenCodec.NamesItem(audioPlayerToken, pointerItemId))
         {
             Logger.LogDebug("LaunchResume: NativeControlsForAudio stale-token check: AudioPlayer token matches a device pointer '{ItemId}'", lastPlayedItemId);
             return null;

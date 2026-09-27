@@ -27,6 +27,11 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// Over a VideoApp-routed medium the handler answers the honest refusal (the
 /// JF-632 SleepTimer precedent: a re-issue would be parallel unstoppable audio,
 /// and the VideoApp seek path tolerates no launch interaction mid-stream).
+/// JF-655: the Audio verdict alone does not license the re-launch either: the
+/// medium classifier reads the PERSISTENT last-played ledger, so the re-launch
+/// additionally requires the active-playback signal (the event-owned flag set by
+/// PlaybackStarted, or the request's own PLAYING report); a stale ledger alone
+/// answers the no-media Tell.
 /// Position math (the load-bearing part): the device reports a STREAM-relative
 /// offset on the rate-adjusted output timeline, so the content position is
 /// composed through the shared event-side chokepoint
@@ -137,6 +142,23 @@ public class SetPlaybackSpeedIntentHandler : BaseHandler
             return Task.FromResult<SkillResponse>(refusal);
         }
 
+        // JF-655: the Audio verdict above comes from the PERSISTENT last-played
+        // ledger, which reads Audio long after playback stops, and this handler had
+        // no other guard (the current-item resolve's ledger tail is unbounded by
+        // design), so a speed ask on an idle device re-launched the stale track at
+        // the new rate (live e2e finding 2026-09-27: 'a velocità uno e mezzo' with
+        // nothing playing restarted hours-old audio). The re-launch now also
+        // requires the active-playback signal (the event-owned flag set by
+        // PlaybackStarted, or this request's own PLAYING report); a stale ledger
+        // alone answers the honest no-media Tell, the same refusal the cold
+        // item-resolve path above owns.
+        if (medium == PlaybackLaunchBuilder.PlayingMedium.Audio
+            && !PlaybackLaunchBuilder.IsAudioPlaybackActive(context, _queueManager))
+        {
+            Logger.LogDebug("SetPlaybackSpeed: medium Audio comes from the device ledger with no active playback signal (flag clear, context not playing); returning the no-media Tell");
+            return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale)));
+        }
+
         // Audiobooks refuse too (JF-636 review): a multi-chapter book on the
         // flat-AudioPlayer path plays the CONCAT HLS stream keyed by the book
         // parent, whose timeline spans chapters. The item-keyed atempo re-launch
@@ -218,7 +240,8 @@ public class SetPlaybackSpeedIntentHandler : BaseHandler
             itemId,
             item,
             user,
-            context);
+            context,
+            queueManager: _queueManager);
         response.Response.OutputSpeech = new PlainTextOutputSpeech(
             ResponseStrings.Get("PlaybackSpeedSet", locale, ResponseStrings.Get($"SpeedName{targetRate}", locale)));
         return Task.FromResult<SkillResponse>(response);

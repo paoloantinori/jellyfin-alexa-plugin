@@ -110,6 +110,11 @@ public class PlaybackStartedEventHandler : BaseHandler
         (_queueManager ?? Plugin.Instance?.DeviceQueueManager)?.PromotePendingLaunchBase(
             deviceId, startItemId != Guid.Empty ? startItemId.ToString() : req.Token);
 
+        // JF-655: this event IS the active-playback signal. Marked unconditionally
+        // (not under the diagnostics toggle below): the re-launch gates read it to
+        // distinguish a playing device from a stale last-played ledger entry.
+        (_queueManager ?? Plugin.Instance?.DeviceQueueManager)?.MarkAudioPlaybackStarted(deviceId);
+
         // JF-522: the directive offset counts the stream's output timeline (0 for a
         // transcode launch, whose base is baked into ?start=), so the item-absolute
         // start position the server report carries is base + offset (read AFTER the
@@ -133,8 +138,13 @@ public class PlaybackStartedEventHandler : BaseHandler
         // (warning above SlowReportMs) so future stalls localize to this call immediately.
         // JF-425/JF-447: fire-and-forget removed start-vs-stop ordering, so the generation
         // is opened BEFORE dispatch and the report corrects itself if a stop or a newer
-        // start supersedes it mid-flight (see PlaybackReportOrdering).
-        long generation = PlaybackReportOrdering.BeginStart(deviceId, playbackStartInfo);
+        // start supersedes it mid-flight (see PlaybackReportOrdering). JF-655 review: the
+        // started stream's LAUNCH generation rides along (null for a bare token), the
+        // same-item half of the displacement classification.
+        long? launchGeneration = StreamTokenCodec.TryGetLaunchGeneration(req.Token, out long parsedGeneration)
+            ? parsedGeneration
+            : null;
+        long generation = PlaybackReportOrdering.BeginStart(deviceId, playbackStartInfo, launchGeneration);
         RunFireAndForget(ReportPlaybackStartAsync(playbackStartInfo, deviceId, generation), "PlaybackStartReport");
 
         // JF-393 diagnostic interaction logging: record playback start so later control

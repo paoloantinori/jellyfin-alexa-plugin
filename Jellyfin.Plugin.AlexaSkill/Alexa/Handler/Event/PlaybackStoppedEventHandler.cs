@@ -87,13 +87,25 @@ public class PlaybackStoppedEventHandler : BaseHandler
             InteractionDiagnostics.RecordPlaybackStopped(diagDevice);
         }
 
+        // JF-655: the stream is no longer active, so the re-launch gates' event-owned
+        // signal clears. DISPLACEMENT stops are exempt (code-review finding): the
+        // stop names the OLD stream while a newer PlaybackStarted already owns the
+        // device, and Alexa can deliver that order (Started(new) before the
+        // displaced Stopped(old)), so clearing here would flag an actively-playing
+        // device inactive; the newer stream's own start owns the flag.
+        var queue = _queueManager.GetOrCreateQueue(device);
+        PlaybackReportOrdering.StopKind stopKind = PlaybackReportOrdering.ClassifyStop(device, req.Token);
+        bool isDisplacement = stopKind != PlaybackReportOrdering.StopKind.Real;
+        if (!isDisplacement)
+        {
+            _queueManager.MarkAudioPlaybackStopped(device);
+        }
+
         // Detect displacement events (JF-447: against the device's latest START, not the
         // device queue, because several play paths never populate the queue): when a new
         // AudioPlayer.Play replaces the current track, Alexa sends PlaybackStopped for the
         // OLD item with a near-zero offset from the new track's start. This would overwrite
         // the real saved position of the old item.
-        var queue = _queueManager.GetOrCreateQueue(device);
-        bool isDisplacement = PlaybackReportOrdering.IsDisplacementStop(device, req.Token);
         if (isDisplacement)
         {
             Logger.LogWarning(
@@ -118,7 +130,21 @@ public class PlaybackStoppedEventHandler : BaseHandler
         long realPositionTicks = Progress.ComposeEventPositionTicks(
             device, stopItemId, req.OffsetInMilliseconds, "PlaybackStopped", _queueManager, _libraryManager);
 
-        long positionTicks = isDisplacement ? 0 : realPositionTicks;
+        // Round-3 finding: the displacement zeroing splits by kind. A DIFFERENT-item
+        // displacement keeps it (the near-zero offset counts the new track's
+        // timeline, the JF-447 rationale). A SAME-item displacement reports the
+        // event's own raw offset: it IS the item's real position at displacement
+        // for identity-rate streams, and composing it through the launch scope
+        // would mis-scale it with the NEW stream's base/rate (the wrong
+        // generation's scope); an atempo old stream's raw offset keeps a
+        // proportional error, still bounded below discarding the position
+        // entirely as the old shape did.
+        long positionTicks = stopKind switch
+        {
+            PlaybackReportOrdering.StopKind.DisplacedDifferentItem => 0,
+            PlaybackReportOrdering.StopKind.DisplacedSameItem => TimeSpan.FromMilliseconds(Math.Max(req.OffsetInMilliseconds, 0)).Ticks,
+            _ => realPositionTicks,
+        };
 
         // JF-447 review hardening (event-order race): the classification above reads the
         // device's LATEST START, which is only written once PlaybackStarted(new) has been

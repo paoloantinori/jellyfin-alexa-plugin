@@ -32,7 +32,10 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 ///   count plays and duplicate the PlaybackStart activity event.
 /// Displacement classification (JF-447): a stop-shaped event whose token is an item
 /// OTHER than the device's latest started item is the OLD stream ending as a newer
-/// play displaces it. This reads NO DeviceQueueManager state: several play paths never
+/// play displaces it; for the SAME item, the JF-655 review adds the launch-generation
+/// comparison (a same-item re-launch nonces its stream token, so its displaced old
+/// stream's late terminal event classifies displacement too; see
+/// <see cref="IsDisplacementStop"/>). This reads NO DeviceQueueManager state: several play paths never
 /// populate the device queue (PlaySongIntentHandler), which made the queue-based
 /// classifier misjudge real stops as displacements and vice versa. The event order
 /// alone is sufficient: a displacement stop arriving BEFORE the new start classifies
@@ -70,8 +73,24 @@ internal static class PlaybackReportOrdering
     {
         public long Generation;
         public volatile StopRegistration? PendingStop;
-        public PlaybackStartInfo? LastStart;
+
+        /// <summary>
+        /// The device's latest start as ONE immutable marker (round-3 review: the
+        /// pre-review shape assigned the start info and its launch generation as two
+        /// separate fields, a torn-write surface a concurrent classifier could read
+        /// paired mismatched; a single volatile reference write makes the pair
+        /// atomic under the store's existing reference-assignment machinery).
+        /// </summary>
+        public volatile StartMarker? LastStart;
     }
+
+    /// <summary>
+    /// The latest-start snapshot: the start report plus its stream token's launch
+    /// generation (null when the started stream carried no generation suffix, the
+    /// bare pre-review token; the same-item half of the displacement
+    /// classification). Immutable by construction so the pair publishes atomically.
+    /// </summary>
+    internal sealed record StartMarker(PlaybackStartInfo Info, long? LaunchGeneration);
 
     private static readonly ConcurrentDictionary<string, DeviceState> Devices = new(StringComparer.Ordinal);
 
@@ -160,12 +179,78 @@ internal static class PlaybackReportOrdering
     /// <param name="deviceId">The Alexa device ID (empty string shares one fallback slot).</param>
     /// <param name="startInfo">The start report being dispatched (the restoration source).</param>
     /// <returns>The generation this start report must match to treat its write as authoritative.</returns>
-    internal static long BeginStart(string deviceId, PlaybackStartInfo startInfo)
+    internal static long BeginStart(string deviceId, PlaybackStartInfo startInfo, long? launchGeneration = null)
     {
         DeviceState state = Devices.GetOrAdd(deviceId, _ => new DeviceState());
-        state.LastStart = startInfo;
+        state.LastStart = new StartMarker(startInfo, launchGeneration);
         state.PendingStop = null;
         return Interlocked.Increment(ref state.Generation);
+    }
+
+    /// <summary>How a stop-shaped event relates to the device's latest start
+    /// (the round-3 three-way refinement of the displacement boolean).</summary>
+    internal enum StopKind
+    {
+        /// <summary>The event's stream is the started one (or nothing is recorded):
+        /// the ordinary user stop/pause/end/failure.</summary>
+        Real,
+
+        /// <summary>The event's stream was replaced by a start for a DIFFERENT item
+        /// (the JF-447 shape; the near-zero-offset zeroing rationale stands).</summary>
+        DisplacedDifferentItem,
+
+        /// <summary>The event's stream was replaced by a start for the SAME item
+        /// (a nonced re-launch; the event's own offset is the item's real position
+        /// at displacement, so the zeroing does NOT apply).</summary>
+        DisplacedSameItem,
+    }
+
+    /// <summary>
+    /// The three-way classification behind <see cref="IsDisplacementStop"/>: same
+    /// item or different item matters to the stop handler's position decision
+    /// (round-3 review finding), while every displacement kind shares the
+    /// no-registration and flag-exemption consequences.
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID.</param>
+    /// <param name="token">The event's stream token (bare or composite).</param>
+    /// <returns>The classification; Real when nothing is recorded or the token is unparseable.</returns>
+    internal static StopKind ClassifyStop(string deviceId, string? token)
+    {
+        if (!Devices.TryGetValue(deviceId, out DeviceState? state)
+            || state.LastStart?.Info.ItemId is not { } startedItemId
+            || startedItemId == Guid.Empty
+            || !StreamTokenCodec.TryGetItemId(token, out Guid stoppedItemId))
+        {
+            return StopKind.Real;
+        }
+
+        if (stoppedItemId != startedItemId)
+        {
+            return StopKind.DisplacedDifferentItem;
+        }
+
+        // JF-655 review, the SAME-ITEM half: item identity alone cannot tell two
+        // streams of one item apart (the directive token is the bare id), so a
+        // same-item re-launch (speed change, sleep re-issue, repeat-one) delivering
+        // Started(new) before the old stream's terminal event would classify the
+        // old stream's stop REAL and dark the active-audio flag while audio plays.
+        // Generation rules, given the latest start is for the SAME item: when the
+        // start carries a generation, a stop that carries a DIFFERENT generation is
+        // the replaced old stream, and a stop carrying NONE is an older stream
+        // still (minting only ever happens on replacements of an active same-item
+        // stream, so any bare same-item stream predates a nonced one); a stop
+        // carrying the SAME generation is the started stream's own terminal event.
+        // A start with NO generation (bare token, the ordinary launch) keeps the
+        // item-only rule exactly as before.
+        if (state.LastStart?.LaunchGeneration is { } startGeneration)
+        {
+            return !StreamTokenCodec.TryGetLaunchGeneration(token, out long stopGeneration)
+                || stopGeneration != startGeneration
+                ? StopKind.DisplacedSameItem
+                : StopKind.Real;
+        }
+
+        return StopKind.Real;
     }
 
     /// <summary>
@@ -183,13 +268,7 @@ internal static class PlaybackReportOrdering
     /// <param name="token">The event's stream token (bare or composite).</param>
     /// <returns>True when the event displaces an already-replaced stream.</returns>
     internal static bool IsDisplacementStop(string deviceId, string? token)
-    {
-        return Devices.TryGetValue(deviceId, out DeviceState? state)
-            && state.LastStart?.ItemId is { } startedItemId
-            && startedItemId != Guid.Empty
-            && StreamTokenCodec.TryGetItemId(token, out Guid stoppedItemId)
-            && stoppedItemId != startedItemId;
-    }
+        => ClassifyStop(deviceId, token) != StopKind.Real;
 
     /// <summary>
     /// Records that a stop report is being sent for a device: from this instant, any
@@ -264,7 +343,7 @@ internal static class PlaybackReportOrdering
     /// <returns>A task representing the restoration.</returns>
     internal static async Task RestoreCurrentStartAsync(ISessionManager sessionManager, string deviceId, ILogger logger, string reason)
     {
-        PlaybackStartInfo? start = Devices.TryGetValue(deviceId, out DeviceState? state) ? state.LastStart : null;
+        PlaybackStartInfo? start = Devices.TryGetValue(deviceId, out DeviceState? state) ? state.LastStart?.Info : null;
         if (start is null || start.ItemId == Guid.Empty)
         {
             // No recorded start, or one from an unparseable token: an empty ItemId would

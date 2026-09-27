@@ -26,9 +26,18 @@ public class JumpToPositionIntentHandler : BaseHandler
     public JumpToPositionIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
-        ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
+        ILoggerFactory loggerFactory,
+        Playback.DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
     {
+        _queueManager = queueManager;
     }
+
+    /// <summary>
+    /// Round-3 review: the same-item seek re-launch below threads its manager into
+    /// the chokepoint so the launch-token mint reads the same store the event
+    /// handlers write (the JF-522 per-call idiom; null keeps the fallback).
+    /// </summary>
+    private readonly Playback.DeviceQueueManager? _queueManager;
 
     /// <inheritdoc/>
     public override bool CanHandle(Request request)
@@ -123,7 +132,8 @@ public class JumpToPositionIntentHandler : BaseHandler
             itemId,
             session.FullNowPlayingItem,
             user,
-            context);
+            context,
+            queueManager: _queueManager);
 
         response.Response.OutputSpeech = new PlainTextOutputSpeech
         {
