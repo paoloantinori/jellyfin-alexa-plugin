@@ -840,10 +840,24 @@ internal sealed class SharedGateProbeHandler : BaseHandler
         ILibraryManager libraryManager,
         IUserDataManager userDataManager,
         string logLabel,
+        IArtistIndex? artistIndex,
         CancellationToken cancellationToken)
         => CrossMedia.TryEntityFallbackAsync(
             slotText, jellyfinUser, user, session, context, locale,
-            libraryManager, userDataManager, null, null, logLabel, cancellationToken);
+            libraryManager, userDataManager, null, artistIndex, logLabel, cancellationToken);
+
+    /// <summary>
+    /// JF-652: direct access to the JF-471 acceptance gate for the kana-bar tests
+    /// (the kanaOrigin flag is only reachable through this signature).
+    /// </summary>
+    public bool CallPassesArtistMatchAcceptance(
+        BaseItem artist,
+        string query,
+        Entities.User user,
+        IArtistIndex? artistIndex,
+        out int score,
+        bool kanaOrigin = false)
+        => CrossMedia.PassesArtistMatchAcceptance(artist, query, user, artistIndex, out score, kanaOrigin);
 
     public Task<SkillResponse?> CallTryAlbumFallbackAsync(
         string slotText,

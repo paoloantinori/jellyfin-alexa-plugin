@@ -209,6 +209,31 @@ internal static class DisambiguationHelper
     }
 
     /// <summary>
+    /// Build the multi-artist disambiguation Ask (JF-420.2 shape: plain name list,
+    /// yes/no cycling via DisambiguateNext, the family's yes/no reprompt). One
+    /// construction for every site that fires the multi-artist prompt: the JF-420
+    /// containment-vs-alternative gate (the extraction SOURCE), the JF-652 kana
+    /// near-tie block in PlayArtistSongsIntentHandler, and the JF-652 kana near-tie
+    /// wrapper in CrossMediaFallback.ResolveKanaOriginTie. The first match is the
+    /// one "yes" plays.
+    /// </summary>
+    /// <param name="matches">The candidates in spoken order (winner first).</param>
+    /// <param name="locale">The request locale.</param>
+    /// <returns>The Ask response carrying the disambiguation session state.</returns>
+    internal static SkillResponse AskMultipleArtists(List<MatchInfo> matches, string locale)
+    {
+        // Plain name list: the flow is yes/no cycling (yes plays the first, no
+        // advances via DisambiguateNext), so no numbering.
+        string matchList = string.Join(", ", matches.Select(m => m.Name));
+        var response = ResponseBuilder.Ask(
+            ResponseStrings.Get("DisambiguateMultipleArtists", locale, matchList),
+            new Reprompt(ResponseStrings.Get("DisambiguateReprompt", locale)));
+        response.SessionAttributes = BuildAttributes(matches, 0, MediaTypeArtist);
+        ConversationalFlows.MarkOthersInactive(response, ConversationalFlows.DisambiguationKeys);
+        return response;
+    }
+
+    /// <summary>
     /// Serializable match info stored in session attributes.
     /// </summary>
     public class MatchInfo
