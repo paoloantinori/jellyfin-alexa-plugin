@@ -4,10 +4,10 @@ title: >-
   JF-643 - katakana query values never match Latin library names (script gap in
   fuzzy/phonetic search): naturalized ja-JP artist and genre requests all end
   not-found
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-27 06:38'
-updated_date: '2026-09-27 09:08'
+updated_date: '2026-09-27 12:23'
 labels:
   - search
   - i18n
@@ -105,3 +105,9 @@ SAME-CLASS RESIDUALS (extends the worker's list; /simplify reuse angle): un-wire
 <!-- SECTION:NOTES:BEGIN -->
 2026-09-27 LIVE VERIFICATION OUTCOME (deployed a39eb2a8, minix): genre rows PASSED (ジャズ plays jazz via the vocab tier; Jazz Latin control unchanged; the stolen-artist rescue fires). Artist rows FAILED the bar as written: クイーン -> 'kuin' -> tier-4 phonetic floor 91 TIE between Queen and Keane resolves silently to Keane (single-best auto-play, no disambiguation); ビートルズ -> 'bitoruzu' -> plain-fuzzy false accept of 'Sator' at threshold 60. Root cause and fix direction filed as JF-652 (kana-aware acceptance calibration), which BLOCKS this task's completion. Mechanism itself verified good: romanizer no-op on Latin (byte-identical, pinned), kana bridging works, genre path exact. Status stays In Progress until JF-652 lands and the artist rows re-verify.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Landed 2026-09-27 as merge b24f03a1 (CI green), deployed at a39eb2a8, and COMPLETED once JF-652 (a9c57451) fixed the acceptance calibration the live battery exposed: the query-side KatakanaRomanizer wired at ~15 entry points (query-only, candidates never transliterated, Latin paths byte-identical and pinned), plus the kana-gated genre-vocabulary resolution tier (exact-match on the library's own tags). Gates: /simplify four angles (applied + one evidenced revert of the nullable-signature collapse), code-review high PASS with an independent suite run, F3 threshold fix applied post-pass. LIVE VERIFICATION, final state: genre rows PASS (ジャズ plays jazz via the tier; ジャズ ER-canonical bypasses the tier post-JF-642; Jazz Latin unchanged); artist rows now PASS via JF-652 (クイーン -> the multi-artist disambiguation ask naming Keane and Queen, never a silent wrong play; ビートルズ -> honest artist not-found; the song-fallback gap it exposed is JF-654). Residuals filed: JF-645 (coverage: unwired sites, tier lift, TTL cache, symmetric normalization, script-chain shape) and JF-654 (song-side kana bar). The ja script gap is closed end-to-end at the artist and genre layers.
+<!-- SECTION:FINAL_SUMMARY:END -->
