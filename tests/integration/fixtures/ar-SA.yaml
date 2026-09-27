@@ -44,3 +44,18 @@ tests:
     expected_intent: FindSongByArtistIntent
     expected_slots:
       musician: {}
+
+  # JF-399 PlayPlaylist/PlayArtistSongs parity pass (2026-09-27): the
+  # isma'-playlist and urid-samaa'-aghani carrier families, both
+  # noun-qualified (the bare shughl shape is the documented PlayVideo
+  # steal, see the header). Requires the model deploy; the first live
+  # suite run after it is the probe.
+  - utterance: "اسمع قائمة التشغيل روك"
+    expected_intent: PlayPlaylistIntent
+    expected_slots:
+      playlist: {}
+
+  - utterance: "أريد سماع أغاني queen"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}

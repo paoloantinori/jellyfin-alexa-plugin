@@ -172,6 +172,19 @@ tests:
     expected_slots:
       playlist: {}
 
+  # JF-399 PlayPlaylist parity pass (2026-09-27): the listen-to and
+  # stream carrier families. Requires the model deploy; the first live
+  # suite run after it is the probe.
+  - utterance: "listen to the playlist my favorites"
+    expected_intent: PlayPlaylistIntent
+    expected_slots:
+      playlist: {}
+
+  - utterance: "stream the playlist road trip"
+    expected_intent: PlayPlaylistIntent
+    expected_slots:
+      playlist: {}
+
   # -------------------------------------------------------------------------
   # 13. PlayFavoritesIntent (media_type)
   # -------------------------------------------------------------------------

@@ -316,7 +316,13 @@
           "Pon la playlist {playlist}",
           "Pon mi playlist {playlist}",
           "Inicia la playlist {playlist}",
-          "Reproducir la playlist {playlist}"
+          "Reproducir la playlist {playlist}",
+          "Escucha la playlist {playlist}",
+          "Escucha mi playlist {playlist}",
+          "Escucha la lista de reproducción {playlist}",
+          "Toca la playlist {playlist}",
+          "Dame la playlist {playlist}",
+          "Quiero escuchar la playlist {playlist}"
         ],
         "slots": [
           {

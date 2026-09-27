@@ -43,3 +43,18 @@ tests:
   - utterance: "ऑडियोबुक सुनो"
     expected_intent: PlayBookIntent
     expected_slots: {}
+
+  # ------------------------------------------------------------------------
+  # JF-399 PlayPlaylist/PlayArtistSongs parity pass (2026-09-27): the
+  # meri-playlist-lagaao and ke-gaane-bajao carrier families. Requires
+  # the model deploy; the first live suite run after it is the probe.
+  # ------------------------------------------------------------------------
+  - utterance: "मेरी प्लेलिस्ट पसंदीदा लगाओ"
+    expected_intent: PlayPlaylistIntent
+    expected_slots:
+      playlist: {}
+
+  - utterance: "queen के गाने बजाओ"
+    expected_intent: PlayArtistSongsIntent
+    expected_slots:
+      musician: {}

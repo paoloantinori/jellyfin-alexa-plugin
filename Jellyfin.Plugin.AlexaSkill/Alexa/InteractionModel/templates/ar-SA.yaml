@@ -9,6 +9,16 @@
 #
 # Run: python3 scripts/generate_interaction_model.py ar-SA
 #
+# JF-399 (2026-09-27): PlayPlaylistIntent enriched 6 -> 12 (the
+# existing opener set crossed with the my-variant noun قائمة تشغيلي,
+# plus اسمع and ابدأ تشغيل from this locale's PlaySong vocabulary)
+# and PlayArtistSongsIntent enriched 14 -> 21 (the bare-artist openers
+# أريد سماع / هل يمكنك تشغيل / ابدأ تشغيل / اسمع crossed with the
+# أغاني / موسيقى / أغانٍ لـ nouns already carried by the شغل and
+# استمع إلى forms). Skipped carrier family: no second playlist noun
+# exists in this vocabulary (قائمة alone is not attested as a playlist
+# noun here).
+#
 # JF-399 (2026-09-26): FindSongByArtistIntent enriched 4 -> 8 (FindSong
 # openers crossed with the li-ughniya tail). Skipped carrier family: no
 # second song noun exists in this vocabulary (أغنية only), so it-IT's
@@ -196,6 +206,17 @@ intents:
       - شغل بعض {musician}
       - شغل أعمال {musician}
       - اسمع {musician}
+      # JF-399 PlayArtistSongs parity: this locale sat at 14 samples vs
+      # the family carrier space (34-43 in the de/fr/en/es families).
+      # The additions are this locale's own bare-artist openers crossed
+      # with the nouns the شغل and استمع إلى forms already carry.
+      - أريد سماع أغاني {musician}
+      - أريد سماع موسيقى {musician}
+      - هل يمكنك تشغيل أغاني {musician}
+      - ابدأ تشغيل أغاني {musician}
+      - اسمع أغاني {musician}
+      - اسمع موسيقى {musician}
+      - استمع إلى أغانٍ لـ {musician}
     slots:
       - name: musician
         type: AMAZON.Musician
@@ -280,6 +301,17 @@ intents:
       - استمع إلى قائمة التشغيل {playlist}
       - هل يمكنك تشغيل قائمة التشغيل {playlist}
       - أريد سماع قائمة التشغيل {playlist}
+      # JF-399 PlayPlaylist parity: this locale sat at 6 samples vs the
+      # family carrier space (en-US 20, es-ES 12). The additions cross
+      # the existing opener set with the my-variant noun and add this
+      # locale's own PlaySong openers; every carrier names the media
+      # (the playlist slot is free-text SearchQuery).
+      - ابدأ قائمة تشغيلي {playlist}
+      - استمع إلى قائمة تشغيلي {playlist}
+      - هل يمكنك تشغيل قائمة تشغيلي {playlist}
+      - أريد سماع قائمة تشغيلي {playlist}
+      - اسمع قائمة التشغيل {playlist}
+      - ابدأ تشغيل قائمة التشغيل {playlist}
     slots:
       - name: playlist
         type: AMAZON.SearchQuery

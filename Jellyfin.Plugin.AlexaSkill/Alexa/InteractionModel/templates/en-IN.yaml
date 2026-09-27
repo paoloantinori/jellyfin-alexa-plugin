@@ -10,6 +10,14 @@
 #
 # Run: python3 scripts/generate_interaction_model.py en-IN
 #
+# JF-399 (2026-09-27): PlayPlaylistIntent enriched 6 -> 16 with this
+# locale's own PlaySong/PlayAlbum openers (put on / listen to / can you
+# play / I want to hear / give me / stream / let's hear / start my)
+# crossed with the playlist noun, the en-family carrier space (en-US 20
+# via its playlist_verb product, en-GB 24). Skipped carrier families:
+# "queue up" and en-GB's colloquial "stick on"/"whack on" are not
+# attested in this locale's sibling vocabulary.
+#
 # JF-399 (2026-09-26): FindSongByArtistIntent enriched 4 -> 12 with this
 # locale's own FindSong openers crossed with the by-artist tail (the
 # song/track noun pair mirrors it-IT's canzone/brano). Skipped carrier
@@ -276,6 +284,22 @@ intents:
       - play my playlist {playlist}
       - start the playlist {playlist}
       - to play the playlist {playlist}
+      # JF-399 PlayPlaylist parity: this locale sat at 6 samples vs the
+      # en-family carrier space (en-US 20, en-GB 24). The additions are
+      # this locale's own PlaySong/PlayAlbum openers crossed with the
+      # playlist noun; every carrier names the media (the playlist slot
+      # is free-text SearchQuery, so a bare carrier would compete with
+      # PlaySong for every "verb + title" utterance).
+      - put on the playlist {playlist}
+      - put on my playlist {playlist}
+      - listen to the playlist {playlist}
+      - can you play the playlist {playlist}
+      - can you play my playlist {playlist}
+      - I want to hear the playlist {playlist}
+      - give me the playlist {playlist}
+      - stream the playlist {playlist}
+      - let's hear the playlist {playlist}
+      - start my playlist {playlist}
     slots:
       - name: playlist
         type: AMAZON.SearchQuery
