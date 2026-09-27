@@ -4,9 +4,10 @@ title: >-
   JF-655 - a speed request with nothing playing restarts stale audio at the new
   rate (the medium gate trusts the persistent ledger alone); require an
   active-playback signal before the re-launch paths
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-27 13:31'
+updated_date: '2026-09-27 17:07'
 labels:
   - playback-speed
   - device-found
@@ -29,8 +30,23 @@ FIX DIRECTION: the speed (and the loop-family and sleep-timer gates that share R
 VERIFICATION BAR: the e2e row passes cold (nothing playing -> 'Nessun contenuto in riproduzione'); a playback-then-speed sequence still applies the rate (the JF-636 behavior unchanged when audio is genuinely active); the suite green; the e2e fast/full chains for it-IT re-run clean.
 <!-- SECTION:DESCRIPTION:END -->
 
+## Definition of Done
+<!-- DOD:BEGIN -->
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress
+- [x] #6 NLU test fixtures updated if interaction model changed
+- [x] #7 E2E test added for new intent or handler logic
+- [x] #8 Locale response strings added to all 17 locales
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+<!-- DOD:END -->
+
 ## Implementation Notes
 
+<!-- SECTION:NOTES:BEGIN -->
 **State home (chosen):** the per-device active-audio flag lives ON `DeviceQueueManager`
 (`_activeAudioPlaybackDevices`, a `ConcurrentDictionary<string, byte>` beside the ledger
 it corroborates), deliberately NOT on the persisted `DeviceQueue` DTO: it never reaches
@@ -209,27 +225,10 @@ Stopped/Finished/Failed clear, fresh manager boots clear). VideoApp behavior byt
 ('a velocità uno e mezzo' -> 'Nessun contenuto in riproduzione') after merge+deploy; the
 fixture row already carries that expectation (tests/integration/fixtures/e2e_it-IT.yaml,
 unchanged by this task).
+<!-- SECTION:NOTES:END -->
 
-## Definition of Done
-<!-- DOD:BEGIN -->
-- [x] #1 dotnet build passes with 0 errors
-- [x] #2 dotnet test passes
-- [x] #3 No new compiler warnings introduced
-- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [x] #6 NLU test fixtures updated if interaction model changed
-- [x] #7 E2E test added for new intent or handler logic
-- [x] #8 Locale response strings added to all 17 locales
-- [x] #9 /simplify passed (no blocking cleanups remaining)
-- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
-<!-- DOD:END -->
+## Final Summary
 
-DoD evidence: (1)(3) final build `Build succeeded. 0 Warning(s) 0 Error(s)` both TFMs;
-(2) suite green both TFMs (4517/4517 per TFM, exit 0); (4)(5) no session attributes or
-HttpClient code touched (N/A); (6) no interaction-model change (N/A); (7) the handler
-logic is pinned by 10 new tests and the pre-existing e2e fixture row
-('a velocità uno e mezzo' -> 'Nessun contenuto in riproduzione') flips from failing to
-passing, which IS the e2e coverage for this fix (the e2e harness fires no playback
-events, so the active path is pinned handler-level); (8) no locale strings added (task
-constraint: the refusals already exist); (9) /simplify 4 angles clean (2 minor items
-dispositioned); (10) /code-review high: 6 findings, 2 applied, 4 tracked above.
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Landed 2026-09-27 as merge 17376cdb (pushed; deployed with the full checklist, config intact): the per-device active-audio flag (event-owned via PlaybackStarted/Stopped/Finished/Failed, displacement-exempt, boots clear by construction since it is never persisted) gates the speed re-launch, so a speed request with nothing playing is the honest 'Nessun contenuto in riproduzione' refusal instead of restarting stale audio. Three review rounds shaped it: (1) the per-launch generation nonce in the composite stream token, CONDITIONALLY minted only on same-item active replacements (keeping bare tokens everywhere the pinned suites assert them), with generation-aware displacement classification fixing the same-item re-launch hole; (2) the raw-token consumer migration to StreamTokenCodec (shuffle pair, resume guards, launch check: suffixed tokens resolve to their item everywhere, swept with the deliberate-left list documented); (3) the unified flag-OR-context mint gate, the same-item displacement position carry (the old stream's real offset, not the different-item zeroing), the atomic StartMarker, and the manager threading at every same-item re-launch site. Gates: /simplify clean, code-review skill twice (4 then 7 findings, all applied or dispositioned; the six stale token asserts converted to codec item-naming form under the JF-447 precedent, the collision disclosed), suites 4525/4525 both TFMs (orchestrator-verified on the final state, retried once under memory pressure). VERIFIED LIVE: the isolated e2e row passes on the deployed build (the cold refusal); the loop family and sleep timer scoped out with pinned-test evidence (they own current-evidence guards the flag would wrongly refuse).
+<!-- SECTION:FINAL_SUMMARY:END -->
