@@ -96,8 +96,9 @@ def test_adjacent_ascii_slots_are_not_flagged():
 
 
 def test_latin_glue_is_out_of_class():
-    # Latin-script glue has no live InvalidCharInSamples incident; the class
-    # is deliberately CJK-only to keep the error level false-positive-free.
+    # Latin-script glue has no live SMAPI rejection on record (the glue error
+    # name is InvalidSample per the ja-JP template header); the class is
+    # deliberately CJK-only to keep the error level false-positive-free.
     errors, _ = validate_single_model("en-US", _lm(["play{album} now"]))
     assert errors == [], errors
 
