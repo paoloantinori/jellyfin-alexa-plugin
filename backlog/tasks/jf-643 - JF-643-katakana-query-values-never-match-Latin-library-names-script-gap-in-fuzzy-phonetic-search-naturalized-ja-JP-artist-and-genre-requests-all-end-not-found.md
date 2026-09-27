@@ -7,6 +7,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-27 06:38'
+updated_date: '2026-09-27 09:08'
 labels:
   - search
   - i18n
@@ -55,7 +56,6 @@ RELATION: depends on nothing technically; JF-642 dependency recorded only for sc
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
-<!-- SECTION:NOTES:BEGIN -->
 ## Implementation Notes (2026-09-27)
 
 CHOKE POINTS wired (query side ONLY; candidates, titles, and catalog values are never transliterated):
@@ -99,3 +99,9 @@ INTERPLAY with JF-642 (recorded on both sides): ER_SUCCESS_MATCH canonical (JF-6
 KNOWN NARROWING (accepted, review-verified): normalization is asymmetric (query only). A kana query against a KATAKANA-TAGGED library name, which previously exact-matched on the Contains tier, now misses on every tier (romanized 'kuin' cannot equal the kana name; Double Metaphone keeps kana, so the phonetic floor cannot rescue it). Latin-tagged libraries (the common shape) are unaffected. The deeper fix is symmetric index-side normalization at index-build time; tracked with the residuals below.
 
 SAME-CLASS RESIDUALS (extends the worker's list; /simplify reuse angle): un-wired genre slots with identical exact-Genres semantics: PlayRandomIntentHandler, PlayByDecadeIntentHandler, BrowseLibraryIntentHandler. Un-wired raw-kana SearchTerm sites: AddToQueueIntentHandler (song side; artist side covered), PlayNextIntentHandler, AddSongToPlaylistIntentHandler, PlayChannelIntentHandler, TvNextUpService. When the first sibling genre site is wired, lift ResolveGenreTagAsync onto the SearchService collaborator (the GetArtistSongsAsync precedent) instead of copying it. Script coverage: this romanizer is kana-specific by construction; Devanagari (hi-IN) and Arabic (ar-SA) native-script values remain unmatched (the JF-643 task Description flagged them); if a second script lands, extract a normalizer-chain shape rather than a parallel one-off.
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-09-27 LIVE VERIFICATION OUTCOME (deployed a39eb2a8, minix): genre rows PASSED (ジャズ plays jazz via the vocab tier; Jazz Latin control unchanged; the stolen-artist rescue fires). Artist rows FAILED the bar as written: クイーン -> 'kuin' -> tier-4 phonetic floor 91 TIE between Queen and Keane resolves silently to Keane (single-best auto-play, no disambiguation); ビートルズ -> 'bitoruzu' -> plain-fuzzy false accept of 'Sator' at threshold 60. Root cause and fix direction filed as JF-652 (kana-aware acceptance calibration), which BLOCKS this task's completion. Mechanism itself verified good: romanizer no-op on Latin (byte-identical, pinned), kana bridging works, genre path exact. Status stays In Progress until JF-652 lands and the artist rows re-verify.
+<!-- SECTION:NOTES:END -->
