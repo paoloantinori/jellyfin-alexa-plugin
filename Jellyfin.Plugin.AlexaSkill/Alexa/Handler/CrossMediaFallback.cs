@@ -601,7 +601,8 @@ public sealed class CrossMediaFallback
         string query,
         Entities.User? user,
         IArtistIndex? artistIndex,
-        out int score)
+        out int score,
+        bool kanaOrigin = false)
     {
         int threshold = FuzzyMatcher.GetDefaultThreshold(user);
 
@@ -615,13 +616,21 @@ public sealed class CrossMediaFallback
                 a => a.Id,
                 id => pinned.TryGetPhoneticCode(id, out var codes) ? codes : null);
             score = scored.HasValue ? scored.Value.Score : 0;
-            return score >= threshold;
+            return PassesKanaAware(score, threshold, kanaOrigin);
         }
 
         var plainScored = FuzzyMatcher.FindBestMatchWithScore(query, new[] { artist }, a => a.Name!);
         score = plainScored.HasValue ? plainScored.Value.Score : 0;
-        return score >= threshold;
+        return PassesKanaAware(score, threshold, kanaOrigin);
     }
+
+    /// <summary>
+    /// JF-652: the shared kana-aware acceptance tail. A kana-origin query accepts
+    /// only on a real Double Metaphone collision (the phonetic floor); Latin
+    /// queries (kanaOrigin false) keep the bare-threshold behavior byte-identical.
+    /// </summary>
+    private static bool PassesKanaAware(int score, int threshold, bool kanaOrigin)
+        => score >= threshold && (!kanaOrigin || FuzzyMatcher.IsPhoneticFloorScore(score));
 
     /// <summary>
     /// Entity fallback for greedy <c>AMAZON.SearchQuery</c> intents that misroute an
@@ -681,6 +690,9 @@ public sealed class CrossMediaFallback
         // chain, the phonetic confirm, and the word-coverage valve all interpret the
         // same Latin-script query (the raw value above keeps the user's spoken words
         // for triage; downstream speech may speak the romanized form).
+        // JF-652: the kana-origin flag is computed from the PRE-romanization value,
+        // the script evidence the romanization erases.
+        bool kanaOrigin = KatakanaRomanizer.ContainsKana(slotText);
         slotText = KatakanaRomanizer.Romanize(slotText);
 
         // JF-464: the fallback's whole payoff is playing music (artist songs), and its
@@ -745,12 +757,48 @@ public sealed class CrossMediaFallback
 
         if (bestItem != null && bestScore >= threshold)
         {
+            // JF-652: the kana-origin auto-play bar. A strict-bar score that is NOT a
+            // Double Metaphone collision is the plain-fuzzy class the romaji query
+            // shape false-accepts ('ビートルズ' -> 'bitoruzu' accepted 'Sator' at
+            // 60), so it is the honest miss here. The floor case goes through the
+            // near-tie check: SearchAsync returns a single best, so the runner-up is
+            // invisible without a pool rescan (the live 'クイーン' 91-tie between
+            // Queen and Keane resolved by iteration order).
+            if (kanaOrigin && !FuzzyMatcher.IsPhoneticFloorScore(bestScore))
+            {
+                _logger.LogInformation(
+                    "{Label}: kana-origin query '{Query}' matched artist '{ArtistName}' with score={Score} without a phonetic collision, treating as a miss (JF-652)",
+                    logLabel, cleaned, bestItem.Name, bestScore);
+                return null;
+            }
+
+            if (kanaOrigin)
+            {
+                SkillResponse? tieOutcome = ResolveKanaOriginTie(
+                    bestItem, bestScore, artists, cleaned, normalThreshold, user, pinnedArtistIndex, libraryManager, locale, logLabel);
+                if (tieOutcome != null)
+                {
+                    return tieOutcome;
+                }
+            }
+
             // Strict (or phonetic-floor) match: fall through to playback below.
             // Restored from the deleted PlaySong/PlayAlbum inline copies (JF-446
             // review): the acceptance must name the artist and its score.
             _logger.LogInformation(
                 "{Label}: artist fallback found '{ArtistName}' with score={Score} for query='{Query}' (threshold={Threshold})",
                 logLabel, bestItem.Name, bestScore, cleaned, threshold);
+        }
+        else if (kanaOrigin && bestItem != null)
+        {
+            // JF-652: the sub-strict JF-363 band and the JF-440 word-coverage valve
+            // are plain-fuzzy acceptance classes; a kana-origin query takes the same
+            // honest miss as the strict-bar plain-fuzzy case above (never a confirm
+            // prompt for the fuzzy tier).
+            _logger.LogInformation(
+                "{Label}: kana-origin query '{Query}' matched artist '{ArtistName}' below the strict bar (score={Score}, threshold={Threshold}), treating as a miss (JF-652)",
+                logLabel, cleaned, bestItem.Name, bestScore, threshold);
+            return null;
         }
         else if (bestItem != null && bestScore >= normalThreshold && notFoundMediaType != null)
         {
@@ -860,6 +908,69 @@ public sealed class CrossMediaFallback
                 ? ResponseStrings.Get("FoundArtistInstead", locale, bestItem.Name)
                 : null,
             cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// JF-652: the kana-origin near-tie check at the cross-media strict acceptance
+    /// point. When the winner and the best rival both clear the normal threshold and
+    /// differ by at most <see cref="Util.ArtistSearch.KanaOriginTieMargin"/>, the
+    /// strict-bar acceptance is a silent coin flip between two real artists, so the
+    /// multi-artist disambiguation ask (the PlayArtistSongs JF-420.2 shape) is fired
+    /// instead of a wrong auto-play; null means a clear margin and playback proceeds.
+    /// The scan needs the FULL artist pool because the search chain returns a single
+    /// best; the pinned index supplies it (library-scoped, so an excluded-library
+    /// name is never spoken, the JF-457 contract). Without an index the chain result
+    /// list is the only pool and no rival can be found there (single-best shape).
+    /// </summary>
+    private SkillResponse? ResolveKanaOriginTie(
+        BaseItem bestItem,
+        int bestScore,
+        IReadOnlyList<BaseItem> chainResults,
+        string cleanedQuery,
+        int normalThreshold,
+        Entities.User user,
+        IArtistIndex? pinnedIndex,
+        ILibraryManager libraryManager,
+        string locale,
+        string logLabel)
+    {
+        IReadOnlyList<BaseItem> pool = pinnedIndex?.GetArtists(LibraryFilter.ResolveForUser(user, libraryManager, _logger)) ?? chainResults;
+        var rivals = pool.Where(a => !a.Id.Equals(bestItem.Id)).ToList();
+        if (rivals.Count == 0)
+        {
+            return null;
+        }
+
+        var runnerUp = pinnedIndex != null
+            ? FuzzyMatcher.FindBestMatchWithScore(
+                cleanedQuery,
+                rivals,
+                a => a.Name,
+                a => a.Id,
+                id => pinnedIndex.TryGetPhoneticCode(id, out var codes) ? codes : null)
+            : FuzzyMatcher.FindBestMatchWithScore(cleanedQuery, rivals, a => a.Name);
+        if (runnerUp == null
+            || runnerUp.Value.Score < normalThreshold
+            || bestScore - runnerUp.Value.Score > Util.ArtistSearch.KanaOriginTieMargin)
+        {
+            return null;
+        }
+
+        _logger.LogInformation(
+            "{Label}: kana-origin query '{Query}' is a near-tie between '{Top}' ({TopScore}) and '{RunnerUp}' ({RunnerScore}), disambiguating (JF-652)",
+            logLabel, cleanedQuery, bestItem.Name, bestScore, runnerUp.Value.Item.Name, runnerUp.Value.Score);
+        var matchInfos = new List<DisambiguationHelper.MatchInfo>
+        {
+            new() { Id = bestItem.Id.ToString(), Name = bestItem.Name },
+            new() { Id = runnerUp.Value.Item.Id.ToString(), Name = runnerUp.Value.Item.Name }
+        };
+        var matchList = string.Join(", ", matchInfos.Select(m => m.Name));
+        SkillResponse response = ResponseBuilder.Ask(
+            ResponseStrings.Get("DisambiguateMultipleArtists", locale, matchList),
+            new Reprompt(ResponseStrings.Get("DisambiguateReprompt", locale)));
+        response.SessionAttributes = DisambiguationHelper.BuildAttributes(matchInfos, 0, DisambiguationHelper.MediaTypeArtist);
+        ConversationalFlows.MarkOthersInactive(response, ConversationalFlows.DisambiguationKeys);
+        return response;
     }
 
     /// <summary>

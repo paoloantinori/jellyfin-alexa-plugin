@@ -78,6 +78,19 @@ internal static class ArtistSearch
     internal const int Tier1ContainmentLengthBand = 10;
 
     /// <summary>
+    /// JF-652 tie margin for kana-origin queries: when the winner and the runner-up
+    /// BOTH reach the acceptance bar and their scores differ by at most this much,
+    /// the acceptance is a silent coin flip between two real artists (the live
+    /// 'クイーン' case: Queen and Keane both Double-Metaphone-collide at the 91
+    /// floor, and the single-best pick resolved by iteration order). The outcome is
+    /// the existing multi-artist disambiguation prompt at both kana decision points
+    /// (PlayArtistSongsIntentHandler, CrossMediaFallback.TryEntityFallbackAsync),
+    /// never an auto-play. A clear margin (strictly greater) auto-plays the winner.
+    /// Shared by both decision points so they cannot drift.
+    /// </summary>
+    internal const int KanaOriginTieMargin = 5;
+
+    /// <summary>
     /// Whether a candidate name is within the JF-381 containment band for the query.
     /// Applied to EVERY containment-shaped candidate source (in-memory tier-1 filter,
     /// database SearchTerm results, database NameContains results) in both search

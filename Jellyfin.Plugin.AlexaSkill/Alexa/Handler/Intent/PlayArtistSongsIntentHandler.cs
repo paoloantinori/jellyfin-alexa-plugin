@@ -177,6 +177,9 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         // JF-643: this handler runs its own inline tier chain (the JF-382 duplicate)
         // that bypasses ArtistSearch.SearchAsync's entry romanization, so the
         // katakana-to-romaji normalization happens here too.
+        // JF-652: the kana-origin flag must be captured on the RAW slot value,
+        // BEFORE the romanization below erases the script evidence.
+        bool kanaOrigin = musician is not null && Util.KatakanaRomanizer.ContainsKana(musician);
         musician = musician is null ? null : Util.KatakanaRomanizer.Romanize(musician);
 
         Logger.LogDebug("PlayArtistSongs: entered, locale={Locale}", locale);
@@ -674,6 +677,28 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             return AskCoincidentalContainment(artists[0], musician, locale, context, user);
         }
 
+        // JF-652: the kana-origin auto-play bar. A katakana query romanizes into a
+        // romaji class whose score distribution the Latin-calibrated acceptance
+        // machinery was never calibrated for (live: 'クイーン' -> 'kuin' silently
+        // resolved a 91-tie to Keane; 'ビートルズ' -> 'bitoruzu' plain-fuzzy-accepted
+        // 'Sator' at 60). At this single end-of-chain point every collapse path
+        // (tier single-best, Fast-mode best pick, HandleFuzzyMiss auto-accept) has
+        // already reduced to one pick, so the bar composes WITH the JF-377/JF-420
+        // gates above instead of replacing them: a kana-origin query auto-plays only
+        // on a real Double Metaphone collision (the phonetic floor), a plain-fuzzy-only
+        // pick is the honest not-found (never a confirm prompt), and a floor-level
+        // near-tie with a rival fires the existing multi-artist disambiguation
+        // (JF-420.2 yes/no cycling). Latin queries never enter this block.
+        if (kanaOrigin && artists.Count > 0)
+        {
+            SkillResponse? kanaOutcome = ApplyKanaOriginAcceptance(
+                artists, musician!, user, pinnedIndex, jf420ArtistPool, locale, context, session, cancellationToken);
+            if (kanaOutcome != null)
+            {
+                return kanaOutcome;
+            }
+        }
+
         string matchedArtistName = artists[0].Name;
         Logger.LogDebug("PlayArtistSongs: matched artist='{ArtistName}' (id={ArtistId})", matchedArtistName, artists[0].Id);
 
@@ -879,6 +904,98 @@ public class PlayArtistSongsIntentHandler : BaseHandler
     /// <returns>The filtered list.</returns>
     private static List<BaseItem> FilterContainmentBand(IReadOnlyList<BaseItem> artists, string musician)
         => artists.Where(a => Util.ArtistSearch.PassesContainmentBand(a.Name, musician)).ToList();
+
+    /// <summary>
+    /// JF-652: the kana-origin acceptance decision for the final single pick. Returns
+    /// the response to return (the honest not-found, or the near-tie disambiguation
+    /// ask), or null when the pick clears the kana bar and auto-play proceeds.
+    /// The bar: a real Double Metaphone collision (<see
+    /// cref="FuzzyMatcher.IsPhoneticFloorScore"/>) on top of the user's threshold.
+    /// Detection reads the score at this decision point, so no flag plumb through the
+    /// search chains is needed. The near-tie check needs the full artist pool (only
+    /// the in-memory path has one; the cold-index database path skips it, same
+    /// cold-window trade-off class as the JF-381/JF-417 gates).
+    /// </summary>
+    private SkillResponse? ApplyKanaOriginAcceptance(
+        IReadOnlyList<BaseItem> artists,
+        string musician,
+        Entities.User user,
+        IArtistIndex? pinnedIndex,
+        IReadOnlyList<BaseItem>? artistPool,
+        string locale,
+        Context context,
+        SessionInfo session,
+        CancellationToken cancellationToken)
+    {
+        BaseItem match = artists[0];
+        var scored = pinnedIndex != null
+            ? FuzzyMatcher.FindBestMatchWithScore(
+                musician,
+                new[] { match },
+                a => a.Name,
+                a => a.Id,
+                id => pinnedIndex.TryGetPhoneticCode(id, out var codes) ? codes : null)
+            : FuzzyMatcher.FindBestMatchWithScore(musician, new[] { match }, a => a.Name);
+        int score = scored?.Score ?? 0;
+
+        // Threshold: the pick already passed a tier threshold, but the user's bar is
+        // re-checked here so the kana bar is (threshold AND floor), matching the
+        // cross-media kana gate.
+        int userThreshold = FuzzyMatcher.GetDefaultThreshold(user);
+        if (score < userThreshold || !FuzzyMatcher.IsPhoneticFloorScore(score))
+        {
+            Logger.LogInformation(
+                "PlayArtistSongs: kana-origin query '{Query}' matched '{Match}' at score {Score} without a phonetic collision, downgrading to not-found (JF-652)",
+                musician, match.Name, score);
+            SkillResponse? songFallback = CrossMedia.TrySongFallback(
+                musician, user, session, context, locale, _songNgramIndex, _libraryManager, "PlayArtistSongs", cancellationToken);
+            if (songFallback != null)
+            {
+                return songFallback;
+            }
+
+            return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundArtist", locale, musician));
+        }
+
+        if (artistPool != null)
+        {
+            var rivals = artistPool.Where(a => !a.Id.Equals(match.Id)).ToList();
+            var runnerUp = rivals.Count == 0
+                ? null
+                : pinnedIndex != null
+                    ? FuzzyMatcher.FindBestMatchWithScore(
+                        musician,
+                        rivals,
+                        a => a.Name,
+                        a => a.Id,
+                        id => pinnedIndex.TryGetPhoneticCode(id, out var codes) ? codes : null)
+                    : FuzzyMatcher.FindBestMatchWithScore(musician, rivals, a => a.Name);
+            if (runnerUp != null
+                && runnerUp.Value.Score >= userThreshold
+                && score - runnerUp.Value.Score <= Util.ArtistSearch.KanaOriginTieMargin)
+            {
+                Logger.LogInformation(
+                    "PlayArtistSongs: kana-origin query '{Query}' is a near-tie between '{Top}' ({TopScore}) and '{RunnerUp}' ({RunnerScore}), disambiguating (JF-652)",
+                    musician, match.Name, score, runnerUp.Value.Item.Name, runnerUp.Value.Score);
+                var matchInfos = new List<DisambiguationHelper.MatchInfo>
+                {
+                    new() { Id = match.Id.ToString(), Name = match.Name },
+                    new() { Id = runnerUp.Value.Item.Id.ToString(), Name = runnerUp.Value.Item.Name }
+                };
+                // Plain name list + yes/no cycling, the JF-420.2 shape.
+                var matchList = string.Join(", ", matchInfos.Select(m => m.Name));
+                var multiPrompt = ResponseStrings.Get("DisambiguateMultipleArtists", locale, matchList);
+                var multiResponse = ResponseBuilder.Ask(multiPrompt, new Reprompt(ResponseStrings.Get("DisambiguateReprompt", locale)));
+                multiResponse.SessionAttributes = DisambiguationHelper.BuildAttributes(matchInfos, 0, DisambiguationHelper.MediaTypeArtist);
+                Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline.ConversationalFlows.MarkOthersInactive(
+                    multiResponse, Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline.ConversationalFlows.DisambiguationKeys);
+                return multiResponse;
+            }
+        }
+
+        // Clear margin (or no pool on the database path): the winner auto-plays.
+        return null;
+    }
 
     /// <summary>
     /// The JF-377/JF-382 downgrade response: a single-candidate yes/no ask for an

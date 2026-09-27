@@ -62,6 +62,24 @@ internal static class FuzzyMatcher
     private const int PhoneticFloorScore = ContainmentScore + 1;
 
     /// <summary>
+    /// Whether <paramref name="score"/> could only have been produced by a real
+    /// Double Metaphone collision (the JF-381 phonetic floor, or an exact match),
+    /// and not by plain Levenshtein/containment scoring alone: every matcher path
+    /// tops out at <see cref="ContainmentScore"/> (90) without a code collision,
+    /// while a code collision floors at <see cref="PhoneticFloorScore"/> (91) or
+    /// boosts above it. JF-652: this is the kana-origin acceptance plumb. The
+    /// kana-derived romaji query class enters acceptance machinery calibrated for
+    /// Latin ASR drift ('クイーン' -> 'kuin' plain-fuzzy-accepted 'Sator' at 60),
+    /// so kana-origin decision points require this instead of the bare threshold.
+    /// Detection is reachable at the DECISION POINTS (which already hold the
+    /// winner's score) with no extra plumb through the search chains; the kana
+    /// flag itself is captured at the entry points that own the decisions
+    /// (PlayArtistSongsIntentHandler, CrossMediaFallback.TryEntityFallbackAsync,
+    /// PlayAlbumIntentHandler via PassesArtistMatchAcceptance).
+    /// </summary>
+    internal static bool IsPhoneticFloorScore(int score) => score >= PhoneticFloorScore;
+
+    /// <summary>
     /// Gets the fuzzy match threshold from the user, falling back to the compile-time constant.
     /// </summary>
     public static int GetDefaultThreshold(Entities.User? user) =>

@@ -101,6 +101,9 @@ public class PlayAlbumIntentHandler : BaseHandler
         // against Latin library names; romanize once at the entry, before the calling
         // word logic (a romanized value is plain Latin input for it).
         album = album is null ? null : Util.KatakanaRomanizer.Romanize(album);
+        // JF-652: captured on the PRE-romanization value; feeds the JF-471
+        // acceptance gate's kana bar below.
+        bool musicianKanaOrigin = Util.KatakanaRomanizer.ContainsKana(musician ?? string.Empty);
         musician = musician is null ? null : Util.KatakanaRomanizer.Romanize(musician);
 
         Logger.LogDebug("PlayAlbum: entered, locale={Locale}", locale);
@@ -349,7 +352,7 @@ public class PlayAlbumIntentHandler : BaseHandler
             // offer. Scoped to the album-by-artist resolution: an album TITLE
             // present keeps today's behavior unchanged.
             if (matchedArtist != null
-                && !CrossMedia.PassesArtistMatchAcceptance(matchedArtist, musician!, user, pinnedArtistIndex, out int acceptanceScore))
+                && !CrossMedia.PassesArtistMatchAcceptance(matchedArtist, musician!, user, pinnedArtistIndex, out int acceptanceScore, musicianKanaOrigin))
             {
                 Logger.LogInformation(
                     "PlayAlbum: artist match '{Artist}' for musician='{Musician}' fails the fuzzy/phonetic tier acceptance (word-coverage free pass, score={Score} below {Threshold}), refusing the album-by-artist auto-play (JF-471)",
