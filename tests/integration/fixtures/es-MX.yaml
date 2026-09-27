@@ -161,6 +161,19 @@ tests:
     expected_slots:
       playlist: {}
 
+  # JF-399 PlayPlaylist parity pass (2026-09-27): the escucha and toca
+  # carrier families. Requires the model deploy; the first live suite
+  # run after it is the probe.
+  - utterance: "Escucha la playlist rock clásico"
+    expected_intent: PlayPlaylistIntent
+    expected_slots:
+      playlist: {}
+
+  - utterance: "Toca la playlist favoritos"
+    expected_intent: PlayPlaylistIntent
+    expected_slots:
+      playlist: {}
+
   # -------------------------------------------------------------------------
   # 13. PlayFavoritesIntent (media_type)
   # -------------------------------------------------------------------------

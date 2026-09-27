@@ -12,6 +12,15 @@
 #
 # Run: python3 scripts/generate_interaction_model.py ja-JP
 #
+# JF-399 (2026-09-27): PlayArtistSongsIntent enriched 13 -> 21 (this
+# locale's own PlaySong/PlayPlaylist tails を聴かせて / を聞きたい /
+# を流して / をかけて / をスタートして / お願いします crossed with the
+# の曲 / の音楽 nouns the を再生して forms already carry). Skipped
+# carrier families: のトラック crossings beyond を再生して (トラック
+# is a light noun here) and the bare '{musician} お願いします' (a bare
+# artist with no noun is ambiguous against the album/book intents; the
+# noun-qualified form is added instead).
+#
 # JF-399 (2026-09-26): FindSongByArtistIntent enriched 4 -> 7 (FindSong
 # openers crossed with the no-uta tail). Skipped carrier families:
 # Japanese carries no article or plural morphology (the axis that
@@ -204,6 +213,18 @@ intents:
       - '{musician} を流して'
       - '{musician} を聞かせて'
       - '{musician} をかけて'
+      # JF-399 PlayArtistSongs parity: this locale sat at 13 samples vs
+      # the family carrier space (34-43 in the de/fr/en/es families).
+      # The additions are this locale's own PlaySong/PlayPlaylist tails
+      # crossed with the nouns the を再生して forms already carry.
+      - '{musician} の音楽を聴かせて'
+      - '{musician} の曲を聞きたい'
+      - '{musician} の音楽を聞きたい'
+      - '{musician} の曲を流して'
+      - '{musician} の音楽を流して'
+      - '{musician} の曲をかけて'
+      - '{musician} の曲をスタートして'
+      - '{musician} の曲をお願いします'
     slots:
       - name: musician
         type: AMAZON.Musician

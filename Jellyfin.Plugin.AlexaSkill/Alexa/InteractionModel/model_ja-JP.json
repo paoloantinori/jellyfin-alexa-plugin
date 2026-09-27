@@ -182,7 +182,15 @@
           "{musician} を再生",
           "{musician} を流して",
           "{musician} を聞かせて",
-          "{musician} をかけて"
+          "{musician} をかけて",
+          "{musician} の音楽を聴かせて",
+          "{musician} の曲を聞きたい",
+          "{musician} の音楽を聞きたい",
+          "{musician} の曲を流して",
+          "{musician} の音楽を流して",
+          "{musician} の曲をかけて",
+          "{musician} の曲をスタートして",
+          "{musician} の曲をお願いします"
         ],
         "slots": [
           {

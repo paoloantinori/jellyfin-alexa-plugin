@@ -174,6 +174,19 @@ tests:
     expected_slots:
       playlist: {}
 
+  # JF-399 PlayPlaylist parity pass (2026-09-27): the put-on and
+  # can-you-play carrier families. Requires the model deploy; the first
+  # live suite run after it is the probe.
+  - utterance: "put on the playlist road trip"
+    expected_intent: PlayPlaylistIntent
+    expected_slots:
+      playlist: {}
+
+  - utterance: "can you play my playlist chill"
+    expected_intent: PlayPlaylistIntent
+    expected_slots:
+      playlist: {}
+
   # -------------------------------------------------------------------------
   # 13. PlayFavoritesIntent (media_type)
   # -------------------------------------------------------------------------

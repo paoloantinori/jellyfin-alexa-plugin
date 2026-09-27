@@ -69,7 +69,7 @@ Placeholder legend:
 | `<كلمات من عنوان الأغنية>` | `{titleKeywords}` |
 | `<اسم المستخدم>` | `{username}` |
 
-Complete phrase list (325 phrases across 66 commands):
+Complete phrase list (338 phrases across 66 commands):
 
 #### Play music
 
@@ -109,6 +109,13 @@ Complete phrase list (325 phrases across 66 commands):
 - `شغل بعض <اسم الفنان>`
 - `شغل أعمال <اسم الفنان>`
 - `اسمع <اسم الفنان>`
+- `أريد سماع أغاني <اسم الفنان>`
+- `أريد سماع موسيقى <اسم الفنان>`
+- `هل يمكنك تشغيل أغاني <اسم الفنان>`
+- `ابدأ تشغيل أغاني <اسم الفنان>`
+- `اسمع أغاني <اسم الفنان>`
+- `اسمع موسيقى <اسم الفنان>`
+- `استمع إلى أغانٍ لـ <اسم الفنان>`
 
 **Play by genre**
 
@@ -144,6 +151,12 @@ Complete phrase list (325 phrases across 66 commands):
 - `استمع إلى قائمة التشغيل <اسم قائمة التشغيل>`
 - `هل يمكنك تشغيل قائمة التشغيل <اسم قائمة التشغيل>`
 - `أريد سماع قائمة التشغيل <اسم قائمة التشغيل>`
+- `ابدأ قائمة تشغيلي <اسم قائمة التشغيل>`
+- `استمع إلى قائمة تشغيلي <اسم قائمة التشغيل>`
+- `هل يمكنك تشغيل قائمة تشغيلي <اسم قائمة التشغيل>`
+- `أريد سماع قائمة تشغيلي <اسم قائمة التشغيل>`
+- `اسمع قائمة التشغيل <اسم قائمة التشغيل>`
+- `ابدأ تشغيل قائمة التشغيل <اسم قائمة التشغيل>`
 
 **Shuffle a playlist**
 
@@ -1976,7 +1989,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (482 phrases across 66 commands):
+Complete phrase list (491 phrases across 66 commands):
 
 #### Play music
 
@@ -2086,6 +2099,15 @@ Complete phrase list (482 phrases across 66 commands):
 - `start the playlist <playlist name>`
 - `start playlist <playlist name>`
 - `to play the playlist <playlist name>`
+- `put on the playlist <playlist name>`
+- `put on my playlist <playlist name>`
+- `listen to the playlist <playlist name>`
+- `can you play the playlist <playlist name>`
+- `can you play my playlist <playlist name>`
+- `I want to hear the playlist <playlist name>`
+- `give me the playlist <playlist name>`
+- `stream the playlist <playlist name>`
+- `let's hear the playlist <playlist name>`
 
 **Shuffle a playlist**
 
@@ -3502,7 +3524,7 @@ Placeholder legend:
 | `<words from the song title>` | `{titleKeywords}` |
 | `<user name>` | `{username}` |
 
-Complete phrase list (483 phrases across 66 commands):
+Complete phrase list (493 phrases across 66 commands):
 
 #### Play music
 
@@ -3611,6 +3633,16 @@ Complete phrase list (483 phrases across 66 commands):
 - `play my playlist <playlist name>`
 - `start the playlist <playlist name>`
 - `to play the playlist <playlist name>`
+- `put on the playlist <playlist name>`
+- `put on my playlist <playlist name>`
+- `listen to the playlist <playlist name>`
+- `can you play the playlist <playlist name>`
+- `can you play my playlist <playlist name>`
+- `I want to hear the playlist <playlist name>`
+- `give me the playlist <playlist name>`
+- `stream the playlist <playlist name>`
+- `let's hear the playlist <playlist name>`
+- `start my playlist <playlist name>`
 
 **Shuffle a playlist**
 
@@ -7175,7 +7207,7 @@ Placeholder legend:
 | `<गाने के नाम के शब्द>` | `{titleKeywords}` |
 | `<उपयोगकर्ता का नाम>` | `{username}` |
 
-Complete phrase list (347 phrases across 66 commands):
+Complete phrase list (362 phrases across 66 commands):
 
 #### Play music
 
@@ -7221,6 +7253,14 @@ Complete phrase list (347 phrases across 66 commands):
 - `कुछ <कलाकार का नाम> चलाओ`
 - `<कलाकार का नाम> बजाओ`
 - `<कलाकार का नाम> सुनाओ`
+- `<कलाकार का नाम> के गाने लगाओ`
+- `<कलाकार का नाम> की म्यूज़िक लगाओ`
+- `<कलाकार का नाम> के गाने बजाओ`
+- `<कलाकार का नाम> के गाने सुनाओ`
+- `<कलाकार का नाम> के ट्रैक सुनो`
+- `मैं <कलाकार का नाम> के गाने सुनना चाहता हूँ`
+- `क्या तुम <कलाकार का नाम> के गाने चला सकते हो`
+- `<कलाकार का नाम> के गाने शुरू करो`
 
 **Play by genre**
 
@@ -7260,6 +7300,13 @@ Complete phrase list (347 phrases across 66 commands):
 - `प्लेलिस्ट <प्लेलिस्ट का नाम> सुनो`
 - `क्या तुम प्लेलिस्ट <प्लेलिस्ट का नाम> चला सकते हो`
 - `मैं प्लेलिस्ट <प्लेलिस्ट का नाम> सुनना चाहता हूँ`
+- `मेरी प्लेलिस्ट <प्लेलिस्ट का नाम> लगाओ`
+- `मेरी प्लेलिस्ट <प्लेलिस्ट का नाम> शुरू करो`
+- `मेरी प्लेलिस्ट <प्लेलिस्ट का नाम> सुनो`
+- `प्लेलिस्ट <प्लेलिस्ट का नाम> बजाओ`
+- `प्लेलिस्ट <प्लेलिस्ट का नाम> सुनाओ`
+- `क्या तुम मेरी प्लेलिस्ट <प्लेलिस्ट का नाम> चला सकते हो`
+- `मैं मेरी प्लेलिस्ट <प्लेलिस्ट का नाम> सुनना चाहता हूँ`
 
 **Shuffle a playlist**
 
@@ -9544,7 +9591,7 @@ Placeholder legend:
 | `<曲名のキーワード>` | `{titleKeywords}` |
 | `<ユーザー名>` | `{username}` |
 
-Complete phrase list (324 phrases across 66 commands):
+Complete phrase list (332 phrases across 66 commands):
 
 #### Play music
 
@@ -9588,6 +9635,14 @@ Complete phrase list (324 phrases across 66 commands):
 - `<アーティスト名> を流して`
 - `<アーティスト名> を聞かせて`
 - `<アーティスト名> をかけて`
+- `<アーティスト名> の音楽を聴かせて`
+- `<アーティスト名> の曲を聞きたい`
+- `<アーティスト名> の音楽を聞きたい`
+- `<アーティスト名> の曲を流して`
+- `<アーティスト名> の音楽を流して`
+- `<アーティスト名> の曲をかけて`
+- `<アーティスト名> の曲をスタートして`
+- `<アーティスト名> の曲をお願いします`
 
 **Play by genre**
 
@@ -11413,7 +11468,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (433 phrases across 66 commands):
+Complete phrase list (439 phrases across 66 commands):
 
 #### Play music
 
@@ -11523,6 +11578,12 @@ Complete phrase list (433 phrases across 66 commands):
 - `Pon mi playlist <nombre de la lista>`
 - `Inicia la playlist <nombre de la lista>`
 - `Reproducir la playlist <nombre de la lista>`
+- `Escucha la playlist <nombre de la lista>`
+- `Escucha mi playlist <nombre de la lista>`
+- `Escucha la lista de reproducción <nombre de la lista>`
+- `Toca la playlist <nombre de la lista>`
+- `Dame la playlist <nombre de la lista>`
+- `Quiero escuchar la playlist <nombre de la lista>`
 
 **Shuffle a playlist**
 

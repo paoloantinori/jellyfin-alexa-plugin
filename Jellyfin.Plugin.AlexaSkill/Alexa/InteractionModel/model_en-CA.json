@@ -330,7 +330,16 @@
           "play my playlist {playlist}",
           "start the playlist {playlist}",
           "start playlist {playlist}",
-          "to play the playlist {playlist}"
+          "to play the playlist {playlist}",
+          "put on the playlist {playlist}",
+          "put on my playlist {playlist}",
+          "listen to the playlist {playlist}",
+          "can you play the playlist {playlist}",
+          "can you play my playlist {playlist}",
+          "I want to hear the playlist {playlist}",
+          "give me the playlist {playlist}",
+          "stream the playlist {playlist}",
+          "let's hear the playlist {playlist}"
         ],
         "slots": [
           {

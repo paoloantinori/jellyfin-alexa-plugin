@@ -7,6 +7,14 @@
 #
 # Run: python3 scripts/generate_interaction_model.py es-MX
 #
+# JF-399 (2026-09-27): PlayPlaylistIntent enriched 8 -> 14 with this
+# locale's own PlaySong openers (Escucha / Toca / Dame / Quiero
+# escuchar) crossed with the playlist nouns (la/mi playlist, la lista
+# de reproducción). Skipped carrier families: Suelta and Quiero oír
+# (colloquial near-twins of the added openers) and the 4 es-ES forms
+# this locale historically drops (see the divergence list below; that
+# divergence is preserved, not healed here).
+#
 # JF-399 (2026-09-26): FindSongByArtistIntent enriched 3 -> 11 (FindSong
 # openers crossed with the de-artist tail; the cancion/tema noun pair
 # mirrors it-IT's canzone/brano; bare-noun wrapper shape). Skipped carrier
@@ -248,6 +256,19 @@ intents:
       - Pon mi playlist {playlist}
       - Inicia la playlist {playlist}
       - Reproducir la playlist {playlist}
+      # JF-399 PlayPlaylist parity: this locale sat at 8 samples vs the
+      # family carrier space (es-ES 12, en-US 20). The additions are
+      # this locale's own PlaySong openers crossed with the playlist
+      # nouns; every carrier names the media (the playlist slot is
+      # free-text SearchQuery, so a bare carrier would compete with
+      # PlaySong for every "verb + title" utterance). The 4 es-ES forms
+      # this locale drops (divergence list in the header) stay dropped.
+      - Escucha la playlist {playlist}
+      - Escucha mi playlist {playlist}
+      - Escucha la lista de reproducción {playlist}
+      - Toca la playlist {playlist}
+      - Dame la playlist {playlist}
+      - Quiero escuchar la playlist {playlist}
     slots:
       - name: playlist
         type: AMAZON.SearchQuery
