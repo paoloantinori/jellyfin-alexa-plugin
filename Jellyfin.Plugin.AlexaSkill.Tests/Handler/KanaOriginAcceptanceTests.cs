@@ -165,11 +165,11 @@ public class KanaOriginAcceptanceTests : PluginTestBase, IDisposable
         // The in-memory search branch issues no library query; the play-shape sink
         // is never reached because the tie downgrades to the ask.
         var jellyfinUser = TestHelpers.CreateJellyfinUser();
-        var probe = new KanaGateProbeHandler(_fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory);
+        var probe = new SharedGateProbeHandler(_fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory);
 
         SkillResponse? result = await probe.CallTryEntityFallbackAsync(
             "クイーン", jellyfinUser, _fx.CreateUser(), _fx.CreateSession(), _fx.CreateContext(), "en-US",
-            _fx.LibraryManager.Object, _fx.UserDataManager.Object, index, "kana probe", CancellationToken.None);
+            _fx.LibraryManager.Object, _fx.UserDataManager.Object, "kana probe", CancellationToken.None, index);
 
         Assert.NotNull(result);
         Assert.True(IsDisambiguationAsk(result, "Queen", "Keane"), "the cross-media tie must ask, not play");
@@ -182,25 +182,34 @@ public class KanaOriginAcceptanceTests : PluginTestBase, IDisposable
         var sator = new MusicArtist { Name = "Sator", Id = Guid.NewGuid() };
         var index = new FakeArtistIndex(new[] { sator }, CodesFromNames(sator));
         var jellyfinUser = TestHelpers.CreateJellyfinUser();
-        var probe = new KanaGateProbeHandler(_fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory);
+        var probe = new SharedGateProbeHandler(_fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory);
 
         SkillResponse? result = await probe.CallTryEntityFallbackAsync(
             "ビートルズ", jellyfinUser, _fx.CreateUser(), _fx.CreateSession(), _fx.CreateContext(), "en-US",
-            _fx.LibraryManager.Object, _fx.UserDataManager.Object, index, "kana probe", CancellationToken.None);
+            _fx.LibraryManager.Object, _fx.UserDataManager.Object, "kana probe", CancellationToken.None, index);
 
         Assert.Null(result);
     }
 
     // ---------------------------------------------------------------
-    // The plumb itself + the Latin byte-identical contract
+    // The bar itself + the Latin byte-identical contract
     // ---------------------------------------------------------------
 
     [Fact]
-    public void IsPhoneticFloorScore_DetectsTheFloorBoundary()
+    public void PassesArtistMatchAcceptance_KanaOrigin_RequiresRealCodeCollision()
     {
-        Assert.False(FuzzyMatcher.IsPhoneticFloorScore(FuzzyMatcher.ContainmentScore));
-        Assert.True(FuzzyMatcher.IsPhoneticFloorScore(FuzzyMatcher.ContainmentScore + 1));
-        Assert.True(FuzzyMatcher.IsPhoneticFloorScore(100));
+        // The kana bar gates on the CODES, never on a score band: a bare score
+        // cannot carry collision provenance (plain PartialRatio reaches 91-99 for
+        // near-identical strings with no code collision). 'kuin' vs 'Queen' really
+        // collides (both KN via the production encoder); 'bitoruzu' vs 'Sator' does
+        // not and is refused whatever its score (review round, F1).
+        var queen = Queen();
+        var sator = new MusicArtist { Name = "Sator", Id = Guid.NewGuid() };
+        var index = new FakeArtistIndex(new[] { queen, sator }, CodesFromNames(queen, sator));
+        var probe = new SharedGateProbeHandler(_fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory);
+
+        Assert.True(probe.CallPassesArtistMatchAcceptance(queen, "kuin", _fx.CreateUser(), index, out _, kanaOrigin: true));
+        Assert.False(probe.CallPassesArtistMatchAcceptance(sator, "bitoruzu", _fx.CreateUser(), index, out _, kanaOrigin: true));
     }
 
     [Fact]
@@ -211,54 +220,11 @@ public class KanaOriginAcceptanceTests : PluginTestBase, IDisposable
         // with kanaOrigin true. Byte-identical Latin behavior is JF-643's pinned
         // contract; the kana bar composes, it does not replace.
         var miles = new MusicArtist { Name = "Miles", Id = Guid.NewGuid() };
-        var probe = new KanaGateProbeHandler(_fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory);
+        var probe = new SharedGateProbeHandler(_fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory);
 
         Assert.True(probe.CallPassesArtistMatchAcceptance(miles, "miles davis live", _fx.CreateUser(), null, out _, kanaOrigin: false));
         Assert.False(probe.CallPassesArtistMatchAcceptance(miles, "miles davis live", _fx.CreateUser(), null, out _, kanaOrigin: true));
     }
 
     public void Dispose() => _fx.LoggerFactory.Dispose();
-
-    /// <summary>
-    /// Probe handler exposing the kana-gated collaborators directly (the
-    /// SharedGateProbeHandler pattern; that probe pins artistIndex null, this one
-    /// needs a live index for the phonetic paths).
-    /// </summary>
-    private sealed class KanaGateProbeHandler : BaseHandler
-    {
-        public KanaGateProbeHandler(ISessionManager sessionManager, PluginConfiguration config, ILoggerFactory loggerFactory)
-            : base(sessionManager, config, loggerFactory)
-        {
-        }
-
-        public override bool CanHandle(Request request) => true;
-
-        public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
-            => Task.FromResult(ResponseBuilder.Tell("test"));
-
-        public Task<SkillResponse?> CallTryEntityFallbackAsync(
-            string slotText,
-            Jellyfin.Database.Implementations.Entities.User jellyfinUser,
-            Entities.User user,
-            SessionInfo session,
-            Context context,
-            string locale,
-            ILibraryManager libraryManager,
-            IUserDataManager userDataManager,
-            IArtistIndex artistIndex,
-            string logLabel,
-            CancellationToken cancellationToken)
-            => CrossMedia.TryEntityFallbackAsync(
-                slotText, jellyfinUser, user, session, context, locale,
-                libraryManager, userDataManager, null, artistIndex, logLabel, cancellationToken);
-
-        public bool CallPassesArtistMatchAcceptance(
-            BaseItem artist,
-            string query,
-            Entities.User user,
-            IArtistIndex? artistIndex,
-            out int score,
-            bool kanaOrigin)
-            => CrossMedia.PassesArtistMatchAcceptance(artist, query, user, artistIndex, out score, kanaOrigin);
-    }
 }

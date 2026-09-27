@@ -601,16 +601,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                             new() { Id = artists[0].Id.ToString(), Name = artists[0].Name },
                             new() { Id = bestAlternative.Id.ToString(), Name = bestAlternative.Name }
                         };
-                        // Plain name list: the flow is yes/no cycling (yes plays the
-                        // first, no advances via DisambiguateNext), so no numbering.
-                        // Reprompt is the family's yes/no hint, not the list again.
-                        var matchList = string.Join(", ", matchInfos.Select(m => m.Name));
-                        string multiPrompt = ResponseStrings.Get("DisambiguateMultipleArtists", locale, matchList);
-                        var multiResponse = ResponseBuilder.Ask(multiPrompt, new Reprompt(ResponseStrings.Get("DisambiguateReprompt", locale)));
-                        multiResponse.SessionAttributes = DisambiguationHelper.BuildAttributes(matchInfos, 0, DisambiguationHelper.MediaTypeArtist);
-                        Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline.ConversationalFlows.MarkOthersInactive(
-                            multiResponse, Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline.ConversationalFlows.DisambiguationKeys);
-                        return multiResponse;
+                        return DisambiguationHelper.AskMultipleArtists(matchInfos, locale);
                     }
                 }
             }
@@ -909,12 +900,15 @@ public class PlayArtistSongsIntentHandler : BaseHandler
     /// JF-652: the kana-origin acceptance decision for the final single pick. Returns
     /// the response to return (the honest not-found, or the near-tie disambiguation
     /// ask), or null when the pick clears the kana bar and auto-play proceeds.
-    /// The bar: a real Double Metaphone collision (<see
-    /// cref="FuzzyMatcher.IsPhoneticFloorScore"/>) on top of the user's threshold.
-    /// Detection reads the score at this decision point, so no flag plumb through the
-    /// search chains is needed. The near-tie check needs the full artist pool (only
-    /// the in-memory path has one; the cold-index database path skips it, same
-    /// cold-window trade-off class as the JF-381/JF-417 gates).
+    /// The bar (one shared definition in
+    /// <see cref="Util.ArtistSearch.PassesKanaOriginAcceptance"/>): the user's
+    /// threshold AND a REAL Double Metaphone code collision between the romanized
+    /// query and the candidate, checked on the codes (index pre-computed, or encoded
+    /// here from the candidate name), never inferred from the score band. The
+    /// near-tie check runs the shared
+    /// <see cref="Util.ArtistSearch.FindNearTiedRunnerUp"/> over the full artist
+    /// pool (only the in-memory path has one; the cold-index database path skips it,
+    /// same cold-window trade-off class as the JF-381/JF-417 gates).
     /// </summary>
     private SkillResponse? ApplyKanaOriginAcceptance(
         IReadOnlyList<BaseItem> artists,
@@ -928,24 +922,13 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         CancellationToken cancellationToken)
     {
         BaseItem match = artists[0];
-        var scored = pinnedIndex != null
-            ? FuzzyMatcher.FindBestMatchWithScore(
-                musician,
-                new[] { match },
-                a => a.Name,
-                a => a.Id,
-                id => pinnedIndex.TryGetPhoneticCode(id, out var codes) ? codes : null)
-            : FuzzyMatcher.FindBestMatchWithScore(musician, new[] { match }, a => a.Name);
-        int score = scored?.Score ?? 0;
-
-        // Threshold: the pick already passed a tier threshold, but the user's bar is
-        // re-checked here so the kana bar is (threshold AND floor), matching the
-        // cross-media kana gate.
+        int score = Util.ArtistSearch.ScoreBestWithCodes(musician, new[] { match }, pinnedIndex)?.Score ?? 0;
         int userThreshold = FuzzyMatcher.GetDefaultThreshold(user);
-        if (score < userThreshold || !FuzzyMatcher.IsPhoneticFloorScore(score))
+
+        if (!Util.ArtistSearch.PassesKanaOriginAcceptance(musician, match, score, userThreshold, pinnedIndex))
         {
             Logger.LogInformation(
-                "PlayArtistSongs: kana-origin query '{Query}' matched '{Match}' at score {Score} without a phonetic collision, downgrading to not-found (JF-652)",
+                "PlayArtistSongs: kana-origin query '{Query}' matched '{Match}' at score {Score} without a Double Metaphone code collision, downgrading to not-found (JF-652)",
                 musician, match.Name, score);
             SkillResponse? songFallback = CrossMedia.TrySongFallback(
                 musician, user, session, context, locale, _songNgramIndex, _libraryManager, "PlayArtistSongs", cancellationToken);
@@ -959,20 +942,8 @@ public class PlayArtistSongsIntentHandler : BaseHandler
 
         if (artistPool != null)
         {
-            var rivals = artistPool.Where(a => !a.Id.Equals(match.Id)).ToList();
-            var runnerUp = rivals.Count == 0
-                ? null
-                : pinnedIndex != null
-                    ? FuzzyMatcher.FindBestMatchWithScore(
-                        musician,
-                        rivals,
-                        a => a.Name,
-                        a => a.Id,
-                        id => pinnedIndex.TryGetPhoneticCode(id, out var codes) ? codes : null)
-                    : FuzzyMatcher.FindBestMatchWithScore(musician, rivals, a => a.Name);
-            if (runnerUp != null
-                && runnerUp.Value.Score >= userThreshold
-                && score - runnerUp.Value.Score <= Util.ArtistSearch.KanaOriginTieMargin)
+            var runnerUp = Util.ArtistSearch.FindNearTiedRunnerUp(musician, match, score, artistPool, pinnedIndex, userThreshold);
+            if (runnerUp != null)
             {
                 Logger.LogInformation(
                     "PlayArtistSongs: kana-origin query '{Query}' is a near-tie between '{Top}' ({TopScore}) and '{RunnerUp}' ({RunnerScore}), disambiguating (JF-652)",
@@ -982,14 +953,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                     new() { Id = match.Id.ToString(), Name = match.Name },
                     new() { Id = runnerUp.Value.Item.Id.ToString(), Name = runnerUp.Value.Item.Name }
                 };
-                // Plain name list + yes/no cycling, the JF-420.2 shape.
-                var matchList = string.Join(", ", matchInfos.Select(m => m.Name));
-                var multiPrompt = ResponseStrings.Get("DisambiguateMultipleArtists", locale, matchList);
-                var multiResponse = ResponseBuilder.Ask(multiPrompt, new Reprompt(ResponseStrings.Get("DisambiguateReprompt", locale)));
-                multiResponse.SessionAttributes = DisambiguationHelper.BuildAttributes(matchInfos, 0, DisambiguationHelper.MediaTypeArtist);
-                Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline.ConversationalFlows.MarkOthersInactive(
-                    multiResponse, Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline.ConversationalFlows.DisambiguationKeys);
-                return multiResponse;
+                return DisambiguationHelper.AskMultipleArtists(matchInfos, locale);
             }
         }
 

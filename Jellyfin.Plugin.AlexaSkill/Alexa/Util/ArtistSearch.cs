@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
+using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -89,6 +90,107 @@ internal static class ArtistSearch
     /// Shared by both decision points so they cannot drift.
     /// </summary>
     internal const int KanaOriginTieMargin = 5;
+
+    /// <summary>
+    /// JF-652 kana-acceptance bar, the ONE definition shared by every kana decision
+    /// point (PlayArtistSongs, TryEntityFallbackAsync, the JF-471 album-by-artist
+    /// gate): the user's threshold on the score AND a REAL Double Metaphone code
+    /// collision between the (already-romanized) query and the candidate. The
+    /// collision is checked on the CODES, never inferred from the score band: plain
+    /// PartialRatio reaches 91-99 for near-identical strings with no code collision,
+    /// so a score alone cannot carry collision provenance (review round, F1).
+    /// </summary>
+    /// <param name="query">The romanized query.</param>
+    /// <param name="candidate">The candidate artist.</param>
+    /// <param name="score">The candidate's matcher score.</param>
+    /// <param name="threshold">The user's fuzzy threshold.</param>
+    /// <param name="index">The pinned artist index when one exists; its pre-computed
+    /// codes are used, otherwise the candidate name is encoded here.</param>
+    /// <returns>True when both the threshold and the real collision hold.</returns>
+    internal static bool PassesKanaOriginAcceptance(
+        string query,
+        BaseItem candidate,
+        int score,
+        int threshold,
+        IArtistIndex? index)
+        => score >= threshold && PassesKanaOriginCollision(query, candidate, index);
+
+    /// <summary>
+    /// Whether the (already-romanized) query and the candidate REALLY collide on
+    /// Double Metaphone codes: the candidate's codes come from the pinned index's
+    /// pre-computed table when available, otherwise the candidate name is encoded
+    /// at the decision point (so the check is uniform on every path, cold index
+    /// included; review round, F1).
+    /// </summary>
+    internal static bool PassesKanaOriginCollision(string query, BaseItem candidate, IArtistIndex? index)
+    {
+        var queryCodes = DoubleMetaphone.Encode(query);
+        (string Primary, string? Alternate) candidateCodes =
+            index != null && index.TryGetPhoneticCode(candidate.Id, out var codes)
+                ? codes
+                : DoubleMetaphone.Encode(candidate.Name ?? string.Empty);
+        return FuzzyMatcher.PhoneticCodesMatch(
+            queryCodes.Primary, queryCodes.Alternate, candidateCodes.Primary, candidateCodes.Alternate);
+    }
+
+    /// <summary>
+    /// The pinned-index scoring ternary, one definition (the JF-382 no-third-copy
+    /// rule): the phonetic overload when the pinned index exists, the plain overload
+    /// otherwise. Review round, F2c.
+    /// </summary>
+    internal static (BaseItem Item, int Score)? ScoreBestWithCodes(
+        string query, IReadOnlyList<BaseItem> candidates, IArtistIndex? pinnedIndex)
+        => pinnedIndex != null
+            ? FuzzyMatcher.FindBestMatchWithScore(
+                query,
+                candidates,
+                a => a.Name,
+                a => a.Id,
+                id => pinnedIndex.TryGetPhoneticCode(id, out var codes) ? codes : null)
+            : FuzzyMatcher.FindBestMatchWithScore(query, candidates, a => a.Name);
+
+    /// <summary>
+    /// JF-652 near-tie runner-up search, ONE shared implementation for both kana
+    /// decision points (review round, F2a): scores every rival of the winner, and
+    /// returns the best rival only when it clears the FULL kana acceptance bar
+    /// (threshold AND a real code collision) AND sits within
+    /// <see cref="KanaOriginTieMargin"/> of the winner. Null means a clear margin
+    /// (or no rival at all) and the winner auto-plays. Pool sourcing stays
+    /// caller-side: the in-memory path has the full index list, the cross-media
+    /// path re-scopes the pinned index, and a cold-window path without a pool skips
+    /// tie detection entirely.
+    /// </summary>
+    /// <param name="query">The romanized query.</param>
+    /// <param name="winner">The accepted winner.</param>
+    /// <param name="winnerScore">The winner's acceptance score.</param>
+    /// <param name="pool">The candidate pool to scan for rivals (winner excluded here).</param>
+    /// <param name="pinnedIndex">The pinned index view (may be null; codes are then encoded per candidate).</param>
+    /// <param name="threshold">The user's fuzzy threshold.</param>
+    /// <returns>The near-tied runner-up with its score, or null.</returns>
+    internal static (BaseItem Item, int Score)? FindNearTiedRunnerUp(
+        string query,
+        BaseItem winner,
+        int winnerScore,
+        IReadOnlyList<BaseItem> pool,
+        IArtistIndex? pinnedIndex,
+        int threshold)
+    {
+        var rivals = pool.Where(a => !a.Id.Equals(winner.Id)).ToList();
+        if (rivals.Count == 0)
+        {
+            return null;
+        }
+
+        var runnerUp = ScoreBestWithCodes(query, rivals, pinnedIndex);
+        if (runnerUp == null
+            || winnerScore - runnerUp.Value.Score > KanaOriginTieMargin
+            || !PassesKanaOriginAcceptance(query, runnerUp.Value.Item, runnerUp.Value.Score, threshold, pinnedIndex))
+        {
+            return null;
+        }
+
+        return runnerUp;
+    }
 
     /// <summary>
     /// Whether a candidate name is within the JF-381 containment band for the query.
