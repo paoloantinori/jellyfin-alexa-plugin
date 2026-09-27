@@ -240,7 +240,8 @@ public class SetPlaybackSpeedIntentHandler : BaseHandler
             itemId,
             item,
             user,
-            context);
+            context,
+            queueManager: _queueManager);
         response.Response.OutputSpeech = new PlainTextOutputSpeech(
             ResponseStrings.Get("PlaybackSpeedSet", locale, ResponseStrings.Get($"SpeedName{targetRate}", locale)));
         return Task.FromResult<SkillResponse>(response);

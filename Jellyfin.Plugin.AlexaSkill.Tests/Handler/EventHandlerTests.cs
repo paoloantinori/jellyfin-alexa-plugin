@@ -1321,21 +1321,30 @@ public class EventHandlerTests : PluginTestBase, IDisposable
         => new(_sessionManagerMock.Object, _config, _loggerFactory, _queueManager);
 
     /// <summary>
-    /// The flag is a plugin-start-cleared signal: a FRESH manager (a boot) reads
-    /// clear even for a device whose flag the previous instance had set, so a
-    /// restart can never re-launch stale audio off a persisted-looking active state
-    /// (the flag never reaches the queue files at all).
+    /// The flag is a plugin-start-cleared signal: a FRESH manager on the SAME data
+    /// directory (a boot) reloads the persisted stores (the ledger entry written
+    /// before the restart survives) while the flag reads clear, so a restart can
+    /// never re-launch stale audio off a persisted-looking active state (the flag
+    /// never reaches the queue files at all). Review finding: the earlier form
+    /// re-created the manager on a DIFFERENT directory, which could not detect the
+    /// flag being persisted.
     /// </summary>
     [Fact]
     public void AudioActiveFlag_FreshManager_BootsClear()
     {
         Context context = CreateContextForFreshDevice();
         string deviceId = context.System.Device.DeviceID!;
-        _queueManager.MarkAudioPlaybackStarted(deviceId);
-        Assert.True(_queueManager.IsAudioPlaybackActive(deviceId));
+        Guid item = Guid.NewGuid();
+        string dir = TestHelpers.CreateRegisteredTempDir("jf655-boot");
+        var logger = _loggerFactory.CreateLogger<DeviceQueueManager>();
+        using (DeviceQueueManager first = new(dir, logger))
+        {
+            first.MarkAudioPlaybackStarted(deviceId);
+            first.RecordLastPlayed(deviceId, item.ToString(), DeviceQueueManager.LaunchRoute.Audio);
+        } // Dispose flushes the debounced persist to disk.
 
-        using DeviceQueueManager booted = TestHelpers.CreateDeviceQueueManager(
-            "jf655-boot", _loggerFactory.CreateLogger<DeviceQueueManager>());
+        using DeviceQueueManager booted = new(dir, logger);
+        Assert.Equal(item.ToString(), booted.GetLastPlayedItemId(deviceId));
         Assert.False(booted.IsAudioPlaybackActive(deviceId));
     }
 

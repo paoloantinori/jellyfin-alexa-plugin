@@ -37,6 +37,13 @@ public sealed class DeviceQueueManager : IDisposable
     /// in-memory on the DI-singleton manager, a plugin/process start begins with
     /// every flag clear by construction; only a live <c>PlaybackStarted</c> event
     /// sets one again.
+    /// DRIFT GUARD (review finding, accepted as a parallel store rather than derived
+    /// from <see cref="Playback.PlaybackReportOrdering"/>'s LastStart/PendingStop):
+    /// that state is static and token-keyed where tests need per-instance isolation,
+    /// so the two live in parallel by design; a future TERMINAL-event path (a new
+    /// stop-shaped AudioPlayer event consumer) must update BOTH stores (the clear
+    /// here plus the ordering registration) or the flag and the ordering state will
+    /// disagree about whether the device is playing.
     /// </summary>
     private readonly ConcurrentDictionary<string, byte> _activeAudioPlaybackDevices = new(StringComparer.Ordinal);
 

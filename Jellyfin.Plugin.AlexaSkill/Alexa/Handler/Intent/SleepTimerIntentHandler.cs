@@ -231,8 +231,12 @@ public class SleepTimerIntentHandler : BaseHandler
                         // in the URL path is unmatchable), and the replay Token is the
                         // CLEAN id string with NO sleep suffix: a cancel replays with
                         // no deadline, so PlaybackNearlyFinished sees nothing to enforce.
+                        // JF-655 review: a replay replacing the actively-playing stream
+                        // of the same item mints a launch generation (the shared
+                        // conditional mint), so its displaced old stream's late
+                        // terminal event cannot classify REAL and dark the flag.
                         Url = replaySource.Url,
-                        Token = itemGuid.ToString(),
+                        Token = PlaybackLaunchBuilder.MintStreamToken(context, itemGuid.ToString(), _queueManager),
                         OffsetInMilliseconds = replaySource.OffsetMs
                     }
                 }
@@ -256,7 +260,14 @@ public class SleepTimerIntentHandler : BaseHandler
         // would stack a second suffix whose deadline parse then fails).
         long deadlineTicks = (DateTimeOffset.UtcNow + duration.Value).UtcTicks;
 
-        string token = StreamTokenCodec.MintSleepTimerToken(itemGuid, deadlineTicks);
+        // JF-655 review: the arm replaces the actively-playing stream of the same
+        // item, so the token mints a launch generation BEFORE the sleep suffix (the
+        // shared conditional mint); the generation lets the displacement classifier
+        // tell this stream from the one it replaced, and the sleep deadline still
+        // parses from its own suffix.
+        string token = StreamTokenCodec.MintSleepTimerToken(
+            PlaybackLaunchBuilder.MintStreamToken(context, itemGuid.ToString(), _queueManager),
+            deadlineTicks);
 
         Logger.LogDebug("SleepTimer: setting {Duration} timer, token={Token}", duration.Value, token);
 

@@ -393,6 +393,42 @@ public sealed class PlaybackLaunchBuilder
     }
 
     /// <summary>
+    /// The JF-655 review launch-token mint: the AudioPlayer.Play stream token an
+    /// AudioPlayer.Play directive carries. CONDITIONAL by construction: a launch on a
+    /// device with NO active same-item playback keeps the bare item id every earlier
+    /// directive carried (dozens of pinned suites assert that exact shape), and only a
+    /// launch REPLACING the actively-playing stream of the SAME item (the speed
+    /// re-launch, the sleep re-issue, repeat-one) mints a launch-generation suffix
+    /// (see <see cref="StreamTokenCodec.WithLaunchGeneration"/>) so the displacement
+    /// classifier can tell the two same-item stream generations apart when Amazon
+    /// delivers Started(new) before the displaced old stream's terminal event. A
+    /// different item needs no generation (item identity already classifies its
+    /// displacement); an absent or unattributed current token mints conservatively.
+    /// </summary>
+    /// <param name="context">The Alexa context (device id for the flag read, current token for the same-item check).</param>
+    /// <param name="itemId">The bare item GUID being launched.</param>
+    /// <param name="queueManager">The caller's device queue manager (the flag store); null falls back to <c>Plugin.Instance</c>'s.</param>
+    /// <returns>The stream token: the bare item id, or the generation-carrying composite.</returns>
+    internal static string MintStreamToken(Context? context, string itemId, DeviceQueueManager? queueManager)
+    {
+        DeviceQueueManager? manager = queueManager ?? Plugin.Instance?.DeviceQueueManager;
+        string deviceId = context?.GetDeviceId() ?? string.Empty;
+        if (manager is null || !manager.IsAudioPlaybackActive(deviceId))
+        {
+            return itemId;
+        }
+
+        if (StreamTokenCodec.TryGetItemId(context?.AudioPlayer?.Token, out Guid playingItemId)
+            && Guid.TryParse(itemId, out Guid launchingItemId)
+            && launchingItemId != playingItemId)
+        {
+            return itemId;
+        }
+
+        return StreamTokenCodec.WithLaunchGeneration(itemId);
+    }
+
+    /// <summary>
     /// Classify what a device is playing from the JF-563 device last-played ledger plus
     /// the AudioPlayer token (JF-564) and the JF-568 recorded launch route. The ledger
     /// is the only record a VideoApp launch leaves (those launches never touch
@@ -1755,7 +1791,10 @@ public sealed class PlaybackLaunchBuilder
         var stream = new AudioItemStream
         {
             Url = directiveUrl,
-            Token = itemId,
+            // JF-655 review: same-item re-launches mint a launch-generation suffix so
+            // their displaced old stream's late terminal event cannot classify REAL
+            // and dark the active-audio flag; every other launch keeps the bare id.
+            Token = MintStreamToken(context, itemId, queueManager),
             OffsetInMilliseconds = offsetInMilliseconds
         };
 

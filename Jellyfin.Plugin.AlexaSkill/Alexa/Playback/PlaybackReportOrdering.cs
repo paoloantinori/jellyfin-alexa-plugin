@@ -32,7 +32,10 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 ///   count plays and duplicate the PlaybackStart activity event.
 /// Displacement classification (JF-447): a stop-shaped event whose token is an item
 /// OTHER than the device's latest started item is the OLD stream ending as a newer
-/// play displaces it. This reads NO DeviceQueueManager state: several play paths never
+/// play displaces it; for the SAME item, the JF-655 review adds the launch-generation
+/// comparison (a same-item re-launch nonces its stream token, so its displaced old
+/// stream's late terminal event classifies displacement too; see
+/// <see cref="IsDisplacementStop"/>). This reads NO DeviceQueueManager state: several play paths never
 /// populate the device queue (PlaySongIntentHandler), which made the queue-based
 /// classifier misjudge real stops as displacements and vice versa. The event order
 /// alone is sufficient: a displacement stop arriving BEFORE the new start classifies
@@ -71,6 +74,13 @@ internal static class PlaybackReportOrdering
         public long Generation;
         public volatile StopRegistration? PendingStop;
         public PlaybackStartInfo? LastStart;
+
+        /// <summary>
+        /// The JF-655 review launch generation of <see cref="LastStart"/>'s stream
+        /// token (null when the started stream carried no generation suffix, the bare
+        /// pre-review token): the same-item half of the displacement classification.
+        /// </summary>
+        public long? LastStartLaunchGeneration;
     }
 
     private static readonly ConcurrentDictionary<string, DeviceState> Devices = new(StringComparer.Ordinal);
@@ -160,10 +170,11 @@ internal static class PlaybackReportOrdering
     /// <param name="deviceId">The Alexa device ID (empty string shares one fallback slot).</param>
     /// <param name="startInfo">The start report being dispatched (the restoration source).</param>
     /// <returns>The generation this start report must match to treat its write as authoritative.</returns>
-    internal static long BeginStart(string deviceId, PlaybackStartInfo startInfo)
+    internal static long BeginStart(string deviceId, PlaybackStartInfo startInfo, long? launchGeneration = null)
     {
         DeviceState state = Devices.GetOrAdd(deviceId, _ => new DeviceState());
         state.LastStart = startInfo;
+        state.LastStartLaunchGeneration = launchGeneration;
         state.PendingStop = null;
         return Interlocked.Increment(ref state.Generation);
     }
@@ -184,11 +195,39 @@ internal static class PlaybackReportOrdering
     /// <returns>True when the event displaces an already-replaced stream.</returns>
     internal static bool IsDisplacementStop(string deviceId, string? token)
     {
-        return Devices.TryGetValue(deviceId, out DeviceState? state)
-            && state.LastStart?.ItemId is { } startedItemId
-            && startedItemId != Guid.Empty
-            && StreamTokenCodec.TryGetItemId(token, out Guid stoppedItemId)
-            && stoppedItemId != startedItemId;
+        if (!Devices.TryGetValue(deviceId, out DeviceState? state)
+            || state.LastStart?.ItemId is not { } startedItemId
+            || startedItemId == Guid.Empty
+            || !StreamTokenCodec.TryGetItemId(token, out Guid stoppedItemId))
+        {
+            return false;
+        }
+
+        if (stoppedItemId != startedItemId)
+        {
+            return true;
+        }
+
+        // JF-655 review, the SAME-ITEM half: item identity alone cannot tell two
+        // streams of one item apart (the directive token is the bare id), so a
+        // same-item re-launch (speed change, sleep re-issue, repeat-one) delivering
+        // Started(new) before the old stream's terminal event would classify the
+        // old stream's stop REAL and dark the active-audio flag while audio plays.
+        // Generation rules, given the latest start is for the SAME item: when the
+        // start carries a generation, a stop that carries a DIFFERENT generation is
+        // the replaced old stream, and a stop carrying NONE is an older stream
+        // still (minting only ever happens on replacements of an active same-item
+        // stream, so any bare same-item stream predates a nonced one); a stop
+        // carrying the SAME generation is the started stream's own terminal event.
+        // A start with NO generation (bare token, the ordinary launch) keeps the
+        // item-only rule exactly as before.
+        if (state.LastStartLaunchGeneration is { } startGeneration)
+        {
+            return !StreamTokenCodec.TryGetLaunchGeneration(token, out long stopGeneration)
+                || stopGeneration != startGeneration;
+        }
+
+        return false;
     }
 
     /// <summary>

@@ -45,11 +45,16 @@ un-gating it would also make a static dictionary load-bearing across test classe
 
 **Lifecycle rules:** `PlaybackStartedEventHandler` sets the flag (unconditionally, not
 under the diagnostics toggle; the shared `(_queueManager ?? Plugin.Instance?.DeviceQueueManager)`
-idiom). `PlaybackStoppedEventHandler` clears it (unconditionally: a displacement stop
-clears too, and the new stream's own PlaybackStarted re-sets it moments later).
-`PlaybackFinishedEventHandler` and `PlaybackFailedEventHandler` clear it as well (a
-finished/failed stream is not an active one; the queued-next advance re-sets via its own
-Started). The read side is `PlaybackLaunchBuilder.IsAudioPlaybackActive(context, queueManager)`:
+idiom). `PlaybackStoppedEventHandler` clears it, and `PlaybackFinishedEventHandler` and
+`PlaybackFailedEventHandler` clear it as well (a finished/failed stream is not an active
+one; the queued-next advance re-sets via its own Started). Every clear is
+DISPLACEMENT-EXEMPT: a terminal event naming a stream other than the device's latest
+start (a newer PlaybackStarted already owns the device) must NOT clear, because the
+device is actively playing the newer stream; the coordinator review tightened this
+further for the SAME-ITEM shape (see the review round below): item identity alone
+cannot distinguish two streams of one item, so same-item re-launches mint a launch
+generation into their stream token and the classifier compares generations. The read
+side is `PlaybackLaunchBuilder.IsAudioPlaybackActive(context, queueManager)`:
 the event flag OR the request context's own `playerActivity` report (PLAYING /
 BUFFER_UNDERRUN, the existing `IsActivelyPlaying` definition). The context arm is what
 keeps the genuinely-playing on-device case working even mid-re-launch windows.
@@ -76,6 +81,36 @@ re-issue or a loop mode write; that is server-state staleness, not the ledger-ta
 and is bounded by session idle expiry. Also, on a PAUSED device (our pause path sends
 AudioPlayer.Stop -> PlaybackStopped clears the flag) a speed ask now answers the honest
 no-media Tell instead of resuming at the new rate: say "riprendi" then the speed ask.
+
+**Coordinator gate-marker review round (applied as the review(jf655) commit):**
+(1) SAME-ITEM DISPLACEMENT GAP, APPLIED: the directive stream token is the bare item
+id, so a same-item re-launch (speed re-launch, sleep re-issue, repeat-one) could never
+classify as displacement; with Started(new) delivered before the displaced old
+stream's terminal event, the clear darkened the flag while audio played. Fix:
+`StreamTokenCodec` mints a per-launch generation suffix (`|launch:{n}`, composable
+with `|sleep:`), `PlaybackReportOrdering.BeginStart` records the started stream's
+generation, and `IsDisplacementStop` compares generations for same-item stops (a bare
+stop against a nonced start is the older generation; a start with no generation keeps
+the item-only rule). The mint is CONDITIONAL (`PlaybackLaunchBuilder.MintStreamToken`):
+only a launch replacing the ACTIVELY-PLAYING stream of the same item nonces its token,
+so every ordinary directive keeps the bare id dozens of pinned suites assert. Minted
+at the BuildAudioPlayerResponse chokepoint, the sleep arm, and the sleep cancel
+replay. Pinned by `SpeedRelaunch_LateOldStreamStopAfterNewStart_KeepsFlagActive`
+(the exact live shape), `ColdDevice_SpeedDirective_KeepsTheBareItemToken`, and the
+StreamTokenCodecTests launch facts.
+(2) VACUOUS BOOT-CLEAR TEST, APPLIED: `AudioActiveFlag_FreshManager_BootsClear` now
+marks and records through a manager on ONE temp directory, disposes it (flushing the
+persist), re-creates a manager on the SAME directory, and asserts the LEDGER entry
+reloaded while the flag reads clear (the earlier form used a second directory, which
+could not detect the flag being persisted at all).
+(3) TASK-DOC CONTRADICTION, APPLIED: the Lifecycle paragraph above now states the
+displacement exemption instead of the pre-review "unconditional" wording.
+(4) PARALLEL STORE, ACCEPTED (no restructuring): `_activeAudioPlaybackDevices` stays a
+separate manager-level store rather than deriving from PlaybackReportOrdering's
+LastStart/PendingStop (static, token-keyed, and per-instance test isolation is the
+point of the DI-side home); the dictionary's doc comment now carries the drift guard
+(a new terminal-event path must update BOTH stores) and this note records the
+acceptance.
 
 **Review gates:** /simplify (4 parallel angles) returned clean; two minor items skipped
 with reasons (the inline DeviceID chain matched 12 pre-existing sites in the same file
@@ -105,9 +140,9 @@ paused-shape string would need 17-locale additions, which this task's constraint
 (no locale strings); if it grates on-device, file it with new strings.
 
 **Verification tail:** build 0 errors 0 warnings both TFMs; full suite green both TFMs
-(summary line per TFM: `Passed!  - Failed:     0, Passed:  4517, Skipped:     0, Total:  4517`
-= 4507 prior + 4 speed-gate tests + 6 flag-lifecycle tests, the review-round displacement
-pin included); new pins: stale-ledger+cold -> refusal (the e2e row's shape), flag-set -> re-launch,
+(summary line per TFM: `Passed!  - Failed:     0, Passed:  4523, Skipped:     0, Total:  4523`
+= 4507 prior + 4 speed-gate tests + 6 flag-lifecycle tests + 2 coordinator-review speed
+tests + 4 codec launch-generation tests); new pins: stale-ledger+cold -> refusal (the e2e row's shape), flag-set -> re-launch,
 PLAYING-context -> re-launch, VideoApp+flag -> still refuses, flag lifecycle (Started sets,
 Stopped/Finished/Failed clear, fresh manager boots clear). VideoApp behavior byte-identical
 (no VideoApp code path touched). The orchestrator runs the isolated e2e row

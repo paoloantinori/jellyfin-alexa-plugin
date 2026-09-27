@@ -81,4 +81,63 @@ public class StreamTokenCodecTests
 
         Assert.False(StreamTokenCodec.TryGetSleepDeadlineUtcTicks($"{itemId}|sleep:not-a-number", out _));
     }
+
+    // ---- JF-655 review: the launch-generation suffix ----
+
+    [Fact]
+    public void WithLaunchGeneration_AndParse_RoundTrip()
+    {
+        Guid itemId = Guid.NewGuid();
+
+        string token = StreamTokenCodec.WithLaunchGeneration(itemId.ToString());
+
+        Assert.True(StreamTokenCodec.TryGetItemId(token, out Guid parsedId));
+        Assert.Equal(itemId, parsedId);
+        Assert.True(StreamTokenCodec.TryGetLaunchGeneration(token, out long generation));
+        Assert.True(generation > 0);
+    }
+
+    [Fact]
+    public void WithLaunchGeneration_TwoMints_NeverCollide()
+    {
+        Guid itemId = Guid.NewGuid();
+
+        string first = StreamTokenCodec.WithLaunchGeneration(itemId.ToString());
+        string second = StreamTokenCodec.WithLaunchGeneration(itemId.ToString());
+
+        Assert.NotEqual(first, second);
+        Assert.True(StreamTokenCodec.TryGetLaunchGeneration(first, out long firstGeneration));
+        Assert.True(StreamTokenCodec.TryGetLaunchGeneration(second, out long secondGeneration));
+        Assert.NotEqual(firstGeneration, secondGeneration);
+    }
+
+    [Fact]
+    public void LaunchAndSleepSuffixes_Compose_BothParse()
+    {
+        // The sleep mint composes ON TOP of a generation-carrying base (launch first,
+        // sleep appended): each parser reads its own suffix off the combined token.
+        Guid itemId = Guid.NewGuid();
+        long deadline = DateTimeOffset.UtcNow.AddMinutes(30).UtcTicks;
+
+        string token = StreamTokenCodec.MintSleepTimerToken(
+            StreamTokenCodec.WithLaunchGeneration(itemId.ToString()), deadline);
+
+        Assert.True(StreamTokenCodec.TryGetItemId(token, out Guid parsedId));
+        Assert.Equal(itemId, parsedId);
+        Assert.True(StreamTokenCodec.TryGetLaunchGeneration(token, out _));
+        Assert.True(StreamTokenCodec.TryGetSleepDeadlineUtcTicks(token, out long parsedDeadline));
+        Assert.Equal(deadline, parsedDeadline);
+    }
+
+    [Fact]
+    public void TryGetLaunchGeneration_BareOrSuffixedWithoutLaunch_Fails()
+    {
+        Guid itemId = Guid.NewGuid();
+
+        Assert.False(StreamTokenCodec.TryGetLaunchGeneration(null, out _));
+        Assert.False(StreamTokenCodec.TryGetLaunchGeneration(itemId.ToString(), out _));
+        Assert.False(StreamTokenCodec.TryGetLaunchGeneration(
+            StreamTokenCodec.MintSleepTimerToken(itemId, 12345), out _));
+        Assert.False(StreamTokenCodec.TryGetLaunchGeneration($"{itemId}|launch:not-a-number", out _));
+    }
 }
