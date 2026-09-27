@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
@@ -131,8 +132,12 @@ public class JapanesePhoneticSynonymsTests
     [Fact]
     public void GenerateSynonyms_JapaneseJP_DispatchesToJapanese()
     {
+        // JF-646: the ja dispatch combines the katakana renderings (first, the
+        // device-captured forms) with this generator's romaji approximations, so
+        // the romaji variants must all survive inside the dispatch result.
         var result = JapanesePhoneticSynonyms.Generate("The Smiths");
         var dispatchResult = PhoneticSynonymGenerator.GenerateSynonyms("The Smiths", "ja-JP");
-        Assert.Equal(result, dispatchResult);
+        Assert.Subset(dispatchResult.ToHashSet(), result.ToHashSet());
+        Assert.Contains(dispatchResult, s => KatakanaRomanizer.ContainsKana(s));
     }
 }
