@@ -87,13 +87,24 @@ public class PlaybackStoppedEventHandler : BaseHandler
             InteractionDiagnostics.RecordPlaybackStopped(diagDevice);
         }
 
+        // JF-655: the stream is no longer active, so the re-launch gates' event-owned
+        // signal clears. DISPLACEMENT stops are exempt (code-review finding): the
+        // stop names the OLD stream while a newer PlaybackStarted already owns the
+        // device, and Alexa can deliver that order (Started(new) before the
+        // displaced Stopped(old)), so clearing here would flag an actively-playing
+        // device inactive; the newer stream's own start owns the flag.
+        var queue = _queueManager.GetOrCreateQueue(device);
+        bool isDisplacement = PlaybackReportOrdering.IsDisplacementStop(device, req.Token);
+        if (!isDisplacement)
+        {
+            _queueManager.MarkAudioPlaybackStopped(device);
+        }
+
         // Detect displacement events (JF-447: against the device's latest START, not the
         // device queue, because several play paths never populate the queue): when a new
         // AudioPlayer.Play replaces the current track, Alexa sends PlaybackStopped for the
         // OLD item with a near-zero offset from the new track's start. This would overwrite
         // the real saved position of the old item.
-        var queue = _queueManager.GetOrCreateQueue(device);
-        bool isDisplacement = PlaybackReportOrdering.IsDisplacementStop(device, req.Token);
         if (isDisplacement)
         {
             Logger.LogWarning(

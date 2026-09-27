@@ -61,6 +61,16 @@ public class PlaybackFinishedEventHandler : BaseHandler
             "PlaybackFinished: item={Token}, offset={OffsetMs}ms, sessionId={SessionId}",
             req.Token, req.OffsetInMilliseconds, session.Id);
 
+        // JF-655: a finished stream is not an active one, so the re-launch gates'
+        // event-owned signal clears; when NearlyFinished enqueued a next track, that
+        // stream's own PlaybackStarted re-sets the flag moments later. A
+        // displacement finish (a newer stream already started) keeps the flag, the
+        // same exemption the Stopped handler owns (code-review finding).
+        if (!PlaybackReportOrdering.IsDisplacementStop(deviceId, req.Token))
+        {
+            (_queueManager ?? Plugin.Instance?.DeviceQueueManager)?.MarkAudioPlaybackStopped(deviceId);
+        }
+
         // JF-447: composite sleep-timer tokens parse through the shared codec; the raw
         // new Guid(token) threw FormatException on them, killing this handler before the
         // ordering registration and before the keep-alive ack Amazon requires.

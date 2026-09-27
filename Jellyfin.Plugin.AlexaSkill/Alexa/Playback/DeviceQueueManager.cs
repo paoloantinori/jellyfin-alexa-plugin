@@ -29,6 +29,18 @@ public sealed class DeviceQueueManager : IDisposable
     private readonly KeyedOneShotDebounce _debounce = new(DebounceInterval);
 
     /// <summary>
+    /// JF-655: the per-device ACTIVE-AUDIO flag, the event-owned playback signal the
+    /// re-launch paths gate on. Deliberately a manager-level store, NOT a
+    /// <see cref="DeviceQueue"/> field: it must never reach the persisted queue
+    /// files, because a restart-persisted active flag would read as truth on a fresh
+    /// boot and re-launch stale audio (the exact bug class JF-655 closes). Being
+    /// in-memory on the DI-singleton manager, a plugin/process start begins with
+    /// every flag clear by construction; only a live <c>PlaybackStarted</c> event
+    /// sets one again.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, byte> _activeAudioPlaybackDevices = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// JF-522: the launch-scope maps are the first per-item stores with writers on TWO
     /// threads (the request pipeline records at directive time; the AudioPlayer event
     /// thread promotes at PlaybackStarted), so unlike the sibling stores their
@@ -168,6 +180,55 @@ public sealed class DeviceQueueManager : IDisposable
             ? (queue.LastPlayedItemId, ParseRoute(queue.LastPlayedLaunchRoute))
             : (null, null);
     }
+
+    /// <summary>
+    /// JF-655: marks the device as ACTIVELY playing AudioPlayer audio. Written by the
+    /// <c>PlaybackStarted</c> event handler only: the Echo sending that event is the
+    /// platform's own playback report, and no launch-site shortcut may set it (the
+    /// e2e/simulated environment fires no events, so a directive-time setter would
+    /// pin the flag on devices where nothing ever played).
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID.</param>
+    public void MarkAudioPlaybackStarted(string deviceId)
+    {
+        if (string.IsNullOrEmpty(deviceId))
+        {
+            return;
+        }
+
+        _activeAudioPlaybackDevices[deviceId] = 1;
+    }
+
+    /// <summary>
+    /// JF-655: clears the device's active-audio flag. Written by the
+    /// Stopped/Finished/Failed event handlers for every NON-displacement terminal
+    /// event: the stream that stopped is the one the flag names. DISPLACEMENT
+    /// terminal events (a newer stream already started; the displaced old stream's
+    /// late Stopped/Finished/Failed) must NOT clear, because the device is actively
+    /// playing the newer stream (code-review finding: Started(new) can be processed
+    /// before the displaced Stopped(old)).
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID.</param>
+    public void MarkAudioPlaybackStopped(string deviceId)
+    {
+        if (string.IsNullOrEmpty(deviceId))
+        {
+            return;
+        }
+
+        _activeAudioPlaybackDevices.TryRemove(deviceId, out _);
+    }
+
+    /// <summary>
+    /// JF-655 read side: whether a <c>PlaybackStarted</c> is currently in effect for
+    /// the device (no terminal event since). In-memory only: false on a fresh
+    /// manager (plugin/process start) even for devices whose persisted ledger
+    /// entries survive, which is the property the re-launch gates rely on.
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID.</param>
+    /// <returns>True when the device has an active AudioPlayer stream per its events.</returns>
+    public bool IsAudioPlaybackActive(string deviceId)
+        => !string.IsNullOrEmpty(deviceId) && _activeAudioPlaybackDevices.ContainsKey(deviceId);
 
     /// <summary>
     /// JF-619: the ONE device resume truth-source. The queue pointer

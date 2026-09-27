@@ -361,6 +361,38 @@ public sealed class PlaybackLaunchBuilder
     }
 
     /// <summary>
+    /// The JF-655 active-audio signal: whether CURRENT evidence says the device is
+    /// playing AudioPlayer audio. Two arms, either suffices: (a) the per-request
+    /// platform report (<see cref="IsActivelyPlaying"/>, the context's own
+    /// playerActivity), and (b) the event-owned flag on the device queue manager
+    /// (set by <c>PlaybackStarted</c>, cleared by Stopped/Finished/Failed, in-memory
+    /// so a fresh boot reads clear). This is the corroboration the re-launch gates
+    /// demand because the medium classifier's Audio verdict comes from the
+    /// PERSISTENT last-played ledger, which reads Audio long after playback stops
+    /// (the live e2e finding: a speed ask on an idle device re-launched the stale
+    /// track at the new rate). VideoApp mediums never consult this helper: those
+    /// launches emit no events at all (the documented platform limit), so no flag
+    /// can exist for them; their gates keep the honest VideoApp refusals.
+    /// </summary>
+    /// <param name="context">The Alexa context (device id for the flag read, playerActivity for the platform report).</param>
+    /// <param name="queueManager">The caller's device queue manager (the flag store); null falls back to <c>Plugin.Instance</c>'s (the classifier-half idiom), and a null there simply leaves the platform-report arm.</param>
+    /// <returns>True when the device is actively playing audio per its events or this request's player report.</returns>
+    internal static bool IsAudioPlaybackActive(Context? context, DeviceQueueManager? queueManager)
+    {
+        if (IsActivelyPlaying(context))
+        {
+            return true;
+        }
+
+        // The ONE device-key extraction (the event writers' idiom), so the reader
+        // and the writers can never drift onto different keys; the empty-string
+        // fallback for an unattributed request lands on the shared slot the
+        // manager's own guard rejects.
+        string deviceId = context?.GetDeviceId() ?? string.Empty;
+        return (queueManager ?? Plugin.Instance?.DeviceQueueManager)?.IsAudioPlaybackActive(deviceId) == true;
+    }
+
+    /// <summary>
     /// Classify what a device is playing from the JF-563 device last-played ledger plus
     /// the AudioPlayer token (JF-564) and the JF-568 recorded launch route. The ledger
     /// is the only record a VideoApp launch leaves (those launches never touch

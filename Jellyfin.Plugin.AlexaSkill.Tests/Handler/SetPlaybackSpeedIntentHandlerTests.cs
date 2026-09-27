@@ -423,6 +423,120 @@ public class SetPlaybackSpeedIntentHandlerTests : PluginTestBase, IDisposable
         Assert.Null(user.PodcastSpeedPerMille);
     }
 
+    // ---- the JF-655 active-playback gate ----
+
+    /// <summary>
+    /// The e2e row's shape (live finding 2026-09-27): an Audio-routed last-played
+    /// ledger entry from long ago makes the medium resolver answer Audio, but
+    /// nothing is playing (no PlaybackStarted flag, no PLAYING context report, no
+    /// session evidence). The re-launch must NOT fire; the honest no-media Tell
+    /// answers, and the standing-rate preference stays untouched.
+    /// </summary>
+    [Fact]
+    public async Task StaleAudioLedger_NoActiveSignal_TellsNoMediaInsteadOfReLaunching()
+    {
+        Audio episode = CreateEpisode(60);
+        SetupItemLookup(episode);
+        _queueManager.RecordLastPlayed(DeviceId, episode.Id.ToString(), DeviceQueueManager.LaunchRoute.Audio);
+
+        var handler = CreateHandler();
+        var user = TestHelpers.CreateTestUser();
+
+        SkillResponse response = await handler.HandleAsync(
+            CreateIntentRequest(RateSlot("uno e mezzo", "1500")),
+            TestHelpers.CreateTestContext(DeviceId), // cold: no AudioPlayer block
+            user,
+            CreateSession(null), // no session now-playing evidence
+            CancellationToken.None);
+
+        Assert.Null(TestHelpers.GetPlayDirective(response));
+        Assert.Contains("Nessun contenuto in riproduzione", SpeechText(response), StringComparison.Ordinal);
+        Assert.Null(user.PodcastSpeedPerMille);
+    }
+
+    /// <summary>
+    /// The genuinely-playing shape through the event-owned arm: the ledger says
+    /// Audio and the device's PlaybackStarted flag is set (no PLAYING context
+    /// report needed). The JF-636 re-launch applies.
+    /// </summary>
+    [Fact]
+    public async Task StaleAudioLedger_EventActiveFlagSet_ReLaunchesAtTheRate()
+    {
+        Audio episode = CreateEpisode(60);
+        SetupItemLookup(episode);
+        _queueManager.RecordLastPlayed(DeviceId, episode.Id.ToString(), DeviceQueueManager.LaunchRoute.Audio);
+        _queueManager.MarkAudioPlaybackStarted(DeviceId);
+
+        var handler = CreateHandler();
+        var user = TestHelpers.CreateTestUser();
+
+        SkillResponse response = await handler.HandleAsync(
+            CreateIntentRequest(RateSlot("uno e mezzo", "1500")),
+            TestHelpers.CreateTestContext(DeviceId),
+            user,
+            CreateSession(null),
+            CancellationToken.None);
+
+        AudioPlayerPlayDirective? directive = TestHelpers.GetPlayDirective(response);
+        Assert.NotNull(directive);
+        Assert.Contains($"/alexaskill/api/audio-speed/{episode.Id}/1500/stream.m3u8", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The platform-report arm: the request context itself reports PLAYING, which
+    /// is current evidence even with the event flag clear (a fresh process mid-play
+    /// has the context report before any event lands).
+    /// </summary>
+    [Fact]
+    public async Task StaleAudioLedger_PlayingContextReport_ReLaunchesAtTheRate()
+    {
+        Audio episode = CreateEpisode(60);
+        SetupItemLookup(episode);
+        _queueManager.RecordLastPlayed(DeviceId, episode.Id.ToString(), DeviceQueueManager.LaunchRoute.Audio);
+
+        var handler = CreateHandler();
+        var user = TestHelpers.CreateTestUser();
+
+        SkillResponse response = await handler.HandleAsync(
+            CreateIntentRequest(RateSlot("uno e mezzo", "1500")),
+            CreatePlayingContext(episode, offsetMs: 0),
+            user,
+            CreateSession(episode),
+            CancellationToken.None);
+
+        AudioPlayerPlayDirective? directive = TestHelpers.GetPlayDirective(response);
+        Assert.NotNull(directive);
+        Assert.Contains($"/alexaskill/api/audio-speed/{episode.Id}/1500/stream.m3u8", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The VideoApp refusal ignores the active flag by design: those launches emit
+    /// no events, so no flag can exist for them; the honest refusal stands even
+    /// with a (here artificial) flag set.
+    /// </summary>
+    [Fact]
+    public async Task VideoAppRoutedLedger_ActiveFlagSet_StillRefuses()
+    {
+        Audio episode = CreateEpisode(60);
+        SetupItemLookup(episode);
+        _queueManager.RecordLastPlayed(DeviceId, episode.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        _queueManager.MarkAudioPlaybackStarted(DeviceId);
+
+        var handler = CreateHandler();
+        var user = TestHelpers.CreateTestUser();
+
+        SkillResponse response = await handler.HandleAsync(
+            CreateIntentRequest(RateSlot("uno e mezzo", "1500")),
+            CreatePlayingContext(episode, offsetMs: 60_000),
+            user,
+            CreateSession(episode),
+            CancellationToken.None);
+
+        Assert.Null(TestHelpers.GetPlayDirective(response));
+        TestHelpers.AssertHasAudioPlayerStopDirective(response);
+        Assert.Contains("non posso cambiare la velocità", SpeechText(response), StringComparison.Ordinal);
+    }
+
     private static string SpeechText(SkillResponse response)
         => (response.Response.OutputSpeech as PlainTextOutputSpeech)?.Text ?? string.Empty;
 }
