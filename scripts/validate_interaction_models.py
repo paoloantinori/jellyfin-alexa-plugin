@@ -10,6 +10,10 @@ Catches the failure modes that have caused broken models in the past:
   - Undefined slot types (slot references a type not in the types array)
   - Intents with zero sample utterances
   - Duplicate sample utterances within an intent
+  - CJK slot-glue: a slot ref whose brace sits directly against a CJK
+    character (Hiragana, Katakana, CJK punctuation or ideographs) with no
+    ASCII space; SMAPI rejects it at build time (JF-638, after the three
+    live incidents JF-513, JF-326, JF-636)
 
 WARNING-level checks (never affect the exit code; error-level checks do, and the
 CI validate-models job has been blocking on errors since JF-556):
@@ -139,6 +143,20 @@ ALBUM_CARRIER_NOUNS: dict[str, list[str]] = {
     "ja": ["アルバム"],
     "hi": ["एल्बम"],
 }
+
+# CJK text glued to a slot ref is an SMAPI build failure (JF-638; live
+# InvalidCharInSamples/InvalidSample hits: JF-513 {musician}を再生, JF-326
+# 星{star_rating}で, JF-636 速度{speed}). The documented rule
+# (templates/ja-JP.yaml header) allows ONLY a regular ASCII space between a
+# slot and adjacent CJK text, so there is no legitimate glued form to exempt.
+# U+3000 (ideographic space) sits inside the span on purpose: the same header
+# bans it in samples entirely, so a U+3000 "separator" must flag, not pass.
+def _is_cjk(ch: str) -> bool:
+    # One contiguous span covers CJK punctuation (U+3000-U+303F, including
+    # U+3000), Hiragana (U+3040-U+309F), and Katakana (U+30A0-U+30FF, incl.
+    # ー U+30FC); the second covers CJK Unified Ideographs.
+    return 0x3000 <= ord(ch) <= 0x30FF or 0x4E00 <= ord(ch) <= 0x9FFF
+
 
 # BrowseCategory slot-value id conventions (JF-468). Every locale carries the
 # English canonical ids on the three concepts shared across the model family
@@ -351,6 +369,31 @@ def validate_single_model(locale: str, lm: dict) -> tuple[list[str], list[str]]:
                     warnings.append(
                         f"{prefix} PlayAlbumIntent bare album carrier "
                         f"(CLAUDE.md anti-pattern #11): '{sample}'"
+                    )
+
+    # 11. CJK slot-glue (ERROR, JF-638): a slot ref whose brace sits directly
+    # against a CJK character passes this validator but SMAPI rejects it at
+    # model-build time (InvalidCharInSamples; three live incidents: JF-513,
+    # JF-326, JF-636, each found only on the box). Scanned in EVERY locale,
+    # not behind a ja-JP gate: the other 16 locales carry no CJK characters
+    # in samples at all, so the scan is a no-op there while a locale list
+    # would only rot.
+    for intent in intents:
+        iname = intent.get("name", "<unnamed>")
+        for sample in intent.get("samples", []):
+            for m in SLOT_PLACEHOLDER_RE.finditer(sample):
+                before = sample[m.start() - 1] if m.start() > 0 else ""
+                after = sample[m.end()] if m.end() < len(sample) else ""
+                sides = []
+                if before and _is_cjk(before):
+                    sides.append(f"U+{ord(before):04X} directly before '{{'")
+                if after and _is_cjk(after):
+                    sides.append(f"U+{ord(after):04X} directly after '}}'")
+                if sides:
+                    errors.append(
+                        f"{prefix} Intent '{iname}': sample '{sample}' glues a slot "
+                        f"to CJK text ({', '.join(sides)}); separate with a regular "
+                        f"ASCII space (SMAPI rejects the build; JF-638)"
                     )
 
     return errors, warnings
