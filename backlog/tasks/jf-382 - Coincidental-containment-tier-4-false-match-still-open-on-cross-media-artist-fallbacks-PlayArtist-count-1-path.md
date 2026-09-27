@@ -49,6 +49,8 @@ Predicate ArtistSearch.IsCoincidentalContainmentMatch (stop-word-aware, locale p
 
 ## Implementation Notes
 
+JF-382 SCOPE NOTE (2026-09-27, from the JF-643 simplify round): consolidating the inline chain must also RETIRE the JF-643 romanization site at the inline chain's entry (PlayArtistSongsIntentHandler ~line 180); ArtistSearch.SearchAsync's entry already romanizes, so the consolidated path needs no per-handler copy.
+
 <!-- SECTION:NOTES:BEGIN -->
 2026-08-31 /code-review high (JF-418 session) surfaced two lower-ranked findings adjacent to this task's consolidation scope, recorded here so they are not lost:
 
