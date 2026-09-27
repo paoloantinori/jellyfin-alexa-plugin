@@ -3,10 +3,10 @@ id: JF-625
 title: >-
   JF-625 - Music seek mode: the audiobook video-audio pipeline (real seek bar)
   applied to music, spike-first behind a flag
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-24 16:16'
-updated_date: '2026-09-24 21:18'
+updated_date: '2026-09-27 19:12'
 labels: []
 milestone: 1.0 polish
 dependencies: []

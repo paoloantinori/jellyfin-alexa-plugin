@@ -4,15 +4,13 @@ title: Verify APL carousel and NowPlaying screen rendering
 status: To Do
 assignee: []
 created_date: '2026-06-08 09:32'
-updated_date: '2026-07-13 20:18'
+updated_date: '2026-09-27 19:12'
 labels:
   - e2e
   - apl
   - visual
 milestone: m-5
 dependencies: []
-modified_files:
-  - Jellyfin.Plugin.AlexaSkill/Alexa/Apl/AplDirectiveBuilder.cs
 priority: low
 ---
 
@@ -40,3 +38,9 @@ APL carousel templates render browse/search results as tappable image cards on E
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining, or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+2026-09-27 audit correction: item 4 ('NowPlaying APL screen shows progress bar during playback') is DEAD AS STATED - JF-624 proved the Echo's native full-screen player covers any skill APL during AudioPlayer playback and a live progress bar is unattainable for custom skills (CLAUDE.md Key Gotchas, the JF-624 entry). Rewrite item 4 to the attainable claim before the device session: the launch-moment card flash and the non-playback surfaces (browse lists, disambiguation).
+<!-- SECTION:NOTES:END -->

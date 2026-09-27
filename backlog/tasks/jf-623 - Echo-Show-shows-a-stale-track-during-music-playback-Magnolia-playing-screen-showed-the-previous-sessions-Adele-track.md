@@ -6,7 +6,7 @@ title: >-
 status: In Progress
 assignee: []
 created_date: '2026-09-23 17:04'
-updated_date: '2026-09-23 19:32'
+updated_date: '2026-09-27 19:12'
 labels: []
 dependencies: []
 priority: low
@@ -32,6 +32,8 @@ Live observation 2026-09-23 18:41 (Paolo's loop test): while Magnolia (Negrita) 
 2026-09-23 follow-up: the full-screen detail plus config facts narrow it down. NativeControlsForAudio=True globally but DefaultVideoAppForAudio=None (off): both the Adele (PlayFavorites) and Magnolia (FindSong) plays pass the item through BuildAudioPlayerResponse, so either BOTH route VideoApp (then the screen would track the title, contradiction) or the delegation is off for both. Since neither play logged a RenderDocument and the APL visuals flag is off, our code rendered NOTHING on either play: the full-screen surface must be the Echo Show's OWN AudioPlayer full-screen player, which persists across plays when the stream carries no metadata (Alexa.NET's AudioItemStream has no metadata support - probe found no metadata/title/art surface on it). Fix direction: extend TryAttachNowPlayingDirective to the BuildAudioPlayerResponse chokepoint (our APL card on every music play, full control of the display); requires AplVisualsEnabled on, so the launch behavior becomes config-dependent - Paolo should decide whether he wants the screen card back on.
 
 Root cause (settled by elimination + the probe): neither play rendered anything of ours (0 RenderDocument in the day's log; APL visuals off; the attacher was carousel-only), Alexa.NET's AudioItemStream has no metadata surface (string probe: no metadata/title/art), so the Show's built-in full-screen player kept the last metadata it ever had. The chosen fix gives us a deterministic screen per play instead.
+
+2026-09-27 audit re-scope: the fix is shipped and verified in tree (the ReplaceAll-gated attach at the BuildAudioPlayerResponse chokepoint); the pending device confirmation should be phrased as 'the NATIVE full-screen player tracks the current track' (JF-624 r7 proved our APL card is covered by the native surface during playback; the fix worked by refreshing what the native surface reads). Close on Paolo's observation of the native surface, not of an APL card.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

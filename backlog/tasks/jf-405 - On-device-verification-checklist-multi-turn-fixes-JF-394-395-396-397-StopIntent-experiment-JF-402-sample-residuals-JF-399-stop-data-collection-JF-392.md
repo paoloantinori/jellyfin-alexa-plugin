@@ -48,6 +48,8 @@ Single checklist of everything that needs a REAL Echo/on-device verification and
 
 ## Implementation Notes
 
+2026-09-27 backlog audit: residual device legs folded in from today's closures - JF-414's on-device spot check of the indefinite album-by-artist forms; JF-619's resume truth-source device half (reconcile with the 2026-09-23 battery's resume tests when closing); JF-623's pending observation RE-SCOPED to the native full-screen player tracking the current track; JF-624's pending items (AlexaTextList tap lists next); JF-625's device battery (whole album + announce-by-vehicle + one-shot-next refusal + cold mid-album resume + MediaInfo position).
+
 <!-- SECTION:NOTES:BEGIN -->
 Review-pass update (deploy 348b171): items 1-4 now test the FULL routing (the first deploy had JF-397 dead code: FindSong intercepted all fallbacks). NEW checks to add from the /code-review pass: (a) plain 'no' during a FindSong disambiguation may route to AMAZON.NoIntent with EMPTY slots - built-in intents carry no slot values - verify the ElicitSlot dialog captures 'no' as titleKeywords (else the exit needs a NoIntent branch reading the FindSong session); (b) verify the debug log line 'FallbackIntent: active resume offer, re-asking resume prompt' appears once (confirms ILibraryManager DI resolved non-null in FallbackIntentHandler); (c) triage note: response logs show PRE-removal merged attributes including __remove_attributes (ResponseBodyLoggingInterceptor runs first in reverse order) - the final payload is correct, don't misread logs.
 

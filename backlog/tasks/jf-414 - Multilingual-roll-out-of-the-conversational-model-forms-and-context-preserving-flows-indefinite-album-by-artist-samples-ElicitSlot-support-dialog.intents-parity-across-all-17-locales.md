@@ -4,11 +4,11 @@ title: >-
   Multilingual roll-out of the conversational model forms and context-preserving
   flows (indefinite album-by-artist samples, ElicitSlot support, dialog.intents
   parity across all 17 locales)
-status: In Progress
+status: Done
 assignee:
   - zai
 created_date: '2026-08-28 18:37'
-updated_date: '2026-08-29 06:47'
+updated_date: '2026-09-27 19:11'
 labels: []
 dependencies: []
 priority: medium
@@ -46,6 +46,12 @@ PLATFORM FINDING (en-*, probe-evidenced 2026-08-29): the AMAZON.Musician built-i
 
 PHASE D FINAL (authoritative verification via get-interaction-model on the SAVED models, immune to the build-status window): all 16 ENABLED locales carry the new indefinite album-by-artist samples (it-IT from yesterday + en-US/GB/AU/CA/IN, de, fr-FR/CA, es-ES/MX/US, pt-BR, nl-NL, hi-IN, ar-SA verified PRESENT with markers). The round-1 'build:?' entries for pt-BR/nl/hi/ar were status-window noise - the saves had landed. ja-JP is the ONLY exception: SMAPI 404s the locale (not enabled on the vendor skill); the repo model is ready and enabling it requires a manifest locale addition (separate action, recorded here, not blocking). en-US round-2 push SUCCEEDED after the dialog slot-type fix.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed by the 2026-09-27 backlog audit (tree-verified): all substance landed. The 16-locale indefinite album-by-artist samples are on the saved models (phase D); the former ja-JP exception is gone (model_ja-JP.json carries musician-carrier PlayAlbum samples; all-17 rebuilds SUCCEEDED 2026-09-27 per JF-399); dialog parity fixed; and the en-* AMAZON.Musician knowledge-graph rewrite residual is resolved by the deployed musician swap (model_en-US/it-IT PlayAlbum+PlayArtistSongs musician -> JellyfinArtist, the JF-541 phase-1/3 outcome). The remaining on-device spot-check leg is folded into JF-405's checklist.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

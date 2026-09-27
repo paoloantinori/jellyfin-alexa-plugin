@@ -4,10 +4,10 @@ title: >-
   Resume after stop: DeviceQueue fallback unreachable when AudioPlayer token and
   session item are both null, so "riprendi" one-shot launches stale
   server-progress item
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-22 15:29'
-updated_date: '2026-09-22 16:36'
+updated_date: '2026-09-27 19:11'
 labels: []
 dependencies: []
 references:
@@ -36,6 +36,12 @@ Live incident 2026-09-22 16:43 (device battery test 3): user stopped skill music
 <!-- SECTION:NOTES:BEGIN -->
 2026-09-22 18:35: fix deployed to minix (net10.0 Release, active DLL size-verified, config survived, 1 user). it-IT model rebuilt SUCCEEDED. The wrapper battery's profile-nlu rows confirm the routing surface is intact post-rebuild (mettere/aggiungere/riprodurre/riprendi all PASS, including the new playlist infinitive twin). Review round applied: materialization through the library (deleted-item fallthrough, Played-elsewhere gate, content-kind gate with the AudioBook-before-Audio type pattern), tail threading of the resolved BaseItem (codec probe + audiobook branch see a real item), GetQueue instead of GetOrCreateQueue, dead disjunct dropped, TicksToMs clamp helper. Two new hardening tests (deleted-item, EAC3-empty-context). Truth-source divergence filed as JF-619. REMAINING: device verification of the post-stop one-shot 'riprendi' (Paolo's battery test 3 re-run).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed by the 2026-09-27 backlog audit (tree-verified): the resume queue fallback is in tree (ResumeIntentHandler ~:193, GetDeviceResumePointer + the hoisted GetQueue path), deployed 2026-09-22, and JF-405's census records the device half covered by the 13:54 battery's resume tests. All four ACs satisfied; the residual observation folded into JF-405.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

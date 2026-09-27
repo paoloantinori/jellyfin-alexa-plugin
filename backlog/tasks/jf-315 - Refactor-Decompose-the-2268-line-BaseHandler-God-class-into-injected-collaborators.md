@@ -3,10 +3,10 @@ id: JF-315
 title: >-
   Refactor: Decompose the 2268-line BaseHandler God class into injected
   collaborators
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-12 14:58'
-updated_date: '2026-09-16 05:18'
+updated_date: '2026-09-27 19:11'
 labels:
   - refactor
   - maintainability
@@ -138,6 +138,12 @@ WHY THE TABLE BLOCKS A NO-BEHAVIOR-CHANGE MERGE (the stop rationale, now evidenc
 
 THE PRECISE CONSOLIDATION PLAN for the future attempt (execute in this order): (0) write the four missing characterization pins FIRST, green on the inline code: (a) Fast in-memory tier-skip (discriminator: a query where Thorough resolves via tier 1.5/2 but Fast's fuzzy-all picks differently, e.g. the JF-437 'beatles live' shape under a Fast user); (b) Fast DB ungated tier-1 (long-name containment auto-plays under Fast where Thorough gates to not-found); (c) parallel tiers (Moq verify the NameContains query IS issued even when the NameStartsWith tier hits); (d) ASR variant integration on the DB tier-1 (flag on, SearchTerm miss, joined-variant hit). (1) extract SearchWithAsrFallbackAsync's core into an internal static flag-parameterized helper on SearchService (its 6 wrapper tests stay green) so ArtistSearch reuses the ONE ASR loop. (2) extend ArtistSearch.SearchAsync with optional parameters ALL defaulting to today's shared behavior, leaving the 11 existing call sites untouched (CrossMediaFallback.cs704, MediaInfoIntentHandler.cs408, QueryArtistLibraryIntentHandler.cs125, FindSongIntentHandler.cs222+281, PlaySongIntentHandler.cs205, AddToQueueIntentHandler.cs120, PlayAlbumIntentHandler.cs248, PlayNextIntentHandler.cs120, SearchMediaIntentHandler.cs413): SearchResponseMode mode = Thorough, bool asrCompoundWordFixEnabled = false, bool parallelDbTiers = false. (3) port the axes: in-memory Fast = tier 1 then straight tier 4; DB Fast = single SearchTerm, mode-conditionally unband, album-scope; DB Thorough tier-1 = ASR variants then band then album-scope; DB Thorough tiers 2-4 behind parallelDbTiers as Task.WhenAll over the EXISTING PrefixSearchAsync/ContainsSearchAsync with the 2>3>4 priority pick (sequential stays the default for the other callers). (4) restructure the handler caller-pins-first (pin only when _artistIndex?.IsReady == true, pass the pinned view so SearchAsync's internal Pin is idempotent on it, keep the view for the JF-420 gate and fastAutoPlay); JF-420 pool via the existing fallback arm pinnedIndex.GetArtists(topParentIds); topParentIds re-resolved (cached) for the artist-songs query; delete TryPrefixFallbackAsync, TryContainsFallbackAsync, TrySearchFallbackAsync, FilterContainmentBand, FilterAlbumScopeAsync from the handler. (5) accept and document the two observability deltas (per-tier retry labels collapse to the dbQuery label; three FuzzyMatchPhonetic LogDebug lines lost on the in-memory tiers). (6) prove: suite green with ZERO expectation edits, the four pins green before AND after, ArtistSearchTests extended with mode/parallel/ASR facts at the shared layer; keep the Task.WhenAll structure verbatim (it is the cold-window latency contract). Also document on ArtistSearch that mode/parallel are caller policy axes, not judgments (the JF-408 letter holds; the spirit note belongs next to them).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed by the 2026-09-27 backlog audit (tree-verified): the decomposition is complete (BaseHandler 5569 -> 1381 lines; all collaborators present: SpeechBuilder, ResumeMath, SearchService, CrossMediaFallback, AlbumPlayService, PlaybackLaunchBuilder, ProgressReporter, RadioTrackSource, Shuffler, TvNextUpService); both named follow-ups are Done (JF-572, JF-382). The batch-11 part-6b inline-search consolidation plan remains ONLY in this task's notes; the follow-up home is filed as JF-658 in the same audit turn, and CLAUDE.md's "consolidate via JF-382" pointer must be re-pointed there.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

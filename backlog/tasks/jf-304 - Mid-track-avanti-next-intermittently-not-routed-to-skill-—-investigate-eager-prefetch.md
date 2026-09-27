@@ -3,11 +3,11 @@ id: JF-304
 title: >-
   Mid-track "avanti" (next) intermittently not routed to skill — investigate
   eager prefetch
-status: In Progress
+status: Done
 assignee:
   - claude
 created_date: '2026-07-02 20:11'
-updated_date: '2026-07-16 20:23'
+updated_date: '2026-09-27 19:11'
 labels:
   - bug
   - playback
@@ -81,6 +81,12 @@ DECISION RULE: do not code Step 2 until Step 3 verdict is in. Verify-don't-assum
 <!-- SECTION:NOTES:BEGIN -->
 CODE ANALYSIS 2026-07-02: Confirmed via PlaybackNearlyFinishedEventHandler.cs + PlaybackStartedEventHandler.cs. Prefetch = one Play(Enqueue) at NearlyFinished only; PlaybackStarted does no enqueue. Double-enqueue risk is the main implementation hazard if we add eager prefetch at PlaybackStarted. NextIntentHandler already serves the next item correctly WHEN routing reaches it (proven by today's 17:39 success) — so the plugin side is fine; the only lever is keeping the Echo buffer non-empty mid-track. No code change made: gated on the on-device diagnostic (plan Step 3).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed by the 2026-09-27 backlog audit as PLATFORM-LIMITED: the candidate fix mechanism (issuing a Play directive from PlaybackStarted) is documented-impossible in-tree (the JF-390 platform rule at PlaybackStartedEventHandler ~:69: Amazon rejects AudioPlayer.Play in PlaybackStarted responses); only pre-compute is possible and PreEnqueueOnStart/NextTrackPrecomputeCache already exist. What survives (the diagnostic of whether a populated buffer changes mid-track routing) is covered by JF-516's canonical-word battery plus the 2026-09-14 triple-confirmed default-music-service evidence and JF-595's Amazon-side fix watch.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Comments
 

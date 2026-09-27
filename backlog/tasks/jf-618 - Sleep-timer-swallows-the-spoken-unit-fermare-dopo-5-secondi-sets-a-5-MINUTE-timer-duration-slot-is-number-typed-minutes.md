@@ -3,10 +3,10 @@ id: JF-618
 title: >-
   Sleep timer swallows the spoken unit: "fermare dopo 5 secondi" sets a 5-MINUTE
   timer (duration slot is number-typed minutes)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-22 16:02'
-updated_date: '2026-09-23 08:19'
+updated_date: '2026-09-27 19:11'
 labels: []
 dependencies: []
 references:
@@ -27,7 +27,7 @@ Live incident 2026-09-22 17:37 (battery test 7): user said «fermare dopo 5 seco
 - [x] #1 «fermare dopo 30 secondi» sets a 30-second stop deadline (slot carries the unit, not a bare number reinterpreted as minutes)
 - [x] #2 «fermare dopo un'ora» / «mezz'ora» / «45 minuti» keep working (hour/half-hour/minute forms)
 - [x] #3 The elicitation on an unparseable duration still works in all 17 locales
-- [ ] #4 Model regenerated in all 17 locales from templates, validator + NLU fixtures updated, deployed and device-verified
+- [x] #4 Model regenerated in all 17 locales from templates, validator + NLU fixtures updated, deployed and device-verified
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -37,6 +37,12 @@ Live incident 2026-09-22 17:37 (battery test 7): user said «fermare dopo 5 seco
 
 2026-09-23 08:20: review round complete, commit 3074d13d pushed, deployed. All 10 code-review findings applied (voice-reference SLOT_HINTS + all mirrors incl. the CI-breaking --check omission; P1W week forms; OverflowException containment; es-MX fixture re-pinned to live routing; stale coupling comment; parse/format moved to ResumeMath as the shared home; SecondsOnly reuse; int domain + reworded fallback comment; French identity pinned to literal; PT59.5S boundary snap) or tracked (the reminder path's identical seconds-swallowing filed as JF-622). AC#4's device verification pending (user battery).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed by the 2026-09-27 backlog audit (tree-verified): sleep_duration/AMAZON.DURATION + SleepTimerSetFor shipped and deployed 2026-09-23 (SleepTimerIntentHandler ~:86/:310; the it-IT template carries sleep_duration); JF-405's census records AC1-3 device-verified including the platform-truth follow-up, and AC4 complete with the boundary-stop observation. All four ACs satisfied.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

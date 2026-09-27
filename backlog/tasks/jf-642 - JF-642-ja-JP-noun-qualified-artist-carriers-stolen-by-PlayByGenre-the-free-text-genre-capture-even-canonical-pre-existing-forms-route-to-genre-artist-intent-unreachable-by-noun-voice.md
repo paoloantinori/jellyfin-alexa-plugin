@@ -4,10 +4,10 @@ title: >-
   JF-642 - ja-JP noun-qualified artist carriers stolen by PlayByGenre (the
   free-text genre capture): even canonical pre-existing forms route to genre,
   artist intent unreachable by noun voice
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-27 06:19'
-updated_date: '2026-09-27 10:49'
+updated_date: '2026-09-27 19:11'
 labels:
   - nlu
   - ja-JP
@@ -167,3 +167,9 @@ hook reminder.
 
 2026-09-27 LIVE BATTERY OUTCOME (deployed d4ba78fd, ja-JP model rebuilt SUCCEEDED, live model verified carrying GenreType on all 3 slots): the GENRE half works - ジャズ routes PlayByGenre with ER canonical (the tier bypass saves the round trip), ロック routes genre, Latin queen unchanged, and the en-US probe (play jazz music -> PlayRandom genre=jazz with NO resolution) supports the unconditional-read design assumption. THE HEADLINE STEAL ROW FAILED: クイーン の曲を再生して selects PlayByGenre genre=クイーン deterministically (3/3 probes) and ビートルズ の曲を再生して likewise - the Mood-precedent premise (a restricted custom type cannot steal) is REFUTED at NLU selection: custom slot types are OPEN for filling; the type changes resolution, not selection. The end-to-end user outcome still lands through the handler chain (raw kana -> JF-463 fallback -> JF-643 romanizer), with the JF-652 precision caveat. The routing-layer steal fix is therefore JF-646 (catalog-side katakana synonyms so AMAZON.Musician wins selection via ER, the en-US/hi-IN shape), priority raised there. This task's shipped value stands: genre canonicalization, the divergence guard, the sibling canonical reads, and the refutation itself (which redirects the steal fix to the catalog layer before more model-layer work was spent).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed by the 2026-09-27 backlog audit (tree-verified): the work shipped as merge d4ba78fd and is live in tree (GenreType on all three ja genre slots, ER-canonical reads at all three handlers, SlotValueHelper.GetCanonicalValue shared, CLAUDE.md anti-pattern #10 guard). The battery outcome is recorded honestly in the notes: the genre half works (ER canonical, tier bypass, sibling reads); the steal premise (a custom type prevents NLU selection steals) was REFUTED live and the steal fix redirected to JF-646 (catalog-side katakana synonyms, now high priority); the long-tail tier residual lives in JF-645. Nothing further is owned here.
+<!-- SECTION:FINAL_SUMMARY:END -->

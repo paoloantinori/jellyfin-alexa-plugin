@@ -75,7 +75,22 @@
       "Bash(cp \"/home/pantinor/Pictures/Screenshots/Screenshot From 2026-07-26 15-24-39.png\" /home/pantinor/data/repo/personal/jellyfin-alexa-plugin/screenshots/settings-general.png)",
       "Read(//home/pantinor/.cc-mirror/zai/config/**)",
       "Bash(python3 scripts/validate_locales.py)",
-      "Bash(NUGET_PACKAGES=/tmp/nuget-pkgs NUGET_HTTP_CACHE_PATH=/tmp/nuget-http-cache dotnet test Jellyfin.Plugin.AlexaSkill.Tests/Jellyfin.Plugin.AlexaSkill.Tests.csproj)"
+      "Bash(NUGET_PACKAGES=/tmp/nuget-pkgs NUGET_HTTP_CACHE_PATH=/tmp/nuget-http-cache dotnet test Jellyfin.Plugin.AlexaSkill.Tests/Jellyfin.Plugin.AlexaSkill.Tests.csproj)",
+      "Bash(export NUGET_PACKAGES=/tmp/nuget-pkgs NUGET_HTTP_CACHE_PATH=/tmp/nuget-http-cache)",
+      "Bash(python3 scripts/validate_interaction_models.py --verbose)",
+      "Bash(python3 -)",
+      "Bash(python3 scripts/generate_interaction_model.py it-IT)",
+      "Bash(cd *)",
+      "Bash(python3 scripts/validate_interaction_models.py)",
+      "Bash(python3 scripts/generate_interaction_model.py ja-JP)",
+      "Bash(python3 scripts/generate_voice_reference.py)",
+      "Bash(python3 scripts/generate_voice_reference.py --check)",
+      "Bash(PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest tests/scripts/ -q)",
+      "Bash(python3 -m pytest tests/integration/test_nlu.py --collect-only -q)",
+      "Bash(crontab -l)",
+      "Bash(crw search *)",
+      "Bash(crw scrape *)",
+      "Bash(python3 *)"
     ]
   },
   "enabledMcpjsonServers": [

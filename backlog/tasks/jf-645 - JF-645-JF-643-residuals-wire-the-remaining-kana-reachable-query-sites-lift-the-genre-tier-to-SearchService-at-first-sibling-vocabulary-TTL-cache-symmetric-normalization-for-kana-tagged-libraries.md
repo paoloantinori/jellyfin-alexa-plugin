@@ -7,7 +7,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-27 08:01'
-updated_date: '2026-09-27 08:41'
+updated_date: '2026-09-27 19:12'
 labels:
   - search
   - i18n
@@ -54,4 +54,6 @@ VERIFICATION BAR: for each wired site, a test pinning the katakana-in / Latin-ma
 
 <!-- SECTION:NOTES:BEGIN -->
 2026-09-27 code-review round additions: (F1 polish) romaji reaches SPEECH and one session attribute on kana miss/recovery paths at these sites: PlayBook:126, PlayPodcast:187, PlayVideo:164, PlaySong:218/310/348, PlayAlbum:312/357/484/549, AlbumPlayService:736, BaseHandler:1233/1266 (the shared HandleFuzzyMiss strings, so even raw-preserving handlers emit romaji there), CrossMediaFallback:282 (crossmedia_notfound_query, spoken on the NoIntent decline turn). The fix shape is FindSong's raw-local pattern (raw for speech, romanized for matching). Judged acceptable for now: fires only for kana input whose pre-change outcome was total failure. (F2) ContainsKana's range U+30A1-30FF includes the middle dot U+30FB and prolonged mark U+30FC (a Latin+middle-dot string like Pop・Rock fires the tier; outcome still strictly better than not-found) and excludes halfwidth katakana U+FF66-FF9F (unromanized, coverage gap only). F3 (hardcoded threshold) was FIXED in the merge path (GetDefaultThreshold(user)).
+
+2026-09-27 audit correction (same as JF-642's F4-hold supersession): PlayRandom (:92) and PlayByDecade (:130) now read the ER canonical at their Genres feeds (JF-642 round 2), so item 1's 'genre slots with identical exact-Genres semantics, un-wired' no longer describes them - what remains for the siblings is the kana resolution TIER for ER_NO_MATCH long-tail. Still accurate and verified un-wired: BrowseLibrary (genre filter ~:343 raw, SearchTerm ~:226) and the raw-kana SearchTerm sites (AddToQueue song side, PlayNext, AddSongToPlaylist, PlayChannel, TvNextUpService). Items 2-5 unchanged.
 <!-- SECTION:NOTES:END -->

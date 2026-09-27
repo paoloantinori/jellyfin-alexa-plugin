@@ -7,7 +7,7 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-12 16:55'
-updated_date: '2026-09-21 21:10'
+updated_date: '2026-09-27 19:12'
 labels:
   - interaction-model
   - nlu
@@ -47,6 +47,8 @@ PROBE RESULTS 2026-09-13 (the AC#1 probe half is COMPLETE; recorded here because
 2026-09-21 late-night CORRECTION (user challenged the diagnosis; old-model cross-check + full matrix run): the outage is PER-LOCALE - it-IT and en-US one-shots PASS in the same minutes that es/fr/de/ja one-shots AND opens all fail; the bare "open X" form fails across ALL locales while one-shots still work. Cross-check: the 09-19 en-US model deployed via set-interaction-model - "open jellyfin player" STILL failed, "ask jellyfin player to play my favorites" PASSED - content-independent (current model restored, byte-verified). Protocol audit: all six response-violation classes clean, zero error-type SessionEndedRequests. The morning "INVOKED (IntentRequest)" opens remain unexplained - dump the full invocation log when the simulator recovers. REFRESHED RESUME CRITERION: target locale's one-shot control passing (bare-open is NOT a usable control during outage windows). Memory: simulate_outage_per_locale.
 
 2026-09-21: JF-558 DECIDED AND DEPLOYED - the gate is LIFTED for es/ja. Native names live (Paolo confirmed). Pure open-verb probe PASSES in simulate for es-ES, es-MX, ja (previously broken with the English name - invocation layer FIXED); their model-side work (payload families, ja PlayVideo steal) is end-to-end testable via simulate. pt-BR/nl-NL/hi-IN/ar-SA remain simulate-BLIND (open probe fails with BOTH names - the documented simulator-outage class, A/B verified 2026-09-21): model-side work lands model-verified (profile-nlu), invocation needs device probes. es-US not probed this round.
+
+2026-09-27 audit: the ja rows are STALE - the last matrix (ja stolen by PlayByGenre/PlayVideo/PlaySong) predates both the 2026-09-27 ja sample additions (the JF-399 residue pass, PlayArtistSongs 13->21 samples) and JF-642's GenreType conversion (the genre slot can no longer resolve artist names, though the SELECTION steal persists per the live battery). Re-probe the ja competition landscape before any model surgery. pt-BR/nl/hi/ar remain simulate-blind per the outage memory; JF-656's harness fallback (when landed) widens coverage.
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done

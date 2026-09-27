@@ -3,10 +3,10 @@ id: JF-360
 title: >-
   Jellyfin: DateLastMediaAddedComparer mis-tagged as IUserBaseItemComparer
   (independent PR)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-21 05:15'
-updated_date: '2026-07-21 08:25'
+updated_date: '2026-09-27 19:11'
 labels:
   - upstream-jellyfin
   - sorting
@@ -50,3 +50,9 @@ Worktree: separate git worktree off the Jellyfin repo, independent PR. Do NOT bu
 <!-- SECTION:NOTES:BEGIN -->
 DECISION (2026-07-21): folded into Bug 1's PRs (#17394 release-10.11.z, #17395 master), NOT a separate PR/issue. Reason: the DateLastMediaAddedComparer mis-tag is a gap in Bug 1's GetComparer SortName-fallback (that fallback wrongly degrades DateLastContentAdded sort for anonymous queries), not an independent bug. Proven via TDD on the release branch: with Bug 1's fallback present + comparer still tagged, the JF-360 test RED (date sort crashes via SortName/CreateSortName NRE); after un-tag, GREEN (date sort works). No separate GitHub issue filed — covered by #17393.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed by the 2026-09-27 backlog audit (live-checked): jellyfin/jellyfin PR #17395 (master) MERGED 2026-07-25 with the un-tag included per the task's own decision note (TDD-proven on the release branch); the release-backport #17394 was closed unmerged and no further action is owned here.
+<!-- SECTION:FINAL_SUMMARY:END -->

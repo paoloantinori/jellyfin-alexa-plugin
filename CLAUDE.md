@@ -175,7 +175,7 @@ All tiers go through `FuzzyMatch` (phonetic-aware via `Search.FuzzyMatchPhonetic
 
 **Coincidental-containment downgrade (JF-377):** when a single tier-4 match is a coincidental substring containment (short common-word name inside a longer query, detected by `ArtistSearch.IsCoincidentalContainmentMatch`), the handler downgrades to a yes/no disambiguation prompt (`DisambiguationHelper.AskFirstMatch`) instead of auto-playing. Real artists still play via "yes"; nonsense resolves to not-found via "no". Bug and regression cases are string-indistinguishable (the JF-377 research), so the prompt is the only no-regression design.
 
-**Duplicated search path (JF-382):** `PlayArtistSongsIntentHandler` still has its own inline 4-tier search (Fast/Thorough/Parallel mode selection), duplicating `ArtistSearch.SearchAsync`. The artist-SONGS query blocks have been consolidated into `SearchService.GetArtistSongsAsync` (the Search collaborator since JF-315 batch 6; shared by FindSong artist-scoped, PlaySong title fallback, and future callers), but the 4-tier SEARCH duplication remains. Do not add a third copy of the search; consolidate via JF-382.
+**Duplicated search path (JF-382):** `PlayArtistSongsIntentHandler` still has its own inline 4-tier search (Fast/Thorough/Parallel mode selection), duplicating `ArtistSearch.SearchAsync`. The artist-SONGS query blocks have been consolidated into `SearchService.GetArtistSongsAsync` (the Search collaborator since JF-315 batch 6; shared by FindSong artist-scoped, PlaySong title fallback, and future callers), but the 4-tier SEARCH duplication remains. Do not add a third copy of the search; consolidate via JF-658 (the JF-315 batch-11 6b plan).
 
 ## Cold-Start Warming Gates (JF-419 family)
 
