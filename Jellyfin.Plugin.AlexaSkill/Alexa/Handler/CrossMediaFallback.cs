@@ -606,22 +606,9 @@ public sealed class CrossMediaFallback
     {
         int threshold = FuzzyMatcher.GetDefaultThreshold(user);
 
-        if (artistIndex != null)
-        {
-            var pinned = artistIndex;
-            var scored = FuzzyMatcher.FindBestMatchWithScore(
-                query,
-                new[] { artist },
-                a => a.Name!,
-                a => a.Id,
-                id => pinned.TryGetPhoneticCode(id, out var codes) ? codes : null);
-            score = scored.HasValue ? scored.Value.Score : 0;
-        }
-        else
-        {
-            var plainScored = FuzzyMatcher.FindBestMatchWithScore(query, new[] { artist }, a => a.Name!);
-            score = plainScored.HasValue ? plainScored.Value.Score : 0;
-        }
+        // The pinned-index scoring ternary rides the shared helper (review round 2,
+        // finding 3); the overload shape is identical to the tiers' own scoring.
+        score = Util.ArtistSearch.ScoreBestWithCodes(query, new[] { artist }, artistIndex)?.Score ?? 0;
 
         // Latin queries (kanaOrigin false) keep the bare-threshold behavior
         // byte-identical; kana-origin adds the REAL code-collision requirement (one
@@ -741,14 +728,7 @@ public sealed class CrossMediaFallback
         // ("cup" for "Koop", both code KP) floors at PhoneticFloorScore and plays, while
         // the plain overload scored it below every bar and dead-ended (the defect the
         // inline copies carried).
-        var best = pinnedArtistIndex != null
-            ? FuzzyMatcher.FindBestMatchWithScore(
-                cleaned,
-                artists,
-                a => a.Name,
-                a => a.Id,
-                id => pinnedArtistIndex.TryGetPhoneticCode(id, out var codes) ? codes : null)
-            : FuzzyMatcher.FindBestMatchWithScore(cleaned, artists, a => a.Name);
+        var best = Util.ArtistSearch.ScoreBestWithCodes(cleaned, artists, pinnedArtistIndex);
         int normalThreshold = FuzzyMatcher.GetDefaultThreshold(user);
         int threshold = FuzzyMatcher.GetEffectiveThreshold(user, CrossMediaArtistThreshold);
         BaseItem? bestItem = best.HasValue ? best.Value.Item : null;
@@ -941,19 +921,19 @@ public sealed class CrossMediaFallback
         string logLabel)
     {
         IReadOnlyList<BaseItem> pool = pinnedIndex?.GetArtists(LibraryFilter.ResolveForUser(user, libraryManager, _logger)) ?? chainResults;
-        var runnerUp = Util.ArtistSearch.FindNearTiedRunnerUp(cleanedQuery, bestItem, bestScore, pool, pinnedIndex, normalThreshold);
-        if (runnerUp == null)
+        var pair = Util.ArtistSearch.FindNearTiedRunnerUp(cleanedQuery, bestItem, bestScore, pool, pinnedIndex, normalThreshold);
+        if (pair == null)
         {
             return null;
         }
 
         _logger.LogInformation(
             "{Label}: kana-origin query '{Query}' is a near-tie between '{Top}' ({TopScore}) and '{RunnerUp}' ({RunnerScore}), disambiguating (JF-652)",
-            logLabel, cleanedQuery, bestItem.Name, bestScore, runnerUp.Value.Item.Name, runnerUp.Value.Score);
+            logLabel, cleanedQuery, pair.Value.First.Name, pair.Value.FirstScore, pair.Value.Second.Name, pair.Value.SecondScore);
         var matchInfos = new List<DisambiguationHelper.MatchInfo>
         {
-            new() { Id = bestItem.Id.ToString(), Name = bestItem.Name },
-            new() { Id = runnerUp.Value.Item.Id.ToString(), Name = runnerUp.Value.Item.Name }
+            new() { Id = pair.Value.First.Id.ToString(), Name = pair.Value.First.Name },
+            new() { Id = pair.Value.Second.Id.ToString(), Name = pair.Value.Second.Name }
         };
         return DisambiguationHelper.AskMultipleArtists(matchInfos, locale);
     }

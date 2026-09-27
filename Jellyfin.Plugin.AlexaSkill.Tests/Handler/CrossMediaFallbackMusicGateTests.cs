@@ -85,7 +85,7 @@ public class CrossMediaFallbackMusicGateTests : PluginTestBase, IDisposable
         var probe = new SharedGateProbeHandler(_fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory);
         SkillResponse? result = await probe.CallTryEntityFallbackAsync(
             "abbey road", jellyfinUser, _fx.CreateUser(), _fx.CreateSession(), _fx.CreateContext(), "en-US",
-            _fx.LibraryManager.Object, _fx.UserDataManager.Object, "gate probe", CancellationToken.None);
+            _fx.LibraryManager.Object, _fx.UserDataManager.Object, "gate probe", null, CancellationToken.None);
 
         Assert.Null(result);
         Assert.Empty(_queries);

@@ -840,8 +840,8 @@ internal sealed class SharedGateProbeHandler : BaseHandler
         ILibraryManager libraryManager,
         IUserDataManager userDataManager,
         string logLabel,
-        CancellationToken cancellationToken,
-        IArtistIndex? artistIndex = null)
+        IArtistIndex? artistIndex,
+        CancellationToken cancellationToken)
         => CrossMedia.TryEntityFallbackAsync(
             slotText, jellyfinUser, user, session, context, locale,
             libraryManager, userDataManager, null, artistIndex, logLabel, cancellationToken);

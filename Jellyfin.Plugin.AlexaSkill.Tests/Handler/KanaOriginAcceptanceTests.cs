@@ -169,7 +169,7 @@ public class KanaOriginAcceptanceTests : PluginTestBase, IDisposable
 
         SkillResponse? result = await probe.CallTryEntityFallbackAsync(
             "クイーン", jellyfinUser, _fx.CreateUser(), _fx.CreateSession(), _fx.CreateContext(), "en-US",
-            _fx.LibraryManager.Object, _fx.UserDataManager.Object, "kana probe", CancellationToken.None, index);
+            _fx.LibraryManager.Object, _fx.UserDataManager.Object, "kana probe", index, CancellationToken.None);
 
         Assert.NotNull(result);
         Assert.True(IsDisambiguationAsk(result, "Queen", "Keane"), "the cross-media tie must ask, not play");
@@ -186,7 +186,7 @@ public class KanaOriginAcceptanceTests : PluginTestBase, IDisposable
 
         SkillResponse? result = await probe.CallTryEntityFallbackAsync(
             "ビートルズ", jellyfinUser, _fx.CreateUser(), _fx.CreateSession(), _fx.CreateContext(), "en-US",
-            _fx.LibraryManager.Object, _fx.UserDataManager.Object, "kana probe", CancellationToken.None, index);
+            _fx.LibraryManager.Object, _fx.UserDataManager.Object, "kana probe", index, CancellationToken.None);
 
         Assert.Null(result);
     }
@@ -210,6 +210,46 @@ public class KanaOriginAcceptanceTests : PluginTestBase, IDisposable
 
         Assert.True(probe.CallPassesArtistMatchAcceptance(queen, "kuin", _fx.CreateUser(), index, out _, kanaOrigin: true));
         Assert.False(probe.CallPassesArtistMatchAcceptance(sator, "bitoruzu", _fx.CreateUser(), index, out _, kanaOrigin: true));
+    }
+
+    [Fact]
+    public void PassesArtistMatchAcceptance_NoIndex_OnTheFlyEncodeCollision_Accepted()
+    {
+        // The on-the-fly-encode fallback (index null): the candidate name is Double
+        // Metaphone encoded AT the decision point, so a real collision is still
+        // detectable without the index and the kana bar accepts (review round 2,
+        // finding 2). 'kuin' vs the artist "Kuin" collides trivially and scores 100.
+        var kuin = new MusicArtist { Name = "Kuin", Id = Guid.NewGuid() };
+        var probe = new SharedGateProbeHandler(_fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory);
+
+        Assert.True(probe.CallPassesArtistMatchAcceptance(kuin, "kuin", _fx.CreateUser(), null, out _, kanaOrigin: true));
+    }
+
+    [Fact]
+    public void FindNearTiedRunnerUp_PairOrderedByScoreDescending_WinnerFirstOnTie()
+    {
+        // Review round 2, finding 1: a rival that OUTSCORES the winner passes the
+        // margin test trivially, and the ask sites present First first, so the pair
+        // must come back ordered by score descending or "yes" plays the
+        // lower-scoring artist.
+        var queen = Queen();
+        var keane = Keane();
+        var index = new FakeArtistIndex(new[] { queen, keane }, CodesFromNames(queen, keane));
+
+        // Keane returned as the chain's single best at 88; Queen's real collision
+        // scores 91, outscores the winner by 3 (within the tie margin).
+        var outscored = Jellyfin.Plugin.AlexaSkill.Alexa.Util.ArtistSearch.FindNearTiedRunnerUp(
+            "kuin", keane, 88, new[] { keane, queen }, index, FuzzyMatcher.DefaultThreshold);
+        Assert.NotNull(outscored);
+        Assert.Equal("Queen", outscored!.Value.First.Name);
+        Assert.Equal("Keane", outscored.Value.Second.Name);
+
+        // Winner on top when it really holds the higher score.
+        var leading = Jellyfin.Plugin.AlexaSkill.Alexa.Util.ArtistSearch.FindNearTiedRunnerUp(
+            "kuin", keane, 94, new[] { keane, queen }, index, FuzzyMatcher.DefaultThreshold);
+        Assert.NotNull(leading);
+        Assert.Equal("Keane", leading!.Value.First.Name);
+        Assert.Equal("Queen", leading.Value.Second.Name);
     }
 
     [Fact]

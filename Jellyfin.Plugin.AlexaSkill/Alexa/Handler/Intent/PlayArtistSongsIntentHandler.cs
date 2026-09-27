@@ -900,8 +900,8 @@ public class PlayArtistSongsIntentHandler : BaseHandler
     /// JF-652: the kana-origin acceptance decision for the final single pick. Returns
     /// the response to return (the honest not-found, or the near-tie disambiguation
     /// ask), or null when the pick clears the kana bar and auto-play proceeds.
-    /// The bar (one shared definition in
-    /// <see cref="Util.ArtistSearch.PassesKanaOriginAcceptance"/>): the user's
+    /// The bar (one shared definition, ArtistSearch.PassesKanaOriginAcceptance in
+    /// the Util collaborator): the user's
     /// threshold AND a REAL Double Metaphone code collision between the romanized
     /// query and the candidate, checked on the codes (index pre-computed, or encoded
     /// here from the candidate name), never inferred from the score band. The
@@ -927,9 +927,15 @@ public class PlayArtistSongsIntentHandler : BaseHandler
 
         if (!Util.ArtistSearch.PassesKanaOriginAcceptance(musician, match, score, userThreshold, pinnedIndex))
         {
+            // Name the actual failing leg: the bar is (threshold AND code collision),
+            // and the two misses mean different things at triage (review round 2,
+            // finding 6).
+            string missReason = score < userThreshold
+                ? $"below the user's threshold ({userThreshold})"
+                : "without a Double Metaphone code collision";
             Logger.LogInformation(
-                "PlayArtistSongs: kana-origin query '{Query}' matched '{Match}' at score {Score} without a Double Metaphone code collision, downgrading to not-found (JF-652)",
-                musician, match.Name, score);
+                "PlayArtistSongs: kana-origin query '{Query}' matched '{Match}' at score {Score} {Reason}, downgrading to not-found (JF-652)",
+                musician, match.Name, score, missReason);
             SkillResponse? songFallback = CrossMedia.TrySongFallback(
                 musician, user, session, context, locale, _songNgramIndex, _libraryManager, "PlayArtistSongs", cancellationToken);
             if (songFallback != null)
@@ -942,16 +948,16 @@ public class PlayArtistSongsIntentHandler : BaseHandler
 
         if (artistPool != null)
         {
-            var runnerUp = Util.ArtistSearch.FindNearTiedRunnerUp(musician, match, score, artistPool, pinnedIndex, userThreshold);
-            if (runnerUp != null)
+            var pair = Util.ArtistSearch.FindNearTiedRunnerUp(musician, match, score, artistPool, pinnedIndex, userThreshold);
+            if (pair != null)
             {
                 Logger.LogInformation(
                     "PlayArtistSongs: kana-origin query '{Query}' is a near-tie between '{Top}' ({TopScore}) and '{RunnerUp}' ({RunnerScore}), disambiguating (JF-652)",
-                    musician, match.Name, score, runnerUp.Value.Item.Name, runnerUp.Value.Score);
+                    musician, pair.Value.First.Name, pair.Value.FirstScore, pair.Value.Second.Name, pair.Value.SecondScore);
                 var matchInfos = new List<DisambiguationHelper.MatchInfo>
                 {
-                    new() { Id = match.Id.ToString(), Name = match.Name },
-                    new() { Id = runnerUp.Value.Item.Id.ToString(), Name = runnerUp.Value.Item.Name }
+                    new() { Id = pair.Value.First.Id.ToString(), Name = pair.Value.First.Name },
+                    new() { Id = pair.Value.Second.Id.ToString(), Name = pair.Value.Second.Name }
                 };
                 return DisambiguationHelper.AskMultipleArtists(matchInfos, locale);
             }
