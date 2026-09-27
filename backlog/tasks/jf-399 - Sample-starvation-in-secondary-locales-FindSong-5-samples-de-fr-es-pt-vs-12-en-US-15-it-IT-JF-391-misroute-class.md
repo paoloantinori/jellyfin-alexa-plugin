@@ -6,7 +6,7 @@ title: >-
 status: In Progress
 assignee: []
 created_date: '2026-08-23 05:56'
-updated_date: '2026-09-26 22:04'
+updated_date: '2026-09-27 06:22'
 labels:
   - nlu
   - interaction-model
@@ -68,4 +68,6 @@ STILL OPEN in this task: (a) the en-US scope note (523 samples vs 1250 it-IT; wh
 REMAINING in this task: (a) the en-US scope decision (carrier-noun expansion of PlaySong 38/PlayArtistSongs 34 toward the it-IT density), (b) the es-US market decision (Spanish FindSong or English-in-es-US; JF-406 tracks the routing side), (c) the hi-IN Decade value/synonym swap after handler work. All product calls.
 
 2026-09-27 FindSongByArtist parity pass (commit 28195a24, deployed, models rebuilt 17/17 SUCCEEDED, live-probed en/de/fr -> FindSongByArtistIntent; the ja probe hit FindSong, the openers overlap as designed): the dispatched headline starvation was stale (959dfcc fixed it); the audit found the real gap - FindSongByArtistIntent 16 in it-IT vs 3-4 in all 16 others. Brought every locale to its natural carrier space (7-12 new samples, all openers from each locale's own FindSong vocabulary; skipped carriers documented per header: morphological gaps, noun-axis limits, no invented grammar). NLU-competition safe (find/search verbs only). 9 new fixture expectations (the deploy probe). Audit residue for a future pass (not acted): PlayPlaylistIntent thin ar 6/hi 7/en-IN 6/en-CA 7/es-MX 8 vs en-US 20; PlayArtistSongsIntent ja 13/hi 15/ar 14 vs 34-43. One-line cleanup candidate: the ElicitSlots entry for FindSongByArtistIntent has no eliciting call site (pre-existing warning). REMAINING product calls unchanged: (a) en-US carrier-noun expansion, (b) es-US market decision, (c) hi-IN Decade swap.
+
+2026-09-27 RESIDUE PASS COMPLETE (commit in 9b0fc105's parent, deployed, models rebuilt 17/17 SUCCEEDED, live-probed): PlayPlaylistIntent ar 6->12 / en-IN 6->16 / en-CA 7->16 / es-MX 8->14 / hi 7->14; PlayArtistSongsIntent ja 13->21 / ar 14->21 / hi 15->23. Live: en-CA 'put on the playlist road trip', es-MX 'escucha la playlist rock clasico', hi 'meri playlist pasandida lagao' all -> PlayPlaylistIntent. The ja artist carriers exposed a REAL find (filed JF-642): noun-qualified artist voice in ja-JP is broadly stolen by PlayByGenre's free-text genre slot - even the canonical pre-existing '{musician} no uta wo saisei shite' routes to genre with two artists probed. The residue pass's ja samples are additive and harmless; JF-642 owns the steal. The task's executable surface is now EXHAUSTED: every starvation the audits found is fixed or owned by a filed task; what remains are the three product calls (en-US density, es-US market, hi Decade).
 <!-- SECTION:NOTES:END -->
