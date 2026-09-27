@@ -1689,6 +1689,17 @@ public sealed class PlaybackLaunchBuilder
 
         _logger.LogDebug("BuildAudioPlayerResponse: itemId={ItemId}, behavior={Behavior}, offsetMs={OffsetMs}, title={Title}, streamUrl={StreamUrl}",
             itemId, playBehavior, offsetInMilliseconds, item?.Name, RequestLogRedactor.RedactUrl(streamUrl));
+
+        // JF-393 completion: the one missing event class. Every AudioPlayer.Play the
+        // chokepoint issues, at Info with the [diag] prefix, gated on the same
+        // per-user/global flag as the other diag lines (the reconstruct-JF-392 chain
+        // needs issuance on the wire, not only the request that caused it).
+        if (Diagnostics.InteractionDiagnostics.IsEnabled(user, _config))
+        {
+            _logger.LogInformation(
+                "[diag] play issued: itemId={ItemId} behavior={Behavior} offsetMs={OffsetMs} token={Token}",
+                itemId, playBehavior, offsetInMilliseconds, itemId);
+        }
         string imageUrl = item != null ? GetImageUrl(itemId, user) : string.Empty;
         var imageSources = new AudioItemSources
         {
