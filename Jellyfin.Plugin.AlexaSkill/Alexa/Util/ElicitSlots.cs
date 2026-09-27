@@ -24,7 +24,6 @@ public static class ElicitSlots
         [IntentNames.PlayVideo] = new[] { "title" },
         [IntentNames.BrowseLibrary] = new[] { "browse_category", "filter" },
         [IntentNames.FindSongIntent] = new[] { IntentNames.Slots.TitleKeywords },
-        [IntentNames.FindSongByArtistIntent] = new[] { IntentNames.Slots.Musician },
         [IntentNames.PlayAlbum] = new[] { IntentNames.Slots.Album, IntentNames.Slots.Musician },
         [IntentNames.PlayArtistSongs] = new[] { IntentNames.Slots.Musician },
         [IntentNames.PlayEpisode] = new[] { "series_name", "season_number", "episode_number" },
