@@ -105,6 +105,14 @@ public class PlayAlbumIntentHandler : BaseHandler
         // (the musician slot also feeds the JF-489/JF-492 title retries), all comparing
         // against Latin library names; romanize once at the entry, before the calling
         // word logic (a romanized value is plain Latin input for it).
+        // JF-660: the album flag is captured on the PRE-romanization value (the same
+        // JF-652/JF-659 shape as the musician flag below); the entity fallback at the
+        // album miss receives the ROMANIZED local, so it needs the flag pinned. The
+        // later reassignments of `album` (JF-489/JF-492 retries, JF-411 resolution)
+        // all guarantee a non-empty album result downstream, so the fallback is never
+        // reached with their values and this capture stays the flag at that site.
+        string? canonicalAlbum = Util.SlotValueHelper.GetCanonicalValue(intentRequest, "album");
+        bool albumKanaOrigin = Util.ArtistSearch.IsKanaOriginQuery(canonicalAlbum, album);
         album = album is null ? null : Util.KatakanaRomanizer.Romanize(album);
         // JF-652: captured on the PRE-romanization value; feeds the JF-471
         // acceptance gate's kana bar below. JF-659: a canonical-bearing query keeps
@@ -564,7 +572,10 @@ public class PlayAlbumIntentHandler : BaseHandler
                 album!, jellyfinUser!, user, session, context, locale,
                 _libraryManager, _userDataManager, _queueManager, _artistIndex,
                 "PlayAlbum", cancellationToken,
-                notFoundMediaType: DisambiguationHelper.MediaTypeAlbum).ConfigureAwait(false);
+                notFoundMediaType: DisambiguationHelper.MediaTypeAlbum,
+                // JF-660: album is the ROMANIZED local; the flag captured on the raw
+                // slot at entry keeps the JF-652 artist bar live here.
+                kanaOrigin: albumKanaOrigin).ConfigureAwait(false);
             if (artistFallback != null)
             {
                 return artistFallback;

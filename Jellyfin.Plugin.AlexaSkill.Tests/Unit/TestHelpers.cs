@@ -713,6 +713,17 @@ internal sealed class FakeArtistIndex : IArtistIndex
     // The fake's state is fixed per instance, so it is already pinned: capture is the
     // identity (the same contract ArtistIndexService.SnapshotView honors).
     public IArtistIndex CaptureSnapshot() => this;
+
+    /// <summary>
+    /// Phonetic-code table for a <see cref="FakeArtistIndex"/> from the artists'
+    /// own names, via the production encoder (the KN collision between Queen and
+    /// Keane is the live tie shape, not a hand-written assumption). Hoisted here
+    /// (JF-660) from the kana test family; the two pre-existing private copies
+    /// (KanaOriginAcceptanceTests, MusicianErCanonicalTests) fold in on their next
+    /// edit.
+    /// </summary>
+    public static Dictionary<Guid, (string Primary, string? Alternate)> CodesFromArtistNames(params BaseItem[] artists)
+        => artists.ToDictionary(a => a.Id, a => DoubleMetaphone.Encode(a.Name!));
 }
 
 /// <summary>
@@ -877,10 +888,13 @@ internal sealed class SharedGateProbeHandler : BaseHandler
         IUserDataManager userDataManager,
         string logLabel,
         IArtistIndex? artistIndex,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? notFoundMediaType = null,
+        bool? kanaOrigin = null)
         => CrossMedia.TryEntityFallbackAsync(
             slotText, jellyfinUser, user, session, context, locale,
-            libraryManager, userDataManager, null, artistIndex, logLabel, cancellationToken);
+            libraryManager, userDataManager, null, artistIndex, logLabel, cancellationToken,
+            notFoundMediaType, kanaOrigin);
 
     /// <summary>
     /// JF-652: direct access to the JF-471 acceptance gate for the kana-bar tests
