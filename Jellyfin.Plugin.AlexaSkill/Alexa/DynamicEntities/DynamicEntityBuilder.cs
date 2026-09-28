@@ -34,6 +34,16 @@ public class DynamicEntityBuilder : IDisposable
     private const int DbQueryLimit = 55;
     private const int ArtistIndexLimit = 70;
     private const int LastPlayedCount = 5;
+
+    // JF-646 review: the ja kana variants (up to 5 per name) would eat the
+    // SHARED dynamic budget (90 total, 85 after the last-played reserve, spent
+    // across artists then albums then series then audiobooks at 1+synonyms per
+    // value: ~14 kana-enriched artists at cost 6 consume 84 of 85 and the
+    // turn-2+ surface silently loses albums/series). The dynamic surface keeps
+    // breadth instead: ja values carry the kana-first pair only. The full kana
+    // coverage belongs to the catalog upload, which has no shared budget.
+    private const int JaDynamicSynonymCap = 2;
+
     private static readonly TimeSpan LastPlayedCacheTtl = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan OutputCacheTtl = TimeSpan.FromMinutes(2);
 
@@ -536,6 +546,14 @@ public class DynamicEntityBuilder : IDisposable
         }
 
         var synonyms = PhoneticSynonymGenerator.GenerateSynonyms(item.Name, locale);
+
+        // JF-646 review: cap the ja dynamic arm BEFORE the cost arithmetic (the
+        // kana forms are ordered first, so Take keeps them).
+        if (Util.LocalePrefix.Of(locale) == "ja" && synonyms.Count > JaDynamicSynonymCap)
+        {
+            synonyms = synonyms.Take(JaDynamicSynonymCap).ToList();
+        }
+
         int cost = 1 + synonyms.Count;
 
         if (cost > budget)

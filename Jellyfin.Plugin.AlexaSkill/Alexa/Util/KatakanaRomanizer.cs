@@ -95,6 +95,68 @@ internal static class KatakanaRomanizer
     };
 
     /// <summary>
+    /// Reverse of the two syllabary tables above (romaji key like "ka", "shi",
+    /// "ti" -> canonical katakana), built from <see cref="Syllables"/> and
+    /// <see cref="Digraphs"/> so the kana->romaji and romaji->kana directions
+    /// share ONE syllable table and stay round-trip consistent by construction.
+    /// Consumed by the catalog-side Latin->kana synonym generator (JF-646).
+    /// Field order is load-bearing: static field initializers run in textual
+    /// order, so this field MUST stay after the two tables it reads.
+    /// Canonical choice on value collisions (several kana share one romaji
+    /// value: "a" is both ア and ァ, "ji" is both ジ and ヂ): the tie-break is
+    /// explicit and exhaustive, so dictionary enumeration order can never
+    /// decide it. Priority 0 is the modern full-size unigram; priority 1 is
+    /// every non-canonical unigram (small kana ァィゥェォ ャュョ ヮ, the obsolete
+    /// ヰヱヲ, and the historical-use ヂヅ that modern loanwords never use);
+    /// digraphs take 2 plus their first kana's priority, so the modern ジャ
+    /// outranks the ヂャ shape. No romaji value has two candidates at the SAME
+    /// priority, which is what makes the resolution deterministic by
+    /// construction.
+    /// </summary>
+    private static readonly Dictionary<string, string> ReverseSyllables = BuildReverseSyllables();
+
+    /// <summary>
+    /// Reverse syllabary lookup for the catalog-side Latin->kana generator
+    /// (JF-646): maps a romaji syllable key to its canonical katakana rendering.
+    /// </summary>
+    internal static bool TryKatakana(string romaji, [NotNullWhen(true)] out string? katakana)
+        => ReverseSyllables.TryGetValue(romaji, out katakana);
+
+    private static Dictionary<string, string> BuildReverseSyllables()
+    {
+        var canonical = new Dictionary<string, (string Kana, int Priority)>(StringComparer.Ordinal);
+        foreach (var kv in Digraphs)
+        {
+            KeepCanonical(canonical, kv.Value, string.Concat(kv.Key.First, kv.Key.Second), priority: 2 + KanaPriority(kv.Key.First));
+        }
+
+        foreach (var kv in Syllables)
+        {
+            KeepCanonical(canonical, kv.Value, kv.Key.ToString(), KanaPriority(kv.Key));
+        }
+
+        var map = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var kv in canonical)
+        {
+            map[kv.Key] = kv.Value.Kana;
+        }
+
+        return map;
+    }
+
+    private static void KeepCanonical(Dictionary<string, (string Kana, int Priority)> map, string romaji, string kana, int priority)
+    {
+        if (!map.TryGetValue(romaji, out var existing) || priority < existing.Priority)
+        {
+            map[romaji] = (kana, priority);
+        }
+    }
+
+    private static int KanaPriority(char kana)
+        => kana is 'ァ' or 'ィ' or 'ゥ' or 'ェ' or 'ォ' or 'ャ' or 'ュ' or 'ョ' or 'ヮ'
+           || kana is 'ヰ' or 'ヱ' or 'ヲ' or 'ヂ' or 'ヅ' ? 1 : 0;
+
+    /// <summary>
     /// Romanizes every kana run of the input, passing every other character
     /// (Latin, kanji, digits, spaces, punctuation) through unchanged. Returns
     /// the SAME instance when the input contains no kana, so Latin-only queries

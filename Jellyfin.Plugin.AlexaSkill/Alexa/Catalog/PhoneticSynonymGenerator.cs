@@ -13,6 +13,13 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
 public static class PhoneticSynonymGenerator
 {
     /// <summary>
+    /// The per-name catalog-slot cap the ja combiner applies, matching the
+    /// Romance generators (JF-362 raised it from 3 to 5 so the coverage variants
+    /// fit; device-captured forms are ordered first so they survive the cap).
+    /// </summary>
+    private const int PerNameVariantCap = 5;
+
+    /// <summary>
     /// Generates phonetic variant strings for a name, using the rules
     /// appropriate for the given locale.
     /// </summary>
@@ -37,10 +44,25 @@ public static class PhoneticSynonymGenerator
             "es" => SpanishPhoneticSynonyms.Generate(name),
             "fr" => FrenchPhoneticSynonyms.Generate(name),
             "pt" => PortuguesePhoneticSynonyms.Generate(name),
-            "ja" => JapanesePhoneticSynonyms.Generate(name),
+            "ja" => GenerateJapaneseSynonyms(name),
             "nl" => DutchPhoneticSynonyms.Generate(name),
             _ => new List<string>()
         };
+    }
+
+    /// <summary>
+    /// JF-646: the ja locale's catalog synonyms are the KATAKANA renderings of
+    /// the Latin names FIRST (ja ASR transcribes foreign names as kana, so the
+    /// kana forms are the device-captured forms that must survive the cap and
+    /// what catalog ER needs to resolve naturalized voice), then the
+    /// Latin-to-Latin romaji approximations (JapanesePhoneticSynonyms). Capped
+    /// like the Romance generators.
+    /// </summary>
+    private static List<string> GenerateJapaneseSynonyms(string name)
+    {
+        var results = KatakanaSynonymGenerator.Generate(name);
+        results.AddRange(JapanesePhoneticSynonyms.Generate(name));
+        return results.Distinct(StringComparer.OrdinalIgnoreCase).Take(PerNameVariantCap).ToList();
     }
 
     // --- JF-362: pronunciation rules shared by the /ŋ/-absent Romance generators ---
