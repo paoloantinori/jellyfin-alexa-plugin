@@ -158,7 +158,7 @@ public class PlayByGenreIntentHandler : BaseHandler
 
         IReadOnlyList<BaseItem> items = await GetGenreItemsAsync(genreQuery).ConfigureAwait(false);
 
-        if (items.Count == 0 && canonicalGenre == null && Util.KatakanaRomanizer.ContainsKana(genreSlot))
+        if (items.Count == 0 && Util.ArtistSearch.IsKanaOriginQuery(canonicalGenre, genreSlot))
         {
             // JF-643: romanization puts the query in Latin script, but the server-side
             // Genres filter is exact CleanValue equality, so 'jazu' still misses the tag

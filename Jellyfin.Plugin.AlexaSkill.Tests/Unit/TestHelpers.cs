@@ -232,8 +232,9 @@ internal static class TestHelpers
     /// <summary>
     /// A slot carrying an ER authority: an ER_SUCCESS_MATCH resolving
     /// <paramref name="rawValue"/> to <paramref name="canonical"/> by default, or
-    /// any other status code for the no-match shapes (JF-659 hoist; the ONE
-    /// hand-built Alexa.NET resolution graph for slot-canonical tests).
+    /// any other status code for the no-match shapes (JF-659 hoist; the shared
+    /// builder of the JF-642/JF-659 suites - four per-class builders persist
+    /// elsewhere, their hoist is JF-653).
     /// </summary>
     /// <param name="slotName">The slot's name; defaults to the musician slot the
     /// JF-659 suites exercise.</param>
