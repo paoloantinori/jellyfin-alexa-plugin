@@ -4,9 +4,10 @@ title: >-
   JF-659 - read the ER canonical for musician slots at the artist entry points
   (the genre-canonical pattern): an ER-resolved クイーン should play Queen directly,
   not hit the Keane/Queen tie ask
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-28 04:29'
+updated_date: '2026-09-28 10:23'
 labels:
   - nlu
   - search
@@ -202,3 +203,9 @@ in a normal 6m23s: a transient host-contention stall (the box was at 25G/31G
 memory after three back-to-back suite runs), not a code failure; flagged here
 rather than silently dropped.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Landed 2026-09-28 as merges 0d460851 + the marker-pass commit 48598cbd (pushed; deployed with the full checklist, config intact; post-deploy probes green: the raw simulator path keeps the JF-652 honest tie ask, the genre control plays, the Latin control plays Queen directly): the musician ER-canonical read. The genre-canonical pattern applied at all 7 musician-slot handlers (8 read sites, the grep-verified roster): canonical feeds the search verbatim (the ER-resolution invariant makes the kana bar inert; a kana canonical exact-self-matches its own name and the docs say so), raw keeps speech and session (the JF-642 F-1 class respected at every NotFound site). Two code-review rounds: the marker pass caught the title-guessing inconsistency (an ER-resolved artist guessed as a song/album TITLE on the stale-catalog miss path) - both the JF-492 album retry and TrySongFallback now SKIP when the canonical is present, bait-pinned against same-titled items; the ER coverage extended to PlayAlbum, QueryArtistLibrary, and both FindSong legs; one kana-origin definition everywhere (the genre gate's inline conjuncts routed through it in the marker simplify); ResolvedSlot parameterized with its doc claim corrected. Gates: /simplify (worker + the completion-gate marker pass, findings applied or reverted-with-reason) and code-review (worker + the skill marker in the orchestrator transcript, 6 findings applied), suites 4668/4668 both TFMs (orchestrator-verified; the net10 transient dispositioned as host contention by the clean rerun); the marker-pass targeted battery 41/41. Live ja flow now: catalog ER selects the artist intent (JF-646) AND the resolved canonical plays directly on a real device; the simulator raw path honestly asks on ties. The device ER probe is Paolo's.
+<!-- SECTION:FINAL_SUMMARY:END -->
