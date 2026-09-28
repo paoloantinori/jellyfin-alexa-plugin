@@ -82,6 +82,10 @@ public class PlayNextIntentHandler : BaseHandler
 
         string? songQuery = intentRequest.Intent.Slots?["song"]?.Value;
         string? musicianQuery = intentRequest.Intent.Slots?["musician"]?.Value;
+        // JF-659: the ER canonical feeds the artist search; musicianQuery keeps
+        // driving the not-found speech (the JF-642 F-1 lesson; SlotValueHelper
+        // owns the full contract).
+        string? canonicalMusician = Util.SlotValueHelper.GetCanonicalValue(intentRequest, "musician");
 
         Logger.LogDebug("PlayNext: entered, song={SongQuery}, musician={MusicianQuery}", songQuery, musicianQuery);
 
@@ -118,7 +122,7 @@ public class PlayNextIntentHandler : BaseHandler
         if (!string.IsNullOrWhiteSpace(musicianQuery))
         {
             IReadOnlyList<BaseItem> artists = await Util.ArtistSearch.SearchAsync(
-                musicianQuery, user, _libraryManager, _artistIndex, Logger,
+                canonicalMusician ?? musicianQuery, user, _libraryManager, _artistIndex, Logger,
                 (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtistsForPlayNext", ct),
                 locale, cancellationToken).ConfigureAwait(false);
 

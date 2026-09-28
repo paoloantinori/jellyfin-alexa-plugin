@@ -97,6 +97,11 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
             }
         }
 
+        // JF-659: the ER canonical feeds the artist search and the song fallback;
+        // `musician` keeps driving the not-found speech (the JF-642 F-1 lesson;
+        // SlotValueHelper owns the full contract).
+        string? canonicalMusician = Util.SlotValueHelper.GetCanonicalValue(intentRequest, "musician");
+
         Logger.LogDebug("QueryArtistLibrary: entered, locale={Locale}, musician={Musician}, queryType={QueryType}", locale, musician, queryType);
 
         // JF-550 (dead-mic sweep; JF-549 class).
@@ -122,8 +127,10 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
             return userError;
         }
 
+        string musicianSearch = canonicalMusician ?? musician;
+
         IReadOnlyList<BaseItem> artists = await Util.ArtistSearch.SearchAsync(
-            musician, user, _libraryManager, _artistIndex, Logger,
+            musicianSearch, user, _libraryManager, _artistIndex, Logger,
             (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", ct),
             locale, cancellationToken).ConfigureAwait(false);
 
@@ -135,7 +142,7 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
             // PlayArtistSongs feeds this intent's musician slot ('cosa abbiamo di
             // sugar free jazz'); serve the song instead of a dead-end not-found.
             SkillResponse? songFallback = CrossMedia.TrySongFallback(
-                musician, user, session, context, locale, _songNgramIndex, _libraryManager, "QueryArtistLibrary", cancellationToken);
+                musicianSearch, user, session, context, locale, _songNgramIndex, _libraryManager, "QueryArtistLibrary", cancellationToken);
             if (songFallback != null)
             {
                 return songFallback;

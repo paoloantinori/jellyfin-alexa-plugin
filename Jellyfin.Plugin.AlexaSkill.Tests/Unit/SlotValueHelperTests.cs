@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using Alexa.NET.Request;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Xunit;
 
@@ -62,5 +64,65 @@ public class SlotValueHelperTests
     {
         // Guard against accidentally changing the documented Alexa hard limit.
         Assert.Equal(140, SlotValueHelper.MaxSlotValueLength);
+    }
+
+    // --- GetCanonicalValue (JF-642 slot read; JF-659 request overload + null slot) ---
+
+    [Fact]
+    public void GetCanonicalValue_MatchedAuthority_ReturnsCanonical()
+    {
+        Assert.Equal("Queen", SlotValueHelper.GetCanonicalValue(TestHelpers.ResolvedSlot("クイーン", "Queen")));
+    }
+
+    [Fact]
+    public void GetCanonicalValue_NoMatchStatus_ReturnsNull()
+    {
+        // The unmatched free-text shape (ER_NO_MATCH): the caller must keep the raw.
+        Assert.Null(SlotValueHelper.GetCanonicalValue(TestHelpers.ResolvedSlot("zzzqqq", "x", statusCode: "ER_NO_MATCH")));
+    }
+
+    [Fact]
+    public void GetCanonicalValue_NoResolution_ReturnsNull()
+    {
+        Assert.Null(SlotValueHelper.GetCanonicalValue(TestHelpers.ResolvedSlot("queen", canonical: null)));
+    }
+
+    [Fact]
+    public void GetCanonicalValue_NullSlot_ReturnsNull()
+    {
+        // The null-conditional slot extraction (Slots?["musician"]) can hand the
+        // helper an absent slot; it reads as no match, never throws.
+        Assert.Null(SlotValueHelper.GetCanonicalValue(null));
+    }
+
+    [Fact]
+    public void GetCanonicalValue_RequestOverload_AbsentSlot_ReturnsNull()
+    {
+        var intent = new global::Alexa.NET.Request.Intent { Name = "x" };
+        intent.Slots = new Dictionary<string, Slot>();
+        var request = new global::Alexa.NET.Request.Type.IntentRequest { Intent = intent };
+
+        Assert.Null(SlotValueHelper.GetCanonicalValue(request, "musician"));
+    }
+
+    [Fact]
+    public void GetCanonicalValue_RequestOverload_NoSlotsDictionary_ReturnsNull()
+    {
+        var request = new global::Alexa.NET.Request.Type.IntentRequest
+        {
+            Intent = new global::Alexa.NET.Request.Intent { Name = "x" }
+        };
+
+        Assert.Null(SlotValueHelper.GetCanonicalValue(request, "musician"));
+    }
+
+    [Fact]
+    public void GetCanonicalValue_RequestOverload_MatchedSlot_ReturnsCanonical()
+    {
+        var intent = new global::Alexa.NET.Request.Intent { Name = "x" };
+        intent.Slots = new Dictionary<string, Slot> { ["musician"] = TestHelpers.ResolvedSlot("クイーン", "Queen") };
+        var request = new global::Alexa.NET.Request.Type.IntentRequest { Intent = intent };
+
+        Assert.Equal("Queen", SlotValueHelper.GetCanonicalValue(request, "musician"));
     }
 }

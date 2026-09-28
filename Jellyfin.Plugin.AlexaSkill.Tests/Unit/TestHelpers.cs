@@ -230,6 +230,39 @@ internal static class TestHelpers
         => response.Response?.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
 
     /// <summary>
+    /// A slot carrying an ER authority: an ER_SUCCESS_MATCH resolving
+    /// <paramref name="rawValue"/> to <paramref name="canonical"/> by default, or
+    /// any other status code for the no-match shapes (JF-659 hoist; the ONE
+    /// hand-built Alexa.NET resolution graph for slot-canonical tests).
+    /// </summary>
+    internal static Slot ResolvedSlot(string rawValue, string? canonical, string statusCode = "ER_SUCCESS_MATCH")
+    {
+        var slot = new Slot { Name = "musician", Value = rawValue };
+        if (canonical != null)
+        {
+            slot.Resolution = new Resolution
+            {
+                Authorities = new[]
+                {
+                    new ResolutionAuthority
+                    {
+                        Status = new ResolutionStatus { Code = statusCode },
+                        Values = new[]
+                        {
+                            new ResolutionValueContainer
+                            {
+                                Value = new ResolutionValue { Name = canonical }
+                            }
+                        }
+                    }
+                }
+            };
+        }
+
+        return slot;
+    }
+
+    /// <summary>
     /// JF-562/JF-564: a context whose AudioPlayer carries the given stream token on a
     /// PLAYING device (the token-vs-ledger displacement shape the transport suites
     /// exercise; previously one private copy per suite). JF-315 batch 5: the player

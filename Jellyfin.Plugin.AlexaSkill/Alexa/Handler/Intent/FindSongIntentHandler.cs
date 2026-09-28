@@ -228,8 +228,13 @@ public class FindSongIntentHandler : BaseHandler
             string artistInput = musician.Trim();
             sessionData.ArtistName = artistInput;
 
+            // JF-659: the ER canonical feeds the artist search; ArtistName stays
+            // the raw input, never the canonical (the JF-642 F-1 lesson;
+            // SlotValueHelper owns the full contract).
+            string artistSearchInput = SlotValueHelper.GetCanonicalValue(intentRequest, "musician") ?? artistInput;
+
             IReadOnlyList<BaseItem> artists = await ArtistSearch.SearchAsync(
-                artistInput, user, _libraryManager, _artistIndex, Logger,
+                artistSearchInput, user, _libraryManager, _artistIndex, Logger,
                 (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", ct),
                 locale, cancellationToken).ConfigureAwait(false);
 
@@ -286,9 +291,17 @@ public class FindSongIntentHandler : BaseHandler
                 sessionData, FindSongState.AwaitingArtist);
         }
 
+        // JF-659: when the musician slot supplied the input, the ER canonical is
+        // the search query; the raw value keeps driving the not-found re-prompt
+        // (the JF-642 F-1 lesson). The transcript/anySlot legs have no slot to
+        // resolve.
+        string artistSearchInput = !string.IsNullOrWhiteSpace(musician)
+            ? SlotValueHelper.GetCanonicalValue(intentRequest, "musician") ?? artistInput
+            : artistInput;
+
         // Resolve the artist
         IReadOnlyList<BaseItem> artists = await ArtistSearch.SearchAsync(
-            artistInput, user, _libraryManager, _artistIndex, Logger,
+            artistSearchInput, user, _libraryManager, _artistIndex, Logger,
             (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", ct),
             locale, cancellationToken).ConfigureAwait(false);
 
