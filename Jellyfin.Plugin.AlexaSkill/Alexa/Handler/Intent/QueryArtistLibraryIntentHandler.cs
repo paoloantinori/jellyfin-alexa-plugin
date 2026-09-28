@@ -141,11 +141,18 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
             // JF-440 sibling coverage: the same NLU coin flip that feeds
             // PlayArtistSongs feeds this intent's musician slot ('cosa abbiamo di
             // sugar free jazz'); serve the song instead of a dead-end not-found.
-            SkillResponse? songFallback = CrossMedia.TrySongFallback(
-                musicianSearch, user, session, context, locale, _songNgramIndex, _libraryManager, "QueryArtistLibrary", cancellationToken);
-            if (songFallback != null)
+            // JF-659 (gate review, finding 2): skipped when the slot is
+            // ER-resolved: an ER match is artist evidence, so guessing the
+            // resolved name as a song TITLE could play an unrelated song titled
+            // like the artist.
+            if (canonicalMusician == null)
             {
-                return songFallback;
+                SkillResponse? songFallback = CrossMedia.TrySongFallback(
+                    musicianSearch, user, session, context, locale, _songNgramIndex, _libraryManager, "QueryArtistLibrary", cancellationToken);
+                if (songFallback != null)
+                {
+                    return songFallback;
+                }
             }
 
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundArtist", locale, musician));

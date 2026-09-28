@@ -40,9 +40,10 @@ public static class SlotValueHelper
     /// 'クイーン' to the library artist name, JF-659's JellyfinArtist slots);
     /// free-text types and unmatched values return null so the caller keeps the
     /// raw slot value. Pairing rule (the JF-642 genre / JF-659 musician contract,
-    /// the ONE owner of it): the canonical is a Latin library name by
-    /// construction, so it feeds the SEARCH verbatim while the raw value keeps
-    /// driving speech and session (never reassign the raw local).
+    /// the ONE owner of it): the canonical feeds the SEARCH VERBATIM regardless
+    /// of script (a kana-named library's canonical IS kana and exact-self-matches
+    /// its own name; romanizing it would destroy that hit) while the raw value
+    /// keeps driving speech and session (never reassign the raw local).
     /// </summary>
     /// <param name="slot">The slot to read entity resolution from; null (an absent slot) reads as no match.</param>
     /// <returns>The canonical slot value, or null when no authority matched.</returns>

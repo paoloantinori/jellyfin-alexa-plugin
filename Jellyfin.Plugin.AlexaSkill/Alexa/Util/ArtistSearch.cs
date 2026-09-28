@@ -94,10 +94,12 @@ internal static class ArtistSearch
     /// <summary>
     /// JF-659: whether a musician query is kana-origin, the ONE definition of the
     /// origin flag the JF-652 acceptance bar consumes (PlayArtistSongs, the JF-471
-    /// album-by-artist gate). A query carrying an ER canonical is Latin by
-    /// construction, so the flag is false for it and the kana bar is inert: the
-    /// ER match IS the collision evidence the bar demands. The canonical is
-    /// slot-layer knowledge, so it arrives here as a plain string rather than
+    /// album-by-artist gate, CrossMediaFallback). A query carrying an ER canonical
+    /// keeps the flag false WHATEVER the canonical's script: ER resolution, not
+    /// Latinity, is what makes the bar inert (the ER match IS the collision
+    /// evidence the bar demands), and the canonical is fed verbatim, so a
+    /// kana-named library's kana canonical still exact-self-matches. The canonical
+    /// is slot-layer knowledge, so it arrives here as a plain string rather than
     /// inside <see cref="PassesKanaOriginAcceptance(string, BaseItem, int, int, IArtistIndex?)"/>,
     /// which stays slot-agnostic by design.
     /// </summary>

@@ -293,14 +293,17 @@ public class PlayAlbumIntentHandler : BaseHandler
                 // out of the way; the retry results feed the play path without a
                 // re-query, the JF-489 hit-path mechanism); a miss keeps today's
                 // not-found naming the searched value. Skipped entirely when the
-                // JF-489 retry already missed this exact value as a title.
-                if (string.IsNullOrWhiteSpace(album) && !musicianSlotTitleRetryMissed)
+                // JF-489 retry already missed this exact value as a title, and
+                // JF-659 (gate review, finding 1): skipped entirely when the slot
+                // is ER-resolved. An ER match is positive evidence the user named
+                // an ARTIST, so the "the slot actually carried a title" premise is
+                // void; keeping only the raw value was no guard in the catalog-
+                // typed locales (raw == canonical modulo case, and the
+                // case-insensitive SearchTerm erases the difference), so a
+                // stale-catalog miss would still auto-play an unrelated album
+                // literally titled like the artist.
+                if (string.IsNullOrWhiteSpace(album) && canonicalMusician == null && !musicianSlotTitleRetryMissed)
                 {
-                    // JF-659 (code review F1): the title retry keeps the RAW value.
-                    // An ER-resolved slot is positive evidence the user named an
-                    // ARTIST, so the "the slot actually carried a title" premise is
-                    // void for the canonical and guessing it as a title could
-                    // auto-play a same-titled album by another artist.
                     string artistMissTitle = musician!;
                     Logger.LogDebug(
                         "PlayAlbum: artist search missed and the album slot is empty, retrying '{Musician}' as an album title (JF-492)",

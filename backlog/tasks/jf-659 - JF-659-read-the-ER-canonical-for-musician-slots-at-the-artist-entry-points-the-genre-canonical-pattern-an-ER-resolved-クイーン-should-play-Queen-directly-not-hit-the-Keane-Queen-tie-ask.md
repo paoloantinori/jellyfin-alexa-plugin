@@ -147,4 +147,58 @@ locale-string, or config changes, so the model/locale validators are unaffected
 and no NLU fixtures moved. Orchestrator probes unchanged from the dispatch:
 profile-nlu and the simulator raw path should be unchanged; the device ER probe
 is Paolo's.
+
+2026-09-28 gate-marker review round 2 (six findings, ALL applied as one
+review commit; it SUPERSEDES the round-1 F1 shape: the JF-492 title retry no
+longer merely keeps the raw value, it SKIPS entirely when the slot is
+ER-resolved):
+
+F1+F2 (the correctness pair): the F1 evidence rule was applied inconsistently
+on the stale-catalog miss path. The raw-keep alone was vacuous in the 8
+catalog-typed locales (raw == canonical modulo case, and the case-insensitive
+SearchTerm erases the difference), so a stale-catalog artist miss could still
+auto-play an unrelated album literally titled like the artist; and the
+canonical was fed to CrossMedia.TrySongFallback at PlayArtistSongs and
+QueryArtistLibrary, guessing an ER-resolved ARTIST name as a song TITLE (the
+same wrong-play class; pre-change the romanized raw missed and the honest
+not-found answered). BOTH title guesses now SKIP when the slot is
+ER-resolved: the honest not-found answers. Pinned by
+PlayAlbum_ErResolvedMusician_ArtistMiss_SkipsTitleRetry_HonestNotFound (a
+bait album titled 'Queen' is mock-available; zero album queries are issued)
+and QueryArtistLibrary_ErResolvedMusician_ArtistMiss_SkipsSongFallback_
+HonestNotFound (a bait song titled 'Queen' at score 95 over the 65 bar; no
+play). The kana-gated TrySongFallback copy inside ApplyKanaOriginAcceptance
+needed no change (unreachable with a canonical by the flag invariant).
+
+F3 (doc accuracy): SlotValueHelper's pairing doc and IsKanaOriginQuery's doc
+claimed 'the canonical is a Latin library name by construction', false for a
+kana-named library (the round-1 F5 residual admitted it). Both now state the
+real invariant: the canonical feeds the search VERBATIM regardless of script
+(a kana canonical exact-self-matches its own library name; a future defensive
+Romanize(canonical) would destroy that hit), and ER resolution, not
+Latinity, is what makes the JF-652 bar inert.
+
+F4 (coverage): the two pins above, plus BOTH FindSong conditional legs
+(first invocation, and AwaitingArtist through the session-attributes
+overload): raw 'zzzqqq' + canonical 'Queen' resolves the artist (the
+elicited session data carries the resolved artist id), proving the canonical
+drove the search on each leg. The non-musician (transcript/anySlot) legs are
+structurally guarded by the same ternary and resolve nothing canonical.
+
+F5 (one definition): CrossMediaFallback's third kana-origin computation
+migrated to ArtistSearch.IsKanaOriginQuery(null, slotText); the ONE-
+definition doc claim is now true at every site.
+
+F6 (test helper): TestHelpers.ResolvedSlot parameterized on the slot name
+(default 'musician') so its generic-builder doc is honest.
+
+VERIFICATION TAIL (round 2): build 0 errors 0 warnings both TFMs; suite
+4668/4668 net9.0 and 4668/4668 net10.0 (round-1 state 4664 + 4 new
+MusicianErCanonicalTests pins: the PlayAlbum retry-skip, the QueryArtistLibrary
+fallback-skip, the two FindSong legs). One net10.0 leg of the first round-2
+run stalled (36m duration, 4667/4668, the failing test name lost to the
+output filter) and the immediate rerun of the SAME binary passed 4668/4668
+in a normal 6m23s: a transient host-contention stall (the box was at 25G/31G
+memory after three back-to-back suite runs), not a code failure; flagged here
+rather than silently dropped.
 <!-- SECTION:NOTES:END -->

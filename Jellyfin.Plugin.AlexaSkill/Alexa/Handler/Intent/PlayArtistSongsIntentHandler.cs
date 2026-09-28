@@ -504,12 +504,19 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             // to the artist reading. Before giving up, try the song index and serve
             // the song with a FoundSongInstead announcement. Returns null when the
             // fallback does not apply (guard/miss/warming), leaving the clean
-            // NotFoundArtist below.
-            SkillResponse? songFallback = CrossMedia.TrySongFallback(
-                musicianQuery, user, session, context, locale, _songNgramIndex, _libraryManager, "PlayArtistSongs", cancellationToken);
-            if (songFallback != null)
+            // NotFoundArtist below. JF-659 (gate review, finding 2): skipped when
+            // the slot is ER-resolved: an ER match is artist evidence, so guessing
+            // the resolved name as a song TITLE could play an unrelated song titled
+            // like the artist (pre-change the romanized raw missed and the honest
+            // not-found answered).
+            if (canonicalMusician == null)
             {
-                return songFallback;
+                SkillResponse? songFallback = CrossMedia.TrySongFallback(
+                    musicianQuery, user, session, context, locale, _songNgramIndex, _libraryManager, "PlayArtistSongs", cancellationToken);
+                if (songFallback != null)
+                {
+                    return songFallback;
+                }
             }
 
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundArtist", locale, musician));

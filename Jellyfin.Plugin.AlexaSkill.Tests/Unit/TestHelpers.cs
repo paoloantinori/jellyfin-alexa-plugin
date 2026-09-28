@@ -235,9 +235,11 @@ internal static class TestHelpers
     /// any other status code for the no-match shapes (JF-659 hoist; the ONE
     /// hand-built Alexa.NET resolution graph for slot-canonical tests).
     /// </summary>
-    internal static Slot ResolvedSlot(string rawValue, string? canonical, string statusCode = "ER_SUCCESS_MATCH")
+    /// <param name="slotName">The slot's name; defaults to the musician slot the
+    /// JF-659 suites exercise.</param>
+    internal static Slot ResolvedSlot(string rawValue, string? canonical, string statusCode = "ER_SUCCESS_MATCH", string slotName = "musician")
     {
-        var slot = new Slot { Name = "musician", Value = rawValue };
+        var slot = new Slot { Name = slotName, Value = rawValue };
         if (canonical != null)
         {
             slot.Resolution = new Resolution

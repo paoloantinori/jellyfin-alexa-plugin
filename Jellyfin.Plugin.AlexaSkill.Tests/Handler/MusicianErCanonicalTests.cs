@@ -9,6 +9,7 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Handler.Intent;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
@@ -18,6 +19,7 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
 using Moq;
+using Newtonsoft.Json;
 using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
@@ -196,6 +198,162 @@ public class MusicianErCanonicalTests : PluginTestBase, IDisposable
         Assert.NotNull(response);
         Assert.True(HasAudioPlayerDirective(response), "the ER-resolved artist filter must lead to a play");
         Assert.Contains(artistScopedSongQueries, ids => ids.Length == 1 && ids[0] == queen.Id);
+    }
+
+    // ---------------------------------------------------------------
+    // Gate review round 2: the F1 evidence rule on the miss path
+    // (an ER-resolved artist name is never guessed as a TITLE)
+    // ---------------------------------------------------------------
+
+    [Fact]
+    public async Task PlayAlbum_ErResolvedMusician_ArtistMiss_SkipsTitleRetry_HonestNotFound()
+    {
+        // The catalog-typed-locale shape (raw 'queen', canonical 'Queen', the
+        // case-insensitive SearchTerm erases the difference): a stale-catalog
+        // artist miss must NOT retry the resolved name as an album title even
+        // though a same-titled album exists; the honest not-found answers.
+        var handler = new PlayAlbumIntentHandler(
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory);
+        var request = CreateAlbumIntent("queen", "Queen");
+        _fx.SetupUserMock();
+
+        var baitAlbum = new MusicAlbum { Name = "Queen", Id = Guid.NewGuid() };
+        var albumQueries = new List<string>();
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) =>
+            {
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(Jellyfin.Data.Enums.BaseItemKind.MusicAlbum))
+                {
+                    albumQueries.Add(q.SearchTerm ?? string.Empty);
+                    return new List<BaseItem> { baitAlbum };
+                }
+
+                return new List<BaseItem>();
+            });
+
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.True(response.Response.ShouldEndSession == true, "the honest not-found Tell ends the session");
+        Assert.Null(TestHelpers.GetPlayDirective(response));
+        Assert.Empty(albumQueries);
+    }
+
+    [Fact]
+    public async Task QueryArtistLibrary_ErResolvedMusician_ArtistMiss_SkipsSongFallback_HonestNotFound()
+    {
+        // The same evidence rule on the song-title fallback: the song index is
+        // primed with a song TITLED like the resolved artist (score 95, far over
+        // the 65 bar), and the ER-resolved miss must still speak the honest
+        // artist not-found instead of playing it.
+        var baitSong = new Audio { Name = "Queen", Id = Guid.NewGuid() };
+        var handler = new QueryArtistLibraryIntentHandler(
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory,
+            artistIndex: null,
+            songNgramIndex: new TestHelpers.FakeSongIndex((baitSong, 95.0)));
+        var request = CreateQueryArtistIntent("queen", "Queen");
+        _fx.SetupUserMock();
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.True(response.Response.ShouldEndSession == true, "the honest not-found Tell ends the session");
+        Assert.Null(TestHelpers.GetPlayDirective(response));
+        Assert.NotNull(response.Response.OutputSpeech);
+    }
+
+    // ---------------------------------------------------------------
+    // FindSong: the canonical leg resolves the artist, the raw legs do not
+    // ---------------------------------------------------------------
+
+    [Fact]
+    public async Task FindSong_ErResolvedMusician_FirstInvocation_ResolvesCanonicalArtist()
+    {
+        // The raw slot value ('zzzqqq') matches nothing on its own; only the ER
+        // canonical ('Queen') resolves the artist, so the elicited session data
+        // carrying the artist id proves the canonical drove the search.
+        var queen = Queen();
+        var index = new FakeArtistIndex(new[] { queen }, CodesFromNames(queen));
+        var handler = new FindSongIntentHandler(
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory,
+            index);
+        _fx.SetupUserMock();
+
+        var intent = new Intent { Name = IntentNames.FindSongByArtistIntent };
+        intent.Slots = new Dictionary<string, Slot> { ["musician"] = TestHelpers.ResolvedSlot("zzzqqq", "Queen") };
+        var request = new IntentRequest { Intent = intent, Locale = "en-US", RequestId = "test-req" };
+
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
+
+        string? sessionJson = response.SessionAttributes?.GetValueOrDefault(FindSongIntentHandler.SessionDataKey)?.ToString();
+        Assert.NotNull(sessionJson);
+        Assert.Contains(queen.Id.ToString(), sessionJson);
+    }
+
+    [Fact]
+    public async Task FindSong_ErResolvedMusician_AwaitingArtist_ResolvesCanonicalArtist()
+    {
+        // The AwaitingArtist wiring: the musician leg carries the canonical while
+        // the raw value alone resolves nothing; the stored session data must end
+        // with the canonical artist resolved.
+        var queen = Queen();
+        var index = new FakeArtistIndex(new[] { queen }, CodesFromNames(queen));
+        var handler = new FindSongIntentHandler(
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory,
+            index);
+        _fx.SetupUserMock();
+
+        var intent = new Intent { Name = IntentNames.FindSongIntent };
+        intent.Slots = new Dictionary<string, Slot> { ["musician"] = TestHelpers.ResolvedSlot("zzzqqq", "Queen") };
+        var request = new IntentRequest { Intent = intent, Locale = "en-US", RequestId = "test-req" };
+        var sessionAttributes = new Dictionary<string, object>
+        {
+            [FindSongIntentHandler.SessionDataKey] = JsonConvert.SerializeObject(new FindSongSessionData { State = FindSongState.AwaitingArtist })
+        };
+
+        SkillResponse response = await handler.HandleAsync(
+            request, _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), sessionAttributes, CancellationToken.None);
+
+        string? sessionJson = response.SessionAttributes?.GetValueOrDefault(FindSongIntentHandler.SessionDataKey)?.ToString();
+        Assert.NotNull(sessionJson);
+        Assert.Contains(queen.Id.ToString(), sessionJson);
+    }
+
+    private static IntentRequest CreateAlbumIntent(string musician, string canonical)
+    {
+        var intent = new Intent { Name = IntentNames.PlayAlbum };
+        intent.Slots = new Dictionary<string, Slot> { ["musician"] = TestHelpers.ResolvedSlot(musician, canonical) };
+        return new IntentRequest { Intent = intent, Locale = "en-US", RequestId = "test-req" };
+    }
+
+    private static IntentRequest CreateQueryArtistIntent(string musician, string canonical)
+    {
+        var intent = new Intent { Name = IntentNames.QueryArtistLibrary };
+        intent.Slots = new Dictionary<string, Slot> { ["musician"] = TestHelpers.ResolvedSlot(musician, canonical) };
+        return new IntentRequest { Intent = intent, Locale = "en-US", RequestId = "test-req" };
     }
 
     public void Dispose() => _fx.LoggerFactory.Dispose();
