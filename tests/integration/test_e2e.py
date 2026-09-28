@@ -64,6 +64,8 @@ _reset_initialized: set[str] = set()
 # Locales where an open simulation already hit the chronic outage class in
 # this process (JF-656): later smoke tests in the locale skip the open
 # attempt instead of burning the open+retry pair (~20s) per test.
+# Process-local and one-way: never re-probed after a mid-run recovery, and
+# invisible to a parallel run (no xdist today), so the flag is best-effort.
 _open_outage_locales: set[str] = set()
 
 
@@ -1019,6 +1021,11 @@ def test_e2e_smoke_two_step(
                 open_response = client.simulate(open_utterance)
         except SmapiUnexpectedError as exc:
             _open_outage_locales.add(locale)
+            # The failed open leaves the dialog state unknown: assume open
+            # so the next test resets (same policy as the full-chain path;
+            # a prefixed one-shot against a stale open dialog is captured
+            # into the elicited slot and misroutes).
+            _open_sessions.add(locale)
             logger.warning(
                 "OPEN FALLBACK (%s): open simulation hit the outage class, "
                 "falling back to a one-shot command: %s",

@@ -146,6 +146,7 @@ class SmapiClient:
         "de-DE": "frage {inv} nach ",
         "es-ES": "pide a {inv} que ",
         "es-MX": "pide a {inv} que ",
+        "es-US": "pide a {inv} que ",
         "ja-JP": "{inv} を開いて ",
         "pt-BR": "peça para {inv} ",
         # JF-400 2026-08-29: these three were missing and fell back to the English
@@ -181,9 +182,19 @@ class SmapiClient:
         simulation_id = init_response.get("id", "")
         status = init_response.get("status", "")
 
-        if status in ("SUCCESSFUL", "FAILED"):
+        if status == "SUCCESSFUL":
             _last_smapi_call = time.time()
             return init_response
+
+        # A FAILED that arrives in the initiation response skips the poll
+        # loop entirely: classify it here too, or the outage type would
+        # never fire on the fast-fail path.
+        if status == "FAILED":
+            _last_smapi_call = time.time()
+            raise self._failed_simulation_error(
+                init_response.get("result", {}).get("error", {}).get("message", ""),
+                utterance, self.locale, detail="",
+            )
 
         if not simulation_id:
             raise SmapiError(
@@ -197,6 +208,23 @@ class SmapiClient:
 
         # Poll until completion with progress logging
         return self._poll_simulation(simulation_id, utterance)
+
+    @staticmethod
+    def _failed_simulation_error(
+        error_msg: str, utterance: str, locale: str, detail: str
+    ) -> SmapiError:
+        """The error for a FAILED simulation, typed for the outage class.
+
+        The marker is checked against error_msg alone (the platform's cause
+        field): the composed message embeds the utterance, whose text must
+        never trigger the classification.
+        """
+        message = (
+            f"Simulation failed {detail}for '{utterance}' ({locale}): {error_msg}"
+        )
+        if _OUTAGE_ERROR_MARKER in error_msg.lower():
+            return SmapiUnexpectedError(message)
+        return SmapiError(message)
 
     def _initiate_simulation(
         self, full_utterance: str, stage: str
@@ -279,13 +307,9 @@ class SmapiClient:
                     .get("error", {})
                     .get("message", "")
                 )
-                message = (
-                    f"Simulation failed after {elapsed:.1f}s for '{utterance}' "
-                    f"({self.locale}): {error_msg}"
+                raise self._failed_simulation_error(
+                    error_msg, utterance, self.locale, f"after {elapsed:.1f}s "
                 )
-                if _OUTAGE_ERROR_MARKER in message.lower():
-                    raise SmapiUnexpectedError(message)
-                raise SmapiError(message)
 
             logger.debug(
                 "  poll #%d [%s] status=%s (%.1fs elapsed)",
