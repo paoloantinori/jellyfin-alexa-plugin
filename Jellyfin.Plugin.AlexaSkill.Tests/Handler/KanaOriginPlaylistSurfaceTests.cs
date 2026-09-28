@@ -28,7 +28,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// romaji could silently play an unrelated Latin-named playlist. These pins hold
 /// the bar and its capture point: the kana-origin bait takes the honest playlist
 /// not-found at the fuzzy fallback and at the server multi-match branch (emptied
-/// AND mixed candidate sets), the identical Latin query keeps the recall, a real
+/// AND mixed candidate sets, plus the downstream prompt surfaces that must carry
+/// only bar-passers), the identical Latin query keeps the recall, a real
 /// collision still accepts, the flag is read on the POST-STRIP name (kana in a
 /// stripped ja carrier is not transliteration evidence; kana in the name
 /// survives the strip), and the single-server-hit literal tier stays ungated
@@ -41,7 +42,9 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// of 3) even though the stripped core 'Bitoruzu' shares the PTRS code;
 /// 'satoru' (from サトル) scores 100 against 'Satoru' with the identical
 /// STR-cored collision passing the band at 6 vs 6, and scores 66 with NO
-/// keyword coverage against 'Bitoruzu Deluxe' (the mixed-set bait); slot
+/// keyword coverage against 'Bitoruzu Deluxe' (the mixed-set bait); 'Bitters'
+/// collides with 'bitoruzu' at 42 with no coverage (the prompt-shape pin's
+/// narrowed best, below the pre-check bar); slot
 /// 'Queenという' strips to the kana-free 'Queen' while 'ビートルズという'
 /// strips to the kana 'ビートルズ'.
 /// </summary>
@@ -255,7 +258,8 @@ public class KanaOriginPlaylistSurfaceTests : PluginTestBase, IDisposable
         // acceptance assertion discriminates both. The one break it cannot
         // observe (a downstream list swap back to the unfiltered set) picks the
         // same best candidate here; Folder stand-ins cannot distinguish WHICH
-        // playlist accepted (the JF-526 off-host limitation).
+        // playlist accepted (the JF-526 off-host limitation); the prompt-shape
+        // pin below closes that residual.
         SetupPlugin();
         using var statics = StubBaseItemStatics();
         SetupPlaylistQueries(
@@ -266,6 +270,33 @@ public class KanaOriginPlaylistSurfaceTests : PluginTestBase, IDisposable
             PlaylistIntent("サトル"), _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         AssertAccepted(response, "ja-JP", "satoru");
+    }
+
+    [Fact]
+    public async Task PlayPlaylist_KanaTitle_MultiMatchPrompt_NamesOnlyCollisionBackedCandidates()
+    {
+        // The downstream narrowed-list pin: neither the HandleFuzzyMiss candidate
+        // list nor the AskFirstMatch matches may swap back to the unfiltered
+        // server set. 'Bitters' collides with 'bitoruzu' (PTRS, band 7 vs 8) but
+        // scores 42 without keyword coverage, so the narrowed flow falls through
+        // the site pre-check into the HandleFuzzyMiss Confirm prompt naming
+        // 'Bitters' alone; with either list unfiltered the 90-scoring
+        // coverage-passing bait 'Bitoruzu Deluxe' wins the pre-check and
+        // silently plays instead, so the prompt-shape assertions catch the swap.
+        SetupPlugin();
+        using var statics = StubBaseItemStatics();
+        SetupPlaylistQueries(
+            serverHits: new List<BaseItem> { PlaylistFolder("Bitoruzu Deluxe"), PlaylistFolder("Bitters") },
+            fuzzyScanItems: null);
+
+        SkillResponse response = await CreatePlayHandler().HandleAsync(
+            PlaylistIntent("ビートルズ"), _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
+
+        Assert.False(response.Response.ShouldEndSession, "the narrowed best lands in the open-session HandleFuzzyMiss Confirm prompt");
+        Assert.True(response.SessionAttributes?.ContainsKey("disambig_matches") == true, "the response is the disambiguation ask");
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Bitters", speech, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Bitoruzu Deluxe", speech, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

@@ -787,8 +787,12 @@ public sealed class AlbumPlayService
         // JF-663: the kana-origin flag is read BEFORE that romanization (the
         // JF-652/JF-660/JF-661 shape: the romanization erases the script evidence
         // the bar keys on); both production callers pin the flag captured on their
-        // raw slot, null self-computes for raw-text callers.
+        // raw slot, null self-computes for raw-text callers. spokenName keeps the
+        // post-strip pre-romanization value past the reassignment so the gate
+        // logs below can tell a kana-origin query from one that spoke the romaji
+        // verbatim (byte-identical romanized log lines otherwise).
         bool kana = kanaOrigin ?? Util.ArtistSearch.IsKanaOriginQuery(null, playlistName);
+        string spokenName = playlistName;
         playlistName = Util.KatakanaRomanizer.Romanize(playlistName);
 
         var (jellyfinUser, userError) = BaseHandler.ResolveJellyfinUser(userManager, session.UserId, locale);
@@ -843,8 +847,8 @@ public sealed class AlbumPlayService
             if (fuzzy != null && kana && !PassesKanaOriginPlaylistAcceptance(playlistName, fuzzy.Value.Item))
             {
                 _logger.LogInformation(
-                    "PlayPlaylist: kana-origin query '{Query}' fuzzy-matched playlist '{PlaylistName}' without a length-banded Double Metaphone collision, treating as a miss (JF-663)",
-                    playlistName, fuzzy.Value.Item.Name);
+                    "PlayPlaylist: kana bar armed={Kana} refused the fuzzy fallback hit for spoken='{SpokenName}' romanized='{Query}': playlist '{PlaylistName}' has no length-banded Double Metaphone collision, treating as a miss (JF-663)",
+                    kana, spokenName, playlistName, fuzzy.Value.Item.Name);
                 fuzzy = null;
             }
 
@@ -870,12 +874,12 @@ public sealed class AlbumPlayService
             // bait the romaji scored into the bar. An emptied set is the honest
             // playlist not-found; a collision-backed candidate still disambiguates
             // and plays normally. The single-server-hit branch below is
-            // deliberately NOT barred: the server itself narrowed to one hit
-            // (a contains-class index narrowing, not an exact match), and that
-            // server-made choice is the direct-play class PlaySong/PlayAlbum's
-            // primary tiers keep ungated (the JF-661 notes' doctrine criterion:
-            // the plugin-fuzzy pick carries the bar, the server-narrowed hit
-            // does not).
+            // deliberately NOT barred, on the JF-661 notes' doctrine criterion:
+            // an acceptance that speaks a SUBSTITUTION (a name the user did not
+            // say, like the cascade's FoundAlbumInstead, whose tier-1 pin bars
+            // even a server-narrowed winner) demands collision evidence, while
+            // this branch is a direct play and rides the server's index
+            // narrowing (contains-class here, not an exact match).
             IReadOnlyList<BaseItem> fuzzyCandidates = playlists.Items;
             if (kana)
             {
@@ -883,9 +887,15 @@ public sealed class AlbumPlayService
                 fuzzyCandidates = playlists.Items.Where(p => PassesKanaOriginPlaylistAcceptance(queryCodes, playlistName.Length, p)).ToList();
                 if (fuzzyCandidates.Count == 0)
                 {
+                    // Name the refused candidates, bounded: the server-narrowed
+                    // multi-match set is a handful, and triage needs to see WHICH
+                    // baits the bar refused.
+                    string refused = playlists.Items.Count <= 5
+                        ? string.Join(", ", playlists.Items.Select(p => p.Name))
+                        : $"{playlists.Items.Count} playlists";
                     _logger.LogInformation(
-                        "PlayPlaylist: kana-origin query '{Query}' matched {Count} playlist(s) with no length-banded Double Metaphone collision, treating as a miss (JF-663)",
-                        playlistName, playlists.TotalRecordCount);
+                        "PlayPlaylist: kana bar armed={Kana} refused every server candidate for spoken='{SpokenName}' romanized='{Query}': {Refused} matched with no length-banded Double Metaphone collision, treating as a miss (JF-663)",
+                        kana, spokenName, playlistName, refused);
                     return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundPlaylist", locale, playlistName));
                 }
             }
