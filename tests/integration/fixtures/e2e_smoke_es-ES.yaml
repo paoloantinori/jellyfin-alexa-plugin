@@ -8,8 +8,10 @@
 #     ('oye los xyzzyfoo' -> decade=xyzzyfoo), so the localized not-found pin
 #     rides the VIDEO path instead (title=xyzzyfoo -> NotFoundVideo).
 locale: es-ES
-invocation_name: jellyfin player
-open_utterance: "abre jellyfin player"
+# JF-656: the invocation name is the live JF-558 native name; the
+# JF-511-era 'jellyfin player' no longer matches this locale's model.
+invocation_name: mi colección
+open_utterance: "abre mi colección"
 tests:
   - utterance: "reproduce mis favoritos"
     expected_intent: PlayFavoritesIntent

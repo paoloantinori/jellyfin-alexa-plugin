@@ -27,6 +27,18 @@ class SmapiServerError(SmapiError):
     """
 
 
+class SmapiUnexpectedError(SmapiError):
+    """A simulation resolved FAILED with the platform's generic cause.
+
+    "An unexpected error occurred": the chronic open-simulation outage
+    class (JF-511's ~21s 'unexpected error'; the recurring per-locale
+    simulate outage whose signature is opens dead while one-shot
+    simulations work). Plain SmapiError to every other handler; the e2e
+    smoke harness catches the type to fall back to a one-shot instead of
+    failing the test (JF-656).
+    """
+
+
 # Status phrases and codes SMAPI/ASK CLI surfaces for transient 5xx
 # failures.  Matched against stderr; phrases over bare codes because a
 # bare "500" can appear in unrelated error bodies.
@@ -42,6 +54,9 @@ _SERVER_ERROR_MARKERS = (
     " 503",
     " 504",
 )
+
+# The platform's generic cause text for a FAILED simulation (JF-656).
+_OUTAGE_ERROR_MARKER = "an unexpected error occurred"
 
 
 # Module-level rate-limit state shared across all SmapiClient instances
@@ -264,10 +279,13 @@ class SmapiClient:
                     .get("error", {})
                     .get("message", "")
                 )
-                raise SmapiError(
+                message = (
                     f"Simulation failed after {elapsed:.1f}s for '{utterance}' "
                     f"({self.locale}): {error_msg}"
                 )
+                if _OUTAGE_ERROR_MARKER in message.lower():
+                    raise SmapiUnexpectedError(message)
+                raise SmapiError(message)
 
             logger.debug(
                 "  poll #%d [%s] status=%s (%.1fs elapsed)",

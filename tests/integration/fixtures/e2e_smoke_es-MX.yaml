@@ -3,8 +3,10 @@
 # command profile-nlu-verified in es-MX specifically (2026-09-07), including
 # the 'oye los' artist carrier and the video-path not-found vehicle.
 locale: es-MX
-invocation_name: jellyfin player
-open_utterance: "abre jellyfin player"
+# JF-656: the invocation name is the live JF-558 native name; the
+# JF-511-era 'jellyfin player' no longer matches this locale's model.
+invocation_name: mi colección
+open_utterance: "abre mi colección"
 tests:
   - utterance: "reproduce mis favoritos"
     expected_intent: PlayFavoritesIntent

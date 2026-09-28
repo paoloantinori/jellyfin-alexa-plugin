@@ -3,8 +3,10 @@
 # the locale's own PlayFavorites/PlayVideo samples; assertions mirror e2e_smoke_de-DE.
 # Seeded 2026-09-12, live-verified before asserting.
 locale: hi-IN
-invocation_name: jellyfin player
-open_utterance: "start jellyfin player"
+# JF-656: the invocation name is the live JF-558 native name; the
+# JF-511-era 'jellyfin player' no longer matches this locale's model.
+invocation_name: मेरी कलेक्शन
+open_utterance: "start मेरी कलेक्शन"
 tests:
   # (a) favorites play: the audio pin -> AudioPlayer.Play, session ends.
   - utterance: "मेरे पसंदीदे गाने चलाओ"
