@@ -360,7 +360,11 @@ public class PlaySongIntentHandler : BaseHandler
             SkillResponse? albumFallback = await AlbumPlay.TryAlbumFallbackAsync(
                 songQuery, jellyfinUser!, user, session, context, locale,
                 _libraryManager, _userDataManager, _queueManager,
-                "PlaySong", request, cancellationToken).ConfigureAwait(false);
+                "PlaySong", request, cancellationToken,
+                // JF-661: songQuery is the ROMANIZED local (JF-643); the flag
+                // captured on the raw slot above (JF-654) keeps the album bar live
+                // here, the same pinning the artist cascade one gate up applies.
+                kanaOrigin: kanaOrigin).ConfigureAwait(false);
             if (albumFallback != null)
             {
                 return albumFallback;

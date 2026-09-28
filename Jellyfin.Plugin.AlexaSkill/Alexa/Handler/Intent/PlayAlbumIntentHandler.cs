@@ -544,6 +544,34 @@ public class PlayAlbumIntentHandler : BaseHandler
             // multi-match here still auto-plays the best; real disambiguation for
             // different-name collisions (several "Greatest Hits") is tracked in JF-341.
             var fuzzyMatch = CrossMedia.FindBestNonEmbeddedMatch(album, allAlbums, a => a.Name!, FuzzyMatcher.GetDefaultThreshold(user));
+
+            // JF-662: the kana-origin album bar on this arm, the FIRST fuzzy
+            // acceptance point a kana album miss flows through and one gate before
+            // the JF-660-fixed entity fallback below (with both gated, every
+            // FUZZY album acceptance surface on PlayAlbum is covered; the exact
+            // SearchTerm tier and the JF-411/JF-489/JF-492 hit paths are literal
+            // indexed acceptance, the same class PlaySong's primary path keeps
+            // ungated). The bare default threshold accepts the plain-fuzzy class
+            // a romaji query false-accepts ('bitoruzu' plain-matched 'Bitorudzu'
+            // at 75 with no code collision), so a kana-origin query demands the
+            // real length-banded Double Metaphone collision (one shared
+            // definition with the JF-345 cascade's JF-661 bar) or falls through
+            // to the honest album not-found; the bar judges the single best only
+            // (the JF-654 head-check rule, not a JF-412 walk). `album` is the
+            // ROMANIZED local (JF-643); the flag was captured on the raw slot at
+            // entry, and the capture stays exact here: every later reassignment
+            // of `album` (JF-489/JF-492 retries, JF-411 resolution) guarantees a
+            // non-empty album result, so this arm never runs with their values.
+            if (fuzzyMatch.HasValue
+                && albumKanaOrigin
+                && !AlbumPlayService.PassesKanaOriginAlbumAcceptance(album, fuzzyMatch.Value.Item))
+            {
+                Logger.LogInformation(
+                    "PlayAlbum: kana-origin query '{Query}' matched album '{Name}' score={Score} without a length-banded Double Metaphone collision, treating as a miss (JF-662)",
+                    album, fuzzyMatch.Value.Item.Name, fuzzyMatch.Value.Score);
+                fuzzyMatch = null;
+            }
+
             if (fuzzyMatch.HasValue)
             {
                 Logger.LogInformation(

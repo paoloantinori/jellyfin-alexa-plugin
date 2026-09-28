@@ -183,6 +183,32 @@ public sealed class AlbumPlayService
     /// <returns>A minimal DtoOptions.</returns>
     public static DtoOptions CheapDtoOptions() => new DtoOptions(false) { EnableImages = false, EnableUserData = false, AddCurrentProgram = false };
 
+    /// <summary>
+    /// JF-661/JF-662: the kana-origin album bar, the ONE shared definition consumed
+    /// by every album auto-play decision point fed by a kana-origin query (the JF-345
+    /// song-to-album cascade's 90-bar acceptance and PlayAlbum's own JF-336 fuzzy
+    /// arm's 60-bar): a real length-banded Double Metaphone code collision between
+    /// the romanized query and the album name (the JF-654 title-collision shape,
+    /// shared with the song bar; album names carry the same '(Deluxe Edition)'
+    /// parenthetical-metadata suffixes, so the band reads the stripped name). NO
+    /// plain-score leg by design: on the FuzzyMatcher scale plain PartialRatio
+    /// reaches 90-99 for near-identical strings with no code collision and the
+    /// containment floor itself scores exactly 90, so any plain leg would re-open
+    /// the wrong-accept class the JF-652 review closed ('ビートルズ' romanized to
+    /// 'bitoruzu' containment-matching 'Bitoruzu Deluxe' at the bar with the suffix
+    /// widening the name past the band). The score bars (the callers' thresholds)
+    /// compose unchanged; this predicate adds only the kana-specific collision
+    /// evidence.
+    /// </summary>
+    /// <param name="romanizedQuery">The romanized (post-KatakanaRomanizer) query string.</param>
+    /// <param name="album">The candidate album.</param>
+    /// <returns>True when the album name carries a length-banded code collision with the query.</returns>
+    internal static bool PassesKanaOriginAlbumAcceptance(string romanizedQuery, BaseItem album)
+        => Util.SongIndexSearch.PassesLengthBandedTitleCollision(
+            DoubleMetaphone.Encode(romanizedQuery),
+            romanizedQuery.Length,
+            album.Name ?? string.Empty);
+
     private readonly PluginConfiguration _config;
     private readonly ILogger _logger;
     private readonly PlaybackLaunchBuilder _launch;
@@ -301,9 +327,16 @@ public sealed class AlbumPlayService
     /// 2-content-word tokenized guard (<see cref="CrossMediaFallback.CrossMediaArtistMaxWords"/>), then
     /// <c>Math.Max(normal, CrossMediaAlbumThreshold=90)</c> (containment-grade; song and
     /// album names overlap far more than artists and moods), then the JF-408
-    /// interior-containment rejection. Non-phonetic and unpinned by design: no album
-    /// phonetic index exists and PlayAlbum's own fuzzy fallback is likewise non-phonetic
-    /// (the album-path precedent). Bounded queries only (the f5c701c lesson): the
+    /// interior-containment rejection. JF-661: a kana-origin query adds the album
+    /// kana bar on top of the threshold (a real length-banded Double Metaphone
+    /// collision, <see cref="PassesKanaOriginAlbumAcceptance"/>); a plain-fuzzy
+    /// accept is the honest miss, and the bar composes over BOTH candidate tiers
+    /// (the JF-652 precedent: the chain result is judged at the acceptance point
+    /// whatever tier produced it, so a tier-1 SearchTerm winner needs the same
+    /// collision evidence). The album tiers stay non-phonetic in their SCORING
+    /// (no album phonetic index exists and no candidate codes are pre-computed);
+    /// the kana bar carries the per-query Double Metaphone collision evidence
+    /// instead. Bounded queries only (the f5c701c lesson): the
     /// indexed SearchTerm tier, then at most ONE cheap-DTO album-catalog scan (the same
     /// bounded shape PlayAlbum's own fuzzy fallback ships), never an Audio-catalog scan.
     /// </summary>
@@ -318,6 +351,12 @@ public sealed class AlbumPlayService
     /// <param name="queueManager">Optional per-device queue manager for crash recovery.</param>
     /// <param name="logLabel">Label for log messages.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="kanaOrigin">JF-661: the flag captured on the caller's RAW
+    /// PRE-romanization slot value (the JF-659 canonical invariant is the caller's
+    /// to compute, it holds the slot). Null (the default) self-computes from
+    /// <paramref name="slotText"/> BEFORE this method's own romanization; pin a
+    /// value from a caller whose input is already romanized (see the JF-660
+    /// TryEntityFallbackAsync shape).</param>
     /// <returns>The album play response with the announcement, or null when no album clears the bar (caller falls through to its own not-found).</returns>
     public async Task<SkillResponse?> TryAlbumFallbackAsync(
         string slotText,
@@ -330,8 +369,9 @@ public sealed class AlbumPlayService
         IUserDataManager userDataManager,
         Playback.DeviceQueueManager? queueManager,
         string logLabel,
-        global::Alexa.NET.Request.Type.Request? request = null,
-        CancellationToken cancellationToken = default)
+        global::Alexa.NET.Request.Type.Request? request,
+        CancellationToken cancellationToken,
+        bool? kanaOrigin = null)
     {
         // JF-464: same music-disabled gate as the artist fallback. This cascade's
         // whole payoff is playing an album of music, and its queries skip
@@ -349,6 +389,12 @@ public sealed class AlbumPlayService
         // JF-643: mirror of the artist gate's entry romanization, before the guard
         // to match its ordering (the SearchTerm tier and the fuzzy tier below
         // compare against Latin album names).
+        // JF-661: the kana-origin flag is read from the PRE-romanization value (the
+        // JF-652/JF-660 shape): the only production caller (PlaySong's cascade)
+        // romanizes its song slot at entry and hands this gate the Latin local, so
+        // it pins the flag captured on its raw slot; null (the default)
+        // self-computes for raw-text callers.
+        bool kana = kanaOrigin ?? Util.ArtistSearch.IsKanaOriginQuery(null, slotText);
         slotText = Util.KatakanaRomanizer.Romanize(slotText);
 
         if (!_crossMedia.PassesCrossMediaWordGuard(slotText, locale, fallbackNoun: "album", logLabel, out _))
@@ -399,6 +445,22 @@ public sealed class AlbumPlayService
                 logLabel, threshold, query);
             return null;
         }
+
+        // JF-661: the kana-origin album bar. A threshold-clearing match that carries
+        // no length-banded Double Metaphone collision is the plain-fuzzy class the
+        // romaji query shape false-accepts (the containment floor scores exactly the
+        // 90 bar: 'bitoruzu' containment-matched 'Bitoruzu Deluxe' with the suffix
+        // widening the name past the collision band), so it is the honest miss here
+        // (one shared definition, PassesKanaOriginAlbumAcceptance; Latin queries
+        // never reach this check).
+        if (kana && !PassesKanaOriginAlbumAcceptance(query, match.Item))
+        {
+            _logger.LogInformation(
+                "{Label}: kana-origin query '{Query}' matched album '{AlbumName}' score={Score} without a length-banded Double Metaphone collision, treating as a miss (JF-661)",
+                logLabel, query, match.Item.Name, match.Score);
+            return null;
+        }
+
         _logger.LogInformation(
             "{Label}: album fallback found '{AlbumName}' score={Score} for query='{Query}' (threshold={Threshold})",
             logLabel, match.Item.Name, match.Score, query, threshold);

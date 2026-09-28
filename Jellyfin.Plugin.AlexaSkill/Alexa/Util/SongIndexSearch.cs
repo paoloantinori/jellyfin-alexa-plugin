@@ -18,7 +18,11 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// JF-654: this file also owns the song-side kana bar (see
 /// <see cref="PassesKanaOriginSongAcceptance(string, BaseItem, double)"/>), the ONE shared acceptance
 /// definition consumed by every song auto-play decision point fed by a
-/// kana-origin query.
+/// kana-origin query. JF-661: the bar's title-collision primitive
+/// (<see cref="PassesLengthBandedTitleCollision"/>) is title-generic and also
+/// backs the album bar (AlbumPlayService.PassesKanaOriginAlbumAcceptance);
+/// songs and albums are both title-shaped candidates for the same DM-cap
+/// rationale.
 /// </summary>
 internal static class SongIndexSearch
 {
@@ -55,7 +59,8 @@ internal static class SongIndexSearch
     /// FuzzyMatcher.PhoneticFloorLengthBand (3) today, but the two bands are
     /// semantically distinct (the JF-381 artist accent-drift floor vs this song
     /// collision band) and tune separately; the mirroring is documented, not
-    /// compiled.
+    /// compiled. The band also bounds the album bar's shared title-collision
+    /// helper (JF-661): one title-collision semantics, one band.
     /// </summary>
     internal const int KanaOriginSongCollisionLengthBand = 3;
 
@@ -122,14 +127,33 @@ internal static class SongIndexSearch
         (string Primary, string? Alternate) queryCodes,
         int romanizedQueryLength,
         BaseItem song)
+        => PassesLengthBandedTitleCollision(queryCodes, romanizedQueryLength, song.Name ?? string.Empty);
+
+    /// <summary>
+    /// Title-generic form of the collision leg (JF-661): album names carry the
+    /// same '(Deluxe Edition)' parenthetical-metadata suffixes and the same
+    /// DM-cap collapse risk, so the album bar
+    /// (AlbumPlayService.PassesKanaOriginAlbumAcceptance) shares this ONE
+    /// strip+band+encode implementation with the song bar instead of a private
+    /// copy. Takes the title STRING so the song wrapper and the album predicate
+    /// each feed their own entity shape.
+    /// </summary>
+    /// <param name="queryCodes">The Double Metaphone codes of the romanized query.</param>
+    /// <param name="romanizedQueryLength">The romanized query's length (the band input).</param>
+    /// <param name="title">The raw candidate title (song or album name).</param>
+    /// <returns>True when the stripped title falls inside the band and its codes collide with the query's.</returns>
+    internal static bool PassesLengthBandedTitleCollision(
+        (string Primary, string? Alternate) queryCodes,
+        int romanizedQueryLength,
+        string title)
     {
-        string title = StripTrailingParentheticalGroups(song.Name ?? string.Empty);
-        if (Math.Abs(title.Length - romanizedQueryLength) > KanaOriginSongCollisionLengthBand)
+        string stripped = StripTrailingParentheticalGroups(title);
+        if (Math.Abs(stripped.Length - romanizedQueryLength) > KanaOriginSongCollisionLengthBand)
         {
             return false;
         }
 
-        var titleCodes = DoubleMetaphone.Encode(title);
+        var titleCodes = DoubleMetaphone.Encode(stripped);
         return FuzzyMatcher.PhoneticCodesMatch(
             queryCodes.Primary, queryCodes.Alternate, titleCodes.Primary, titleCodes.Alternate);
     }
