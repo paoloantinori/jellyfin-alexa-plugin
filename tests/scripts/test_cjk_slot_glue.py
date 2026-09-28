@@ -4,6 +4,11 @@ The glued-sample shapes that reached SMAPI three times (JF-513 musician,
 JF-326 star_rating, JF-636 speed) must fail the validator before any deploy.
 The check lives inside validate_single_model (error-level), so the harness
 feeds synthetic languageModels and asserts the error list; no repo mutation.
+
+JF-644 widens the trigger class: halfwidth katakana (U+FF66-FF9D) and
+fullwidth forms (U+FF01-FF5E) join the glue-adjacency check, the ideograph
+span drops to Extension A (U+3400), and the two banned halfwidth/fullwidth
+ranges also fail anywhere in a sample (JF-644 marker).
 """
 import sys
 from pathlib import Path
@@ -74,6 +79,64 @@ def test_error_names_intent_and_locale():
     assert "Intent 'PlaySongIntent'" in errors[0], errors
 
 
+# --- JF-644 widened classes: glued halfwidth katakana / fullwidth / Ext A ---
+
+
+def test_halfwidth_katakana_glue_errors():
+    # ｶ = U+FF76 (unicodedata: HALFWIDTH KATAKANA LETTER KA), inside the
+    # U+FF66-FF9D span the ja-JP header bans; glue-adjacent it must flag.
+    errors = _glue_errors(["ｶ{album}"])
+    assert len(errors) == 1, errors
+    assert "U+FF76 directly before '{'" in errors[0], errors
+
+
+def test_fullwidth_form_glue_errors():
+    # ！ = U+FF01 (FULLWIDTH EXCLAMATION MARK), first char of U+FF01-FF5E.
+    errors = _glue_errors(["！{album}"])
+    assert len(errors) == 1, errors
+    assert "U+FF01 directly before '{'" in errors[0], errors
+
+
+def test_extension_a_ideograph_glue_errors():
+    # 㐀 = U+3400 (CJK UNIFIED IDEOGRAPH-3400), the new contiguous span floor.
+    errors = _glue_errors(["㐀{album}"])
+    assert len(errors) == 1, errors
+    assert "U+3400 directly before '{'" in errors[0], errors
+
+
+def test_ideograph_span_lower_boundary_stays_outside():
+    # U+33FF sits below the contiguous U+3400-U+9FFF span; glued, it stays
+    # outside the trigger class.
+    errors, _ = validate_single_model("ja-JP", _lm(["㏿{album}"]))
+    assert errors == [], errors
+
+
+def test_ff_span_boundaries_stay_outside():
+    # Exactly U+FF01-FF5E and U+FF66-FF9D: the halfwidth punctuation/voicing
+    # tail (U+FF65, U+FF9F) and the double parentheses (U+FF5F) are outside.
+    for sample in ["･{album}", "ﾟ{album}", "｟{album}"]:
+        errors, _ = validate_single_model("ja-JP", _lm([sample]))
+        assert errors == [], (sample, errors)
+
+
+def test_banned_ff_fails_anywhere_not_only_glued():
+    # The two Halfwidth/Fullwidth ranges are banned from samples outright,
+    # so the anywhere-level scan fires with no slot adjacency at all.
+    errors, _ = validate_single_model("ja-JP", _lm(["テスト {album} ｶ"]))
+    jf644 = [e for e in errors if "JF-644" in e]
+    assert len(jf644) == 1, errors
+    assert "U+FF76" in jf644[0], jf644
+    assert not any("JF-638" in e for e in errors), errors
+
+
+def test_glued_banned_ff_reports_both_findings():
+    # A glued FF character is certain twice over: the JF-638 glue error and
+    # the JF-644 anywhere ban each report once for the same sample.
+    errors, _ = validate_single_model("ja-JP", _lm(["ｶ{album}"]))
+    assert sum("JF-638" in e for e in errors) == 1, errors
+    assert sum("JF-644" in e for e in errors) == 1, errors
+
+
 # --- Clean shapes: the documented JF-513 rule and the check's exact scope ---
 
 
@@ -111,4 +174,4 @@ def test_all_committed_models_have_no_glued_slots():
     assert len(models) == 17, len(models)
     for locale, lm in models.items():
         errors, _ = validate_single_model(locale, lm)
-        assert not any("JF-638" in e for e in errors), errors
+        assert not any("JF-638" in e or "JF-644" in e for e in errors), errors
