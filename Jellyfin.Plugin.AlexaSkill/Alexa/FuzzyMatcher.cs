@@ -51,7 +51,7 @@ internal static class FuzzyMatcher
     /// phonetic-code-collision floor to apply. Accent drift produces short garbled strings
     /// close in length to the intended name. JF-381.
     /// </summary>
-    internal const int PhoneticFloorLengthBand = 3;
+    private const int PhoneticFloorLengthBand = 3;
 
     /// <summary>
     /// Score floor for a length-matched phonetic code collision. Must be above

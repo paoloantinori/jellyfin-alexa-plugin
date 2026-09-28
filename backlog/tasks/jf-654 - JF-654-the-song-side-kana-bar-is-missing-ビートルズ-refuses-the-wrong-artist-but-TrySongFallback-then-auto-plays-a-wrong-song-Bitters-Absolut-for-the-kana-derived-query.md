@@ -164,6 +164,55 @@ documented as deliberate in the method doc. (6) misleading
 IsKanaOriginQuery(canonicalMusician, ...) inside the null-canonical guard ->
 applied, passes null explicitly. (7) banned 'word - word' comment breaks ->
 applied, two comment sentences reworded in SongIndexSearch.
+
+Gate-marker review round 2 (7 findings, dispositions):
+(1) APPLY, THE HOLE: SearchMedia's fuzzy pass auto-plays a kana-matched song
+with no bar and runs BEFORE the gated retry; the previous in-line comment
+calling the pass 'artist-side machinery' was wrong (the fuzzy scan covers the
+playable kinds INCLUDING songs). Fixed: PassesKanaSongGate (the fuzzy score
+rides the PartialRatio scale the bar's plain leg cannot trust, so the hit is
+re-scored through the KeywordMatcher chain, then ApplyKanaOriginBar); a
+refusal falls through to the gated song-title retry.
+(2) APPLY: TrySongFallback now SELF-COMPUTES kanaOrigin from its input
+pre-romanization (bool? param, default null, the TryEntityFallbackAsync
+shape). QueryArtistLibrary drops its threaded arg (it passes the raw slot);
+PlayArtistSongs keeps explicit threading at both sites because its input is
+already romanized at entry (self-computation would see Latin and leave the
+bar inert), named in the method doc.
+(3) APPLY: the topMatch full-coverage pre-check (the third song auto-play on
+SearchMedia) takes the same bar via KeywordMatcher.Score on the single item;
+a refusal returns the honest MediaNotFound rather than falling into
+HandleFuzzyMiss, whose >= 90 auto-accept would play the refused item.
+(4) EVALUATED, DECIDED: the band input. Token-banding on the collision-bearing
+prefix was REJECTED on the evidence: the live bait IS a first-word-dominated
+collision, so 'bitoruzu' vs the 'Bitters' prefix would pass any token-band
+(codes PTRS==PTRS, 8 vs 7 chars) and the wrong-accept would return. Applied
+instead: trailing PARENTHETICAL groups are stripped before BOTH the band and
+the codes ('(2011 Remaster)' is metadata, not phonetic content; the
+first-word-dominated DM code cannot see it either). This satisfies both
+required pins: 'bohemian rapusodi' vs 'Bohemian Rhapsody (2011 Remaster)'
+(stripped 17 vs 17, codes collide) PLAYS; the bait ('Bitters & Absolut', a
+consonant-bearing non-parenthetical suffix) still refuses. The residual
+recall class (consonant-bearing non-parenthetical suffixes, e.g. a title
+'Queening' for query 'kuin') stays the documented not-found, same JF-652
+strictness trade.
+(5) APPLY: KanaOriginSongCollisionLengthBand owns its value again (= 3) with
+a cross-reference comment; FuzzyMatcher.PhoneticFloorLengthBand reverted to
+private (the compile tie from the /simplify round is undone: the two bands
+are semantically distinct and tune separately).
+(6) APPLY: ApplyKanaOriginAcceptance takes the handler's kanaOrigin (before
+the CancellationToken, CA1068); a future non-kana caller inherits false.
+(7) (the round's remaining items were the F1/F3 scope above.)
+
+Round-2 pins: PassesKanaOriginSongAcceptance_RemasteredTitle_
+ParentheticalsStrippedForBandAndCodes (the F4 pair), and the two SearchMedia
+end-to-end tests (fuzzy-pass soup hit gated to MediaNotFound; topMatch
+full-coverage tribute pick gated to MediaNotFound). Session-note: the round
+was interrupted by a transient API kill mid-test-writing; on resume the
+half-applied state was found and completed (the PassesKanaSongGate doc block
+had landed INSIDE TrySongTitleRetry's doc comment, the wrapped log line was
+mis-indented, and the new bool param tripped CA1068; all repaired before
+commit).
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done

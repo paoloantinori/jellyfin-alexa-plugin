@@ -40,10 +40,10 @@ internal static class SongIndexSearch
     internal const double KanaOriginSongPlainScoreBar = 95.0;
 
     /// <summary>
-    /// JF-654: maximum length difference between the romanized query and the song
-    /// title for a Double Metaphone code collision to count as acceptance
-    /// evidence. EMPIRICAL NECESSITY (verified against the production encoder;
-    /// pinned by KanaOriginSongAcceptanceTests
+    /// JF-654: maximum length difference between the (parenthetical-stripped) song
+    /// title and the romanized query for a Double Metaphone code collision to
+    /// count as acceptance evidence. EMPIRICAL NECESSITY (verified against the
+    /// production encoder; pinned by KanaOriginSongAcceptanceTests
     /// .PassesKanaOriginSongAcceptance_CollisionLeg): DM codes cap at 4 characters
     /// and are dominated by the FIRST word, so 'bitoruzu' and 'Bitters &amp;
     /// Absolut' BOTH encode to PTRS; the live wrong-accept IS a full-string code
@@ -51,9 +51,13 @@ internal static class SongIndexSearch
     /// ACCEPTED it. The JF-381 lesson applies verbatim: a collision between
     /// strings of wildly different lengths is not the intended accent-drift shape,
     /// because the code cap collapses unrelated strings into the same skeleton.
-    /// Compile-level tie to the constant that lesson lives on.
+    /// OWNED HERE (JF-654 review round 2): the value mirrors
+    /// FuzzyMatcher.PhoneticFloorLengthBand (3) today, but the two bands are
+    /// semantically distinct (the JF-381 artist accent-drift floor vs this song
+    /// collision band) and tune separately; the mirroring is documented, not
+    /// compiled.
     /// </summary>
-    internal const int KanaOriginSongCollisionLengthBand = FuzzyMatcher.PhoneticFloorLengthBand;
+    internal const int KanaOriginSongCollisionLengthBand = 3;
 
     /// <summary>
     /// JF-654 song-side kana bar, the ONE shared definition consumed by every song
@@ -100,18 +104,60 @@ internal static class SongIndexSearch
             || PassesLengthBandedSongCollision(queryCodes, romanizedQueryLength, song);
 
     /// <summary>
-    /// The collision leg: the JF-652 code-collision predicate (title encoded at
-    /// the decision point) AND the JF-381 length band, so the DM code cap cannot
+    /// The collision leg: a Double Metaphone code collision (primary/alternate
+    /// cross-compared, the JF-652 predicate's semantics) between the romanized
+    /// query and the song title AND the length band, so the DM code cap cannot
     /// manufacture collisions between a short romaji query and a long multi-word
     /// title (see <see cref="KanaOriginSongCollisionLengthBand"/> for the live
-    /// 'bitoruzu' / 'Bitters &amp; Absolut' PTRS evidence).
+    /// 'bitoruzu' / 'Bitters &amp; Absolut' PTRS evidence). Both the band and the
+    /// codes read the title WITHOUT its trailing parenthetical groups (JF-654
+    /// review round 2): '(2011 Remaster)' / '(Live)' suffixes are metadata, not
+    /// phonetic content, and the first-word-dominated DM code cannot see them
+    /// either, so banding on the raw name would refuse legitimately colliding
+    /// titles on characters that carry no evidence. A consonant-bearing
+    /// non-parenthetical suffix ('Bitters &amp; Absolut' itself) still widens the
+    /// title past the band and stays the documented refusal shape.
     /// </summary>
     private static bool PassesLengthBandedSongCollision(
         (string Primary, string? Alternate) queryCodes,
         int romanizedQueryLength,
         BaseItem song)
-        => Math.Abs((song.Name ?? string.Empty).Length - romanizedQueryLength) <= KanaOriginSongCollisionLengthBand
-            && ArtistSearch.PassesKanaOriginCollision(queryCodes, song, index: null);
+    {
+        string title = StripTrailingParentheticalGroups(song.Name ?? string.Empty);
+        if (Math.Abs(title.Length - romanizedQueryLength) > KanaOriginSongCollisionLengthBand)
+        {
+            return false;
+        }
+
+        var titleCodes = DoubleMetaphone.Encode(title);
+        return FuzzyMatcher.PhoneticCodesMatch(
+            queryCodes.Primary, queryCodes.Alternate, titleCodes.Primary, titleCodes.Alternate);
+    }
+
+    /// <summary>
+    /// Removes trailing parenthetical groups ('(2011 Remaster)', stacked
+    /// '(Deluxe) (Live)') from a title, the JF-654 band's evidence input. A title
+    /// that is entirely parenthetical strips to empty and fails the band (the
+    /// honest miss).
+    /// </summary>
+    /// <param name="title">The raw song title.</param>
+    /// <returns>The title without trailing parenthetical groups.</returns>
+    private static string StripTrailingParentheticalGroups(string title)
+    {
+        string stripped = title.TrimEnd();
+        while (stripped.EndsWith(')'))
+        {
+            int open = stripped.LastIndexOf('(');
+            if (open < 0)
+            {
+                break;
+            }
+
+            stripped = stripped[..open].TrimEnd();
+        }
+
+        return stripped;
+    }
 
     /// <summary>
     /// JF-654 list form of the kana bar for the scored-candidate chains: kana-origin

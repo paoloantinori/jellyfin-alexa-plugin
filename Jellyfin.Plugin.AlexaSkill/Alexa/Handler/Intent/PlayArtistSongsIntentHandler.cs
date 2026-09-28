@@ -701,7 +701,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         if (kanaOrigin && artists.Count > 0)
         {
             SkillResponse? kanaOutcome = ApplyKanaOriginAcceptance(
-                artists, musician!, user, pinnedIndex, jf420ArtistPool, locale, context, session, cancellationToken);
+                artists, musician!, user, pinnedIndex, jf420ArtistPool, locale, context, session, kanaOrigin, cancellationToken);
             if (kanaOutcome != null)
             {
                 return kanaOutcome;
@@ -937,6 +937,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         string locale,
         Context context,
         SessionInfo session,
+        bool kanaOrigin,
         CancellationToken cancellationToken)
     {
         BaseItem match = artists[0];
@@ -954,12 +955,15 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             Logger.LogInformation(
                 "PlayArtistSongs: kana-origin query '{Query}' matched '{Match}' at score {Score} {Reason}, downgrading to not-found (JF-652)",
                 musician, match.Name, score, missReason);
-            // kanaOrigin is true by construction here: ApplyKanaOriginAcceptance is
-            // only reached from the kana guard at the single-pick end gate (JF-654
-            // threads the flag so the song fallback shares the same bar).
+            // JF-654 review round 2: the flag rides the method param (the kana guard
+            // at the single-pick end gate passes it), so a future non-kana caller
+            // inherits false instead of a silent song bar on Latin queries. The
+            // value is also PINNED explicitly: `musician` here is already
+            // romanized (the handler's entry romanization), so TrySongFallback's
+            // self-computation would see Latin and leave the bar inert.
             SkillResponse? songFallback = CrossMedia.TrySongFallback(
                 musician, user, session, context, locale, _songNgramIndex, _libraryManager, "PlayArtistSongs", cancellationToken,
-                kanaOrigin: true);
+                kanaOrigin: kanaOrigin);
             if (songFallback != null)
             {
                 return songFallback;

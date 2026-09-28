@@ -170,6 +170,23 @@ public class KanaOriginSongAcceptanceTests : PluginTestBase, IDisposable
     }
 
     [Fact]
+    public void PassesKanaOriginSongAcceptance_RemasteredTitle_ParentheticalsStrippedForBandAndCodes()
+    {
+        // JF-654 review round 2, finding 4: trailing parenthetical groups are
+        // metadata, not phonetic content ('(2011 Remaster)' contributes nothing
+        // the first-word-dominated DM code can see), so the band and the codes
+        // read the stripped title: the legit remastered-title kana query collides
+        // in band and plays...
+        var remaster = new Audio { Name = "Bohemian Rhapsody (2011 Remaster)", Id = Guid.NewGuid() };
+        Assert.True(SongIndexSearch.PassesKanaOriginSongAcceptance("bohemian rapusodi", remaster, 72.0));
+
+        // ...while the bait still refuses: its suffix is consonant-bearing TITLE
+        // content, not a parenthetical, so the strip leaves it long enough to
+        // fail the band (the pinned wrong-accept shape, repeated for contrast).
+        Assert.False(SongIndexSearch.PassesKanaOriginSongAcceptance("bitoruzu", BittersBait(), 68.0));
+    }
+
+    [Fact]
     public void ApplyKanaOriginBar_LatinQuery_NoOp()
     {
         // kanaOrigin false returns the list unchanged (contents and order): the

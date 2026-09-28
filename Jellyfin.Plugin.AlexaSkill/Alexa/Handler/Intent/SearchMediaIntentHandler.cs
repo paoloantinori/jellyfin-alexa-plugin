@@ -129,11 +129,14 @@ public class SearchMediaIntentHandler : BaseHandler
         // pass, and the n-gram song-title retry; all compare against Latin-script
         // library names, so a katakana query is romanized once here.
         // JF-654: the kana-origin flag is captured on the RAW query, BEFORE the
-        // romanization (the query slot is free-text: no ER canonical). Scope
-        // decision: it gates ONLY the song-title retry below (the JF-440 song chain
-        // feeding this handler's single-result auto-play); the primary SearchTerm
-        // path is literal, and the fuzzy pass is the JF-652 artist-side machinery,
-        // outside the song-acceptance class of this task.
+        // romanization (the query slot is free-text: no ER canonical). It gates
+        // every SONG auto-play this handler can reach: the fuzzy pass's
+        // single-result pick (the fuzzy scan covers the playable kinds INCLUDING
+        // songs; the live 'bitoruzu' wrong-accept class reproduces through it),
+        // the FuzzyMatch topMatch full-coverage pre-check, and the JF-506
+        // song-title retry. The primary SearchTerm path stays ungated: a
+        // server-side index match on a romanized string is literal, not the
+        // fuzzy wrong-accept class.
         bool kanaOrigin = Util.ArtistSearch.IsKanaOriginQuery(null, query);
         query = Util.KatakanaRomanizer.Romanize(query);
 
@@ -185,7 +188,7 @@ public class SearchMediaIntentHandler : BaseHandler
                 fuzzy = await Search.SearchItemsFuzzyAsync(query, jellyfinUser, user, _libraryManager, fuzzySiblingTypes, cancellationToken, "SearchMediaFuzzyOutOfLibrary", locale: locale).ConfigureAwait(false);
             }
 
-            if (fuzzy != null)
+            if (fuzzy != null && PassesKanaSongGate(fuzzy.Value.Item, query, locale, kanaOrigin))
             {
                 results = new List<BaseItem> { fuzzy.Value.Item };
             }
@@ -230,8 +233,24 @@ public class SearchMediaIntentHandler : BaseHandler
         // the yes/no "did you mean" prompt.
         if (topMatch != null && KeywordMatcher.HasFullKeywordCoverage(KeywordMatcher.Tokenize(query, locale), topMatch.Name, locale))
         {
-            Logger.LogInformation("Fuzzy match hit '{Item}' — auto-playing", topMatch.Name);
-            return await PlayItem(topMatch, user, session, context, request, locale, jellyfinUser).ConfigureAwait(false);
+            // JF-654 review round 2: the full-coverage pre-check is a song
+            // auto-play on this handler (the fuzzy pass's sibling, one branch
+            // later); a kana-origin query takes the same shared bar. A refusal is
+            // the honest not-found rather than a fall-through into
+            // HandleFuzzyMiss, whose >= 90 auto-accept would play the very item
+            // the bar just refused.
+            var topScored = KeywordMatcher.Score(new[] { topMatch }, KeywordMatcher.Tokenize(query, locale), locale);
+            double topScore = topScored.Count > 0 ? topScored[0].Score : 0;
+            if (!kanaOrigin || Util.SongIndexSearch.PassesKanaOriginSongAcceptance(query, topMatch, topScore))
+            {
+                Logger.LogInformation("Fuzzy match hit '{Item}' — auto-playing", topMatch.Name);
+                return await PlayItem(topMatch, user, session, context, request, locale, jellyfinUser).ConfigureAwait(false);
+            }
+
+            Logger.LogInformation(
+                "Fuzzy match hit '{Item}' for kana-origin query '{Query}' carries no length-banded Double Metaphone collision or near-exact score, honest not-found (JF-654)",
+                topMatch.Name, query);
+            return ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale));
         }
 
         var (missOutcome, missResponse) = await HandleFuzzyMiss(
@@ -416,6 +435,43 @@ public class SearchMediaIntentHandler : BaseHandler
 
         int cap = Plugin.Instance?.Configuration?.MaxSearchResults ?? 20;
         return scored.Take(cap).Select(s => s.Item).ToList();
+    }
+
+    /// <summary>
+    /// JF-654 review round 2: the shared song-side kana bar applied to the fuzzy
+    /// pass's single-result pick. The fuzzy score rides the PartialRatio scale
+    /// the bar's plain leg cannot trust (the JF-652 review: plain 91-99 there
+    /// proves no collision), so the hit is re-scored through the same
+    /// KeywordMatcher chain the &gt;= 95 leg is calibrated on, then gated by the
+    /// shared definition. False is the honest miss: the caller falls through to
+    /// the gated song-title retry instead of auto-playing the soup match.
+    /// </summary>
+    /// <param name="item">The fuzzy pass's single best hit.</param>
+    /// <param name="romanizedQuery">The romanized query string.</param>
+    /// <param name="locale">The request locale.</param>
+    /// <param name="kanaOrigin">Whether the query carried kana pre-romanization.</param>
+    /// <returns>True when the hit may feed the result flow's auto-play.</returns>
+    private bool PassesKanaSongGate(BaseItem item, string romanizedQuery, string locale, bool kanaOrigin)
+    {
+        if (!kanaOrigin)
+        {
+            return true;
+        }
+
+        var scored = KeywordMatcher.ScoreWithPhoneticFallback(
+            new[] { item },
+            KeywordMatcher.Tokenize(romanizedQuery, locale),
+            locale,
+            _config.PhoneticSongSearchEnabled);
+        if (Util.SongIndexSearch.ApplyKanaOriginBar(scored, romanizedQuery, kanaOrigin: true).Count > 0)
+        {
+            return true;
+        }
+
+        Logger.LogInformation(
+            "Fuzzy-pass hit '{ItemName}' for kana-origin query '{Query}' carries no length-banded Double Metaphone collision or near-exact score, treating as a miss (JF-654)",
+            item.Name, romanizedQuery);
+        return false;
     }
 
     private async Task<IReadOnlyList<BaseItem>> SearchByArtistNameAsync(

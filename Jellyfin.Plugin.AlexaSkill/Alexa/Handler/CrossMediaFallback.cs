@@ -475,10 +475,13 @@ public sealed class CrossMediaFallback
     /// deliberately: this is a fallback GUESS on a coin-flipped slot, and walking
     /// the ranking to serve a lower-scoring collision carrier is a deeper guess
     /// than the head check (the list-walking ApplyKanaOriginBar form belongs to
-    /// the primary search paths). The flag is threaded from the callers, which
-    /// hold the raw slot pre-romanization and the ER canonical (the JF-659 skip
-    /// means an ER-resolved musician never reaches this fallback, so
-    /// kanaOrigin=true always means the raw/kana shape).
+    /// the primary search paths). The kana-origin flag defaults to self-computed
+    /// from the input pre-romanization (the TryEntityFallbackAsync shape), which
+    /// is exact for every caller that passes the RAW slot value; the ONE
+    /// exception that must pass it explicitly is PlayArtistSongsIntentHandler,
+    /// whose entry already romanized its slot (JF-643), so the raw script
+    /// evidence is gone by the time this method runs and self-computing here
+    /// would see Latin and leave the bar inert (JF-654 review round 2).
     /// </summary>
     /// <param name="musician">The raw musician slot value.</param>
     /// <param name="user">The plugin user.</param>
@@ -488,9 +491,10 @@ public sealed class CrossMediaFallback
     /// <param name="songIndex">The song n-gram index (null in minimal setups).</param>
     /// <param name="libraryManager">Library manager for the library-filter walk.</param>
     /// <param name="cancellationToken">Shutdown token.</param>
-    /// <param name="kanaOrigin">JF-654: whether the raw slot value contained kana
-    /// (computed by the caller via <see cref="Util.ArtistSearch.IsKanaOriginQuery"/>
-    /// before its own romanization).</param>
+    /// <param name="kanaOrigin">JF-654: whether the slot value contained kana.
+    /// Null (the default) self-computes from the input BEFORE this method's own
+    /// romanization; pass a value only from a caller whose input is already
+    /// romanized (see the summary).</param>
     /// <returns>The play response, or null to fall through to the caller's not-found.</returns>
     public SkillResponse? TrySongFallback(
         string musician,
@@ -502,7 +506,7 @@ public sealed class CrossMediaFallback
         ILibraryManager libraryManager,
         string logLabel,
         CancellationToken cancellationToken,
-        bool kanaOrigin = false)
+        bool? kanaOrigin = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -510,6 +514,11 @@ public sealed class CrossMediaFallback
         {
             return null;
         }
+
+        // JF-654: the kana-origin flag is read BEFORE the romanization below
+        // erases the script evidence, unless the caller pinned it (a caller whose
+        // input arrived pre-romanized).
+        bool kana = kanaOrigin ?? ArtistSearch.IsKanaOriginQuery(null, musician);
 
         // JF-643: the tokens feed the Latin-built n-gram index and KeywordMatcher,
         // so the query-side romanization happens before tokenization.
@@ -550,7 +559,7 @@ public sealed class CrossMediaFallback
         // JF-654: the song-side kana bar, head candidate (see the method doc).
         // `musician` is the romanized local here, so the collision codes are
         // computed from it and the song title.
-        if (kanaOrigin && !Util.SongIndexSearch.PassesKanaOriginSongAcceptance(musician, scored[0].Item, scored[0].Score))
+        if (kana && !Util.SongIndexSearch.PassesKanaOriginSongAcceptance(musician, scored[0].Item, scored[0].Score))
         {
             _logger.LogInformation(
                 "{Label}: kana-origin query '{Query}' matched song '{SongName}' at score {Score:F0} without a length-banded Double Metaphone collision or a near-exact plain score, treating as a miss (JF-654)",
