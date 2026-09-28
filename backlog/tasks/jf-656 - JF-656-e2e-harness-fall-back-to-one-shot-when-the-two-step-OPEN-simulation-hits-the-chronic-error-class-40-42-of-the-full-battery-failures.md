@@ -3,9 +3,10 @@ id: JF-656
 title: >-
   JF-656 - e2e harness: fall back to one-shot when the two-step OPEN simulation
   hits the chronic error class (40/42 of the full-battery failures)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-27 13:31'
+updated_date: '2026-09-28 05:49'
 labels:
   - e2e
   - harness
@@ -71,3 +72,9 @@ Dispositions recorded (no behavior change):
 - #7 the outage gate is per-process, one-way (a locale is never re-probed after a mid-run recovery), and invisible to a parallel run (no xdist configured today): documented as best-effort in the comment at `_open_outage_locales`.
 
 Verification this round: dry-run green (157 skipped, 0.70s); the mocked classification checks extended to six cases (poll path generic/other, init path generic/other, poisoned-utterance non-match, case-insensitive cause match), all green.
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Landed 2026-09-28 as merge 677f0a24 (pushed; Python-only, no deploy): the e2e open-fallback plus the battery's actual root cause. The 2026-09-27 failing set (40 failures) exactly matches the 11 locales JF-558 renamed to native invocation names, whose smoke fixtures still opened with the dead English 'jellyfin player'; the fixtures now carry the live native names (verified byte-for-byte against Config.cs LocaleInvocationNames). The fallback machinery: SmapiUnexpectedError typed classification at BOTH FAILED sites (the review caught the fast-fail hole) matching the platform cause field alone (the review caught the composed-message matcher risk), the per-process outage gate (documented best-effort), the warnings-summary OPEN FALLBACK marker, and the assume-open session policy in the outage branch (the review's consistency catch); the es-US INVOCATION_PREFIX gap fixed. Gates: /simplify in-worker, code-review skill in the orchestrator transcript (7 findings: 4 applied, 3 dispositioned), dry-run green (orchestrator-verified). HONEST FRAMING RECORDED: in an active outage the fallback converts an opaque open failure into a marked one-shot failure (better diagnostics, still red); the fixture fix is the green-maker on a healthy platform; the fallback becomes a true rescue when the native-name wrappers are verified (the next battery run is the verification of the ten unprobed compositions, ja/hi mixed-script the highest-risk rows).
+<!-- SECTION:FINAL_SUMMARY:END -->
