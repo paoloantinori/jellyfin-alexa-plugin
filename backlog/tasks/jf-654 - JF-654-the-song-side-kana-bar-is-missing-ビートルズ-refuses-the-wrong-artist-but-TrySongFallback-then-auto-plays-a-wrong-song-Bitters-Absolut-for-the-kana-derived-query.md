@@ -4,9 +4,10 @@ title: >-
   JF-654 - the song-side kana bar is missing: ビートルズ refuses the wrong artist but
   TrySongFallback then auto-plays a wrong song (Bitters & Absolut) for the
   kana-derived query
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-27 12:22'
+updated_date: '2026-09-28 14:37'
 labels:
   - search
   - i18n
@@ -34,6 +35,20 @@ THE WORK (mirror JF-652's shape at the song decision points): for kana-origin qu
 
 VERIFICATION BAR: musician=ビートルズ -> honest not-found (never a wrong song); title-keyword katakana queries (FindSong path) get the same bar; the Latin song matrix unchanged.
 <!-- SECTION:DESCRIPTION:END -->
+
+## Definition of Done
+<!-- DOD:BEGIN -->
+- [ ] #1 dotnet build passes with 0 errors
+- [ ] #2 dotnet test passes
+- [ ] #3 No new compiler warnings introduced
+- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
+- [ ] #6 NLU test fixtures updated if interaction model changed
+- [ ] #7 E2E test added for new intent or handler logic
+- [ ] #8 Locale response strings added to all 17 locales
+- [ ] #9 /simplify passed (no blocking cleanups remaining)
+- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+<!-- DOD:END -->
 
 ## Implementation Notes
 
@@ -233,16 +248,8 @@ kana plain-fuzzy Sator match -> MediaNotFound never a play; Latin same-arm
 control -> still auto-plays (the JF-506-era behavior unchanged).
 <!-- SECTION:NOTES:END -->
 
-## Definition of Done
-<!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
-<!-- DOD:END -->
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Landed 2026-09-28 as merges a7d42b09 + the round-3 fixup 58cd75c7 (pushed; deployed with the full checklist, config intact): the song-side kana bar. A kana-origin query auto-plays a song only on a length-banded DM collision or a >=95 near-exact plain score; plain-fuzzy-only coverage matches take the honest not-found. The bar spans TrySongFallback (self-computing flag, the TryEntityFallbackAsync shape), FindSong's chain, PlaySong's title fallbacks, and SearchMedia's every auto-play feed (the fuzzy pass, the topMatch pre-check, the song-title retry, and the artist-fallback arm - the last traced LIVE by the battery: bitoruzu -> tier-4 plain-fuzzy Sator -> single-result auto-play through the one arm no bar covered; gated with the shared JF-471 predicate in round 3). Empirical corrections the rounds earned: the bare JF-652 predicate would have ACCEPTED the live bait (both encode PTRS under the 4-char cap) so the collision leg is length-banded; parenthetical suffixes stripped (banding on them refuses legit matches on characters with no phonetic evidence; the token-band alternative was rejected because the live bait IS a first-word collision). Gates: /simplify + code-review in-worker (2 adjacent gaps filed JF-660/JF-661), the code-review skill marker (7 findings applied/dispositioned), suites 4689/4689 both TFMs (orchestrator-verified at every round). LIVE BATTERY on the deployed build: PlayArtistSongs ビートルズ -> honest artist not-found (the Bitters wrong-song dead); PlaySong ビートルズ -> song bar refuses (the Sator SUGGESTION that follows is the JF-660 leak, now live-evidenced in its notes); SearchMedia ビートルズ -> MediaNotFound (the Sator play dead after round 3); the Latin SearchMedia suggestion flow and the クイーン/ジャズ controls unchanged.
+<!-- SECTION:FINAL_SUMMARY:END -->
