@@ -97,6 +97,11 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
             }
         }
 
+        // JF-659: the ER canonical feeds the artist search and the song fallback;
+        // `musician` keeps driving the not-found speech (the JF-642 F-1 lesson;
+        // SlotValueHelper owns the full contract).
+        string? canonicalMusician = Util.SlotValueHelper.GetCanonicalValue(intentRequest, "musician");
+
         Logger.LogDebug("QueryArtistLibrary: entered, locale={Locale}, musician={Musician}, queryType={QueryType}", locale, musician, queryType);
 
         // JF-550 (dead-mic sweep; JF-549 class).
@@ -122,8 +127,10 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
             return userError;
         }
 
+        string musicianSearch = canonicalMusician ?? musician;
+
         IReadOnlyList<BaseItem> artists = await Util.ArtistSearch.SearchAsync(
-            musician, user, _libraryManager, _artistIndex, Logger,
+            musicianSearch, user, _libraryManager, _artistIndex, Logger,
             (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", ct),
             locale, cancellationToken).ConfigureAwait(false);
 
@@ -134,11 +141,18 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
             // JF-440 sibling coverage: the same NLU coin flip that feeds
             // PlayArtistSongs feeds this intent's musician slot ('cosa abbiamo di
             // sugar free jazz'); serve the song instead of a dead-end not-found.
-            SkillResponse? songFallback = CrossMedia.TrySongFallback(
-                musician, user, session, context, locale, _songNgramIndex, _libraryManager, "QueryArtistLibrary", cancellationToken);
-            if (songFallback != null)
+            // JF-659 (gate review, finding 2): skipped when the slot is
+            // ER-resolved: an ER match is artist evidence, so guessing the
+            // resolved name as a song TITLE could play an unrelated song titled
+            // like the artist.
+            if (canonicalMusician == null)
             {
-                return songFallback;
+                SkillResponse? songFallback = CrossMedia.TrySongFallback(
+                    musicianSearch, user, session, context, locale, _songNgramIndex, _libraryManager, "QueryArtistLibrary", cancellationToken);
+                if (songFallback != null)
+                {
+                    return songFallback;
+                }
             }
 
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundArtist", locale, musician));

@@ -94,6 +94,11 @@ public class PlayAlbumIntentHandler : BaseHandler
 
         string? album = intentRequest.Intent.Slots?.TryGetValue("album", out var albumSlot) == true ? albumSlot.Value : null;
         string? musician = intentRequest.Intent.Slots?.TryGetValue("musician", out var musicianSlot) == true ? musicianSlot.Value : null;
+        // JF-659: the ER canonical feeds the artist search and the JF-471 acceptance;
+        // the raw value keeps driving the JF-489/JF-492 title retries (raw-spoken
+        // calling-word analysis) and the not-found speech (the JF-642 F-1 lesson;
+        // SlotValueHelper owns the full contract).
+        string? canonicalMusician = Util.SlotValueHelper.GetCanonicalValue(intentRequest, "musician");
         // JF-426: strip a leading Italian article Amazon failed to strip (see PlayArtistSongs).
         musician = musician is null ? null : Util.ArtistSearch.StripLeadingArticle(musician, locale);
         // JF-643: both slots feed SearchTerm album queries and the fuzzy cascade below
@@ -102,8 +107,10 @@ public class PlayAlbumIntentHandler : BaseHandler
         // word logic (a romanized value is plain Latin input for it).
         album = album is null ? null : Util.KatakanaRomanizer.Romanize(album);
         // JF-652: captured on the PRE-romanization value; feeds the JF-471
-        // acceptance gate's kana bar below.
-        bool musicianKanaOrigin = Util.KatakanaRomanizer.ContainsKana(musician ?? string.Empty);
+        // acceptance gate's kana bar below. JF-659: a canonical-bearing query keeps
+        // the flag false (IsKanaOriginQuery owns the invariant), so the kana bar is
+        // inert for it.
+        bool musicianKanaOrigin = Util.ArtistSearch.IsKanaOriginQuery(canonicalMusician, musician);
         musician = musician is null ? null : Util.KatakanaRomanizer.Romanize(musician);
 
         Logger.LogDebug("PlayAlbum: entered, locale={Locale}", locale);
@@ -250,16 +257,22 @@ public class PlayAlbumIntentHandler : BaseHandler
             }
         }
 
+        // JF-659: the search value (canonical when ER resolved the slot, the
+        // post-JF-489 raw otherwise); declared after the retry block above since
+        // that block can clear or replace `musician` on its own paths. The later
+        // JF-471/JF-473 gates only run on the artist-hit path, where it is unchanged.
+        string? musicianSearch = canonicalMusician ?? musician;
+
         if (!string.IsNullOrWhiteSpace(musician))
         {
             pinnedArtistIndex = _artistIndex.Pin();
-            Logger.LogDebug("PlayAlbum: searching for artist filter='{Musician}'", musician);
+            Logger.LogDebug("PlayAlbum: searching for artist filter='{Musician}'", musicianSearch);
             IReadOnlyList<BaseItem> artists = await Util.ArtistSearch.SearchAsync(
-                musician, user, _libraryManager, pinnedArtistIndex, Logger,
+                musicianSearch!, user, _libraryManager, pinnedArtistIndex, Logger,
                 (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", ct),
                 locale, cancellationToken).ConfigureAwait(false);
 
-            Logger.LogDebug("PlayAlbum: artist search returned {Count} results for '{Musician}'", artists.Count, musician);
+            Logger.LogDebug("PlayAlbum: artist search returned {Count} results for '{Musician}'", artists.Count, musicianSearch);
 
             if (artists.Count == 0)
             {
@@ -280,8 +293,16 @@ public class PlayAlbumIntentHandler : BaseHandler
                 // out of the way; the retry results feed the play path without a
                 // re-query, the JF-489 hit-path mechanism); a miss keeps today's
                 // not-found naming the searched value. Skipped entirely when the
-                // JF-489 retry already missed this exact value as a title.
-                if (string.IsNullOrWhiteSpace(album) && !musicianSlotTitleRetryMissed)
+                // JF-489 retry already missed this exact value as a title, and
+                // JF-659 (gate review, finding 1): skipped entirely when the slot
+                // is ER-resolved. An ER match is positive evidence the user named
+                // an ARTIST, so the "the slot actually carried a title" premise is
+                // void; keeping only the raw value was no guard in the catalog-
+                // typed locales (raw == canonical modulo case, and the
+                // case-insensitive SearchTerm erases the difference), so a
+                // stale-catalog miss would still auto-play an unrelated album
+                // literally titled like the artist.
+                if (string.IsNullOrWhiteSpace(album) && canonicalMusician == null && !musicianSlotTitleRetryMissed)
                 {
                     string artistMissTitle = musician!;
                     Logger.LogDebug(
@@ -303,7 +324,7 @@ public class PlayAlbumIntentHandler : BaseHandler
                     }
                     else
                     {
-                        return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByArtist", locale, artistMissTitle));
+                        return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByArtist", locale, musician!));
                     }
                 }
                 else
@@ -352,11 +373,11 @@ public class PlayAlbumIntentHandler : BaseHandler
             // offer. Scoped to the album-by-artist resolution: an album TITLE
             // present keeps today's behavior unchanged.
             if (matchedArtist != null
-                && !CrossMedia.PassesArtistMatchAcceptance(matchedArtist, musician!, user, pinnedArtistIndex, out int acceptanceScore, musicianKanaOrigin))
+                && !CrossMedia.PassesArtistMatchAcceptance(matchedArtist, musicianSearch!, user, pinnedArtistIndex, out int acceptanceScore, musicianKanaOrigin))
             {
                 Logger.LogInformation(
                     "PlayAlbum: artist match '{Artist}' for musician='{Musician}' fails the fuzzy/phonetic tier acceptance (word-coverage free pass, score={Score} below {Threshold}), refusing the album-by-artist auto-play (JF-471)",
-                    matchedArtist.Name, musician, acceptanceScore, FuzzyMatcher.GetDefaultThreshold(user));
+                    matchedArtist.Name, musicianSearch, acceptanceScore, FuzzyMatcher.GetDefaultThreshold(user));
                 return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundAlbumByArtist", locale, musician!));
             }
 
@@ -375,11 +396,11 @@ public class PlayAlbumIntentHandler : BaseHandler
             // YesIntentHandler.PlayArtist (disambig_type=artist); No walks the shared
             // disambiguation cycle to NoMoreMatches.
             if (matchedArtist != null
-                && Util.ArtistSearch.IsCoincidentalContainmentMatch(musician!, matchedArtist.Name, locale))
+                && Util.ArtistSearch.IsCoincidentalContainmentMatch(musicianSearch!, matchedArtist.Name, locale))
             {
                 Logger.LogInformation(
                     "PlayAlbum: artist match '{Artist}' for musician='{Musician}' is coincidental containment, downgrading the album-by-artist auto-play to a yes/no prompt (JF-473/JF-377)",
-                    matchedArtist.Name, musician);
+                    matchedArtist.Name, musicianSearch);
                 var matches = new List<(Guid Id, string Name, string? ArtUrl)>
                 {
                     (matchedArtist.Id, matchedArtist.Name, Launch.GetImageUrl(matchedArtist.Id.ToString("N"), user))

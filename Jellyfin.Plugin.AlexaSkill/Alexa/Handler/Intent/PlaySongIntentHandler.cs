@@ -135,6 +135,10 @@ public class PlaySongIntentHandler : BaseHandler
 
         string? songQuery = intentRequest.Intent.Slots?.TryGetValue("song", out var songSlot) == true ? songSlot.Value : null;
         string? musicianQuery = intentRequest.Intent.Slots?.TryGetValue("musician", out var musicianSlot) == true ? musicianSlot.Value : null;
+        // JF-659: the ER canonical feeds the artist search; musicianQuery keeps
+        // driving the not-found speech (the JF-642 F-1 lesson; SlotValueHelper
+        // owns the full contract).
+        string? canonicalMusician = Util.SlotValueHelper.GetCanonicalValue(intentRequest, "musician");
         // JF-426: strip a leading Italian article Amazon failed to strip (see PlayArtistSongs).
         musicianQuery = musicianQuery is null ? null : Util.ArtistSearch.StripLeadingArticle(musicianQuery, locale);
 
@@ -205,13 +209,14 @@ public class PlaySongIntentHandler : BaseHandler
         string? matchedArtistName = null;
         if (!string.IsNullOrWhiteSpace(musicianQuery))
         {
-            Logger.LogDebug("PlaySong: searching for artist filter='{Musician}'", musicianQuery);
+            string searchMusician = canonicalMusician ?? musicianQuery;
+            Logger.LogDebug("PlaySong: searching for artist filter='{Musician}'", searchMusician);
             IReadOnlyList<BaseItem> artists = await Util.ArtistSearch.SearchAsync(
-                musicianQuery, user, _libraryManager, _artistIndex, Logger,
+                searchMusician, user, _libraryManager, _artistIndex, Logger,
                 (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", ct),
                 locale, cancellationToken).ConfigureAwait(false);
 
-            Logger.LogDebug("PlaySong: artist search returned {Count} results for '{Musician}'", artists.Count, musicianQuery);
+            Logger.LogDebug("PlaySong: artist search returned {Count} results for '{Musician}'", artists.Count, searchMusician);
 
             if (artists.Count == 0)
             {

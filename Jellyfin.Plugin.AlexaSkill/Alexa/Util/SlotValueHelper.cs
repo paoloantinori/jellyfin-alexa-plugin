@@ -1,6 +1,7 @@
 #nullable enable
 
 using Alexa.NET.Request;
+using Alexa.NET.Request.Type;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 
@@ -35,15 +36,20 @@ public static class SlotValueHelper
     /// <summary>
     /// Canonical value of the first ER_SUCCESS_MATCH authority on the slot, or
     /// null when no authority matched. A custom slot type resolves the spoken
-    /// form ('ジャズ') to its canonical value ('Jazz', JF-642's ja-JP GenreType);
+    /// form ('ジャズ') to its canonical value ('Jazz', JF-642's ja-JP GenreType;
+    /// 'クイーン' to the library artist name, JF-659's JellyfinArtist slots);
     /// free-text types and unmatched values return null so the caller keeps the
-    /// raw slot value.
+    /// raw slot value. Pairing rule (the JF-642 genre / JF-659 musician contract,
+    /// the ONE owner of it): the canonical feeds the SEARCH VERBATIM regardless
+    /// of script (a kana-named library's canonical IS kana and exact-self-matches
+    /// its own name; romanizing it would destroy that hit) while the raw value
+    /// keeps driving speech and session (never reassign the raw local).
     /// </summary>
-    /// <param name="slot">The slot to read entity resolution from.</param>
+    /// <param name="slot">The slot to read entity resolution from; null (an absent slot) reads as no match.</param>
     /// <returns>The canonical slot value, or null when no authority matched.</returns>
-    public static string? GetCanonicalValue(Slot slot)
+    public static string? GetCanonicalValue(Slot? slot)
     {
-        if (slot.Resolution?.Authorities is { Length: > 0 } authorities)
+        if (slot?.Resolution?.Authorities is { Length: > 0 } authorities)
         {
             foreach (var authority in authorities)
             {
@@ -59,4 +65,19 @@ public static class SlotValueHelper
 
         return null;
     }
+
+    /// <summary>
+    /// Canonical value of a named slot on an intent request (JF-659): the same
+    /// ER_SUCCESS_MATCH read as the slot overload, for call sites that hold the
+    /// request rather than the slot object (GetSlotValue callers and indexer
+    /// reads). Null when the slot is absent or unmatched, so the caller keeps
+    /// the raw value.
+    /// </summary>
+    /// <param name="request">The intent request carrying the slots.</param>
+    /// <param name="slotName">The slot name.</param>
+    /// <returns>The canonical slot value, or null when no authority matched.</returns>
+    public static string? GetCanonicalValue(IntentRequest request, string slotName)
+        => request.Intent.Slots != null && request.Intent.Slots.TryGetValue(slotName, out Slot? slot)
+            ? GetCanonicalValue(slot)
+            : null;
 }

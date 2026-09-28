@@ -171,6 +171,10 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
         string? musician = intentRequest.Intent.Slots?.TryGetValue("musician", out var musicianSlot) == true ? musicianSlot.Value : null;
+        // JF-659: the ER canonical feeds the search; the raw value keeps driving
+        // the not-found speech (the JF-642 F-1 lesson; SlotValueHelper owns the
+        // full contract).
+        string? canonicalMusician = Util.SlotValueHelper.GetCanonicalValue(intentRequest, "musician");
         // JF-426: strip a leading Italian article Amazon failed to strip for an
         // out-of-catalog artist ("suona i 24 grana" arrived raw as 'i 24 grana').
         musician = musician is null ? null : Util.ArtistSearch.StripLeadingArticle(musician, locale);
@@ -178,8 +182,10 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         // that bypasses ArtistSearch.SearchAsync's entry romanization, so the
         // katakana-to-romaji normalization happens here too.
         // JF-652: the kana-origin flag must be captured on the RAW slot value,
-        // BEFORE the romanization below erases the script evidence.
-        bool kanaOrigin = musician is not null && Util.KatakanaRomanizer.ContainsKana(musician);
+        // BEFORE the romanization below erases the script evidence. JF-659: a
+        // canonical-bearing query keeps the flag false (IsKanaOriginQuery owns the
+        // invariant), so the kana bar is inert for it.
+        bool kanaOrigin = Util.ArtistSearch.IsKanaOriginQuery(canonicalMusician, musician);
         musician = musician is null ? null : Util.KatakanaRomanizer.Romanize(musician);
 
         Logger.LogDebug("PlayArtistSongs: entered, locale={Locale}", locale);
@@ -194,6 +200,10 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         {
             return BuildDialogElicitResponse("DidNotCatchArtistName", locale, "musician", IntentNames.PlayArtistSongs, Util.ElicitSlots.For(IntentNames.PlayArtistSongs));
         }
+
+        // JF-659: the search/gate path below reads the canonical when present, the
+        // romanized raw otherwise; `musician` itself stays the speech value.
+        string musicianQuery = canonicalMusician ?? musician;
 
         // JF-467: primary-path music gate (shared contract on IfMediaTypeDisabled).
         // Placed AFTER the empty-musician prompt and BEFORE the warming gate, so a
@@ -258,14 +268,14 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             // the fuzzy/phonetic tiers handle accent drift instead. JF-381.
             tierSw.Restart();
             artists = allArtists
-                .Where(a => a.Name.Contains(musician, StringComparison.OrdinalIgnoreCase)
-                    && Util.ArtistSearch.PassesContainmentBand(a.Name, musician))
+                .Where(a => a.Name.Contains(musicianQuery, StringComparison.OrdinalIgnoreCase)
+                    && Util.ArtistSearch.PassesContainmentBand(a.Name, musicianQuery))
                 .ToList();
             tierSw.Stop();
             tierReached = 1;
             Logger.LogInformation(
                 "ArtistSearch: tier=1 duration={TierMs}ms results={Count} method=InMemoryContains query='{Query}'",
-                tierSw.ElapsedMilliseconds, artists.Count, musician);
+                tierSw.ElapsedMilliseconds, artists.Count, musicianQuery);
 
             if (artists.Count == 0)
             {
@@ -273,12 +283,12 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                 {
                     // Fast mode: skip prefix tiers, go straight to fuzzy-all
                     tierSw.Restart();
-                    BaseItem? fuzzy = Search.FuzzyMatchPhonetic(musician, allArtists, a => a.Name, a => a.Id, pinnedIndex, user);
+                    BaseItem? fuzzy = Search.FuzzyMatchPhonetic(musicianQuery, allArtists, a => a.Name, a => a.Id, pinnedIndex, user);
                     tierSw.Stop();
                     tierReached = 4;
                     Logger.LogInformation(
                         "ArtistSearch: tier=4 duration={TierMs}ms matched={Matched} method=InMemoryFuzzyAll query='{Query}' mode=Fast",
-                        tierSw.ElapsedMilliseconds, fuzzy != null, musician);
+                        tierSw.ElapsedMilliseconds, fuzzy != null, musicianQuery);
                     if (fuzzy != null)
                     {
                         artists = new List<BaseItem> { fuzzy };
@@ -287,23 +297,23 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                 else
                 {
                     // Thorough mode: run tiers 2-4 as before (in-memory tiers are sub-ms, no need to parallelize)
-                    string firstWord = musician.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? musician;
+                    string firstWord = musicianQuery.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? musicianQuery;
 
                     // Tier 2: prefix first word + fuzzy (catches ASR truncation, e.g. "soul coughin" → "Soul Coughing")
                     tierSw.Restart();
                     var prefixCandidates = allArtists
                         .Where(a => a.Name.StartsWith(firstWord, StringComparison.OrdinalIgnoreCase))
                         .ToList();
-                    BaseItem? tier2Match = Search.FuzzyMatchPhonetic(musician, prefixCandidates, a => a.Name, a => a.Id, pinnedIndex, user);
+                    BaseItem? tier2Match = Search.FuzzyMatchPhonetic(musicianQuery, prefixCandidates, a => a.Name, a => a.Id, pinnedIndex, user);
                     tierSw.Stop();
                     tierReached = 2;
                     Logger.LogInformation(
                         "ArtistSearch: tier=2 duration={TierMs}ms matched={Matched} method=InMemoryPrefixFirstWord query='{Query}' prefix='{Prefix}'",
-                        tierSw.ElapsedMilliseconds, tier2Match != null, musician, firstWord);
+                        tierSw.ElapsedMilliseconds, tier2Match != null, musicianQuery, firstWord);
                     BaseItem? deferredTier2 = null;
                     if (tier2Match != null)
                     {
-                        if (Util.ArtistSearch.IsPartialFirstWordMatch(musician, firstWord, tier2Match.Name))
+                        if (Util.ArtistSearch.IsPartialFirstWordMatch(musicianQuery, firstWord, tier2Match.Name))
                         {
                             // JF-417: partial first-word match, defer and let tiers 3-4 run
                             deferredTier2 = tier2Match;
@@ -315,18 +325,18 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                     }
 
                     // Tier 3: prefix full query + fuzzy (e.g. "Kidz Bop" → "Kidz Bop Kids")
-                    if (artists.Count == 0 && !string.Equals(firstWord, musician, StringComparison.Ordinal))
+                    if (artists.Count == 0 && !string.Equals(firstWord, musicianQuery, StringComparison.Ordinal))
                     {
                         tierSw.Restart();
                         var fullPrefixCandidates = allArtists
-                            .Where(a => a.Name.StartsWith(musician, StringComparison.OrdinalIgnoreCase))
+                            .Where(a => a.Name.StartsWith(musicianQuery, StringComparison.OrdinalIgnoreCase))
                             .ToList();
-                        BaseItem? tier3Match = Search.FuzzyMatchPhonetic(musician, fullPrefixCandidates, a => a.Name, a => a.Id, pinnedIndex, user);
+                        BaseItem? tier3Match = Search.FuzzyMatchPhonetic(musicianQuery, fullPrefixCandidates, a => a.Name, a => a.Id, pinnedIndex, user);
                         tierSw.Stop();
                         tierReached = 3;
                         Logger.LogInformation(
                             "ArtistSearch: tier=3 duration={TierMs}ms matched={Matched} method=InMemoryPrefixFull query='{Query}'",
-                            tierSw.ElapsedMilliseconds, tier3Match != null, musician);
+                            tierSw.ElapsedMilliseconds, tier3Match != null, musicianQuery);
                         if (tier3Match != null)
                         {
                             artists = new List<BaseItem> { tier3Match };
@@ -337,7 +347,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                     // SearchAsync (placement rationale there). Thorough only: Fast mode
                     // keeps its exact pre-tier semantics (speed over recall by design).
                     if (mode != SearchResponseMode.Fast && artists.Count == 0
-                        && Util.ArtistSearch.TryWordCoverageTier(musician, allArtists, locale, Logger, out var wordCoverageMatches))
+                        && Util.ArtistSearch.TryWordCoverageTier(musicianQuery, allArtists, locale, Logger, out var wordCoverageMatches))
                     {
                         artists = wordCoverageMatches;
                         tierReached = 4; // tier 1.5 preempted tier 4 (the summary log is coarse)
@@ -348,12 +358,12 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                     {
                         tierSw.Restart();
                         // JF-417 review correction: no exclusion (see ArtistSearch.cs comment)
-                        BaseItem? tier4Match = Search.FuzzyMatchPhonetic(musician, allArtists, a => a.Name, a => a.Id, pinnedIndex, user);
+                        BaseItem? tier4Match = Search.FuzzyMatchPhonetic(musicianQuery, allArtists, a => a.Name, a => a.Id, pinnedIndex, user);
                         tierSw.Stop();
                         tierReached = 4;
                         Logger.LogInformation(
                             "ArtistSearch: tier=4 duration={TierMs}ms matched={Matched} method=InMemoryFuzzyAll query='{Query}'",
-                            tierSw.ElapsedMilliseconds, tier4Match != null, musician);
+                            tierSw.ElapsedMilliseconds, tier4Match != null, musicianQuery);
                         if (tier4Match != null)
                         {
                             artists = new List<BaseItem> { tier4Match };
@@ -377,7 +387,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             if (mode == SearchResponseMode.Fast)
             {
                 // Fast mode: single SearchTerm query, no fallback tiers, no ASR variants
-                artists = await Search.SearchWithAsrFallbackAsync(musician,
+                artists = await Search.SearchWithAsrFallbackAsync(musicianQuery,
                     searchTerm =>
                     {
                         var q = new InternalItemsQuery()
@@ -410,12 +420,12 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                 tierReached = 1;
                 Logger.LogInformation(
                     "ArtistSearch: tier=1 duration={TierMs}ms results={Count} method=SearchTerm query='{Query}' mode=Fast",
-                    tierSw.ElapsedMilliseconds, artists.Count, musician);
+                    tierSw.ElapsedMilliseconds, artists.Count, musicianQuery);
             }
             else
             {
                 // Thorough mode: 4-tier fallback with ASR variants on tier 1
-                artists = await Search.SearchWithAsrFallbackAsync(musician,
+                artists = await Search.SearchWithAsrFallbackAsync(musicianQuery,
                     searchTerm =>
                     {
                         var q = new InternalItemsQuery()
@@ -431,7 +441,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                         return RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", cancellationToken);
                     }).ConfigureAwait(false);
 
-                artists = FilterContainmentBand(artists, musician);
+                artists = FilterContainmentBand(artists, musicianQuery);
 
                 // JF-457: album-scope verification of the bypass-tier list (same
                 // contract as the shared implementation); an emptied tier falls
@@ -443,19 +453,19 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                 tierReached = 1;
                 Logger.LogInformation(
                     "ArtistSearch: tier=1 duration={TierMs}ms results={Count} method=SearchTerm query='{Query}'",
-                    tierSw.ElapsedMilliseconds, artists.Count, musician);
+                    tierSw.ElapsedMilliseconds, artists.Count, musicianQuery);
 
                 // Tier 1 emptied (no band-passing in-scope match): run the parallel tiers 2-4
                 if (artists.Count == 0)
                 {
                     // Parallelize tiers 2-4: all independent, pick by priority order
-                    string firstWord = musician.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? musician;
+                    string firstWord = musicianQuery.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? musicianQuery;
 
-                    var tier2 = TryPrefixFallbackAsync(firstWord, musician, topParentIds, user, "GetArtistsFuzzy", cancellationToken);
-                    var tier3 = !string.Equals(firstWord, musician, StringComparison.Ordinal)
-                        ? TryPrefixFallbackAsync(musician, musician, topParentIds, user, "GetArtistsFullPrefix", cancellationToken)
+                    var tier2 = TryPrefixFallbackAsync(firstWord, musicianQuery, topParentIds, user, "GetArtistsFuzzy", cancellationToken);
+                    var tier3 = !string.Equals(firstWord, musicianQuery, StringComparison.Ordinal)
+                        ? TryPrefixFallbackAsync(musicianQuery, musicianQuery, topParentIds, user, "GetArtistsFullPrefix", cancellationToken)
                         : Task.FromResult<BaseItem?>(null);
-                    var tier4 = TryContainsFallbackAsync(musician, musician, topParentIds, user, "GetArtistsContains", cancellationToken);
+                    var tier4 = TryContainsFallbackAsync(musicianQuery, musicianQuery, topParentIds, user, "GetArtistsContains", cancellationToken);
 
                     BaseItem?[] parallelResults = await Task.WhenAll(tier2, tier3, tier4).ConfigureAwait(false);
 
@@ -465,7 +475,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
 
                     Logger.LogInformation(
                         "ArtistSearch: tiers=2-4 (parallel) matched={Matched} tierHit={Tier} method=ParallelFallback query='{Query}'",
-                        match != null, tierReached, musician);
+                        match != null, tierReached, musicianQuery);
                     if (match != null)
                     {
                         artists = new List<BaseItem> { match };
@@ -480,13 +490,13 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             totalSw.ElapsedMilliseconds,
             tierReached,
             artists.Count,
-            musician,
+            musicianQuery,
             searchSource,
             mode);
 
         if (artists.Count == 0)
         {
-            Logger.LogDebug("PlayArtistSongs: no artist found for query='{Query}'", musician);
+            Logger.LogDebug("PlayArtistSongs: no artist found for query='{Query}'", musicianQuery);
 
             // JF-439 inverse cross-media fallback: the NLU coin-flips musician-shaped
             // song titles ("suona la canzone sugar free jazz" -> musician="sugar free
@@ -494,12 +504,19 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             // to the artist reading. Before giving up, try the song index and serve
             // the song with a FoundSongInstead announcement. Returns null when the
             // fallback does not apply (guard/miss/warming), leaving the clean
-            // NotFoundArtist below.
-            SkillResponse? songFallback = CrossMedia.TrySongFallback(
-                musician, user, session, context, locale, _songNgramIndex, _libraryManager, "PlayArtistSongs", cancellationToken);
-            if (songFallback != null)
+            // NotFoundArtist below. JF-659 (gate review, finding 2): skipped when
+            // the slot is ER-resolved: an ER match is artist evidence, so guessing
+            // the resolved name as a song TITLE could play an unrelated song titled
+            // like the artist (pre-change the romanized raw missed and the honest
+            // not-found answered).
+            if (canonicalMusician == null)
             {
-                return songFallback;
+                SkillResponse? songFallback = CrossMedia.TrySongFallback(
+                    musicianQuery, user, session, context, locale, _songNgramIndex, _libraryManager, "PlayArtistSongs", cancellationToken);
+                if (songFallback != null)
+                {
+                    return songFallback;
+                }
             }
 
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundArtist", locale, musician));
@@ -520,9 +537,9 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         // >= half the query content words (a real multi-word near-match), and boundary-touching
         // containments (whole-word or affixed forms like "outkasts" -> "outkast", JF-408).
         if (artists.Count == 1
-            && ArtistSearch.IsCoincidentalContainmentMatch(musician, artists[0].Name, locale))
+            && ArtistSearch.IsCoincidentalContainmentMatch(musicianQuery, artists[0].Name, locale))
         {
-            return AskCoincidentalContainment(artists[0], musician, locale, context, user);
+            return AskCoincidentalContainment(artists[0], musicianQuery, locale, context, user);
         }
 
         // JF-420: when the single match is a containment shape (artist name is a substring
@@ -534,9 +551,9 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         // threshold (80) ensures "nirvana unplugged" with only "Nirvana Tribute Band"
         // as an alternative (scoring ~65) does NOT trigger: Nirvana auto-plays.
         if (artists.Count == 1
-            && musician.Contains(' ')
-            && musician.Contains(artists[0].Name, StringComparison.OrdinalIgnoreCase)
-            && !IsExactNameMatch(musician, artists[0].Name)
+            && musicianQuery.Contains(' ')
+            && musicianQuery.Contains(artists[0].Name, StringComparison.OrdinalIgnoreCase)
+            && !IsExactNameMatch(musicianQuery, artists[0].Name)
             && pinnedIndex != null)
         {
             // Same pinned view the chain above used (JF-448): the alternative pool and
@@ -554,13 +571,13 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                 double bestAlternativeFair = 0;
                 foreach (BaseItem candidate in alternatives)
                 {
-                    int raw = FuzzyMatcher.Score(musician, candidate.Name);
+                    int raw = FuzzyMatcher.Score(musicianQuery, candidate.Name);
                     if (raw < AlternativeFullNameThreshold)
                     {
                         continue;
                     }
 
-                    double fair = FairComparisonScore(candidate.Name, musician, raw);
+                    double fair = FairComparisonScore(candidate.Name, musicianQuery, raw);
                     if (fair > bestAlternativeFair)
                     {
                         bestAlternativeFair = fair;
@@ -569,7 +586,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                 }
 
                 if (bestAlternative != null
-                    && !IsRedundantShorterForm(artists[0].Name, bestAlternative.Name, musician))
+                    && !IsRedundantShorterForm(artists[0].Name, bestAlternative.Name, musicianQuery))
                 {
                     // JF-420/JF-420.3 SYMMETRIC fair comparison (FairComparisonScore:
                     // bidirectional length fraction, no matcher recall floor). The
@@ -578,7 +595,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                     // like "Miles" inside "miles davis live") cannot outrank a better
                     // full match. If the alternative wins by a clear margin, auto-select
                     // it ("P!nk floyd" means Pink Floyd, not P!nk); otherwise offer both.
-                    double containmentFair = FairComparisonScore(artists[0].Name, musician, FuzzyMatcher.ContainmentScore);
+                    double containmentFair = FairComparisonScore(artists[0].Name, musicianQuery, FuzzyMatcher.ContainmentScore);
 
                     if (bestAlternativeFair >= AlternativeFullNameThreshold && bestAlternativeFair - containmentFair > ContainmentVsFullNameMargin)
                     {
@@ -614,7 +631,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         {
             Logger.LogDebug("PlayArtistSongs: {Count} artists matched, running disambiguation", artists.Count);
             var (missOutcome, missResponse) = await HandleFuzzyMiss(
-                musician,
+                musicianQuery,
                 artists,
                 a => a.Name,
                 best => new List<(Guid, string)> { (best.Id, best.Name) },
@@ -643,7 +660,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         else if (fastAutoPlay)
         {
             // Fast mode: pick the best fuzzy match and auto-play
-            var best = Search.FuzzyMatchPhonetic(musician, artists, a => a.Name, a => a.Id, pinnedIndex, user);
+            var best = Search.FuzzyMatchPhonetic(musicianQuery, artists, a => a.Name, a => a.Id, pinnedIndex, user);
             if (best != null)
             {
                 artists = new List<BaseItem> { best };
@@ -663,9 +680,9 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         // reject): the shape is string-indistinguishable from a real artist inside a
         // carrier phrase, so the yes/no prompt is the only no-regression behavior.
         if (artists.Count == 1
-            && ArtistSearch.IsCoincidentalContainmentMatch(musician, artists[0].Name, locale))
+            && ArtistSearch.IsCoincidentalContainmentMatch(musicianQuery, artists[0].Name, locale))
         {
-            return AskCoincidentalContainment(artists[0], musician, locale, context, user);
+            return AskCoincidentalContainment(artists[0], musicianQuery, locale, context, user);
         }
 
         // JF-652: the kana-origin auto-play bar. A katakana query romanizes into a

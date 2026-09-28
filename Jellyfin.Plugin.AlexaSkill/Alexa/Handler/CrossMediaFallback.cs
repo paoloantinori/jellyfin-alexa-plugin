@@ -677,8 +677,10 @@ public sealed class CrossMediaFallback
         // same Latin-script query (the raw value above keeps the user's spoken words
         // for triage; downstream speech may speak the romanized form).
         // JF-652: the kana-origin flag is computed from the PRE-romanization value,
-        // the script evidence the romanization erases.
-        bool kanaOrigin = KatakanaRomanizer.ContainsKana(slotText);
+        // the script evidence the romanization erases. JF-659: through the ONE
+        // shared definition (no canonical on this path; the callers pass raw slot
+        // text).
+        bool kanaOrigin = Util.ArtistSearch.IsKanaOriginQuery(null, slotText);
         slotText = KatakanaRomanizer.Romanize(slotText);
 
         // JF-464: the fallback's whole payoff is playing music (artist songs), and its
