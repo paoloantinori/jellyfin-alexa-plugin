@@ -134,6 +134,29 @@ public class KanaOriginAlbumCascadeTests : PluginTestBase, IDisposable
             _fx.LibraryManager.Object, _fx.UserDataManager.Object, "kana album cascade probe", CancellationToken.None, kanaOrigin);
     }
 
+    /// <summary>
+    /// Mocks the library so the cascade's tier-1 indexed SearchTerm query returns
+    /// <paramref name="exactAlbums"/> (tier 2 never runs: the cascade only scans the
+    /// fuzzy tier on an empty tier 1); every other query misses.
+    /// </summary>
+    private void SetupTierOneWithAlbums(List<BaseItem> exactAlbums)
+    {
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum) && q.SearchTerm != null
+                    ? exactAlbums
+                    : new List<BaseItem>());
+    }
+
+    private Task<SkillResponse?> CallAlbumCascadeTierOne(string slotText, List<BaseItem> exactAlbums, bool? kanaOrigin)
+    {
+        var probe = new SharedGateProbeHandler(_fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory);
+        SetupTierOneWithAlbums(exactAlbums);
+        return probe.CallTryAlbumFallbackAsync(
+            slotText, TestHelpers.CreateJellyfinUser(), _fx.CreateUser(), _fx.CreateSession(), _fx.CreateContext(), "ja-JP",
+            _fx.LibraryManager.Object, _fx.UserDataManager.Object, "kana album cascade probe", CancellationToken.None, kanaOrigin);
+    }
+
     // ---------------------------------------------------------------
     // The gate: pinned flag vs self-computed on the identical input
     // ---------------------------------------------------------------
@@ -148,6 +171,26 @@ public class KanaOriginAlbumCascadeTests : PluginTestBase, IDisposable
         SetupPlugin();
 
         SkillResponse? result = await CallAlbumCascade("sato", new List<BaseItem> { BaitedAlbum("Sator") }, kanaOrigin: true);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task AlbumCascade_TierOneSearchTermWinner_PinnedKanaFlag_PlainFuzzyAlbum_ReturnsNull()
+    {
+        // The 'composes over BOTH candidate tiers' contract, pinned against the
+        // 'tier-1 winners are literal' doctrine drift: here the tier-1 indexed
+        // SearchTerm query ITSELF returns the 'Sator' bait for 'sato' (containment
+        // 90, no ST/STR collision), so the winner flows from the literal tier, not
+        // the fuzzy scan. The cascade's acceptance is a SUBSTITUTION (the
+        // FoundAlbumInstead announcement speaks a name the user did not say), so
+        // the tier-1 winner needs the same collision evidence as a fuzzy one and
+        // the pinned flag keeps it the honest miss; the identical SearchTerm hit
+        // on PlayAlbum's own direct-play path stays ungated (the notes' doctrine
+        // criterion).
+        SetupPlugin();
+
+        SkillResponse? result = await CallAlbumCascadeTierOne("sato", new List<BaseItem> { BaitedAlbum("Sator") }, kanaOrigin: true);
 
         Assert.Null(result);
     }
