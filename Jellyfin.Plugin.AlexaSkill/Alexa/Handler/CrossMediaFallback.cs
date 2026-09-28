@@ -467,6 +467,21 @@ public sealed class CrossMediaFallback
     /// absent/warming (an opportunistic fallback must never worsen the not-found
     /// path) or nothing clears the bar. NO word-count guard by design: a spaceless
     /// CJK title tokenizes to one token (JF-439 review).
+    /// JF-654: for a kana-origin query the coverage bar composes with the song-side
+    /// kana bar (one shared definition, SongIndexSearch
+    /// .PassesKanaOriginSongAcceptance(string, BaseItem, double);
+    /// the bar's evidence, the length band, and the live wrong-accept it kills are
+    /// documented there). The bar is applied to the BEST candidate only,
+    /// deliberately: this is a fallback GUESS on a coin-flipped slot, and walking
+    /// the ranking to serve a lower-scoring collision carrier is a deeper guess
+    /// than the head check (the list-walking ApplyKanaOriginBar form belongs to
+    /// the primary search paths). The kana-origin flag defaults to self-computed
+    /// from the input pre-romanization (the TryEntityFallbackAsync shape), which
+    /// is exact for every caller that passes the RAW slot value; the ONE
+    /// exception that must pass it explicitly is PlayArtistSongsIntentHandler,
+    /// whose entry already romanized its slot (JF-643), so the raw script
+    /// evidence is gone by the time this method runs and self-computing here
+    /// would see Latin and leave the bar inert (JF-654 review round 2).
     /// </summary>
     /// <param name="musician">The raw musician slot value.</param>
     /// <param name="user">The plugin user.</param>
@@ -476,6 +491,10 @@ public sealed class CrossMediaFallback
     /// <param name="songIndex">The song n-gram index (null in minimal setups).</param>
     /// <param name="libraryManager">Library manager for the library-filter walk.</param>
     /// <param name="cancellationToken">Shutdown token.</param>
+    /// <param name="kanaOrigin">JF-654: whether the slot value contained kana.
+    /// Null (the default) self-computes from the input BEFORE this method's own
+    /// romanization; pass a value only from a caller whose input is already
+    /// romanized (see the summary).</param>
     /// <returns>The play response, or null to fall through to the caller's not-found.</returns>
     public SkillResponse? TrySongFallback(
         string musician,
@@ -486,7 +505,8 @@ public sealed class CrossMediaFallback
         ISongNgramIndex? songIndex,
         ILibraryManager libraryManager,
         string logLabel,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool? kanaOrigin = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -494,6 +514,11 @@ public sealed class CrossMediaFallback
         {
             return null;
         }
+
+        // JF-654: the kana-origin flag is read BEFORE the romanization below
+        // erases the script evidence, unless the caller pinned it (a caller whose
+        // input arrived pre-romanized).
+        bool kana = kanaOrigin ?? ArtistSearch.IsKanaOriginQuery(null, musician);
 
         // JF-643: the tokens feed the Latin-built n-gram index and KeywordMatcher,
         // so the query-side romanization happens before tokenization.
@@ -528,6 +553,17 @@ public sealed class CrossMediaFallback
             _logger.LogDebug(
                 "{Label}: song fallback rejected for query='{Query}' (best score {Score:F0} over {Count} candidates, bar={Bar})",
                 logLabel, musician, scored.Count > 0 ? scored[0].Score : 0, scored.Count, CrossMediaSongThreshold);
+            return null;
+        }
+
+        // JF-654: the song-side kana bar, head candidate (see the method doc).
+        // `musician` is the romanized local here, so the collision codes are
+        // computed from it and the song title.
+        if (kana && !Util.SongIndexSearch.PassesKanaOriginSongAcceptance(musician, scored[0].Item, scored[0].Score))
+        {
+            _logger.LogInformation(
+                "{Label}: kana-origin query '{Query}' matched song '{SongName}' at score {Score:F0} without a length-banded Double Metaphone collision or a near-exact plain score, treating as a miss (JF-654)",
+                logLabel, musician, scored[0].Item.Name, scored[0].Score);
             return null;
         }
 

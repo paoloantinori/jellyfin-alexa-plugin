@@ -195,6 +195,12 @@ public class PlaySongIntentHandler : BaseHandler
         // JF-643: the song title feeds the SearchTerm index and the keyword-matcher
         // fallbacks below, both Latin-script; romanize the query once (a ja-JP title
         // slot arrives as katakana).
+        // JF-654: the kana-origin flag is captured on the RAW song slot, BEFORE the
+        // romanization erases the script evidence (the song slot is free-text: no ER
+        // canonical ever rides it); it feeds the title-fallback kana bar below. The
+        // PRIMARY SearchTerm path stays ungated: a server-side index match on a
+        // romaji string is literal, not the fuzzy wrong-accept class the bar kills.
+        bool kanaOrigin = Util.ArtistSearch.IsKanaOriginQuery(null, songQuery);
         songQuery = Util.KatakanaRomanizer.Romanize(songQuery);
 
         RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)));
@@ -286,6 +292,10 @@ public class PlaySongIntentHandler : BaseHandler
                 // JF-384: the helper's phonetic fallback prevents one accent-drifted
                 // keyword from vetoing the match.
                 var scoredByKeywords = Util.KeywordMatcher.ScoreWithPhoneticFallback(artistSongs, keywordTokens, locale, _config.PhoneticSongSearchEnabled);
+                // JF-654: the song-side kana bar before any fallback candidate
+                // reaches the auto-play/disambiguation flows below (one shared
+                // definition, Util.SongIndexSearch.ApplyKanaOriginBar).
+                scoredByKeywords = Util.SongIndexSearch.ApplyKanaOriginBar(scoredByKeywords, songQuery, kanaOrigin);
                 if (scoredByKeywords.Count > 0)
                 {
                     songs = scoredByKeywords.Select(s => s.Item).ToList();
@@ -302,6 +312,9 @@ public class PlaySongIntentHandler : BaseHandler
                 var keywordTokens = Util.KeywordMatcher.Tokenize(songQuery, locale);
                 Guid[]? songTopParents = Util.LibraryFilter.ResolveForUser(user, _libraryManager, Logger);
                 var scoredByIndex = _songNgramIndex.SearchWithPhoneticFallback(keywordTokens, locale, songTopParents, _config.PhoneticSongSearchEnabled);
+                // JF-654: same shared bar as the artist-songs branch above (the
+                // two branches are the JF-383/JF-384 title fallback's halves).
+                scoredByIndex = Util.SongIndexSearch.ApplyKanaOriginBar(scoredByIndex, songQuery, kanaOrigin);
                 if (scoredByIndex.Count > 0)
                 {
                     songs = scoredByIndex.Select(s => s.Item).ToList();

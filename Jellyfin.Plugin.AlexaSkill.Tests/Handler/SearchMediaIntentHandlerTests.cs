@@ -369,6 +369,83 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
         response.HasDirective<AudioPlayerPlayDirective>();
     }
 
+    // --- JF-654 review round 2: the kana bar on this handler's song auto-plays ---
+
+    /// <summary>
+    /// JF-654 review round 2, finding 1: the fuzzy pass scans the playable kinds
+    /// INCLUDING songs, so its single-result pick is a song auto-play; a kana-origin
+    /// query ('ビートルズ' -> 'bitoruzu') whose fuzzy hit is a Latin soup match
+    /// ('Bitters Absolut') carries no length-banded Double Metaphone collision and
+    /// no near-exact score, so the gate refuses it and the flow falls through to the
+    /// (itself gated) song-title retry: the honest MediaNotFound, never a play.
+    /// AutoPlay behavior + a floor threshold let the fuzzy pass RETURN the soup hit
+    /// deterministically (AutoPlay bypasses SearchItemsFuzzyAsync's coverage gate).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_KanaQuery_FuzzyPassSoupHit_GatedToHonestNotFound()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(query: "ビートルズ");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        user.FuzzyMatchBehavior = FuzzyMatchBehavior.AutoPlay;
+        user.FuzzyMatchThreshold = 10;
+        var session = _fx.CreateSession();
+
+        _fx.SetupUserMock();
+
+        var bait = new Audio { Name = "Bitters Absolut", Id = Guid.NewGuid() };
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+                q.SearchTerm == null && q.NameStartsWith == null && q.NameContains == null
+                    && q.ArtistIds == null && q.Limit == 500
+                    ? new List<BaseItem> { bait }
+                    : new List<BaseItem>());
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.True(response.Response.ShouldEndSession == true, "the honest outcome is the MediaNotFound Tell");
+        Assert.True(response.Response.Directives?.All(d => d is not AudioPlayerPlayDirective) != false,
+            "the soup fuzzy hit must never auto-play for a kana-origin query");
+    }
+
+    /// <summary>
+    /// JF-654 review round 2, finding 3: the FuzzyMatch topMatch full-coverage
+    /// pre-check is the fuzzy pass's sibling song auto-play, one branch later. The
+    /// tribute-band shape ('Bitoruzu Tribute Act' covers the verbatim keyword but
+    /// widens the title far past the length band, score 85 below the near-exact
+    /// leg) is refused: the honest MediaNotFound rather than a fall-through into
+    /// HandleFuzzyMiss, whose >= 90 auto-accept would play the very item the bar
+    /// just refused.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_KanaQuery_TopMatchFullCoverage_NoEvidence_HonestNotFound()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(query: "ビートルズ");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
+
+        _fx.SetupUserMock();
+
+        var tribute = new Audio { Name = "Bitoruzu Tribute Act", Id = Guid.NewGuid() };
+        var filler = new Audio { Name = "Something Else Entirely", Id = Guid.NewGuid() };
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+                q.SearchTerm != null
+                    ? new List<BaseItem> { tribute, filler }
+                    : new List<BaseItem>());
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.True(response.Response.ShouldEndSession == true, "the honest outcome is the MediaNotFound Tell");
+        Assert.True(response.Response.Directives?.All(d => d is not AudioPlayerPlayDirective) != false,
+            "the full-coverage tribute pick must never auto-play for a kana-origin query without collision evidence");
+    }
+
     // --- JF-538: the video-launch announce on the HandleFuzzyMiss auto-play path ---
 
     /// <summary>
