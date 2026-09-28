@@ -3,10 +3,10 @@ id: JF-660
 title: >-
   JF-660 - JF-652 artist-side kana bar inert on PlaySong/FindSong entity
   fallback: both pass pre-romanized text to TryEntityFallbackAsync
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-28 11:25'
-updated_date: '2026-09-28 13:55'
+updated_date: '2026-09-28 16:54'
 labels:
   - search
   - i18n
@@ -69,3 +69,9 @@ GATES: /simplify (4 parallel review agents: reuse/simplification/efficiency/alti
 /code-review high (forked, 5 findings, all verified against the current state): (1) PlayAlbum's own JF-336 fuzzy-album arm (FindBestNonEmbeddedMatch, bare 60-bar, in-handler, one gate BEFORE the fixed fallback) remains kana-ungated - a real adjacent gap, NOT covered by JF-661 (which tracks the TryAlbumFallbackAsync cascade only): FILED as JF-662 the same turn (in this branch's backlog). (2) the deferred private-copy fold-in - tracked above. (3) the RomanizeWithOrigin structural enforcement - the documented follow-up above. (4) the kanaOrigin param doc must carry the raw-capture rule itself - APPLIED. (5) the in-band FindSong test is a contract pin, not regression power (FindSong wires no JF-363 band, so the in-band shape resolves null with and without the fix) - kept, labeled in its comment; the discriminating FindSong pin is the strict-arm 'サト' test.
 VERIFICATION TAIL: build 0 errors 0 warnings both TFMs. Full suite 4697/4697 green BOTH TFMs (net9.0 + net10.0, 4689 baseline + 8 new pins in KanaOriginEntityFallbackThreadingTests). Fixture scores dumped from the production matcher, not assumed: bitoruzu/Sator 60 (JF-363 band, codes PTRS vs STR no collision), sato/Sator 90 (strict, ST vs STR no collision), satoru/Sator STR/STR collision at 100 (phonetic boost; 90 plain). The code-review fork independently reproduced all three score pairs and the romanization outputs. SENSITIVITY CHECK: with the PlaySong pin swapped to `kanaOrigin: null` (the pre-fix shape) the live-shape pin fails on both TFMs (the Confirm offer appears), so the pins detect the leak. No model/locale/config changes, no threshold changes.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Landed 2026-09-28 as merge ff482799 (pushed; deployed with the full checklist, config intact; live re-probe green: PlaySong song=ビートルズ -> the honest song not-found with NO Sator offer; the Latin near-miss control unchanged; the SearchMedia and クイーン regressions hold): the entity-fallback kana threading. TryEntityFallbackAsync gained the pinned-flag shape (the TrySongFallback precedent); the worker's mandated caller-map verification found a THIRD leaking caller beyond the task's two (PlayAlbum romanizes its album slot in place - fixed with a new albumKanaOrigin capture, the validity invariant across the JF-489/JF-492/JF-411 reassignments verified structurally); with the flag true the strict arm requires the real DM collision and the JF-363 suggestion band returns null. Gates: /simplify in-worker (clean production), the code-review skill marker in the orchestrator transcript (no correctness bug; the pins' config-independence and a garbled comment applied in the marker pass; the doc-only contract and the deferred copies tracked), suites 4697/4697 both TFMs (orchestrator-verified; the file battery 8/8 after the marker edits). The RomanizeWithOrigin composite evaluated and deferred (heterogeneous couplets, zero behavior change). Follow-up filed: JF-662 (PlayAlbum's own JF-336 in-handler fuzzy arm, the fourth ungated surface).
+<!-- SECTION:FINAL_SUMMARY:END -->
