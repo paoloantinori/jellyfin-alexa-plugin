@@ -2140,6 +2140,7 @@ public class VideoAudioController : ControllerBase
             _logger.LogWarning("VideoAudio audiobook HLS: pre-written playlist not available for {ParentId}, returning 503", parentId);
             return StatusCode(503, "Encode in progress");
         }
+#pragma warning restore CA3003
 
         // Cache miss — acquire per-parent lock
         using (await _cache.LockItemAsync(parentId, artModifiedTicks).ConfigureAwait(false))
