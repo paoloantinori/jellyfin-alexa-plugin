@@ -4,10 +4,10 @@ title: >-
   JF-646 - catalog-side katakana synonyms: Latin artist/album names get kana
   variants in the ja catalog upload so NLU selection resolves naturalized ja
   voice (the routing-layer complement to JF-643)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-27 08:01'
-updated_date: '2026-09-27 10:49'
+updated_date: '2026-09-28 04:30'
 labels:
   - catalog
   - i18n
@@ -75,3 +75,9 @@ VERIFICATION BAR: profile-nlu selection probes as above; catalog upload logs sho
 4. Reverse-syllabary tie-break made deterministic by construction: modern full-size unigram priority 0; non-canonical unigram (small kana, obsolete ヰヱヲ, historical ヂヅ) priority 1; digraph 2 + first-kana priority. No romaji value has two same-priority candidates, so Dictionary enumeration order can never decide. Pinned: TryKatakana("ji")==ジ, ("zu")==ズ, ("ja")==ジャ.
 5. Kana-containing names skip the romaji arm's Latin tail-rules (guard inside JapanesePhoneticSynonyms, matching the generator's ContainsKana entry-guard shape): 'クイーン' no longer becomes 'クイーンu' via AppendFinalVowel. The ja dispatch returns empty for kana and mixed names (pinned).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Landed 2026-09-28 as merge 67b1be4f (pushed; deployed with the full checklist, config intact; the catalog-sync throttle cleared via the herdr minix window per the standing rule, backup left in the container; the ja catalog sync completed in 112s, JellyfinArtist catalog version created with 1135 values, the ja-JP interaction model with catalog references submitted and built): the catalog-side katakana synonym generator. KatakanaSynonymGenerator transliterates Latin artist/album names to kana (coverage-oriented, round-trip-guaranteed with KatakanaRomanizer via the shared reverse syllabary), wired into the ja dispatch arm only (the 16-locale no-kana pin proves the others' payloads unchanged); the dynamic-entity arm carries kana-first + 1 under a stated budget policy while the budget-free catalog upload carries full coverage. Five code-review findings applied (the no-yoon double vowel, the dynamic budget policy, the final -ey team, the deterministic reverse tie-break, the kana-input romaji-arm guard). Gates: /simplify in-worker, code-review skill in the orchestrator transcript, suites 4654/4654 both TFMs (orchestrator-verified). LIVE BATTERY, the arc's headline: クイーン の曲を再生して -> PlayArtistSongsIntent with ER_SUCCESS_MATCH on the JellyfinArtist catalog authority (deterministic; the steal is DEAD); ビートルズ -> PlayArtistSongs ER_MATCH; ジャズ genre control unchanged; queen Latin control unchanged; the simulator raw-slot path keeps the JF-652 honest tie ask. This closes the routing layer of the ja arc: JF-643 (search bridging) + JF-652 (acceptance precision) + JF-646 (selection) all live. Residual filed: JF-659 (read the musician ER canonical so resolved entities skip the tie ask).
+<!-- SECTION:FINAL_SUMMARY:END -->
