@@ -130,13 +130,14 @@ public class SearchMediaIntentHandler : BaseHandler
         // library names, so a katakana query is romanized once here.
         // JF-654: the kana-origin flag is captured on the RAW query, BEFORE the
         // romanization (the query slot is free-text: no ER canonical). It gates
-        // every SONG auto-play this handler can reach: the fuzzy pass's
-        // single-result pick (the fuzzy scan covers the playable kinds INCLUDING
-        // songs; the live 'bitoruzu' wrong-accept class reproduces through it),
-        // the FuzzyMatch topMatch full-coverage pre-check, and the JF-506
-        // song-title retry. The primary SearchTerm path stays ungated: a
-        // server-side index match on a romanized string is literal, not the
-        // fuzzy wrong-accept class.
+        // every auto-play this handler can reach: the ARTIST fallback's resolved
+        // artist (live a7d42b09: tier-4 plain-fuzzy 'Sator' for 'bitoruzu'
+        // auto-played; the JF-652 decision points never covered SearchMedia),
+        // the fuzzy pass's single-result pick (the fuzzy scan covers the playable
+        // kinds INCLUDING songs), the FuzzyMatch topMatch full-coverage
+        // pre-check, and the JF-506 song-title retry. The primary SearchTerm
+        // path stays ungated: a server-side index match on a romanized string is
+        // literal, not the fuzzy wrong-accept class.
         bool kanaOrigin = Util.ArtistSearch.IsKanaOriginQuery(null, query);
         query = Util.KatakanaRomanizer.Romanize(query);
 
@@ -167,7 +168,7 @@ public class SearchMediaIntentHandler : BaseHandler
 
         if (results.Count <= ArtistFallbackThreshold)
         {
-            IReadOnlyList<BaseItem> artistResults = await SearchByArtistNameAsync(query, jellyfinUser!, user, topParentIds, locale, cancellationToken).ConfigureAwait(false);
+            IReadOnlyList<BaseItem> artistResults = await SearchByArtistNameAsync(query, jellyfinUser!, user, topParentIds, locale, kanaOrigin, cancellationToken).ConfigureAwait(false);
             if (artistResults.Count > 0)
             {
                 Logger.LogInformation("Artist fallback for '{Query}': found {Count} items via artist lookup", query, artistResults.Count);
@@ -480,6 +481,7 @@ public class SearchMediaIntentHandler : BaseHandler
         Entities.User user,
         Guid[]? topParentIds,
         string locale,
+        bool kanaOrigin,
         CancellationToken cancellationToken)
     {
         IReadOnlyList<BaseItem> artists = await Util.ArtistSearch.SearchAsync(
@@ -489,6 +491,22 @@ public class SearchMediaIntentHandler : BaseHandler
 
         if (artists.Count == 0)
         {
+            return Array.Empty<BaseItem>();
+        }
+
+        // JF-654 live-battery round 3: the artist arm's acceptance. JF-652's
+        // decision points never covered SearchMedia (live a7d42b09: tier-4
+        // InMemoryFuzzyAll plain-fuzzy-matched 'Sator' for 'bitoruzu', the
+        // artist items concat'd to a single deduplicated result and auto-played).
+        // The shared JF-471 decision-point predicate (its kana leg is the JF-652
+        // artist bar: user threshold AND a real DM code collision) gates the
+        // resolved artist; a refusal is the honest miss, so the flow continues
+        // to the gated fuzzy pass and song-title retry below.
+        if (kanaOrigin && !CrossMedia.PassesArtistMatchAcceptance(artists[0], query, user, _artistIndex, out _, kanaOrigin: true))
+        {
+            Logger.LogInformation(
+                "Artist fallback for '{Query}' matched '{Artist}' without kana-origin acceptance evidence (no Double Metaphone collision), treating as a miss (JF-654)",
+                query, artists[0].Name);
             return Array.Empty<BaseItem>();
         }
 

@@ -213,6 +213,24 @@ half-applied state was found and completed (the PassesKanaSongGate doc block
 had landed INSIDE TrySongTitleRetry's doc comment, the wrapped log line was
 mis-indented, and the new bool param tripped CA1068; all repaired before
 commit).
+
+Live-battery round 3 (deployed a7d42b09, the trace in the orchestrator's
+message): the decision table's 'fuzzy/artist machinery outside scope' LEAVE row
+was HALF wrong. SearchMedia's ARTIST fallback arm had no bar anywhere: JF-652's
+three decision points (PlayArtistSongs / CrossMediaFallback.TryEntityFallbackAsync
+/ the JF-471 album-by-artist gate) never covered SearchMedia, so query=ビートルズ
+went primary 0 -> ArtistSearch tier-4 InMemoryFuzzyAll plain-fuzzy-matched
+'Sator' -> the artist's single item concat'd to one deduplicated result ->
+auto-played. Fixed at the arm's acceptance point (SearchByArtistNameAsync, after
+SearchAsync resolves the artist): the shared JF-471 decision-point predicate
+CrossMedia.PassesArtistMatchAcceptance (kana leg = the JF-652 artist bar: user
+threshold AND a real DM code collision) gates artists[0]; a refusal returns
+empty and the flow continues to the now-gated fuzzy pass and song-title retry,
+ending in the honest MediaNotFound. With this arm gated, every auto-play feed on
+the handler is either the literal primary SearchTerm path (documented safe) or
+kana-gated: artist arm, fuzzy pass, topMatch pre-check, song-title retry. Pins:
+kana plain-fuzzy Sator match -> MediaNotFound never a play; Latin same-arm
+control -> still auto-plays (the JF-506-era behavior unchanged).
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done

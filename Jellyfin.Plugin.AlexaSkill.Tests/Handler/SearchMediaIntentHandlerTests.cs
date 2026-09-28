@@ -446,6 +446,91 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
             "the full-coverage tribute pick must never auto-play for a kana-origin query without collision evidence");
     }
 
+    /// <summary>
+    /// JF-654 live-battery round 3: the ARTIST fallback arm. The live trace
+    /// (deployed a7d42b09): primary 0 for 'bitoruzu' -> ArtistSearch tier-4
+    /// InMemoryFuzzyAll plain-fuzzy-matched 'Sator' -> the artist's single item
+    /// concat'd to one deduplicated result -> auto-played. JF-652's decision
+    /// points never covered SearchMedia, so this arm had NO bar. The resolved
+    /// artist now takes the shared JF-471 acceptance predicate (kana leg: user
+    /// threshold AND a real DM code collision); the plain-fuzzy Sator match
+    /// carries no collision and is the honest MediaNotFound, never a play.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_KanaQuery_ArtistFallbackPlainFuzzyMatch_GatedToHonestNotFound()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(query: "ビートルズ");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
+
+        _fx.SetupUserMock();
+
+        var sator = new MusicArtist { Name = "Sator", Id = Guid.NewGuid() };
+        var satorTrack = new Audio { Name = "Sator Song", Id = Guid.NewGuid() };
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
+                {
+                    return new List<BaseItem> { sator };
+                }
+
+                if (q.ArtistIds != null && q.ArtistIds.Length > 0)
+                {
+                    return new List<BaseItem> { satorTrack };
+                }
+
+                return new List<BaseItem>();
+            });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.True(response.Response.ShouldEndSession == true, "the honest outcome is the MediaNotFound Tell");
+        Assert.True(response.Response.Directives?.All(d => d is not AudioPlayerPlayDirective) != false,
+            "the plain-fuzzy artist match must never auto-play for a kana-origin query without collision evidence");
+    }
+
+    [Fact]
+    public async Task HandleAsync_LatinQuery_ArtistFallback_StillAutoPlays()
+    {
+        // Latin control: the artist arm's acceptance is unchanged for Latin
+        // queries (kanaOrigin false, the gate is a no-op), so the single-item
+        // artist result still auto-plays (the JF-506-era behavior).
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(query: "sator");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
+
+        _fx.SetupUserMock();
+
+        var sator = new MusicArtist { Name = "Sator", Id = Guid.NewGuid() };
+        var satorTrack = new Audio { Name = "Sator Song", Id = Guid.NewGuid() };
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
+                {
+                    return new List<BaseItem> { sator };
+                }
+
+                if (q.ArtistIds != null && q.ArtistIds.Length > 0)
+                {
+                    return new List<BaseItem> { satorTrack };
+                }
+
+                return new List<BaseItem>();
+            });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        response.HasDirective<AudioPlayerPlayDirective>();
+    }
+
     // --- JF-538: the video-launch announce on the HandleFuzzyMiss auto-play path ---
 
     /// <summary>
