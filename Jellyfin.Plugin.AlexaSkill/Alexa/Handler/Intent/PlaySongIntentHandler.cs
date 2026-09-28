@@ -340,7 +340,10 @@ public class PlaySongIntentHandler : BaseHandler
                 songQuery, jellyfinUser!, user, session, context, locale,
                 _libraryManager, _userDataManager, _queueManager, _artistIndex,
                 "PlaySong", cancellationToken,
-                notFoundMediaType: DisambiguationHelper.MediaTypeSong).ConfigureAwait(false);
+                notFoundMediaType: DisambiguationHelper.MediaTypeSong,
+                // JF-660: songQuery is the ROMANIZED local; the flag captured on the
+                // raw slot above (JF-654) keeps the JF-652 artist bar live here.
+                kanaOrigin: kanaOrigin).ConfigureAwait(false);
             if (artistFallback != null)
             {
                 return artistFallback;

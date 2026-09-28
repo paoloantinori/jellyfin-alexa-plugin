@@ -681,12 +681,30 @@ public sealed class CrossMediaFallback
     /// because its decline path must speak a media-type not-found: FindSong re-prompts
     /// for the title instead (not a terminal song not-found) and PlayMoodMusic declines
     /// to NotFoundMood, so neither can reuse the band's decline contract.
+    /// JF-660: the kana-origin flag defaults to self-computed from the slot text
+    /// pre-romanization, exact for PlayMoodMusic's mood and NEARLY exact for
+    /// PlayByGenre's genre (the self-compute reads no ER canonical, so an
+    /// ER-matched kana genre keeps the bar live where a canonical-aware flag
+    /// would inert it; the divergence is fail-safe, the stricter direction).
+    /// The callers whose entry already romanized the slot
+    /// (PlaySong's song title, FindSong's keywords, PlayAlbum's album, all JF-643)
+    /// MUST pin the flag captured on their raw values: self-computing on their
+    /// pre-romanized input sees Latin and leaves the JF-652 artist bar inert (live
+    /// leak, deployed a7d42b09: the kana song miss 'ビートルズ' was romanized to
+    /// 'bitoruzu' before this gate, the flag computed false, and the JF-363 band
+    /// offered the plain-fuzzy artist 'Sator' instead of the honest song not-found).
     /// </summary>
     /// <param name="notFoundMediaType">When non-null (<see cref="DisambiguationHelper.MediaTypeSong"/>
     /// or <see cref="DisambiguationHelper.MediaTypeAlbum"/>), enables the JF-363
     /// sub-strict band: a single best artist scoring in [normalThreshold, strict) is
     /// offered for confirmation (or auto-served per config), and the offer's decline
     /// speaks the media-type not-found. Null keeps the pre-band behavior (clean miss).</param>
+    /// <param name="kanaOrigin">JF-660: the flag captured on the caller's RAW
+    /// PRE-romanization slot value (the JF-659 canonical invariant is the caller's
+    /// to compute, it holds the slot; computing it on a romanized local is always
+    /// false and silently disarms the bar). Null (the default) self-computes from
+    /// <paramref name="slotText"/> BEFORE this method's own romanization; pin a
+    /// value only from a caller whose input is already romanized (see the summary).</param>
     public async Task<SkillResponse?> TryEntityFallbackAsync(
         string slotText,
         JellyfinUser jellyfinUser,
@@ -700,7 +718,8 @@ public sealed class CrossMediaFallback
         IArtistIndex? artistIndex,
         string logLabel,
         CancellationToken cancellationToken,
-        string? notFoundMediaType = null)
+        string? notFoundMediaType = null,
+        bool? kanaOrigin = null)
     {
         // Restored from the deleted PlaySong/PlayAlbum inline copies (JF-446 review):
         // the gate's entry point must name the query it is about to interpret.
@@ -710,13 +729,16 @@ public sealed class CrossMediaFallback
 
         // JF-643: romanize once at the shared entry so the word guard, the SearchAsync
         // chain, the phonetic confirm, and the word-coverage valve all interpret the
-        // same Latin-script query (the raw value above keeps the user's spoken words
-        // for triage; downstream speech may speak the romanized form).
-        // JF-652: the kana-origin flag is computed from the PRE-romanization value,
-        // the script evidence the romanization erases. JF-659: through the ONE
-        // shared definition (no canonical on this path; the callers pass raw slot
-        // text).
-        bool kanaOrigin = Util.ArtistSearch.IsKanaOriginQuery(null, slotText);
+        // same Latin-script query. The raw value above is kept for triage: it is the
+        // user's spoken words for the raw-text callers, and already romanized for the
+        // pinned callers (downstream speech may speak the romanized form).
+        // JF-652: the kana-origin flag is read from the PRE-romanization value,
+        // the script evidence the romanization erases, unless the caller pinned it
+        // (a caller whose input arrived pre-romanized; the TrySongFallback shape).
+        // JF-659: through the ONE shared definition, canonical-less (an ER-matched
+        // kana genre on PlayByGenre's raw path keeps the bar live: fail-safe, the
+        // stricter direction; see the method doc).
+        bool kana = kanaOrigin ?? Util.ArtistSearch.IsKanaOriginQuery(null, slotText);
         slotText = KatakanaRomanizer.Romanize(slotText);
 
         // JF-464: the fallback's whole payoff is playing music (artist songs), and its
@@ -786,7 +808,7 @@ public sealed class CrossMediaFallback
             // SearchAsync returns a single best, so the runner-up is invisible
             // without a pool rescan (the live 'クイーン' tie between Queen and Keane
             // resolved by iteration order).
-            if (kanaOrigin && !Util.ArtistSearch.PassesKanaOriginAcceptance(cleaned, bestItem, bestScore, normalThreshold, pinnedArtistIndex))
+            if (kana && !Util.ArtistSearch.PassesKanaOriginAcceptance(cleaned, bestItem, bestScore, normalThreshold, pinnedArtistIndex))
             {
                 _logger.LogInformation(
                     "{Label}: kana-origin query '{Query}' matched artist '{ArtistName}' with score={Score} without a Double Metaphone code collision, treating as a miss (JF-652)",
@@ -794,7 +816,7 @@ public sealed class CrossMediaFallback
                 return null;
             }
 
-            if (kanaOrigin)
+            if (kana)
             {
                 SkillResponse? tieOutcome = ResolveKanaOriginTie(
                     bestItem, bestScore, artists, cleaned, normalThreshold, user, pinnedArtistIndex, libraryManager, locale, logLabel);
@@ -811,7 +833,7 @@ public sealed class CrossMediaFallback
                 "{Label}: artist fallback found '{ArtistName}' with score={Score} for query='{Query}' (threshold={Threshold})",
                 logLabel, bestItem.Name, bestScore, cleaned, threshold);
         }
-        else if (kanaOrigin && bestItem != null)
+        else if (kana && bestItem != null)
         {
             // JF-652: the sub-strict JF-363 band and the JF-440 word-coverage valve
             // are plain-fuzzy acceptance classes; a kana-origin query takes the same

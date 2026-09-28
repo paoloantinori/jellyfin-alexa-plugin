@@ -590,7 +590,11 @@ public class FindSongIntentHandler : BaseHandler
                 SkillResponse? artistFallback = await CrossMedia.TryEntityFallbackAsync(
                     keywords, jellyfinUser!, user, session, context, locale,
                     _libraryManager, _userDataManager, _queueManager, _artistIndex,
-                    "FindSong artist fallback", cancellationToken).ConfigureAwait(false);
+                    "FindSong artist fallback", cancellationToken,
+                    // JF-660: keywords is the ROMANIZED local; the flag captured on
+                    // the raw stored Keywords above (JF-654) keeps the JF-652 artist
+                    // bar live here.
+                    kanaOrigin: kanaOrigin).ConfigureAwait(false);
                 if (artistFallback != null)
                 {
                     return artistFallback;
