@@ -729,9 +729,9 @@ public sealed class CrossMediaFallback
 
         // JF-643: romanize once at the shared entry so the word guard, the SearchAsync
         // chain, the phonetic confirm, and the word-coverage valve all interpret the
-        // same Latin-script query (the raw value above keeps the user's spoken words
-        // for triage, raw only for the raw-text callers; the pinned callers' value is
-        // already romanized; downstream speech may speak the romanized form).
+        // same Latin-script query. The raw value above is kept for triage: it is the
+        // user's spoken words for the raw-text callers, and already romanized for the
+        // pinned callers (downstream speech may speak the romanized form).
         // JF-652: the kana-origin flag is read from the PRE-romanization value,
         // the script evidence the romanization erases, unless the caller pinned it
         // (a caller whose input arrived pre-romanized; the TrySongFallback shape).

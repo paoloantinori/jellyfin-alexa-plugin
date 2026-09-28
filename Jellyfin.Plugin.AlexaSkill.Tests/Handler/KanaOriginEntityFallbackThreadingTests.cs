@@ -106,6 +106,8 @@ public class KanaOriginEntityFallbackThreadingTests : PluginTestBase, IDisposabl
         // local 'bitoruzu' plus the flag pinned on the raw slot. The in-band
         // plain-fuzzy Sator match (60, no code collision) is the honest miss
         // under the JF-652 bar, never the JF-363 offer.
+        _fx.Config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.Confirm;
+
         SkillResponse? result = await CallEntityFallback(Sator(), kanaOrigin: true);
 
         Assert.Null(result);
@@ -151,6 +153,10 @@ public class KanaOriginEntityFallbackThreadingTests : PluginTestBase, IDisposabl
     [Fact]
     public async Task PlaySong_KanaTitle_InBandPlainFuzzySator_HonestSongNotFound_NeverSatorOffer()
     {
+        // The offer must be reachable for this null-assertion to prove the
+        // bar refused it: pin Confirm so the global default cannot mask a leak.
+        _fx.Config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.Confirm;
+
         // THE live leak shape (deployed a7d42b09): PlaySong song=ビートルズ, the
         // song search misses, and the cross-media artist fallback sees the
         // romanized 'bitoruzu' against the library's real Sator. The threaded
@@ -293,6 +299,10 @@ public class KanaOriginEntityFallbackThreadingTests : PluginTestBase, IDisposabl
     [Fact]
     public async Task PlayAlbum_KanaAlbumTitle_InBandPlainFuzzySator_HonestAlbumNotFound_NeverSatorOffer()
     {
+        // The offer must be reachable for this null-assertion to prove the
+        // bar refused it: pin Confirm so the global default cannot mask a leak.
+        _fx.Config.DefaultCrossMediaArtistSuggestion = CrossMediaArtistSuggestion.Confirm;
+
         // PlayAlbum romanizes its album slot in place at entry and hands the
         // gate the Latin local; the task's caller map asserted raw text, but
         // the code passes 'bitoruzu' with the flag inert, so the JF-363 ALBUM
