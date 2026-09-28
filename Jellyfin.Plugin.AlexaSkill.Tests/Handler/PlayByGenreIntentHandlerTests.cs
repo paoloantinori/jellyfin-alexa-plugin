@@ -366,37 +366,17 @@ public class PlayByGenreIntentHandlerTests : PluginTestBase
     // --- JF-642: ER-canonical genre path (ja-JP's custom GenreType) ---
 
     /// <summary>
-    /// Builds a genre slot carrying an ER_SUCCESS_MATCH authority, the shape
-    /// ja-JP's GenreType produces for a spoken synonym ('ジャズ' resolving to
-    /// the canonical 'Jazz').
+    /// Builds the PlayByGenre intent whose genre slot carries an ER_SUCCESS_MATCH
+    /// authority, the shape ja-JP's GenreType produces for a spoken synonym
+    /// ('ジャズ' resolving to the canonical 'Jazz'). JF-653: the slot graph comes
+    /// from TestHelpers.ResolvedSlot; the IntentRequest wrapper stays per-class.
     /// </summary>
     private static IntentRequest CreateIntentRequestWithResolution(string rawValue, string canonical)
     {
         var intent = new Intent { Name = IntentNames.PlayByGenre };
         intent.Slots = new Dictionary<string, Slot>
         {
-            ["genre"] = new Slot
-            {
-                Name = "genre",
-                Value = rawValue,
-                Resolution = new global::Alexa.NET.Request.Resolution
-                {
-                    Authorities = new[]
-                    {
-                        new global::Alexa.NET.Request.ResolutionAuthority
-                        {
-                            Status = new global::Alexa.NET.Request.ResolutionStatus { Code = "ER_SUCCESS_MATCH" },
-                            Values = new[]
-                            {
-                                new global::Alexa.NET.Request.ResolutionValueContainer
-                                {
-                                    Value = new global::Alexa.NET.Request.ResolutionValue { Name = canonical }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            ["genre"] = TestHelpers.ResolvedSlot(rawValue, canonical, slotName: "genre")
         };
 
         return new IntentRequest { Intent = intent, Locale = "ja-JP", RequestId = "test-req" };

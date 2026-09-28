@@ -77,33 +77,18 @@ public class SetPlaybackSpeedIntentHandlerTests : PluginTestBase, IDisposable
         return new IntentRequest { Intent = intent, Locale = locale, RequestId = "test-req", DialogState = "COMPLETED" };
     }
 
+    /// <summary>
+    /// The rate slot: the authority's canonical echoes the raw value, so the id is
+    /// the whole payload and the id is the graph trigger. JF-653 hoisted the ER
+    /// graph to TestHelpers.ResolvedSlot (which triggers on the canonical, hence
+    /// the nulling).
+    /// </summary>
     private static Slot RateSlot(string value, string? id = null)
-    {
-        var slot = new Slot { Name = IntentNames.Slots.Speed, Value = value };
-        if (id == null)
-        {
-            return slot;
-        }
-
-        slot.Resolution = new global::Alexa.NET.Request.Resolution
-        {
-            Authorities = new[]
-            {
-                new global::Alexa.NET.Request.ResolutionAuthority
-                {
-                    Status = new global::Alexa.NET.Request.ResolutionStatus { Code = "ER_SUCCESS_MATCH" },
-                    Values = new[]
-                    {
-                        new global::Alexa.NET.Request.ResolutionValueContainer
-                        {
-                            Value = new global::Alexa.NET.Request.ResolutionValue { Name = value, Id = id }
-                        }
-                    }
-                }
-            }
-        };
-        return slot;
-    }
+        => TestHelpers.ResolvedSlot(
+            value,
+            id == null ? null : value,
+            slotName: IntentNames.Slots.Speed,
+            id: id);
 
     private Context CreatePlayingContext(BaseItem item, long offsetMs)
     {

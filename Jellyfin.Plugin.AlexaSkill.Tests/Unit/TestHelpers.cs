@@ -233,12 +233,15 @@ internal static class TestHelpers
     /// A slot carrying an ER authority: an ER_SUCCESS_MATCH resolving
     /// <paramref name="rawValue"/> to <paramref name="canonical"/> by default, or
     /// any other status code for the no-match shapes (JF-659 hoist; the shared
-    /// builder of the JF-642/JF-659 suites - four per-class builders persist
-    /// elsewhere, their hoist is JF-653).
+    /// builder of the JF-642/JF-659 suites). JF-653 folded the last four per-class
+    /// ER-graph builders in here (the speed, episode-position and genre suites):
+    /// a null <paramref name="canonical"/> stays the bare raw-value slot, and
+    /// <paramref name="id"/> rides the authority value's Id next to the canonical
+    /// name (never a graph trigger on its own; no suite mints an id-only match).
     /// </summary>
     /// <param name="slotName">The slot's name; defaults to the musician slot the
     /// JF-659 suites exercise.</param>
-    internal static Slot ResolvedSlot(string rawValue, string? canonical, string statusCode = "ER_SUCCESS_MATCH", string slotName = "musician")
+    internal static Slot ResolvedSlot(string rawValue, string? canonical, string statusCode = "ER_SUCCESS_MATCH", string slotName = "musician", string? id = null)
     {
         var slot = new Slot { Name = slotName, Value = rawValue };
         if (canonical != null)
@@ -254,7 +257,7 @@ internal static class TestHelpers
                         {
                             new ResolutionValueContainer
                             {
-                                Value = new ResolutionValue { Name = canonical }
+                                Value = new ResolutionValue { Name = canonical, Id = id }
                             }
                         }
                     }

@@ -109,35 +109,11 @@ public class PlayNextEpisodeIntentHandlerTests : PluginTestBase
     /// Builds an episode_position slot (JF-583). With <paramref name="canonical"/>/
     /// <paramref name="id"/> set it carries an ER_SUCCESS_MATCH authority (the
     /// entity-resolution branch); without them it is a bare raw-value slot (the
-    /// no-resolution fallback branch).
+    /// no-resolution fallback branch). JF-653: the ER graph construction is
+    /// TestHelpers.ResolvedSlot.
     /// </summary>
     private static global::Alexa.NET.Request.Slot CreatePositionSlot(string? value, string? canonical = null, string? id = null)
-    {
-        var slot = new global::Alexa.NET.Request.Slot { Name = "episode_position", Value = value };
-        if (canonical == null && id == null)
-        {
-            return slot;
-        }
-
-        slot.Resolution = new global::Alexa.NET.Request.Resolution
-        {
-            Authorities = new[]
-            {
-                new global::Alexa.NET.Request.ResolutionAuthority
-                {
-                    Status = new global::Alexa.NET.Request.ResolutionStatus { Code = "ER_SUCCESS_MATCH" },
-                    Values = new[]
-                    {
-                        new global::Alexa.NET.Request.ResolutionValueContainer
-                        {
-                            Value = new global::Alexa.NET.Request.ResolutionValue { Name = canonical, Id = id }
-                        }
-                    }
-                }
-            }
-        };
-        return slot;
-    }
+        => TestHelpers.ResolvedSlot(value!, canonical, slotName: "episode_position", id: id);
 
     private static Context CreateContext()
     {
