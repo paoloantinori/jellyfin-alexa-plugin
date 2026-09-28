@@ -3,10 +3,10 @@ id: JF-662
 title: >-
   JF-662 - PlayAlbum's own JF-336 fuzzy-album arm has no kana bar: the 60-bar
   sits ONE gate before the JF-660-fixed entity fallback
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-28 18:10'
-updated_date: '2026-09-28 18:10'
+updated_date: '2026-09-28 19:21'
 labels:
   - search
   - i18n
@@ -54,4 +54,11 @@ VERIFICATION BAR: a kana-origin PlayAlbum album=ビートルズ miss over a libr
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
+<!-- SECTION:NOTES:BEGIN -->
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Landed 2026-09-28 as part of merge 370e7662 (pushed; deployed; live battery green: PlayAlbum album=ビートルズ -> the honest album not-found, the bait arm dead; the Latin thriller control unchanged): PlayAlbum's own JF-336 fuzzy arm (the bare 60-bar in-handler FindBestNonEmbeddedMatch, one gate before the entity fallback - the fourth ungated surface the JF-660 review found) now applies the shared collision predicate when albumKanaOrigin is true (head-check only, the JF-654 rule). The doctrine criterion recorded in both tasks' notes: substitution speech demands collision evidence; direct literal-index plays ride the server's exact match. Gates: /simplify + code-review in-worker, the code-review skill marker in the orchestrator transcript (findings applied/dispositioned per the report), suites 4706/4706 both TFMs.
+<!-- SECTION:FINAL_SUMMARY:END -->
