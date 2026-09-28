@@ -123,28 +123,10 @@ public class PlaybackSpeedTests
 
     // ---- the slot resolver: entity resolution first ----
 
+    // JF-653: the ER graph lives on TestHelpers.ResolvedSlot; this adapter keeps the
+    // id-first shape, where the authority's canonical name IS the slot value.
     private static Slot EntitySlot(string id, string name)
-    {
-        var slot = new Slot { Name = "speed", Value = name };
-        slot.Resolution = new global::Alexa.NET.Request.Resolution
-        {
-            Authorities = new[]
-            {
-                new global::Alexa.NET.Request.ResolutionAuthority
-                {
-                    Status = new global::Alexa.NET.Request.ResolutionStatus { Code = "ER_SUCCESS_MATCH" },
-                    Values = new[]
-                    {
-                        new global::Alexa.NET.Request.ResolutionValueContainer
-                        {
-                            Value = new global::Alexa.NET.Request.ResolutionValue { Name = name, Id = id }
-                        }
-                    }
-                }
-            }
-        };
-        return slot;
-    }
+        => TestHelpers.ResolvedSlot(name, name, slotName: "speed", id: id);
 
     [Theory]
     [InlineData("750", 750)]
