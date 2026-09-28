@@ -3,9 +3,10 @@ id: JF-653
 title: >-
   JF-653 - hoist the four private ER-resolution test builders into one
   TestHelpers.ErMatchedSlot (the suite's own hoist-at-four-copies rule)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-27 10:07'
+updated_date: '2026-09-28 23:19'
 labels:
   - tests
   - tech-debt
@@ -42,3 +43,15 @@ VERIFICATION: the four suites stay green byte-identical (no behavior change anyw
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+DONE 2026-09-29, commit 2784bc85 (worktree branch worktree-agent-a0fdc125eb0d406d2, not pushed). DECISION: MERGE, not compose. The task's sketched TestHelpers.ErMatchedSlot was filed before JF-659 landed TestHelpers.ResolvedSlot; two ER-graph builders in TestHelpers would be one too many, so ResolvedSlot was extended instead: a trailing optional string? id = null threads into ResolutionValue.Id, and the bare-slot trigger stays canonical == null, so every pre-existing ResolvedSlot caller (MusicianErCanonicalTests, SlotValueHelperTests) is untouched and byte-identical. ResolvedSlot's shape carries three of the four sites DIRECTLY (PlayNextEpisode CreatePositionSlot and PlayByGenre's genre slot delegate in one line; Unit/PlaybackSpeedTests EntitySlot keeps a one-line adapter only to state the raw==canonical echo once). SetPlaybackSpeed RateSlot also keeps a one-line adapter because its graph trigger is the id (its authority canonical echoes the raw value), and ResolvedSlot deliberately does NOT make id a graph trigger (no suite mints an id-only match; that contract is now in the ResolvedSlot doc comment). The three adapters contain no authority graph; the PlayByGenre IntentRequest wrapper stays per-class per the task. Proof: four affected classes 115/115 per TFM by filter; full suite 4716/4716 net9.0 + 4716/4716 net10.0, zero assertion edits; grep 'new Resolution|ResolutionAuthority' over the test project hits only TestHelpers.ResolvedSlot itself. -74 net lines. gate-exempt trivial (test-only mechanical hoist).
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Landed 2026-09-29 as merge 4e60fb1f (pushed; test-only, no deploy): the four private ER slot builders hoisted onto TestHelpers.ResolvedSlot. The decision was MERGE not compose (two ER-graph builders in TestHelpers would be one too many): ResolvedSlot gained a trailing optional id parameter threaded into ResolutionValue.Id with the bare-slot trigger unchanged (canonical == null), every pre-existing caller untouched; the three Id-keyed sites became one-line per-class adapters absorbing their trigger/echo differences; the PlayByGenre IntentRequest wrapper stayed per-class per the task. Zero assertion edits; grep shows the authority graph only in TestHelpers itself; suites 4716/4716 both TFMs (worker's four-class 115/115 filter + my independent full run).
+<!-- SECTION:FINAL_SUMMARY:END -->
