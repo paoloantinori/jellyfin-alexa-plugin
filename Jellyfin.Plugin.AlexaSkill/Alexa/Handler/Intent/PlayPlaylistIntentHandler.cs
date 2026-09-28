@@ -77,7 +77,7 @@ public class PlayPlaylistIntentHandler : BaseHandler
     {
         string locale = GetLocale(request);
         IntentRequest intentRequest = (IntentRequest)request;
-        (_, string? playlistName) = ReadPlaylistSlot(intentRequest, "playlist", locale);
+        (_, string? playlistName) = ReadPlaylistSlot(intentRequest, IntentNames.Slots.Playlist, locale);
         // JF-550 (dead-mic sweep; JF-549 class): the empty-playlist prompt elicits
         // with the mic open (this caller's intent; the shared builder serves both
         // PlayPlaylistIntent and ShufflePlayIntent, so the elicit must name the
@@ -92,9 +92,16 @@ public class PlayPlaylistIntentHandler : BaseHandler
             return Task.FromResult(BuildDialogElicitResponse("DidNotCatchPlaylistName", locale, "playlist", IntentNames.PlayPlaylist, Util.ElicitSlots.For(IntentNames.PlayPlaylist)));
         }
 
+        // JF-663: the kana-origin flag is captured on the post-strip,
+        // pre-romanization name, the string the builder matches: kana in the
+        // NAME is the lossy-transliteration evidence the bar keys on, while
+        // kana living only in a stripped ja carrier (という) is not. Pinned per
+        // the family convention so a future upstream romanization cannot
+        // silently defuse the bar (the JF-660 lesson).
+        bool kanaOrigin = Util.ArtistSearch.IsKanaOriginQuery(null, playlistName);
         return AlbumPlay.BuildPlaylistPlayResponseAsync(
             _libraryManager, _userManager, _queueManager,
             playlistName ?? string.Empty, context, user, session, locale,
-            shuffle: false, rng: null, cancellationToken);
+            shuffle: false, rng: null, kanaOrigin, cancellationToken);
     }
 }

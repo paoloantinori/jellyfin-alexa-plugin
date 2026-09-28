@@ -209,6 +209,44 @@ public sealed class AlbumPlayService
             romanizedQuery.Length,
             album.Name ?? string.Empty);
 
+    /// <summary>
+    /// JF-663: the kana-origin playlist bar, the playlist-surface sibling of
+    /// <see cref="PassesKanaOriginAlbumAcceptance"/> (the song wrapper and the album
+    /// predicate are the existing per-surface names over the ONE shared
+    /// <see cref="Util.SongIndexSearch.PassesLengthBandedTitleCollision"/> primitive;
+    /// no private strip+band+encode copy). Playlist names are the same title-shaped
+    /// candidates with the same suffix-widening risk, so the bar is collision-only
+    /// for the same containment-floor-scores-90 reason the album bar documents.
+    /// </summary>
+    /// <param name="romanizedQuery">The romanized (post-KatakanaRomanizer) query string.</param>
+    /// <param name="playlist">The candidate playlist.</param>
+    /// <returns>True when the playlist name carries a length-banded code collision with the query.</returns>
+    internal static bool PassesKanaOriginPlaylistAcceptance(string romanizedQuery, BaseItem playlist)
+        => PassesKanaOriginPlaylistAcceptance(
+            DoubleMetaphone.Encode(romanizedQuery),
+            romanizedQuery.Length,
+            playlist);
+
+    /// <summary>
+    /// Codes-carried form of <see cref="PassesKanaOriginPlaylistAcceptance(string, BaseItem)"/>
+    /// for callers that encode the query once and reuse it across several candidate
+    /// checks (the PassesKanaOriginSongAcceptance encode-once shape): the
+    /// multi-match narrowing in <see cref="BuildPlaylistPlayResponseAsync"/> loops
+    /// this predicate over the server-narrowed candidate list.
+    /// </summary>
+    /// <param name="queryCodes">The Double Metaphone codes of the romanized query.</param>
+    /// <param name="romanizedQueryLength">The romanized query's length (the band input).</param>
+    /// <param name="playlist">The candidate playlist.</param>
+    /// <returns>True when the playlist name carries a length-banded code collision with the query.</returns>
+    internal static bool PassesKanaOriginPlaylistAcceptance(
+        (string Primary, string? Alternate) queryCodes,
+        int romanizedQueryLength,
+        BaseItem playlist)
+        => Util.SongIndexSearch.PassesLengthBandedTitleCollision(
+            queryCodes,
+            romanizedQueryLength,
+            playlist.Name ?? string.Empty);
+
     private readonly PluginConfiguration _config;
     private readonly ILogger _logger;
     private readonly PlaybackLaunchBuilder _launch;
@@ -719,6 +757,7 @@ public sealed class AlbumPlayService
     /// <param name="locale">The locale for response strings.</param>
     /// <param name="shuffle">When true and <paramref name="queueManager"/> is non-null, shuffles the queue via <see cref="Playback.DeviceQueueManager.SetShuffledQueue"/>.</param>
     /// <param name="rng">Optional injectable random source for deterministic shuffle (tests); null uses <see cref="Random.Shared"/>.</param>
+    /// <param name="kanaOrigin">JF-663: the flag captured on the caller's post-strip, PRE-romanization slot value (the JF-652/JF-660/JF-661 threading shape; kana in the stripped NAME is the transliteration evidence, kana in a stripped carrier is not). Both production callers pin it; null self-computes from <paramref name="playlistName"/> before this method's own romanization for raw-text callers.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A skill response with an AudioPlayer directive, or a localized error tell.</returns>
     public async Task<SkillResponse> BuildPlaylistPlayResponseAsync(
@@ -732,6 +771,7 @@ public sealed class AlbumPlayService
         string locale,
         bool shuffle,
         Random? rng,
+        bool? kanaOrigin,
         CancellationToken cancellationToken)
     {
         // Shared by PlayPlaylist (shuffle=false) and ShufflePlay (shuffle=true); the
@@ -744,6 +784,15 @@ public sealed class AlbumPlayService
         // JF-643: the SearchTerm index, the fuzzy fallback, and the coverage gate all
         // compare against Latin-script playlist names; romanize the query once at the
         // shared entry.
+        // JF-663: the kana-origin flag is read BEFORE that romanization (the
+        // JF-652/JF-660/JF-661 shape: the romanization erases the script evidence
+        // the bar keys on); both production callers pin the flag captured on their
+        // raw slot, null self-computes for raw-text callers. spokenName keeps the
+        // post-strip pre-romanization value past the reassignment so the gate
+        // logs below can tell a kana-origin query from one that spoke the romaji
+        // verbatim (byte-identical romanized log lines otherwise).
+        bool kana = kanaOrigin ?? Util.ArtistSearch.IsKanaOriginQuery(null, playlistName);
+        string spokenName = playlistName;
         playlistName = Util.KatakanaRomanizer.Romanize(playlistName);
 
         var (jellyfinUser, userError) = BaseHandler.ResolveJellyfinUser(userManager, session.UserId, locale);
@@ -789,6 +838,20 @@ public sealed class AlbumPlayService
         if (playlists.TotalRecordCount == 0)
         {
             var fuzzy = await _search.SearchItemsFuzzyAsync(playlistName, jellyfinUser, user, libraryManager, new[] { BaseItemKind.Playlist }, cancellationToken, "PlayPlaylistFuzzyFallback", locale: locale).ConfigureAwait(false);
+            // JF-663: the kana bar at the fuzzy fallback's single acceptance point.
+            // A kana-origin query whose romaji plain-fuzzy scored into the default
+            // bar (the containment floor scores exactly 90) would play silently with
+            // no real length-banded Double Metaphone collision, the wrong-accept
+            // class the JF-652 family bars; the refusal converts the hit into the
+            // honest miss below.
+            if (fuzzy != null && kana && !PassesKanaOriginPlaylistAcceptance(playlistName, fuzzy.Value.Item))
+            {
+                _logger.LogInformation(
+                    "PlayPlaylist: kana bar armed={Kana} refused the fuzzy fallback hit for spoken='{SpokenName}' romanized='{Query}': playlist '{PlaylistName}' has no length-banded Double Metaphone collision, treating as a miss (JF-663)",
+                    kana, spokenName, playlistName, fuzzy.Value.Item.Name);
+                fuzzy = null;
+            }
+
             if (fuzzy != null)
             {
                 playlists = new QueryResult<BaseItem> { Items = new List<BaseItem> { fuzzy.Value.Item }, TotalRecordCount = 1 };
@@ -803,7 +866,41 @@ public sealed class AlbumPlayService
         if (playlists.TotalRecordCount > 1)
         {
             _logger.LogDebug("PlayPlaylist: {Count} playlists matched, running disambiguation", playlists.TotalRecordCount);
-            BaseItem? topMatch = _search.FuzzyMatch(playlistName, playlists.Items, p => p.Name, user);
+            // JF-663: the kana bar composes over every acceptance point in this
+            // branch (the site-level FuzzyMatch pre-check, the HandleFuzzyMiss
+            // auto-play delegate, and the yes/no prompts below): with the flag set
+            // the candidate list is narrowed once here to the collision-passing
+            // playlists, so no plain-fuzzy acceptance can pick a non-colliding
+            // bait the romaji scored into the bar. An emptied set is the honest
+            // playlist not-found; a collision-backed candidate still disambiguates
+            // and plays normally. The single-server-hit branch below is
+            // deliberately NOT barred, on the JF-661 notes' doctrine criterion:
+            // an acceptance that speaks a SUBSTITUTION (a name the user did not
+            // say, like the cascade's FoundAlbumInstead, whose tier-1 pin bars
+            // even a server-narrowed winner) demands collision evidence, while
+            // this branch is a direct play and rides the server's index
+            // narrowing (contains-class here, not an exact match).
+            IReadOnlyList<BaseItem> fuzzyCandidates = playlists.Items;
+            if (kana)
+            {
+                var queryCodes = DoubleMetaphone.Encode(playlistName);
+                fuzzyCandidates = playlists.Items.Where(p => PassesKanaOriginPlaylistAcceptance(queryCodes, playlistName.Length, p)).ToList();
+                if (fuzzyCandidates.Count == 0)
+                {
+                    // Name the refused candidates, bounded: the server-narrowed
+                    // multi-match set is a handful, and triage needs to see WHICH
+                    // baits the bar refused.
+                    string refused = playlists.Items.Count <= 5
+                        ? string.Join(", ", playlists.Items.Select(p => p.Name))
+                        : $"{playlists.Items.Count} playlists";
+                    _logger.LogInformation(
+                        "PlayPlaylist: kana bar armed={Kana} refused every server candidate for spoken='{SpokenName}' romanized='{Query}': {Refused} matched with no length-banded Double Metaphone collision, treating as a miss (JF-663)",
+                        kana, spokenName, playlistName, refused);
+                    return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundPlaylist", locale, playlistName));
+                }
+            }
+
+            BaseItem? topMatch = _search.FuzzyMatch(playlistName, fuzzyCandidates, p => p.Name, user);
             // JF-526 (JF-508 sibling): this site-level pre-check returns before
             // HandleFuzzyMiss, so the short-query full-coverage gate must be applied
             // here too; a gated miss falls into HandleFuzzyMiss below, whose Confirm
@@ -816,7 +913,7 @@ public sealed class AlbumPlayService
             {
                 var (missOutcome, missResponse) = await _handleFuzzyMiss(
                     playlistName,
-                    playlists.Items,
+                    fuzzyCandidates,
                     p => p.Name,
                     best => new List<(Guid, string)> { (best.Id, best.Name) },
                     DisambiguationHelper.MediaTypePlaylist,
@@ -837,7 +934,7 @@ public sealed class AlbumPlayService
                 }
                 else
                 {
-                    var matches = playlists.Items.Take(3).Select(p => (p.Id, p.Name, (string?)_launch.GetImageUrl(p.Id.ToString("N"), user))).ToList();
+                    var matches = fuzzyCandidates.Take(3).Select(p => (p.Id, p.Name, (string?)_launch.GetImageUrl(p.Id.ToString("N"), user))).ToList();
                     return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypePlaylist, locale, context);
                 }
             }
