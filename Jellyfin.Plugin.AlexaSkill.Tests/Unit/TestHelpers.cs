@@ -936,10 +936,12 @@ internal sealed class SharedGateProbeHandler : BaseHandler
         ILibraryManager libraryManager,
         IUserDataManager userDataManager,
         string logLabel,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool? kanaOrigin = null)
         => AlbumPlay.TryAlbumFallbackAsync(
             slotText, jellyfinUser, user, session, context, locale,
-            libraryManager, userDataManager, null, logLabel, cancellationToken: cancellationToken);
+            libraryManager, userDataManager, null, logLabel,
+            request: null, cancellationToken: cancellationToken, kanaOrigin: kanaOrigin);
 
     /// <summary>
     /// JF-505: direct access to the shared VideoApp launch chokepoint for the
