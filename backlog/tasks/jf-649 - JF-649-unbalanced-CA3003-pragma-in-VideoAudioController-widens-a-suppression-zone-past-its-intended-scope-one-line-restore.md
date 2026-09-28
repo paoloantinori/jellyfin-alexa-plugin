@@ -3,9 +3,10 @@ id: JF-649
 title: >-
   JF-649 - unbalanced CA3003 pragma in VideoAudioController widens a suppression
   zone past its intended scope (one-line restore)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-27 08:16'
+updated_date: '2026-09-28 22:07'
 labels:
   - analyzer-hygiene
   - trivial
@@ -42,3 +43,9 @@ SCOPE: one line plus verification; do it as a standalone trivial commit (no gate
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Landed 2026-09-29 as commit 2c40a60b (pushed): the unmatched CA3003 disable at the audiobook concurrent-serve guard (VideoAudioController ~:2110) now has its restore immediately after the block closes, so the suppression no longer silently widens over the code that follows. Counts 37/37 (verified), Release build 0 errors. One directive line, the task's own gate-exempt trivial class.
+<!-- SECTION:FINAL_SUMMARY:END -->
