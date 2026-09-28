@@ -147,8 +147,15 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
             // like the artist.
             if (canonicalMusician == null)
             {
+                // JF-654: the kana-origin flag on the RAW slot, at its only consumer
+                // (this handler never romanizes its own copy: SearchAsync and
+                // TrySongFallback romanize internally; the canonical guard above
+                // means only the raw/kana shape ever reaches the kana bar, so the
+                // canonical argument is statically null here).
+                bool kanaOrigin = Util.ArtistSearch.IsKanaOriginQuery(null, musician);
                 SkillResponse? songFallback = CrossMedia.TrySongFallback(
-                    musicianSearch, user, session, context, locale, _songNgramIndex, _libraryManager, "QueryArtistLibrary", cancellationToken);
+                    musicianSearch, user, session, context, locale, _songNgramIndex, _libraryManager, "QueryArtistLibrary", cancellationToken,
+                    kanaOrigin: kanaOrigin);
                 if (songFallback != null)
                 {
                     return songFallback;

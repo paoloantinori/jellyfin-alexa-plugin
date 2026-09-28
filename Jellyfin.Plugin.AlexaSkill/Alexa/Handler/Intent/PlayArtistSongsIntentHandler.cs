@@ -512,7 +512,8 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             if (canonicalMusician == null)
             {
                 SkillResponse? songFallback = CrossMedia.TrySongFallback(
-                    musicianQuery, user, session, context, locale, _songNgramIndex, _libraryManager, "PlayArtistSongs", cancellationToken);
+                    musicianQuery, user, session, context, locale, _songNgramIndex, _libraryManager, "PlayArtistSongs", cancellationToken,
+                    kanaOrigin: kanaOrigin);
                 if (songFallback != null)
                 {
                     return songFallback;
@@ -953,8 +954,12 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             Logger.LogInformation(
                 "PlayArtistSongs: kana-origin query '{Query}' matched '{Match}' at score {Score} {Reason}, downgrading to not-found (JF-652)",
                 musician, match.Name, score, missReason);
+            // kanaOrigin is true by construction here: ApplyKanaOriginAcceptance is
+            // only reached from the kana guard at the single-pick end gate (JF-654
+            // threads the flag so the song fallback shares the same bar).
             SkillResponse? songFallback = CrossMedia.TrySongFallback(
-                musician, user, session, context, locale, _songNgramIndex, _libraryManager, "PlayArtistSongs", cancellationToken);
+                musician, user, session, context, locale, _songNgramIndex, _libraryManager, "PlayArtistSongs", cancellationToken,
+                kanaOrigin: true);
             if (songFallback != null)
             {
                 return songFallback;

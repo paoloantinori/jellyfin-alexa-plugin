@@ -895,6 +895,23 @@ internal sealed class SharedGateProbeHandler : BaseHandler
         bool kanaOrigin = false)
         => CrossMedia.PassesArtistMatchAcceptance(artist, query, user, artistIndex, out score, kanaOrigin);
 
+    /// <summary>
+    /// JF-654: direct access to the inverse song fallback for the song-side
+    /// kana-bar tests (the kanaOrigin flag is threaded through this signature).
+    /// </summary>
+    public SkillResponse? CallTrySongFallback(
+        string musician,
+        Entities.User user,
+        SessionInfo session,
+        Context context,
+        string locale,
+        ISongNgramIndex? songIndex,
+        ILibraryManager libraryManager,
+        CancellationToken cancellationToken,
+        bool kanaOrigin = false)
+        => CrossMedia.TrySongFallback(
+            musician, user, session, context, locale, songIndex, libraryManager, "kana song probe", cancellationToken, kanaOrigin);
+
     public Task<SkillResponse?> CallTryAlbumFallbackAsync(
         string slotText,
         Jellyfin.Database.Implementations.Entities.User jellyfinUser,

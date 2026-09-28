@@ -468,6 +468,10 @@ public class FindSongIntentHandler : BaseHandler
         // NameContains filter, KeywordMatcher). sessionData.Keywords keeps the raw
         // spoken words for speech and logging. Null keywords romanize to empty and
         // take the too-vague path, exactly like the pre-romanization Tokenize(null).
+        // JF-654: the kana-origin flag is captured on the RAW stored keywords, before
+        // the romanization erases the script evidence (titleKeywords is a
+        // SearchQuery slot: no ER canonical ever rides it).
+        bool kanaOrigin = Util.ArtistSearch.IsKanaOriginQuery(null, sessionData.Keywords);
         string keywords = Util.KatakanaRomanizer.Romanize(sessionData.Keywords ?? string.Empty);
 
         string[] keywordTokens = KeywordMatcher.Tokenize(keywords, locale);
@@ -512,7 +516,6 @@ public class FindSongIntentHandler : BaseHandler
             // Post-filter with KeywordMatcher; JF-384: the phonetic fallback (inside the
             // helper) prevents one accent-drifted keyword from vetoing the match.
             scored = KeywordMatcher.ScoreWithPhoneticFallback(allArtistSongs, keywordTokens, locale, _config.PhoneticSongSearchEnabled);
-            songs = scored.Select(s => s.Item).ToList();
         }
         else
         {
@@ -555,9 +558,15 @@ public class FindSongIntentHandler : BaseHandler
                 // Post-filter with KeywordMatcher
                 scored = KeywordMatcher.Score(nameMatches, keywordTokens, locale);
             }
-
-            songs = scored.Select(s => s.Item).ToList();
         }
+
+        // JF-654: the song-side kana bar (one shared definition,
+        // Util.SongIndexSearch.ApplyKanaOriginBar; no-op for Latin). Site-unique
+        // fact: ALL THREE search stages above (artist-scoped, n-gram, DB fallback)
+        // converge here, so this single filter is the chain's acceptance point and
+        // a kana-origin miss flows into the honest no-match re-prompt below.
+        scored = Util.SongIndexSearch.ApplyKanaOriginBar(scored, keywords, kanaOrigin);
+        songs = scored.Select(s => s.Item).ToList();
 
         Logger.LogDebug("FindSong: search returned {Count} matching songs (artist={ArtistName}, keywords={Keywords})", songs.Count, sessionData.ArtistName, sessionData.Keywords);
 

@@ -128,6 +128,13 @@ public class SearchMediaIntentHandler : BaseHandler
         // JF-643: the query feeds the SearchTerm index, the artist fallback, the fuzzy
         // pass, and the n-gram song-title retry; all compare against Latin-script
         // library names, so a katakana query is romanized once here.
+        // JF-654: the kana-origin flag is captured on the RAW query, BEFORE the
+        // romanization (the query slot is free-text: no ER canonical). Scope
+        // decision: it gates ONLY the song-title retry below (the JF-440 song chain
+        // feeding this handler's single-result auto-play); the primary SearchTerm
+        // path is literal, and the fuzzy pass is the JF-652 artist-side machinery,
+        // outside the song-acceptance class of this task.
+        bool kanaOrigin = Util.ArtistSearch.IsKanaOriginQuery(null, query);
         query = Util.KatakanaRomanizer.Romanize(query);
 
         // Layer-1 gate (GuardIndexReady): before the "searching" announcement.
@@ -193,7 +200,7 @@ public class SearchMediaIntentHandler : BaseHandler
                 // index is the O(1) complete song-title lookup (the same chain
                 // PlaySong's title fallback uses, JF-440); found songs feed the
                 // normal result flow below (single auto-play / fuzzy / disambiguate).
-                IReadOnlyList<BaseItem> songTitleHits = TrySongTitleRetry(query, locale, topParentIds);
+                IReadOnlyList<BaseItem> songTitleHits = TrySongTitleRetry(query, locale, topParentIds, kanaOrigin);
                 if (songTitleHits.Count == 0)
                 {
                     Logger.LogInformation("Search for '{Query}' returned no results", query);
@@ -376,7 +383,7 @@ public class SearchMediaIntentHandler : BaseHandler
     /// <param name="locale">The request locale (tokenizer).</param>
     /// <param name="topParentIds">The library scope resolved once in HandleAsync.</param>
     /// <returns>Scored song matches best-first, capped at MaxSearchResults; empty when nothing matched.</returns>
-    private IReadOnlyList<BaseItem> TrySongTitleRetry(string query, string locale, Guid[]? topParentIds)
+    private IReadOnlyList<BaseItem> TrySongTitleRetry(string query, string locale, Guid[]? topParentIds, bool kanaOrigin)
     {
         // JF-466 contract: an empty FilterByContentAccess result is a hard zero, never
         // a "no type filter" query. A music-disabled user must not get song results.
@@ -402,6 +409,10 @@ public class SearchMediaIntentHandler : BaseHandler
             Logger.LogDebug("Song-title retry skipped for '{Query}': song index warming", query);
             return Array.Empty<BaseItem>();
         }
+
+        // JF-654: the shared song-side kana bar before the retry's hits feed the
+        // result flow (whose single-result branch auto-plays).
+        scored = Util.SongIndexSearch.ApplyKanaOriginBar(scored, query, kanaOrigin);
 
         int cap = Plugin.Instance?.Configuration?.MaxSearchResults ?? 20;
         return scored.Take(cap).Select(s => s.Item).ToList();
