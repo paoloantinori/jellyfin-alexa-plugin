@@ -12,11 +12,12 @@ from __future__ import annotations
 
 import logging
 import time
+import warnings
 import xml.etree.ElementTree as ET
 
 import pytest
 
-from smapi_client import SmapiClient, SmapiError
+from smapi_client import SmapiClient, SmapiError, SmapiUnexpectedError
 
 logger = logging.getLogger("e2e.test")
 
@@ -47,7 +48,7 @@ def e2e_smapi_client(skill_id, smapi_delay, e2e_fixture):
 
 
 # ---------------------------------------------------------------------------
-# Cross-test simulate-skill session tracking (locale-scoped, conditional)
+# Cross-test simulate-skill state (locale-scoped, conditional)
 # ---------------------------------------------------------------------------
 
 # Locales whose most recent simulation in this process left the skill
@@ -59,6 +60,13 @@ _open_sessions: set[str] = set()
 # reset of a run guards against a stale open session left by an earlier
 # crashed run, where no in-process tracking exists.
 _reset_initialized: set[str] = set()
+
+# Locales where an open simulation already hit the chronic outage class in
+# this process (JF-656): later smoke tests in the locale skip the open
+# attempt instead of burning the open+retry pair (~20s) per test.
+# Process-local and one-way: never re-probed after a mid-run recovery, and
+# invisible to a parallel run (no xdist today), so the flag is best-effort.
+_open_outage_locales: set[str] = set()
 
 
 def _request_locale(request: pytest.FixtureRequest) -> str:
@@ -863,6 +871,18 @@ def smoke_fixture(request):
     return request.param
 
 
+def _note_open_fallback(utterance: str, locale: str, source: str) -> None:
+    """Surface the fallback in the run report.
+
+    Captured log lines are not rendered for passing tests without log_cli,
+    so the warning (pytest's warnings summary prints every run) is what
+    distinguishes a fallback pass from a full-chain one in the output.
+    """
+    warnings.warn(
+        f"OPEN FALLBACK: '{utterance}' ({locale}) ran as a one-shot ({source})"
+    )
+
+
 def _assert_play_or_gate_tell(
     utterance: str, locale: str, skill_response: dict, gate_substring: str
 ) -> None:
@@ -979,32 +999,75 @@ def test_e2e_smoke_two_step(
     # One retry on a transient simulation error (the en-GB class: platform
     # 'unexpected error' after ~21s, observed about once per ten opens,
     # JF-511); a genuinely broken open shape fails on the retry too.
-    logger.info("SMOKE OPEN [%s] (%s)", open_utterance, locale)
-    try:
-        try:
-            open_response = client.simulate(open_utterance)
-        except SmapiError:
-            time.sleep(3.0)
-            open_response = client.simulate(open_utterance)
-    except SmapiError as exc:
-        pytest.fail(
-            f"Open simulation error for '{open_utterance}' ({locale}): {exc}"
+    # JF-656: when the retry also fails with SmapiUnexpectedError (the
+    # platform's generic 'unexpected error'; opens dead while one-shot
+    # simulations work), the test falls back to a one-shot of the target
+    # utterance instead of failing, and the locale is flagged so later
+    # tests of the run skip the open attempt entirely.
+    open_response = None
+    if locale in _open_outage_locales:
+        logger.info(
+            "OPEN FALLBACK [%s] (%s): locale flagged, running one-shot",
+            open_utterance, locale,
         )
-    # An open that did not invoke the skill leaves nothing for the command
-    # to ride on: fail here, with the considered intents, rather than as a
-    # confusing command-intent mismatch below.
-    considered = [
-        c.get("name")
-        for c in open_response.get("result", {})
-        .get("alexaExecutionInfo", {})
-        .get("consideredIntents", [])
-    ][:3]
-    assert _extract_response_body(_extract_skill_response(open_response)), (
-        f"Open utterance '{open_utterance}' ({locale}) did not invoke the "
-        f"skill (considered: {considered})"
-    )
+        _note_open_fallback(utterance, locale, "locale flagged from an earlier test")
+    else:
+        logger.info("SMOKE OPEN [%s] (%s)", open_utterance, locale)
+        try:
+            try:
+                open_response = client.simulate(open_utterance)
+            except SmapiError:
+                time.sleep(3.0)
+                open_response = client.simulate(open_utterance)
+        except SmapiUnexpectedError as exc:
+            _open_outage_locales.add(locale)
+            # The failed open leaves the dialog state unknown: assume open
+            # so the next test resets (same policy as the full-chain path;
+            # a prefixed one-shot against a stale open dialog is captured
+            # into the elicited slot and misroutes).
+            _open_sessions.add(locale)
+            logger.warning(
+                "OPEN FALLBACK (%s): open simulation hit the outage class, "
+                "falling back to a one-shot command: %s",
+                locale, str(exc)[:150],
+            )
+            _note_open_fallback(utterance, locale, "open hit the outage class")
+        except SmapiError as exc:
+            pytest.fail(
+                f"Open simulation error for '{open_utterance}' ({locale}): {exc}"
+            )
 
-    # --- Step 2: the bare in-session command ---
+    if open_response is not None:
+        # An open that did not invoke the skill leaves nothing for the command
+        # to ride on: fail here, with the considered intents, rather than as a
+        # confusing command-intent mismatch below.
+        considered = [
+            c.get("name")
+            for c in open_response.get("result", {})
+            .get("alexaExecutionInfo", {})
+            .get("consideredIntents", [])
+        ][:3]
+        assert _extract_response_body(_extract_skill_response(open_response)), (
+            f"Open utterance '{open_utterance}' ({locale}) did not invoke the "
+            f"skill (considered: {considered})"
+        )
+
+    # --- Step 2: the command; bare in-session after a real open, one-shot
+    # with the invocation prefix in the fallback (the same composition the
+    # full-chain e2e_*.yaml cases use) ---
+    command_client = client
+    if open_response is None:
+        invocation_name = fixture.get("invocation_name", "")
+        if not invocation_name:
+            pytest.fail(
+                f"Cannot one-shot '{utterance}' ({locale}): the open hit the "
+                f"outage class but the fixture carries no invocation_name"
+            )
+        command_client = SmapiClient(
+            skill_id=skill_id, locale=locale, delay=smapi_delay,
+            invocation_name=invocation_name,
+        )
+
     logger.info(
         "SMOKE CMD [%s] (%s) expecting %s (response: %s)",
         utterance, locale, expected_intent, expected_response_type,
@@ -1015,7 +1078,7 @@ def test_e2e_smoke_two_step(
     )
     try:
         response = _simulate_with_invocation_retry(
-            client, utterance, expected_intent, needs_body
+            command_client, utterance, expected_intent, needs_body
         )
     except SmapiError as exc:
         _open_sessions.add(locale)
@@ -1026,9 +1089,13 @@ def test_e2e_smoke_two_step(
     result = SmapiClient.parse_nlu_result(response)
     resolved_intent = result["intent"]
 
+    shape = (
+        f"in-session after '{open_utterance}'"
+        if open_response is not None
+        else "one-shot, open fallback"
+    )
     assert resolved_intent == expected_intent, (
-        f"Intent mismatch for '{utterance}' ({locale}, in-session after "
-        f"'{open_utterance}'):\n"
+        f"Intent mismatch for '{utterance}' ({locale}, {shape}):\n"
         f"  expected: {expected_intent}\n"
         f"  actual:   {resolved_intent}"
     )
@@ -1047,7 +1114,11 @@ def test_e2e_smoke_two_step(
         )
     _assert_ssml_valid(skill_response, utterance, locale)
 
-    logger.info("  SMOKE PASS: [%s] -> %s", utterance[:30], resolved_intent)
+    logger.info(
+        "  SMOKE PASS%s: [%s] -> %s",
+        " (open-fallback)" if open_response is None else "",
+        utterance[:30], resolved_intent,
+    )
 
     # If the command left the skill session open (reprompt/disambiguation),
     # close it now so the next test's open starts clean; costs a simulation

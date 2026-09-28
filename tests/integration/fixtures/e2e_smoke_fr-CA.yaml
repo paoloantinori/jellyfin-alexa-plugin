@@ -5,8 +5,10 @@
 # the fr-CA marketplace (probed live 2026-09-07, 'did not resolve to any
 # intent'); 'lance' and 'commence' both work, 'lance' is used here.
 locale: fr-CA
-invocation_name: jellyfin player
-open_utterance: "lance jellyfin player"
+# JF-656: the invocation name is the live JF-558 native name; the
+# JF-511-era 'jellyfin player' no longer matches this locale's model.
+invocation_name: mon serveur
+open_utterance: "lance mon serveur"
 tests:
   - utterance: "lis mes favoris"
     expected_intent: PlayFavoritesIntent

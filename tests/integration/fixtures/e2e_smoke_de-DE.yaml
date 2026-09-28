@@ -16,8 +16,10 @@
 # play-or-gate-Tell disjunction because the audio pin cannot survive the
 # empty media_type.
 locale: de-DE
-invocation_name: jellyfin player
-open_utterance: "öffne jellyfin player"
+# JF-656: the invocation name is the live JF-558 native name; the
+# JF-511-era 'jellyfin player' no longer matches this locale's model.
+invocation_name: meine sammlung
+open_utterance: "öffne meine sammlung"
 tests:
   # (a) favorites play: measured live (JF-511 + first smoke run) ->
   # AudioPlayer.Play, session ends.

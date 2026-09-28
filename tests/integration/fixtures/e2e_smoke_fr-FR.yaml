@@ -3,8 +3,10 @@
 # carrier is 'lis les chansons de {musician}': 'lis la musique de X' is
 # absorbed by PlaySongIntent (song='la musique', JF-508 family).
 locale: fr-FR
-invocation_name: jellyfin player
-open_utterance: "ouvre jellyfin player"
+# JF-656: the invocation name is the live JF-558 native name; the
+# JF-511-era 'jellyfin player' no longer matches this locale's model.
+invocation_name: mon serveur
+open_utterance: "ouvre mon serveur"
 tests:
   - utterance: "lis mes favoris"
     expected_intent: PlayFavoritesIntent
