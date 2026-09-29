@@ -189,34 +189,17 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             ? _libraryManager.GetItemById(currentItemId)
             : session.FullNowPlayingItem;
 
-        // PostPlay/radio policy resolved once (the radio branch and the exhaustion
-        // block used to read these independently).
+        // PostPlay/radio policy resolved once (the radio branch, the exhaustion
+        // block, and the episode advance's gate all consume this one read).
         var postPlayMode = Progress.GetPostPlayBehavior(user);
         bool radioOn = RadioModeState.IsEnabled(session.UserId, deviceId);
 
-        // JF-670 books never radio: a finishing audiobook chapter must neither seed
-        // nor receive music-radio tracks, so at exhaustion it is treated as
-        // PostPlay=Stop for radio purposes and the book ends in silence. Detection
-        // is the finished item's own book shape (the AudioBook itself, or an Audio
-        // item sitting under one; AudioBook derives from Audio, so without this gate
-        // a single-file book seeds genre radio exactly like a song), the mechanism
-        // that survives the LAST continuation batch: the store entry is long gone at
-        // true end-of-book, but the item still names its book. Consumers are exactly
-        // the two radio paths below (radio-on, or PostPlay=AutoPlay); the episode
-        // advance never matches an Audio chapter, so the ancestor walk is skipped
-        // when neither consumer can run.
-        bool bookChapterExhausting = false;
-        if (nextItemId == null && (radioOn || postPlayMode == PostPlayBehavior.AutoPlay))
+        // If no next item and radio mode is on, auto-populate similar tracks. The
+        // books-never-radio gate (JF-670) lives inside the seeders on the seed
+        // source itself, so no branch can bypass it.
+        if (nextItemId == null && radioOn)
         {
-            bookChapterExhausting = AudiobookItems.IsAudioBookOrChapter(currentItem, _libraryManager);
-        }
-
-        // If no next item and radio mode is on, auto-populate similar tracks. A book
-        // chapter never receives radio tracks, even from a leftover radio flag left by
-        // earlier music (JF-670).
-        if (nextItemId == null && !bookChapterExhausting && radioOn)
-        {
-            nextItemId = await AutoPopulateRadioTracks(session, cancellationToken).ConfigureAwait(false);
+            nextItemId = await AutoPopulateRadioTracks(currentItem, session, cancellationToken).ConfigureAwait(false);
         }
 
         if (nextItemId == null)
@@ -229,12 +212,11 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             // single-track playback that reaches queue exhaustion without radio. The
             // episode advance below deliberately ignores radioOn (a leftover radio
             // flag from earlier music must not stop a TV binge).
-            if (!radioOn && !bookChapterExhausting && postPlayMode == PostPlayBehavior.AutoPlay)
+            if (!radioOn && postPlayMode == PostPlayBehavior.AutoPlay)
             {
                 // AutoPlay: find similar tracks and enqueue for gapless transition.
                 // PlaybackNearlyFinished can return AudioPlayer.Play but NOT speech,
-                // so the music continues seamlessly without announcement. A book
-                // chapter is excluded by the gate above (JF-670).
+                // so the music continues seamlessly without announcement.
                 nextItemId = await AutoPopulatePostPlayTracks(
                     currentItem, session, user, context, cancellationToken).ConfigureAwait(false);
             }
@@ -252,7 +234,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             if (nextItemId == null)
             {
                 nextItemId = await TryAutoAdvanceNextEpisodeAsync(
-                    currentItem, session, user, cancellationToken).ConfigureAwait(false);
+                    currentItem, session, user, postPlayMode, cancellationToken).ConfigureAwait(false);
             }
 
             if (nextItemId == null)
@@ -629,10 +611,25 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
     /// Find similar tracks to the current item and append them to the queue.
     /// Returns the first new track ID, or null if no tracks found.
     /// </summary>
-    private async Task<Guid?> AutoPopulateRadioTracks(SessionInfo session, CancellationToken cancellationToken)
+    private async Task<Guid?> AutoPopulateRadioTracks(BaseItem? currentItem, SessionInfo session, CancellationToken cancellationToken)
     {
-        var currentAudio = session.FullNowPlayingItem as MediaBrowser.Controller.Entities.Audio.Audio;
-        if (currentAudio == null)
+        // JF-670 books never radio: the gate lives HERE, at the seed source (the
+        // Audio cast is what makes books seedable; AudioBook derives from Audio on
+        // both shipping refs, so without this gate a single-file book seeds genre
+        // radio exactly like a song), not at the call sites, so no branch can
+        // bypass it. The seed comes from the caller's ONE finishing-item
+        // resolution (token-first with the session fallback), matching
+        // AutoPopulatePostPlayTracks. Detection reads the finished item's own
+        // book shape, the mechanism that survives the LAST continuation batch:
+        // the store entry is long gone at true end-of-book, but the item still
+        // names its book.
+        var currentAudio = currentItem as MediaBrowser.Controller.Entities.Audio.Audio;
+        bool bookShaped = AudiobookItems.IsAudioBookOrChapter(currentItem, _libraryManager);
+        Logger.LogDebug(
+            "Radio mode seed gate on '{FinishingItem}': {GateOutcome}",
+            currentItem?.Name ?? "<unknown>",
+            bookShaped ? "book-shaped, radio suppressed" : currentAudio == null ? "not an Audio item, nothing to seed from" : "seed allowed");
+        if (currentAudio == null || bookShaped)
         {
             return null;
         }
@@ -696,8 +693,16 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         Context context,
         CancellationToken cancellationToken)
     {
+        // JF-670 books never radio: same gate as AutoPopulateRadioTracks, on the
+        // seed source, at exhaustion treated as PostPlay=Stop for radio purposes
+        // and the book ends in silence.
         var currentAudio = currentItem as MediaBrowser.Controller.Entities.Audio.Audio;
-        if (currentAudio == null)
+        bool bookShaped = AudiobookItems.IsAudioBookOrChapter(currentItem, _libraryManager);
+        Logger.LogDebug(
+            "PostPlay AutoPlay seed gate on '{FinishingItem}': {GateOutcome}",
+            currentItem?.Name ?? "<unknown>",
+            bookShaped ? "book-shaped, radio suppressed" : currentAudio == null ? "not an Audio item, nothing to seed from" : "seed allowed");
+        if (currentAudio == null || bookShaped)
         {
             return null;
         }
@@ -788,14 +793,16 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         BaseItem? currentItem,
         SessionInfo session,
         Entities.User user,
+        PostPlayBehavior postPlayMode,
         CancellationToken cancellationToken)
     {
         // Config gates first, before any library work (gate-before-query): the
-        // PostPlay mode, the VideoPlaybackEnabled feature flag, and the VideosEnabled
-        // content gate (JF-466 hard-zero contract) all skip the branch without
-        // touching the library, mirroring the intent path. An event response cannot
-        // speak, so a disabled configuration just skips the advance.
-        if (Progress.GetPostPlayBehavior(user) != PostPlayBehavior.AutoPlay)
+        // PostPlay mode (passed in, the caller's ONE resolution), the
+        // VideoPlaybackEnabled feature flag, and the VideosEnabled content gate
+        // (JF-466 hard-zero contract) all skip the branch without touching the
+        // library, mirroring the intent path. An event response cannot speak, so
+        // a disabled configuration just skips the advance.
+        if (postPlayMode != PostPlayBehavior.AutoPlay)
         {
             return null;
         }

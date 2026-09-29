@@ -343,6 +343,45 @@ public class PlaybackNearlyFinishedPostPlayTests : PluginTestBase, IDisposable
         _libraryManagerMock.Verify(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()), Times.Never);
     }
 
+    // book/part/subfolder/chapter: the deepest layout the ancestor walk claims to
+    // cover (item + three ancestors). Every non-AudioBook hop must keep walking;
+    // with the walk stopped one hop early this test goes red via the radio enqueue.
+    [Fact]
+    public async Task PartNestedChapterExhausted_AutoPlayMode_DoesNotSeedRadio()
+    {
+        _config.DefaultPostPlayBehavior = PostPlayBehavior.AutoPlay;
+        var bookId = Guid.NewGuid();
+        var partId = Guid.NewGuid();
+        var subfolderId = Guid.NewGuid();
+        var chapterId = Guid.NewGuid();
+        var chapter = TestHelpers.CreateSong("Chapter 11", chapterId);
+        chapter.ParentId = subfolderId;
+
+        var (request, context, user, session) = CreatePlaybackNearlyFinishedContext(chapterId.ToString());
+        session.NowPlayingQueue = new List<QueueItem> { new() { Id = chapterId } };
+        session.FullNowPlayingItem = chapter;
+
+        _libraryManagerMock.Setup(lm => lm.GetItemById(chapterId)).Returns(chapter);
+        Folder subfolder = new Folder { Id = subfolderId, Name = "Disc 2" };
+        subfolder.ParentId = partId;
+        _libraryManagerMock.Setup(lm => lm.GetItemById(subfolderId)).Returns(subfolder);
+        Folder part = new Folder { Id = partId, Name = "Part One" };
+        part.ParentId = bookId;
+        _libraryManagerMock.Setup(lm => lm.GetItemById(partId)).Returns(part);
+        _libraryManagerMock.Setup(lm => lm.GetItemById(bookId))
+            .Returns(new AudioBook { Id = bookId, Name = "The Book" });
+
+        var radioTrack = TestHelpers.CreateSong("Radio Song");
+        _libraryManagerMock.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { radioTrack }.AsReadOnly());
+
+        SkillResponse response = await _handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.Empty(response.Response.Directives ?? Array.Empty<IDirective>());
+        Assert.False(RadioModeState.IsEnabled(_userId, DeviceId));
+        _libraryManagerMock.Verify(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()), Times.Never);
+    }
+
     [Fact]
     public async Task HasNextItem_DoesNotTriggerPostPlay()
     {

@@ -34,11 +34,16 @@ internal static class AudiobookItems
     /// <returns>True when the item is an AudioBook or sits under one.</returns>
     internal static bool IsAudioBookOrChapter(BaseItem? item, ILibraryManager libraryManager)
     {
-        // Item + two ancestors covers the deepest real book shape (book/subfolder/
-        // chapter = two ParentId hops); a plain song burns at most its album + folder
-        // lookups on the gated path (radio-on or PostPlay=AutoPlay exhaustion only).
+        // Item + three ancestors: book/chapter (one hop), book/subfolder/chapter
+        // (two), and book/part/subfolder/chapter (three). The first-AudioBook early
+        // exit keeps the common shapes at one lookup; a plain song burns at most its
+        // album, folder, and library-root lookups on the gated path (radio-on or
+        // PostPlay=AutoPlay exhaustion only). Live-shape note: the deepest book
+        // layout in the test folder fixtures is the chapter directly under the book
+        // (BrowseLibraryIntentHandlerTests' Audiobooks root); the deeper hops are
+        // the defensive bound, not observed shapes.
         BaseItem? cursor = item;
-        for (int hop = 0; cursor != null && hop < 3; hop++)
+        for (int hop = 0; cursor != null && hop < 4; hop++)
         {
             if (IsAudioBook(cursor))
             {

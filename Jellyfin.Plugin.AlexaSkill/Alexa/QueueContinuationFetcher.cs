@@ -217,25 +217,13 @@ internal static class QueueContinuationFetcher
         // for restricted-library accounts, not for this folder's row membership.
         Util.LibraryFilter.ApplyLibraryFilter(query, pluginUser, libraryManager, logger);
 
-        // NRE guard mirrors the initial page's executor (PlayBookIntentHandler wraps
-        // the same query in SearchService.SafeGetItemsResult): Jellyfin's
-        // GetItemsResult evaluates dbQuery.Count() and certain filter combinations
-        // NRE there; GetItemList skips the Count() step. Head surviving while the
-        // tail dies would be the same mid-book truncation this arm exists to fix.
-        QueryResult<BaseItem> result;
-        try
-        {
-            result = libraryManager.GetItemsResult(query);
-        }
-        catch (NullReferenceException)
-        {
-            // Same observability as SearchService.SafeGetItemsResult (the head's
-            // executor logs this fallback at WARN): a silent tail degrade would be
-            // unobservable next to the head's logged one.
-            logger.LogWarning("GetItemsResult NRE, falling back to GetItemList (audiobook continuation)");
-            IReadOnlyList<BaseItem> items = libraryManager.GetItemList(query);
-            result = new QueryResult<BaseItem>(continuation.StartIndex, items.Count, items);
-        }
+        // Shared executor guard (JF-670 review): the initial page runs this same
+        // query through SearchService.SafeGetItemsResult; head and tail share the
+        // ONE static core so the NRE-to-GetItemList fallback cannot drift between
+        // them (catch class, log wording, fallback shape). Head surviving while
+        // the tail dies would be the same mid-book truncation this arm exists to
+        // fix.
+        QueryResult<BaseItem> result = Util.SearchService.SafeGetItemsResult(libraryManager, query, logger);
 
         continuation.StartIndex += result.Items.Count;
         return result.Items;
