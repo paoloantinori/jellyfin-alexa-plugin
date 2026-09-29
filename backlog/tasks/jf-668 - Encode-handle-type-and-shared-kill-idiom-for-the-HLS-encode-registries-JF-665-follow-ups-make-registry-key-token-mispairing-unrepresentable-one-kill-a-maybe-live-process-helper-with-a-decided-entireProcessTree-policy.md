@@ -4,9 +4,10 @@ title: >-
   Encode-handle type and shared kill idiom for the HLS encode registries (JF-665
   follow-ups: make registry/key/token mispairing unrepresentable; one
   kill-a-maybe-live-process helper with a decided entireProcessTree policy)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-29'
+updated_date: '2026-09-29 13:49'
 labels:
   - playback-speed
   - encode-gate
@@ -14,7 +15,8 @@ labels:
 dependencies: []
 references:
   - >-
-    backlog/tasks/jf-665 - Registration-side-of-the-same-key-speed-encode-re-register-race-orphaned-displaced-ffmpeg-at-the-registry-overwrite-unchecked-TryAdd-key-only-encode-flag-clear.md
+    backlog/tasks/jf-665 -
+    Registration-side-of-the-same-key-speed-encode-re-register-race-orphaned-displaced-ffmpeg-at-the-registry-overwrite-unchecked-TryAdd-key-only-encode-flag-clear.md
 priority: low
 ---
 

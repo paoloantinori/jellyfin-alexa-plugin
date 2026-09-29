@@ -4,10 +4,10 @@ title: >-
   JF-670 - the Audiobook progressive continuation is a dead letter (no fetcher
   case: books truncate at the initial page and PostPlay AutoPlay can append
   music radio after a book)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-29 07:35'
-updated_date: '2026-09-29 07:35'
+updated_date: '2026-09-29 15:33'
 labels: []
 dependencies: []
 references:
@@ -35,6 +35,12 @@ SCOPE NOTES for the implementer: the VideoApp path (NativeControlsForBooks=true)
 - [ ] #4 Captured-query or handler-path test pinning the chosen behavior; full suite green both TFMs
 - [ ] #5 Live spot check on the 12.1.0 box with a multi-chapter book
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Landed 2026-09-29 on main (two commits, 72e9f978 + the review round 5dd99996): the Audiobook continuation is no longer a dead letter and books never radio. The fetcher grew the Audiobook arm (FetchAudiobookChapters) running the ONE shared BuildAudiobookChaptersQuery builder the PlayBook head also runs on (ParentId+MediaTypes deliberately, JF-358 governs ArtistIds queries only; no OrderBy deliberately, the initial page's DB order is the chapter order; per-user library filter parity; NRE fallback delegated to the shared SafeGetItemsResult core, which this round also unified). The books-never-radio gate lives INSIDE both radio seeders on the seed source (unbypassable; the seeder's as-Audio cast was the unguarded path, AudioBook deriving from Audio probe-verified on both refs), seeded from the ONE token-first finishing-item resolution, outcome debug-logged per policy; ancestor walk covers item + 3 ancestors (book/part/subfolder/chapter), pinned. 11 pins total incl. the head-side builder pin and the part-nested chapter pin; suite 4746/4746 both TFMs worker-run and orchestrator-verified independently; merged-tree (with JF-664+667) 4752/4752 both TFMs. Gates: Skill simplify (4 applied) + Skill code-review high in-worker (base: 6 findings, 3 applied + JF-672/JF-673 filed; rework: 4 applied) + the orchestrator gate-marker code-review on the base whose F1 (stale-continuation injection: stop a book mid-way, later single song gets mid-book chapters) was investigated by the worker, found to have NO single-fix chokepoint (evidence in JF-674), and filed as JF-674 with the sharper production fact appended (the store site precedes the NativeControlsForBooks split, so VideoApp book plays mint dead entries under the CURRENT production config). LIVE VERIFICATION TRUTH: NativeControlsForBooks=true on the household box means the AudioPlayer book path (this task's surface) is config-gated OFF in production; the unit pins carry the verification and the live check belongs to Paolo's device round with the flag flipped (multi-chapter book plays past the initial page; end-of-book silence under PostPlay=AutoPlay; the deploy's own live probe exercised the shared head query via the PlayBook simulator path).
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
