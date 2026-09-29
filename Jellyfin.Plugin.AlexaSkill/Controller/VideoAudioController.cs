@@ -454,7 +454,7 @@ public class VideoAudioController : ControllerBase
             // site in the encode branch below); the listing survives on disk after
             // completion, so the gate decides prewrite vs ffmpeg's ENDLIST
             // playlist below. OWN-TICKS gate (JF-675): only the caller's OWN
-            // art-tick generation being live serves the listing - the canonical
+            // art-tick generation being live serves the listing; the canonical
             // rationale and the conservative-reader split live on
             // OwnTicksGenerationLive.
             if (OwnTicksGenerationLive(_activeVideoAudioEncodes, itemId, artModifiedTicks))
@@ -777,8 +777,8 @@ public class VideoAudioController : ControllerBase
                     // prewrite site below); the pre-written file survives on disk
                     // after completion, so the gate decides prewrite vs ffmpeg's
                     // ENDLIST playlist below. OWN-TICKS gate (JF-675): only the
-                    // caller's OWN art-tick generation being live serves the listing
-                    // - the canonical rationale and the conservative-reader split
+                    // caller's OWN art-tick generation being live serves the listing;
+                    // the canonical rationale and the conservative-reader split
                     // live on OwnTicksGenerationLive.
                     if (OwnTicksGenerationLive(_activeEpisodeEncodes, itemId, artModifiedTicks))
                     {
@@ -1068,7 +1068,7 @@ public class VideoAudioController : ControllerBase
     /// root) would not hold this verdict back; <see cref="TryHoldForNearAheadSegmentAsync"/>
     /// reads any-of-three registries for the same key family. The routing overlap
     /// is theoretical today (handlers route audio items to the song endpoint,
-    /// episodes here), so the asymmetry is documented rather than widened - a
+    /// episodes here), so the asymmetry is documented rather than widened; a
     /// real overlap would argue for an any-of-three read at this gate.
     /// </summary>
     /// <param name="cached">The cached playlist file info (stream.m3u8).</param>
@@ -1968,9 +1968,14 @@ public class VideoAudioController : ControllerBase
     /// the generation. The entry as a whole (what every presence reader's
     /// ContainsKey sees) is present whenever at least one slot is live (plus
     /// the brief mid-registration window between the entry's creation and the
-    /// slot write, where every reader errs in the conservative direction:
-    /// skip a debris verdict, serve pre-written instead of a second ffmpeg,
-    /// hold a segment).
+    /// slot write, where every PRESENCE reader errs in the conservative
+    /// direction: skip a debris verdict, serve pre-written instead of a second
+    /// ffmpeg, hold a segment; the debris verdict, the near-ahead hold, and the
+    /// audiobook guard are that family. The four prewrite serve gates LEFT the
+    /// presence-reader family in JF-675: they read own-ticks liveness through
+    /// <see cref="ActiveEncodeGenerations.IsTickLive"/> (whose doc holds the
+    /// window account) and in that window err the OPPOSITE way, toward
+    /// ffmpeg's own playlist).
     /// </summary>
     /// <param name="activeEncodes">The path's active-encode registry.</param>
     /// <param name="cacheKey">The encode's cache key.</param>
@@ -1982,19 +1987,19 @@ public class VideoAudioController : ControllerBase
 
     /// <summary>
     /// Whether the CALLER'S OWN (cache key, art-tick) generation is the live one
-    /// (JF-675, the prewrite serve gates' refinement of bare presence - THIS doc
-    /// is the canonical account of the rule; the four gates carry pointers). An
-    /// entry found but without the caller's own-ticks slot means the own-ticks
+    /// (JF-675, the prewrite serve gates' refinement of bare presence; THIS doc
+    /// is the canonical account of the rule, and the four gates carry pointers).
+    /// An entry found but without the caller's own-ticks slot means the own-ticks
     /// encode completed (or never ran) while a FOREIGN-ticks generation of the
     /// same key still writes, so the caller must fall through to the normal
-    /// cache serve - ffmpeg's ENDLIST playlist for a completed encode - instead
+    /// cache serve (ffmpeg's ENDLIST playlist for a completed encode) instead
     /// of the pre-written no-ENDLIST listing, which bare presence would serve
     /// for the sibling generation's whole remaining duration. The CONSERVATIVE
     /// readers keep bare any-generation presence, each for its own reason: the
     /// <see cref="ValidateEpisodeCacheAsync"/> debris verdict and the near-ahead
     /// hold ask whether ANY live writer of the key exists (directory protection
     /// must not depend on tick matching), and the audiobook concurrent-encode
-    /// guard is a SERVE/bound decision - it serves the caller or 503s instead
+    /// guard is a SERVE/bound decision; it serves the caller or 503s instead
     /// of starting a second ffmpeg, and own-ticks matching there would newly
     /// allow two concurrent encodes of one book under different ticks (JF-669).
     /// </summary>
