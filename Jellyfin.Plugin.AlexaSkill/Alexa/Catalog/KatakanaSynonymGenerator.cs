@@ -121,6 +121,9 @@ public static class KatakanaSynonymGenerator
             results.Add((hasArticle ? ArticleKana + " " : string.Empty) + string.Join(" ", primaryWords));
         }
 
+        // Deliberately NOT PhoneticSynonymGenerator.CappedDistinct: this exit is
+        // uncapped (the ja combiner owns the per-name cap) and dedups kana output
+        // where case never varies, so the exact Ordinal comparer is the honest form.
         return results.Distinct(StringComparer.Ordinal).ToList();
     }
 

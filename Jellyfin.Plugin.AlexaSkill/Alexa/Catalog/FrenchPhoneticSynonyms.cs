@@ -62,7 +62,7 @@ public static class FrenchPhoneticSynonyms
             PhoneticSynonymGenerator.AddConsonantVariants(results, phonetic);
         }
 
-        return results.Distinct(StringComparer.OrdinalIgnoreCase).Take(5).ToList();
+        return PhoneticSynonymGenerator.CappedDistinct(results, PhoneticSynonymGenerator.PerNameVariantCap);
     }
 
     private static bool IsFrenchOrigin(string name)

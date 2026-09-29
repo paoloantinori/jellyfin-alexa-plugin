@@ -13,11 +13,15 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
 public static class PhoneticSynonymGenerator
 {
     /// <summary>
-    /// The per-name catalog-slot cap the ja combiner applies, matching the
-    /// Romance generators (JF-362 raised it from 3 to 5 so the coverage variants
-    /// fit; device-captured forms are ordered first so they survive the cap).
+    /// The per-name catalog-slot cap shared by the Romance generators and the ja
+    /// combiner (JF-362 raised it from 3 to 5 so the coverage variants fit;
+    /// device-captured forms are ordered first so they survive the cap). The
+    /// German/Dutch/ja-romaji arms deliberately keep their own local cap of 3
+    /// instead: they emit at most 2 variants (the ja-romaji arm at most 1), so
+    /// their cap never truncates, and unifying the number would change those
+    /// arms' documented policy, not their output.
     /// </summary>
-    private const int PerNameVariantCap = 5;
+    internal const int PerNameVariantCap = 5;
 
     /// <summary>
     /// Generates phonetic variant strings for a name, using the rules
@@ -62,8 +66,17 @@ public static class PhoneticSynonymGenerator
     {
         var results = KatakanaSynonymGenerator.Generate(name);
         results.AddRange(JapanesePhoneticSynonyms.Generate(name));
-        return results.Distinct(StringComparer.OrdinalIgnoreCase).Take(PerNameVariantCap).ToList();
+        return CappedDistinct(results, PerNameVariantCap);
     }
+
+    /// <summary>
+    /// The dedup+cap exit shared by the capping exits of the locale generator
+    /// family (JF-657): case-insensitive Distinct in insertion order, truncated
+    /// to <paramref name="cap"/> variants. The cap is per-arm policy; see
+    /// <see cref="PerNameVariantCap"/> for the two values the family carries.
+    /// </summary>
+    internal static List<string> CappedDistinct(List<string> results, int cap)
+        => results.Distinct(StringComparer.OrdinalIgnoreCase).Take(cap).ToList();
 
     // --- JF-362: pronunciation rules shared by the /ŋ/-absent Romance generators ---
     // Italian/Spanish/French/Portuguese L1 speakers all lack the velar nasal /ŋ/ as a

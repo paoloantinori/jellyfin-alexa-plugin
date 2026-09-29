@@ -54,7 +54,9 @@ public static class DutchPhoneticSynonyms
             }
         }
 
-        return results.Distinct(StringComparer.OrdinalIgnoreCase).Take(3).ToList();
+        // Local cap 3, not the shared 5 (rationale on PerNameVariantCap): this arm
+        // emits at most 2 variants (phonetic + article), so the cap never truncates.
+        return PhoneticSynonymGenerator.CappedDistinct(results, 3);
     }
 
     private static bool IsDutchOrigin(string name)
