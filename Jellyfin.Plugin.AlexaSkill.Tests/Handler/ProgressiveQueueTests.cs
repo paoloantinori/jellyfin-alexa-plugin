@@ -1375,6 +1375,190 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
         Assert.Contains("offset 5/end-unknown", warning);
     }
 
+    // JF-670: the Audiobook continuation is no longer a dead letter. The fetch arm
+    // mirrors PlayBookIntentHandler's initial page query: ParentId scoped on the book
+    // folder, MediaTypes=Audio (the JF-358 IncludeItemTypes discipline governs
+    // ArtistIds queries, which MediaTypes silently ignores; the initial page returns
+    // its chapters through MediaTypes + ParentId, and the pages must share one query
+    // shape so they concatenate in one order), and NO explicit order (the initial page
+    // sets none, so its DB order is the book's chapter order).
+    [Fact]
+    public void QueueContinuation_AudiobookFetch_QueriesBookParentBeyondInitialPage()
+    {
+        _fx.SetupUserMock();
+
+        var bookId = Guid.NewGuid();
+        var continuation = new QueueContinuation
+        {
+            SourceType = "Audiobook",
+            ParentId = bookId,
+            UserId = Guid.NewGuid(),
+            StartIndex = 5,
+            TotalCount = 20,
+            BatchSize = 10
+        };
+
+        InternalItemsQuery? captured = null;
+        _fx.LibraryManager
+            .Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Callback<InternalItemsQuery>(q => captured = q)
+            .Returns(new QueryResult<BaseItem>
+            {
+                Items = new List<BaseItem>
+                {
+                    new Audio { Id = Guid.NewGuid(), Name = "Chapter 6" },
+                    new Audio { Id = Guid.NewGuid(), Name = "Chapter 7" }
+                },
+                TotalRecordCount = 20
+            });
+
+        ILogger logger = _fx.LoggerFactory.CreateLogger("AudiobookContinuationTest");
+        IReadOnlyList<BaseItem> batch = QueueContinuationFetcher.FetchNextBatch(
+            continuation, _fx.LibraryManager.Object, _fx.UserManager.Object, logger);
+
+        Assert.NotNull(captured);
+        Assert.Equal(bookId, captured!.ParentId);
+        Assert.True(captured.Recursive);
+        Assert.NotNull(captured.MediaTypes);
+        Assert.Contains(MediaType.Audio, captured.MediaTypes);
+        // The mirror contract: the initial book page carries NO kind filter and NO
+        // explicit order. Jellyfin initializes both fields to empty arrays, so the
+        // contract is "no filter", not the field's exact null/empty shape.
+        Assert.True(
+            captured.IncludeItemTypes == null || captured.IncludeItemTypes.Length == 0,
+            "audiobook query must mirror the initial page: no IncludeItemTypes filter");
+        Assert.True(
+            captured.OrderBy == null || captured.OrderBy.Count == 0,
+            "audiobook query must mirror the initial page: no explicit order");
+        Assert.Equal(5, captured.StartIndex);
+        Assert.Equal(10, captured.Limit);
+
+        // The batch feeds the queue and the offset advances past it.
+        Assert.Equal(2, batch.Count);
+        Assert.Equal(7, continuation.StartIndex);
+    }
+
+    // JF-666 parity extended to the Audiobook arm (JF-670): a restricted user's book
+    // batch query carries the allowed libraries as TopParentIds, same as the artist
+    // and album fetchers.
+    [Fact]
+    public void QueueContinuation_AudiobookFetch_AppliesPluginUserLibraryScope()
+    {
+        _fx.SetupUserMock();
+
+        var bookLibId = Guid.NewGuid();
+        var pluginUser = new Entities.User
+        {
+            Id = Guid.NewGuid(),
+            AllowedLibraryIds = new List<string> { bookLibId.ToString() }
+        };
+
+        var continuation = new QueueContinuation
+        {
+            SourceType = "Audiobook",
+            ParentId = Guid.NewGuid(),
+            UserId = Guid.NewGuid(),
+            StartIndex = 5,
+            TotalCount = 20,
+            BatchSize = 10
+        };
+
+        InternalItemsQuery? captured = null;
+        _fx.LibraryManager
+            .Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Callback<InternalItemsQuery>(q => captured = q)
+            .Returns(new QueryResult<BaseItem>
+            {
+                Items = new List<BaseItem> { new Audio { Id = Guid.NewGuid(), Name = "Chapter 6" } },
+                TotalRecordCount = 20
+            });
+
+        ILogger logger = _fx.LoggerFactory.CreateLogger("AudiobookScopeTest");
+        QueueContinuationFetcher.FetchNextBatch(
+            continuation, _fx.LibraryManager.Object, _fx.UserManager.Object, logger, pluginUser);
+
+        Assert.NotNull(captured);
+        Assert.NotNull(captured!.TopParentIds);
+        Assert.Contains(bookLibId, captured.TopParentIds);
+    }
+
+    // JF-670: the Audiobook arm runs a real query, so its zero page belongs in the
+    // WARN-gated set. Before the arm existed the structural zero was silent (and
+    // truncated books at the initial page); a real empty page while StartIndex <
+    // TotalCount must stay loud, naming the book.
+    [Fact]
+    public void QueueContinuation_AudiobookFetch_ZeroPage_LogsWarningNamingTheBook()
+    {
+        _fx.SetupUserMock();
+
+        var bookId = Guid.NewGuid();
+        var continuation = new QueueContinuation
+        {
+            SourceType = "Audiobook",
+            ParentId = bookId,
+            UserId = Guid.NewGuid(),
+            StartIndex = 5,
+            TotalCount = 20,
+            BatchSize = 10
+        };
+
+        _fx.LibraryManager
+            .Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem> { Items = new List<BaseItem>(), TotalRecordCount = 0 });
+
+        var records = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = LoggerFactory.Create(b => b.AddProvider(TestCaptureLogger.Into(records)));
+        QueueContinuationFetcher.FetchNextBatch(
+            continuation, _fx.LibraryManager.Object, _fx.UserManager.Object, loggerFactory.CreateLogger("QueueContinuation"));
+
+        var warnings = TestCaptureLogger.Snapshot(records)
+            .Where(r => r.Level == LogLevel.Warning)
+            .ToList();
+        string warning = Assert.Single(warnings).Message;
+        Assert.Contains("fetched 0 items for Audiobook", warning);
+        Assert.Contains($"book {bookId}", warning);
+        Assert.Contains("offset 5/20", warning);
+    }
+
+    // JF-670 executor parity: the initial page runs the same query through
+    // SearchService.SafeGetItemsResult (NRE -> GetItemList fallback for Jellyfin's
+    // Count()-translation NRE class); the tail arm must survive the same class, or
+    // the head lives while the tail dies mid-book.
+    [Fact]
+    public void QueueContinuation_AudiobookFetch_NreFallback_UsesGetItemList()
+    {
+        _fx.SetupUserMock();
+
+        var chapterId = Guid.NewGuid();
+        var continuation = new QueueContinuation
+        {
+            SourceType = "Audiobook",
+            ParentId = Guid.NewGuid(),
+            UserId = Guid.NewGuid(),
+            StartIndex = 5,
+            TotalCount = 20,
+            BatchSize = 10
+        };
+
+        _fx.LibraryManager
+            .Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Throws(new NullReferenceException());
+        InternalItemsQuery? captured = null;
+        _fx.LibraryManager
+            .Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Callback<InternalItemsQuery>(q => captured = q)
+            .Returns(new List<BaseItem> { new Audio { Id = chapterId, Name = "Chapter 6" } });
+
+        ILogger logger = _fx.LoggerFactory.CreateLogger("AudiobookNreFallbackTest");
+        IReadOnlyList<BaseItem> batch = QueueContinuationFetcher.FetchNextBatch(
+            continuation, _fx.LibraryManager.Object, _fx.UserManager.Object, logger);
+
+        Assert.NotNull(captured);
+        Assert.Single(batch);
+        Assert.Equal(chapterId, batch[0].Id);
+        Assert.Equal(6, continuation.StartIndex);
+    }
+
     [Fact]
     public async Task PlayAlbum_MultiDiscAlbum_QueueFollowsDiscThenTrackOrder()
     {

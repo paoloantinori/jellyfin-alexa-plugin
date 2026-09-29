@@ -172,6 +172,216 @@ public class PlaybackNearlyFinishedPostPlayTests : PluginTestBase, IDisposable
         Assert.False(RadioModeState.IsEnabled(_userId, DeviceId));
     }
 
+    // =====================================================================
+    // JF-670: books never radio
+    // =====================================================================
+
+    // A finishing audiobook chapter must not seed PostPlay music radio even with
+    // PostPlay=AutoPlay: the book ends in silence. The radio query mock returns a
+    // track, so a regressed gate would enqueue it and fail every assertion here.
+    [Fact]
+    public async Task BookChapterExhausted_AutoPlayMode_DoesNotSeedRadio()
+    {
+        _config.DefaultPostPlayBehavior = PostPlayBehavior.AutoPlay;
+        var bookId = Guid.NewGuid();
+        var chapterId = Guid.NewGuid();
+        var chapter = TestHelpers.CreateSong("Chapter 1", chapterId, new[] { "Mystery" });
+        chapter.ParentId = bookId;
+
+        var (request, context, user, session) = CreatePlaybackNearlyFinishedContext(chapterId.ToString());
+        session.NowPlayingQueue = new List<QueueItem> { new() { Id = chapterId } };
+        session.FullNowPlayingItem = chapter;
+
+        _libraryManagerMock.Setup(lm => lm.GetItemById(chapterId)).Returns(chapter);
+        _libraryManagerMock.Setup(lm => lm.GetItemById(bookId)).Returns(new AudioBook { Id = bookId, Name = "The Book" });
+
+        var radioTrack = TestHelpers.CreateSong("Radio Song");
+        _libraryManagerMock.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { radioTrack }.AsReadOnly());
+
+        SkillResponse response = await _handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.Empty(response.Response.Directives ?? Array.Empty<IDirective>());
+        Assert.False(RadioModeState.IsEnabled(_userId, DeviceId));
+        Assert.Equal(chapterId, Assert.Single(session.NowPlayingQueue).Id);
+        _libraryManagerMock.Verify(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()), Times.Never);
+    }
+
+    // The gate keys on the BOOK shape (an Audio whose parent is an AudioBook), not on
+    // Audio-ness: a song under a music album still seeds radio at the same decision
+    // point. Without the ParentId discrimination this test and the one above could
+    // not both pass.
+    [Fact]
+    public async Task SongExhausted_WithMusicAlbumParent_StillSeedsRadio()
+    {
+        _config.DefaultPostPlayBehavior = PostPlayBehavior.AutoPlay;
+        var albumId = Guid.NewGuid();
+        var songId = Guid.NewGuid();
+        var song = TestHelpers.CreateSong("Test Song", songId, new[] { "Rock" });
+        song.ParentId = albumId;
+
+        var (request, context, user, session) = CreatePlaybackNearlyFinishedContext(songId.ToString());
+        session.NowPlayingQueue = new List<QueueItem> { new() { Id = songId } };
+        session.FullNowPlayingItem = song;
+
+        _libraryManagerMock.Setup(lm => lm.GetItemById(songId)).Returns(song);
+        _libraryManagerMock.Setup(lm => lm.GetItemById(albumId)).Returns(new MusicAlbum { Id = albumId, Name = "The Album" });
+
+        var radioTrackId = Guid.NewGuid();
+        var radioTrack = TestHelpers.CreateSong("Radio Song", radioTrackId);
+        _libraryManagerMock.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { radioTrack }.AsReadOnly());
+        _libraryManagerMock.Setup(lm => lm.GetItemById(radioTrackId)).Returns(radioTrack);
+
+        var jellyfinUser = TestHelpers.CreateJellyfinUser(authProviderId: "test", passwordProviderId: "test", id: _userId);
+        _userManagerMock.Setup(um => um.GetUserById(_userId)).Returns(jellyfinUser);
+
+        SkillResponse response = await _handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.True(RadioModeState.IsEnabled(_userId, DeviceId));
+        var playDirective = response.Response.Directives?.OfType<AudioPlayerPlayDirective>().FirstOrDefault();
+        Assert.NotNull(playDirective);
+        Assert.Equal(PlayBehavior.Enqueue, playDirective.PlayBehavior);
+    }
+
+    // A leftover radio flag from earlier music must not hand a book's last chapter to
+    // the radio continuation either: the chapter never RECEIVES radio tracks (the
+    // gate sits ahead of the radio-mode branch, not only on the PostPlay arm).
+    [Fact]
+    public async Task BookChapterExhausted_LeftoverRadioModeEnabled_DoesNotReceiveRadioTracks()
+    {
+        _config.DefaultPostPlayBehavior = PostPlayBehavior.AutoPlay;
+        RadioModeState.Enable(_userId, DeviceId);
+
+        var bookId = Guid.NewGuid();
+        var chapterId = Guid.NewGuid();
+        var chapter = TestHelpers.CreateSong("Chapter 1", chapterId);
+        chapter.ParentId = bookId;
+
+        var (request, context, user, session) = CreatePlaybackNearlyFinishedContext(chapterId.ToString());
+        session.NowPlayingQueue = new List<QueueItem> { new() { Id = chapterId } };
+        session.FullNowPlayingItem = chapter;
+
+        _libraryManagerMock.Setup(lm => lm.GetItemById(chapterId)).Returns(chapter);
+        _libraryManagerMock.Setup(lm => lm.GetItemById(bookId)).Returns(new AudioBook { Id = bookId, Name = "The Book" });
+
+        var radioTrack = TestHelpers.CreateSong("Radio Song");
+        _libraryManagerMock.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { radioTrack }.AsReadOnly());
+
+        SkillResponse response = await _handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.Empty(response.Response.Directives ?? Array.Empty<IDirective>());
+        Assert.Equal(chapterId, Assert.Single(session.NowPlayingQueue).Id);
+        _libraryManagerMock.Verify(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()), Times.Never);
+
+        RadioModeState.Disable(_userId, DeviceId);
+    }
+
+    // AudioBook DERIVES FROM Audio (reflection-probed 10.11.8 + 12.0.0), so the
+    // radio paths' `as Audio` cast succeeds on a single-file book: without the gate
+    // the AudioBook item itself seeds genre radio exactly like a song. The gate must
+    // catch the AudioBook item directly, not only chapter shapes.
+    [Fact]
+    public async Task SingleFileBookExhausted_AutoPlayMode_DoesNotSeedRadio()
+    {
+        _config.DefaultPostPlayBehavior = PostPlayBehavior.AutoPlay;
+        var bookId = Guid.NewGuid();
+        var book = new AudioBook { Id = bookId, Name = "Single File Book" };
+        book.Genres = new[] { "Mystery" };
+
+        var (request, context, user, session) = CreatePlaybackNearlyFinishedContext(bookId.ToString());
+        session.NowPlayingQueue = new List<QueueItem> { new() { Id = bookId } };
+        session.FullNowPlayingItem = book;
+
+        _libraryManagerMock.Setup(lm => lm.GetItemById(bookId)).Returns(book);
+
+        var radioTrack = TestHelpers.CreateSong("Radio Song");
+        _libraryManagerMock.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { radioTrack }.AsReadOnly());
+
+        SkillResponse response = await _handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.Empty(response.Response.Directives ?? Array.Empty<IDirective>());
+        Assert.False(RadioModeState.IsEnabled(_userId, DeviceId));
+        Assert.Equal(bookId, Assert.Single(session.NowPlayingQueue).Id);
+        _libraryManagerMock.Verify(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()), Times.Never);
+    }
+
+    // The initial chapters query is Recursive, so a chapter's direct parent can be a
+    // plain subfolder (book/Disc 2/chapter): the gate walks the ancestor chain, it
+    // does not stop at the first non-AudioBook hop.
+    [Fact]
+    public async Task SubfolderChapterExhausted_AutoPlayMode_DoesNotSeedRadio()
+    {
+        _config.DefaultPostPlayBehavior = PostPlayBehavior.AutoPlay;
+        var bookId = Guid.NewGuid();
+        var discFolderId = Guid.NewGuid();
+        var chapterId = Guid.NewGuid();
+        var chapter = TestHelpers.CreateSong("Chapter 11", chapterId);
+        chapter.ParentId = discFolderId;
+
+        var (request, context, user, session) = CreatePlaybackNearlyFinishedContext(chapterId.ToString());
+        session.NowPlayingQueue = new List<QueueItem> { new() { Id = chapterId } };
+        session.FullNowPlayingItem = chapter;
+
+        _libraryManagerMock.Setup(lm => lm.GetItemById(chapterId)).Returns(chapter);
+        _libraryManagerMock.Setup(lm => lm.GetItemById(discFolderId))
+            .Returns(new Folder { Id = discFolderId, Name = "Disc 2" });
+        _libraryManagerMock.Setup(lm => lm.GetItemById(bookId))
+            .Returns(new AudioBook { Id = bookId, Name = "The Book" });
+
+        var radioTrack = TestHelpers.CreateSong("Radio Song");
+        _libraryManagerMock.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { radioTrack }.AsReadOnly());
+
+        SkillResponse response = await _handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.Empty(response.Response.Directives ?? Array.Empty<IDirective>());
+        Assert.False(RadioModeState.IsEnabled(_userId, DeviceId));
+        Assert.Equal(chapterId, Assert.Single(session.NowPlayingQueue).Id);
+        _libraryManagerMock.Verify(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()), Times.Never);
+    }
+
+    // book/part/subfolder/chapter: the deepest layout the ancestor walk claims to
+    // cover (item + three ancestors). Every non-AudioBook hop must keep walking;
+    // with the walk stopped one hop early this test goes red via the radio enqueue.
+    [Fact]
+    public async Task PartNestedChapterExhausted_AutoPlayMode_DoesNotSeedRadio()
+    {
+        _config.DefaultPostPlayBehavior = PostPlayBehavior.AutoPlay;
+        var bookId = Guid.NewGuid();
+        var partId = Guid.NewGuid();
+        var subfolderId = Guid.NewGuid();
+        var chapterId = Guid.NewGuid();
+        var chapter = TestHelpers.CreateSong("Chapter 11", chapterId);
+        chapter.ParentId = subfolderId;
+
+        var (request, context, user, session) = CreatePlaybackNearlyFinishedContext(chapterId.ToString());
+        session.NowPlayingQueue = new List<QueueItem> { new() { Id = chapterId } };
+        session.FullNowPlayingItem = chapter;
+
+        _libraryManagerMock.Setup(lm => lm.GetItemById(chapterId)).Returns(chapter);
+        Folder subfolder = new Folder { Id = subfolderId, Name = "Disc 2" };
+        subfolder.ParentId = partId;
+        _libraryManagerMock.Setup(lm => lm.GetItemById(subfolderId)).Returns(subfolder);
+        Folder part = new Folder { Id = partId, Name = "Part One" };
+        part.ParentId = bookId;
+        _libraryManagerMock.Setup(lm => lm.GetItemById(partId)).Returns(part);
+        _libraryManagerMock.Setup(lm => lm.GetItemById(bookId))
+            .Returns(new AudioBook { Id = bookId, Name = "The Book" });
+
+        var radioTrack = TestHelpers.CreateSong("Radio Song");
+        _libraryManagerMock.Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { radioTrack }.AsReadOnly());
+
+        SkillResponse response = await _handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.Empty(response.Response.Directives ?? Array.Empty<IDirective>());
+        Assert.False(RadioModeState.IsEnabled(_userId, DeviceId));
+        _libraryManagerMock.Verify(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()), Times.Never);
+    }
+
     [Fact]
     public async Task HasNextItem_DoesNotTriggerPostPlay()
     {

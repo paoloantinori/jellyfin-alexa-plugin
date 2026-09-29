@@ -221,6 +221,56 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
         Assert.True(response.Response.ShouldEndSession);
     }
 
+    // JF-670 review F5: the initial page MUST be the shared builder's output. A
+    // hand-edit of the handler query (an IncludeItemTypes reflex, an IndexNumber
+    // sort) desyncs head and tail ordering and recreates the mid-book truncation
+    // and misorder class; the fetcher-side pins lock the builder itself, this one
+    // locks the handler to the builder. User identity rides the same resolution on
+    // both sides of the builder and is out of the pin's scope.
+    [Fact]
+    public async Task PlayBook_InitialPage_UsesSharedChaptersQueryBuilder()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(bookName: "The Hobbit");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+
+        var bookItem = new Audio { Name = "The Hobbit", Id = Guid.NewGuid() };
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
+            .Returns(new List<BaseItem> { bookItem });
+
+        var trackItem = new Audio { Name = "Chapter 1", Id = Guid.NewGuid() };
+        InternalItemsQuery? captured = null;
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Callback<InternalItemsQuery>(q => captured = q)
+            .Returns(new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+            {
+                Items = new[] { trackItem },
+                TotalRecordCount = 1
+            });
+
+        await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(captured);
+        InternalItemsQuery expected = QueueContinuationFetcher.BuildAudiobookChaptersQuery(
+            null, bookItem.Id, 0, ProgressiveQueueConstants.GetInitialFetchSize());
+        Assert.Equal(expected.ParentId, captured!.ParentId);
+        Assert.Equal(expected.Recursive, captured.Recursive);
+        Assert.Equal(expected.MediaTypes, captured.MediaTypes);
+        Assert.Equal(expected.StartIndex, captured.StartIndex);
+        Assert.Equal(expected.Limit, captured.Limit);
+        Assert.True(
+            captured.IncludeItemTypes == null || captured.IncludeItemTypes.Length == 0,
+            "head query must not grow an IncludeItemTypes filter the tail does not run");
+        Assert.True(
+            captured.OrderBy == null || captured.OrderBy.Count == 0,
+            "head query must not grow an explicit order the tail does not run");
+    }
+
     [Fact]
     public async Task HandleAsync_SingleBookFound_NativeControls_FreshStart_AnnouncesTitle()
     {

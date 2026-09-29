@@ -161,16 +161,13 @@ public class PlayBookIntentHandler : BaseHandler
             }
         }
 
+        // Initial page through the ONE shared chapters-page query (JF-670): the
+        // continuation fetcher builds the same shape, so head and tail concatenate
+        // in one order and cannot drift apart.
         QueryResult<BaseItem> bookTracks = await RetryAsync(
-            () => Search.SafeGetItemsResult(_libraryManager, new InternalItemsQuery
-            {
-                User = jellyfinUser,
-                Recursive = true,
-                ParentId = books[0].Id,
-                MediaTypes = new[] { MediaType.Audio },
-                DtoOptions = new DtoOptions(true),
-                Limit = ProgressiveQueueConstants.GetInitialFetchSize()
-            }),
+            () => Search.SafeGetItemsResult(_libraryManager,
+                QueueContinuationFetcher.BuildAudiobookChaptersQuery(
+                    jellyfinUser, books[0].Id, 0, ProgressiveQueueConstants.GetInitialFetchSize())),
             "GetBookTracks",
             cancellationToken).ConfigureAwait(false);
 

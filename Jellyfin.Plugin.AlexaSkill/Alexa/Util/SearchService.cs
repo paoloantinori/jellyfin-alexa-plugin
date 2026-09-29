@@ -67,6 +67,15 @@ public sealed class SearchService
     /// Count() step entirely.
     /// </summary>
     public QueryResult<BaseItem> SafeGetItemsResult(ILibraryManager libraryManager, InternalItemsQuery query)
+        => SafeGetItemsResult(libraryManager, query, _logger);
+
+    /// <summary>
+    /// The static core of <see cref="SafeGetItemsResult(ILibraryManager, InternalItemsQuery)"/>,
+    /// shared with query sites outside the collaborator (QueueContinuationFetcher's
+    /// audiobook tail guard, JF-670) so head and tail executors cannot drift: one
+    /// catch class, one log wording, one fallback shape.
+    /// </summary>
+    internal static QueryResult<BaseItem> SafeGetItemsResult(ILibraryManager libraryManager, InternalItemsQuery query, ILogger logger)
     {
         try
         {
@@ -78,7 +87,7 @@ public sealed class SearchService
             // filters + ordering. Certain combinations (e.g. ArtistIds + PopularitySort
             // referencing User data) cause EF Core's Count() translation to NRE.
             // Fall back to GetItemList which skips the Count() step entirely.
-            _logger.LogWarning("GetItemsResult NRE — falling back to GetItemList");
+            logger.LogWarning("GetItemsResult NRE, falling back to GetItemList");
             IReadOnlyList<BaseItem> items = libraryManager.GetItemList(query);
             return new QueryResult<BaseItem>(query.StartIndex ?? 0, items.Count, items);
         }

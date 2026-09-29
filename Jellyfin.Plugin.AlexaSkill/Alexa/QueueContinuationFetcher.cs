@@ -62,14 +62,21 @@ internal static class QueueContinuationFetcher
         int queryOffset = continuation.StartIndex;
 
         // One switch owns the dispatch, the source-id label, and (via a null label)
-        // the zero-page anomaly gate: null marks the default arm (the Audiobook
-        // source type has no fetcher case), whose empty page is structural, not a
-        // library anomaly.
+        // the zero-page anomaly gate: null marks the default arm (an unknown source
+        // type), whose empty page is structural, not a library anomaly. Listed arms
+        // carry labels, so their zero pages WARN; the Audiobook arm joined them in
+        // JF-670 (its structural zero used to truncate books at the initial page,
+        // which is exactly why a real empty page here must be loud). Known accepted
+        // noise: the Playlist cached-slice arm can zero out on a stale snapshot
+        // (playlist shrunk since first-play) and WARNs too; the one-dimensional
+        // label cannot tell that apart from a real fetch failure, and either way
+        // the caller's store Remove makes it terminal.
         (IReadOnlyList<BaseItem> Items, string? SourceId) fetched = continuation.SourceType switch
         {
             "Album" => (FetchAlbumTracks(continuation, libraryManager, jellyfinUser, pluginUser, logger), $"album {continuation.ParentId}"),
             "Artist" => (FetchArtistSongs(continuation, libraryManager, jellyfinUser, pluginUser, logger), $"artist {continuation.ArtistId}"),
             "Playlist" => (FetchPlaylistItems(continuation, libraryManager, jellyfinUser), $"playlist {continuation.PlaylistId ?? continuation.ParentId}"),
+            "Audiobook" => (FetchAudiobookChapters(continuation, libraryManager, jellyfinUser, pluginUser, logger), $"book {continuation.ParentId}"),
             _ => (Array.Empty<BaseItem>(), null)
         };
 
@@ -149,6 +156,74 @@ internal static class QueueContinuationFetcher
             Util.LibraryFilter.ApplyLibraryFilter(albumIdsQuery, pluginUser, libraryManager, logger);
             result = libraryManager.GetItemsResult(albumIdsQuery);
         }
+
+        continuation.StartIndex += result.Items.Count;
+        return result.Items;
+    }
+
+    /// <summary>
+    /// The ONE audiobook chapters-page query (JF-670): the head (PlayBookIntentHandler
+    /// initial page) and the tail (continuation batches) MUST share one query shape so
+    /// the pages concatenate in one deterministic order. This builder is the single
+    /// definition; a hand-kept copy in the handler would drift exactly like the
+    /// stale-mirror class that bit the interaction-model docs (anti-pattern 11).
+    /// Deliberately MediaTypes, not the JF-358 IncludeItemTypes discipline: JF-358
+    /// governs ArtistIds queries, which MediaTypes silently ignores; a ParentId query
+    /// IS constrained by MediaTypes (this shape returns the chapters in production).
+    /// Deliberately NO OrderBy: the DB order for this shape IS the book's chapter
+    /// order; an album-style disc/track sort here would order the tail differently
+    /// from the head.
+    /// </summary>
+    /// <param name="jellyfinUser">The query user (session scope).</param>
+    /// <param name="bookId">The book folder ID (ParentId scope).</param>
+    /// <param name="startIndex">Page offset (0 for the initial page).</param>
+    /// <param name="limit">Page size.</param>
+    /// <returns>The query (executor differs by site: the handler wraps in
+    /// SafeGetItemsResult, the fetcher's guard mirrors it, see FetchAudiobookChapters).</returns>
+    internal static InternalItemsQuery BuildAudiobookChaptersQuery(
+        Jellyfin.Database.Implementations.Entities.User? jellyfinUser,
+        Guid bookId,
+        int startIndex,
+        int limit)
+        => new InternalItemsQuery
+        {
+            User = jellyfinUser,
+            Recursive = true,
+            ParentId = bookId,
+            MediaTypes = new[] { MediaType.Audio },
+            DtoOptions = new DtoOptions(true),
+            StartIndex = startIndex,
+            Limit = limit
+        };
+
+    private static IReadOnlyList<BaseItem> FetchAudiobookChapters(
+        QueueContinuation continuation,
+        ILibraryManager libraryManager,
+        Jellyfin.Database.Implementations.Entities.User? jellyfinUser,
+        Entities.User? pluginUser,
+        ILogger logger)
+    {
+        // Shared builder with PlayBookIntentHandler's initial page (JF-670): one query
+        // shape owns head and tail, see the builder's doc.
+        InternalItemsQuery query = BuildAudiobookChaptersQuery(
+            jellyfinUser,
+            continuation.ParentId ?? Guid.Empty,
+            continuation.StartIndex,
+            continuation.BatchSize);
+
+        // Same per-user library scope the other continuation fetchers run under
+        // (JF-666 parity). The book folder itself was resolved under the same filter
+        // at PlayBook time, so its chapters cannot be scoped out; the parity matters
+        // for restricted-library accounts, not for this folder's row membership.
+        Util.LibraryFilter.ApplyLibraryFilter(query, pluginUser, libraryManager, logger);
+
+        // Shared executor guard (JF-670 review): the initial page runs this same
+        // query through SearchService.SafeGetItemsResult; head and tail share the
+        // ONE static core so the NRE-to-GetItemList fallback cannot drift between
+        // them (catch class, log wording, fallback shape). Head surviving while
+        // the tail dies would be the same mid-book truncation this arm exists to
+        // fix.
+        QueryResult<BaseItem> result = Util.SearchService.SafeGetItemsResult(libraryManager, query, logger);
 
         continuation.StartIndex += result.Items.Count;
         return result.Items;
