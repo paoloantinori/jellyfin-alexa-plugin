@@ -1402,17 +1402,19 @@ public class VideoAudioController : ControllerBase
         [FromRoute] int ratePerMille,
         [FromQuery(Name = "start")] long? startTicks = null)
     {
-        // Not ValidateSignedRoute (JF-651): the Core rejects an unserved rate BEFORE
-        // the itemId 400, so a non-GUID id with an unserved rate must keep yielding
-        // "Unsupported playback rate"; a strict preamble would flip which 400 body
-        // that request gets. The token check still precedes the rate check.
-        if (Guid.TryParse(itemId, out _))
+        // ValidateSignedRoute (JF-664): for a doubly-invalid request (non-GUID id +
+        // unserved rate) the id 400 wins here, matching GetAudioSpeedSegment and
+        // every other route on that shape. JF-651 kept this route off the shared
+        // preamble only because the Core checked the rate first; the decision is
+        // now made deliberately. The token check still precedes the Core's rate
+        // check, so a GUID with a bad rate and no token keeps its 401 (note the
+        // segment sibling answers that triply-invalid shape with the rate 400
+        // instead: its id/rate/token order is deliberate (JF-651) and still
+        // unpinned, see the JF-671 follow-up).
+        ActionResult? routeError = ValidateSignedRoute(itemId);
+        if (routeError != null)
         {
-            ActionResult? tokenError = ValidateStreamToken(itemId);
-            if (tokenError != null)
-            {
-                return tokenError;
-            }
+            return routeError;
         }
 
         return await StreamHlsAudioSpeedCore(itemId, ratePerMille, startTicks ?? 0).ConfigureAwait(false);
