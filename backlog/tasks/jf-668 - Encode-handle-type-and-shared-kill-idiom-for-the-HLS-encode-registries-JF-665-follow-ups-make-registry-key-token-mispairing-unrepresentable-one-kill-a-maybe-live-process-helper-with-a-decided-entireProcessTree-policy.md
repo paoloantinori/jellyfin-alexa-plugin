@@ -4,9 +4,10 @@ title: >-
   Encode-handle type and shared kill idiom for the HLS encode registries (JF-665
   follow-ups: make registry/key/token mispairing unrepresentable; one
   kill-a-maybe-live-process helper with a decided entireProcessTree policy)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-29'
+updated_date: '2026-09-29 16:37'
 labels:
   - playback-speed
   - encode-gate
@@ -14,7 +15,8 @@ labels:
 dependencies: []
 references:
   - >-
-    backlog/tasks/jf-665 - Registration-side-of-the-same-key-speed-encode-re-register-race-orphaned-displaced-ffmpeg-at-the-registry-overwrite-unchecked-TryAdd-key-only-encode-flag-clear.md
+    backlog/tasks/jf-665 -
+    Registration-side-of-the-same-key-speed-encode-re-register-race-orphaned-displaced-ffmpeg-at-the-registry-overwrite-unchecked-TryAdd-key-only-encode-flag-clear.md
 priority: low
 ---
 
@@ -68,4 +70,8 @@ GATES: Skill /simplify (4 parallel angles on the diff; findings APPLIED: the tem
 VERIFICATION: Release-equivalent Debug builds 0 warnings 0 errors both TFMs on the final tree (TreatWarningsAsErrors on); full suite 4742/4742 net9.0 + 4742/4742 net10.0, exit 0 (4741 baseline at main tip + the 1 new pin), both red proofs observed on both TFMs before the final run.
 <!-- SECTION:NOTES:END -->
 
-ORCHESTRATOR GATE-MARKER TAIL (2026-09-29, 5 findings, all dispositioned): F2 APPLIED - the ctor is now PRIVATE with a public static MarkActive factory on the struct (the worker's CS0122 rejection only ruled out the bare private ctor; the factory shape compiles, PreMarkSentinel proved it), so mispairing is now unrepresentable, not doc-advised; F4 APPLIED - the hook comment no longer overclaims "before ANY directory mutation" (the stub cleanup above the hook also touches directories; the honest invariant cites the missing/empty-playlist guards plus the JF-428 pin protocol, neither pinned, with a do-not-hoist warning); F5 APPLIED - the pin's probe tolerance widened 0.5s -> 2s (40x0.05s) with the trade documented (deterministic red kept, CI false-red window shrunk); F3 DOCUMENTED at TryKillLiveProcess (probed on MEL 9.0.11: through the params wrapper the analyzer checks placeholders in one direction only; template edits need an eyed re-read); F1 NOTED as this task's own documented non-goal (the episode-audio/song/remux/audiobook paths keep the two-writers hazard; JF-665's scope note owns that boundary). Encode-family pins 16/16 both TFMs after the fixes; full suite 4742/4742 both TFMs.
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Landed 2026-09-29 as merge 1265b0f6 on main: all three JF-665 follow-ups closed. (1) ENCODE HANDLE: ActiveEncodeHandle bundles registry+cacheKey+generation-token as private readonly fields with Clear (JF-665 compare-and-remove) and KillAndClear as the ONLY clear paths; the ctor is PRIVATE behind the public static MarkActive factory (the gate-marker round refuted the bare-private-ctor rejection: the factory shape compiles, PreMarkSentinel proved it), so registry/key/token mispairing is now unrepresentable; the parallel-parameter threading is deleted (old statics gone, zero references). (2) KILL IDIOM: KillEncodeTree owns the entireProcessTree:true policy ONCE; TryKillLiveProcess (template+args preserving each site's wording) and RemoveSpeedEncodeAndKill replace the three drifted copies; the one-directional placeholder checking through the params wrapper is probed (MEL 9.0.11) and documented. (3) EARLIER DISPLACEMENT KILL: KillDisplacedSpeedEncode at the SupersedeStaleEncodes hook moved BEFORE directory recreation (review-sharpened: dead before recreate AND debris sweep; the stub-cleanup invariant honestly commented with a do-not-hoist warning), registration-time kill kept as backstop; the real-sleeper pin (endpoint-driven, /proc snapshot before first segment) red-proofed twice, tolerance 2s. Non-goals respected (the other paths' two-writers hazard stays the JF-665 scope note's documented boundary). Gates: Skill simplify (4 applied, 2 justified skips) + Skill code-review high in-worker (4 findings: 2 applied, 1 rejected-with-Roslyn-evidence, 1 applied) + orchestrator gate-marker high (5 findings: 3 applied incl. the private ctor, 1 documented, 1 the non-goal). Suites 4742/4742 both TFMs on the branch (worker-run and orchestrator-verified; encode pins 16/16 isolated), merged-tree 4753/4753 both TFMs. Live surface: registry mechanics need a real speed-play (device round); deploy smoke is the route probe + config integrity. MERGE LESSON recorded: backlog task files live under a filename the MCP can rename (status edits re-wrap the slug); workers must copy files into their worktree by the name CURRENT AT THEIR BASE, and tail-appends must verify the target exists first.
+<!-- SECTION:FINAL_SUMMARY:END -->
