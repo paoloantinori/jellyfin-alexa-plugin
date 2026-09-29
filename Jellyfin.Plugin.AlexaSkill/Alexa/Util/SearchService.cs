@@ -297,6 +297,10 @@ public sealed class SearchService
         if (artistIds is { Length: > 0 })
         {
             fallbackQuery.ArtistIds = artistIds;
+            if (mediaTypes is { Length: > 0 })
+            {
+                _logger.LogDebug("SearchItemsFuzzyAsync: artistIds scoping wins; MediaTypes filter ({Count} entries) suppressed", mediaTypes.Length);
+            }
         }
 
         // JF-358: MediaTypes does not constrain an ArtistIds query; the two filters

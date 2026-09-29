@@ -213,7 +213,7 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
         string artistName,
         Jellyfin.Database.Implementations.Entities.User jellyfinUser,
         string locale,
-        BaseItemKind[]? includeItemTypes,
+        BaseItemKind[] includeItemTypes,
         string emptyKey,
         string listKey,
         string partialKey,
@@ -227,15 +227,11 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
             User = jellyfinUser,
             Recursive = true,
             ArtistIds = new[] { artistId },
+            IncludeItemTypes = includeItemTypes,
             OrderBy = CrossMediaFallback.PopularitySort,
             DtoOptions = new DtoOptions(true)
         };
         ApplyLibraryFilter(query, user, _libraryManager);
-
-        if (includeItemTypes != null)
-        {
-            query.IncludeItemTypes = includeItemTypes;
-        }
 
         IReadOnlyList<BaseItem> items = await RetryAsync(() => _libraryManager.GetItemList(query), operationName, cancellationToken).ConfigureAwait(false);
 
