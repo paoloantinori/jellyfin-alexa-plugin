@@ -743,6 +743,49 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
+    public async Task HandleAsync_ArtistFallback_QueryUsesIncludeItemTypesWithoutMediaTypes()
+    {
+        // JF-667 (JF-358 sibling): the artist-fallback items query is ArtistIds-filtered,
+        // so IncludeItemTypes is the single filtering term; MediaTypes must not ride it.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(query: "Soul Coughing");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
+        _fx.SetupUserMock();
+
+        var artist = new MusicArtist { Name = "Soul Coughing", Id = Guid.NewGuid() };
+        var song = new Audio { Name = "Circles", Id = Guid.NewGuid() };
+
+        InternalItemsQuery? captured = null;
+        int callCount = 0;
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Callback<InternalItemsQuery>(q => captured = q)
+            .Returns(() =>
+            {
+                callCount++;
+                return callCount switch
+                {
+                    1 => new List<BaseItem>(),            // initial title search: empty
+                    2 => new List<BaseItem> { artist },   // artist lookup: found
+                    3 => new List<BaseItem> { song },     // artist items
+                    _ => new List<BaseItem>()
+                };
+            });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // The captured query is the LAST GetItemList call: the artist-items query (call 3),
+        // not the title search or the artist lookup before it.
+        Assert.NotNull(captured);
+        Assert.NotNull(captured!.ArtistIds);
+        Assert.Contains(artist.Id, captured.ArtistIds);
+        Assert.NotNull(captured.IncludeItemTypes);
+        Assert.Contains(BaseItemKind.Audio, captured.IncludeItemTypes);
+        TestHelpers.AssertNoMediaTypesFilter(captured, "artist-fallback query");
+    }
+
+    [Fact]
     public async Task HandleAsync_ZeroResults_NoArtist_ReturnsMediaNotFound()
     {
         var handler = CreateHandler();

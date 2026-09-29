@@ -580,6 +580,45 @@ public class YesIntentHandlerTests : PluginTestBase
         response.HasDirective<AudioPlayerPlayDirective>();
     }
 
+    [Fact]
+    public async Task HandleAsync_ArtistType_SongQuery_UsesIncludeItemTypesNotMediaTypes()
+    {
+        // JF-667 (JF-358 sibling): the confirmed-artist songs query is ArtistIds-filtered,
+        // so it must filter via IncludeItemTypes=Audio; MediaTypes does not constrain an
+        // ArtistIds query (entire audio library on 10.11.x, zero rows at offset on 12.x).
+        var artistId = Guid.NewGuid();
+        var artist = new MusicArtist { Name = "Test Artist", Id = artistId };
+
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemById(artistId))
+            .Returns(artist);
+
+        InternalItemsQuery? captured = null;
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Callback<InternalItemsQuery>(q => captured = q)
+            .Returns(new List<BaseItem> { new Audio { Name = "Song", Id = Guid.NewGuid() } });
+
+        var matchInfo = new DisambiguationHelper.MatchInfo { Id = artistId.ToString(), Name = "Test Artist" };
+        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, DisambiguationHelper.MediaTypeArtist);
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreateYesIntentRequest(),
+            CreateContext(),
+            TestHelpers.CreateTestUser(),
+            CreateSession(),
+            attrs,
+            CancellationToken.None);
+
+        Assert.NotNull(captured);
+        Assert.Contains(artistId, captured!.ArtistIds);
+        Assert.NotNull(captured.IncludeItemTypes);
+        Assert.Contains(Jellyfin.Data.Enums.BaseItemKind.Audio, captured.IncludeItemTypes);
+        TestHelpers.AssertNoMediaTypesFilter(captured!, "artist query");
+        response.HasDirective<AudioPlayerPlayDirective>();
+    }
+
     // ========== JF-507: codec-gated audio-launch URL on the resume-yes path ==========
 
     private Dictionary<string, object> CreateResumeAttrs(Guid itemId, int offsetMs)

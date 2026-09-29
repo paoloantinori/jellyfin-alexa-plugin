@@ -173,7 +173,6 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
                 jellyfinUser!,
                 locale,
                 new[] { BaseItemKind.MusicAlbum },
-                null,
                 "NoAlbumsByArtist",
                 "AlbumsByArtistList",
                 "AlbumsByArtistPartial",
@@ -188,8 +187,8 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
             artistName,
             jellyfinUser!,
             locale,
-            null,
-            new[] { MediaType.Audio },
+            // JF-358: MediaTypes does not constrain an ArtistIds query; filter via item type.
+            new[] { BaseItemKind.Audio },
             "NoSongsForArtist",
             "TracksByArtistList",
             "TracksByArtistPartial",
@@ -214,8 +213,7 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
         string artistName,
         Jellyfin.Database.Implementations.Entities.User jellyfinUser,
         string locale,
-        BaseItemKind[]? includeItemTypes,
-        MediaType[]? mediaTypes,
+        BaseItemKind[] includeItemTypes,
         string emptyKey,
         string listKey,
         string partialKey,
@@ -229,20 +227,11 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
             User = jellyfinUser,
             Recursive = true,
             ArtistIds = new[] { artistId },
+            IncludeItemTypes = includeItemTypes,
             OrderBy = CrossMediaFallback.PopularitySort,
             DtoOptions = new DtoOptions(true)
         };
         ApplyLibraryFilter(query, user, _libraryManager);
-
-        if (includeItemTypes != null)
-        {
-            query.IncludeItemTypes = includeItemTypes;
-        }
-
-        if (mediaTypes != null)
-        {
-            query.MediaTypes = mediaTypes;
-        }
 
         IReadOnlyList<BaseItem> items = await RetryAsync(() => _libraryManager.GetItemList(query), operationName, cancellationToken).ConfigureAwait(false);
 

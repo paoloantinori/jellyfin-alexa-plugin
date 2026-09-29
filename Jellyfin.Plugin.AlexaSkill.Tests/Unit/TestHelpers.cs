@@ -323,6 +323,16 @@ internal static class TestHelpers
         };
 
     /// <summary>
+    /// JF-358/JF-667 shared pin: Jellyfin initializes MediaTypes to an empty array,
+    /// so the contract is "no MediaTypes filter", not the field's exact null/empty
+    /// shape.
+    /// </summary>
+    internal static void AssertNoMediaTypesFilter(InternalItemsQuery query, string what)
+        => Assert.True(
+            query.MediaTypes == null || query.MediaTypes.Length == 0,
+            $"{what} must not filter via MediaTypes (JF-358/JF-667)");
+
+    /// <summary>
     /// Extract speech text from a SkillResponse, handling both plain text and SSML output.
     /// Strips SSML markup for content assertions.
     /// </summary>

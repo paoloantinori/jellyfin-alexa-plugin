@@ -514,7 +514,8 @@ public class SearchMediaIntentHandler : BaseHandler
         {
             User = jellyfinUser,
             Recursive = true,
-            MediaTypes = new[] { MediaType.Audio },
+            // JF-358: ArtistIds filters via IncludeItemTypes only; the MediaTypes term
+            // here was redundant at best and the broken combination at worst.
             ArtistIds = new[] { artists[0].Id },
             IncludeItemTypes = FilterByContentAccess(_playableTypes),
             Limit = Plugin.Instance?.Configuration?.MaxSearchResults ?? 20,
