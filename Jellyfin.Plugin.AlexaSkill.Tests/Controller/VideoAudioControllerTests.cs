@@ -3498,6 +3498,61 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
+    /// JF-647: the speed-encode exit watcher must remove ONLY the registry entry
+    /// it registered. When the OLD encode exits and a NEW same-key encode
+    /// registers before the old watcher's 1s poll notices (a re-request after
+    /// the variant's cache directory was evicted mid-encode), the old watcher's
+    /// key-only TryRemove deleted the LIVE entry, so the supersede kill later
+    /// degraded to its conservative no-kill and the abandoned ffmpeg held an
+    /// encode-gate slot to completion. Pinned directly on the registration seam:
+    /// old process exits, new process registers under the same key, the old
+    /// watcher wakes and must leave the new entry alone; once the new process
+    /// also exits, its OWN watcher must still clear the key.
+    /// </summary>
+    [Fact]
+    public async Task RegisterLiveSpeedEncode_OldWatcherWake_DoesNotDeleteReRegisteredLiveEntry()
+    {
+        var controller = CreateController();
+        string cacheKey = VideoAudioController.AudioSpeedCacheKey(Guid.NewGuid().ToString(), 1500, 0);
+
+        using var oldProcess = Process.Start(new ProcessStartInfo("/bin/sh", "-c \"sleep 30\""))!;
+        using var newProcess = Process.Start(new ProcessStartInfo("/bin/sh", "-c \"sleep 30\""))!;
+        try
+        {
+            controller.RegisterLiveSpeedEncode(oldProcess, cacheKey, "device-A");
+
+            // The OLD encode exits while its watcher sleeps out the 1s poll.
+            oldProcess.Kill();
+            oldProcess.WaitForExit();
+
+            // The NEW same-key encode registers inside that window: the registry
+            // entry now names the live new process.
+            controller.RegisterLiveSpeedEncode(newProcess, cacheKey, "device-A");
+            Assert.Same(newProcess, VideoAudioController.LiveSpeedEncodeProcessForTest(cacheKey));
+
+            // Past the old watcher's first wake after the exit (and, at the second
+            // assert, past a slow-scheduled second wake): unfixed, the stale
+            // watcher would have deleted the live entry by then.
+            await Task.Delay(1300);
+            Assert.Same(newProcess, VideoAudioController.LiveSpeedEncodeProcessForTest(cacheKey));
+            await Task.Delay(1300);
+            Assert.Same(newProcess, VideoAudioController.LiveSpeedEncodeProcessForTest(cacheKey));
+
+            // The OWN watcher still clears the key once its process exits.
+            newProcess.Kill();
+            newProcess.WaitForExit();
+            Assert.True(
+                await WaitUntilAsync(() => VideoAudioController.LiveSpeedEncodeProcessForTest(cacheKey) == null, TimeSpan.FromSeconds(5), 100),
+                "the entry must still be removed once its own process exits");
+        }
+        finally
+        {
+            try { if (!oldProcess.HasExited) { oldProcess.Kill(); } } catch { /* already exited */ }
+            try { if (!newProcess.HasExited) { newProcess.Kill(); } } catch { /* already exited */ }
+        }
+    }
+
+    /// <summary>
     /// JF-498 review I1, endpoint level: a re-encode over interrupted-encode debris
     /// (non-empty playlist WITHOUT ENDLIST, no active encode) must start ffmpeg over a
     /// CLEAN target: the fake ffmpeg snapshots the pre-existing playlist/segments

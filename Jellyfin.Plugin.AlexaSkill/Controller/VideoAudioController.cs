@@ -1497,14 +1497,22 @@ public class VideoAudioController : ControllerBase
     /// <see cref="KillSupersededSpeedEncodes"/> gets), so this helper itself
     /// never touches HttpContext and stays callable from any context. The exit
     /// watcher keeps the registry to live encodes only (the monitor owns the
-    /// process disposal and knows nothing of it).
+    /// process disposal and knows nothing of it). Internal test seam (JF-647,
+    /// InternalsVisibleTo): the same-key re-register race the watcher's
+    /// compare-and-remove guards against needs a mid-encode cache eviction the
+    /// endpoint cannot reproduce without racing a live encode's directory, so
+    /// the pin drives this seam directly.
     /// </summary>
     /// <param name="ffmpegProcess">The encode process the first-segment wait just proved live.</param>
     /// <param name="cacheKey">The speed variant's cache key.</param>
     /// <param name="ownerDeviceId">The <c>?d=</c> device hint of the launching request; null leaves the entry ownerless (never killed).</param>
-    private void RegisterLiveSpeedEncode(Process ffmpegProcess, string cacheKey, string? ownerDeviceId)
+    internal void RegisterLiveSpeedEncode(Process ffmpegProcess, string cacheKey, string? ownerDeviceId)
     {
         _activeAudioSpeedEncodeProcesses[cacheKey] = (ffmpegProcess, ownerDeviceId);
+        // Capture the logger so the fire-and-forget watcher, which lives as long
+        // as the encode, does not pin this transient controller instance for the
+        // whole window.
+        var logger = _logger;
         _ = Task.Run(async () =>
         {
             try
@@ -1516,12 +1524,29 @@ public class VideoAudioController : ControllerBase
             }
             catch (Exception ex)
             {
-                _logger.LogDebug(ex, "VideoAudio audio-speed HLS: exit watcher raced the disposal of {CacheKey}", cacheKey);
+                logger.LogDebug(ex, "VideoAudio audio-speed HLS: exit watcher raced the disposal of {CacheKey}", cacheKey);
             }
 
-            _activeAudioSpeedEncodeProcesses.TryRemove(cacheKey, out _);
+            // Compare-and-remove (JF-647): a same-key re-register (the variant's
+            // cache directory evicted mid-encode, then a re-request restarted it)
+            // installs a NEWER process under this key before this watcher's 1s
+            // poll notices the exit; a key-only TryRemove deleted that LIVE entry,
+            // the supersede kill then degraded to its conservative no-kill, and
+            // the abandoned encode held a gate slot to completion. The Process
+            // reference is the generation token (each registration starts a
+            // distinct instance), so this removes only the entry this watcher
+            // registered.
+            _activeAudioSpeedEncodeProcesses.TryRemove(new KeyValuePair<string, (Process Process, string? OwnerDeviceId)>(cacheKey, (ffmpegProcess, ownerDeviceId)));
         });
     }
+
+    /// <summary>
+    /// Internal test seam (JF-647, InternalsVisibleTo): the process the live
+    /// speed-encode registry names for <paramref name="cacheKey"/>, or null when
+    /// the key is absent. Read-only.
+    /// </summary>
+    internal static Process? LiveSpeedEncodeProcessForTest(string cacheKey)
+        => _activeAudioSpeedEncodeProcesses.TryGetValue(cacheKey, out var entry) ? entry.Process : null;
 
     /// <summary>
     /// The ONE variant-HLS serve core (JF-637, collapsing the JF-507 episode-audio
@@ -1867,7 +1892,11 @@ public class VideoAudioController : ControllerBase
                 continue;
             }
 
-            _activeAudioSpeedEncodeProcesses.TryRemove(entry.Key, out _);
+            // Compare-and-remove (JF-647): a same-key re-register can swap this
+            // entry between the enumeration and the removal; the kill below still
+            // targets the observed process, but the removal must not delete a
+            // newer registration it never inspected.
+            _activeAudioSpeedEncodeProcesses.TryRemove(entry);
             try
             {
                 if (!entry.Value.Process.HasExited)
