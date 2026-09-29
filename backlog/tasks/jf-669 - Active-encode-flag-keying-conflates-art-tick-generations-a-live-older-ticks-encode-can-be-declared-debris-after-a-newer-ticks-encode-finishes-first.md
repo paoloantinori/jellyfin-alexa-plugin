@@ -1,5 +1,5 @@
 ---
-id: JF-667
+id: JF-669
 title: >-
   Active-encode flag keying conflates art-tick generations: a live older-ticks
   encode can be declared debris after a newer-ticks encode finishes first

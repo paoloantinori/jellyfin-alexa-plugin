@@ -1,5 +1,5 @@
 ---
-id: JF-666
+id: JF-668
 title: >-
   Encode-handle type and shared kill idiom for the HLS encode registries (JF-665
   follow-ups: make registry/key/token mispairing unrepresentable; one
