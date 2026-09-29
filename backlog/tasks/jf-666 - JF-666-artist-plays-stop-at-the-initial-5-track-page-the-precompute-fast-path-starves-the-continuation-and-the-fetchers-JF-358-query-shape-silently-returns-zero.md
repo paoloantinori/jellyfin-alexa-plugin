@@ -4,9 +4,10 @@ title: >-
   JF-666 - artist plays stop at the initial 5-track page: the precompute fast
   path starves the continuation and the fetcher's JF-358 query shape silently
   returns zero
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-29 06:01'
+updated_date: '2026-09-29 09:54'
 labels:
   - playback
   - progressive-queue
@@ -78,3 +79,9 @@ GATE-MARKER REVIEW ROUND (coordinator findings on the first commit, applied as t
 - Finding 2 FILED same-turn as JF-670: the Audiobook continuation is a dead letter (no fetcher case; books truncate at the initial page on the AudioPlayer path; PostPlay AutoPlay can append music radio after a book). The WARN gate and its comment already documented the structural arm; JF-670 owns the decision (fetcher case vs not storing + suppressing the book radio hand-off).
 - Suite after the review fixes: 4732/4732 BOTH TFMs on the final tail state (4727 baseline + 5 JF-666 pins), exit 0, single node; the 5 pins green in isolation on both TFMs; zero pre-existing test edits (the two prior JF-666 pins kept their semantics; only the zero-log pin's fixture moved to the real int.MaxValue shape).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Landed 2026-09-29 as merge 373c20db (pushed; deployed with the full checklist, config intact; the active DLL byte-verified identical to the build): the progressive queue burns the catalogue again. The continuation fetch now runs BEFORE the precompute cache-hit early return (batches arrive while tracks play; the starvation defect), the fetcher queries IncludeItemTypes (the JF-358 shape that silently returned zero on the direct path and declared real catalogues exhausted), and the gate-marker tail landed the library-scope parity (the fetchers apply the same per-user filter as the initial fetches, closing the content-access regression the fix activated), the 6s budget wrap on the cache-hit fast path (parity with the initial fetch; transient failures retried within the budget, pinned), the end-unknown log operand for the int.MaxValue artist shape, and the one-switch fold. Five pins red-green; the audiobook dead letter filed as JF-670 same-turn. Gates: /simplify + code-review in-worker, the code-review skill marker in the orchestrator transcript (5 findings: 4 applied, 1 filed), suites 4732/4732 both TFMs (orchestrator-verified on the final state; the merge's only conflict was the tracker markdown, resolved to the complete notes). LIVE: the deployed build plays the 5-track initial page correctly (simulator-verified, logs read); the catalogue-burn path fires on device events, so the definitive verification is Paolo's device round: "musica di norah jones" should now play past 5 tracks (her 13) before any radio transition, with the "Progressive queue: fetched N items for Artist" INFO line in the logs.
+<!-- SECTION:FINAL_SUMMARY:END -->
