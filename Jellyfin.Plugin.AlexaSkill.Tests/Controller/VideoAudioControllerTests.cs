@@ -608,6 +608,20 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
+    /// A bare-GUID HLS playlist request with no token must be rejected (401).
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsVideoAudio_NoToken_Returns401()
+    {
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        var controller = CreateController(); // no itemIdForToken → no token in query
+
+        ActionResult result = await controller.StreamHlsVideoAudio(Guid.NewGuid().ToString());
+
+        Assert.IsType<UnauthorizedObjectResult>(result);
+    }
+
+    /// <summary>
     /// Verify that the HLS endpoint returns 404 when the item is not found.
     /// </summary>
     [Fact]
@@ -3168,6 +3182,19 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         var anonymous = CreateController();
         ActionResult rejected = await anonymous.GetEpisodeAudioSegment(itemId, startTicks, "seg_0000.ts");
         Assert.IsType<UnauthorizedObjectResult>(rejected);
+    }
+
+    /// <summary>
+    /// Verify that the audio-segments endpoint returns 400 when itemId is not a valid GUID.
+    /// </summary>
+    [Fact]
+    public async Task GetEpisodeAudioSegment_InvalidItemId_Returns400()
+    {
+        var controller = CreateController();
+
+        ActionResult result = await controller.GetEpisodeAudioSegment("not-a-guid", 0, "seg_0000.ts");
+
+        Assert.IsType<BadRequestObjectResult>(result);
     }
 
     /// <summary>
