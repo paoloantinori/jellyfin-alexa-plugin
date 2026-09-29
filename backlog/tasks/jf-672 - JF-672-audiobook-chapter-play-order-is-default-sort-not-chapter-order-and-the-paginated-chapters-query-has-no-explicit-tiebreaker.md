@@ -43,3 +43,5 @@ Fix owner must first verify live: play a 15+ chapter book, compare play order ag
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+ORCHESTRATOR GATE-REVIEW ADDENDUM (2026-09-29, same-turn): the shared-shape premise needs one correction - the head (PlayBookIntentHandler initial page) and tail (FetchAudiobookChapters) run DIFFERENT queries today: the tail applies Util.LibraryFilter.ApplyLibraryFilter (TopParentIds) after BuildAudiobookChaptersQuery, the head does not. With no explicit OrderBy the extra constraint can change the engine's natural row order across the page boundary, repeating or dropping a chapter at the boundary. The JF-672 fix (explicit chapter order/tiebreaker) must decide the head-side filter parity in the same change; the two LIMIT/OFFSET executions must be one shape PLUS one filter treatment.
