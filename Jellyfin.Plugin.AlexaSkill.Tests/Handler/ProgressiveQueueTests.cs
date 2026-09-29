@@ -385,6 +385,100 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
         QueueContinuationStore.Remove(session.UserId, deviceId);
     }
 
+    // JF-666 review finding 3: the fetch runs on the precompute cache-hit fast path,
+    // so it must carry the shared request budget (RetryAsync): a transiently failing
+    // batch query is retried inside the budget and the cached response is still
+    // served; without the wrapper the first exception would fail the whole event.
+    [Fact]
+    public async Task PlaybackNearlyFinished_CacheHitTransientFetchFailure_RetriedWithinBudget()
+    {
+        _fx.Config.PreEnqueueOnStart = true;
+        var handler = CreatePlaybackHandler();
+        var session = CreateSession();
+        _fx.SetupUserMock();
+
+        var track1Id = Guid.NewGuid();
+        var track2Id = Guid.NewGuid();
+        var track3Id = Guid.NewGuid();
+
+        session.FullNowPlayingItem = new Audio { Id = track1Id, Name = "Track 1" };
+        session.NowPlayingQueue = new List<QueueItem>
+        {
+            new() { Id = track1Id },
+            new() { Id = track2Id },
+            new() { Id = track3Id }
+        };
+
+        const string deviceId = "test-device";
+
+        var artistId = Guid.NewGuid();
+        var continuation = new QueueContinuation
+        {
+            SourceType = "Artist",
+            ArtistId = artistId,
+            StartIndex = 3,
+            TotalCount = int.MaxValue,
+            UserId = Guid.NewGuid(),
+            BatchSize = 5
+        };
+        QueueContinuationStore.Set(session.UserId, deviceId, continuation);
+
+        NextTrackPrecomputeCache.Store(
+            deviceId,
+            track1Id.ToString(),
+            track2Id,
+            new Audio { Id = track2Id, Name = "Track 2" },
+            "https://stream/track2");
+        _fx.LibraryManager.Setup(l => l.GetItemById(track2Id))
+            .Returns((BaseItem?)null);
+
+        var batch = Enumerable.Range(0, 5)
+            .Select(i => new Audio { Id = Guid.NewGuid(), Name = $"Song {i + 4}" })
+            .ToList();
+
+        // Two transient failures, then the batch: only the budgeted RetryAsync
+        // wrapper gets past the first two attempts.
+        int attempts = 0;
+        _fx.LibraryManager
+            .Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.ArtistIds != null && q.ArtistIds.Contains(artistId))))
+            .Returns(() =>
+            {
+                attempts++;
+                if (attempts < 3)
+                {
+                    throw new TimeoutException($"simulated transient {attempts}");
+                }
+
+                return batch.Cast<BaseItem>().ToList();
+            });
+
+        var response = await handler.HandleAsync(
+            CreateNearlyFinishedRequest(track1Id.ToString()),
+            CreateContext(track1Id.ToString()),
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        // The cache-hit branch still served the precomputed next track...
+        var directive = response.Response.Directives.OfType<AudioPlayerPlayDirective>().FirstOrDefault();
+        Assert.NotNull(directive);
+        Assert.Equal(track2Id.ToString(), directive.AudioItem.Stream.Token);
+
+        // ...the query was retried to success (three attempts, inside the budget)...
+        _fx.LibraryManager.Verify(
+            l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.ArtistIds != null && q.ArtistIds.Contains(artistId))),
+            Times.Exactly(3));
+
+        // ...and the batch still extended the queue.
+        Assert.Equal(8, session.NowPlayingQueue.Count);
+
+        // Cleanup
+        NextTrackPrecomputeCache.Invalidate(deviceId);
+        QueueContinuationStore.Remove(session.UserId, deviceId);
+    }
+
     [Fact]
     public async Task PlaybackNearlyFinished_NoContinuation_WorksWithoutExtension()
     {
@@ -1202,9 +1296,51 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
         Assert.Contains("fetched 1 items for Artist (offset 5/13)", info);
     }
 
+    // JF-666 review finding 1: continuation batches must run under the same per-user
+    // library scope as the initial fetches; a restricted user's artist batch query
+    // carries the allowed libraries as TopParentIds.
+    [Fact]
+    public void QueueContinuation_ArtistFetch_AppliesPluginUserLibraryScope()
+    {
+        _fx.SetupUserMock();
+
+        var musicLibId = Guid.NewGuid();
+        var pluginUser = new Entities.User
+        {
+            Id = Guid.NewGuid(),
+            AllowedLibraryIds = new List<string> { musicLibId.ToString() }
+        };
+
+        var continuation = new QueueContinuation
+        {
+            SourceType = "Artist",
+            ArtistId = Guid.NewGuid(),
+            UserId = Guid.NewGuid(),
+            StartIndex = 5,
+            TotalCount = 13,
+            BatchSize = 5
+        };
+
+        InternalItemsQuery? captured = null;
+        _fx.LibraryManager
+            .Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Callback<InternalItemsQuery>(q => captured = q)
+            .Returns(new List<BaseItem> { new Audio { Id = Guid.NewGuid(), Name = "t" } });
+
+        ILogger logger = _fx.LoggerFactory.CreateLogger("ArtistScopeTest");
+        QueueContinuationFetcher.FetchNextBatch(
+            continuation, _fx.LibraryManager.Object, _fx.UserManager.Object, logger, pluginUser);
+
+        Assert.NotNull(captured);
+        Assert.NotNull(captured!.TopParentIds);
+        Assert.Contains(musicLibId, captured.TopParentIds);
+    }
+
     // JF-666: a zero-page fetch while StartIndex < TotalCount must log at WARN naming
     // the source type, source id, and offset; the silent exhaust forced the live
-    // diagnosis to infer it from the store Remove alone.
+    // diagnosis to infer it from the store Remove alone. TotalCount=int.MaxValue is
+    // the REAL artist-continuation shape (both creators set it; GetItemList has no
+    // count), rendered as end-unknown instead of a meaningless 2147483647.
     [Fact]
     public void QueueContinuation_ZeroItemFetch_LogsWarningWithQueryOperands()
     {
@@ -1217,7 +1353,7 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
             ArtistId = artistId,
             UserId = Guid.NewGuid(),
             StartIndex = 5,
-            TotalCount = 13,
+            TotalCount = int.MaxValue,
             BatchSize = 5
         };
 
@@ -1236,7 +1372,7 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
         string warning = Assert.Single(warnings).Message;
         Assert.Contains("fetched 0 items for Artist", warning);
         Assert.Contains($"artist {artistId}", warning);
-        Assert.Contains("offset 5/13", warning);
+        Assert.Contains("offset 5/end-unknown", warning);
     }
 
     [Fact]

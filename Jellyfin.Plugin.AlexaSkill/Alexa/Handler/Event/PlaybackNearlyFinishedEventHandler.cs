@@ -127,7 +127,7 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         // This fetch must run BEFORE the precompute cache-hit early return below:
         // placed after it, every cache-served NearlyFinished skips the fetch and the
         // queue starves at its initial page until the last track (JF-666).
-        TryFetchContinuationBatch(session, context);
+        await TryFetchContinuationBatch(session, context, cancellationToken).ConfigureAwait(false);
 
         if (_config.PreEnqueueOnStart
             && (session.PlayState?.RepeatMode ?? RepeatMode.RepeatNone) == RepeatMode.RepeatNone
@@ -286,10 +286,15 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
     /// Check if the queue is running low and fetch more items from continuation state.
     /// This enables progressive queue building: the initial bulk-play handler fetches
     /// only the first few items, and this method lazily fetches the rest as needed.
+    /// Runs under the shared request budget (RetryAsync) because it sits on the
+    /// precompute cache-hit fast path: a transiently failing batch query stops
+    /// retrying inside the 6s budget instead of burning Alexa's response window
+    /// (the JF-358 class), matching the initial fetches' bound.
     /// </summary>
     /// <param name="session">The current Jellyfin session.</param>
     /// <param name="context">The Alexa context for device identification.</param>
-    private void TryFetchContinuationBatch(SessionInfo session, Context context)
+    /// <param name="cancellationToken">Cancellation token for the retry budget.</param>
+    private async Task TryFetchContinuationBatch(SessionInfo session, Context context, CancellationToken cancellationToken)
     {
         string deviceId = context.GetDeviceId();
         QueueContinuation? continuation = QueueContinuationStore.Get(session.UserId, deviceId);
@@ -312,12 +317,22 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             return;
         }
 
+        // JF-327 (the radio-path shape): the request funnel scopes a user CLONE;
+        // GetUserById returns the unscoped config instance, so re-apply the device
+        // library binding or the batch widens the scope the initial fetch ran under.
+        Entities.User? pluginUser = Util.DeviceLibraryBindingResolver.ApplyByDevice(
+            session.DeviceId, _config.GetUserById(session.UserId), _config, Logger);
+
         // Fetch the next batch
-        IReadOnlyList<BaseItem> newItems = QueueContinuationFetcher.FetchNextBatch(
-            continuation,
-            _libraryManager,
-            _userManager,
-            Logger);
+        IReadOnlyList<BaseItem> newItems = await RetryAsync(
+            () => QueueContinuationFetcher.FetchNextBatch(
+                continuation,
+                _libraryManager,
+                _userManager,
+                Logger,
+                pluginUser),
+            "FetchContinuationBatch",
+            cancellationToken).ConfigureAwait(false);
 
         if (newItems.Count == 0)
         {
