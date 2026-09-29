@@ -3,9 +3,10 @@ id: JF-669
 title: >-
   Active-encode flag keying conflates art-tick generations: a live older-ticks
   encode can be declared debris after a newer-ticks encode finishes first
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-29'
+updated_date: '2026-09-29 17:07'
 labels:
   - encode-gate
   - race
@@ -13,7 +14,8 @@ labels:
 dependencies: []
 references:
   - >-
-    backlog/tasks/jf-665 - Registration-side-of-the-same-key-speed-encode-re-register-race-orphaned-displaced-ffmpeg-at-the-registry-overwrite-unchecked-TryAdd-key-only-encode-flag-clear.md
+    backlog/tasks/jf-665 -
+    Registration-side-of-the-same-key-speed-encode-re-register-race-orphaned-displaced-ffmpeg-at-the-registry-overwrite-unchecked-TryAdd-key-only-encode-flag-clear.md
 priority: low
 ---
 
