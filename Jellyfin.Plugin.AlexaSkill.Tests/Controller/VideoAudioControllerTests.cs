@@ -3337,6 +3337,29 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
+    /// JF-664 pin: a doubly-invalid request (non-GUID id AND unserved rate) gets
+    /// the itemId 400 on BOTH audio-speed sibling routes, matching every other
+    /// route. The playlist route used to answer "Unsupported playback rate"
+    /// (its Core checked the rate before the id); the precedence is now decided:
+    /// the id 400 wins everywhere.
+    /// </summary>
+    [Fact]
+    public async Task AudioSpeedRoutes_DoublyInvalid_NonGuidIdPlusUnservedRate_BothReturnItemId400()
+    {
+        var controller = CreateController();
+
+        ActionResult playlistResult = await controller.StreamHlsAudioSpeed("not-a-guid", 1337);
+        var playlist400 = Assert.IsType<BadRequestObjectResult>(playlistResult);
+        string playlistBody = System.Text.Json.JsonSerializer.Serialize(playlist400.Value!);
+        Assert.Contains("Invalid itemId format", playlistBody, StringComparison.Ordinal);
+
+        ActionResult segmentResult = await controller.GetAudioSpeedSegment("not-a-guid", 1337, 0, "seg_0000.ts");
+        var segment400 = Assert.IsType<BadRequestObjectResult>(segmentResult);
+        string segmentBody = System.Text.Json.JsonSerializer.Serialize(segment400.Value!);
+        Assert.Contains("Invalid itemId format", segmentBody, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Cache-miss flow of the speed variant: an AUDIO item's static /Audio/ stream is
     /// fed to ffmpeg with atempo + AAC, the encode lands in the variant directory,
     /// and the partial playlist is served with the token injected into the
