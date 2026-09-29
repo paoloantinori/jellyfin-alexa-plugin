@@ -897,11 +897,13 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
-    /// Verify that the HLS cache hit path returns a PhysicalFileResult with
-    /// the correct HLS content type (application/vnd.apple.mpegurl).
+    /// Verify that the HLS cache hit path serves the playlist with the correct
+    /// HLS content type (application/vnd.apple.mpegurl). A token is present
+    /// (CreateController mints one), so the serve is the token-rewritten
+    /// ContentResult shape, not the token-less PhysicalFile shape.
     /// </summary>
     [Fact]
-    public async Task StreamHlsVideoAudio_CacheHit_ReturnsPhysicalFileResult()
+    public async Task StreamHlsVideoAudio_CacheHit_ServesPlaylistWithCorrectHlsContentType()
     {
         var audioItem = new MediaBrowser.Controller.Entities.Audio.Audio
         {
@@ -912,11 +914,16 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
         _libraryManagerMock.Setup(m => m.GetItemById(audioItem.Id)).Returns(audioItem);
 
-        // Pre-populate HLS cache with a valid playlist (>= 10 KB)
+        // Pre-populate the HLS cache with a COMPLETED encode's playlist: since
+        // JF-676 the warm-cache path validates the cached playlist (the
+        // ticks-scoped debris verdict), and a no-ENDLIST playlist with no live
+        // own generation is debris, not a cache hit.
         string hlsDir = _cache.GetHlsDirectoryPath(audioItem.Id.ToString("D"), 0);
         Directory.CreateDirectory(hlsDir);
         string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
-        await File.WriteAllTextAsync(playlistPath, new string('x', 12 * 1024));
+        await File.WriteAllTextAsync(
+            playlistPath,
+            "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:4.000,\nseg_000.ts\n#EXT-X-ENDLIST\n");
 
         var controller = CreateController(audioItem.Id.ToString());
         controller.FfmpegPath = "/usr/bin/ffmpeg";
@@ -2289,6 +2296,40 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         File.SetUnixFileMode(fakeFfmpegPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
 #pragma warning restore CA3003, CA1416
         return fakeFfmpegPath;
+    }
+
+    /// <summary>
+    /// The cross-tick pins' shared teardown (extracted at the FIFTH copy,
+    /// 2026-09-30: the JF-675 simplify round deferred this extraction until a
+    /// third cross-tick pin appeared, and JF-676 added the fourth and fifth).
+    /// Releases every parked fake ffmpeg of the scenario (writes the stop file
+    /// into each generation directory, best-effort), lets the monitors run
+    /// their generation clears, then force-drops the registry entry so nothing
+    /// leaks into other tests. Every pin's key is a fresh Guid, so this is
+    /// hygiene, not correctness.
+    /// </summary>
+    /// <param name="key">The pin's cache key (episode itemId, song itemId, or audiobook parentId).</param>
+    /// <param name="dirs">The scenario's generation directories (stop-file targets).</param>
+    /// <param name="song">True when the pin drives the single-item registry.</param>
+    /// <param name="audiobook">True when the pin drives the audiobook registry.</param>
+    private async Task ReleaseParkedEncodeFixturesAsync(string key, string[] dirs, bool song = false, bool audiobook = false)
+    {
+        foreach (string dir in dirs)
+        {
+            try
+            {
+                Directory.CreateDirectory(dir);
+                File.WriteAllText(Path.Combine(dir, "stop"), string.Empty);
+            }
+            catch (IOException)
+            {
+                // Best effort: the parked fake loops are short and exit on
+                // their own otherwise.
+            }
+        }
+
+        await WaitUntilAsync(() => VideoAudioController.EncodeGenerationCountForTest(key, audiobook, song) == 0, TimeSpan.FromSeconds(10), 100);
+        VideoAudioController.SetEncodeActiveForTest(key, active: false, audiobook, song);
     }
 
     /// <summary>
@@ -3960,25 +4001,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         finally
         {
             artImage.DateModified = artA;
-            foreach (string dir in new[] { dirA, dirB })
-            {
-                try
-                {
-                    Directory.CreateDirectory(dir);
-                    File.WriteAllText(Path.Combine(dir, "stop"), string.Empty);
-                }
-                catch (IOException)
-                {
-                    // Best effort: the parked fake loops are short and exit on
-                    // their own otherwise.
-                }
-            }
-
-            // Let both monitors run their finally clears; force-drop whatever
-            // lingers so nothing leaks into other tests (the key is a fresh
-            // Guid, so this is hygiene, not correctness).
-            await WaitUntilAsync(() => VideoAudioController.EncodeGenerationCountForTest(itemIdStr) == 0, TimeSpan.FromSeconds(10), 100);
-            VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: false);
+            await ReleaseParkedEncodeFixturesAsync(itemIdStr, new[] { dirA, dirB });
         }
     }
 
@@ -4098,25 +4121,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         finally
         {
             artImage.DateModified = artA;
-            foreach (string dir in new[] { dirA, dirB })
-            {
-                try
-                {
-                    Directory.CreateDirectory(dir);
-                    File.WriteAllText(Path.Combine(dir, "stop"), string.Empty);
-                }
-                catch (IOException)
-                {
-                    // Best effort: the parked fake loops are short and exit on
-                    // their own otherwise.
-                }
-            }
-
-            // Let both monitors run their finally clears; force-drop whatever
-            // lingers so nothing leaks into other tests (the key is a fresh
-            // Guid, so this is hygiene, not correctness).
-            await WaitUntilAsync(() => VideoAudioController.EncodeGenerationCountForTest(itemIdStr) == 0, TimeSpan.FromSeconds(10), 100);
-            VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: false);
+            await ReleaseParkedEncodeFixturesAsync(itemIdStr, new[] { dirA, dirB });
         }
     }
 
@@ -4244,25 +4249,261 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         finally
         {
             artImage.DateModified = artA;
-            foreach (string dir in new[] { dirA, dirB })
-            {
-                try
-                {
-                    Directory.CreateDirectory(dir);
-                    File.WriteAllText(Path.Combine(dir, "stop"), string.Empty);
-                }
-                catch (IOException)
-                {
-                    // Best effort: the parked fake loops are short and exit on
-                    // their own otherwise.
-                }
-            }
+            await ReleaseParkedEncodeFixturesAsync(itemIdStr, new[] { dirA, dirB }, song: true);
+        }
+    }
 
-            // Let both monitors run their finally clears; force-drop whatever
-            // lingers so nothing leaks into other tests (the key is a fresh
-            // Guid, so this is hygiene, not correctness).
-            await WaitUntilAsync(() => VideoAudioController.EncodeGenerationCountForTest(itemIdStr, song: true) == 0, TimeSpan.FromSeconds(10), 100);
-            VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: false, song: true);
+    /// <summary>
+    /// JF-676: the episode debris verdict is TICKS-SCOPED (it reads the
+    /// CALLER'S OWN art-tick generation, and its cleanup deletes only the
+    /// caller's own generation directory). Exposure (the residual the JF-675
+    /// review filed): gen A (ticks A) parked live, gen B (ticks B) KILLED
+    /// mid-encode (nonzero exit, monitor clear) leaving its partial no-ENDLIST
+    /// playlist on disk; the JF-669 any-generation short-circuit then held the
+    /// verdict back for gen A's whole remaining duration and the own-dead
+    /// fall-through served the DEAD partial (ExoPlayer joins at the dead live
+    /// edge and polls a playlist that never grows). Construction mirrors the
+    /// JF-675 episode pin (real endpoint, primary-art DateModified mutated
+    /// between calls, one fake ffmpeg branching on the art-tick suffix of its
+    /// output directory): the ticks-B branch parks then exits NONZERO on the
+    /// stop file (the killed shape; ffmpeg's partial playlist survives because
+    /// the monitor's failure path only logs), and the ticks-B fetch after B's
+    /// clear must NOT serve the dead partial: the verdict fires (its own
+    /// generation is dead), cleans dir_B only, and the re-encode serves its
+    /// fresh pre-written listing (tail marker seg_0674), with gen A's directory
+    /// untouched throughout. Red proof: the verdict's skip toggled back to bare
+    /// any-generation presence (the JF-675 shape) fails this pin showing the
+    /// partial served.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_KilledOwnTicksEncode_StalePartialCleanedNotServedWhileForeignTicksGenerationRuns()
+    {
+        var (episode, mediaSourceManager) = SetupEpisodeForHls("JF-676 Killed Own Ticks S01E01", "h264", TimeSpan.FromMinutes(45));
+
+        // Primary art with a controllable DateModified: this is the cache-key
+        // component the endpoint (and only the cache/lock layer) keys on.
+        var artA = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        long ticksA = artA.Ticks;
+        long ticksB = artA.AddHours(6).Ticks;
+        var artImage = new MediaBrowser.Controller.Entities.ItemImageInfo
+        {
+            Path = "/tmp/jf676-art.jpg",
+            Type = ImageType.Primary,
+            DateModified = artA
+        };
+        episode.ImageInfos = new[] { artImage };
+
+        // The ticks-A branch parks gen A on a stop file (foreign generation
+        // still live at the verdict fetch); the ticks-B branch parks on its OWN
+        // stop file, then exits NONZERO when it appears: the KILLED-encode
+        // shape, leaving the partial no-ENDLIST playlist (seg_0000 only) on
+        // disk with the generation's flag cleared by the monitor's finally.
+        string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-jf676-killed-own-ticks",
+            "for last_arg in \"$@\"; do :; done\n" +
+            "dir=$(dirname \"$last_arg\")\n" +
+            "ticks=${dir##*_}\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0000.ts\" 2>/dev/null\n" +
+            "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:4.000,\\nseg_0000.ts\\n' > \"$last_arg\"\n" +
+            $"if [ \"$ticks\" = \"{ticksB}\" ]; then\n" +
+            "  while [ ! -f \"$dir/stop\" ]; do sleep 0.1; done\n" +
+            "  exit 1\n" +
+            "fi\n" +
+            "while [ ! -f \"$dir/stop\" ]; do sleep 0.2; done\n" +
+            "exit 0\n");
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Trace);
+            b.AddProvider(TestCaptureLogger.Into(logRecords));
+        });
+
+        var controller = CreateController(episode.Id.ToString(), loggerFactory, mediaSourceManager, fakeFfmpegPath);
+
+        string itemIdStr = episode.Id.ToString();
+        string dirA = _cache.GetHlsDirectoryPath(itemIdStr, ticksA);
+        string dirB = _cache.GetHlsDirectoryPath(itemIdStr, ticksB);
+        try
+        {
+            // Gen A: encodes under ticks A, then parks (stop file not written).
+            ActionResult first = await controller.StreamHlsEpisode(itemIdStr);
+            Assert.IsType<ContentResult>(first);
+            Assert.True(VideoAudioController.EncodeActiveForTest(itemIdStr), "the gen-A registration set the flag");
+
+            // Art changed mid-encode: gen B computes DIFFERENT ticks (a
+            // different lock and directory) and registers its own generation.
+            artImage.DateModified = artA.AddHours(6);
+            ActionResult second = await controller.StreamHlsEpisode(itemIdStr);
+            Assert.IsType<ContentResult>(second);
+
+            // Both generations live together (B parks on its own stop file):
+            // observed, not asserted, so the red run still reaches the serve
+            // assertions below instead of failing at this premise.
+            await WaitUntilAsync(() => VideoAudioController.EncodeGenerationCountForTest(itemIdStr) == 2, TimeSpan.FromSeconds(5), 50);
+
+            // Gen B is KILLED: the stop file makes its fake exit NONZERO, the
+            // monitor logs the failure and its finally clears ONLY the ticks-B
+            // slot; the partial no-ENDLIST playlist survives on disk.
+            File.WriteAllText(Path.Combine(dirB, "stop"), string.Empty);
+            Assert.True(
+                await WaitUntilAsync(() => VideoAudioController.EncodeGenerationCountForTest(itemIdStr) == 1, TimeSpan.FromSeconds(20), 100),
+                "gen B's monitor must clear its own killed slot while gen A still runs");
+            await Task.Delay(500);
+
+            // The JF-676 fetch: same ticks B. The own-ticks generation is dead
+            // (killed) while a foreign-ticks generation holds the entry: the
+            // ticks-scoped verdict must fire (clean dir_B's dead partial, never
+            // dir_A) and the re-encode must serve its fresh pre-write, not the
+            // stale partial.
+            ActionResult third = await controller.StreamHlsEpisode(itemIdStr);
+            var content = Assert.IsType<ContentResult>(third);
+            Assert.True(
+                content.Content.Contains("seg_0674.ts", StringComparison.Ordinal),
+                $"a killed own-ticks encode's stale partial must be cleaned and re-encoded, not served, while a foreign-ticks generation runs (JF-676); dead-partial marker seg_0000.ts present: {content.Content.Contains("seg_0000.ts", StringComparison.Ordinal)}");
+            Assert.True(
+                TestCaptureLogger.Snapshot(logRecords).Any(r => r.Message.Contains("Episode HLS cache invalidated", StringComparison.Ordinal)),
+                "the ticks-scoped debris verdict must fire for the killed own-ticks generation");
+            Assert.True(
+                Directory.Exists(dirA),
+                "the verdict's cleanup must never touch the live foreign-ticks generation's directory");
+
+            // Premise (green world only; the red run already failed above):
+            // gen A plus the verdict-triggered ticks-B re-encode hold the entry.
+            Assert.Equal(2, VideoAudioController.EncodeGenerationCountForTest(itemIdStr));
+        }
+        finally
+        {
+            artImage.DateModified = artA;
+            await ReleaseParkedEncodeFixturesAsync(itemIdStr, new[] { dirA, dirB });
+        }
+    }
+
+    /// <summary>
+    /// JF-676: the audiobook debris verdict gains the liveness gate it lacked
+    /// ENTIRELY plus ticks scoping. Exposure (the JF-675 review's stronger
+    /// sibling finding): gen B live under ticks B while a request validating an
+    /// OLDER ENDLIST-with-fewer-segments-than-chapters playlist at ticks A
+    /// fired the KEY-wide <c>Cleanup(parentId)</c> unconditionally, wiping gen
+    /// B's live directory mid-write. Construction (audiobook patterns: Folder
+    /// parent with controllable primary-art DateModified, Audio chapters, fake
+    /// ffmpeg parking on a stop file): a fixture undercounting ENDLIST playlist
+    /// is planted at ticks A, gen B is started live under ticks B, and the
+    /// ticks-A verdict fetch must fire (its own generation is dead) while gen
+    /// B's directory SURVIVES: the cleanup is scoped to the caller's own ticks
+    /// directory. The fetch itself then hits the pre-existing
+    /// concurrent-encode guard (deliberately any-generation, JF-669/JF-675) and
+    /// 503s until gen B exits, the honest one-retry-later degraded answer.
+    /// Red proof: with the validator reverted to the ungated key-wide shape
+    /// (the pre-JF-676 body) the pin fails showing dir_B wiped.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_UndercountVerdictIsTicksScoped_LiveForeignTicksGenerationDirectorySurvives()
+    {
+        Guid parentId = Guid.NewGuid();
+        string parentIdStr = parentId.ToString();
+        var parentItem = new MediaBrowser.Controller.Entities.Folder
+        {
+            Name = "JF-676 Undercount Book",
+            Id = parentId
+        };
+
+        // Primary art with a controllable DateModified (the cache-key component
+        // the concat path keys on; set on the parent folder itself).
+        var artA = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        long ticksA = artA.Ticks;
+        long ticksB = artA.AddHours(6).Ticks;
+        var artImage = new MediaBrowser.Controller.Entities.ItemImageInfo
+        {
+            Path = "/tmp/jf676-book-art.jpg",
+            Type = ImageType.Primary,
+            DateModified = artA
+        };
+        parentItem.ImageInfos = new[] { artImage };
+
+        var chapters = new List<MediaBrowser.Controller.Entities.BaseItem>();
+        for (int i = 1; i <= 3; i++)
+        {
+            chapters.Add(new MediaBrowser.Controller.Entities.Audio.Audio
+            {
+                Name = $"JF-676 Chapter {i}",
+                Id = Guid.NewGuid(),
+                Path = $"/book/jf676-{i:000}.mp3",
+                RunTimeTicks = TimeSpan.FromMinutes(10).Ticks
+            });
+        }
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns(parentItem);
+        _libraryManagerMock.Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Returns(chapters);
+
+        // The fixture the verdict judges: an ENDLIST playlist with FEWER
+        // segments than the 3 chapters (the "older undercounting ENDLIST
+        // playlist of the same key" of the filing).
+        string dirA = _cache.GetHlsDirectoryPath(parentIdStr, ticksA);
+        string dirB = _cache.GetHlsDirectoryPath(parentIdStr, ticksB);
+        Directory.CreateDirectory(dirA);
+        await File.WriteAllTextAsync(
+            Path.Combine(dirA, "stream.m3u8"),
+            "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:10.000,\nseg_0000.ts\n#EXT-X-ENDLIST\n");
+
+        // Fake ffmpeg (audiobook concat shape, last positional arg is the
+        // playlist): writes the first segment + a live no-ENDLIST playlist,
+        // then parks on the stop file; used by BOTH generations.
+        string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-jf676-undercount",
+            "for playlist_path in \"$@\"; do :; done\n" +
+            "playlist_dir=\"$(dirname \"$playlist_path\")\"\n" +
+            "mkdir -p \"$playlist_dir\"\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$playlist_dir/seg_0000.ts\" 2>/dev/null\n" +
+            "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:10.000,\\nseg_0000.ts\\n' > \"$playlist_path\"\n" +
+            "while [ ! -f \"$playlist_dir/stop\" ]; do sleep 0.1; done\n" +
+            "exit 0\n");
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Trace);
+            b.AddProvider(TestCaptureLogger.Into(logRecords));
+        });
+
+        var controller = CreateController(parentIdStr, loggerFactory, ffmpegPath: fakeFfmpegPath);
+        try
+        {
+            // Gen B: art dated B, no cache under ticks B, so the concat path
+            // starts a live generation that parks on its stop file.
+            artImage.DateModified = artA.AddHours(6);
+            ActionResult first = await controller.StreamHlsAudiobook(parentIdStr);
+            Assert.IsType<ContentResult>(first);
+            Assert.True(
+                await WaitUntilAsync(() => VideoAudioController.EncodeGenerationCountForTest(parentIdStr, audiobook: true) == 1, TimeSpan.FromSeconds(5), 50),
+                "gen B must register its live audiobook generation");
+
+            // The verdict fetch: art back to A finds the undercounting fixture
+            // playlist. Its own (parentId, ticks A) generation is dead while
+            // gen B (ticks B) is live: the verdict must fire TICKS-SCOPED.
+            artImage.DateModified = artA;
+            ActionResult second = await controller.StreamHlsAudiobook(parentIdStr);
+            var degraded = Assert.IsType<ObjectResult>(second);
+            Assert.Equal(503, degraded.StatusCode);
+
+            Assert.True(
+                File.Exists(Path.Combine(dirB, "stream.m3u8")),
+                "the undercount verdict's key-wide Cleanup wiped the live foreign-ticks generation's directory mid-write (JF-676)");
+            Assert.True(
+                TestCaptureLogger.Snapshot(logRecords).Any(r => r.Message.Contains("Audiobook HLS cache invalidated", StringComparison.Ordinal)),
+                "the ticks-scoped undercount verdict must fire for the dead own-ticks generation");
+            Assert.False(
+                File.Exists(Path.Combine(dirA, "stream.m3u8")),
+                "the verdict must clean its own ticks directory's debris playlist");
+
+            // Premise (green world only): the guard refused a second encode of
+            // the book, so exactly gen B's generation holds the registry.
+            Assert.Equal(1, VideoAudioController.EncodeGenerationCountForTest(parentIdStr, audiobook: true));
+        }
+        finally
+        {
+            artImage.DateModified = artA;
+            await ReleaseParkedEncodeFixturesAsync(parentIdStr, new[] { dirA, dirB }, audiobook: true);
         }
     }
 

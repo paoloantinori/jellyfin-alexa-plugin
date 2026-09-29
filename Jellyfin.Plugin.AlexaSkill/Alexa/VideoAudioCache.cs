@@ -704,7 +704,12 @@ public class VideoAudioCache
 
     /// <summary>
     /// Removes all cached files and HLS directories for a given item ID regardless of art modification ticks.
-    /// Used for manual invalidation when needed.
+    /// MANUAL-INVALIDATION UTILITY ONLY (JF-676): since the debris verdicts went
+    /// ticks-scoped this method has NO production caller; never call it from a
+    /// serve/verdict path, where a sibling art-tick generation of the same key
+    /// may be live-writing a directory this wipe would delete mid-write; use
+    /// <see cref="CleanupHlsGeneration"/> there (one generation's directory,
+    /// never a sibling's).
     /// </summary>
     /// <param name="itemId">The Jellyfin item ID to invalidate.</param>
     public void Cleanup(string itemId)
@@ -758,6 +763,42 @@ public class VideoAudioCache
         if (deleted > 0)
         {
             _logger.LogDebug("Cleaned up {Count} cache file(s)/dir(s) for item {ItemId}", deleted, itemId);
+        }
+#pragma warning restore CA3003
+    }
+
+    /// <summary>
+    /// Removes ONLY the HLS directory of ONE art-tick generation of the given item
+    /// (JF-676): the ticks-scoped sibling of <see cref="Cleanup"/> (which removes
+    /// every <c>{itemId}_*</c> directory and flat file regardless of ticks). The
+    /// ticks-scoped debris verdicts of <c>VideoAudioController</c> trigger this, so
+    /// a verdict on one art-tick generation's stale playlist can never delete a
+    /// sibling generation's directory, including a live foreign-ticks encode's,
+    /// which the key-wide Cleanup would wipe mid-write. Deliberately does NOT
+    /// touch the generation's flat <c>{itemId}_{ticks}.mp4</c> files: they are a
+    /// different endpoint's artifact and not the verdict's subject. Best-effort,
+    /// same failure family as <see cref="Cleanup"/> (logged, swallowed).
+    /// </summary>
+    /// <param name="itemId">The Jellyfin item ID whose generation directory is removed.</param>
+    /// <param name="artModifiedTicks">The generation's art ticks (the directory suffix).</param>
+    public void CleanupHlsGeneration(string itemId, long artModifiedTicks)
+    {
+#pragma warning disable CA3003 // itemId is GUID-validated by callers before reaching this method
+        string dirPath = GetHlsDirectoryPath(itemId, artModifiedTicks);
+        try
+        {
+            if (Directory.Exists(dirPath))
+            {
+                Directory.Delete(dirPath, recursive: true);
+                _lastAccessUtc.TryRemove(dirPath, out _);
+                _logger.LogDebug("Cleaned up HLS cache directory for item {ItemId} art ticks {ArtModifiedTicks}", itemId, artModifiedTicks);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException)
+        {
+            // Lost a race with a concurrent delete of the same generation, or the
+            // directory is undeletable: the verdict's caller re-encodes either way.
+            _logger.LogDebug(ex, "Failed to delete HLS cache directory: {Path}", dirPath);
         }
 #pragma warning restore CA3003
     }
