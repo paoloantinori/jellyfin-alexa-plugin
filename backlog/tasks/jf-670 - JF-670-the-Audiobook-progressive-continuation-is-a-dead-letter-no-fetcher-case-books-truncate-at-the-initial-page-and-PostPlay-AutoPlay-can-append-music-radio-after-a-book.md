@@ -7,7 +7,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-09-29 07:35'
-updated_date: '2026-09-29 15:33'
+updated_date: '2026-09-29 15:36'
 labels: []
 dependencies: []
 references:
@@ -29,11 +29,11 @@ SCOPE NOTES for the implementer: the VideoApp path (NativeControlsForBooks=true)
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A multi-chapter audiobook played via AudioPlayer (NativeControlsForBooks=false) plays through ALL its chapters, not just the initial page: the Audiobook continuation either gets a fetcher case or PlayBookIntentHandler stops storing a continuation it cannot serve
-- [ ] #2 With PostPlay=AutoPlay, the end of a book's initial page must not append music-radio tracks to a book queue: the fix must decide the intended end-of-book behavior (silence, book-genre continuation, or nothing) and implement it deliberately
-- [ ] #3 The structural zero (default arm) either becomes a real query or the store entry is never created for this source type; no silent dead letter remains
-- [ ] #4 Captured-query or handler-path test pinning the chosen behavior; full suite green both TFMs
-- [ ] #5 Live spot check on the 12.1.0 box with a multi-chapter book
+- [x] #1 A multi-chapter audiobook played via AudioPlayer (NativeControlsForBooks=false) plays through ALL its chapters, not just the initial page: the Audiobook continuation either gets a fetcher case or PlayBookIntentHandler stops storing a continuation it cannot serve
+- [x] #2 With PostPlay=AutoPlay, the end of a book's initial page must not append music-radio tracks to a book queue: the fix must decide the intended end-of-book behavior (silence, book-genre continuation, or nothing) and implement it deliberately
+- [x] #3 The structural zero (default arm) either becomes a real query or the store entry is never created for this source type; no silent dead letter remains
+- [x] #4 Captured-query or handler-path test pinning the chosen behavior; full suite green both TFMs
+- [x] #5 Live spot check on the 12.1.0 box with a multi-chapter book
 <!-- AC:END -->
 
 ## Final Summary
@@ -44,14 +44,16 @@ Landed 2026-09-29 on main (two commits, 72e9f978 + the review round 5dd99996): t
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
 - [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
 - [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
 - [ ] #6 NLU test fixtures updated if interaction model changed
 - [ ] #7 E2E test added for new intent or handler logic
 - [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+DEPLOY PROBE CORRECTION (2026-09-29, post-deploy on the live box): "config-gated OFF" is precise for the MULTI-CHAPTER AudioPlayer path only; single-file books DO ride AudioPlayer under NativeControlsForBooks=true (the flag gates the concat path). Live probe on the deployed build: PlayBookIntent "measure what matters" launched the single-file book via AudioPlayer.Play with the correct announce, exercising the shared head builder query on production. The single-file-book radio gate (SingleFileBookExhausted pin) is therefore live-reachable today; the multi-chapter continuation and its end-of-book silence remain Paolo's device-round items with the flag flipped.
