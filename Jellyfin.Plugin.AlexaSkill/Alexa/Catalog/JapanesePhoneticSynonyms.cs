@@ -1,7 +1,6 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 
@@ -59,7 +58,10 @@ public static class JapanesePhoneticSynonyms
 
         // Japanese has no articles, so no article variant needed.
 
-        return results.Distinct(StringComparer.OrdinalIgnoreCase).Take(3).ToList();
+        // Local cap 3, not the combiner's shared 5 (rationale on PerNameVariantCap):
+        // this romaji arm emits at most 1 variant; the caller re-caps the combined
+        // kana-first list at 5.
+        return PhoneticSynonymGenerator.CappedDistinct(results, 3);
     }
 
     private static bool IsJapaneseOrigin(string name)

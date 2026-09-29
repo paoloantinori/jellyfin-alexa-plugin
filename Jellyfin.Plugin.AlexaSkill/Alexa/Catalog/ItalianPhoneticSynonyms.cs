@@ -12,12 +12,6 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
 public static class ItalianPhoneticSynonyms
 {
     /// <summary>
-    /// The per-name catalog-slot cap (JF-362 raised it from 3 to fit the coverage variants;
-    /// device-captured forms are ordered first so they survive the cap).
-    /// </summary>
-    private const int PerNameVariantCap = 5;
-
-    /// <summary>
     /// Generates up to 5 Italian phonetic variant strings for an English name (the
     /// per-name cap, raised from 3 in JF-362 to fit the coverage variants; device-captured
     /// forms are ordered first so they survive the cap). Returns an empty list for names
@@ -75,10 +69,11 @@ public static class ItalianPhoneticSynonyms
         bool transformed = !string.Equals(phonetic, withoutThe, StringComparison.OrdinalIgnoreCase);
         if (transformed)
         {
-            // Device-captured forms FIRST, so they survive the Take(5) cap. ASR captured
+            // Device-captured forms FIRST, so they survive the per-name cap. ASR captured
             // both "sol coffin" and "soul coffin"; the override-vowel restore ("Soul
             // Coffin") is added before the alternate transform, which is lower priority and
-            // often a near-duplicate that would otherwise push the device match past index 5.
+            // often a near-duplicate that would otherwise push the device match out of the
+            // capped list.
             PhoneticSynonymGenerator.AddConsonantVariants(results, RestoreOverrideVowels(phonetic, withoutThe));
             PhoneticSynonymGenerator.AddConsonantVariants(results, phonetic);
             PhoneticSynonymGenerator.AddConsonantVariants(results, phoneticAlt);
@@ -89,13 +84,13 @@ public static class ItalianPhoneticSynonyms
         // transform in its own right (device: Koop heard as BOTH "cup" and "coop").
         // Names with no velar stop add nothing here. Skipped when the cap is already
         // provably full: velar variants append last and the in-list Contains keeps
-        // results distinct, so the Take below would discard them anyway.
-        if (results.Count < PerNameVariantCap)
+        // results distinct, so the exit cap would discard them anyway.
+        if (results.Count < PhoneticSynonymGenerator.PerNameVariantCap)
         {
             PhoneticSynonymGenerator.AddVelarStopVariants(results, withoutThe);
         }
 
-        return results.Distinct(StringComparer.OrdinalIgnoreCase).Take(PerNameVariantCap).ToList();
+        return PhoneticSynonymGenerator.CappedDistinct(results, PhoneticSynonymGenerator.PerNameVariantCap);
     }
 
     /// <summary>
