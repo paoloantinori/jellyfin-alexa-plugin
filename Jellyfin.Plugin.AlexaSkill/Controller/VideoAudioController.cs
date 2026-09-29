@@ -1693,10 +1693,14 @@ public class VideoAudioController : ControllerBase
             // JF-636/JF-668: both registry kills run INSIDE the per-key lock after
             // the cache fast paths (a variant with a valid cache entry returned
             // already, so anything still running here is abandoned by this launch)
-            // and BEFORE the directory is recreated: the abandoned prior writer
-            // must be dead before any directory mutation, or its by-path segment
-            // opens and playlist rewrites land in the recreated directory (see
-            // KillDisplacedSpeedEncode).
+            // and BEFORE this launch's directory recreation and debris sweep: the
+            // abandoned prior writer must be dead before those mutations, or its
+            // by-path segment opens and playlist rewrites land in the recreated
+            // directory (see KillDisplacedSpeedEncode). The stub cleanup above the
+            // hook also touches directories; it is kept from deleting under a live
+            // writer only by its missing/empty-playlist guards plus the JF-428 pin
+            // protocol (a registered encode holds a pin) - neither pinned for this
+            // ordering, so do not hoist further mutations above the hook.
             spec.SupersedeStaleEncodes?.Invoke();
 
 #pragma warning disable CA3003 // paths derived from GUID-validated itemId
@@ -1930,11 +1934,7 @@ public class VideoAudioController : ControllerBase
     /// <param name="cacheKey">The encode's cache key.</param>
     /// <returns>The handle every clear of THIS encode must go through.</returns>
     private static ActiveEncodeHandle MarkEncodeActive(ConcurrentDictionary<string, object> activeEncodes, string cacheKey)
-    {
-        var generation = new object();
-        activeEncodes[cacheKey] = generation;
-        return new ActiveEncodeHandle(activeEncodes, cacheKey, generation);
-    }
+        => ActiveEncodeHandle.MarkActive(activeEncodes, cacheKey);
 
     /// <summary>
     /// The active-encode flag's ownership bundle (JF-668): the registry, the
@@ -1967,14 +1967,29 @@ public class VideoAudioController : ControllerBase
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ActiveEncodeHandle"/> struct.
-        /// Hand-built handles are an accident waiting to happen: mint through
-        /// <see cref="MarkEncodeActive"/> or <see cref="PreMarkSentinel"/>.
+        /// PRIVATE (JF-668 gate-review F2): hand-built handles - the right key with
+        /// the wrong registry or a stale token - are the silent no-op-clear failure
+        /// family this type exists to prevent, so construction is confined to the
+        /// struct's own factories (<see cref="MarkActive"/>, <see cref="PreMarkSentinel"/>);
+        /// the enclosing controller cannot reach a private ctor's members but CAN
+        /// call public static factories (PreMarkSentinel proves the shape).
         /// </summary>
-        public ActiveEncodeHandle(ConcurrentDictionary<string, object> activeEncodes, string cacheKey, object generation)
+        private ActiveEncodeHandle(ConcurrentDictionary<string, object> activeEncodes, string cacheKey, object generation)
         {
             _activeEncodes = activeEncodes;
             _cacheKey = cacheKey;
             _generation = generation;
+        }
+
+        /// <summary>
+        /// The real mint: registers a fresh generation token under the key (JF-665:
+        /// reference identity IS the generation) and returns the handle bound to it.
+        /// </summary>
+        public static ActiveEncodeHandle MarkActive(ConcurrentDictionary<string, object> activeEncodes, string cacheKey)
+        {
+            var generation = new object();
+            activeEncodes[cacheKey] = generation;
+            return new(activeEncodes, cacheKey, generation);
         }
 
         /// <summary>
@@ -2038,7 +2053,12 @@ public class VideoAudioController : ControllerBase
     /// (<see cref="KillEncodeTree"/>'s policy), and swallow only the exit race
     /// at Debug. The reason is a structured MESSAGE TEMPLATE with its args, so
     /// callers keep their exact pre-JF-668 wording and the log keeps named
-    /// fields. Does NOT dispose: the process's own owner (the monitor, the
+    /// fields. KNOWN LIMITATION (gate-review F3, probed on MEL 9.0.11):
+    /// threading the template as a value means the analyzer checks it in only
+    /// one direction through this wrapper (extra args surface via CA2017; a
+    /// template naming a placeholder whose arg was forgotten compiles clean),
+    /// so template edits must be re-read against their args by eye. Does NOT
+    /// dispose: the process's own owner (the monitor, the
     /// gate's exit-poll) keeps its lifecycle.
     /// </summary>
     /// <param name="process">The encode process to kill; may have exited (guard) or

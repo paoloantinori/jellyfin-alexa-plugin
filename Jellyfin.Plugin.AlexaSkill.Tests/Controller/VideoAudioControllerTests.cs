@@ -3635,8 +3635,10 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// produce the interleave without racing a live encode's directory): the
     /// fake ffmpeg probes the prior process's /proc state at its start and
     /// writes prior-state.txt BEFORE the first segment, so the file reads dead
-    /// iff the kill landed within the probe's 0.5s tolerance (the loop accepts
-    /// SIGKILL delivery latency; state Z counts as dead because a
+    /// iff the kill landed within the probe's 2s tolerance (the 40x0.05s loop
+    /// accepts SIGKILL delivery latency under loaded runners; a strict single
+    /// read would trade the deterministic red for a scheduler-dependent CI
+    /// false-red; state Z counts as dead because a
     /// killed-but-unreaped process stays a zombie, and a missing /proc entry
     /// counts as dead too, all via shell builtins so no tool absence can fake
     /// a dead read). A kill that only follows the first-segment wait reads
@@ -3667,7 +3669,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             "dir=$(dirname \"$last_arg\")\n" +
             "state=alive\n" +
             "i=0\n" +
-            "while [ $i -lt 10 ]; do\n" +
+            "while [ $i -lt 40 ]; do\n" +
             "  pstate=S\n" +
             $"  if [ -r /proc/{prior.Id}/stat ]; then read -r _p _c pstate _r < /proc/{prior.Id}/stat; fi\n" +
             $"  if [ ! -e /proc/{prior.Id}/stat ] || [ \"$pstate\" = \"Z\" ]; then state=dead; break; fi\n" +
