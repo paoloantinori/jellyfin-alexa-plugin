@@ -542,8 +542,10 @@ public class VideoAudioController : ControllerBase
             string prewrittenPath = Path.Combine(hlsDir, PrewrittenPlaylistFileName);
 
             // Declared before the try so the catch below can clear it: the
-            // sentinel's token is never registered, so its clear no-ops until
-            // the mark below re-mints the handle with the real generation.
+            // sentinel's clear no-ops because its holder is never stored in the
+            // registry (the structural JF-669 guarantee PreMarkSentinel's doc
+            // states), until the mark below re-mints the handle with the real
+            // generation.
             ActiveEncodeHandle activeEncode = ActiveEncodeHandle.PreMarkSentinel(_activeVideoAudioEncodes, itemId, artModifiedTicks);
             try
             {
@@ -3207,6 +3209,10 @@ public class VideoAudioController : ControllerBase
     /// <param name="active">True to mark an encode active, false to clear it.</param>
     /// <param name="audiobook">True to target the audiobook registry (default episode).</param>
     /// <param name="song">True to target the single-item registry (default episode).</param>
+    /// TEST-SEAM HAZARD: the clear arm hard-removes the whole registry entry,
+    /// bypassing the holder gate that closes the register-vs-remove race; safe
+    /// only on fresh-Guid keys or after the monitors already cleared (all current
+    /// callers) - do not call it concurrent with a production-marked generation.
     internal static void SetEncodeActiveForTest(string itemId, bool active, bool audiobook = false, bool song = false)
     {
         var registry = EncodeRegistryFor(audiobook, song);
