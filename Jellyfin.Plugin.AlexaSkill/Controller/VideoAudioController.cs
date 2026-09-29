@@ -536,11 +536,10 @@ public class VideoAudioController : ControllerBase
 
             string prewrittenPath = Path.Combine(hlsDir, PrewrittenPlaylistFileName);
 
-            // Declared before the try so the catch below can clear it: the token
-            // is this generation's identity whether or not the flag mark below
-            // was reached, and the generation-aware clear no-ops unless the
-            // registry holds exactly this token.
-            object encodeGeneration = new object();
+            // Declared before the try so the catch below can clear it: the
+            // sentinel's token is never registered, so its clear no-ops until
+            // the mark below re-mints the handle with the real generation.
+            ActiveEncodeHandle activeEncode = ActiveEncodeHandle.PreMarkSentinel(_activeVideoAudioEncodes, itemId);
             try
             {
                 // JF-536: pre-write the FULL segment listing (the episode path's
@@ -594,7 +593,7 @@ public class VideoAudioController : ControllerBase
                 // lock): the serve paths above rely on flag-set implying the
                 // pre-written listing is on disk. The monitor clears the flag on
                 // exit (generation-aware, JF-665).
-                encodeGeneration = MarkEncodeActive(_activeVideoAudioEncodes, itemId);
+                activeEncode = MarkEncodeActive(_activeVideoAudioEncodes, itemId);
 
                 // Wait for the first segment file to appear on disk.
                 ActionResult? firstSegmentFailure = await WaitForFirstSegmentOrKillAsync(
@@ -602,9 +601,7 @@ public class VideoAudioController : ControllerBase
                     hlsDir,
                     playlistPath,
                     "seg_000.ts",
-                    itemId,
-                    _activeVideoAudioEncodes,
-                    encodeGeneration,
+                    activeEncode,
                     exitCode => _logger.LogWarning("VideoAudio HLS: ffmpeg failed to create first segment for item {ItemId} (exit code {ExitCode})", itemId, exitCode),
                     "HLS generation failed").ConfigureAwait(false);
                 if (firstSegmentFailure != null)
@@ -618,7 +615,7 @@ public class VideoAudioController : ControllerBase
             catch
             {
                 // Pre-handoff failure: this scope still owns the process.
-                KillEncodeAndClearFlag(ffmpegProcess, _activeVideoAudioEncodes, itemId, encodeGeneration);
+                activeEncode.KillAndClear(ffmpegProcess);
                 throw;
             }
 
@@ -629,7 +626,7 @@ public class VideoAudioController : ControllerBase
             // closed, so no later exception (e.g. the playlist re-read in
             // ServePlaylistWithToken racing ffmpeg's rewrite) can dispose the
             // process under the running monitor.
-            StartHlsMonitor(ffmpegProcess, hlsDir, itemId, artModifiedTicks, "Song", _activeVideoAudioEncodes, encodeGeneration);
+            StartHlsMonitor(ffmpegProcess, hlsDir, itemId, artModifiedTicks, "Song", activeEncode);
 
             // Serve the pre-written FULL listing immediately (JF-536). Null only when
             // the prewrite was skipped (no runtime): fall back to ffmpeg's live
@@ -917,7 +914,7 @@ public class VideoAudioController : ControllerBase
             // can briefly see the flag with no listing yet;
             // <see cref="TryServePrewrittenEpisodePlaylist"/> covers that race by
             // falling back to the live playlist.
-            object encodeGeneration = MarkEncodeActive(_activeEpisodeEncodes, itemId);
+            ActiveEncodeHandle activeEncode = MarkEncodeActive(_activeEpisodeEncodes, itemId);
 
             Process ffmpegProcess;
             try
@@ -935,7 +932,7 @@ public class VideoAudioController : ControllerBase
             }
             catch
             {
-                ClearEncodeFlag(_activeEpisodeEncodes, itemId, encodeGeneration);
+                activeEncode.Clear();
                 throw;
             }
 
@@ -988,9 +985,7 @@ public class VideoAudioController : ControllerBase
                     hlsDir,
                     playlistPath,
                     "seg_0000.ts",
-                    itemId,
-                    _activeEpisodeEncodes,
-                    encodeGeneration,
+                    activeEncode,
                     exitCode => _logger.LogWarning("VideoAudio episode HLS: ffmpeg failed to create first segment for item {ItemId} (exit code {ExitCode})", itemId, exitCode),
                     "Episode HLS generation failed").ConfigureAwait(false);
                 if (firstSegmentFailure != null)
@@ -1004,7 +999,7 @@ public class VideoAudioController : ControllerBase
             catch
             {
                 // Pre-handoff failure: this scope still owns the process.
-                KillEncodeAndClearFlag(ffmpegProcess, _activeEpisodeEncodes, itemId, encodeGeneration);
+                activeEncode.KillAndClear(ffmpegProcess);
                 throw;
             }
 
@@ -1020,8 +1015,7 @@ public class VideoAudioController : ControllerBase
                 itemId,
                 artModifiedTicks,
                 "Episode",
-                _activeEpisodeEncodes,
-                encodeGeneration,
+                activeEncode,
                 videoTranscodeTier,
                 validation.Item.RunTimeTicks);
 
@@ -1499,7 +1493,14 @@ public class VideoAudioController : ControllerBase
                 // _activeAudioSpeedEncodeProcesses). Runs INSIDE the per-key lock, after
                 // the cache fast paths: a variant that had a valid cache entry returned
                 // already, so anything still running here is abandoned by this launch.
-                SupersedeStaleEncodes = () => KillSupersededSpeedEncodes(itemId, cacheKey, deviceIdHint),
+                // JF-668: the SAME-KEY displaced entry dies here too, before the new
+                // ffmpeg starts (the first-segment-wait window closer; see
+                // KillDisplacedSpeedEncode).
+                SupersedeStaleEncodes = () =>
+                {
+                    KillDisplacedSpeedEncode(cacheKey);
+                    KillSupersededSpeedEncodes(itemId, cacheKey, deviceIdHint);
+                },
                 // Registered only once the encode is provably live (the first-segment
                 // wait succeeded); the failure paths never enter the registry, so a
                 // registry entry always names a running encode to supersede later.
@@ -1514,7 +1515,10 @@ public class VideoAudioController : ControllerBase
     /// <see cref="KillSupersededSpeedEncodes"/> gets), so this helper itself
     /// never touches HttpContext and stays callable from any context. A same-key
     /// registration first kills the LIVE prior encode it displaces (JF-665;
-    /// rationale in the loop comment below); the exit watcher keeps the registry
+    /// rationale in the loop comment below); since JF-668 this is the BACKSTOP:
+    /// <see cref="KillDisplacedSpeedEncode"/> already fired at the pre-start
+    /// position inside the per-key lock, so the displaced entry here is normally
+    /// already gone. The exit watcher keeps the registry
     /// to live encodes only (the monitor owns the process disposal and knows
     /// nothing of it). Internal
     /// test seam (JF-647, InternalsVisibleTo): the same-key re-register race the
@@ -1557,22 +1561,10 @@ public class VideoAudioController : ControllerBase
             // the seam is directly drivable) must not kill itself.
             if (!ReferenceEquals(displaced.Process, ffmpegProcess))
             {
-                try
-                {
-                    if (!displaced.Process.HasExited)
-                    {
-                        _logger.LogInformation(
-                            "VideoAudio audio-speed HLS: killing displaced speed encode {CacheKey} (a same-key re-register is rebuilding its evicted variant)",
-                            cacheKey);
-                        displaced.Process.Kill();
-                    }
-                }
-                catch (Exception ex)
-                {
-                    // Exited or disposed between the check and the kill: the
-                    // encode ends on its own and the entry is replaced either way.
-                    _logger.LogDebug(ex, "VideoAudio audio-speed HLS: displaced-encode kill raced the exit of {CacheKey}", cacheKey);
-                }
+                TryKillLiveProcess(
+                    displaced.Process,
+                    "VideoAudio audio-speed HLS: killing displaced speed encode {CacheKey} (a same-key re-register is rebuilding its evicted variant)",
+                    cacheKey);
             }
 
             if (_activeAudioSpeedEncodeProcesses.TryUpdate(cacheKey, (ffmpegProcess, ownerDeviceId), displaced))
@@ -1698,6 +1690,15 @@ public class VideoAudioController : ControllerBase
                 }
             }
 
+            // JF-636/JF-668: both registry kills run INSIDE the per-key lock after
+            // the cache fast paths (a variant with a valid cache entry returned
+            // already, so anything still running here is abandoned by this launch)
+            // and BEFORE the directory is recreated: the abandoned prior writer
+            // must be dead before any directory mutation, or its by-path segment
+            // opens and playlist rewrites land in the recreated directory (see
+            // KillDisplacedSpeedEncode).
+            spec.SupersedeStaleEncodes?.Invoke();
+
 #pragma warning disable CA3003 // paths derived from GUID-validated itemId
             string hlsDir = _cache.GetHlsDirectoryPath(spec.CacheKey, spec.ArtModifiedTicks);
             Directory.CreateDirectory(hlsDir);
@@ -1718,9 +1719,7 @@ public class VideoAudioController : ControllerBase
             // JF-498 review I1 concern, same as every sibling path).
             _cache.DeleteHlsEncodeDebris(spec.CacheKey, spec.ArtModifiedTicks);
 
-            spec.SupersedeStaleEncodes?.Invoke();
-
-            object encodeGeneration = MarkEncodeActive(_activeEpisodeEncodes, spec.CacheKey);
+            ActiveEncodeHandle activeEncode = MarkEncodeActive(_activeEpisodeEncodes, spec.CacheKey);
 
             Process ffmpegProcess;
             try
@@ -1733,7 +1732,7 @@ public class VideoAudioController : ControllerBase
             }
             catch
             {
-                ClearEncodeFlag(_activeEpisodeEncodes, spec.CacheKey, encodeGeneration);
+                activeEncode.Clear();
                 throw;
             }
 
@@ -1744,9 +1743,7 @@ public class VideoAudioController : ControllerBase
                     hlsDir,
                     playlistPath,
                     "seg_0000.ts",
-                    spec.CacheKey,
-                    _activeEpisodeEncodes,
-                    encodeGeneration,
+                    activeEncode,
                     spec.LogFirstSegmentFailure,
                     spec.FailureErrorBody).ConfigureAwait(false);
                 if (firstSegmentFailure != null)
@@ -1761,13 +1758,13 @@ public class VideoAudioController : ControllerBase
             catch
             {
                 // Pre-handoff failure: this scope still owns the process.
-                KillEncodeAndClearFlag(ffmpegProcess, _activeEpisodeEncodes, spec.CacheKey, encodeGeneration);
+                activeEncode.KillAndClear(ffmpegProcess);
                 throw;
             }
 
             // CA2025: monitor started via the boundary helper AFTER the disposing scope
             // above closed; the monitor's finally owns the flag clear and the disposal.
-            StartHlsMonitor(ffmpegProcess, hlsDir, spec.CacheKey, spec.ArtModifiedTicks, spec.MonitorLabel, _activeEpisodeEncodes, encodeGeneration);
+            StartHlsMonitor(ffmpegProcess, hlsDir, spec.CacheKey, spec.ArtModifiedTicks, spec.MonitorLabel, activeEncode);
 
             spec.LogServingPartial();
             return ServePlaylistWithToken(playlistPath);
@@ -1834,8 +1831,10 @@ public class VideoAudioController : ControllerBase
         required public Action LogServingPartial { get; init; }
 
         /// <summary>
-        /// Optional extra inside the lock, after debris cleanup and before the
-        /// encode flag lands (the speed variant's same-device supersede kill).
+        /// Optional extra inside the lock, after the cache fast paths and before
+        /// the encode directory is recreated (the speed variant's pre-start
+        /// same-key displacement kill and its same-device supersede kill: the
+        /// abandoned prior writer must be dead before any directory mutation).
         /// </summary>
         public Action? SupersedeStaleEncodes { get; init; }
 
@@ -1872,9 +1871,7 @@ public class VideoAudioController : ControllerBase
     /// <param name="hlsDir">The encode's HLS cache directory.</param>
     /// <param name="playlistPath">ffmpeg's playlist path in that directory.</param>
     /// <param name="firstSegmentFileName">The first segment's file name ("seg_000.ts" for the song path's 3-digit template, "seg_0000.ts" for the 4-digit paths).</param>
-    /// <param name="cacheKey">The encode's cache key (flag clear on failure).</param>
-    /// <param name="activeEncodes">The path's active-encode registry.</param>
-    /// <param name="encodeGeneration">The token <see cref="MarkEncodeActive"/> returned for this encode; the failure clear is compare-and-remove on it.</param>
+    /// <param name="activeEncode">The encode's handle (<see cref="MarkEncodeActive"/>); its failure clear is the handle's generation-aware KillAndClear.</param>
     /// <param name="logFailure">Logs the path's exact failure warning; receives the exit code read before the kill.</param>
     /// <param name="errorBody">The 500 response's error string.</param>
     /// <returns>The failure response to answer with, or null when the first segment appeared.</returns>
@@ -1883,9 +1880,7 @@ public class VideoAudioController : ControllerBase
         string hlsDir,
         string playlistPath,
         string firstSegmentFileName,
-        string cacheKey,
-        ConcurrentDictionary<string, object> activeEncodes,
-        object encodeGeneration,
+        ActiveEncodeHandle activeEncode,
         Action<int> logFailure,
         string errorBody)
     {
@@ -1915,15 +1910,16 @@ public class VideoAudioController : ControllerBase
         }
 
         logFailure(SafeExitCode(ffmpegProcess));
-        KillEncodeAndClearFlag(ffmpegProcess, activeEncodes, cacheKey, encodeGeneration);
+        activeEncode.KillAndClear(ffmpegProcess);
         return StatusCode(500, new { error = errorBody });
     }
 
     /// <summary>
     /// Mark a cache key as actively encoding under a fresh generation token and
-    /// return that token (JF-665). Never a checked TryAdd: when the key is
-    /// already flagged, the holder is a PRIOR generation (its cache directory
-    /// was evicted mid-encode and a re-request is re-encoding, or its monitor's
+    /// return the encode's handle (the JF-665 generation rule, one bundled
+    /// value since JF-668). Never a checked TryAdd: when the key is already
+    /// flagged, the holder is a PRIOR generation (its cache directory was
+    /// evicted mid-encode and a re-request is re-encoding, or its monitor's
     /// clear is still pending), and the flag must pass to the NEWEST generation
     /// so the prior monitor's generation-aware clear cannot drop it mid-encode
     /// (which turned the near-ahead segment hold off and let
@@ -1932,47 +1928,145 @@ public class VideoAudioController : ControllerBase
     /// </summary>
     /// <param name="activeEncodes">The path's active-encode registry.</param>
     /// <param name="cacheKey">The encode's cache key.</param>
-    /// <returns>The generation token every clear of THIS encode must present.</returns>
-    private static object MarkEncodeActive(ConcurrentDictionary<string, object> activeEncodes, string cacheKey)
+    /// <returns>The handle every clear of THIS encode must go through.</returns>
+    private static ActiveEncodeHandle MarkEncodeActive(ConcurrentDictionary<string, object> activeEncodes, string cacheKey)
     {
         var generation = new object();
         activeEncodes[cacheKey] = generation;
-        return generation;
+        return new ActiveEncodeHandle(activeEncodes, cacheKey, generation);
     }
 
     /// <summary>
-    /// Generation-aware active-encode flag clear (JF-665, the JF-647
-    /// compare-and-remove shape): removes the key only while the flag still
-    /// belongs to <paramref name="encodeGeneration"/>, so the late monitor or
-    /// failure path of a displaced generation cannot clear a newer
-    /// registration's flag.
+    /// The active-encode flag's ownership bundle (JF-668): the registry, the
+    /// cache key, and the generation token <see cref="MarkEncodeActive"/>
+    /// minted, captured as ONE value so a clear can never pair the right key
+    /// with the wrong registry or a stale token. Both mispairings were silent
+    /// no-op clears leaving the flag stuck mid-encode (the failure family
+    /// JF-665 exists to prevent), and until JF-668 they were representable
+    /// because the triple travelled as parallel parameters through the
+    /// wait/kill/monitor chain, guarded only by doc comments. The type is
+    /// private to this controller, so construction happens only here, and the
+    /// two intended shapes are <see cref="MarkEncodeActive"/> (the real mint)
+    /// and <see cref="PreMarkSentinel"/> (the song path's pre-mark no-op
+    /// clear). <see cref="Clear"/> and <see cref="KillAndClear"/> are the ONLY
+    /// clear paths.
     /// </summary>
-    /// <param name="activeEncodes">The path's active-encode registry.</param>
-    /// <param name="cacheKey">The encode's cache key.</param>
-    /// <param name="encodeGeneration">The token <see cref="MarkEncodeActive"/> returned for this encode.</param>
-    private static void ClearEncodeFlag(ConcurrentDictionary<string, object> activeEncodes, string cacheKey, object encodeGeneration)
-        => activeEncodes.TryRemove(new KeyValuePair<string, object>(cacheKey, encodeGeneration));
+    private readonly struct ActiveEncodeHandle
+    {
+        /// <summary>The path's active-encode registry this handle's key lives in.</summary>
+        private readonly ConcurrentDictionary<string, object> _activeEncodes;
+
+        /// <summary>The encode's cache key.</summary>
+        private readonly string _cacheKey;
+
+        /// <summary>
+        /// The generation token minted together with this handle; reference
+        /// identity IS the generation, and every clear compares against it.
+        /// </summary>
+        private readonly object _generation;
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ActiveEncodeHandle"/> struct.
+        /// Hand-built handles are an accident waiting to happen: mint through
+        /// <see cref="MarkEncodeActive"/> or <see cref="PreMarkSentinel"/>.
+        /// </summary>
+        public ActiveEncodeHandle(ConcurrentDictionary<string, object> activeEncodes, string cacheKey, object generation)
+        {
+            _activeEncodes = activeEncodes;
+            _cacheKey = cacheKey;
+            _generation = generation;
+        }
+
+        /// <summary>
+        /// The song path's pre-mark sentinel: a handle whose token the registry
+        /// never holds, so <see cref="Clear"/> no-ops until
+        /// <see cref="MarkEncodeActive"/> mints the real one (a prewrite failure
+        /// before the mark must not drop a prior generation's flag), while
+        /// <see cref="KillAndClear"/>'s kill and dispose stay real (that scope
+        /// owns the process).
+        /// </summary>
+        public static ActiveEncodeHandle PreMarkSentinel(ConcurrentDictionary<string, object> activeEncodes, string cacheKey)
+            => new(activeEncodes, cacheKey, new object());
+
+        /// <summary>
+        /// Generation-aware active-encode flag clear (JF-665, the JF-647
+        /// compare-and-remove shape): removes the key only while the flag still
+        /// belongs to this handle's generation, so the late monitor or failure
+        /// path of a displaced generation cannot clear a newer registration's
+        /// flag. A handle whose token the registry never held (the
+        /// <see cref="PreMarkSentinel"/> shape) clears as a no-op.
+        /// </summary>
+        public void Clear()
+            => _activeEncodes.TryRemove(new KeyValuePair<string, object>(_cacheKey, _generation));
+
+        /// <summary>
+        /// The ONE failure cleanup triple shared by every HLS path's pre-handoff
+        /// failure sites (JF-637): kill the encode (already-exited is fine; the
+        /// tree-kill policy lives in <see cref="KillEncodeTree"/>), dispose the
+        /// process this scope still owns, and clear the flag. Called from
+        /// <see cref="WaitForFirstSegmentOrKillAsync"/>'s failure branch and
+        /// every core's catch; a future cleanup addition (releasing a pin,
+        /// clearing a second registry) lands here once instead of being
+        /// mirrored per site. The caller owns the failure LOG: it must read the
+        /// exit code through <see cref="SafeExitCode"/> BEFORE this kills.
+        /// </summary>
+        /// <param name="ffmpegProcess">The failed encode's process (never null).</param>
+        public void KillAndClear(Process ffmpegProcess)
+        {
+            try { KillEncodeTree(ffmpegProcess); } catch { /* already exited */ }
+            ffmpegProcess.Dispose();
+            Clear();
+        }
+    }
 
     /// <summary>
-    /// The ONE failure cleanup triple shared by every HLS path's pre-handoff
-    /// failure sites (JF-637): kill the encode (already-exited is fine), dispose
-    /// the process this scope still owns, and clear the path's active-encode
-    /// flag (generation-aware, JF-665). Called from
-    /// <see cref="WaitForFirstSegmentOrKillAsync"/>'s failure branch and every
-    /// core's catch; a future cleanup addition (releasing a pin, clearing a
-    /// second registry) lands here once instead of being mirrored per site. The
-    /// caller owns the failure LOG: it must read the exit code through
-    /// <see cref="SafeExitCode"/> BEFORE this kills.
+    /// The KILL POLICY in one place (JF-668): every encode kill is a TREE kill
+    /// (<c>entireProcessTree: true</c>). A plain Kill of a wrapper process
+    /// leaves its CHILD ffmpeg writing; only the fact that production
+    /// currently starts ffmpeg directly made the old plain Kills safe, and the
+    /// stall kill already used the tree form. Callers add their own guard,
+    /// log, and catch around this (see <see cref="TryKillLiveProcess"/> and
+    /// <see cref="ActiveEncodeHandle.KillAndClear"/>).
     /// </summary>
-    /// <param name="ffmpegProcess">The failed encode's process (never null).</param>
-    /// <param name="activeEncodes">The path's active-encode registry.</param>
-    /// <param name="cacheKey">The encode's cache key.</param>
-    /// <param name="encodeGeneration">The token <see cref="MarkEncodeActive"/> returned for this encode.</param>
-    private static void KillEncodeAndClearFlag(Process ffmpegProcess, ConcurrentDictionary<string, object> activeEncodes, string cacheKey, object encodeGeneration)
+    private static void KillEncodeTree(Process process)
+        => process.Kill(entireProcessTree: true);
+
+    /// <summary>
+    /// The ONE kill-a-maybe-live-process idiom (JF-668; the supersede kill, the
+    /// displacement kills, and the monitor's stall kill were three drifted
+    /// copies): guard on HasExited, log at Information WHY, tree-kill
+    /// (<see cref="KillEncodeTree"/>'s policy), and swallow only the exit race
+    /// at Debug. The reason is a structured MESSAGE TEMPLATE with its args, so
+    /// callers keep their exact pre-JF-668 wording and the log keeps named
+    /// fields. Does NOT dispose: the process's own owner (the monitor, the
+    /// gate's exit-poll) keeps its lifecycle.
+    /// </summary>
+    /// <param name="process">The encode process to kill; may have exited (guard) or
+    /// get disposed concurrently (the catch-race is expected and Debug-only).</param>
+    /// <param name="reasonTemplate">The kill's structured log template (the caller's exact wording).</param>
+    /// <param name="args">The template's arguments.</param>
+    private void TryKillLiveProcess(Process process, string reasonTemplate, params object?[] args)
     {
-        try { ffmpegProcess.Kill(); } catch { /* already exited */ }
-        ffmpegProcess.Dispose();
-        ClearEncodeFlag(activeEncodes, cacheKey, encodeGeneration);
+        try
+        {
+            if (process.HasExited)
+            {
+                return;
+            }
+
+#pragma warning disable CA2254 // the template is the caller's constant log wording, threaded as a value
+            _logger.LogInformation(reasonTemplate, args);
+#pragma warning restore CA2254
+            KillEncodeTree(process);
+        }
+        catch (Exception ex)
+        {
+            // Exited or disposed between the check and the kill: the encode
+            // ends on its own and whatever registry named it is updated either way.
+#pragma warning disable CA2254 // same: the caller's constant wording
+            _logger.LogDebug(ex, "Kill raced the exit: " + reasonTemplate, args);
+#pragma warning restore CA2254
+        }
     }
 
     /// <summary>
@@ -2007,29 +2101,66 @@ public class VideoAudioController : ControllerBase
                 continue;
             }
 
-            // Compare-and-remove (JF-647): a same-key re-register can swap this
-            // entry between the enumeration and the removal; the kill below still
-            // targets the observed process, but the removal must not delete a
-            // newer registration it never inspected.
-            _activeAudioSpeedEncodeProcesses.TryRemove(entry);
-            try
-            {
-                if (!entry.Value.Process.HasExited)
-                {
-                    _logger.LogInformation(
-                        "VideoAudio audio-speed HLS: killing superseded speed encode {CacheKey} for item {ItemId} (device {DeviceId} launched a new rate/start)",
-                        entry.Key, itemId, requestingDeviceId);
-                    entry.Value.Process.Kill();
-                }
-            }
-            catch (Exception ex)
-            {
-                // Already exited/disposed between the check and the kill, or an
-                // ESRCH-class kill failure: the encode finishes on its own and the
-                // registry entry is gone either way.
-                _logger.LogDebug(ex, "VideoAudio audio-speed HLS: supersede kill raced the exit of {CacheKey}", entry.Key);
-            }
+            RemoveSpeedEncodeAndKill(
+                entry,
+                "VideoAudio audio-speed HLS: killing superseded speed encode {CacheKey} for item {ItemId} (device {DeviceId} launched a new rate/start)",
+                entry.Key, itemId, requestingDeviceId);
         }
+    }
+
+    /// <summary>
+    /// Drop a live speed-encode registry entry and kill its process (JF-668:
+    /// the remove+kill composite both registry kills share). Compare-and-remove
+    /// on the OBSERVED pair (the JF-647 shape): never delete a newer
+    /// registration the caller never inspected; the kill targets the observed
+    /// process either way (a kill of an already-dead process is a no-op).
+    /// </summary>
+    /// <param name="entry">The registry entry the caller observed.</param>
+    /// <param name="reasonTemplate">The kill's structured log template (the caller's exact wording).</param>
+    /// <param name="args">The template's arguments.</param>
+    private void RemoveSpeedEncodeAndKill(
+        KeyValuePair<string, (Process Process, string? OwnerDeviceId)> entry,
+        string reasonTemplate,
+        params object?[] args)
+    {
+        _activeAudioSpeedEncodeProcesses.TryRemove(entry);
+        TryKillLiveProcess(entry.Value.Process, reasonTemplate, args);
+    }
+
+    /// <summary>
+    /// JF-668 (the JF-665 code-review follow-up): kill a registry entry that
+    /// still names a LIVE encode under the cache key this request is about to
+    /// re-encode, at the pre-start position inside the per-key lock, BEFORE
+    /// the encode directory is recreated and the new ffmpeg starts. The JF-665
+    /// registration-time kill fires only after the NEW encode's first-segment
+    /// wait succeeds, and in that window (typically sub-second, worst case the
+    /// ~20s wait ceiling) the abandoned prior ffmpeg keeps writing BY PATH
+    /// into the recreated directory: its post-eviction segment opens and
+    /// stream.m3u8 rewrites resolve by path at open time, so both processes
+    /// can truncate each other's seg_NNNN.ts, and the new encode's liveness
+    /// proof can even be satisfied by the prior encode's seg_0000.ts.
+    /// Abandoned by construction, the same argument as the registration-time
+    /// kill: reaching the encode branch with a live same-key entry requires
+    /// the mid-encode eviction of that entry's cache directory. The
+    /// registration-time displacement kill in
+    /// <see cref="RegisterLiveSpeedEncode"/> stays as the backstop for any
+    /// registry write this position cannot see.
+    /// </summary>
+    /// <param name="cacheKey">The speed variant's cache key about to re-encode.</param>
+    private void KillDisplacedSpeedEncode(string cacheKey)
+    {
+        if (!_activeAudioSpeedEncodeProcesses.TryGetValue(cacheKey, out var displaced))
+        {
+            return;
+        }
+
+        // The per-key lock serializes registrations, so the only racer is a
+        // displaced watcher removing an already-exited entry; the
+        // compare-and-remove + kill contract lives in RemoveSpeedEncodeAndKill.
+        RemoveSpeedEncodeAndKill(
+            new KeyValuePair<string, (Process Process, string? OwnerDeviceId)>(cacheKey, displaced),
+            "VideoAudio audio-speed HLS: killing displaced speed encode {CacheKey} (a same-key re-encode is restarting its evicted variant)",
+            cacheKey);
     }
 
     /// <summary>
@@ -2458,14 +2589,14 @@ public class VideoAudioController : ControllerBase
             _cache.RegisterHlsDirectory(parentId, artModifiedTicks);
 
             // Mark this audiobook as actively encoding to prevent concurrent ffmpeg launches.
-            object encodeGeneration = MarkEncodeActive(_activeAudiobookEncodes, parentId);
+            ActiveEncodeHandle activeEncode = MarkEncodeActive(_activeAudiobookEncodes, parentId);
 
             // Monitor ffmpeg in background: logs errors, triggers eviction when done.
             // CA2025: started via the boundary helper (this method never disposes the
             // process). The HasExited/ExitCode reads below are best-effort; their
             // InvalidOperationException catch already tolerates the monitor's raced
             // disposal (the monitor's finally is the sole owner).
-            StartHlsMonitor(ffmpegProcess, hlsDir, parentId, artModifiedTicks, "Audiobook", _activeAudiobookEncodes, encodeGeneration);
+            StartHlsMonitor(ffmpegProcess, hlsDir, parentId, artModifiedTicks, "Audiobook", activeEncode);
 
             // Wait briefly for the first segment to appear so we don't serve a playlist
             // that references zero actual segment files (Echo Show would fail immediately).
@@ -4810,10 +4941,11 @@ public class VideoAudioController : ControllerBase
     /// <summary>
     /// CA2025 ownership boundary for every HLS path: see <see cref="StartSongMonitor"/>.
     /// Optional parameters mirror <see cref="MonitorFfmpegHlsAsync"/> 1:1. The
-    /// active-encode registry is REQUIRED (JF-536): a default here once let a new
-    /// caller silently clear flags in the wrong path's registry. The generation
-    /// token is REQUIRED for the same reason (JF-665): a missing or defaulted
-    /// token would silently break the finally's compare-and-remove.
+    /// active-encode handle is REQUIRED (JF-536/JF-665/JF-668): a defaulted
+    /// registry once let a new caller silently clear flags in the wrong path's
+    /// registry, and a missing or defaulted token would silently break the
+    /// finally's compare-and-remove; bundling the three into one required
+    /// handle makes both mispairings unrepresentable.
     /// </summary>
     private void StartHlsMonitor(
         Process process,
@@ -4821,11 +4953,10 @@ public class VideoAudioController : ControllerBase
         string itemId,
         long artModifiedTicks,
         string label,
-        ConcurrentDictionary<string, object> activeEncodesTracker,
-        object encodeGeneration,
+        ActiveEncodeHandle activeEncode,
         bool videoTranscodeTier = false,
         long? runTimeTicks = null)
-        => _ = MonitorFfmpegHlsAsync(process, hlsDir, itemId, artModifiedTicks, label, activeEncodesTracker, encodeGeneration, videoTranscodeTier, runTimeTicks);
+        => _ = MonitorFfmpegHlsAsync(process, hlsDir, itemId, artModifiedTicks, label, activeEncode, videoTranscodeTier, runTimeTicks);
 
     /// <summary>
     /// Monitor an ffmpeg process that was started by <see cref="StartFfmpegProcess"/>.
@@ -4894,15 +5025,11 @@ public class VideoAudioController : ControllerBase
     /// <param name="itemId">Item ID for logging.</param>
     /// <param name="artModifiedTicks">Art ticks for logging.</param>
     /// <param name="label">Content label for log messages ("Song", "Audiobook", "Episode").</param>
-    /// <param name="activeEncodesTracker">The active-encode registry to clear when
-    /// this process exits (<see cref="_activeAudiobookEncodes"/>,
-    /// <see cref="_activeEpisodeEncodes"/>, or
-    /// <see cref="_activeVideoAudioEncodes"/>); REQUIRED since JF-536 so a new path
-    /// cannot silently clear another path's flags via a default.</param>
-    /// <param name="encodeGeneration">The token <see cref="MarkEncodeActive"/>
-    /// returned for this encode (JF-665); the finally's clear is
-    /// compare-and-remove on it, so this monitor cannot drop a newer
-    /// registration's flag.</param>
+    /// <param name="activeEncode">The encode's handle
+    /// (<see cref="MarkEncodeActive"/>: registry + key + generation); the
+    /// finally's clear is compare-and-remove on its token, so this monitor
+    /// cannot drop a newer registration's flag, and the bundled registry makes
+    /// a clear in the wrong path's registry unrepresentable (JF-665/JF-668).</param>
     /// <param name="videoTranscodeTier">Whether this encode is the episode
     /// video-transcode tier (JF-500); only that tier scales its stall budget from the
     /// runtime, the others keep the fixed 30-minute ceiling.</param>
@@ -4914,12 +5041,10 @@ public class VideoAudioController : ControllerBase
         string itemId,
         long artModifiedTicks,
         string label,
-        ConcurrentDictionary<string, object> activeEncodesTracker,
-        object encodeGeneration,
+        ActiveEncodeHandle activeEncode,
         bool videoTranscodeTier = false,
         long? runTimeTicks = null)
     {
-        var activeEncodes = activeEncodesTracker;
         int timeoutMinutes = HlsMonitorTimeoutMinutes(videoTranscodeTier, runTimeTicks);
         TimeSpan stallBudget = HlsMonitorStallBudgetOverride ?? TimeSpan.FromMinutes(timeoutMinutes);
         try
@@ -4931,11 +5056,12 @@ public class VideoAudioController : ControllerBase
             if (stalled)
             {
                 _logger.LogWarning(
-                    "{Label} HLS encoding STALLED for {ParentId}: no segment-directory progress for {StallBudget} (JF-499), killing",
+                    "{Label} HLS encoding STALLED for {ParentId}: no segment-directory progress for {StallBudget} (JF-499)",
                     label, itemId, stallBudget);
-                // entireProcessTree: the hung encode's children (ffmpeg helpers, the
-                // fake-ffmpeg test's sleep) must not outlive the kill.
-                try { process.Kill(entireProcessTree: true); } catch { /* already exited */ }
+                TryKillLiveProcess(
+                    process,
+                    "{Label} HLS: killing the stalled encode for {ParentId} (no segment-directory progress for {StallBudget})",
+                    label, itemId, stallBudget);
                 return;
             }
 
@@ -5026,7 +5152,7 @@ public class VideoAudioController : ControllerBase
             // flag may clear it; a key-only TryRemove let a displaced
             // generation's late exit drop a newer encode's flag (see
             // <see cref="MarkEncodeActive"/> for the full account).
-            ClearEncodeFlag(activeEncodes, itemId, encodeGeneration);
+            activeEncode.Clear();
             process.Dispose();
         }
     }
