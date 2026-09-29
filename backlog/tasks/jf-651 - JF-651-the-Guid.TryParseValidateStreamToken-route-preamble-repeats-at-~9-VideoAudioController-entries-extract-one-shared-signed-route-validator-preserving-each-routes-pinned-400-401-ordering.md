@@ -4,9 +4,10 @@ title: >-
   JF-651 - the Guid.TryParse+ValidateStreamToken route preamble repeats at ~9
   VideoAudioController entries: extract one shared signed-route validator,
   preserving each route's pinned 400/401 ordering
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-27 08:23'
+updated_date: '2026-09-29 00:33'
 labels:
   - refactor
   - streaming
@@ -64,5 +65,5 @@ GATES: /simplify (4 parallel angles: doc-citation fix applied; IsNullOrWhiteSpac
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Landed 2026-09-29 as worktree commit b9441932 (not pushed): the Guid.TryParse+ValidateStreamToken route preamble consolidated into one private ValidateSignedRoute(itemId) helper at 6 of the 9 VideoAudioController entries (StreamVideoAudio, StreamHlsVideoAudio, StreamHlsEpisode, StreamHlsEpisodeAudio, GetEpisodeAudioSegment, GetSegment), with the pinned 400-before-401 ordering preserved per route; the three divergent entries (both audio-speed routes, whose rate-400 interleaving differs from each other, and the audiobook parentId route) stay separate with comments naming their differences, and the pre-existing speed-sibling 400-precedence inconsistency is tracked as JF-664. Two pin tests added so the helper's contract citation is true; suites 4718/4718 both TFMs with existing preamble tests unchanged.
+Landed 2026-09-29 as merge ea3afde3 (pushed; C# refactor, no runtime surface change so no deploy needed beyond routine): the signed-route preamble extracted. ValidateSignedRoute(itemId) owns the 400-before-401 contract at 6 of 9 route entries (the two segment routes verbatim, the four playlist routes via the guarded shape whose hoisted 400 is observably identical per input class, verified by code-review); the 3 divergent sites kept separate with in-code comments (the speed route's rate-first 400, the speed segment's interleaved ordering, the audiobook's parentId shape); the JF-309 token gate unweakened anywhere. Two new pins close a real gap (the song HLS route had no bare-GUID 401 pin; the video-audio route had no non-GUID 400 pin). Gates: /simplify + code-review in-worker (both findings applied; the speed-sibling precedence inconsistency filed as JF-664 same-turn), suites 4718/4718 both TFMs (orchestrator-verified on the final state; the preamble tests unchanged).
 <!-- SECTION:FINAL_SUMMARY:END -->
