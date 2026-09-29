@@ -3336,6 +3336,9 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Assert.NotNull(badRequest.Value);
     }
 
+    /// <summary>Serialize an ObjectResult's anonymous body for Contains assertions.</summary>
+    private static string Body(object value) => System.Text.Json.JsonSerializer.Serialize(value);
+
     /// <summary>
     /// JF-664 pin: a doubly-invalid request (non-GUID id AND unserved rate) gets
     /// the itemId 400 on BOTH audio-speed sibling routes, matching every other
@@ -3350,13 +3353,37 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
         ActionResult playlistResult = await controller.StreamHlsAudioSpeed("not-a-guid", 1337);
         var playlist400 = Assert.IsType<BadRequestObjectResult>(playlistResult);
-        string playlistBody = System.Text.Json.JsonSerializer.Serialize(playlist400.Value!);
-        Assert.Contains("Invalid itemId format", playlistBody, StringComparison.Ordinal);
+        Assert.Contains("Invalid itemId format", Body(playlist400.Value!), StringComparison.Ordinal);
 
         ActionResult segmentResult = await controller.GetAudioSpeedSegment("not-a-guid", 1337, 0, "seg_0000.ts");
         var segment400 = Assert.IsType<BadRequestObjectResult>(segmentResult);
-        string segmentBody = System.Text.Json.JsonSerializer.Serialize(segment400.Value!);
-        Assert.Contains("Invalid itemId format", segmentBody, StringComparison.Ordinal);
+        Assert.Contains("Invalid itemId format", Body(segment400.Value!), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-671 pin: the TRIPLY-invalid shape (GUID id + unserved rate + no token)
+    /// is deliberately SPLIT between the siblings, and this pin ratifies it:
+    /// the playlist route checks id -> token -> rate (the playlist fetch is where
+    /// the client first presents its token, so auth precedes semantics there and
+    /// the answer is the 401 token body), while the segment route checks
+    /// id -> rate -> token (the rate is structural there: it names the variant
+    /// directory the segment URL resolves into, so the rate 400 wins). A future
+    /// alignment of either route to the other's order must flip THIS pin loudly,
+    /// not silently.
+    /// </summary>
+    [Fact]
+    public async Task AudioSpeedRoutes_TriplyInvalid_GuidPlusUnservedRatePlusNoToken_RatifiedSplit()
+    {
+        var controller = CreateController();
+        string guid = Guid.NewGuid().ToString();
+
+        ActionResult playlistResult = await controller.StreamHlsAudioSpeed(guid, 1337);
+        var playlist401 = Assert.IsType<UnauthorizedObjectResult>(playlistResult);
+        Assert.Contains("Invalid or expired stream token", Body(playlist401.Value!), StringComparison.Ordinal);
+
+        ActionResult segmentResult = await controller.GetAudioSpeedSegment(guid, 1337, 0, "seg_0000.ts");
+        var segment400 = Assert.IsType<BadRequestObjectResult>(segmentResult);
+        Assert.Contains("Unsupported playback rate", Body(segment400.Value!), StringComparison.Ordinal);
     }
 
     /// <summary>

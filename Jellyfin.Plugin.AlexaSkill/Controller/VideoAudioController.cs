@@ -1401,10 +1401,11 @@ public class VideoAudioController : ControllerBase
         // every other route on that shape. JF-651 kept this route off the shared
         // preamble only because the Core checked the rate first; the decision is
         // now made deliberately. The token check still precedes the Core's rate
-        // check, so a GUID with a bad rate and no token keeps its 401 (note the
-        // segment sibling answers that triply-invalid shape with the rate 400
-        // instead: its id/rate/token order is deliberate (JF-651) and still
-        // unpinned, see the JF-671 follow-up).
+        // check, so a GUID with a bad rate and no token keeps its 401; the segment
+        // sibling answers that triply-invalid shape with the rate 400 instead
+        // (deliberate, JF-651): the split is ratified and pinned by JF-671
+        // (AudioSpeedRoutes_TriplyInvalid_GuidPlusUnservedRatePlusNoToken_RatifiedSplit
+        // carries the rationale).
         ActionResult? routeError = ValidateSignedRoute(itemId);
         if (routeError != null)
         {
@@ -2206,7 +2207,10 @@ public class VideoAudioController : ControllerBase
     {
         // Not ValidateSignedRoute (JF-651): the unserved-rate 400 sits between the
         // itemId 400 and the token 401; a combined preamble would move it to one
-        // side, changing which error a bad-rate + bad-token request gets.
+        // side, changing which error a bad-rate + bad-token request gets. The
+        // resulting triply-invalid split vs the playlist sibling is ratified and
+        // pinned by JF-671 (AudioSpeedRoutes_TriplyInvalid_GuidPlusUnservedRatePlusNoToken_RatifiedSplit
+        // carries the rationale).
         if (string.IsNullOrWhiteSpace(itemId) || !Guid.TryParse(itemId, out _))
         {
             return BadRequest(new { error = "Invalid itemId format" });

@@ -3,9 +3,10 @@ id: JF-671
 title: >-
   JF-671 - pin or decide the triply-invalid audio-speed shapes (GUID + unserved
   rate + bad token): siblings disagree, unpinned
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-29 12:49'
+updated_date: '2026-09-29 17:06'
 labels:
   - streaming
   - tech-debt
@@ -40,14 +41,20 @@ VERIFICATION: the new pins plus the existing StreamHlsAudioSpeed/GetAudioSpeedSe
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
 - [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
 - [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
 - [ ] #6 NLU test fixtures updated if interaction model changed
 - [ ] #7 E2E test added for new intent or handler logic
 - [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Landed 2026-09-29 inline on main (comment + test only, no deploy: the deployed JF-668 build is behavior-identical): the triply-invalid split (GUID id + unserved rate + no token: playlist answers 401 "Invalid or expired stream token", segment answers 400 "Unsupported playback rate") is RATIFIED as intentional and pinned by AudioSpeedRoutes_TriplyInvalid_GuidPlusUnservedRatePlusNoToken_RatifiedSplit, which exercises BOTH routes on the SAME shape and flips loudly in every alignment direction (playlist rate-before-token flips the 401 assert; segment token-before-rate flips the 400 assert; deleting either check flips its own assert). The ratification rationale lives once, in the pin's doc: the playlist fetch is where the client first presents its token, so auth precedes semantics on the entry route (the shared-preamble convention), while the rate is structural on the segment route (it names the variant directory AudioSpeedCacheKey resolves). Both route comments now carry the pointer (the playlist's old "still unpinned, see JF-671" caveat superseded; the segment's JF-651 comment gains the ratification clause), and the body-assertions collapsed into a local Body() helper (4 inline copies). Alignment was considered and rejected: it would change live, JF-651-documented behavior and contradict the kept-separate decision rather than re-pin it (the altitude round's verdict: JF-664 aligned an ACCIDENTAL split, JF-671 ratifies the residue of two DELIBERATE orderings; same discipline, different situations). Gates: /simplify 4-angle (dedup applied, segment pointer applied, Body helper applied, efficiency angle taken over inline after an API-error death: no finding) + code-review high (one finding applied: the dead EncoderPath setup removed to match the doubly-invalid sibling; everything else verified incl. the no-token-vs-bad-token convergence on the same TryValidate branch). Suites: full 4754/4754 both TFMs on the pre-removal state + the pins re-run green on the exact final state (the only delta is that dead setup line).
+<!-- SECTION:FINAL_SUMMARY:END -->
