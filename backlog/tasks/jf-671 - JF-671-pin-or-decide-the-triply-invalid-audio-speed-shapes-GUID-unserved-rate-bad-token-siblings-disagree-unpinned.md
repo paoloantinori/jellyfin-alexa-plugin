@@ -13,7 +13,7 @@ dependencies: []
 references:
   - >-
     backlog/tasks/jf-664 -
-    JF-664-the-two-audio-speed-sibling-routes-disagree-on-which-400-body-wins-for-a-doubly-invalid-request-non-GUID-id-plus-unserved-rate.md
+    JF-664-the-two-audio-speed-sibling-routes-disagree-on-which-400-body-wins-for-a-doubly-invalid-request-non-GUID-id-unserved-rate.md
   - >-
     backlog/tasks/jf-651 -
     JF-651-the-Guid.TryParseValidateStreamToken-route-preamble-repeats-at-~9-VideoAudioController-entries-extract-one-shared-signed-route-validator-preserving-each-routes-pinned-400-401-ordering.md
