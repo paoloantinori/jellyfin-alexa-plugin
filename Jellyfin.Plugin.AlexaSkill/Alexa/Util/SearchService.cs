@@ -299,7 +299,7 @@ public sealed class SearchService
             fallbackQuery.ArtistIds = artistIds;
             if (mediaTypes is { Length: > 0 })
             {
-                _logger.LogDebug("SearchItemsFuzzyAsync: artistIds scoping wins; MediaTypes filter ({Count} entries) suppressed", mediaTypes.Length);
+                _logger.LogDebug("SearchItemsFuzzyAsync ({Label}): artistIds scoping wins; MediaTypes filter ({Count} entries) suppressed", operationLabel, mediaTypes.Length);
             }
         }
 

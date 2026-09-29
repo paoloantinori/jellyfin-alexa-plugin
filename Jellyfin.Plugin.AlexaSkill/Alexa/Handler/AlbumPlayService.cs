@@ -328,6 +328,10 @@ public sealed class AlbumPlayService
             }
             else
             {
+                // JF-358: this post-construction ArtistIds assignment is outside the
+                // initializer scan's reach; the query (here and in its initializer)
+                // must never gain a MediaTypes term: MediaTypes does not constrain
+                // an ArtistIds query.
                 q.ArtistIds = artistIds;
             }
         }

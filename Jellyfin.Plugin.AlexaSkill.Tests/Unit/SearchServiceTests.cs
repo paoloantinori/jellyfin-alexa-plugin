@@ -255,9 +255,7 @@ public class SearchServiceTests : PluginTestBase
         // JF-667 (JF-358): MediaTypes does not constrain an ArtistIds query, so the
         // helper suppresses it when artist scoping is present (the two filters must
         // never ride the same query).
-        Assert.True(
-            captured.MediaTypes == null || captured.MediaTypes.Length == 0,
-            "an ArtistIds-scoped fallback query must not carry a MediaTypes term (JF-358/JF-667)");
+        TestHelpers.AssertNoMediaTypesFilter(captured!, "ArtistIds-scoped fallback query");
         Assert.Equal(500, captured.Limit);
         Assert.True(captured.Recursive);
     }

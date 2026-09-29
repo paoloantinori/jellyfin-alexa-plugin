@@ -10,17 +10,22 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 /// <summary>
 /// JF-358 structural guard (JF-667 review finding 1): the ArtistIds+MediaTypes
 /// combination must never ride one InternalItemsQuery. The original JF-358 fix
-/// left per-site comments and per-site pins, and three sites still escaped - the
+/// left per-site comments and per-site pins, and three sites still escaped; the
 /// per-site approach is proven insufficient. This test scans every plugin source
 /// file's query INITIALIZER blocks for the combination, making the common
 /// hand-built shape fail at suite time instead of being re-found by a manual
-/// sweep. Post-construction property assignments are covered structurally at the
-/// one shared sink (SearchService.SearchItemsFuzzyAsync's if/else-if, pinned by
-/// SearchServiceTests); a future property-assignment site outside that sink is
-/// out of this guard's reach and owns its own comment. Known blind spot: the
-/// regex requires the literal "new InternalItemsQuery" and cannot see
-/// target-typed "new()" initializers (SearchMediaIntentHandler's local
-/// BuildQuery is the one such site today) - spell the type name there.
+/// sweep. Post-construction property assignments are out of this scan's reach;
+/// the two live sites own their pins or comments (SearchService.SearchItemsFuzzyAsync's
+/// if/else-if, pinned by SearchServiceTests, and AlbumPlayService.BuildAlbumQuery's
+/// ArtistIds-only assignment, whose query must never gain a MediaTypes term), and a
+/// future property-assignment site owns its own comment. Known blind spots: the
+/// regex requires the literal "new InternalItemsQuery", so target-typed "new()"
+/// initializers are invisible (SearchMediaIntentHandler's local BuildQuery is the
+/// one such site today; spell the type name there) and constructor arguments
+/// containing nested parentheses do not match the optional-args pattern; the
+/// brace walk also runs on raw text, so a stray brace inside a comment or string
+/// literal within an initializer can truncate or extend the walked block (the
+/// comment strip below de-noises containment, not the walk).
 /// </summary>
 public partial class ArtistQueryShapeGuardTests
 {
@@ -74,7 +79,7 @@ public partial class ArtistQueryShapeGuardTests
 
                 if (i >= source.Length)
                 {
-                    continue; // never closed (a brace inside a string literal): not our shape
+                    continue; // never closed (a stray brace in a comment or string literal): not our shape
                 }
 
                 // Stripping can only delete text, so a raw slice missing either word

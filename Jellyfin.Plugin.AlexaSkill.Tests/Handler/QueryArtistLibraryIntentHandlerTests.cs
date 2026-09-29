@@ -216,11 +216,7 @@ public class QueryArtistLibraryIntentHandlerTests : PluginTestBase
         Assert.NotNull(captured);
         Assert.NotNull(captured!.IncludeItemTypes);
         Assert.Contains(Jellyfin.Data.Enums.BaseItemKind.Audio, captured.IncludeItemTypes);
-        // Jellyfin initializes MediaTypes to an empty array: the contract is "no
-        // MediaTypes filter", not the field's exact null/empty shape.
-        Assert.True(
-            captured.MediaTypes == null || captured.MediaTypes.Length == 0,
-            "tracks query must not filter via MediaTypes (JF-358/JF-667)");
+        TestHelpers.AssertNoMediaTypesFilter(captured!, "tracks query");
         Assert.Contains("Yesterday", TestHelpers.GetSpeechText(response));
     }
 
