@@ -3623,6 +3623,94 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
+    /// JF-668 (the earlier displacement kill): a same-key re-encode must kill
+    /// the displaced prior ffmpeg at the pre-start position inside the per-key
+    /// lock, BEFORE the new ffmpeg starts. The JF-665 registration-time kill
+    /// fires only after the new encode's first-segment wait succeeds, and in
+    /// that window the abandoned prior ffmpeg keeps writing BY PATH into the
+    /// recreated directory (both processes can truncate each other's
+    /// seg_NNNN.ts; the new encode's liveness proof can even be satisfied by
+    /// the prior encode's seg_0000.ts). Driven through the REAL endpoint with
+    /// the prior encode planted on the registration seam (the endpoint cannot
+    /// produce the interleave without racing a live encode's directory): the
+    /// fake ffmpeg probes the prior process's /proc state at its start and
+    /// writes prior-state.txt BEFORE the first segment, so the file reads dead
+    /// iff the kill landed within the probe's 2s tolerance (the 40x0.05s loop
+    /// accepts SIGKILL delivery latency under loaded runners; a strict single
+    /// read would trade the deterministic red for a scheduler-dependent CI
+    /// false-red; state Z counts as dead because a
+    /// killed-but-unreaped process stays a zombie, and a missing /proc entry
+    /// counts as dead too, all via shell builtins so no tool absence can fake
+    /// a dead read). A kill that only follows the first-segment wait reads
+    /// alive deterministically: the snapshot precedes the segment write the
+    /// wait polls for, which is the red shape (verified: with the earlier kill
+    /// commented out the pin fails with prior-state=alive on both TFMs).
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudioSpeed_SameKeyReEncode_KillsDisplacedEncodeBeforeNewFfmpegStarts()
+    {
+        var episode = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "JF-668 earlier kill episode",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromMinutes(60).Ticks
+        };
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(episode.Id)).Returns(episode);
+
+        // The displaced prior encode: a real sh sleeper planted under the exact
+        // cache key this endpoint is about to re-encode.
+        string cacheKey = VideoAudioController.AudioSpeedCacheKey(episode.Id.ToString(), 1500, 0);
+        using var prior = Process.Start(new ProcessStartInfo("/bin/sh", "-c \"sleep 300\""))!;
+
+        string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-jf668-earlier-kill",
+            "for last_arg in \"$@\"; do :; done\n" +
+            "dir=$(dirname \"$last_arg\")\n" +
+            "state=alive\n" +
+            "i=0\n" +
+            "while [ $i -lt 40 ]; do\n" +
+            "  pstate=S\n" +
+            $"  if [ -r /proc/{prior.Id}/stat ]; then read -r _p _c pstate _r < /proc/{prior.Id}/stat; fi\n" +
+            $"  if [ ! -e /proc/{prior.Id}/stat ] || [ \"$pstate\" = \"Z\" ]; then state=dead; break; fi\n" +
+            "  sleep 0.05\n" +
+            "  i=$((i+1))\n" +
+            "done\n" +
+            "echo $state > \"$dir/prior-state.txt\"\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0000.ts\" 2>/dev/null\n" +
+            "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:10.000,\\nseg_0000.ts\\n' > \"$last_arg\"\n" +
+            "sleep 300\n");
+
+        var controller = CreateController(episode.Id.ToString(), "device-A", fakeFfmpegPath);
+        try
+        {
+            controller.RegisterLiveSpeedEncode(prior, cacheKey, "device-A");
+
+            ActionResult result = await controller.StreamHlsAudioSpeed(episode.Id.ToString(), 1500, 0);
+            Assert.IsType<ContentResult>(result);
+
+            string hlsDir = _cache.GetHlsDirectoryPath(cacheKey, 0);
+            string priorState = File.ReadAllText(Path.Combine(hlsDir, "prior-state.txt")).Trim();
+            Assert.True(
+                string.Equals(priorState, "dead", StringComparison.Ordinal),
+                $"the displaced prior encode was still {priorState} when the new ffmpeg started: the earlier displacement kill did not fire before the encode");
+        }
+        finally
+        {
+            try { if (!prior.HasExited) { prior.Kill(entireProcessTree: true); } } catch { /* already exited */ }
+            try
+            {
+                var live = VideoAudioController.LiveSpeedEncodeProcessForTest(cacheKey);
+                if (live is { HasExited: false })
+                {
+                    live.Kill(entireProcessTree: true);
+                }
+            }
+            catch { /* already gone */ }
+        }
+    }
+
+    /// <summary>
     /// JF-665: the monitor's encode-flag clear is generation-aware. A prior
     /// generation's monitor that fires late (its encode hung; the stall budget
     /// kills it while a NEWER same-key encode has already re-registered after
