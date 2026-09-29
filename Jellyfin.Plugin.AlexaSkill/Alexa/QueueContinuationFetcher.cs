@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Dto;
@@ -39,12 +40,14 @@ internal static class QueueContinuationFetcher
     /// <param name="libraryManager">The library manager for queries.</param>
     /// <param name="userManager">The user manager for resolving Jellyfin users.</param>
     /// <param name="logger">Logger for diagnostics.</param>
+    /// <param name="pluginUser">The plugin user whose library scope the batch must respect, mirroring the initial fetches (null: unrestricted).</param>
     /// <returns>The fetched items, or empty list if no more items.</returns>
     public static IReadOnlyList<BaseItem> FetchNextBatch(
         QueueContinuation continuation,
         ILibraryManager libraryManager,
         IUserManager userManager,
-        ILogger logger)
+        ILogger logger,
+        Entities.User? pluginUser = null)
     {
         if (continuation.StartIndex >= continuation.TotalCount)
         {
@@ -53,31 +56,59 @@ internal static class QueueContinuationFetcher
 
         var jellyfinUser = userManager.GetUserById(continuation.UserId);
 
-        IReadOnlyList<BaseItem> items = continuation.SourceType switch
+        // Captured before the fetchers advance StartIndex: the zero-page diagnostic
+        // below must name the offset the query ran at (the artist fetcher marks
+        // StartIndex=TotalCount on a short page, erasing it before the log).
+        int queryOffset = continuation.StartIndex;
+
+        // One switch owns the dispatch, the source-id label, and (via a null label)
+        // the zero-page anomaly gate: null marks the default arm (the Audiobook
+        // source type has no fetcher case), whose empty page is structural, not a
+        // library anomaly.
+        (IReadOnlyList<BaseItem> Items, string? SourceId) fetched = continuation.SourceType switch
         {
-            "Album" => FetchAlbumTracks(continuation, libraryManager, jellyfinUser),
-            "Artist" => FetchArtistSongs(continuation, libraryManager, jellyfinUser),
-            "Playlist" => FetchPlaylistItems(continuation, libraryManager, jellyfinUser),
-            _ => Array.Empty<BaseItem>()
+            "Album" => (FetchAlbumTracks(continuation, libraryManager, jellyfinUser, pluginUser, logger), $"album {continuation.ParentId}"),
+            "Artist" => (FetchArtistSongs(continuation, libraryManager, jellyfinUser, pluginUser, logger), $"artist {continuation.ArtistId}"),
+            "Playlist" => (FetchPlaylistItems(continuation, libraryManager, jellyfinUser), $"playlist {continuation.PlaylistId ?? continuation.ParentId}"),
+            _ => (Array.Empty<BaseItem>(), null)
         };
 
-        if (items.Count > 0)
+        // Artist continuations carry TotalCount=int.MaxValue (GetItemList has no
+        // count); render that honestly instead of a meaningless 2147483647.
+        string totalText = continuation.TotalCount == int.MaxValue
+            ? "end-unknown"
+            : continuation.TotalCount.ToString(CultureInfo.InvariantCulture);
+
+        if (fetched.Items.Count > 0)
         {
             logger.LogInformation(
                 "Progressive queue: fetched {Count} items for {SourceType} (offset {StartIndex}/{Total})",
-                items.Count,
+                fetched.Items.Count,
                 continuation.SourceType,
-                continuation.StartIndex,
-                continuation.TotalCount);
+                queryOffset,
+                totalText);
+        }
+        else if (fetched.SourceId != null)
+        {
+            // Here StartIndex < TotalCount (the guard above owns the exhausted state)
+            // yet the query returned nothing.
+            logger.LogWarning(
+                "Progressive queue: fetched 0 items for {SourceType} {SourceId} (offset {StartIndex}/{Total}); treating continuation as exhausted",
+                continuation.SourceType,
+                fetched.SourceId,
+                queryOffset,
+                totalText);
         }
 
-        return items;
+        return fetched.Items;
     }
 
     private static IReadOnlyList<BaseItem> FetchAlbumTracks(
         QueueContinuation continuation,
         ILibraryManager libraryManager,
-        Jellyfin.Database.Implementations.Entities.User? jellyfinUser)
+        Jellyfin.Database.Implementations.Entities.User? jellyfinUser,
+        Entities.User? pluginUser,
+        ILogger logger)
     {
         var query = new InternalItemsQuery
         {
@@ -90,6 +121,11 @@ internal static class QueueContinuationFetcher
             StartIndex = continuation.StartIndex,
             Limit = continuation.BatchSize
         };
+
+        // Same per-user library scope the initial album fetch runs under
+        // (AlbumPlayService.BuildAlbumQuery); without it a continuation batch
+        // widens the scope to every library the Jellyfin account sees.
+        Util.LibraryFilter.ApplyLibraryFilter(query, pluginUser, libraryManager, logger);
 
         QueryResult<BaseItem> result = libraryManager.GetItemsResult(query);
 
@@ -110,6 +146,7 @@ internal static class QueueContinuationFetcher
                 StartIndex = continuation.StartIndex,
                 Limit = continuation.BatchSize
             };
+            Util.LibraryFilter.ApplyLibraryFilter(albumIdsQuery, pluginUser, libraryManager, logger);
             result = libraryManager.GetItemsResult(albumIdsQuery);
         }
 
@@ -120,18 +157,28 @@ internal static class QueueContinuationFetcher
     private static IReadOnlyList<BaseItem> FetchArtistSongs(
         QueueContinuation continuation,
         ILibraryManager libraryManager,
-        Jellyfin.Database.Implementations.Entities.User? jellyfinUser)
+        Jellyfin.Database.Implementations.Entities.User? jellyfinUser,
+        Entities.User? pluginUser,
+        ILogger logger)
     {
         var query = new InternalItemsQuery
         {
             User = jellyfinUser,
             Recursive = true,
-            MediaTypes = new[] { MediaType.Audio },
+            // JF-358/JF-666: filter via IncludeItemTypes=Audio, NOT MediaTypes=Audio.
+            // MediaTypes does not constrain an ArtistIds query; on the direct
+            // ILibraryManager path it returned ZERO items (live 2026-09-29: offset 5
+            // of a 13-track artist), silently marking the continuation exhausted.
+            IncludeItemTypes = new[] { BaseItemKind.Audio },
             DtoOptions = new DtoOptions(true),
             ArtistIds = continuation.ArtistId.HasValue ? new[] { continuation.ArtistId.Value } : Array.Empty<Guid>(),
             StartIndex = continuation.StartIndex,
             Limit = continuation.BatchSize
         };
+
+        // Same per-user library scope the initial artist fetch runs under
+        // (SearchService.GetArtistSongsAsync).
+        Util.LibraryFilter.ApplyLibraryFilter(query, pluginUser, libraryManager, logger);
 
         if (continuation.SortOrder != null)
         {
