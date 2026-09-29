@@ -4,9 +4,10 @@ title: >-
   JF-675 - own-ticks slot liveness at the prewrite serve gates (completed
   foreign-ticks caches serve no-ENDLIST prewrites) + verdict's registry family
   boundary
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-29 18:49'
+updated_date: '2026-09-29 19:10'
 labels:
   - encode-gate
   - playback-speed
