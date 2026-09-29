@@ -177,8 +177,44 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             resolvedOrder,
             resolvedReshuffled);
 
-        // If no next item and radio mode is on, auto-populate similar tracks
-        if (nextItemId == null && RadioModeState.IsEnabled(session.UserId, deviceId))
+        // ONE finishing-item resolution shared by the JF-670 book gate, both AutoPlay
+        // branches, and the JF-636 advance-rate tail: the AudioPlayer token parsed
+        // through the shared codec (composite sleep tokens included, JF-447), with the
+        // session's now-playing item as fallback when there is no token. Resolved once
+        // per event at this single site (the precompute cache-hit path early-returns
+        // above; nothing between here and the tail mutates the token or the session
+        // item), so the resolution shape cannot drift between copies (the JF-424.1 /
+        // JF-447 token-vs-session disagreement class).
+        BaseItem? currentItem = StreamTokenCodec.TryGetItemId(context.AudioPlayer?.Token, out Guid currentItemId)
+            ? _libraryManager.GetItemById(currentItemId)
+            : session.FullNowPlayingItem;
+
+        // PostPlay/radio policy resolved once (the radio branch and the exhaustion
+        // block used to read these independently).
+        var postPlayMode = Progress.GetPostPlayBehavior(user);
+        bool radioOn = RadioModeState.IsEnabled(session.UserId, deviceId);
+
+        // JF-670 books never radio: a finishing audiobook chapter must neither seed
+        // nor receive music-radio tracks, so at exhaustion it is treated as
+        // PostPlay=Stop for radio purposes and the book ends in silence. Detection
+        // is the finished item's own book shape (the AudioBook itself, or an Audio
+        // item sitting under one; AudioBook derives from Audio, so without this gate
+        // a single-file book seeds genre radio exactly like a song), the mechanism
+        // that survives the LAST continuation batch: the store entry is long gone at
+        // true end-of-book, but the item still names its book. Consumers are exactly
+        // the two radio paths below (radio-on, or PostPlay=AutoPlay); the episode
+        // advance never matches an Audio chapter, so the ancestor walk is skipped
+        // when neither consumer can run.
+        bool bookChapterExhausting = false;
+        if (nextItemId == null && (radioOn || postPlayMode == PostPlayBehavior.AutoPlay))
+        {
+            bookChapterExhausting = AudiobookItems.IsAudioBookOrChapter(currentItem, _libraryManager);
+        }
+
+        // If no next item and radio mode is on, auto-populate similar tracks. A book
+        // chapter never receives radio tracks, even from a leftover radio flag left by
+        // earlier music (JF-670).
+        if (nextItemId == null && !bookChapterExhausting && radioOn)
         {
             nextItemId = await AutoPopulateRadioTracks(session, cancellationToken).ConfigureAwait(false);
         }
@@ -188,28 +224,17 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             // Clean up continuation state when queue is exhausted
             QueueContinuationStore.Remove(session.UserId, deviceId);
 
-            var postPlayMode = Progress.GetPostPlayBehavior(user);
-
             // Music PostPlay populate only runs when radio mode is NOT active: radio
             // mode handles its own continuation above, and plain PostPlay is for
             // single-track playback that reaches queue exhaustion without radio. The
-            // episode advance below deliberately ignores radioActive (a leftover radio
+            // episode advance below deliberately ignores radioOn (a leftover radio
             // flag from earlier music must not stop a TV binge).
-            bool radioActive = RadioModeState.IsEnabled(session.UserId, deviceId);
-
-            // ONE current-item resolution shared by both AutoPlay branches below
-            // (music populate and episode advance): the AudioPlayer token parsed
-            // through the shared codec (composite sleep tokens included, JF-447),
-            // with the session's now-playing item as fallback when there is no token.
-            BaseItem? currentItem = StreamTokenCodec.TryGetItemId(context.AudioPlayer?.Token, out Guid currentItemId)
-                ? _libraryManager.GetItemById(currentItemId)
-                : session.FullNowPlayingItem;
-
-            if (!radioActive && postPlayMode == PostPlayBehavior.AutoPlay)
+            if (!radioOn && !bookChapterExhausting && postPlayMode == PostPlayBehavior.AutoPlay)
             {
                 // AutoPlay: find similar tracks and enqueue for gapless transition.
                 // PlaybackNearlyFinished can return AudioPlayer.Play but NOT speech,
-                // so the music continues seamlessly without announcement.
+                // so the music continues seamlessly without announcement. A book
+                // chapter is excluded by the gate above (JF-670).
                 nextItemId = await AutoPopulatePostPlayTracks(
                     currentItem, session, user, context, cancellationToken).ConfigureAwait(false);
             }
@@ -261,13 +286,10 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         // podcast session started at 1.5x stays at 1.5x on every episode boundary
         // instead of silently falling back to 1x; a rate-1000 (or absent) scope keeps
         // music queues byte-identical to the pre-JF-636 advance. The finishing item
-        // resolves from the AudioPlayer token (codec-parsed, composite-sleep safe)
-        // with the session now-playing item as fallback (the shared resolution shape).
-        BaseItem? finishingItem = StreamTokenCodec.TryGetItemId(context.AudioPlayer?.Token, out Guid finishingItemId)
-            ? _libraryManager.GetItemById(finishingItemId)
-            : session.FullNowPlayingItem;
-        int advanceRatePerMille = finishingItem != null
-            ? Launch.GetActivePlaybackRate(deviceId, finishingItem.Id.ToString(), _queueManager) ?? Util.PlaybackSpeed.NormalPerMille
+        // reuses the ONE resolution at the top of the method (token-first,
+        // composite-sleep safe, session fallback).
+        int advanceRatePerMille = currentItem != null
+            ? Launch.GetActivePlaybackRate(deviceId, currentItem.Id.ToString(), _queueManager) ?? Util.PlaybackSpeed.NormalPerMille
             : Util.PlaybackSpeed.NormalPerMille;
         AudioLaunchSource source = Launch.ResolveAudioLaunchSource(item, itemId, user, 0, ratePerMille: advanceRatePerMille);
 
