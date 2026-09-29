@@ -3,18 +3,19 @@ id: JF-657
 title: >-
   JF-657 - dedupe the per-name variant cap and the dedup+Take idiom across the
   seven synonym generators
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-27'
-updated_date: '2026-09-27'
+updated_date: '2026-09-29 03:14'
 labels:
   - cleanup
   - catalog
-priority: low
 dependencies: []
 references:
   - >-
-    backlog/tasks/jf-646 - JF-646-catalog-side-katakana-synonyms-Latin-artist-album-names-get-kana-variants-in-the-ja-catalog-upload-so-NLU-selection-resolves-naturalized-ja-voice-the-routing-layer-complement-to-JF-643.md
+    backlog/tasks/jf-646 -
+    JF-646-catalog-side-katakana-synonyms-Latin-artist-album-names-get-kana-variants-in-the-ja-catalog-upload-so-NLU-selection-resolves-naturalized-ja-voice-the-routing-layer-complement-to-JF-643.md
+priority: low
 ---
 
 ## Description
@@ -59,3 +60,9 @@ KEPT LOCAL: (a) the deliberate 3 at German/Dutch/JapanesePhoneticSynonyms is a l
 Proof: behavior-preserving by construction (same comparer, same insertion order, same cap values); full suite on the final tree 4719/4719 net9.0 + 4719/4719 net10.0, existing tests unmodified; generator/payload filter 389/389 both TFMs. Gates: /simplify four-agent round (2 findings applied: cap-3 rationale deduped to one authoritative home on the constant's doc plus pointer comments, dead using System.Linq removed from JapanesePhoneticSynonyms) and code-review high fork (no correctness bugs; 3 of 4 findings applied: katakana why-comment + helper-doc "every locale generator" overclaim fixed, shared doc's ja-romaji bound corrected to "at most 1", Italian's stale "past index 5" bound replaced with a cap-number-free phrase; 1 declined: the shared second constant, reasoning above).
 Deferred, recorded here per the same-turn rule: the comment at Jellyfin.Plugin.AlexaSkill.Tests/Unit/PhoneticSynonymGeneratorTests.cs:403 still reads "the Take(5) cap" although the idiom is now CappedDistinct; fixing it is a one-line comment edit barred by this task's existing-tests-unmodified constraint, take it on the next touch of that file.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Landed 2026-09-29 as merge 504561c1 (pushed; behavior-preserving catalog refactor, no deploy needed): the synonym-generator cap and idiom deduplicated. One PerNameVariantCap=5 on PhoneticSynonymGenerator and one CappedDistinct helper own the family's exit idiom (8 sites converted, grep-verified single definitions); the cap-3 arms (German/Dutch/ja-romaji) stay deliberately local with pointer comments (three independent test-pinned contracts; a shared second constant was declined by two review angles as promoting an inert number to a fake policy); the kana exit's uncapped-Ordinal shape is documented. Payload byte-identity holds by the mechanical argument (same comparer, same insertion order, same caps at every site) plus the unmodified generator suites. Gates: /simplify + code-review in-worker (3 of 4 findings applied, 1 declined with reasoning; one deferred comment fix recorded for the next touch of that test file), suites 4719/4719 both TFMs (orchestrator-verified on the final state).
+<!-- SECTION:FINAL_SUMMARY:END -->
