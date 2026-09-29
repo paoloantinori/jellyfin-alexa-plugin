@@ -3838,6 +3838,151 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
+    /// JF-669: the active-encode flag must be art-tick aware, so a NEWER-ticks
+    /// encode finishing first cannot orphan an OLDER-ticks encode's liveness.
+    /// Exposure: the flag registry keys by the bare cache key while the locks
+    /// and cache directories key by (key, artModifiedTicks); an art change
+    /// mid-encode lets the gen-B encode displace gen-A's flag entry, gen-B's
+    /// monitor then compare-and-removes ITS (correct) generation and - pre
+    /// fix - the whole entry drops while gen A still writes, so a tick-stale
+    /// request (art ticks read before the change) sees flag-absent plus a
+    /// no-ENDLIST playlist in dir_A and ValidateEpisodeCacheAsync declares the
+    /// LIVE directory interrupted-encode debris (Cleanup wipes every {id}_*
+    /// directory). Driven through the REAL episode endpoint twice with the
+    /// item's primary-art DateModified mutated between the calls (that is what
+    /// GetArtModifiedTicks reads): gen A parks on a stop file, gen B parks on
+    /// its own stop file so both generations are structurally live together,
+    /// then B exits 0 with ENDLIST so B's monitor clear lands while A still
+    /// runs; call 3 re-reads art ticks A (the tick-stale request). The fake
+    /// script branches on the art-tick suffix of its output directory, so one
+    /// script serves all three calls. The debris assertions come FIRST so the
+    /// red run (all generations pinned into one slot, the pre-fix conflation)
+    /// fails on exactly "the debris cleanup fired", not on the premise; the
+    /// both-live premise is observed with a non-fatal wait for the same
+    /// reason. The verdict's log line is the primary discriminator (a
+    /// directory-content probe alone is vacuous: the re-encode's fake rewrites
+    /// the same files); the surviving gen-B ENDLIST playlist is the secondary,
+    /// file-level evidence (Cleanup deletes every {id}_* directory and nothing
+    /// recreates dir_B).
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_NewerArtTickGenerationClearsFirst_OlderTicksLiveDirNotDebris()
+    {
+        var (episode, mediaSourceManager) = SetupEpisodeForHls("JF-669 Cross Tick S01E01", "h264", TimeSpan.FromMinutes(45));
+
+        // Primary art with a controllable DateModified: this is the cache-key
+        // component the endpoint (and only the cache/lock layer) keys on.
+        var artA = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        long ticksA = artA.Ticks;
+        long ticksB = artA.AddHours(6).Ticks;
+        var artImage = new MediaBrowser.Controller.Entities.ItemImageInfo
+        {
+            Path = "/tmp/jf669-art.jpg",
+            Type = ImageType.Primary,
+            DateModified = artA
+        };
+        episode.ImageInfos = new[] { artImage };
+
+        string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-jf669-cross-tick",
+            "for last_arg in \"$@\"; do :; done\n" +
+            "dir=$(dirname \"$last_arg\")\n" +
+            "ticks=${dir##*_}\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0000.ts\" 2>/dev/null\n" +
+            "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:4.000,\\nseg_0000.ts\\n' > \"$last_arg\"\n" +
+            $"if [ \"$ticks\" = \"{ticksB}\" ]; then\n" +
+            "  while [ ! -f \"$dir/stop\" ]; do sleep 0.1; done\n" +
+            "  printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:4.000,\\nseg_0000.ts\\n#EXT-X-ENDLIST\\n' > \"$last_arg\"\n" +
+            "  exit 0\n" +
+            "fi\n" +
+            "while [ ! -f \"$dir/stop\" ]; do sleep 0.2; done\n" +
+            "exit 0\n");
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Trace);
+            b.AddProvider(TestCaptureLogger.Into(logRecords));
+        });
+
+        var controller = CreateController(episode.Id.ToString(), loggerFactory, mediaSourceManager, fakeFfmpegPath);
+
+        string itemIdStr = episode.Id.ToString();
+        string dirA = _cache.GetHlsDirectoryPath(itemIdStr, ticksA);
+        string dirB = _cache.GetHlsDirectoryPath(itemIdStr, ticksB);
+        try
+        {
+            // Gen A: encodes under ticks A, then parks (stop file not written).
+            ActionResult first = await controller.StreamHlsEpisode(itemIdStr);
+            Assert.IsType<ContentResult>(first);
+            Assert.True(VideoAudioController.EncodeActiveForTest(itemIdStr), "the gen-A registration set the flag");
+
+            // Art changed mid-encode: gen B computes DIFFERENT ticks (a
+            // different lock and directory), registers its own generation.
+            artImage.DateModified = artA.AddHours(6);
+            ActionResult second = await controller.StreamHlsEpisode(itemIdStr);
+            Assert.IsType<ContentResult>(second);
+
+            // Both generations live together (B parks on its own stop file):
+            // observed, not asserted, so the red run still reaches the debris
+            // assertions below instead of failing at this premise.
+            await WaitUntilAsync(() => VideoAudioController.EncodeGenerationCountForTest(itemIdStr) == 2, TimeSpan.FromSeconds(5), 50);
+
+            // Gen B finishes FIRST: its monitor's generation-aware clear fires
+            // while gen A still writes. The completion log is B's monitor's (A's
+            // is parked on its stop file), and the settle spans the finally's
+            // clear that follows it.
+            File.WriteAllText(Path.Combine(dirB, "stop"), string.Empty);
+            Assert.True(
+                await WaitUntilAsync(
+                    () => TestCaptureLogger.Snapshot(logRecords).Any(r => r.Message.Contains("Episode HLS encoding complete", StringComparison.Ordinal)),
+                    TimeSpan.FromSeconds(20)),
+                "gen B's monitor must reach its completion log");
+            await WaitUntilAsync(() => VideoAudioController.EncodeGenerationCountForTest(itemIdStr) <= 1, TimeSpan.FromSeconds(5), 50);
+            await Task.Delay(500);
+
+            // The tick-stale request: art ticks A read before the change. It
+            // must NOT fire the interrupted-debris verdict on dir_A.
+            artImage.DateModified = artA;
+            ActionResult third = await controller.StreamHlsEpisode(itemIdStr);
+            Assert.IsType<ContentResult>(third);
+
+            Assert.False(
+                TestCaptureLogger.Snapshot(logRecords).Any(r => r.Message.Contains("Episode HLS cache invalidated", StringComparison.Ordinal)),
+                "the interrupted-debris verdict fired for a key whose older-ticks generation is still live (JF-669)");
+            Assert.True(
+                File.Exists(Path.Combine(dirB, "stream.m3u8")),
+                "the debris verdict's Cleanup wiped every directory of the key, including gen B's completed encode, while gen A still writes");
+
+            // Premise (green world only; the red run already failed above):
+            // exactly gen A's generation remains after gen B's clear.
+            Assert.Equal(1, VideoAudioController.EncodeGenerationCountForTest(itemIdStr));
+        }
+        finally
+        {
+            artImage.DateModified = artA;
+            foreach (string dir in new[] { dirA, dirB })
+            {
+                try
+                {
+                    Directory.CreateDirectory(dir);
+                    File.WriteAllText(Path.Combine(dir, "stop"), string.Empty);
+                }
+                catch (IOException)
+                {
+                    // Best effort: the parked fake loops are short and exit on
+                    // their own otherwise.
+                }
+            }
+
+            // Let both monitors run their finally clears; force-drop whatever
+            // lingers so nothing leaks into other tests (the key is a fresh
+            // Guid, so this is hygiene, not correctness).
+            await WaitUntilAsync(() => VideoAudioController.EncodeGenerationCountForTest(itemIdStr) == 0, TimeSpan.FromSeconds(10), 100);
+            VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: false);
+        }
+    }
+
+    /// <summary>
     /// JF-498 review I1, endpoint level: a re-encode over interrupted-encode debris
     /// (non-empty playlist WITHOUT ENDLIST, no active encode) must start ffmpeg over a
     /// CLEAN target: the fake ffmpeg snapshots the pre-existing playlist/segments

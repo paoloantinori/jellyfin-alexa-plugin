@@ -59,10 +59,11 @@ public class VideoAudioController : ControllerBase
     /// Tracks audiobook HLS encode operations currently in progress by parentId.
     /// Prevents concurrent ffmpeg processes for the same audiobook (Echo Show
     /// sends multiple rapid requests for stream.m3u8).
-    /// Key: parentId string, Value: the encode's generation token (presence =
-    /// active; see <see cref="MarkEncodeActive"/> for the generation rule, JF-665).
+    /// Key: parentId string, Value: the live generation slots (presence = at
+    /// least one art-tick generation active; see <see cref="MarkEncodeActive"/>
+    /// for the generation rule, JF-665/JF-669).
     /// </summary>
-    private static readonly ConcurrentDictionary<string, object> _activeAudiobookEncodes = new();
+    private static readonly ConcurrentDictionary<string, ActiveEncodeGenerations> _activeAudiobookEncodes = new();
 
     /// <summary>
     /// JF-636: live ffmpeg processes of the audio-speed variant, keyed by its
@@ -452,7 +453,10 @@ public class VideoAudioController : ControllerBase
             // listing, not ffmpeg's growing stream.m3u8 (mechanism at the prewrite
             // site in the encode branch below). The flag gate matters: the listing
             // survives on disk after completion, and a completed cache must serve
-            // ffmpeg's ENDLIST playlist below.
+            // ffmpeg's ENDLIST playlist below. KEY-scoped caveat (JF-669): the
+            // flag is held by any live art-tick generation of the key, so while
+            // an unrelated ticks generation runs, a completed foreign-ticks
+            // cache can still serve its surviving pre-written listing.
             if (_activeVideoAudioEncodes.ContainsKey(itemId))
             {
                 ActionResult? prewritten = TryServePrewrittenVideoAudioPlaylist(itemId, artModifiedTicks, overrideToken);
@@ -480,7 +484,8 @@ public class VideoAudioController : ControllerBase
             {
                 // JF-536: the encode a concurrent request started is still running;
                 // serve its pre-written full listing, not ffmpeg's live one (flag
-                // gate as in the fast path: a completed cache serves the ENDLIST one).
+                // gate as in the fast path, including its JF-669 key-scoped
+                // caveat: any live art-tick generation of the key holds the flag).
                 if (_activeVideoAudioEncodes.ContainsKey(itemId))
                 {
                     ActionResult? prewritten = TryServePrewrittenVideoAudioPlaylist(itemId, artModifiedTicks, overrideToken);
@@ -539,7 +544,7 @@ public class VideoAudioController : ControllerBase
             // Declared before the try so the catch below can clear it: the
             // sentinel's token is never registered, so its clear no-ops until
             // the mark below re-mints the handle with the real generation.
-            ActiveEncodeHandle activeEncode = ActiveEncodeHandle.PreMarkSentinel(_activeVideoAudioEncodes, itemId);
+            ActiveEncodeHandle activeEncode = ActiveEncodeHandle.PreMarkSentinel(_activeVideoAudioEncodes, itemId, artModifiedTicks);
             try
             {
                 // JF-536: pre-write the FULL segment listing (the episode path's
@@ -592,8 +597,8 @@ public class VideoAudioController : ControllerBase
                 // Mark the encode active AFTER the listing exists (inside the
                 // lock): the serve paths above rely on flag-set implying the
                 // pre-written listing is on disk. The monitor clears the flag on
-                // exit (generation-aware, JF-665).
-                activeEncode = MarkEncodeActive(_activeVideoAudioEncodes, itemId);
+                // exit (generation-aware, JF-665/JF-669).
+                activeEncode = MarkEncodeActive(_activeVideoAudioEncodes, itemId, artModifiedTicks);
 
                 // Wait for the first segment file to appear on disk.
                 ActionResult? firstSegmentFailure = await WaitForFirstSegmentOrKillAsync(
@@ -655,11 +660,14 @@ public class VideoAudioController : ControllerBase
     /// liveness signal for <see cref="ValidateEpisodeCacheAsync"/>: a cached
     /// playlist WITHOUT <c>#EXT-X-ENDLIST</c> is either a live encode (flag
     /// present) or the debris of an interrupted one (flag absent; cleaned up and
-    /// re-encoded). The value is the encode's generation token (JF-665, see
-    /// <see cref="MarkEncodeActive"/>): every clear is compare-and-remove on it,
-    /// so a displaced generation's late exit cannot drop a newer encode's flag.
+    /// re-encoded). The value is the key's live generation slots, one per
+    /// (key, artModifiedTicks) generation (JF-665/JF-669, see
+    /// <see cref="MarkEncodeActive"/>): every clear is compare-and-remove on the
+    /// handle's own (ticks, token) pair, so a displaced generation's late exit
+    /// cannot drop a newer encode's flag, and the entry survives while ANY
+    /// art-tick generation of the key is still writing.
     /// </summary>
-    private static readonly ConcurrentDictionary<string, object> _activeEpisodeEncodes = new();
+    private static readonly ConcurrentDictionary<string, ActiveEncodeGenerations> _activeEpisodeEncodes = new();
 
     /// <summary>
     /// Tracks single-item video-audio HLS encodes currently in progress by itemId
@@ -668,10 +676,10 @@ public class VideoAudioController : ControllerBase
     /// <see cref="StreamHlsVideoAudioCore"/>). Doubles as the gate for serving the
     /// pre-written full listing while the encode runs (JF-536): the monitor clears
     /// the flag on exit, after which the completed ENDLIST playlist is served.
-    /// The value is the encode's generation token (JF-665, see
+    /// The value is the key's live generation slots (JF-665/JF-669, see
     /// <see cref="MarkEncodeActive"/>), like every sibling registry.
     /// </summary>
-    private static readonly ConcurrentDictionary<string, object> _activeVideoAudioEncodes = new();
+    private static readonly ConcurrentDictionary<string, ActiveEncodeGenerations> _activeVideoAudioEncodes = new();
 
     /// <summary>
     /// Attached-picture COVER codecs seen as VIDEO streams in tagged files (JF-500
@@ -766,7 +774,11 @@ public class VideoAudioController : ControllerBase
                     // listing, not ffmpeg's growing stream.m3u8 (mechanism on the
                     // prewrite site below). The flag gate matters: the pre-written file
                     // survives on disk after completion, and a completed cache must
-                    // serve ffmpeg's ENDLIST playlist below.
+                    // serve ffmpeg's ENDLIST playlist below. KEY-scoped caveat
+                    // (JF-669): the flag is held by any live art-tick generation
+                    // of the key, so while an unrelated ticks generation runs, a
+                    // completed foreign-ticks cache can still serve its
+                    // surviving pre-written listing.
                     if (_activeEpisodeEncodes.ContainsKey(itemId))
                     {
                         ActionResult? prewritten = TryServePrewrittenEpisodePlaylist(itemId, artModifiedTicks, startTicks);
@@ -801,7 +813,8 @@ public class VideoAudioController : ControllerBase
                 {
                     // JF-531: the encode a concurrent request started is still running;
                     // serve its pre-written full listing, not ffmpeg's live one (flag
-                    // gate as in the fast path: a completed cache serves the ENDLIST one).
+                    // gate as in the fast path, including its JF-669 key-scoped
+                    // caveat: any live art-tick generation of the key holds the flag).
                     if (_activeEpisodeEncodes.ContainsKey(itemId))
                     {
                         ActionResult? prewritten = TryServePrewrittenEpisodePlaylist(itemId, artModifiedTicks, startTicks);
@@ -908,13 +921,13 @@ public class VideoAudioController : ControllerBase
             // concurrent fast-path request that sees a live (no-ENDLIST) playlist
             // can then rely on the flag being set, because no playlist file can
             // exist before ffmpeg starts. The monitor clears the flag on exit
-            // (generation-aware, JF-665).
+            // (generation-aware, JF-665/JF-669).
             // Since JF-536 the pre-written listing lands AFTER the process starts
             // (it must sit inside the JF-428 pin window), so a concurrent request
             // can briefly see the flag with no listing yet;
             // <see cref="TryServePrewrittenEpisodePlaylist"/> covers that race by
             // falling back to the live playlist.
-            ActiveEncodeHandle activeEncode = MarkEncodeActive(_activeEpisodeEncodes, itemId);
+            ActiveEncodeHandle activeEncode = MarkEncodeActive(_activeEpisodeEncodes, itemId, artModifiedTicks);
 
             Process ffmpegProcess;
             try
@@ -1724,7 +1737,7 @@ public class VideoAudioController : ControllerBase
             // JF-498 review I1 concern, same as every sibling path).
             _cache.DeleteHlsEncodeDebris(spec.CacheKey, spec.ArtModifiedTicks);
 
-            ActiveEncodeHandle activeEncode = MarkEncodeActive(_activeEpisodeEncodes, spec.CacheKey);
+            ActiveEncodeHandle activeEncode = MarkEncodeActive(_activeEpisodeEncodes, spec.CacheKey, spec.ArtModifiedTicks);
 
             Process ffmpegProcess;
             try
@@ -1920,45 +1933,148 @@ public class VideoAudioController : ControllerBase
     }
 
     /// <summary>
-    /// Mark a cache key as actively encoding under a fresh generation token and
-    /// return the encode's handle (the JF-665 generation rule, one bundled
-    /// value since JF-668). Never a checked TryAdd: when the key is already
-    /// flagged, the holder is a PRIOR generation (its cache directory was
-    /// evicted mid-encode and a re-request is re-encoding, or its monitor's
-    /// clear is still pending), and the flag must pass to the NEWEST generation
-    /// so the prior monitor's generation-aware clear cannot drop it mid-encode
-    /// (which turned the near-ahead segment hold off and let
-    /// <see cref="ValidateEpisodeCacheAsync"/> delete the live directory). The
-    /// token is opaque: reference identity IS the generation.
+    /// Mark a cache key as actively encoding under a fresh generation token in
+    /// the encode's OWN art-tick slot and return the encode's handle (the
+    /// JF-665/JF-669 generation rule, one bundled value since JF-668). Never a
+    /// checked TryAdd: within one (key, artTicks) generation the flag passes to
+    /// the NEWEST registration (JF-665: its directory was evicted mid-encode and
+    /// a re-request is re-encoding, or its monitor's clear is still pending, so
+    /// the prior monitor's generation-aware clear must not be able to drop the
+    /// flag mid-encode, which turned the near-ahead segment hold off and let
+    /// <see cref="ValidateEpisodeCacheAsync"/> delete the live directory). A
+    /// DIFFERENT art-tick generation of the same key gets its OWN slot (JF-669:
+    /// the locks and cache directories are keyed by (key, artModifiedTicks), so
+    /// an art change mid-encode runs a genuinely separate encode whose clear
+    /// must not drop the older generation's liveness either - the pre-JF-669
+    /// single-token entry let the newest generation's correct clear drop the
+    /// flag while the older-ticks encode still wrote, and the debris verdict
+    /// deleted its live directory). The token is opaque: reference identity IS
+    /// the generation. The entry as a whole (what every presence reader's
+    /// ContainsKey sees) is present whenever at least one slot is live (plus
+    /// the brief mid-registration window between the entry's creation and the
+    /// slot write, where every reader errs in the conservative direction:
+    /// skip a debris verdict, serve pre-written instead of a second ffmpeg,
+    /// hold a segment).
     /// </summary>
     /// <param name="activeEncodes">The path's active-encode registry.</param>
     /// <param name="cacheKey">The encode's cache key.</param>
+    /// <param name="artModifiedTicks">The encode's art ticks (the cache
+    /// directory generation this encode writes into).</param>
     /// <returns>The handle every clear of THIS encode must go through.</returns>
-    private static ActiveEncodeHandle MarkEncodeActive(ConcurrentDictionary<string, object> activeEncodes, string cacheKey)
-        => ActiveEncodeHandle.MarkActive(activeEncodes, cacheKey);
+    private static ActiveEncodeHandle MarkEncodeActive(ConcurrentDictionary<string, ActiveEncodeGenerations> activeEncodes, string cacheKey, long artModifiedTicks)
+        => ActiveEncodeHandle.MarkActive(activeEncodes, cacheKey, artModifiedTicks);
 
     /// <summary>
-    /// The active-encode flag's ownership bundle (JF-668): the registry, the
-    /// cache key, and the generation token <see cref="MarkEncodeActive"/>
-    /// minted, captured as ONE value so a clear can never pair the right key
-    /// with the wrong registry or a stale token. Both mispairings were silent
-    /// no-op clears leaving the flag stuck mid-encode (the failure family
-    /// JF-665 exists to prevent), and until JF-668 they were representable
-    /// because the triple travelled as parallel parameters through the
-    /// wait/kill/monitor chain, guarded only by doc comments. The type is
-    /// private to this controller, so construction happens only here, and the
-    /// two intended shapes are <see cref="MarkEncodeActive"/> (the real mint)
-    /// and <see cref="PreMarkSentinel"/> (the song path's pre-mark no-op
-    /// clear). <see cref="Clear"/> and <see cref="KillAndClear"/> are the ONLY
-    /// clear paths.
+    /// The live generation slots of ONE cache key's active-encode flag (JF-669):
+    /// one slot per (key, artModifiedTicks) generation actually running. The
+    /// holder carries its own registry location, so a handle over it never
+    /// re-threads the registry and key as parallel state. The slot mutations
+    /// and the empty-check + registry removal all run under the holder's
+    /// private gate so a registration can never land in a holder whose
+    /// registry entry a concurrent clear just emptied and removed (which would
+    /// drop the flag while that encode is live: the JF-669 exposure reborn as
+    /// a race). The gate guards only a few in-memory dictionary operations -
+    /// no I/O, no awaits - and the per-item cache locks are untouched.
+    /// </summary>
+    private sealed class ActiveEncodeGenerations
+    {
+        private readonly ConcurrentDictionary<string, ActiveEncodeGenerations> _registry;
+        private readonly string _cacheKey;
+
+        /// <summary>Serializes the slot mutations with this entry's registry removal.</summary>
+        private readonly object _gate = new();
+
+        private readonly Dictionary<long, object> _slotsByTicks = new();
+
+        public ActiveEncodeGenerations(ConcurrentDictionary<string, ActiveEncodeGenerations> registry, string cacheKey)
+        {
+            _registry = registry;
+            _cacheKey = cacheKey;
+        }
+
+        /// <summary>
+        /// Register a generation in its art-tick slot (displacing any prior
+        /// token of the SAME tick: the JF-665 newest-owns rule within one
+        /// generation) only while this holder is still the registry's stored
+        /// entry. False when a concurrent clear emptied and removed this holder
+        /// between the caller's GetOrAdd and the gate: the caller retries
+        /// against the holder the registry stores now, so a registration can
+        /// never be stranded in an unreachable holder.
+        /// </summary>
+        internal bool RegisterIfStored(long artModifiedTicks, object generation)
+        {
+            lock (_gate)
+            {
+                if (!_registry.TryGetValue(_cacheKey, out ActiveEncodeGenerations? stored) || !ReferenceEquals(stored, this))
+                {
+                    return false;
+                }
+
+                _slotsByTicks[artModifiedTicks] = generation;
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// Compare-and-remove of one (art-tick, token) pair (the JF-647/JF-665
+        /// shape: only the generation that set the slot may clear it), dropping
+        /// the whole registry entry only when the LAST live generation cleared
+        /// its own (JF-669). The empty check and the removal share the gate
+        /// with the slot mutation so a concurrent registration cannot refill a
+        /// holder this clear is about to drop (and vice versa).
+        /// </summary>
+        internal void ClearGeneration(long artModifiedTicks, object generation)
+        {
+            lock (_gate)
+            {
+                if (_slotsByTicks.TryGetValue(artModifiedTicks, out object? current) && ReferenceEquals(current, generation))
+                {
+                    _slotsByTicks.Remove(artModifiedTicks);
+                }
+
+                if (_slotsByTicks.Count == 0)
+                {
+                    _registry.TryRemove(new KeyValuePair<string, ActiveEncodeGenerations>(_cacheKey, this));
+                }
+            }
+        }
+
+        /// <summary>Live generation count, under the gate (the test seam's probe).</summary>
+        internal int Count
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _slotsByTicks.Count;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// The active-encode flag's ownership bundle (JF-668): the generation
+    /// slots (which carry their own registry location), the art-tick slot, and
+    /// the generation token <see cref="MarkEncodeActive"/> minted, captured as
+    /// ONE value so a clear can never pair the right key with the wrong
+    /// registry or a stale token. Both mispairings were silent no-op clears
+    /// leaving the flag stuck mid-encode (the failure family JF-665 exists to
+    /// prevent), and until JF-668 they were representable because the triple
+    /// travelled as parallel parameters through the wait/kill/monitor chain,
+    /// guarded only by doc comments. The type is private to this controller,
+    /// so construction happens only here, and the two intended shapes are
+    /// <see cref="MarkEncodeActive"/> (the real mint) and
+    /// <see cref="PreMarkSentinel"/> (the song path's pre-mark no-op clear).
+    /// <see cref="Clear"/> and <see cref="KillAndClear"/> are the ONLY clear
+    /// paths.
     /// </summary>
     private readonly struct ActiveEncodeHandle
     {
-        /// <summary>The path's active-encode registry this handle's key lives in.</summary>
-        private readonly ConcurrentDictionary<string, object> _activeEncodes;
+        /// <summary>The live generation slots of this handle's key (carries the registry location).</summary>
+        private readonly ActiveEncodeGenerations _generations;
 
-        /// <summary>The encode's cache key.</summary>
-        private readonly string _cacheKey;
+        /// <summary>The encode's art ticks: the slot this handle's token lives in.</summary>
+        private readonly long _artModifiedTicks;
 
         /// <summary>
         /// The generation token minted together with this handle; reference
@@ -1975,45 +2091,62 @@ public class VideoAudioController : ControllerBase
         /// the enclosing controller cannot reach a private ctor's members but CAN
         /// call public static factories (PreMarkSentinel proves the shape).
         /// </summary>
-        private ActiveEncodeHandle(ConcurrentDictionary<string, object> activeEncodes, string cacheKey, object generation)
+        private ActiveEncodeHandle(ActiveEncodeGenerations generations, long artModifiedTicks, object generation)
         {
-            _activeEncodes = activeEncodes;
-            _cacheKey = cacheKey;
+            _generations = generations;
+            _artModifiedTicks = artModifiedTicks;
             _generation = generation;
         }
 
         /// <summary>
-        /// The real mint: registers a fresh generation token under the key (JF-665:
-        /// reference identity IS the generation) and returns the handle bound to it.
+        /// The real mint: registers a fresh generation token in the key's
+        /// <paramref name="artModifiedTicks"/> slot (the generation rule's
+        /// canonical account lives on <see cref="MarkEncodeActive"/>) and
+        /// returns the handle bound to it. The stored-holder verification
+        /// inside <see cref="ActiveEncodeGenerations.RegisterIfStored"/> closes
+        /// the register-vs-remove race (see the holder's doc): a holder emptied
+        /// and removed between the GetOrAdd and the gate can never accept the
+        /// token, and the retry loop re-registers against the holder the
+        /// registry stores now. The loop terminates because every rejection
+        /// implies a concurrent clear made progress.
         /// </summary>
-        public static ActiveEncodeHandle MarkActive(ConcurrentDictionary<string, object> activeEncodes, string cacheKey)
+        public static ActiveEncodeHandle MarkActive(ConcurrentDictionary<string, ActiveEncodeGenerations> activeEncodes, string cacheKey, long artModifiedTicks)
         {
             var generation = new object();
-            activeEncodes[cacheKey] = generation;
-            return new(activeEncodes, cacheKey, generation);
+            while (true)
+            {
+                ActiveEncodeGenerations holder = activeEncodes.GetOrAdd(cacheKey, key => new ActiveEncodeGenerations(activeEncodes, key));
+                if (holder.RegisterIfStored(artModifiedTicks, generation))
+                {
+                    return new(holder, artModifiedTicks, generation);
+                }
+            }
         }
 
         /// <summary>
-        /// The song path's pre-mark sentinel: a handle whose token the registry
-        /// never holds, so <see cref="Clear"/> no-ops until
-        /// <see cref="MarkEncodeActive"/> mints the real one (a prewrite failure
-        /// before the mark must not drop a prior generation's flag), while
+        /// The song path's pre-mark sentinel: a handle over a DETACHED holder
+        /// the registry never stores, so it never creates registry presence and
+        /// <see cref="Clear"/> no-ops (a prewrite failure before the mark must
+        /// not drop a prior generation's flag), while
         /// <see cref="KillAndClear"/>'s kill and dispose stay real (that scope
-        /// owns the process).
+        /// owns the process). Once <see cref="MarkEncodeActive"/> mints the
+        /// real handle the sentinel variable is simply replaced.
         /// </summary>
-        public static ActiveEncodeHandle PreMarkSentinel(ConcurrentDictionary<string, object> activeEncodes, string cacheKey)
-            => new(activeEncodes, cacheKey, new object());
+        public static ActiveEncodeHandle PreMarkSentinel(ConcurrentDictionary<string, ActiveEncodeGenerations> activeEncodes, string cacheKey, long artModifiedTicks)
+            => new(new ActiveEncodeGenerations(activeEncodes, cacheKey), artModifiedTicks, new object());
 
         /// <summary>
-        /// Generation-aware active-encode flag clear (JF-665, the JF-647
-        /// compare-and-remove shape): removes the key only while the flag still
-        /// belongs to this handle's generation, so the late monitor or failure
-        /// path of a displaced generation cannot clear a newer registration's
-        /// flag. A handle whose token the registry never held (the
+        /// Generation-aware active-encode flag clear (JF-665/JF-669): removes
+        /// this handle's (art-tick, token) slot only while it still belongs to
+        /// this generation, so the late monitor or failure path of a displaced
+        /// generation cannot clear a newer registration's slot, and the whole
+        /// entry drops only when the LAST live generation cleared its own (a
+        /// newer-ticks encode finishing first can no longer orphan an
+        /// older-ticks encode's liveness). A handle over a detached holder (the
         /// <see cref="PreMarkSentinel"/> shape) clears as a no-op.
         /// </summary>
         public void Clear()
-            => _activeEncodes.TryRemove(new KeyValuePair<string, object>(_cacheKey, _generation));
+            => _generations.ClearGeneration(_artModifiedTicks, _generation);
 
         /// <summary>
         /// The ONE failure cleanup triple shared by every HLS path's pre-handoff
@@ -2613,7 +2746,7 @@ public class VideoAudioController : ControllerBase
             _cache.RegisterHlsDirectory(parentId, artModifiedTicks);
 
             // Mark this audiobook as actively encoding to prevent concurrent ffmpeg launches.
-            ActiveEncodeHandle activeEncode = MarkEncodeActive(_activeAudiobookEncodes, parentId);
+            ActiveEncodeHandle activeEncode = MarkEncodeActive(_activeAudiobookEncodes, parentId, artModifiedTicks);
 
             // Monitor ffmpeg in background: logs errors, triggers eviction when done.
             // CA2025: started via the boundary helper (this method never disposes the
@@ -3048,14 +3181,27 @@ public class VideoAudioController : ControllerBase
     }
 
     /// <summary>
+    /// The one registry-selector definition shared by the three test seams
+    /// (JF-669): <paramref name="audiobook"/> selects the audiobook registry
+    /// and <paramref name="song"/> the single-item registry instead of the
+    /// episode one, mirroring which endpoint would have set the flag in
+    /// production. One definition so a fourth seam or a registry rename can
+    /// never leave the siblings drifting.
+    /// </summary>
+    private static ConcurrentDictionary<string, ActiveEncodeGenerations> EncodeRegistryFor(bool audiobook, bool song)
+        => audiobook ? _activeAudiobookEncodes : song ? _activeVideoAudioEncodes : _activeEpisodeEncodes;
+
+    /// <summary>
     /// Internal test seam (JF-503, InternalsVisibleTo): set or clear the active-encode
-    /// flag the hold-for-segment path keys on, without a live ffmpeg process.
-    /// <paramref name="audiobook"/> selects the audiobook registry and
-    /// <paramref name="song"/> the single-item registry instead of the episode one,
-    /// mirroring which endpoint would have set it in production. Setting uses the
-    /// PRODUCTION idiom (<see cref="MarkEncodeActive"/>, JF-665): a fresh
-    /// generation takes over the key even when a prior flag is still set, so a
-    /// test can simulate the newer same-key generation of the re-register race.
+    /// flag the hold-for-segment path keys on, without a live ffmpeg process,
+    /// with the registry chosen by <see cref="EncodeRegistryFor"/>. Setting uses
+    /// the PRODUCTION idiom (<see cref="MarkEncodeActive"/>, JF-665/JF-669): a
+    /// fresh generation takes over the key even when a prior flag is still set,
+    /// so a test can simulate the newer same-key generation of the re-register
+    /// race. The simulated generation lands in the ticks-0 slot (the no-art
+    /// sentinel: every flag-test fixture's real generation also encodes an item
+    /// without images, so this displaces same-ticks exactly like the production
+    /// re-register).
     /// </summary>
     /// <param name="itemId">The item ID (episode itemId or audiobook parentId).</param>
     /// <param name="active">True to mark an encode active, false to clear it.</param>
@@ -3063,10 +3209,10 @@ public class VideoAudioController : ControllerBase
     /// <param name="song">True to target the single-item registry (default episode).</param>
     internal static void SetEncodeActiveForTest(string itemId, bool active, bool audiobook = false, bool song = false)
     {
-        var registry = audiobook ? _activeAudiobookEncodes : song ? _activeVideoAudioEncodes : _activeEpisodeEncodes;
+        var registry = EncodeRegistryFor(audiobook, song);
         if (active)
         {
-            MarkEncodeActive(registry, itemId);
+            MarkEncodeActive(registry, itemId, artModifiedTicks: 0);
         }
         else
         {
@@ -3083,7 +3229,24 @@ public class VideoAudioController : ControllerBase
     /// <param name="audiobook">True to target the audiobook registry (default episode).</param>
     /// <param name="song">True to target the single-item registry (default episode).</param>
     internal static bool EncodeActiveForTest(string itemId, bool audiobook = false, bool song = false)
-        => (audiobook ? _activeAudiobookEncodes : song ? _activeVideoAudioEncodes : _activeEpisodeEncodes).ContainsKey(itemId);
+        => EncodeRegistryFor(audiobook, song).ContainsKey(itemId);
+
+    /// <summary>
+    /// Internal test seam (JF-669, InternalsVisibleTo): how many art-tick
+    /// generations of <paramref name="itemId"/>'s active-encode flag are
+    /// currently live, with the same registry selectors as
+    /// <see cref="SetEncodeActiveForTest"/>. Read-only; 0 when no flag entry
+    /// exists. Lets a pin wait for ONE generation's clear to land without
+    /// conflating it with another generation's liveness (plain
+    /// <see cref="EncodeActiveForTest"/> cannot distinguish them). Can read 0
+    /// while <see cref="EncodeActiveForTest"/> reads true in the brief
+    /// mid-registration window before the first slot write.
+    /// </summary>
+    /// <param name="itemId">The item ID (episode itemId or audiobook parentId).</param>
+    /// <param name="audiobook">True to target the audiobook registry (default episode).</param>
+    /// <param name="song">True to target the single-item registry (default episode).</param>
+    internal static int EncodeGenerationCountForTest(string itemId, bool audiobook = false, bool song = false)
+        => EncodeRegistryFor(audiobook, song).TryGetValue(itemId, out ActiveEncodeGenerations? generations) ? generations.Count : 0;
 
     /// <summary>
     /// Serve an HLS playlist file, injecting <c>?token=</c> into every segment URI line so the
@@ -5050,10 +5213,12 @@ public class VideoAudioController : ControllerBase
     /// <param name="artModifiedTicks">Art ticks for logging.</param>
     /// <param name="label">Content label for log messages ("Song", "Audiobook", "Episode").</param>
     /// <param name="activeEncode">The encode's handle
-    /// (<see cref="MarkEncodeActive"/>: registry + key + generation); the
-    /// finally's clear is compare-and-remove on its token, so this monitor
-    /// cannot drop a newer registration's flag, and the bundled registry makes
-    /// a clear in the wrong path's registry unrepresentable (JF-665/JF-668).</param>
+    /// (<see cref="MarkEncodeActive"/>: registry + key + art-tick slot +
+    /// generation); the finally's clear is compare-and-remove on its own
+    /// (art-tick, token) pair, so this monitor cannot drop a newer
+    /// registration's slot or another art-tick generation's liveness, and the
+    /// bundled registry makes a clear in the wrong path's registry
+    /// unrepresentable (JF-665/JF-668/JF-669).</param>
     /// <param name="videoTranscodeTier">Whether this encode is the episode
     /// video-transcode tier (JF-500); only that tier scales its stall budget from the
     /// runtime, the others keep the fixed 30-minute ceiling.</param>
@@ -5172,10 +5337,13 @@ public class VideoAudioController : ControllerBase
         }
         finally
         {
-            // Generation-aware clear (JF-665): only the generation that SET the
-            // flag may clear it; a key-only TryRemove let a displaced
-            // generation's late exit drop a newer encode's flag (see
-            // <see cref="MarkEncodeActive"/> for the full account).
+            // Generation-aware clear (JF-665/JF-669): only the generation that
+            // SET its art-tick slot may clear it, and the entry drops only when
+            // the LAST live generation cleared its own; a key-only TryRemove let
+            // a displaced generation's late exit drop a newer encode's flag, and
+            // the single-token entry let a newer-ticks encode's exit orphan an
+            // older-ticks encode's liveness (see <see cref="MarkEncodeActive"/>
+            // for the full account).
             activeEncode.Clear();
             process.Dispose();
         }
