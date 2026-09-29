@@ -1,11 +1,12 @@
 ---
 id: JF-664
 title: >-
-  JF-664 - the two audio-speed sibling routes disagree on which 400 body wins for
-  a doubly-invalid request (non-GUID id + unserved rate)
-status: To Do
+  JF-664 - the two audio-speed sibling routes disagree on which 400 body wins
+  for a doubly-invalid request (non-GUID id + unserved rate)
+status: Done
 assignee: []
 created_date: '2026-09-29 01:55'
+updated_date: '2026-09-29 13:43'
 labels:
   - refactor
   - streaming
@@ -13,9 +14,11 @@ labels:
 dependencies: []
 references:
   - >-
-    backlog/tasks/jf-651 - JF-651-the-Guid.TryParseValidateStreamToken-route-preamble-repeats-at-~9-VideoAudioController-entries-extract-one-shared-signed-route-validator-preserving-each-routes-pinned-400-401-ordering.md
+    backlog/tasks/jf-651 -
+    JF-651-the-Guid.TryParseValidateStreamToken-route-preamble-repeats-at-~9-VideoAudioController-entries-extract-one-shared-signed-route-validator-preserving-each-routes-pinned-400-401-ordering.md
   - >-
-    backlog/tasks/jf-637 - JF-636-follow-ups-consolidate-the-variant-HLS-machinery-the-JF-632-gate-preamble-and-the-slot-resolution-walk.md
+    backlog/tasks/jf-637 -
+    JF-636-follow-ups-consolidate-the-variant-HLS-machinery-the-JF-632-gate-preamble-and-the-slot-resolution-walk.md
 priority: low
 ---
 
@@ -49,3 +52,9 @@ VERIFICATION: the new pin test plus the existing StreamHlsAudioSpeed/GetAudioSpe
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Landed 2026-09-29 as merge c6e52691 on main: the doubly-invalid audio-speed shape (non-GUID id + unserved rate) now answers 400 Invalid itemId format on BOTH sibling routes. StreamHlsAudioSpeed migrated its JF-651-era hand-rolled preamble (a Guid.TryParse-gated token check that skipped validation for non-GUIDs and let the Core's rate check answer first) to the shared ValidateSignedRoute; GetAudioSpeedSegment needed no change. Every other pinned ordering stayed byte-identical (GUID + bad rate + no token keeps its 401, non-GUID + served rate keeps the same id-400 body, GUID + unserved rate + valid token keeps the Core's rate 400). Pin: AudioSpeedRoutes_DoublyInvalid_NonGuidIdPlusUnservedRate_BothReturnItemId400, the first body-asserting pin in the controller test file (Assert.IsType alone could not discriminate; the old playlist body was a disjoint 400). The residual triply-invalid divergence (GUID + unserved rate + bad token: playlist 401 vs segment rate-400, both unpinned) is named in the route comment and filed same-turn as JF-671. Gates: Skill simplify (4-agent round, all angles clean) and Skill code-review high in-worker (3 findings: comment scoped, routeError rename, one skip-justified) plus the orchestrator gate-marker code-review pass (clean; its one low finding, the JF-671 reference pointing at the pre-rename jf-664 filename, fixed in the same DONE commit as the rename). Suites: 4736/4736 both TFMs worker-run and orchestrator-verified independently; merged-tree (JF-664+JF-667) 4741/4741 both TFMs. N/A DoD: NLU fixtures, E2E-for-new-intent, locale strings (internal error contract, no model or handler surface). Live probe after deploy: curl both audio-speed routes with not-a-guid + rate expects the id-format 400 body on both.
+<!-- SECTION:FINAL_SUMMARY:END -->
