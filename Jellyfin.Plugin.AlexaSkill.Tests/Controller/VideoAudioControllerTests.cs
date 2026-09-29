@@ -3553,6 +3553,153 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
+    /// JF-665: a same-key re-register while the prior encode is STILL LIVE (the
+    /// variant's cache directory evicted mid-encode, a re-request restarting it)
+    /// displaces the prior registry entry; after the JF-647 compare-and-remove
+    /// the prior watcher no longer cleans it up, so the registration itself must
+    /// KILL the displaced encode instead of orphaning it to run to completion
+    /// holding an encode-gate slot (the gate releases only on the process's own
+    /// exit). Pinned directly on the registration seam, like the JF-647 pin: the
+    /// endpoint cannot produce the interleave without racing a live encode's
+    /// directory.
+    /// </summary>
+    [Fact]
+    public async Task RegisterLiveSpeedEncode_SameKeyReRegister_KillsDisplacedLiveEncode()
+    {
+        var controller = CreateController();
+        string cacheKey = VideoAudioController.AudioSpeedCacheKey(Guid.NewGuid().ToString(), 1500, 0);
+
+        using var oldProcess = Process.Start(new ProcessStartInfo("/bin/sh", "-c \"sleep 30\""))!;
+        using var newProcess = Process.Start(new ProcessStartInfo("/bin/sh", "-c \"sleep 30\""))!;
+        try
+        {
+            controller.RegisterLiveSpeedEncode(oldProcess, cacheKey, "device-A");
+
+            // The prior encode is still running when the same key re-registers:
+            // the registry must name the new process AND kill the displaced one.
+            controller.RegisterLiveSpeedEncode(newProcess, cacheKey, "device-A");
+            Assert.Same(newProcess, VideoAudioController.LiveSpeedEncodeProcessForTest(cacheKey));
+
+            Assert.True(
+                await WaitUntilAsync(() => oldProcess.HasExited, TimeSpan.FromSeconds(5), 100),
+                "the displaced live encode must be killed at the overwrite, not orphaned onto the encode gate");
+
+            // The surviving entry is the new generation's, and its own watcher
+            // still owns the cleanup once it exits.
+            newProcess.Kill();
+            newProcess.WaitForExit();
+            Assert.True(
+                await WaitUntilAsync(() => VideoAudioController.LiveSpeedEncodeProcessForTest(cacheKey) == null, TimeSpan.FromSeconds(5), 100),
+                "the new generation's own watcher must still clear the key");
+        }
+        finally
+        {
+            try { if (!oldProcess.HasExited) { oldProcess.Kill(); } } catch { /* already exited */ }
+            try { if (!newProcess.HasExited) { newProcess.Kill(); } } catch { /* already exited */ }
+        }
+    }
+
+    /// <summary>
+    /// JF-665: the monitor's encode-flag clear is generation-aware. A prior
+    /// generation's monitor that fires late (its encode hung; the stall budget
+    /// kills it while a NEWER same-key encode has already re-registered after
+    /// the eviction) must NOT clear the newer generation's flag: the old
+    /// key-only clear turned the near-ahead segment hold off mid-encode (device
+    /// seeks 404ed). Gen 1 runs the REAL endpoint (hung fake ffmpeg, shrunk
+    /// stall budget so its monitor's finally lands within seconds); gen 2's
+    /// registration is simulated through the test seam the moment the endpoint
+    /// returns, well inside gen 1's stall budget.
+    /// </summary>
+    [Fact]
+    public async Task MonitorHls_LatePriorGenerationClear_KeepsNewerEncodeFlagSet()
+    {
+        var (episode, mediaSourceManager) = SetupEpisodeForHls("JF-665 Late Clear S01E01", "h264", TimeSpan.FromMinutes(45));
+
+        string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-jf665-hung",
+            "for last_arg in \"$@\"; do :; done\n" +
+            "dir=$(dirname \"$last_arg\")\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0000.ts\" 2>/dev/null\n" +
+            "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:4.000,\\nseg_0000.ts\\n' > \"$last_arg\"\n" +
+            "sleep 30\n");
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Trace);
+            b.AddProvider(TestCaptureLogger.Into(logRecords));
+        });
+
+        var controller = CreateController(episode.Id.ToString(), loggerFactory, mediaSourceManager, fakeFfmpegPath);
+        controller.HlsMonitorStallBudgetOverride = TimeSpan.FromSeconds(5);
+
+        string itemIdStr = episode.Id.ToString();
+        try
+        {
+            ActionResult result = await controller.StreamHlsEpisode(itemIdStr);
+            Assert.IsType<ContentResult>(result);
+            Assert.True(VideoAudioController.EncodeActiveForTest(itemIdStr), "the endpoint's registration set the flag");
+
+            // The newer same-key generation registers while gen 1's monitor is
+            // still pending (the mid-encode eviction + re-request race): it takes
+            // over the flag's generation. The 5s budget leaves a wide margin for
+            // a descheduled test thread, and the premise assert below turns a
+            // budget overrun into a loud failure instead of a vacuous pass.
+            VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: true);
+            Assert.False(
+                TestCaptureLogger.Snapshot(logRecords).Any(r => r.Message.Contains("HLS encoding STALLED", StringComparison.Ordinal)),
+                "gen 2 must register before gen 1's monitor stalls (raise the stall budget if this fires)");
+
+            // Gen 1's monitor stalls out and runs its finally (the clear attempt).
+            Assert.True(
+                await WaitUntilAsync(
+                    () => TestCaptureLogger.Snapshot(logRecords).Any(r => r.Message.Contains("HLS encoding STALLED", StringComparison.Ordinal)),
+                    TimeSpan.FromSeconds(20)),
+                "gen 1's monitor must reach its stall clear");
+
+            // The late prior-generation clear must not drop the newer encode's
+            // flag: it has to stay set through a settle window that comfortably
+            // spans the finally's execution after the stall log.
+            Assert.False(
+                await WaitUntilAsync(() => !VideoAudioController.EncodeActiveForTest(itemIdStr), TimeSpan.FromSeconds(2), 50),
+                "the prior generation's late clear dropped the newer encode's flag");
+        }
+        finally
+        {
+            VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: false);
+        }
+    }
+
+    /// <summary>
+    /// JF-665 companion: the generation-aware clear must still FIRE for the
+    /// generation that owns the flag (the healthy path): once this encode's own
+    /// monitor finishes, the flag is gone, so future requests re-encode instead
+    /// of being told an encode is active forever.
+    /// </summary>
+    [Fact]
+    public async Task MonitorHls_OwnGenerationExit_StillClearsEncodeFlag()
+    {
+        var (episode, mediaSourceManager) = SetupEpisodeForHls("JF-665 Own Clear S01E01", "h264", TimeSpan.FromMinutes(45));
+
+        string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-jf665-done",
+            "for last_arg in \"$@\"; do :; done\n" +
+            "dir=$(dirname \"$last_arg\")\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0000.ts\" 2>/dev/null\n" +
+            "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:4.000,\\nseg_0000.ts\\n#EXT-X-ENDLIST\\n' > \"$last_arg\"\n" +
+            "sleep 2\n" +
+            "exit 0\n");
+
+        var controller = CreateController(episode.Id.ToString(), null, mediaSourceManager, fakeFfmpegPath);
+
+        ActionResult result = await controller.StreamHlsEpisode(episode.Id.ToString());
+        Assert.IsType<ContentResult>(result);
+        Assert.True(VideoAudioController.EncodeActiveForTest(episode.Id.ToString()), "the registration set the flag");
+
+        Assert.True(
+            await WaitUntilAsync(() => !VideoAudioController.EncodeActiveForTest(episode.Id.ToString()), TimeSpan.FromSeconds(10), 100),
+            "the owning generation's own exit must still clear the flag");
+    }
+
+    /// <summary>
     /// JF-498 review I1, endpoint level: a re-encode over interrupted-encode debris
     /// (non-empty playlist WITHOUT ENDLIST, no active encode) must start ffmpeg over a
     /// CLEAN target: the fake ffmpeg snapshots the pre-existing playlist/segments
