@@ -45,14 +45,16 @@ internal static class TestHelpers
         Guid? id = null,
         string invocationName = "test",
         string jellyfinToken = "test-token",
-        IReadOnlyList<string>? allowedLibraryIds = null)
+        IReadOnlyList<string>? allowedLibraryIds = null,
+        SearchResponseMode? searchResponseMode = null)
     {
         return new Entities.User
         {
             Id = id ?? Guid.NewGuid(),
             InvocationName = invocationName,
             JellyfinToken = jellyfinToken,
-            AllowedLibraryIds = allowedLibraryIds?.ToList()
+            AllowedLibraryIds = allowedLibraryIds?.ToList(),
+            SearchResponseMode = searchResponseMode
         };
     }
 

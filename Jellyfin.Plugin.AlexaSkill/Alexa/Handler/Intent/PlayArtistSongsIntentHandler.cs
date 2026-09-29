@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,7 +9,6 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
-using Jellyfin.Plugin.AlexaSkill.Alexa.Exceptions;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
@@ -19,7 +17,6 @@ using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
-using MediaBrowser.Model.Entities;
 using MediaBrowser.Model.Querying;
 using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
@@ -178,9 +175,11 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         // JF-426: strip a leading Italian article Amazon failed to strip for an
         // out-of-catalog artist ("suona i 24 grana" arrived raw as 'i 24 grana').
         musician = musician is null ? null : Util.ArtistSearch.StripLeadingArticle(musician, locale);
-        // JF-643: this handler runs its own inline tier chain (the JF-382 duplicate)
-        // that bypasses ArtistSearch.SearchAsync's entry romanization, so the
-        // katakana-to-romaji normalization happens here too.
+        // JF-643: the search chain romanizes at its own entry (ArtistSearch.SearchAsync,
+        // the ONE query-side choke point); this handler romanizes too because its own
+        // downstream surfaces need the Latin value (the not-found speech, the JF-652
+        // bar, the JF-654 song fallback). SearchAsync's entry romanization is
+        // idempotent for the already-Latin result, so the search adds no cost.
         // JF-652: the kana-origin flag must be captured on the RAW slot value,
         // BEFORE the romanization below erases the script evidence. JF-659: a
         // canonical-bearing query keeps the flag false (IsKanaOriginQuery owns the
@@ -215,10 +214,12 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             return musicDisabled;
         }
 
-        // The inline JF-382 search copy bypasses SearchAsync (the Layer-2 choke
-        // point), so the gate is explicit here: AFTER slot validation (a slot-less
-        // utterance still gets DidNotCatch) but BEFORE the "searching" progressive
-        // response.
+        // Layer-1 warming gate (the standard gated-handler placement, JF-419):
+        // AFTER slot validation (a slot-less utterance still gets DidNotCatch)
+        // and BEFORE the "searching" progressive response, so a warming refusal
+        // never speaks the announcement first. The shared chain re-checks at its
+        // entry (layer 2, the SearchAsync choke point), as for every other gated
+        // handler.
         GuardIndexReady(_artistIndex);
 
         RunFireAndForget(SendProgressiveResponse(context, request, ResponseStrings.Get("SearchingMedia", locale)));
@@ -229,270 +230,47 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             return userError;
         }
 
-        var totalSw = Stopwatch.StartNew();
-        var tierSw = Stopwatch.StartNew();
-        int tierReached = 0;
-        string searchSource = "Database";
         SearchResponseMode mode = Search.GetSearchResponseMode(user);
 
-        // Pre-resolve library filter once for the entire request.
-        // Used by both the in-memory and database paths, plus the final artist-songs query.
-        Guid[]? topParentIds = null;
+        // JF-448 (review F2), caller-pins-first (the TryEntityFallbackAsync
+        // precedent): pin the index view ONCE for the whole request and hand it to
+        // the search chain (SearchAsync's own capture is idempotent on it), because
+        // the post-search gates below (the JF-420 alternative pool, the JF-652
+        // near-tie pool, Fast mode's best pick) must read the SAME publish the
+        // tiers used: a mid-search refresh must not serve one snapshot's artist
+        // list against another's phonetic codes. Null on the cold-index path.
+        IArtistIndex? pinnedIndex = _artistIndex?.IsReady == true ? _artistIndex.Pin() : null;
 
-        IReadOnlyList<BaseItem> artists;
-        IReadOnlyList<BaseItem>? jf420ArtistPool = null;
+        // JF-658: the JF-382 inline 4-tier duplicate is gone; this handler drives
+        // the ONE shared chain (ArtistSearch.SearchAsync) with its policy axes:
+        // Fast skips the recall tiers and the DB containment band, Thorough runs
+        // the parallel DB tiers (the inline chain's Task.WhenAll structure, kept
+        // verbatim per the JF-315 6b plan) and the ASR compound-word variants on
+        // tier 1. Observability deltas accepted with the fold (plan step 5): the
+        // per-tier retry labels collapse to the one "GetArtists" label, including
+        // the JF-457 album-scope verification queries the inline path labeled
+        // "ArtistAlbumScope" (scope-verify vs search triage now needs the query
+        // shape, not the label); SearchAsync's TOTAL log line carries the mode.
+        IReadOnlyList<BaseItem> artists = await Util.ArtistSearch.SearchAsync(
+            musicianQuery, user, _libraryManager, pinnedIndex, Logger,
+            (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", ct),
+            locale, cancellationToken,
+            mode: mode,
+            asrCompoundWordFixEnabled: _config.AsrCompoundWordFixEnabled,
+            parallelDbTiers: mode != SearchResponseMode.Fast).ConfigureAwait(false);
 
-        // JF-448 (review F2): the inline chain's pinned index view, captured once when
-        // the in-memory branch runs. Every GetArtists/FuzzyMatchPhonetic below resolves
-        // from the SAME publish, so a mid-search refresh cannot serve the artist list of
-        // one snapshot against another's phonetic codes (nulled code, skipped JF-381
-        // floor, wrong artist for one request). Null on the database path.
-        IArtistIndex? pinnedIndex = null;
-
-        if (_artistIndex?.IsReady == true)
-        {
-            // In-memory search: resolve library filter once, search the pre-loaded index
-            searchSource = "InMemory";
-            topParentIds = Util.LibraryFilter.ResolveForUser(user, _libraryManager, Logger);
-            pinnedIndex = _artistIndex.Pin();
-            var allArtists = pinnedIndex.GetArtists(topParentIds);
-            // JF-420 efficiency: reuse this list in the auto-selection check below
-            // instead of calling GetArtists again (re-filters + re-allocates for
-            // multi-library users).
-            jf420ArtistPool = allArtists;
-
-            // Tier 1: name contains query (in-memory equivalent of SearchTerm).
-            // Gate: skip containment matches where the query is much shorter than the
-            // candidate name, since a short query inside a long name is a coincidental
-            // substring (e.g. "cup" in "Porcupine Tree"), not an intended match. This lets
-            // the fuzzy/phonetic tiers handle accent drift instead. JF-381.
-            tierSw.Restart();
-            artists = allArtists
-                .Where(a => a.Name.Contains(musicianQuery, StringComparison.OrdinalIgnoreCase)
-                    && Util.ArtistSearch.PassesContainmentBand(a.Name, musicianQuery))
-                .ToList();
-            tierSw.Stop();
-            tierReached = 1;
-            Logger.LogInformation(
-                "ArtistSearch: tier=1 duration={TierMs}ms results={Count} method=InMemoryContains query='{Query}'",
-                tierSw.ElapsedMilliseconds, artists.Count, musicianQuery);
-
-            if (artists.Count == 0)
-            {
-                if (mode == SearchResponseMode.Fast)
-                {
-                    // Fast mode: skip prefix tiers, go straight to fuzzy-all
-                    tierSw.Restart();
-                    BaseItem? fuzzy = Search.FuzzyMatchPhonetic(musicianQuery, allArtists, a => a.Name, a => a.Id, pinnedIndex, user);
-                    tierSw.Stop();
-                    tierReached = 4;
-                    Logger.LogInformation(
-                        "ArtistSearch: tier=4 duration={TierMs}ms matched={Matched} method=InMemoryFuzzyAll query='{Query}' mode=Fast",
-                        tierSw.ElapsedMilliseconds, fuzzy != null, musicianQuery);
-                    if (fuzzy != null)
-                    {
-                        artists = new List<BaseItem> { fuzzy };
-                    }
-                }
-                else
-                {
-                    // Thorough mode: run tiers 2-4 as before (in-memory tiers are sub-ms, no need to parallelize)
-                    string firstWord = musicianQuery.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? musicianQuery;
-
-                    // Tier 2: prefix first word + fuzzy (catches ASR truncation, e.g. "soul coughin" → "Soul Coughing")
-                    tierSw.Restart();
-                    var prefixCandidates = allArtists
-                        .Where(a => a.Name.StartsWith(firstWord, StringComparison.OrdinalIgnoreCase))
-                        .ToList();
-                    BaseItem? tier2Match = Search.FuzzyMatchPhonetic(musicianQuery, prefixCandidates, a => a.Name, a => a.Id, pinnedIndex, user);
-                    tierSw.Stop();
-                    tierReached = 2;
-                    Logger.LogInformation(
-                        "ArtistSearch: tier=2 duration={TierMs}ms matched={Matched} method=InMemoryPrefixFirstWord query='{Query}' prefix='{Prefix}'",
-                        tierSw.ElapsedMilliseconds, tier2Match != null, musicianQuery, firstWord);
-                    BaseItem? deferredTier2 = null;
-                    if (tier2Match != null)
-                    {
-                        if (Util.ArtistSearch.IsPartialFirstWordMatch(musicianQuery, firstWord, tier2Match.Name))
-                        {
-                            // JF-417: partial first-word match, defer and let tiers 3-4 run
-                            deferredTier2 = tier2Match;
-                        }
-                        else
-                        {
-                            artists = new List<BaseItem> { tier2Match };
-                        }
-                    }
-
-                    // Tier 3: prefix full query + fuzzy (e.g. "Kidz Bop" → "Kidz Bop Kids")
-                    if (artists.Count == 0 && !string.Equals(firstWord, musicianQuery, StringComparison.Ordinal))
-                    {
-                        tierSw.Restart();
-                        var fullPrefixCandidates = allArtists
-                            .Where(a => a.Name.StartsWith(musicianQuery, StringComparison.OrdinalIgnoreCase))
-                            .ToList();
-                        BaseItem? tier3Match = Search.FuzzyMatchPhonetic(musicianQuery, fullPrefixCandidates, a => a.Name, a => a.Id, pinnedIndex, user);
-                        tierSw.Stop();
-                        tierReached = 3;
-                        Logger.LogInformation(
-                            "ArtistSearch: tier=3 duration={TierMs}ms matched={Matched} method=InMemoryPrefixFull query='{Query}'",
-                            tierSw.ElapsedMilliseconds, tier3Match != null, musicianQuery);
-                        if (tier3Match != null)
-                        {
-                            artists = new List<BaseItem> { tier3Match };
-                        }
-                    }
-
-                    // Tier 1.5 (JF-437): word-coverage tier, shared entry point with
-                    // SearchAsync (placement rationale there). Thorough only: Fast mode
-                    // keeps its exact pre-tier semantics (speed over recall by design).
-                    if (mode != SearchResponseMode.Fast && artists.Count == 0
-                        && Util.ArtistSearch.TryWordCoverageTier(musicianQuery, allArtists, locale, Logger, out var wordCoverageMatches))
-                    {
-                        artists = wordCoverageMatches;
-                        tierReached = 4; // tier 1.5 preempted tier 4 (the summary log is coarse)
-                    }
-
-                    // Tier 4: fuzzy match against ALL artists (catches misspellings)
-                    if (artists.Count == 0)
-                    {
-                        tierSw.Restart();
-                        // JF-417 review correction: no exclusion (see ArtistSearch.cs comment)
-                        BaseItem? tier4Match = Search.FuzzyMatchPhonetic(musicianQuery, allArtists, a => a.Name, a => a.Id, pinnedIndex, user);
-                        tierSw.Stop();
-                        tierReached = 4;
-                        Logger.LogInformation(
-                            "ArtistSearch: tier=4 duration={TierMs}ms matched={Matched} method=InMemoryFuzzyAll query='{Query}'",
-                            tierSw.ElapsedMilliseconds, tier4Match != null, musicianQuery);
-                        if (tier4Match != null)
-                        {
-                            artists = new List<BaseItem> { tier4Match };
-                        }
-                    }
-
-                    // JF-417: fallback to deferred tier-2 if tiers 3-4 found nothing better
-                    if (artists.Count == 0 && deferredTier2 != null)
-                    {
-                        artists = new List<BaseItem> { deferredTier2 };
-                    }
-                }
-            }
-        }
-        else
-        {
-            // Fallback: database queries when in-memory index is not yet loaded
-            // Resolve library filter once and reuse across all fallback tiers.
-            topParentIds = Util.LibraryFilter.ResolveForUser(user, _libraryManager, Logger);
-
-            if (mode == SearchResponseMode.Fast)
-            {
-                // Fast mode: single SearchTerm query, no fallback tiers, no ASR variants
-                artists = await Search.SearchWithAsrFallbackAsync(musicianQuery,
-                    searchTerm =>
-                    {
-                        var q = new InternalItemsQuery()
-                        {
-                            Recursive = true,
-                            SearchTerm = searchTerm,
-                            IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
-                            DtoOptions = new DtoOptions(true)
-                        };
-                        // Scope; the items-by-name bypass is automatic for the
-                        // MusicArtist kind (LibraryFilter, JF-456).
-                        Util.LibraryFilter.ApplyLibraryFilter(q, topParentIds);
-                        return RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", cancellationToken);
-                    }, mode).ConfigureAwait(false);
-
-                // NOTE: no JF-381 containment-band gate here - Fast mode DB has NO
-                // recovery tier (the in-memory Fast path falls through to fuzzy-all, this
-                // one does not), so gating would turn direct long-name hits ("florence" ->
-                // "Florence + The Machine") into not-founds during the cold-index window.
-                // Trade-off: a cold-start Fast DB search can auto-play a coincidental
-                // containment, as it did before the sweep (code-review 2026-08-29).
-
-                // JF-457: no recovery tier here either, but the privacy bound is not a
-                // recall trade: an excluded-library artist NAME must not be spoken, so
-                // the list is album-scope verified before it leaves the tier (empty
-                // result degrades to the JF-439 song fallback / not-found below).
-                artists = await FilterAlbumScopeAsync(artists, topParentIds, cancellationToken).ConfigureAwait(false);
-
-                tierSw.Stop();
-                tierReached = 1;
-                Logger.LogInformation(
-                    "ArtistSearch: tier=1 duration={TierMs}ms results={Count} method=SearchTerm query='{Query}' mode=Fast",
-                    tierSw.ElapsedMilliseconds, artists.Count, musicianQuery);
-            }
-            else
-            {
-                // Thorough mode: 4-tier fallback with ASR variants on tier 1
-                artists = await Search.SearchWithAsrFallbackAsync(musicianQuery,
-                    searchTerm =>
-                    {
-                        var q = new InternalItemsQuery()
-                        {
-                            Recursive = true,
-                            SearchTerm = searchTerm,
-                            IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
-                            DtoOptions = new DtoOptions(true)
-                        };
-                        // Scope; the items-by-name bypass is automatic for the
-                        // MusicArtist kind (LibraryFilter, JF-456).
-                        Util.LibraryFilter.ApplyLibraryFilter(q, topParentIds);
-                        return RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", cancellationToken);
-                    }).ConfigureAwait(false);
-
-                artists = FilterContainmentBand(artists, musicianQuery);
-
-                // JF-457: album-scope verification of the bypass-tier list (same
-                // contract as the shared implementation); an emptied tier falls
-                // through to the parallel tiers 2-4 below. Fires before the tier log
-                // so duration and count carry the true yield (the SearchAsync shape).
-                artists = await FilterAlbumScopeAsync(artists, topParentIds, cancellationToken).ConfigureAwait(false);
-
-                tierSw.Stop();
-                tierReached = 1;
-                Logger.LogInformation(
-                    "ArtistSearch: tier=1 duration={TierMs}ms results={Count} method=SearchTerm query='{Query}'",
-                    tierSw.ElapsedMilliseconds, artists.Count, musicianQuery);
-
-                // Tier 1 emptied (no band-passing in-scope match): run the parallel tiers 2-4
-                if (artists.Count == 0)
-                {
-                    // Parallelize tiers 2-4: all independent, pick by priority order
-                    string firstWord = musicianQuery.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? musicianQuery;
-
-                    var tier2 = TryPrefixFallbackAsync(firstWord, musicianQuery, topParentIds, user, "GetArtistsFuzzy", cancellationToken);
-                    var tier3 = !string.Equals(firstWord, musicianQuery, StringComparison.Ordinal)
-                        ? TryPrefixFallbackAsync(musicianQuery, musicianQuery, topParentIds, user, "GetArtistsFullPrefix", cancellationToken)
-                        : Task.FromResult<BaseItem?>(null);
-                    var tier4 = TryContainsFallbackAsync(musicianQuery, musicianQuery, topParentIds, user, "GetArtistsContains", cancellationToken);
-
-                    BaseItem?[] parallelResults = await Task.WhenAll(tier2, tier3, tier4).ConfigureAwait(false);
-
-                    // Preserve priority: tier 2 > tier 3 > tier 4
-                    BaseItem? match = parallelResults[0] ?? parallelResults[1] ?? parallelResults[2];
-                    tierReached = match != null ? (parallelResults[0] != null ? 2 : parallelResults[1] != null ? 3 : 4) : 4;
-
-                    Logger.LogInformation(
-                        "ArtistSearch: tiers=2-4 (parallel) matched={Matched} tierHit={Tier} method=ParallelFallback query='{Query}'",
-                        match != null, tierReached, musicianQuery);
-                    if (match != null)
-                    {
-                        artists = new List<BaseItem> { match };
-                    }
-                }
-            }
-        }
-
-        totalSw.Stop();
-        Logger.LogInformation(
-            "ArtistSearch: total duration={TotalMs}ms tier_reached={Tier} results={Count} query='{Query}' source={Source} mode={Mode}",
-            totalSw.ElapsedMilliseconds,
-            tierReached,
-            artists.Count,
-            musicianQuery,
-            searchSource,
-            mode);
+        // Re-resolved here for the post-search consumers (cached, so no extra
+        // library walk): the JF-420/JF-652 pools fetch from the pinned index
+        // scoped to the user's libraries, and the artist-songs query reuses the
+        // same scope. The pool itself is fetched at most once per request and
+        // shared by both gates (JF-658). Known seam (accepted with the fold): a
+        // library-scope cache invalidation landing between SearchAsync's internal
+        // resolution and this one would serve the gates a fresher scope than the
+        // search ran under; the window is milliseconds and the worst case is a
+        // disambiguation prompt naming a just-removed library's artist (the
+        // JF-457 name-only leak class).
+        Guid[]? topParentIds = Util.LibraryFilter.ResolveForUser(user, _libraryManager, Logger);
+        IReadOnlyList<BaseItem>? artistPool = null;
 
         if (artists.Count == 0)
         {
@@ -558,8 +336,9 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             && pinnedIndex != null)
         {
             // Same pinned view the chain above used (JF-448): the alternative pool and
-            // the match list stay on one publish.
-            var searchPool = jf420ArtistPool ?? pinnedIndex.GetArtists(topParentIds);
+            // the match list stay on one publish. Fetched lazily here (the JF-658 fold):
+            // only gate-firing requests pay the one extra GetArtists.
+            var searchPool = artistPool ??= pinnedIndex.GetArtists(topParentIds);
             var alternatives = searchPool.Where(a => !a.Id.Equals(artists[0].Id)).ToList();
             if (alternatives.Count > 0)
             {
@@ -700,8 +479,9 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         // (JF-420.2 yes/no cycling). Latin queries never enter this block.
         if (kanaOrigin && artists.Count > 0)
         {
+            artistPool ??= pinnedIndex?.GetArtists(topParentIds);
             SkillResponse? kanaOutcome = ApplyKanaOriginAcceptance(
-                artists, musician!, user, pinnedIndex, jf420ArtistPool, locale, context, session, kanaOrigin, cancellationToken);
+                artists, musician!, user, pinnedIndex, artistPool, locale, context, session, kanaOrigin, cancellationToken);
             if (kanaOutcome != null)
             {
                 return kanaOutcome;
@@ -811,110 +591,6 @@ public class PlayArtistSongsIntentHandler : BaseHandler
     }
 
     /// <summary>
-    /// Tries a NameStartsWith prefix search followed by fuzzy matching against the results.
-    /// Used as a fallback when the primary SearchTerm query returns no artists.
-    /// </summary>
-    private async Task<BaseItem?> TryPrefixFallbackAsync(
-        string prefix, string musician, Guid[]? topParentIds, Entities.User? user,
-        string retryLabel, CancellationToken cancellationToken)
-    {
-        return await TrySearchFallbackAsync(
-            q => q.NameStartsWith = prefix, musician, topParentIds, user, retryLabel, applyContainmentBand: false, cancellationToken).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// Tries a NameContains substring search followed by fuzzy matching against the results.
-    /// Catches cases where the query appears anywhere in the artist name (e.g. "Kidz Bop" → "The Kidz Bop Kids").
-    /// Since this is a substring-shaped source, results pass through the JF-381 containment
-    /// band (a purely coincidental candidate set would be confirmed by the fuzzy step).
-    /// </summary>
-    private async Task<BaseItem?> TryContainsFallbackAsync(
-        string searchTerm, string musician, Guid[]? topParentIds, Entities.User? user,
-        string retryLabel, CancellationToken cancellationToken)
-    {
-        return await TrySearchFallbackAsync(
-            q => q.NameContains = searchTerm, musician, topParentIds, user, retryLabel, applyContainmentBand: true, cancellationToken).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// Executes a configured InternalItemsQuery and fuzzy-matches the results against the artist name.
-    /// Uses pre-resolved topParentIds to avoid repeated library filter resolution.
-    /// </summary>
-    private async Task<BaseItem?> TrySearchFallbackAsync(
-        Action<InternalItemsQuery> configure,
-        string musician,
-        Guid[]? topParentIds,
-        Entities.User? user,
-        string retryLabel,
-        bool applyContainmentBand = false,
-        CancellationToken cancellationToken = default)
-    {
-        var query = new InternalItemsQuery()
-        {
-            Recursive = true,
-            IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
-            DtoOptions = new DtoOptions(true)
-        };
-        // Scope; the items-by-name bypass is automatic for the MusicArtist kind
-        // (LibraryFilter, JF-456).
-        Util.LibraryFilter.ApplyLibraryFilter(query, topParentIds);
-        configure(query);
-
-        IReadOnlyList<BaseItem> results = await RetryAsync(
-            () => _libraryManager.GetItemList(query),
-            retryLabel,
-            cancellationToken).ConfigureAwait(false);
-
-        if (results == null || results.Count == 0)
-        {
-            return null;
-        }
-
-        // JF-381 gate before fuzzy ONLY for substring-shaped sources (NameContains):
-        // a purely coincidental candidate set would be confirmed by the fuzzy step.
-        // Prefix-shaped callers (NameStartsWith) pass applyContainmentBand=false: a short
-        // query at the START of a long name is the intended ASR-truncation shape
-        // ("crash" -> "Crash Test Dummies"), not a coincidence (code-review 2026-08-29).
-        var candidates = applyContainmentBand ? FilterContainmentBand(results, musician) : results;
-        BaseItem? match = Search.FuzzyMatch(musician, candidates, a => a.Name, user);
-
-        // JF-457 winner-level album-scope verification via the shared
-        // ArtistSearch.KeepIfAlbumScopeAsync (the winner only, one bounded query; a
-        // scope failure empties the tier so the parallel caller considers the next).
-        IReadOnlyList<BaseItem> scopedWinner = await Util.ArtistSearch.KeepIfAlbumScopeAsync(
-            match, topParentIds,
-            (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "ArtistAlbumScope", ct),
-            Logger, cancellationToken).ConfigureAwait(false);
-        return scopedWinner.Count > 0 ? match : null;
-    }
-
-    /// <summary>
-    /// JF-457 wiring of the shared <see cref="Util.ArtistSearch.FilterByAlbumScopeAsync"/>
-    /// for this handler's inline DB tiers (the JF-382 duplication): routes the bounded
-    /// MusicAlbum scope queries through the same RetryAsync GetItemList channel every
-    /// other DB call here uses. Skipped at zero cost for unrestricted users.
-    /// </summary>
-    private Task<IReadOnlyList<BaseItem>> FilterAlbumScopeAsync(
-        IReadOnlyList<BaseItem> artists, Guid[]? topParentIds, CancellationToken cancellationToken)
-        => Util.ArtistSearch.FilterByAlbumScopeAsync(
-            artists,
-            topParentIds,
-            (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "ArtistAlbumScope", ct),
-            Logger,
-            cancellationToken);
-
-    /// <summary>
-    /// Filters raw search results to the JF-381 containment band (shared predicate with
-    /// <see cref="Util.ArtistSearch"/>); used on the database-tier results, which unlike
-    /// the in-memory path have no later phonetic-over-full-index tier to self-correct.
-    /// </summary>
-    /// <param name="artists">Raw candidate artists.</param>
-    /// <param name="musician">The raw query.</param>
-    /// <returns>The filtered list.</returns>
-    private static List<BaseItem> FilterContainmentBand(IReadOnlyList<BaseItem> artists, string musician)
-        => artists.Where(a => Util.ArtistSearch.PassesContainmentBand(a.Name, musician)).ToList();
-
-    /// <summary>
     /// JF-652: the kana-origin acceptance decision for the final single pick. Returns
     /// the response to return (the honest not-found, or the near-tie disambiguation
     /// ask), or null when the pick clears the kana bar and auto-play proceeds.
@@ -925,8 +601,10 @@ public class PlayArtistSongsIntentHandler : BaseHandler
     /// here from the candidate name), never inferred from the score band. The
     /// near-tie check runs the shared
     /// <see cref="Util.ArtistSearch.FindNearTiedRunnerUp"/> over the full artist
-    /// pool (only the in-memory path has one; the cold-index database path skips it,
-    /// same cold-window trade-off class as the JF-381/JF-417 gates).
+    /// pool (the request-memoized pool, fetched lazily from the pinned index and
+    /// shared with the JF-420 gate; only the in-memory path has one, the
+    /// cold-index database path skips it, same cold-window trade-off class as
+    /// the JF-381/JF-417 gates).
     /// </summary>
     private SkillResponse? ApplyKanaOriginAcceptance(
         IReadOnlyList<BaseItem> artists,
