@@ -87,25 +87,41 @@ public sealed class SearchService
     /// <summary>
     /// Search using the original query first, then fall back to ASR compound-word
     /// variants if the feature is enabled and the original returned no results.
-    /// Stops at the first non-empty result set.
+    /// Stops at the first non-empty result set. Delegates the loop to
+    /// <see cref="SearchFirstNonEmptyAsync{T}"/> (the JF-658 extraction) folding
+    /// this wrapper's config flag + mode policy into the one boolean.
     /// </summary>
     /// <typeparam name="T">The result item type.</typeparam>
     /// <param name="query">The original search query from ASR.</param>
     /// <param name="searchFunc">A function that executes a search for a given query string.</param>
     /// <returns>Results from the first successful search, or the original empty results.</returns>
-    public async Task<IReadOnlyList<T>> SearchWithAsrFallbackAsync<T>(
+    public Task<IReadOnlyList<T>> SearchWithAsrFallbackAsync<T>(
         string query,
         Func<string, Task<IReadOnlyList<T>>> searchFunc,
         SearchResponseMode mode = SearchResponseMode.Thorough)
+        => SearchFirstNonEmptyAsync(query, searchFunc, _config.AsrCompoundWordFixEnabled && mode != SearchResponseMode.Fast);
+
+    /// <summary>
+    /// The ASR variant loop underlying <see cref="SearchWithAsrFallbackAsync{T}"/>,
+    /// extracted flag-parameterized (JF-658) so <see cref="ArtistSearch.SearchAsync"/>'s
+    /// database tier 1 reuses the ONE loop instead of growing a second copy (the
+    /// caller folds its own flag+mode policy into <paramref name="tryAsrVariants"/>).
+    /// Runs the original query, then the generated compound-word variants, stopping
+    /// at the first non-empty result set.
+    /// </summary>
+    /// <typeparam name="T">The result item type.</typeparam>
+    /// <param name="query">The original search query.</param>
+    /// <param name="searchFunc">A function that executes a search for a given query string.</param>
+    /// <param name="tryAsrVariants">Whether the compound-word variants are retried on an empty original result.</param>
+    /// <returns>Results from the first successful search, or the original empty results.</returns>
+    internal static async Task<IReadOnlyList<T>> SearchFirstNonEmptyAsync<T>(
+        string query,
+        Func<string, Task<IReadOnlyList<T>>> searchFunc,
+        bool tryAsrVariants)
     {
         IReadOnlyList<T> results = await searchFunc(query).ConfigureAwait(false) ?? Array.Empty<T>();
 
-        if (results.Count > 0)
-        {
-            return results;
-        }
-
-        if (!_config.AsrCompoundWordFixEnabled || mode == SearchResponseMode.Fast)
+        if (results.Count > 0 || !tryAsrVariants)
         {
             return results;
         }

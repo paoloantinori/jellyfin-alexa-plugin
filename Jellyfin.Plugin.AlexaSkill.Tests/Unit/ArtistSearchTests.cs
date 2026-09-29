@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Exceptions;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
+using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Library;
@@ -1076,5 +1077,153 @@ public class ArtistSearchTests
 
         Assert.NotNull(capturedSearchTerm);
         Assert.Equal("kuin", capturedSearchTerm);
+    }
+
+    // ---------------------------------------------------------------
+    // JF-658: the caller policy axes (mode / parallelDbTiers / ASR flag)
+    // ported from the folded PlayArtistSongs inline chain. The same four
+    // scenarios are pinned end to end by PlayArtistSongsSearchModeAxisTests;
+    // this block owns the shared-layer axis semantics for all callers.
+    // ---------------------------------------------------------------
+
+    [Fact]
+    public async Task SearchAsync_FastMode_InMemory_SkipsWordCoverageTier()
+    {
+        // The JF-437 'beatles live' shape: Thorough resolves The Beatles through
+        // the word-coverage tier (tier 1.5); Fast skips it (and the prefix tiers)
+        // by design, so tier-4's fuzzy window ranks the near-anagram Eagles higher.
+        var theBeatles = new MusicArtist { Name = "The Beatles", Id = Guid.NewGuid() };
+        var eagles = new MusicArtist { Name = "Eagles", Id = Guid.NewGuid() };
+        var index = new FakeArtistIndex(new[] { theBeatles, eagles });
+
+        var thorough = await ArtistSearch.SearchAsync(
+            "beatles live", user: null, libraryManager: Mock.Of<ILibraryManager>(), artistIndex: index,
+            logger: Logger, dbQuery: NotCalled, locale: "en-US", cancellationToken: CancellationToken.None);
+        var fast = await ArtistSearch.SearchAsync(
+            "beatles live", user: null, libraryManager: Mock.Of<ILibraryManager>(), artistIndex: index,
+            logger: Logger, dbQuery: NotCalled, locale: "en-US", cancellationToken: CancellationToken.None,
+            mode: SearchResponseMode.Fast);
+
+        var thoroughMatch = Assert.Single(thorough);
+        Assert.Equal("The Beatles", thoroughMatch.Name);
+        var fastMatch = Assert.Single(fast);
+        Assert.Equal("Eagles", fastMatch.Name);
+    }
+
+    [Fact]
+    public async Task SearchAsync_FastMode_Db_SingleSearchTermQuery_PlaysUngatedLongName()
+    {
+        // The Fast-mode DB exception: no JF-381 containment band (no recovery
+        // tier exists), exactly one SearchTerm query, no fallback tiers.
+        var fftm = new MusicArtist { Name = "Florence + The Machine", Id = Guid.NewGuid() };
+        var artistQueries = new List<InternalItemsQuery>();
+
+        Task<IReadOnlyList<BaseItem>> DbQuery(InternalItemsQuery q, CancellationToken ct)
+        {
+            if (q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(Jellyfin.Data.Enums.BaseItemKind.MusicArtist))
+            {
+                artistQueries.Add(q);
+            }
+
+            return Task.FromResult<IReadOnlyList<BaseItem>>(new[] { fftm });
+        }
+
+        var result = await ArtistSearch.SearchAsync(
+            "florence", user: null, libraryManager: Mock.Of<ILibraryManager>(), artistIndex: null,
+            logger: Logger, dbQuery: DbQuery, locale: "en-US", cancellationToken: CancellationToken.None,
+            mode: SearchResponseMode.Fast);
+
+        var match = Assert.Single(result);
+        Assert.Equal("Florence + The Machine", match.Name); // 15 chars past the band, still plays
+        var query = Assert.Single(artistQueries);
+        Assert.Equal("florence", query.SearchTerm);
+        Assert.Null(query.NameStartsWith);
+        Assert.Null(query.NameContains);
+    }
+
+    [Fact]
+    public async Task SearchAsync_ParallelDbTiers_AllThreeQueriesIssued_Tier2KeepsPriority()
+    {
+        // The cold-window latency contract: tiers 2-4 all issue their query (no
+        // sequential short-circuit after the tier-2 hit) and the 2 > 3 > 4
+        // priority pick keeps the tier-2 winner over a tier-4 candidate.
+        var abba = new MusicArtist { Name = "Abba", Id = Guid.NewGuid() };
+        var tribute = new MusicArtist { Name = "Abba Tribute Band", Id = Guid.NewGuid() };
+        var issued = new List<string>();
+
+        Task<IReadOnlyList<BaseItem>> DbQuery(InternalItemsQuery q, CancellationToken ct)
+        {
+            if (q.SearchTerm != null)
+            {
+                issued.Add("searchterm");
+                return Task.FromResult<IReadOnlyList<BaseItem>>(Array.Empty<BaseItem>());
+            }
+
+            if (q.NameStartsWith == "abba")
+            {
+                issued.Add("prefix-first");
+                return Task.FromResult<IReadOnlyList<BaseItem>>(new[] { abba });
+            }
+
+            if (q.NameStartsWith == "abba live")
+            {
+                issued.Add("prefix-full");
+                return Task.FromResult<IReadOnlyList<BaseItem>>(Array.Empty<BaseItem>());
+            }
+
+            if (q.NameContains == "abba live")
+            {
+                issued.Add("contains");
+                return Task.FromResult<IReadOnlyList<BaseItem>>(new[] { tribute });
+            }
+
+            return Task.FromResult<IReadOnlyList<BaseItem>>(Array.Empty<BaseItem>());
+        }
+
+        var result = await ArtistSearch.SearchAsync(
+            "abba live", user: null, libraryManager: Mock.Of<ILibraryManager>(), artistIndex: null,
+            logger: Logger, dbQuery: DbQuery, locale: "en-US", cancellationToken: CancellationToken.None,
+            parallelDbTiers: true);
+
+        var match = Assert.Single(result);
+        Assert.Equal("Abba", match.Name);
+        Assert.Contains("prefix-first", issued);
+        Assert.Contains("prefix-full", issued);
+        Assert.Contains("contains", issued); // issued DESPITE the tier-2 hit: the parallel proof
+    }
+
+    [Fact]
+    public async Task SearchAsync_ThoroughTier1_RetriesAsrVariants_OnlyWhenEnabled()
+    {
+        // The ASR compound-word fold: Thorough DB tier 1 retries the joined-word
+        // variant when the caller enables the flag; the default (flag off, every
+        // pre-JF-658 caller) keeps the single plain query.
+        var lazybones = new MusicArtist { Name = "Lazybones", Id = Guid.NewGuid() };
+        var searched = new List<string?>();
+
+        Task<IReadOnlyList<BaseItem>> DbQuery(InternalItemsQuery q, CancellationToken ct)
+        {
+            if (q.SearchTerm != null)
+            {
+                searched.Add(q.SearchTerm);
+                return Task.FromResult<IReadOnlyList<BaseItem>>(
+                    q.SearchTerm == "lazybones" ? new[] { lazybones } : Array.Empty<BaseItem>());
+            }
+
+            return Task.FromResult<IReadOnlyList<BaseItem>>(Array.Empty<BaseItem>());
+        }
+
+        var withVariants = await ArtistSearch.SearchAsync(
+            "lazy bones", user: null, libraryManager: Mock.Of<ILibraryManager>(), artistIndex: null,
+            logger: Logger, dbQuery: DbQuery, locale: "en-US", cancellationToken: CancellationToken.None,
+            asrCompoundWordFixEnabled: true);
+        var withoutVariants = await ArtistSearch.SearchAsync(
+            "lazy bones", user: null, libraryManager: Mock.Of<ILibraryManager>(), artistIndex: null,
+            logger: Logger, dbQuery: DbQuery, locale: "en-US", cancellationToken: CancellationToken.None);
+
+        var match = Assert.Single(withVariants);
+        Assert.Equal("Lazybones", match.Name);
+        Assert.Empty(withoutVariants);
+        Assert.Equal(new[] { "lazy bones", "lazybones", "lazy bones" }, searched);
     }
 }

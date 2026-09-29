@@ -15,12 +15,14 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 
 /// <summary>
-/// Shared artist search with in-memory index preference and database fallback.
-/// Uses the same 4-tier strategy as PlayArtistSongsIntentHandler:
+/// Shared artist search with in-memory index preference and database fallback:
 ///   1. Name contains (in-memory) / SearchTerm (database)
 ///   2. Prefix first word + fuzzy
 ///   3. Prefix full query + fuzzy
 ///   4. Fuzzy match against all artists
+/// Since JF-658 this is the ONE implementation: PlayArtistSongsIntentHandler's
+/// former inline duplicate (the JF-382/JF-315 batch-6b plan) was folded in here
+/// behind the caller policy axes documented on <see cref="SearchAsync"/>.
 /// </summary>
 internal static class ArtistSearch
 {
@@ -97,10 +99,14 @@ internal static class ArtistSearch
     /// album-by-artist gate, CrossMediaFallback). A query carrying an ER canonical
     /// keeps the flag false WHATEVER the canonical's script: ER resolution, not
     /// Latinity, is what makes the bar inert (the ER match IS the collision
-    /// evidence the bar demands), and the canonical is fed verbatim, so a
-    /// kana-named library's kana canonical still exact-self-matches. The canonical
-    /// is slot-layer knowledge, so it arrives here as a plain string rather than
-    /// inside <see cref="PassesKanaOriginAcceptance(string, BaseItem, int, int, IArtistIndex?)"/>,
+    /// evidence the bar demands). Since JF-658 every musician handler feeds the
+    /// canonical through <see cref="SearchAsync"/>, whose entry romanization is
+    /// the ONE query-side choke point: a kana canonical against a kana-tagged
+    /// library name rides the JF-643 accepted narrowing (query-side normalization
+    /// only; the symmetric index-side fix is tracked in JF-645), uniform across
+    /// all musician handlers. The canonical is slot-layer knowledge, so it
+    /// arrives here as a plain string rather than inside
+    /// <see cref="PassesKanaOriginAcceptance(string, BaseItem, int, int, IArtistIndex?)"/>,
     /// which stays slot-agnostic by design.
     /// </summary>
     /// <param name="canonical">The ER canonical when the slot resolved, else null.</param>
@@ -510,6 +516,36 @@ internal static class ArtistSearch
         return false;
     }
 
+    /// <summary>
+    /// The one 4-tier artist search (JF-658: the PlayArtistSongs inline duplicate
+    /// was folded in here). <paramref name="mode"/>, <paramref name="asrCompoundWordFixEnabled"/>,
+    /// and <paramref name="parallelDbTiers"/> are CALLER POLICY axes, not judgments:
+    /// they select recall/latency behavior inside the recall layer and never decide
+    /// whether a returned candidate should play (those decisions stay at the
+    /// handlers' decision points, the JF-408 rule this class documents in its doc).
+    /// The defaults preserve the pre-JF-658 shared-caller behavior (Thorough,
+    /// sequential DB tiers, no ASR variants: the flag was the inline chain's
+    /// config read, which the caller now passes explicitly).
+    /// <para>
+    /// Fast mode's documented exceptions (CLAUDE.md, Search Response Mode) live
+    /// at the branch sites below: the in-memory path skips the prefix and
+    /// word-coverage tiers (tier 1 then fuzzy-all); the DB path issues a single
+    /// ungated SearchTerm query with no ASR variants and no fallback tiers (the
+    /// ungated-band rationale sits on the tier-1 gate).
+    /// </para>
+    /// </summary>
+    /// <param name="musician">The musician query (romanized at entry, JF-643).</param>
+    /// <param name="user">The plugin user (thresholds, library scope).</param>
+    /// <param name="libraryManager">The library manager (scope resolution).</param>
+    /// <param name="artistIndex">The artist index; a caller-pinned view is honored (capture is idempotent).</param>
+    /// <param name="logger">The caller's logger.</param>
+    /// <param name="dbQuery">The caller's database query channel (retry-wrapped).</param>
+    /// <param name="locale">The request locale (stop-word stripping in the gates).</param>
+    /// <param name="cancellationToken">Request cancellation token.</param>
+    /// <param name="mode">Fast skips recall tiers for speed; Thorough (default) runs the full chain.</param>
+    /// <param name="asrCompoundWordFixEnabled">Whether the DB tier 1 retries ASR compound-word variants (Thorough only).</param>
+    /// <param name="parallelDbTiers">Whether the Thorough DB tiers 2-4 run as Task.WhenAll with the 2&gt;3&gt;4 priority pick (the inline chain's structure kept verbatim per the JF-315 6b plan: the tier tasks' retry backoffs overlap, while the synchronous queries themselves share the request thread) instead of sequentially.</param>
+    /// <returns>The matched artist candidates (possibly several; judgment is the caller's).</returns>
     public static async Task<IReadOnlyList<BaseItem>> SearchAsync(
         string musician,
         Entities.User? user,
@@ -518,7 +554,10 @@ internal static class ArtistSearch
         ILogger logger,
         Func<InternalItemsQuery, CancellationToken, Task<IReadOnlyList<BaseItem>>> dbQuery,
         string locale,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        SearchResponseMode mode = SearchResponseMode.Thorough,
+        bool asrCompoundWordFixEnabled = false,
+        bool parallelDbTiers = false)
     {
         // JF-643: the ONE query-side romanization for the artist chain (both the
         // in-memory tiers and every database tier below search Latin library names;
@@ -575,103 +614,124 @@ internal static class ArtistSearch
                 "ArtistSearch: tier=1 duration={TierMs}ms results={Count} method=InMemoryContains query='{Query}'",
                 tierSw.ElapsedMilliseconds, artists.Count, musician);
 
-            // Tier 2: prefix first word + fuzzy
-            string firstWord = musician.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? musician;
-            BaseItem? deferredTier2Match = null;
             if (artists.Count == 0)
             {
-                tierSw.Restart();
-                var prefixCandidates = allArtists
-                    .Where(a => a.Name.StartsWith(firstWord, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
-                BaseItem? fuzzy = FuzzyMatch(musician, prefixCandidates, user, pinned);
-                tierSw.Stop();
-                tierReached = 2;
-                logger.LogInformation(
-                    "ArtistSearch: tier=2 duration={TierMs}ms matched={Matched} method=InMemoryPrefixFirstWord query='{Query}' prefix='{Prefix}'",
-                    tierSw.ElapsedMilliseconds, fuzzy != null, musician, firstWord);
-                if (fuzzy != null)
+                if (mode == SearchResponseMode.Fast)
                 {
-                    if (IsPartialFirstWordMatch(musician, firstWord, fuzzy.Name))
-                    {
-                        // JF-417: the tier-2 candidate covers only the first word of a
-                        // multi-word query ("P!nk" for "P!nk floyd"). Defer acceptance;
-                        // tier-4 fuzzy-all may have a better full-name match ("Pink Floyd").
-                        deferredTier2Match = fuzzy;
-                        logger.LogInformation(
-                            "ArtistSearch: tier=2 deferred (partial first-word match: candidate='{Candidate}' covers only '{FirstWord}' of query '{Query}', JF-417)",
-                            fuzzy.Name, firstWord, musician);
-                    }
-                    else
+                    // Fast mode: skip the prefix tiers and the word-coverage tier;
+                    // tier 1 falls straight to fuzzy-all (speed over recall by
+                    // design; the recall machinery is Thorough-only, CLAUDE.md's
+                    // Search Response Mode).
+                    tierSw.Restart();
+                    BaseItem? fuzzy = FuzzyMatch(musician, allArtists, user, pinned);
+                    tierSw.Stop();
+                    tierReached = 4;
+                    logger.LogInformation(
+                        "ArtistSearch: tier=4 duration={TierMs}ms matched={Matched} method=InMemoryFuzzyAll query='{Query}' mode=Fast",
+                        tierSw.ElapsedMilliseconds, fuzzy != null, musician);
+                    if (fuzzy != null)
                     {
                         artists = new List<BaseItem> { fuzzy };
                     }
                 }
-            }
-
-            // Tier 3: prefix full query + fuzzy
-            if (artists.Count == 0 && !string.Equals(firstWord, musician, StringComparison.Ordinal))
-            {
-                tierSw.Restart();
-                var prefixCandidates = allArtists
-                    .Where(a => a.Name.StartsWith(musician, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
-                BaseItem? fuzzy = FuzzyMatch(musician, prefixCandidates, user, pinned);
-                tierSw.Stop();
-                tierReached = 3;
-                logger.LogInformation(
-                    "ArtistSearch: tier=3 duration={TierMs}ms matched={Matched} method=InMemoryPrefixFull query='{Query}'",
-                    tierSw.ElapsedMilliseconds, fuzzy != null, musician);
-                if (fuzzy != null)
+                else
                 {
-                    artists = new List<BaseItem> { fuzzy };
+                    // Tier 2: prefix first word + fuzzy
+                    string firstWord = FirstWordOf(musician);
+                    BaseItem? deferredTier2Match = null;
+                    tierSw.Restart();
+                    var prefixCandidates = allArtists
+                        .Where(a => a.Name.StartsWith(firstWord, StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+                    BaseItem? fuzzy = FuzzyMatch(musician, prefixCandidates, user, pinned);
+                    tierSw.Stop();
+                    tierReached = 2;
+                    logger.LogInformation(
+                        "ArtistSearch: tier=2 duration={TierMs}ms matched={Matched} method=InMemoryPrefixFirstWord query='{Query}' prefix='{Prefix}'",
+                        tierSw.ElapsedMilliseconds, fuzzy != null, musician, firstWord);
+                    if (fuzzy != null)
+                    {
+                        if (IsPartialFirstWordMatch(musician, firstWord, fuzzy.Name))
+                        {
+                            // JF-417: the tier-2 candidate covers only the first word of a
+                            // multi-word query ("P!nk" for "P!nk floyd"). Defer acceptance;
+                            // tier-4 fuzzy-all may have a better full-name match ("Pink Floyd").
+                            deferredTier2Match = fuzzy;
+                            logger.LogInformation(
+                                "ArtistSearch: tier=2 deferred (partial first-word match: candidate='{Candidate}' covers only '{FirstWord}' of query '{Query}', JF-417)",
+                                fuzzy.Name, firstWord, musician);
+                        }
+                        else
+                        {
+                            artists = new List<BaseItem> { fuzzy };
+                        }
+                    }
+
+                    // Tier 3: prefix full query + fuzzy
+                    if (artists.Count == 0 && !string.Equals(firstWord, musician, StringComparison.Ordinal))
+                    {
+                        tierSw.Restart();
+                        var fullPrefixCandidates = allArtists
+                            .Where(a => a.Name.StartsWith(musician, StringComparison.OrdinalIgnoreCase))
+                            .ToList();
+                        BaseItem? tier3Fuzzy = FuzzyMatch(musician, fullPrefixCandidates, user, pinned);
+                        tierSw.Stop();
+                        tierReached = 3;
+                        logger.LogInformation(
+                            "ArtistSearch: tier=3 duration={TierMs}ms matched={Matched} method=InMemoryPrefixFull query='{Query}'",
+                            tierSw.ElapsedMilliseconds, tier3Fuzzy != null, musician);
+                        if (tier3Fuzzy != null)
+                        {
+                            artists = new List<BaseItem> { tier3Fuzzy };
+                        }
+                    }
+
+                    // Tier 1.5 (JF-437): word-coverage tier, shared entry point (runs after
+                    // tiers 2-3, before tier 4 (see TryWordCoverageTier for the placement)
+                    // rationale). A single result flows through the caller's downstream
+                    // judgment (JF-377 downgrade, JF-420 gate) unchanged; ties disambiguate.
+                    if (artists.Count == 0 && TryWordCoverageTier(musician, allArtists, locale, logger, out var wordCoverageMatches))
+                    {
+                        artists = wordCoverageMatches;
+                        tierReached = 4; // tier 1.5 preempted tier 4 (the tier_reached summary log is coarse)
+                    }
+
+                    // Tier 4: fuzzy match against ALL artists
+                    if (artists.Count == 0)
+                    {
+                        tierSw.Restart();
+                        // JF-417 review correction: do NOT exclude the deferred candidate from
+                        // tier-4. The exclusion (original JF-417 approach) fixed "P!nk floyd" ->
+                        // Pink Floyd but broke the common "nirvana unplugged" shape (Nirvana was
+                        // excluded, "Nirvana Tribute Band" won). The containment exemption still
+                        // carries the deferred candidate at ContainmentScore at tier-4; the
+                        // P!nk-floyd case is handled by the ALBUM path (PlayAlbumIntent +
+                        // catalog-backed AlbumName entity resolution), not the artist path.
+                        BaseItem? tier4Fuzzy = FuzzyMatch(musician, allArtists, user, pinned);
+                        tierSw.Stop();
+                        tierReached = 4;
+                        logger.LogInformation(
+                            "ArtistSearch: tier=4 duration={TierMs}ms matched={Matched} method=InMemoryFuzzyAll query='{Query}' deferred-excluded={Deferred}",
+                            tierSw.ElapsedMilliseconds, tier4Fuzzy != null, musician, deferredTier2Match?.Name);
+                        if (tier4Fuzzy != null)
+                        {
+                            artists = new List<BaseItem> { tier4Fuzzy };
+                        }
+                    }
+
+                    // JF-417: if tier-2 produced a deferred partial match and tiers 3-4 found
+                    // nothing better (the deferred candidate was the ONLY plausible match),
+                    // accept the deferred match as the final result. If tier-4 DID produce a
+                    // different result (e.g. "Pink Floyd" for query "P!nk floyd"), the tier-4
+                    // result wins by not reaching this branch.
+                    if (artists.Count == 0 && deferredTier2Match != null)
+                    {
+                        artists = new List<BaseItem> { deferredTier2Match };
+                        logger.LogInformation(
+                            "ArtistSearch: falling back to deferred tier-2 match '{Candidate}' for query '{Query}' (tiers 3-4 found nothing better, JF-417)",
+                            deferredTier2Match.Name, musician);
+                    }
                 }
-            }
-
-            // Tier 1.5 (JF-437): word-coverage tier, shared entry point (runs after
-            // tiers 2-3, before tier 4 (see TryWordCoverageTier for the placement)
-            // rationale). A single result flows through the caller's downstream
-            // judgment (JF-377 downgrade, JF-420 gate) unchanged; ties disambiguate.
-            if (artists.Count == 0 && TryWordCoverageTier(musician, allArtists, locale, logger, out var wordCoverageMatches))
-            {
-                artists = wordCoverageMatches;
-                tierReached = 4; // tier 1.5 preempted tier 4 (the tier_reached summary log is coarse)
-            }
-
-            // Tier 4: fuzzy match against ALL artists
-            if (artists.Count == 0)
-            {
-                tierSw.Restart();
-                // JF-417 review correction: do NOT exclude the deferred candidate from
-                // tier-4. The exclusion (original JF-417 approach) fixed "P!nk floyd" ->
-                // Pink Floyd but broke the common "nirvana unplugged" shape (Nirvana was
-                // excluded, "Nirvana Tribute Band" won). The containment exemption still
-                // carries the deferred candidate at ContainmentScore at tier-4; the
-                // P!nk-floyd case is handled by the ALBUM path (PlayAlbumIntent +
-                // catalog-backed AlbumName entity resolution), not the artist path.
-                BaseItem? fuzzy = FuzzyMatch(musician, allArtists, user, pinned);
-                tierSw.Stop();
-                tierReached = 4;
-                logger.LogInformation(
-                    "ArtistSearch: tier=4 duration={TierMs}ms matched={Matched} method=InMemoryFuzzyAll query='{Query}' deferred-excluded={Deferred}",
-                    tierSw.ElapsedMilliseconds, fuzzy != null, musician, deferredTier2Match?.Name);
-                if (fuzzy != null)
-                {
-                    artists = new List<BaseItem> { fuzzy };
-                }
-            }
-
-            // JF-417: if tier-2 produced a deferred partial match and tiers 3-4 found
-            // nothing better (the deferred candidate was the ONLY plausible match),
-            // accept the deferred match as the final result. If tier-4 DID produce a
-            // different result (e.g. "Pink Floyd" for query "P!nk floyd"), the tier-4
-            // result wins by not reaching this branch.
-            if (artists.Count == 0 && deferredTier2Match != null)
-            {
-                artists = new List<BaseItem> { deferredTier2Match };
-                logger.LogInformation(
-                    "ArtistSearch: falling back to deferred tier-2 match '{Candidate}' for query '{Query}' (tiers 3-4 found nothing better, JF-417)",
-                    deferredTier2Match.Name, musician);
             }
         }
         else
@@ -682,21 +742,32 @@ internal static class ArtistSearch
             // in LibraryFilter.ApplyItemsByNameBypass). JF-457: every tier below
             // post-filters its results through FilterByAlbumScopeAsync, bounding the
             // bypass's wrong-library NAME leak before any name leaves this chain.
-            var query = new InternalItemsQuery()
-            {
-                Recursive = true,
-                SearchTerm = musician,
-                IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
-                DtoOptions = new DtoOptions(true)
-            };
-            LibraryFilter.ApplyLibraryFilter(query, topParentIds);
+            //
+            // Tier 1 runs through the ONE ASR variant loop (SearchService's
+            // flag-parameterized core, extracted JF-658): the original SearchTerm
+            // query first, then the compound-word variants when the caller enables
+            // the fix (Thorough only; Fast keeps the single plain query).
+            artists = await SearchService.SearchFirstNonEmptyAsync(
+                musician,
+                searchTerm => dbQuery(BuildArtistQuery(topParentIds, q => q.SearchTerm = searchTerm), cancellationToken),
+                asrCompoundWordFixEnabled && mode != SearchResponseMode.Fast).ConfigureAwait(false);
 
-            // JF-381 gate on the raw database results too: SearchTerm matching can surface
-            // coincidental substrings, and unlike the in-memory path there is no later
-            // phonetic tier over the full index to correct them.
-            artists = (await dbQuery(query, cancellationToken).ConfigureAwait(false))
-                .Where(a => PassesContainmentBand(a.Name, musician))
-                .ToList();
+            // JF-381 gate on the raw database results in Thorough mode: SearchTerm
+            // matching can surface coincidental substrings, and unlike the
+            // in-memory path there is no later phonetic tier over the full index
+            // to correct them. The Fast-mode DB exception (CLAUDE.md): Fast has NO
+            // recovery tier here (the in-memory Fast path falls through to
+            // fuzzy-all, this one does not), so gating would turn direct long-name
+            // hits ("florence" -> "Florence + The Machine") into not-founds during
+            // the cold-index window; the trade-off is that a cold-start Fast DB
+            // search can auto-play a coincidental containment, as it did before
+            // the sweep (code-review 2026-08-29).
+            if (mode != SearchResponseMode.Fast)
+            {
+                artists = artists
+                    .Where(a => PassesContainmentBand(a.Name, musician))
+                    .ToList();
+            }
 
             // JF-457: the tier-1 LIST flows to the caller (not-found messages,
             // disambiguation prompts), so every name must be album-scope verified;
@@ -705,55 +776,119 @@ internal static class ArtistSearch
 
             tierSw.Stop();
             tierReached = 1;
-            logger.LogInformation(
-                "ArtistSearch: tier=1 duration={TierMs}ms results={Count} method=SearchTerm query='{Query}'",
-                tierSw.ElapsedMilliseconds, artists.Count, musician);
-
-            // Tier 2: prefix first word
-            string firstWord = musician.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? musician;
-            if (artists.Count == 0)
+            if (mode == SearchResponseMode.Fast)
             {
-                tierSw.Restart();
-                artists = await PrefixSearchAsync(firstWord, musician, user, topParentIds, dbQuery, logger, cancellationToken).ConfigureAwait(false);
-                tierSw.Stop();
-                tierReached = 2;
                 logger.LogInformation(
-                    "ArtistSearch: tier=2 duration={TierMs}ms results={Count} method=PrefixFirstWord query='{Query}' prefix='{Prefix}'",
-                    tierSw.ElapsedMilliseconds, artists.Count, musician, firstWord);
+                    "ArtistSearch: tier=1 duration={TierMs}ms results={Count} method=SearchTerm query='{Query}' mode=Fast",
+                    tierSw.ElapsedMilliseconds, artists.Count, musician);
             }
-
-            // Tier 3: prefix full query
-            if (artists.Count == 0 && !string.Equals(firstWord, musician, StringComparison.Ordinal))
+            else
             {
-                tierSw.Restart();
-                artists = await PrefixSearchAsync(musician, musician, user, topParentIds, dbQuery, logger, cancellationToken).ConfigureAwait(false);
-                tierSw.Stop();
-                tierReached = 3;
                 logger.LogInformation(
-                    "ArtistSearch: tier=3 duration={TierMs}ms results={Count} method=PrefixFullQuery query='{Query}'",
+                    "ArtistSearch: tier=1 duration={TierMs}ms results={Count} method=SearchTerm query='{Query}'",
                     tierSw.ElapsedMilliseconds, artists.Count, musician);
             }
 
-            // Tier 4: contains search
-            if (artists.Count == 0)
+            // Fast mode DB has no fallback tiers (single query, done); Thorough
+            // runs tiers 2-4, either in parallel (the caller's cold-window policy)
+            // or sequentially.
+            if (artists.Count == 0 && mode != SearchResponseMode.Fast)
             {
-                tierSw.Restart();
-                artists = await ContainsSearchAsync(musician, user, topParentIds, dbQuery, logger, cancellationToken).ConfigureAwait(false);
-                tierSw.Stop();
-                tierReached = 4;
-                logger.LogInformation(
-                    "ArtistSearch: tier=4 duration={TierMs}ms results={Count} method=Contains query='{Query}'",
-                    tierSw.ElapsedMilliseconds, artists.Count, musician);
+                // Tier 2: prefix first word
+                string firstWord = FirstWordOf(musician);
+                if (parallelDbTiers)
+                {
+                    // Tiers 2-4 as Task.WhenAll with the 2 > 3 > 4 priority pick,
+                    // the inline chain's structure kept verbatim (the JF-315 6b
+                    // plan): the tier tasks' retry backoffs overlap, while the
+                    // synchronous GetItemList queries themselves share the request
+                    // thread. Each tier keeps its own winner-level JF-457 album
+                    // scope verification inside PrefixSearchAsync/ContainsSearchAsync.
+                    var tier2 = PrefixSearchAsync(firstWord, musician, user, topParentIds, dbQuery, logger, cancellationToken);
+                    var tier3 = !string.Equals(firstWord, musician, StringComparison.Ordinal)
+                        ? PrefixSearchAsync(musician, musician, user, topParentIds, dbQuery, logger, cancellationToken)
+                        : Task.FromResult<IReadOnlyList<BaseItem>>(Array.Empty<BaseItem>());
+                    var tier4 = ContainsSearchAsync(musician, user, topParentIds, dbQuery, logger, cancellationToken);
+
+                    IReadOnlyList<BaseItem>[] parallelResults = await Task.WhenAll(tier2, tier3, tier4).ConfigureAwait(false);
+
+                    // Preserve priority: tier 2 > tier 3 > tier 4
+                    artists = parallelResults.FirstOrDefault(r => r.Count > 0) ?? (IReadOnlyList<BaseItem>)Array.Empty<BaseItem>();
+                    tierReached = parallelResults[0].Count > 0 ? 2 : parallelResults[1].Count > 0 ? 3 : 4;
+
+                    logger.LogInformation(
+                        "ArtistSearch: tiers=2-4 (parallel) matched={Matched} tierHit={Tier} method=ParallelFallback query='{Query}'",
+                        artists.Count > 0, tierReached, musician);
+                }
+                else
+                {
+                    tierSw.Restart();
+                    artists = await PrefixSearchAsync(firstWord, musician, user, topParentIds, dbQuery, logger, cancellationToken).ConfigureAwait(false);
+                    tierSw.Stop();
+                    tierReached = 2;
+                    logger.LogInformation(
+                        "ArtistSearch: tier=2 duration={TierMs}ms results={Count} method=PrefixFirstWord query='{Query}' prefix='{Prefix}'",
+                        tierSw.ElapsedMilliseconds, artists.Count, musician, firstWord);
+
+                    // Tier 3: prefix full query
+                    if (artists.Count == 0 && !string.Equals(firstWord, musician, StringComparison.Ordinal))
+                    {
+                        tierSw.Restart();
+                        artists = await PrefixSearchAsync(musician, musician, user, topParentIds, dbQuery, logger, cancellationToken).ConfigureAwait(false);
+                        tierSw.Stop();
+                        tierReached = 3;
+                        logger.LogInformation(
+                            "ArtistSearch: tier=3 duration={TierMs}ms results={Count} method=PrefixFullQuery query='{Query}'",
+                            tierSw.ElapsedMilliseconds, artists.Count, musician);
+                    }
+
+                    // Tier 4: contains search
+                    if (artists.Count == 0)
+                    {
+                        tierSw.Restart();
+                        artists = await ContainsSearchAsync(musician, user, topParentIds, dbQuery, logger, cancellationToken).ConfigureAwait(false);
+                        tierSw.Stop();
+                        tierReached = 4;
+                        logger.LogInformation(
+                            "ArtistSearch: tier=4 duration={TierMs}ms results={Count} method=Contains query='{Query}'",
+                            tierSw.ElapsedMilliseconds, artists.Count, musician);
+                    }
+                }
             }
         }
 
         totalSw.Stop();
         logger.LogInformation(
-            "ArtistSearch: total duration={TotalMs}ms tier_reached={Tier} results={Count} query='{Query}' source={Source}",
-            totalSw.ElapsedMilliseconds, tierReached, artists.Count, musician, searchSource);
+            "ArtistSearch: total duration={TotalMs}ms tier_reached={Tier} results={Count} query='{Query}' source={Source} mode={Mode}",
+            totalSw.ElapsedMilliseconds, tierReached, artists.Count, musician, searchSource, mode);
 
         return artists;
     }
+
+    /// <summary>
+    /// The shared MusicArtist tier query preamble (scope + kind + DtoOptions) with
+    /// the tier's shape applied by <paramref name="configure"/> (SearchTerm for
+    /// tier 1, NameStartsWith for tiers 2-3, NameContains for tier 4). The JF-658
+    /// home of the query-construction idiom the deleted handler-local
+    /// TrySearchFallbackAsync carried.
+    /// </summary>
+    private static InternalItemsQuery BuildArtistQuery(Guid[]? topParentIds, Action<InternalItemsQuery> configure)
+    {
+        var query = new InternalItemsQuery()
+        {
+            Recursive = true,
+            IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
+            DtoOptions = new DtoOptions(true)
+        };
+        LibraryFilter.ApplyLibraryFilter(query, topParentIds);
+        configure(query);
+        return query;
+    }
+
+    /// <summary>The query's first word (the tier-2 prefix), or the whole query
+    /// when it is single-word.</summary>
+    private static string FirstWordOf(string query)
+        => query.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? query;
 
     private static async Task<IReadOnlyList<BaseItem>> PrefixSearchAsync(
         string prefix, string musician, Entities.User? user, Guid[]? topParentIds,
@@ -761,16 +896,12 @@ internal static class ArtistSearch
         ILogger logger,
         CancellationToken cancellationToken)
     {
-        var query = new InternalItemsQuery()
-        {
-            Recursive = true,
-            NameStartsWith = prefix,
-            IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
-            DtoOptions = new DtoOptions(true)
-        };
-        LibraryFilter.ApplyLibraryFilter(query, topParentIds);
+        var query = BuildArtistQuery(topParentIds, q => q.NameStartsWith = prefix);
 
-        IReadOnlyList<BaseItem> results = await dbQuery(query, cancellationToken).ConfigureAwait(false);
+        // Null-tolerant like the tier-1 ASR loop: a dbQuery channel may surface a
+        // null result set (production GetItemList does not, the JF-658 fold made
+        // the handler's former inline null guard live here instead).
+        IReadOnlyList<BaseItem> results = await dbQuery(query, cancellationToken).ConfigureAwait(false) ?? Array.Empty<BaseItem>();
         BaseItem? fuzzy = FuzzyMatch(musician, results, user, null);
         return await KeepIfAlbumScopeAsync(fuzzy, topParentIds, dbQuery, logger, cancellationToken).ConfigureAwait(false);
     }
@@ -781,16 +912,9 @@ internal static class ArtistSearch
         ILogger logger,
         CancellationToken cancellationToken)
     {
-        var query = new InternalItemsQuery()
-        {
-            Recursive = true,
-            NameContains = searchTerm,
-            IncludeItemTypes = new[] { BaseItemKind.MusicArtist },
-            DtoOptions = new DtoOptions(true)
-        };
-        LibraryFilter.ApplyLibraryFilter(query, topParentIds);
+        var query = BuildArtistQuery(topParentIds, q => q.NameContains = searchTerm);
 
-        IReadOnlyList<BaseItem> results = await dbQuery(query, cancellationToken).ConfigureAwait(false);
+        IReadOnlyList<BaseItem> results = await dbQuery(query, cancellationToken).ConfigureAwait(false) ?? Array.Empty<BaseItem>();
 
         // JF-381 gate before fuzzy: NameContains is an explicit substring match, so the
         // candidate set itself can be purely coincidental ("cup" -> "Porcupine Tree")
