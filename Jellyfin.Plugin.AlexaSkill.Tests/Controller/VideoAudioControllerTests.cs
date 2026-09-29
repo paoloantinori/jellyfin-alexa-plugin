@@ -3983,6 +3983,144 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
+    /// JF-675: the prewrite serve gates ask the CALLER'S OWN art-tick slot
+    /// (OwnTicksGenerationLive), not bare any-generation presence. Exposure
+    /// (the widened window JF-669's review filed): gen A (ticks A) live, gen B
+    /// (ticks B) completes and writes ENDLIST - under bare presence, EVERY
+    /// subsequent ticks-B playlist fetch serves dir_B's surviving no-ENDLIST
+    /// pre-written listing for gen A's whole remaining duration, so ExoPlayer
+    /// reaches the tail of completed content, finds no ENDLIST, and keeps
+    /// live-edge polling for growth that never comes. Driven through the REAL
+    /// episode endpoint with the JF-669 pin's construction (primary-art
+    /// DateModified mutated between calls, one fake ffmpeg branching on the
+    /// art-tick suffix of its output directory): gen A parks on a stop file,
+    /// gen B parks on its own then completes with ENDLIST, and the ticks-B
+    /// fetch after B's clear must receive the ENDLIST playlist while gen A
+    /// still runs. A mid-encode fetch BEFORE B's completion pins the
+    /// unchanged common case (own ticks live: the pre-write IS served); the
+    /// ENDLIST assertion carries the prewrite-tail marker in its failure
+    /// message so the red run (own-ticks check disabled, the JF-669 shape)
+    /// fails showing the pre-write served.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_CompletedOwnTicksEncode_ServesEndlistWhileForeignTicksGenerationRuns()
+    {
+        var (episode, mediaSourceManager) = SetupEpisodeForHls("JF-675 Own Ticks Serve S01E01", "h264", TimeSpan.FromMinutes(45));
+
+        // Primary art with a controllable DateModified: this is the cache-key
+        // component the endpoint (and only the cache/lock layer) keys on.
+        var artA = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        long ticksA = artA.Ticks;
+        long ticksB = artA.AddHours(6).Ticks;
+        var artImage = new MediaBrowser.Controller.Entities.ItemImageInfo
+        {
+            Path = "/tmp/jf675-art.jpg",
+            Type = ImageType.Primary,
+            DateModified = artA
+        };
+        episode.ImageInfos = new[] { artImage };
+
+        // The ticks-A branch parks gen A on a stop file (still running at the
+        // verdict fetch); the ticks-B branch parks on its OWN stop file (both
+        // generations structurally live together), then rewrites the playlist
+        // WITH ENDLIST and exits 0 so B's monitor clears only B's slot.
+        string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-jf675-own-ticks",
+            "for last_arg in \"$@\"; do :; done\n" +
+            "dir=$(dirname \"$last_arg\")\n" +
+            "ticks=${dir##*_}\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0000.ts\" 2>/dev/null\n" +
+            "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:4.000,\\nseg_0000.ts\\n' > \"$last_arg\"\n" +
+            $"if [ \"$ticks\" = \"{ticksB}\" ]; then\n" +
+            "  while [ ! -f \"$dir/stop\" ]; do sleep 0.1; done\n" +
+            "  printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:4.000,\\nseg_0000.ts\\n#EXT-X-ENDLIST\\n' > \"$last_arg\"\n" +
+            "  exit 0\n" +
+            "fi\n" +
+            "while [ ! -f \"$dir/stop\" ]; do sleep 0.2; done\n" +
+            "exit 0\n");
+
+        var controller = CreateController(episode.Id.ToString(), null, mediaSourceManager, fakeFfmpegPath);
+
+        string itemIdStr = episode.Id.ToString();
+        string dirA = _cache.GetHlsDirectoryPath(itemIdStr, ticksA);
+        string dirB = _cache.GetHlsDirectoryPath(itemIdStr, ticksB);
+        try
+        {
+            // Gen A: encodes under ticks A, then parks (stop file not written).
+            ActionResult first = await controller.StreamHlsEpisode(itemIdStr);
+            Assert.IsType<ContentResult>(first);
+            Assert.True(VideoAudioController.EncodeActiveForTest(itemIdStr), "the gen-A registration set the flag");
+
+            // Art changed mid-encode: gen B computes DIFFERENT ticks (a
+            // different lock and directory) and registers its own generation.
+            artImage.DateModified = artA.AddHours(6);
+            ActionResult second = await controller.StreamHlsEpisode(itemIdStr);
+            Assert.IsType<ContentResult>(second);
+
+            // Both generations live together (B parks on its own stop file):
+            // observed, not asserted, so the red run still reaches the serve
+            // assertions below instead of failing at this premise.
+            await WaitUntilAsync(() => VideoAudioController.EncodeGenerationCountForTest(itemIdStr) == 2, TimeSpan.FromSeconds(5), 50);
+
+            // Common case unchanged (same-ticks serve is byte-identical): while
+            // the caller's OWN ticks-B generation is live, a ticks-B fetch
+            // serves the pre-written full listing - no ENDLIST, tail segment
+            // seg_0674 (45min / 4s) present.
+            ActionResult midEncode = await controller.StreamHlsEpisode(itemIdStr);
+            var midContent = Assert.IsType<ContentResult>(midEncode);
+            Assert.Contains("seg_0674.ts", midContent.Content, StringComparison.Ordinal);
+            Assert.DoesNotContain("#EXT-X-ENDLIST", midContent.Content, StringComparison.Ordinal);
+
+            // Gen B finishes FIRST: its monitor's generation-aware clear drops
+            // ONLY the ticks-B slot; the entry survives on gen A (the count is
+            // gate-serialized with the clear, so 1 means B's clear landed and
+            // A's slot is still live).
+            File.WriteAllText(Path.Combine(dirB, "stop"), string.Empty);
+            Assert.True(
+                await WaitUntilAsync(() => VideoAudioController.EncodeGenerationCountForTest(itemIdStr) == 1, TimeSpan.FromSeconds(20), 100),
+                "gen B's monitor must clear its own slot while gen A still runs");
+            await Task.Delay(500);
+
+            // The JF-675 fetch: same ticks B (art already dated B). The own-ticks
+            // generation is dead while a foreign-ticks generation holds the
+            // entry: the serve gate must fall through to ffmpeg's ENDLIST
+            // playlist, not dir_B's surviving no-ENDLIST pre-write.
+            ActionResult third = await controller.StreamHlsEpisode(itemIdStr);
+            var content = Assert.IsType<ContentResult>(third);
+            Assert.True(
+                content.Content.Contains("#EXT-X-ENDLIST", StringComparison.Ordinal),
+                $"a completed own-ticks encode must serve ffmpeg's ENDLIST playlist, not the surviving no-ENDLIST pre-write, while a foreign-ticks generation runs (JF-675); pre-write tail marker seg_0674 present: {content.Content.Contains("seg_0674", StringComparison.Ordinal)}");
+            Assert.DoesNotContain("seg_0674", content.Content, StringComparison.Ordinal);
+
+            // Premise (green world only; the red run already failed above):
+            // exactly gen A's generation holds the entry.
+            Assert.Equal(1, VideoAudioController.EncodeGenerationCountForTest(itemIdStr));
+        }
+        finally
+        {
+            artImage.DateModified = artA;
+            foreach (string dir in new[] { dirA, dirB })
+            {
+                try
+                {
+                    Directory.CreateDirectory(dir);
+                    File.WriteAllText(Path.Combine(dir, "stop"), string.Empty);
+                }
+                catch (IOException)
+                {
+                    // Best effort: the parked fake loops are short and exit on
+                    // their own otherwise.
+                }
+            }
+
+            // Let both monitors run their finally clears; force-drop whatever
+            // lingers so nothing leaks into other tests (the key is a fresh
+            // Guid, so this is hygiene, not correctness).
+            await WaitUntilAsync(() => VideoAudioController.EncodeGenerationCountForTest(itemIdStr) == 0, TimeSpan.FromSeconds(10), 100);
+            VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: false);
+        }
+    }
+
+    /// <summary>
     /// JF-498 review I1, endpoint level: a re-encode over interrupted-encode debris
     /// (non-empty playlist WITHOUT ENDLIST, no active encode) must start ffmpeg over a
     /// CLEAN target: the fake ffmpeg snapshots the pre-existing playlist/segments
