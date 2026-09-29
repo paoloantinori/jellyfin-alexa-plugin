@@ -4,9 +4,10 @@ title: >-
   Registration side of the same-key speed-encode re-register race: orphaned
   displaced ffmpeg at the registry overwrite, unchecked TryAdd, key-only
   encode-flag clear
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-29 01:23'
+updated_date: '2026-09-29 07:38'
 labels:
   - playback-speed
   - encode-gate
@@ -85,5 +86,5 @@ VERIFICATION TAIL: Release build 0 warnings 0 errors both TFMs on the final tree
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-The registration side of the same-key speed-encode re-register race is closed: RegisterLiveSpeedEncode now kills the LIVE displaced encode at the atomic swap (TryAdd/TryUpdate CAS loop, so a concurrent same-key registration can never be silently orphaned), the three active-encode flag registries carry a per-encode generation token (the set is an unconditional indexer replace, so the newest generation always owns the flag; the old unchecked TryAdd was state-wise a no-op under the bool value and is gone rather than checked), and every flag clear (both startup catches, the shared failure triple, and the monitor's finally) is a compare-and-remove on that token, so a displaced generation's late exit can no longer drop a newer encode's flag (which turned the near-ahead hold off mid-encode and let cache validation delete the live directory). Three red-green pins added; suites 4730/4730 both TFMs; /simplify and code-review high run with every finding applied, skipped-with-reason, or filed same-turn (JF-668: encode-handle type, shared kill idiom, earlier displacement kill; JF-669: the inherited art-ticks flag-keying exposure).
+Landed 2026-09-29 as merge 1341cd97 (pushed; C# fix in the streaming controller, deploy pending the JF-666 companion): the registration side of the same-key speed-encode race closed. RegisterLiveSpeedEncode kills the LIVE displaced encode at the atomic swap (TryAdd/TryUpdate CAS loop; a concurrent same-key registration can never be silently orphaned); the three active-encode flag registries carry per-encode generation tokens (the set is an unconditional indexer replace, so the newest generation always owns the flag; the old unchecked TryAdd was state-wise a no-op and is gone rather than checked); every flag clear (both startup catches, KillEncodeAndClearFlag, the monitor's finally) is compare-and-remove on the token, so a displaced generation's late exit can no longer drop a newer encode's flag (which had turned the near-ahead hold off mid-encode and let cache validation delete the live directory). Three red-green pins; the JF-647 pin unchanged. Gates: /simplify + code-review in-worker (the pin timing-margin fix applied; follow-ups filed same-turn and RENUMBERED to JF-668/JF-669 at merge time, the parallel JF-666 worker owning those numbers in main) plus the orchestrator's completion-gate marker pass (four angles, clean on all); suites 4730/4730 both TFMs (orchestrator-verified on the final state).
 <!-- SECTION:FINAL_SUMMARY:END -->
