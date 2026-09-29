@@ -11,6 +11,7 @@ using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Dto;
@@ -299,6 +300,88 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
         Assert.Equal(PlayBehavior.Enqueue, directive.PlayBehavior);
 
         // Cleanup
+        QueueContinuationStore.Remove(session.UserId, deviceId);
+    }
+
+    // JF-666: the continuation fetch must run BEFORE the precompute cache-hit early
+    // return. A cache-served NearlyFinished within the prefetch window still extends
+    // the queue; with the fetch placed after the early return, the whole initial page
+    // was served from the cache and the queue starved until its last track (live:
+    // "musica di norah jones" stopped at 5 tracks and radio-switched away).
+    [Fact]
+    public async Task PlaybackNearlyFinished_CacheHitWithinPrefetchWindow_StillFetchesContinuation()
+    {
+        _fx.Config.PreEnqueueOnStart = true;
+        var handler = CreatePlaybackHandler();
+        var session = CreateSession();
+        _fx.SetupUserMock();
+
+        var track1Id = Guid.NewGuid();
+        var track2Id = Guid.NewGuid();
+        var track3Id = Guid.NewGuid();
+
+        session.FullNowPlayingItem = new Audio { Id = track1Id, Name = "Track 1" };
+        session.NowPlayingQueue = new List<QueueItem>
+        {
+            new() { Id = track1Id },
+            new() { Id = track2Id },
+            new() { Id = track3Id }
+        };
+
+        const string deviceId = "test-device";
+
+        // Continuation within the prefetch window: playing index 0 of a 3-item queue
+        // leaves 2 remaining, at the prefetch threshold boundary.
+        var artistId = Guid.NewGuid();
+        var continuation = new QueueContinuation
+        {
+            SourceType = "Artist",
+            ArtistId = artistId,
+            StartIndex = 3,
+            TotalCount = 13,
+            UserId = Guid.NewGuid(),
+            BatchSize = 5
+        };
+        QueueContinuationStore.Set(session.UserId, deviceId, continuation);
+
+        // A VALID precompute entry (cached next == live queue successor), so the
+        // handler serves track 2 straight from the cache. Track 2 is deliberately NOT
+        // in the library: the full-resolution path cannot produce it, so a play
+        // directive for track 2 with the stored URL proves the cache-hit branch ran.
+        NextTrackPrecomputeCache.Store(
+            deviceId,
+            track1Id.ToString(),
+            track2Id,
+            new Audio { Id = track2Id, Name = "Track 2" },
+            "https://stream/track2");
+        _fx.LibraryManager.Setup(l => l.GetItemById(track2Id))
+            .Returns((BaseItem?)null);
+
+        var batch = Enumerable.Range(0, 5)
+            .Select(i => new Audio { Id = Guid.NewGuid(), Name = $"Song {i + 4}" })
+            .ToList();
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.ArtistIds != null && q.ArtistIds.Contains(artistId))))
+            .Returns(batch.Cast<BaseItem>().ToList());
+
+        var response = await handler.HandleAsync(
+            CreateNearlyFinishedRequest(track1Id.ToString()),
+            CreateContext(track1Id.ToString()),
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        // The cache-hit branch served the precomputed next track...
+        var directive = response.Response.Directives.OfType<AudioPlayerPlayDirective>().FirstOrDefault();
+        Assert.NotNull(directive);
+        Assert.Equal(track2Id.ToString(), directive.AudioItem.Stream.Token);
+        Assert.Equal("https://stream/track2", directive.AudioItem.Stream.Url);
+
+        // ...AND the continuation batch extended the queue BEFORE that early return.
+        Assert.Equal(8, session.NowPlayingQueue.Count);
+
+        // Cleanup
+        NextTrackPrecomputeCache.Invalidate(deviceId);
         QueueContinuationStore.Remove(session.UserId, deviceId);
     }
 
@@ -1068,6 +1151,92 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
         Assert.Equal(
             QueueContinuationFetcher.AlbumTrackOrder,
             capturedFallback!.OrderBy);
+    }
+
+    // JF-666: the artist continuation fetch must filter via IncludeItemTypes=Audio,
+    // never MediaTypes=Audio (the JF-358 anti-pattern: MediaTypes does not constrain
+    // an ArtistIds query; on the direct path it returned zero and silently exhausted
+    // the continuation).
+    [Fact]
+    public void QueueContinuation_ArtistFetch_UsesIncludeItemTypesNotMediaTypes()
+    {
+        _fx.SetupUserMock();
+
+        var artistId = Guid.NewGuid();
+        var continuation = new QueueContinuation
+        {
+            SourceType = "Artist",
+            ArtistId = artistId,
+            UserId = Guid.NewGuid(),
+            StartIndex = 5,
+            TotalCount = 13,
+            BatchSize = 5
+        };
+
+        InternalItemsQuery? captured = null;
+        _fx.LibraryManager
+            .Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Callback<InternalItemsQuery>(q => captured = q)
+            .Returns(new List<BaseItem> { new Audio { Id = Guid.NewGuid(), Name = "t" } });
+
+        var records = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = LoggerFactory.Create(b => b.AddProvider(TestCaptureLogger.Into(records)));
+        QueueContinuationFetcher.FetchNextBatch(
+            continuation, _fx.LibraryManager.Object, _fx.UserManager.Object, loggerFactory.CreateLogger("QueueContinuation"));
+
+        Assert.NotNull(captured);
+        Assert.Contains(artistId, captured!.ArtistIds);
+        Assert.NotNull(captured.IncludeItemTypes);
+        Assert.Contains(BaseItemKind.Audio, captured.IncludeItemTypes);
+        // Jellyfin initializes MediaTypes to an empty array: the contract is "no
+        // MediaTypes filter", not the field's exact null/empty shape.
+        Assert.True(
+            captured.MediaTypes == null || captured.MediaTypes.Length == 0,
+            "artist query must not filter via MediaTypes (JF-358/JF-666)");
+
+        // The success log names the offset the query RAN AT (a short page like this
+        // 1-of-5 batch advances StartIndex to TotalCount before logging; the log must
+        // not report that advanced value).
+        string info = Assert.Single(
+            TestCaptureLogger.Snapshot(records).Where(r => r.Level == LogLevel.Information)).Message;
+        Assert.Contains("fetched 1 items for Artist (offset 5/13)", info);
+    }
+
+    // JF-666: a zero-page fetch while StartIndex < TotalCount must log at WARN naming
+    // the source type, source id, and offset; the silent exhaust forced the live
+    // diagnosis to infer it from the store Remove alone.
+    [Fact]
+    public void QueueContinuation_ZeroItemFetch_LogsWarningWithQueryOperands()
+    {
+        _fx.SetupUserMock();
+
+        var artistId = Guid.NewGuid();
+        var continuation = new QueueContinuation
+        {
+            SourceType = "Artist",
+            ArtistId = artistId,
+            UserId = Guid.NewGuid(),
+            StartIndex = 5,
+            TotalCount = 13,
+            BatchSize = 5
+        };
+
+        _fx.LibraryManager
+            .Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        var records = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = LoggerFactory.Create(b => b.AddProvider(TestCaptureLogger.Into(records)));
+        QueueContinuationFetcher.FetchNextBatch(
+            continuation, _fx.LibraryManager.Object, _fx.UserManager.Object, loggerFactory.CreateLogger("QueueContinuation"));
+
+        var warnings = TestCaptureLogger.Snapshot(records)
+            .Where(r => r.Level == LogLevel.Warning)
+            .ToList();
+        string warning = Assert.Single(warnings).Message;
+        Assert.Contains("fetched 0 items for Artist", warning);
+        Assert.Contains($"artist {artistId}", warning);
+        Assert.Contains("offset 5/13", warning);
     }
 
     [Fact]

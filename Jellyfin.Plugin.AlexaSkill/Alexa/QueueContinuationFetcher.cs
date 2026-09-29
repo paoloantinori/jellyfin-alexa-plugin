@@ -53,6 +53,11 @@ internal static class QueueContinuationFetcher
 
         var jellyfinUser = userManager.GetUserById(continuation.UserId);
 
+        // Captured before the fetchers advance StartIndex: the zero-page diagnostic
+        // below must name the offset the query ran at (the artist fetcher marks
+        // StartIndex=TotalCount on a short page, erasing it before the log).
+        int queryOffset = continuation.StartIndex;
+
         IReadOnlyList<BaseItem> items = continuation.SourceType switch
         {
             "Album" => FetchAlbumTracks(continuation, libraryManager, jellyfinUser),
@@ -61,13 +66,35 @@ internal static class QueueContinuationFetcher
             _ => Array.Empty<BaseItem>()
         };
 
+        // Doubles as the anomaly gate below: null marks the dispatch switch's default
+        // arm (the Audiobook source type has no fetcher case), whose empty page is
+        // structural, not a library anomaly.
+        string? sourceId = continuation.SourceType switch
+        {
+            "Artist" => $"artist {continuation.ArtistId}",
+            "Album" => $"album {continuation.ParentId}",
+            "Playlist" => $"playlist {continuation.PlaylistId ?? continuation.ParentId}",
+            _ => null
+        };
+
         if (items.Count > 0)
         {
             logger.LogInformation(
                 "Progressive queue: fetched {Count} items for {SourceType} (offset {StartIndex}/{Total})",
                 items.Count,
                 continuation.SourceType,
-                continuation.StartIndex,
+                queryOffset,
+                continuation.TotalCount);
+        }
+        else if (sourceId != null)
+        {
+            // Here StartIndex < TotalCount (the guard above owns the exhausted state)
+            // yet the query returned nothing.
+            logger.LogWarning(
+                "Progressive queue: fetched 0 items for {SourceType} {SourceId} (offset {StartIndex}/{Total}); treating continuation as exhausted",
+                continuation.SourceType,
+                sourceId,
+                queryOffset,
                 continuation.TotalCount);
         }
 
@@ -126,7 +153,11 @@ internal static class QueueContinuationFetcher
         {
             User = jellyfinUser,
             Recursive = true,
-            MediaTypes = new[] { MediaType.Audio },
+            // JF-358/JF-666: filter via IncludeItemTypes=Audio, NOT MediaTypes=Audio.
+            // MediaTypes does not constrain an ArtistIds query; on the direct
+            // ILibraryManager path it returned ZERO items (live 2026-09-29: offset 5
+            // of a 13-track artist), silently marking the continuation exhausted.
+            IncludeItemTypes = new[] { BaseItemKind.Audio },
             DtoOptions = new DtoOptions(true),
             ArtistIds = continuation.ArtistId.HasValue ? new[] { continuation.ArtistId.Value } : Array.Empty<Guid>(),
             StartIndex = continuation.StartIndex,

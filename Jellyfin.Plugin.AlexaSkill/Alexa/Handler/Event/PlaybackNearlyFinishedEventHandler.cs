@@ -124,6 +124,11 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         // same source for it.
         var (resolvedOrder, resolvedReshuffled) = ResolvePlaybackOrder(session, context);
 
+        // This fetch must run BEFORE the precompute cache-hit early return below:
+        // placed after it, every cache-served NearlyFinished skips the fetch and the
+        // queue starves at its initial page until the last track (JF-666).
+        TryFetchContinuationBatch(session, context);
+
         if (_config.PreEnqueueOnStart
             && (session.PlayState?.RepeatMode ?? RepeatMode.RepeatNone) == RepeatMode.RepeatNone
             && resolvedOrder == PlaybackOrder.Default)
@@ -162,9 +167,6 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
                 Logger.LogDebug("PlaybackNearlyFinished: PreEnqueueOnStart on but no cache hit, falling through to full resolution");
             }
         }
-
-        // Progressive queue building: fetch more items if we're approaching the end
-        TryFetchContinuationBatch(session, context);
 
         Guid? nextItemId = ResolveNextItemId(session, context);
 
