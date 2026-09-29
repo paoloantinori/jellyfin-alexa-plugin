@@ -6,6 +6,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-09-29'
+updated_date: '2026-09-29 18:54'
 labels:
   - encode-gate
   - race
@@ -13,7 +14,8 @@ labels:
 dependencies: []
 references:
   - >-
-    backlog/tasks/jf-665 - Registration-side-of-the-same-key-speed-encode-re-register-race-orphaned-displaced-ffmpeg-at-the-registry-overwrite-unchecked-TryAdd-key-only-encode-flag-clear.md
+    backlog/tasks/jf-665 -
+    Registration-side-of-the-same-key-speed-encode-re-register-race-orphaned-displaced-ffmpeg-at-the-registry-overwrite-unchecked-TryAdd-key-only-encode-flag-clear.md
 priority: low
 ---
 
@@ -51,9 +53,6 @@ VERIFICATION: a test that starts a ticks=A encode (fake ffmpeg), marks a ticks=B
 - [x] #9 /simplify passed (no blocking cleanups remaining)
 - [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
-<!-- DoD items 4-8 are N/A: no session attributes, no HttpClient changes, no
-interaction model/locale/NLU/E2E surface touched (controller-internal
-concurrency fix, no user-facing strings changed). -->
 
 ## Implementation Notes
 
@@ -100,6 +99,6 @@ VERIFICATION (final tree, both TFMs, NEVER --no-build): build 0 warnings 0 error
 
 ## Final Summary
 
-Art-tick generation refcounting for the active-encode flags: each of the three flag registries now maps its bare cache key to a holder of live (key, artModifiedTicks) generation slots instead of a single newest-generation token. A same-ticks re-registration still displaces (the JF-665 newest-owns contract preserved within one generation), and the entry drops only when the LAST live generation's own compare-and-remove clear fires, so a newer-ticks encode finishing first can no longer orphan an older-ticks encode's liveness and let the interrupted-debris verdict delete its live directory. Presence readers are untouched (the flag now honestly means "any live art-tick generation of this key"). Pinned by StreamHlsEpisode_NewerArtTickGenerationClearsFirst_OlderTicksLiveDirNotDebris, red-proven by pinning all generations into one shared slot (the pre-fix conflation) and observing the debris verdict fire.
-
-ORCHESTRATOR GATE-MARKER TAIL (2026-09-29, scrutiny items all passed: the retry loop's termination, the mid-registration window's conservative readers, and no same-ticks masking of cross-ticks regressions; 4 findings, all dispositioned): F1+F2 FILED same-turn as JF-675 (the widened prewrite-serve window for completed foreign-ticks caches - the task notes' "no regression" claim is exact only for flag liveness, corrected here - and the verdict's undocumented registry-family boundary); F3 APPLIED (the SetEncodeActiveForTest clear-arm hazard documented on the seam: it hard-removes bypassing the holder gate, safe only on fresh keys or post-monitor keys); F4 APPLIED (the song-path sentinel inline comment now states the structural JF-669 guarantee - the detached holder the registry never stores - instead of the superseded token-identity account, pointing at PreMarkSentinel's doc).
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Landed 2026-09-29 as merge b7429be8 on main: the active-encode flags are now art-tick aware via ActiveEncodeGenerations (one bare-key entry holding gate-serialized art-tick->token slots; RegisterIfStored's terminating retry closes the register-vs-removed race; ClearGeneration compare-and-removes its (ticks, token) pair and drops the entry only when the LAST live slot empties), so no single generation's clear, the newest's included, can drop the flag while another ticks generation still writes: the interrupted-debris verdict can no longer delete a live encode's directory. ZERO presence-reader changes (the design's point: every reader now means any-live-generation); same-ticks re-registration still displaces (JF-665 preserved, its pins verbatim); the JF-668 handle kept and slimmed (3 fields, the holder carries registry+key, mispairing still unrepresentable). Chosen over composite (key,ticks) registry keys because every presence reader's honest question is any-generation liveness: the union is delivered natively with zero reader changes instead of per-reader fallback policy across six sites. Pin: StreamHlsEpisode_NewerArtTickGenerationClearsFirst_OlderTicksLiveDirNotDebris (real endpoint, three calls with art mutated between; the red proof failed exactly on the debris verdict; the first incomplete toggle exposed and fixed a vacuous marker-file assertion, the honest trail in the notes). Gates: Skill simplify (3 applied, 2 justified skips) + Skill code-review high in-worker (2 doc findings applied) + the orchestrator gate-marker high whose scrutiny items all passed (retry termination, conservative mid-registration window, no same-ticks masking) with 4 findings dispositioned: F3 (test-seam clear-arm hazard) + F4 (sentinel comment states the structural guarantee) applied as doc; F1 (the widened foreign-ticks prewrite-serve window; the notes' no-regression claim was exact only for flag liveness, now corrected) + F2 (the verdict's registry-family boundary) filed same-turn as JF-675 with the review's own-ticks-slot fix direction. Suites: 4755/4755 both TFMs on the branch (worker-run and orchestrator-verified independently), encode pins 7/7 on the final tail state. Live surface: registry mechanics need a real encode (device round); deploy smoke is the audio-speed route probe plus config integrity.
+<!-- SECTION:FINAL_SUMMARY:END -->
