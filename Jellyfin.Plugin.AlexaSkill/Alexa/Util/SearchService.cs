@@ -299,7 +299,10 @@ public sealed class SearchService
             fallbackQuery.ArtistIds = artistIds;
         }
 
-        if (mediaTypes is { Length: > 0 })
+        // JF-358: MediaTypes does not constrain an ArtistIds query; the two filters
+        // must never ride the same query. MediaTypes stays for the artist-less
+        // callers (e.g. PlayRadioIntentHandler's station lookup).
+        else if (mediaTypes is { Length: > 0 })
         {
             fallbackQuery.MediaTypes = mediaTypes;
         }

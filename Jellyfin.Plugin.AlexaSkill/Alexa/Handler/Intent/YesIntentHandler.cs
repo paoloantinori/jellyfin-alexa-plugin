@@ -399,7 +399,9 @@ public class YesIntentHandler : BaseHandler
         {
             User = jellyfinUser,
             Recursive = true,
-            MediaTypes = new[] { MediaType.Audio },
+            // JF-358: MediaTypes does not constrain an ArtistIds query (entire audio
+            // library on 10.11.x, zero rows at offset on 12.x); use IncludeItemTypes.
+            IncludeItemTypes = new[] { BaseItemKind.Audio },
             DtoOptions = new DtoOptions(true),
             ArtistIds = new[] { artist.Id }
         };

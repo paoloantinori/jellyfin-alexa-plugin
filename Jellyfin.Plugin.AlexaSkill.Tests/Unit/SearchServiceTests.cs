@@ -252,9 +252,43 @@ public class SearchServiceTests : PluginTestBase
         Assert.NotNull(captured);
         Assert.Equal(new[] { BaseItemKind.MusicAlbum }, captured!.IncludeItemTypes);
         Assert.Equal(artistIds, captured.ArtistIds);
-        Assert.Equal(new[] { MediaType.Audio }, captured.MediaTypes);
+        // JF-667 (JF-358): MediaTypes does not constrain an ArtistIds query, so the
+        // helper suppresses it when artist scoping is present (the two filters must
+        // never ride the same query).
+        Assert.True(
+            captured.MediaTypes == null || captured.MediaTypes.Length == 0,
+            "an ArtistIds-scoped fallback query must not carry a MediaTypes term (JF-358/JF-667)");
         Assert.Equal(500, captured.Limit);
         Assert.True(captured.Recursive);
+    }
+
+    [Fact]
+    public async Task SearchItemsFuzzyAsync_MediaTypesApply_WhenNoArtistIds()
+    {
+        // JF-667 companion pin: without artist scoping, MediaTypes still filters
+        // (the PlayRadioIntentHandler station-lookup shape).
+        var libraryManager = new Mock<ILibraryManager>();
+        InternalItemsQuery? captured = null;
+        libraryManager
+            .Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Callback<InternalItemsQuery>(q => captured = q)
+            .Returns(new List<BaseItem>());
+        var search = CreateSearchService(new PluginConfiguration());
+
+        var match = await search.SearchItemsFuzzyAsync(
+            query: "jazz",
+            jellyfinUser: null,
+            user: new User(),
+            libraryManager: libraryManager.Object,
+            itemTypes: new[] { BaseItemKind.Audio },
+            cancellationToken: CancellationToken.None,
+            operationLabel: "TestFuzzyFallback",
+            mediaTypes: new[] { MediaType.Audio });
+
+        Assert.Null(match);
+        Assert.NotNull(captured);
+        Assert.Equal(new[] { MediaType.Audio }, captured!.MediaTypes);
+        Assert.True(captured.ArtistIds == null || captured.ArtistIds.Length == 0);
     }
 
     // ---------------------------------------------------------------------

@@ -182,6 +182,49 @@ public class QueryArtistLibraryIntentHandlerTests : PluginTestBase
     }
 
     [Fact]
+    public async Task HandleAsync_TracksByArtist_QueryUsesIncludeItemTypesNotMediaTypes()
+    {
+        // JF-667 (JF-358 sibling): the tracks listing's ArtistIds query must filter via
+        // IncludeItemTypes=Audio; MediaTypes does not constrain an ArtistIds query.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(musician: "Beatles");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
+
+        _fx.SetupUserMock();
+
+        var artist = new MusicArtist { Name = "The Beatles", Id = Guid.NewGuid() };
+        var track = new Audio { Name = "Yesterday", Id = Guid.NewGuid() };
+
+        InternalItemsQuery? captured = null;
+        int callCount = 0;
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Callback<InternalItemsQuery>(q => captured = q)
+            .Returns(() =>
+            {
+                callCount++;
+                return callCount == 1
+                    ? new List<BaseItem> { artist }
+                    : new List<BaseItem> { track };
+            });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // The captured query is the LAST GetItemList call: the tracks listing itself,
+        // not the artist lookup that precedes it.
+        Assert.NotNull(captured);
+        Assert.NotNull(captured!.IncludeItemTypes);
+        Assert.Contains(Jellyfin.Data.Enums.BaseItemKind.Audio, captured.IncludeItemTypes);
+        // Jellyfin initializes MediaTypes to an empty array: the contract is "no
+        // MediaTypes filter", not the field's exact null/empty shape.
+        Assert.True(
+            captured.MediaTypes == null || captured.MediaTypes.Length == 0,
+            "tracks query must not filter via MediaTypes (JF-358/JF-667)");
+        Assert.Contains("Yesterday", TestHelpers.GetSpeechText(response));
+    }
+
+    [Fact]
     public async Task HandleAsync_AlbumsByArtist_ReturnsList()
     {
         var handler = CreateHandler();
