@@ -451,13 +451,13 @@ public class VideoAudioController : ControllerBase
         {
             // JF-536: while the encode is RUNNING, serve the PRE-WRITTEN full
             // listing, not ffmpeg's growing stream.m3u8 (mechanism at the prewrite
-            // site in the encode branch below). The flag gate matters: the listing
-            // survives on disk after completion, and a completed cache must serve
-            // ffmpeg's ENDLIST playlist below. KEY-scoped caveat (JF-669): the
-            // flag is held by any live art-tick generation of the key, so while
-            // an unrelated ticks generation runs, a completed foreign-ticks
-            // cache can still serve its surviving pre-written listing.
-            if (_activeVideoAudioEncodes.ContainsKey(itemId))
+            // site in the encode branch below); the listing survives on disk after
+            // completion, so the gate decides prewrite vs ffmpeg's ENDLIST
+            // playlist below. OWN-TICKS gate (JF-675): only the caller's OWN
+            // art-tick generation being live serves the listing; the canonical
+            // rationale and the conservative-reader split live on
+            // OwnTicksGenerationLive.
+            if (OwnTicksGenerationLive(_activeVideoAudioEncodes, itemId, artModifiedTicks))
             {
                 ActionResult? prewritten = TryServePrewrittenVideoAudioPlaylist(itemId, artModifiedTicks, overrideToken);
                 if (prewritten != null)
@@ -483,10 +483,10 @@ public class VideoAudioController : ControllerBase
             if (cached != null)
             {
                 // JF-536: the encode a concurrent request started is still running;
-                // serve its pre-written full listing, not ffmpeg's live one (flag
-                // gate as in the fast path, including its JF-669 key-scoped
-                // caveat: any live art-tick generation of the key holds the flag).
-                if (_activeVideoAudioEncodes.ContainsKey(itemId))
+                // serve its pre-written full listing, not ffmpeg's live one. Same
+                // own-ticks gate as the fast path (JF-675, see
+                // OwnTicksGenerationLive).
+                if (OwnTicksGenerationLive(_activeVideoAudioEncodes, itemId, artModifiedTicks))
                 {
                     ActionResult? prewritten = TryServePrewrittenVideoAudioPlaylist(itemId, artModifiedTicks, overrideToken);
                     if (prewritten != null)
@@ -774,14 +774,13 @@ public class VideoAudioController : ControllerBase
                 {
                     // JF-531: while the encode is RUNNING, serve the PRE-WRITTEN full
                     // listing, not ffmpeg's growing stream.m3u8 (mechanism on the
-                    // prewrite site below). The flag gate matters: the pre-written file
-                    // survives on disk after completion, and a completed cache must
-                    // serve ffmpeg's ENDLIST playlist below. KEY-scoped caveat
-                    // (JF-669): the flag is held by any live art-tick generation
-                    // of the key, so while an unrelated ticks generation runs, a
-                    // completed foreign-ticks cache can still serve its
-                    // surviving pre-written listing.
-                    if (_activeEpisodeEncodes.ContainsKey(itemId))
+                    // prewrite site below); the pre-written file survives on disk
+                    // after completion, so the gate decides prewrite vs ffmpeg's
+                    // ENDLIST playlist below. OWN-TICKS gate (JF-675): only the
+                    // caller's OWN art-tick generation being live serves the listing;
+                    // the canonical rationale and the conservative-reader split
+                    // live on OwnTicksGenerationLive.
+                    if (OwnTicksGenerationLive(_activeEpisodeEncodes, itemId, artModifiedTicks))
                     {
                         ActionResult? prewritten = TryServePrewrittenEpisodePlaylist(itemId, artModifiedTicks, startTicks);
                         if (prewritten != null)
@@ -814,10 +813,10 @@ public class VideoAudioController : ControllerBase
                 if (cached != null)
                 {
                     // JF-531: the encode a concurrent request started is still running;
-                    // serve its pre-written full listing, not ffmpeg's live one (flag
-                    // gate as in the fast path, including its JF-669 key-scoped
-                    // caveat: any live art-tick generation of the key holds the flag).
-                    if (_activeEpisodeEncodes.ContainsKey(itemId))
+                    // serve its pre-written full listing, not ffmpeg's live one. Same
+                    // own-ticks gate as the fast path (JF-675, see
+                    // OwnTicksGenerationLive).
+                    if (OwnTicksGenerationLive(_activeEpisodeEncodes, itemId, artModifiedTicks))
                     {
                         ActionResult? prewritten = TryServePrewrittenEpisodePlaylist(itemId, artModifiedTicks, startTicks);
                         if (prewritten != null)
@@ -1061,6 +1060,16 @@ public class VideoAudioController : ControllerBase
     /// JF-507/JF-636 (name kept for the remux history): the audio-only episode and
     /// audio-speed variants validate through it too, keyed by their variant cache
     /// keys against the same <see cref="_activeEpisodeEncodes"/> registry.
+    /// REGISTRY-FAMILY BOUNDARY (JF-675, doc-only): the liveness gate below reads
+    /// ONLY this episode registry while the Cleanup it triggers wipes EVERY
+    /// <c>{guid}_*</c> directory of the key in the shared cache root, so a live
+    /// encode of the same GUID in a sibling registry (the song path's
+    /// <see cref="StreamHlsVideoAudioCore"/> names its directories in that same
+    /// root) would not hold this verdict back; <see cref="TryHoldForNearAheadSegmentAsync"/>
+    /// reads any-of-three registries for the same key family. The routing overlap
+    /// is theoretical today (handlers route audio items to the song endpoint,
+    /// episodes here), so the asymmetry is documented rather than widened; a
+    /// real overlap would argue for an any-of-three read at this gate.
     /// </summary>
     /// <param name="cached">The cached playlist file info (stream.m3u8).</param>
     /// <param name="itemId">The encode's cache key (remux itemId or a variant cache key) for logging and cleanup.</param>
@@ -1135,8 +1144,11 @@ public class VideoAudioController : ControllerBase
 
     /// <summary>
     /// Serve the episode encode's pre-written full listing (JF-531) when it exists.
-    /// Called on every serve path whose active-encode flag is set (fast path, in-lock
-    /// double check, first serve). Returns null when the file is absent (encode with
+    /// Called on the two warm-cache serve paths, which gate on own-ticks generation
+    /// liveness since JF-675 (<see cref="OwnTicksGenerationLive"/>), and on the
+    /// first serve, which is ungated by construction (the caller just wrote the
+    /// prewrite under the lock). Returns null when the
+    /// file is absent (encode with
     /// unknown runtime, or a race before the prewrite landed) so the caller falls
     /// back to serving the live playlist, the pre-JF-531 behavior, rather than
     /// failing the play. Live-edge mechanism: the prewrite site in
@@ -1185,7 +1197,9 @@ public class VideoAudioController : ControllerBase
     /// <summary>
     /// Serve the single-item encode's pre-written full listing (JF-536), the song
     /// path's twin of <see cref="TryServePrewrittenEpisodePlaylist"/>: called on
-    /// every serve path whose active-encode flag is set, returning null when the
+    /// the two warm-cache serve paths (gated on own-ticks generation liveness
+    /// since JF-675, like the twin) and the ungated first serve, returning null
+    /// when the
     /// file is absent so the caller falls back to ffmpeg's live playlist (the
     /// pre-JF-536 behavior) instead of failing the play. No resume slicing here:
     /// the single-item endpoint takes no <c>?start=</c>.
@@ -1954,9 +1968,14 @@ public class VideoAudioController : ControllerBase
     /// the generation. The entry as a whole (what every presence reader's
     /// ContainsKey sees) is present whenever at least one slot is live (plus
     /// the brief mid-registration window between the entry's creation and the
-    /// slot write, where every reader errs in the conservative direction:
-    /// skip a debris verdict, serve pre-written instead of a second ffmpeg,
-    /// hold a segment).
+    /// slot write, where every PRESENCE reader errs in the conservative
+    /// direction: skip a debris verdict, serve pre-written instead of a second
+    /// ffmpeg, hold a segment; the debris verdict, the near-ahead hold, and the
+    /// audiobook guard are that family. The four prewrite serve gates LEFT the
+    /// presence-reader family in JF-675: they read own-ticks liveness through
+    /// <see cref="ActiveEncodeGenerations.IsTickLive"/> (whose doc holds the
+    /// window account) and in that window err the OPPOSITE way, toward
+    /// ffmpeg's own playlist).
     /// </summary>
     /// <param name="activeEncodes">The path's active-encode registry.</param>
     /// <param name="cacheKey">The encode's cache key.</param>
@@ -1965,6 +1984,31 @@ public class VideoAudioController : ControllerBase
     /// <returns>The handle every clear of THIS encode must go through.</returns>
     private static ActiveEncodeHandle MarkEncodeActive(ConcurrentDictionary<string, ActiveEncodeGenerations> activeEncodes, string cacheKey, long artModifiedTicks)
         => ActiveEncodeHandle.MarkActive(activeEncodes, cacheKey, artModifiedTicks);
+
+    /// <summary>
+    /// Whether the CALLER'S OWN (cache key, art-tick) generation is the live one
+    /// (JF-675, the prewrite serve gates' refinement of bare presence; THIS doc
+    /// is the canonical account of the rule, and the four gates carry pointers).
+    /// An entry found but without the caller's own-ticks slot means the own-ticks
+    /// encode completed (or never ran) while a FOREIGN-ticks generation of the
+    /// same key still writes, so the caller must fall through to the normal
+    /// cache serve (ffmpeg's ENDLIST playlist for a completed encode) instead
+    /// of the pre-written no-ENDLIST listing, which bare presence would serve
+    /// for the sibling generation's whole remaining duration. The CONSERVATIVE
+    /// readers keep bare any-generation presence, each for its own reason: the
+    /// <see cref="ValidateEpisodeCacheAsync"/> debris verdict and the near-ahead
+    /// hold ask whether ANY live writer of the key exists (directory protection
+    /// must not depend on tick matching), and the audiobook concurrent-encode
+    /// guard is a SERVE/bound decision; it serves the caller or 503s instead
+    /// of starting a second ffmpeg, and own-ticks matching there would newly
+    /// allow two concurrent encodes of one book under different ticks (JF-669).
+    /// </summary>
+    /// <param name="activeEncodes">The path's active-encode registry.</param>
+    /// <param name="cacheKey">The encode's cache key.</param>
+    /// <param name="artModifiedTicks">The caller's art ticks (its own cache directory generation).</param>
+    private static bool OwnTicksGenerationLive(ConcurrentDictionary<string, ActiveEncodeGenerations> activeEncodes, string cacheKey, long artModifiedTicks)
+        => activeEncodes.TryGetValue(cacheKey, out ActiveEncodeGenerations? generations)
+            && generations.IsTickLive(artModifiedTicks);
 
     /// <summary>
     /// The live generation slots of ONE cache key's active-encode flag (JF-669):
@@ -2050,6 +2094,24 @@ public class VideoAudioController : ControllerBase
                 {
                     return _slotsByTicks.Count;
                 }
+            }
+        }
+
+        /// <summary>
+        /// Whether the key's OWN generation slot at <paramref name="artModifiedTicks"/>
+        /// is live, under the gate (JF-675). The prewrite serve gates read this
+        /// through <see cref="OwnTicksGenerationLive"/>, which owns the canonical
+        /// account of the own-ticks rule. Also false inside the brief
+        /// mid-registration window before the first slot write (see
+        /// <see cref="MarkEncodeActive"/>), where bare presence already reads
+        /// true: the serve gate errs toward ffmpeg's own playlist there, the
+        /// same file the prewrite-missing fallback would serve.
+        /// </summary>
+        internal bool IsTickLive(long artModifiedTicks)
+        {
+            lock (_gate)
+            {
+                return _slotsByTicks.ContainsKey(artModifiedTicks);
             }
         }
     }
