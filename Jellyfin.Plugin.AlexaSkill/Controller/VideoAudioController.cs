@@ -216,13 +216,10 @@ public class VideoAudioController : ControllerBase
     [AllowAnonymous]
     public async Task<ActionResult> StreamVideoAudio([FromRoute] string itemId)
     {
-        if (Guid.TryParse(itemId, out _))
+        ActionResult? routeError = ValidateSignedRoute(itemId);
+        if (routeError != null)
         {
-            ActionResult? tokenError = ValidateStreamToken(itemId);
-            if (tokenError != null)
-            {
-                return tokenError;
-            }
+            return routeError;
         }
 
         var validation = ValidateVideoAudioRequest(itemId);
@@ -420,13 +417,10 @@ public class VideoAudioController : ControllerBase
     [AllowAnonymous]
     public async Task<ActionResult> StreamHlsVideoAudio([FromRoute] string itemId)
     {
-        if (Guid.TryParse(itemId, out _))
+        ActionResult? routeError = ValidateSignedRoute(itemId);
+        if (routeError != null)
         {
-            ActionResult? tokenError = ValidateStreamToken(itemId);
-            if (tokenError != null)
-            {
-                return tokenError;
-            }
+            return routeError;
         }
 
         return await StreamHlsVideoAudioCore(itemId).ConfigureAwait(false);
@@ -706,13 +700,10 @@ public class VideoAudioController : ControllerBase
         [FromRoute] string itemId,
         [FromQuery(Name = "start")] long? startTicks = null)
     {
-        if (Guid.TryParse(itemId, out _))
+        ActionResult? routeError = ValidateSignedRoute(itemId);
+        if (routeError != null)
         {
-            ActionResult? tokenError = ValidateStreamToken(itemId);
-            if (tokenError != null)
-            {
-                return tokenError;
-            }
+            return routeError;
         }
 
         return await StreamHlsEpisodeCore(itemId, startTicks ?? 0).ConfigureAwait(false);
@@ -1234,13 +1225,10 @@ public class VideoAudioController : ControllerBase
         [FromRoute] string itemId,
         [FromQuery(Name = "start")] long? startTicks = null)
     {
-        if (Guid.TryParse(itemId, out _))
+        ActionResult? routeError = ValidateSignedRoute(itemId);
+        if (routeError != null)
         {
-            ActionResult? tokenError = ValidateStreamToken(itemId);
-            if (tokenError != null)
-            {
-                return tokenError;
-            }
+            return routeError;
         }
 
         return await StreamHlsEpisodeAudioCore(itemId, startTicks ?? 0).ConfigureAwait(false);
@@ -1322,15 +1310,10 @@ public class VideoAudioController : ControllerBase
         [FromRoute] long startTicks,
         [FromRoute] string segmentName)
     {
-        if (string.IsNullOrWhiteSpace(itemId) || !Guid.TryParse(itemId, out _))
+        ActionResult? routeError = ValidateSignedRoute(itemId);
+        if (routeError != null)
         {
-            return BadRequest(new { error = "Invalid itemId format" });
-        }
-
-        ActionResult? tokenError = ValidateStreamToken(itemId);
-        if (tokenError != null)
-        {
-            return tokenError;
+            return routeError;
         }
 
         if (!VideoAudioCache.IsValidSegmentName(segmentName))
@@ -1404,6 +1387,10 @@ public class VideoAudioController : ControllerBase
         [FromRoute] int ratePerMille,
         [FromQuery(Name = "start")] long? startTicks = null)
     {
+        // Not ValidateSignedRoute (JF-651): the Core rejects an unserved rate BEFORE
+        // the itemId 400, so a non-GUID id with an unserved rate must keep yielding
+        // "Unsupported playback rate"; a strict preamble would flip which 400 body
+        // that request gets. The token check still precedes the rate check.
         if (Guid.TryParse(itemId, out _))
         {
             ActionResult? tokenError = ValidateStreamToken(itemId);
@@ -1922,6 +1909,9 @@ public class VideoAudioController : ControllerBase
         [FromRoute] long startTicks,
         [FromRoute] string segmentName)
     {
+        // Not ValidateSignedRoute (JF-651): the unserved-rate 400 sits between the
+        // itemId 400 and the token 401; a combined preamble would move it to one
+        // side, changing which error a bad-rate + bad-token request gets.
         if (string.IsNullOrWhiteSpace(itemId) || !Guid.TryParse(itemId, out _))
         {
             return BadRequest(new { error = "Invalid itemId format" });
@@ -1976,6 +1966,9 @@ public class VideoAudioController : ControllerBase
         [FromRoute] string parentId,
         [FromQuery(Name = "start")] long? startTicks = null)
     {
+        // Not ValidateSignedRoute (JF-651): the id is a parentId (the 400 body says
+        // "Invalid parentId format") and this parse's GUID feeds the children query
+        // below, which the itemId-shaped helper would neither produce nor preserve.
         if (string.IsNullOrWhiteSpace(parentId) || !Guid.TryParse(parentId, out Guid parentGuid))
         {
             return BadRequest(new { error = "Invalid parentId format" });
@@ -2439,15 +2432,10 @@ public class VideoAudioController : ControllerBase
     [AllowAnonymous]
     public async Task<ActionResult> GetSegment([FromRoute] string itemId, [FromRoute] string segmentName)
     {
-        if (string.IsNullOrWhiteSpace(itemId) || !Guid.TryParse(itemId, out _))
+        ActionResult? routeError = ValidateSignedRoute(itemId);
+        if (routeError != null)
         {
-            return BadRequest(new { error = "Invalid itemId format" });
-        }
-
-        ActionResult? tokenError = ValidateStreamToken(itemId);
-        if (tokenError != null)
-        {
-            return tokenError;
+            return routeError;
         }
 
         // Validate segment name to prevent directory traversal
@@ -2938,6 +2926,23 @@ public class VideoAudioController : ControllerBase
             return PhysicalFile(basePlaylistPath, "application/vnd.apple.mpegurl");
 #pragma warning restore CA3003
         }
+    }
+
+    /// <summary>
+    /// Shared signed-route preamble (JF-651, JF-309): reject a non-GUID route id with
+    /// 400, then validate the signed item-scoped stream token, returning its error.
+    /// Returns null when the request may proceed. The 400 must stay BEFORE the token
+    /// check (the token binds to the GUID); each migrated route's
+    /// InvalidItemId_Returns400 + NoToken_Returns401 test pair pins that ordering.
+    /// </summary>
+    private ActionResult? ValidateSignedRoute(string itemId)
+    {
+        if (string.IsNullOrWhiteSpace(itemId) || !Guid.TryParse(itemId, out _))
+        {
+            return BadRequest(new { error = "Invalid itemId format" });
+        }
+
+        return ValidateStreamToken(itemId);
     }
 
     /// <summary>
