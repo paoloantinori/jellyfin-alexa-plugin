@@ -4,9 +4,10 @@ title: >-
   JF-358 sibling sweep: three ArtistIds+MediaTypes query sites survive outside
   the continuation fetcher (YesIntentHandler.PlayArtist, QueryArtistLibrary
   tracks listing, SearchMedia redundant filter)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-29 06:45'
+updated_date: '2026-09-29 13:08'
 labels: []
 dependencies: []
 references:
@@ -63,8 +64,14 @@ VERIFICATION TAIL: AC #5 (live spot check on the 12.1.0 box: confirm-artist yes-
 - [x] #2 QueryArtistLibraryIntentHandler's tracks listing passes an Audio item-type filter (not a MediaType filter) into ListItemsByArtistAsync, with the captured query shape pinned by test
 - [x] #3 SearchMediaIntentHandler's artist-fallback query no longer carries MediaTypes alongside IncludeItemTypes (single filtering term), pinned by test
 - [x] #4 All existing suites green both TFMs; the three touched handlers keep their current user-facing responses byte-identical for libraries where the old shape still returned rows
-- [ ] #5 Live spot check on the 12.1.0 box: confirm-artist yes-path plays tracks, 'what tracks does X have' lists them
+- [x] #5 Live spot check on the 12.1.0 box: confirm-artist yes-path plays tracks, 'what tracks does X have' lists them
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Landed 2026-09-29 as merge on main (deployed with the full checklist, config intact, active DLL byte-verified 342161e0): the three surviving ArtistIds+MediaTypes query sites moved to the IncludeItemTypes shape (YesIntentHandler.PlayArtist, whose confirm-artist yes-path could speak NoSongsForArtist for an artist that has tracks; QueryArtistLibrary's tracks listing; SearchMedia's artist-fallback redundant filter), SearchService.SearchItemsFuzzyAsync can no longer carry both filters on one query (if/else-if at the one sink), and the combination is now unrepresentable at the initializer level: ArtistQueryShapeGuardTests scans every plugin query initializer comment-aware, red-green proven twice. The guard's birth defects were fixed in-tail and are part of the record: the vacuous-green root cause (EnumerateFiles(AllDirectories) on an un-normalized ..-carrying path yields ZERO files on .NET Linux; GetFullPath is load-bearing, pinned by a comment) and three comment-only false positives (raw pre-test + single-alternation strip). AlbumPlayService.BuildAlbumQuery's post-construction ArtistIds documented as the second non-initializer site with its own JF-358 comment. Gates: /simplify 4-angle round (2 negligible skips noted in the notes), gate-marker code-review on the base, code-review high on the final state in the orchestrator transcript (5 findings, all applied: the one-sink doc overclaim, brace-walk blind spots, operationLabel on the suppression log, the 4x MediaTypes pin hoisted to TestHelpers.AssertNoMediaTypesFilter, two banned hyphens). Suites 4740/4740 both TFMs orchestrator-run on the exact merged tree (tree-hash identity verified). LIVE spot checks on the 12.1.0 box: QueryArtistLibrary tracks lists all 13 Norah Jones tracks with names; SearchMedia artist fallback plays the artist (AudioPlayer.Play + APL, card "Norah Jones - Not Too Late"). The yes-confirm path is unit-pinned (the simulator carries no session attributes to drive it in one shot).
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
@@ -76,16 +83,6 @@ VERIFICATION TAIL: AC #5 (live spot check on the 12.1.0 box: confirm-artist yes-
 - [ ] #6 NLU test fixtures updated if interaction model changed
 - [ ] #7 E2E test added for new intent or handler logic
 - [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
-
-GATE-MARKER REVIEW ROUND (2026-09-29, coordinator marker on the final state; no correctness bug, 4 low findings, all landed):
-- F1 APPLIED as ArtistQueryShapeGuardTests (the structural guard the review demanded: a source scan over every plugin query INITIALIZER block asserting the ArtistIds+MediaTypes combination never rides one query; the per-site-pin approach was this task's own refuted premise - three sites escaped it. Post-construction property assignments stay covered structurally at the SearchService if/else-if sink, pinned by SearchServiceTests; the guard's doc states that boundary).
-- F2 APPLIED as this notes paragraph: the COMPLETE documented-survivor set of live MediaTypes query terms (all verified load-bearing, none ArtistIds queries): YesIntentHandler.PlayAlbum/PlayBook chapter queries (ParentId-scoped; AudioBook chapters inherit MediaType=Audio from Audio but are the distinct BaseItemKind.AudioBook - IncludeItemTypes=Audio would DROP them; reflection-verified on both cached Jellyfin DLLs by the review), PlayBookIntentHandler ~:170 (ParentId book tracks), YesIntentHandler.PlayPlaylist ~:450 (Folder children), PlayRadioIntentHandler ~:291 (LiveTvChannel + MediaTypes=Audio radio scoping; 'fixing' it to IncludeItemTypes would drop every TV-channel row), AplUserEventHandler ~:238 (ParentId folder children), SearchService.SearchItemsFuzzyAsync's artist-less mediaTypes branch (the PlayRadio shape). SearchMedia's remaining MediaType uses are item-property reads, not query terms.
-- F3 APPLIED: one LogDebug in SearchItemsFuzzyAsync naming the suppressed MediaTypes when artistIds scoping wins (the silent drop was invisible to triage).
-- F4 APPLIED: ListItemsByArtistAsync's includeItemTypes made non-nullable with the direct assignment (both call sites pass non-null since this task; the null guard was dead generality).
-
-SIMPLIFY TAIL (2026-09-29, orchestrator /simplify 4-angle round on the marker diff; applied: guard restructured to a single alternation comment-strip regex with a raw pre-test and hoisted obj/bin filters, never-closed brace walk now skips instead of slicing out of range, the target-typed new() blind spot documented in the guard's doc (SearchMediaIntentHandler's local BuildQuery is the one such site today, benign), and ListItemsByArtistAsync's IncludeItemTypes folded into the initializer (behavior-identical: ApplyLibraryFilter's out-of-library bypass cannot trigger for MusicAlbum/Audio kinds; the site is now initializer-scoped and guard-visible). Skipped as measured-negligible: the span-count micro-opt and prune-before-descend (6 generated obj files, milliseconds, stable). Red-green re-proof after the restructure: injected violation flagged exactly YesIntentHandler.cs:398 both TFMs, clean tree green).
-
-CODE-REVIEW TAIL (2026-09-29, code-review high on 841f933e..1622e317, the final pre-merge state; site fixes verified direction-correct with no widening, 5 findings, all applied): the guard doc's "one shared sink" claim corrected (AlbumPlayService.BuildAlbumQuery's post-construction ArtistIds is a second site, now carrying its own JF-358 comment); the brace walk's raw-text blind spots documented (truncation/extension on stray braces, ctor-args-with-nested-parens invisible); the suppression LogDebug now carries operationLabel like every neighboring query-path log; the 4x copy-pasted null-or-empty MediaTypes pin hoisted to TestHelpers.AssertNoMediaTypesFilter (the tolerance rationale lives once); two banned parenthetical hyphens in the guard doc rewritten. Hyphen scan of the changed prose: only pre-existing lines match.
