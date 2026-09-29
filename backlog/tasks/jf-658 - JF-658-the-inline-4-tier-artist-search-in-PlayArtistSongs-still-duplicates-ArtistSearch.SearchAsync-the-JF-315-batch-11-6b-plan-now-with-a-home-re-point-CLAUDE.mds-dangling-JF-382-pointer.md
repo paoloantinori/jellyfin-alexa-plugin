@@ -4,9 +4,10 @@ title: >-
   JF-658 - the inline 4-tier artist search in PlayArtistSongs still duplicates
   ArtistSearch.SearchAsync (the JF-315 batch-11 '6b' plan, now with a home);
   re-point CLAUDE.md's dangling JF-382 pointer
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-27 19:12'
+updated_date: '2026-09-29 05:27'
 labels:
   - refactor
   - tech-debt
@@ -30,6 +31,20 @@ THE WORK: fold the inline 4-tier chain into ArtistSearch.SearchAsync per the 6b 
 
 ALSO in this edit: CLAUDE.md's Artist Search Fallback Chain section still says 'consolidate via JF-382', which now dangles (JF-382 was the coincidental-containment task, Done, and never held the inline-search plan); re-point it here.
 <!-- SECTION:DESCRIPTION:END -->
+
+## Definition of Done
+<!-- DOD:BEGIN -->
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
+- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
+- [ ] #6 NLU test fixtures updated if interaction model changed
+- [ ] #7 E2E test added for new intent or handler logic
+- [ ] #8 Locale response strings added to all 17 locales
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+<!-- DOD:END -->
 
 ## Implementation Notes
 
@@ -60,16 +75,8 @@ OBSERVABILITY DELTAS (plan step 5, all named in the code where they bite): per-t
 GATES + VERIFICATION TAIL: /simplify 4-angle pass, findings applied (DB tier-1 Fast/Thorough copy-paste collapsed behind a single mode-conditioned band + shared tail; BuildArtistQuery + FirstWordOf locals own the query preamble and first-word idioms; mode added to the total log; the WhenAll claim wording corrected to the accurate statement the sync-channel shape supports, retry backoffs overlap while the queries share the request thread, an INHERITED shape kept verbatim per the plan; pool fetch memoized once per request; test helpers reused; doc-count fix 11 to 10; skipped with reasons: the Task.Run execution-model change (behavior change, out of a no-behavior-change fold) and the Mock-vs-FakeArtistIndex swap (sibling-suite convention)). code-review high: fold verified mechanically faithful, 4 findings dispositioned (F1 kana-canonical reachability FILED in JF-645 same-turn; F2 scope seam documented at the site; F3 label collapse named precisely in the comment; F4 comment overstatement corrected). Builds: Debug + Release solution, 0 errors 0 warnings both TFMs. Suites: 4727/4727 BOTH TFMs on the post-simplify-fixes state AND on the final state (4719 baseline + 4 pins + 4 shared facts, zero expectation edits).
 <!-- SECTION:NOTES:END -->
 
-## Definition of Done
-<!-- DOD:BEGIN -->
-- [x] #1 dotnet build passes with 0 errors
-- [x] #2 dotnet test passes
-- [x] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [x] #9 /simplify passed (no blocking cleanups remaining)
-- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
-<!-- DOD:END -->
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Landed 2026-09-29 as merge 75bf95eb (pushed; deployed with the full checklist, config intact; live spot check green on the folded path: soul coughing plays, led zep resolves Stairway to Heaven, the クイーン kana tie ask holds, the not-found control clean): the inline 4-tier artist search folded into ArtistSearch.SearchAsync. One search implementation remains (grep-proven); the caller-policy axes (mode/ASR-fix/parallel-tiers) default to the pre-fold shared behavior so the 10 other call sites are untouched; all five kana-family interactions preserved or explicitly dispositioned (the kana-canonical corner convergence filed in JF-645; the one mid-fold null-tolerance violation fixed in production, not fixtures). Four characterization pins written first against the pre-fold chain, green unchanged post-fold. Gates: /simplify + code-review in-worker, pa:reflect ALIGNED, suites 4727/4727 both TFMs (orchestrator-verified on the final state), zero pre-existing test edits. CLAUDE.md's Artist Search section rewritten for the post-consolidation state.
+<!-- SECTION:FINAL_SUMMARY:END -->
