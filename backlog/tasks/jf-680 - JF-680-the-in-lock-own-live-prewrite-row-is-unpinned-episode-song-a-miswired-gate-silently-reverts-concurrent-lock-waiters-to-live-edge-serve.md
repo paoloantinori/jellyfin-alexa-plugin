@@ -3,7 +3,7 @@ id: JF-680
 title: >-
   JF-680 - the in-lock own-live prewrite row is unpinned (episode + song): a
   miswired gate silently reverts concurrent lock-waiters to live-edge serve
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-30 05:18'
 labels:
