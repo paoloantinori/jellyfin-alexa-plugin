@@ -6509,6 +6509,9 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
         public ILogger CreateLogger(string categoryName) => new DeletingLogger(this);
 
+        /// <summary>Whether the trigger fired and the file was deleted.</summary>
+        internal bool Fired => Volatile.Read(ref _fired) == 1;
+
         public void Dispose()
         {
         }
@@ -6674,13 +6677,13 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// <summary>
     /// JF-678: logger provider that clears <c>StreamTokenSecret</c> the first
     /// time a message containing the trigger is logged. Mirrors
-    /// <see cref="FileDeletingLoggerProvider"/>'s fire-once shape; used to
-    /// reproduce the ONLY reachable no-token serve (the single-chapter
-    /// audiobook redirect whose chapter re-mint reads a secret that a config
-    /// save emptied between the route gate and the branch) deterministically:
-    /// the route gate validates the parentId token while the secret is still
-    /// set, then the single-chapter branch sees it empty and hands the core an
-    /// empty override token.
+    /// <see cref="FileDeletingLoggerProvider"/>'s fire-once shape; reproduces
+    /// the secret-clearing race deterministically: the route gate validates
+    /// the parentId token while the secret is still set, then a config save
+    /// empties it before the single-chapter redirect's re-mint reads. Since
+    /// JF-682 that race ends at the route gate's own 503 (the redirect refuses
+    /// to mint an empty chapter token), and the JF-682 twin uses this provider
+    /// to drive the race and pin that 503.
     /// </summary>
     private sealed class SecretClearingLoggerProvider : ILoggerProvider
     {
@@ -6691,6 +6694,9 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         {
             _trigger = trigger;
         }
+
+        /// <summary>Whether the trigger fired and the secret was cleared.</summary>
+        internal bool Fired => Volatile.Read(ref _fired) == 1;
 
         public ILogger CreateLogger(string categoryName) => new ClearingLogger(this);
 
@@ -6721,34 +6727,35 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
-    /// JF-678 (a), the task's original filing, reworked per review F2: the
-    /// NO-TOKEN serve of a verdict-validated playlist must READ the bytes
-    /// (materialized, like the tokened branch) instead of returning
-    /// PhysicalFile over a path a concurrent eviction just deleted (a 500 at
-    /// result execution, outside every catch; even a pre-probed raw file
-    /// result leaves the probe-to-execution window open). Construction: the
-    /// single-chapter audiobook redirect is the only reachable no-token shape,
-    /// so the twin drives it with the secret-clearing provider (secret emptied
-    /// after the route gate, before the chapter re-mint) plus the deleting
-    /// provider on the fast-path serve log. GREEN: the read's FNF reaches the
-    /// fast-path vanish translation, the request falls through to the re-encode,
-    /// and the re-encode's own no-token serve answers with the MATERIALIZED
-    /// fresh playlist (ContentResult; episode-args.txt present, vanish log
-    /// fired). RED (materialization removed, raw PhysicalFile back): the
-    /// fast-path serve "succeeds" with a PhysicalFileResult over the DELETED
-    /// path, so no re-encode runs, no vanish log fires, and the args-file
-    /// assert fails. That red shape is exactly the filed bug: a 500 at result
-    /// execution only self-healing on the Echo's playlist retry. The 3-digit
-    /// fake is the song-path shape (the redirected core is the song core; the
-    /// JF-499 song twin's rationale).
+    /// JF-678 (a) pinned the NO-TOKEN serve of a verdict-validated playlist
+    /// (materialized read, re-encode fall-through); JF-682 closed that shape's
+    /// production driver (the single-chapter redirect now serves the route
+    /// gate's own 503 instead of minting an empty chapter token) and this twin
+    /// was REWRITTEN to pin the replacement shape. Construction unchanged: the
+    /// secret-clearing provider empties <c>StreamTokenSecret</c> on the
+    /// single-chapter log line (after the route gate validated the parentId
+    /// token, before the re-mint reads), the deleting provider stays wired on
+    /// the fast-path serve log, and the 3-digit fake is kept (the redirected
+    /// core is the song core). GREEN: the redirect answers the gate's own 503
+    /// ("Stream token secret not configured") and the core never runs, so no
+    /// re-encode starts (no args file) and the serve log never fires (both
+    /// provider constructions are PINNED via their Fired flags: the clearing
+    /// provider must have fired, the deleting provider must have stayed cold).
+    /// RED (the
+    /// JF-682 check removed, the empty-token mint back): the old no-token flow
+    /// reappears and every assertion flips - the vanish fall-through re-encodes
+    /// (args file exists) and the materialized fresh playlist answers as a
+    /// ContentResult, not an ObjectResult. The no-token branch keeps its
+    /// last-resort safety-net role for any future no-token shape; this red
+    /// proof is the only construction that still reaches it.
     /// </summary>
     [Fact]
-    public async Task StreamHlsAudiobook_NoTokenServe_CacheVanishedAtServe_FallsThroughToReencode()
+    public async Task StreamHlsAudiobook_SecretEmptiedAtChapterRemint_ServesGate503_NoReencode()
     {
         Guid parentId = Guid.NewGuid();
         var parentItem = new MediaBrowser.Controller.Entities.Folder
         {
-            Name = "JF-678 No-Token Book",
+            Name = "JF-682 Empty-Secret Book",
             Id = parentId
         };
         var chapter = new MediaBrowser.Controller.Entities.Audio.Audio { Name = "Only Chapter", Id = Guid.NewGuid() };
@@ -6768,18 +6775,18 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             playlistPath,
             "#EXTM3U\n#EXTINF:4.000,\nseg_000.ts\n#EXTINF:4.000,\nseg_001.ts\n#EXT-X-ENDLIST\n");
 
-        var logRecords = new List<(LogLevel Level, string Message)>();
+        var clearingProvider = new SecretClearingLoggerProvider("single chapter, serving single-item HLS inline");
+        var deletingProvider = new FileDeletingLoggerProvider("serving cached playlist for item", playlistPath);
         using var loggerFactory = LoggerFactory.Create(b =>
         {
             b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(TestCaptureLogger.Into(logRecords));
-            b.AddProvider(new SecretClearingLoggerProvider("single chapter, serving single-item HLS inline"));
-            b.AddProvider(new FileDeletingLoggerProvider("serving cached playlist for item", playlistPath));
+            b.AddProvider(clearingProvider);
+            b.AddProvider(deletingProvider);
         });
 
-        // 3-digit song shape: the redirected core is the song core (the
-        // JF-499 song twin's rationale for the segment-name parameter).
-        string fakeFfmpegPath = WriteRecordingFakeFfmpeg("fake-ffmpeg-jf678-notoken", "seg_000.ts");
+        // 3-digit song shape: the redirected core is the song core (kept from
+        // the JF-678 twin so the red proof reproduces the old re-encode shape).
+        string fakeFfmpegPath = WriteRecordingFakeFfmpeg("fake-ffmpeg-jf682-remint503", "seg_000.ts");
 
         string? originalSecret = _config.StreamTokenSecret;
         var controller = CreateController(parentId.ToString(), loggerFactory, ffmpegPath: fakeFfmpegPath);
@@ -6787,15 +6794,18 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         {
             ActionResult result = await controller.StreamHlsAudiobook(parentId.ToString());
 
-            // The re-encoded serve is itself a no-token serve: the MATERIALIZED
-            // fresh playlist (ContentResult; F2), never a raw file result.
-            Assert.IsType<ContentResult>(result);
             Assert.True(
+                clearingProvider.Fired,
+                "the clearing provider must have fired on the single-chapter log line (the route-gate-to-remint race window was exercised)");
+            ObjectResult gate503 = Assert.IsType<ObjectResult>(result);
+            Assert.Equal(503, gate503.StatusCode);
+            Assert.Contains("Stream token secret not configured", Body(gate503.Value!), StringComparison.Ordinal);
+            Assert.False(
                 File.Exists(Path.Combine(hlsDir, "episode-args.txt")),
-                "the re-encode path must have run after the no-token vanish fallthrough (the materialized read must not let a raw PhysicalFile ride over a deleted playlist)");
-            Assert.Contains(
-                TestCaptureLogger.Snapshot(logRecords),
-                r => r.Message.Contains("vanished or became unreadable", StringComparison.Ordinal));
+                "the 503 must land before the core: no re-encode may run for an empty-secret redirect");
+            Assert.False(
+                deletingProvider.Fired,
+                "the serve log must never fire for an empty-secret redirect (the 503 precedes every serve; the deleting provider stays cold so the red-proof vanish construction stays honest)");
         }
         finally
         {
