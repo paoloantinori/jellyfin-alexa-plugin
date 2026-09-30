@@ -55,6 +55,10 @@ public class CatalogPayload
                 }
             };
 
+            // JF-684: after the phonetic family (so it never consumes the per-name
+            // variant cap), append the bare first-word synonym for artist entries.
+            PartialNameSynonyms.AppendTo(catalogValue.Name, type);
+
             payload.Values.Add(catalogValue);
         }
 
