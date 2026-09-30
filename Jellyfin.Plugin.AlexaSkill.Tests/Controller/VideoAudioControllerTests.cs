@@ -6743,7 +6743,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// provider must have fired, the deleting provider must have stayed cold).
     /// RED (the
     /// JF-682 check removed, the empty-token mint back): the old no-token flow
-    /// reappears and every assertion flips - the vanish fall-through re-encodes
+    /// reappears and the outcome assertions flip (the clearingProvider.Fired construction assert stays green in both shapes, as it should) - the vanish fall-through re-encodes
     /// (args file exists) and the materialized fresh playlist answers as a
     /// ContentResult, not an ObjectResult. The no-token branch keeps its
     /// last-resort safety-net role for any future no-token shape; this red

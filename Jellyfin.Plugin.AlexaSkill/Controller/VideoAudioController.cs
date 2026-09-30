@@ -2974,7 +2974,12 @@ public class VideoAudioController : ControllerBase
             // no-token branch, whose playlist carries token-less segment lines GetSegment
             // 401s, and since JF-678 the branch kicks a full re-encode before handing out
             // that dead playlist. The no-token branch itself stays as the last-resort
-            // safety net for any future no-token shape.
+            // safety net for any future no-token shape. RESIDUAL (accepted): a secret
+            // emptied AFTER this re-read yields a STALE-secret chapter token (the mint
+            // consumes the local snapshot), which fails at GetSegment per segment: the
+            // general mid-stream rotate/empty shape every token consumer shares, identical
+            // on the multi-chapter path; this check closes only the gate-to-re-read
+            // window because that is the one where the wasted re-encode kicked in.
             string? secret = Plugin.Instance?.Configuration?.StreamTokenSecret;
             if (string.IsNullOrEmpty(secret))
             {
