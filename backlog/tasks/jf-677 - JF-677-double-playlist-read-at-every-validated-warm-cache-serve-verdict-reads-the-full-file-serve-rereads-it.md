@@ -3,7 +3,7 @@ id: JF-677
 title: >-
   JF-677 - double playlist read at every validated warm-cache serve: the
   verdict reads the full file, the serve re-reads it
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-30'
 labels:
