@@ -1,7 +1,7 @@
 ---
-id: JF-683
+id: JF-685
 title: >-
-  JF-683 - the JF-678 no-token serve branch lost its only committed test in the
+  JF-685 - the JF-678 no-token serve branch lost its only committed test in the
   JF-682 twin rewrite; its materialization hardening is doc-enforced only
 status: To Do
 assignee: []

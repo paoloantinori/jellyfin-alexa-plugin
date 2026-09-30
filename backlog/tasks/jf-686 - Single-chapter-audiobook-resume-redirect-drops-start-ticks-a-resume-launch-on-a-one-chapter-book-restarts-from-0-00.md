@@ -1,7 +1,7 @@
 ---
-id: JF-684
+id: JF-686
 title: >-
-  JF-684 - single-chapter audiobook resume redirect drops ?start=, a resume
+  JF-686 - single-chapter audiobook resume redirect drops ?start=, a resume
   launch on a one-chapter book restarts from 0:00
 status: To Do
 assignee: []
