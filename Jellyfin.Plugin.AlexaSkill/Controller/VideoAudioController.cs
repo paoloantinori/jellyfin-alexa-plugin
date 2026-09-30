@@ -535,6 +535,10 @@ public class VideoAudioController : ControllerBase
                 {
                     return concurrentServed;
                 }
+
+                // JF-678 rework F1: the vanish fall-through's breach-vs-legitimate
+                // liveness guard (the rationale lives on GuardInLockVanishFallThrough).
+                GuardInLockVanishFallThrough(_activeVideoAudioEncodes, itemId, artModifiedTicks, cached.FullName, "VideoAudio HLS");
             }
 
             string audioUrl = $"{validation.ServerUrl}/Audio/{itemId}/stream?static=true";
@@ -871,6 +875,10 @@ public class VideoAudioController : ControllerBase
                 {
                     return concurrentServed;
                 }
+
+                // JF-678 rework F1: the vanish fall-through's breach-vs-legitimate
+                // liveness guard (the rationale lives on GuardInLockVanishFallThrough).
+                GuardInLockVanishFallThrough(_activeEpisodeEncodes, itemId, artModifiedTicks, cached.FullName, "VideoAudio episode HLS");
             }
 
             // Re-probe server-side to build the ffmpeg arguments (the handler-side
@@ -1280,14 +1288,12 @@ public class VideoAudioController : ControllerBase
     /// playlist, so a vanished playlist is a dead serve) and throws the same
     /// exception the fresh read would have. Since JF-678 this composite is
     /// also the vanish translation of the IN-LOCK verdict+serve rows and the
-    /// two audiobook verdict rows, which previously let the serve's throw
-    /// propagate as a bare 500 (in-lock) or swallowed it into a PhysicalFile
-    /// over the dead path (audiobook); every caller of this helper must have
-    /// a next step its null can fall through to (the lock+re-encode for the
-    /// fast paths, the encode branch below the row for the in-lock rows).
-    /// Sites that cannot fall through (the exists-gated serves of a LIVE
-    /// pinned encode's files) deliberately do not route here; see the
-    /// coverage boundary on <see cref="ResolveServeContentAsync"/>.
+    /// two audiobook verdict rows; every caller must have a next step its
+    /// null can fall through to, and the in-lock rows additionally pass
+    /// through <see cref="GuardInLockVanishFallThrough"/> first. The ONE
+    /// authoritative account of which rows translate, which stay loud, and
+    /// why is the coverage boundary on
+    /// <see cref="ResolveServeContentAsync"/>.
     /// </summary>
     /// <param name="cacheKey">The encode's cache key (vanish-race logging).</param>
     /// <param name="logLabel">Log prefix ("VideoAudio episode HLS" / its AUDIO
@@ -1336,12 +1342,58 @@ public class VideoAudioController : ControllerBase
     /// playlist (or its directory) is gone, whether the fresh read threw it or
     /// <see cref="ProbePlaylistExists"/> translated it. The vanish
     /// translation catches exactly this set; the audiobook content branches'
-    /// fallback catches exclude exactly this set so a vanish can propagate to
-    /// the translation while every other failure keeps the PhysicalFile
-    /// degrade.
+    /// fallback catches exclude exactly this set (where the caller confirmed
+    /// the path) so a vanish can propagate to the translation while every
+    /// other failure keeps the PhysicalFile degrade.
     /// </summary>
     private static bool IsHlsVanishException(Exception ex)
         => ex is FileNotFoundException or DirectoryNotFoundException;
+
+    /// <summary>
+    /// The in-lock fall-through's liveness guard (JF-678 rework, review F1):
+    /// called at the four in-lock verdict+serve rows after
+    /// <see cref="TryServeValidatedHlsCacheAsync"/> answered null, BEFORE
+    /// falling through to the encode branch. No live generation of this
+    /// (key, ticks): the legitimate fall-through (debris verdict, or a
+    /// completed cache evicted between verdict and serve), so return. STILL
+    /// LIVE: the vanish is a pin breach, and falling through would start a
+    /// SECOND ffmpeg against the live writer's directory (the episode/variant
+    /// paths' per-file debris sweep would first delete the live writer's
+    /// files under it), so fail LOUD: a breach-named warning, then the
+    /// action-time <see cref="FileNotFoundException"/> (the policy account
+    /// lives on the coverage boundary of <see cref="ResolveServeContentAsync"/>).
+    /// LOAD-BEARING INVARIANT: a null VERDICT can never arrive here live,
+    /// because the debris rule requires the own-ticks generation not live and
+    /// nothing can register a new generation while this scope holds the
+    /// per-item lock, so the guard reads a vanish, never a false breach. That
+    /// second clause is enforced by CONVENTION, not machinery: it holds
+    /// because every <see cref="MarkEncodeActive"/> site sits inside its
+    /// (key, ticks) lock scope, and a future registration site outside the
+    /// lock would make this guard misclassify legitimate vanishes as
+    /// breaches, so keep the placement when adding encode paths.
+    /// </summary>
+    /// <param name="activeEncodes">The path's active-encode registry.</param>
+    /// <param name="cacheKey">The encode's cache key.</param>
+    /// <param name="artModifiedTicks">The caller's art ticks (its own generation).</param>
+    /// <param name="playlistPath">The vanished playlist's path (carried on the exception).</param>
+    /// <param name="logLabel">Path label for the breach warning.</param>
+    private void GuardInLockVanishFallThrough(
+        ConcurrentDictionary<string, ActiveEncodeGenerations> activeEncodes,
+        string cacheKey,
+        long artModifiedTicks,
+        string playlistPath,
+        string logLabel)
+    {
+        if (!OwnTicksGenerationLive(activeEncodes, cacheKey, artModifiedTicks))
+        {
+            return;
+        }
+
+        _logger.LogWarning(
+            "{LogLabel}: playlist of a LIVE encode vanished between validation and serve for item {ItemId} (pin breach or external delete?); failing the request loud instead of starting a second encode against the live writer",
+            logLabel, cacheKey);
+        throw new FileNotFoundException("Playlist of a live pinned encode vanished between validation and serve", playlistPath);
+    }
 
     /// <summary>
     /// Serve the episode encode's pre-written full listing (JF-531) when it exists.
@@ -2030,6 +2082,10 @@ public class VideoAudioController : ControllerBase
                 {
                     return concurrentServed;
                 }
+
+                // JF-678 rework F1: the vanish fall-through's breach-vs-legitimate
+                // liveness guard (the rationale lives on GuardInLockVanishFallThrough).
+                GuardInLockVanishFallThrough(_activeEpisodeEncodes, spec.CacheKey, spec.ArtModifiedTicks, cached.FullName, spec.LogLabel);
             }
 
             // JF-636/JF-668: both registry kills run INSIDE the per-key lock after
@@ -2964,11 +3020,9 @@ public class VideoAudioController : ControllerBase
         // Echo Show request), serve the pre-written event playlist instead of starting
         // another ffmpeg. The pre-written playlist has correct total duration and no
         // ENDLIST, so the player plays available segments.
-        // JF-678 RESIDUAL, deliberate: this block's serves and the first-fetch serves
-        // below are NOT vanish-translated (the full rationale lives on the coverage
-        // boundary of ResolveServeContentAsync): they hand out files a LIVE pinned
-        // encode just created, a vanish there is a JF-428 pin-protocol breach that
-        // must stay loud, and no re-encode fall-through exists structurally.
+        // JF-678: this block's serves and the first-fetch prewrite row below are the
+        // UNTRANSLATED rows of the vanish family (coverage boundary on
+        // ResolveServeContentAsync).
         if (_activeAudiobookEncodes.TryGetValue(parentId, out _))
         {
             _logger.LogDebug("VideoAudio audiobook HLS: encode already in progress for {ParentId}, serving pre-written playlist", parentId);
@@ -3032,6 +3086,10 @@ public class VideoAudioController : ControllerBase
                 {
                     return concurrentServed;
                 }
+
+                // JF-678 rework F1: the vanish fall-through's breach-vs-legitimate
+                // liveness guard (the rationale lives on GuardInLockVanishFallThrough).
+                GuardInLockVanishFallThrough(_activeAudiobookEncodes, parentId, artModifiedTicks, cached.FullName, "VideoAudio audiobook HLS");
             }
 
 #pragma warning disable CA3003 // paths derived from GUID-validated parentId
@@ -3307,7 +3365,17 @@ public class VideoAudioController : ControllerBase
                 _logger.LogDebug(
                     "VideoAudio album HLS: serving ffmpeg live playlist for parent {ParentId} ({TrackCount} tracks)",
                     parentId, sortedChapters.Count);
-                return await ServeAudiobookPlaylistAsync(playlistPath, startTicks).ConfigureAwait(false);
+
+                // JF-678 rework F3: existenceConfirmed is FALSE here, the only
+                // DEGRADED row inside the audiobook serve family: the
+                // first-segment wait above polls the SEGMENT, not the
+                // playlist, so this serve may legitimately run one flush cycle
+                // before ffmpeg's first stream.m3u8 write; a read miss must
+                // keep the PhysicalFile degrade, not surface as a vanish.
+                // (The song/episode/variant first-fetch tails carry the same
+                // lag class pre-existing and unhandled; the coverage boundary
+                // on ResolveServeContentAsync records it.)
+                return await ServeAudiobookPlaylistAsync(playlistPath, startTicks, existenceConfirmed: false).ConfigureAwait(false);
             }
 
             _logger.LogDebug(
@@ -3317,7 +3385,9 @@ public class VideoAudioController : ControllerBase
             // Serve the pre-written event playlist (no ENDLIST) so the Echo Show gets
             // the correct total book duration. The player treats it as an event playlist
             // and plays available segments without failing on missing ones. ffmpeg generates
-            // segments in the background, staying ahead of real-time playback.
+            // segments in the background, staying ahead of real-time playback. The
+            // prewrite is plugin-written synchronously above, so no flush-lag
+            // boundary applies (the confirmed default).
             return await ServeAudiobookPlaylistAsync(prewrittenPath, startTicks).ConfigureAwait(false);
 #pragma warning restore CA3003
         }
@@ -3766,22 +3836,44 @@ public class VideoAudioController : ControllerBase
     /// read. A vanished playlist means a vanished generation directory,
     /// segments included, so serving the remembered bytes would hand the
     /// player a playlist of dead segment links. COVERAGE BOUNDARY of that
-    /// throw (widened by JF-678): the three FAST paths (the
-    /// <see cref="TryServeValidatedHlsCacheAsync"/> callers: song, episode,
-    /// variants), the three IN-LOCK verdict+serve rows, and the two audiobook
-    /// verdict rows all translate it into the re-encode fall-through via
-    /// <see cref="TryServeValidatedHlsCacheAsync"/>. Still untranslated, by
-    /// design: the exists-gated serves of a LIVE pinned encode's files (the
-    /// audiobook concurrent-guard rows and first-fetch rows, the prewrite
-    /// helpers' fast-path-gate/first-serve call sites), where a vanish means
-    /// the JF-428 pin protocol itself failed; there the throw surfaces as an
-    /// action-time 500 (logged with a stack) rather than being masked behind
-    /// a retryable 503, and no re-encode fall-through exists structurally
-    /// (the caller already holds the lock and just ran the encode). The MP4
-    /// sibling endpoint (<see cref="StreamVideoAudio"/>) is also outside the
-    /// contract by design: it serves one cached file with no segment
-    /// directory, its vanish race self-heals as a plain cache miss on the
-    /// Echo's retry, and it shares none of the serve plumbing hardened here. The
+    /// throw (widened by JF-678, reworked by its review round; THIS block is
+    /// the ONE authoritative account of the vanish family's coverage, every
+    /// other site points here):
+    /// TRANSLATED rows (the throw becomes a null the caller falls through
+    /// on, via <see cref="TryServeValidatedHlsCacheAsync"/>): the three FAST
+    /// paths (song, episode, variants), which fall through to the
+    /// lock+re-encode (the pre-JF-678 shape; a breach reached through them is
+    /// re-caught by the in-lock row below, pre-existing and out of scope: a
+    /// later request finding NO cache at all takes the plain cache-miss path,
+    /// which cannot distinguish a breach from a miss); the three IN-LOCK
+    /// verdict+serve rows and the two audiobook verdict rows, which fall
+    /// through to their own encode branch ONLY after
+    /// <see cref="GuardInLockVanishFallThrough"/> rules out the breach shape
+    /// (a vanish while a generation of the key is STILL LIVE is a JF-428 pin
+    /// breach and fails loud, because falling through would start a second
+    /// ffmpeg against the live writer).
+    /// UNTRANSLATED rows, by design: the exists-gated serves of a LIVE
+    /// pinned encode's files (the audiobook concurrent-guard rows, the
+    /// prewrite helpers' fast-path-gate/first-serve call sites, the audiobook
+    /// first-fetch PREWRITE row), where a vanish means the pin protocol
+    /// itself failed and surfaces as an action-time 500 with a stack, never
+    /// masked behind a retryable 503, and no re-encode fall-through exists
+    /// structurally (the caller already holds the lock and just ran the
+    /// encode). The DEGRADED row: the audiobook ALBUM first-fetch live serve
+    /// (<c>existenceConfirmed: false</c> on
+    /// <see cref="ServeAudiobookPlaylistAsync"/>), whose path ffmpeg may not
+    /// have flushed yet (the first-segment wait polls the segment, not the
+    /// playlist), so a read miss keeps the generic catch's PhysicalFile
+    /// degrade there. The SAME flush-lag class exists, PRE-EXISTING and
+    /// unhandled, on the song/episode/variant FIRST-FETCH tails (the segment
+    /// wait then an unwrapped fresh read through
+    /// <see cref="ServePlaylistWithTokenAsync"/>): they keep that behavior,
+    /// not widened by this rework; the class is closed family-wide only
+    /// inside the audiobook serve methods, which own the degrade.
+    /// OUTSIDE the contract: the MP4 sibling endpoint
+    /// (<see cref="StreamVideoAudio"/>), which serves one cached file with no
+    /// segment directory, self-heals as a plain cache miss on the Echo's
+    /// retry, and shares none of the serve plumbing hardened here. The
     /// probe is an O(1) stat, so the validated warm-cache serve pays ONE full
     /// read (the verdict's) plus one existence check. BOUNDED RESIDUAL (the
     /// probe tests existence, not generation): if eviction deletes the
@@ -3824,15 +3916,16 @@ public class VideoAudioController : ControllerBase
 
     /// <summary>
     /// The ONE existence probe behind the JF-499 W3 vanish-at-serve contract
-    /// (JF-678 gave it a name and a second caller): throw the canonical
+    /// (JF-678 gave it a name): throw the canonical
     /// <see cref="FileNotFoundException"/> when the playlist a serve is about
     /// to hand out is gone, so the throw happens at ACTION time where
     /// <see cref="TryServeValidatedHlsCacheAsync"/> can translate it, instead of
     /// at result execution over a dead <c>PhysicalFile</c> path (a 500 that
     /// only self-heals on the Echo's playlist retry). Used by
-    /// <see cref="ResolveServeContentAsync"/> (threaded-content serves) and
-    /// the raw no-token serves, which read nothing and previously skipped the
-    /// contract entirely. CONFLATION DECISION (JF-678, deliberate):
+    /// <see cref="ResolveServeContentAsync"/>'s threaded-content path; the raw
+    /// no-token serve reaches the same contract by materializing the bytes
+    /// (its read throws the same exception natively). CONFLATION DECISION
+    /// (JF-678, deliberate):
     /// <c>File.Exists</c> reports false for an INACCESSIBLE file too, so an
     /// ACL revocation inside the verdict-to-serve window translates into the
     /// vanish fall-through rather than the fresh read's loud
@@ -3859,9 +3952,17 @@ public class VideoAudioController : ControllerBase
     /// Echo carries the stream token when fetching segments (JF-309). ffmpeg-written playlists
     /// (<c>stream.m3u8</c>) don't carry the token (ffmpeg's <c>-hls_base_url</c> can't place it
     /// correctly), so this post-processes the file before serving. If no token is in the request
-    /// query, the file is served raw (no rewriting); since JF-678 that raw serve probes
-    /// existence first (<see cref="ProbePlaylistExists"/>) so the vanish contract is
-    /// auth-shape-independent: the only reachable no-token shape is the single-chapter
+    /// query, the file is served raw (no rewriting); since JF-678 that raw serve MATERIALIZES
+    /// the bytes via <see cref="ResolveServeContentAsync"/> (probe + threaded reuse or a
+    /// fresh read, whose miss throws the vanish exception) instead of handing out a raw
+    /// <c>PhysicalFile</c>, so the branch is immune AFTER the read exactly like the
+    /// tokened branch (a raw file result would 500 at RESULT EXECUTION if the playlist
+    /// vanished between the read here and the execution; playlists are kilobytes).
+    /// Accepted costs, deliberate: the raw result's conditional-GET/Last-Modified
+    /// support is dropped (ExoPlayer rarely conditional-GETs a playlist, and the only
+    /// reachable no-token shape is the single-chapter audiobook redirect racing
+    /// <c>StreamTokenSecret</c> being emptied between the route gate and the chapter
+    /// re-mint). The only reachable no-token shape is the single-chapter
     /// audiobook redirect racing <c>StreamTokenSecret</c> being emptied between the route gate
     /// and the chapter re-mint (every public HLS entry is token-gated and the gate 503s on an
     /// empty secret), and its caller gets the same re-encode fall-through a tokened serve gets.
@@ -3878,8 +3979,8 @@ public class VideoAudioController : ControllerBase
         string? token = overrideToken ?? HttpContext.Request.Query["token"];
         if (string.IsNullOrEmpty(token))
         {
-            ProbePlaylistExists(playlistPath);
-            return PhysicalFile(playlistPath, "application/vnd.apple.mpegurl");
+            string raw = await ResolveServeContentAsync(playlistPath, preloadedContent).ConfigureAwait(false);
+            return Content(raw, "application/vnd.apple.mpegurl");
         }
 
         string content = await ResolveServeContentAsync(playlistPath, preloadedContent).ConfigureAwait(false);
@@ -3962,12 +4063,16 @@ public class VideoAudioController : ControllerBase
     /// Since JF-677 a serve that follows a validating verdict reuses its read
     /// (<paramref name="preloadedContent"/>; see <see cref="ResolveServeContentAsync"/>).
     /// JF-678: a VANISH (the playlist gone between the verdict and the read, or
-    /// unreadable) is no longer swallowed into the PhysicalFile fallback over
-    /// the dead path: both the token branch and the resume twin let
-    /// <see cref="FileNotFoundException"/>/
-    /// <see cref="DirectoryNotFoundException"/> propagate so the caller's
-    /// <see cref="TryServeValidatedHlsCacheAsync"/> translates them into the
-    /// re-encode fall-through; every OTHER failure keeps the fallback verbatim.
+    /// unreadable) propagates instead of being swallowed into the PhysicalFile
+    /// fallback over the dead path, but ONLY when
+    /// <paramref name="existenceConfirmed"/> says the caller already confirmed
+    /// this path exists (a verdict's FileInfo/threaded read, or an existence
+    /// gate): there, a read miss is the vanish race. Without confirmation
+    /// (the album FIRST-FETCH serve, whose path ffmpeg may not have FLUSHED
+    /// yet: the first-segment wait polls the segment, not the playlist), a
+    /// read miss is indistinguishable from one flush cycle of write lag, so
+    /// the generic catch keeps the PhysicalFile degrade (the pre-JF-678
+    /// behavior). Every OTHER failure keeps the fallback regardless.
     /// The raw no-token tail needs no probe of its own: this route's query
     /// token is gate-validated (there is no override-token mechanism here), so
     /// the tail's no-token entry is unreachable and its reachable entry is the
@@ -3976,13 +4081,14 @@ public class VideoAudioController : ControllerBase
     /// <param name="playlistPath">Path of the playlist file to serve.</param>
     /// <param name="startTicks">Resume position in .NET ticks (null/0 serves the playlist as-is).</param>
     /// <param name="preloadedContent">The verdict's read of the playlist, when one preceded this serve; null reads fresh.</param>
-    private async Task<ActionResult> ServeAudiobookPlaylistAsync(string playlistPath, long? startTicks, string? preloadedContent = null)
+    /// <param name="existenceConfirmed">True when the caller holds prior evidence the path exists (a verdict FileInfo/threaded read or an existence gate); false keeps the flush-lag degrade.</param>
+    private async Task<ActionResult> ServeAudiobookPlaylistAsync(string playlistPath, long? startTicks, string? preloadedContent = null, bool existenceConfirmed = true)
     {
         string? token = HttpContext.Request.Query["token"];
 
         if (startTicks.HasValue && startTicks.Value > 0)
         {
-            return await ServeResumePlaylistAsync(playlistPath, startTicks.Value, token, preloadedContent).ConfigureAwait(false);
+            return await ServeResumePlaylistAsync(playlistPath, startTicks.Value, token, preloadedContent, existenceConfirmed).ConfigureAwait(false);
         }
 
         // Non-resume: inject token into segment lines (JF-309). The cached playlist may be
@@ -3995,7 +4101,7 @@ public class VideoAudioController : ControllerBase
                 string content = await ResolveServeContentAsync(playlistPath, preloadedContent).ConfigureAwait(false);
                 return Content(RewritePlaylistWithToken(content, token), "application/vnd.apple.mpegurl");
             }
-            catch (Exception ex) when (!IsHlsVanishException(ex))
+            catch (Exception ex) when (!existenceConfirmed || !IsHlsVanishException(ex))
             {
                 _logger.LogWarning(ex, "Failed to rewrite audiobook playlist with token from {Path}", playlistPath);
             }
@@ -4013,14 +4119,15 @@ public class VideoAudioController : ControllerBase
     /// that follows a validating verdict reuses its read
     /// (<paramref name="preloadedContent"/>; see <see cref="ResolveServeContentAsync"/>).
     /// JF-678: a vanish propagates instead of falling back to the dead
-    /// PhysicalFile path (the exception filter mirrors
-    /// <see cref="ServeAudiobookPlaylistAsync"/>'s token branch).
+    /// PhysicalFile path under the same <paramref name="existenceConfirmed"/>
+    /// boundary as <see cref="ServeAudiobookPlaylistAsync"/>'s token branch.
     /// </summary>
     /// <param name="basePlaylistPath">Path of the base playlist file.</param>
     /// <param name="startTicks">Resume position in .NET ticks.</param>
     /// <param name="token">Stream token from the request query, when present.</param>
     /// <param name="preloadedContent">The verdict's read of the playlist, when one preceded this serve; null reads fresh.</param>
-    private async Task<ActionResult> ServeResumePlaylistAsync(string basePlaylistPath, long startTicks, string? token, string? preloadedContent = null)
+    /// <param name="existenceConfirmed">Passed through from <see cref="ServeAudiobookPlaylistAsync"/> (its doc owns the boundary).</param>
+    private async Task<ActionResult> ServeResumePlaylistAsync(string basePlaylistPath, long startTicks, string? token, string? preloadedContent = null, bool existenceConfirmed = true)
     {
         try
         {
@@ -4034,7 +4141,7 @@ public class VideoAudioController : ControllerBase
 
             return Content(resumeContent, "application/vnd.apple.mpegurl");
         }
-        catch (Exception ex) when (!IsHlsVanishException(ex))
+        catch (Exception ex) when (!existenceConfirmed || !IsHlsVanishException(ex))
         {
             _logger.LogWarning(ex, "Failed to serve resume playlist from {Path}, serving base", basePlaylistPath);
 #pragma warning disable CA3003 // path is an internal cache file resolved by the controller

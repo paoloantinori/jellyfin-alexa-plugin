@@ -6721,24 +6721,26 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
-    /// JF-678 (a), the task's original filing: the NO-TOKEN serve of a
-    /// verdict-validated playlist must run the existence probe
-    /// (<see cref="VideoAudioController"/> ProbePlaylistExists) instead of
-    /// returning PhysicalFile over a path a concurrent eviction just deleted
-    /// (a 500 at result execution, outside every catch). Construction: the
+    /// JF-678 (a), the task's original filing, reworked per review F2: the
+    /// NO-TOKEN serve of a verdict-validated playlist must READ the bytes
+    /// (materialized, like the tokened branch) instead of returning
+    /// PhysicalFile over a path a concurrent eviction just deleted (a 500 at
+    /// result execution, outside every catch; even a pre-probed raw file
+    /// result leaves the probe-to-execution window open). Construction: the
     /// single-chapter audiobook redirect is the only reachable no-token shape,
     /// so the twin drives it with the secret-clearing provider (secret emptied
     /// after the route gate, before the chapter re-mint) plus the deleting
-    /// provider on the fast-path serve log. GREEN: the probe's FNF reaches the
+    /// provider on the fast-path serve log. GREEN: the read's FNF reaches the
     /// fast-path vanish translation, the request falls through to the re-encode,
-    /// and the re-encode's own no-token serve answers PhysicalFile over the
-    /// FRESH playlist (episode-args.txt present, vanish log fired). RED (probe
-    /// removed from the no-token branch): the fast-path serve "succeeds" with a
-    /// PhysicalFileResult over the DELETED path, so no re-encode runs, no vanish
-    /// log fires, and the args-file assert fails. That red shape is exactly the
-    /// filed bug: a 500 at result execution only self-healing on the Echo's
-    /// playlist retry. The 3-digit fake is the song-path shape (the redirected
-    /// core is the song core; the JF-499 song twin's rationale).
+    /// and the re-encode's own no-token serve answers with the MATERIALIZED
+    /// fresh playlist (ContentResult; episode-args.txt present, vanish log
+    /// fired). RED (materialization removed, raw PhysicalFile back): the
+    /// fast-path serve "succeeds" with a PhysicalFileResult over the DELETED
+    /// path, so no re-encode runs, no vanish log fires, and the args-file
+    /// assert fails. That red shape is exactly the filed bug: a 500 at result
+    /// execution only self-healing on the Echo's playlist retry. The 3-digit
+    /// fake is the song-path shape (the redirected core is the song core; the
+    /// JF-499 song twin's rationale).
     /// </summary>
     [Fact]
     public async Task StreamHlsAudiobook_NoTokenServe_CacheVanishedAtServe_FallsThroughToReencode()
@@ -6785,12 +6787,12 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         {
             ActionResult result = await controller.StreamHlsAudiobook(parentId.ToString());
 
-            // The re-encoded serve is itself a no-token serve: raw PhysicalFile
-            // over the FRESH playlist (the fake's), never Content.
-            Assert.IsType<PhysicalFileResult>(result);
+            // The re-encoded serve is itself a no-token serve: the MATERIALIZED
+            // fresh playlist (ContentResult; F2), never a raw file result.
+            Assert.IsType<ContentResult>(result);
             Assert.True(
                 File.Exists(Path.Combine(hlsDir, "episode-args.txt")),
-                "the re-encode path must have run after the no-token vanish fallthrough (the probe must not let a raw PhysicalFile ride over a deleted playlist)");
+                "the re-encode path must have run after the no-token vanish fallthrough (the materialized read must not let a raw PhysicalFile ride over a deleted playlist)");
             Assert.Contains(
                 TestCaptureLogger.Snapshot(logRecords),
                 r => r.Message.Contains("vanished or became unreadable", StringComparison.Ordinal));
@@ -7091,6 +7093,319 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Assert.True(
             File.Exists(Path.Combine(hlsDir, "episode-args.txt")),
             "the resume serve must fall through to the lock+re-encode path when the playlist vanishes between verdict and serve, not answer PhysicalFile over the deleted playlist");
+    }
+
+    // ---- JF-678 rework: the in-lock breach guard (F1) and the flush-lag boundary (F3) ----
+
+    /// <summary>
+    /// JF-678 rework F1, the breach shape of the in-lock vanish fall-through:
+    /// when the playlist vanishes between verdict and serve WHILE a generation
+    /// of the key is STILL LIVE (the seam's own-live marking, the JF-680
+    /// construction), the vanish is a JF-428 pin breach, and the row must FAIL
+    /// LOUD (the action-time FileNotFoundException plus the breach-named
+    /// warning) instead of falling through into a SECOND encode against the
+    /// live writer's directory. GREEN: ThrowsAsync(FileNotFoundException), the
+    /// breach log fires, and episode-args.txt does NOT exist (no re-encode
+    /// ran). RED (the site's GuardInLockVanishFallThrough call removed): the
+    /// fall-through runs the encode, the request answers 200, and ThrowsAsync
+    /// fails with no exception thrown. Four per-path twins below share this
+    /// construction (episode, song, audio-variant, audiobook); each red proof
+    /// removes only its own site's guard call.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_InLockLiveGenerationVanishAtServe_FailsLoudNoReencode()
+    {
+        var (episode, mediaSourceManager) = SetupEpisodeForHls("JF-678 Breach S01E01", "h264", TimeSpan.FromMinutes(45));
+
+        string hlsDir = _cache.GetHlsDirectoryPath(episode.Id.ToString(), 0);
+        string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Trace);
+            b.AddProvider(TestCaptureLogger.Into(logRecords));
+            b.AddProvider(new FileDeletingLoggerProvider("serving playlist generated by concurrent request", playlistPath));
+        });
+
+        var controller = CreateController(
+            episode.Id.ToString(), loggerFactory, mediaSourceManager, WriteRecordingFakeFfmpeg("fake-ffmpeg-jf678-breach-episode"));
+
+        // The own-live marking (the JF-680 construction: no encode runs, so
+        // nothing displaces it; the guard reads it as the live writer).
+        VideoAudioController.SetEncodeActiveForTest(episode.Id.ToString(), active: true);
+        try
+        {
+            var ex = await Assert.ThrowsAsync<FileNotFoundException>(
+                () => ServeInLockWarmCacheAsync(
+                    () => _cache.LockItemAsync(episode.Id.ToString(), 0),
+                    () => controller.StreamHlsEpisode(episode.Id.ToString()),
+                    () =>
+                    {
+                        Directory.CreateDirectory(hlsDir);
+                        File.WriteAllText(playlistPath, "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:4.000,\nseg_0000.ts\n#EXTINF:4.000,\nseg_0001.ts\n#EXT-X-ENDLIST\n");
+                    }));
+
+            Assert.Contains("live pinned encode", ex.Message, StringComparison.Ordinal);
+            Assert.Contains(
+                TestCaptureLogger.Snapshot(logRecords),
+                r => r.Message.Contains("failing the request loud instead of starting a second encode", StringComparison.Ordinal));
+            Assert.False(
+                File.Exists(Path.Combine(hlsDir, "episode-args.txt")),
+                "a breach vanish must NOT fall through to a second encode against the still-live writer's directory");
+            Assert.Equal(
+                1,
+                VideoAudioController.EncodeGenerationCountForTest(episode.Id.ToString()));
+        }
+        finally
+        {
+            VideoAudioController.SetEncodeActiveForTest(episode.Id.ToString(), active: false);
+        }
+    }
+
+    /// <summary>
+    /// JF-678 rework F1, the song-path breach twin (the single-item registry).
+    /// Same construction and red proof as the episode twin; the 3-digit fake
+    /// is the song-path shape so the RED run (guard removed) completes a real
+    /// re-encode.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsVideoAudio_InLockLiveGenerationVanishAtServe_FailsLoudNoReencode()
+    {
+        var audioItem = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "JF-678 Breach Song",
+            Id = Guid.NewGuid()
+        };
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(audioItem.Id)).Returns(audioItem);
+
+        string hlsDir = _cache.GetHlsDirectoryPath(audioItem.Id.ToString("D"), 0);
+        string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Trace);
+            b.AddProvider(TestCaptureLogger.Into(logRecords));
+            b.AddProvider(new FileDeletingLoggerProvider("serving playlist generated by concurrent request", playlistPath));
+        });
+
+        var controller = CreateController(
+            audioItem.Id.ToString(), loggerFactory, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf678-breach-song", "seg_000.ts"));
+
+        VideoAudioController.SetEncodeActiveForTest(audioItem.Id.ToString(), active: true, song: true);
+        try
+        {
+            var ex = await Assert.ThrowsAsync<FileNotFoundException>(
+                () => ServeInLockWarmCacheAsync(
+                    () => _cache.LockItemAsync(audioItem.Id.ToString("D"), 0),
+                    () => controller.StreamHlsVideoAudio(audioItem.Id.ToString()),
+                    () =>
+                    {
+                        Directory.CreateDirectory(hlsDir);
+                        File.WriteAllText(playlistPath, "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:4.000,\nseg_000.ts\n#EXT-X-ENDLIST\n");
+                    }));
+
+            Assert.Contains("live pinned encode", ex.Message, StringComparison.Ordinal);
+            Assert.Contains(
+                TestCaptureLogger.Snapshot(logRecords),
+                r => r.Message.Contains("failing the request loud instead of starting a second encode", StringComparison.Ordinal));
+            Assert.False(
+                File.Exists(Path.Combine(hlsDir, "episode-args.txt")),
+                "a breach vanish must NOT fall through to a second encode against the still-live writer's directory");
+            Assert.Equal(
+                1,
+                VideoAudioController.EncodeGenerationCountForTest(audioItem.Id.ToString(), song: true));
+        }
+        finally
+        {
+            VideoAudioController.SetEncodeActiveForTest(audioItem.Id.ToString(), active: false, song: true);
+        }
+    }
+
+    /// <summary>
+    /// JF-678 rework F1, the audio-variant breach twin (keyed by the variant
+    /// cache key in the episode registry). Same construction and red proof as
+    /// the episode twin.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisodeAudio_InLockLiveGenerationVanishAtServe_FailsLoudNoReencode()
+    {
+        var episode = new MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "JF-678 Breach Audio S01E01",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromMinutes(39).Ticks
+        };
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(episode.Id)).Returns(episode);
+
+        string cacheKey = VideoAudioController.EpisodeAudioCacheKey(episode.Id.ToString(), 0);
+        string hlsDir = _cache.GetHlsDirectoryPath(cacheKey, 0);
+        string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Trace);
+            b.AddProvider(TestCaptureLogger.Into(logRecords));
+            b.AddProvider(new FileDeletingLoggerProvider("serving playlist generated by concurrent request", playlistPath));
+        });
+
+        var controller = CreateController(
+            episode.Id.ToString(), loggerFactory, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf678-breach-audio"));
+
+        VideoAudioController.SetEncodeActiveForTest(cacheKey, active: true);
+        try
+        {
+            var ex = await Assert.ThrowsAsync<FileNotFoundException>(
+                () => ServeInLockWarmCacheAsync(
+                    () => _cache.LockItemAsync(cacheKey, 0),
+                    () => controller.StreamHlsEpisodeAudio(episode.Id.ToString(), 0),
+                    () =>
+                    {
+                        Directory.CreateDirectory(hlsDir);
+                        File.WriteAllText(playlistPath, "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:10.000,\nseg_0000.ts\n#EXTINF:10.000,\nseg_0001.ts\n#EXT-X-ENDLIST\n");
+                    }));
+
+            Assert.Contains("live pinned encode", ex.Message, StringComparison.Ordinal);
+            Assert.Contains(
+                TestCaptureLogger.Snapshot(logRecords),
+                r => r.Message.Contains("failing the request loud instead of starting a second encode", StringComparison.Ordinal));
+            Assert.False(
+                File.Exists(Path.Combine(hlsDir, "episode-args.txt")),
+                "a breach vanish must NOT fall through to a second encode against the still-live writer's directory");
+            Assert.Equal(
+                1,
+                VideoAudioController.EncodeGenerationCountForTest(cacheKey));
+        }
+        finally
+        {
+            VideoAudioController.SetEncodeActiveForTest(cacheKey, active: false);
+        }
+    }
+
+    /// <summary>
+    /// JF-678 rework F1, the audiobook breach twin (the audiobook registry;
+    /// the vanish rides the content branch's confirmed-path filter, so the
+    /// twin also proves the filter still propagates the vanish to the guard).
+    /// Same construction and red proof as the episode twin.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_InLockLiveGenerationVanishAtServe_FailsLoudNoReencode()
+    {
+        (Guid parentId, string hlsDir, string playlistPath) = SetupAudiobookVanishFixture("JF-678 Breach Book");
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Trace);
+            b.AddProvider(TestCaptureLogger.Into(logRecords));
+            b.AddProvider(new FileDeletingLoggerProvider("serving playlist generated by concurrent request", playlistPath));
+        });
+
+        var controller = CreateController(parentId.ToString(), loggerFactory, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf678-breach-book"));
+
+        try
+        {
+            var ex = await Assert.ThrowsAsync<FileNotFoundException>(
+                () => ServeInLockWarmCacheAsync(
+                    () => _cache.LockItemAsync(parentId.ToString(), 0),
+                    () => controller.StreamHlsAudiobook(parentId.ToString()),
+                    () =>
+                    {
+                        // The live marking happens INSIDE the park window, not
+                        // before the endpoint starts: the audiobook flow's
+                        // registry-presence guard runs BEFORE the lock and
+                        // would 503 the parked-outside construction.
+                        VideoAudioController.SetEncodeActiveForTest(parentId.ToString(), active: true, audiobook: true);
+                        Directory.CreateDirectory(hlsDir);
+                        File.WriteAllText(playlistPath, "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:10.000,\nseg_0000.ts\n#EXTINF:10.000,\nseg_0001.ts\n#EXT-X-ENDLIST\n");
+                    }));
+
+            Assert.Contains("live pinned encode", ex.Message, StringComparison.Ordinal);
+            Assert.Contains(
+                TestCaptureLogger.Snapshot(logRecords),
+                r => r.Message.Contains("failing the request loud instead of starting a second encode", StringComparison.Ordinal));
+            Assert.False(
+                File.Exists(Path.Combine(hlsDir, "episode-args.txt")),
+                "a breach vanish must NOT fall through to a second encode against the still-live writer's directory");
+            Assert.Equal(
+                1,
+                VideoAudioController.EncodeGenerationCountForTest(parentId.ToString(), audiobook: true));
+        }
+        finally
+        {
+            VideoAudioController.SetEncodeActiveForTest(parentId.ToString(), active: false, audiobook: true);
+        }
+    }
+
+    /// <summary>
+    /// JF-678 rework F3, the FLUSH-LAG boundary: the album FIRST-FETCH live
+    /// serve reads stream.m3u8 with NO prior existence evidence (the
+    /// first-segment wait polls seg_0000.ts, never the playlist), so a read
+    /// miss one flush cycle before ffmpeg's first playlist write must keep
+    /// the generic catch's PhysicalFile DEGRADE, not surface as an action-time
+    /// vanish 500. Construction: a MusicAlbum parent whose fake ffmpeg writes
+    /// the first segment but NEVER the playlist, so the post-wait serve reads
+    /// a missing file. GREEN: PhysicalFileResult (the degrade), no exception.
+    /// RED (the site forced confirmed / the filter unscoped): the FNF
+    /// propagates and the await throws.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_AlbumFirstFetch_PlaylistNotYetFlushed_DegradesNotVanish500()
+    {
+        Guid parentId = Guid.NewGuid();
+        var album = new MediaBrowser.Controller.Entities.Audio.MusicAlbum
+        {
+            Name = "JF-678 Flush-Lag Album",
+            Id = parentId
+        };
+        var track1 = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Track 1",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromMinutes(3).Ticks
+        };
+        var track2 = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Track 2",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromMinutes(3).Ticks
+        };
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns(album);
+        _libraryManagerMock.Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Returns(new List<MediaBrowser.Controller.Entities.BaseItem> { track1, track2 });
+
+        // Writes the first SEGMENT only: the first-segment wait passes, the
+        // playlist read one flush cycle later still misses.
+        string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-jf678-flushlag",
+            "for last_arg in \"$@\"; do :; done\n" +
+            "dir=$(dirname \"$last_arg\")\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0000.ts\" 2>/dev/null\n" +
+            "exit 0\n");
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Trace);
+            b.AddProvider(TestCaptureLogger.Into(logRecords));
+        });
+
+        var controller = CreateController(parentId.ToString(), loggerFactory, ffmpegPath: fakeFfmpegPath);
+
+        ActionResult result = await controller.StreamHlsAudiobook(parentId.ToString());
+
+        // The DEGRADE row itself must have produced this (the token branch's
+        // generic catch warning), not some other PhysicalFile return path:
+        // the boundary can rot while the pin stays green otherwise.
+        Assert.IsType<PhysicalFileResult>(result);
+        Assert.Contains(
+            TestCaptureLogger.Snapshot(logRecords),
+            r => r.Message.Contains("Failed to rewrite audiobook playlist with token", StringComparison.Ordinal));
     }
 
     // ---- W4: permission-denied deletes must not surface as 500s ----
