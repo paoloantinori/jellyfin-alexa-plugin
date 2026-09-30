@@ -153,6 +153,22 @@ internal static class StreamTokenCodec
     }
 
     /// <summary>
+    /// Whether a stream token's sleep timer has EXPIRED at the given instant: the ONE
+    /// predicate both playback-event gates read (JF-683 review F5). NearlyFinished
+    /// stops enqueueing at an expired deadline (playback ends after the current
+    /// stream, nothing follows); PlaybackFinished's keep-alive arm must decline on
+    /// exactly the same shape, or the session would outlive the sleep timer's
+    /// stop-and-dismiss intent. The two gates must stay in exact parity, hence one
+    /// definition instead of a copied comparison.
+    /// </summary>
+    /// <param name="token">The raw stream token (a token without a sleep suffix never expires).</param>
+    /// <param name="now">The evaluation instant (the call sites pass DateTimeOffset.UtcNow).</param>
+    /// <returns>True when the token carries a sleep deadline that has passed.</returns>
+    internal static bool IsSleepExpiredUtc(string? token, DateTimeOffset now)
+        => TryGetSleepDeadlineUtcTicks(token, out long deadlineTicks)
+            && now.UtcTicks >= deadlineTicks;
+
+    /// <summary>
     /// Whether a stream token NAMES the given item (the JF-655 round-3 sweep's ONE
     /// comparison helper): both sides parse through <see cref="TryGetItemId"/>, so a
     /// generation- or sleep-suffixed token compares equal to the bare store id it

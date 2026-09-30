@@ -7,6 +7,7 @@ using global::Alexa.NET;
 using global::Alexa.NET.Request;
 using global::Alexa.NET.Request.Type;
 using global::Alexa.NET.Response;
+using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
@@ -933,6 +934,102 @@ public class EventHandlerTests : PluginTestBase, IDisposable
         Assert.Contains("queueCount=5", exhaustedLine, StringComparison.Ordinal);
         Assert.Contains("finishedIndex=4", exhaustedLine, StringComparison.Ordinal);
         Assert.Contains("playerActivity=FINISHED", exhaustedLine, StringComparison.Ordinal);
+    }
+
+    // JF-683 rework (review F3/F4/F5): the sleep-expiry carve-out and the loop-mode
+    // arm are decision branches with their own pins. The carve-out mirrors
+    // NearlyFinished's expired-deadline gate through the ONE shared predicate
+    // (StreamTokenCodec.IsSleepExpiredUtc); these pins are its parity tests.
+    private static Context CreateFinishedContextWithSleepToken(string itemId, long deadlineUtcTicks, string deviceId)
+        => TestHelpers.CreateContextWithToken(
+            FormattableString.Invariant($"{itemId}|sleep:{deadlineUtcTicks}"), deviceId, "FINISHED");
+
+    [Fact]
+    public async Task PlaybackFinished_ExpiredSleepToken_AtBoundary_EndsSessionAndLogsCarveOut()
+    {
+        // The sleep timer's stop-and-dismiss intent: at an expired deadline
+        // NearlyFinished enqueued NOTHING, so despite a positional successor the
+        // session ends. The carve-out line names the reason (the exhausted line
+        // alone would report finishedIndex=-1 on a populated queue).
+        var records = new List<(LogLevel Level, string Message)>();
+        var handler = CreateFinishedHandler(LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Debug);
+            b.AddProvider(TestCaptureLogger.Into(records));
+        }));
+        _sessionManagerMock
+            .Setup(s => s.OnPlaybackStopped(It.IsAny<PlaybackStopInfo>()))
+            .Returns(Task.CompletedTask);
+
+        Guid track3 = Guid.NewGuid();
+        var session = CreateSession();
+        session.NowPlayingQueue = Enumerable.Range(0, 5)
+            .Select(i => new QueueItem { Id = i == 2 ? track3 : Guid.NewGuid() })
+            .ToList();
+
+        long pastDeadline = DateTimeOffset.UtcNow.AddMinutes(-1).UtcTicks;
+        var context = CreateFinishedContextWithSleepToken(track3.ToString(), pastDeadline, $"jf683-{Guid.NewGuid():N}");
+
+        var response = await handler.HandleAsync(
+            CreateAudioPlayerRequest("AudioPlayer.PlaybackFinished", $"{track3}|sleep:{pastDeadline}"),
+            context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.True(response.Response!.ShouldEndSession == true, "an expired sleep timer ends the session even with a queued successor: playback stops by design");
+        Assert.Contains(
+            TestCaptureLogger.Snapshot(records),
+            r => r.Message.Contains("sleep timer expired", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task PlaybackFinished_FutureSleepToken_AtBoundary_KeepsSessionAlive()
+    {
+        // Parity half: a sleep timer that has NOT expired yet must not suppress the
+        // successor arm (an inverted comparison would end the session mid-playback).
+        var handler = CreateFinishedHandler();
+        Guid track3 = Guid.NewGuid();
+        var session = CreateSession();
+        session.NowPlayingQueue = Enumerable.Range(0, 5)
+            .Select(i => new QueueItem { Id = i == 2 ? track3 : Guid.NewGuid() })
+            .ToList();
+        _sessionManagerMock
+            .Setup(s => s.OnPlaybackStopped(It.IsAny<PlaybackStopInfo>()))
+            .Returns(Task.CompletedTask);
+
+        long futureDeadline = DateTimeOffset.UtcNow.AddMinutes(10).UtcTicks;
+        var context = CreateFinishedContextWithSleepToken(track3.ToString(), futureDeadline, $"jf683-{Guid.NewGuid():N}");
+
+        var response = await handler.HandleAsync(
+            CreateAudioPlayerRequest("AudioPlayer.PlaybackFinished", $"{track3}|sleep:{futureDeadline}"),
+            context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.True(response.Response!.ShouldEndSession != true, "a future sleep deadline must not suppress the queued-successor keep-alive");
+    }
+
+    [Theory]
+    [InlineData(RepeatMode.RepeatOne)]
+    [InlineData(RepeatMode.RepeatAll)]
+    public async Task PlaybackFinished_LoopModeAtLastPosition_KeepsSessionAlive(RepeatMode loopMode)
+    {
+        // The loops arm (review F3): RepeatOne replays the same item and RepeatAll
+        // wraps to index 0, so at the LAST queue position a next stream IS enqueued
+        // while no positional successor exists. Loop mode counts as queued-next.
+        Guid lastTrack = Guid.NewGuid();
+        var session = CreateSession();
+        session.PlayState = new PlayerStateInfo { RepeatMode = loopMode };
+        session.NowPlayingQueue = Enumerable.Range(0, 5)
+            .Select(i => new QueueItem { Id = i == 4 ? lastTrack : Guid.NewGuid() })
+            .ToList();
+        _sessionManagerMock
+            .Setup(s => s.OnPlaybackStopped(It.IsAny<PlaybackStopInfo>()))
+            .Returns(Task.CompletedTask);
+
+        var context = TestHelpers.CreateContextWithToken(lastTrack.ToString(), $"jf683-{Guid.NewGuid():N}", "FINISHED");
+
+        var response = await CreateFinishedHandler().HandleAsync(
+            CreateAudioPlayerRequest("AudioPlayer.PlaybackFinished", lastTrack.ToString()),
+            context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.True(response.Response!.ShouldEndSession != true, "loop mode keeps playback going at the last position: the session must survive the inter-track gap");
     }
 
     [Fact]

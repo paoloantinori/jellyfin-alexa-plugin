@@ -91,15 +91,16 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
     public override async Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, CancellationToken cancellationToken)
     {
         // Check for sleep timer deadline encoded in the current token (parsed by the
-        // shared StreamTokenCodec, the one owner of the suffix format, JF-447)
+        // shared StreamTokenCodec, the one owner of the suffix format, JF-447; the
+        // expired predicate is the ONE definition both event gates read, JF-683
+        // review F5)
         string? currentToken = context.AudioPlayer?.Token;
         string deviceId = context.GetDeviceId();
         Logger.LogDebug(
             "PlaybackNearlyFinished: currentToken={Token}, offset={OffsetMs}ms",
             currentToken, context.AudioPlayer?.OffsetInMilliseconds);
 
-        if (StreamTokenCodec.TryGetSleepDeadlineUtcTicks(currentToken, out long deadlineTicks)
-            && DateTimeOffset.UtcNow.UtcTicks >= deadlineTicks)
+        if (StreamTokenCodec.IsSleepExpiredUtc(currentToken, DateTimeOffset.UtcNow))
         {
             Logger.LogInformation("Sleep timer expired, stopping playback");
             return BuildKeepAliveResponse();

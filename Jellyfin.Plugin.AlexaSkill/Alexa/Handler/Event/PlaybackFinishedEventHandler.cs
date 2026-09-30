@@ -135,8 +135,7 @@ public class PlaybackFinishedEventHandler : BaseHandler
         int finishedIndex = -1;
         if (!hasQueuedNext)
         {
-            bool sleepExpired = StreamTokenCodec.TryGetSleepDeadlineUtcTicks(req.Token, out long deadlineTicks)
-                && DateTimeOffset.UtcNow.UtcTicks >= deadlineTicks;
+            bool sleepExpired = StreamTokenCodec.IsSleepExpiredUtc(req.Token, DateTimeOffset.UtcNow);
             if (!sleepExpired)
             {
                 finishedIndex = SessionQueue.IndexOfQueueItem(session, itemId);
@@ -148,6 +147,14 @@ public class PlaybackFinishedEventHandler : BaseHandler
                         "PlaybackFinished: playerActivity={Activity} (inter-track gap) but playback continues (index={Index} of {QueueCount}, loops={Loops}); keeping the session alive",
                         context.AudioPlayer?.PlayerActivity, finishedIndex, session.NowPlayingQueue.Count, loops);
                 }
+            }
+            else
+            {
+                // JF-683 review F4: the carve-out must be diagnosable on its own - the
+                // exhausted line below would otherwise report finishedIndex=-1 against
+                // a populated queue with no reason anywhere.
+                Logger.LogDebug(
+                    "PlaybackFinished: sleep timer expired (the token's deadline has passed, NearlyFinished enqueued nothing); ending the session despite the queue view");
             }
         }
 

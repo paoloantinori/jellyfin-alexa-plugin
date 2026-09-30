@@ -121,6 +121,25 @@ adoption above), 2 test-strengthening findings applied (remaining value asserted
 keep-alive debug line pinned), 2 semantic corners declined with reasons and filed
 SAME-TURN as JF-688 (unreshuffled-shuffle last position; deleted-successor lingering
 screen - both pre-existing at base, both needing a policy hoist beyond this diff).
+
+REWORK ROUND (same day, orchestrator gate-marker F3/F4/F5; F6 process-only, nothing
+to do): F3 - the carve-out and loops arm now have their own pins:
+PlaybackFinished_ExpiredSleepToken_AtBoundary_EndsSessionAndLogsCarveOut (composite
+sleep token past deadline at a boundary -> session ENDS + the carve-out line logged),
+PlaybackFinished_FutureSleepToken_AtBoundary_KeepsSessionAlive (future deadline ->
+the successor arm still keeps alive), PlaybackFinished_LoopModeAtLastPosition_
+KeepsSessionAlive (RepeatOne AND RepeatAll Theory at the last position -> keeps
+alive via the loops arm). Red proofs by branch inversion: sleepExpired/loops forced
+false -> ExpiredSleep + both LoopMode cases FAIL (3), FutureSleep passes; the
+helper's deadline comparison dropped -> FutureSleep FAILS on both TFMs. (The first
+red attempt hit the documented --no-build trap: stale DLLs passed; rerun with a
+fresh build.) F4 - the carve-out logs its own Debug line ("sleep timer expired ...
+NearlyFinished enqueued nothing; ending the session despite the queue view"),
+killing the finishedIndex=-1 triage misread on a populated queue. F5 - the
+expired-deadline predicate is ONE definition now:
+StreamTokenCodec.IsSleepExpiredUtc(token, DateTimeOffset now), routed through BOTH
+NearlyFinished's enqueue gate and Finished's carve-out (the F3 pins are its parity
+tests); NearlyFinished keeps its "Sleep timer expired" INF line.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done
