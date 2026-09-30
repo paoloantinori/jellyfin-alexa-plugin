@@ -3,7 +3,7 @@ id: JF-678
 title: >-
   JF-678 - token-less serve skips the JF-499 W3 vanish probe: PhysicalFile
   over a vanished playlist 500s at result execution
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-30'
 labels:
