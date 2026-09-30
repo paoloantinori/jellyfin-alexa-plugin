@@ -1499,8 +1499,10 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// the episode pin. Same construction with the single-item registry
     /// (song: true), 3-digit song segments, and the seg_899/seg_999 markers
     /// (the prewrite marker deliberately outside any production-shaped listing,
-    /// the episode pin's debris-regression rationale; today's runtime-less
-    /// fixture writes no prewrite on a re-encode at all). TWIN INDEPENDENCE:
+    /// the episode pin's debris-regression rationale; BOUND: safe while the
+    /// fixture stays runtime-less or under 60min, since a re-encoded listing
+    /// of >= 60min at 4s segments would contain seg_899 - derive the marker
+    /// from the fixture runtime if it ever grows). TWIN INDEPENDENCE:
     /// the red proof toggles ONLY the song gate (disabled, or its call-site
     /// ticks miswired), which must fail THIS pin while the episode pin stays
     /// green.
