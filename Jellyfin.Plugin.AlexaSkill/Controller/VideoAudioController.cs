@@ -3959,12 +3959,10 @@ public class VideoAudioController : ControllerBase
     /// tokened branch (a raw file result would 500 at RESULT EXECUTION if the playlist
     /// vanished between the read here and the execution; playlists are kilobytes).
     /// Accepted costs, deliberate: the raw result's conditional-GET/Last-Modified
-    /// support is dropped (ExoPlayer rarely conditional-GETs a playlist, and the only
+    /// support is dropped (ExoPlayer rarely conditional-GETs a playlist). The only
     /// reachable no-token shape is the single-chapter audiobook redirect racing
     /// <c>StreamTokenSecret</c> being emptied between the route gate and the chapter
-    /// re-mint). The only reachable no-token shape is the single-chapter
-    /// audiobook redirect racing <c>StreamTokenSecret</c> being emptied between the route gate
-    /// and the chapter re-mint (every public HLS entry is token-gated and the gate 503s on an
+    /// re-mint (every public HLS entry is token-gated and the gate 503s on an
     /// empty secret), and its caller gets the same re-encode fall-through a tokened serve gets.
     /// Since JF-677 a serve that follows a
     /// validating verdict reuses its read (<paramref name="preloadedContent"/>), keeping the
