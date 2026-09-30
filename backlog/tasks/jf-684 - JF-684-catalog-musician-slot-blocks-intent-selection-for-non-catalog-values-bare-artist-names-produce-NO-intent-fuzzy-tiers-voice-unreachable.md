@@ -85,6 +85,14 @@ The code change reaches the deployed skill only on the NEXT catalog sync (weekly
 - APPLIED (doc): DynamicEntityBuilder (turn-2+ in-session entities) deliberately gets NO partial word (it serves open-session ER, not intent selection, and its entry budget would evict at the margin); the scope boundary is now stated in the class doc.
 - SKIPPED: NBSP/tab-split names yield no synonym (Split(' ') limitation). Pre-existing property of the whole synonym family (all four generators split on ASCII space the same way); a one-off fix here would diverge, a family fix is a drive-by.
 - Finding 5 (the two construction sites) = JF-689, already filed; no new entry needed.
+
+### Orchestrator gate-marker rework round (2026-09-30, 5 findings on 3591ec4c)
+
+- F1 APPLIED: the single leading skip could land on a mid-name function word absent from every curated stop list ("In This Moment" -> "this" became a synonym). The gate now rejects candidates in a NEW catalog-gate `FunctionWords` set (this/that/these/those/them/here/there/was/were/is/are/has/have/had/get/got/out/up/down/all/one/two/now/then/will/would/not/yes/what/when/where/who/how/why/than/also/too/just/only/some/more/most/very), deliberately separate from KeywordMatcher's curated query-side sets. Pins: "In This Moment" -> null, "All Time Low" -> null, "One Direction" -> null.
+- F2 APPLIED: outer punctuation is trimmed from the candidate before the checks ("Earth," -> "Earth"), inner non-letter characters still reject ("P!nk" stays rejected). Pin: "Earth, Wind & Fire" -> "Earth".
+- F3 SKIPPED WITH EVIDENCE (the ordered fix would make behavior WORSE): SlotValueHelper.Truncate cuts at the last SPACE before 140 chars (or hard-cuts at 140), so words[0]/words[1] are always intact in the truncated value; end-truncation cannot produce a first-word fragment. The ONLY case where Generate(truncated) differs from Generate(original) is a first word of 139+ chars, where the current truncated path yields null (words < 2) while threading the original name would mint a 140-char junk synonym (Truncate of a 150-char word). The truncated-source behavior is strictly safer; no change.
+- F4 APPLIED: payload-growth guard with the stated budget of MaxSlotValueLength(140) + 40 bytes JSON overhead per entry (50k-value catalog bounded at ~9 MB): a representative 15-name corpus test measures the serialized payload against itself with the appended word stripped per entry, plus an 8-entry shared-"John" high-fanout probe (per-entry cap <= phonetic cap + 1, every synonym <= 140).
+- F5 APPLIED: the single-skip contract is now explicit (trim -> skip check -> trim -> skip-to reject) instead of the redundant words[0] re-check; the post-trim stop-word re-check remains because trimming can turn a punctuated article into a stop word.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done

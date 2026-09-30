@@ -51,13 +51,35 @@ internal static class PartialNameSynonyms
     private const int MinWordLength = 4;
 
     /// <summary>
+    /// Common function words that the curated per-locale stop lists do not carry
+    /// but that must never own a catalog synonym (JF-684 review F1: "In This
+    /// Moment" skipped the leading "in" onto "this", which no stop set contains).
+    /// This is catalog-gate policy, NOT query-side tokenization: it lives here and
+    /// deliberately never feeds <see cref="KeywordMatcher"/>, whose sets are curated
+    /// for title search with their own documented exclusions.
+    /// </summary>
+    private static readonly HashSet<string> FunctionWords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "this", "that", "these", "those", "them", "here", "there",
+        "was", "were", "is", "are", "am", "be", "been", "being", "has", "have", "had",
+        "get", "got", "out", "up", "down", "all", "one", "two", "now", "then",
+        "will", "would", "can", "could", "should", "not", "yes",
+        "what", "when", "where", "who", "how", "why", "than", "also", "too",
+        "just", "only", "some", "more", "most", "very"
+    };
+
+    /// <summary>
     /// Computes the partial synonym for a name: the first substantive (non-stop-word)
-    /// word of a multi-word name, preserving its casing in the name. A leading article
-    /// or other function word is skipped ("The Beatles" -> "Beatles") using the union
-    /// of KeywordMatcher's stop-word sets across all 17 locales. Returns null when the
-    /// name is single-word, the candidate is shorter than <see cref="MinWordLength"/>,
-    /// the candidate itself is a stop word, or the candidate carries non-letter
-    /// characters (digits/punctuation, e.g. a leading "50 Cent" or "5.6.7.8's").
+    /// word of a multi-word name, preserving its casing in the name. Outer punctuation
+    /// is trimmed from the candidate first ("Earth," in "Earth, Wind &amp; Fire" ->
+    /// "Earth"); inner non-letter characters reject ("P!nk floyd" -> null). A leading
+    /// article or other function word is skipped exactly once ("The Beatles" ->
+    /// "Beatles") using the union of KeywordMatcher's stop-word sets across all 17
+    /// locales; a skipped-to word that is itself a stop word rejects ("Da La Soul"),
+    /// as does a word from the catalog-gate <see cref="FunctionWords"/> set ("In This
+    /// Moment" -> null). Returns null when the name is single-word, the candidate is
+    /// shorter than <see cref="MinWordLength"/>, or the candidate carries inner
+    /// non-letter characters (digits/punctuation, e.g. a leading "50 Cent").
     /// </summary>
     /// <param name="name">The full artist name.</param>
     /// <returns>The bare first word, or null when the gate rejects the name.</returns>
@@ -74,23 +96,56 @@ internal static class PartialNameSynonyms
             return null;
         }
 
-        // Skip a leading article/function word to the first substantive word. Only one
-        // skip: "The Beatles" -> "Beatles". A second stop word ("Da La Soul" -> "La")
-        // rejects the name instead of digging to a mid-name word.
-        string candidate = words[0];
+        // The single-skip contract, explicit: trim the first word, and ONLY when it
+        // is a stop word look at the second; a stop-word second word rejects instead
+        // of digging deeper into the name ("Da La Soul" -> null, not "Soul").
+        string candidate = TrimOuterPunctuation(words[0]);
         if (KeywordMatcher.IsStopWordInAnyLocale(candidate))
         {
-            candidate = words[1];
+            candidate = TrimOuterPunctuation(words[1]);
+            if (string.IsNullOrEmpty(candidate)
+                || KeywordMatcher.IsStopWordInAnyLocale(candidate))
+            {
+                return null;
+            }
         }
 
+        // The minimum-distinctiveness bar: long enough, not a curated stop word even
+        // after trimming (a punctuated article), not a common function word, and
+        // letters only in the middle (digits/inner punctuation reject).
         if (candidate.Length < MinWordLength
             || KeywordMatcher.IsStopWordInAnyLocale(candidate)
+            || FunctionWords.Contains(candidate)
             || !candidate.All(char.IsLetter))
         {
             return null;
         }
 
         return candidate;
+    }
+
+    /// <summary>
+    /// Strips leading and trailing non-letter characters from a word ("Earth," ->
+    /// "Earth", "50" -> ""), leaving inner characters intact so the all-letters
+    /// gate still rejects them ("P!nk" stays "P!nk" and rejects).
+    /// </summary>
+    /// <param name="word">The raw word from the space split.</param>
+    /// <returns>The trimmed word, or the empty string when no letters remain.</returns>
+    private static string TrimOuterPunctuation(string word)
+    {
+        int start = 0;
+        int end = word.Length - 1;
+        while (start <= end && !char.IsLetter(word[start]))
+        {
+            start++;
+        }
+
+        while (end >= start && !char.IsLetter(word[end]))
+        {
+            end--;
+        }
+
+        return start > end ? string.Empty : word[start..(end + 1)];
     }
 
     /// <summary>
