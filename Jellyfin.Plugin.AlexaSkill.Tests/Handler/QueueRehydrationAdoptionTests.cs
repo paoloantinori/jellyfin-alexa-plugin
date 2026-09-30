@@ -788,4 +788,43 @@ public class QueueRehydrationAdoptionTests : PluginTestBase, IDisposable
             manager.GetQueue(DeviceId)!.ItemIds);
         manager.Dispose();
     }
+
+    // === PlaybackFinishedEventHandler (JF-683 adoption) ===
+
+    [Fact]
+    public async Task PlaybackFinished_RestartWipedSession_CoherentDeviceQueue_KeepsSessionAlive()
+    {
+        // JF-683: the Finished handler's inter-track-gap keep-alive reads the session
+        // queue (successor scan). A restart wiped the session queue while the device
+        // still plays member [1] of the persisted 4-track queue; without the shared
+        // rehydration bridge the scan answers -1 and the handler reads FALSE
+        // exhaustion, ending the session mid-queue (the same class the bridge exists
+        // for in NearlyFinished, JF-574). The pin drives the full Finished flow.
+        var songs = SetupQueueSongs(4);
+        _queueManager.SetQueue(DeviceId, songs.Select(s => s.Id.ToString()).ToList(), currentIndex: 1);
+        _sessionManagerMock
+            .Setup(s => s.OnPlaybackStopped(It.IsAny<PlaybackStopInfo>()))
+            .Returns(Task.CompletedTask);
+
+        var handler = new PlaybackFinishedEventHandler(
+            _sessionManagerMock.Object, _config, _loggerFactory, _queueManager, _libraryManagerMock.Object);
+
+        var session = CreateWipedSession();
+        SkillResponse response = await handler.HandleAsync(
+            new AudioPlayerRequest
+            {
+                Type = "AudioPlayer.PlaybackFinished",
+                Token = songs[1].Id.ToString(),
+                OffsetInMilliseconds = 90_000
+            },
+            TestHelpers.CreateContextWithToken(songs[1].Id.ToString(), DeviceId, "FINISHED"),
+            TestHelpers.CreateTestUser(id: _userId),
+            session,
+            CancellationToken.None);
+
+        // The queue was rehydrated from the coherent device queue and the successor
+        // (member [2]) kept the session alive through the FINISHED activity gap.
+        Assert.Equal(songs.Select(s => s.Id), session.NowPlayingQueue.Select(q => q.Id));
+        Assert.True(response.Response!.ShouldEndSession != true, "a restart-wiped queue must not read as exhaustion when the coherent device queue still has a successor");
+    }
 }

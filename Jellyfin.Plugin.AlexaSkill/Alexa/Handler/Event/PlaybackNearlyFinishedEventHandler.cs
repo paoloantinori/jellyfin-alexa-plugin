@@ -304,6 +304,13 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         QueueContinuation? continuation = QueueContinuationStore.Get(session.UserId, deviceId);
         if (continuation == null)
         {
+            // JF-683: the three skip guards each log their decision and values. The
+            // live 2026-09-30 round was misdiagnosed from logs exactly because these
+            // returns were silent (a legitimate threshold skip was read as a guard
+            // bug); the per-guard lines make the next round readable without guessing.
+            Logger.LogDebug(
+                "ContinuationFetch: skip, no continuation stored for user={UserId} device={DeviceId} (queueCount={QueueCount})",
+                session.UserId, deviceId, session.NowPlayingQueue.Count);
             return;
         }
 
@@ -311,15 +318,27 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         int currentIndex = FindCurrentQueueIndex(session, context);
         if (currentIndex < 0)
         {
+            Logger.LogDebug(
+                "ContinuationFetch: skip, current item not found in the session queue (index=-1, nowPlayingItem={NowPlayingItem}, token={Token}, queueCount={QueueCount}, source={SourceType})",
+                session.FullNowPlayingItem?.Id, context.AudioPlayer?.Token, session.NowPlayingQueue.Count, continuation.SourceType);
             return;
         }
 
-        // Only fetch when approaching the end of the current queue
+        // Only fetch when approaching the end of the current queue. The threshold is
+        // read once so the logged value is provably the one the guard compared.
+        int threshold = ProgressiveQueueConstants.GetPrefetchThreshold();
         int remaining = session.NowPlayingQueue.Count - currentIndex - 1;
-        if (remaining > ProgressiveQueueConstants.GetPrefetchThreshold())
+        if (remaining > threshold)
         {
+            Logger.LogDebug(
+                "ContinuationFetch: skip, {Remaining} items remain over threshold={Threshold} (index={Index} of {QueueCount}, source={SourceType})",
+                remaining, threshold, currentIndex, session.NowPlayingQueue.Count, continuation.SourceType);
             return;
         }
+
+        Logger.LogDebug(
+            "ContinuationFetch: within prefetch window, fetching next batch (index={Index} of {QueueCount}, remaining={Remaining}, threshold={Threshold}, source={SourceType}, offset={StartIndex}/{Total})",
+            currentIndex, session.NowPlayingQueue.Count, remaining, threshold, continuation.SourceType, continuation.StartIndex, continuation.TotalCount);
 
         // JF-327 (the radio-path shape): the request funnel scopes a user CLONE;
         // GetUserById returns the unscoped config instance, so re-apply the device

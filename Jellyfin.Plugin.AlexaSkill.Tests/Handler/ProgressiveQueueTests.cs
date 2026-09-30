@@ -142,14 +142,14 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
         };
     }
 
-    private PlaybackNearlyFinishedEventHandler CreatePlaybackHandler()
+    private PlaybackNearlyFinishedEventHandler CreatePlaybackHandler(ILoggerFactory? loggerFactory = null)
     {
         return new PlaybackNearlyFinishedEventHandler(
             _fx.SessionManager.Object,
             _fx.Config,
             _fx.LibraryManager.Object,
             _fx.UserManager.Object,
-            _fx.LoggerFactory);
+            loggerFactory ?? _fx.LoggerFactory);
     }
 
     // =====================================================================
@@ -383,6 +383,148 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
         // Cleanup
         NextTrackPrecomputeCache.Invalidate(deviceId);
         QueueContinuationStore.Remove(session.UserId, deviceId);
+    }
+
+    // JF-683: the PlaySong-fallback artist-queue continuation pin, driven through the
+    // REAL fallback builder (CrossMediaFallback.BuildArtistSongsResponseAsync under the
+    // "PlaySong fallback" label, the exact live path from the 2026-09-30 18:30 round)
+    // and then a NearlyFinished at the prefetch boundary (track 3 of the 5-item page,
+    // remaining == threshold) with a valid precompute entry. The live round's logs
+    // PROVED this shape healthy (18:42:54: "Progressive queue: fetched 8 items for
+    // Artist (offset 5/end-unknown)", queue position 5/13 at the next start); the
+    // incident filing misread track 2's token as track 3 and blamed the guards. This
+    // pin locks the healthy shape so a future regression in the Set gate, the key
+    // (session.UserId + device), the threshold comparison, or the fetch-before-cache-hit
+    // ordering fails here instead of on a device.
+    [Fact]
+    public async Task PlaybackNearlyFinished_PlaySongFallbackQueue_AtPrefetchBoundary_FetchesAndGrowsQueue()
+    {
+        _fx.Config.PreEnqueueOnStart = true;
+        var handler = CreatePlaybackHandler();
+        var session = CreateSession();
+        _fx.SetupUserMock();
+
+        // 13-track artist (the live Norah Jones shape): page 1 = tracks 1-5 (the
+        // builder's Limit=InitialFetchSize query), page 2 = tracks 6-13 (the
+        // continuation fetch: 8 items, fewer than BatchSize 10 -> the artist is
+        // drained and the store entry removed).
+        var allTracks = Enumerable.Range(0, 13)
+            .Select(i => new Audio { Id = Guid.NewGuid(), Name = $"Norah {i + 1}" })
+            .ToList();
+        List<BaseItem> initialPage = allTracks.Take(5).Cast<BaseItem>().ToList();
+        List<BaseItem> nextBatch = allTracks.Skip(5).Cast<BaseItem>().ToList();
+
+        _fx.LibraryManager.SetupSequence(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(initialPage)
+            .Returns(nextBatch);
+
+        var crossMedia = new CrossMediaFallback(
+            _fx.Config,
+            _fx.LoggerFactory.CreateLogger<CrossMediaFallback>(),
+            TestHelpers.CreateLaunchBuilder(_fx.Config),
+            requestTimeoutMs: 6000);
+
+        await crossMedia.BuildArtistSongsResponseAsync(
+            Guid.NewGuid(),
+            "Norah Jones",
+            TestHelpers.CreateJellyfinUser(),
+            TestHelpers.CreateTestUser(),
+            session,
+            CreateContext(),
+            "it-IT",
+            _fx.LibraryManager.Object,
+            _fx.UserDataManager.Object,
+            queueManager: null,
+            "PlaySong fallback",
+            announcement: null,
+            CancellationToken.None);
+
+        // The builder left the live post-play state: a 5-item queue, the page's
+        // first item now-playing, and a continuation for the remaining 8.
+        Assert.Equal(5, session.NowPlayingQueue.Count);
+        Assert.NotNull(QueueContinuationStore.Get(session.UserId, DeviceId));
+
+        // Track 3 reaches its prefetch window (index 2 of 5, remaining 2 ==
+        // threshold). Started(track 3) precomputed track 4 (hand-stored, the
+        // PreEnqueueOnStartTests idiom); the session's now-playing item reflects the
+        // landed start report (the healthy live state the 18:42:54 fetch ran under).
+        Guid track3 = session.NowPlayingQueue[2].Id;
+        Guid track4 = session.NowPlayingQueue[3].Id;
+        session.FullNowPlayingItem = new Audio { Id = track3, Name = "Norah 3" };
+        NextTrackPrecomputeCache.Store(
+            DeviceId, track3.ToString(), track4, new Audio { Id = track4, Name = "Norah 4" }, "https://stream/track4");
+
+        var response = await handler.HandleAsync(
+            CreateNearlyFinishedRequest(track3.ToString()),
+            CreateContext(track3.ToString()),
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        // The cache-hit branch served the precomputed successor...
+        var directive = TestHelpers.GetPlayDirective(response);
+        Assert.NotNull(directive);
+        Assert.Equal(track4.ToString(), directive.AudioItem.Stream.Token);
+
+        // ...AND the continuation batch grew the queue past the initial page (5+8=13)
+        // with the whole artist drained (the 8-item short page marks exhaustion).
+        Assert.Equal(13, session.NowPlayingQueue.Count);
+        Assert.Null(QueueContinuationStore.Get(session.UserId, DeviceId));
+
+        NextTrackPrecomputeCache.Invalidate(DeviceId);
+    }
+
+    // JF-683 observability: each of TryFetchContinuationBatch's three skip guards must
+    // name itself and its values in a Debug line. The live 18:30 round was misdiagnosed
+    // precisely because a legitimate threshold skip (track 2, remaining 3 > 2) was
+    // indistinguishable in the logs from a guard bug. This pins the threshold-guard
+    // line; the null-continuation and index guards share the same "ContinuationFetch:
+    // skip" contract.
+    [Fact]
+    public async Task PlaybackNearlyFinished_ThresholdGuardSkip_LogsGuardNameAndValues()
+    {
+        var records = new List<(LogLevel Level, string Message)>();
+        var handler = CreatePlaybackHandler(LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Debug);
+            b.AddProvider(TestCaptureLogger.Into(records));
+        }));
+        var session = CreateSession();
+        _fx.SetupUserMock();
+
+        var track1Id = Guid.NewGuid();
+        session.FullNowPlayingItem = new Audio { Id = track1Id, Name = "Track 1" };
+        session.NowPlayingQueue = Enumerable.Range(0, 5)
+            .Select(i => new QueueItem { Id = i == 0 ? track1Id : Guid.NewGuid() })
+            .ToList();
+
+        QueueContinuationStore.Set(session.UserId, DeviceId, new QueueContinuation
+        {
+            SourceType = "Artist",
+            ArtistId = Guid.NewGuid(),
+            StartIndex = 5,
+            TotalCount = 13,
+            UserId = Guid.NewGuid(),
+            BatchSize = 5
+        });
+
+        _fx.LibraryManager.Setup(l => l.GetItemById(It.IsAny<Guid>()))
+            .Returns(new Audio { Id = Guid.NewGuid(), Name = "Track 2" });
+
+        await handler.HandleAsync(
+            CreateNearlyFinishedRequest(track1Id.ToString()),
+            CreateContext(track1Id.ToString()),
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        string? skipLine = TestCaptureLogger.Snapshot(records)
+            .FirstOrDefault(r => r.Message.Contains("ContinuationFetch: skip", StringComparison.Ordinal)).Message;
+        Assert.NotNull(skipLine);
+        Assert.Contains("skip, 4 items remain over threshold=2", skipLine, StringComparison.Ordinal);
+        Assert.Contains("index=0 of 5", skipLine, StringComparison.Ordinal);
+
+        QueueContinuationStore.Remove(session.UserId, DeviceId);
     }
 
     // JF-666 review finding 3: the fetch runs on the precompute cache-hit fast path,

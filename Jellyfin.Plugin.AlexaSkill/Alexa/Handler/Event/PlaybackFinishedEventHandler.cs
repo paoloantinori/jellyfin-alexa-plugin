@@ -7,6 +7,7 @@ using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
+using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Session;
@@ -99,15 +100,62 @@ public class PlaybackFinishedEventHandler : BaseHandler
             "PlaybackFinished: saved to server, item={Token}, positionTicks={Ticks}",
             req.Token, playbackStopInfo.PositionTicks);
 
+        // JF-574 bridge, same call NearlyFinished makes at entry (review round, JF-683):
+        // a restart-wiped session queue would read as exhaustion here too (the
+        // successor scan below answers -1 on an empty queue while the device still
+        // plays the queue NearlyFinished enqueued pre-restart). Coherence-checked by the
+        // shared helper (the finished token must be a member); no-op without a queue
+        // manager or on a populated queue.
+        ProgressReporter.TryRehydrateSessionQueueFromDevice(_queueManager, session, context, Logger, "PlaybackFinished");
+
         // If PlaybackNearlyFinished enqueued a next track, keep the session alive
         // for APL touch events and the upcoming track. PLAYING/BUFFER_UNDERRUN are
         // the two active-playback states, shared with PlayRadio's seed decision via
         // PlaybackLaunchBuilder.IsActivelyPlaying (JF-481).
         bool hasQueuedNext = PlaybackLaunchBuilder.IsActivelyPlaying(context);
 
+        // JF-683: the playerActivity read alone loses the inter-track race. Live
+        // 2026-09-30 (Norah Jones round): every PlaybackFinished arrived with
+        // playerActivity=FINISHED during the ~1s gap before the ALREADY-ENQUEUED
+        // next stream started, so the handler logged "queue exhausted" and ended the
+        // session at every track boundary (three times by track 4; the user's later
+        // pause then arrived sessionNew=true because of it). The session queue is
+        // the plugin's own view of what is still queued: when the finished item has
+        // a successor there, a next stream exists (the enqueue NearlyFinished
+        // performed, or precompute will serve it) and the session must survive the
+        // gap. Resolved from the event's own token (the finished stream, composite
+        // sleep tokens included; an unparseable token is never queued, so the scan
+        // answers -1 and the old activity-only behavior holds).
+        // Two deliberate refinements (review round): a loop mode (RepeatOne /
+        // RepeatAll) enqueues a NON-adjacent successor at the last queue position
+        // (the same item / a wrap to index 0), so loop mode counts as queued-next
+        // regardless of position; and an EXPIRED sleep timer is the one shape where
+        // NearlyFinished deliberately enqueued nothing (its own gate at entry), so
+        // the session ends and the screen dismisses exactly as before.
+        int finishedIndex = -1;
         if (!hasQueuedNext)
         {
-            Logger.LogInformation("PlaybackFinished: queue exhausted, ending session to dismiss APL screen");
+            bool sleepExpired = StreamTokenCodec.TryGetSleepDeadlineUtcTicks(req.Token, out long deadlineTicks)
+                && DateTimeOffset.UtcNow.UtcTicks >= deadlineTicks;
+            if (!sleepExpired)
+            {
+                finishedIndex = SessionQueue.IndexOfQueueItem(session, itemId);
+                bool loops = (session.PlayState?.RepeatMode ?? RepeatMode.RepeatNone) != RepeatMode.RepeatNone;
+                if ((finishedIndex >= 0 && finishedIndex + 1 < session.NowPlayingQueue.Count) || (loops && finishedIndex >= 0))
+                {
+                    hasQueuedNext = true;
+                    Logger.LogDebug(
+                        "PlaybackFinished: playerActivity={Activity} (inter-track gap) but playback continues (index={Index} of {QueueCount}, loops={Loops}); keeping the session alive",
+                        context.AudioPlayer?.PlayerActivity, finishedIndex, session.NowPlayingQueue.Count, loops);
+                }
+            }
+        }
+
+        if (!hasQueuedNext)
+        {
+            Logger.LogInformation(
+                "PlaybackFinished: queue exhausted, ending session to dismiss APL screen (queueCount={QueueCount}, finishedIndex={Index}, playerActivity={Activity})",
+                session.NowPlayingQueue.Count, finishedIndex, context.AudioPlayer?.PlayerActivity);
             return BuildEndSessionResponse();
         }
 
