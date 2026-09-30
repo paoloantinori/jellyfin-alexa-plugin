@@ -2968,10 +2968,25 @@ public class VideoAudioController : ControllerBase
             _logger.LogDebug("VideoAudio audiobook HLS: single chapter, serving single-item HLS inline for {ItemId} (token already validated against parentId)", chapters[0].Id);
             // Re-mint a chapter-scoped token: the playlist references segments by chapterId, not
             // parentId, so the Echo needs a token GetSegment will accept against chapterId.
+            // JF-682: the gate above validated against a secret this re-read can find empty
+            // (a config save between the two reads). Serving the gate's own 503 beats minting
+            // an empty chapter token: that token flips every serve in the core into the
+            // no-token branch, whose playlist carries token-less segment lines GetSegment
+            // 401s, and since JF-678 the branch kicks a full re-encode before handing out
+            // that dead playlist. The no-token branch itself stays as the last-resort
+            // safety net for any future no-token shape. RESIDUAL (accepted): a secret
+            // emptied AFTER this re-read yields a STALE-secret chapter token (the mint
+            // consumes the local snapshot), which fails at GetSegment per segment: the
+            // general mid-stream rotate/empty shape every token consumer shares, identical
+            // on the multi-chapter path; this check closes only the gate-to-re-read
+            // window because that is the one where the wasted re-encode kicked in.
             string? secret = Plugin.Instance?.Configuration?.StreamTokenSecret;
-            string chapterToken = string.IsNullOrEmpty(secret)
-                ? string.Empty
-                : StreamTokenHelper.Mint(chapters[0].Id.ToString(), secret);
+            if (string.IsNullOrEmpty(secret))
+            {
+                return StreamTokenSecretNotConfigured();
+            }
+
+            string chapterToken = StreamTokenHelper.Mint(chapters[0].Id.ToString(), secret);
             return await StreamHlsVideoAudioCore(chapters[0].Id.ToString(), chapterToken).ConfigureAwait(false);
         }
 
@@ -3959,11 +3974,14 @@ public class VideoAudioController : ControllerBase
     /// tokened branch (a raw file result would 500 at RESULT EXECUTION if the playlist
     /// vanished between the read here and the execution; playlists are kilobytes).
     /// Accepted costs, deliberate: the raw result's conditional-GET/Last-Modified
-    /// support is dropped (ExoPlayer rarely conditional-GETs a playlist). The only
-    /// reachable no-token shape is the single-chapter audiobook redirect racing
-    /// <c>StreamTokenSecret</c> being emptied between the route gate and the chapter
-    /// re-mint (every public HLS entry is token-gated and the gate 503s on an
-    /// empty secret), and its caller gets the same re-encode fall-through a tokened serve gets.
+    /// support is dropped (ExoPlayer rarely conditional-GETs a playlist). Since
+    /// JF-682 no production shape reaches this branch: the single-chapter
+    /// audiobook redirect, its only historical driver (the secret emptying
+    /// between the route gate and the chapter re-mint), now serves the route
+    /// gate's own 503 instead of minting an empty chapter token. The branch stays
+    /// as the last-resort safety net for any future no-token shape, and a request
+    /// that ever reaches it still gets the same materialized read and re-encode
+    /// fall-through a tokened serve gets.
     /// Since JF-677 a serve that follows a
     /// validating verdict reuses its read (<paramref name="preloadedContent"/>), keeping the
     /// vanish probe (<see cref="ResolveServeContentAsync"/>) instead of paying a second full
@@ -4168,16 +4186,17 @@ public class VideoAudioController : ControllerBase
     /// <summary>
     /// Validate the signed item-scoped stream token (JF-309). The token is carried in the
     /// <c>?token=</c> query parameter and binds the request's itemId to an HMAC signature so a
-    /// bare item GUID can no longer stream an item. Returns a 401 result on any failure, or null
-    /// when the token is valid. Call after the GUID-format check (the token binds to the GUID).
+    /// bare item GUID can no longer stream an item. Returns the 503 of
+    /// <see cref="StreamTokenSecretNotConfigured"/> on an empty secret, a 401 result on any
+    /// token failure, or null when the request may proceed. Call after the GUID-format check
+    /// (the token binds to the GUID).
     /// </summary>
     private ActionResult? ValidateStreamToken(string itemId)
     {
         string? secret = Plugin.Instance?.Configuration?.StreamTokenSecret;
         if (string.IsNullOrEmpty(secret))
         {
-            _logger.LogError("VideoAudio: stream token secret not configured");
-            return StatusCode(503, new { error = "Stream token secret not configured" });
+            return StreamTokenSecretNotConfigured();
         }
 
         string? token = HttpContext.Request.Query["token"];
@@ -4188,6 +4207,19 @@ public class VideoAudioController : ControllerBase
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The ONE answer to an empty <c>StreamTokenSecret</c> (JF-309 gate, JF-682): the route
+    /// gate rejects with it at entry, and the single-chapter audiobook redirect returns it
+    /// when the secret it re-reads at the chapter re-mint has been emptied since the gate
+    /// (a config save mid-request). One definition, so the redirect's answer stays identical
+    /// to the gate's; an empty-secret request must never reach a serve.
+    /// </summary>
+    private ObjectResult StreamTokenSecretNotConfigured()
+    {
+        _logger.LogError("VideoAudio: stream token secret not configured");
+        return StatusCode(503, new { error = "Stream token secret not configured" });
     }
 
     /// <summary>
