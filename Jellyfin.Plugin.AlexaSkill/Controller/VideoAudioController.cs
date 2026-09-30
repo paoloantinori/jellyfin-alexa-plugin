@@ -455,21 +455,15 @@ public class VideoAudioController : ControllerBase
         FileInfo? cached = await _cache.GetCachedHlsPlaylist(itemId, artModifiedTicks).ConfigureAwait(false);
         if (cached != null)
         {
-            // JF-536: while the encode is RUNNING, serve the PRE-WRITTEN full
-            // listing, not ffmpeg's growing stream.m3u8 (mechanism at the prewrite
-            // site in the encode branch below); the listing survives on disk after
-            // completion, so the gate decides prewrite vs ffmpeg's ENDLIST
-            // playlist below. OWN-TICKS gate (JF-675): only the caller's OWN
-            // art-tick generation being live serves the listing; the canonical
-            // rationale and the conservative-reader split live on
-            // OwnTicksGenerationLive.
-            if (OwnTicksGenerationLive(_activeVideoAudioEncodes, itemId, artModifiedTicks))
+            // JF-536/JF-675 own-live prewrite gate, ONE copy on
+            // TryServeOwnLiveVideoAudioPrewriteAsync (JF-679): while the
+            // caller's OWN art-tick generation runs, the pre-written full
+            // listing serves; the own-dead fall-through validates the cached
+            // playlist below.
+            ActionResult? prewritten = await TryServeOwnLiveVideoAudioPrewriteAsync(itemId, artModifiedTicks, overrideToken).ConfigureAwait(false);
+            if (prewritten != null)
             {
-                ActionResult? prewritten = await TryServePrewrittenVideoAudioPlaylist(itemId, artModifiedTicks, overrideToken).ConfigureAwait(false);
-                if (prewritten != null)
-                {
-                    return prewritten;
-                }
+                return prewritten;
             }
 
             // JF-676: the own-dead fall-through VALIDATES the cached playlist
@@ -512,16 +506,12 @@ public class VideoAudioController : ControllerBase
             if (cached != null)
             {
                 // JF-536: the encode a concurrent request started is still running;
-                // serve its pre-written full listing, not ffmpeg's live one. Same
-                // own-ticks gate as the fast path (JF-675, see
-                // OwnTicksGenerationLive).
-                if (OwnTicksGenerationLive(_activeVideoAudioEncodes, itemId, artModifiedTicks))
+                // its pre-written full listing serves (the own-live row), the same
+                // gate helper as the fast path (JF-675, JF-679).
+                ActionResult? prewritten = await TryServeOwnLiveVideoAudioPrewriteAsync(itemId, artModifiedTicks, overrideToken).ConfigureAwait(false);
+                if (prewritten != null)
                 {
-                    ActionResult? prewritten = await TryServePrewrittenVideoAudioPlaylist(itemId, artModifiedTicks, overrideToken).ConfigureAwait(false);
-                    if (prewritten != null)
-                    {
-                        return prewritten;
-                    }
+                    return prewritten;
                 }
 
                 // JF-676: the own-dead fall-through validates (same ticks-scoped
@@ -829,34 +819,12 @@ public class VideoAudioController : ControllerBase
                 itemId,
                 "VideoAudio episode HLS",
                 () => ValidateEpisodeCacheAsync(cached, itemId, artModifiedTicks),
-                async valid =>
-                {
-                    // JF-531: while the encode is RUNNING, serve the PRE-WRITTEN full
-                    // listing, not ffmpeg's growing stream.m3u8 (mechanism on the
-                    // prewrite site below); the pre-written file survives on disk
-                    // after completion, so the gate decides prewrite vs ffmpeg's
-                    // ENDLIST playlist below. OWN-TICKS gate (JF-675): only the
-                    // caller's OWN art-tick generation being live serves the listing;
-                    // the canonical rationale and the conservative-reader split
-                    // live on OwnTicksGenerationLive. On that own-live row the
-                    // verdict read nothing (valid.Content is null) and the serve
-                    // reads the live playlist fresh; on the own-dead ENDLIST row
-                    // the verdict's read is threaded here (JF-677, one full read
-                    // per validated serve).
-                    if (OwnTicksGenerationLive(_activeEpisodeEncodes, itemId, artModifiedTicks))
-                    {
-                        ActionResult? prewritten = await TryServePrewrittenEpisodePlaylist(itemId, artModifiedTicks, startTicks).ConfigureAwait(false);
-                        if (prewritten != null)
-                        {
-                            return prewritten;
-                        }
-                    }
-
-                    _logger.LogDebug("VideoAudio episode HLS: serving cached playlist for item {ItemId}", itemId);
-#pragma warning disable CA3003 // path derived from GUID-validated itemId
-                    return await ServeEpisodePlaylistAsync(valid.Playlist.FullName, startTicks, valid.Content).ConfigureAwait(false);
-#pragma warning restore CA3003
-                }).ConfigureAwait(false);
+                valid => ServeEpisodeWarmCacheAsync(
+                    valid,
+                    itemId,
+                    artModifiedTicks,
+                    startTicks,
+                    () => _logger.LogDebug("VideoAudio episode HLS: serving cached playlist for item {ItemId}", itemId))).ConfigureAwait(false);
             if (fastServed != null)
             {
                 return fastServed;
@@ -876,23 +844,16 @@ public class VideoAudioController : ControllerBase
                 if (validEpisodeCache != null)
                 {
                     // JF-531: the encode a concurrent request started is still running;
-                    // serve its pre-written full listing, not ffmpeg's live one. Same
-                    // own-ticks gate as the fast path (JF-675, see
-                    // OwnTicksGenerationLive).
-                    if (OwnTicksGenerationLive(_activeEpisodeEncodes, itemId, artModifiedTicks))
-                    {
-                        ActionResult? prewritten = await TryServePrewrittenEpisodePlaylist(itemId, artModifiedTicks, startTicks).ConfigureAwait(false);
-                        if (prewritten != null)
-                        {
-                            return prewritten;
-                        }
-                    }
-
-                    _logger.LogDebug("VideoAudio episode HLS: serving playlist generated by concurrent request for item {ItemId}", itemId);
-#pragma warning disable CA3003
-                    return await ServeEpisodePlaylistAsync(
-                        validEpisodeCache.Playlist.FullName, startTicks, validEpisodeCache.Content).ConfigureAwait(false);
-#pragma warning restore CA3003
+                    // its pre-written full listing serves (the own-live row). The whole
+                    // serve row (JF-531/JF-675/JF-677 rationale and the JF-499 W3 log
+                    // ordering contract) lives once on ServeEpisodeWarmCacheAsync
+                    // (JF-679), shared with the fast-path closure above.
+                    return await ServeEpisodeWarmCacheAsync(
+                        validEpisodeCache,
+                        itemId,
+                        artModifiedTicks,
+                        startTicks,
+                        () => _logger.LogDebug("VideoAudio episode HLS: serving playlist generated by concurrent request for item {ItemId}", itemId)).ConfigureAwait(false);
                 }
             }
 
@@ -1309,9 +1270,9 @@ public class VideoAudioController : ControllerBase
     /// FileInfo, key, and the caller's art ticks).</param>
     /// <param name="serve">Serves the validated cache (the verdict's FileInfo
     /// plus its read content when there was one): the remux keeps its
-    /// pre-written branch + <see cref="ServeEpisodePlaylistAsync"/>, the
-    /// variants and the song path serve via
-    /// <see cref="ServePlaylistWithTokenAsync"/>.</param>
+    /// pre-written branch + threaded serve on
+    /// <see cref="ServeEpisodeWarmCacheAsync"/>, the variants and the song
+    /// path serve via <see cref="ServePlaylistWithTokenAsync"/>.</param>
     /// <returns>The served response, or null when the cache is invalid or vanished.</returns>
     private async Task<ActionResult?> TryServeValidatedHlsCacheAsync(
         string cacheKey,
@@ -1374,6 +1335,66 @@ public class VideoAudioController : ControllerBase
     }
 
     /// <summary>
+    /// The ONE episode warm-cache serve row (JF-679), extracted from the two
+    /// copies the JF-675 and JF-677 rounds each had to edit twice: serve the
+    /// PRE-WRITTEN full listing when the caller's OWN art-tick generation is
+    /// live (JF-531/JF-675, <see cref="OwnTicksGenerationLive"/>), else serve
+    /// the validated playlist with the verdict's threaded read (JF-677).
+    /// Called from both warm-cache sites of <see cref="StreamHlsEpisodeCore"/>
+    /// (the fast path's serve closure inside
+    /// <see cref="TryServeValidatedHlsCacheAsync"/> and the in-lock
+    /// concurrent-serve double check); the first-serve site stays separate
+    /// because it is ungated by construction (the caller just wrote the
+    /// prewrite under the lock) and serves ffmpeg's partial, not a validated
+    /// cache. On the own-live row the verdict read nothing
+    /// (<see cref="ValidatedHlsCache.Content"/> is null) and the prewrite
+    /// serve reads the live listing fresh; on the own-dead ENDLIST row the
+    /// verdict's read is threaded through to
+    /// <see cref="ServeEpisodePlaylistAsync"/> (one full read per validated
+    /// serve). A third row exists on the fast path: MID-REGISTRATION, where
+    /// the verdict answers valid on the conservative
+    /// OwnTicksGenerationLiveOrRegistering read (Content null) while this
+    /// helper's strict gate is false, so no prewrite serves and the
+    /// fall-through reads the live playlist fresh; do not reconcile the
+    /// two-row story by hoisting the gate behind the verdict, that would
+    /// change the mid-registration window's serve. ORDER CONTRACT,
+    /// load-bearing for the vanish pins (JF-499 W3):
+    /// the per-site log fires BETWEEN the prewrite branch and the serve, so a
+    /// file deleted at that log leaves exactly the vanish-at-serve state the
+    /// <see cref="ResolveServeContentAsync"/> probe must catch; the per-site
+    /// wording rides <paramref name="logServe"/> (the VariantHlsSpec delegate
+    /// pattern, preserving each site's exact message) because the JF-677
+    /// in-lock pins discriminate the serving branch by these exact log lines.
+    /// </summary>
+    /// <param name="valid">The verdict's output: the validated playlist file plus its read when it read one.</param>
+    /// <param name="itemId">GUID-validated episode item ID.</param>
+    /// <param name="artModifiedTicks">Art ticks of the item's HLS cache directory.</param>
+    /// <param name="startTicks">Resume position in .NET ticks (0 serves unsliced).</param>
+    /// <param name="logServe">The caller's serve log line (exact per-site wording; fired only on the fall-through serve row, never on the prewrite row).</param>
+    /// <returns>The playlist response: the pre-written listing on the own-live row, else the validated playlist (resume-sliced when <paramref name="startTicks"/> is positive).</returns>
+    private async Task<ActionResult> ServeEpisodeWarmCacheAsync(
+        ValidatedHlsCache valid,
+        string itemId,
+        long artModifiedTicks,
+        long startTicks,
+        Action logServe)
+    {
+        if (OwnTicksGenerationLive(_activeEpisodeEncodes, itemId, artModifiedTicks))
+        {
+            ActionResult? prewritten = await TryServePrewrittenEpisodePlaylist(itemId, artModifiedTicks, startTicks).ConfigureAwait(false);
+            if (prewritten != null)
+            {
+                return prewritten;
+            }
+        }
+
+        logServe();
+#pragma warning disable CA3003 // path derived from GUID-validated itemId
+        return await ServeEpisodePlaylistAsync(valid.Playlist.FullName, startTicks, valid.Content).ConfigureAwait(false);
+#pragma warning restore CA3003
+    }
+
+    /// <summary>
     /// The no-runtime half of every prewrite site (JF-536): an item without a runtime
     /// cannot have an honest full listing, so fall back to serving ffmpeg's live
     /// playlist (the pre-prewrite behavior) and remove any stale listing so the
@@ -1422,6 +1443,46 @@ public class VideoAudioController : ControllerBase
             "VideoAudio HLS: serving pre-written full listing for item {ItemId} (encode in progress, JF-536)",
             itemId);
         return await ServePlaylistWithTokenAsync(prewrittenPath, overrideToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The song path's own-live prewrite serve gate (JF-679), the twin of the
+    /// episode row on <see cref="ServeEpisodeWarmCacheAsync"/> and the ONE
+    /// copy of the gate+prewrite pair that previously sat byte-identical on
+    /// both <see cref="StreamHlsVideoAudioCore"/> warm-cache sites (the fast
+    /// path and the in-lock double check; the JF-675 round had to edit both).
+    /// When the caller's OWN art-tick generation is live
+    /// (<see cref="OwnTicksGenerationLive"/>, JF-675), serve the PRE-WRITTEN
+    /// full listing (<see cref="TryServePrewrittenVideoAudioPlaylist"/>,
+    /// JF-536). Null on the own-dead row (the prewrite option is already
+    /// closed by this gate returning null; the verdict below decides
+    /// debris-vs-ENDLIST) and when the listing file is absent (the race
+    /// before the prewrite lands; the caller falls through to the live
+    /// playlist). Deliberately NOT the episode helper: this path's gate sits
+    /// BEFORE its verdict at both sites, while the episode fast path's gate
+    /// runs inside the <see cref="TryServeValidatedHlsCacheAsync"/> serve
+    /// closure. That placement is load-bearing: this gate asks the STRICT
+    /// predicate (the canonical strict-live vs mid-registration account lives
+    /// on <see cref="OwnTicksGenerationLive"/> and
+    /// <see cref="OwnTicksGenerationLiveOrRegistering"/>), and hoisting it
+    /// behind the verdict would let the mid-registration window serve the
+    /// prewrite where today it serves the live playlist. The twins share the
+    /// predicate, not the row.
+    /// </summary>
+    /// <param name="itemId">GUID-validated item ID.</param>
+    /// <param name="artModifiedTicks">Art ticks of the item's HLS cache directory.</param>
+    /// <param name="overrideToken">Chapter-scoped token when serving a single-chapter
+    /// audiobook redirected from <see cref="StreamHlsAudiobook"/>; null uses the
+    /// request's own token.</param>
+    /// <returns>The pre-written listing response on the own-live row, else null.</returns>
+    private async Task<ActionResult?> TryServeOwnLiveVideoAudioPrewriteAsync(string itemId, long artModifiedTicks, string? overrideToken)
+    {
+        if (!OwnTicksGenerationLive(_activeVideoAudioEncodes, itemId, artModifiedTicks))
+        {
+            return null;
+        }
+
+        return await TryServePrewrittenVideoAudioPlaylist(itemId, artModifiedTicks, overrideToken).ConfigureAwait(false);
     }
 
     /// <summary>
