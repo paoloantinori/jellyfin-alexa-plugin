@@ -3,7 +3,7 @@ id: JF-682
 title: >-
   JF-682 - single-chapter audiobook redirect mints an empty chapter token when
   the secret empties mid-request; serve the gate's own 503 instead
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-30'
 labels:
