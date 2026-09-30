@@ -1,7 +1,7 @@
 ---
-id: JF-684
+id: JF-688
 title: >-
-  JF-684 - residuals of the JF-683 Finished keep-alive: unreshuffled shuffle at the
+  JF-688 - residuals of the JF-683 Finished keep-alive: unreshuffled shuffle at the
   last queue position still ends the session mid-playback, and a
   deleted-from-library successor can keep the session alive over dead audio
 status: To Do

@@ -119,7 +119,7 @@ position so loop mode counts as queued-next; the expired-sleep-timer carve-out: 
 one shape where NearlyFinished deliberately enqueued nothing; the rehydration
 adoption above), 2 test-strengthening findings applied (remaining value asserted;
 keep-alive debug line pinned), 2 semantic corners declined with reasons and filed
-SAME-TURN as JF-684 (unreshuffled-shuffle last position; deleted-successor lingering
+SAME-TURN as JF-688 (unreshuffled-shuffle last position; deleted-successor lingering
 screen - both pre-existing at base, both needing a policy hoist beyond this diff).
 <!-- SECTION:DESCRIPTION:END -->
 
@@ -144,5 +144,5 @@ landed (the fallback-path continuation pin through the real builder, the guard-d
 line, the inter-track-gap keep-alive RED->GREEN, the true-exhaustion view log, the
 JF-579 rehydration adoption pin); a live device round is the standing verification
 for on-device behavior (the observability lines make the next round readable).
-Suites 4789/4789 both TFMs (baseline 4784 + 5). Residual corners filed as JF-684.
+Suites 4789/4789 both TFMs (baseline 4784 + 5). Residual corners filed as JF-688.
 <!-- SECTION:FINALSUMMARY:END -->
