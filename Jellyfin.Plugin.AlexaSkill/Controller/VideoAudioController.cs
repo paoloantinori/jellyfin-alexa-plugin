@@ -3628,8 +3628,15 @@ public class VideoAudioController : ControllerBase
     /// W3 vanish-at-serve contract, which must survive losing the second full
     /// read. A vanished playlist means a vanished generation directory,
     /// segments included, so serving the remembered bytes would hand the
-    /// player a playlist of dead segment links; the caller falls through to
-    /// the re-encode exactly as it did when the second read itself threw. The
+    /// player a playlist of dead segment links. COVERAGE BOUNDARY of that
+    /// throw (identical to the fresh-read era, no JF-677 change): only the
+    /// three FAST paths (the <see cref="TryServeValidatedHlsCacheAsync"/>
+    /// callers: song, episode, variants) translate it into the re-encode
+    /// fall-through; the song/episode/variant IN-LOCK serve sites let it
+    /// propagate unhandled (a bare 500), and the two audiobook serve sites'
+    /// own catches swallow it into their PhysicalFile fallback over the
+    /// vanished path (a 500 at result execution). Those non-fast shapes are
+    /// pre-existing and are the JF-678 hardening family, out of this diff. The
     /// probe is an O(1) stat, so the validated warm-cache serve pays ONE full
     /// read (the verdict's) plus one existence check. BOUNDED RESIDUAL (the
     /// probe tests existence, not generation): if eviction deletes the
@@ -3637,10 +3644,22 @@ public class VideoAudioController : ControllerBase
     /// stream.m3u8 as a fresh partial inside the sub-millisecond
     /// verdict-to-serve window, the probe passes and the serve hands out the
     /// old generation's remembered ENDLIST bytes over the partially recreated
-    /// directory (tail segment 404s). The fresh-read era had its own degraded
-    /// shape in the same race (it would serve the NEW partial's no-ENDLIST
-    /// bytes), so this trades one wrong-bytes corner for another inside an
-    /// already-degraded race, not a new failure class.
+    /// directory. THE ASYMMETRY WITH THE FRESH-READ ERA, stated honestly: both
+    /// eras serve wrong bytes in this race and both recover only on a NEW
+    /// request, but the per-fetch degradation differs. The threaded corner
+    /// serves ENDLIST bytes whose tail segments 404, and ExoPlayer treats a
+    /// playlist it believes COMPLETE as terminal (it does not re-poll for
+    /// growth), so that one fetch aborts dead; the fresh-read era served the
+    /// recreated no-ENDLIST partial, a live-edge join that keeps following the
+    /// re-encode on every reload. Same trigger, same bounded sub-millisecond
+    /// window, worse per-fetch shape: the price of removing the second full
+    /// read. The probe also conflates
+    /// INACCESSIBLE with vanished: File.Exists swallows an access error and
+    /// reports false, so an ACL revocation between verdict and probe translates
+    /// into the same vanish fall-through (a misleading vanish log plus a
+    /// re-encode attempt on an unreadable directory), where the fresh read's
+    /// UnauthorizedAccessException failed loudly; the window is the
+    /// verdict-to-serve gap only (gate-review note, JF-677 round).
     /// </summary>
     /// <param name="playlistPath">Path of the playlist file being served.</param>
     /// <param name="preloadedContent">The verdict's read of the same file, when it made one; null reads fresh.</param>
