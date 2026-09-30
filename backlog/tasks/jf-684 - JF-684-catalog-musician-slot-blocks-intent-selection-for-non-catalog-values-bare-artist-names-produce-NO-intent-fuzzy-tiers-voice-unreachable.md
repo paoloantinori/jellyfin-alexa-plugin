@@ -3,7 +3,7 @@ id: JF-684
 title: >-
   JF-684 - catalog musician slot blocks intent selection for non-catalog values:
   bare artist names produce NO intent (fuzzy tiers voice-unreachable)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-30 16:53'
 labels:
