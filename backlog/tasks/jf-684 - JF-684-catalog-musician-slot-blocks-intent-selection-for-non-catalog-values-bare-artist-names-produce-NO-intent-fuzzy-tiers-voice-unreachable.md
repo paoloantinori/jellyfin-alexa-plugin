@@ -6,6 +6,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-09-30 16:53'
+updated_date: '2026-09-30 19:54'
 labels:
   - catalog
   - interaction-model
@@ -109,4 +110,8 @@ The code change reaches the deployed skill only on the NEXT catalog sync (weekly
 - [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
-Status: Done (2026-09-30, worker session).
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Landed 2026-09-30 as merge cd0178e8 on main (deployed with the full checklist; the synonyms go LIVE on the next catalog sync - triggered manually post-deploy and re-verified via profile-nlu): partial-first-word catalog synonyms for multi-word artist names close the "pink" selection hole Paolo found live. THE MECHANISM, LIVE-PROVEN by an A/B spike on the production skill BEFORE implementing (adding "pink" as a Pink Floyd synonym made "suona la musica di pink" select PlaySongIntent with ER_SUCCESS_MATCH; the negative control "norah" - first word NOT added - selected nothing; fully reverted to pristine v1188): catalog types gate NLU intent SELECTION on value match, so a spoken name matching no catalog value produces NO intent (the morning device round: "pink" x3, zero requests). Also REFUTED the dropped-article assumption: "beatles" is ABSENT from the live catalog (only "i Beatles"), explaining the JF-510 e2e skips since 2026-09-06. THE GATE: PartialNameSynonyms (first word of multi-word names, length >= 4, one leading stop-word skip, the curated 17-locale stop-word union PLUS a function-word set closing the In This Moment hole the gate-marker found, outer punctuation trim recovering "Earth, Wind & Fire", non-letter rejection), wired at both CatalogValue construction sites for CatalogType.Artist ONLY (album first words deliberately untouched, JF-508), 37 filter tests incl. the In This Moment / All Time Low / One Direction rejects, the Earth pin, and the F4 payload-budget guard (180B/entry, ~9MB worst case at 50k values). REFUTED with evidence: the truncation concern (SlotValueHelper.Truncate cuts at the last SPACE - first words are always intact; the truncated path is strictly safer in the only divergent case). REFUTED the task's multi-artist assumption: ER returns Values[0] and the JF-420.1 exact-name bypass auto-plays - the no-prompt gap filed as JF-690; JF-689 owns the two-site factory consolidation. Gates: Skill simplify (4 agents) + Skill code-review high in-worker (5 findings: 3 doc applied) + the orchestrator final-state gate-marker (5 findings: all landed in the rework - the function-word set, the punctuation trim, the F3 truncation refutation, the F4 budget, the F5 single-skip contract). Suites: 4821/4821 both TFMs on the reworked branch (worker-run and orchestrator-verified independently), combined merged-tree 4830/4830 both TFMs.
+<!-- SECTION:FINAL_SUMMARY:END -->
