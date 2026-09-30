@@ -1454,8 +1454,9 @@ public class VideoAudioController : ControllerBase
     /// When the caller's OWN art-tick generation is live
     /// (<see cref="OwnTicksGenerationLive"/>, JF-675), serve the PRE-WRITTEN
     /// full listing (<see cref="TryServePrewrittenVideoAudioPlaylist"/>,
-    /// JF-536). Null on the own-dead row (the verdict below decides
-    /// prewrite-vs-ENDLIST) and when the listing file is absent (the race
+    /// JF-536). Null on the own-dead row (the prewrite option is already
+    /// closed by this gate returning null; the verdict below decides
+    /// debris-vs-ENDLIST) and when the listing file is absent (the race
     /// before the prewrite lands; the caller falls through to the live
     /// playlist). Deliberately NOT the episode helper: this path's gate sits
     /// BEFORE its verdict at both sites, while the episode fast path's gate
