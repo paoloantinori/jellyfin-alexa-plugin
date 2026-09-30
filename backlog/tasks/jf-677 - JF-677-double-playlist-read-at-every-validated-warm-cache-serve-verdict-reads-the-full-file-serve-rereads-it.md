@@ -3,9 +3,10 @@ id: JF-677
 title: >-
   JF-677 - double playlist read at every validated warm-cache serve: the
   verdict reads the full file, the serve re-reads it
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-30'
+updated_date: '2026-09-30'
 labels:
   - encode-gate
   - performance
@@ -31,16 +32,38 @@ FIX DIRECTIONS (either, or both):
 VERIFICATION: a pin is optional (behavior-identical); the proof burden is the read-count: assert (test seam or measured) that a warm-cache serve performs exactly one read of stream.m3u8. Full suite green both TFMs unchanged.
 <!-- SECTION:DESCRIPTION:END -->
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+INVESTIGATION (worktree agent-a5ee4c0942d58039e, 2026-09-30, before code): the two reads do NOT serve identical lifetimes, and the dispatch prompt's "the two reads genuinely serve different lifetimes" branch fires for ONE of the two verdict rows. On the own-LIVE row the verdict reads nothing (liveness only) and the serve's read is load-bearing by construction (ffmpeg's playlist is GROWING; it must be read fresh, and the episode path may instead serve the prewrite listing, a different file). On the own-dead ENDLIST row the playlist is COMPLETE and immutable-in-practice (nobody rewrites stream.m3u8 after ffmpeg's final tmp-rename; the only possible mutation is DELETION by the ticks-scoped cleanup or the eviction sweep), so the serve's re-read returns either identical bytes (pure waste) or an exception: its ONLY behavioral contribution is vanish DETECTION. That detection is load-bearing and PINNED: the JF-499 W3 twins (StreamHlsEpisode/StreamHlsEpisodeAudio_FastPathCacheVanishedAtServe_FallsThroughToReencode) delete the playlist at the serve-closure log and require the fall-through-to-re-encode, because a vanished playlist means a vanished generation DIRECTORY, segments included, and serving remembered bytes would hand ExoPlayer a playlist of dead segment links. So fix direction 1 was taken WITH the vanish contract preserved as an O(1) probe instead of a second full read (direction 2's tail read cannot serve the audiobook undercount hook, which counts EXTINF across the whole file, and adds a new I/O shape).
+
+SHAPE: the verdict core ValidateHlsCacheAsync returns the new internal record ValidatedHlsCache(FileInfo Playlist, string? Content) (Content non-null exactly on the read row; the own-live row returns Content:null and every serve reads fresh, unchanged); the three pairings and all eight call sites (song/episode/variant/audiobook, fast + in-lock) thread it through; TryServeValidatedHlsCacheAsync's serve delegate became Func<ValidatedHlsCache, Task<ActionResult>> (and its long-dead FileInfo parameter is finally deleted, a simplify-round finding); the four serve helpers (ServePlaylistWithTokenAsync/ServeEpisodePlaylistAsync/ServeAudiobookPlaylistAsync/ServeResumePlaylistAsync, all converted sync->async so every read routes ONE funnel ReadPlaylistContentAsync, which also removed the last blocking File.ReadAllText calls on these endpoints) take an optional preloadedContent; ResolveServeContentAsync owns the contract: preloaded path probes File.Exists and throws the same FileNotFoundException the fresh read would throw (the wrapper's existing catch translates it to the re-encode fall-through; the audiobook serve's own catches hit their pre-existing PhysicalFile fallbacks), fresh path reads via the funnel. Internal observer seam PlaylistContentReadForTest (instance Action<string>?, null in production, the FfmpegProcessStartedForTest shape) fires after every funnel read and is the read-count seam. NOT routed through the funnel (documented on it): IsSegmentListedInLivePlaylistAsync (the GetSegment hold probe) and the monitor's diagnostic reads.
+
+PINS (4 read-count + 1 vanish twin, all in VideoAudioControllerTests): StreamHlsVideoAudio_CacheHit_ValidatedServe_ReadsPlaylistOnce (song fast path, ServePlaylistWithTokenAsync token row), StreamHlsEpisode_CacheHitWithResume_ValidatedServe_ReadsPlaylistOnce (the RESUME row: the slice is built from the verdict's read), StreamHlsEpisodeAudio_CacheHit_ValidatedServe_ReadsPlaylistOnce (the variants path, keyed by the variant cache key), StreamHlsAudiobook_CacheHit_ValidatedServe_ReadsPlaylistOnce (the only path outside the wrapper; its undercount hook consumed the threaded content) each assert ContentResult + exactly 1 funnel read of stream.m3u8; StreamHlsVideoAudio_FastPathCacheVanishedAtServe_FallsThroughToReencode (added in the code-review round) pins the probe's contract on the song path (the W3 twins already pinned episode + audio-variant; audiobook's vanish shape is its own catch-fallback, predating JF-677, documented in the song pin's doc). RED PROOFS (both TFMs each): (a) ResolveServeContentAsync forced to always read fresh (the pre-JF-677 serve) -> all 4 read-count pins fail on the count (2 != 1); (b) the probe's throw disabled (serve remembered bytes blindly, the exact probe-skip regression class) -> all 3 FastPathCacheVanishedAtServe twins fail with the re-encode assertion; both mutations reverted, everything green.
+
+GATE /simplify (3 angles: reuse/quality/efficiency, all returned). APPLIED: the wrapper's dead FileInfo parameter dropped with its doc (quality; the record and the validate closure's capture already carried the same file, three channels to one meaningful two); the variants read-count pin added (efficiency angle: the fourth path had the wiring but no pin; twin discipline). JUSTIFIED SKIPS: folding the three observer-lambda blocks into a helper (below the extraction bar at 3 copies, matches the file's inline-lambda idiom shared with FfmpegProcessStartedForTest); a shared warm-cache planting helper (~15 sites, spans untouched pre-existing tests); efficiency angle confirmed the change is a net hot-path WIN (halves the ~150KB string churn per serve, LOH-sized for audiobook playlists, and stops blocking a pool thread per serve) with zero regressions (the observer is a null check in production).
+
+GATE /code-review high (8 angles; verdict: sound, no correctness regressions). 4 findings, all dispositioned same-turn: F1 CI-BLOCKING APPLIED: the variants pin's CreateController(null) bound the 3-arg overload's NON-nullable deviceHint param (CS8625 on both TFMs, an error under ci.yml's -warnaserror; also injected a bogus empty d= query param) -> named loggerFactory: null argument. F3 APPLIED (doc + pin): the song read-count pin's doc overstated the W3 twins' coverage (they pin episode + variant only) -> honest doc naming exactly which serve sites have direct vanish pins, PLUS the song vanish twin above (the pin the finding's regression scenario asked for). F4 APPLIED: the song and audiobook read-count pins moved off the ambient /usr/bin/ffmpeg onto WriteRecordingFakeFfmpeg-family fakes (the repo's host-dependence rule; the episode twins already used them; the song vanish twin needed the 3-digit seg_000.ts fake shape or the song first-segment wait kills the encode). F2 ACKNOWLEDGED IN DOC: the probe tests existence, not generation, so eviction + a concurrent re-encode RECREATING stream.m3u8 inside the sub-millisecond verdict-to-serve window serves the old generation's remembered ENDLIST bytes over a partially recreated directory; the fresh-read era served the NEW partial's bytes in the same race, so it is a wrong-bytes trade inside an already-degraded corner, not a new failure class (documented as the BOUNDED RESIDUAL on ResolveServeContentAsync).
+
+VERIFICATION (final tree, both TFMs, NEVER --no-build; `unset NUGET_PACKAGES NUGET_HTTP_CACHE_PATH; dotnet test Jellyfin.Plugin.AlexaSkill.Tests -m:1`): build 0 errors 0 warnings (the CS8625 class checked and clean); full suite 4766/4766 net9.0 + 4766/4766 net10.0 (4761 baseline + 5 new tests), exit 0. Pin roster re-verified green after every gate edit: the 4 read-count pins, all 3 FastPathCacheVanishedAtServe twins, the JF-675 episode+song own-ticks twins, the JF-676 killed-own-ticks + undercount verdict pins, the JF-676 order pins, and the JF-669 cross-tick pin, all UNCHANGED. No interaction model, locale, NLU, session-attribute, HttpClient, or config surface touched (DoD 4-8 N/A: no user-facing strings changed; the one renamed comment surface is internal).
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Landed 2026-09-30 in worktree agent-a5ee4c0942d58039e (not pushed): every validated warm-cache HLS serve performs ONE full read of the playlist instead of two. The JF-676 verdict core now returns ValidatedHlsCache(Playlist, Content) and its read is threaded to the serve on all four paths (song/episode/variants/audiobook, fast + in-lock) through the serve helpers' new optional preloadedContent, behind ResolveServeContentAsync's O(1) existence probe that preserves the JF-499 W3 vanish-at-serve contract byte-for-byte (a vanished playlist is a vanished directory, so the serve falls through to re-encode exactly as the old second read did); the own-live row keeps its fresh serve read (the growing playlist), the no-token row keeps its PhysicalFile shape, and all serve helpers became async through the one ReadPlaylistContentAsync funnel (removing the last blocking playlist reads). The read-count proof is pinned on all four paths via the internal PlaylistContentReadForTest observer seam (4 pins, red-proven: a serve that re-reads fails the count), and the vanish contract is now pinned at THREE serve sites (episode, audio-variant, and the new song twin, red-proven: a skipped probe fails all three). Gates: Skill simplify 3-angle (dead wrapper parameter dropped, variants pin added; two idiom-level skips justified) + Skill code-review high 8-angle (F1 CI-blocking CS8625 overload fix, F3 doc honesty + the song vanish pin, F4 fake-ffmpeg conversion applied; F2 the existence-not-generation residual acknowledged in the probe's doc). Suites 4766/4766 both TFMs (4761 baseline + 5), build 0 warnings, all pre-existing pins green unchanged.
+<!-- SECTION:FINAL_SUMMARY:END -->
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
 - [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
 - [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
 - [ ] #6 NLU test fixtures updated if interaction model changed
 - [ ] #7 E2E test added for new intent or handler logic
 - [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->

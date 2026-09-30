@@ -936,6 +936,199 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Assert.Equal("application/vnd.apple.mpegurl", contentResult.ContentType);
     }
 
+    // ---- JF-677: one full playlist read per validated warm-cache serve ----
+
+    /// <summary>
+    /// JF-677: a validated warm-cache serve performs exactly ONE full read of
+    /// stream.m3u8. Before JF-677 the song path paid two full reads (the
+    /// ticks-scoped debris verdict's validating read for ENDLIST, then the
+    /// token-rewrite serve's re-read of the same file); the verdict's read is
+    /// now threaded to the serve (ValidatedHlsCache.Content) behind
+    /// ResolveServeContentAsync's O(1) existence probe. The vanish-at-serve
+    /// contract that probe preserves is pinned DIRECTLY at the episode and
+    /// audio-variant serve sites (the FastPathCacheVanishedAtServe twins) and
+    /// at the song site (the JF-677 song twin in the W3 section); the
+    /// audiobook path shares the same probe but its serve translates a
+    /// vanished read into its own PhysicalFile fallback rather than the
+    /// re-encode fall-through, so it has no twin here. RED PROOF: making the
+    /// serve ignore the threaded content (a fresh read) raises this pin's
+    /// count to 2.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsVideoAudio_CacheHit_ValidatedServe_ReadsPlaylistOnce()
+    {
+        var audioItem = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "JF-677 Read Count Song",
+            Id = Guid.NewGuid()
+        };
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(audioItem.Id)).Returns(audioItem);
+
+        string hlsDir = _cache.GetHlsDirectoryPath(audioItem.Id.ToString("D"), 0);
+        Directory.CreateDirectory(hlsDir);
+        string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
+        await File.WriteAllTextAsync(
+            playlistPath,
+            "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:4.000,\nseg_000.ts\n#EXT-X-ENDLIST\n");
+
+        var controller = CreateController(audioItem.Id.ToString());
+        controller.FfmpegPath = WriteRecordingFakeFfmpeg("fake-ffmpeg-jf677-readcount-song");
+
+        int reads = 0;
+        controller.PlaylistContentReadForTest = path =>
+        {
+            if (path == playlistPath)
+            {
+                reads++;
+            }
+        };
+
+        ActionResult result = await controller.StreamHlsVideoAudio(audioItem.Id.ToString());
+
+        var contentResult = Assert.IsType<ContentResult>(result);
+        Assert.Contains("seg_000.ts?token=", contentResult.Content, StringComparison.Ordinal);
+        Assert.Equal(1, reads);
+    }
+
+    /// <summary>
+    /// JF-677, the episode twin (ServeEpisodePlaylistAsync's RESUME row): a
+    /// completed episode cache served with a start position slices the
+    /// VERDICT'S read, not a second fresh read. Same red proof as the song
+    /// twin: a serve that ignores the threaded content reads twice.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_CacheHitWithResume_ValidatedServe_ReadsPlaylistOnce()
+    {
+        var (episode, mediaSourceManager) = SetupEpisodeForHls("JF-677 Read Count S01E01", "h264", TimeSpan.FromMinutes(45));
+
+        string hlsDir = _cache.GetHlsDirectoryPath(episode.Id.ToString(), 0);
+        Directory.CreateDirectory(hlsDir);
+        string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
+        await File.WriteAllTextAsync(
+            playlistPath,
+            "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n"
+            + "#EXTINF:4.000,\nseg_0000.ts\n#EXTINF:4.000,\nseg_0001.ts\n#EXTINF:4.000,\nseg_0002.ts\n"
+            + "#EXTINF:4.000,\nseg_0003.ts\n#EXTINF:4.000,\nseg_0004.ts\n#EXTINF:4.000,\nseg_0005.ts\n#EXT-X-ENDLIST\n");
+
+        var controller = CreateController(
+            episode.Id.ToString(), null, mediaSourceManager, WriteRecordingFakeFfmpeg("fake-ffmpeg-jf677-readcount"));
+
+        int reads = 0;
+        controller.PlaylistContentReadForTest = path =>
+        {
+            if (path == playlistPath)
+            {
+                reads++;
+            }
+        };
+
+        ActionResult result = await controller.StreamHlsEpisode(episode.Id.ToString(), 16 * TimeSpan.TicksPerSecond);
+
+        var content = Assert.IsType<ContentResult>(result);
+        Assert.Contains("seg_0004.ts?token=", content.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("seg_0003.ts", content.Content, StringComparison.Ordinal);
+        Assert.Equal(1, reads);
+    }
+
+    /// <summary>
+    /// JF-677, the audiobook twin (the one validated path outside the
+    /// TryServeValidatedHlsCacheAsync wrapper, and the only one whose verdict
+    /// hook inspects the content: the undercount check): the fast-path cache
+    /// hit serves from the verdict's single read through
+    /// ServeAudiobookPlaylistAsync. Same red proof as the song twin.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_CacheHit_ValidatedServe_ReadsPlaylistOnce()
+    {
+        Guid parentId = Guid.NewGuid();
+        var parentItem = new MediaBrowser.Controller.Entities.Folder
+        {
+            Name = "JF-677 Read Count Book",
+            Id = parentId
+        };
+        var chapter1 = new MediaBrowser.Controller.Entities.Audio.Audio { Name = "Chapter 1", Id = Guid.NewGuid() };
+        var chapter2 = new MediaBrowser.Controller.Entities.Audio.Audio { Name = "Chapter 2", Id = Guid.NewGuid() };
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns(parentItem);
+        _libraryManagerMock.Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Returns(new List<MediaBrowser.Controller.Entities.BaseItem> { chapter1, chapter2 });
+
+        // COMPLETED concat cache: ENDLIST with at least one segment per chapter
+        // (the undercount hook's bar), so the verdict validates on its read row.
+        string hlsDir = _cache.GetHlsDirectoryPath(parentId.ToString(), 0);
+        Directory.CreateDirectory(hlsDir);
+        string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
+        await File.WriteAllTextAsync(
+            playlistPath,
+            "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:10.000,\nseg_0000.ts\n#EXTINF:10.000,\nseg_0001.ts\n#EXT-X-ENDLIST\n");
+
+        var controller = CreateController(parentId.ToString());
+        controller.FfmpegPath = WriteRecordingFakeFfmpeg("fake-ffmpeg-jf677-readcount-book");
+
+        int reads = 0;
+        controller.PlaylistContentReadForTest = path =>
+        {
+            if (path == playlistPath)
+            {
+                reads++;
+            }
+        };
+
+        ActionResult result = await controller.StreamHlsAudiobook(parentId.ToString());
+
+        var content = Assert.IsType<ContentResult>(result);
+        Assert.Contains("seg_0000.ts?token=", content.Content, StringComparison.Ordinal);
+        Assert.Equal(1, reads);
+    }
+
+    /// <summary>
+    /// JF-677, the audio-variant twin (the fourth validated path, keyed by the
+    /// variant cache key against the episode registry): the same one-read
+    /// contract through ServePlaylistWithTokenAsync. Same red proof as the
+    /// song twin.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisodeAudio_CacheHit_ValidatedServe_ReadsPlaylistOnce()
+    {
+        var episode = new MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "JF-677 Read Count Audio S01E01",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromMinutes(39).Ticks
+        };
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(episode.Id)).Returns(episode);
+
+        string cacheKey = VideoAudioController.EpisodeAudioCacheKey(episode.Id.ToString(), 0);
+        string hlsDir = _cache.GetHlsDirectoryPath(cacheKey, 0);
+        Directory.CreateDirectory(hlsDir);
+        string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
+        await File.WriteAllTextAsync(
+            playlistPath,
+            "#EXTM3U\n#EXTINF:10.000,\nseg_0000.ts\n#EXTINF:10.000,\nseg_0001.ts\n#EXT-X-ENDLIST\n");
+
+        var controller = CreateController(
+            episode.Id.ToString(), loggerFactory: null, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf677-readcount-audio"));
+
+        int reads = 0;
+        controller.PlaylistContentReadForTest = path =>
+        {
+            if (path == playlistPath)
+            {
+                reads++;
+            }
+        };
+
+        ActionResult result = await controller.StreamHlsEpisodeAudio(episode.Id.ToString(), 0);
+
+        var content = Assert.IsType<ContentResult>(result);
+        Assert.Contains("seg_0000.ts?token=", content.Content, StringComparison.Ordinal);
+        Assert.Equal(1, reads);
+    }
+
     /// <summary>
     /// Verify that on a cache miss, the HLS controller starts ffmpeg, waits for the
     /// first segment to appear, and returns a PhysicalFileResult with the playlist.
@@ -5978,6 +6171,63 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Assert.True(
             File.Exists(Path.Combine(hlsDir, "episode-args.txt")),
             "the re-encode path must have run after the vanished-cache fallthrough");
+    }
+
+    /// <summary>
+    /// JF-499 W3, the SONG twin (added with JF-677, whose read threading is the
+    /// reason the contract needs pinning per path): since JF-677 the song fast
+    /// path's serve reuses the verdict's threaded content instead of re-reading,
+    /// so the vanish-at-serve fall-through now rides
+    /// ResolveServeContentAsync's existence probe. A probe skipped on this
+    /// path (the regression class the threading enables) would serve the
+    /// remembered bytes of a deleted generation directory: this pin requires
+    /// the same re-encode fall-through the fresh-read era had.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsVideoAudio_FastPathCacheVanishedAtServe_FallsThroughToReencode()
+    {
+        var audioItem = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Vanishing Song",
+            Id = Guid.NewGuid()
+        };
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(audioItem.Id)).Returns(audioItem);
+
+        string hlsDir = _cache.GetHlsDirectoryPath(audioItem.Id.ToString("D"), 0);
+        Directory.CreateDirectory(hlsDir);
+        string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
+        await File.WriteAllTextAsync(
+            playlistPath,
+            "#EXTM3U\n#EXTINF:4.000,\nseg_000.ts\n#EXT-X-ENDLIST\n");
+
+        using var loggerFactory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Trace);
+            b.AddProvider(new FileDeletingLoggerProvider("serving cached playlist for item", playlistPath));
+        });
+
+        // The recording fake's SONG shape: 3-digit segments (seg_%03d), or the
+        // song path's first-segment wait polls forever for seg_000.ts and
+        // kills the encode.
+        string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-jf677-race-song",
+            "for last_arg in \"$@\"; do :; done\n" +
+            "dir=$(dirname \"$last_arg\")\n" +
+            "printf '%s\\n' \"$@\" > \"$dir/episode-args.txt\"\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_000.ts\" 2>/dev/null\n" +
+            "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:4.000,\\nseg_000.ts\\n' > \"$last_arg\"\n" +
+            "exit 0\n");
+
+        var controller = CreateController(
+            audioItem.Id.ToString(), loggerFactory, ffmpegPath: fakeFfmpegPath);
+
+        ActionResult result = await controller.StreamHlsVideoAudio(audioItem.Id.ToString());
+
+        var content = Assert.IsType<ContentResult>(result);
+        Assert.Contains("seg_000.ts?token=", content.Content, StringComparison.Ordinal);
+        Assert.True(
+            File.Exists(Path.Combine(hlsDir, "episode-args.txt")),
+            "the re-encode path must have run after the vanished-cache fallthrough (the probe must not serve the threaded content of a deleted playlist)");
     }
 
     // ---- W4: permission-denied deletes must not surface as 500s ----
