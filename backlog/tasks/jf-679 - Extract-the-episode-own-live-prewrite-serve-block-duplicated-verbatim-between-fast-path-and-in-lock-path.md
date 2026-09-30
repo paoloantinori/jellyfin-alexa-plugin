@@ -3,7 +3,7 @@ id: JF-679
 title: >-
   JF-679 - extract the episode own-live prewrite-serve block duplicated
   verbatim between fast path and in-lock path
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-30'
 labels:
