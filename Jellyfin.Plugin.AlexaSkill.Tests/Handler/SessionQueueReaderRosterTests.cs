@@ -42,11 +42,15 @@ public class SessionQueueReaderRosterTests
     /// writes route through ProgressReporter.RehydrateAndEnqueueToBothStores
     /// (guard + current-item resolve + both-stores enqueue), also pinned in
     /// QueueRehydrationAdoptionTests.
+    /// PlaybackFinishedEventHandler joined in JF-683: its successor scan (the
+    /// inter-track-gap keep-alive) reads the queue, and a restart-wiped queue would
+    /// read as false exhaustion there exactly as it did in NearlyFinished (JF-574).
     /// </summary>
     private static readonly HashSet<Type> AdoptedReaders = new()
     {
         typeof(ListQueueIntentHandler),
-        typeof(PlaybackNearlyFinishedEventHandler)
+        typeof(PlaybackNearlyFinishedEventHandler),
+        typeof(PlaybackFinishedEventHandler)
     };
 
     /// <summary>
