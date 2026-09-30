@@ -774,10 +774,18 @@ public class VideoAudioCache
     /// ticks-scoped debris verdicts of <c>VideoAudioController</c> trigger this, so
     /// a verdict on one art-tick generation's stale playlist can never delete a
     /// sibling generation's directory, including a live foreign-ticks encode's,
-    /// which the key-wide Cleanup would wipe mid-write. Deliberately does NOT
-    /// touch the generation's flat <c>{itemId}_{ticks}.mp4</c> files: they are a
-    /// different endpoint's artifact and not the verdict's subject. Best-effort,
-    /// same failure family as <see cref="Cleanup"/> (logged, swallowed).
+    /// which the key-wide Cleanup would wipe mid-write. ORPHAN COLLECTOR (the
+    /// JF-676 rework's honest residual): a debris directory of a NON-current art
+    /// tick has no deterministic cleaner anymore (the verdict deletes only the
+    /// CALLER's own ticks directory, <see cref="CleanupHlsStub"/> skips
+    /// non-empty playlists, and the per-file debris sweep runs only on the
+    /// encode path for the caller's own ticks); the size-cap LRU eviction sweep
+    /// (<see cref="EvictIfNeeded()"/>) is the eventual collector, bounded by the
+    /// cap and unbounded in time. That is the deliberate trade for never
+    /// deleting a live generation's directory. Deliberately does NOT touch the
+    /// generation's flat <c>{itemId}_{ticks}.mp4</c> files: they are a different
+    /// endpoint's artifact and not the verdict's subject. Best-effort, same
+    /// failure family as <see cref="Cleanup"/> (logged, swallowed).
     /// </summary>
     /// <param name="itemId">The Jellyfin item ID whose generation directory is removed.</param>
     /// <param name="artModifiedTicks">The generation's art ticks (the directory suffix).</param>

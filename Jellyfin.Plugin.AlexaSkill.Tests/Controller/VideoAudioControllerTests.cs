@@ -4508,6 +4508,141 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
+    /// JF-676 rework (gate-marker F1), SONG path: the encode generation must be
+    /// registered BEFORE the ffmpeg process starts (the mark-before-start
+    /// invariant all four HLS paths share). The arming race the review found:
+    /// the song mark used to sit after the process start (and the prewrite),
+    /// so a concurrent fast-path ticks-scoped debris verdict landing between
+    /// ffmpeg's first playlist write and the mark classified the genuinely-live
+    /// no-ENDLIST playlist as debris and deleted the running encode's
+    /// directory. STRUCTURAL order assertion via the
+    /// <see cref="VideoAudioController.FfmpegProcessStartedForTest"/> seam (a
+    /// fake ffmpeg cannot read the in-process registry, so the observer
+    /// snapshots it AT process-start time, the exact instant the invariant is
+    /// about): the song registry must already carry the generation when the
+    /// process starts. Red proof: the mark temporarily moved back after the
+    /// prewrite (the pre-rework order) fails this pin with
+    /// generationLiveAtStart=false.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsVideoAudio_EncodeGenerationMarkedBeforeFfmpegStart()
+    {
+        Guid itemId = Guid.NewGuid();
+        string itemIdStr = itemId.ToString();
+        var audioItem = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "JF-676 Rework Song",
+            Id = itemId,
+            RunTimeTicks = TimeSpan.FromMinutes(45).Ticks
+        };
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(itemId)).Returns(audioItem);
+
+        string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-jf676-rework-song",
+            "for last_arg in \"$@\"; do :; done\n" +
+            "dir=$(dirname \"$last_arg\")\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_000.ts\" 2>/dev/null\n" +
+            "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:4.000,\\nseg_000.ts\\n#EXT-X-ENDLIST\\n' > \"$last_arg\"\n" +
+            "exit 0\n");
+
+        var controller = CreateController(itemIdStr, ffmpegPath: fakeFfmpegPath);
+        bool observerFired = false;
+        bool generationLiveAtStart = false;
+        controller.FfmpegProcessStartedForTest = _ =>
+        {
+            observerFired = true;
+            generationLiveAtStart = VideoAudioController.EncodeActiveForTest(itemIdStr, song: true);
+        };
+
+        ActionResult result = await controller.StreamHlsVideoAudio(itemIdStr);
+        Assert.IsType<ContentResult>(result);
+
+        try
+        {
+            Assert.True(observerFired, "the process-start observer must fire (the seam is wired)");
+            Assert.True(
+                generationLiveAtStart,
+                "the song path must register its encode generation BEFORE ffmpeg starts: a playlist a concurrent debris verdict could judge cannot exist until ffmpeg writes it, and by then the own-ticks generation must already be live (JF-676 rework)");
+        }
+        finally
+        {
+            await ReleaseParkedEncodeFixturesAsync(itemIdStr, Array.Empty<string>(), song: true);
+        }
+    }
+
+    /// <summary>
+    /// JF-676 rework (gate-marker F1), AUDIOBOOK twin: the same
+    /// mark-before-start invariant on the concat path (its mark also used to
+    /// sit after the process start). Same structural order assertion through
+    /// <see cref="VideoAudioController.FfmpegProcessStartedForTest"/>: the
+    /// audiobook registry must already carry the generation when the process
+    /// starts. Red proof: the mark temporarily moved back after the prewrite
+    /// (the pre-rework order) fails this pin.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_EncodeGenerationMarkedBeforeFfmpegStart()
+    {
+        Guid parentId = Guid.NewGuid();
+        string parentIdStr = parentId.ToString();
+        var parentItem = new MediaBrowser.Controller.Entities.Folder
+        {
+            Name = "JF-676 Rework Book",
+            Id = parentId
+        };
+        var chapter1 = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "JF-676 Rework Chapter 1",
+            Id = Guid.NewGuid(),
+            Path = "/book/jf676rework-001.mp3",
+            RunTimeTicks = TimeSpan.FromMinutes(10).Ticks
+        };
+        var chapter2 = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "JF-676 Rework Chapter 2",
+            Id = Guid.NewGuid(),
+            Path = "/book/jf676rework-002.mp3",
+            RunTimeTicks = TimeSpan.FromMinutes(10).Ticks
+        };
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns(parentItem);
+        _libraryManagerMock.Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Returns(new List<MediaBrowser.Controller.Entities.BaseItem> { chapter1, chapter2 });
+
+        string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-jf676-rework-book",
+            "for playlist_path in \"$@\"; do :; done\n" +
+            "playlist_dir=\"$(dirname \"$playlist_path\")\"\n" +
+            "mkdir -p \"$playlist_dir\"\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$playlist_dir/seg_0000.ts\" 2>/dev/null\n" +
+            "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:10.000,\\nseg_0000.ts\\n#EXT-X-ENDLIST\\n' > \"$playlist_path\"\n" +
+            "exit 0\n");
+
+        var controller = CreateController(parentIdStr, ffmpegPath: fakeFfmpegPath);
+        bool observerFired = false;
+        bool generationLiveAtStart = false;
+        controller.FfmpegProcessStartedForTest = _ =>
+        {
+            observerFired = true;
+            generationLiveAtStart = VideoAudioController.EncodeActiveForTest(parentIdStr, audiobook: true);
+        };
+
+        ActionResult result = await controller.StreamHlsAudiobook(parentIdStr);
+        Assert.IsType<ContentResult>(result);
+
+        try
+        {
+            Assert.True(observerFired, "the process-start observer must fire (the seam is wired)");
+            Assert.True(
+                generationLiveAtStart,
+                "the audiobook path must register its encode generation BEFORE ffmpeg starts: a playlist a concurrent debris verdict could judge cannot exist until ffmpeg writes it, and by then the own-ticks generation must already be live (JF-676 rework)");
+        }
+        finally
+        {
+            await ReleaseParkedEncodeFixturesAsync(parentIdStr, Array.Empty<string>(), audiobook: true);
+        }
+    }
+
+    /// <summary>
     /// JF-498 review I1, endpoint level: a re-encode over interrupted-encode debris
     /// (non-empty playlist WITHOUT ENDLIST, no active encode) must start ffmpeg over a
     /// CLEAN target: the fake ffmpeg snapshots the pre-existing playlist/segments

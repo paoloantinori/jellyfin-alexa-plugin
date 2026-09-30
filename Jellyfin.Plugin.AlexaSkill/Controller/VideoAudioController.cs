@@ -564,23 +564,44 @@ public class VideoAudioController : ControllerBase
                 _logger.LogDebug("VideoAudio HLS: ffmpeg arguments: {Args}", string.Join(" ", ffmpegArgs));
             }
 
-            // Start ffmpeg without waiting — generate segments in the background.
-            // Serve the playlist as soon as the first segment is ready so the Echo Show
-            // can start playback immediately, even for long content like audiobooks.
-            var ffmpegProcess = await StartFfmpegProcessGatedAsync(
-                validation.FfmpegPath,
-                ffmpegArgs,
-                useBlackFrame ? EstimateEncodeBytes(validation.Item.RunTimeTicks ?? 0) : EstimateArtEncodeBytes(validation.Item.RunTimeTicks ?? 0),
-                hlsDir).ConfigureAwait(false);
+            // Mark the encode active BEFORE starting ffmpeg (inside the lock):
+            // the mark-before-start invariant all four HLS paths share (the
+            // episode/variant paths have carried it since JF-498; moved here in
+            // the JF-676 rework). A concurrent fast-path request can only see a
+            // playlist file once ffmpeg writes it, and by then the caller's own
+            // art-tick generation is already live, so the ticks-scoped debris
+            // verdict holds instead of deleting the running encode's directory
+            // (the gate review's race: this mark used to sit after the process
+            // start, and a verdict landing between ffmpeg's first playlist
+            // write and the mark classified the genuinely-live no-ENDLIST
+            // playlist as debris). The monitor clears the flag on exit
+            // (generation-aware, JF-665/JF-669); the song path's former
+            // pre-mark sentinel is gone with the pre-mark window it existed
+            // for (the JF-665 semantics survive structurally: every failure
+            // path from here on clears only THIS generation's slot).
+            ActiveEncodeHandle activeEncode = MarkEncodeActive(_activeVideoAudioEncodes, itemId, artModifiedTicks);
+
+            Process ffmpegProcess;
+            try
+            {
+                // Start ffmpeg without waiting: generate segments in the
+                // background. Serve the playlist as soon as the first segment
+                // is ready so the Echo Show can start playback immediately,
+                // even for long content like audiobooks.
+                ffmpegProcess = await StartFfmpegProcessGatedAsync(
+                    validation.FfmpegPath,
+                    ffmpegArgs,
+                    useBlackFrame ? EstimateEncodeBytes(validation.Item.RunTimeTicks ?? 0) : EstimateArtEncodeBytes(validation.Item.RunTimeTicks ?? 0),
+                    hlsDir).ConfigureAwait(false);
+            }
+            catch
+            {
+                activeEncode.Clear();
+                throw;
+            }
 
             string prewrittenPath = Path.Combine(hlsDir, PrewrittenPlaylistFileName);
 
-            // Declared before the try so the catch below can clear it: the
-            // sentinel's clear no-ops because its holder is never stored in the
-            // registry (the structural JF-669 guarantee PreMarkSentinel's doc
-            // states), until the mark below re-mints the handle with the real
-            // generation.
-            ActiveEncodeHandle activeEncode = ActiveEncodeHandle.PreMarkSentinel(_activeVideoAudioEncodes, itemId, artModifiedTicks);
             try
             {
                 // JF-536: pre-write the FULL segment listing (the episode path's
@@ -608,6 +629,10 @@ public class VideoAudioController : ControllerBase
                 // (JF-536/JF-531: a no-ENDLIST growing playlist joins at the live edge);
                 // short content encodes to ENDLIST before the device's first fetch, so
                 // skipping the listing serves the correct VOD playlist directly.
+                // Like the episode twin, the listing lands AFTER the process starts,
+                // so a concurrent request can briefly see the flag with no listing
+                // yet: TryServePrewrittenVideoAudioPlaylist covers that race by
+                // falling back to ffmpeg's live playlist (the pre-JF-536 serve).
                 if (validation.Item.RunTimeTicks is > 0 && ShouldPrewriteFullListing(validation.Item.RunTimeTicks.Value))
                 {
                     WriteVideoAudioPlaylist(
@@ -629,12 +654,6 @@ public class VideoAudioController : ControllerBase
                 {
                     SkipPrewrittenListing(prewrittenPath, itemId, "VideoAudio HLS");
                 }
-
-                // Mark the encode active AFTER the listing exists (inside the
-                // lock): the serve paths above rely on flag-set implying the
-                // pre-written listing is on disk. The monitor clears the flag on
-                // exit (generation-aware, JF-665/JF-669).
-                activeEncode = MarkEncodeActive(_activeVideoAudioEncodes, itemId, artModifiedTicks);
 
                 // Wait for the first segment file to appear on disk.
                 ActionResult? firstSegmentFailure = await WaitForFirstSegmentOrKillAsync(
@@ -957,11 +976,15 @@ public class VideoAudioController : ControllerBase
             // a clean target.
             _cache.DeleteHlsEncodeDebris(itemId, artModifiedTicks);
 
-            // Mark the encode active BEFORE starting ffmpeg (inside the lock): a
-            // concurrent fast-path request that sees a live (no-ENDLIST) playlist
-            // can then rely on the flag being set, because no playlist file can
-            // exist before ffmpeg starts. The monitor clears the flag on exit
-            // (generation-aware, JF-665/JF-669).
+            // Mark the encode active BEFORE starting ffmpeg (inside the lock):
+            // the mark-before-start invariant all four HLS paths share (this
+            // path and the variants have carried it since JF-498; the song and
+            // audiobook paths joined in the JF-676 rework). A concurrent
+            // fast-path request that sees a live (no-ENDLIST) playlist can then
+            // rely on the flag being set, because no playlist file can exist
+            // before ffmpeg starts: the ticks-scoped debris verdict never sees
+            // a playlist whose own-ticks generation is not already live. The
+            // monitor clears the flag on exit (generation-aware, JF-665/JF-669).
             // Since JF-536 the pre-written listing lands AFTER the process starts
             // (it must sit inside the JF-428 pin window), so a concurrent request
             // can briefly see the flag with no listing yet;
@@ -1154,6 +1177,14 @@ public class VideoAudioController : ControllerBase
     /// between the caller's cache read and the read here) is ALSO null: there
     /// is nothing left to validate and the lock path re-encodes, which closes
     /// the in-lock read race the key-wide-Cleanup era left as a bare 500.
+    /// BOUNDED WINDOW on the own-live row (the deliberate trade): between
+    /// ffmpeg's final write and the monitor's clear (one poll interval), a
+    /// completed-but-STALE ENDLIST playlist (the audiobook undercount shape)
+    /// reads own-live and serves once; the next request after the clear
+    /// re-encodes it. The pre-JF-676 ungated validator cleaned that playlist
+    /// immediately but could wipe LIVE sibling directories mid-write; one
+    /// degraded serve of a bounded window is the price of never deleting a
+    /// live generation's directory.
     /// </summary>
     /// <param name="cached">The cached playlist file info (stream.m3u8).</param>
     /// <param name="cacheKey">The encode's cache key for logging and cleanup.</param>
@@ -1887,6 +1918,8 @@ public class VideoAudioController : ControllerBase
             // JF-498 review I1 concern, same as every sibling path).
             _cache.DeleteHlsEncodeDebris(spec.CacheKey, spec.ArtModifiedTicks);
 
+            // Mark before the process start: the mark-before-start invariant all
+            // four HLS paths share (see the remux mark site's comment).
             ActiveEncodeHandle activeEncode = MarkEncodeActive(_activeEpisodeEncodes, spec.CacheKey, spec.ArtModifiedTicks);
 
             Process ffmpegProcess;
@@ -2318,11 +2351,12 @@ public class VideoAudioController : ControllerBase
     /// prevent), and until JF-668 they were representable because the triple
     /// travelled as parallel parameters through the wait/kill/monitor chain,
     /// guarded only by doc comments. The type is private to this controller,
-    /// so construction happens only here, and the two intended shapes are
-    /// <see cref="MarkEncodeActive"/> (the real mint) and
-    /// <see cref="PreMarkSentinel"/> (the song path's pre-mark no-op clear).
-    /// <see cref="Clear"/> and <see cref="KillAndClear"/> are the ONLY clear
-    /// paths.
+    /// so construction happens only here, and the ONE intended shape is
+    /// <see cref="MarkEncodeActive"/> (the real mint; every path marks before
+    /// its process starts since the JF-676 rework, so the song path's former
+    /// pre-mark sentinel shape is gone with the pre-mark window it existed
+    /// for). <see cref="Clear"/> and <see cref="KillAndClear"/> are the ONLY
+    /// clear paths.
     /// </summary>
     private readonly struct ActiveEncodeHandle
     {
@@ -2343,9 +2377,9 @@ public class VideoAudioController : ControllerBase
         /// PRIVATE (JF-668 gate-review F2): hand-built handles - the right key with
         /// the wrong registry or a stale token - are the silent no-op-clear failure
         /// family this type exists to prevent, so construction is confined to the
-        /// struct's own factories (<see cref="MarkActive"/>, <see cref="PreMarkSentinel"/>);
+        /// struct's own factory (<see cref="MarkActive"/>);
         /// the enclosing controller cannot reach a private ctor's members but CAN
-        /// call public static factories (PreMarkSentinel proves the shape).
+        /// call the public static factory.
         /// </summary>
         private ActiveEncodeHandle(ActiveEncodeGenerations generations, long artModifiedTicks, object generation)
         {
@@ -2380,26 +2414,13 @@ public class VideoAudioController : ControllerBase
         }
 
         /// <summary>
-        /// The song path's pre-mark sentinel: a handle over a DETACHED holder
-        /// the registry never stores, so it never creates registry presence and
-        /// <see cref="Clear"/> no-ops (a prewrite failure before the mark must
-        /// not drop a prior generation's flag), while
-        /// <see cref="KillAndClear"/>'s kill and dispose stay real (that scope
-        /// owns the process). Once <see cref="MarkEncodeActive"/> mints the
-        /// real handle the sentinel variable is simply replaced.
-        /// </summary>
-        public static ActiveEncodeHandle PreMarkSentinel(ConcurrentDictionary<string, ActiveEncodeGenerations> activeEncodes, string cacheKey, long artModifiedTicks)
-            => new(new ActiveEncodeGenerations(activeEncodes, cacheKey), artModifiedTicks, new object());
-
-        /// <summary>
         /// Generation-aware active-encode flag clear (JF-665/JF-669): removes
         /// this handle's (art-tick, token) slot only while it still belongs to
         /// this generation, so the late monitor or failure path of a displaced
         /// generation cannot clear a newer registration's slot, and the whole
         /// entry drops only when the LAST live generation cleared its own (a
         /// newer-ticks encode finishing first can no longer orphan an
-        /// older-ticks encode's liveness). A handle over a detached holder (the
-        /// <see cref="PreMarkSentinel"/> shape) clears as a no-op.
+        /// older-ticks encode's liveness).
         /// </summary>
         public void Clear()
             => _generations.ClearGeneration(_artModifiedTicks, _generation);
@@ -2954,14 +2975,38 @@ public class VideoAudioController : ControllerBase
                 _logger.LogDebug("VideoAudio audiobook HLS: ffmpeg arguments: {Args}", string.Join(" ", ffmpegArgs));
             }
 
-            // Start ffmpeg in the background — writes to stream.m3u8, not our pre-written file.
-            var ffmpegProcess = await StartFfmpegProcessGatedAsync(
-                ffmpeg,
-                ffmpegArgs,
-                isMusicAlbum && collectionArtUrl != null
-                    ? EstimateArtEncodeBytes(chapters.Sum(c => c.RunTimeTicks ?? 0))
-                    : EstimateEncodeBytes(chapters.Sum(c => c.RunTimeTicks ?? 0)),
-                hlsDir).ConfigureAwait(false);
+            // Mark this audiobook as actively encoding BEFORE starting ffmpeg
+            // (the mark-before-start invariant all four HLS paths share; moved
+            // here in the JF-676 rework, from after the prewrite): the
+            // ticks-scoped debris verdict can only see a playlist once ffmpeg
+            // writes it, and by then this generation is already live, so the
+            // verdict holds instead of deleting the running encode's directory
+            // (the gate review's race: the mark used to sit after the process
+            // start, and a verdict landing between ffmpeg's first playlist
+            // write and the mark classified the genuinely-live no-ENDLIST
+            // playlist as debris). Also prevents concurrent ffmpeg launches
+            // (the guard reads bare presence). The monitor clears the flag on
+            // exit (generation-aware, JF-665/JF-669).
+            ActiveEncodeHandle activeEncode = MarkEncodeActive(_activeAudiobookEncodes, parentId, artModifiedTicks);
+
+            Process ffmpegProcess;
+            try
+            {
+                // Start ffmpeg in the background: it writes to stream.m3u8,
+                // not our pre-written file.
+                ffmpegProcess = await StartFfmpegProcessGatedAsync(
+                    ffmpeg,
+                    ffmpegArgs,
+                    isMusicAlbum && collectionArtUrl != null
+                        ? EstimateArtEncodeBytes(chapters.Sum(c => c.RunTimeTicks ?? 0))
+                        : EstimateEncodeBytes(chapters.Sum(c => c.RunTimeTicks ?? 0)),
+                    hlsDir).ConfigureAwait(false);
+            }
+            catch
+            {
+                activeEncode.Clear();
+                throw;
+            }
 
             // Pre-write a complete HLS playlist to a SEPARATE file from what ffmpeg
             // uses. This gives the Echo Show the correct total book duration
@@ -2972,9 +3017,13 @@ public class VideoAudioController : ControllerBase
             // JF-536: written only AFTER the pin inside StartFfmpegProcessGatedAsync
             // succeeded (the JF-428 rule: a listing written before the pin can be
             // deleted by a concurrent eviction sweep in the creation-to-pin window,
-            // silently reverting the serve to the live playlist), and still BEFORE
-            // the active-encode flag below so the concurrent-encode guard's
-            // flag-set-implies-listing-on-disk invariant (it 503s otherwise) holds.
+            // silently reverting the serve to the live playlist). Since the JF-676
+            // rework moved the active-encode mark ABOVE the process start, the
+            // prewrite now lands AFTER the flag: a concurrent guard fetch inside
+            // the [mark, prewrite] window finds the flag set with no listing on
+            // disk and takes its designed 503 ("Encode in progress") once; the
+            // Echo's retry lands after the listing. That transient replaces the
+            // arming race the old ordering left for the debris verdict.
             string prewrittenPath = Path.Combine(hlsDir, PrewrittenPlaylistFileName);
             string? token = HttpContext.Request.Query["token"];
             // JF-625: albums SKIP the pre-written full listing entirely. The Echo joins
@@ -2990,19 +3039,16 @@ public class VideoAudioController : ControllerBase
                 }
                 catch
                 {
-                    // Pre-handoff failure: this scope still owns the process (no monitor
-                    // was started yet), so kill it instead of leaking a running ffmpeg.
-                    try { ffmpegProcess.Kill(); } catch { /* already exited */ }
-                    ffmpegProcess.Dispose();
+                    // Pre-handoff failure: this scope still owns the process and
+                    // the flag (no monitor was started yet), so the JF-637
+                    // triple: kill, dispose, clear this generation's slot.
+                    activeEncode.KillAndClear(ffmpegProcess);
                     throw;
                 }
             }
 
             // Register the HLS directory for segment lookups immediately.
             _cache.RegisterHlsDirectory(parentId, artModifiedTicks);
-
-            // Mark this audiobook as actively encoding to prevent concurrent ffmpeg launches.
-            ActiveEncodeHandle activeEncode = MarkEncodeActive(_activeAudiobookEncodes, parentId, artModifiedTicks);
 
             // Monitor ffmpeg in background: logs errors, triggers eviction when done.
             // CA2025: started via the boundary helper (this method never disposes the
@@ -4931,7 +4977,11 @@ public class VideoAudioController : ControllerBase
     /// foreign-ticks generation's directory mid-write; the core's own-ticks
     /// short-circuit and ticks-scoped cleanup close both. The no-ENDLIST
     /// branch comes from the core: a killed encode's partial is debris now,
-    /// not a forever "encoding in progress" serve. Keyed by parentId; used by
+    /// not a forever "encoding in progress" serve. The core's documented
+    /// bounded window applies to the undercount row: a completed-but-undercount
+    /// ENDLIST playlist serves once during the [ffmpeg exit, monitor clear]
+    /// lag (one poll interval) before the next request's verdict re-encodes
+    /// it. Keyed by parentId; used by
     /// both StreamHlsAudiobook call sites (fast path + in-lock double check).
     /// </summary>
     /// <param name="cached">The cached playlist file info (stream.m3u8).</param>
@@ -5124,6 +5174,21 @@ public class VideoAudioController : ControllerBase
     }
 
     /// <summary>
+    /// JF-676 rework internal test seam: when non-null, invoked immediately
+    /// after a gated ffmpeg process starts and before the method returns, with
+    /// the encode's pin path (the HLS output directory). Lets a pin snapshot,
+    /// AT PROCESS-START TIME, whatever state the caller was required to
+    /// establish BEFORE starting ffmpeg: the four HLS paths'
+    /// mark-before-start invariant (the encode generation must already be
+    /// registered when ffmpeg can first write a playlist a concurrent
+    /// ticks-scoped debris verdict could judge; see the mark sites). Test-only;
+    /// null in production. Instance-scoped like the other per-controller
+    /// seams; an exception thrown by the observer surfaces to the endpoint
+    /// caller (the pin owns it).
+    /// </summary>
+    internal Action<string>? FfmpegProcessStartedForTest { get; set; }
+
+    /// <summary>
     /// Starts ffmpeg under the encode gate: the slot is held for the lifetime of the
     /// spawned process (all HLS/song encode paths; the lightweight faststart remux
     /// calls StartFfmpegProcess directly instead). An optional
@@ -5132,6 +5197,11 @@ public class VideoAudioController : ControllerBase
     /// gate and released AFTER it, in the same structures, so its ordering against
     /// the gate is fixed and inverse on release.
     /// </summary>
+    /// <remarks>
+    /// JF-676 rework internal test seam: <see cref="FfmpegProcessStartedForTest"/>,
+    /// when set, fires between the process start and the return (the exact instant
+    /// the four HLS paths' mark-before-start invariant is about).
+    /// </remarks>
     private async Task<Process> StartFfmpegProcessGatedAsync(
         string ffmpegPath,
         List<string> arguments,
@@ -5200,6 +5270,13 @@ public class VideoAudioController : ControllerBase
             _cache.Unpin(pinPath);
             throw;
         }
+
+        // Test-only observer (JF-676 rework): fires between the process start
+        // and the return to the caller, the exact instant the mark-before-start
+        // invariant is about, so a pin can assert the caller's encode
+        // generation was already registered before ffmpeg could write
+        // anything. Null in production.
+        FfmpegProcessStartedForTest?.Invoke(pinPath);
 
         // Release the gate slot when the process exits or is disposed. Polling
         // HasExited instead of WaitForExitAsync: the .NET runtime makes
