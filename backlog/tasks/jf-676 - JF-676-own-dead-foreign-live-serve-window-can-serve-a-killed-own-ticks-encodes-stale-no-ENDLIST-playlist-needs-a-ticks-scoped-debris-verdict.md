@@ -3,7 +3,7 @@ id: JF-676
 title: >-
   JF-676 - own-dead + foreign-live serve window can serve a KILLED own-ticks
   encode's stale no-ENDLIST playlist (needs a ticks-scoped debris verdict)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-29 22:12'
 labels:
