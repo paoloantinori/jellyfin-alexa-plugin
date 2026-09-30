@@ -255,9 +255,9 @@ public static class PhoneticSynonymGenerator
     /// <summary>
     /// Adds each variant not already present (case-insensitive) into
     /// <paramref name="results"/>: the one dedup-append idiom shared by the
-    /// coverage-variant families.
+    /// coverage-variant families and the JF-684 partial-name synonym append.
     /// </summary>
-    private static void AppendDistinct(List<string> results, IEnumerable<string> variants)
+    internal static void AppendDistinct(List<string> results, IEnumerable<string> variants)
     {
         foreach (string variant in variants)
         {

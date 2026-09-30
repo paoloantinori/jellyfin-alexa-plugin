@@ -189,6 +189,25 @@ internal static class KeywordMatcher
     private static readonly HashSet<string> EnglishStopWords = StopWords["en"];
 
     /// <summary>
+    /// The union of every locale's stop-word set, precomputed like
+    /// <see cref="EnglishStopWords"/> so the any-locale check below is one lookup
+    /// (JF-684). Memberships are identical to the per-locale sets.
+    /// </summary>
+    private static readonly HashSet<string> AnyLocaleStopWords =
+        StopWords.Values.SelectMany(s => s).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// True when <paramref name="word"/> is a stop word in ANY locale's set (the union
+    /// across all 17 locales' prefixes). JF-684: the catalog partial-name gate uses this
+    /// so a first-word synonym can never be a function word of any locale the skill
+    /// serves ("the", "i", "van", "de", "la", ...), keeping the single source of the
+    /// stop-word vocabulary here where Tokenize curates it.
+    /// </summary>
+    /// <param name="word">The candidate word (compared case-insensitively).</param>
+    /// <returns>True when any locale's set contains the word.</returns>
+    internal static bool IsStopWordInAnyLocale(string word) => AnyLocaleStopWords.Contains(word);
+
+    /// <summary>
     /// Lowercases a raw token and adds it unless it is a stop word of the request locale
     /// OR of English (see the JF-384 note in <see cref="Tokenize"/>).
     /// </summary>
