@@ -1,0 +1,94 @@
+#nullable enable
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
+
+namespace Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
+
+/// <summary>
+/// The ONE construction path for <see cref="CatalogValue"/> catalog entries
+/// (JF-689): id formatting, the 140-char slot truncation on the value and every
+/// synonym, the null-vs-empty synonym normalization, and the JF-684 partial-name
+/// enrichment all live here. Both builders (<see cref="CatalogPayload.FromItems"/>
+/// for library items, <see cref="CatalogSeedEnrichment"/> for the static seeds)
+/// route through it, so a future Artist-catalog construction site cannot ship
+/// without the partial synonym (the silent on-device selection-gate regression
+/// JF-684 diagnosed); the assembly-scan pin in CatalogValueFactoryTests fails on
+/// any CatalogValue construction outside this factory.
+/// </summary>
+internal static class CatalogValueFactory
+{
+    /// <summary>
+    /// Builds one catalog entry under the shared construction contract. For the
+    /// enriched types the JF-684 append is verified structurally (see
+    /// AssertArtistEnrichment), so a drifted enrichment path fails the sync
+    /// loudly instead of regressing silently on-device.
+    /// </summary>
+    /// <param name="type">The catalog type the entry belongs to.</param>
+    /// <param name="itemId">The Jellyfin item guid, or the deterministic seed guid.</param>
+    /// <param name="name">The raw, untruncated display name.</param>
+    /// <param name="synonyms">The generated synonym family; may be empty.</param>
+    /// <returns>The enriched catalog entry.</returns>
+    internal static CatalogValue Create(CatalogType type, Guid itemId, string name, List<string> synonyms)
+    {
+        var value = new CatalogValue
+        {
+            Id = CatalogValue.FormatId(type, itemId),
+            Name = new CatalogValueName
+            {
+                Value = SlotValueHelper.Truncate(name),
+                Synonyms = synonyms.Count > 0 ? synonyms.Select(SlotValueHelper.Truncate).ToList() : null
+            }
+        };
+
+        // JF-684: after the phonetic family (so it never consumes the per-name
+        // variant cap), append the bare first-word synonym, then verify it
+        // structurally. The Artist-only scope is stated once (AppliesTo) and
+        // gates both the append and the guard; AppendTo's internal gate stays as
+        // the policy owner's own defense for direct callers.
+        if (PartialNameSynonyms.AppliesTo(type))
+        {
+            PartialNameSynonyms.AppendTo(value.Name, type);
+            AssertArtistEnrichment(value.Name);
+        }
+
+        return value;
+    }
+
+    /// <summary>
+    /// The structural guard on the JF-684 enrichment: an Artist entry whose
+    /// (truncated) name yields a partial word MUST carry it among its synonyms.
+    /// The expectation is re-derived from the payload side, so the drift this can
+    /// fire on is between the enrichment VERDICT and the synonym-list mutation
+    /// (AppendTo's plumbing, AppendDistinct) plus non-determinism; Generate-policy
+    /// drift (a changed accept/reject table) is invisible here by construction
+    /// (both sides call the same function) and is owned by the
+    /// PartialNameSynonymsTests accept/reject pins instead. The throw aborts the
+    /// whole per-locale sync leg (all catalog types and the model injection for
+    /// that locale, deterministically on every run) and the leg's catch logs it,
+    /// keeping every last-good catalog version pinned instead of shipping one
+    /// whose bare-word reachability silently collapsed. Cost: one extra Generate
+    /// call per Artist entry, sync-path only.
+    /// </summary>
+    /// <param name="name">The freshly built entry name block.</param>
+    /// <remarks>Internal for the InternalsVisibleTo test seam: the guard's own
+    /// throw contract is pinned directly, since every other pin exercises only
+    /// the passing side.</remarks>
+    internal static void AssertArtistEnrichment(CatalogValueName name)
+    {
+        string? expected = PartialNameSynonyms.Generate(name.Value);
+        if (expected == null)
+        {
+            return;
+        }
+
+        string truncated = SlotValueHelper.Truncate(expected);
+        if (name.Synonyms?.Contains(truncated, StringComparer.OrdinalIgnoreCase) != true)
+        {
+            throw new InvalidOperationException(
+                $"Artist catalog entry '{name.Value}' yielded partial synonym '{truncated}' but it is absent from the entry's synonyms; the JF-684 enrichment path is broken.");
+        }
+    }
+}
