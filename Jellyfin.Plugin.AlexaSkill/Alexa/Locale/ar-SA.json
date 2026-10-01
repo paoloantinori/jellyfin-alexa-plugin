@@ -301,5 +301,6 @@
   "SpeedName1750": "واحد وثلاثة أرباع",
   "SpeedName2000": "مضاعفة",
   "CannotChangeSpeedOverVideo": "عذراً، لا أستطيع تغيير سرعة التشغيل أثناء تشغيل مقطع فيديو أو عرض شريط التقدم.",
-  "CannotChangeSpeedForBook": "عذراً، لا أستطيع تغيير سرعة تشغيل الكتب الصوتية."
+  "CannotChangeSpeedForBook": "عذراً، لا أستطيع تغيير سرعة تشغيل الكتب الصوتية.",
+  "StreamTokenNotConfigured": "البث غير مهيأ بشكل صحيح. يرجى التحقق من صفحة إعدادات مهارة Alexa في لوحة تحكم Jellyfin."
 }

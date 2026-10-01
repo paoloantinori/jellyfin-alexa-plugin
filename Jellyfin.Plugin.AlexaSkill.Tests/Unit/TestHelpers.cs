@@ -670,6 +670,23 @@ internal static class TestHelpers
     }
 
     /// <summary>
+    /// The ONE remux-eligible episode fixture (h264 video + EAC3 audio, one hour of
+    /// runtime, the JF-565 clamp's resumable shape): routes to the episode HLS remux on
+    /// the VideoApp path and to the audio-only transcode on the AudioPlayer path. Was 2
+    /// private RemuxEpisode copies (PlaybackLaunchBuilderEpisodeResumeTests, the JF-687
+    /// stream-token-secret suite).
+    /// </summary>
+    internal static TestEpisodeWithStreams RemuxEpisode(Guid? id = null)
+        => new(
+            "The Convention",
+            id ?? Guid.NewGuid(),
+            TestStream(MediaStreamType.Video, "h264"),
+            TestStream(MediaStreamType.Audio, "eac3"))
+        {
+            RunTimeTicks = TimeSpan.FromMinutes(60).Ticks
+        };
+
+    /// <summary>
     /// Movie twin of <see cref="TestEpisodeWithStreams"/> (ResolveAudioLaunchSource and
     /// the VideoApp launch routing match Movie and Episode). Was 2 private copies
     /// (MovieWithStreams in PlayVideoIntentHandlerTests, the awkwardly-named

@@ -301,5 +301,6 @@
   "SpeedName1750": "een en drie kwart",
   "SpeedName2000": "dubbel",
   "CannotChangeSpeedOverVideo": "Sorry, ik kan de afspeelsnelheid niet wijzigen terwijl een video of de weergave met voortgangsbalk wordt afgespeeld.",
-  "CannotChangeSpeedForBook": "Sorry, ik kan de snelheid van luisterboeken niet wijzigen."
+  "CannotChangeSpeedForBook": "Sorry, ik kan de snelheid van luisterboeken niet wijzigen.",
+  "StreamTokenNotConfigured": "Streaming is niet goed geconfigureerd. Controleer de instellingen van de Alexa-skill in je Jellyfin-dashboard."
 }

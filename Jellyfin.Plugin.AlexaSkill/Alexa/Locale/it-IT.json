@@ -301,5 +301,6 @@
   "SpeedName1750": "uno e tre quarti",
   "SpeedName2000": "doppia",
   "CannotChangeSpeedOverVideo": "Mi dispiace, non posso cambiare la velocità durante la riproduzione di un video o con la barra di avanzamento.",
-  "CannotChangeSpeedForBook": "Mi dispiace, non posso cambiare la velocità degli audiolibri."
+  "CannotChangeSpeedForBook": "Mi dispiace, non posso cambiare la velocità degli audiolibri.",
+  "StreamTokenNotConfigured": "Lo streaming non è configurato correttamente. Controlla la pagina delle impostazioni della Alexa Skill nella dashboard di Jellyfin."
 }
