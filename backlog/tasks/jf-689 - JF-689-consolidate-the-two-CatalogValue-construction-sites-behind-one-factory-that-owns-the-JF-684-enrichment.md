@@ -3,7 +3,7 @@ id: JF-689
 title: >-
   JF-689 - consolidate the two CatalogValue construction sites behind one factory
   that owns the JF-684 partial-synonym enrichment
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-30 20:20'
 labels:
