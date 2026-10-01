@@ -1398,7 +1398,7 @@ public sealed class PlaybackLaunchBuilder
 
         _logger.LogDebug(
             "BuildAudiobookResumeResponse: itemId={ItemId}, parentId={ParentId}, startTicks={Ticks}, url={Url}",
-            item.Id, parentId, startTicks, videoAudioUrl);
+            item.Id, parentId, startTicks, RequestLogRedactor.RedactUrl(videoAudioUrl));
 
         // JF-687: the resume URL above minted a token-gated URL; with an empty secret
         // the route gate would 503 every fetch, so the resume answers the configuration
@@ -2145,8 +2145,11 @@ public sealed class PlaybackLaunchBuilder
         // secret would hand the device a URL the route gate 503s. The refusal runs
         // BEFORE the last-played record below: one refusal-ledger policy at every
         // launch site (the chokepoint refuses before its record too), so a refused
-        // launch never flips the device's real last-played entry.
-        if (StreamTokenSecretRefusal(videoAudioUrl, locale) is { } secretRefusal)
+        // launch never flips the device's real last-played entry. The locale folds
+        // announceLocale in (the gate-marker F2 fix): this branch's production
+        // callers thread announceLocale, not locale, and the screenless sibling
+        // of the SAME builder answers localized on the identical input.
+        if (StreamTokenSecretRefusal(videoAudioUrl, locale ?? announceLocale) is { } secretRefusal)
         {
             return secretRefusal;
         }

@@ -53,3 +53,5 @@ carrying the has-launch-directive gate, consumed by every site. Related residual
 speed handler persists PodcastSpeedPerMille BEFORE the launch build, so a refused speed
 ask still mutates the persisted preference; move the persist behind a successful launch.
 <!-- SECTION:DESCRIPTION:END -->
+
+ORCHESTRATOR GATE-MARKER EXTENSIONS (2026-10-01, from the final-state review; findings 3 and 4): (a) all 11 JF-687 pins assert the en-US refusal only - when this task's locale threading lands, extend at least one pin per family to the localized assertion (the it-IT string is currently unreachable on the flagship paths, so the pins bake English in); (b) NEW ITEM, the phantom now-playing state: handlers write session.NowPlayingQueue / FullNowPlayingItem / DeviceQueueManager.SetQueue / QueueContinuationStore BEFORE the guarded builder call (PlayBook ~234-251, YesIntent ~220), so a refused launch leaves MediaInfo answering "playing <book>" with nothing playing and a stale QueueContinuation that survives - the refusal-before-ledger policy must extend to the queue/session writes (fix ordering or roll back on refusal detection via the HasLaunchDirective predicate).
