@@ -3,7 +3,7 @@ id: JF-686
 title: >-
   JF-686 - single-chapter audiobook resume redirect drops ?start=, a resume
   launch on a one-chapter book restarts from 0:00
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-30'
 labels:
