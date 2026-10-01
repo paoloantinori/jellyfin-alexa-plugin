@@ -4,7 +4,7 @@ title: >-
   JF-691 - residuals of the JF-683 Finished keep-alive: unreshuffled shuffle at the
   last queue position still ends the session mid-playback, and a
   deleted-from-library successor can keep the session alive over dead audio
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-30 21:40'
 labels:
