@@ -149,6 +149,16 @@ internal static class PartialNameSynonyms
     }
 
     /// <summary>
+    /// The Artist-only scope of the partial-word enrichment, the ONE statement of
+    /// the JF-508 boundary (album first words stay untouched): AppendTo gates on
+    /// it and the <see cref="CatalogValueFactory"/> structural guard gates on it,
+    /// so a deliberate scope widening moves both together.
+    /// </summary>
+    /// <param name="type">The catalog type to test.</param>
+    /// <returns>True when the enrichment applies to the type.</returns>
+    internal static bool AppliesTo(CatalogType type) => type == CatalogType.Artist;
+
+    /// <summary>
     /// Appends the partial synonym to a catalog entry's synonym list, no-op for
     /// non-Artist catalog types (JF-684 scope: the musician slot only; album first
     /// words stay untouched because the AlbumName anchors already steal artist
@@ -161,7 +171,7 @@ internal static class PartialNameSynonyms
     /// <param name="type">The catalog type the entry belongs to.</param>
     internal static void AppendTo(CatalogValueName name, CatalogType type)
     {
-        if (type != CatalogType.Artist)
+        if (!AppliesTo(type))
         {
             return;
         }

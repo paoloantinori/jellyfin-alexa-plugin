@@ -2,9 +2,7 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text.Json.Serialization;
-using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
 
@@ -45,21 +43,7 @@ public class CatalogPayload
             }
 
             List<string> synonyms = synonymGenerator(name, locale);
-            var catalogValue = new CatalogValue
-            {
-                Id = CatalogValue.FormatId(type, id),
-                Name = new CatalogValueName
-                {
-                    Value = SlotValueHelper.Truncate(name),
-                    Synonyms = synonyms.Count > 0 ? synonyms.Select(SlotValueHelper.Truncate).ToList() : null
-                }
-            };
-
-            // JF-684: after the phonetic family (so it never consumes the per-name
-            // variant cap), append the bare first-word synonym for artist entries.
-            PartialNameSynonyms.AppendTo(catalogValue.Name, type);
-
-            payload.Values.Add(catalogValue);
+            payload.Values.Add(CatalogValueFactory.Create(type, id, name, synonyms));
         }
 
         return payload;

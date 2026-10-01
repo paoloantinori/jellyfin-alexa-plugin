@@ -209,22 +209,10 @@ public static class CatalogSeedEnrichment
             }
 
             List<string> synonyms = synonymGenerator(seed, locale);
-            var seedValue = new CatalogValue
-            {
-                Id = CatalogValue.FormatId(type, StableSeedGuid(seed)),
-                Name = new CatalogValueName
-                {
-                    Value = value,
-                    Synonyms = synonyms.Count > 0 ? synonyms.Select(SlotValueHelper.Truncate).ToList() : null
-                }
-            };
 
-            // JF-684: artist seeds are catalog entries like library ones, so they get
-            // the same first-word partial synonym (the selection gate the spike
-            // proved applies to every entry of the catalog the model references).
-            PartialNameSynonyms.AppendTo(seedValue.Name, type);
-
-            payload.Values.Add(seedValue);
+            // Artist seeds are catalog entries like library ones, so the shared
+            // factory enriches them identically (JF-684 via the JF-689 factory).
+            payload.Values.Add(CatalogValueFactory.Create(type, StableSeedGuid(seed), seed, synonyms));
         }
     }
 
