@@ -1032,6 +1032,220 @@ public class EventHandlerTests : PluginTestBase, IDisposable
         Assert.True(response.Response!.ShouldEndSession != true, "loop mode keeps playback going at the last position: the session must survive the inter-track gap");
     }
 
+    // ---- JF-691: the two residuals of the JF-683 keep-alive ----
+
+    /// <summary>
+    /// The JF-691 chain drives NearlyFinished's real enqueue path, whose stream URL
+    /// builder needs a server address (the GaplessPlaybackTests precedent; the
+    /// class-level _config stays bare for the event-only tests).
+    /// </summary>
+    private static readonly PluginConfiguration Jf691Config = new() { ServerAddress = "http://localhost:8096" };
+
+    /// <summary>
+    /// The NearlyFinished half of the JF-691 chain must be constructed on THIS
+    /// class's manager and the SAME config instance as its Finished counterpart so
+    /// the enqueue record both write and read lands in one store (the file's
+    /// manager-less helpers deliberately omit the manager for the heuristic pins).
+    /// </summary>
+    private PlaybackNearlyFinishedEventHandler CreateNearlyFinishedHandlerOnClassManager()
+        => new(_sessionManagerMock.Object, Jf691Config, _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory, _queueManager);
+
+    // JF-691 corner 1: shuffle requested WITHOUT a physical reshuffle makes
+    // NearlyFinished's ResolveNextItemId random-pick a next track at EVERY
+    // position with count > 1, including the last one, so playback genuinely
+    // continues there. The JF-683 arm saw finishedIndex = Count-1 and RepeatNone
+    // and ended the session at that boundary (the dismissed-screen, pause
+    // sessionNew=true symptom persisted in this mode). The arm is the resolver's
+    // own admission condition (Shuffle, NOT reshuffled, count > 1, index found),
+    // so it cannot fire where the resolver would have answered null.
+    [Fact]
+    public async Task PlaybackFinished_ShuffleRandomAtLastPosition_KeepsSessionAlive()
+    {
+        var records = new List<(LogLevel Level, string Message)>();
+        var handler = CreateFinishedHandler(LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Debug);
+            b.AddProvider(TestCaptureLogger.Into(records));
+        }));
+        _sessionManagerMock
+            .Setup(s => s.OnPlaybackStopped(It.IsAny<PlaybackStopInfo>()))
+            .Returns(Task.CompletedTask);
+
+        Guid lastTrack = Guid.NewGuid();
+        var session = CreateSession();
+        // No device queue: ResolvePlaybackOrder falls back to the session PlayState,
+        // the same fallback NearlyFinished's resolver uses manager-less.
+        session.PlayState = new PlayerStateInfo { PlaybackOrder = PlaybackOrder.Shuffle };
+        session.NowPlayingQueue = Enumerable.Range(0, 5)
+            .Select(i => new QueueItem { Id = i == 4 ? lastTrack : Guid.NewGuid() })
+            .ToList();
+        session.FullNowPlayingItem = new MediaBrowser.Controller.Entities.Audio.Audio { Id = lastTrack, Name = "Track 5" };
+
+        var context = TestHelpers.CreateContextWithToken(lastTrack.ToString(), $"jf691-{Guid.NewGuid():N}", "FINISHED");
+
+        var response = await handler.HandleAsync(
+            CreateAudioPlayerRequest("AudioPlayer.PlaybackFinished", lastTrack.ToString()),
+            context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.True(response.Response!.ShouldEndSession != true, "unreshuffled shuffle random-picks a next track at the last position: the session must survive the boundary");
+        Assert.Contains(
+            TestCaptureLogger.Snapshot(records),
+            r => r.Message.Contains("keeping the session alive", StringComparison.Ordinal)
+                && r.Message.Contains("shuffleRandom=True", StringComparison.Ordinal));
+    }
+
+    // The honest negative of corner 1: a PHYSICALLY reshuffled queue (ShuffleOn's
+    // OriginalItemIds marker) advances sequentially through its shuffled order, so
+    // at the last position true exhaustion IS reachable and the session must end.
+    // The enqueue record is armed first so the JF-691 veto passes and the ARMS
+    // alone decide this pin.
+    [Fact]
+    public async Task PlaybackFinished_ShuffledReshuffledQueueAtLastPosition_EndsSession()
+    {
+        var records = new List<(LogLevel Level, string Message)>();
+        var handler = CreateFinishedHandlerOnClassManager();
+        _sessionManagerMock
+            .Setup(s => s.OnPlaybackStopped(It.IsAny<PlaybackStopInfo>()))
+            .Returns(Task.CompletedTask);
+
+        Context context = CreateContextForFreshDevice();
+        string deviceId = context.System.Device.DeviceID!;
+        Guid lastTrack = Guid.NewGuid();
+        List<string> ids = Enumerable.Range(0, 4).Select(_ => Guid.NewGuid().ToString())
+            .Append(lastTrack.ToString()).ToList();
+
+        // The production reshuffle shape: device queue marked Shuffle with the
+        // pre-shuffle order kept (OriginalItemIds non-null), finished item last.
+        _queueManager.SetQueue(deviceId, ids, currentIndex: 4);
+        _queueManager.GetOrCreateQueue(deviceId).OriginalItemIds = new List<string>(ids);
+        _queueManager.RecordEnqueue(deviceId, lastTrack.ToString(), Guid.NewGuid().ToString());
+
+        var session = CreateSession();
+        session.NowPlayingQueue = ids.Select(id => new QueueItem { Id = Guid.Parse(id) }).ToList();
+        session.FullNowPlayingItem = new MediaBrowser.Controller.Entities.Audio.Audio { Id = lastTrack, Name = "Last" };
+
+        var response = await handler.HandleAsync(
+            CreateAudioPlayerRequest("AudioPlayer.PlaybackFinished", lastTrack.ToString()),
+            context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.True(response.Response!.ShouldEndSession == true, "a reshuffled queue advances sequentially: the last position is true exhaustion and ends the session");
+        Assert.DoesNotContain(
+            TestCaptureLogger.Snapshot(records),
+            r => r.Message.Contains("keeping the session alive", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// The two-track scene both JF-691 chain pins start from: the device store
+    /// carries the queue the play seeded (the production play-flow mirror), the
+    /// session queue matches it, track1 is now-playing and resolvable, and the
+    /// Finished handler runs on the class manager with the server-address config
+    /// and a capture logger. The caller decides the successor's library fate
+    /// (present or deleted) and drives the two event steps itself.
+    /// </summary>
+    private (SessionInfo Session, string DeviceId, Guid Track1, Guid Track2, PlaybackFinishedEventHandler Finished) SeedTwoTrackJf691Scene(List<(LogLevel Level, string Message)> records)
+    {
+        string deviceId = $"jf691-{Guid.NewGuid():N}";
+        Guid track1 = Guid.NewGuid();
+        Guid track2 = Guid.NewGuid();
+
+        _queueManager.SetQueue(deviceId, new List<string> { track1.ToString(), track2.ToString() }, currentIndex: 0);
+
+        var session = CreateSession();
+        session.NowPlayingQueue = new List<QueueItem>
+        {
+            new() { Id = track1 },
+            new() { Id = track2 }
+        };
+        session.FullNowPlayingItem = new MediaBrowser.Controller.Entities.Audio.Audio { Id = track1, Name = "Track 1" };
+
+        _libraryManagerMock.Setup(l => l.GetItemById(track1)).Returns(session.FullNowPlayingItem);
+
+        var finished = CreateFinishedHandlerOnClassManager(Jf691Config, LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Debug);
+            b.AddProvider(TestCaptureLogger.Into(records));
+        }));
+
+        return (session, deviceId, track1, track2, finished);
+    }
+
+    // JF-691 corner 2, the end-to-end deleted-successor chain on the class manager:
+    // NearlyFinished resolves the positional successor the library can no longer
+    // serve (deleted from the library) and returns Empty WITHOUT enqueueing, so
+    // the enqueue record stays untouched; the device then stops after the current
+    // stream, yet the JF-683 positional arm kept the session and its APL screen
+    // alive over dead audio until Amazon reaped it. The record veto closes it:
+    // nothing was enqueued for this boundary, so the session ends.
+    [Fact]
+    public async Task PlaybackFinished_DeletedSuccessor_NothingEnqueued_EndsSession()
+    {
+        var records = new List<(LogLevel Level, string Message)>();
+        var (session, deviceId, track1, track2, finished) = SeedTwoTrackJf691Scene(records);
+        _sessionManagerMock
+            .Setup(s => s.OnPlaybackStopped(It.IsAny<PlaybackStopInfo>()))
+            .Returns(Task.CompletedTask);
+
+        // The successor is gone from the library.
+        _libraryManagerMock.Setup(l => l.GetItemById(track2)).Returns((MediaBrowser.Controller.Entities.BaseItem?)null);
+
+        SkillResponse nearlyFinished = await CreateNearlyFinishedHandlerOnClassManager().HandleAsync(
+            CreateAudioPlayerRequest("AudioPlayer.PlaybackNearlyFinished", track1.ToString()),
+            TestHelpers.CreateContextWithToken(track1.ToString(), deviceId, "PLAYING"),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        // The precondition the whole corner rests on: NOTHING was enqueued, and the
+        // record (the enqueue the device was actually told about) stayed untouched.
+        Assert.Empty(nearlyFinished.Response!.Directives ?? new List<IDirective>());
+        Assert.Null(_queueManager.GetQueue(deviceId)!.LastEnqueueAfterToken);
+
+        var response = await finished.HandleAsync(
+            CreateAudioPlayerRequest("AudioPlayer.PlaybackFinished", track1.ToString()),
+            TestHelpers.CreateContextWithToken(track1.ToString(), deviceId, "FINISHED"),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.True(response.Response!.ShouldEndSession == true, "nothing was enqueued for this boundary: the session must end instead of lingering over dead audio");
+        // The ending reason must be visible at the PRODUCTION log level (the
+        // JF-683 review-F4 lesson): the dedicated Info line, not only the Debug
+        // record view and never the misleading "queue exhausted" line.
+        Assert.Contains(
+            TestCaptureLogger.Snapshot(records),
+            r => r.Level == LogLevel.Information
+                && r.Message.Contains("nothing was enqueued for this boundary", StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            TestCaptureLogger.Snapshot(records),
+            r => r.Message.Contains("queue exhausted", StringComparison.Ordinal));
+    }
+
+    // The healthy companion: when NearlyFinished DID enqueue (the record names this
+    // boundary's token), the veto passes and the JF-683 inter-track keep-alive
+    // works on a manager-backed session too - the veto must not over-fire on the
+    // boundary it exists to protect.
+    [Fact]
+    public async Task PlaybackFinished_EnqueueRecordMatches_KeepsSessionAlive()
+    {
+        var (session, deviceId, track1, track2, finished) = SeedTwoTrackJf691Scene(new List<(LogLevel Level, string Message)>());
+        _sessionManagerMock
+            .Setup(s => s.OnPlaybackStopped(It.IsAny<PlaybackStopInfo>()))
+            .Returns(Task.CompletedTask);
+
+        _libraryManagerMock.Setup(l => l.GetItemById(track2))
+            .Returns(new MediaBrowser.Controller.Entities.Audio.Audio { Id = track2, Name = "Track 2" });
+
+        await CreateNearlyFinishedHandlerOnClassManager().HandleAsync(
+            CreateAudioPlayerRequest("AudioPlayer.PlaybackNearlyFinished", track1.ToString()),
+            TestHelpers.CreateContextWithToken(track1.ToString(), deviceId, "PLAYING"),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.Equal(track1.ToString(), _queueManager.GetQueue(deviceId)!.LastEnqueueAfterToken);
+
+        var response = await finished.HandleAsync(
+            CreateAudioPlayerRequest("AudioPlayer.PlaybackFinished", track1.ToString()),
+            TestHelpers.CreateContextWithToken(track1.ToString(), deviceId, "FINISHED"),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.True(response.Response!.ShouldEndSession != true, "the record names this boundary's enqueue: the session survives the inter-track gap");
+    }
+
     [Fact]
     public void PlaybackStopped_CanHandle_ReturnsTrueForPlaybackStopped()
     {
@@ -1493,8 +1707,14 @@ public class EventHandlerTests : PluginTestBase, IDisposable
     private PlaybackStartedEventHandler CreateStartHandlerOnClassManager()
         => new(_sessionManagerMock.Object, _config, _loggerFactory, _libraryManagerMock.Object, _queueManager);
 
-    private PlaybackFinishedEventHandler CreateFinishedHandlerOnClassManager()
-        => new(_sessionManagerMock.Object, _config, _loggerFactory, _queueManager, _libraryManagerMock.Object);
+    /// <summary>
+    /// The class-manager Finished factory. The optional overrides exist for the
+    /// JF-691 chain tests, which need a server-address config (their NearlyFinished
+    /// counterpart builds real stream URLs) and a capture logger; the bare form
+    /// keeps the pre-existing call sites unchanged.
+    /// </summary>
+    private PlaybackFinishedEventHandler CreateFinishedHandlerOnClassManager(PluginConfiguration? config = null, ILoggerFactory? loggerFactory = null)
+        => new(_sessionManagerMock.Object, config ?? _config, loggerFactory ?? _loggerFactory, _queueManager, _libraryManagerMock.Object);
 
     private PlaybackFailedEventHandler CreateFailedHandlerOnClassManager()
         => new(_sessionManagerMock.Object, _config, _loggerFactory, _queueManager);

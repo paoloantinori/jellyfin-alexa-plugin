@@ -802,6 +802,14 @@ public class QueueRehydrationAdoptionTests : PluginTestBase, IDisposable
         // for in NearlyFinished, JF-574). The pin drives the full Finished flow.
         var songs = SetupQueueSongs(4);
         _queueManager.SetQueue(DeviceId, songs.Select(s => s.Id.ToString()).ToList(), currentIndex: 1);
+        // JF-691: the boundary this pin models is a restart AFTER the pre-restart
+        // NearlyFinished enqueued member [2], and that enqueue's record rides the
+        // same persisted store the queue rides: RecordEnqueue wrote it seconds
+        // before the boundary (the ~2s persist debounce flushes long before
+        // Finished), so the restarted plugin reloads BOTH. Seeding only the queue
+        // would make the Finished veto read the restart shape as
+        // nothing-enqueued and end the session the pin exists to protect.
+        _queueManager.RecordEnqueue(DeviceId, songs[1].Id.ToString(), songs[2].Id.ToString());
         _sessionManagerMock
             .Setup(s => s.OnPlaybackStopped(It.IsAny<PlaybackStopInfo>()))
             .Returns(Task.CompletedTask);

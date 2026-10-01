@@ -175,4 +175,23 @@ public sealed class DeviceQueue
     /// crashing, and a newer plugin loading an older file reads null.
     /// </summary>
     public string? LastPlayedLaunchRoute { get; set; }
+
+    /// <summary>
+    /// Gets or sets the AudioPlayer token of the stream the last Enqueue directive
+    /// was issued AFTER (JF-691): the durable twin of the directive's
+    /// <c>ExpectedPreviousToken</c>. The ONE writer is the
+    /// <c>PlaybackLaunchBuilder.BuildAudioPlayerResponse</c> chokepoint; the reader
+    /// and the full veto rationale live on
+    /// <c>PlaybackFinishedEventHandler.EnqueuedForThisBoundary</c>. Null when no
+    /// Enqueue directive was ever issued for this device. Purely additive in the
+    /// persisted JSON (the LastPlayedLaunchRoute compat contract above).
+    /// </summary>
+    public string? LastEnqueueAfterToken { get; set; }
+
+    /// <summary>
+    /// Gets or sets the item ID the last Enqueue directive carried: the JF-691
+    /// record's diagnosability half, so the Finished veto's debug line can name
+    /// what the stale record points at without a disk dig.
+    /// </summary>
+    public string? LastEnqueueNextItemId { get; set; }
 }

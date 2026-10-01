@@ -131,8 +131,15 @@ public class PlaybackFinishedEventHandler : BaseHandler
         // (the same item / a wrap to index 0), so loop mode counts as queued-next
         // regardless of position; and an EXPIRED sleep timer is the one shape where
         // NearlyFinished deliberately enqueued nothing (its own gate at entry), so
-        // the session ends and the screen dismisses exactly as before.
+        // the session ends and the screen dismisses exactly as before. JF-691 adds
+        // two more: the unreshuffled-shuffle mode (NearlyFinished's resolver
+        // random-picks a next at EVERY position with count > 1, the last one
+        // included, so playback continues where this queue-shape read alone saw
+        // exhaustion) and the enqueue-record veto below, which turns the arms from
+        // "the queue LOOKS continued" into "a stream was actually enqueued after
+        // this token".
         int finishedIndex = -1;
+        bool vetoedByEnqueueRecord = false;
         if (!hasQueuedNext)
         {
             bool sleepExpired = StreamTokenCodec.IsSleepExpiredUtc(req.Token, DateTimeOffset.UtcNow);
@@ -140,12 +147,33 @@ public class PlaybackFinishedEventHandler : BaseHandler
             {
                 finishedIndex = SessionQueue.IndexOfQueueItem(session, itemId);
                 bool loops = (session.PlayState?.RepeatMode ?? RepeatMode.RepeatNone) != RepeatMode.RepeatNone;
-                if ((finishedIndex >= 0 && finishedIndex + 1 < session.NowPlayingQueue.Count) || (loops && finishedIndex >= 0))
+
+                // JF-691 (a): the mode-aware arm. NearlyFinished's random-pick
+                // admission guard is ONE shared predicate (ShuffleRandomPickApplies,
+                // evaluated by both handlers over the shared ResolvePlaybackOrder
+                // resolution), so this arm can only fire where the resolver itself
+                // would have produced a next. Default order and a reshuffled queue
+                // advance sequentially: their last position is true exhaustion and
+                // the arm deliberately does not fire there.
+                var (resolvedOrder, resolvedReshuffled) = ProgressReporter.ResolvePlaybackOrder(session, context, _queueManager);
+                bool shuffleRandomNext = ProgressReporter.ShuffleRandomPickApplies(resolvedOrder, resolvedReshuffled, session.NowPlayingQueue.Count)
+                    && finishedIndex >= 0;
+
+                if ((finishedIndex >= 0 && finishedIndex + 1 < session.NowPlayingQueue.Count) || (loops && finishedIndex >= 0) || shuffleRandomNext)
                 {
-                    hasQueuedNext = true;
-                    Logger.LogDebug(
-                        "PlaybackFinished: playerActivity={Activity} (inter-track gap) but playback continues (index={Index} of {QueueCount}, loops={Loops}); keeping the session alive",
-                        context.AudioPlayer?.PlayerActivity, finishedIndex, session.NowPlayingQueue.Count, loops);
+                    // JF-691 (b): shape is not the enqueue; the veto asks what the
+                    // device was actually told (rationale on the helper).
+                    if (EnqueuedForThisBoundary(deviceId, req.Token))
+                    {
+                        hasQueuedNext = true;
+                        Logger.LogDebug(
+                            "PlaybackFinished: playerActivity={Activity} (inter-track gap) but playback continues (index={Index} of {QueueCount}, loops={Loops}, shuffleRandom={ShuffleRandom}); keeping the session alive",
+                            context.AudioPlayer?.PlayerActivity, finishedIndex, session.NowPlayingQueue.Count, loops, shuffleRandomNext);
+                    }
+                    else
+                    {
+                        vetoedByEnqueueRecord = true;
+                    }
                 }
             }
             else
@@ -160,12 +188,79 @@ public class PlaybackFinishedEventHandler : BaseHandler
 
         if (!hasQueuedNext)
         {
-            Logger.LogInformation(
-                "PlaybackFinished: queue exhausted, ending session to dismiss APL screen (queueCount={QueueCount}, finishedIndex={Index}, playerActivity={Activity})",
-                session.NowPlayingQueue.Count, finishedIndex, context.AudioPlayer?.PlayerActivity);
+            // The JF-691 record veto is a DIFFERENT ending reason than exhaustion and
+            // gets its own Info line (the JF-683 review-F4 lesson: the generic line
+            // would report a mid-queue finishedIndex with the true reason visible
+            // only at Debug, the exact misdiagnosis trap that carve-out was added
+            // to prevent).
+            if (vetoedByEnqueueRecord)
+            {
+                Logger.LogInformation(
+                    "PlaybackFinished: nothing was enqueued for this boundary (the enqueue record names an older token), ending session to dismiss APL screen (queueCount={QueueCount}, finishedIndex={Index}, playerActivity={Activity})",
+                    session.NowPlayingQueue.Count, finishedIndex, context.AudioPlayer?.PlayerActivity);
+            }
+            else
+            {
+                Logger.LogInformation(
+                    "PlaybackFinished: queue exhausted, ending session to dismiss APL screen (queueCount={QueueCount}, finishedIndex={Index}, playerActivity={Activity})",
+                    session.NowPlayingQueue.Count, finishedIndex, context.AudioPlayer?.PlayerActivity);
+            }
+
             return BuildEndSessionResponse();
         }
 
         return BuildKeepAliveResponse();
+    }
+
+    /// <summary>
+    /// JF-691 (b): the veto that turns the queue-shape arms from "the queue LOOKS
+    /// continued" into "a stream was actually enqueued after this token". The
+    /// record is the durable twin of the directive's ExpectedPreviousToken, written
+    /// by the ONE BuildAudioPlayerResponse chokepoint for every Enqueue directive
+    /// the device was told about (see
+    /// <see cref="Playback.DeviceQueue.LastEnqueueAfterToken"/>). The
+    /// deleted-successor shape is the exact miss it closes: NearlyFinished resolved
+    /// a next the library could not serve and returned Empty, so the record still
+    /// names the PREVIOUS boundary (or is absent on the first one) while the queue
+    /// shape still shows the successor. Conservative bounds: no injected manager or
+    /// no queue for the device keeps the pure heuristic (nothing authoritative to
+    /// consult; the arms alone run, the pre-JF-691 behavior). The read uses the
+    /// INJECTED manager only, with no Plugin.Instance fallback: in production DI
+    /// injects the same singleton the chokepoint wrote, and the handler-level tests
+    /// stay hermetic. DISPLACED FINISHES (code-review round, deliberate): the OLD
+    /// stream's late Finished also ends the session when the record names a newer
+    /// boundary, where the pre-JF-691 heuristic kept it alive; the difference is
+    /// inert because the replacing play itself already carried
+    /// <c>ShouldEndSession=true</c> (the skill session ended at that play), and an
+    /// enqueue-shaped replacement IS recorded with the displaced token as its
+    /// after-token, so the veto passes there. No displacement machinery is
+    /// consulted on purpose: the JF-655 exemption serves the active-audio flag, a
+    /// different contract.
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID (the device-store key).</param>
+    /// <param name="finishedToken">The finished stream's token from the event.</param>
+    /// <returns>True when the record names this boundary (or cannot be consulted).</returns>
+    private bool EnqueuedForThisBoundary(string deviceId, string finishedToken)
+    {
+        if (_queueManager == null)
+        {
+            return true;
+        }
+
+        DeviceQueue? queue = _queueManager.GetQueue(deviceId);
+        if (queue == null)
+        {
+            return true;
+        }
+
+        if (string.Equals(queue.LastEnqueueAfterToken, finishedToken, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        Logger.LogDebug(
+            "PlaybackFinished: queue shape says playback continues, but the last enqueue this device was sent followed token {RecordedToken} (next item {RecordedNext}), not the finished {FinishedToken}; ending the session (nothing was enqueued for this boundary, the JF-691 deleted-successor shape)",
+            queue.LastEnqueueAfterToken, queue.LastEnqueueNextItemId, finishedToken);
+        return false;
     }
 }

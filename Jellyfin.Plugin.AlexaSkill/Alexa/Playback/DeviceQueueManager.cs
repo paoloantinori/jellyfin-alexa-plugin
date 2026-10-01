@@ -189,6 +189,38 @@ public sealed class DeviceQueueManager : IDisposable
     }
 
     /// <summary>
+    /// JF-691: record the enqueue as the device was told it: the AudioPlayer token
+    /// the directive's <c>ExpectedPreviousToken</c> names, and the item the
+    /// directive carries. The ONE writer is the
+    /// <c>PlaybackLaunchBuilder.BuildAudioPlayerResponse</c> chokepoint; the reader
+    /// and the rationale live on
+    /// <c>PlaybackFinishedEventHandler.EnqueuedForThisBoundary</c> (see
+    /// <see cref="DeviceQueue.LastEnqueueAfterToken"/>). Short-circuits when
+    /// NOTHING changed (the RecordLastPlayed idiom): Amazon multi-fires
+    /// NearlyFinished, and identical re-enqueues must not churn the persist timer.
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID (the device-store key).</param>
+    /// <param name="afterToken">The stream token the enqueue was issued after.</param>
+    /// <param name="nextItemId">The item ID the enqueued stream will play.</param>
+    public void RecordEnqueue(string deviceId, string afterToken, string nextItemId)
+    {
+        DeviceQueue queue = GetOrCreateQueue(deviceId);
+        if (string.Equals(queue.LastEnqueueAfterToken, afterToken, StringComparison.Ordinal)
+            && string.Equals(queue.LastEnqueueNextItemId, nextItemId, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        queue.LastEnqueueAfterToken = afterToken;
+        queue.LastEnqueueNextItemId = nextItemId;
+        SchedulePersistInternal(deviceId);
+
+        _logger.LogDebug(
+            "Recorded enqueue for device {DeviceId}: afterToken={AfterToken}, nextItem={NextItemId}",
+            deviceId, afterToken, nextItemId);
+    }
+
+    /// <summary>
     /// JF-655: marks the device as ACTIVELY playing AudioPlayer audio. Written by the
     /// <c>PlaybackStarted</c> event handler only: the Echo sending that event is the
     /// platform's own playback report, and no launch-site shortcut may set it (the
