@@ -3,9 +3,10 @@ id: JF-688
 title: >-
   JF-688 - post-catalog-sync live verification of JF-684 partial synonyms and
   re-triage of the JF-510 skip family
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-30 20:05'
+updated_date: '2026-10-01 05:23'
 labels:
   - catalog
   - routing
@@ -69,4 +70,8 @@ risk) unless step 4 surfaces new evidence.
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
-UPDATE 2026-10-01: the post-sync profile-nlu half is DONE (see jf-684's post-sync note: pink/beatles selecting with ER_SUCCESS on catalog v1199). Remaining for this task: the JF-510 e2e skip-family re-triage on the next test round (the skips may now pass or need fixture updates reflecting the new selection).
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed 2026-10-01, both halves satisfied by the JF-684 rollout (catalog v1199, the partial-first-word synonyms): (1) the post-sync profile-nlu verification - "suona la musica di pink" selects PlaySongIntent with ER_SUCCESS [P!nk, Pink Floyd], "beatles" selects with ER_SUCCESS [The Beatles], "suona la cantante pink" selects PlayArtistSongs directly (recorded on jf-684 the morning the sync landed); (2) the JF-510 skip-family re-triage - profile-nlu probes showed the previously-dead utterances now routing ("metti una canzone dei beatles" and "suona i pink floyd" both select PlayArtistSongsIntent with ER_SUCCESS; even the JF-418 "suona i X" family is live again through the phonetic anchor), so BOTH fixture skips were lifted with the new-evidence comments (the old skip_reasons said "re-enable when the model routing is fixed" - it is) and both entries PASSED the live e2e (simulate-skill, full pipeline): "metti una canzone dei beatles" PASSED in 18.7s, "suona i pink floyd" PASSED (with the 4 other suona-family entries green). The xyzzyfoo not-found skip remains (correct: the artist genuinely does not exist; its behavior stays unit-covered). The JF-508/JF-510 regression family is CLOSED by the catalog synonyms, not by model edits - the root cause was out-of-catalog names having no selection anchor at all.
+<!-- SECTION:FINAL_SUMMARY:END -->

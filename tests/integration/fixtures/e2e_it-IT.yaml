@@ -113,23 +113,16 @@ tests:
     expected_response_type: any
 
   # Exact match, different artist
-  # SKIPPED (JF-510 triage 2026-09-06, real model regression; evidence filed
-  # on JF-508): 'suona i pink floyd' now selects PlayAlbumIntent with
-  # album='i P!nk floyd' (the AlbumName catalog's phonetic anchor for Pink
-  # Floyd steals the nominative-article artist query). profile-nlu clean
-  # string confirms ('suona i radiohead' and 'suona i beatles' select NO
-  # intent at all: the whole 'suona i X' JF-418 family is dead in the current
-  # model statistics; 'metti i led zep' still routes). Artist-path coverage
-  # for Pink Floyd continues on 'metti una canzone dei pink floyd' below.
+  # RE-ENABLED (JF-688 re-triage 2026-10-01, catalog v1199 with the JF-684
+  # partial synonyms): profile-nlu now selects PlayArtistSongsIntent with
+  # musician='i P!nk floyd' ER_SUCCESS_MATCH (the artist catalog's phonetic
+  # anchor routes the nominative-article query to the artist intent; the
+  # JF-418 'suona i X' family is live again through the same anchor).
   - utterance: "suona i pink floyd"
     expected_intent: PlayArtistSongsIntent
     expected_slots:
       musician: {}
     expected_response_type: any
-    skip_reason: >
-      JF-508 family regression: PlayAlbumIntent steals the query via the
-      AlbumName catalog anchor (profile-nlu 2026-09-06); re-enable when the
-      model routing is fixed
 
   # JF-510 (2026-09-06): replacement Pink Floyd coverage for the regressed
   # 'suona i pink floyd' above. The catalog's phonetic anchor ('P!nk floyd')
@@ -177,15 +170,14 @@ tests:
   # dei beatles', musician empty). In-catalog names still win via the
   # JellyfinArtist anchor (soul coughing passes). Same root cause as the
   # fast-mode xyzzyfoo skip in test_e2e.py.
+  # RE-ENABLED (JF-688 re-triage 2026-10-01, catalog v1199 with the JF-684
+  # partial synonyms): 'beatles' is now an in-catalog synonym of The Beatles
+  # (profile-nlu: PlayArtistSongsIntent, musician='beatles' ER_SUCCESS_MATCH).
   - utterance: "metti una canzone dei beatles"
     expected_intent: PlayArtistSongsIntent
     expected_slots:
       musician: {}
     expected_response_type: any
-    skip_reason: >
-      JF-508 family regression: PlaySongIntent absorbs the artist carrier
-      for out-of-catalog names (profile-nlu 2026-09-06); re-enable when the
-      model routing is fixed
 
   # Not found, artist that doesn't exist in the library
   # SKIPPED (JF-510 triage 2026-09-06): same PlaySongIntent carrier

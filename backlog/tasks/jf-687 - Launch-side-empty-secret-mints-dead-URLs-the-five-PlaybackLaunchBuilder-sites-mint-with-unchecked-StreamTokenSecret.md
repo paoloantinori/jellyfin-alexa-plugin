@@ -3,7 +3,7 @@ id: JF-687
 title: >-
   JF-687 - launch-side empty secret mints dead URLs: the five PlaybackLaunchBuilder
   mint sites use the unchecked StreamTokenSecret
-status: To Do
+status: In Progress
 priority: low
 labels:
   - streaming
