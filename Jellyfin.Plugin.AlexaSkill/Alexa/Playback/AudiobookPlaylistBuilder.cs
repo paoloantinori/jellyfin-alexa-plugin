@@ -113,8 +113,7 @@ public static class AudiobookPlaylistBuilder
     /// </summary>
     internal static string BuildSlicedPlaylist(string basePlaylist, long startTicks, int segmentDurationSeconds)
     {
-        int startSegment = TryResolveStartSegmentByExtinf(basePlaylist, startTicks)
-            ?? (int)(startTicks / (TimeSpan.TicksPerSecond * segmentDurationSeconds));
+        int startSegment = ResolveStartSegment(basePlaylist, startTicks, segmentDurationSeconds);
         if (startSegment <= 0)
         {
             return basePlaylist;
@@ -124,6 +123,11 @@ public static class AudiobookPlaylistBuilder
         var output = new StringBuilder(basePlaylist.Length);
         string? pendingInf = null; // buffered #EXTINF awaiting its URI line
         bool mediaSequenceSet = false;
+        // Where a synthesized #EXT-X-MEDIA-SEQUENCE line goes when the base lacks one:
+        // immediately AFTER #EXTM3U (RFC 8216 requires EXTM3U to be the first line, so a
+        // leading insert would emit an invalid playlist; JF-686 review F3). 0 keeps the
+        // old leading insert only for a base that has no EXTM3U at all (already malformed).
+        int sequenceInsertOffset = 0;
 
         foreach (string rawLine in lines)
         {
@@ -158,16 +162,35 @@ public static class AudiobookPlaylistBuilder
 
             // Other header/closing tags (EXTM3U, VERSION, TARGETDURATION, ENDLIST, …) pass through.
             output.AppendLine(line);
+            if (line == "#EXTM3U")
+            {
+                sequenceInsertOffset = output.Length;
+            }
         }
 
         // A sliced playlist MUST declare the first segment's sequence; add it if the base lacked one.
         if (!mediaSequenceSet)
         {
-            output.Insert(0, "#EXT-X-MEDIA-SEQUENCE:" + startSegment.ToString(CultureInfo.InvariantCulture) + "\n");
+            output.Insert(sequenceInsertOffset, "#EXT-X-MEDIA-SEQUENCE:" + startSegment.ToString(CultureInfo.InvariantCulture) + "\n");
         }
 
         return output.ToString();
     }
+
+    /// <summary>
+    /// The ONE start-segment resolution (JF-686 review F5): the EXTINF walk when the
+    /// playlist's durations decide, else the flat divisor over
+    /// <paramref name="segmentDurationSeconds"/>. Extracted so the serve path can log the
+    /// resolved segment (the debug-logging policy's playback-position + branching data)
+    /// without a second copy of the arithmetic.
+    /// </summary>
+    /// <param name="basePlaylist">The full playlist text.</param>
+    /// <param name="startTicks">Resume position in .NET ticks.</param>
+    /// <param name="segmentDurationSeconds">The flat-divisor fallback segment length.</param>
+    /// <returns>The segment index the slice would begin at.</returns>
+    internal static int ResolveStartSegment(string basePlaylist, long startTicks, int segmentDurationSeconds)
+        => TryResolveStartSegmentByExtinf(basePlaylist, startTicks)
+            ?? (int)(startTicks / (TimeSpan.TicksPerSecond * segmentDurationSeconds));
 
     /// <summary>
     /// Resolve the resume segment by accumulating the playlist's own per-segment

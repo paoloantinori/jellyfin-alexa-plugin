@@ -6814,6 +6814,217 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
+    /// Arrange a one-chapter audiobook for the JF-686 redirect tests: the parent folder plus
+    /// the single chapter, BOTH GetItemById lookups stubbed (the redirected core resolves
+    /// the CHAPTER item itself via ValidateVideoAudioRequest on chapterId), GetItemList
+    /// answering the one chapter, and a COMPLETED playlist planted as the chapter's HLS
+    /// cache in the PRODUCTION shape (JF-686 review F6): #EXT-X-TARGETDURATION +
+    /// #EXT-X-MEDIA-SEQUENCE headers (so the slice exercises the tag-REPLACE branch, the
+    /// one production playlists take) and full <c>/alexaskill/api/video-audio/{chapterId}/segments/seg_NNN.ts</c>
+    /// URIs (the <c>-hls_base_url</c> lines ffmpeg actually writes), 4s segments, ENDLIST.
+    /// <paramref name="segments"/> 0 skips the planting entirely (cold cache: the encode
+    /// path runs and the fake's own live partial is what serves). Returns the parent id
+    /// the endpoint is called with.
+    /// </summary>
+    private async Task<Guid> ArrangeSingleChapterBookAsync(string bookName, int segments)
+    {
+        Guid parentId = Guid.NewGuid();
+        var parentItem = new MediaBrowser.Controller.Entities.Folder
+        {
+            Name = bookName,
+            Id = parentId
+        };
+        var chapter = new MediaBrowser.Controller.Entities.Audio.Audio { Name = "Only Chapter", Id = Guid.NewGuid() };
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns(parentItem);
+        _libraryManagerMock.Setup(m => m.GetItemById(chapter.Id)).Returns(chapter);
+        _libraryManagerMock.Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Returns(new List<MediaBrowser.Controller.Entities.BaseItem> { chapter });
+
+        if (segments <= 0)
+        {
+            return parentId;
+        }
+
+        string hlsDir = _cache.GetHlsDirectoryPath(chapter.Id.ToString(), 0);
+        Directory.CreateDirectory(hlsDir);
+        var playlist = new System.Text.StringBuilder("#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n");
+        for (int i = 0; i < segments; i++)
+        {
+            playlist.Append("#EXTINF:4.000,\n/alexaskill/api/video-audio/")
+                .Append(chapter.Id.ToString())
+                .Append("/segments/seg_").Append(i.ToString("000", System.Globalization.CultureInfo.InvariantCulture)).Append(".ts\n");
+        }
+
+        playlist.Append("#EXT-X-ENDLIST\n");
+        await File.WriteAllTextAsync(Path.Combine(hlsDir, "stream.m3u8"), playlist.ToString());
+
+        return parentId;
+    }
+
+    /// <summary>
+    /// JF-686: a resume launch on a ONE-chapter book must serve a playlist SLICED at the
+    /// resume position. The builder mints <c>audiobook/{parentId}/stream.m3u8?start=&lt;ticks&gt;</c>
+    /// (pinned builder-side in VideoAppCapabilityGateTests) and the multi-chapter path slices
+    /// via <c>ServeAudiobookPlaylistAsync</c>, but the single-chapter redirect used to drop
+    /// startTicks at <c>StreamHlsVideoAudioCore</c>: the song core served the full unsliced
+    /// playlist, so "resume from 20 minutes" played from 0:00 while the device showed a fresh
+    /// timeline. Construction mirrors the JF-682 twin with a COMPLETED (ENDLIST) 12-segment/4s
+    /// playlist planted in the chapter's cache dir in the production shape (full segment URIs
+    /// + the TARGETDURATION/MEDIA-SEQUENCE headers, JF-686 review F6) and start = 40s: the
+    /// EXTINF walk resolves segment 10 so the serve must carry MEDIA-SEQUENCE:10, keep
+    /// seg_010 with the re-minted chapter token, drop the seg_000..009 prefix, and preserve
+    /// the ENDLIST (a completed VOD stays a completed VOD under the slice).
+    /// GREEN: the redirect threads startTicks into the core and the slice-aware serve
+    /// (<c>ServeVideoAudioPlaylistAsync</c>, SongHlsSegmentSeconds=4 as the flat fallback)
+    /// answers the sliced playlist.
+    /// RED (the redirect reverted to <c>StreamHlsVideoAudioCore(chapterId, chapterToken)</c>):
+    /// the full unsliced playlist answers, the sequence tag stays :0, seg_000 rides
+    /// first with the token, and the MEDIA-SEQUENCE/seg_010/prefix-drop asserts all flip.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_SingleChapterResume_Start_ServesSlicedPlaylistAtOffset()
+    {
+        // Completed encode: 12 segments x 4s = 48s of content with ENDLIST (the shape the
+        // fast-path verdict serves without touching ffmpeg).
+        Guid parentId = await ArrangeSingleChapterBookAsync("JF-686 Single-Chapter Book", 12);
+
+        // 3-digit song shape: the redirected core is the song core (kept hermetic so an
+        // accidental verdict fall-through encodes instead of reaching a real ffmpeg).
+        string fakeFfmpegPath = WriteRecordingFakeFfmpeg("fake-ffmpeg-jf686-slice", "seg_000.ts");
+
+        var controller = CreateController(parentId.ToString(), ffmpegPath: fakeFfmpegPath);
+        long startTicks = TimeSpan.FromSeconds(40).Ticks;
+
+        // The bound parameter is passed DIRECTLY: a direct action call runs no model
+        // binder, so a QueryCollection entry would never reach it. The wire name
+        // (?start=) is pinned builder-side by the resume-URL mint test.
+        ActionResult result = await controller.StreamHlsAudiobook(parentId.ToString(), startTicks);
+
+        var content = Assert.IsType<ContentResult>(result);
+        Assert.Equal("application/vnd.apple.mpegurl", content.ContentType);
+        // JF-686 review F2, the honest direction: the JF-499 P2 walk serves the FIRST
+        // segment whose cumulative start is >= the offset (rounds UP, at-or-after; the
+        // shared live-verified multi-chapter direction). start=40s over 4s segments is
+        // the exact boundary, so seg_010's true start (40s) EQUALS the offset here.
+        Assert.Contains("#EXT-X-MEDIA-SEQUENCE:10", content.Content, StringComparison.Ordinal);
+        Assert.Contains("segments/seg_010.ts?token=", content.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("segments/seg_009.ts", content.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("segments/seg_000.ts", content.Content, StringComparison.Ordinal);
+        Assert.Contains("#EXT-X-ENDLIST", content.Content, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-686 review F2: a MID-SEGMENT resume position pins the walk's round-UP direction.
+    /// start=41s over 4s segments cannot be served exactly; the JF-499 P2 walk serves the
+    /// first segment whose cumulative start reaches the offset, seg_011 (true start 44s),
+    /// skipping up to one segment of unheard audio rather than re-hearing it. The direction
+    /// is kept DELIBERATELY (shared with the live-verified multi-chapter and episode
+    /// paths; the tracker's conservative under-report, (highWaterMark-1) segments, is the
+    /// re-hear margin on the other side), so this pin LOCKS it: switching the walk to
+    /// round-down flips MEDIA-SEQUENCE to 11 and the seg_010 keeps. Green by construction
+    /// against the current walk; its red shape is the round-down behavior.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_SingleChapterResume_Start_MidSegment_RoundsUpToNextSegmentBoundary()
+    {
+        Guid parentId = await ArrangeSingleChapterBookAsync("JF-686 Mid-Segment Book", 12);
+
+        string fakeFfmpegPath = WriteRecordingFakeFfmpeg("fake-ffmpeg-jf686-midsegment", "seg_000.ts");
+
+        var controller = CreateController(parentId.ToString(), ffmpegPath: fakeFfmpegPath);
+        long startTicks = TimeSpan.FromSeconds(41).Ticks;
+
+        ActionResult result = await controller.StreamHlsAudiobook(parentId.ToString(), startTicks);
+
+        var content = Assert.IsType<ContentResult>(result);
+        Assert.Contains("#EXT-X-MEDIA-SEQUENCE:11", content.Content, StringComparison.Ordinal);
+        Assert.Contains("segments/seg_011.ts?token=", content.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("segments/seg_010.ts", content.Content, StringComparison.Ordinal);
+        Assert.Contains("#EXT-X-ENDLIST", content.Content, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-686 review F1: the COLD-cache resume on a one-chapter book (no runtime, so the
+    /// prewritten listing is skipped) must keep serving the FULL live partial. The
+    /// still-growing playlist cannot honor a position: slicing start=40s over the fake's
+    /// 8s-so-far partial lands the flat divisor past the last written segment, the emitter
+    /// keeps ZERO segments, and the player dies on a header-only playlist, where
+    /// pre-JF-686 the same request served the full live playlist and merely restarted at
+    /// 0:00 (the benign degradation; the album twin's cold-serve drops the offset the same
+    /// way). GREEN: the live-partial fallback serves both segments with the chapter token
+    /// and the base sequence tag untouched.
+    /// RED (the fallback reverted to passing startTicks): MEDIA-SEQUENCE:10 is injected,
+    /// both segment lines vanish, and every content assert flips.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_SingleChapterResume_ColdCacheLivePartial_ServesFullUnsliced()
+    {
+        // Cold cache: nothing planted, the encode runs and the fake's own live partial
+        // (2 segments x 4s, no ENDLIST) is what serves.
+        Guid parentId = await ArrangeSingleChapterBookAsync("JF-686 Cold-Cache Book", 0);
+
+        // POSIX sh (dash) has no "${@: -1}": iterate to the last positional arg instead.
+        string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-jf686-livepartial",
+            "for playlist_path in \"$@\"; do :; done\n" +
+            "playlist_dir=\"$(dirname \"$playlist_path\")\"\n" +
+            "mkdir -p \"$playlist_dir\"\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$playlist_dir/seg_000.ts\" 2>/dev/null\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$playlist_dir/seg_001.ts\" 2>/dev/null\n" +
+            "echo '#EXTM3U' > \"$playlist_path\"\n" +
+            "echo '#EXT-X-VERSION:3' >> \"$playlist_path\"\n" +
+            "echo '#EXT-X-TARGETDURATION:4' >> \"$playlist_path\"\n" +
+            "echo '#EXT-X-MEDIA-SEQUENCE:0' >> \"$playlist_path\"\n" +
+            "echo '#EXTINF:4.000,' >> \"$playlist_path\"\n" +
+            "echo 'seg_000.ts' >> \"$playlist_path\"\n" +
+            "echo '#EXTINF:4.000,' >> \"$playlist_path\"\n" +
+            "echo 'seg_001.ts' >> \"$playlist_path\"\n" +
+            "exit 0\n");
+
+        var controller = CreateController(parentId.ToString(), ffmpegPath: fakeFfmpegPath);
+
+        ActionResult result = await controller.StreamHlsAudiobook(parentId.ToString(), TimeSpan.FromSeconds(40).Ticks);
+
+        var content = Assert.IsType<ContentResult>(result);
+        Assert.Equal("application/vnd.apple.mpegurl", content.ContentType);
+        // Full live partial: both segments ride (token-rewritten), the base sequence tag
+        // passes through untouched, and no resume slice rewrote it.
+        Assert.Contains("seg_000.ts?token=", content.Content, StringComparison.Ordinal);
+        Assert.Contains("seg_001.ts?token=", content.Content, StringComparison.Ordinal);
+        Assert.Contains("#EXT-X-MEDIA-SEQUENCE:0", content.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("#EXT-X-MEDIA-SEQUENCE:10", content.Content, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-686 control: the SAME one-chapter redirect WITHOUT <c>?start=</c> must keep the
+    /// pre-JF-686 byte shape (the full unsliced playlist, chapter-token rewritten, the
+    /// base sequence tag untouched). Pins the boundary of the resume slice: startTicks absent
+    /// means the slice-aware serve delegates to <c>ServePlaylistWithTokenAsync</c>
+    /// unchanged, so the song route and every position-less single-chapter play are
+    /// untouched. GREEN before AND after the fix (the no-overblock control).
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_SingleChapterResume_NoStart_ServesUnslicedPlaylist()
+    {
+        Guid parentId = await ArrangeSingleChapterBookAsync("JF-686 No-Start Book", 2);
+
+        string fakeFfmpegPath = WriteRecordingFakeFfmpeg("fake-ffmpeg-jf686-nostart", "seg_000.ts");
+
+        var controller = CreateController(parentId.ToString(), ffmpegPath: fakeFfmpegPath);
+
+        ActionResult result = await controller.StreamHlsAudiobook(parentId.ToString());
+
+        var content = Assert.IsType<ContentResult>(result);
+        Assert.Equal("application/vnd.apple.mpegurl", content.ContentType);
+        // Unsliced: both segments ride with the token, and the base sequence tag passes
+        // through exactly as planted (a slice would have rewritten it to the start index).
+        Assert.Contains("segments/seg_000.ts?token=", content.Content, StringComparison.Ordinal);
+        Assert.Contains("segments/seg_001.ts?token=", content.Content, StringComparison.Ordinal);
+        Assert.Contains("#EXT-X-MEDIA-SEQUENCE:0", content.Content, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// JF-685: the committed re-drive of the JF-678 (a) pin the JF-682 twin
     /// rewrite orphaned. Since JF-682 no PUBLIC construction reaches
     /// <c>ServePlaylistWithTokenAsync</c>'s no-token branch (every public HLS
