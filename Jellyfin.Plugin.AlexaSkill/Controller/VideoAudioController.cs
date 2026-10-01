@@ -434,8 +434,15 @@ public class VideoAudioController : ControllerBase
     /// Build and serve the single-item HLS playlist without token validation. Token validation is
     /// performed by the public <see cref="StreamHlsVideoAudio"/> entry point, or by the audiobook
     /// endpoint (which validates against parentId before redirecting single-chapter books here).
+    /// Internal test seam (JF-685, InternalsVisibleTo; visibility only): the ONE driver left that
+    /// reaches <see cref="ServePlaylistWithTokenAsync"/>'s no-token branch through a real
+    /// construction (every public entry is gate-gated; JF-682 closed the redirect shape). The full
+    /// why lives on the JF-685 pin in VideoAudioControllerTests. INVARIANT the old private
+    /// visibility enforced for free, now doc-only: this core performs NO token validation, so
+    /// every PRODUCTION caller must arrive through a validated gate (the JF-309 rule); do not
+    /// call it from new production code.
     /// </summary>
-    private async Task<ActionResult> StreamHlsVideoAudioCore(string itemId, string? overrideToken = null)
+    internal async Task<ActionResult> StreamHlsVideoAudioCore(string itemId, string? overrideToken = null)
     {
         var validation = ValidateVideoAudioRequest(itemId);
         if (validation.Error != null)
