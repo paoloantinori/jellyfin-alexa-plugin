@@ -1,7 +1,7 @@
 ---
-id: JF-692
+id: JF-693
 title: >-
-  JF-692 - JF-687 residuals: handler-level token-gated deliveries and refusal-Tell
+  JF-693 - JF-687 residuals: handler-level token-gated deliveries and refusal-Tell
   overwrites that sit outside the launch builder
 status: To Do
 priority: low
