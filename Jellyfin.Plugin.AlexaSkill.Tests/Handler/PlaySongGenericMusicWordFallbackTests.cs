@@ -297,6 +297,138 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
         }
     }
 
+    // Shared artist-in-library fixture: the artist search resolves artistName, the
+    // song search (SearchTerm) is empty, the artist-songs query returns song.
+    private void SetupArtistWithOneSong(string artistName, Audio song)
+    {
+        var artistId = Guid.NewGuid();
+        _fx.SetupUserMock();
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
+                    return new List<BaseItem> { new MusicArtist { Name = artistName, Id = artistId } };
+
+                if (q.SearchTerm != null)
+                    return new List<BaseItem>();
+
+                if (q.ArtistIds != null && q.ArtistIds.Length > 0)
+                    return new List<BaseItem> { song };
+
+                return new List<BaseItem>();
+            });
+    }
+
+    [Fact]
+    public async Task GenericMusicWord_ArticledLaMusica_FallsBackToArtistSongs()
+    {
+        // JF-697 live evidence: "suonare la musica di pink" delivered song="la musica"
+        // (article + generic word) and answered not-found because the gate was an
+        // exact Contains. The article form must reach the artist-songs fallback.
+        var song = new Audio { Name = "Just Like a Pill", Id = Guid.NewGuid() };
+        SetupArtistWithOneSong("P!nk", song);
+
+        var handler = CreateHandler();
+        var request = CreateIntentWithBothSlots("la musica", "pink");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response.Response?.Directives);
+        Assert.NotEmpty(response.Response.Directives);
+        Assert.Single(session.NowPlayingQueue);
+        Assert.True(response.Response.ShouldEndSession);
+    }
+
+    [Fact]
+    public async Task GenericMusicWord_ArticledLaMusique_FallsBackToArtistSongs()
+    {
+        // JF-697: the same leak class in the other covered languages; fr article form.
+        var song = new Audio { Name = "La Bohème", Id = Guid.NewGuid() };
+        SetupArtistWithOneSong("Aznavour", song);
+
+        var handler = CreateHandler();
+        var request = CreateIntentWithBothSlots("la musique", "aznavour");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response.Response?.Directives);
+        Assert.NotEmpty(response.Response.Directives);
+        Assert.Single(session.NowPlayingQueue);
+        Assert.True(response.Response.ShouldEndSession);
+    }
+
+    [Fact]
+    public async Task ArticleTitledRealSong_StillPlaysAsSong()
+    {
+        // JF-697 boundary: the article strip is a gate-membership probe ONLY.
+        // A real song whose title starts with an article still plays as the song.
+        var artistId = Guid.NewGuid();
+        var song = new Audio { Name = "La Vie En Rose", Id = Guid.NewGuid() };
+
+        _fx.SetupUserMock();
+
+        var searchTermQueries = new List<string>();
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Callback<InternalItemsQuery>(q =>
+            {
+                if (q.SearchTerm != null)
+                    searchTermQueries.Add(q.SearchTerm);
+            })
+            .Returns<InternalItemsQuery>(q =>
+            {
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.MusicArtist))
+                    return new List<BaseItem> { new MusicArtist { Name = "Louis Armstrong", Id = artistId } };
+
+                if (q.SearchTerm != null && q.SearchTerm.Contains("vie", StringComparison.OrdinalIgnoreCase))
+                    return new List<BaseItem> { song };
+
+                return new List<BaseItem>();
+            });
+
+        var handler = CreateHandler();
+        var request = CreateIntentWithBothSlots("la vie en rose", "louis armstrong");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = _fx.CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // The song search ran with the RAW slot (the strip never touched it)
+        Assert.Contains("la vie en rose", searchTermQueries, StringComparer.OrdinalIgnoreCase);
+        // And the titled song played, not a generic artist-songs fallback
+        Assert.NotNull(response.Response?.Directives);
+        Assert.NotEmpty(response.Response.Directives);
+        Assert.Single(session.NowPlayingQueue);
+        Assert.Equal(song.Id, session.NowPlayingQueue[0].Id);
+    }
+
+    [Theory]
+    [InlineData("la musica", true)]
+    [InlineData("la musique", true)]
+    [InlineData("die Musik", true)]
+    [InlineData("die Musik ", true)]
+    [InlineData("the music", true)]
+    [InlineData("a música", true)]
+    [InlineData("le titre", true)]
+    [InlineData("les chansons", true)]
+    [InlineData("ein lied", true)]
+    [InlineData("eine musik", true)]
+    [InlineData("il brano", true)]
+    [InlineData("musica", true)]
+    [InlineData("la vie en rose", false)]
+    [InlineData("a day in the life", false)]
+    [InlineData("der hugenottenfestmarsch", false)]
+    public void IsGenericMusicQuery_MembershipTable(string query, bool expected)
+    {
+        Assert.Equal(expected, PlaySongIntentHandler.IsGenericMusicQuery(query));
+    }
+
     [Fact]
     public async Task GenericMusicWord_SetsProgressiveQueueContinuation()
     {
