@@ -229,36 +229,46 @@ public class PlayBookIntentHandler : BaseHandler
             Logger.LogInformation("PlayBook: starting '{Book}' from the beginning (no resume position found)", books[0].Name);
         }
 
-        List<QueueItem> queueItems = new();
-        for (int i = startIndex; i < trackItems.Count; i++)
+        // JF-693 (the JF-687 refusal-before-ledger policy extended to the queue and
+        // session writes): the launch branches below can answer the empty-secret
+        // configuration Tell instead of a directive (the audiobook concat URL is
+        // always token-gated), so the now-playing queue, the device queue and the
+        // progressive-continuation record are applied AFTER the launch verdict: a
+        // refused launch must not leave MediaInfo answering "playing <book>" with
+        // nothing playing and a stale QueueContinuation that survives.
+        void ApplyBookPlaybackState()
         {
-            queueItems.Add(new QueueItem { Id = trackItems[i].Id });
-        }
+            List<QueueItem> queueItems = new();
+            for (int i = startIndex; i < trackItems.Count; i++)
+            {
+                queueItems.Add(new QueueItem { Id = trackItems[i].Id });
+            }
 
-        session.NowPlayingQueue = queueItems;
-        session.FullNowPlayingItem = trackItems[startIndex];
+            session.NowPlayingQueue = queueItems;
+            session.FullNowPlayingItem = trackItems[startIndex];
 
-        _queueManager?.SetQueue(
-            context.System.Device.DeviceID,
-            trackItems.Skip(startIndex).Select(i => i.Id.ToString()).ToList(),
-            0);
-
-        // Store continuation info so PlaybackNearlyFinished can fetch the rest.
-        // StartIndex uses the original page size because the database offset is
-        // independent of the resume slice.
-        if (bookTracks.TotalRecordCount > bookTracks.Items.Count)
-        {
-            QueueContinuationStore.Set(
-                session.UserId,
+            _queueManager?.SetQueue(
                 context.System.Device.DeviceID,
-                new QueueContinuation
-                {
-                    SourceType = "Audiobook",
-                    ParentId = books[0].Id,
-                    StartIndex = bookTracks.Items.Count,
-                    TotalCount = bookTracks.TotalRecordCount,
-                    UserId = jellyfinUser!.Id
-                });
+                trackItems.Skip(startIndex).Select(i => i.Id.ToString()).ToList(),
+                0);
+
+            // Store continuation info so PlaybackNearlyFinished can fetch the rest.
+            // StartIndex uses the original page size because the database offset is
+            // independent of the resume slice.
+            if (bookTracks.TotalRecordCount > bookTracks.Items.Count)
+            {
+                QueueContinuationStore.Set(
+                    session.UserId,
+                    context.System.Device.DeviceID,
+                    new QueueContinuation
+                    {
+                        SourceType = "Audiobook",
+                        ParentId = books[0].Id,
+                        StartIndex = bookTracks.Items.Count,
+                        TotalCount = bookTracks.TotalRecordCount,
+                        UserId = jellyfinUser!.Id
+                    });
+            }
         }
 
         string itemId = trackItems[startIndex].Id.ToString();
@@ -279,7 +289,15 @@ public class PlayBookIntentHandler : BaseHandler
             {
                 // JF-567: VideoApp.Launch responses must OMIT shouldEndSession (the repo
                 // reference rule; BuildAudiobookResumeResponse keeps it null).
-                SkillResponse trackedResponse = Launch.BuildAudiobookResumeResponse(trackItems[startIndex], trackedTicks, user, context);
+                // JF-693: the request locale threads into the builder so the JF-687
+                // refusal Tell answers in the user's language.
+                SkillResponse trackedResponse = Launch.BuildAudiobookResumeResponse(trackItems[startIndex], trackedTicks, user, context, locale);
+                if (!PlaybackLaunchBuilder.HasLaunchDirective(trackedResponse))
+                {
+                    return trackedResponse;
+                }
+
+                ApplyBookPlaybackState();
                 trackedResponse.Response.OutputSpeech = SpeechBuilder.BuildOutputSpeech(
                     "ResumingBookSsml", "ResumingBook", locale, books[0].Name, trackItems[startIndex].Name);
                 return trackedResponse;
@@ -296,18 +314,36 @@ public class PlayBookIntentHandler : BaseHandler
             // resume offer applies).
             if (resumeTicks <= 0)
             {
-                return await Launch.BuildAudiobookVideoAppLaunchResponseAsync(
+                SkillResponse freshResponse = await Launch.BuildAudiobookVideoAppLaunchResponseAsync(
                     itemId,
                     trackItems[startIndex],
                     SpeechBuilder.BuildNowPlayingSpeech(books[0].Name, locale, Launch.GetAnnounceNowPlaying(user)),
                     user,
                     context,
-                    request).ConfigureAwait(false);
+                    request,
+                    locale).ConfigureAwait(false);
+                if (!PlaybackLaunchBuilder.HasLaunchDirective(freshResponse))
+                {
+                    return freshResponse;
+                }
+
+                ApplyBookPlaybackState();
+                return freshResponse;
             }
         }
 
         SkillResponse standardResponse = Launch.BuildAudioPlayerResponse(
-            PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, trackItems[startIndex], user, context, offsetMs);
+            PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, trackItems[startIndex], user, context, offsetMs, locale: locale);
+
+        // JF-693: the state writes and the resume announce ride a delivered launch.
+        // The static chapter URL never refuses today; the gate keeps that invariant
+        // structural rather than incidental.
+        if (!PlaybackLaunchBuilder.HasLaunchDirective(standardResponse))
+        {
+            return standardResponse;
+        }
+
+        ApplyBookPlaybackState();
 
         // Add resume announcement when not starting from the beginning
         if (startIndex > 0 || resumeTicks > 0)

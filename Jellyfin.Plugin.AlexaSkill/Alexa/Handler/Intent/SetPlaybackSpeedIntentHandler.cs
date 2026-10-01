@@ -218,7 +218,7 @@ public class SetPlaybackSpeedIntentHandler : BaseHandler
         long startTicks = Launch.ClampResumeTicksToRuntime(item, contentTicks, "SetPlaybackSpeed");
         int offsetMs = Util.ResumeMath.TicksToMs(startTicks);
 
-        // The standing preference (JF-636): every successful speed ask persists
+        // The standing preference (JF-636): every DELIVERED speed ask persists
         // the resulting rate, so future podcast plays start at it (read by
         // PodcastEpisodeResolver through ResolveStandingRate). Cross-medium by
         // design: the ONE rate preference is whatever the user last asked for
@@ -226,13 +226,11 @@ public class SetPlaybackSpeedIntentHandler : BaseHandler
         // no reliable discriminator exists between album-shape podcast episodes
         // and music tracks, and guessing wrong on MUSIC (2x songs) is the worse
         // failure. Clear it with "normal speed" or the config API.
-        user.PodcastSpeedPerMille = targetRate;
-        Plugin.Instance?.SaveConfiguration();
-
-        Logger.LogInformation(
-            "SetPlaybackSpeed: re-launching '{ItemName}' ({ItemId}) at rate {TargetRate}/1000 (from {CurrentRate}/1000), content position {ContentTicks} ticks (raw offset {RawOffsetMs}ms)",
-            item.Name, item.Id, targetRate, currentRate, startTicks, rawOffsetMs);
-
+        // JF-693: the persist and the success speech ride only a DELIVERED launch,
+        // so they sit after the JF-687 refusal verdict below (the atempo URL is
+        // always token-gated, so an empty StreamTokenSecret refuses the re-launch;
+        // a refused ask must neither mutate the persisted preference nor speak a
+        // speed change that will not happen).
         AudioLaunchSource source = Launch.ResolveAudioLaunchSource(item, itemId, user, offsetMs, ratePerMille: targetRate);
         SkillResponse response = Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll,
@@ -241,7 +239,24 @@ public class SetPlaybackSpeedIntentHandler : BaseHandler
             item,
             user,
             context,
-            queueManager: _queueManager);
+            queueManager: _queueManager,
+            locale: locale);
+
+        if (!PlaybackLaunchBuilder.HasLaunchDirective(response))
+        {
+            Logger.LogInformation(
+                "SetPlaybackSpeed: re-launch of '{ItemName}' ({ItemId}) refused (stream token secret empty); the standing rate stays {CurrentRate}/1000",
+                item.Name, item.Id, currentRate);
+            return Task.FromResult<SkillResponse>(response);
+        }
+
+        user.PodcastSpeedPerMille = targetRate;
+        Plugin.Instance?.SaveConfiguration();
+
+        Logger.LogInformation(
+            "SetPlaybackSpeed: re-launching '{ItemName}' ({ItemId}) at rate {TargetRate}/1000 (from {CurrentRate}/1000), content position {ContentTicks} ticks (raw offset {RawOffsetMs}ms)",
+            item.Name, item.Id, targetRate, currentRate, startTicks, rawOffsetMs);
+
         response.Response.OutputSpeech = new PlainTextOutputSpeech(
             ResponseStrings.Get("PlaybackSpeedSet", locale, ResponseStrings.Get($"SpeedName{targetRate}", locale)));
         return Task.FromResult<SkillResponse>(response);

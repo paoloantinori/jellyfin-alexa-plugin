@@ -859,4 +859,60 @@ public class StartOverIntentHandlerTests : PluginTestBase, IDisposable
         var directive = Assert.Single(response.Response!.Directives!.OfType<AudioPlayerPlayDirective>());
         Assert.Equal(audioItem.Id.ToString(), directive.AudioItem.Stream.Token);
     }
+
+    /// <summary>
+    /// JF-693 (code-review finding 2): a REFUSED restart must not destroy durable
+    /// resume state. With an empty StreamTokenSecret the book concat launch answers
+    /// the JF-687 configuration Tell instead of a directive, and the server-side
+    /// position clear and the book-tracker clear ride a DELIVERED restart only, so
+    /// the user's saved position survives to resume once the configuration is fixed
+    /// (zeroing it before the verdict made the restart unrecoverable).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_BookRestart_EmptySecret_RefusesAndKeepsTheSavedPosition()
+    {
+        _fx.Config.NativeControlsForBooks = true;
+        _fx.Config.StreamTokenSecret = string.Empty;
+        var tracker = TestHelpers.CreatePositionTracker("startover-refusal-jf693");
+        using var trackerSwap = TestHelpers.SwapPluginPositionTracker(tracker);
+
+        var handler = CreateHandler();
+        var request = CreateStartOverRequest();
+        var context = TestHelpers.CreateContextWithVideoApp();
+        var user = TestHelpers.CreateTestUser();
+
+        var book = new MediaBrowser.Controller.Entities.AudioBook
+        {
+            Name = "Long Book",
+            Id = Guid.NewGuid(),
+            Path = "/books/long.m4b"
+        };
+        var session = CreateSessionWithNowPlaying(book);
+
+        _fx.UserDataManager.Setup(x => x.GetUserData(_jellyfinUser, book))
+            .Returns(new UserItemData
+            {
+                Key = "test",
+                PlaybackPositionTicks = TimeSpan.FromMinutes(90).Ticks,
+                Played = false
+            });
+
+        string bookKey = Jellyfin.Plugin.AlexaSkill.Alexa.Util.ResumeMath.GetAudiobookBookKey(book);
+        tracker.RecordSegment(book.Id.ToString(), 500);
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        TestHelpers.AssertStreamTokenRefusalTell(response);
+
+        // The durable position survives: no server-side clear, no tracker clear.
+        _fx.UserDataManager.Verify(
+            x => x.SaveUserData(
+                It.IsAny<JellyfinUser>(),
+                It.IsAny<BaseItem>(),
+                It.IsAny<UserItemData>(),
+                It.IsAny<UserDataSaveReason>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+        Assert.True(tracker.GetPositionTicks(bookKey) > 0, "the book tracker position must survive a refused restart");
+    }
 }

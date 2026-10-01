@@ -191,6 +191,18 @@ public class SleepTimerIntentHandler : BaseHandler
                 _queueManager,
                 "SleepTimer re-issue");
 
+        // JF-693: the re-issue is the ONE AudioPlayer.Play minted outside the guarded
+        // BuildAudioPlayerResponse chokepoint, so the JF-687 delivery gate runs HERE,
+        // before the JF-628 ledger writes below and before either directive is built: a
+        // token-gated replay URL (a speed/transcode-routed source) with an empty
+        // StreamTokenSecret is dead at the route gate, and the honest localized
+        // configuration Tell answers instead of a dead directive (static replay URLs
+        // carry no plugin token and still re-issue).
+        if (Launch.StreamTokenSecretRefusal(replaySource.Url, locale) is { } refusedReplay)
+        {
+            return Task.FromResult(refusedReplay);
+        }
+
         if (itemGuid != Guid.Empty
             && context.GetDeviceId() is { Length: > 0 } deviceId
             && Plugin.Instance?.DeviceQueueManager is { } queues)

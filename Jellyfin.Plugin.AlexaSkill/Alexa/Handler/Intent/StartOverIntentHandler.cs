@@ -133,66 +133,89 @@ public class StartOverIntentHandler : BaseHandler
                 _streamResolver, item, context, request, user, session, locale, cancellationToken).ConfigureAwait(false);
         }
 
-        // Clear server-side progress so the item plays from the beginning
-        UserItemData? userData = _userDataManager.GetUserData(jellyfinUser!, item);
-        if (userData != null)
+        // JF-693 (code-review finding 2): the durable position clears ride a DELIVERED
+        // restart only. The launch branches below can answer the JF-687 empty-secret
+        // refusal Tell instead of a directive (the book concat, the episode remux and
+        // the codec-routed transcode URLs are all token-gated), and a refused "start
+        // over" must not destroy the user's saved position: zeroing PlaybackPositionTicks
+        // and the book tracker is unrecoverable once the secret is fixed. None of the
+        // launches reads the cleared state (every branch restarts from 0 by
+        // construction), so clearing after the verdict is behavior-neutral on success.
+        void ClearRestartedPosition()
         {
-            userData.PlaybackPositionTicks = 0;
-            _userDataManager.SaveUserData(jellyfinUser!, item, userData, UserDataSaveReason.PlaybackProgress, CancellationToken.None);
-        }
+            UserItemData? userData = _userDataManager.GetUserData(jellyfinUser!, item);
+            if (userData != null)
+            {
+                userData.PlaybackPositionTicks = 0;
+                _userDataManager.SaveUserData(jellyfinUser!, item, userData, UserDataSaveReason.PlaybackProgress, CancellationToken.None);
+            }
 
-        string itemId = item.Id.ToString();
-
-        // NativeControlsForBooks (JF-563): restart a book from 0 through the same VideoApp
-        // HLS entry PlayBook uses. BuildVideoAppAudioResponse routes a multi-chapter book
-        // to the concat endpoint and a single-chapter one to the per-item endpoint whose
-        // controller re-mints the chapter-scoped token, so no URL is hand-built here.
-        // Gated at the caller, NOT in IsVideoAppLaunchItem: the predicate is the durable
-        // movie-shaped kind list (its other callers must not treat a book as video) and
-        // the flag is mutable config (the JF-499 W1 split; see ResumeIntentHandler).
-        if (AudiobookItems.IsAudioBook(item))
-        {
             // The tracker's high-water mark never decreases, so the stale position must be
             // dropped here or the next resume would jump back near where the user just
-            // restarted from. Cleared regardless of the flag (the tracker is only READ
-            // under it), so a flag-off restart cannot leave a stale mark behind either.
+            // restarted from. Cleared for every successful restart (the tracker is only
+            // READ under the books flag), so a flag-off restart cannot leave a stale mark
+            // behind either.
             Plugin.Instance?.AudiobookPositionTracker?.Clear(ResumeMath.GetAudiobookBookKey(item));
+        }
 
-            if (Plugin.Instance?.Configuration?.NativeControlsForBooks == true)
+        async Task<SkillResponse> BuildRestartLaunchAsync()
+        {
+            // NativeControlsForBooks (JF-563): restart a book from 0 through the same VideoApp
+            // HLS entry PlayBook uses. BuildVideoAppAudioResponse routes a multi-chapter book
+            // to the concat endpoint and a single-chapter one to the per-item endpoint whose
+            // controller re-mints the chapter-scoped token, so no URL is hand-built here.
+            // Gated at the caller, NOT in IsVideoAppLaunchItem: the predicate is the durable
+            // movie-shaped kind list (its other callers must not treat a book as video) and
+            // the flag is mutable config (the JF-499 W1 split; see ResumeIntentHandler).
+            if (AudiobookItems.IsAudioBook(item)
+                && Plugin.Instance?.Configuration?.NativeControlsForBooks == true)
             {
                 return await Launch.BuildAudiobookVideoAppLaunchResponseAsync(
-                    itemId,
+                    item.Id.ToString(),
                     item,
                     new PlainTextOutputSpeech(ResponseStrings.Get("RestartingContent", locale, item.Name)),
                     user,
                     context,
-                    request).ConfigureAwait(false);
+                    request,
+                    locale).ConfigureAwait(false);
             }
+
+            // Use VideoApp for movies/episodes, AudioPlayer for audio/audiobooks
+            if (item is MediaBrowser.Controller.Entities.Movies.Movie
+                or MediaBrowser.Controller.Entities.TV.Episode)
+            {
+                // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
+                // JF-501: the announce is spoken progressively (directive-only final response).
+                // JF-586: on a screenless device (an Echo Dot) an EPISODE restart degrades
+                // to the AudioPlayer audio-only launch instead of the screen-required
+                // refusal (the progress was just cleared, so resumeTicks stays 0); a movie
+                // keeps the capability refusal inside the shared builder.
+                return await Launch.BuildEpisodeLaunchResponseAsync(
+                    context,
+                    request,
+                    locale,
+                    item,
+                    user,
+                    Launch.GetVideoAppLaunchUrl(item, user),
+                    resumeTicks: 0,
+                    new PlainTextOutputSpeech(ResponseStrings.Get("RestartingContent", locale, item.Name))).ConfigureAwait(false);
+            }
+
+            // JF-693: the locale threads in so the refusal Tell answers in the user's
+            // language (a seek-mode music item delegates to the token-gated video-audio
+            // endpoint inside the chokepoint).
+            return Launch.BuildAudioPlayerResponse(
+                PlayBehavior.ReplaceAll, Launch.GetStreamUrl(item.Id.ToString(), user), item.Id.ToString(), item, user, context,
+                queueManager: _queueManager, locale: locale);
         }
 
-        // Use VideoApp for movies/episodes, AudioPlayer for audio/audiobooks
-        if (item is MediaBrowser.Controller.Entities.Movies.Movie
-            or MediaBrowser.Controller.Entities.TV.Episode)
+        SkillResponse restartResponse = await BuildRestartLaunchAsync().ConfigureAwait(false);
+        if (!PlaybackLaunchBuilder.HasLaunchDirective(restartResponse))
         {
-            // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
-            // JF-501: the announce is spoken progressively (directive-only final response).
-            // JF-586: on a screenless device (an Echo Dot) an EPISODE restart degrades
-            // to the AudioPlayer audio-only launch instead of the screen-required
-            // refusal (the progress was just cleared, so resumeTicks stays 0); a movie
-            // keeps the capability refusal inside the shared builder.
-            return await Launch.BuildEpisodeLaunchResponseAsync(
-                context,
-                request,
-                locale,
-                item,
-                user,
-                Launch.GetVideoAppLaunchUrl(item, user),
-                resumeTicks: 0,
-                new PlainTextOutputSpeech(ResponseStrings.Get("RestartingContent", locale, item.Name))).ConfigureAwait(false);
+            return restartResponse;
         }
 
-        return Launch.BuildAudioPlayerResponse(
-            PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, item, user, context,
-            queueManager: _queueManager);
+        ClearRestartedPosition();
+        return restartResponse;
     }
 }

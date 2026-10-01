@@ -638,5 +638,48 @@ public class SleepTimerIntentHandlerTests : PluginTestBase, IDisposable
         Assert.Equal((long)TimeSpan.FromMinutes(27.5).TotalMilliseconds, _queueManager.GetActiveLaunchBase(deviceId, audioItem.Id.ToString()));
         Assert.Equal(1500, _queueManager.GetActivePlaybackRate(deviceId, audioItem.Id.ToString()));
     }
+
+    /// <summary>
+    /// JF-693 residual 1: the re-issue is the ONE AudioPlayer.Play minted outside the
+    /// guarded BuildAudioPlayerResponse chokepoint, so the JF-687 delivery gate runs at
+    /// the handler itself, BEFORE the JF-628 ledger writes. A speed-routed (token-gated)
+    /// replay source with an empty StreamTokenSecret answers the localized configuration
+    /// Tell instead of a dead directive, and neither the launch scope nor the device
+    /// last-played ledger is re-recorded for a launch that did not happen.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_ArmingDuringAtempoPlayback_EmptySecret_RefusesInsteadOfDeadDirective()
+    {
+        _config.StreamTokenSecret = string.Empty;
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(durationValue: "PT20M");
+        var user = CreateUser();
+        var session = CreateSession();
+
+        var audioItem = new Audio { Name = "Podcast episode", Id = Guid.NewGuid(), RunTimeTicks = TimeSpan.FromMinutes(60).Ticks };
+        session.FullNowPlayingItem = audioItem;
+
+        var context = CreateContext();
+        context.AudioPlayer = new PlaybackState
+        {
+            Token = audioItem.Id.ToString(),
+            OffsetInMilliseconds = (long)TimeSpan.FromMinutes(5).TotalMilliseconds,
+            PlayerActivity = "PLAYING"
+        };
+
+        string deviceId = context.System.Device.DeviceID!;
+        _queueManager.RecordLaunchBase(deviceId, audioItem.Id.ToString(), (long)TimeSpan.FromMinutes(20).TotalMilliseconds, enqueued: false, ratePerMille: 1500);
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // The honest configuration Tell, not the dead directive.
+        TestHelpers.AssertStreamTokenRefusalTell(response);
+
+        // The pre-existing launch scope survives untouched and no last-played record
+        // was minted for the refused re-issue.
+        Assert.Equal((long)TimeSpan.FromMinutes(20).TotalMilliseconds, _queueManager.GetActiveLaunchBase(deviceId, audioItem.Id.ToString()));
+        Assert.Equal(1500, _queueManager.GetActivePlaybackRate(deviceId, audioItem.Id.ToString()));
+        Assert.Null(_queueManager.GetLastPlayedItemId(deviceId));
+    }
 }
 

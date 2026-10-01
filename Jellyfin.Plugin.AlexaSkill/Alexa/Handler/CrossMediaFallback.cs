@@ -409,16 +409,19 @@ public sealed class CrossMediaFallback
     /// <summary>
     /// Overrides a play response's speech with the given announcement (JF-345: the
     /// ONE override site; was a triplicated 3-liner across the artist/album/song play
-    /// builders). No-op for a null/whitespace announcement.
+    /// builders). No-op for a null/whitespace announcement. JF-693: the delivered-
+    /// launch gate lives in <see cref="PlaybackLaunchBuilder.AttachAnnounceIfLaunched"/>
+    /// (the album builder can answer the JF-687 empty-secret refusal Tell instead of a
+    /// directive; that Tell must not be spoken over with a correction for a play that
+    /// will not happen), so this stays a thin string-to-speech adapter over it.
     /// </summary>
     /// <param name="response">The play response to speak over.</param>
     /// <param name="announcement">The announcement text, or null to keep the default speech.</param>
     internal static void ApplyAnnouncement(SkillResponse response, string? announcement)
     {
-        if (!string.IsNullOrWhiteSpace(announcement))
-        {
-            response.Response.OutputSpeech = new PlainTextOutputSpeech { Text = announcement };
-        }
+        PlaybackLaunchBuilder.AttachAnnounceIfLaunched(
+            response,
+            string.IsNullOrWhiteSpace(announcement) ? null : new PlainTextOutputSpeech { Text = announcement });
     }
 
     /// <summary>

@@ -13,6 +13,7 @@ using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -297,6 +298,24 @@ internal static class TestHelpers
         => Assert.DoesNotContain(
             response.Response.Directives ?? new List<IDirective>(),
             d => d is AudioPlayerPlayDirective);
+
+    /// <summary>
+    /// JF-687/JF-693: the ONE oracle for the empty-StreamTokenSecret refusal Tell:
+    /// no playback directive of either kind (the production predicate), the response
+    /// is a session-ending Tell, and the speech is the localized
+    /// <c>StreamTokenNotConfigured</c> string (hoisted from the builder suite when
+    /// the JF-693 handler pins started re-inlining it; the en-US flavor is the
+    /// default-locale call).
+    /// </summary>
+    internal static void AssertStreamTokenRefusalTell(SkillResponse response, string locale = "en-US")
+    {
+        Assert.False(
+            PlaybackLaunchBuilder.HasLaunchDirective(response),
+            "a refused launch must not deliver any playback directive");
+        Assert.True(response.Response.ShouldEndSession, "the configuration answer is a Tell");
+        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        Assert.Equal(ResponseStrings.Get("StreamTokenNotConfigured", locale), speech.Text);
+    }
 
     /// <summary>
     /// JF-564: asserts the response carries the AudioPlayer.Stop directive (the

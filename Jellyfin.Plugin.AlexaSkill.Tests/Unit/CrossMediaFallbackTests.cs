@@ -302,12 +302,34 @@ public class CrossMediaFallbackTests : PluginTestBase
     [Fact]
     public void ApplyAnnouncement_NonEmpty_OverridesAsPlainText()
     {
+        // JF-693: the override requires a response that actually launched; the
+        // directive below is the AudioPlayer.Play every real caller hands in.
         var response = ResponseBuilder.Tell("default speech");
+        response.Response.Directives = new List<IDirective>
+        {
+            new global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective()
+        };
 
         CrossMediaFallback.ApplyAnnouncement(response, "Playing something else");
 
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
         Assert.Equal("Playing something else", speech.Text);
+    }
+
+    /// <summary>
+    /// JF-693: a response with NO launch directive (the JF-687 empty-secret refusal
+    /// Tell) keeps its speech; the JF-345 announcement never speaks a correction over
+    /// a configuration error for a play that will not happen.
+    /// </summary>
+    [Fact]
+    public void ApplyAnnouncement_NoLaunchDirective_KeepsTheRefusalSpeech()
+    {
+        var response = ResponseBuilder.Tell("streaming isn't configured");
+
+        CrossMediaFallback.ApplyAnnouncement(response, "Playing something else");
+
+        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
+        Assert.Equal("streaming isn't configured", speech.Text);
     }
 
     // ---------------------------------------------------------------------

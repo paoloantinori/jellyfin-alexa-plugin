@@ -239,7 +239,17 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
         var (query, candidates) = CreateBorderlineScenario();
 
         Func<TestCandidate, Task<SkillResponse>> autoPlayFunc = _ =>
-            Task.FromResult(ResponseBuilder.Empty()); // directive-only shape: null OutputSpeech
+        {
+            // Directive-only shape: the AudioPlayer.Play directive, null OutputSpeech.
+            // JF-693: the directive must actually be present (a real delegate launches);
+            // the qualifier block rides a delivered launch only.
+            var directiveOnly = ResponseBuilder.Empty();
+            directiveOnly.Response.Directives = new List<IDirective>
+            {
+                new global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective()
+            };
+            return Task.FromResult(directiveOnly);
+        };
 
         var (outcome, response) = await harness.CallHandleFuzzyMiss(
             query: query,
@@ -259,6 +269,41 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
         Assert.True(harness.Progressive.Any(m => m.Contains("closest match", StringComparison.Ordinal)
                 || m.Contains("Rhapsody", StringComparison.Ordinal)),
             "the qualifier must ride the progressive vehicle in the band, not the final response");
+    }
+
+    /// <summary>
+    /// JF-693 (code-review finding 4): the closest-match qualifier never speaks over
+    /// the JF-687 empty-secret refusal Tell. The auto-play delegate's builder answered
+    /// the configuration error (speech, no directive); the qualifier block rides a
+    /// delivered launch only, so the Tell reaches the user instead of "playing X" for
+    /// a play that will not happen.
+    /// </summary>
+    [Fact]
+    public async Task AutoPlayRefusedLaunch_QualifierNeverOverwritesTheRefusalTell()
+    {
+        var config = new PluginConfiguration();
+        var user = new Entities.User { FuzzyMatchBehavior = FuzzyMatchBehavior.AutoPlay };
+        var harness = CreateHarness(config);
+
+        var (query, candidates) = CreateBelowThreshold90Scenario();
+
+        Func<TestCandidate, Task<SkillResponse>> autoPlayFunc = _ =>
+            Task.FromResult(
+                ResponseBuilder.Tell(Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("StreamTokenNotConfigured", "en-US")));
+
+        var (outcome, response) = await harness.CallHandleFuzzyMiss(
+            query: query,
+            candidates: candidates,
+            selector: c => c.Name,
+            matchExtractor: c => new List<(Guid, string)> { (c.Id, c.Name) },
+            mediaType: "album",
+            locale: "en-US",
+            autoPlayFunc: autoPlayFunc,
+            user: user);
+
+        Assert.Equal("SuggestionHandled", outcome);
+        Assert.NotNull(response);
+        TestHelpers.AssertStreamTokenRefusalTell(response);
     }
 
     /// <summary>
@@ -471,6 +516,12 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
         {
             var response = ResponseBuilder.Empty();
             response.Response.OutputSpeech = new PlainTextOutputSpeech { Text = "Original speech" };
+            // JF-693: a real auto-play delegate launches, so the fixture carries the
+            // directive the qualifier gate keys on.
+            response.Response.Directives = new List<IDirective>
+            {
+                new global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective()
+            };
             return Task.FromResult<SkillResponse>(response);
         };
 

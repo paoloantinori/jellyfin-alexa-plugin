@@ -1,13 +1,11 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading.Tasks;
 using global::Alexa.NET.Request;
 using global::Alexa.NET.Request.Type;
 using global::Alexa.NET.Response;
 using global::Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
-using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests;
@@ -61,17 +59,18 @@ public class PlaybackLaunchBuilderStreamTokenSecretTests : PluginTestBase
     private static TestHelpers.TestEpisodeWithStreams RemuxEpisode()
         => TestHelpers.RemuxEpisode();
 
-    private static bool HasLaunchDirective(SkillResponse response)
-        => response.Response.Directives?.Any(d
-            => d is AudioPlayerPlayDirective or VideoAppLaunchDirective) == true;
-
+    /// <summary>
+    /// The JF-687/JF-693 refusal-Tell oracle lives in
+    /// <see cref="TestHelpers.AssertStreamTokenRefusalTell"/> (the production
+    /// <see cref="PlaybackLaunchBuilder.HasLaunchDirective"/> predicate, the Tell
+    /// shape, and the localized StreamTokenNotConfigured speech); the localized
+    /// flavor is the JF-693 gate-marker extension (a) twin.
+    /// </summary>
     private static void AssertConfigTell(SkillResponse response)
-    {
-        Assert.False(HasLaunchDirective(response), "a refused launch must not deliver any playback directive");
-        Assert.True(response.Response.ShouldEndSession, "the configuration answer is a Tell");
-        var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
-        Assert.Equal(ResponseStrings.Get("StreamTokenNotConfigured", "en-US"), speech.Text);
-    }
+        => TestHelpers.AssertStreamTokenRefusalTell(response);
+
+    private static void AssertLocalizedConfigTell(SkillResponse response, string locale)
+        => TestHelpers.AssertStreamTokenRefusalTell(response, locale);
 
     // ---- Family: the AudioPlayer.Play chokepoint (speed + episode-transcode mints) ----
 
@@ -254,5 +253,60 @@ public class PlaybackLaunchBuilderStreamTokenSecretTests : PluginTestBase
 
         AssertConfigTell(response);
         Assert.Empty(sends);
+    }
+
+    // ---- JF-693 gate-marker extension (a): the localized twins, one per family ----
+
+    [Fact]
+    public void AudioPlayerPlay_SpeedUrl_ThreadedLocale_SpeaksLocalizedConfigTell()
+    {
+        var song = TestHelpers.CreateSong();
+        var user = CreateUser();
+
+        AudioLaunchSource source = _launch.ResolveAudioLaunchSource(song, song.Id.ToString(), user, 0, ratePerMille: 1500);
+
+        SkillResponse response = _launch.BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll, source, song.Id.ToString(), song, user,
+            TestHelpers.CreateContextWithVideoApp(), locale: "it-IT");
+
+        AssertLocalizedConfigTell(response, "it-IT");
+    }
+
+    [Fact]
+    public void VideoAppAudio_AlbumConcat_ThreadedLocale_SpeaksLocalizedConfigTell()
+    {
+        var song = TestHelpers.CreateSong();
+        var user = CreateUser();
+
+        SkillResponse response = _launch.BuildVideoAppAudioResponse(
+            song.Id.ToString(), song, user, context: TestHelpers.CreateContextWithVideoApp(),
+            collectionParentId: Guid.NewGuid(), locale: "it-IT");
+
+        AssertLocalizedConfigTell(response, "it-IT");
+    }
+
+    [Fact]
+    public void AudiobookResume_ThreadedLocale_SpeaksLocalizedConfigTell()
+    {
+        var chapter = new MediaBrowser.Controller.Entities.AudioBook { Name = "Chapter 1", Id = Guid.NewGuid() };
+        var user = CreateUser();
+
+        SkillResponse response = _launch.BuildAudiobookResumeResponse(
+            chapter, TimeSpan.FromMinutes(5).Ticks, user, TestHelpers.CreateContextWithVideoApp(), locale: "it-IT");
+
+        AssertLocalizedConfigTell(response, "it-IT");
+    }
+
+    [Fact]
+    public void VideoAppLaunch_RemuxUrl_ThreadedLocale_SpeaksLocalizedConfigTell()
+    {
+        var episode = RemuxEpisode();
+        var user = CreateUser();
+        string sourceUrl = _launch.GetVideoAppLaunchUrl(episode, user);
+
+        SkillResponse response = _launch.BuildVideoAppLaunchResponse(
+            TestHelpers.CreateContextWithVideoApp(), "it-IT", sourceUrl, episode.Name);
+
+        AssertLocalizedConfigTell(response, "it-IT");
     }
 }

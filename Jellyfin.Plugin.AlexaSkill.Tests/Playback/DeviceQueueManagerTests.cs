@@ -179,6 +179,26 @@ public class DeviceQueueManagerTests : IDisposable
         Assert.Equal("Shuffle", queue.PlaybackOrder);
     }
 
+    /// <summary>
+    /// JF-693 (code-review finding 1): the last-played record is a LAUNCH fact, not
+    /// queue content, so a queue reset carries it. The PlayBook paths call SetQueue
+    /// AFTER the launch builder (the refusal-before-phantom-state ordering); before
+    /// this contract the reset wiped the record the builder had just written on every
+    /// successful book launch, blinding the medium classifiers (SleepTimer /
+    /// SetPlaybackSpeed JF-632 gates) and resume arbitration.
+    /// </summary>
+    [Fact]
+    public void SetQueue_PreservesTheLastPlayedRecord()
+    {
+        _manager.RecordLastPlayed("device-1", "launched-item", DeviceQueueManager.LaunchRoute.VideoApp);
+        _manager.SetQueue("device-1", new List<string> { "q1", "q2" }, 0);
+
+        Assert.Equal("launched-item", _manager.GetLastPlayedItemId("device-1"));
+        (string? itemId, DeviceQueueManager.LaunchRoute? route) = _manager.GetLastPlayedSnapshot("device-1");
+        Assert.Equal("launched-item", itemId);
+        Assert.Equal(DeviceQueueManager.LaunchRoute.VideoApp, route);
+    }
+
     // =====================================================================
     // Advance
     // =====================================================================
