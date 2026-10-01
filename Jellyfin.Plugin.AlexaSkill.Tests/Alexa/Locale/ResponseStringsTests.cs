@@ -21,7 +21,8 @@ public class ResponseStringsTests
         "HoursAndMinutes", "MinutesAndSeconds", "SecondsOnly", "PositionOfTotal",
         "TrackByArtist", "TrackByArtistFromAlbum", "SeasonEpisode", "SeriesTitle",
         "TitleWithYear", "SearchingMedia", "DisambiguatePrompt", "DisambiguateNext",
-        "NoMoreMatches", "DisambiguateReprompt", "UnexpectedYes"
+        "NoMoreMatches", "DisambiguateReprompt", "UnexpectedYes",
+        "StreamTokenNotConfigured"
     };
 
     [Fact]

@@ -301,5 +301,6 @@
   "SpeedName1750": "1.75倍",
   "SpeedName2000": "2倍",
   "CannotChangeSpeedOverVideo": "申し訳ありません、動画やシークバー表示の再生中は再生速度を変更できません。",
-  "CannotChangeSpeedForBook": "申し訳ありません、オーディオブックの再生速度は変更できません。"
+  "CannotChangeSpeedForBook": "申し訳ありません、オーディオブックの再生速度は変更できません。",
+  "StreamTokenNotConfigured": "ストリーミングが正しく設定されていません。JellyfinのダッシュボードでAlexaスキルの設定ページを確認してください。"
 }

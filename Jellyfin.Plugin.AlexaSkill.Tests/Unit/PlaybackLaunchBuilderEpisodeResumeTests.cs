@@ -30,18 +30,7 @@ public class PlaybackLaunchBuilderEpisodeResumeTests : PluginTestBase
     }
 
     private static TestHelpers.TestEpisodeWithStreams RemuxEpisode(Guid id)
-    {
-        // JF-565: the runtime clamp is fail-closed (an unknown runtime cannot prove
-        // a mid-episode position), so the resumable-shape fixture needs one.
-        return new TestHelpers.TestEpisodeWithStreams(
-            "The Convention",
-            id,
-            TestHelpers.TestStream(MediaStreamType.Video, "h264"),
-            TestHelpers.TestStream(MediaStreamType.Audio, "eac3"))
-        {
-            RunTimeTicks = TimeSpan.FromMinutes(60).Ticks
-        };
-    }
+        => TestHelpers.RemuxEpisode(id);
 
     private static TestHelpers.TestEpisodeWithStreams StaticEpisode(Guid id)
         => new(
