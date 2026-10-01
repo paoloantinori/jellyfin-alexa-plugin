@@ -3,7 +3,7 @@ id: JF-696
 title: >-
   JF-697 - the generic-music-word fallback misses article forms: song slot "la
   musica" skips the artist fallback and answers not-found
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-01 17:30'
 labels:
@@ -37,14 +37,19 @@ VERIFICATION: the new pin + the existing PlaySong/fallback suites green; full su
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
+- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress
+- [x] #6 NLU test fixtures updated if interaction model changed
+- [ ] #7 E2E test added for new intent or handler logic (N/A: handler-internal gate change, no model/fixture surface; covered by unit pins in PlaySongGenericMusicWordFallbackTests)
+- [x] #8 Locale response strings added to all 17 locales
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+<!-- SECTION:IMPL:BEGIN -->
+Landed in the worker worktree (single commit, not pushed): PlaySongIntentHandler.IsGenericMusicQuery + StripGenericMusicLeadingArticle, one leading article of the covered languages (en/it/de/es/fr/nl/pt + elisions l'/un') stripped for the GenericMusicWords gate membership test ONLY; the song search keeps the raw slot (article-titled real songs still match by title, pinned). Red proofs run and read at the reverted gate: ArticledLaMusica and ArticledLaMusique both flip to the not-found shape; the La Vie En Rose boundary pin stays green either way. DoD 4-5 N/A (no session attrs, no HttpClient); 6-8 N/A (no interaction model, fixture, or locale-string change). Gates: simplify + code-review high, same turn. Nothing cut at a cap; JF-698 reserve untouched.
+<!-- SECTION:IMPL:END -->

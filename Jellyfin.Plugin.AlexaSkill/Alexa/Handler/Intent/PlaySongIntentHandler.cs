@@ -74,6 +74,82 @@ public class PlaySongIntentHandler : BaseHandler
         "canções", "cancoes", "músicas", "musicas", "faixa", "faixas",
     };
 
+    // JF-697: leading articles of every language the GenericMusicWords set covers
+    // (en, it, de, es, fr, nl, pt). ASR delivers the carrier WITH its article
+    // ("la musica di pink" -> song slot "la musica"), so the generic-word gate
+    // must test the article-stripped form. Membership-test only: the probe never
+    // feeds the song search, so a real song titled with an article ("La Vie En
+    // Rose") still matches by title. Simple articles only by design: partitive
+    // and contracted forms ("della musica", "de la musique") are a deliberate
+    // scope cap, not yet observed in a captured slot.
+    // Sibling tables, deliberately independent: ArtistSearch.ItalianLeadingArticles
+    // (it-only, shapes the MUSICIAN search input), KeywordMatcher.StopWords
+    // (per-locale tokenizer vocabulary; its any-locale union over-strips real
+    // titles, and no existing helper covers the l'/un' elisions), and this file's
+    // own SongCarrierPhrases (carrier+NOUN phrases with a trailing space, which
+    // miss the no-trailing-space slot shape this table covers).
+    private static readonly string[] GenericMusicLeadingArticles = new[]
+    {
+        // Italian
+        "il", "lo", "la", "i", "gli", "le", "un", "una",
+        // English
+        "the", "a", "an",
+        // German
+        "der", "die", "das", "den", "dem", "ein", "eine",
+        // Spanish
+        "el", "los", "las",
+        // French
+        "le", "les", "une",
+        // Portuguese
+        "o", "os", "as", "um", "uma",
+        // Dutch
+        "de", "het", "een",
+    };
+
+    /// <summary>
+    /// JF-697 membership test for the generic-music-word fallback gate: true when
+    /// the song query is a generic music word either bare or after stripping one
+    /// leading article of the covered languages ("la musica" -> "musica").
+    /// The song search itself keeps the raw slot value.
+    /// </summary>
+    internal static bool IsGenericMusicQuery(string songQuery)
+    {
+        // When no article was stripped the probe returns the input unchanged, so
+        // this single Contains covers the bare-word case too.
+        return GenericMusicWords.Contains(StripGenericMusicLeadingArticle(songQuery));
+    }
+
+    /// <summary>
+    /// Strips ONE leading space-separated article from the query; returns the
+    /// input unchanged when no article is present (null/empty included, matching
+    /// the null-safe HashSet.Contains this probe replaced). Safe against real
+    /// titles by construction: the caller only consumes the result as a
+    /// GenericMusicWords membership probe.
+    /// </summary>
+    internal static string StripGenericMusicLeadingArticle(string songQuery)
+    {
+        if (string.IsNullOrEmpty(songQuery))
+        {
+            return songQuery;
+        }
+
+        string trimmed = songQuery.TrimStart();
+        int space = trimmed.IndexOf(' ');
+        if (space > 0)
+        {
+            string first = trimmed[..space];
+            foreach (string article in GenericMusicLeadingArticles)
+            {
+                if (string.Equals(first, article, StringComparison.OrdinalIgnoreCase))
+                {
+                    return trimmed[(space + 1)..].Trim();
+                }
+            }
+        }
+
+        return songQuery;
+    }
+
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
     private readonly IUserDataManager _userDataManager;
@@ -239,7 +315,11 @@ public class PlaySongIntentHandler : BaseHandler
         // When the song query is a generic word like "musica"/"music" and we have
         // a valid artist, skip the song search and go straight to artist playback.
         // This avoids 1-4 wasted DB queries searching for a literal "music" song.
-        if (GenericMusicWords.Contains(songQuery)
+        // JF-697: membership via IsGenericMusicQuery (article forms "la musica",
+        // "die Musik", "la musique" now match); the article probe does NOT feed
+        // the song search below, which runs the pre-gate value (carrier-stripped,
+        // romanized slot) so article-titled real songs still match by title.
+        if (IsGenericMusicQuery(songQuery)
             && !string.IsNullOrWhiteSpace(musicianQuery) && artistsIds.Count > 0)
         {
             Logger.LogInformation(
