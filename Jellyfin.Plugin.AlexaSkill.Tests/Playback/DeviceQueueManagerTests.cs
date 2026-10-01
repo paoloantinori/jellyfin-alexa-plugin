@@ -186,17 +186,26 @@ public class DeviceQueueManagerTests : IDisposable
     /// this contract the reset wiped the record the builder had just written on every
     /// successful book launch, blinding the medium classifiers (SleepTimer /
     /// SetPlaybackSpeed JF-632 gates) and resume arbitration.
+    /// JF-693 review (coordinator F1): ALL THREE fields assert, id, route AND the
+    /// freshness stamp: a carried record without its stamp reads as a legacy entry in
+    /// GetDeviceResumePointer's tie rule (either stamp null => queue pointer wins), so
+    /// the just-launched item would lose resume arbitration to the old song's
+    /// stop-event pointer on the displaced-stop shape.
     /// </summary>
     [Fact]
     public void SetQueue_PreservesTheLastPlayedRecord()
     {
         _manager.RecordLastPlayed("device-1", "launched-item", DeviceQueueManager.LaunchRoute.VideoApp);
+        DateTime? writtenAt = _manager.GetQueue("device-1").LastPlayedWrittenAt;
+        Assert.NotNull(writtenAt);
+
         _manager.SetQueue("device-1", new List<string> { "q1", "q2" }, 0);
 
         Assert.Equal("launched-item", _manager.GetLastPlayedItemId("device-1"));
         (string? itemId, DeviceQueueManager.LaunchRoute? route) = _manager.GetLastPlayedSnapshot("device-1");
         Assert.Equal("launched-item", itemId);
         Assert.Equal(DeviceQueueManager.LaunchRoute.VideoApp, route);
+        Assert.Equal(writtenAt, _manager.GetQueue("device-1").LastPlayedWrittenAt);
     }
 
     // =====================================================================

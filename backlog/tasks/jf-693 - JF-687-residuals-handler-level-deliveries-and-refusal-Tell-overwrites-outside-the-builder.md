@@ -141,4 +141,25 @@ SUITES: 4868/4868 BOTH TFMs (net9.0 + net10.0; baseline 4856 + 12 pins), 0 warni
 locale strings (the refusal reuses the JF-687 StreamTokenNotConfigured key in all 17 locales);
 no interaction model, session-attribute, or HttpClient changes (DoD 4-8 N/A as annotated). No
 deploy; do not push. Residuals filed: JF-699.
+
+REWORK ROUND (2026-10-02, the orchestrator gate-marker's 3 findings on the c49cab92 state,
+all applied): F1 the carry was half-done - CopySurvivingStores now also carries
+LastPlayedWrittenAt (a carried record without its stamp read as a LEGACY entry in
+GetDeviceResumePointer's tie rule, either-stamp-null => queue pointer wins, so the
+just-launched book would lose resume arbitration to the old song's stop-event pointer on the
+displaced-stop shape); the SetQueue_PreservesTheLastPlayedRecord pin now asserts all three
+fields (id, route, stamp; red proof: stamp carry removed -> the stamp assert flips to null).
+F2 the delivery gate trapped the CANCEL - the gate sat before the cancel branch, so a
+cancel-mode ask over a token-gated source answered the config error and left the armed
+deadline running; the cancel branch now runs BEFORE the gate (a cancel disarms the deadline;
+it is not a launch ask), with the JF-628 re-issue ledger writes extracted into a shared
+RecordReissueLedger local called by BOTH branches so the ARM path still refuses before any
+write (the existing arm-refusal pin's untouched-ledger assertions still hold); new pin
+HandleAsync_CancelDuringAtempoPlayback_EmptySecret_CancelsInsteadOfRefusing (clean replay
+directive, no sleep suffix, CancelSleepTimer speech, ledger written; red proof: the gate
+hoisted back above the cancel branch -> the refusal Tell answers and the pin flips). F3 the
+speed handler's refusal log now states the OBSERVABLE state ("delivered no playback directive
+(stream token secret configured: {bool})") instead of hard-coding the empty-secret cause the
+!HasLaunchDirective gate cannot prove. Suites after the rework: 4869/4869 BOTH TFMs (4868 +
+the F2 pin; F1 extended an existing pin).
 <!-- SECTION:FINAL_SUMMARY:END -->

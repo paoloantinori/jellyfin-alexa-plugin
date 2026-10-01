@@ -784,6 +784,13 @@ public sealed class DeviceQueueManager : IDisposable
         queue.LastPlayedItemId = oldQueue?.LastPlayedItemId;
         queue.LastPlayedLaunchRoute = oldQueue?.LastPlayedLaunchRoute;
 
+        // JF-693 review (coordinator F1): the FRESHNESS STAMP rides with the record.
+        // A carried record without its stamp reads as a legacy entry in
+        // GetDeviceResumePointer's tie rule (either stamp null => queue pointer wins),
+        // so the just-launched book would lose resume arbitration to the old song's
+        // stop-event pointer on the displaced-stop shape.
+        queue.LastPlayedWrittenAt = oldQueue?.LastPlayedWrittenAt;
+
     }
 
     /// <summary>

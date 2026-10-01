@@ -244,9 +244,12 @@ public class SetPlaybackSpeedIntentHandler : BaseHandler
 
         if (!PlaybackLaunchBuilder.HasLaunchDirective(response))
         {
+            // JF-693 review (coordinator F3): log the OBSERVABLE state, not an
+            // inferred cause - the gate is the directive-less response shape, and
+            // any future no-directive return must not read here as an empty secret.
             Logger.LogInformation(
-                "SetPlaybackSpeed: re-launch of '{ItemName}' ({ItemId}) refused (stream token secret empty); the standing rate stays {CurrentRate}/1000",
-                item.Name, item.Id, currentRate);
+                "SetPlaybackSpeed: re-launch of '{ItemName}' ({ItemId}) delivered no playback directive (stream token secret configured: {SecretConfigured}); the standing rate stays {CurrentRate}/1000",
+                item.Name, item.Id, !string.IsNullOrEmpty(_config.StreamTokenSecret), currentRate);
             return Task.FromResult<SkillResponse>(response);
         }
 
