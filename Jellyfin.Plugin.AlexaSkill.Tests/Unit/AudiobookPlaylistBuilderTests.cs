@@ -70,6 +70,26 @@ seg_0002.ts
         Assert.Equal(BasePlaylist, result);
     }
 
+    /// <summary>
+    /// JF-686 review F3: when the base playlist carries NO #EXT-X-MEDIA-SEQUENCE, the
+    /// synthesized tag must land immediately AFTER #EXTM3U. RFC 8216 requires EXTM3U to
+    /// be the first line, so the old leading insert (index 0) emitted an invalid
+    /// playlist. RED (the insert reverted to index 0): the output starts with the
+    /// sequence tag and this assert flips.
+    /// </summary>
+    [Fact]
+    public void BuildResumePlaylist_Sliced_NoSequenceTag_InsertsAfterExtm3u()
+    {
+        const string noSequence = "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:10\n"
+            + "#EXTINF:10.0,\nseg_0000.ts\n#EXTINF:10.0,\nseg_0001.ts\n#EXTINF:10.0,\nseg_0002.ts\n";
+
+        string result = AudiobookPlaylistBuilder.BuildResumePlaylist(noSequence, 10 * TicksPerSecond, 10);
+
+        Assert.StartsWith("#EXTM3U\n#EXT-X-MEDIA-SEQUENCE:1\n", result, StringComparison.Ordinal);
+        Assert.Contains("seg_0001.ts", result, StringComparison.Ordinal);
+        Assert.DoesNotContain("seg_0000.ts", result, StringComparison.Ordinal);
+    }
+
     // ========== JF-499 W2: caller-supplied segment duration (episode remux is 4s) ==========
 
     private const string FourSecondPlaylist = @"#EXTM3U
