@@ -1914,6 +1914,14 @@ public sealed class PlaybackLaunchBuilder
         if (playBehavior == PlayBehavior.Enqueue && context?.AudioPlayer?.Token != null)
         {
             stream.ExpectedPreviousToken = context.AudioPlayer.Token;
+
+            // JF-691: the record, the durable twin of the ExpectedPreviousToken just
+            // issued; this chokepoint is its ONE writer (contract:
+            // DeviceQueue.LastEnqueueAfterToken / PlaybackFinishedEventHandler).
+            if (!string.IsNullOrEmpty(deviceId))
+            {
+                (queueManager ?? Plugin.Instance?.DeviceQueueManager)?.RecordEnqueue(deviceId, context.AudioPlayer.Token, itemId);
+            }
         }
 
         var directive = new AudioPlayerPlayDirective

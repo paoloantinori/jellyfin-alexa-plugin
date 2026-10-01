@@ -117,13 +117,13 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         // hit, skip the library lookups entirely and respond instantly. Only applies
         // to sequential playback (no shuffle, no repeat); other modes fall through
         // to the full resolution below. The playback order in this gate is the
-        // AUTHORITATIVE one (per-device queue via ResolvePlaybackOrder, JF-447 trust
-        // sweep), not the session PlayState: a device queue marked Shuffle with a stale
-        // session PlayState could otherwise pass the gate and serve a stale-order
-        // precomputed entry that the full resolution below would never produce. Repeat
-        // mode stays on the session PlayState because the resolution below reads the
-        // same source for it.
-        var (resolvedOrder, resolvedReshuffled) = ResolvePlaybackOrder(session, context);
+        // AUTHORITATIVE one (per-device queue via ProgressReporter.ResolvePlaybackOrder,
+        // JF-447 trust sweep), not the session PlayState: a device queue marked Shuffle
+        // with a stale session PlayState could otherwise pass the gate and serve a
+        // stale-order precomputed entry that the full resolution below would never
+        // produce. Repeat mode stays on the session PlayState because the resolution
+        // below reads the same source for it.
+        var (resolvedOrder, resolvedReshuffled) = ProgressReporter.ResolvePlaybackOrder(session, context, _queueManager);
 
         // This fetch must run BEFORE the precompute cache-hit early return below:
         // placed after it, every cache-served NearlyFinished skips the fetch and the
@@ -392,31 +392,6 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
     }
 
     /// <summary>
-    /// Resolves the effective playback order and whether the queue was physically
-    /// reshuffled by <c>ShuffleOnIntentHandler</c>. The authoritative source is the
-    /// persisted per-device queue (written by the shuffle handlers); the Jellyfin
-    /// session PlayState is only used as a fallback when no device queue exists.
-    /// Shared by <see cref="ResolveNextItemId"/> (decision) and the debug/Info log
-    /// lines (so they report the value actually used, not the secondary PlayState).
-    /// </summary>
-    /// <param name="session">The current Jellyfin session (fallback source).</param>
-    /// <param name="context">The Alexa context for device identification.</param>
-    /// <returns>The resolved playback order and whether the queue was reshuffled.</returns>
-    private (PlaybackOrder Order, bool Reshuffled) ResolvePlaybackOrder(SessionInfo session, Context context)
-    {
-        Playback.DeviceQueue? deviceQueue = _queueManager?.GetQueue(context.GetDeviceId());
-        if (deviceQueue == null)
-        {
-            return (session.PlayState?.PlaybackOrder ?? PlaybackOrder.Default, false);
-        }
-
-        PlaybackOrder order = string.Equals(deviceQueue.PlaybackOrder, "Shuffle", StringComparison.Ordinal)
-            ? PlaybackOrder.Shuffle
-            : PlaybackOrder.Default;
-        return (order, deviceQueue.OriginalItemIds != null);
-    }
-
-    /// <summary>
     /// Finds the currently playing item's position in the session queue, or -1 when
     /// it cannot be located. Resolution order (the session's now-playing item first,
     /// then the AudioPlayer token parsed through the shared stream-token codec) is
@@ -551,11 +526,12 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         RepeatMode repeatMode = session.PlayState?.RepeatMode ?? RepeatMode.RepeatNone;
 
         // playbackOrder + reshuffledQueue come from the authoritative per-device
-        // queue (see ResolvePlaybackOrder). When reshuffledQueue is true the queue
-        // order IS the shuffle order, so we advance sequentially (each track once);
-        // the random-pick fallback below only runs for shuffle requested WITHOUT a
-        // physical reshuffle.
-        var (playbackOrder, reshuffledQueue) = ResolvePlaybackOrder(session, context);
+        // queue (see ProgressReporter.ResolvePlaybackOrder, the shared home this
+        // resolver's decision and PlaybackFinishedEventHandler's keep-alive arm both
+        // read). When reshuffledQueue is true the queue order IS the shuffle order,
+        // so we advance sequentially (each track once); the random-pick fallback
+        // below only runs for shuffle requested WITHOUT a physical reshuffle.
+        var (playbackOrder, reshuffledQueue) = ProgressReporter.ResolvePlaybackOrder(session, context, _queueManager);
 
         if (session.NowPlayingQueue.Count == 0)
         {
@@ -578,8 +554,10 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         // Shuffle mode (only when the queue was NOT physically reshuffled): pick a
         // random next track from the queue, avoiding immediate repeat. A reshuffled
         // queue falls through to sequential advance so its carefully shuffled order
-        // is honored (each track once) rather than re-randomized every step.
-        if (playbackOrder == PlaybackOrder.Shuffle && !reshuffledQueue && session.NowPlayingQueue.Count > 1)
+        // is honored (each track once) rather than re-randomized every step. The
+        // admission guard is the ONE shared predicate (JF-691: the Finished
+        // keep-alive arm evaluates the same one, so the two cannot drift).
+        if (ProgressReporter.ShuffleRandomPickApplies(playbackOrder, reshuffledQueue, session.NowPlayingQueue.Count))
         {
             int nextIndex;
             if (session.NowPlayingQueue.Count == 2)

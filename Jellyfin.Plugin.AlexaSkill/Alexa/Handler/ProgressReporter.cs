@@ -526,6 +526,58 @@ public sealed class ProgressReporter
     }
 
     /// <summary>
+    /// Resolves the effective playback order and whether the queue was physically
+    /// reshuffled by <c>ShuffleOnIntentHandler</c>. The authoritative source is the
+    /// persisted per-device queue (written by the shuffle handlers); the Jellyfin
+    /// session PlayState is only used as a fallback when no device queue exists.
+    /// Hoisted here (JF-691) from its private home on
+    /// <c>PlaybackNearlyFinishedEventHandler</c> so the Finished handler's
+    /// keep-alive decision can answer "would playback continue?" in the RESOLVER's
+    /// mode instead of re-deriving the shuffle state: NearlyFinished's
+    /// <c>ResolveNextItemId</c> consumes the tuple for its advance decision, the
+    /// Finished handler consumes it for the shuffle-random keep-alive arm, and the
+    /// debug/Info log lines report the value actually used (not the secondary
+    /// PlayState). The admission rules of the random-pick branch live on
+    /// <see cref="ShuffleRandomPickApplies"/>, the shared predicate both consumers
+    /// evaluate, so the guard cannot drift between the handlers.
+    /// </summary>
+    /// <param name="session">The current Jellyfin session (fallback source).</param>
+    /// <param name="context">The Alexa context for device identification.</param>
+    /// <param name="queueManager">The caller's per-device queue manager, or null
+    /// (the PlayState fallback decides alone; the handlers' optional dependency).</param>
+    /// <returns>The resolved playback order and whether the queue was reshuffled.</returns>
+    public static (PlaybackOrder Order, bool Reshuffled) ResolvePlaybackOrder(SessionInfo session, Context context, DeviceQueueManager? queueManager)
+    {
+        Playback.DeviceQueue? deviceQueue = queueManager?.GetQueue(context.GetDeviceId());
+        if (deviceQueue == null)
+        {
+            return (session.PlayState?.PlaybackOrder ?? PlaybackOrder.Default, false);
+        }
+
+        PlaybackOrder order = string.Equals(deviceQueue.PlaybackOrder, "Shuffle", StringComparison.Ordinal)
+            ? PlaybackOrder.Shuffle
+            : PlaybackOrder.Default;
+        return (order, deviceQueue.OriginalItemIds != null);
+    }
+
+    /// <summary>
+    /// The ONE home of the shuffle random-pick admission guard (JF-691 code-review
+    /// round): the exact condition <c>PlaybackNearlyFinishedEventHandler.ResolveNextItemId</c>
+    /// random-picks a next track under (shuffle requested, queue NOT physically
+    /// reshuffled by ShuffleOn, more than one track) and the condition the Finished
+    /// keep-alive arm mirrors. The index-found precondition stays at the callers:
+    /// the two handlers resolve "current item" through different members
+    /// (FindCurrentQueueIndex vs the event token's IndexOfQueueItem). A change to
+    /// the admission rules edits this member and both consumers move with it.
+    /// </summary>
+    /// <param name="order">The resolved playback order (see <see cref="ResolvePlaybackOrder"/>).</param>
+    /// <param name="reshuffled">Whether the queue was physically reshuffled.</param>
+    /// <param name="queueCount">The session queue's item count.</param>
+    /// <returns>True when the resolver would random-pick rather than advance sequentially.</returns>
+    public static bool ShuffleRandomPickApplies(PlaybackOrder order, bool reshuffled, int queueCount)
+        => order == PlaybackOrder.Shuffle && !reshuffled && queueCount > 1;
+
+    /// <summary>
     /// JF-578: the both-stores queue-membership writer the queue-editing intents
     /// (AddToQueue, PlayNext) route through, next to the mirror it composes with
     /// (the JF-574 layering: the Playback store owns the durable mutation, this
