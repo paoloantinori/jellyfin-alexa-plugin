@@ -119,7 +119,7 @@ position so loop mode counts as queued-next; the expired-sleep-timer carve-out: 
 one shape where NearlyFinished deliberately enqueued nothing; the rehydration
 adoption above), 2 test-strengthening findings applied (remaining value asserted;
 keep-alive debug line pinned), 2 semantic corners declined with reasons and filed
-SAME-TURN as JF-688 (unreshuffled-shuffle last position; deleted-successor lingering
+SAME-TURN as JF-691 (unreshuffled-shuffle last position; deleted-successor lingering
 screen - both pre-existing at base, both needing a policy hoist beyond this diff).
 
 REWORK ROUND (same day, orchestrator gate-marker F3/F4/F5; F6 process-only, nothing

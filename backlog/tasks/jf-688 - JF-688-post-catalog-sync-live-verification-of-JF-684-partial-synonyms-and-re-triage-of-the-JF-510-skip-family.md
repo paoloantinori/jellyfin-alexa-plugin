@@ -68,3 +68,5 @@ risk) unless step 4 surfaces new evidence.
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+UPDATE 2026-10-01: the post-sync profile-nlu half is DONE (see jf-684's post-sync note: pink/beatles selecting with ER_SUCCESS on catalog v1199). Remaining for this task: the JF-510 e2e skip-family re-triage on the next test round (the skips may now pass or need fixture updates reflecting the new selection).
