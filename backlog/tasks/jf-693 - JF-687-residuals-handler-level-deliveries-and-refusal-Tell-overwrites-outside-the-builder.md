@@ -3,7 +3,7 @@ id: JF-693
 title: >-
   JF-693 - JF-687 residuals: handler-level token-gated deliveries and refusal-Tell
   overwrites that sit outside the launch builder
-status: To Do
+status: In Progress
 priority: low
 labels:
   - streaming

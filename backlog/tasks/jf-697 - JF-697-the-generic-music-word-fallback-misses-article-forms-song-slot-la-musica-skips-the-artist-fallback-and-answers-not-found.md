@@ -3,7 +3,7 @@ id: JF-696
 title: >-
   JF-697 - the generic-music-word fallback misses article forms: song slot "la
   musica" skips the artist fallback and answers not-found
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-01 17:30'
 labels:
