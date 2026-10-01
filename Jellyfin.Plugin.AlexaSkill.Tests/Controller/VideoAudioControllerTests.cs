@@ -6814,6 +6814,109 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
+    /// JF-685: the committed re-drive of the JF-678 (a) pin the JF-682 twin
+    /// rewrite orphaned. Since JF-682 no PUBLIC construction reaches
+    /// <c>ServePlaylistWithTokenAsync</c>'s no-token branch (every public HLS
+    /// entry is gate-gated 401/503, and the single-chapter redirect's
+    /// empty-token shape serves the gate's own 503), so the pin drives the
+    /// token-free <c>StreamHlsVideoAudioCore</c> seam (JF-685,
+    /// InternalsVisibleTo, visibility only) with a request query that carries
+    /// NO token: every serve inside the core then takes the no-token branch.
+    /// Construction: a completed (ENDLIST) cache planted, the deleting
+    /// provider on the fast-path serve log ("serving cached playlist for
+    /// item", fired AFTER the verdict's read, BEFORE the serve), and the
+    /// 3-digit song-shape fake. GREEN: the no-token serve of the
+    /// verdict-threaded content probes the now-vanished path and throws the
+    /// vanish exception at ACTION time, the fast-path translation falls
+    /// through to the re-encode (episode-args.txt), and the post-encode
+    /// no-token serve of the FRESH playlist answers a MATERIALIZED
+    /// ContentResult with the raw (token-less) bytes - never a raw
+    /// PhysicalFile riding over a path. The core performed exactly TWO full
+    /// reads through ReadPlaylistContentAsync: the verdict's validating read
+    /// and the post-encode fresh read;
+    /// the vanish serve itself consumed the threaded content probe-only (the
+    /// JF-677 one-read invariant survives on the no-token branch). The
+    /// translation log's "vanished or became unreadable" wording is pinned
+    /// too (the honesty contract of the ProbePlaylistExists conflation
+    /// decision; this test re-established it after the JF-678(a) original
+    /// was orphaned).
+    /// RED (the branch reverted to the pre-JF-678 raw PhysicalFile): the
+    /// vanish probe is gone, the fast-path serve "succeeds" with a
+    /// PhysicalFileResult over the DELETED path (the filed JF-678(a) bug: a
+    /// 500 at RESULT EXECUTION), no re-encode runs, no vanish log fires, and
+    /// the count drops to the verdict's single read - the ContentResult,
+    /// vanish-log, args-file, and read-count asserts all flip (the deleting
+    /// provider's Fired construction assert stays green by design, the
+    /// JF-682 twin's red note).
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsVideoAudioCore_NoTokenServe_CacheVanishedAtServe_FallsThroughToReencode()
+    {
+        var audioItem = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "JF-685 No-Token Vanish Song",
+            Id = Guid.NewGuid()
+        };
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(audioItem.Id)).Returns(audioItem);
+
+        string hlsDir = _cache.GetHlsDirectoryPath(audioItem.Id.ToString("D"), 0);
+        Directory.CreateDirectory(hlsDir);
+        string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
+        await File.WriteAllTextAsync(
+            playlistPath,
+            "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:4.000,\nseg_000.ts\n#EXT-X-ENDLIST\n");
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        var deletingProvider = new FileDeletingLoggerProvider("serving cached playlist for item", playlistPath);
+        using var loggerFactory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Trace);
+            b.AddProvider(TestCaptureLogger.Into(logRecords));
+            b.AddProvider(deletingProvider);
+        });
+
+        // 3-digit song shape: the re-encode must actually serve for the
+        // content assert (the JF-499/JF-677/JF-682 song twins' rationale).
+        string fakeFfmpegPath = WriteRecordingFakeFfmpeg("fake-ffmpeg-jf685-notoken", "seg_000.ts");
+
+        // itemIdForToken null: the query carries NO token, so the core's
+        // serves (fast path AND post-encode) take the no-token branch.
+        var controller = CreateController(null, loggerFactory, ffmpegPath: fakeFfmpegPath);
+
+        int reads = 0;
+        controller.PlaylistContentReadForTest = path =>
+        {
+            if (path == playlistPath)
+            {
+                reads++;
+            }
+        };
+
+        ActionResult result = await controller.StreamHlsVideoAudioCore(audioItem.Id.ToString());
+
+        Assert.True(
+            deletingProvider.Fired,
+            "the deleting provider must have fired on the fast-path serve log (the verdict-to-serve race window was exercised)");
+        // The vanish translation's honesty wording (the conflation decision:
+        // the log must not claim a pure vanish when File.Exists conflates an
+        // ACL revocation with a delete).
+        Assert.Contains(
+            TestCaptureLogger.Snapshot(logRecords),
+            r => r.Message.Contains("vanished or became unreadable", StringComparison.Ordinal));
+        var content = Assert.IsType<ContentResult>(result);
+        // The MATERIALIZED no-token serve: the fresh playlist's raw bytes,
+        // unrewritten (a token-less serve appends no ?token= - the inverse of
+        // the tokened twins' seg_000.ts?token= assert).
+        Assert.Contains("seg_000.ts", content.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("?token=", content.Content, StringComparison.Ordinal);
+        Assert.True(
+            File.Exists(Path.Combine(hlsDir, "episode-args.txt")),
+            "the re-encode path must have run after the no-token vanish fallthrough (the probe must not let a raw PhysicalFile ride over a deleted playlist)");
+        Assert.Equal(2, reads);
+    }
+
+    /// <summary>
     /// JF-678 (b), the song path's in-lock verdict+serve row: the playlist a
     /// verdict just validated vanishing BETWEEN the verdict and the serve must
     /// fall through to the row's own encode branch (inside the same lock), not
