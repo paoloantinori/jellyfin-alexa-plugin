@@ -42,6 +42,16 @@ are parsed/rendered (Configuration/ and config.html) and decide between appendin
 clause to an existing message/error field versus a distinct status value the UI already
 tolerates. Add a pin: partial freeze with successful PUT must surface the frozen type in
 the ledger entry. Keep the run-level honesty (Success gate) unchanged.
+
+GATE-MARKER TAIL (2026-10-02, orchestrator review of commit 7a7982ee, 2 findings): all
+four scrutiny axes verified clean at the consumer level (no consumer keys behavior off
+Error-empty for SUCCEEDED rows; the clause leads and fits the 80-char window in every
+arity; the pins are hermetic per-test with the locale pin restored; the all-frozen shape
+writes no entry, JF-709 territory untouched). F1 FILED as JF-710 (the startup
+skill-update capture overwrites Error=null and can erase the frozen clause under the
+compound skip-gated restart; preserve-semantics on a second writer, needs its own
+startup-path pin); F2 applied (the worst-case clause is 58 chars, not 59; the commit
+message retains the off-by-one).
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done
@@ -75,7 +85,7 @@ field (the ledger's existing caveat channel, same as JF-495 canary mismatches); 
 config.html change needed, which also avoids the embedded-resource clean-build dance. WHAT
 LANDED: RunLegAsync passes its frozenTypes list into RecordModelUpdateInLedger, which
 composes "Artist + Album catalogs FROZEN (last-good pinned)" (plural and " + " join over the
-enum names, 59 chars worst case, inside the 80-char visible window) LEADING any canary
+enum names, 58 chars worst case (gate-marker correction; the commit message retains the off-by-one), inside the 80-char visible window) LEADING any canary
 message so the persistent actionable condition survives truncation (code-review F1);
 LocaleModelStatus.Error's doc now names the caveat role; TWO pins extend
 LibrarySyncServiceLegIsolationTests: partial freeze with successful PUT surfaces the frozen
