@@ -341,7 +341,8 @@ public class PlayRadioIntentHandler : BaseHandler
     /// Tier (ii) payoff: seed radio mode from the genre word's tracks. Same shape as
     /// the context-seeded path (shuffle, 20-track cap, RadioModeState on, the
     /// RadioStarted announcement), with the first genre track in the now-playing slot
-    /// and PlaybackNearlyFinished continuing the genre radio via AutoPopulateRadioTracks.
+    /// and PlaybackNearlyFinished continuing the genre radio via its radio-mode
+    /// population arm (DeriveSimilarTracksPopulation).
     /// </summary>
     /// <param name="genre">The matched genre word (logging only).</param>
     /// <param name="genreTracks">The genre's tracks (from FindRadioTracksByGenreAsync).</param>

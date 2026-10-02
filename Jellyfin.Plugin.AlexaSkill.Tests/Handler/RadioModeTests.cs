@@ -855,8 +855,13 @@ public class RadioModeTests : PluginTestBase, IDisposable
         RadioModeState.Enable(session.UserId, context.System.Device.DeviceID);
 
         var similarId = Guid.NewGuid();
+        var similarTrack = new Audio { Id = similarId, Name = "Similar Rock Song" };
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
-            .Returns(new List<MediaBrowser.Controller.Entities.BaseItem> { new Audio { Id = similarId, Name = "Similar Rock Song" } });
+            .Returns(new List<MediaBrowser.Controller.Entities.BaseItem> { similarTrack });
+        // JF-712: the session-queue append commits only after the launch build
+        // succeeds, so the successor must resolve in the library (the old fixture
+        // passed via the phantom append the item-not-found early return left behind).
+        _libraryManagerMock.Setup(l => l.GetItemById(similarId)).Returns(similarTrack);
 
         _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
             .Returns(TestHelpers.CreateJellyfinUser());
