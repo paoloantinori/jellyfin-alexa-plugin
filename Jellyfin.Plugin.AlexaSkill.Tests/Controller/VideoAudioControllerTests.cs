@@ -1143,13 +1143,31 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// cache, and returns the result. The IsCompleted assert converts a broken
     /// construction (a fast-path hit, which would serve and complete without
     /// the lock) into an honest failure instead of a false pass; the twins add
-    /// the log assertions that pin WHICH branch served.
+    /// the log assertions that pin WHICH branch served. JF-681: the assert
+    /// distinguishes a FAULTED endpoint task from a fast-path hit
+    /// (<see cref="ParkAssertFailureMessage"/> unwraps the exception, so a
+    /// pre-lock crash surfaces its real cause instead of reading as a fast
+    /// serve). Passing <paramref name="controller"/> additionally makes the
+    /// in-lock-vs-fast-path attribution DETERMINISTIC: the helper wires the
+    /// controller's InLockWarmCacheProbeForTest seam and, after the endpoint
+    /// completes, asserts the probe fired (it can only fire inside the per-item
+    /// lock scope, so a >400ms pre-lock stall whose request then served from the
+    /// fast path fails here instead of passing under a false attribution); omit
+    /// the parameter for constructions whose endpoint never reaches a lock scope
+    /// (the fault-observation pin).
     /// </summary>
     private static async Task<ActionResult> ServeInLockWarmCacheAsync(
         Func<Task<IDisposable>> acquireLock,
         Func<Task<ActionResult>> startEndpoint,
-        Action plantWarmCache)
+        Action plantWarmCache,
+        VideoAudioController? controller = null)
     {
+        bool inLockProbeFired = false;
+        if (controller != null)
+        {
+            controller.InLockWarmCacheProbeForTest = _ => inLockProbeFired = true;
+        }
+
         IDisposable gate = await acquireLock();
         Task<ActionResult> endpointTask;
         try
@@ -1158,7 +1176,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             await Task.Delay(400);
             Assert.False(
                 endpointTask.IsCompleted,
-                "the endpoint must be parked on the per-item lock when the warm cache is planted (a fast-path hit would have completed without the lock)");
+                ParkAssertFailureMessage(endpointTask));
             plantWarmCache();
         }
         finally
@@ -1166,7 +1184,147 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             gate.Dispose();
         }
 
-        return await endpointTask.WaitAsync(TimeSpan.FromSeconds(20)).ConfigureAwait(false);
+        ActionResult result = await endpointTask.WaitAsync(TimeSpan.FromSeconds(20)).ConfigureAwait(false);
+        if (controller != null)
+        {
+            Assert.True(inLockProbeFired, InLockProbeNotFiredMessage);
+        }
+
+        return result;
+    }
+
+    /// <summary>The one failure message for the helper's in-lock attribution assert (JF-681), owned here once.</summary>
+    private const string InLockProbeNotFiredMessage =
+        "the JF-681 in-lock probe never fired, so the request served WITHOUT entering the per-item lock scope (a fast-path serve won the race past the 400ms park window) and this pin's in-lock attribution is void";
+
+    /// <summary>
+    /// The park assert's message (JF-681): the original single message conflated
+    /// the two ways a task can be completed at the 400ms probe. A RAN-TO-COMPLETION
+    /// task IS a fast-path hit and keeps the original guidance verbatim; a FAULTED
+    /// task is a crash before the lock (a pre-lock NRE, an argument throw) whose
+    /// real exception the suite would otherwise never surface (nothing awaited the
+    /// task yet, so the fault stayed unobserved and triage read the crash as a
+    /// fast serve), so its exception is unwrapped into the message; a CANCELED
+    /// task names itself (there is no exception to unwrap).
+    /// </summary>
+    private static string ParkAssertFailureMessage(Task<ActionResult> endpointTask)
+    {
+        const string BaseMessage =
+            "the endpoint must be parked on the per-item lock when the warm cache is planted (a fast-path hit would have completed without the lock)";
+
+        if (endpointTask.IsFaulted)
+        {
+            // The TPL guarantees a faulted task's Exception is non-null, so the
+            // unwrap is total here.
+            Exception failure = endpointTask.Exception!.GetBaseException();
+            return BaseMessage
+                + " THE TASK FAULTED BEFORE PARKING: the real cause is the exception below, not a fast-path hit. "
+                + $"{failure.GetType().FullName}: {failure.Message}{Environment.NewLine}{failure.StackTrace}";
+        }
+
+        if (endpointTask.IsCanceled)
+        {
+            return BaseMessage + " THE TASK WAS CANCELED BEFORE PARKING (no fault to unwrap).";
+        }
+
+        return BaseMessage;
+    }
+
+    /// <summary>
+    /// JF-681 park-assert fault observation: a task that faults BEFORE parking (a
+    /// pre-lock NRE, an argument throw) used to trip the helper's IsCompleted
+    /// assert with only the generic "must be parked" wording, so the real
+    /// exception stayed unobserved (nothing had awaited the task) and triage read
+    /// the crash as a fast-path hit. The helper now unwraps the fault into the
+    /// assert message (see <see cref="ParkAssertFailureMessage"/>). RED PROOF:
+    /// reverting <see cref="ParkAssertFailureMessage"/> to the old constant drops
+    /// the exception text from the message and this pin fails on the Contains
+    /// asserts.
+    /// </summary>
+    [Fact]
+    public async Task ServeInLockWarmCacheHelper_FaultedEndpointTask_SurfacesExceptionThroughParkAssert()
+    {
+        var fault = new InvalidOperationException("pre-lock boom (JF-681 fault observation)");
+
+        var failed = await Assert.ThrowsAsync<Xunit.Sdk.FalseException>(() => ServeInLockWarmCacheAsync(
+            () => _cache.LockItemAsync(Guid.NewGuid().ToString("D"), 0),
+            () => Task.FromException<ActionResult>(fault),
+            () => { }));
+
+        Assert.Contains("THE TASK FAULTED BEFORE PARKING", failed.Message, StringComparison.Ordinal);
+        Assert.Contains("InvalidOperationException", failed.Message, StringComparison.Ordinal);
+        Assert.Contains("pre-lock boom (JF-681 fault observation)", failed.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-681 code-review hardening pin: a THROWING in-lock probe observer must
+    /// not orphan the per-item lock. LockHlsItemAsync acquires the cache gate
+    /// BEFORE the caller's using binds it, so an observer that throws inside the
+    /// wrapper would (without the dispose-and-rethrow) leave the gate acquired
+    /// forever and deadlock every later request for the key. GREEN: the
+    /// observer's exception surfaces out of the endpoint AND a follow-up
+    /// acquisition of the same per-item lock completes immediately (the gate
+    /// was released). RED PROOF: removing the wrapper's catch (dispose +
+    /// rethrow) keeps the gate held and the follow-up acquisition below times
+    /// out instead of returning.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsVideoAudio_ThrowingInLockProbe_ReleasesTheItemLock()
+    {
+        var audioItem = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "JF-681 Throwing Probe Song",
+            Id = Guid.NewGuid()
+        };
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(audioItem.Id)).Returns(audioItem);
+
+        var controller = CreateController(audioItem.Id.ToString());
+        controller.InLockWarmCacheProbeForTest = _ => throw new InvalidOperationException("probe boom (JF-681 lock-release pin)");
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => controller.StreamHlsVideoAudio(audioItem.Id.ToString()));
+
+        // The gate must be free: this acquisition completes (bounded) exactly
+        // when the wrapper released it, and times out into the red shape when a
+        // leaked gate holds the key.
+        IDisposable reAcquired = await _cache.LockItemAsync(audioItem.Id.ToString("D"), 0)
+            .WaitAsync(TimeSpan.FromSeconds(15)).ConfigureAwait(false);
+        reAcquired.Dispose();
+    }
+
+    /// <summary>
+    /// The two-path read-count funnel shared by the own-live prewrite pins and
+    /// the mid-registration twins (JF-681): installs a
+    /// PlaylistContentReadForTest observer that counts full reads per playlist
+    /// file and returns the two readers. Pure counting plumbing: the pins keep
+    /// their own expected values and their production-side red proofs, so the
+    /// shared funnel cannot couple the pins' outcomes.
+    /// </summary>
+    /// <param name="controller">The pin's controller instance (per-test, never shared).</param>
+    /// <param name="prewrittenPath">The prewrite playlist path to count (playlist-full.m3u8).</param>
+    /// <param name="playlistPath">The live playlist path to count (stream.m3u8).</param>
+    /// <returns>Readers for the prewrite-path and live-path read counts.</returns>
+    private static (Func<int> Prewrites, Func<int> Lives) TrackPlaylistReads(
+        VideoAudioController controller,
+        string prewrittenPath,
+        string playlistPath)
+    {
+        int prewriteReads = 0;
+        int liveReads = 0;
+        controller.PlaylistContentReadForTest = path =>
+        {
+            if (path == prewrittenPath)
+            {
+                prewriteReads++;
+            }
+
+            if (path == playlistPath)
+            {
+                liveReads++;
+            }
+        };
+
+        return (() => prewriteReads, () => liveReads);
     }
 
     /// <summary>
@@ -1214,7 +1372,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             {
                 Directory.CreateDirectory(hlsDir);
                 File.WriteAllText(playlistPath, "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:4.000,\nseg_000.ts\n#EXT-X-ENDLIST\n");
-            });
+            }, controller);
 
         var content = Assert.IsType<ContentResult>(result);
         Assert.Contains("seg_000.ts?token=", content.Content, StringComparison.Ordinal);
@@ -1263,7 +1421,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             {
                 Directory.CreateDirectory(hlsDir);
                 File.WriteAllText(playlistPath, "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:4.000,\nseg_0000.ts\n#EXTINF:4.000,\nseg_0001.ts\n#EXT-X-ENDLIST\n");
-            });
+            }, controller);
 
         var content = Assert.IsType<ContentResult>(result);
         Assert.Contains("seg_0000.ts?token=", content.Content, StringComparison.Ordinal);
@@ -1320,7 +1478,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             {
                 Directory.CreateDirectory(hlsDir);
                 File.WriteAllText(playlistPath, "#EXTM3U\n#EXTINF:10.000,\nseg_0000.ts\n#EXTINF:10.000,\nseg_0001.ts\n#EXT-X-ENDLIST\n");
-            });
+            }, controller);
 
         var content = Assert.IsType<ContentResult>(result);
         Assert.Contains("seg_0000.ts?token=", content.Content, StringComparison.Ordinal);
@@ -1384,7 +1542,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
                 Directory.CreateDirectory(hlsDir);
                 // 2 segments >= 2 chapters: the undercount hook's bar.
                 File.WriteAllText(playlistPath, "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:10.000,\nseg_0000.ts\n#EXTINF:10.000,\nseg_0001.ts\n#EXT-X-ENDLIST\n");
-            });
+            }, controller);
 
         var content = Assert.IsType<ContentResult>(result);
         Assert.Contains("seg_0000.ts?token=", content.Content, StringComparison.Ordinal);
@@ -1431,14 +1589,20 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// (seg_9999 served, the concurrent-request log fires); the verdict still
     /// answers own-live-or-registering at the correct ticks, so the fall-through
     /// is exactly the silent live-edge revert the task describes.
-    /// ATTRIBUTION BOUNDARY (stated honestly): the prewrite row carries no
-    /// site-specific log, so the in-lock-vs-fast-path attribution rests on the
-    /// helper's IsCompleted assert at 400ms; a >400ms stall in the pre-lock
-    /// in-memory phase would re-target the pin at the fast-path gate, which
-    /// reads the SAME predicate at the SAME ticks (the row the JF-675/JF-531
-    /// fast-path pins already cover). A deterministic site discriminator would
-    /// need a production lock-probe seam, out of scope for this test-only task
-    /// (code-review high, 2026-09-30).
+    /// JF-681 ADDITIONS: (1) ATTRIBUTION is now deterministic, closing the
+    /// boundary the original pin stated honestly (it rested on the 400ms park
+    /// assert, and a >400ms pre-lock stall would re-target the pin at the
+    /// fast-path gate, which reads the SAME predicate at the SAME ticks and
+    /// serves byte-identically): the InLockWarmCacheProbeForTest seam fires only
+    /// inside the per-item lock scope, so a fast-path serve can no longer
+    /// satisfy this pin silently; the probe assert fails and names the void
+    /// attribution (red proof: removing the song/episode probe invocations
+    /// flips this pin and the JF-677 twins on those paths, nothing else).
+    /// (2) READ-COUNT FUNNEL: on this row the verdict reads nothing (own-live
+    /// row, Content null) and the prewrite serve reads the prewrite EXACTLY
+    /// ONCE fresh (no preloaded content to reuse), so a double-read regression
+    /// on the prewrite serve flips the count (red proof: a discarded read
+    /// hoisted into TryServePrewrittenEpisodePlaylist flips this pin to 2).
     /// </summary>
     [Fact]
     public async Task StreamHlsEpisode_InLockOwnLiveGeneration_ServesPrewriteNotLivePartial()
@@ -1447,6 +1611,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
         string hlsDir = _cache.GetHlsDirectoryPath(episode.Id.ToString(), 0);
         string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
+        string prewrittenPath = Path.Combine(hlsDir, "playlist-full.m3u8");
 
         var logRecords = new List<(LogLevel Level, string Message)>();
         using var loggerFactory = LoggerFactory.Create(b =>
@@ -1455,6 +1620,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             b.AddProvider(TestCaptureLogger.Into(logRecords));
         });
         var controller = CreateController(episode.Id.ToString(), loggerFactory, mediaSourceManager, WriteRecordingFakeFfmpeg("fake-ffmpeg-jf680-inlock-episode"));
+
+        var reads = TrackPlaylistReads(controller, prewrittenPath, playlistPath);
 
         // The own-live marking (doc: no encode runs, so nothing displaces it).
         VideoAudioController.SetEncodeActiveForTest(episode.Id.ToString(), active: true);
@@ -1468,15 +1635,18 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
                     Directory.CreateDirectory(hlsDir);
                     File.WriteAllText(playlistPath, "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:4.000,\nseg_0000.ts\n#EXTINF:4.000,\nseg_9999.ts\n");
                     File.WriteAllText(
-                        Path.Combine(hlsDir, "playlist-full.m3u8"),
+                        prewrittenPath,
                         "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:4.000,\nseg_0000.ts\n#EXTINF:4.000,\nseg_0999.ts\n");
-                });
+                },
+                controller);
 
             var content = Assert.IsType<ContentResult>(result);
             Assert.True(
                 content.Content.Contains("seg_0999", StringComparison.Ordinal),
                 $"a concurrent lock-waiter under a live own-ticks generation must receive the pre-written full listing, not ffmpeg's live partial (JF-680); live-only marker seg_9999 present: {content.Content.Contains("seg_9999", StringComparison.Ordinal)}");
             Assert.DoesNotContain("seg_9999", content.Content, StringComparison.Ordinal);
+            Assert.Equal(1, reads.Prewrites());
+            Assert.Equal(0, reads.Lives());
             Assert.Contains(
                 TestCaptureLogger.Snapshot(logRecords),
                 r => r.Message.Contains("serving pre-written full listing", StringComparison.Ordinal));
@@ -1505,7 +1675,15 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// from the fixture runtime if it ever grows). TWIN INDEPENDENCE:
     /// the red proof toggles ONLY the song gate (disabled, or its call-site
     /// ticks miswired), which must fail THIS pin while the episode pin stays
-    /// green.
+    /// green. JF-681 ADDITIONS (the episode twin's shape): the in-lock probe
+    /// assert makes the in-lock-vs-fast-path attribution deterministic, and the
+    /// read-count funnel pins the row's reads (this gate sits BEFORE the
+    /// verdict, so the verdict never runs on this row: the prewrite serve reads
+    /// the prewrite EXACTLY ONCE fresh and the live partial ZERO times; red
+    /// proof for the count: a discarded read hoisted into
+    /// TryServePrewrittenVideoAudioPlaylist flips this pin to 2; red proof for
+    /// the probe: removing the song probe invocation flips this pin's probe
+    /// assert).
     /// </summary>
     [Fact]
     public async Task StreamHlsVideoAudio_InLockOwnLiveGeneration_ServesPrewriteNotLivePartial()
@@ -1520,6 +1698,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
         string hlsDir = _cache.GetHlsDirectoryPath(audioItem.Id.ToString("D"), 0);
         string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
+        string prewrittenPath = Path.Combine(hlsDir, "playlist-full.m3u8");
 
         var logRecords = new List<(LogLevel Level, string Message)>();
         using var loggerFactory = LoggerFactory.Create(b =>
@@ -1528,6 +1707,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             b.AddProvider(TestCaptureLogger.Into(logRecords));
         });
         var controller = CreateController(audioItem.Id.ToString(), loggerFactory, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf680-inlock-song"));
+
+        var reads = TrackPlaylistReads(controller, prewrittenPath, playlistPath);
 
         // The own-live marking in the song registry (doc: the episode pin's
         // construction; no encode runs, so nothing displaces it).
@@ -1542,15 +1723,18 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
                     Directory.CreateDirectory(hlsDir);
                     File.WriteAllText(playlistPath, "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:4.000,\nseg_000.ts\n#EXTINF:4.000,\nseg_999.ts\n");
                     File.WriteAllText(
-                        Path.Combine(hlsDir, "playlist-full.m3u8"),
+                        prewrittenPath,
                         "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:4.000,\nseg_000.ts\n#EXTINF:4.000,\nseg_899.ts\n");
-                });
+                },
+                controller);
 
             var content = Assert.IsType<ContentResult>(result);
             Assert.True(
                 content.Content.Contains("seg_899", StringComparison.Ordinal),
                 $"a concurrent lock-waiter under a live own-ticks generation must receive the pre-written full listing, not ffmpeg's live partial (JF-680 song gate); live-only marker seg_999 present: {content.Content.Contains("seg_999", StringComparison.Ordinal)}");
             Assert.DoesNotContain("seg_999", content.Content, StringComparison.Ordinal);
+            Assert.Equal(1, reads.Prewrites());
+            Assert.Equal(0, reads.Lives());
             Assert.Contains(
                 TestCaptureLogger.Snapshot(logRecords),
                 r => r.Message.Contains("serving pre-written full listing", StringComparison.Ordinal));
@@ -1561,6 +1745,166 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         finally
         {
             VideoAudioController.SetEncodeActiveForTest(audioItem.Id.ToString(), active: false, song: true);
+        }
+    }
+
+    /// <summary>
+    /// JF-681 mid-registration split pin (the EPISODE row): the strict-vs-conservative
+    /// gate split (OwnTicksGenerationLive at the prewrite serve gates vs
+    /// OwnTicksGenerationLiveOrRegistering at the debris verdicts) had ZERO mechanical
+    /// coverage, because SetEncodeActiveForTest always creates a FULL slot where the
+    /// two predicates agree, so a regression swapping the warm-cache gate's predicate
+    /// (or hoisting the gate behind the verdict, the exact move
+    /// ServeEpisodeWarmCacheAsync's doc warns against) kept the suite green.
+    /// Construction: the SetEncodeRegisteringForTest zero-slot seam (the
+    /// mid-registration state: entry stored, NO slot written, the production
+    /// GetOrAdd-before-RegisterIfStored window) plus the JF-680 in-lock construction
+    /// (both playlists planted under the held lock, the seg_0999/seg_9999 marker
+    /// scheme). In the window the serve gate must stay STRICT (the prewrite skipped:
+    /// seg_0999 absent, zero prewrite reads, no "serving pre-written full listing"
+    /// log) while the verdict stays CONSERVATIVE (the "serving live ffmpeg playlist
+    /// (encoding in progress)" own-live row fires; an ABSENT entry could not produce
+    /// it, it would send the verdict down the no-ENDLIST debris row instead), and the
+    /// request falls through to the live partial (seg_9999 served, one fresh read).
+    /// RED PROOF: swapping ServeEpisodeWarmCacheAsync's gate to the conservative
+    /// predicate serves the prewrite (seg_0999 present, the prewrite log fires, live
+    /// reads 0) and flips this pin.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_InLockMidRegistrationWindow_SkipsPrewriteAndVerdictStaysConservative()
+    {
+        var (episode, mediaSourceManager) = SetupEpisodeForHls("JF-681 Mid-Registration S01E01", "h264", TimeSpan.FromMinutes(45));
+
+        string hlsDir = _cache.GetHlsDirectoryPath(episode.Id.ToString(), 0);
+        string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
+        string prewrittenPath = Path.Combine(hlsDir, "playlist-full.m3u8");
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Trace);
+            b.AddProvider(TestCaptureLogger.Into(logRecords));
+        });
+        var controller = CreateController(episode.Id.ToString(), loggerFactory, mediaSourceManager, WriteRecordingFakeFfmpeg("fake-ffmpeg-jf681-midreg-episode"));
+
+        var reads = TrackPlaylistReads(controller, prewrittenPath, playlistPath);
+
+        // The MID-REGISTRATION marking (doc: a stored holder with ZERO slots, the
+        // window where the strict gate and the conservative verdict disagree).
+        VideoAudioController.SetEncodeRegisteringForTest(episode.Id.ToString(), registering: true);
+        try
+        {
+            ActionResult result = await ServeInLockWarmCacheAsync(
+                () => _cache.LockItemAsync(episode.Id.ToString(), 0),
+                () => controller.StreamHlsEpisode(episode.Id.ToString()),
+                () =>
+                {
+                    Directory.CreateDirectory(hlsDir);
+                    File.WriteAllText(playlistPath, "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:4.000,\nseg_0000.ts\n#EXTINF:4.000,\nseg_9999.ts\n");
+                    File.WriteAllText(
+                        prewrittenPath,
+                        "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:4.000,\nseg_0000.ts\n#EXTINF:4.000,\nseg_0999.ts\n");
+                },
+                controller);
+
+            var content = Assert.IsType<ContentResult>(result);
+            Assert.True(
+                content.Content.Contains("seg_9999", StringComparison.Ordinal),
+                $"in the mid-registration window the strict serve gate must skip the prewrite and fall through to ffmpeg's live partial (JF-681); prewrite marker seg_0999 present: {content.Content.Contains("seg_0999", StringComparison.Ordinal)}");
+            Assert.DoesNotContain("seg_0999", content.Content, StringComparison.Ordinal);
+            Assert.Equal(0, reads.Prewrites());
+            Assert.Equal(1, reads.Lives());
+            Assert.Contains(
+                TestCaptureLogger.Snapshot(logRecords),
+                r => r.Message.Contains("serving live ffmpeg playlist (encoding in progress)", StringComparison.Ordinal));
+            Assert.DoesNotContain(
+                TestCaptureLogger.Snapshot(logRecords),
+                r => r.Message.Contains("serving pre-written full listing", StringComparison.Ordinal));
+        }
+        finally
+        {
+            VideoAudioController.SetEncodeRegisteringForTest(episode.Id.ToString(), registering: false);
+        }
+    }
+
+    /// <summary>
+    /// JF-681 mid-registration split pin (the SONG row, the twin on the gate whose
+    /// doc deliberately keeps it BEFORE the verdict at both sites): same gap and
+    /// same construction as the episode pin, on the song registry (song: true) with
+    /// the seg_899/seg_999 markers (the JF-680 song pin's boundary: the prewrite
+    /// marker stays outside any production-shaped listing). Here the strict gate is
+    /// TryServeOwnLiveVideoAudioPrewriteAsync, whose doc warns that hoisting it
+    /// behind the verdict would change the mid-registration serve; this pin is the
+    /// mechanical guard of that warning. In the window the gate stays STRICT
+    /// (prewrite skipped: seg_899 absent, zero prewrite reads, no "serving
+    /// pre-written full listing" log) while the verdict stays CONSERVATIVE (the
+    /// "serving live ffmpeg playlist (encoding in progress)" own-live row fires,
+    /// the discriminator an ABSENT entry could not produce), and the request falls
+    /// through to the live partial (seg_999 served, one fresh read).
+    /// RED PROOF: swapping TryServeOwnLiveVideoAudioPrewriteAsync's gate to the
+    /// conservative predicate serves the prewrite (seg_899 present, the prewrite
+    /// log fires, live reads 0) and flips this pin.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsVideoAudio_InLockMidRegistrationWindow_SkipsPrewriteAndVerdictStaysConservative()
+    {
+        var audioItem = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "JF-681 Mid-Registration Song",
+            Id = Guid.NewGuid()
+        };
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(audioItem.Id)).Returns(audioItem);
+
+        string hlsDir = _cache.GetHlsDirectoryPath(audioItem.Id.ToString("D"), 0);
+        string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
+        string prewrittenPath = Path.Combine(hlsDir, "playlist-full.m3u8");
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Trace);
+            b.AddProvider(TestCaptureLogger.Into(logRecords));
+        });
+        var controller = CreateController(audioItem.Id.ToString(), loggerFactory, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf681-midreg-song"));
+
+        var reads = TrackPlaylistReads(controller, prewrittenPath, playlistPath);
+
+        // The MID-REGISTRATION marking in the song registry (doc: the episode
+        // twin's construction).
+        VideoAudioController.SetEncodeRegisteringForTest(audioItem.Id.ToString(), registering: true, song: true);
+        try
+        {
+            ActionResult result = await ServeInLockWarmCacheAsync(
+                () => _cache.LockItemAsync(audioItem.Id.ToString("D"), 0),
+                () => controller.StreamHlsVideoAudio(audioItem.Id.ToString()),
+                () =>
+                {
+                    Directory.CreateDirectory(hlsDir);
+                    File.WriteAllText(playlistPath, "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:4.000,\nseg_000.ts\n#EXTINF:4.000,\nseg_999.ts\n");
+                    File.WriteAllText(
+                        prewrittenPath,
+                        "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:4.000,\nseg_000.ts\n#EXTINF:4.000,\nseg_899.ts\n");
+                },
+                controller);
+
+            var content = Assert.IsType<ContentResult>(result);
+            Assert.True(
+                content.Content.Contains("seg_999", StringComparison.Ordinal),
+                $"in the mid-registration window the strict serve gate must skip the prewrite and fall through to ffmpeg's live partial (JF-681 song gate); prewrite marker seg_899 present: {content.Content.Contains("seg_899", StringComparison.Ordinal)}");
+            Assert.DoesNotContain("seg_899", content.Content, StringComparison.Ordinal);
+            Assert.Equal(0, reads.Prewrites());
+            Assert.Equal(1, reads.Lives());
+            Assert.Contains(
+                TestCaptureLogger.Snapshot(logRecords),
+                r => r.Message.Contains("serving live ffmpeg playlist (encoding in progress)", StringComparison.Ordinal));
+            Assert.DoesNotContain(
+                TestCaptureLogger.Snapshot(logRecords),
+                r => r.Message.Contains("serving pre-written full listing", StringComparison.Ordinal));
+        }
+        finally
+        {
+            VideoAudioController.SetEncodeRegisteringForTest(audioItem.Id.ToString(), registering: false, song: true);
         }
     }
 
