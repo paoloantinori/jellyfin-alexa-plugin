@@ -51,6 +51,28 @@ literal duplicated at two sites. Add a startup-path pin for the preserve (and th
 clean case not inventing a clause). Mind: this is a second ledger writer; read
 JF-709's Status-for-no-build open decision before choosing where the preserve logic
 lives, so the two do not fight over the same entry.
+
+COORDINATION UPDATE (2026-10-02, JF-709 rework round): the ledger now has THREE
+writers, namely the JF-705 PUT-path writer (RecordModelUpdateInLedger), the JF-709
+no-PUT writer (RecordNoPutFrozenLegInLedger), and this startup capture. JF-709's
+Status-for-no-build decision is CLOSED: settled statuses (SUCCEEDED / FAILED /
+TIMEOUT, OrdinalIgnoreCase) are preserved verbatim by the no-PUT writer, transients
+and unknowns clamp to "Skipped" (PreservedOrSkippedStatus), Source is always the
+writing subsystem's own label. This task's preserve spec must therefore say WHICH
+Error segments survive a capture overwrite: the frozen clause
+(LibrarySyncService.FrozenLedgerClause output) and any FOREIGN diagnostic (a JF-495
+canary message or failed-PUT reason, i.e. an Error NOT carrying the JF-709 no-PUT
+tail) MUST survive; the run-scoped "; no PUT this run" tail itself must NOT survive
+(it describes the last sync run's shape, which the capture's rebuild supersedes in
+observability terms), so drop it on overwrite rather than preserving stale
+run-scoped text. The no-PUT tail constant (LibrarySyncService.NoPutLedgerTail) is
+the marker both this capture and the no-PUT writer's own-shape replace key on; it is
+internal, reuse it, do not re-type the literal. ONE SHAPE HAZARD to design around:
+if the capture preserves a frozen clause WITHOUT the tail, the next all-frozen run's
+own-shape check (tail-based) will classify that clause as foreign and emit a
+self-referential "; previous: <same frozen clause>" trail for one run; make the
+own-shape predicate there recognize the frozen-clause-led shape too (clause prefix
+OR tail marker), not the tail alone.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done

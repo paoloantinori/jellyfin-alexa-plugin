@@ -61,6 +61,23 @@ comment at ~578-582 ("the last minted version ... is the one the live model alre
 references") is FALSE in this shape. Same commit's JF-709 audit extends the starvation
 set: the equivalence-class FIRST member can itself be hash-skipped after a
 failed-upload retry. Fold this ordering fix into this task's fix shape.
+FOLDED INTO JF-709 (2026-10-02, picked up together): the addendum's ordering hazard
+(hash-record-before-upload) is fixed by the JF-709 change - the hash is recorded only
+after UploadCatalogValuesAsync returns successfully, and the false ~578 comment is
+corrected in the same touch. THIS task's remaining scope is the CORE sequence only:
+the PUT-completed-vs-skipped distinction across the locale attempt loop when the 401
+lands on the model PUT itself (attempt-1 uploads all succeed, attempt-2 hash-skips
+them all, the injection gate skips the PUT).
+AUDIT ADDENDUM 2 (2026-10-02, JF-709 code-review high round; both pre-existing
+retry-shape residuals, same root as the CORE, so they land here rather than as new
+tasks): (a) the PUT-stage-401 sequence above also produces NO ledger write and a
+green leg - the stale-green-row hole JF-709 closed for the freeze shape is equally
+reachable via this retry path; fix it with the CORE (the attempted-PUT tracking
+makes the leg fail) or extend JF-709's no-PUT writer to it. (b) A 401 on ONE type's
+upload mid-leg leaves the earlier types hash-recorded, so the retry's PUT wires ONLY
+the retried type's catalog - on a fresh install the model gets no valueSupplier for
+the silently skipped types while the run reports Success; the attempted-upload
+tracking must cover the type legs, not only the PUT.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done
