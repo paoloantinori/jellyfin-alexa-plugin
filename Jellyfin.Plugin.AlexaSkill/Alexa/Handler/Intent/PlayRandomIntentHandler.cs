@@ -188,7 +188,7 @@ public class PlayRandomIntentHandler : BaseHandler
             response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, firstItem, user, context);
         }
 
-        // JF-714: the StartOver pattern - a random MOVIE on a screenless device
+        // JF-714: the StartOver pattern (a random MOVIE ask on a screenless device is the canonical phantom shape) on a screenless device
         // gets the capability Tell (no directive; an EPISODE degrades to the
         // audio-only launch, which carries one), and a phantom now-playing must
         // not survive it. The queue list builds INSIDE the gate: it can hold the

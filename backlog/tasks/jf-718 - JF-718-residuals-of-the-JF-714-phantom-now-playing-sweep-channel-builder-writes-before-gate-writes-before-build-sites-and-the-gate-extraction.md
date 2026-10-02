@@ -72,7 +72,7 @@ NOT-tautological rationale (the VideoRequiresScreen capability Tell), and stop
 the ninth site copying the block; the builder already writes session state
 itself at BuildChannelLaunchResponseAsync, so the home is consistent. Skipped
 in JF-714 because the task file prescribes the per-site StartOver wrap and the
-extraction touches three pre-existing shipped sites (the JF-702 -> JF-715
+extraction touches three pre-existing shipped sites (the JF-702-to-JF-715
 precedent for exactly this class).
 
 Finding 4 (structural pin, /simplify altitude angle): the delivered-launch
@@ -91,6 +91,27 @@ builder and writing NowPlayingQueue/FullNowPlayingItem must reference the gate
 or sit on an explicit allowlist), or at minimum behavior pins on the remaining
 four JF-714 sites, would close it. Standard-raising beyond the JF-714 ONE-pin
 spec, hence filed not taken.
+
+AUDIT ADDENDUM (2026-10-02, JF-714 gate-marker round, three corrections):
+(1) FINDING 1'S FIX SHAPE IS INSUFFICIENT AS WRITTEN - the channel builder has a
+SECOND directive-less return below the capability check (the resolver-null
+MediaTypeNotAvailable Tell at PlaybackLaunchBuilder.cs:1375-1378), so moving the
+session writes merely below the capability gate still leaves them before that Tell,
+and the final BuildVideoAppLaunchResponseAsync (line 1389, EnsureStreamTokenDeliverable)
+can also throw after the relocated writes. Correct shape: writes below the
+resolver-null return, gated on the delivered directive (or the handler-side
+HasLaunchDirective pattern). Also: the builder has a THIRD caller the original list
+missed (StartOverIntentHandler.cs:132, alongside PlayChannel:107 and PlayRadio:170;
+harmless since the fix is builder-side, but the caller census should be complete).
+(2) FINDING 2'S SITE LIST GAINS SkillConnectionHandler.HandlePlayFavoritesTask (~152):
+the NowPlayingQueue write precedes BOTH the MediaNotFound early Tell (156) and the
+refusal-throwing BuildAudioPlayerResponse (168) - the JF-699 policy comment at 166-168
+covers only the FullNowPlayingItem write at 169, and a later bare "open the skill"
+resumes from the phantom queue. This site was missed by both the JF-714 census and
+JF-718's original sweep (found by the gate-marker's full-codebase NowPlayingQueue scan).
+(3) The arrow chain in this file's earlier prose is replaced by sentences per the
+prose rules.
+
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done
