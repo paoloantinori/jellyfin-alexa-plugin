@@ -133,12 +133,17 @@ public class JumpToPositionIntentHandler : BaseHandler
             session.FullNowPlayingItem,
             user,
             context,
-            queueManager: _queueManager);
+            queueManager: _queueManager,
+            locale: locale);
 
-        response.Response.OutputSpeech = new PlainTextOutputSpeech
-        {
-            Text = ResponseStrings.Get("JumpedToPosition", locale, positionStr)
-        };
+        // JF-693: the transcode/speed-routed source can be token-gated, so the confirm
+        // rides a delivered launch; the JF-687 refusal Tell keeps its message.
+        PlaybackLaunchBuilder.AttachAnnounceIfLaunched(
+            response,
+            new PlainTextOutputSpeech
+            {
+                Text = ResponseStrings.Get("JumpedToPosition", locale, positionStr)
+            });
 
         return Task.FromResult(response);
     }

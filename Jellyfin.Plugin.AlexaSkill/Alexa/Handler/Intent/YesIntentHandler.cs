@@ -223,7 +223,10 @@ public class YesIntentHandler : BaseHandler
         }
 
         string itemId = item.Id.ToString();
-        session.FullNowPlayingItem = item;
+        // JF-693: the now-playing write and the resume announces below ride a
+        // DELIVERED launch (the builder can answer the JF-687 empty-secret refusal
+        // Tell instead of a directive; the refusal must not leave a phantom
+        // now-playing behind nor be spoken over).
 
         // Audiobook resume via VideoApp resume playlist (keeps the seek bar). The position
         // slices the playlist via ?start= (ExoPlayer ignores #EXT-X-START); VideoApp.Launch has no offset param.
@@ -234,7 +237,15 @@ public class YesIntentHandler : BaseHandler
             // Tracker cleared between offer and confirm: fall back to the offered offset.
             long startTicks = ResumeMath.GetAudiobookStartTicks(bookKey, offeredTicks);
 
-            SkillResponse response = Launch.BuildAudiobookResumeResponse(item, startTicks, user, context);
+            // JF-693: the request locale threads into the builder so the refusal
+            // Tell answers in the user's language.
+            SkillResponse response = Launch.BuildAudiobookResumeResponse(item, startTicks, user, context, locale);
+            if (!PlaybackLaunchBuilder.HasLaunchDirective(response))
+            {
+                return Task.FromResult(response);
+            }
+
+            session.FullNowPlayingItem = item;
             response.Response.OutputSpeech = _config.ResumeAnnounceTitle
                 ? SpeechBuilder.BuildOutputSpeech("ResumingSsml", "Resuming", locale, item.Name ?? ResponseStrings.Get("UnknownMedia", locale))
                 : SpeechBuilder.BuildOutputSpeech("ResumeBriefSsml", "ResumeBrief", locale);
@@ -270,7 +281,18 @@ public class YesIntentHandler : BaseHandler
             item,
             user,
             context,
-            queueManager: _queueManager);
+            queueManager: _queueManager,
+            locale: locale);
+
+        // JF-693: the JF-507 transcode-routed source can be token-gated, so the
+        // empty-secret refusal Tell must survive the resume announce below (and no
+        // phantom now-playing is written for a launch that will not happen).
+        if (!PlaybackLaunchBuilder.HasLaunchDirective(standardResponse))
+        {
+            return Task.FromResult(standardResponse);
+        }
+
+        session.FullNowPlayingItem = item;
 
         // Replace default speech with resume announcement
         if (_config.ResumeAnnounceTitle)
@@ -373,24 +395,31 @@ public class YesIntentHandler : BaseHandler
             trackItems = bookTrackList.ToList();
         }
 
-        session.NowPlayingQueue = trackItems.Select(t => new QueueItem { Id = t.Id }).ToList();
-        session.FullNowPlayingItem = trackItems[0];
-
         string itemId = trackItems[0].Id.ToString();
 
         // NativeControlsForBooks → VideoApp HLS concat (seek bar)
-        if (Plugin.Instance?.Configuration?.NativeControlsForBooks == true)
-        {
-            return await Launch.BuildAudiobookVideoAppLaunchResponseAsync(
+        // JF-693: the locale threads into the VideoApp builder so the JF-687 refusal
+        // Tell answers in the user's language; the state writes below ride a
+        // DELIVERED launch only (the concat URL is token-gated, so the builder can
+        // answer the refusal Tell instead of a directive).
+        SkillResponse response = Plugin.Instance?.Configuration?.NativeControlsForBooks == true
+            ? await Launch.BuildAudiobookVideoAppLaunchResponseAsync(
                 itemId,
                 trackItems[0],
                 SpeechBuilder.BuildNowPlayingSpeech(book.Name, locale, Launch.GetAnnounceNowPlaying(user)),
                 user,
                 context,
-                request).ConfigureAwait(false);
+                request,
+                locale).ConfigureAwait(false)
+            : Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, trackItems[0], user, context, locale: locale);
+
+        if (PlaybackLaunchBuilder.HasLaunchDirective(response))
+        {
+            session.NowPlayingQueue = trackItems.Select(t => new QueueItem { Id = t.Id }).ToList();
+            session.FullNowPlayingItem = trackItems[0];
         }
 
-        return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, trackItems[0], user, context);
+        return response;
     }
 
     private SkillResponse PlayArtist(BaseItem artist, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Entities.User user, SessionInfo session, string locale, Context? context)

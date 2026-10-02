@@ -443,4 +443,118 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
         string speech = TestHelpers.GetSpeechText(response);
         Assert.Contains("resuming", speech, StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// JF-693 residuals 2 + 3 (and the JF-687 gate-marker phantom-state item): with an
+    /// empty StreamTokenSecret the tracked-resume concat URL is dead at birth, so the
+    /// builder answers the JF-687 refusal Tell. That Tell must SURVIVE the handler tail:
+    /// the "Riprendo ..." announce never replaces it, it answers in the REQUEST locale
+    /// (the it-IT threading, previously unreachable), and the queue/session/continuation
+    /// writes never run for a launch that did not happen (no phantom now-playing for
+    /// MediaInfo, no stale QueueContinuation).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_TrackedResume_EmptySecret_RefusalTellSurvives_NoPhantomState()
+    {
+        _fx.Config.NativeControlsForBooks = true;
+        _fx.Config.StreamTokenSecret = string.Empty;
+        var tracker = TestHelpers.CreatePositionTracker("playbook-refusal-jf693");
+        using var trackerSwap = TestHelpers.SwapPluginPositionTracker(tracker);
+
+        var handler = CreateHandler();
+        var request = new IntentRequest
+        {
+            Intent = new Intent
+            {
+                Name = IntentNames.PlayBook,
+                Slots = new Dictionary<string, global::Alexa.NET.Request.Slot>
+                {
+                    ["book"] = new() { Name = "book", Value = "The Hobbit" }
+                }
+            },
+            Locale = "it-IT",
+            RequestId = "test-req"
+        };
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+
+        var bookItem = new Audio { Name = "The Hobbit", Id = Guid.NewGuid() };
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
+            .Returns(new List<BaseItem> { bookItem });
+
+        var trackItem = new Audio { Name = "Chapter 1", Id = Guid.NewGuid() };
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q =>
+                q.ParentId == bookItem.Id)))
+            .Returns(new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+            {
+                Items = new[] { trackItem },
+                TotalRecordCount = 1
+            });
+
+        tracker.RecordSegment(trackItem.Id.ToString(), 31);
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // The refusal Tell, in the request locale, with no launch directive of
+        // either kind: the shared oracle pins all three.
+        Assert.NotNull(response);
+        TestHelpers.AssertStreamTokenRefusalTell(response, "it-IT");
+
+        // No phantom playback state: MediaInfo keeps answering honestly and no
+        // progressive continuation was recorded for the refused launch.
+        Assert.Null(session.FullNowPlayingItem);
+        Assert.Empty(session.NowPlayingQueue);
+        Assert.Null(Jellyfin.Plugin.AlexaSkill.Alexa.QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID!));
+    }
+
+    /// <summary>
+    /// JF-693 (code-review finding 1): the SUCCESS-path end-state. ApplyBookPlaybackState's
+    /// SetQueue runs AFTER the builder recorded the launch in the device ledger (the
+    /// refusal-before-phantom-state ordering), so the queue reset must CARRY that record:
+    /// a wipe here blinded the JF-632 medium gates (a later sleep-timer or speed ask over
+    /// the running book misclassified the medium and re-issued parallel audio).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_TrackedResume_LaunchLedgerSurvivesTheQueueReset()
+    {
+        _fx.Config.NativeControlsForBooks = true;
+        var tracker = TestHelpers.CreatePositionTracker("playbook-ledger-jf693");
+        using var trackerSwap = TestHelpers.SwapPluginPositionTracker(tracker);
+        using var queueSwap = TestHelpers.SwapPluginQueueManager(_queueManager);
+
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(bookName: "The Hobbit");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+
+        var bookItem = new Audio { Name = "The Hobbit", Id = Guid.NewGuid() };
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
+            .Returns(new List<BaseItem> { bookItem });
+
+        var trackItem = new Audio { Name = "Chapter 1", Id = Guid.NewGuid() };
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q =>
+                q.ParentId == bookItem.Id)))
+            .Returns(new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+            {
+                Items = new[] { trackItem },
+                TotalRecordCount = 1
+            });
+
+        tracker.RecordSegment(trackItem.Id.ToString(), 31);
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response.Response.Directives?.FirstOrDefault(d => d.GetType().Name.Contains("VideoApp")));
+        (string? itemId, DeviceQueueManager.LaunchRoute? route) = _queueManager.GetLastPlayedSnapshot(session.DeviceId);
+        Assert.Equal(trackItem.Id.ToString(), itemId);
+        Assert.Equal(DeviceQueueManager.LaunchRoute.VideoApp, route);
+    }
 }

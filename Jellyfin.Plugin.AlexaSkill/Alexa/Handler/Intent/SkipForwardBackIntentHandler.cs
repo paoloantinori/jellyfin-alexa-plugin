@@ -145,12 +145,17 @@ public class SkipForwardBackIntentHandler : BaseHandler
                 session.FullNowPlayingItem,
                 user,
                 context,
-                queueManager: _queueManager);
+                queueManager: _queueManager,
+                locale: locale);
 
-            endResponse.Response.OutputSpeech = new PlainTextOutputSpeech
-            {
-                Text = ResponseStrings.Get("SkippedToEnd", locale)
-            };
+            // JF-693: the seek source can be speed/transcode-routed (token-gated), so
+            // the confirm rides a delivered launch; the JF-687 refusal Tell stands.
+            PlaybackLaunchBuilder.AttachAnnounceIfLaunched(
+                endResponse,
+                new PlainTextOutputSpeech
+                {
+                    Text = ResponseStrings.Get("SkippedToEnd", locale)
+                });
 
             return Task.FromResult(endResponse);
         }
@@ -166,12 +171,16 @@ public class SkipForwardBackIntentHandler : BaseHandler
             session.FullNowPlayingItem,
             user,
             context,
-            queueManager: _queueManager);
+            queueManager: _queueManager,
+            locale: locale);
 
-        response.Response.OutputSpeech = new PlainTextOutputSpeech
-        {
-            Text = ResponseStrings.Get(announcementKey, locale, positionStr)
-        };
+        // JF-693: same delivered-launch gate as the end-skip branch above.
+        PlaybackLaunchBuilder.AttachAnnounceIfLaunched(
+            response,
+            new PlainTextOutputSpeech
+            {
+                Text = ResponseStrings.Get(announcementKey, locale, positionStr)
+            });
 
         return Task.FromResult(response);
     }

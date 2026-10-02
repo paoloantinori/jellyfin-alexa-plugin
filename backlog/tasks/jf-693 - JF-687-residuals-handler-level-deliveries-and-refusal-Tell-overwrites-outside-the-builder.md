@@ -3,7 +3,7 @@ id: JF-693
 title: >-
   JF-693 - JF-687 residuals: handler-level token-gated deliveries and refusal-Tell
   overwrites that sit outside the launch builder
-status: In Progress
+status: Done
 priority: low
 labels:
   - streaming
@@ -55,3 +55,111 @@ ask still mutates the persisted preference; move the persist behind a successful
 <!-- SECTION:DESCRIPTION:END -->
 
 ORCHESTRATOR GATE-MARKER EXTENSIONS (2026-10-01, from the final-state review; findings 3 and 4): (a) all 11 JF-687 pins assert the en-US refusal only - when this task's locale threading lands, extend at least one pin per family to the localized assertion (the it-IT string is currently unreachable on the flagship paths, so the pins bake English in); (b) NEW ITEM, the phantom now-playing state: handlers write session.NowPlayingQueue / FullNowPlayingItem / DeviceQueueManager.SetQueue / QueueContinuationStore BEFORE the guarded builder call (PlayBook ~234-251, YesIntent ~220), so a refused launch leaves MediaInfo answering "playing <book>" with nothing playing and a stale QueueContinuation that survives - the refusal-before-ledger policy must extend to the queue/session writes (fix ordering or roll back on refusal detection via the HasLaunchDirective predicate).
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Landed 2026-10-02 (worker on the JF-693 dispatch). ALL FOUR RESIDUALS plus both gate-marker
+extensions and four code-review fixes:
+
+(1) SLEEP-TIMER: the re-issue (the ONE AudioPlayer.Play minted outside the guarded chokepoint)
+routes its resolved replay URL through the ONE shared guard, now internal
+(PlaybackLaunchBuilder.StreamTokenSecretRefusal): a token-gated replay source (speed/transcode)
+with an empty secret answers the localized configuration Tell instead of a dead directive, and
+the check sits BEFORE the JF-628 ledger writes (RecordLaunchBase/RecordLastPlayed), so a refused
+re-issue never touches the scope store or the device ledger (static replay URLs still re-issue).
+
+(2) OVERWRITES: two shared members in PlaybackLaunchBuilder (both internal): HasLaunchDirective
+(the JF-687 private predicate, now the handler-side verdict signal) and
+AttachAnnounceIfLaunched(response, speech) (the task's suggested shape). Every post-builder
+OutputSpeech overwrite in scope now rides a delivered launch: PlayBook (tracked-resume announce,
+fresh-launch rides the builder's own gate, standard-chapter announce), YesIntent
+(resume-playlist announce, standard resume announce, PlayBook confirmation), ResumeIntent
+(position announce x2 incl. the progressive-announce swap, book-resume announce),
+SetPlaybackSpeed (the success speech), SkipForwardBack (both skip confirms), JumpToPosition,
+CrossMediaFallback.ApplyAnnouncement (the JF-345 ONE override site, now delegating to the
+helper - covers AlbumPlayService's seek-mode concat path), and BaseHandler.HandleFuzzyMiss
+(the auto-play qualifier block, code-review finding 4).
+
+(3) LOCALE: BuildAudiobookVideoAppLaunchResponseAsync gained the optional locale param (threaded
+into BuildVideoAppAudioResponse); threaded from every caller that holds one: PlayBook (all three
+branches), YesIntent (both), ResumeIntent (audiobook resume + fresh book + audio tail + the
+server-progress audio branch), StartOver (book + audio branches), and the refusal-reachable
+chokepoint calls (SetPlaybackSpeed, Skip x2, Jump, PodcastEpisodeResolver,
+LaunchRequestHandler.HandleSessionQueueResume, Yes resume-confirm).
+
+(4) PERSIST-BEFORE-REFUSE: SetPlaybackSpeed's PodcastSpeedPerMille persist + SaveConfiguration
+moved behind the delivered-launch verdict (a refused speed ask keeps the standing rate and its
+own Info log line). Same class applied beyond the dispatch: StartOver's durable position clears
+(server PlaybackPositionTicks + the book tracker) ride a delivered restart only (code-review
+finding 2), and PodcastEpisodeResolver/LaunchRequestHandler/YesIntent session writes moved
+behind the verdict.
+
+GATE-MARKER (a): four localized twins (one per builder family) added to the JF-687 pin file, and
+the handler pins assert the it-IT string end-to-end (the flagship path is now localized).
+GATE-MARKER (b): the phantom now-playing state is gated at PlayBook (the queue/session/
+SetQueue/QueueContinuation writes moved into a post-verdict ApplyBookPlaybackState local),
+YesIntent (both shapes), PodcastEpisodeResolver (+ its APL screen attach), and
+LaunchRequestHandler's queue-resume else branch.
+CODE-REVIEW FINDING 1 (a happy-path regression the reordering would have introduced): the
+builder records the launch ledger DURING its call and the post-verdict SetQueue replaced the
+DeviceQueue without carrying it, so every successful book launch would have wiped its own
+last-played record. Fixed at the manager: CopySurvivingStores carries LastPlayedItemId/
+LastPlayedLaunchRoute (a launch fact, not queue content); old-order callers are unaffected
+(their builder record still lands last).
+
+PINS (12 new): SleepTimer refusal (dead-directive shape + ledger/scope untouched),
+SetPlaybackSpeed refusal (localized Tell, no success speech, no persist), PlayBook tracked-resume
+refusal (localized Tell survives, no phantom state/QueueContinuation), PlayBook success-path
+ledger survival, DeviceQueueManager SetQueue_PreservesTheLastPlayedRecord, StartOver refusal
+keeps the saved position, ApplyAnnouncement no-directive no-op (+ the override fixture updated
+to the delivered-launch contract), the fuzzy qualifier refusal pin (+ two fixtures updated to
+carry the directive a real delegate returns), and the four localized builder twins. Shared
+oracle hoisted: TestHelpers.AssertStreamTokenRefusalTell (the JF-687 file's twins fold onto it).
+RED PROOFS run and read (each guard disabled in isolation, the pin flipped, guard restored):
+sleep guard off -> dead directive ships; speed gate off -> "Velocità uno e mezzo." over the
+refusal; PlayBook gate off -> "eccoci Riprendo The Hobbit..." over the refusal; locale dropped
+alone -> en-US string; builder locale ignored -> all four localized twins flip; SetQueue carry
+removed -> both ledger pins flip to null; StartOver gate off -> SaveUserData invoked despite the
+refusal.
+
+GATES: Skill simplify (4 agents; APPLIED: ApplyAnnouncement delegates to the ONE gate, the
+shared refusal-Tell oracle in TestHelpers + the production predicate in tests, the private
+predicate twin deleted, YesIntent PlayBook single gate, PlayBook/Resume early-return shapes,
+queueItems built only when applied, the ApplyAnnouncement fixture split; SKIPPED with reasons:
+the double directive-scan on audiobook flows (nanoseconds vs builder-signature churn), the
+sleep gate's post-resolution placement (forced: token-gating is only knowable from the resolved
+URL), the local-function closure (no delegate, request-scoped). The altitude angle's pipeline
+redesign was declined as re-architecting JF-687's contract: filed as JF-699) + Skill code-review
+high (6 findings: 4 APPLIED - the SetQueue ledger carry (finding 1), the StartOver durable
+clears (finding 2), the HandleFuzzyMiss qualifier gate (finding 4), the four in-function locale
+asymmetries (finding 5); 2 FILED in JF-699 - the music-path phantom-state sweep (finding 3,
+safe only after the finding-1 fix that landed here) and the announce-adapter overload collapse
+(finding 6)). Nothing cut at a cap.
+
+SUITES: 4868/4868 BOTH TFMs (net9.0 + net10.0; baseline 4856 + 12 pins), 0 warnings. No new
+locale strings (the refusal reuses the JF-687 StreamTokenNotConfigured key in all 17 locales);
+no interaction model, session-attribute, or HttpClient changes (DoD 4-8 N/A as annotated). No
+deploy; do not push. Residuals filed: JF-699.
+
+REWORK ROUND (2026-10-02, the orchestrator gate-marker's 3 findings on the c49cab92 state,
+all applied): F1 the carry was half-done - CopySurvivingStores now also carries
+LastPlayedWrittenAt (a carried record without its stamp read as a LEGACY entry in
+GetDeviceResumePointer's tie rule, either-stamp-null => queue pointer wins, so the
+just-launched book would lose resume arbitration to the old song's stop-event pointer on the
+displaced-stop shape); the SetQueue_PreservesTheLastPlayedRecord pin now asserts all three
+fields (id, route, stamp; red proof: stamp carry removed -> the stamp assert flips to null).
+F2 the delivery gate trapped the CANCEL - the gate sat before the cancel branch, so a
+cancel-mode ask over a token-gated source answered the config error and left the armed
+deadline running; the cancel branch now runs BEFORE the gate (a cancel disarms the deadline;
+it is not a launch ask), with the JF-628 re-issue ledger writes extracted into a shared
+RecordReissueLedger local called by BOTH branches so the ARM path still refuses before any
+write (the existing arm-refusal pin's untouched-ledger assertions still hold); new pin
+HandleAsync_CancelDuringAtempoPlayback_EmptySecret_CancelsInsteadOfRefusing (clean replay
+directive, no sleep suffix, CancelSleepTimer speech, ledger written; red proof: the gate
+hoisted back above the cancel branch -> the refusal Tell answers and the pin flips). F3 the
+speed handler's refusal log now states the OBSERVABLE state ("delivered no playback directive
+(stream token secret configured: {bool})") instead of hard-coding the empty-secret cause the
+!HasLaunchDirective gate cannot prove. Suites after the rework: 4869/4869 BOTH TFMs (4868 +
+the F2 pin; F1 extended an existing pin).
+<!-- SECTION:FINAL_SUMMARY:END -->

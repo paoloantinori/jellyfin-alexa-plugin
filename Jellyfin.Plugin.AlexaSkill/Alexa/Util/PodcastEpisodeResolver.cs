@@ -108,8 +108,6 @@ public static class PodcastEpisodeResolver
         BaseItem episode = episodes[0];
         logger.LogDebug("{Label}: newest episode='{EpisodeName}' id={EpisodeId}", retryLabel, episode.Name, episode.Id);
         string itemId = episode.Id.ToString();
-        session.NowPlayingQueue = new List<QueueItem> { new() { Id = episode.Id } };
-        session.FullNowPlayingItem = episode;
 
         // The codec-routed audio source (JF-507): a series-shape Episode whose
         // audio codec has no Echo decoder (a TV series matched by name, eac3/ac3)
@@ -118,10 +116,26 @@ public static class PodcastEpisodeResolver
         // redirects the launch to the atempo speed endpoint when set (the speed
         // branch supersedes the codec branch there); rate 1000 keeps this path
         // byte-identical to the pre-JF-636 launch.
+        // JF-693: the request locale threads into the launch so the JF-687 refusal
+        // Tell answers in the user's language.
         int offsetMs = offsetFor?.Invoke(episode) ?? 0;
         AudioLaunchSource source = launch.ResolveAudioLaunchSource(
             episode, itemId, user, offsetMs, ratePerMille: PlaybackSpeed.ResolveStandingRate(user));
-        SkillResponse response = launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source, itemId, episode, user, context);
+        SkillResponse response = launch.BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll, source, itemId, episode, user, context, locale: locale);
+
+        // JF-693: the now-playing writes and the screen attach ride a DELIVERED
+        // launch only: the standing-rate atempo URL and the codec-routed transcode
+        // URL are token-gated, so the builder can answer the empty-secret refusal
+        // Tell instead of a directive, and a refused launch must not leave a
+        // phantom now-playing (or screen) for a play that will not happen.
+        if (!PlaybackLaunchBuilder.HasLaunchDirective(response))
+        {
+            return response;
+        }
+
+        session.NowPlayingQueue = new List<QueueItem> { new() { Id = episode.Id } };
+        session.FullNowPlayingItem = episode;
         attachScreen?.Invoke(response, episode);
         return response;
     }

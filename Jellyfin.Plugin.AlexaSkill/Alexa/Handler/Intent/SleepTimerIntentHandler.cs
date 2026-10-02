@@ -191,23 +191,31 @@ public class SleepTimerIntentHandler : BaseHandler
                 _queueManager,
                 "SleepTimer re-issue");
 
-        if (itemGuid != Guid.Empty
-            && context.GetDeviceId() is { Length: > 0 } deviceId
-            && Plugin.Instance?.DeviceQueueManager is { } queues)
+        // JF-628: the re-issue IS a user-initiated play, so the ledger names the
+        // re-issued track and the launch scope records the RESOLVED source. Shared by
+        // the cancel replay and the arm below (both are ReplaceAll re-issues); the
+        // route guard the review proved necessary lives in the VideoApp-medium GATE
+        // above (it refuses on ANY VideoApp-routed entry, absorbed from this belt);
+        // only audio-routed shapes reach this write.
+        void RecordReissueLedger()
         {
-            queues.RecordLaunchBase(deviceId, itemGuid.ToString(), replaySource.LaunchBaseMs, enqueued: false, replaySource.RatePerMille);
-
-            // JF-628: the re-issue IS a user-initiated play, so the ledger names the
-            // armed track. The route guard the review proved necessary now lives in
-            // the GATE above (it refuses on ANY VideoApp-routed entry, absorbed from
-            // this belt); only audio-routed shapes reach this write.
-            queues.RecordLastPlayed(deviceId, itemGuid.ToString(), DeviceQueueManager.LaunchRoute.Audio);
+            if (itemGuid != Guid.Empty
+                && context.GetDeviceId() is { Length: > 0 } reissueDeviceId
+                && Plugin.Instance?.DeviceQueueManager is { } queues)
+            {
+                queues.RecordLaunchBase(reissueDeviceId, itemGuid.ToString(), replaySource.LaunchBaseMs, enqueued: false, replaySource.RatePerMille);
+                queues.RecordLastPlayed(reissueDeviceId, itemGuid.ToString(), DeviceQueueManager.LaunchRoute.Audio);
+            }
         }
 
         // Cancel mode: a zero duration ("ferma dopo zero", the legacy "0") replays
         // without a sleep deadline. The comparison is on the TimeSpan, NOT a rounded
         // minute count (review finding: PT29S rounded to 0 minutes and CANCELLED
         // instead of arming a 29-second timer).
+        // JF-693 review (coordinator F2): the cancel runs BEFORE the delivery gate
+        // below. Its purpose is to DISARM the armed deadline; refusing it with the
+        // unrelated empty-secret configuration error would leave the deadline armed
+        // (a cancel is not a launch ask - it takes the replay it can get).
         if (duration.Value <= TimeSpan.Zero)
         {
             // No-token tell: an unparseable token (and no id left to fall back to)
@@ -220,6 +228,7 @@ public class SleepTimerIntentHandler : BaseHandler
             }
 
             Logger.LogDebug("SleepTimer: cancel mode (duration={Duration}), replaying without deadline", duration.Value);
+            RecordReissueLedger();
             var cancelDirective = new AudioPlayerPlayDirective
             {
                 PlayBehavior = PlayBehavior.ReplaceAll,
@@ -253,6 +262,20 @@ public class SleepTimerIntentHandler : BaseHandler
                 }
             });
         }
+
+        // JF-693: the ARM re-issue is the one AudioPlayer.Play minted outside the
+        // guarded BuildAudioPlayerResponse chokepoint, so the JF-687 delivery gate
+        // runs HERE, before the arm's ledger write and directive: a token-gated
+        // replay URL (a speed/transcode-routed source) with an empty
+        // StreamTokenSecret is dead at the route gate, and the honest localized
+        // configuration Tell answers instead of a dead directive (static replay URLs
+        // carry no plugin token and still re-issue).
+        if (Launch.StreamTokenSecretRefusal(replaySource.Url, locale) is { } refusedReplay)
+        {
+            return Task.FromResult(refusedReplay);
+        }
+
+        RecordReissueLedger();
 
         // Encode the sleep deadline into the token through the shared StreamTokenCodec
         // (JF-447: the format's one owner; the event handlers parse it with the same

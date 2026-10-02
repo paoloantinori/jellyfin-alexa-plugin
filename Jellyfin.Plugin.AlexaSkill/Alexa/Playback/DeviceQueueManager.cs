@@ -763,6 +763,14 @@ public sealed class DeviceQueueManager : IDisposable
     /// wired once, not per reset path). The base and rate maps must be carried
     /// together (the pairing invariant <see cref="WritePendingLaunchScope"/> owns:
     /// a rate entry exists iff its base entry exists).
+    /// JF-693 (code-review finding 1): the LAST-PLAYED record survives too. It is a
+    /// fact about a LAUNCH, not about the queue's contents, and the PlayBook paths
+    /// now call <see cref="SetQueue"/> AFTER the launch builder (the JF-687
+    /// refusal-before-phantom-state ordering), so a reset that dropped it would wipe
+    /// the record the builder just wrote on every successful book launch (the medium
+    /// classifiers read it: SleepTimer/SetPlaybackSpeed JF-632 gates, resume
+    /// arbitration). Old-order callers (SetQueue before the launch) are unaffected:
+    /// their builder record still lands last and overwrites whatever survived.
     /// </summary>
     /// <param name="oldQueue">The queue being replaced (null starts everything empty).</param>
     /// <param name="queue">The fresh queue to populate.</param>
@@ -773,6 +781,16 @@ public sealed class DeviceQueueManager : IDisposable
         queue.PendingLaunchBaseMs = oldQueue?.PendingLaunchBaseMs ?? new Dictionary<string, long>();
         queue.ActivePlaybackRatePerMille = oldQueue?.ActivePlaybackRatePerMille ?? new Dictionary<string, int>();
         queue.PendingPlaybackRatePerMille = oldQueue?.PendingPlaybackRatePerMille ?? new Dictionary<string, int>();
+        queue.LastPlayedItemId = oldQueue?.LastPlayedItemId;
+        queue.LastPlayedLaunchRoute = oldQueue?.LastPlayedLaunchRoute;
+
+        // JF-693 review (coordinator F1): the FRESHNESS STAMP rides with the record.
+        // A carried record without its stamp reads as a legacy entry in
+        // GetDeviceResumePointer's tie rule (either stamp null => queue pointer wins),
+        // so the just-launched book would lose resume arbitration to the old song's
+        // stop-event pointer on the displaced-stop shape.
+        queue.LastPlayedWrittenAt = oldQueue?.LastPlayedWrittenAt;
+
     }
 
     /// <summary>

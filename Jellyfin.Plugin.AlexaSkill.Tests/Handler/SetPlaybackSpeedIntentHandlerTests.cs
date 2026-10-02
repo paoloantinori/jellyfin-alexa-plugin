@@ -617,4 +617,39 @@ public class SetPlaybackSpeedIntentHandlerTests : PluginTestBase, IDisposable
 
     private static string SpeechText(SkillResponse response)
         => (response.Response.OutputSpeech as PlainTextOutputSpeech)?.Text ?? string.Empty;
+
+    // ---- the JF-693 empty-secret refusal (residuals 2 + 4) ----
+
+    /// <summary>
+    /// JF-693: the atempo re-launch URL is ALWAYS token-gated, so with an empty
+    /// StreamTokenSecret the JF-687 chokepoint refuses the launch. The refusal Tell
+    /// must survive the handler tail: the user hears the localized configuration
+    /// error (the request locale threads into the chokepoint), NOT the
+    /// PlaybackSpeedSet success speech for a re-launch that will not happen, and the
+    /// standing-rate preference is not persisted (the JF-636 persist rides a
+    /// delivered launch only).
+    /// </summary>
+    [Fact]
+    public async Task EmptyStreamTokenSecret_RefusalTellSurvives_NoSuccessSpeech_NoPersist()
+    {
+        _config.StreamTokenSecret = string.Empty;
+        Audio episode = CreateEpisode(60);
+        SetupItemLookup(episode);
+        _queueManager.RecordLastPlayed(DeviceId, episode.Id.ToString(), DeviceQueueManager.LaunchRoute.Audio);
+        _queueManager.MarkAudioPlaybackStarted(DeviceId);
+
+        var handler = CreateHandler();
+        var user = TestHelpers.CreateTestUser();
+
+        SkillResponse response = await handler.HandleAsync(
+            CreateIntentRequest(RateSlot("uno e mezzo", "1500")),
+            CreatePlayingContext(episode, offsetMs: 60_000),
+            user,
+            CreateSession(episode),
+            CancellationToken.None);
+
+        Assert.Null(TestHelpers.GetPlayDirective(response));
+        TestHelpers.AssertStreamTokenRefusalTell(response, "it-IT");
+        Assert.Null(user.PodcastSpeedPerMille);
+    }
 }

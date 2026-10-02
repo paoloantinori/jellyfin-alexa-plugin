@@ -355,6 +355,9 @@ public class ResumeIntentHandler : BaseHandler
                 }
 
                 // Audio/AudioBook items use AudioPlayer response with offset
+                // (JF-693: the locale threads in so a refusal Tell answers in the
+                // request language; a seek-mode audio item can delegate to the
+                // token-gated video-audio endpoint inside the chokepoint.)
                 var audioResponse = Launch.BuildAudioPlayerResponse(
                     PlayBehavior.ReplaceAll,
                     Launch.GetStreamUrl(item_id, user),
@@ -362,16 +365,21 @@ public class ResumeIntentHandler : BaseHandler
                     resumeItem,
                     user,
                     context,
-                    offset);
+                    offset,
+                    locale: locale);
 
-                // Announce resume position if enabled
+                // Announce resume position if enabled. JF-693: the announce rides a
+                // delivered launch only (the static URL never refuses today; the gate
+                // keeps the JF-687 refusal Tell safe here too).
                 if (offset > 0 && pluginUser.AnnouncePositionOnResume)
                 {
                     string positionStr = ResumeMath.FormatTimeSpan(TimeSpan.FromMilliseconds(offset), locale);
-                    audioResponse.Response.OutputSpeech = new PlainTextOutputSpeech
-                    {
-                        Text = ResponseStrings.Get("ResumingAtPosition", locale, positionStr)
-                    };
+                    PlaybackLaunchBuilder.AttachAnnounceIfLaunched(
+                        audioResponse,
+                        new PlainTextOutputSpeech
+                        {
+                            Text = ResponseStrings.Get("ResumingAtPosition", locale, positionStr)
+                        });
                 }
 
                 return audioResponse;
@@ -428,7 +436,8 @@ public class ResumeIntentHandler : BaseHandler
             tailItem,
             user,
             context,
-            queueManager: _queueManager);
+            queueManager: _queueManager,
+            locale: locale);
 
         Logger.LogDebug(
             "ResumeIntent: final response itemId={ItemId}, offset={OffsetMs}ms",
@@ -437,16 +446,20 @@ public class ResumeIntentHandler : BaseHandler
         // Proactive position announcement when enabled and we have a non-zero offset.
         // Uses the EFFECTIVE offset (source.OffsetMs): a dropped stream-relative offset
         // must not be announced as the position playback restarts from.
+        // JF-693: the transcode/speed-routed source can be token-gated, so the announce
+        // rides a delivered launch only; the JF-687 refusal Tell keeps its message.
         if (source.OffsetMs > 0)
         {
             Entities.User? pluginUser = _config.GetUserById(user.Id);
             if (pluginUser?.AnnouncePositionOnResume == true)
             {
                 string positionStr = ResumeMath.FormatTimeSpan(TimeSpan.FromMilliseconds(source.OffsetMs), locale);
-                response.Response.OutputSpeech = new PlainTextOutputSpeech
-                {
-                    Text = ResponseStrings.Get("ResumingAtPosition", locale, positionStr)
-                };
+                PlaybackLaunchBuilder.AttachAnnounceIfLaunched(
+                    response,
+                    new PlainTextOutputSpeech
+                    {
+                        Text = ResponseStrings.Get("ResumingAtPosition", locale, positionStr)
+                    });
             }
         }
 
@@ -504,7 +517,9 @@ public class ResumeIntentHandler : BaseHandler
             {
                 // No position in either source: the same fresh VideoApp launch
                 // PlayBook's no-progress path uses (no start slice), kept silent.
-                return Launch.BuildVideoAppAudioResponse(item.Id.ToString(), item, user, context: context);
+                // JF-693: the locale threads in so the JF-687 refusal Tell answers
+                // in the user's language.
+                return Launch.BuildVideoAppAudioResponse(item.Id.ToString(), item, user, context: context, locale: locale);
             }
 
             // Chapter progress only: return null so the caller flat-resumes the
@@ -514,11 +529,21 @@ public class ResumeIntentHandler : BaseHandler
 
         long startTicks = trackedTicks;
 
-        SkillResponse bookResponse = Launch.BuildAudiobookResumeResponse(item, startTicks, user, context);
+        // JF-693: the request locale threads into the builder so the JF-687 refusal
+        // Tell answers in the user's language.
+        SkillResponse bookResponse = Launch.BuildAudiobookResumeResponse(item, startTicks, user, context, locale);
 
         // JF-501: the announce rides the progressive vehicle on a VideoApp launch (a
         // directive-only final response can have its speech cut); non-intent requests
         // and failed sends keep it on the final response.
+        // JF-693: gated on the delivered launch; the JF-687 empty-secret refusal Tell
+        // carries no directive, so neither the progressive send nor the final-response
+        // overwrite may touch it.
+        if (!PlaybackLaunchBuilder.HasLaunchDirective(bookResponse))
+        {
+            return bookResponse;
+        }
+
         bookResponse.Response.OutputSpeech = await Launch.SpeakVideoLaunchAnnounceAsync(
             context,
             request,

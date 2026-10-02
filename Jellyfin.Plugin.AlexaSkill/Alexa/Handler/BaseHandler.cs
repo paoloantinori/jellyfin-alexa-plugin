@@ -1240,18 +1240,27 @@ public abstract class BaseHandler
             // mechanism and guards; a failed send falls back to the final response, the
             // pre-JF-538 shape). Callers that do not pass context/request (audio paths, side
             // effect delegates) keep the classic overwrite untouched.
-            if (playResponse.Response.OutputSpeech is null && context != null && request != null)
+            // JF-693 (code-review finding 4): the whole qualifier block rides a DELIVERED
+            // launch only. The delegate's builder can answer the JF-687 empty-secret
+            // refusal Tell instead of a directive (a seek-mode user's static-URL launch
+            // delegates to the token-gated video-audio endpoint inside the chokepoint),
+            // and the configuration error must not be spoken over with "playing X".
+            if (PlaybackLaunchBuilder.HasLaunchDirective(playResponse))
             {
-                IOutputSpeech? fallback = await Launch.SpeakVideoLaunchAnnounceAsync(context, request, qualifier).ConfigureAwait(false);
-                if (fallback == null)
+                if (playResponse.Response.OutputSpeech is null && context != null && request != null)
                 {
-                    return (FuzzyMissOutcome.SuggestionHandled, playResponse);
+                    IOutputSpeech? fallback = await Launch.SpeakVideoLaunchAnnounceAsync(context, request, qualifier).ConfigureAwait(false);
+                    if (fallback == null)
+                    {
+                        return (FuzzyMissOutcome.SuggestionHandled, playResponse);
+                    }
+
+                    qualifier = fallback;
                 }
 
-                qualifier = fallback;
+                playResponse.Response.OutputSpeech = qualifier;
             }
 
-            playResponse.Response.OutputSpeech = qualifier;
             return (FuzzyMissOutcome.SuggestionHandled, playResponse);
         }
 

@@ -638,5 +638,94 @@ public class SleepTimerIntentHandlerTests : PluginTestBase, IDisposable
         Assert.Equal((long)TimeSpan.FromMinutes(27.5).TotalMilliseconds, _queueManager.GetActiveLaunchBase(deviceId, audioItem.Id.ToString()));
         Assert.Equal(1500, _queueManager.GetActivePlaybackRate(deviceId, audioItem.Id.ToString()));
     }
+
+    /// <summary>
+    /// JF-693 residual 1: the re-issue is the ONE AudioPlayer.Play minted outside the
+    /// guarded BuildAudioPlayerResponse chokepoint, so the JF-687 delivery gate runs at
+    /// the handler itself, BEFORE the JF-628 ledger writes. A speed-routed (token-gated)
+    /// replay source with an empty StreamTokenSecret answers the localized configuration
+    /// Tell instead of a dead directive, and neither the launch scope nor the device
+    /// last-played ledger is re-recorded for a launch that did not happen.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_ArmingDuringAtempoPlayback_EmptySecret_RefusesInsteadOfDeadDirective()
+    {
+        _config.StreamTokenSecret = string.Empty;
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(durationValue: "PT20M");
+        var user = CreateUser();
+        var session = CreateSession();
+
+        var audioItem = new Audio { Name = "Podcast episode", Id = Guid.NewGuid(), RunTimeTicks = TimeSpan.FromMinutes(60).Ticks };
+        session.FullNowPlayingItem = audioItem;
+
+        var context = CreateContext();
+        context.AudioPlayer = new PlaybackState
+        {
+            Token = audioItem.Id.ToString(),
+            OffsetInMilliseconds = (long)TimeSpan.FromMinutes(5).TotalMilliseconds,
+            PlayerActivity = "PLAYING"
+        };
+
+        string deviceId = context.System.Device.DeviceID!;
+        _queueManager.RecordLaunchBase(deviceId, audioItem.Id.ToString(), (long)TimeSpan.FromMinutes(20).TotalMilliseconds, enqueued: false, ratePerMille: 1500);
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // The honest configuration Tell, not the dead directive.
+        TestHelpers.AssertStreamTokenRefusalTell(response);
+
+        // The pre-existing launch scope survives untouched and no last-played record
+        // was minted for the refused re-issue.
+        Assert.Equal((long)TimeSpan.FromMinutes(20).TotalMilliseconds, _queueManager.GetActiveLaunchBase(deviceId, audioItem.Id.ToString()));
+        Assert.Equal(1500, _queueManager.GetActivePlaybackRate(deviceId, audioItem.Id.ToString()));
+        Assert.Null(_queueManager.GetLastPlayedItemId(deviceId));
+    }
+
+    /// <summary>
+    /// JF-693 review (coordinator F2): a CANCEL runs BEFORE the empty-secret delivery
+    /// gate. The cancel's purpose is to DISARM the armed deadline; refusing it with
+    /// the unrelated configuration error would leave the deadline running, so over a
+    /// token-gated (atempo) source with an empty secret the cancel still answers the
+    /// clean replay: a directive whose token carries NO sleep suffix, the cancel
+    /// confirmation speech (not the refusal Tell), and the JF-628 re-issue ledger
+    /// written.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_CancelDuringAtempoPlayback_EmptySecret_CancelsInsteadOfRefusing()
+    {
+        _config.StreamTokenSecret = string.Empty;
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(durationValue: "0");
+        var user = CreateUser();
+        var session = CreateSession();
+
+        var audioItem = new Audio { Name = "Podcast episode", Id = Guid.NewGuid(), RunTimeTicks = TimeSpan.FromMinutes(60).Ticks };
+        session.FullNowPlayingItem = audioItem;
+
+        var context = CreateContext();
+        context.AudioPlayer = new PlaybackState
+        {
+            Token = $"{audioItem.Id}|sleep:{DateTimeOffset.UtcNow.AddMinutes(30).UtcTicks}",
+            OffsetInMilliseconds = (long)TimeSpan.FromMinutes(5).TotalMilliseconds,
+            PlayerActivity = "PLAYING"
+        };
+
+        string deviceId = context.System.Device.DeviceID!;
+        _queueManager.RecordLaunchBase(deviceId, audioItem.Id.ToString(), (long)TimeSpan.FromMinutes(20).TotalMilliseconds, enqueued: false, ratePerMille: 1500);
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // The cancel went through: the clean replay directive, not the refusal Tell.
+        var directive = Assert.Single(response.Response!.Directives.OfType<global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective>());
+        Assert.DoesNotContain("|sleep:", directive.AudioItem.Stream.Token, StringComparison.Ordinal);
+        Assert.Contains($"/alexaskill/api/audio-speed/{audioItem.Id}/1500/", directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.Equal(
+            ResponseStrings.Get("CancelSleepTimer", "en-US"),
+            TestHelpers.GetSpeechText(response));
+
+        // The JF-628 cancel contract holds: the ledger names the replayed item.
+        Assert.Equal(audioItem.Id.ToString(), _queueManager.GetLastPlayedItemId(deviceId));
+    }
 }
 

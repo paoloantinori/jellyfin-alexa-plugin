@@ -93,11 +93,32 @@ public sealed class PlaybackLaunchBuilder
     /// Whether the response carries a launch directive (AudioPlayer.Play or
     /// VideoApp.Launch): the only shape an announce may ride (JF-501). The JF-687
     /// empty-secret refusal Tell carries no directive, so this predicate also keeps
-    /// every post-build announce overwrite off that Tell.
+    /// every post-build announce overwrite off that Tell. Internal since JF-693:
+    /// handler-side callers gate their own announce overwrites and now-playing
+    /// state writes on the same verdict (a refused launch must not speak a
+    /// now-playing nor leave phantom playback state behind).
     /// </summary>
-    private static bool HasLaunchDirective(SkillResponse response)
+    internal static bool HasLaunchDirective(SkillResponse response)
         => response.Response.Directives?.Any(d
             => d is AudioPlayerPlayDirective or Directive.VideoAppLaunchDirective) == true;
+
+    /// <summary>
+    /// JF-693: attaches a handler-side announce onto a launch response ONLY when the
+    /// response actually carries a launch directive. The JF-687 empty-secret refusal
+    /// Tell carries none, so it survives instead of being replaced by a now-playing
+    /// announce for a launch that will not happen (the handler-side twin of the
+    /// builder-internal gates <see cref="BuildEpisodeAudioLaunch"/> and
+    /// <see cref="BuildAudiobookVideoAppLaunchResponseAsync"/> already apply).
+    /// </summary>
+    /// <param name="response">The builder response the announce would ride.</param>
+    /// <param name="announce">The announce speech, or null to keep the response's speech.</param>
+    internal static void AttachAnnounceIfLaunched(SkillResponse response, IOutputSpeech? announce)
+    {
+        if (announce != null && HasLaunchDirective(response))
+        {
+            response.Response.OutputSpeech = announce;
+        }
+    }
 
     /// <summary>
     /// The JF-687 launch-side answer to an empty <see cref="PluginConfiguration.StreamTokenSecret"/>:
@@ -114,7 +135,10 @@ public sealed class PlaybackLaunchBuilder
     /// <param name="sourceUrl">The stream URL the response would deliver.</param>
     /// <param name="locale">The request locale when the caller carries one; null falls back to en-US.</param>
     /// <returns>The configuration-error Tell, or null when the launch may proceed.</returns>
-    private SkillResponse? StreamTokenSecretRefusal(string sourceUrl, string? locale)
+    /// <remarks>Internal since JF-693: the sleep-timer re-issue (the ONE AudioPlayer.Play
+    /// minted outside this builder, per the JF-564 docs) routes its replay URL through
+    /// this same gate so no second marker/guard implementation can drift from it.</remarks>
+    internal SkillResponse? StreamTokenSecretRefusal(string sourceUrl, string? locale)
     {
         if (!string.IsNullOrEmpty(_config.StreamTokenSecret)
             || !sourceUrl.Contains(TokenGatedUrlMarker, StringComparison.Ordinal))
@@ -1460,6 +1484,7 @@ public sealed class PlaybackLaunchBuilder
     /// <param name="user">The plugin user (announce toggles + stream URLs).</param>
     /// <param name="context">The Alexa context, for device capability detection.</param>
     /// <param name="request">The skill request, for the progressive-response vehicle.</param>
+    /// <param name="locale">The request locale, for the JF-687 empty-secret configuration Tell when the concat URL is token-gated; null falls back to en-US (JF-693 threading).</param>
     /// <returns>The VideoApp.Launch response with the announce attached.</returns>
     internal async Task<SkillResponse> BuildAudiobookVideoAppLaunchResponseAsync(
         string itemId,
@@ -1467,9 +1492,10 @@ public sealed class PlaybackLaunchBuilder
         IOutputSpeech? announce,
         Entities.User user,
         Context? context,
-        Request? request)
+        Request? request,
+        string? locale = null)
     {
-        SkillResponse response = BuildVideoAppAudioResponse(itemId, item, user, context: context);
+        SkillResponse response = BuildVideoAppAudioResponse(itemId, item, user, context: context, locale: locale);
         // JF-501: the announce rides the progressive vehicle on a VideoApp launch; a
         // screenless device degrades to AudioPlayer, where it stays on the final response.
         // JF-687: not onto the empty-secret refusal Tell, which already carries the
