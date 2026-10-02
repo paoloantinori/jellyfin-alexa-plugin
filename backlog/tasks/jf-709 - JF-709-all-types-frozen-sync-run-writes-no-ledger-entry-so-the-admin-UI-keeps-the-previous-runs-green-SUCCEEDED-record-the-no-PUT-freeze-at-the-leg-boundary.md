@@ -7,7 +7,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-10-02 12:00'
-updated_date: '2026-10-02 15:40'
+updated_date: '2026-10-02 19:33'
 labels:
   - catalog
   - observability
@@ -215,35 +215,5 @@ foreign diagnostics, per its coordination note).
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Closed through TWO rounds (initial commit 40005751 + the rework round for the
-gate-marker findings). The all-frozen no-PUT leg now writes a ledger entry at the leg
-boundary (RunLegAsync's injection-gate else side), so a locale whose every catalog
-type froze no longer keeps the previous run's green SUCCEEDED row. DESIGN DECISION
-(consumer-read): the entry PRESERVES the previous Status when it is SETTLED
-(SUCCEEDED / FAILED / TIMEOUT, OrdinalIgnoreCase; the live model is unchanged, so its
-recorded build status is still true and the diagnostics panel's ModelsDeployed
-Any("Succeeded") stays truthful for single-locale setups; NOT the JF-705 "keep
-SUCCEEDED" shape, which would lie on a previously-FAILED locale) and clamps
-transients/unknowns, including no previous entry at all, to "Skipped" (documented
-meaning extended). Error = the shared FrozenLedgerClause + the NoPutLedgerTail marker
-("; no PUT this run"), then a single "previous: ..." trailer ONLY for a foreign
-diagnostic; a previous Error already carrying this writer's tail is REPLACED entirely
-(rework R-F1: the every-restart resync cadence would otherwise nest "previous:
-previous: ..." unboundedly), which bounds the string and means a foreign diagnostic
-survives exactly one full run cycle on this path, with JF-710's capture preserve as
-its durable home. Source is always the catalog-sync label; LastUpdated refreshed
-(the row is replaced, not shadowed). The trailed foreign diagnostic sits past the
-80-char visual window for multi-type freezes, ACCEPTED (rework R-F4) since the
-actionable freeze text stays inside it. The starved-locale (zero-frozen, all
-hash-skipped) shape deliberately writes nothing and its PRODUCT fix is filed as
-JF-717. The JF-703 addendum's ordering hazard FOLDED here: uploadedPayloadHashes
-records only AFTER a successful upload; JF-703's CORE (attempted-PUT tracking) stays
-with JF-703, now carrying AUDIT ADDENDUM 2 with the first review round's two
-retry-shape residuals, and JF-710 carries the three-writer coordination note with the
-NoPutLedgerTail marker (now internal) and its predicate hazard. FOUR new pins
-(preserve + clean-rerun, no-prior "Skipped", 401-retry ordering, consecutive-runs
-single-depth + IN_PROGRESS clamp); JF-705's partial-freeze pins green unchanged.
-Gates ran twice (both rounds: simplify + code-review high, dispositions in the DoD
-and the REWORK GATE ROUND note). Suites 4939/4939 both TFMs on the reworked state,
-0 new warnings. No deploy.
+Closed by the orchestrator after the full cycle including a rework round: worker commit 40005751, rework 726afc2b (the gate-marker's five findings all landed: the Error compounding bound with its consecutive-runs pin, the settled-set Status clamp with transients going to Skipped, the tooltip-only foreign-diagnostic decision, the three-writer JF-710 coordination note), merged as f44aef8c. The all-frozen no-PUT leg writes its ledger entry at the leg boundary (previous Status preserved within SUCCEEDED/FAILED/TIMEOUT, transients clamped; Error = frozen clause + run-scoped tail with foreign diagnostics trailed exactly once and own-shape entries replaced entirely so the every-restart resync cadence can never compound). The JF-703 fold landed (hash recorded only after successful upload; the accepted duplicate-version trade named); the starved-locale product gap filed as JF-717. Worker gates green on both rounds; orchestrator independent suites 4939/4939 both TFMs on the rework head (the pre-rework 40005751 also independently verified green before its findings were adjudicated); merged-tree 4962/4962 both TFMs exit 0. Production surface changed (LibrarySyncService): deployed in the post-closure deploy.
 <!-- SECTION:FINAL_SUMMARY:END -->
