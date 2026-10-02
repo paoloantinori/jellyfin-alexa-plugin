@@ -6,6 +6,7 @@ using global::Alexa.NET.Request.Type;
 using global::Alexa.NET.Response;
 using global::Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Exceptions;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests;
@@ -18,24 +19,30 @@ using Xunit;
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 
 /// <summary>
-/// JF-687 pins: with an EMPTY <see cref="PluginConfiguration.StreamTokenSecret"/> every
-/// URL to the plugin's own token-gated endpoints is dead at birth (the JF-309 route gate
-/// 503s each request before reading any token), so the launch builders answer the
-/// localized <c>StreamTokenNotConfigured</c> Tell instead of delivering such a URL. One
-/// pin family per mint-site family, all at the builder delivery points:
+/// JF-687 pins, reshaped by JF-699 item 1: with an EMPTY
+/// <see cref="PluginConfiguration.StreamTokenSecret"/> every URL to the plugin's own
+/// token-gated endpoints is dead at birth (the JF-309 route gate 503s each request
+/// before reading any token), so the launch builders THROW
+/// <see cref="StreamTokenNotConfiguredException"/> at their delivery decisions instead
+/// of returning the refusal Tell (the Tell is now built ONCE by RequestPipeline's
+/// translation, pinned in SkillWarmingUpTests' pipeline idiom; the locale comes from
+/// the request there, so the JF-693 per-builder ThreadedLocale twins moved to the
+/// pipeline level too). One pin family per mint-site family, all at the builder
+/// delivery points:
 /// - the AudioPlayer chokepoint (JF-636 speed URL + JF-507 episode audio-transcode URL,
 ///   minted by ResolveAudioLaunchSource from any of its callers),
 /// - the VideoApp-audio builder (single-item video-audio URL + the audiobook/album
 ///   concat URL),
 /// - the audiobook resume builder (resume concat URL),
 /// - the VideoApp launch chokepoint (the episode/movie remux URL minted by
-///   GetVideoAppLaunchUrl and handed in as sourceUrl).
+///   GetVideoAppLaunchUrl and handed in as sourceUrl; the ASYNC variant additionally
+///   pins that the progressive announce is never sent for a refused launch).
 /// The no-overblock pins hold the other half of the contract: static Jellyfin stream
 /// URLs and live-TV resolver URLs carry NO plugin token, keep playing with an empty
 /// secret, and must never be refused. RED PROOF: disable the shared
-/// StreamTokenSecretRefusal guard in PlaybackLaunchBuilder; every ConfigTell pin
-/// flips to the dead-URL directive shape while the no-overblock and control pins stay
-/// green.
+/// EnsureStreamTokenDeliverable guard in PlaybackLaunchBuilder; every Throws pin
+/// flips (the dead-URL directive is returned instead) while the no-overblock and
+/// control pins stay green.
 /// </summary>
 [Collection("Plugin")]
 public class PlaybackLaunchBuilderStreamTokenSecretTests : PluginTestBase
@@ -59,23 +66,13 @@ public class PlaybackLaunchBuilderStreamTokenSecretTests : PluginTestBase
     private static TestHelpers.TestEpisodeWithStreams RemuxEpisode()
         => TestHelpers.RemuxEpisode();
 
-    /// <summary>
-    /// The JF-687/JF-693 refusal-Tell oracle lives in
-    /// <see cref="TestHelpers.AssertStreamTokenRefusalTell"/> (the production
-    /// <see cref="PlaybackLaunchBuilder.HasLaunchDirective"/> predicate, the Tell
-    /// shape, and the localized StreamTokenNotConfigured speech); the localized
-    /// flavor is the JF-693 gate-marker extension (a) twin.
-    /// </summary>
-    private static void AssertConfigTell(SkillResponse response)
-        => TestHelpers.AssertStreamTokenRefusalTell(response);
-
-    private static void AssertLocalizedConfigTell(SkillResponse response, string locale)
-        => TestHelpers.AssertStreamTokenRefusalTell(response, locale);
+    private static void AssertRefused(Func<SkillResponse> build)
+        => Assert.Throws<StreamTokenNotConfiguredException>(() => build());
 
     // ---- Family: the AudioPlayer.Play chokepoint (speed + episode-transcode mints) ----
 
     [Fact]
-    public void AudioPlayerPlay_SpeedUrl_EmptySecret_ConfigTell_NoDirective()
+    public void AudioPlayerPlay_SpeedUrl_EmptySecret_Throws()
     {
         var song = TestHelpers.CreateSong();
         var user = CreateUser();
@@ -83,14 +80,12 @@ public class PlaybackLaunchBuilderStreamTokenSecretTests : PluginTestBase
         AudioLaunchSource source = _launch.ResolveAudioLaunchSource(song, song.Id.ToString(), user, 0, ratePerMille: 1500);
         Assert.Contains("/alexaskill/api/", source.Url);
 
-        SkillResponse response = _launch.BuildAudioPlayerResponse(
-            PlayBehavior.ReplaceAll, source, song.Id.ToString(), song, user, TestHelpers.CreateContextWithVideoApp());
-
-        AssertConfigTell(response);
+        AssertRefused(() => _launch.BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll, source, song.Id.ToString(), song, user, TestHelpers.CreateContextWithVideoApp()));
     }
 
     [Fact]
-    public void AudioPlayerPlay_EpisodeTranscodeUrl_EmptySecret_ConfigTell_NoDirective()
+    public void AudioPlayerPlay_EpisodeTranscodeUrl_EmptySecret_Throws()
     {
         var episode = RemuxEpisode();
         var user = CreateUser();
@@ -98,10 +93,8 @@ public class PlaybackLaunchBuilderStreamTokenSecretTests : PluginTestBase
         AudioLaunchSource source = _launch.ResolveAudioLaunchSource(episode, episode.Id.ToString(), user, 0);
         Assert.Contains("/alexaskill/api/", source.Url);
 
-        SkillResponse response = _launch.BuildAudioPlayerResponse(
-            PlayBehavior.ReplaceAll, source, episode.Id.ToString(), episode, user, TestHelpers.CreateContextWithVideoApp());
-
-        AssertConfigTell(response);
+        AssertRefused(() => _launch.BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll, source, episode.Id.ToString(), episode, user, TestHelpers.CreateContextWithVideoApp()));
     }
 
     [Fact]
@@ -142,42 +135,36 @@ public class PlaybackLaunchBuilderStreamTokenSecretTests : PluginTestBase
     // ---- Family: the VideoApp-audio builder (video-audio + concat mints) ----
 
     [Fact]
-    public void VideoAppAudio_Music_EmptySecret_ConfigTell_NoDirective()
+    public void VideoAppAudio_Music_EmptySecret_Throws()
     {
         var song = TestHelpers.CreateSong();
         var user = CreateUser();
 
-        SkillResponse response = _launch.BuildVideoAppAudioResponse(
-            song.Id.ToString(), song, user, context: TestHelpers.CreateContextWithVideoApp());
-
-        AssertConfigTell(response);
+        AssertRefused(() => _launch.BuildVideoAppAudioResponse(
+            song.Id.ToString(), song, user, context: TestHelpers.CreateContextWithVideoApp()));
     }
 
     [Fact]
-    public void VideoAppAudio_AlbumConcat_EmptySecret_ConfigTell_NoDirective()
+    public void VideoAppAudio_AlbumConcat_EmptySecret_Throws()
     {
         var song = TestHelpers.CreateSong();
         var user = CreateUser();
 
-        SkillResponse response = _launch.BuildVideoAppAudioResponse(
+        AssertRefused(() => _launch.BuildVideoAppAudioResponse(
             song.Id.ToString(), song, user, context: TestHelpers.CreateContextWithVideoApp(),
-            collectionParentId: Guid.NewGuid());
-
-        AssertConfigTell(response);
+            collectionParentId: Guid.NewGuid()));
     }
 
     // ---- Family: the audiobook resume builder (resume concat mint) ----
 
     [Fact]
-    public void AudiobookResume_EmptySecret_ConfigTell_NoDirective()
+    public void AudiobookResume_EmptySecret_Throws()
     {
         var chapter = new MediaBrowser.Controller.Entities.AudioBook { Name = "Chapter 1", Id = Guid.NewGuid() };
         var user = CreateUser();
 
-        SkillResponse response = _launch.BuildAudiobookResumeResponse(
-            chapter, TimeSpan.FromMinutes(5).Ticks, user, TestHelpers.CreateContextWithVideoApp());
-
-        AssertConfigTell(response);
+        AssertRefused(() => _launch.BuildAudiobookResumeResponse(
+            chapter, TimeSpan.FromMinutes(5).Ticks, user, TestHelpers.CreateContextWithVideoApp()));
     }
 
     [Fact]
@@ -200,20 +187,17 @@ public class PlaybackLaunchBuilderStreamTokenSecretTests : PluginTestBase
     // ---- Family: the VideoApp launch chokepoint (episode remux mint, sourceUrl arg) ----
 
     [Fact]
-    public void VideoAppLaunch_RemuxUrl_EmptySecret_ConfigTell_NoDirective()
+    public void VideoAppLaunch_RemuxUrl_EmptySecret_Throws()
     {
         // The URL is minted by the CALLER (GetVideoAppLaunchUrl); the guard sits at the
-        // delivery decision, so the mint itself is unchanged and the directive is not
-        // emitted.
+        // delivery decision, so the mint itself is unchanged and no directive is emitted.
         var episode = RemuxEpisode();
         var user = CreateUser();
         string sourceUrl = _launch.GetVideoAppLaunchUrl(episode, user);
         Assert.Contains("/alexaskill/api/", sourceUrl);
 
-        SkillResponse response = _launch.BuildVideoAppLaunchResponse(
-            TestHelpers.CreateContextWithVideoApp(), "en-US", sourceUrl, episode.Name);
-
-        AssertConfigTell(response);
+        AssertRefused(() => _launch.BuildVideoAppLaunchResponse(
+            TestHelpers.CreateContextWithVideoApp(), "en-US", sourceUrl, episode.Name));
     }
 
     [Fact]
@@ -230,7 +214,7 @@ public class PlaybackLaunchBuilderStreamTokenSecretTests : PluginTestBase
     }
 
     [Fact]
-    public async Task VideoAppLaunchAsync_RemuxUrl_EmptySecret_ConfigTell_NoProgressiveSend()
+    public async Task VideoAppLaunchAsync_RemuxUrl_EmptySecret_Throws_NoProgressiveSend()
     {
         // The async chokepoint refuses BEFORE the progressive announce, so a broken
         // configuration never speaks a now-playing it then refuses to deliver.
@@ -248,65 +232,9 @@ public class PlaybackLaunchBuilderStreamTokenSecretTests : PluginTestBase
         string sourceUrl = launch.GetVideoAppLaunchUrl(episode, user);
         var request = new IntentRequest { Intent = new Intent { Name = "PlayVideoIntent" } };
 
-        SkillResponse response = await launch.BuildVideoAppLaunchResponseAsync(
-            TestHelpers.CreateContextWithVideoApp(), request, "en-US", sourceUrl, episode.Name);
+        await Assert.ThrowsAsync<StreamTokenNotConfiguredException>(() => launch.BuildVideoAppLaunchResponseAsync(
+            TestHelpers.CreateContextWithVideoApp(), request, "en-US", sourceUrl, episode.Name));
 
-        AssertConfigTell(response);
         Assert.Empty(sends);
-    }
-
-    // ---- JF-693 gate-marker extension (a): the localized twins, one per family ----
-
-    [Fact]
-    public void AudioPlayerPlay_SpeedUrl_ThreadedLocale_SpeaksLocalizedConfigTell()
-    {
-        var song = TestHelpers.CreateSong();
-        var user = CreateUser();
-
-        AudioLaunchSource source = _launch.ResolveAudioLaunchSource(song, song.Id.ToString(), user, 0, ratePerMille: 1500);
-
-        SkillResponse response = _launch.BuildAudioPlayerResponse(
-            PlayBehavior.ReplaceAll, source, song.Id.ToString(), song, user,
-            TestHelpers.CreateContextWithVideoApp(), locale: "it-IT");
-
-        AssertLocalizedConfigTell(response, "it-IT");
-    }
-
-    [Fact]
-    public void VideoAppAudio_AlbumConcat_ThreadedLocale_SpeaksLocalizedConfigTell()
-    {
-        var song = TestHelpers.CreateSong();
-        var user = CreateUser();
-
-        SkillResponse response = _launch.BuildVideoAppAudioResponse(
-            song.Id.ToString(), song, user, context: TestHelpers.CreateContextWithVideoApp(),
-            collectionParentId: Guid.NewGuid(), locale: "it-IT");
-
-        AssertLocalizedConfigTell(response, "it-IT");
-    }
-
-    [Fact]
-    public void AudiobookResume_ThreadedLocale_SpeaksLocalizedConfigTell()
-    {
-        var chapter = new MediaBrowser.Controller.Entities.AudioBook { Name = "Chapter 1", Id = Guid.NewGuid() };
-        var user = CreateUser();
-
-        SkillResponse response = _launch.BuildAudiobookResumeResponse(
-            chapter, TimeSpan.FromMinutes(5).Ticks, user, TestHelpers.CreateContextWithVideoApp(), locale: "it-IT");
-
-        AssertLocalizedConfigTell(response, "it-IT");
-    }
-
-    [Fact]
-    public void VideoAppLaunch_RemuxUrl_ThreadedLocale_SpeaksLocalizedConfigTell()
-    {
-        var episode = RemuxEpisode();
-        var user = CreateUser();
-        string sourceUrl = _launch.GetVideoAppLaunchUrl(episode, user);
-
-        SkillResponse response = _launch.BuildVideoAppLaunchResponse(
-            TestHelpers.CreateContextWithVideoApp(), "it-IT", sourceUrl, episode.Name);
-
-        AssertLocalizedConfigTell(response, "it-IT");
     }
 }

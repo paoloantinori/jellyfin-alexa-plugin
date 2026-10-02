@@ -496,9 +496,6 @@ public class PlaySongIntentHandler : BaseHandler
                 async best =>
                 {
                     songs = new List<BaseItem> { best };
-                    var qi = new List<QueueItem> { new() { Id = best.Id } };
-                    session.NowPlayingQueue = qi;
-                    session.FullNowPlayingItem = best;
                     string iid = best.Id.ToString();
                     int fuzzOffset = GetItemResumeOffset(best, jellyfinUser!, locale);
                     if (fuzzOffset > 0)
@@ -508,7 +505,12 @@ public class PlaySongIntentHandler : BaseHandler
                             best.Name, fuzzOffset);
                     }
 
+                    // JF-699 item 5: the launch build runs BEFORE the session writes
+                    // (a refusal throws; no phantom now-playing for a launch that will
+                    // not happen), the same reorder as the inline path below.
                     SkillResponse fuzzyPlay = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(iid, user), iid, best, user, context, fuzzOffset, announceLocale: locale);
+                    session.NowPlayingQueue = new List<QueueItem> { new() { Id = best.Id } };
+                    session.FullNowPlayingItem = best;
                     return await SwapOntoAnnounceVehicleAsync(fuzzyPlay, request, context, user).ConfigureAwait(false);
                 },
                 user: user).ConfigureAwait(false);
@@ -521,12 +523,6 @@ public class PlaySongIntentHandler : BaseHandler
             var matches = songs.Take(3).Select(s => (s.Id, s.Name, (string?)Launch.GetImageUrl(s.Id.ToString("N"), user))).ToList();
             return DisambiguationHelper.AskFirstMatch(matches, DisambiguationHelper.MediaTypeSong, locale, context);
         }
-
-        List<QueueItem> queueItems = new List<QueueItem>();
-        queueItems.Add(new QueueItem { Id = songs[0].Id });
-
-        session.NowPlayingQueue = queueItems;
-        session.FullNowPlayingItem = songs[0];
 
         string item_id = songs[0].Id.ToString();
 
@@ -542,7 +538,16 @@ public class PlaySongIntentHandler : BaseHandler
         Logger.LogDebug(
             "PlaySong: returning AudioPlayer, itemId={ItemId}, song='{SongName}', offsetMs={OffsetMs}",
             item_id, songs[0].Name, offsetMs);
+
+        // JF-699 item 5: the launch build runs BEFORE the session writes (a refusal
+        // throws; no phantom now-playing for a launch that will not happen).
         SkillResponse playResponse = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(item_id, user), item_id, songs[0], user, context, offsetMs, announceLocale: locale);
+
+        List<QueueItem> queueItems = new List<QueueItem>();
+        queueItems.Add(new QueueItem { Id = songs[0].Id });
+
+        session.NowPlayingQueue = queueItems;
+        session.FullNowPlayingItem = songs[0];
 
         // JF-635 item 3 (live: 'magnolia' announce cut): on the VideoApp route the
         // fast-start player steals the channel before a FINAL-response speech finishes
@@ -556,13 +561,15 @@ public class PlaySongIntentHandler : BaseHandler
     /// when the response actually took the VideoApp route and carries speech, the speech
     /// moves to a progressive response so it completes BEFORE the launch response opens
     /// the player; on vehicle failure it stays on the final response. No-ops for the
-    /// AudioPlayer route (no directive, no swap).
+    /// AudioPlayer route (no directive, no swap). The VideoApp sniff is the shared
+    /// <see cref="PlaybackLaunchBuilder.HasVideoAppLaunchDirective"/> predicate since
+    /// JF-699 item 4.
     /// </summary>
     private async Task<SkillResponse> SwapOntoAnnounceVehicleAsync(SkillResponse response, Request? request, Context? context, Entities.User user)
     {
         if (request == null
             || response.Response.OutputSpeech is null
-            || !response.Response.Directives.Any(d => d is Directive.VideoAppLaunchDirective))
+            || !PlaybackLaunchBuilder.HasVideoAppLaunchDirective(response))
         {
             return response;
         }

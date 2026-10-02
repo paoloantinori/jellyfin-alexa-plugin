@@ -284,23 +284,26 @@ public class CrossMediaFallbackTests : PluginTestBase
     }
 
     // ---------------------------------------------------------------------
-    // ApplyAnnouncement (JF-345 the ONE override site)
+    // The gated string-announce attach (JF-345 the ONE override site; JF-699 item 4
+    // absorbed the CrossMediaFallback.ApplyAnnouncement adapter into
+    // PlaybackLaunchBuilder.AttachAnnounceIfLaunched's string overload, so these
+    // pins target the builder member directly)
     // ---------------------------------------------------------------------
 
     [Fact]
-    public void ApplyAnnouncement_NullOrWhitespace_KeepsSpeech()
+    public void AttachAnnounceIfLaunchedString_NullOrWhitespace_KeepsSpeech()
     {
         var response = ResponseBuilder.Tell("default speech");
 
-        CrossMediaFallback.ApplyAnnouncement(response, null);
+        PlaybackLaunchBuilder.AttachAnnounceIfLaunched(response, (string?)null);
         Assert.Equal("default speech", ((PlainTextOutputSpeech)response.Response.OutputSpeech).Text);
 
-        CrossMediaFallback.ApplyAnnouncement(response, "  ");
+        PlaybackLaunchBuilder.AttachAnnounceIfLaunched(response, "  ");
         Assert.Equal("default speech", ((PlainTextOutputSpeech)response.Response.OutputSpeech).Text);
     }
 
     [Fact]
-    public void ApplyAnnouncement_NonEmpty_OverridesAsPlainText()
+    public void AttachAnnounceIfLaunchedString_NonEmpty_OverridesAsPlainText()
     {
         // JF-693: the override requires a response that actually launched; the
         // directive below is the AudioPlayer.Play every real caller hands in.
@@ -310,23 +313,22 @@ public class CrossMediaFallbackTests : PluginTestBase
             new global::Alexa.NET.Response.Directive.AudioPlayerPlayDirective()
         };
 
-        CrossMediaFallback.ApplyAnnouncement(response, "Playing something else");
+        PlaybackLaunchBuilder.AttachAnnounceIfLaunched(response, "Playing something else");
 
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
         Assert.Equal("Playing something else", speech.Text);
     }
 
     /// <summary>
-    /// JF-693: a response with NO launch directive (the JF-687 empty-secret refusal
-    /// Tell) keeps its speech; the JF-345 announcement never speaks a correction over
-    /// a configuration error for a play that will not happen.
+    /// JF-693: a response with NO launch directive keeps its speech; the JF-345
+    /// announcement never speaks a correction over a response that is not a launch.
     /// </summary>
     [Fact]
-    public void ApplyAnnouncement_NoLaunchDirective_KeepsTheRefusalSpeech()
+    public void AttachAnnounceIfLaunchedString_NoLaunchDirective_KeepsTheRefusalSpeech()
     {
         var response = ResponseBuilder.Tell("streaming isn't configured");
 
-        CrossMediaFallback.ApplyAnnouncement(response, "Playing something else");
+        PlaybackLaunchBuilder.AttachAnnounceIfLaunched(response, "Playing something else");
 
         var speech = Assert.IsType<PlainTextOutputSpeech>(response.Response.OutputSpeech);
         Assert.Equal("streaming isn't configured", speech.Text);

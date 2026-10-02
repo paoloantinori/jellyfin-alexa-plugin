@@ -115,11 +115,15 @@ public class SkillConnectionHandler : BaseHandler
             // Wrap the response with CompleteTask directive for connection-based invocations
             return WrapWithCompleteTask(response, locale);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not Exceptions.StreamTokenNotConfiguredException)
         {
             Logger.LogError(ex, "Error handling skill connection task: {TaskName}", taskName);
             return BuildTaskErrorResponse(locale, ex.Message);
         }
+        // JF-699 item 1: the JF-687 empty-secret launch refusal is NOT a task error:
+        // it must escape this catch so RequestPipeline's single translation site
+        // answers the localized configuration Tell (swallowing it here answered the
+        // generic MediaSearchError for a broken configuration).
     }
 
     private async Task<SkillResponse> HandlePlayFavoritesTask(Context context, Entities.User user, SessionInfo session, string locale, CancellationToken cancellationToken)
@@ -152,14 +156,18 @@ public class SkillConnectionHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale));
         }
 
-        session.FullNowPlayingItem = firstItem;
-
         string itemId = firstItem.Id.ToString();
         // JF-507: codec-gated audio-launch decision; an EAC3-family video item at the
         // head of the favorites queue routes to the audio-only transcode instead of
         // dying on the raw static bytes (JF-505 does not apply: audio-shaped launch).
         AudioLaunchSource source = Launch.ResolveAudioLaunchSource(firstItem, itemId, user, 0);
-        return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source, itemId, firstItem, user, context);
+
+        // JF-699 item 5: launch build BEFORE the now-playing write (the ordering
+        // policy lives on EnsureStreamTokenDeliverable; the transcode-routed source
+        // is token-gated, so a refusal must not leave a phantom now-playing).
+        SkillResponse response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source, itemId, firstItem, user, context);
+        session.FullNowPlayingItem = firstItem;
+        return response;
     }
 
     private Task<SkillResponse> HandlePlayMediaTask(LaunchRequest launchRequest, Context context, Entities.User user, SessionInfo session, string locale, CancellationToken cancellationToken)

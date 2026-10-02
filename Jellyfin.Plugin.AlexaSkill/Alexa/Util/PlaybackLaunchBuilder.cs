@@ -92,15 +92,33 @@ public sealed class PlaybackLaunchBuilder
     /// <summary>
     /// Whether the response carries a launch directive (AudioPlayer.Play or
     /// VideoApp.Launch): the only shape an announce may ride (JF-501). The JF-687
-    /// empty-secret refusal Tell carries no directive, so this predicate also keeps
-    /// every post-build announce overwrite off that Tell. Internal since JF-693:
-    /// handler-side callers gate their own announce overwrites and now-playing
-    /// state writes on the same verdict (a refused launch must not speak a
-    /// now-playing nor leave phantom playback state behind).
+    /// empty-secret refusal now THROWS (JF-699 item 1), so for the builder families
+    /// handlers consume this predicate is BELT, not load-bearing refusal protection;
+    /// it stays the shared verdict for a response that is not a launch (the
+    /// VideoRequiresScreen capability Tell on the VideoApp launch family, and any
+    /// future non-launch builder return). Internal since JF-693: handler-side
+    /// callers gate their announce overwrites and state writes on this verdict, and
+    /// the JF-699 output-speech roster scan requires every post-builder speech
+    /// write to route through it or one of its siblings.
     /// </summary>
     internal static bool HasLaunchDirective(SkillResponse response)
         => response.Response.Directives?.Any(d
             => d is AudioPlayerPlayDirective or Directive.VideoAppLaunchDirective) == true;
+
+    /// <summary>
+    /// Whether the response carries a VIDEOAPP launch directive specifically (JF-699
+    /// item 4, the fold of the two hand-rolled <c>d is VideoAppLaunchDirective</c>
+    /// sniffs at AlbumPlayService's album vehicle swap and PlaySong's
+    /// SwapOntoAnnounceVehicleAsync). Deliberately its OWN name beside
+    /// <see cref="HasLaunchDirective"/>: those consumers need the ROUTE the launch
+    /// took (the JF-625 progressive vehicle swap applies to the VideoApp route only,
+    /// where the fast-start player steals the audio channel), not the generic
+    /// delivered-launch verdict, so the scoping stays explicit at every call site.
+    /// </summary>
+    /// <param name="response">The response to inspect.</param>
+    /// <returns>True when a VideoApp.Launch directive is present.</returns>
+    internal static bool HasVideoAppLaunchDirective(SkillResponse response)
+        => response.Response.Directives?.Any(d => d is Directive.VideoAppLaunchDirective) == true;
 
     /// <summary>
     /// JF-693: attaches a handler-side announce onto a launch response ONLY when the
@@ -109,6 +127,13 @@ public sealed class PlaybackLaunchBuilder
     /// announce for a launch that will not happen (the handler-side twin of the
     /// builder-internal gates <see cref="BuildEpisodeAudioLaunch"/> and
     /// <see cref="BuildAudiobookVideoAppLaunchResponseAsync"/> already apply).
+    /// JF-699 item 1 note: post-pipeline-translation the builder families handlers
+    /// consume throw-or-launch, so the check is belt, not load-bearing refusal
+    /// protection; it is kept as the free structural guard against a FUTURE builder
+    /// return that is not a launch (e.g. a capability Tell added inside the
+    /// AudioPlayer chokepoint), and the JF-699 output-speech roster
+    /// scan requires every post-builder speech write to route through a gate of this
+    /// family.
     /// </summary>
     /// <param name="response">The builder response the announce would ride.</param>
     /// <param name="announce">The announce speech, or null to keep the response's speech.</param>
@@ -121,37 +146,53 @@ public sealed class PlaybackLaunchBuilder
     }
 
     /// <summary>
+    /// JF-699 item 4, the string form of <see cref="AttachAnnounceIfLaunched(SkillResponse, IOutputSpeech)"/>:
+    /// absorbs the adapter role CrossMediaFallback.ApplyAnnouncement played since JF-693
+    /// (the JF-345 ONE override site), so string-announce callers reach the gated attach
+    /// directly instead of hand-rolling the <c>PlainTextOutputSpeech</c> construction.
+    /// Null/whitespace keeps the response's speech (the JF-345 no-op contract).
+    /// </summary>
+    /// <param name="response">The builder response the announce would ride.</param>
+    /// <param name="announce">The announce text, or null/whitespace to keep the response's speech.</param>
+    internal static void AttachAnnounceIfLaunched(SkillResponse response, string? announce)
+        => AttachAnnounceIfLaunched(
+            response,
+            string.IsNullOrWhiteSpace(announce) ? null : new PlainTextOutputSpeech { Text = announce });
+
+    /// <summary>
     /// The JF-687 launch-side answer to an empty <see cref="PluginConfiguration.StreamTokenSecret"/>:
     /// a URL to a token-gated plugin endpoint is then dead at birth (the route gate 503s
-    /// every request before reading any token), so a launch about to DELIVER one answers
-    /// the localized configuration Tell instead of handing the Echo a URL it fails on
-    /// opaquely. The check runs at the delivery decision of each launch builder: one
-    /// secret read in the same method tail that assembles the response, with no mint
-    /// between the read and the returned answer, so no entry-gate snapshot can disagree
-    /// with a later mint the way the JF-682 mid-request re-read did. URLs without the
-    /// plugin marker (static streams, live TV) still play with an empty secret and are
-    /// never refused.
+    /// every request before reading any token), so a launch about to DELIVER one throws
+    /// <see cref="Exceptions.StreamTokenNotConfiguredException"/> instead of handing the
+    /// Echo a URL it fails on opaquely. RequestPipeline translates the exception ONCE
+    /// into the localized configuration Tell (JF-699 item 1; the SkillWarmingUpException
+    /// precedent) and owns the refusal logging, so no handler tail runs on a refusal and
+    /// the Tell's locale comes from the request itself rather than per-call-site
+    /// threading. ORDERING POLICY (JF-699 item 5, the one home): the refusal fires at
+    /// the builder's delivery decision, so every CALL SITE must build the launch BEFORE
+    /// any queue/session/continuation state write: a write that precedes the call
+    /// survives the refusal as phantom state (post-builder SetQueue is safe because
+    /// DeviceQueueManager.CopySurvivingStores carries the last-played record the builder
+    /// writes during its call). The check runs at the delivery decision of each launch
+    /// builder: one secret read in the same method tail that assembles the response,
+    /// with no mint between the read and the throw, so no entry-gate snapshot can
+    /// disagree with a later mint the way the JF-682 mid-request re-read did. URLs
+    /// without the plugin marker (static streams, live TV) still play with an empty
+    /// secret and are never refused.
     /// </summary>
     /// <param name="sourceUrl">The stream URL the response would deliver.</param>
-    /// <param name="locale">The request locale when the caller carries one; null falls back to en-US.</param>
-    /// <returns>The configuration-error Tell, or null when the launch may proceed.</returns>
     /// <remarks>Internal since JF-693: the sleep-timer re-issue (the ONE AudioPlayer.Play
     /// minted outside this builder, per the JF-564 docs) routes its replay URL through
     /// this same gate so no second marker/guard implementation can drift from it.</remarks>
-    internal SkillResponse? StreamTokenSecretRefusal(string sourceUrl, string? locale)
+    internal void EnsureStreamTokenDeliverable(string sourceUrl)
     {
         if (!string.IsNullOrEmpty(_config.StreamTokenSecret)
             || !sourceUrl.Contains(TokenGatedUrlMarker, StringComparison.Ordinal))
         {
-            return null;
+            return;
         }
 
-        _logger.LogError(
-            "Launch refused: stream token secret not configured; the token-gated stream URL would be rejected by the route gate (JF-687)");
-        return ResponseBuilder.Tell(
-            ResponseStrings.Get(
-                "StreamTokenNotConfigured",
-                locale ?? "en-US"));
+        throw new Exceptions.StreamTokenNotConfiguredException();
     }
 
     /// <summary>
@@ -919,13 +960,11 @@ public sealed class PlaybackLaunchBuilder
         IOutputSpeech? outputSpeech = null)
     {
         // JF-687: a token-gated source URL (the episode/movie remux mint) with an empty
-        // secret is dead at the route gate; answer the configuration error instead of
-        // emitting the directive. The live-TV resolver URLs carry no plugin token and
-        // pass through unchanged.
-        if (StreamTokenSecretRefusal(sourceUrl, locale) is { } secretRefusal)
-        {
-            return secretRefusal;
-        }
+        // secret is dead at the route gate; refuse by throwing instead of emitting the
+        // directive (JF-699 item 1: RequestPipeline translates the exception into the
+        // configuration Tell). The live-TV resolver URLs carry no plugin token and pass
+        // through unchanged.
+        EnsureStreamTokenDeliverable(sourceUrl);
 
         if (!Interface.VideoAppCapabilities.DeviceSupportsVideoApp(context))
         {
@@ -993,11 +1032,9 @@ public sealed class PlaybackLaunchBuilder
     {
         // JF-687: the config refusal precedes the progressive announce, so a broken
         // configuration never speaks a now-playing it then refuses to deliver (the sync
-        // builder re-checks at its own delivery decision).
-        if (StreamTokenSecretRefusal(sourceUrl, locale) is { } secretRefusal)
-        {
-            return secretRefusal;
-        }
+        // builder re-checks at its own delivery decision; JF-699 item 1: the refusal is
+        // the throwing guard, translated once by RequestPipeline).
+        EnsureStreamTokenDeliverable(sourceUrl);
 
         outputSpeech = await SpeakVideoLaunchAnnounceAsync(context, request, outputSpeech).ConfigureAwait(false);
         return BuildVideoAppLaunchResponse(context, locale, sourceUrl, title, outputSpeech);
@@ -1109,7 +1146,7 @@ public sealed class PlaybackLaunchBuilder
                 item.Id,
                 context?.System?.Device?.DeviceID ?? "unknown",
                 standingRate);
-            return BuildEpisodeAudioLaunch(item, user, context, resumeTicks, outputSpeech, standingRate, locale);
+            return BuildEpisodeAudioLaunch(item, user, context, resumeTicks, outputSpeech, standingRate);
         }
 
         if (isEpisode && !capable)
@@ -1118,7 +1155,7 @@ public sealed class PlaybackLaunchBuilder
                 "Episode launch of '{Title}' on device {DeviceId} without the VideoApp interface: degrading to the AudioPlayer audio-only route (JF-586)",
                 item.Name,
                 context?.System?.Device?.DeviceID ?? "unknown");
-            return BuildEpisodeAudioLaunch(item, user, context, resumeTicks, outputSpeech, locale: locale);
+            return BuildEpisodeAudioLaunch(item, user, context, resumeTicks, outputSpeech);
         }
 
         return await BuildVideoAppLaunchResponseAsync(context, request, locale, sourceUrl, item.Name, outputSpeech).ConfigureAwait(false);
@@ -1222,8 +1259,7 @@ public sealed class PlaybackLaunchBuilder
         Context? context,
         long resumeTicks,
         IOutputSpeech? outputSpeech,
-        int ratePerMille = Util.PlaybackSpeed.NormalPerMille,
-        string? locale = null)
+        int ratePerMille = Util.PlaybackSpeed.NormalPerMille)
     {
         // The JF-565 clamp, audio-route mirror: a stored position at or beyond
         // the runtime cannot be a legitimate mid-episode resume (only stale
@@ -1241,8 +1277,7 @@ public sealed class PlaybackLaunchBuilder
             itemId,
             item,
             user,
-            context,
-            locale: locale);
+            context);
 
         // The caller-chosen announce rides the final response: the wording gate
         // already ran at the caller against the VideoApp delivery verdict, and
@@ -1375,14 +1410,12 @@ public sealed class PlaybackLaunchBuilder
     /// <param name="startTicks">Resume position in .NET ticks.</param>
     /// <param name="user">The plugin user (fallback audio stream URL on screenless devices).</param>
     /// <param name="context">The Alexa context, for the JF-505 screenless-device check. Null (or a context without capability data) keeps the VideoApp path.</param>
-    /// <param name="locale">The request locale, for the JF-687 empty-secret configuration Tell; null falls back to en-US.</param>
     /// <returns>A VideoApp.Launch SkillResponse targeting the resume playlist, or an AudioPlayer resume on a screenless device.</returns>
     internal SkillResponse BuildAudiobookResumeResponse(
         MediaBrowser.Controller.Entities.BaseItem item,
         long startTicks,
         Entities.User user,
-        Context? context,
-        string? locale = null)
+        Context? context)
     {
         if (!Interface.VideoAppCapabilities.DeviceSupportsVideoApp(context))
         {
@@ -1408,8 +1441,7 @@ public sealed class PlaybackLaunchBuilder
                 item,
                 user,
                 context,
-                offsetMs,
-                locale: locale);
+                offsetMs);
         }
 
         // JF-567: this GUID feeds a URL path segment, so it keeps the default dashed
@@ -1425,14 +1457,12 @@ public sealed class PlaybackLaunchBuilder
             item.Id, parentId, startTicks, RequestLogRedactor.RedactUrl(videoAudioUrl));
 
         // JF-687: the resume URL above minted a token-gated URL; with an empty secret
-        // the route gate would 503 every fetch, so the resume answers the configuration
-        // Tell instead of launching. The refusal runs BEFORE the last-played record
-        // below: one refusal-ledger policy at every launch site, so a refused launch
-        // never flips the device's real last-played entry.
-        if (StreamTokenSecretRefusal(videoAudioUrl, locale) is { } secretRefusal)
-        {
-            return secretRefusal;
-        }
+        // the route gate would 503 every fetch, so the resume refuses instead of
+        // launching (JF-699 item 1: the throwing guard, translated once by
+        // RequestPipeline). The refusal runs BEFORE the last-played record below: one
+        // refusal-ledger policy at every launch site, so a refused launch never flips
+        // the device's real last-played entry.
+        EnsureStreamTokenDeliverable(videoAudioUrl);
 
         // JF-563 review: record the device last-played ledger here (this VideoApp launch
         // bypasses the BuildAudioPlayerResponse chokepoint that owns the record, and the
@@ -1484,7 +1514,6 @@ public sealed class PlaybackLaunchBuilder
     /// <param name="user">The plugin user (announce toggles + stream URLs).</param>
     /// <param name="context">The Alexa context, for device capability detection.</param>
     /// <param name="request">The skill request, for the progressive-response vehicle.</param>
-    /// <param name="locale">The request locale, for the JF-687 empty-secret configuration Tell when the concat URL is token-gated; null falls back to en-US (JF-693 threading).</param>
     /// <returns>The VideoApp.Launch response with the announce attached.</returns>
     internal async Task<SkillResponse> BuildAudiobookVideoAppLaunchResponseAsync(
         string itemId,
@@ -1492,10 +1521,9 @@ public sealed class PlaybackLaunchBuilder
         IOutputSpeech? announce,
         Entities.User user,
         Context? context,
-        Request? request,
-        string? locale = null)
+        Request? request)
     {
-        SkillResponse response = BuildVideoAppAudioResponse(itemId, item, user, context: context, locale: locale);
+        SkillResponse response = BuildVideoAppAudioResponse(itemId, item, user, context: context);
         // JF-501: the announce rides the progressive vehicle on a VideoApp launch; a
         // screenless device degrades to AudioPlayer, where it stays on the final response.
         // JF-687: not onto the empty-secret refusal Tell, which already carries the
@@ -1813,35 +1841,18 @@ public sealed class PlaybackLaunchBuilder
     /// <param name="queueManager">Optional per-device queue manager holding the launch-scope store (JF-522); null falls back to <c>Plugin.Instance</c>'s (pass one explicitly to keep unit tests off the shared plugin instance).</param>
     /// <param name="launchBaseMs">The item-absolute launch base of the stream this directive plays (<see cref="AudioLaunchSource.LaunchBaseMs"/>; 0 for raw-static/precomputed launches). Recorded at this chokepoint so the playback event writers can persist item-absolute positions (JF-522).</param>
     /// <param name="ratePerMille">The stream's playback rate in per-mille form (JF-636: 1000 = identity). Recorded beside the launch base so the event writers scale the stream's raw offsets; also disables the native-controls VideoApp delegation, which has no rate support and would silently drop the speed.</param>
-    /// <param name="locale">The request locale, for the JF-687 empty-secret configuration Tell when the stream URL is token-gated; null falls back to en-US.</param>
     /// <returns>A SkillResponse containing the AudioPlayer directive.</returns>
-    public SkillResponse BuildAudioPlayerResponse(PlayBehavior playBehavior, string streamUrl, string itemId, MediaBrowser.Controller.Entities.BaseItem? item, Entities.User user, Context? context, int offsetInMilliseconds = 0, string? announceLocale = null, DeviceQueueManager? queueManager = null, long launchBaseMs = 0, Guid? collectionParentId = null, long collectionStartTicks = 0, int ratePerMille = 1000, string? locale = null)
+    public SkillResponse BuildAudioPlayerResponse(PlayBehavior playBehavior, string streamUrl, string itemId, MediaBrowser.Controller.Entities.BaseItem? item, Entities.User user, Context? context, int offsetInMilliseconds = 0, string? announceLocale = null, DeviceQueueManager? queueManager = null, long launchBaseMs = 0, Guid? collectionParentId = null, long collectionStartTicks = 0, int ratePerMille = 1000)
     {
         // JF-687: the delivery gate for every AudioPlayer.Play. A token-gated stream URL
         // (the JF-636 speed route, the JF-507 audio-only episode transcode) with an empty
         // secret is dead at the route gate; refuse the launch before any ledger record,
-        // launch-scope write or directive build. Static URLs (the modal music play) never
-        // match and keep playing. The announce locale doubles as the response locale:
-        // most production callers carry no separate request locale, and the announce is
-        // already spoken in the request's language.
-        if (StreamTokenSecretRefusal(streamUrl, locale ?? announceLocale) is { } secretRefusal)
-        {
-            return secretRefusal;
-        }
+        // launch-scope write or directive build (JF-699 item 1: the throwing guard,
+        // translated once by RequestPipeline). Static URLs (the modal music play) never
+        // match and keep playing.
+        EnsureStreamTokenDeliverable(streamUrl);
 
-        // Record the last user-initiated play for this device (ReplaceAll = a new item starts).
-        // This is the universal chokepoint: every play path flows through here, including APL
-        // carousel taps and resume confirmations that bypass SetQueue. Captures VideoApp.Launch
-        // plays too (which don't update context.AudioPlayer.Token), giving LaunchRequestHandler
-        // a reliable device-specific "what did this Echo last play" signal.
-        // JF-568: records the AUDIO route. The native-controls delegation below re-records
-        // with the VideoApp route when it actually builds a VideoApp.Launch for the item, so
-        // the route always names the directive that went out, not the builder that started.
         string? deviceId = context?.System?.Device?.DeviceID;
-        if (playBehavior == PlayBehavior.ReplaceAll && !string.IsNullOrEmpty(deviceId))
-        {
-            (queueManager ?? Plugin.Instance?.DeviceQueueManager)?.RecordLastPlayed(deviceId, itemId, DeviceQueueManager.LaunchRoute.Audio);
-        }
 
         // Route initial playback through VideoApp when native controls are enabled for the
         // item's category. Enqueue/ReplaceEnqueued stay as AudioPlayer for queue building.
@@ -1875,8 +1886,26 @@ public sealed class PlaybackLaunchBuilder
             // break for BuildVideoAppAudioResponse's own screenless fallback.
             if (wantsNativeControls && Interface.VideoAppCapabilities.DeviceSupportsVideoApp(context))
             {
-                return BuildVideoAppAudioResponse(itemId, item, user, announceLocale, context, collectionParentId, collectionStartTicks, locale);
+                // The callee records the VideoApp route itself, AFTER its own refusal
+                // guard, so a refused delegation leaves the ledger untouched (JF-699
+                // code-review finding 3: the Audio-route record used to sit BEFORE
+                // this return and flipped the ledger for a launch the delegation then
+                // refused).
+                return BuildVideoAppAudioResponse(itemId, item, user, announceLocale, context, collectionParentId, collectionStartTicks);
             }
+        }
+
+        // Record the last user-initiated play for this device (ReplaceAll = a new item starts).
+        // This is the universal chokepoint: every play path flows through here, including APL
+        // carousel taps and resume confirmations that bypass SetQueue. Captures VideoApp.Launch
+        // plays too (which don't update context.AudioPlayer.Token), giving LaunchRequestHandler
+        // a reliable device-specific "what did this Echo last play" signal.
+        // JF-568: records the AUDIO route; the delegated VideoApp path above records its
+        // own route inside the callee, so the route always names the directive that went
+        // out, not the builder that started.
+        if (playBehavior == PlayBehavior.ReplaceAll && !string.IsNullOrEmpty(deviceId))
+        {
+            (queueManager ?? Plugin.Instance?.DeviceQueueManager)?.RecordLastPlayed(deviceId, itemId, DeviceQueueManager.LaunchRoute.Audio);
         }
 
         // JF-522 launch-scope capture: the directive below is what actually creates the
@@ -2078,7 +2107,6 @@ public sealed class PlaybackLaunchBuilder
     /// <param name="context">Optional Alexa context for enqueue previous-token tracking.</param>
     /// <param name="announceLocale">Optional locale for the now-playing announce.</param>
     /// <param name="queueManager">Optional per-device queue manager holding the launch-scope store; null falls back to <c>Plugin.Instance</c>'s.</param>
-    /// <param name="locale">The request locale, for the JF-687 empty-secret configuration Tell; threaded to the string overload.</param>
     /// <returns>A SkillResponse containing the AudioPlayer directive.</returns>
     public SkillResponse BuildAudioPlayerResponse(
         PlayBehavior playBehavior,
@@ -2090,8 +2118,7 @@ public sealed class PlaybackLaunchBuilder
         string? announceLocale = null,
         DeviceQueueManager? queueManager = null,
         Guid? collectionParentId = null,
-        long collectionStartTicks = 0,
-        string? locale = null)
+        long collectionStartTicks = 0)
         => BuildAudioPlayerResponse(
             playBehavior,
             source.Url,
@@ -2105,8 +2132,7 @@ public sealed class PlaybackLaunchBuilder
             source.LaunchBaseMs,
             collectionParentId,
             collectionStartTicks,
-            source.RatePerMille,
-            locale);
+            source.RatePerMille);
 
     /// <summary>
     /// Build a VideoApp.Launch response for audio playback using the video-audio
@@ -2124,9 +2150,8 @@ public sealed class PlaybackLaunchBuilder
     /// <param name="user">The user for the stream URL.</param>
     /// <param name="announceLocale">Optional locale for the now-playing announce.</param>
     /// <param name="context">The Alexa context, for the screenless-device check. Null (or a context without capability data) keeps the VideoApp path.</param>
-    /// <param name="locale">The request locale, for the JF-687 empty-secret configuration Tell; the announce locale doubles as the response locale on the screenless degrade when no separate locale is threaded.</param>
     /// <returns>A VideoApp.Launch response, or an AudioPlayer response on a screenless device.</returns>
-    public SkillResponse BuildVideoAppAudioResponse(string itemId, BaseItem? item, Entities.User user, string? announceLocale = null, Context? context = null, Guid? collectionParentId = null, long collectionStartTicks = 0, string? locale = null)
+    public SkillResponse BuildVideoAppAudioResponse(string itemId, BaseItem? item, Entities.User user, string? announceLocale = null, Context? context = null, Guid? collectionParentId = null, long collectionStartTicks = 0)
     {
         if (!Interface.VideoAppCapabilities.DeviceSupportsVideoApp(context))
         {
@@ -2141,8 +2166,7 @@ public sealed class PlaybackLaunchBuilder
                 item,
                 user,
                 context,
-                announceLocale,
-                locale: locale ?? announceLocale);
+                announceLocale);
         }
 
         bool isAudioBook = AudiobookItems.IsAudioBook(item);
@@ -2179,14 +2203,10 @@ public sealed class PlaybackLaunchBuilder
         // secret would hand the device a URL the route gate 503s. The refusal runs
         // BEFORE the last-played record below: one refusal-ledger policy at every
         // launch site (the chokepoint refuses before its record too), so a refused
-        // launch never flips the device's real last-played entry. The locale folds
-        // announceLocale in (the gate-marker F2 fix): this branch's production
-        // callers thread announceLocale, not locale, and the screenless sibling
-        // of the SAME builder answers localized on the identical input.
-        if (StreamTokenSecretRefusal(videoAudioUrl, locale ?? announceLocale) is { } secretRefusal)
-        {
-            return secretRefusal;
-        }
+        // launch never flips the device's real last-played entry (JF-699 item 1: the
+        // throwing guard, translated once by RequestPipeline with the request's own
+        // locale, replacing the per-call-site locale/announceLocale fold).
+        EnsureStreamTokenDeliverable(videoAudioUrl);
 
         // JF-563 review: the device last-played ledger records HERE too. Direct VideoApp
         // callers bypass the BuildAudioPlayerResponse chokepoint that owns the record,

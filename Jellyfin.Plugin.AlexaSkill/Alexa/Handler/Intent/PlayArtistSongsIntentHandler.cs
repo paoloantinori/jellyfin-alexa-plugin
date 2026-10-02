@@ -566,6 +566,17 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             queueItems.Add(new QueueItem { Id = artistsItems[i].Id });
         }
 
+        string itemId = artistsItems[startIndex].Id.ToString();
+
+        Logger.LogDebug(
+            "PlayArtistSongs: returning AudioPlayer, itemId={ItemId}, startIndex={StartIndex}, queueSize={QueueSize}, offset=0",
+            itemId, startIndex, queueItems.Count);
+
+        // JF-699 item 5: launch build BEFORE any queue/session/continuation write
+        // (the ordering policy lives on EnsureStreamTokenDeliverable; a seek-mode
+        // refusal must not leave phantom state behind).
+        SkillResponse response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, artistsItems[0], user, context, announceLocale: locale);
+
         session.NowPlayingQueue = queueItems;
         session.FullNowPlayingItem = artistsItems[startIndex];
 
@@ -594,12 +605,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                 });
         }
 
-        string itemId = artistsItems[startIndex].Id.ToString();
-
-        Logger.LogDebug(
-            "PlayArtistSongs: returning AudioPlayer, itemId={ItemId}, startIndex={StartIndex}, queueSize={QueueSize}, offset=0",
-            itemId, startIndex, queueItems.Count);
-        return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, artistsItems[0], user, context, announceLocale: locale);
+        return response;
     }
 
     /// <summary>

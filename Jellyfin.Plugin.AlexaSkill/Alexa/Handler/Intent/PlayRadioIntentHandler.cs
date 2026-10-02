@@ -378,6 +378,17 @@ public class PlayRadioIntentHandler : BaseHandler
     private SkillResponse StartRadioPlayback(
         BaseItem first, List<QueueItem> queue, int announceCount, SessionInfo session, Entities.User user, Context context, string locale)
     {
+        string? nowPlayingSsml = SpeechBuilder.GetSsml("NowPlayingSsml", locale, SpeechBuilder.EscapeXml(first.Name));
+
+        string radioMsg = ResponseStrings.Get("RadioStarted", locale, announceCount.ToString(CultureInfo.InvariantCulture));
+
+        // JF-699 item 5: the launch build runs BEFORE the session writes and the
+        // radio-mode arm (a refusal throws; no phantom now-playing and no armed
+        // RadioModeState for a start that will not happen: an armed-but-dead radio
+        // mode is the worst phantom of this family, it drives later
+        // PlaybackNearlyFinished continuation decisions).
+        var response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(first.Id.ToString(), user), first.Id.ToString(), first, user, context);
+
         session.NowPlayingQueue = queue;
         // The now-playing pointer must follow the launch (review round 2026-09-22):
         // every FullNowPlayingItem-first consumer (next/previous, StartOver, the
@@ -387,16 +398,16 @@ public class PlayRadioIntentHandler : BaseHandler
         session.FullNowPlayingItem = first;
         RadioModeState.Enable(session.UserId, context.System.Device.DeviceID);
 
-        string? nowPlayingSsml = SpeechBuilder.GetSsml("NowPlayingSsml", locale, SpeechBuilder.EscapeXml(first.Name));
-
-        string radioMsg = ResponseStrings.Get("RadioStarted", locale, announceCount.ToString(CultureInfo.InvariantCulture));
-
-        var response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(first.Id.ToString(), user), first.Id.ToString(), first, user, context);
         if (Launch.GetAnnounceNowPlaying(user))
         {
-            response.Response.OutputSpeech = nowPlayingSsml != null
-                ? (IOutputSpeech)new SsmlOutputSpeech { Ssml = $"<speak>{nowPlayingSsml}. {SpeechBuilder.EscapeXml(radioMsg)}</speak>" }
-                : new PlainTextOutputSpeech($"{ResponseStrings.Get("NowPlaying", locale, first.Name)}. {radioMsg}");
+            // JF-699 item 6: the write rides the delivered-launch gate; also safe by
+            // construction since JF-699 item 1 (the builder throws the refusal or
+            // always delivers a directive).
+            PlaybackLaunchBuilder.AttachAnnounceIfLaunched(
+                response,
+                nowPlayingSsml != null
+                    ? new SsmlOutputSpeech { Ssml = $"<speak>{nowPlayingSsml}. {SpeechBuilder.EscapeXml(radioMsg)}</speak>" }
+                    : new PlainTextOutputSpeech($"{ResponseStrings.Get("NowPlaying", locale, first.Name)}. {radioMsg}"));
         }
 
         return response;

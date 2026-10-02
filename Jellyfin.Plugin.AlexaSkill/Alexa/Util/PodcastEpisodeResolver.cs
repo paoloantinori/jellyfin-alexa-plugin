@@ -117,23 +117,19 @@ public static class PodcastEpisodeResolver
         // branch supersedes the codec branch there); rate 1000 keeps this path
         // byte-identical to the pre-JF-636 launch.
         // JF-693: the request locale threads into the launch so the JF-687 refusal
-        // Tell answers in the user's language.
+        // Tell answers in the user's language (JF-699 item 1: the refusal is now the
+        // throwing guard translated by RequestPipeline with the request's own locale,
+        // so no locale threading remains here).
         int offsetMs = offsetFor?.Invoke(episode) ?? 0;
         AudioLaunchSource source = launch.ResolveAudioLaunchSource(
             episode, itemId, user, offsetMs, ratePerMille: PlaybackSpeed.ResolveStandingRate(user));
         SkillResponse response = launch.BuildAudioPlayerResponse(
-            PlayBehavior.ReplaceAll, source, itemId, episode, user, context, locale: locale);
+            PlayBehavior.ReplaceAll, source, itemId, episode, user, context);
 
-        // JF-693: the now-playing writes and the screen attach ride a DELIVERED
-        // launch only: the standing-rate atempo URL and the codec-routed transcode
-        // URL are token-gated, so the builder can answer the empty-secret refusal
-        // Tell instead of a directive, and a refused launch must not leave a
-        // phantom now-playing (or screen) for a play that will not happen.
-        if (!PlaybackLaunchBuilder.HasLaunchDirective(response))
-        {
-            return response;
-        }
-
+        // JF-699 item 1: the builder either threw the StreamTokenNotConfigured
+        // refusal (RequestPipeline answers it; nothing below runs) or delivered the
+        // launch, so the JF-693 delivered-launch verdict wrapper is gone and the
+        // now-playing writes + screen attach simply follow the launch.
         session.NowPlayingQueue = new List<QueueItem> { new() { Id = episode.Id } };
         session.FullNowPlayingItem = episode;
         attachScreen?.Invoke(response, episode);

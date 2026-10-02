@@ -239,20 +239,12 @@ public class SetPlaybackSpeedIntentHandler : BaseHandler
             item,
             user,
             context,
-            queueManager: _queueManager,
-            locale: locale);
+            queueManager: _queueManager);
 
-        if (!PlaybackLaunchBuilder.HasLaunchDirective(response))
-        {
-            // JF-693 review (coordinator F3): log the OBSERVABLE state, not an
-            // inferred cause - the gate is the directive-less response shape, and
-            // any future no-directive return must not read here as an empty secret.
-            Logger.LogInformation(
-                "SetPlaybackSpeed: re-launch of '{ItemName}' ({ItemId}) delivered no playback directive (stream token secret configured: {SecretConfigured}); the standing rate stays {CurrentRate}/1000",
-                item.Name, item.Id, !string.IsNullOrEmpty(_config.StreamTokenSecret), currentRate);
-            return Task.FromResult<SkillResponse>(response);
-        }
-
+        // JF-699 item 1: the builder either threw the StreamTokenNotConfigured
+        // refusal (RequestPipeline answers it; nothing below runs) or delivered the
+        // re-launch, so the JF-693 verdict wrapper is gone and the persist + success
+        // speech simply follow the delivered launch.
         user.PodcastSpeedPerMille = targetRate;
         Plugin.Instance?.SaveConfiguration();
 
@@ -260,8 +252,10 @@ public class SetPlaybackSpeedIntentHandler : BaseHandler
             "SetPlaybackSpeed: re-launching '{ItemName}' ({ItemId}) at rate {TargetRate}/1000 (from {CurrentRate}/1000), content position {ContentTicks} ticks (raw offset {RawOffsetMs}ms)",
             item.Name, item.Id, targetRate, currentRate, startTicks, rawOffsetMs);
 
-        response.Response.OutputSpeech = new PlainTextOutputSpeech(
-            ResponseStrings.Get("PlaybackSpeedSet", locale, ResponseStrings.Get($"SpeedName{targetRate}", locale)));
+        PlaybackLaunchBuilder.AttachAnnounceIfLaunched(
+            response,
+            new PlainTextOutputSpeech(
+                ResponseStrings.Get("PlaybackSpeedSet", locale, ResponseStrings.Get($"SpeedName{targetRate}", locale))));
         return Task.FromResult<SkillResponse>(response);
     }
 }

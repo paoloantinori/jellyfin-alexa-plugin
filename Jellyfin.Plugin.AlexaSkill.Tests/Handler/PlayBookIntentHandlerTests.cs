@@ -11,6 +11,7 @@ using global::Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Exceptions;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
@@ -454,7 +455,7 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
     /// MediaInfo, no stale QueueContinuation).
     /// </summary>
     [Fact]
-    public async Task HandleAsync_TrackedResume_EmptySecret_RefusalTellSurvives_NoPhantomState()
+    public async Task HandleAsync_TrackedResume_EmptySecret_Refuses_NoPhantomState()
     {
         _fx.Config.NativeControlsForBooks = true;
         _fx.Config.StreamTokenSecret = string.Empty;
@@ -497,12 +498,11 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
 
         tracker.RecordSegment(trackItem.Id.ToString(), 31);
 
-        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
-
-        // The refusal Tell, in the request locale, with no launch directive of
-        // either kind: the shared oracle pins all three.
-        Assert.NotNull(response);
-        TestHelpers.AssertStreamTokenRefusalTell(response, "it-IT");
+        // JF-699 item 1: the refusal is the typed exception; RequestPipeline
+        // translates it into the localized Tell (pinned at the pipeline level). The
+        // handler tail (state writes + announce) never runs on a refusal.
+        await Assert.ThrowsAsync<StreamTokenNotConfiguredException>(
+            () => handler.HandleAsync(request, context, user, session, CancellationToken.None));
 
         // No phantom playback state: MediaInfo keeps answering honestly and no
         // progressive continuation was recorded for the refused launch.

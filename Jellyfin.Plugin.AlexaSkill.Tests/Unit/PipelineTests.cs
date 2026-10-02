@@ -8,6 +8,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Exceptions;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Session;
@@ -1185,5 +1186,151 @@ public class PipelineTests : PluginTestBase
         Assert.NotEmpty(capturedCorrelationId);
         Assert.Equal(8, capturedCorrelationId.Length);
         Assert.Matches("^[0-9a-f]{8}$", capturedCorrelationId);
+    }
+
+    // ---------------------------------------------------------------------
+    // JF-699 item 1: the JF-687 stream-token refusal is a TYPED exception the
+    // pipeline translates ONCE (the SkillWarmingUpException precedent). These pins
+    // hold the translation contract: intent requests answer the localized Tell in
+    // the REQUEST's own locale (the per-call-site locale threading is gone), Alexa
+    // event requests answer the speechless keep-alive (Amazon rejects outputSpeech
+    // on event responses, the JF-507 INVALID_RESPONSE lesson (the pre-JF-699
+    // builder-returned Tell was latently invalid there); the handler tail after the
+    // refusing builder call never runs, and the response interceptors still run.
+    // ---------------------------------------------------------------------
+
+    /// <summary>
+    /// A REAL refusing builder call inside the handler: the handler's post-builder
+    /// tail (the flag write) must never run, and the pipeline answers the localized
+    /// Tell in the request locale.
+    /// </summary>
+    [Fact]
+    public async Task Pipeline_TranslatesStreamTokenRefusalToLocalizedTell_SkipsHandlerTail()
+    {
+        _config.StreamTokenSecret = string.Empty;
+        TestHelpers.SetServerAddress(_config, "https://test.example.com");
+        bool tailRan = false;
+
+        var song = TestHelpers.CreateSong();
+        var user = TestHelpers.CreateTestUser(jellyfinToken: "tok");
+        var launch = TestHelpers.CreateLaunchBuilder(_config);
+        var source = launch.ResolveAudioLaunchSource(song, song.Id.ToString(), user, 0, ratePerMille: 1500);
+
+        var handler = CreateHandler(() =>
+        {
+            var response = launch.BuildAudioPlayerResponse(
+                global::Alexa.NET.Response.Directive.PlayBehavior.ReplaceAll, source, song.Id.ToString(), song, user, null);
+            tailRan = true;
+            return Task.FromResult(response);
+        });
+
+        var pipeline = new RequestPipeline(
+            Array.Empty<IRequestInterceptor>(),
+            Array.Empty<IResponseInterceptor>(),
+            _loggerFactory.CreateLogger<RequestPipeline>());
+
+        var request = new IntentRequest { Locale = "it-IT" };
+        request.Type = "IntentRequest";
+
+        SkillResponse result = await pipeline.ExecuteAsync(handler, request, CreateAuthenticatableContext(), null, CancellationToken.None);
+
+        Assert.False(tailRan, "the handler tail after the refusing builder call must never run (JF-699 item 1)");
+        Assert.True(result.Response.ShouldEndSession, "the translated refusal is a Tell");
+        Assert.False(
+            Jellyfin.Plugin.AlexaSkill.Alexa.Util.PlaybackLaunchBuilder.HasLaunchDirective(result),
+            "a refused launch must not deliver any playback directive");
+        var speech = Assert.IsType<PlainTextOutputSpeech>(result.Response.OutputSpeech);
+        Assert.Equal(
+            Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("StreamTokenNotConfigured", "it-IT"),
+            speech.Text);
+    }
+
+    /// <summary>
+    /// The locale comes from the request alone (the JF-693 per-call-site threading
+    /// seam is deleted): a request without a locale answers the en-US default, the
+    /// same default GetLocalePublic applies everywhere else.
+    /// </summary>
+    [Fact]
+    public async Task Pipeline_StreamTokenRefusal_LocalelessRequest_AnswersEnUs()
+    {
+        var handler = CreateHandler(() =>
+            throw new StreamTokenNotConfiguredException());
+
+        var pipeline = new RequestPipeline(
+            Array.Empty<IRequestInterceptor>(),
+            Array.Empty<IResponseInterceptor>(),
+            _loggerFactory.CreateLogger<RequestPipeline>());
+
+        var request = CreateSkillRequest("IntentRequest");
+        Assert.True(string.IsNullOrEmpty(request.Locale));
+
+        SkillResponse result = await pipeline.ExecuteAsync(handler, request, CreateAuthenticatableContext(), null, CancellationToken.None);
+
+        var speech = Assert.IsType<PlainTextOutputSpeech>(result.Response.OutputSpeech);
+        Assert.Equal(
+            Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("StreamTokenNotConfigured", "en-US"),
+            speech.Text);
+    }
+
+    /// <summary>
+    /// An Alexa EVENT request (the PlaybackNearlyFinished rate-continuation enqueue
+    /// is the reachable refusal shape there: atempo URLs are token-gated) gets the
+    /// speechless keep-alive, because Amazon rejects outputSpeech on event responses.
+    /// </summary>
+    [Fact]
+    public async Task Pipeline_StreamTokenRefusal_OnEventRequest_AnswersKeepAlive()
+    {
+        var handler = CreateHandler(() =>
+            throw new StreamTokenNotConfiguredException());
+
+        var pipeline = new RequestPipeline(
+            Array.Empty<IRequestInterceptor>(),
+            Array.Empty<IResponseInterceptor>(),
+            _loggerFactory.CreateLogger<RequestPipeline>());
+
+        var request = new AudioPlayerRequest { Locale = "it-IT" };
+        request.Type = "AudioPlayerPlaybackNearlyFinishedRequest";
+
+        SkillResponse result = await pipeline.ExecuteAsync(handler, request, CreateAuthenticatableContext(), null, CancellationToken.None);
+
+        Assert.Null(result.Response.OutputSpeech);
+        Assert.False(
+            Jellyfin.Plugin.AlexaSkill.Alexa.Util.PlaybackLaunchBuilder.HasLaunchDirective(result),
+            "the event-request keep-alive carries no playback directive");
+        Assert.Null(result.Response.ShouldEndSession);
+    }
+
+    /// <summary>
+    /// The warming-precedent interceptor stance: logging/metrics response
+    /// interceptors still run after the translation (and the refusal sets
+    /// SkipColdLibraryWork so DynamicEntities skips its library queries).
+    /// </summary>
+    [Fact]
+    public async Task Pipeline_StreamTokenRefusal_ResponseInterceptorsStillRun_SkipsColdLibraryWork()
+    {
+        bool interceptorRan = false;
+        bool? skipColdSeen = null;
+        var interceptor = new Mock<IResponseInterceptor>();
+        interceptor
+            .Setup(i => i.ProcessAsync(It.IsAny<RequestContext>(), It.IsAny<CancellationToken>()))
+            .Callback<RequestContext, CancellationToken>((ctx, _) =>
+            {
+                interceptorRan = true;
+                skipColdSeen = ctx.SkipColdLibraryWork;
+            })
+            .Returns(Task.CompletedTask);
+
+        var handler = CreateHandler(() =>
+            throw new StreamTokenNotConfiguredException());
+
+        var pipeline = new RequestPipeline(
+            Array.Empty<IRequestInterceptor>(),
+            new[] { interceptor.Object },
+            _loggerFactory.CreateLogger<RequestPipeline>());
+
+        await pipeline.ExecuteAsync(handler, CreateSkillRequest("IntentRequest"), CreateAuthenticatableContext(), null, CancellationToken.None);
+
+        Assert.True(interceptorRan, "response interceptors must still run after the refusal translation");
+        Assert.True(skipColdSeen == true, "the refusal must set SkipColdLibraryWork (the warming stance)");
     }
 }

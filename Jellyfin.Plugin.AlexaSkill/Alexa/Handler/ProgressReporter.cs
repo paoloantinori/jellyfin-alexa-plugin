@@ -427,8 +427,6 @@ public sealed class ProgressReporter
             return ResponseBuilder.Empty();
         }
 
-        session.FullNowPlayingItem = adjacentItem;
-
         _logger.LogDebug(
             "{Label}: playing {Direction} item '{ItemName}' ({ItemId})",
             logLabel, directionWord, adjacentItem.Name, adjacentItemId);
@@ -436,8 +434,13 @@ public sealed class ProgressReporter
         // JF-507: codec-gated audio-launch decision; an EAC3-family video item in
         // the queue routes to the audio-only transcode instead of dying on the raw
         // static bytes (JF-505 does not apply: this launch is audio-shaped).
+        // JF-699 item 5: launch build BEFORE the now-playing write (the ordering
+        // policy lives on EnsureStreamTokenDeliverable; the transcode-routed
+        // source is token-gated).
         AudioLaunchSource source = _launch.ResolveAudioLaunchSource(adjacentItem, itemId, user, 0);
-        return _launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source, itemId, adjacentItem, user, context, queueManager: queueManager);
+        SkillResponse response = _launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source, itemId, adjacentItem, user, context, queueManager: queueManager);
+        session.FullNowPlayingItem = adjacentItem;
+        return response;
     }
 
     /// <summary>

@@ -526,11 +526,10 @@ public class LaunchRequestHandler : BaseHandler
 
             // JF-507: shared codec-gated audio-launch decision (an EAC3-family video
             // item on the audio path routes to the audio-only episode HLS transcode).
-            // JF-693: the locale threads in so the JF-687 empty-secret refusal Tell
-            // (the transcode URL is token-gated) answers in the user's language.
+            // JF-699 item 1: a token-gated refusal throws; RequestPipeline answers it.
             AudioLaunchSource source = Launch.ResolveAudioLaunchSource(session.FullNowPlayingItem, item_id, user, 0);
             return Launch.BuildAudioPlayerResponse(
-                PlayBehavior.ReplaceAll, source, item_id, session.FullNowPlayingItem, user, context, locale: GetLocale(request));
+                PlayBehavior.ReplaceAll, source, item_id, session.FullNowPlayingItem, user, context);
         }
         else
         {
@@ -544,14 +543,12 @@ public class LaunchRequestHandler : BaseHandler
 
             AudioLaunchSource source = Launch.ResolveAudioLaunchSource(item, item_id, user, 0);
             SkillResponse response = Launch.BuildAudioPlayerResponse(
-                PlayBehavior.ReplaceAll, source, item_id, item, user, context, locale: GetLocale(request));
+                PlayBehavior.ReplaceAll, source, item_id, item, user, context);
 
-            // JF-693: the now-playing write rides a delivered launch only (the
-            // refusal Tell must not leave a phantom now-playing behind).
-            if (PlaybackLaunchBuilder.HasLaunchDirective(response))
-            {
-                session.FullNowPlayingItem = item;
-            }
+            // JF-699 item 1: throw-or-launch (a token-gated refusal throws and
+            // RequestPipeline answers it), so the JF-693 verdict gate is gone and the
+            // now-playing write simply follows the delivered launch.
+            session.FullNowPlayingItem = item;
 
             return response;
         }

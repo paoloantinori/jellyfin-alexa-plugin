@@ -99,6 +99,41 @@ public class RequestPipeline
                 requestContext.Response = ResponseBuilder.Tell(
                     ResponseStrings.Get("SkillWarmingUp", BaseHandler.GetLocalePublic(requestContext.SkillRequest)));
             }
+            catch (StreamTokenNotConfiguredException ex)
+            {
+                // JF-699 item 1: a launch builder refused to deliver a token-gated
+                // stream URL with an empty secret (JF-687); the refusal propagates as
+                // the typed exception so NO handler tail (announce overwrites,
+                // now-playing state, persists) runs on it. This is the single
+                // translation site, the SkillWarmingUpException precedent: the locale
+                // comes from the request itself (replacing JF-687/JF-693 per-call-site
+                // threading), and an Alexa EVENT request (e.g. the
+                // PlaybackNearlyFinished rate-continuity enqueue, which mints atempo
+                // token-gated URLs) gets the speechless keep-alive shape because
+                // Amazon rejects outputSpeech on event responses (the JF-507
+                // INVALID_RESPONSE lesson; the pre-JF-699 builder-returned Tell was
+                // latently invalid there). DELIBERATE CLASSIFICATION (gate-marker
+                // note): IsEventRequest does NOT classify PlaybackController
+                // CommandIssued taps, so a refused tap-routed adjacent launch answers
+                // a speech Tell on that request class - the same response shape the
+                // happy path already produces there (no recorded incident); revisit
+                // only if Amazon documents the no-outputSpeech rule for it.
+                // SkipColdLibraryWork mirrors the warming
+                // stance: a configuration-error answer pays no library queries on the
+                // way out; logging and metrics interceptors still run below.
+                bool isEventRequest = BaseHandler.IsEventRequest(requestContext.SkillRequest);
+                _logger.LogError(
+                    ex,
+                    "Stream token secret not configured: refusing launch intent={Intent} eventType={RequestType} corr={CorrelationId}",
+                    requestContext.IntentName,
+                    requestContext.RequestType,
+                    requestContext.CorrelationId);
+                requestContext.SkipColdLibraryWork = true;
+                requestContext.Response = isEventRequest
+                    ? BaseHandler.BuildKeepAliveResponse()
+                    : ResponseBuilder.Tell(
+                        ResponseStrings.Get("StreamTokenNotConfigured", BaseHandler.GetLocalePublic(requestContext.SkillRequest)));
+            }
         }
 
         // Response interceptors run in reverse registration order (stack unwinding)

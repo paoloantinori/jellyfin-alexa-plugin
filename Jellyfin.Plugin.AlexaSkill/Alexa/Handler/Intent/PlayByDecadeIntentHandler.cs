@@ -143,12 +143,14 @@ public class PlayByDecadeIntentHandler : BaseHandler
             queueItems.Add(new QueueItem { Id = items[i].Id });
         }
 
-        session.NowPlayingQueue = queueItems;
-        session.FullNowPlayingItem = items[0];
-
         string itemId = items[0].Id.ToString();
 
-        return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, items[0], user, context);
+        // JF-699 item 5: launch build BEFORE the now-playing writes (the ordering
+        // policy lives on EnsureStreamTokenDeliverable).
+        SkillResponse response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, items[0], user, context);
+        session.NowPlayingQueue = queueItems;
+        session.FullNowPlayingItem = items[0];
+        return response;
     }
 
     /// <summary>

@@ -148,30 +148,12 @@ public class AudioPlayerPlayConstructionRosterTests
     /// of the same handler cannot detach the site from its write. MethodSpec
     /// (generic) tokens are skipped because they need type context to resolve;
     /// a skipped candidate can only fail this check loudly, never pass it
-    /// silently.
+    /// silently. The body is the shared
+    /// <see cref="IlCallScanner.CallsDirectlyOrViaSameTypeHelper"/> since JF-699
+    /// (the DeliveredLaunchOutputSpeechRosterTests twin was its second consumer).
     /// </summary>
     private static bool CallsDirectlyOrViaSameTypeHelper(MethodBase method, Module module, HashSet<int> targetTokens)
-    {
-        if (IlCallScanner.ContainsCallToAnyToken(method, targetTokens))
-        {
-            return true;
-        }
-
-        Type owner = IlCallScanner.TopLevelType(method.DeclaringType!);
-        foreach (int token in IlCallScanner.CallTokens(method))
-        {
-            MethodBase? callee = IlCallScanner.TryResolveMethod(module, token);
-
-            if (callee?.DeclaringType != null
-                && IlCallScanner.TopLevelType(callee.DeclaringType) == owner
-                && IlCallScanner.ContainsCallToAnyToken(callee, targetTokens))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
+        => IlCallScanner.CallsDirectlyOrViaSameTypeHelper(method, module, targetTokens);
 
     /// <summary>
     /// The source-level method name an IL method belongs to: compiler-generated
@@ -180,40 +162,7 @@ public class AudioPlayerPlayConstructionRosterTests
     /// &lt;Owner&gt;g__Name|N); plain methods keep their own name.
     /// </summary>
     private static string LogicalMethodName(MethodBase method)
-    {
-        Type declared = method.DeclaringType!;
-        string? owner = null;
-
-        if (method.Name == "MoveNext" && declared.IsNested)
-        {
-            owner = ExtractCompilerGeneratedOwner(declared.Name);
-        }
-
-        owner ??= ExtractCompilerGeneratedOwner(method.Name);
-
-        return owner ?? method.Name;
-    }
-
-    private static string? ExtractCompilerGeneratedOwner(string name)
-    {
-        // Double-nested compiler names (the review's probe-confirmed mangling):
-        // an async LAMBDA's state machine is <<Owner>b__12_0>d and an async LOCAL
-        // FUNCTION's is <<LocalFn>g__Make|0_1>d. A leading "<<"" must strip one
-        // bracket before extraction, or the owner parses as "<Owner" and the
-        // whitelist needs a malformed hardcoded string.
-        if (name.StartsWith("<<", StringComparison.Ordinal))
-        {
-            name = name.Substring(1);
-        }
-
-        if (name.Length == 0 || name[0] != '<')
-        {
-            return null;
-        }
-
-        int close = name.IndexOf('>');
-        return close > 1 ? name.Substring(1, close - 1) : null;
-    }
+        => IlCallScanner.LogicalMethodName(method);
 
     private static string Format(Site site)
         => $"{site.Owner.Name}.{site.Method}";

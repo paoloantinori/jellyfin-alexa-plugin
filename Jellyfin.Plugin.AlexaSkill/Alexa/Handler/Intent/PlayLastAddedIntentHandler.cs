@@ -125,18 +125,19 @@ public class PlayLastAddedIntentHandler : BaseHandler
             });
         }
 
-        session.NowPlayingQueue = queueItems;
-
         BaseItem? prevItem = _libraryManager.GetItemById(latestItems[0].Id);
         if (prevItem == null)
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale));
         }
 
-        session.FullNowPlayingItem = prevItem;
-
         string item_id = prevItem.Id.ToString();
 
-        return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(item_id, user), item_id, prevItem, user, context);
+        // JF-699 item 5: launch build BEFORE the now-playing writes (the ordering
+        // policy lives on EnsureStreamTokenDeliverable).
+        SkillResponse response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(item_id, user), item_id, prevItem, user, context);
+        session.NowPlayingQueue = queueItems;
+        session.FullNowPlayingItem = prevItem;
+        return response;
     }
 }

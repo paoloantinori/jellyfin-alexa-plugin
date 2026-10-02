@@ -176,8 +176,7 @@ public class StartOverIntentHandler : BaseHandler
                     new PlainTextOutputSpeech(ResponseStrings.Get("RestartingContent", locale, item.Name)),
                     user,
                     context,
-                    request,
-                    locale).ConfigureAwait(false);
+                    request).ConfigureAwait(false);
             }
 
             // Use VideoApp for movies/episodes, AudioPlayer for audio/audiobooks
@@ -201,15 +200,22 @@ public class StartOverIntentHandler : BaseHandler
                     new PlainTextOutputSpeech(ResponseStrings.Get("RestartingContent", locale, item.Name))).ConfigureAwait(false);
             }
 
-            // JF-693: the locale threads in so the refusal Tell answers in the user's
-            // language (a seek-mode music item delegates to the token-gated video-audio
+            // JF-699 item 1: a token-gated refusal throws (RequestPipeline answers
+            // it; a seek-mode music item delegates to the token-gated video-audio
             // endpoint inside the chokepoint).
             return Launch.BuildAudioPlayerResponse(
                 PlayBehavior.ReplaceAll, Launch.GetStreamUrl(item.Id.ToString(), user), item.Id.ToString(), item, user, context,
-                queueManager: _queueManager, locale: locale);
+                queueManager: _queueManager);
         }
 
         SkillResponse restartResponse = await BuildRestartLaunchAsync().ConfigureAwait(false);
+
+        // JF-693/JF-699: the durable position clears ride a DELIVERED restart only.
+        // NOT tautological even post-JF-699: the episode/movie arm routes through
+        // BuildEpisodeLaunchResponseAsync, which can answer the VideoRequiresScreen
+        // capability Tell on a screenless device (a Tell, no directive); the JF-687
+        // refusal now throws before this point, but the capability case still needs
+        // the gate.
         if (!PlaybackLaunchBuilder.HasLaunchDirective(restartResponse))
         {
             return restartResponse;

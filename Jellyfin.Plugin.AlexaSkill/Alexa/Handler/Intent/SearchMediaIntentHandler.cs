@@ -536,13 +536,10 @@ public class SearchMediaIntentHandler : BaseHandler
     {
         string itemId = item.Id.ToString();
 
-        List<QueueItem> queueItems = new()
-        {
-            new QueueItem { Id = item.Id }
-        };
-        session.NowPlayingQueue = queueItems;
-        session.FullNowPlayingItem = item;
-
+        // JF-699 item 5: the session writes follow the launch build in both arms
+        // (the ordering policy lives on EnsureStreamTokenDeliverable; a refusal
+        // must not leave a phantom now-playing).
+        SkillResponse response;
         if (IsVideoType(item))
         {
             // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
@@ -556,7 +553,7 @@ public class SearchMediaIntentHandler : BaseHandler
             // directive-only contract there (JF-538 review finding).
             // JF-587: the episode screenless degrade (audio-only on Dots); movies keep
             // the capability refusal inside the builder. Fresh play: no resume ticks.
-            return await Launch.BuildEpisodeLaunchResponseAsync(
+            response = await Launch.BuildEpisodeLaunchResponseAsync(
                 context,
                 request,
                 locale,
@@ -566,14 +563,23 @@ public class SearchMediaIntentHandler : BaseHandler
                 resumeTicks: 0,
                 Launch.BuildVideoLaunchSpeech(item, locale, _userDataManager, jellyfinUser, Launch.GetAnnounceNowPlaying(user))).ConfigureAwait(false);
         }
+        else
+        {
+            response = Launch.BuildAudioPlayerResponse(
+                global::Alexa.NET.Response.Directive.PlayBehavior.ReplaceAll,
+                Launch.GetStreamUrl(itemId, user),
+                itemId,
+                item,
+                user,
+                context);
+        }
 
-        return Launch.BuildAudioPlayerResponse(
-            global::Alexa.NET.Response.Directive.PlayBehavior.ReplaceAll,
-            Launch.GetStreamUrl(itemId, user),
-            itemId,
-            item,
-            user,
-            context);
+        session.NowPlayingQueue = new List<QueueItem>
+        {
+            new QueueItem { Id = item.Id }
+        };
+        session.FullNowPlayingItem = item;
+        return response;
     }
 
     private static bool IsVideoType(BaseItem item)
