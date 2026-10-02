@@ -60,6 +60,31 @@ internal static class TestHelpers
     }
 
     /// <summary>
+    /// The ONE SMAPI-capable plugin-user factory for catalog-sync suites: the
+    /// <see cref="CreateTestUser"/> shape plus the device token, skill id and
+    /// vendor id the sync entry gates require. Hoisted here on the third
+    /// identical private construction (JF-695; the CreateLaunchBuilder
+    /// convention). Tests needing an expired token overwrite
+    /// <c>SmapiDeviceToken</c> after construction.
+    /// </summary>
+    internal static Entities.User CreateSyncUser(
+        Guid? id = null,
+        IReadOnlyList<string>? allowedLibraryIds = null)
+    {
+        return new Entities.User
+        {
+            Id = id ?? Guid.NewGuid(),
+            InvocationName = "test",
+            JellyfinToken = "test-token",
+            SmapiDeviceToken = CreateTestDeviceToken(
+                accessToken: "access-token", refreshToken: "refresh-token", expireTimestamp: 9999999999),
+            UserSkill = new UserSkill { SkillId = "amzn1.ask.skill.test-id" },
+            VendorId = "test-vendor-id",
+            AllowedLibraryIds = allowedLibraryIds?.ToList()
+        };
+    }
+
+    /// <summary>
     /// The ONE Jellyfin-user factory for tests that need a server-side user value
     /// (the JF-571 batch migrated all raw constructions here; the optional
     /// parameters absorb the non-default name/provider sites).

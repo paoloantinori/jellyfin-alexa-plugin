@@ -45,6 +45,17 @@ public class LibrarySyncService
     private readonly ILogger<LibrarySyncService> _logger;
 
     /// <summary>
+    /// Test seam (null in production, JF-695): invoked inside each catalog type's
+    /// isolation try at leg entry, before the payload build. Lets the isolation
+    /// pins simulate a deterministic payload-build invariant violation (throw
+    /// <see cref="CatalogPayloadInvariantException"/>) that the real factory
+    /// cannot produce by construction (AppendTo and AssertArtistEnrichment
+    /// re-derive from the same Generate), and pin that non-invariant exceptions
+    /// still propagate to the leg-level retry machinery.
+    /// </summary>
+    internal Action<CatalogType>? TypeLegEntryProbeForTest { get; set; }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="LibrarySyncService"/> class.
     /// </summary>
     /// <param name="libraryManager">Jellyfin library manager.</param>
@@ -152,26 +163,76 @@ public class LibrarySyncService
         // catalog, which the model-injection gate below already treats as current.
         Dictionary<string, string> uploadedPayloadHashes = new(StringComparer.Ordinal);
 
-        async Task RunLegAsync(string locale)
+        async Task<IReadOnlyList<CatalogType>> RunLegAsync(string locale)
         {
+            var frozenTypes = new List<CatalogType>();
+
+            // JF-695 per-type isolation: ONE try per catalog type, so a
+            // deterministic payload-build invariant failure
+            // (CatalogPayloadInvariantException, e.g. the JF-689 enrichment guard
+            // drifting inside CatalogPayload.FromItems or the seed merge) freezes
+            // ONLY its own type: no version is minted, so the model injection
+            // below forwards a null id for it and the live model keeps that
+            // type's last-good pinned catalog reference. The freeze itself is the
+            // JF-689 contract kept verbatim (per-entry degradation would ship
+            // incomplete catalogs); JF-695 only narrowed the blast radius from
+            // the whole locale leg to the type. Every other failure keeps the
+            // whole-leg handling in the locale attempt loop below (the 401
+            // refresh-retry, transient-fetch exhaustion, timeouts): catching
+            // those here would swallow the leg-level retry semantics.
+            async Task<string?> SyncTypeLegAsync(
+                CatalogType catalogType,
+                IReadOnlyList<BaseItem> items,
+                string? existingCatalogId,
+                string catalogName,
+                string catalogDescription)
+            {
+                try
+                {
+                    // Test seam, null in production (see TypeLegEntryProbeForTest):
+                    // fires inside the isolation try so the pins can simulate the
+                    // drifted payload-build invariant the real factory cannot
+                    // produce by construction. Guarded on items.Count > 0 so the
+                    // seam's reachability equals the real throw's (a zero-item
+                    // type never builds a payload, so it can never freeze).
+                    if (items.Count > 0)
+                    {
+                        TypeLegEntryProbeForTest?.Invoke(catalogType);
+                    }
+
+                    return (await SyncCatalogForLocaleAsync(
+                        user, user.SmapiDeviceToken.AccessToken, vendorId, catalogType, items,
+                        existingCatalogId, catalogName, catalogDescription,
+                        locale, uploadedPayloadHashes, cancellationToken).ConfigureAwait(false)).Version;
+                }
+                catch (CatalogPayloadInvariantException ex)
+                {
+                    _logger.LogError(ex,
+                        "Catalog {CatalogType} payload build violated a construction invariant for locale {Locale}, user {UserId}; freezing the type for this run (its last-good version stays pinned and its catalog id is not forwarded to the model injection) while the remaining types continue (JF-695)",
+                        catalogType, locale, user.Id);
+                    frozenTypes.Add(catalogType);
+                    return null;
+                }
+            }
+
             // Create/update catalogs with locale-specific phonetic synonyms
-            var artistResult = await SyncCatalogForLocaleAsync(
-                user, user.SmapiDeviceToken.AccessToken, vendorId, CatalogType.Artist, artistItems,
-                user.ArtistCatalogId, "Jellyfin Artists", "Artist catalog synced from Jellyfin library",
-                locale, uploadedPayloadHashes, cancellationToken).ConfigureAwait(false);
+            string? artistVersion = await SyncTypeLegAsync(
+                CatalogType.Artist, artistItems, user.ArtistCatalogId,
+                "Jellyfin Artists", "Artist catalog synced from Jellyfin library").ConfigureAwait(false);
 
-            var albumResult = await SyncCatalogForLocaleAsync(
-                user, user.SmapiDeviceToken.AccessToken, vendorId, CatalogType.Album, albumItems,
-                user.AlbumCatalogId, "Jellyfin Albums", "Album catalog synced from Jellyfin library",
-                locale, uploadedPayloadHashes, cancellationToken).ConfigureAwait(false);
+            string? albumVersion = await SyncTypeLegAsync(
+                CatalogType.Album, albumItems, user.AlbumCatalogId,
+                "Jellyfin Albums", "Album catalog synced from Jellyfin library").ConfigureAwait(false);
 
-            var seriesResult = await SyncCatalogForLocaleAsync(
-                user, user.SmapiDeviceToken.AccessToken, vendorId, CatalogType.Series, seriesItems,
-                user.SeriesCatalogId, "Jellyfin Series", "Series catalog synced from Jellyfin library",
-                locale, uploadedPayloadHashes, cancellationToken).ConfigureAwait(false);
+            string? seriesVersion = await SyncTypeLegAsync(
+                CatalogType.Series, seriesItems, user.SeriesCatalogId,
+                "Jellyfin Series", "Series catalog synced from Jellyfin library").ConfigureAwait(false);
 
-            // Update this locale's interaction model with the catalog references
-            if (artistResult.Version != null || albumResult.Version != null || seriesResult.Version != null)
+            // Update this locale's interaction model with the catalog references.
+            // A frozen type's null version keeps its id out (the same JF-495
+            // null-version rule the zero-items shape uses), so its last-good
+            // catalog reference survives in the live model.
+            if (artistVersion != null || albumVersion != null || seriesVersion != null)
             {
                 // JF-495: forward a catalog id ONLY together with the version minted
                 // in THIS run. Forwarding a stored id with a null version (e.g. that
@@ -183,18 +244,20 @@ public class LibrarySyncService
                     skillId,
                     DevelopmentStage,
                     locale,
-                    artistResult.Version != null ? user.ArtistCatalogId : null,
-                    albumResult.Version != null ? user.AlbumCatalogId : null,
-                    seriesResult.Version != null ? user.SeriesCatalogId : null,
-                    artistResult.Version,
-                    albumResult.Version,
-                    seriesResult.Version,
+                    artistVersion != null ? user.ArtistCatalogId : null,
+                    albumVersion != null ? user.AlbumCatalogId : null,
+                    seriesVersion != null ? user.SeriesCatalogId : null,
+                    artistVersion,
+                    albumVersion,
+                    seriesVersion,
                     cancellationToken).ConfigureAwait(false);
 
                 // JF-495: catalog-sync model PUTs must appear in the per-locale
                 // status ledger, not just ModelDeploymentManager deployments.
                 RecordModelUpdateInLedger(locale, modelUpdate);
             }
+
+            return frozenTypes;
         }
 
         foreach (string locale in locales)
@@ -202,12 +265,13 @@ public class LibrarySyncService
             var localeSw = System.Diagnostics.Stopwatch.StartNew();
             Exception? legError = null;
             var legSucceeded = false;
+            IReadOnlyList<CatalogType>? legFrozenTypes = null;
 
             for (int attempt = 1; attempt <= 2; attempt++)
             {
                 try
                 {
-                    await RunLegAsync(locale).ConfigureAwait(false);
+                    legFrozenTypes = await RunLegAsync(locale).ConfigureAwait(false);
                     legSucceeded = true;
                     break;
                 }
@@ -238,8 +302,28 @@ public class LibrarySyncService
             if (legSucceeded)
             {
                 localesSucceeded++;
-                _logger.LogInformation("Catalog sync locale {Locale} completed in {ElapsedMs}ms for user {UserId}",
-                    locale, localeSw.ElapsedMilliseconds, user.Id);
+
+                // JF-695: a leg that completed with frozen types still pinned its
+                // healthy types' versions, but the freeze must not read as a
+                // clean locale completion. Types frozen on a retried-away attempt
+                // refreeze deterministically on the next attempt, so only the
+                // returned (winning) attempt's list is merged here.
+                if (legFrozenTypes is { Count: > 0 })
+                {
+                    foreach (CatalogType frozen in legFrozenTypes)
+                    {
+                        result.RecordFrozenType(frozen);
+                    }
+
+                    _logger.LogWarning(
+                        "Catalog sync locale {Locale} completed with frozen catalog types ({Types}) for user {UserId}; each frozen type keeps its last-good pinned version (JF-695)",
+                        locale, string.Join(", ", legFrozenTypes), user.Id);
+                }
+                else
+                {
+                    _logger.LogInformation("Catalog sync locale {Locale} completed in {ElapsedMs}ms for user {UserId}",
+                        locale, localeSw.ElapsedMilliseconds, user.Id);
+                }
             }
             else
             {
@@ -256,12 +340,38 @@ public class LibrarySyncService
         }
 
         totalSw.Stop();
-        result.Success = localesSucceeded > 0;
+
+        // JF-695: partial failure is honest. Any frozen type (see the RunLegAsync
+        // isolation try for the full rationale) fails the run even though the
+        // healthy types pinned their versions, so CatalogSyncTask does not stamp
+        // LastCatalogSync over a payload build that will fail identically on
+        // every subsequent run. ACCEPTED CADENCE COST (code-review): while the
+        // drift persists, Success stays false and LastCatalogSync never
+        // advances, so the startup trigger re-runs the FULL sync on every
+        // restart and the healthy types mint fresh catalog versions each time
+        // (pre-JF-695 the same drift aborted every leg at the artist payload
+        // build with zero SMAPI writes). The feature is that the healthy types
+        // keep pinning; the drift is a code bug to fix promptly, not a steady
+        // state to optimize for.
+        result.Success = localesSucceeded > 0 && result.FrozenTypes.Count == 0;
+
         result.SyncTime = DateTime.UtcNow;
 
+        if (result.FrozenTypes.Count > 0)
+        {
+            _logger.LogError(
+                "Catalog sync for user {UserId} finished with frozen catalog types ({Types}); their last-good versions stay pinned but will not refresh until the payload-build invariant violation is fixed (JF-695)",
+                user.Id, string.Join(", ", result.FrozenTypes));
+        }
+
+        // The completion line must not read clean on a freeze run: a tail-grep
+        // triage sees this line last, so the frozen types ride it too.
+        string frozenClause = result.FrozenTypes.Count > 0
+            ? $" (partial: {string.Join(", ", result.FrozenTypes)} frozen, Success=false)"
+            : string.Empty;
         _logger.LogInformation(
-            "Catalog sync completed for user {UserId}: {Succeeded}/{Total} locales, {Artists} artists, {Albums} albums, {Series} series, {ElapsedMs}ms total",
-            user.Id, localesSucceeded, locales.Count, result.ArtistCount, result.AlbumCount, result.SeriesCount, totalSw.ElapsedMilliseconds);
+            "Catalog sync completed for user {UserId}: {Succeeded}/{Total} locales, {Artists} artists, {Albums} albums, {Series} series, {ElapsedMs}ms total{FrozenClause}",
+            user.Id, localesSucceeded, locales.Count, result.ArtistCount, result.AlbumCount, result.SeriesCount, totalSw.ElapsedMilliseconds, frozenClause);
 
         return result;
     }

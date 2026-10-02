@@ -72,19 +72,7 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
         _loggerFactory.Dispose();
     }
 
-    private static Entities.User CreateUser()
-    {
-        return new Entities.User
-        {
-            Id = Guid.NewGuid(),
-            InvocationName = "test",
-            JellyfinToken = "test-token",
-            SmapiDeviceToken = new DeviceToken("access-token", "refresh-token", "Bearer", 9999999999),
-            UserSkill = new Entities.UserSkill { SkillId = "amzn1.ask.skill.test-id" },
-            VendorId = "test-vendor-id",
-            AllowedLibraryIds = null
-        };
-    }
+    private static Entities.User CreateUser() => TestHelpers.CreateSyncUser();
 
     private void SetupLibraryWithSeries(params string[] seriesNames)
     {
