@@ -1,11 +1,12 @@
 ---
 id: JF-690
 title: >-
-  JF-690 - shared-first-word catalog synonyms auto-play Amazon's top ER rank with
-  no disambiguation prompt
-status: To Do
+  JF-690 - shared-first-word catalog synonyms auto-play Amazon's top ER rank
+  with no disambiguation prompt
+status: Done
 assignee: []
 created_date: '2026-09-30 20:40'
+updated_date: '2026-10-02 08:50'
 labels:
   - catalog
   - routing
@@ -21,6 +22,7 @@ priority: medium
 
 ## Description
 
+<!-- SECTION:DESCRIPTION:BEGIN -->
 <!-- SECTION:DESCRIPTION:BEGIN -->
 Filed 2026-09-30 same-turn by the JF-684 worker from the /code-review high gate
 (hand-created in the worker worktree per the number reserve; max existing was JF-689).
@@ -231,47 +233,7 @@ paths for one read contract; the saved cost is two gen0 allocations).
 5. Null guard removed: the blank-named-pool pin fails with
    NullReferenceException (an earlier attempt at this sabotage wrote the
    unmodified buffer by mistake and proved nothing; re-done properly).
-
-## Final Summary
-
-<!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Landed 2026-10-02 in worktree agent-a94e89dbc21d631aa (single commit on
-worktree-agent-a94e89dbc21d631aa, base 62185458; not pushed). JF-690: when a
-spoken word matches SEVERAL catalog entries (the JF-684 shared-first-word
-synonyms, live 2026-10-01: "pink" -> ER [P!nk, Pink Floyd], both real library
-artists), the plain JF-659 canonical read kept only Amazon's rank #1 and the
-exact-name hit auto-played silently through the JF-420.1 equality bypass. THE
-ARBITRATION (candidate (a) with library verification, chosen over (b)
-log-only and (c) feed-the-search, both rejected with reasons above): a new
-`SlotValueHelper.GetCanonicalValues` read exposes all distinct ER canonical
-names; the ONE shared gate `MultiValueErDisambiguation.TryArbitrate`
-(Alexa/Handler/) resolves every candidate by exact-name equality
-(`ArtistSearch.IsExactNameMatch`, moved to ArtistSearch as the single shared
-definition, now null-safe; `ArtistSearch.ResolveExactNameMatches`, rank order
-preserved) against the pinned in-memory index, and (i) on >=2 distinct library
-artists fires the EXISTING `DisambiguationHelper.AskMultipleArtists` JF-420.2
-yes/no prompt with real library ids ("yes" keeps the rank-#1 artist, "no"
-cycles), (ii) on exactly 1 resolved artist PLAYS that proven survivor (stale
-catalog candidates never drive a not-found), (iii) on every closed-gate leg
-(single value, no ready index, zero resolves) keeps the single-value path
-byte-identical. Wired into both live-evidenced paths: PlayArtistSongs (after
-its JF-448 pin, sharing the view) and PlaySong (restricted to the
-generic-music-word shape so a REAL song title keeps today's scoped title
-search). Review-round fixes that rode along: the confirm leg's artist query now
-orders by popularity (YesIntentHandler.PlayArtist), and the four plain ask
-builders now supersede stale cross-media decline keys (a same-session leak
-where "no" answered an old not-found). NO locale strings added (all 17 locales
-already carry DisambiguateMultipleArtists/DisambiguateReprompt); no model, no
-NLU fixtures, no E2E changes (the behavior is handler-side; the JF-688 device
-round can add the shared-word probe). The remaining 5 musician-slot call sites
-are JF-702. Gates: Skill simplify (4 agents, applied/skipped above) + Skill
-code-review high (9 findings: 7 applied, 1 filed as JF-702, 1 skipped with the
-pool-cache reason). Suites 4921/4921 BOTH TFMs on the final state (baseline
-4895 + 26). DoD 4-5 N/A (no session DTOs added beyond the existing MatchInfo
-shape, no HttpClient changes); 6-7 N/A (no model change; handler pins are the
-unit-level evidence, E2E covered by the existing artist matrix); 8 N/A (no
-strings); 9-10 done (gates above). No deploy; do not push.
-<!-- SECTION:FINAL_SUMMARY:END -->
+<!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
@@ -286,3 +248,9 @@ strings); 9-10 done (gates above). No deploy; do not push.
 - [x] #9 /simplify passed (no blocking cleanups remaining)
 - [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed by the orchestrator after the full cycle: worker commit 08a3322d (the shared MultiValueErDisambiguation.TryArbitrate gate resolving every ER canonical against the pinned index; >=2 distinct library artists fire the existing JF-420.2 yes/no ask with real ids; a lone survivor auto-plays; closed legs byte-identical; wired into PlayArtistSongs and PlaySong's generic-music-word shape), worker gates green (simplify 11 applied; code-review high 7 applied, 1 filed as JF-702 with the residual list corrected, 1 skipped with the JF-448/JF-658 reorder reason), worker suites 4921/4921 both TFMs with 26 new pins and verified-effective red proofs (including the honestly-reported host-death recovery and the caught stale --no-build green), orchestrator gate-marker review 5 findings adjudicated same-turn (F1 applied in tail 4267e13b: the fifth supersede site in HandleFuzzyMiss's Confirm-mode builder; F4 applied: the CLAUDE.md JF-684 reference now states the gate; F2 comment-only with the pool-sharing addendum appended to JF-702; F3 filed as JF-707; F5 skipped defensive-theoretical, recorded), filtered classes 284/284 after the tail, merged into main as b2f058f6, combined merged-tree suite 4925/4925 both TFMs exit 0 (with the JF-695 and JF-700 merges). Production surface changed (handlers, ArtistSearch, SlotValueHelper, DisambiguationHelper): deployed in the post-merge deploy. The live-fix verification (speaking a shared first word now asks which artist) rides the next device round.
+<!-- SECTION:FINAL_SUMMARY:END -->
