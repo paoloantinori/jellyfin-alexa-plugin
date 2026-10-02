@@ -691,7 +691,9 @@ public record LocaleModelStatus
     /// <summary>Gets the error message if the build failed, or a non-fatal
     /// caveat surfaced next to the status (a canary mismatch or frozen catalog
     /// types on an otherwise successful build, JF-495/JF-705); null otherwise.
-    /// The admin UI renders this field regardless of Status.</summary>
+    /// Catalog-sync caveats survive a clean startup capture's overwrite of the
+    /// row (JF-710: the model rebuild does not reset the catalog state they
+    /// describe). The admin UI renders this field regardless of Status.</summary>
     public string? Error { get; init; }
 
     /// <summary>Gets the model source: "Embedded" (bundled) or "Custom" (user-provided).</summary>

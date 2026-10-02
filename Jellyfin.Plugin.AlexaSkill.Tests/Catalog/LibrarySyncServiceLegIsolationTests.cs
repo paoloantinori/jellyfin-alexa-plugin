@@ -575,6 +575,75 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
+    /// JF-710 coordination-note hazard pin: the startup capture now preserves
+    /// the frozen clause WITHOUT the no-PUT tail (a new skill version was
+    /// pushed, so the run-scoped tail drops). A tail-only own-shape check
+    /// would classify that clause-led row as foreign and trail the SAME clause
+    /// back as "; previous: ..." once per restart. The predicate must
+    /// recognize the clause-led shape too, so the next all-frozen run REPLACES
+    /// the row with exactly its own composed message.
+    /// </summary>
+    [Fact]
+    public async Task SyncUserLibraryAsync_AllTypesFrozen_CapturePreservedClauseRow_ReplacedWithoutSelfReferentialTrail()
+    {
+        // Arrange: the row exactly as the JF-710 capture preserve leaves it
+        // (clause-led, no tail, catalog-sync source).
+        Plugin.Instance!.Configuration.SetLocaleModelStatus("it-IT", new LocaleModelStatus
+        {
+            Status = "SUCCEEDED",
+            LastUpdated = DateTime.UtcNow.AddHours(-1),
+            Source = LibrarySyncService.CatalogSyncLedgerSource,
+            Error = $"Artist catalog{LibrarySyncService.FrozenLedgerClauseMarker}"
+        });
+        SetupLibraryWithAllTypes();
+        FreezeAllTypesViaProbe();
+        var user = CreateUser();
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
+
+        // Act
+        await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
+
+        // Assert: exactly this writer's own composed message, no trailed clause.
+        var ledger = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(ledger);
+        Assert.Equal(
+            $"Artist + Album + Series catalogs{LibrarySyncService.FrozenLedgerClauseMarker}{LibrarySyncService.NoPutLedgerTail}",
+            ledger!.Error);
+    }
+
+    /// <summary>
+    /// Accepted consequence of the clause-led own-shape arm (the JF-709 review
+    /// rejected the strip-at-marker alternative): a foreign diagnostic riding
+    /// a clause-led row (the JF-705 PUT writer's clause + canary shape, which
+    /// the capture preserve also mints) is REPLACED by the next all-frozen
+    /// run, not trailed. Its durable home is the capture preserve; this pin
+    /// keeps the replace explicit rather than accidental.
+    /// </summary>
+    [Fact]
+    public async Task SyncUserLibraryAsync_AllTypesFrozen_ClauseLedRowWithCanary_ReplacedEntirely()
+    {
+        Plugin.Instance!.Configuration.SetLocaleModelStatus("it-IT", new LocaleModelStatus
+        {
+            Status = "SUCCEEDED",
+            LastUpdated = DateTime.UtcNow.AddHours(-1),
+            Source = LibrarySyncService.CatalogSyncLedgerSource,
+            Error = $"Artist catalog{LibrarySyncService.FrozenLedgerClauseMarker}; canary mismatch: submitted 145/900 but live reports 144/899"
+        });
+        SetupLibraryWithAllTypes();
+        FreezeAllTypesViaProbe();
+        var user = CreateUser();
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
+
+        await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
+
+        var ledger = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(ledger);
+        Assert.Equal(
+            $"Artist + Album + Series catalogs{LibrarySyncService.FrozenLedgerClauseMarker}{LibrarySyncService.NoPutLedgerTail}",
+            ledger!.Error);
+    }
+
+    /// <summary>
     /// Extracts one slot-type node from a raw interaction-model JSON body.
     /// Clone() keeps the element valid after the owning document is disposed.
     /// </summary>
