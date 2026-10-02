@@ -53,6 +53,23 @@ must not swallow; the pipeline translation still owns the response). Pin: a refu
 continuation leaves the pointer naming the finishing item with its position intact,
 and a successful continuation still advances exactly once (the existing continuation
 pins must stay green unchanged).
+
+GATE-MARKER TAIL (2026-10-03, orchestrator review of commit 343c478f, 5 findings; all
+five scrutiny axes verified clean at source level: the three compensation rejections,
+the build's provable non-read of the pointer, the JF-447/JF-691 orderings, the safe
+pre-build exceptions, and the RadioModeTests repair's genuineness): F2 APPLIED (the
+pre-build Remove comment stated a FALSE invariant - two reachable shapes drop a live
+continuation, both pre-existing; the comment now names them so no future reader trusts
+a stronger invariant than the code provides); F1 APPLIED (the KNOWN RACE note at the
+commit's whole-list replace: the re-dedup prevents double-append, NOT lost update; the
+lock belongs with the JF-720 helper extraction if the shape ever bites); F3 APPLIED
+(the BOUNDED COST note on the derive-on-refire shape under sustained refusal); F4
+APPLIED (the repaired RadioMode pin now also asserts the AudioPlayerPlayDirective on
+the success path, closing the append-without-launch gap); F5 APPLIED into JF-720 (the
+SessionQueue.AppendUnseen helper extraction covering the three hand-rolled
+copy+dedup+assign idioms, with the roster pin asserting all three sites route through
+it). Affected classes 86/86 both TFMs after the tail; independent suite 4969/4969 both
+TFMs on the worker commit; merged-tree follows the merge.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Design Decision (written BEFORE coding, per the task mandate)

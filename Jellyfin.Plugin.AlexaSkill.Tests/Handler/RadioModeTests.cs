@@ -870,6 +870,10 @@ public class RadioModeTests : PluginTestBase, IDisposable
             CreateNearlyFinishedRequest(currentId.ToString()), context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
 
         Assert.True(session.NowPlayingQueue.Count > 1);
+        // JF-712 gate-marker tail: the success path must also deliver the launch,
+        // not merely append the queue (an append-without-directive regression
+        // would pass the count alone).
+        Assert.NotNull(response.Response.Directives?.OfType<AudioPlayerPlayDirective>().SingleOrDefault());
     }
 
     [Fact]

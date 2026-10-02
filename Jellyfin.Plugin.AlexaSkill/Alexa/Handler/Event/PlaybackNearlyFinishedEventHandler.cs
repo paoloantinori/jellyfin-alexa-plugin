@@ -230,10 +230,15 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         if (nextItemId == null)
         {
             // Clean up continuation state when queue is exhausted (JF-712: stays
-            // pre-build BY DESIGN; the removal states a fact about the SOURCE queue
-            // (every batch fetched), and deferring it would resurrect a spent
-            // continuation on a refused launch and re-fetch an exhausted source
-            // forever).
+            // pre-build because deferring it would resurrect a spent continuation
+            // on a refused launch and re-fetch an exhausted source forever. NOT a
+            // total-invariant claim (JF-712 gate-marker): two pre-existing shapes
+            // still drop a LIVE continuation here - a momentarily-absent finishing
+            // item (restart-wiped session the rehydration declined) skips the fetch
+            // guard while un-fetched batches remain, and an all-dupes fetched batch
+            // leaves the store entry alive until this Remove drops it. Both shapes
+            // predate JF-712; named here so a future reader does not trust a
+            // stronger invariant than the code provides.
             QueueContinuationStore.Remove(session.UserId, deviceId);
 
             // Music PostPlay populate only runs when radio mode is NOT active: radio
@@ -241,6 +246,12 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             // single-track playback that reaches queue exhaustion without radio. The
             // episode advance below deliberately ignores radioOn (a leftover radio
             // flag from earlier music must not stop a TV binge).
+            // BOUNDED COST (JF-712 gate-marker): under a SUSTAINED refusal the
+            // queue never appends, so each Near-finished refire re-runs this
+            // derive (a library query plus a shuffle) instead of the once-per-
+            // exhaustion the old derive-time append paid. Acceptable while it
+            // needs a misconfigured secret and refires are sparse; add a
+            // recent-refusal guard here if refire density ever grows.
             if (!radioOn && postPlayMode == PostPlayBehavior.AutoPlay)
             {
                 // AutoPlay: find similar tracks and enqueue for gapless transition.
@@ -937,6 +948,14 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
 
         if (appendedCount > 0)
         {
+            // KNOWN RACE (JF-712 gate-marker): the copy-modify-assign above plus
+            // this whole-list replace is UNLOCKED, so two concurrent NearlyFinished
+            // fires whose commits interleave can drop one side's population (the
+            // re-dedup only prevents double-append, not lost update). The window is
+            // pre-existing (the old derive-time write had the same replace) and
+            // bounded to sibling fires near the same track end; a lock or a merge-
+            // style append belongs with the JF-720 helper extraction if the shape
+            // ever bites live.
             session.NowPlayingQueue = queue;
         }
 

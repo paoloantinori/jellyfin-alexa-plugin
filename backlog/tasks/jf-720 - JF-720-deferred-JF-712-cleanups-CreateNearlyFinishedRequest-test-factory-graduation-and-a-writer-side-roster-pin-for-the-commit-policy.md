@@ -49,6 +49,18 @@ the two findings both rounds judged real but out of that task's scope:
    roster must be self-red (adding a raw NowPlayingQueue write anywhere in the handler
    flips it) and the three allowlisted sites must carry their in-code BY DESIGN
    markers (two of the three landed in JF-712 already).
+
+AUDIT ADDENDUM (2026-10-03, JF-712 gate-marker round, finding 5): add the
+SessionQueue.AppendUnseen(session, items) helper extraction to this task's scope. The
+JF-712 commit leaves THREE hand-rolled copies of the copy-queue + seen-set +
+add-unseen + assign idiom in PlaybackNearlyFinishedEventHandler (TryFetchContinuationBatch
+~411-427, DeriveSimilarTracksPopulation ~718-727, CommitPendingContinuation ~925-940),
+and the double-append race fix's soundness rests on the derive-time and commit-time
+dedup computing the same predicate against the same store; as three inline loops, a
+future edit to one compiles clean and silently breaks the invariant the race pin
+encodes. ONE helper used by all three sites makes the drift structurally impossible
+(and the roster pin this task already carries should then assert all three sites
+route through it).
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done
