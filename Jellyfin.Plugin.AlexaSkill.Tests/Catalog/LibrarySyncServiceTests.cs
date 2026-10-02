@@ -54,19 +54,8 @@ public class LibrarySyncServiceTests
             _loggerFactory.CreateLogger<LibrarySyncService>());
     }
 
-    private static Entities.User CreatePluginUser(Guid? id = null, List<string>? allowedLibraryIds = null)
-    {
-        return new Entities.User
-        {
-            Id = id ?? Guid.NewGuid(),
-            InvocationName = "test",
-            JellyfinToken = "test-token",
-            SmapiDeviceToken = new DeviceToken("access-token", "refresh-token", "Bearer", 9999999999),
-            UserSkill = new UserSkill { SkillId = "amzn1.ask.skill.test-id" },
-            VendorId = "test-vendor-id",
-            AllowedLibraryIds = allowedLibraryIds
-        };
-    }
+    private static Entities.User CreatePluginUser(Guid? id = null, IReadOnlyList<string>? allowedLibraryIds = null)
+        => TestHelpers.CreateSyncUser(id, allowedLibraryIds);
 
     /// <summary>
     /// Verifies that when a user has AllowedLibraryIds configured, the LibrarySyncService

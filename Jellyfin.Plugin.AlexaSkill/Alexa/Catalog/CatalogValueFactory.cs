@@ -25,6 +25,16 @@ internal static class CatalogValueFactory
     /// enriched types the JF-684 append is verified structurally (see
     /// AssertArtistEnrichment), so a drifted enrichment path fails the sync
     /// loudly instead of regressing silently on-device.
+    /// BLANK-NAME CONTRACT BOUNDARY (JF-695): this factory deliberately does NOT
+    /// filter whitespace-only names; every CALLER owns that skip at its own
+    /// source (<see cref="CatalogPayload.FromItems"/> skips blank names,
+    /// CatalogSeedEnrichment.MergeSeeds skips blank seed values after truncation,
+    /// and LibrarySyncService pre-filters item names before the tuple feed). A
+    /// whitespace name reaching Create would ship a blank catalog entry silently
+    /// (PartialNameSynonyms.Generate returns null for it, so even the structural
+    /// guard stays quiet); a future third construction site must pre-filter the
+    /// same way, or decide the blank-name contract explicitly (skip vs reject)
+    /// in the same change that adds the site.
     /// </summary>
     /// <param name="type">The catalog type the entry belongs to.</param>
     /// <param name="itemId">The Jellyfin item guid, or the deterministic seed guid.</param>
@@ -65,12 +75,16 @@ internal static class CatalogValueFactory
     /// (AppendTo's plumbing, AppendDistinct) plus non-determinism; Generate-policy
     /// drift (a changed accept/reject table) is invisible here by construction
     /// (both sides call the same function) and is owned by the
-    /// PartialNameSynonymsTests accept/reject pins instead. The throw aborts the
-    /// whole per-locale sync leg (all catalog types and the model injection for
-    /// that locale, deterministically on every run) and the leg's catch logs it,
-    /// keeping every last-good catalog version pinned instead of shipping one
-    /// whose bare-word reachability silently collapsed. Cost: one extra Generate
-    /// call per Artist entry, sync-path only.
+    /// PartialNameSynonymsTests accept/reject pins instead. The throw
+    /// (<see cref="CatalogPayloadInvariantException"/>) freezes ONLY its own
+    /// catalog type for the run (JF-695 per-type isolation in
+    /// LibrarySyncService.RunLegAsync): the frozen type mints no version and its
+    /// catalog id is not forwarded to the model injection, so the live model
+    /// keeps that type's last-good pinned catalog reference, while the sibling
+    /// types and the locale's model injection continue. The freeze itself is
+    /// deterministic on every run until the drift is fixed: per-entry degradation
+    /// would ship incomplete catalogs. Cost: one extra Generate call per Artist
+    /// entry, sync-path only.
     /// </summary>
     /// <param name="name">The freshly built entry name block.</param>
     /// <remarks>Internal for the InternalsVisibleTo test seam: the guard's own
@@ -87,7 +101,7 @@ internal static class CatalogValueFactory
         string truncated = SlotValueHelper.Truncate(expected);
         if (name.Synonyms?.Contains(truncated, StringComparer.OrdinalIgnoreCase) != true)
         {
-            throw new InvalidOperationException(
+            throw new CatalogPayloadInvariantException(
                 $"Artist catalog entry '{name.Value}' yielded partial synonym '{truncated}' but it is absent from the entry's synonyms; the JF-684 enrichment path is broken.");
         }
     }

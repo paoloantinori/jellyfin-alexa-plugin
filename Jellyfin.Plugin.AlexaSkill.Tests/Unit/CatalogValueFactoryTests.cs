@@ -107,20 +107,41 @@ public class CatalogValueFactoryTests
         // The guard's own contract (code-review finding): every other pin
         // exercises only the passing side, so the throw path, the null-synonyms
         // branch, and the OrdinalIgnoreCase presence check are locked here.
+        // ThrowsAny: since JF-695 the guard throws the DERIVED
+        // CatalogPayloadInvariantException (pinned exactly by the test below);
+        // xUnit's Throws<T> would require the exact base type.
         var missing = new CatalogValueName
         {
             Value = "Pink Floyd",
             Synonyms = new List<string> { "i Pink Floyd" }
         };
-        Assert.Throws<InvalidOperationException>(
+        Assert.ThrowsAny<InvalidOperationException>(
             () => CatalogValueFactory.AssertArtistEnrichment(missing));
 
         var noList = new CatalogValueName { Value = "The Beatles" };
-        Assert.Throws<InvalidOperationException>(
+        Assert.ThrowsAny<InvalidOperationException>(
             () => CatalogValueFactory.AssertArtistEnrichment(noList));
 
         var present = new CatalogValueName { Value = "Pink Floyd", Synonyms = new List<string> { "PINK" } };
         CatalogValueFactory.AssertArtistEnrichment(present);
+    }
+
+    [Fact]
+    public void ArtistEnrichmentGuard_ThrowsTheIsolatedExceptionType()
+    {
+        // JF-695 coupling pin: the per-type sync-leg isolation catches
+        // CatalogPayloadInvariantException SPECIFICALLY (its InvalidOperationException
+        // base is the historical contract pinned above, and the derived type keeps
+        // that pin green). If the guard ever reverts to throwing the plain base
+        // type, the isolation silently stops isolating - this pin fails first.
+        var missing = new CatalogValueName
+        {
+            Value = "Pink Floyd",
+            Synonyms = new List<string> { "i Pink Floyd" }
+        };
+
+        Assert.Throws<CatalogPayloadInvariantException>(
+            () => CatalogValueFactory.AssertArtistEnrichment(missing));
     }
 
     [Fact]
