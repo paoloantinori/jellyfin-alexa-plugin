@@ -112,7 +112,13 @@ public class RequestPipeline
                 // token-gated URLs) gets the speechless keep-alive shape because
                 // Amazon rejects outputSpeech on event responses (the JF-507
                 // INVALID_RESPONSE lesson; the pre-JF-699 builder-returned Tell was
-                // latently invalid there). SkipColdLibraryWork mirrors the warming
+                // latently invalid there). DELIBERATE CLASSIFICATION (gate-marker
+                // note): IsEventRequest does NOT classify PlaybackController
+                // CommandIssued taps, so a refused tap-routed adjacent launch answers
+                // a speech Tell on that request class - the same response shape the
+                // happy path already produces there (no recorded incident); revisit
+                // only if Amazon documents the no-outputSpeech rule for it.
+                // SkipColdLibraryWork mirrors the warming
                 // stance: a configuration-error answer pays no library queries on the
                 // way out; logging and metrics interceptors still run below.
                 bool isEventRequest = BaseHandler.IsEventRequest(requestContext.SkillRequest);

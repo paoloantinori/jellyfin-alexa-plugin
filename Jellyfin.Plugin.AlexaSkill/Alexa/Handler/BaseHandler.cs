@@ -1244,8 +1244,13 @@ public abstract class BaseHandler
             // refusal now THROWS from the delegate's builder (RequestPipeline answers
             // it; this block never runs on a refusal), so the verdict wrapper is gone;
             // the qualifier write rides the delivered-launch gate as the roster belt
-            // (a future non-launch builder return must not be spoken over).
-            if (playResponse.Response.OutputSpeech is null && context != null && request != null)
+            // (a future non-launch builder return must not be spoken over). The
+            // PROGRESSIVE send rides the same gate (gate-marker tail): JF-693 gated
+            // the whole block on HasLaunchDirective, and speaking the qualifier into
+            // the progressive channel for a non-launch response with null OutputSpeech
+            // would announce a now-playing that is not happening, unretractable.
+            if (PlaybackLaunchBuilder.HasLaunchDirective(playResponse)
+                && playResponse.Response.OutputSpeech is null && context != null && request != null)
             {
                 IOutputSpeech? fallback = await Launch.SpeakVideoLaunchAnnounceAsync(context, request, qualifier).ConfigureAwait(false);
                 if (fallback == null)

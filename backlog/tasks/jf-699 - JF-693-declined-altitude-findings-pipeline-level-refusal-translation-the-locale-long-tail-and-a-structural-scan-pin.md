@@ -76,6 +76,26 @@ scope:
    OutputSpeech writes can speak over a JF-687 refusal Tell for seek-mode users. The same
    reachability applies to any future "static URL so it never refuses" assumption - only
    the token marker in the DELIVERED url (what StreamTokenSecretRefusal checks) decides.
+
+GATE-MARKER TAIL (2026-10-02, orchestrator review of commit 65821618, 5 findings): all
+six scrutiny axes verified clean (the pipeline catch sits below every swallowing catch
+with the controller and simulator both dispatching through ExecuteAsync; event requests
+get the speechless keep-alive and StreamTokenNotConfigured exists in all 17 locales;
+happy-path response shapes byte-identical, the deleted verdict wrappers tautologies;
+the FollowMe reorder safe via CopySurvivingStores carrying the maps; the F3 ledger move
+correct; the roster scans enumerate the state-machine bodies). F3 APPLIED in the tail
+(the progressive qualifier block regained the HasLaunchDirective gate JF-693 had around
+it; unreachable today but the belt the comment claims); F4 APPLIED as a comment (the
+PlaybackController CommandIssued classification documented as deliberate, same response
+shape the happy path produces there); F1 FILED as JF-712 (PlaybackNearlyFinished
+advances recovery/queue state before the token-gated build - the reachable event
+refusal - leaving a phantom pointer and zeroed position; derive-then-commit vs
+compensate-on-refusal needs its own design and pin); F2 FILED as JF-714 (five
+screenless-Tell video sites still write NowPlaying state for launches that will not
+happen on Dots; the StartOver gate pattern plus one pin); F5 FILED as JF-713 (the
+PlayPlaylist shuffle commit-before-build residual closed via snapshot derive-then-commit).
+Independent suite 4931/4931 both TFMs on the worker commit; filtered classes 254/254
+after the tail edits.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Item 1 Design (written BEFORE coding, per the sequencing mandate)
