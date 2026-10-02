@@ -188,6 +188,34 @@ public class SkillStartupTests : PluginTestBase
     }
 
     /// <summary>
+    /// JF-710 gate-marker tail: the PLAIN no-PUT row (clause + tail, no trailed
+    /// foreign) must reduce to clause-only through the capture, and that
+    /// clause-only product must be idempotent under a second capture (only the
+    /// compound clause+tail+foreign shape and its double capture were pinned
+    /// before; a future edit to the preserve that mishandles the tail-only
+    /// strip or the marker-only idempotence would otherwise pass the suite).
+    /// </summary>
+    [Fact]
+    public async Task CaptureLocaleModelStatusesAsync_CleanCapture_OverPlainNoPutRow_ReducesToClauseAndStaysIdempotent()
+    {
+        string clause = $"Artist catalog{LibrarySyncService.FrozenLedgerClauseMarker}";
+        SeedLocaleRow($"{clause}{LibrarySyncService.NoPutLedgerTail}");
+
+        await CaptureCleanAsync();
+
+        var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(row);
+        Assert.Equal(clause, row!.Error);
+
+        // The clause-only product has no tail left to strip; a second capture
+        // must be a Replace no-op, not a mutation.
+        await CaptureCleanAsync();
+        row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(row);
+        Assert.Equal(clause, row!.Error);
+    }
+
+    /// <summary>
     /// JF-710: the clean capture over a CLEAN row must stay byte-clean itself:
     /// no clause is invented, Error stays null, only the timestamp refreshes.
     /// </summary>

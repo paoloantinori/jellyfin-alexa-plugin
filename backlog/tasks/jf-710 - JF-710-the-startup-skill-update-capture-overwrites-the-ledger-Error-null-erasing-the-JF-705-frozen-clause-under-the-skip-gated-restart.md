@@ -27,7 +27,7 @@ Filed 2026-10-02 same-turn from the orchestrator gate-marker review of the JF-70
 overwrites each locale's ledger entry with the fresh build's outcome, including
 `Error = null` on success. That is honest for the MODEL-BUILD surface, but the JF-705
 frozen clause describes CATALOG state from the last sync, which a model rebuild does
-not reset - so the overwrite erases "Artist catalog FROZEN (last-good pinned)" next to
+not reset, so the overwrite erases "Artist catalog FROZEN (last-good pinned)" next to
 a green SUCCEEDED.
 
 The failure needs a compound path, which is why it is filed rather than tailed: (1) a
@@ -36,7 +36,7 @@ change, so `cloudVersion != GetVersion()` triggers UpdateSkillAsync + the captur
 which wipes the clause; (3) the startup catalog re-sync is skipped via the
 CatalogSyncTask.cs:68/96 gates (SmapiDeviceToken null, SkillId null, or the Jellyfin
 user deleted) so no sync re-writes it. The admin page then shows green SUCCEEDED with
-no clause while the artist catalog stays pinned to last-good - the exact stale-green
+no clause while the artist catalog stays pinned to last-good (the exact stale-green
 triage trap JF-705 was filed to close. The 12h self-heal only covers the
 credentials-intact case (Success=false keeps LastCatalogSync stale so the re-sync gate
 cannot skip). Note the same overwrite also erases JF-495 canary errors (pre-existing
@@ -44,7 +44,7 @@ pattern this change extends; fix both in one shape).
 
 THE WORK: when the captured entry would be Status=SUCCEEDED with Error=null and the
 EXISTING entry's Error carries a FROZEN clause, preserve the existing clause (the
-condition it describes - the last sync froze types and no sync has run since - is
+condition it describes; the last sync froze types and no sync has run since) is
 still true at capture time; the next sync either re-freezes and rewrites it or heals
 and clears it). Extract the clause composer so the marker check is not a bare string
 literal duplicated at two sites. Add a startup-path pin for the preserve (and the
@@ -73,6 +73,20 @@ own-shape check (tail-based) will classify that clause as foreign and emit a
 self-referential "; previous: <same frozen clause>" trail for one run; make the
 own-shape predicate there recognize the frozen-clause-led shape too (clause prefix
 OR tail marker), not the tail alone.
+
+GATE-MARKER TAIL (2026-10-02, orchestrator review of commit a09a0448, 5 low findings,
+all five scrutiny axes verified clean with the pins empirically re-run 21/21): F4
+APPLIED (the four banned hyphen-break constructions in the Final Summary prose fixed,
+plus three pre-existing ones in the description); F5 APPLIED (the two unpinned preserve
+shapes gained their pin: the plain clause+tail row reduces to clause-only and stays
+idempotent under a second capture); F1 APPLIED as a comment (the KNOWN RACE note at the
+capture's read: the preserve is an unguarded read-modify-write while the sync writers
+guard against the capture, one-directional by accepted trade); F2 APPLIED (the
+LOAD-BEARING INVARIANT doc on IsOwnShapeLedgerError naming the three-literals
+assumption and pointing at JF-721); F3 FILED as JF-721 (the structured-caveat design
+replacing the marker-parser family; sequenced after JF-719's gate decision).
+Independent suite 4970/4970 both TFMs on the worker commit; affected classes 22/22
+after the tail.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done
@@ -95,7 +109,7 @@ OR tail marker), not the tail alone.
 Landed 2026-10-02 by the JF-710 worker (base f44aef8c). The startup skill-update capture
 (`SkillStartup.CaptureLocaleModelStatusesAsync`, now internal for the InternalsVisibleTo
 test seam) no longer unconditionally writes Error=null: on a CLEAN capture (observed
-state SUCCEEDED, no build errors - the gate the coordination note specifies), it calls
+state SUCCEEDED, no build errors (the gate the coordination note specifies)), it calls
 the new `LibrarySyncService.PreserveLedgerErrorAcrossCapture(config.GetLocaleModelStatus(locale))`
 and writes the surviving segments instead. A capture with its own build errors still
 replaces the row wholesale, and a FAILED/IN_PROGRESS observation still overwrites
@@ -117,10 +131,10 @@ text cannot drift):
   the catalog sync (Source == CatalogSyncLedgerSource) preserves, and so does a row a
   PREVIOUS capture already preserved (that capture writes Source "Embedded", but its
   Error still carries the clause/tail markers, and the durable freeze state must
-  survive every later capture while the skip-gated sync stays skipped - otherwise the
+  survive every later capture while the skip-gated sync stays skipped; otherwise the
   clause died exactly one restart later, which was F1's scenario, now pinned by a
   double-capture assertion). Consequence: a BARE foreign diagnostic (no marker) rides
-  its Source label and survives ONE capture cycle, then clears - deliberate, the freeze
+  its Source label and survives ONE capture cycle, then clears (deliberate), the freeze
   is durable state while a canary describes the build it followed, which the next
   push replaces; pinned. A previous capture's or custom deployment's own build error
   carries no marker and is always superseded; pinned.

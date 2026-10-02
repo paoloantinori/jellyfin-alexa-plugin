@@ -623,6 +623,13 @@ public class LibrarySyncService
     /// is dropped one run earlier than the pre-JF-710 single trail; the
     /// strip-at-marker alternative that would keep it was rejected in the
     /// JF-709 review, and the capture preserve is its durable home.
+    /// LOAD-BEARING INVARIANT (JF-710 gate-marker): this predicate and the
+    /// capture's Replace-family rest on the assumption that ONLY this
+    /// subsystem's writers ever put the three marker literals into a ledger
+    /// Error (the canary format is fixed and failed-PUT reasons never reach
+    /// the field); a future composer that lets external text into Error must
+    /// either quarantine it or this family moves to a structured field (the
+    /// JF-721 design).
     /// </summary>
     private static bool IsOwnShapeLedgerError(string error) =>
         error.Contains(NoPutLedgerTail, StringComparison.Ordinal)

@@ -403,6 +403,13 @@ public class SkillStartup : IHostedService, IDisposable
                     // the rebuild did not reset. Non-SUCCEEDED clean observations
                     // (IN_PROGRESS) still overwrite: the preserve is keyed to the
                     // shape whose fresh outcome is actually known.
+                    // KNOWN RACE (JF-710 gate-marker): this preserve is an unguarded
+                    // read-modify-write of the row, while the sync writers guard
+                    // their own reads against exactly this capture; a sync leg
+                    // writing between the read and the Set below is overwritten
+                    // until its next run (sub-millisecond window, the pre-existing
+                    // capture class; the acknowledgment is one-directional by
+                    // accepted trade, not by oversight).
                     error = LibrarySyncService.PreserveLedgerErrorAcrossCapture(config.GetLocaleModelStatus(locale));
                 }
 
