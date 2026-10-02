@@ -3482,16 +3482,10 @@ public class VideoAudioController : ControllerBase
             return BadRequest(new { error = "Invalid segment name" });
         }
 
-        // Record audiobook playback progress via the segment request. Anonymous endpoint,
-        // so keyed by itemId (the book parent-folder ID for audiobook concat streams).
-        // Best-effort: never fail the segment request over tracking. The gate is
-        // derived from the ITEM (restart-safe, JF-499 W1): only Folder keys can ever be
-        // read back by the resume path, so leaf items (episodes, songs) are skipped
-        // instead of growing the persisted positions file with dead keys.
-        if (ShouldRecordPositionProgress(itemId))
-        {
-            RecordSegmentForTracking(itemId, segmentName);
-        }
+        // Record audiobook playback progress via the segment request. Best-effort:
+        // never fail the segment request over tracking. The item-derived gate and the
+        // read-key rationale live once, on RecordPositionProgress below.
+        RecordPositionProgress(itemId, segmentName);
 
         string? segmentPath = _cache.FindSegmentPath(itemId, segmentName);
         if (segmentPath == null)
@@ -3534,51 +3528,74 @@ public class VideoAudioController : ControllerBase
     }
 
     /// <summary>
-    /// Best-effort audiobook position tracking: parse the segment number from a
-    /// <c>seg_NNN[N].ts</c> name and record it. For audiobook concat streams, itemId is
-    /// the book parent-folder ID (matches the resume-time lookup key). Single-item
-    /// segment requests are keyed by their own itemId and simply never read at resume.
+    /// Best-effort audiobook position tracking: parse the segment number out of a
+    /// <c>seg_NNN[N].ts</c> name and record it under the key the resume path reads.
+    /// JF-499 W1 (restart-safe gate, derived from the library item so the skip survives
+    /// a restart; the old <c>_episodeHlsItems</c> flag was process-static and cached
+    /// episodes resumed growing the file) plus the JF-694 read-key alignment:
+    /// <list type="bullet">
+    /// <item>Folders record under their own id: the multi-chapter audiobook concat and
+    /// the JF-625 album concat both key segments by the parent Folder, whose 10s
+    /// timeline is exactly the tracker's read arithmetic. Album entries are
+    /// LOAD-BEARING: in seek mode AlbumPlayService reads the album key as the resume
+    /// truth (JF-625 criterion 3), so this arm must stay untouched.</item>
+    /// <item>An AudioBook LEAF with a ParentId records under its BOOK key
+    /// (<see cref="ResumeMath.GetAudiobookBookKey"/>: the ParentId), the same
+    /// expression every mint site reads. This is the one-chapter redirect's shape: the
+    /// chapters query selects AudioBook items, so the single chapter IS the book and
+    /// the leaf's own timeline is the book timeline. The leaf's 4s song-core index is
+    /// translated onto the tracker's 10s concat timeline by
+    /// <see cref="Alexa.Playback.AudiobookPositionTracker.RecordScaledSegment"/>.
+    /// A root-level single-file book (EMPTY ParentId) is deliberately NOT recorded:
+    /// its mint would build <c>audiobook/{ownId}</c>, and the concat endpoint's
+    /// children query under a leaf returns zero chapters (404), so that key must stay
+    /// cold for resume to keep the working plain single-item launch.</item>
+    /// <item>Every other leaf (episodes, songs) is skipped: its key is write-only dead
+    /// weight in the persisted positions file. Deliberately NOT
+    /// <c>AudiobookItems.IsAudioBookOrChapter</c>: that helper's plain-Audio arm would
+    /// key song fetches under ancestor ids no mint site reads, and where the ancestor
+    /// IS an album the write is worse than dead weight, because the album key IS read
+    /// back (see the first bullet) and a track-local 4s index read on the 10s timeline
+    /// would poison AlbumPlayService's resume mapping.</item>
+    /// </list>
+    /// Not memoized: the verdict is a durable fact, but <c>GetItemById</c> is already
+    /// an in-memory lookup on the platform side (and
+    /// <see cref="ValidateVideoAudioRequest"/> already calls it unmemoized per
+    /// playlist request), so a plugin-side memo would only duplicate the platform's
+    /// cache.
     /// </summary>
-    private void RecordSegmentForTracking(string itemId, string segmentName)
+    /// <param name="itemId">Item ID from the segment URL (any GUID format).</param>
+    /// <param name="segmentName">The segment file name (e.g. "seg_0042.ts").</param>
+    private void RecordPositionProgress(string itemId, string segmentName)
     {
-        if (TryParseSegmentNumber(segmentName, out int segmentNumber))
+        if (!Guid.TryParse(itemId, out Guid itemGuid)
+            || !TryParseSegmentNumber(segmentName, out int segmentNumber))
         {
-            Plugin.Instance?.AudiobookPositionTracker?.RecordSegment(itemId, segmentNumber);
-        }
-    }
-
-    /// <summary>
-    /// JF-499 W1: whether this item's segment fetches may grow the audiobook position
-    /// tracker. Trackable items are Folders (the audiobook parent containers whose
-    /// keys the resume path reads via <c>GetPositionTicks</c>); every leaf item
-    /// (episodes, songs) is skipped because its key is write-only dead weight in the
-    /// persisted positions file. Derived from the library item, so the skip survives
-    /// a restart (the old <c>_episodeHlsItems</c> flag was process-static and cached
-    /// episodes resumed growing the file). Not memoized: the verdict is a durable
-    /// fact, but <c>GetItemById</c> is already an in-memory lookup on the platform
-    /// side (and <see cref="ValidateVideoAudioRequest"/> already calls it unmemoized
-    /// per playlist request), so a plugin-side memo would only duplicate the
-    /// platform's cache.
-    /// </summary>
-    /// <param name="itemId">GUID-validated item ID from the segment URL.</param>
-    /// <returns>True when the item is a container whose positions can be read back.</returns>
-    private bool ShouldRecordPositionProgress(string itemId)
-    {
-        if (!Guid.TryParse(itemId, out Guid itemGuid))
-        {
-            return false;
+            return;
         }
 
         try
         {
-            return _libraryManager.GetItemById(itemGuid) is MediaBrowser.Controller.Entities.Folder;
+            BaseItem? item = _libraryManager.GetItemById(itemGuid);
+            if (item is MediaBrowser.Controller.Entities.Folder)
+            {
+                Plugin.Instance?.AudiobookPositionTracker?.RecordSegment(itemId, segmentNumber);
+            }
+            else if (item != null
+                && AudiobookItems.IsAudioBook(item)
+                && item.ParentId != Guid.Empty)
+            {
+                Plugin.Instance?.AudiobookPositionTracker?.RecordScaledSegment(
+                    ResumeMath.GetAudiobookBookKey(item),
+                    segmentNumber,
+                    SongHlsSegmentSeconds);
+            }
         }
         catch (Exception ex)
         {
             // Best-effort gate, same contract as the tracking itself: never fail the
             // segment request over it.
             _logger.LogDebug(ex, "Position-tracking gate: item lookup failed for {ItemId}", itemId);
-            return false;
         }
     }
 

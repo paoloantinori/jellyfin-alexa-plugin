@@ -9,8 +9,13 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 
 /// <summary>
 /// Global playback-position tracker for audiobooks played via the HLS concat endpoint.
-/// Keyed by book parent-folder ID because segment requests are anonymous (no device/user/
-/// api_key). Single-user skill — global keying is acceptable.
+/// Keyed by the audiobook key the resume path reads (the book parent-folder ID)
+/// because segment requests are anonymous (no device/user/api_key). Single-user
+/// skill, global keying acceptable. The root-level single-file book's own ID is a
+/// key shape the book-key resolver can return but that must stay COLD:
+/// the record gate (JF-694) deliberately never writes it, because a warm root key
+/// arms the dead audiobook/{ownId} resume URL the concat endpoint 404s on (a leaf
+/// has no AudioBook children). Do not re-widen the gate.
 ///
 /// Tracks the high-water-mark segment number seen via GetSegment requests and reports a
 /// conservative resume position: (highWaterMark - 1) * segmentDuration, so resume never
@@ -22,7 +27,8 @@ public sealed class AudiobookPositionTracker : IDisposable
     // LOAD-BEARING COUPLING: must move together with the controller's
     // AudiobookHlsSegmentSeconds and the -hls_time 10 literal in
     // BuildHlsAudiobookFfmpegArguments (the resume arithmetic assumes the segment
-    // length ffmpeg actually cut audiobook segments at).
+    // length ffmpeg actually cut audiobook segments at). RecordScaledSegment divides
+    // foreign-timeline indexes by the same const, so it moves with it too.
     private const int SegmentDurationSeconds = 10;
 
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -60,7 +66,7 @@ public sealed class AudiobookPositionTracker : IDisposable
     /// Record that a segment was requested for a book. Updates the high-water mark if this
     /// segment is further than the current one. Debounced per-book persistence.
     /// </summary>
-    /// <param name="bookParentId">The audiobook parent-folder ID (any GUID format — normalized internally).</param>
+    /// <param name="bookParentId">The audiobook book key the resume path reads (any GUID format; normalized internally).</param>
     /// <param name="segmentNumber">The zero-based segment index fetched.</param>
     public void RecordSegment(string bookParentId, int segmentNumber)
     {
@@ -84,12 +90,40 @@ public sealed class AudiobookPositionTracker : IDisposable
     }
 
     /// <summary>
+    /// Record a segment fetch for a book whose serve cuts segments at a NON-concat
+    /// length: the one-chapter redirect plays the single chapter through the
+    /// single-item core (4s segments), while every read of this tracker
+    /// (<see cref="GetPositionTicks"/>) counts the 10s concat timeline. Translates the
+    /// foreign-timeline index onto this tracker's timeline (floor division, so the
+    /// translation is conservative like the high-water-mark -1 itself) before recording.
+    /// A raw 4s index recorded as-is would read back 2.5x past the listening point
+    /// (segment 150 = 10 minutes listened would resume at 24:50).
+    /// </summary>
+    /// <param name="bookParentId">The audiobook key the resume path reads (any GUID format; normalized internally).</param>
+    /// <param name="segmentNumber">The zero-based segment index fetched, counted in <paramref name="segmentSeconds"/> units.</param>
+    /// <param name="segmentSeconds">The segment length the serve actually cut (the caller's own geometry constant).</param>
+    public void RecordScaledSegment(string bookParentId, int segmentNumber, int segmentSeconds)
+    {
+        if (segmentSeconds <= 0)
+        {
+            // Debug-logging policy: a skipped record must be visible in triage, or a
+            // bad geometry value silently keeps one-chapter resume cold.
+            _logger.LogDebug(
+                "AudiobookPositionTracker: ignoring scaled record for book {BookId} with invalid segment seconds {SegmentSeconds}",
+                bookParentId, segmentSeconds);
+            return;
+        }
+
+        RecordSegment(bookParentId, segmentNumber * segmentSeconds / SegmentDurationSeconds);
+    }
+
+    /// <summary>
     /// Get the conservative resume position in ticks for a book.
     /// Returns (highWaterMark - 1) * 10s if a high-water mark ≥ 1 is recorded, else 0.
     /// The -1 ensures resume targets the start of the last fully-fetched segment rather
     /// than a segment that may only have been prefetched.
     /// </summary>
-    /// <param name="bookParentId">The audiobook parent-folder ID (GUID "N" format).</param>
+    /// <param name="bookParentId">The audiobook book key (GUID "N" format).</param>
     /// <returns>Resume position in ticks (conservative), or 0 if none recorded.</returns>
     public long GetPositionTicks(string bookParentId)
     {
@@ -111,7 +145,7 @@ public sealed class AudiobookPositionTracker : IDisposable
     /// <summary>
     /// Clear tracked position for a book (e.g. when the book is finished/marked played).
     /// </summary>
-    /// <param name="bookParentId">The audiobook parent-folder ID (any GUID format).</param>
+    /// <param name="bookParentId">The audiobook book key (any GUID format).</param>
     public void Clear(string bookParentId)
     {
         if (_positions.TryRemove(NormalizeKey(bookParentId), out _))
