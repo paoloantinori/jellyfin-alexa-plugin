@@ -1,12 +1,13 @@
 ---
 id: JF-691
 title: >-
-  JF-691 - residuals of the JF-683 Finished keep-alive: unreshuffled shuffle at the
-  last queue position still ends the session mid-playback, and a
+  JF-691 - residuals of the JF-683 Finished keep-alive: unreshuffled shuffle at
+  the last queue position still ends the session mid-playback, and a
   deleted-from-library successor can keep the session alive over dead audio
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-30 21:40'
+updated_date: '2026-10-02 11:51'
 labels:
   - playback
   - progressive-queue
@@ -15,7 +16,8 @@ dependencies:
   - JF-683
 references:
   - >-
-    backlog/tasks/jf-683 - JF-683-the-PlaySong-fallback-artist-queue-never-continues-silent-guard-skip-at-the-prefetch-window-no-fetch-no-log-PlaybackFinished-calls-queue-exhausted-2-tracks-early.md
+    backlog/tasks/jf-683 -
+    JF-683-the-PlaySong-fallback-artist-queue-never-continues-silent-guard-skip-at-the-prefetch-window-no-fetch-no-log-PlaybackFinished-calls-queue-exhausted-2-tracks-early.md
 priority: low
 ---
 
@@ -171,3 +173,9 @@ residual filing was needed.
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Status-sync closure during the 2026-10-02 backlog audit: landed and fully verified in its own cycle, status never flipped. Merge into main: 6fadb98d. Both JF-683 keep-alive corners closed: the shuffle-random admission became ONE shared predicate (ProgressReporter.ShuffleRandomPickApplies) so the arm can only fire where the resolver itself would produce a next, and the deleted-successor corner closed with the durable enqueue record (LastEnqueueAfterToken + LastEnqueueNextItemId on the persisted DeviceQueue) vetoing Finished's keep-alive when the record does not name the finished token. Four pins including the end-to-end deleted-successor chain.
+<!-- SECTION:FINAL_SUMMARY:END -->

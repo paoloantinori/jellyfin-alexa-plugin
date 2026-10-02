@@ -4,9 +4,10 @@ title: >-
   JF-694 - one-chapter book resume never gets a position to serve: the tracker
   write gate is Folder-only while the single-chapter redirect keys segments by
   the chapter leaf; plus the overrun ?start= zero-segment slice
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-01'
+updated_date: '2026-10-02 11:51'
 labels:
   - audiobooks
   - resume
@@ -14,7 +15,8 @@ labels:
 dependencies: []
 references:
   - >-
-    backlog/tasks/jf-686 - Single-chapter-audiobook-resume-redirect-drops-start-ticks-a-resume-launch-on-a-one-chapter-book-restarts-from-0-00.md
+    backlog/tasks/jf-686 -
+    Single-chapter-audiobook-resume-redirect-drops-start-ticks-a-resume-launch-on-a-one-chapter-book-restarts-from-0-00.md
 priority: medium
 ---
 
@@ -66,3 +68,9 @@ GATES: Skill simplify (4 agents). Applied: the call-site comment trimmed to a po
 SUITES: 4895/4895 BOTH TFMs on the final state (baseline at d05958e3: 4891 + the 4 new pins), recipe `env -u NUGET_PACKAGES -u NUGET_HTTP_CACHE_PATH dotnet test Jellyfin.Plugin.AlexaSkill.Tests -m:1`, never --no-build. The incremental test run emits 0 warnings; a forced --no-incremental rebuild shows only the 2 pre-existing xUnit1030 warnings at VideoAudioControllerTests.cs:1291, a line this diff does not touch.
 
 RESIDUALS: (a) the on-device probe the JF-686 task named is still open and now REACHABLE (the serve slices since JF-686, the position arrives since JF-694): the maintainer's next device round should resume a one-chapter book on hardware; (b) JF-701 (CLAUDE.md bullet sync); (c) the nested-chapter pre-existing record/read key mismatch on the MULTI-chapter path (records key = the URL parent folder, reads key = chapter.ParentId, which differs when chapters sit under subfolders) was noticed during analysis and deliberately left: it predates JF-694, is untouched by this diff, and changing it needs its own evidence round. DoD 4-8 N/A (no session attributes, no HttpClient, no interaction model, no new intent surface, no user-facing strings).
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Status-sync closure during the 2026-10-02 backlog audit: landed and fully verified in its own cycle (merge 62185458, deployed to the box as build md5 ebc11459, later superseded by the 2026-10-02 morning deploy), status never flipped. The one-chapter book resume is reachable end to end: RecordPositionProgress is the one write gate (Folder arm byte-identical to JF-499 W1 with the protective try/catch delta; AudioBook leaf with non-empty ParentId records under GetAudiobookBookKey with RecordScaledSegment translating the 4s song-core index onto the 10s concat timeline; root-level leaf deliberately cold). Four red-green pins; the stale CLAUDE.md tracker bullet it surfaced was fixed as JF-701. Device-round item: the one-chapter book resume probe is now the definitive test (serve since JF-686, position since JF-694).
+<!-- SECTION:FINAL_SUMMARY:END -->

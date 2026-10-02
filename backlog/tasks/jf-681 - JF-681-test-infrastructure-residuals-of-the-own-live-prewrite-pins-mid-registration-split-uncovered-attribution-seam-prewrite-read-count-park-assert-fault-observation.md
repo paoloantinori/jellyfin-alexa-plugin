@@ -4,9 +4,10 @@ title: >-
   JF-681 - test-infrastructure residuals of the own-live prewrite pins:
   mid-registration split uncovered, attribution seam, prewrite read count,
   park-assert fault observation
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-30 09:27'
+updated_date: '2026-10-02 11:52'
 labels:
   - encode-gate
   - tech-debt
@@ -47,6 +48,8 @@ VERIFICATION: the new pins + red proofs per item 1 (predicate swap flips them); 
 <!-- DOD:END -->
 
 ## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
 <!-- SECTION:IMPL:BEGIN -->
 Landed in the worker worktree (single commit, not pushed), baseline 7bc89eb1, suite 4891/4891 both TFMs (4887 + 4: the two mid-registration pins, the park-fault observation pin, the throwing-probe lock-release pin).
 
@@ -60,3 +63,10 @@ ITEM 4 (park-assert fault observation): the helper's park assert routes through 
 
 GATES: simplify (4 agents; applied the helper-param probe shape, TrackPlaylistReads, the total GetBaseException unwrap, the LockHlsItemAsync one-definition wrapper, the clear-arm delegation; skipped justified: TestHelpers.CreateSong migration (file precedent is 45 inline constructions), double Snapshot calls (file-wide convention, micro)). Code-review high: finding 1 (throwing observer orphans the acquired gate) FIXED with the wrapper's dispose-and-rethrow catch + pin `StreamHlsVideoAudio_ThrowingInLockProbe_ReleasesTheItemLock` (RED PROOF: removing the catch times out the follow-up acquisition at 15s, both TFMs); finding 2 = the JF-678-family asymmetry, already tracked as JF-700 (not re-filed). Full suite on the final state: 4891/4891 both TFMs, 0 warnings, recipe dotnet test -m:1, never --no-build. DoD 4-8 N/A (test-infra). No deploy; do not push.
 <!-- SECTION:IMPL:END -->
+<!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Status-sync closure during the 2026-10-02 backlog audit: landed and fully verified in its own cycle (merge d05958e3), status never flipped. The four test-infra residuals closed: SetEncodeRegisteringForTest stores the exact mid-registration zero-slot holder with the two twins pinning the split; InLockWarmCacheProbeForTest fires at the one LockHlsItemAsync wrapper making in-lock attribution deterministic (eight pins opted in, with the review-fixed gate-orphan catch); the two JF-680 own-live pins count the prewrite's exactly-one funnel read; the park assert unwraps a faulted endpoint task's base exception. Its own residual (the JF-678 vanish/breach callers still on 400ms-only attribution) was filed as JF-700, which landed 2026-10-02 (merge 82d6fe77). Test-only: no deploy.
+<!-- SECTION:FINAL_SUMMARY:END -->

@@ -4,9 +4,10 @@ title: >-
   JF-683 - the PlaySong-fallback artist queue never continues (silent guard skip
   at the prefetch window: no fetch, no log; PlaybackFinished calls
   queue-exhausted 2 tracks early)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-30 16:45'
+updated_date: '2026-10-02 11:51'
 labels:
   - playback
   - progressive-queue
@@ -156,12 +157,8 @@ tests); NearlyFinished keeps its "Sleep timer expired" INF line.
 - [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
-<!-- SECTION:FINALSUMMARY:BEGIN -->
-Completed 2026-09-30. #4/#5/#8 N/A unchanged (no session-attribute DTOs, HttpClient,
-or locale strings touched). #6 N/A (no interaction-model change). #7: five unit pins
-landed (the fallback-path continuation pin through the real builder, the guard-debug
-line, the inter-track-gap keep-alive RED->GREEN, the true-exhaustion view log, the
-JF-579 rehydration adoption pin); a live device round is the standing verification
-for on-device behavior (the observability lines make the next round readable).
-Suites 4789/4789 both TFMs (baseline 4784 + 5). Residual corners filed as JF-688.
-<!-- SECTION:FINALSUMMARY:END -->
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Status-sync closure during the 2026-10-02 backlog audit: this task landed and was fully verified in its own cycle (worker gates + orchestrator gate-marker + suites both TFMs) but its status field was never flipped to Done. Merge into main: b1bb0f51. The task's original premise (the PlaySong-fallback artist queue never continues) was REFUTED by live logs during the cycle; the real defect promoted from the clue (PlaybackFinished reading only context playerActivity at inter-track gaps, ending the session early) was fixed with the successor-in-queue read, loop-mode arm, and sleep-expiry carve-out. Deployed and live-verified in the 2026-09 device rounds.
+<!-- SECTION:FINAL_SUMMARY:END -->
