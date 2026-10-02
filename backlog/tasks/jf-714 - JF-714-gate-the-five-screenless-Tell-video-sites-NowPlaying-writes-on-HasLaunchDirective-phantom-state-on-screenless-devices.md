@@ -6,6 +6,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-10-02 15:20'
+updated_date: '2026-10-02 19:58'
 labels:
   - playback
   - refusal-contract
@@ -64,39 +65,6 @@ launch path still writes. Verify no existing test pins the phantom-write behavio
 
 ## Final Summary
 
-Implemented 2026-10-02 on the agent worktree (branch off 73325c8d). All five
-sites got the StartOver-pattern gate: PlayVideoIntentHandler (~238),
-SearchMediaIntentHandler.PlayItem (~577), PlayRandomIntentHandler (~197),
-RecommendIntentHandler (~221, whose in-code "pre-existing behavior and
-unchanged here" note was REWRITTEN to name the JF-714 closure),
-YesIntentHandler.PlayVideo (~470). The phantom-state class at each site is
-exactly the two session fields (verified: no other `session.* =` writes and no
-QueueContinuationStore/DeviceQueueManager writes exist in the five handlers;
-the Yes resume-arm siblings at 246/290 were checked and are throw-or-launch,
-not the class). Audio arms and real-video arms keep their writes (directive
-present); episodes on screenless devices degrade to the audio-only launch,
-which carries a directive, so their writes survive the gate by design.
-
-PIN (the cheapest existing harness, as prescribed): the
-VideoAppCapabilityGateTests PlayVideo pair was extended in place rather than
-contradicted (pre-check confirmed no existing test pins the phantom write; all
-existing NowPlayingQueue/FullNowPlayingItem assertions sit on
-directive-carrying paths or fail-open capable contexts). The screenless leg
-now asserts the capability Tell AND Null FullNowPlayingItem + Empty
-NowPlayingQueue (the MusicPathLaunchRefusalTests assertion shape); the launch
-leg asserts the writes still land (Assert.Same on the movie, single queue
-entry).
-
-RED PROOF (run, not compensated: the permission layer allowed this sabotage,
-unlike JF-702's): with the PlayVideo gate flipped to `if (true)`,
-PlayVideo_ScreenlessDevice_VideoRequiresScreenTell FAILS on both TFMs while
-the launch leg stays green; gate restored, both green. The pin is
-load-bearing.
-
-Gates: /simplify (4 angles, 3 applied / 1 filed to JF-718) and code-review
-high (0 in-diff findings, 4 filed to JF-718) as literal Skill calls in the
-worker transcript; full suites Bash-run green on both TFMs AFTER the last
-source edit (4958/4958 net9.0 + net10.0). Residuals of the sweep filed
-same-turn as JF-718 (the live channel-builder instance of the same bug class,
-the writes-before-build leftovers, the extraction, the structural pin). No
-deploy, no push; orchestrator merges via review.
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed by the orchestrator after the full cycle: worker commit eeb17234 + gate-marker tail 724df7da, merged as 3549c256. The five screenless-Tell video sites' NowPlaying writes gated on HasLaunchDirective (PlayVideo, SearchMedia, PlayRandom, Recommend's movie arm, YesIntent's video confirm), so a capability Tell on a Dot no longer leaves phantom now-playing state; the screenless-episode degrade keeps its writes (AudioPlayer directive). The census was confirmed by the gate-marker's own full-codebase scan, which found the one site both sweeps missed (SkillConnectionHandler's favorites task, appended to JF-718). Worker gates green (simplify 3 applied + the JF-718 extraction filed; code-review high 0 correctness findings with the reviewer independently re-running compile, targeted suites, and the full net9.0 suite). Red proof genuinely run (the sabotage was permitted this round: gate flipped to if(true), the screenless pin failed on both TFMs via the phantom write itself). Gate-marker findings all applied in the tail (the JF-718 site addition, its channel-builder fix-shape correction naming the second directive-less return and the third caller, and the prose fixes). Suites: worker 4958/4958 twice, orchestrator independent 4958/4958 both TFMs, merged-tree 4962/4962 both TFMs exit 0 run as concurrent split-TFM jobs. Production surface changed (five handlers): deployed in the post-merge deploy.
+<!-- SECTION:FINAL_SUMMARY:END -->
