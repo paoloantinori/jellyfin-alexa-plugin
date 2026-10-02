@@ -271,8 +271,11 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         // Re-resolved here for the post-search consumers (cached, so no extra
         // library walk): the JF-420/JF-652 pools fetch from the pinned index
         // scoped to the user's libraries, and the artist-songs query reuses the
-        // same scope. The pool itself is fetched at most once per request and
-        // shared by both gates (JF-658). Known seam (accepted with the fold): a
+        // same scope. The handler's own gates fetch the pool at most once per
+        // request and share it (JF-658); a MULTI-VALUE ER leg adds one earlier
+        // fetch inside MultiValueErDisambiguation.TryArbitrate (its Pool ships
+        // on the arbitration result for the JF-702 sharing adopters).
+        // Known seam (accepted with the fold): a
         // library-scope cache invalidation landing between SearchAsync's internal
         // resolution and this one would serve the gates a fresher scope than the
         // search ran under; the window is milliseconds and the worst case is a

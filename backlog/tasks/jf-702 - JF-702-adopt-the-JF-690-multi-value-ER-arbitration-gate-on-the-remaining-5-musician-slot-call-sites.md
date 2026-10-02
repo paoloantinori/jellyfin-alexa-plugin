@@ -47,6 +47,13 @@ Remaining sites (the JF-690 simplify review corrected the original 9-name list;
   disambiguation ask would coexist with through HandlerSelector routing. Scope:
   decide per-leg (first-turn wire, multi-turn defer or handle), with a
   HandlerSelector-level test for the coexistence shape.
+
+GATE-MARKER ADDENDUM (2026-10-02, orchestrator review of the JF-690 merge): while
+adopting, also close the pool-sharing seam the gate marker flagged: both wired call
+sites fetch the artist pool twice on a multi-value leg (once inside TryArbitrate for
+resolution, once at the handler's JF-420/JF-652 gates); arbitration.Pool already ships
+the gate's fetch, so the adopters should consume it instead of re-fetching (the
+PlayArtistSongs/PlaySong sites can take the same fix in this task or a spin-off).
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done
