@@ -23,6 +23,8 @@ APL carousel templates render browse/search results as tappable image cards on E
 3. Tap a carousel item — verify it triggers playback
 4. Verify NowPlaying APL screen shows progress bar during playback
 5. Verify graceful fallback on non-APL devices (no crash, audio-only response)
+
+AUDIT UPDATE (2026-10-02): item 4 is DEAD as stated - the JF-624 live card-drop experiment proved the native now-playing surface covers skill APL during AudioPlayer playback, so the enhanced music NowPlaying goal is unattainable (see CLAUDE.md Key Gotchas). Items 1-3 and 5 remain real device work; the tap path exists (Alexa/Apl/AplUserEventHandler.cs). Apply the task's own 2026-09-27 rewrite prescription when picking this up.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done

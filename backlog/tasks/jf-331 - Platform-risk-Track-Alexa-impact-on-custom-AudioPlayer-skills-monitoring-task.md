@@ -3,10 +3,10 @@ id: JF-331
 title: >-
   Platform risk: Track Alexa+ impact on custom AudioPlayer skills (monitoring
   task)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-07-12 15:01'
-updated_date: '2026-07-13 20:18'
+updated_date: '2026-10-02 12:03'
 labels:
   - platform-risk
   - monitoring
@@ -37,6 +37,12 @@ This is a watch-item, not actionable work today. Task: periodically re-verify (a
 - [ ] #3 On-device (or simulator) check of invocation-name routing behavior on any Alexa+ device is recorded if such a device is available
 - [ ] #4 A concrete trigger is defined for when this becomes a real migration task (e.g. routing observed to break)
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed by the 2026-10-02 backlog audit as SUPERSEDED: the watch-item this monitoring task carried materialized and moved to concrete, active homes. JF-595 (active, same backlog) tracks the Amazon route-hijacking risk with a 2026-09-19 baseline, hermes-agent drift monitoring, and an on-device battery AC; claudedocs/research_amazon_musician_entity_canonicalization_2026-08-30.md documents the degradation with sources (Amazon-confirmed bug, Q3-2026 fix window, whose close is now due per JF-595's own ACs); JF-561's 2026-09-19 correction also fixed the MSAPI self-serve claim this task touched. The unique residue (whether Amazon opens an Alexa+ path for custom skills) overlaps JF-595's drift watch and milestone m-11. Running two stale monitors of the same risk would hide the real one; retired in favor of JF-595.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->

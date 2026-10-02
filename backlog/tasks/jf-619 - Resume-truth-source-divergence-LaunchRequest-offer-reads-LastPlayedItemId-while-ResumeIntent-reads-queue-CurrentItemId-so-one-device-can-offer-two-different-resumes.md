@@ -21,6 +21,8 @@ priority: medium
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
 From the JF-617 review round (2026-09-22, finding CONFIRMED): bare AMAZON.ResumeIntent (the hoisted DeviceQueue fallback) now prefers queue.CurrentItemId (written by AudioPlayer stop events), while the LaunchRequest resume offer and its YesIntent confirm seed exclusively from DeviceQueueManager.GetLastPlayedItemId + UserData (written by VideoApp launches via LastPlayedResponseInterceptor). Neither path reads the other's store. Concrete divergence: user stops music X on the Echo (CurrentItemId=X), later watches a VideoApp item M on the same device (LastPlayedItemId=M): opening the skill offers 'resume M' while saying 'riprendi' resumes X. Any freshness/ordering fix must be applied to both chains or they drift further; the fix should introduce one shared resolution helper (device-scoped, freshness-aware) rather than divergent inline reads. Related review context: the queue pointer has no aging/clearing on cross-client completion (only ClearQueue/FollowMe reset it), which is why the JF-617 hardening added the Played-elsewhere gate - the same discipline belongs in whatever shared resolver replaces both reads.
+
+AUDIT UPDATE (2026-10-02): the CODE half is done and deployed (2026-09-22, commit 8bb5e511): the ONE shared resolver DeviceQueueManager.GetDeviceResumePointer (DeviceQueueManager.cs:291) consumed by LaunchRequestHandler (:119/:203) and ResumeIntentHandler (:193); pinned in PauseResumeStateTests and DeviceQueueManagerTests. CLOSE CONDITION: the device round confirms a single device no longer offers two different resumes.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria

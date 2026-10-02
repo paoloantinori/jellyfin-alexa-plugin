@@ -29,6 +29,8 @@ THE RESIDUAL: the ~80-line serve skeleton (cache-hit serve, encode-in-progress c
 THE HONEST DEEPER SHAPE (named by the review): a serve-strategy spec (TryServeWhileEncoding, prewrite-after-start, ServeAfterEncode delegates + registry + token-override members), absorbing the three skeletons with the ordering differences expressed as strategy hooks instead of delegates-per-site. Natural trigger: the next variant-HLS endpoint (fourth sibling), or whenever the song core's missing debris-cleanup/vanish-guard (item c) graduates from accepted-loose to must-fix (it is a real gap: the song path can leave debris and cannot recover a vanished cache dir the way the variant path can).
 
 SCOPE GUARD: do NOT attempt this before JF-537.1 (cache-rooted transient mode) lands or is declined; both touch the same serve paths and the strategy refactor should absorb the final shape, not an intermediate one.
+
+AUDIT UPDATE (2026-10-02): trigger item (c) is RESOLVED - JF-676 (commit 33401491) landed the ticks-scoped debris verdict + vanish re-probe on the song core and every HLS path, so the "song core's loose cleanup graduates to must-fix" trigger can no longer fire. The only remaining trigger is the fourth serve sibling; the flag-vs-prewrite ordering and registry/token blocker notes stand. Scope guard unchanged: not before JF-537.1 lands or is declined.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done

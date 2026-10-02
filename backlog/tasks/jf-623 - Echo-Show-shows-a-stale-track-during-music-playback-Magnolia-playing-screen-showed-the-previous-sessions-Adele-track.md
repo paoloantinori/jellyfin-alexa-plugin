@@ -16,6 +16,8 @@ priority: low
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
 Live observation 2026-09-23 18:41 (Paolo's loop test): while Magnolia (Negrita) played via a FindSong play, the Echo Show screen still showed "Set Fire to the Rain" (Adele), the track played at 13:59:40 via PlayFavorites. Evidence gathered: the 18:41:52 FindSong play response carries ZERO RenderDocument directives; TryAttachNowPlayingDirective is only called from AplUserEventHandler (carousel taps), NOT from the regular play paths; live config has AplVisualsEnabled unset/false (VisualsEnabled: None), so no APL cards render from anywhere today. Open question: which screen was it (our APL full-screen player from an earlier era, or the Echo's own now-playing widget fed by stream metadata we do not set on music plays). If the latter, the fix is setting AudioItem Stream metadata (title/artist/art) on music launches so the device widget tracks the actual track.
+
+AUDIT UPDATE (2026-10-02): the CODE half is done and deployed: the metadata-refresh chokepoint (PlaybackLaunchBuilder.cs:2043-2050, ReplaceAll-gated TryAttachNowPlayingDirective threading real offset/duration), with the JF-624 round-7 verdict documented inline. CLOSE CONDITION: the device round observes the NATIVE full-screen player tracking the track during music playback (not an APL card).
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria

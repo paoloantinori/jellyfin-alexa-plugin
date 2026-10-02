@@ -25,6 +25,8 @@ DynamicEntityBuilder and DynamicEntitiesInterceptor update slot values via SMAPI
 3. Verify Alexa resolves the new entity value in a subsequent request
 4. Test with large libraries (>1000 artists) — verify performance
 5. Verify entity cleanup when items are removed from library
+
+AUDIT UPDATE (2026-10-02): the mechanism framing is wrong - dynamic entities inject via the Dialog.UpdateDynamicEntities RESPONSE directive (DynamicEntitiesInterceptor, wired at EntryPoints/Registrator.cs:123), not "via SMAPI" (that is the separate catalog-sync subsystem). The unit layer has grown (12 interceptor tests + builder + ja-budget tests) and live directive delivery is proven by the 2026-08-21 INVALID_RESPONSE incident (CLAUDE.md). GENUINELY REMAINING: positive live proof that a dynamically injected value resolves in a subsequent request, large-library performance, and removal cleanup.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done

@@ -38,6 +38,8 @@ lives in the gate's ask leg or a new AskMultipleArtists overload, NOT in the sha
 JF-420.2 builder used by the containment gate (that path's list is bounded by the
 fair-comparison ranking already). Pin: a 4-resolved-candidate leg speaks 3 names and
 still cycles to the 4th.
+
+AUDIT UPDATE (2026-10-02): the fix shape must cover the SECOND uncapped consumer - AskMultipleArtists is also called from CrossMediaFallback.cs:1001 (the JF-363 cross-media offer), which inherits the same uncapped spoken list.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done

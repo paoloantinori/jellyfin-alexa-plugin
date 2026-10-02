@@ -23,6 +23,8 @@ GoToChapterIntentHandler handles chapter navigation for audiobooks/videos. No E2
 2. Test "go to chapter 5" with specific chapter number
 3. Verify playback resumes at correct position after chapter skip
 4. Test edge cases: first chapter (prev), last chapter (next), invalid chapter number
+
+AUDIT UPDATE (2026-10-02): the unit layer landed (Handler/GoToChapterIntentHandlerTests.cs: numeric seek, it-IT word numbers, out-of-range, next/previous; NLU fixtures it-IT:344-359, en-US:228-233). REMAINING: the device leg only. Item 3's wording predates the HLS concat architecture: chapters are seek positions and resume is segment-sliced (JF-694), so re-read it in that frame.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done

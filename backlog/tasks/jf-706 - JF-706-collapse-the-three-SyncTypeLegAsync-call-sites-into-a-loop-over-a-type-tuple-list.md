@@ -43,6 +43,8 @@ contract stable). Pins must stay green unchanged (the three isolation pins, the 
 coupling pin, and the JF-495 SeriesTests mid-sync pin). This was deliberately NOT done in
 the JF-695 review tail: it reshapes the leg flow the JF-695 pins encode, so it deserves
 its own red-green pass, not a drive-by.
+
+AUDIT UPDATE (2026-10-02): path/line refresh - the file lives at Alexa/Catalog/LibrarySyncService.cs; the three call sites are at 219-229, the three-operand gate at 235, the six positional injection args at 247-252. Substance unchanged.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done

@@ -28,6 +28,8 @@ ProactiveEventService and ProactiveEventClient send background notifications to 
 5. Verify graceful failure when user hasn't enabled notifications
 
 Depends on: Amazon Proactive Events API, SMAPI auth tokens.
+
+AUDIT UPDATE (2026-10-02): the "completely untested" premise is refuted - Jellyfin.Plugin.AlexaSkill.Tests/Unit/ProactiveEventsTests.cs carries 10 tests (rate limiter, payload build incl. season/episode and availability timestamp and unique URI, graceful no-LWA failure). REMAINING: the live service-start + real send (original items 1/4) and the release-notes "experimental" marking decision.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done

@@ -28,6 +28,8 @@ TWO stacked concerns on the audiobook chapters query (now the ONE shared builder
 2. Default sort is not chapter order: lexicographic SortName puts "Chapter 10" before "Chapter 2". Whether real books suffer depends on whether Jellyfin's default resolves through SortName or IndexNumber for AudioBook children, and whether libraries tag IndexNumber - needs a live probe on the 12.1.0 box before deciding a fix (an explicit (ParentIndexNumber, IndexNumber) order analogous to AlbumTrackOrder is the candidate, but chapters may carry neither).
 
 Fix owner must first verify live: play a 15+ chapter book, compare play order against folder/chapter numbering, check the DB rows' SortName/IndexNumber/ParentIndexNumber. Then decide: explicit order in BuildAudiobookChaptersQuery (single definition makes head+tail flip together) or documented status quo.
+
+AUDIT UPDATE (2026-10-02): BuildAudiobookChaptersQuery now carries a doc comment asserting the status-quo rationale ("the DB order for this shape IS the book's chapter order"); the probe should confirm or refute that claim explicitly. Head/tail asymmetry confirmed current (tail applies ApplyLibraryFilter at QueueContinuationFetcher.cs:225; the head at PlayBookIntentHandler.cs:168-172 does not).
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done

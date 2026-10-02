@@ -30,6 +30,8 @@ WHY JF-685 DID NOT APPLY IT: the four constructions differ in provider trigger (
 
 FIX DIRECTION: extract `SetupSongVanishFixture` (sibling of SetupAudiobookVanishFixture) returning the (hlsDir, playlistPath) tuple, parameterized on the provider trigger and the planted bytes; migrate the four pins; keep each pin's distinct asserts in the pin.
 
+
+AUDIT UPDATE (2026-10-02): scope note - four EPISODE-path vanish pins (StreamHlsEpisode/EpisodeAudio fast-path at VideoAudioControllerTests.cs:7091/7124, in-lock at 7740/7781) hand-roll the same fixture shape with the same two provider triggers; the extraction can absorb both families (song + episode), not just the four song pins named in the filing.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done

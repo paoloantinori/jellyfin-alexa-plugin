@@ -4,10 +4,10 @@ title: >-
   it-IT musician-slot swap retry: re-pin the 23 pre-existing stale fixtures
   first, then re-apply the native swap and drive the ~12 attributable failures
   to zero (+ en stragglers)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-11 02:03'
-updated_date: '2026-09-12 02:12'
+updated_date: '2026-10-02 12:03'
 labels:
   - nlu
   - interaction-model
@@ -60,3 +60,9 @@ EN STRAGGLERS classified 2026-09-12 night run (probes on the live post-phase-3 s
 
 Task state after the night: phases 1-3 complete; remaining = the musica-family decision (product call: accept-and-repin vs experiment), the 3 filed en entity/slot cases, and the 4 documented model-bug leftovers. All are judgment-or-fresh-session work; nothing mechanical remains.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed by the 2026-10-02 backlog audit: the work this task tracked is landed and verified in the shipped artifacts. The it-IT native musician-slot swap is in the live model (model_it-IT.json declares JellyfinArtist natively on PlaySong/PlayArtistSongs/AddToQueue/PlayNext/PlayAlbum/QueryArtistLibrary; audit-verified 2026-10-02); the fixture debt it tracked was re-pinned by the JF-585 battery (the musica family to PlayArtistSongsIntent 4/4, the matrix pair) and the en stragglers triaged and re-pinned under JF-597 (Done); the it-IT fixture file now carries only a handful of skip_reason rows versus the 23 the task originally tracked. Nothing in its remaining list is unowned. No separate code change was ever needed beyond what landed.
+<!-- SECTION:FINAL_SUMMARY:END -->

@@ -124,8 +124,8 @@ Plugin source lives under `Jellyfin.Plugin.AlexaSkill/` (the C# project root) �
 - `Jellyfin.Plugin.AlexaSkill/Alexa/Entities/` — Data transfer objects and entity types
 - `Jellyfin.Plugin.AlexaSkill/Alexa/EntryPoints/` — Plugin entry points (service registration, DI)
 - `Jellyfin.Plugin.AlexaSkill/Alexa/Exceptions/` — Custom exception types
-- `Jellyfin.Plugin.AlexaSkill/Alexa/Lwa/` — Login with Amazon (LWA) OAuth flow
-- `Jellyfin.Plugin.AlexaSkill/Alexa/ProactiveEvents/` — Proactive event notifications via Alexa
+- `Jellyfin.Plugin.AlexaSkill/Lwa/`: Login with Amazon (LWA) OAuth flow (project root, NOT under Alexa/)
+- `Jellyfin.Plugin.AlexaSkill/ProactiveEvents/`: Proactive event notifications via Alexa (project root, NOT under Alexa/)
 - `docs/` — 104 Mermaid diagrams covering 6 feature flows × 17 locales
 - `tests/integration/` — NLU + E2E test suites (Python/pytest)
 - `Directory.Build.props` — Version numbers (single source of truth)

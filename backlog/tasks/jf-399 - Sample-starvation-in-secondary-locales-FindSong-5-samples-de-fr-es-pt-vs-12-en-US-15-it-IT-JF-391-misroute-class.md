@@ -22,6 +22,8 @@ priority: high
 Primary finding of the 2026-08-23 model audit. Sample counts per intent vs en-US (12) and it-IT (15): FindSongIntent has only 5 samples in pt-BR, es-ES, es-MX, fr-FR, fr-CA, de-DE (2 slotted variants only). PlaySongIntent: ja-JP 10 and hi-IN 14 vs en-US 38. PlayPlaylistIntent: ja-JP 5 vs 20. This is the same class of imbalance that caused JF-391 (playlist requests misrouted to the album intent because 12 samples lost to 354): NLU preferentially matches the intent with more samples, so these locales likely misroute conversational song-search requests to other intents.
 
 Plan: (1) reproduce the misroute with profile-nlu for a de-DE "finde ein lied" style utterance to confirm impact; (2) raise FindSongIntent + PlaySongIntent to >= 12 samples in de/fr/es/pt first (biggest gap), then ja/hi/other; (3) add NLU fixtures for the new utterances in the covered locales. Anti-pattern #4 rules apply: same samples across all locales simultaneously once the set is agreed.
+
+AUDIT UPDATE (2026-10-02): the headline starvation counts are FIXED (FindSong de 16 / fr,es 15 / pt 14 vs en-US 12; PlaySong ja 22, hi 22; PlayPlaylist ja 11; commit 959dfcc) and the executable surface is EXHAUSTED per the task's own 2026-09-27 note. The task stays open ONLY for three product calls: the en-US carrier-noun density (38/34 vs it-IT 84/418), the es-US market decision, the hi-IN Decade swap. Treat those as the task's actual content.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done

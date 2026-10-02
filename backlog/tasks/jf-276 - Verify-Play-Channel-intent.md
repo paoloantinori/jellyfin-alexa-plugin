@@ -23,6 +23,8 @@ PlayChannelIntentHandler plays live TV/radio channels. No E2E coverage. Need to:
 2. Verify stream URL generation for channels (uses /Videos, not /Audio)
 3. Test channel not found handling
 4. Verify live stream behavior (no duration, no seeking)
+
+AUDIT UPDATE (2026-10-02): the unit layer landed (PlayChannelIntentHandlerTests.cs, 15 tests incl. byte-identical radio-tier equivalence; LiveTv/LiveTvStreamResolverTests.cs, 8 resolver tests). Item 2's "/Videos not /Audio" premise is outdated: the live architecture is ILiveTvStreamResolver with direct-remote HLS primary and master.m3u8 fallback. REMAINING: a real-channel device battery.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done
