@@ -49,6 +49,18 @@ not completed" across the attempt loop; when attempt 2 returns all-null versions
 after such an attempt, treat the leg as failed (or re-mint instead of hash-skipping)
 so the leg cannot read as a clean completion. Trigger window is narrow (the 401
 must land exactly on the PUT), hence low priority.
+
+AUDIT ADDENDUM (2026-10-02, JF-706 gate-marker round, pre-existing but this family):
+the hash-skip records the payload hash BEFORE the upload (LibrarySyncService.cs ~596,
+upload at ~608), so "already uploaded this run" is really "already attempted this run":
+a failed upload followed by the leg-level 401 retry hash-skips a version that was never
+minted, dropping a needed upload for the rest of the run (attempt 2 sees the hash at
+~586 and returns count/null; other types mint, the PUT omits this id, the locale logs
+completed). Self-heals only on the next full sync (fresh dictionary). The in-code
+comment at ~578-582 ("the last minted version ... is the one the live model already
+references") is FALSE in this shape. Same commit's JF-709 audit extends the starvation
+set: the equivalence-class FIRST member can itself be hash-skipped after a
+failed-upload retry. Fold this ordering fix into this task's fix shape.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done

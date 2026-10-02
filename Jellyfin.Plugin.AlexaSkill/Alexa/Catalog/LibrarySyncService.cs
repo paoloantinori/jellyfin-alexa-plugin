@@ -155,7 +155,9 @@ public class LibrarySyncService
         // per-attempt re-read below); catalog version creation and the model PUT are
         // both safe to re-submit, which the one-shot 401 retry relies on.
         // JF-513.3 (item 2): locale legs whose payload is identical to one already
-        // uploaded this run (ar-SA/hi-IN have no phonetic generator, so their
+        // (the byte-identical legs are the synonym-equivalence classes the
+        // JF-709 audit names: es x3, fr x2, and the 6-member en/hi cluster;
+        // ar-SA never reaches the sync, the JF-543 filter above.)
         // uploads are byte-identical to a previous leg's) are skipped: SMAPI stores
         // a new catalog version per upload, so re-minting identical content burns
         // quota and the 17-locale volume is the growth this item flagged. The

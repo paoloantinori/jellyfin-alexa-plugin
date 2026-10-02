@@ -16,7 +16,7 @@ references:
   - >-
     backlog/tasks/jf-705 -
     JF-705-per-locale-model-status-ledger-records-SUCCEEDED-over-a-partially-frozen-leg-surface-the-frozen-types-in-the-admin-UI.md
-priority: low
+priority: high
 ---
 
 ## Description
@@ -93,6 +93,17 @@ locale fine; only the shared-default multi-locale run starves it. The stale oute
 JF-513.3 comment that claimed the skip "returns the last uploaded version ... treats
 as current" was corrected in the JF-706 change; this file is now the only record of
 that historical wrongness.
+
+AUDIT UPDATE 2 (2026-10-02, JF-706 gate-marker round, code-CONFIRMED): the starvation
+analysis is verified end to end - CatalogPayload.cs:45 and CatalogSeedEnrichment.cs:211
+are the only locale consumers, PhoneticSynonymGenerator.cs:42-54 dispatches purely on
+LocalePrefix (empty for everything else), the seed union is locale-independent, and
+UpdateInteractionModelAsync is the sole wiring path. The byte-identical classes are
+exactly {es x3}, {fr x2}, {en-AU/CA/GB/IN/US + hi-IN x6}; under the default "*" config
+8 of 16 synced locales NEVER get their model PUT (the first member of each class to run
+uploads, the rest hash-skip forever; CatalogWiringGraft cannot help, it only preserves
+existing wiring). PRIORITY RAISED to high. A JF-706 gate-marker finding adds the
+hash-skip ordering hazard to this family - see JF-703's audit addendum.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done

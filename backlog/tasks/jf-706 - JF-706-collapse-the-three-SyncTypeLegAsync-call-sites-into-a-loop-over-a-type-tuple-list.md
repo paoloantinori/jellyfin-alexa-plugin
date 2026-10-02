@@ -45,6 +45,23 @@ the JF-695 review tail: it reshapes the leg flow the JF-695 pins encode, so it d
 its own red-green pass, not a drive-by.
 
 AUDIT UPDATE (2026-10-02): path/line refresh - the file lives at Alexa/Catalog/LibrarySyncService.cs; the three call sites are at 219-229, the three-operand gate at 235, the six positional injection args at 247-252. Substance unchanged.
+
+GATE-MARKER TAIL (2026-10-02, orchestrator review of commit 1a2f7651, 5 findings): all
+four scrutiny axes verified clean (the live-getter sound with the per-type guard making
+cross-type writes unreachable and the post-leg capture final incl. create-then-fail and
+the 401 attempt-2 re-run; minted.Count > 0 exactly the old three-operand chain with the
+JF-495 rule structural; the pins honest and RUN-EXECUTED green; the JF-709 starvation
+analysis code-confirmed end to end). F1 APPLIED (JF-709 priority raised to high with the
+audit-confirmation block); F2 APPLIED as a JF-703 audit addendum (the
+hash-record-before-upload ordering makes the skip "already attempted", not "already
+uploaded", and the ~578 comment false in the failed-upload-retry shape); F5 APPLIED (the
+corrected JF-513.3 comment now names the real equivalence classes instead of the
+ar-SA/hi-IN example that contradicts the JF-543 filter above it); F4 APPLIED (the pin-2
+doc now states the direct-call boundary: a method-group delegate or reflection
+invocation is invisible to the call-token scan); F3 FILED as JF-716 (the injection seam
+- gate plus six positional arguments - can re-expand to hand ternaries with both pins
+green; candidate shape: a negative ldfld assertion that RunLegAsync's body never loads
+the three stored-id getters).
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done

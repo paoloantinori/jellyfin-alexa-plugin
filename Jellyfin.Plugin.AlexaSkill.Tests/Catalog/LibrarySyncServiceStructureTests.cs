@@ -54,7 +54,10 @@ public class LibrarySyncServiceStructureTests
     }
 
     /// <summary>
-    /// SyncCatalogForLocaleAsync is reachable ONLY through the type-leg stub:
+    /// SyncCatalogForLocaleAsync is reachable ONLY via a DIRECT call through the
+    /// type-leg stub (the scan counts call/callvirt instructions on the methoddef
+    /// token; a method-group delegate or reflection invocation would add a logical
+    /// call site this pin cannot see - the JF-706 gate-marker's named boundary):
     /// a future direct call to it (private, same class, exact-purpose
     /// signature) would bypass the JF-695 CatalogPayloadInvariantException
     /// isolation try, the probe seam, and the minted/id-forwarding rule for
