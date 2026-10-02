@@ -7,6 +7,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-10-02 15:05'
+updated_date: '2026-10-02 22:37'
 labels:
   - playback
   - progressive-queue
@@ -163,68 +164,5 @@ stay green unchanged.
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Closed 2026-10-03 in the worker worktree (base dfe5e09e). DESIGN DECISION (written in
-this file BEFORE coding, above): (a) derive-then-commit, not (b) compensate-on-refusal.
-The compensation design leaves a real crash window (the device-queue persist is
-debounced 2s with the payload captured at arm time, and the resolve+build path sits
-under the 6s retry budget, so the phantom pointer can reach the JSON before any
-rollback), would have to hand-assign pointer fields to restore the JF-619 stamp
-(bypassing SetCurrentItemPointer's ONE-writer contract), and covers only the typed
-refusal. Derive-then-commit never writes the phantom at all and holds for ANY build
-failure. The task's warned reorder hazard ("the build consumes the item the pointer
-names") was verified absent at both arms: the build consumes the source/itemId locals
-and never reads CurrentIndex/CurrentItemId/CurrentPositionTicks; the derivation reads
-the session queue + token; the JF-579 rehydration reader runs at entry and mirrors
-ItemIds membership (untouched by MoveTo/SetCurrentItemPointer); the JF-691 enqueue
-record is written inside the build (now before the handler commit rather than after;
-its Finished-handler reader runs on a later event and needs no ordering); the JF-447
-directive-time-truth property survives because the commit still runs before
-HandleAsync returns, i.e. before Amazon receives the directive.
-
-WHAT LANDED (PlaybackNearlyFinishedEventHandler): both UpdateRecoveryPointer calls
-(main continuation arm + precompute cached-enqueue arm) moved strictly after the
-launch build; the three exhaustion arms (radio, PostPlay AutoPlay, JF-324 episode
-auto-advance) became derive-only, each returning a PendingContinuation (positional
-record, FirstNewId computed with a structural empty-list guard) that the ONE commit
-point (CommitPendingContinuation: session-queue append re-deduped against the live
-queue + RadioModeState arming, then UpdateRecoveryPointer) commits only on a
-successful build. The two former AutoPopulate helpers folded into one
-DeriveSimilarTracksPopulation (the reorder had removed their last structural
-differences; the JF-670 gate and dedup are now single-sourced). Deliberately NOT
-moved, each marked in code: QueueContinuationStore.Remove (a source-queue fact;
-moving it would resurrect a spent continuation), TryFetchContinuationBatch's appends
-(the derivation input, JF-666), the entry rehydration. One pre-existing fixture was
-repaired, not bent: RadioModeTests.PlaybackNearlyFinished_WithRadioMode_AutoQueuesSimilar
-had passed via the phantom append itself (the successor's GetItemById was unmocked,
-the old code appended before the item-not-found early return); it now mocks the
-successor and pins the success-path append. One stale doc pointer the rename created
-in PlayRadioIntentHandler was fixed.
-
-THE PIN (PlaybackNearlyFinishedRefusalTests, 7 facts): a refused continuation (empty
-secret + the JF-636 rate-continuity atempo launch seeded via the launch-scope store)
-leaves the device pointer naming the finishing item with its position intact,
-CurrentIndex unmoved, no enqueue record, the session queue un-appended, and radio
-mode un-armed, at every arm (main, cached-enqueue, radio, PostPlay, episode); the
-success-parity pin shows a non-refusing advance still moves the pointer exactly once
-and records the enqueue; the multi-fire race pin (code-review F1) shows a sibling
-fire committing the same track inside the derive-to-commit window cannot double-append.
-RED PROOFS run: pointer-before-build restored -> the main-arm pin fails on both TFMs;
-commit-before-build restored -> the three exhaustion-arm pins fail on both TFMs; the
-commit's re-dedup reverted to blind AddRange -> the race pin fails on both TFMs.
-
-GATES: /simplify (4 agents) applied 6 findings (derive-pair fold; PendingContinuation
-record + computed FirstNewId; class-doc scoping to "every SYNTHESIZED-continuation
-write" with the three named pre-build exceptions + the missing TryFetchContinuationBatch
-BY DESIGN marker + this file's invariant sentence fixed; rationale restatements trimmed
-from 11 sites to the class doc + pointers; test seeding/assertion helpers
-SeedExhaustedScene + AssertPointerIntact; unused using + unread destructure) and
-skipped 2 with reasons filed as JF-720 (the CreateNearlyFinishedRequest 5th-copy
-graduation to TestHelpers; the writer-side IL roster pin); efficiency was clean.
-/code-review high returned 5 findings, all applied: F1 the double-append race the
-reorder itself introduced (the commit's read-modify-write vs the old derive-time
-whole-list REPLACE's benign last-write-wins) fixed by the commit-side membership
-re-dedup + its deterministic pin; F2 the FirstNewId structural guard; F3 the stale
-PlayRadioIntentHandler doc pointer; F4 leftover misindentation; F5 the success-pin
-config consistency (SetServerAddress). Suites: final 4969/4969 on BOTH TFMs
-(`dotnet test Jellyfin.Plugin.AlexaSkill.Tests -m:1`, exit 0), 0 new warnings.
+Closed by the orchestrator after the full cycle: worker commit 343c478f + gate-marker tail cdcfd283, merged as 35198e5b. The derive-then-commit reorder: both UpdateRecoveryPointer sites moved after the launch build (compensation rejected on three source-verified facts), the three exhaustion arms derive-only with a PendingContinuation record committed at one post-build point, and the pre-build exceptions marked with their true (not overclaimed) invariants. A refused continuation leaves the pointer naming the finishing item with position intact at every arm; the double-append race the reorder would have introduced was caught by the worker's own code review and fixed with commit-side re-dedup plus its race pin; the RadioModeTests fixture that had been passing via the phantom append was repaired to the real success path. 7 new pins, red proofs on both TFMs (pointer/commit/append sabotage each flipping their pins). Worker gates green (simplify 6 applied, 2 filed as JF-720; code-review high all 5 applied). Gate-marker verified all five scrutiny axes at source level; its 5 findings all landed (the false-invariant comment corrected, the lost-update KNOWN RACE note, the bounded derive-on-refire cost note, the success-path directive assert, and the AppendUnseen helper extraction folded into JF-720's scope). Suites: worker and orchestrator independent 4969/4969 both TFMs, merged-tree 4978/4978 both TFMs as concurrent split-TFM jobs. Production surface changed (PlaybackNearlyFinishedEventHandler): deployed in the post-closure deploy.
 <!-- SECTION:FINAL_SUMMARY:END -->
