@@ -375,9 +375,10 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
     /// on Amazon is unchanged by this run, so its
     /// recorded build status is still true, and the diagnostics panel's
     /// ModelsDeployed stays truthful for single-locale setups); the freeze rides
-    /// Error with the "; no model update this run" clause, on a fresh
-    /// LastUpdated. The clean re-run overwrites with no clause, pinning that the
-    /// clause is freeze-driven (JF-705's #4 second half, extended to this path).
+    /// Error with the "; no PUT this run" tail (the NoPutLedgerTail constant),
+    /// on a fresh LastUpdated. The clean re-run overwrites with no clause,
+    /// pinning that the clause is freeze-driven (JF-705's #4 second half,
+    /// extended to this path).
     /// </summary>
     [Fact]
     public async Task SyncUserLibraryAsync_AllTypesFrozen_PreExistingGreenEntry_PreservedWithFrozenClause()
@@ -512,6 +513,65 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
             Plugin.Instance!.Configuration.LwaClientId = string.Empty;
             Plugin.Instance!.Configuration.LwaClientSecret = string.Empty;
         }
+    }
+
+    /// <summary>
+    /// Rework pins F5 + F3 for the no-PUT writer: (a) two CONSECUTIVE all-frozen
+    /// runs must not nest this writer's own message; the second entry carries
+    /// exactly one frozen clause and one no-PUT tail with no "previous:" chain
+    /// and no length growth, which matters because the JF-695 cadence re-runs
+    /// the full sync on EVERY restart while the drift persists; (b) a TRANSIENT
+    /// previous status (IN_PROGRESS, the startup capture's poll world) clamps to
+    /// "Skipped" instead of being preserved forever, while a foreign previous
+    /// Error trails once on the first run and is replaced (not re-trailed) on
+    /// the second.
+    /// </summary>
+    [Fact]
+    public async Task SyncUserLibraryAsync_AllTypesFrozen_ConsecutiveRuns_ErrorStaysSingleDepth()
+    {
+        SetupLibraryWithAllTypes();
+        Plugin.Instance!.Configuration.SetLocaleModelStatus("it-IT", new LocaleModelStatus
+        {
+            Status = "IN_PROGRESS",
+            LastUpdated = DateTime.UtcNow.AddHours(-1),
+            Source = "Embedded",
+            Error = "simulated in-flight build"
+        });
+        FreezeAllTypesViaProbe();
+        var user = CreateUser();
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
+
+        var first = await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
+        var entryAfterFirst = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+
+        // F3: the transient status clamped to the healthy neutral, and the
+        // foreign diagnostic trailed exactly once behind the freeze clause.
+        Assert.False(first.Success);
+        Assert.NotNull(entryAfterFirst);
+        Assert.Equal("Skipped", entryAfterFirst!.Status);
+        Assert.Contains("FROZEN", entryAfterFirst.Error!, StringComparison.Ordinal);
+        Assert.Contains("; previous: simulated in-flight build", entryAfterFirst.Error!, StringComparison.Ordinal);
+
+        // Second all-frozen run with the probe still in place (the every-restart
+        // cadence): the entry must NOT nest or grow.
+        var second = await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
+        var entryAfterSecond = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+
+        Assert.False(second.Success);
+        Assert.NotNull(entryAfterSecond);
+        Assert.Equal("Skipped", entryAfterSecond!.Status);
+
+        // Single depth, no growth: exactly one clause and one tail (the
+        // non-overlapping Split-count idiom), no nested "previous:" chain, and
+        // the once-trailed foreign diagnostic is replaced with the fresh
+        // message rather than re-trailed (own-shape replace).
+        string errorAfterSecond = entryAfterSecond.Error!;
+        Assert.Equal(2, errorAfterSecond.Split("FROZEN", StringSplitOptions.None).Length);
+        Assert.Equal(2, errorAfterSecond.Split("no PUT this run", StringSplitOptions.None).Length);
+        Assert.DoesNotContain("previous:", errorAfterSecond, StringComparison.Ordinal);
+        Assert.DoesNotContain("simulated in-flight build", errorAfterSecond, StringComparison.Ordinal);
+        Assert.True(errorAfterSecond.Length <= entryAfterFirst.Error!.Length,
+            "the composed Error must not grow across consecutive all-frozen runs");
     }
 
     /// <summary>

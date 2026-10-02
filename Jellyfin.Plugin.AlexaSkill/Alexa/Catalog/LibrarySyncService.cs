@@ -461,15 +461,17 @@ public class LibrarySyncService
             LastUpdated = DateTime.UtcNow,
             Error = error,
             Source = CatalogSyncLedgerSource
-        });
+        }, "catalog-sync model update");
     }
 
     /// <summary>
     /// The ONE ledger-write shell (guard, set, save, non-fatal catch) shared by
     /// both ledger writers (the JF-705 PUT path above and the JF-709 no-PUT
     /// path); the writers differ only in how the entry's fields are derived.
+    /// The what label names the failed write in the non-fatal log line so triage
+    /// reads the right surface.
     /// </summary>
-    private void WriteLedgerEntry(string locale, Configuration.LocaleModelStatus entry)
+    private void WriteLedgerEntry(string locale, Configuration.LocaleModelStatus entry, string what)
     {
         try
         {
@@ -485,8 +487,8 @@ public class LibrarySyncService
         catch (Exception ex)
         {
             _logger.LogWarning(ex,
-                "Failed to record catalog-sync model update in the locale status ledger for {Locale} (non-fatal)",
-                locale);
+                "Failed to record the {What} in the locale status ledger for {Locale} (non-fatal)",
+                what, locale);
         }
     }
 
@@ -503,52 +505,84 @@ public class LibrarySyncService
         $"{string.Join(" + ", frozenTypes)} catalog{(frozenTypes.Count > 1 ? "s" : string.Empty)} FROZEN (last-good pinned)";
 
     /// <summary>
+    /// The run-scoped tail this writer appends after the frozen clause. Doubles
+    /// as the OWN-SHAPE MARKER: a previous Error carrying this tail was written
+    /// by this writer, so it is replaced wholesale on the next all-frozen run
+    /// instead of being trailed (see RecordNoPutFrozenLegInLedger). Internal for
+    /// the JF-710 startup capture, whose preserve spec keys on the same marker.
+    /// </summary>
+    internal const string NoPutLedgerTail = "; no PUT this run";
+
+    /// <summary>
     /// Records an ALL-FROZEN leg (no version minted for any type, no model PUT)
     /// in the per-locale status ledger (JF-709), replacing the locale's previous
-    /// row rather than leaving it stale. The previous entry's Status is
-    /// preserved verbatim when one exists: the live model on Amazon is UNCHANGED
-    /// by this run, so its recorded build status is still true, and keeping it
-    /// keeps the diagnostics panel's ModelsDeployed (Any Status=="Succeeded")
-    /// truthful for single-locale setups. With no previous entry (fresh install,
-    /// everything frozen on the first run) the entry reads "Skipped", whose
-    /// documented meaning this extends to the no-PUT leg shapes. The freeze
-    /// clause LEADS the Error (the live, actionable condition) and the previous
-    /// entry's Error, when present, trails as "previous: ..." so a preserved
-    /// FAILED status does not lose its failure diagnostic (code-review F3).
+    /// row rather than leaving it stale. Status: PreservedOrSkippedStatus (the
+    /// policy and its consumer-weight rationale live on the helper). Error: the
+    /// frozen clause plus the run-scoped no-PUT tail, then a single
+    /// "previous: ..." trailer ONLY when the previous Error is a FOREIGN
+    /// diagnostic (a JF-495 canary mismatch or a failed PUT reason, i.e. an
+    /// Error WITHOUT this writer's tail marker). A previous Error carrying the
+    /// tail was
+    /// written by THIS writer and is REPLACED entirely, never nested: the
+    /// every-restart resync cadence would otherwise compound "previous:
+    /// previous: ..." (rework F1; full story in the JF-709 task file). The
+    /// window arithmetic is FrozenLedgerClause's; the tooltip-only position of a
+    /// trailed foreign diagnostic is ACCEPTED there per JF-709 rework F4.
     /// Source is always this writer's own label: catalog sync authors THIS row.
     /// </summary>
     private void RecordNoPutFrozenLegInLedger(string locale, List<CatalogType> frozenTypes)
     {
-        // The previous-entry READ sits under the same non-fatal contract as the
-        // write (WriteLedgerEntry below): the startup capture can swap ledger
-        // rows concurrently, and a Collection mutation during the
-        // GetLocaleModelStatus scan must not fail a sync leg that otherwise
-        // completed.
+        // The previous-entry READ carries its own non-fatal guard (the write is
+        // WriteLedgerEntry's): the startup capture can swap ledger rows
+        // concurrently, and a Collection mutation during the GetLocaleModel
+        // Status scan must not fail a sync leg that otherwise completed. A
+        // failed read degrades to the no-previous-entry shape.
+        Configuration.LocaleModelStatus? previous;
         try
         {
-            Configuration.LocaleModelStatus? previous =
-                Plugin.Instance?.Configuration?.GetLocaleModelStatus(locale);
-            string error = $"{FrozenLedgerClause(frozenTypes)}; no PUT this run";
-            if (previous?.Error is { Length: > 0 } previousError)
-            {
-                error = $"{error}; previous: {previousError}";
-            }
-
-            WriteLedgerEntry(locale, new Configuration.LocaleModelStatus
-            {
-                Status = previous?.Status ?? "Skipped",
-                LastUpdated = DateTime.UtcNow,
-                Error = error,
-                Source = CatalogSyncLedgerSource
-            });
+            previous = Plugin.Instance?.Configuration?.GetLocaleModelStatus(locale);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex,
-                "Failed to record the all-frozen no-PUT leg in the locale status ledger for {Locale} (non-fatal)",
+                "Failed to read the locale status ledger for {Locale} before recording the all-frozen no-PUT leg (non-fatal)",
                 locale);
+            previous = null;
         }
+
+        string error = $"{FrozenLedgerClause(frozenTypes)}{NoPutLedgerTail}";
+        if (previous?.Error is { Length: > 0 } previousError
+            && !previousError.Contains(NoPutLedgerTail, StringComparison.Ordinal))
+        {
+            error = $"{error}; previous: {previousError}";
+        }
+
+        WriteLedgerEntry(locale, new Configuration.LocaleModelStatus
+        {
+            Status = PreservedOrSkippedStatus(previous?.Status),
+            LastUpdated = DateTime.UtcNow,
+            Error = error,
+            Source = CatalogSyncLedgerSource
+        }, "all-frozen no-PUT leg");
     }
+
+    /// <summary>
+    /// The no-PUT writer's Status clamp (rework F3): SETTLED statuses keep their
+    /// consumer weight (SUCCEEDED feeds ModelsDeployed; FAILED/TIMEOUT keep the
+    /// diagnostics panel's failedModels count; comparison is OrdinalIgnoreCase to
+    /// match those consumers). Everything else clamps to the documented healthy
+    /// neutral "Skipped": IN_PROGRESS (the startup capture's in-flight poll
+    /// world) would freeze a momentary state into a permanent row, and UNVERIFIED
+    /// (the catalog-sync PUT path's outcome-not-confirmed observation,
+    /// CatalogManager) describes a superseded run whose reason still trails in
+    /// Error when the prior row carried one.
+    /// </summary>
+    private static string PreservedOrSkippedStatus(string? previousStatus) =>
+        string.Equals(previousStatus, "SUCCEEDED", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(previousStatus, "FAILED", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(previousStatus, "TIMEOUT", StringComparison.OrdinalIgnoreCase)
+            ? previousStatus!
+            : "Skipped";
 
     /// <summary>
     /// Fetch library items of a given type, filtered by the user's allowed libraries.
