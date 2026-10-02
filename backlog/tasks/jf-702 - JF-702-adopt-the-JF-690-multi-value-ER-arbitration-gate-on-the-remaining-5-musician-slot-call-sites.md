@@ -3,9 +3,10 @@ id: JF-702
 title: >-
   JF-702 - adopt the JF-690 multi-value ER arbitration gate on the remaining 5
   musician-slot call sites
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-02'
+updated_date: '2026-10-02 17:56'
 labels:
   - routing
   - ux
@@ -87,83 +88,5 @@ the normalization fold note).
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Closed by the JF-702 worker (worktree agent-a039cdd1e14113f82, base 7592ccaf). All five
-musician-slot sites now drive MultiValueErDisambiguation.TryArbitrate; 23 new pins in
-MusicianMultiValueErAdoptionTests; suites 4956/4956 net9.0 and 4956/4956 net10.0
-(baseline 4933 + 23), 0 new compiler warnings.
-
-Per-site decisions:
-- AddToQueue + PlayNext (the twins): the gate carries PlaySong's scope restriction
-  (PlaySongIntentHandler.IsGenericMusicQuery on the song slot), the same
-  song+musician constraint logic JF-690's code-review found for PlaySong: a REAL song
-  title keeps today's rank-#1 scoped title search because the confirm leg plays the
-  artist and can neither preserve the requested song nor the queue/insert-next
-  operation; a generic music word ("metti in coda la musica di pink") lets the gate
-  ask, and a stale-catalog collapse scopes the song search to the proven survivor
-  (the twins have no PlaySong-style play-the-artist bypass; the generic-word title
-  miss on the collapse leg is pre-existing either way, documented at the site).
-- PlayAlbum: the gate is restricted to the musician-only shape (album slot empty
-  after the JF-489 retry block, the JF-411 album-by-artist resolution the JF-690
-  filing named); an album TITLE in hand keeps the rank-#1 scoped search. NEW seam
-  found and closed: the JF-471/JF-473 re-judgment gates score the match against
-  musicianSearch (the stale rank-#1 canonical on a collapse leg), so the survivor
-  ("ABBA") would be refused against "P!nk" despite being proven; the
-  arbitrationResolvedArtist flag skips both re-judgment gates for the survivor
-  (the gates exist to judge SEARCH results; proven evidence outranks the stale
-  canonical, the same principle JF-690 applied at PlaySong/PlayArtistSongs). Pin:
-  the collapse plays the survivor's album (red-loads without the flag by
-  construction: the acceptance gate returns NotFoundAlbumByArtist).
-- QueryArtistLibrary: PlayArtistSongs' shape, unrestricted (the musician slot is
-  the intent's only content input). Documented contract shift on the ask leg: the
-  confirm leg plays the artist instead of listing, the accepted JF-690 adoption
-  trade.
-- FindSong: WIRED, both first-turn and the AwaitingArtist musician-supplied leg,
-  with evidence replacing the JF-690 deferral: (1) a first-turn request carries no
-  FindSongSessionData, so the feared force-route interplay cannot occur (the ask is
-  the FIRST session state written and the FindSong flow never opens); (2) on the
-  multi-turn leg the interplay is ALREADY owned by the JF-398 machinery the JF-690
-  notes predate the sharpening of: AskMultipleArtists marks every other flow's keys
-  for removal, so the interceptor strips FindSongSessionData from the ask and the
-  confirm/cycle turns route to Yes/NoIntentHandler through the normal CanHandle
-  order. The coexistence pin drives the full chain: handler ask -> interceptor merge
-  over an open FindSong session (FindSongSessionData gone, disambig_* present) ->
-  HandlerSelector routes the yes to YesIntentHandler (control: with FindSong state
-  kept, the yes force-routes to FindSongIntentHandler). NOT wired by decision: the
-  AwaitingKeywords musician-as-keywords fallback and the Disambiguating pick leg
-  (the musician slot there is a keyword/pick surface, not an artist-search driver;
-  gating it would change semantics, not adopt the gate).
-
-Pool-sharing closure (the addendum): PlayArtistSongs seeds its artistPool cache
-from arbitration.Pool, so on a multi-value leg the JF-420/JF-652 gates consume the
-gate's fetch instead of a third materialization; closed legs are null (byte-
-identical). Pin: the counting index sees exactly TWO GetArtists calls on the
-multi-value fall-through-then-JF-420-gate leg (the gate's + SearchAsync's tier 1).
-PlaySong's fall-through re-fetch lives INSIDE the shared SearchAsync chain (its
-tier-1 materialization feeds tiers 2-4); no handler gates follow the arbitration
-there, so consuming Pool would need a contract change on the ONE shared chain for
-the rarest leg - documented at the addendum level as deliberately not taken.
-
-Gates: /simplify (4 angles, findings applied/skipped in the commit message) and
-/code-review high (6 findings: 3 applied, 2 filed to JF-715, 1 verified-no-action)
-run on the final diff; the applied set: the FindSong first-turn gate restricted to
-the keywords-empty shape (a titleKeywords value in the SAME utterance is in-hand
-content the confirm leg cannot preserve; the both-slots shape keeps today's
-rank-#1 resolution byte-identically, new pin), the twins' comments now name the
-ask leg's accepted operation shift and the collapse not-found naming the survivor,
-the FindSong in-file arbitration helper (one collapse log literal, the simplify
-fold), and the PlayAlbum closed-gate-leg clarifying comment. Filed to JF-715: the
-three-way gate-consume composite extraction (PlaySong + the twins, with the
-TryArbitrate constraint-slot-probe overload variant) and the pool threading
-through SearchAsync's fall-through legs. Verified-no-action: the QueryArtistLibrary
-ordering finding (the canonicalMusician gate already made the JF-440 fallback
-unreachable for ER-resolved slots before the adoption; behavior unchanged).
-Caveat honestly recorded: the sabotage-style red proofs (temporarily disabling
-each new mechanism to watch its pin flip) were attempted and DENIED by the
-session's permission layer (source-edit tampering classifier); the pins'
-load-bearing quality is argued structurally instead: the pool pin counts
-GetArtists (removing the seed provably yields 3 calls), the survivor pins assert
-the ABSENCE of any MusicArtist DB query (only the collapse supplies the scope),
-and the PlayAlbum flag pin fails as NotFoundAlbumByArtist without the skip.
-
-Do not merge from the worker branch; orchestrator merges via review.
+Closed by the orchestrator after the full cycle: worker commit 42b62cbd + gate-marker tail ea0320ee, merged as ce1d9810. The multi-value ER gate adopted on every remaining musician-slot site: AddToQueue and PlayNext with PlaySong's generic-word scope restriction; PlayAlbum restricted to the musician-only JF-411 shape with the new arbitrationResolvedArtist flag closing a NEW seam (the JF-471/JF-473 re-judgment gates would have refused the proven survivor by scoring against the stale rank-#1 canonical); QueryArtistLibrary in the unrestricted shape with the listing-to-playback shift documented; FindSong wired on both musician-supplied legs (first-turn keywords-empty and AwaitingArtist), replacing the JF-690 deferral with evidence including the HandlerSelector-level coexistence test. Pool-sharing closed on PlayArtistSongs with the counting pin. 23 new pins. Worker gates green (simplify 2 applied incl. the verified-false-positive rejection; code-review high 3 applied, 2 filed as JF-715, 1 verified-no-action); the worker's sabotage red proofs were permission-denied and honestly reported, and the orchestrator gate-marker compensated: source-level byte-identity reads of all three restriction wrappers, the end-to-end coexistence pin verified driving the real interceptor and production selector, pool-scope matching, mental sabotage confirming the load-bearing pins, and real suite runs (23/23, 348/348 both TFMs). Gate-marker findings all applied in the tail (the two real-title pins strengthened to total rank-#1-only assertions over a two-artist library; the raw-vs-stripped probing divergence documented at both twin sites; JF-715's pool-waste site list completed with the two new adopters). Suites: worker and orchestrator independent 4956/4956 both TFMs, merged-tree 4958/4958 both TFMs exit 0. Production surface changed (five handlers): deployed in the post-merge deploy.
 <!-- SECTION:FINAL_SUMMARY:END -->
