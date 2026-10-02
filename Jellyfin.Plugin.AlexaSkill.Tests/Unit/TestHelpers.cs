@@ -272,6 +272,34 @@ internal static class TestHelpers
     }
 
     /// <summary>
+    /// JF-690: a slot carrying a MULTI-VALUE ER authority: an ER_SUCCESS_MATCH
+    /// listing several canonical values in Amazon's likelihood-rank order (the
+    /// shared-first-word catalog-synonym shape, live: raw "pink" resolving to
+    /// [P!nk, Pink Floyd]). The single-value <see cref="ResolvedSlot"/> shape
+    /// cannot express it; this builder mirrors its construction otherwise.
+    /// </summary>
+    /// <param name="rawValue">The raw spoken slot value.</param>
+    /// <param name="canonicalValues">The matched canonical names, rank #1 first.</param>
+    internal static Slot ResolvedSlotMultiValue(string rawValue, params string[] canonicalValues)
+    {
+        var slot = new Slot { Name = "musician", Value = rawValue };
+        slot.Resolution = new Resolution
+        {
+            Authorities = new[]
+            {
+                new ResolutionAuthority
+                {
+                    Status = new ResolutionStatus { Code = "ER_SUCCESS_MATCH" },
+                    Values = canonicalValues
+                        .Select(v => new ResolutionValueContainer { Value = new ResolutionValue { Name = v } })
+                        .ToArray()
+                }
+            }
+        };
+        return slot;
+    }
+
+    /// <summary>
     /// JF-562/JF-564: a context whose AudioPlayer carries the given stream token on a
     /// PLAYING device (the token-vs-ledger displacement shape the transport suites
     /// exercise; previously one private copy per suite). JF-315 batch 5: the player

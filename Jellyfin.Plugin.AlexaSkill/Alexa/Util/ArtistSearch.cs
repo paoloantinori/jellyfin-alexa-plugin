@@ -258,6 +258,62 @@ internal static class ArtistSearch
         => !string.IsNullOrEmpty(candidateName) && candidateName.Length <= query.Length + Tier1ContainmentLengthBand;
 
     /// <summary>
+    /// JF-420.1: exact-name equality between a query and a candidate name
+    /// (case-insensitive, end-trimmed; the same normalization as FuzzyMatcher's
+    /// exact-match concept). The JF-420 gate exists to resolve CONTAINMENT matches
+    /// (artist name inside a LONGER query); equality is the degenerate case where
+    /// the containment exemption inflates both sides to ContainmentScore, the margin
+    /// is always 0, and an exact request is demoted to a disambiguation prompt (live:
+    /// "Soul Coughing" with "Soul Coughing &amp; Roni Size" in the library). An exact
+    /// match is the strongest possible signal: it must auto-play. NOT accent-insensitive
+    /// by design: an accented query ("måneskin" vs "Måneskin") is ASR accent drift,
+    /// which the phonetic tiers exist to resolve. JF-690 also uses it as the
+    /// resolution predicate for ER canonical names (a catalog value IS the library
+    /// artist name, so only the exact hit counts; fuzzy expansion would re-introduce
+    /// the arbitrary arbitration the gate exists to remove), which is why it lives
+    /// here and not on the handler.
+    /// </summary>
+    /// <param name="query">The query (or ER canonical name).</param>
+    /// <param name="name">The candidate library artist name.</param>
+    /// <returns>True when the two are equal ignoring case after trimming. Null or
+    /// empty on either side reads as false (the pool walk feeds every published
+    /// index entry through here; a blank-named entry can never exact-match, the
+    /// PassesContainmentBand guard convention).</returns>
+    internal static bool IsExactNameMatch(string? query, string? name)
+        => !string.IsNullOrEmpty(query) && !string.IsNullOrEmpty(name)
+            && string.Equals(query.Trim(), name.Trim(), StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// JF-690: resolve ER candidate names to library artists by exact-name equality
+    /// (<see cref="IsExactNameMatch"/>) over the user-scoped pool. One artist per
+    /// name (first pool hit, deterministic in pool order), de-duplicated by id (a
+    /// deliberate second layer behind the caller's name de-dup: a duplicated
+    /// candidate can never manufacture a two-entry prompt of one artist, whoever
+    /// calls this), and the RESULT preserves the candidates' order: callers feed
+    /// the ER values list, whose order is Amazon's likelihood rank, so the first
+    /// resolved artist is the one a plain "yes" plays (AskMultipleArtists'
+    /// winner-first contract).
+    /// </summary>
+    /// <param name="names">The candidate names (ER canonical values, rank order).</param>
+    /// <param name="pool">The user-scoped artist pool (a pinned index view).</param>
+    /// <returns>The distinct resolved artists in candidate order; empty when none resolve.</returns>
+    internal static List<BaseItem> ResolveExactNameMatches(IReadOnlyList<string> names, IReadOnlyList<BaseItem> pool)
+    {
+        List<BaseItem> resolved = new();
+        HashSet<Guid> seen = new();
+        foreach (string name in names)
+        {
+            BaseItem? match = pool.FirstOrDefault(candidate => IsExactNameMatch(name, candidate.Name));
+            if (match != null && seen.Add(match.Id))
+            {
+                resolved.Add(match);
+            }
+        }
+
+        return resolved;
+    }
+
+    /// <summary>
     /// Whether a tier-2 prefix match covers only the first word of a multi-word query,
     /// leaving the rest of the query's content completely unmatched (JF-417). This shape
     /// must NOT short-circuit the tier chain: the tier-4 fuzzy-all pass often has a much

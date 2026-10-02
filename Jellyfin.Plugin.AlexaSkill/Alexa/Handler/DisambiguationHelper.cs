@@ -72,7 +72,13 @@ internal static class DisambiguationHelper
         response.SessionAttributes = BuildAttributes(matchList, index, mediaType);
 
         // JF-398: activating the disambiguation flow supersedes any other flow's state.
-        ConversationalFlows.MarkOthersInactive(response, ConversationalFlows.DisambiguationKeys);
+        // JF-690 review: mark ONLY the keys this builder writes, so the
+        // cross-media OFFER flavor's decline keys (same disambig_* family, set by
+        // the JF-363 offer ask) are superseded with the rest of the other flows:
+        // a stale crossmedia_notfound_* surviving a plain artist ask made "no"
+        // answer the OLD song/album not-found instead of cycling.
+        ConversationalFlows.MarkOthersInactive(
+            response, AttrMatches, AttrIndex, AttrType);
         return response;
     }
 
@@ -99,7 +105,13 @@ internal static class DisambiguationHelper
         response.SessionAttributes = BuildAttributes(matchList, index, mediaType);
 
         // JF-398: activating the disambiguation flow supersedes any other flow's state.
-        ConversationalFlows.MarkOthersInactive(response, ConversationalFlows.DisambiguationKeys);
+        // JF-690 review: mark ONLY the keys this builder writes, so the
+        // cross-media OFFER flavor's decline keys (same disambig_* family, set by
+        // the JF-363 offer ask) are superseded with the rest of the other flows:
+        // a stale crossmedia_notfound_* surviving a plain artist ask made "no"
+        // answer the OLD song/album not-found instead of cycling.
+        ConversationalFlows.MarkOthersInactive(
+            response, AttrMatches, AttrIndex, AttrType);
 
         if (context != null && AplHelper.DeviceSupportsApl(context) && AplHelper.VisualsEnabled)
         {
@@ -142,7 +154,13 @@ internal static class DisambiguationHelper
         response.SessionAttributes = BuildAttributes(matches, nextIndex, mediaType);
 
         // JF-398: activating the disambiguation flow supersedes any other flow's state.
-        ConversationalFlows.MarkOthersInactive(response, ConversationalFlows.DisambiguationKeys);
+        // JF-690 review: mark ONLY the keys this builder writes, so the
+        // cross-media OFFER flavor's decline keys (same disambig_* family, set by
+        // the JF-363 offer ask) are superseded with the rest of the other flows:
+        // a stale crossmedia_notfound_* surviving a plain artist ask made "no"
+        // answer the OLD song/album not-found instead of cycling.
+        ConversationalFlows.MarkOthersInactive(
+            response, AttrMatches, AttrIndex, AttrType);
         return response;
     }
 
@@ -229,7 +247,13 @@ internal static class DisambiguationHelper
             ResponseStrings.Get("DisambiguateMultipleArtists", locale, matchList),
             new Reprompt(ResponseStrings.Get("DisambiguateReprompt", locale)));
         response.SessionAttributes = BuildAttributes(matches, 0, MediaTypeArtist);
-        ConversationalFlows.MarkOthersInactive(response, ConversationalFlows.DisambiguationKeys);
+        // JF-690 review: mark ONLY the keys this builder writes, so the
+        // cross-media OFFER flavor's decline keys (same disambig_* family, set by
+        // the JF-363 offer ask) are superseded with the rest of the other flows:
+        // a stale crossmedia_notfound_* surviving a plain artist ask made "no"
+        // answer the OLD song/album not-found instead of cycling.
+        ConversationalFlows.MarkOthersInactive(
+            response, AttrMatches, AttrIndex, AttrType);
         return response;
     }
 

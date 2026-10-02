@@ -291,24 +291,54 @@ public class PlaySongIntentHandler : BaseHandler
         string? matchedArtistName = null;
         if (!string.IsNullOrWhiteSpace(musicianQuery))
         {
-            string searchMusician = canonicalMusician ?? musicianQuery;
-            Logger.LogDebug("PlaySong: searching for artist filter='{Musician}'", searchMusician);
-            IReadOnlyList<BaseItem> artists = await Util.ArtistSearch.SearchAsync(
-                searchMusician, user, _libraryManager, _artistIndex, Logger,
-                (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", ct),
-                locale, cancellationToken).ConfigureAwait(false);
-
-            Logger.LogDebug("PlaySong: artist search returned {Count} results for '{Musician}'", artists.Count, searchMusician);
-
-            if (artists.Count == 0)
+            // JF-690: the shared multi-value-ER gate (it owns the full contract),
+            // restricted to the generic-music-word shape: when the song slot
+            // carries a REAL title, the title itself keeps driving today's
+            // rank-#1 scoped search, because the gate's confirm leg cannot
+            // preserve the song constraint and asking here would drop the
+            // explicitly requested song (code-review finding, applied). Placed
+            // before the artist search so the ask never pays for the search
+            // (only the earlier "searching" announcement is spoken).
+            if (IsGenericMusicQuery(songQuery))
             {
-                return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByArtist", locale, musicianQuery));
+                var arbitration = MultiValueErDisambiguation.TryArbitrate(
+                    intentRequest, user, _artistIndex, _libraryManager, Logger, locale);
+                if (arbitration.Ask != null)
+                {
+                    return arbitration.Ask;
+                }
+
+                if (arbitration.ResolvedArtist is { } resolvedArtist)
+                {
+                    // The ambiguity collapsed to one library artist (stale
+                    // catalog candidates): proven evidence outranks a search
+                    // driven by the stale rank-#1 canonical.
+                    matchedArtistName = resolvedArtist.Name;
+                    artistsIds.Add(resolvedArtist.Id);
+                }
             }
 
-            matchedArtistName = artists[0].Name;
-            foreach (BaseItem artist in artists)
+            if (artistsIds.Count == 0)
             {
-                artistsIds.Add(artist.Id);
+                string searchMusician = canonicalMusician ?? musicianQuery;
+                Logger.LogDebug("PlaySong: searching for artist filter='{Musician}'", searchMusician);
+                IReadOnlyList<BaseItem> artists = await Util.ArtistSearch.SearchAsync(
+                    searchMusician, user, _libraryManager, _artistIndex, Logger,
+                    (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", ct),
+                    locale, cancellationToken).ConfigureAwait(false);
+
+                Logger.LogDebug("PlaySong: artist search returned {Count} results for '{Musician}'", artists.Count, searchMusician);
+
+                if (artists.Count == 0)
+                {
+                    return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByArtist", locale, musicianQuery));
+                }
+
+                matchedArtistName = artists[0].Name;
+                foreach (BaseItem artist in artists)
+                {
+                    artistsIds.Add(artist.Id);
+                }
             }
         }
 

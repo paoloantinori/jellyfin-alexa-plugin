@@ -1226,4 +1226,90 @@ public class ArtistSearchTests
         Assert.Empty(withoutVariants);
         Assert.Equal(new[] { "lazy bones", "lazybones", "lazy bones" }, searched);
     }
+
+    // --- IsExactNameMatch / ResolveExactNameMatches (JF-420.1 predicate, JF-690 resolver) ---
+
+    [Fact]
+    public void IsExactNameMatch_TrimmedCaseInsensitive_True()
+    {
+        Assert.True(ArtistSearch.IsExactNameMatch("  soul coughing ", "Soul Coughing"));
+    }
+
+    [Fact]
+    public void IsExactNameMatch_AccentDrift_False()
+    {
+        // NOT accent-insensitive by design (JF-420.1): accent drift is the
+        // phonetic tiers' job, never the exact gate's.
+        Assert.False(ArtistSearch.IsExactNameMatch("maneskin", "Måneskin"));
+    }
+
+    [Fact]
+    public void IsExactNameMatch_Containment_False()
+    {
+        Assert.False(ArtistSearch.IsExactNameMatch("p!nk floyd", "P!nk"));
+    }
+
+    [Fact]
+    public void ResolveExactNameMatches_ResolvesAllInCandidateOrder()
+    {
+        // The ER rank order is preserved: Amazon's rank #1 first, the entry a
+        // plain "yes" plays in AskMultipleArtists' winner-first contract.
+        var pnk = new MusicArtist { Name = "P!nk", Id = Guid.NewGuid() };
+        var floyd = new MusicArtist { Name = "Pink Floyd", Id = Guid.NewGuid() };
+        var pool = new List<BaseItem> { floyd, pnk };
+
+        var resolved = ArtistSearch.ResolveExactNameMatches(new[] { "p!nk", " pink floyd " }, pool);
+
+        Assert.Equal(new[] { pnk.Id, floyd.Id }, resolved.Select(a => a.Id));
+    }
+
+    [Fact]
+    public void ResolveExactNameMatches_UnresolvedNamesDropOut()
+    {
+        // A stale catalog value (artist left the library) must not enter the
+        // prompt: only library-resident candidates survive.
+        var floyd = new MusicArtist { Name = "Pink Floyd", Id = Guid.NewGuid() };
+
+        var resolved = ArtistSearch.ResolveExactNameMatches(new[] { "P!nk", "Pink Floyd" }, new List<BaseItem> { floyd });
+
+        Assert.Equal(new[] { floyd.Id }, resolved.Select(a => a.Id));
+    }
+
+    [Fact]
+    public void ResolveExactNameMatches_SameNameTwice_YieldsOneArtist()
+    {
+        // Defense in depth behind GetCanonicalValues' own name de-dup: the
+        // resolver also de-dupes by id, so a duplicated candidate can never
+        // manufacture a two-entry prompt of one artist.
+        var pnk = new MusicArtist { Name = "P!nk", Id = Guid.NewGuid() };
+
+        var resolved = ArtistSearch.ResolveExactNameMatches(new[] { "P!nk", "p!nk" }, new List<BaseItem> { pnk });
+
+        Assert.Equal(new[] { pnk.Id }, resolved.Select(a => a.Id));
+    }
+
+    [Fact]
+    public void ResolveExactNameMatches_NoHit_ReturnsEmpty()
+    {
+        var floyd = new MusicArtist { Name = "Pink Floyd", Id = Guid.NewGuid() };
+
+        var resolved = ArtistSearch.ResolveExactNameMatches(new[] { "Nirvana" }, new List<BaseItem> { floyd });
+
+        Assert.Empty(resolved);
+    }
+
+    [Fact]
+    public void ResolveExactNameMatches_BlankNamedPoolEntry_DoesNotThrow()
+    {
+        // The resolver walks EVERY published index entry (the JF-455 blank-named
+        // class included), so the predicate must read a null name as "no match",
+        // never throw (code-review finding; the moved IsExactNameMatch's previous
+        // caller only ever saw search-matched, non-null names).
+        var blank = new MusicArtist { Name = null!, Id = Guid.NewGuid() };
+        var floyd = new MusicArtist { Name = "Pink Floyd", Id = Guid.NewGuid() };
+
+        var resolved = ArtistSearch.ResolveExactNameMatches(new[] { "pink floyd" }, new List<BaseItem> { blank, floyd });
+
+        Assert.Equal(new[] { floyd.Id }, resolved.Select(a => a.Id));
+    }
 }
