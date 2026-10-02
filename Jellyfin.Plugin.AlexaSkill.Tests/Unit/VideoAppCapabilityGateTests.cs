@@ -277,13 +277,20 @@ public class VideoAppCapabilityGateTests : PluginTestBase
         var handler = new PlayVideoIntentHandler(
             _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory);
 
+        var session = _fx.CreateSession();
         SkillResponse response = await handler.HandleAsync(
             CreatePlayRequest("PlayVideoIntent", "title", "The Matrix"),
-            TestHelpers.CreateScreenlessContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
+            TestHelpers.CreateScreenlessContext(), _fx.CreateUser(), session, CancellationToken.None);
 
         Assert.False(HasVideoAppDirective(response), "the Dot must not get a VideoApp.Launch it will reject");
         Assert.True(response.Response.ShouldEndSession);
         Assert.Contains("requires a device with a screen", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+
+        // JF-714: the capability Tell is not a launch, so no phantom now-playing may
+        // survive it (the StartOver-pattern HasLaunchDirective gate at the write
+        // site); the refusal-test assertion shape (MusicPathLaunchRefusalTests).
+        Assert.Null(session.FullNowPlayingItem);
+        Assert.Empty(session.NowPlayingQueue);
     }
 
     [Fact]
@@ -297,13 +304,20 @@ public class VideoAppCapabilityGateTests : PluginTestBase
         var handler = new PlayVideoIntentHandler(
             _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory);
 
+        var session = _fx.CreateSession();
         SkillResponse response = await handler.HandleAsync(
             CreatePlayRequest("PlayVideoIntent", "title", "The Matrix"),
-            TestHelpers.CreateContextWithVideoApp(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
+            TestHelpers.CreateContextWithVideoApp(), _fx.CreateUser(), session, CancellationToken.None);
 
         var directive = response.HasDirective<VideoAppLaunchDirective>();
         Assert.NotNull(directive.VideoItem);
         Assert.Null(response.Response.ShouldEndSession);
+
+        // JF-714: the delivered launch still writes the now-playing state (the gate
+        // must not swallow the real-video arm's writes).
+        Assert.Same(movie, session.FullNowPlayingItem);
+        Assert.NotNull(session.NowPlayingQueue);
+        Assert.Equal(movie.Id, Assert.Single(session.NowPlayingQueue).Id);
     }
 
     [Fact]

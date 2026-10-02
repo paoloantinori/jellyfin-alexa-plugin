@@ -467,8 +467,17 @@ public class YesIntentHandler : BaseHandler
             Launch.GetVideoAppLaunchUrl(video, user),
             resumeTicks: 0,
             SpeechBuilder.BuildNowPlayingSpeech(video.Name, locale, Launch.GetAnnounceNowPlaying(user))).ConfigureAwait(false);
-        session.NowPlayingQueue = new List<QueueItem> { new() { Id = video.Id } };
-        session.FullNowPlayingItem = video;
+        // JF-714: the video confirm arm's now-playing writes ride a DELIVERED
+        // launch (the StartOver pattern): a confirmed MOVIE on a screenless
+        // device answers the VideoRequiresScreen capability Tell (no directive;
+        // an EPISODE degrades to the audio-only launch, which carries one), and
+        // a phantom now-playing must not survive it.
+        if (PlaybackLaunchBuilder.HasLaunchDirective(response))
+        {
+            session.NowPlayingQueue = new List<QueueItem> { new() { Id = video.Id } };
+            session.FullNowPlayingItem = video;
+        }
+
         return response;
     }
 

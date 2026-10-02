@@ -574,11 +574,21 @@ public class SearchMediaIntentHandler : BaseHandler
                 context);
         }
 
-        session.NowPlayingQueue = new List<QueueItem>
+        // JF-714: the now-playing writes ride a DELIVERED launch (the StartOver
+        // pattern). NOT tautological: the video arm routes through
+        // BuildEpisodeLaunchResponseAsync, which can answer the VideoRequiresScreen
+        // capability Tell on a screenless device (a Tell, no directive); the audio
+        // arm always delivers a directive (a refusal throws), so only the phantom
+        // movie case is new here.
+        if (PlaybackLaunchBuilder.HasLaunchDirective(response))
         {
-            new QueueItem { Id = item.Id }
-        };
-        session.FullNowPlayingItem = item;
+            session.NowPlayingQueue = new List<QueueItem>
+            {
+                new QueueItem { Id = item.Id }
+            };
+            session.FullNowPlayingItem = item;
+        }
+
         return response;
     }
 
