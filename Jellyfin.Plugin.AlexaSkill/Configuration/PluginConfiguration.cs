@@ -686,7 +686,10 @@ public record LocaleModelStatus
     /// <summary>Gets the UTC timestamp when this status was last checked.</summary>
     public DateTime LastUpdated { get; init; }
 
-    /// <summary>Gets the error message if the build failed, null otherwise.</summary>
+    /// <summary>Gets the error message if the build failed, or a non-fatal
+    /// caveat surfaced next to the status (a canary mismatch or frozen catalog
+    /// types on an otherwise successful build, JF-495/JF-705); null otherwise.
+    /// The admin UI renders this field regardless of Status.</summary>
     public string? Error { get; init; }
 
     /// <summary>Gets the model source: "Embedded" (bundled) or "Custom" (user-provided).</summary>

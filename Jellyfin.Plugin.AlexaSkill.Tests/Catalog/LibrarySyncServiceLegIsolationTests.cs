@@ -268,6 +268,97 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
+    /// JF-705 ledger observability pin: a partially frozen leg whose model PUT
+    /// succeeded must not read as a clean locale in the per-locale status
+    /// ledger. Status stays the PUT's own outcome (SUCCEEDED: the build DID
+    /// succeed for the injected types, and the diagnostics panel's
+    /// ModelsDeployed/failedModels status-string matches stay truthful), while
+    /// the frozen types ride the entry's Error field, which config.html renders
+    /// unconditionally next to the status icon (80-char truncation, full text
+    /// in the tooltip). The clean re-run (probe cleared, same service and
+    /// user) overwrites the entry with no clause, pinning that the clause is
+    /// freeze-driven, not unconditional.
+    /// </summary>
+    [Fact]
+    public async Task SyncUserLibraryAsync_PartialFreezeWithSuccessfulPut_LedgerSurfacesFrozenTypes()
+    {
+        // Arrange: artist freezes at leg entry, album/series mint, the model
+        // PUT still runs and succeeds.
+        SetupLibraryWithAllTypes();
+        FreezeArtistTypeViaProbe();
+        var user = CreateUser();
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
+
+        // Act
+        await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
+
+        // Assert: the entry keeps the PUT's own outcome but names the frozen type.
+        var ledger = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(ledger);
+        Assert.Equal(LibrarySyncService.CatalogSyncLedgerSource, ledger!.Source);
+        Assert.Equal("SUCCEEDED", ledger.Status);
+        Assert.NotNull(ledger.Error);
+        Assert.Contains("Artist", ledger.Error!, StringComparison.Ordinal);
+        Assert.Contains("FROZEN", ledger.Error!, StringComparison.Ordinal);
+
+        // Clean leg: the fresh entry for the same locale must carry no frozen
+        // clause (the canary matches against the fake backend, so Error is null).
+        _service.TypeLegEntryProbeForTest = null;
+        await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
+        ledger = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(ledger);
+        Assert.Equal("SUCCEEDED", ledger!.Status);
+        Assert.Null(ledger.Error);
+    }
+
+    /// <summary>
+    /// Covers the remaining two branches of the JF-705 Error composition under
+    /// one leg: TWO frozen types (the plural clause and the " + " join) plus a
+    /// post-PUT canary mismatch (the combined-message shape). The frozen clause
+    /// must LEAD the combined message: config.html truncates Error at 80 chars
+    /// visually, so an appended clause would be tooltip-only exactly when two
+    /// problems co-occur (code-review F1). Status still records the PUT's own
+    /// outcome: the build succeeded, only the verification mismatched.
+    /// </summary>
+    [Fact]
+    public async Task SyncUserLibraryAsync_PartialFreezeWithCanaryError_LedgerLeadsWithFrozenClause()
+    {
+        // Arrange: artist AND album freeze at leg entry, series still mints, the
+        // model PUT succeeds, and the canary reads back a model whose sample
+        // count differs from the submission.
+        SetupLibraryWithAllTypes();
+        _service.TypeLegEntryProbeForTest = type =>
+        {
+            if (type == CatalogType.Artist || type == CatalogType.Album)
+            {
+                throw new CatalogPayloadInvariantException(SimulatedDriftMessage);
+            }
+        };
+        _smapiHandler.ServeCanaryMismatchAfterPut = true;
+        var user = CreateUser();
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
+
+        // Act
+        var result = await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
+
+        // Assert: the freeze still gates the run while the ledger entry keeps
+        // the PUT's own outcome.
+        Assert.False(result.Success);
+        var ledger = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(ledger);
+        Assert.Equal(LibrarySyncService.CatalogSyncLedgerSource, ledger!.Source);
+        Assert.Equal("SUCCEEDED", ledger.Status);
+
+        Assert.NotNull(ledger.Error);
+        string error = ledger.Error!;
+        Assert.Contains("Artist + Album catalogs FROZEN", error, StringComparison.Ordinal);
+        Assert.Contains("canary mismatch", error, StringComparison.Ordinal);
+        Assert.True(
+            error.IndexOf("FROZEN", StringComparison.Ordinal) < error.IndexOf("canary mismatch", StringComparison.Ordinal),
+            "the frozen clause must lead the combined Error (config.html truncates at 80 chars)");
+    }
+
+    /// <summary>
     /// Extracts one slot-type node from a raw interaction-model JSON body.
     /// Clone() keeps the element valid after the owning document is disposed.
     /// </summary>
@@ -304,6 +395,16 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
 
         public string? LastModelPutBody { get; private set; }
 
+        /// <summary>
+        /// When true, GETs of the interaction-model URL AFTER the first PUT
+        /// serve a variant whose sample counts differ from the submission, so
+        /// the post-PUT canary reports a mismatch (JF-705 pin for the combined
+        /// Error message). The pre-PUT GET still serves the base model.
+        /// </summary>
+        public bool ServeCanaryMismatchAfterPut { get; set; }
+
+        private bool _modelPutSeen;
+
         private static string CatalogIdForName(string body) =>
             body.Contains("Jellyfin Artists", StringComparison.Ordinal) ? ArtistCatalogId
             : body.Contains("Jellyfin Albums", StringComparison.Ordinal) ? AlbumCatalogId
@@ -313,6 +414,13 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
         private static string ModelJson =>
             """
             {"interactionModel":{"languageModel":{"invocationName":"mia collezione","intents":[{"name":"PlayArtistSongsIntent","slots":[{"name":"musician","type":"JELLYFIN_ARTIST"}]},{"name":"PlayAlbumIntent","slots":[{"name":"album","type":"AlbumName"}]},{"name":"PlayEpisodeIntent","slots":[{"name":"series_name","type":"SeriesName"}]}],"types":[{"name":"JellyfinArtist","values":[{"name":{"value":"Mina"}}]},{"name":"AlbumName","values":[{"name":{"value":"Thriller"}}]},{"name":"SeriesName","values":[{"name":{"value":"Breaking Bad"}}]}]}}}
+            """;
+
+        /// <summary>Same model with two samples on the first intent: the canary's
+        /// sample count (2) differs from the submitted one (0).</summary>
+        private static string CanaryMismatchModelJson =>
+            """
+            {"interactionModel":{"languageModel":{"invocationName":"mia collezione","intents":[{"name":"PlayArtistSongsIntent","samples":["suona mina","metti mina"],"slots":[{"name":"musician","type":"JELLYFIN_ARTIST"}]},{"name":"PlayAlbumIntent","slots":[{"name":"album","type":"AlbumName"}]},{"name":"PlayEpisodeIntent","slots":[{"name":"series_name","type":"SeriesName"}]}],"types":[{"name":"JellyfinArtist","values":[{"name":{"value":"Mina"}}]},{"name":"AlbumName","values":[{"name":{"value":"Thriller"}}]},{"name":"SeriesName","values":[{"name":{"value":"Breaking Bad"}}]}]}}}
             """;
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -349,12 +457,13 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
 
             if (request.Method == HttpMethod.Get && url.Contains("/interactionModel/locales/", StringComparison.Ordinal))
             {
-                return Json(ModelJson);
+                return Json(ServeCanaryMismatchAfterPut && _modelPutSeen ? CanaryMismatchModelJson : ModelJson);
             }
 
             if (request.Method == HttpMethod.Put && url.Contains("/interactionModel/locales/", StringComparison.Ordinal))
             {
                 LastModelPutBody = body;
+                _modelPutSeen = true;
                 return new HttpResponseMessage(HttpStatusCode.OK);
             }
 

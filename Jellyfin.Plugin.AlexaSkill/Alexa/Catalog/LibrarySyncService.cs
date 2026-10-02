@@ -254,7 +254,8 @@ public class LibrarySyncService
 
                 // JF-495: catalog-sync model PUTs must appear in the per-locale
                 // status ledger, not just ModelDeploymentManager deployments.
-                RecordModelUpdateInLedger(locale, modelUpdate);
+                // JF-705: the leg's frozen types ride the entry too.
+                RecordModelUpdateInLedger(locale, modelUpdate, frozenTypes);
             }
 
             return frozenTypes;
@@ -386,9 +387,20 @@ public class LibrarySyncService
     /// <summary>
     /// Records a catalog-sync model update outcome in the per-locale status ledger
     /// (JF-495). A canary mismatch lands in the entry's Error field so the admin UI
-    /// surfaces it next to the build status.
+    /// surfaces it next to the build status. JF-705: a partially frozen leg (its
+    /// model PUT succeeded while one catalog type froze) keeps Status as the PUT's
+    /// own outcome and composes a frozen-types clause into Error, ahead of any
+    /// canary message (config.html truncates Error at 80 chars visually and renders
+    /// it unconditionally next to the status icon, and the diagnostics panel's
+    /// status-string matching of SUCCEEDED/FAILED/TIMEOUT stays valid). A distinct
+    /// status value was rejected because the panel's ModelsDeployed checklist
+    /// matches Status == "Succeeded" and would read false for a locale whose model
+    /// build actually succeeded.
     /// </summary>
-    private void RecordModelUpdateInLedger(string locale, CatalogModelUpdateResult modelUpdate)
+    private void RecordModelUpdateInLedger(
+        string locale,
+        CatalogModelUpdateResult modelUpdate,
+        List<CatalogType> frozenTypes)
     {
         try
         {
@@ -398,11 +410,23 @@ public class LibrarySyncService
                 return;
             }
 
+            string? error = modelUpdate.CanaryError;
+            if (frozenTypes.Count > 0)
+            {
+                // The frozen clause LEADS the combined message: config.html
+                // truncates Error at 80 chars visually, and the freeze is the
+                // persistent actionable condition while a canary error
+                // describes only this run's PUT verification.
+                string frozenClause =
+                    $"{string.Join(" + ", frozenTypes)} catalog{(frozenTypes.Count > 1 ? "s" : string.Empty)} FROZEN (last-good pinned)";
+                error = string.IsNullOrEmpty(error) ? frozenClause : $"{frozenClause}; {error}";
+            }
+
             config.SetLocaleModelStatus(locale, new Configuration.LocaleModelStatus
             {
                 Status = modelUpdate.BuildStatus,
                 LastUpdated = DateTime.UtcNow,
-                Error = modelUpdate.CanaryError,
+                Error = error,
                 Source = CatalogSyncLedgerSource
             });
             Plugin.Instance!.SaveConfiguration();
