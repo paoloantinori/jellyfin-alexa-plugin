@@ -133,8 +133,7 @@ public class JumpToPositionIntentHandler : BaseHandler
             session.FullNowPlayingItem,
             user,
             context,
-            queueManager: _queueManager,
-            locale: locale);
+            queueManager: _queueManager);
 
         // JF-693: the transcode/speed-routed source can be token-gated, so the confirm
         // rides a delivered launch; the JF-687 refusal Tell keeps its message.

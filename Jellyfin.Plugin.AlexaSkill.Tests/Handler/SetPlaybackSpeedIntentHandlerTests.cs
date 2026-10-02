@@ -10,6 +10,7 @@ using global::Alexa.NET.Response;
 using global::Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Exceptions;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -621,16 +622,16 @@ public class SetPlaybackSpeedIntentHandlerTests : PluginTestBase, IDisposable
     // ---- the JF-693 empty-secret refusal (residuals 2 + 4) ----
 
     /// <summary>
-    /// JF-693: the atempo re-launch URL is ALWAYS token-gated, so with an empty
-    /// StreamTokenSecret the JF-687 chokepoint refuses the launch. The refusal Tell
-    /// must survive the handler tail: the user hears the localized configuration
-    /// error (the request locale threads into the chokepoint), NOT the
-    /// PlaybackSpeedSet success speech for a re-launch that will not happen, and the
-    /// standing-rate preference is not persisted (the JF-636 persist rides a
-    /// delivered launch only).
+    /// JF-693, reshaped by JF-699 item 1: the atempo re-launch URL is ALWAYS
+    /// token-gated, so with an empty StreamTokenSecret the JF-687 chokepoint refuses
+    /// the launch by THROWING the typed exception (RequestPipeline translates it into
+    /// the localized configuration Tell; the handler tail never runs). The standing-
+    /// rate preference is therefore not persisted for a re-launch that will not
+    /// happen, and no success speech can exist (there is no response at all from the
+    /// handler).
     /// </summary>
     [Fact]
-    public async Task EmptyStreamTokenSecret_RefusalTellSurvives_NoSuccessSpeech_NoPersist()
+    public async Task EmptyStreamTokenSecret_Refuses_NoPersist()
     {
         _config.StreamTokenSecret = string.Empty;
         Audio episode = CreateEpisode(60);
@@ -641,15 +642,14 @@ public class SetPlaybackSpeedIntentHandlerTests : PluginTestBase, IDisposable
         var handler = CreateHandler();
         var user = TestHelpers.CreateTestUser();
 
-        SkillResponse response = await handler.HandleAsync(
-            CreateIntentRequest(RateSlot("uno e mezzo", "1500")),
-            CreatePlayingContext(episode, offsetMs: 60_000),
-            user,
-            CreateSession(episode),
-            CancellationToken.None);
+        await Assert.ThrowsAsync<StreamTokenNotConfiguredException>(
+            () => handler.HandleAsync(
+                CreateIntentRequest(RateSlot("uno e mezzo", "1500")),
+                CreatePlayingContext(episode, offsetMs: 60_000),
+                user,
+                CreateSession(episode),
+                CancellationToken.None));
 
-        Assert.Null(TestHelpers.GetPlayDirective(response));
-        TestHelpers.AssertStreamTokenRefusalTell(response, "it-IT");
         Assert.Null(user.PodcastSpeedPerMille);
     }
 }

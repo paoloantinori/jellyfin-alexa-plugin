@@ -667,6 +667,29 @@ public sealed class AlbumPlayService
             queueItems.Add(new QueueItem { Id = albumItems[i].Id });
         }
 
+        // JF-699 item 5: launch build BEFORE any queue/session/continuation write
+        // (the ordering policy lives on EnsureStreamTokenDeliverable; in seek mode
+        // this launch delegates to the token-gated album-concat URL, so a refusal
+        // throws here and the writes below must not land).
+        string item_id = albumItems[startIndex].Id.ToString();
+
+        _logger.LogDebug(
+            "{Label}: returning AudioPlayer, itemId={ItemId}, album='{AlbumName}', startIndex={StartIndex}, queueSize={QueueSize}",
+            logLabel, item_id, album.Name, startIndex, queueItems.Count);
+        // JF-625 queue-as-concat: in seek mode the album launches as ONE video-audio
+        // concat stream keyed by the album GUID; the seek bar spans the whole album.
+        // Album-level resume offset = the summed runtime of the tracks BEFORE the
+        // resume track (the sliced-playlist ?start= mechanism; the in-track partial
+        // position is not carried in this first cut: playback resumes at the resume
+        // track's beginning, matching the AudioPlayer queue behavior of starting the
+        // queue at startIndex).
+        long albumStartTicks = albumItems.Take(startIndex).Sum(i => i.RunTimeTicks ?? 0);
+        // The seek-mode tracker path's in-track partial (tracked - prefix at the resume
+        // track): added so a warm-cache slice lands mid-track where listening stopped.
+        albumStartTicks += trackedInTrackTicks;
+
+        SkillResponse albumResponse = _launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, _launch.GetStreamUrl(item_id, user), item_id, albumItems[startIndex], user, context, announceLocale: locale, collectionParentId: album.Id, collectionStartTicks: albumStartTicks);
+
         session.NowPlayingQueue = queueItems;
         session.FullNowPlayingItem = albumItems[startIndex];
 
@@ -694,29 +717,11 @@ public sealed class AlbumPlayService
                 });
         }
 
-        string item_id = albumItems[startIndex].Id.ToString();
-
-        _logger.LogDebug(
-            "{Label}: returning AudioPlayer, itemId={ItemId}, album='{AlbumName}', startIndex={StartIndex}, queueSize={QueueSize}",
-            logLabel, item_id, album.Name, startIndex, queueItems.Count);
-        // JF-625 queue-as-concat: in seek mode the album launches as ONE video-audio
-        // concat stream keyed by the album GUID; the seek bar spans the whole album.
-        // Album-level resume offset = the summed runtime of the tracks BEFORE the
-        // resume track (the sliced-playlist ?start= mechanism; the in-track partial
-        // position is not carried in this first cut: playback resumes at the resume
-        // track's beginning, matching the AudioPlayer queue behavior of starting the
-        // queue at startIndex).
-        long albumStartTicks = albumItems.Take(startIndex).Sum(i => i.RunTimeTicks ?? 0);
-        // The seek-mode tracker path's in-track partial (tracked - prefix at the resume
-        // track): added so a warm-cache slice lands mid-track where listening stopped.
-        albumStartTicks += trackedInTrackTicks;
-
-        SkillResponse albumResponse = _launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, _launch.GetStreamUrl(item_id, user), item_id, albumItems[startIndex], user, context, announceLocale: locale, collectionParentId: album.Id, collectionStartTicks: albumStartTicks);
-
         // The caller may pass an announcement (fuzzy name correction in PlayAlbum,
         // cross-media substitution in the JF-345 cascade) so the user knows what is
-        // playing instead of what was asked (JF-339).
-        CrossMediaFallback.ApplyAnnouncement(albumResponse, announcement);
+        // playing instead of what was asked (JF-339; JF-699 item 4: the string
+        // overload of the gated attach absorbed the ApplyAnnouncement adapter).
+        PlaybackLaunchBuilder.AttachAnnounceIfLaunched(albumResponse, announcement);
 
         // JF-625 (live 2026-09-24 + review): whatever speech the final response now
         // carries (the album announce, or the announcement override above, which is the
@@ -729,7 +734,7 @@ public sealed class AlbumPlayService
         // degrade path, send error) it returns the speech to ride the final response.
         if (request != null
             && albumResponse.Response.OutputSpeech is not null
-            && albumResponse.Response.Directives.Any(d => d is Directive.VideoAppLaunchDirective))
+            && PlaybackLaunchBuilder.HasVideoAppLaunchDirective(albumResponse))
         {
             // The vehicle speech: the caller's announcement when one was applied (the
             // load-bearing correction), else the ALBUM name - what an album play
@@ -977,27 +982,28 @@ public sealed class AlbumPlayService
             });
         }
 
-        session.NowPlayingQueue = queueItems;  // ordered, so MirrorQueueToSession can read track metadata
-
+        // JF-699 item 5: launch build BEFORE the session writes, the crash-recovery
+        // SetQueue/SetShuffledQueue tail, and the continuation store (the ordering
+        // policy lives on EnsureStreamTokenDeliverable). RESIDUAL, deliberate: on the
+        // shuffle branch SetShuffledQueue itself stays BEFORE the build because the
+        // first track is DERIVED from the shuffled queue (a shuffle preview would
+        // re-shuffle and disagree with the stored order); a refused shuffle start can
+        // therefore leave the device queue written, never the session now-playing or
+        // the continuation.
         string deviceId = context.System.Device.DeviceID;
         List<string> idList = playlistItems.Select(i => i.Id.ToString()).ToList();
         BaseItem? firstItem;
+        Playback.DeviceQueue? shuffledQueue = null;
 
         if (shuffle && queueManager != null)
         {
             queueManager.SetShuffledQueue(deviceId, idList, rng);
-            // Mirror the shuffled DeviceQueue order back into the session queue (metadata preserved).
-            Playback.DeviceQueue deviceQueue = queueManager.GetOrCreateQueue(deviceId);
-            ProgressReporter.MirrorQueueToSession(deviceQueue, session);
-            firstItem = libraryManager.GetItemById(Guid.Parse(deviceQueue.ItemIds[0]));
+            shuffledQueue = queueManager.GetOrCreateQueue(deviceId);
+            firstItem = libraryManager.GetItemById(Guid.Parse(shuffledQueue.ItemIds[0]));
         }
         else
         {
             firstItem = libraryManager.GetItemById(queueItems[0].Id);
-            if (firstItem != null)
-            {
-                queueManager?.SetQueue(deviceId, idList, 0);
-            }
         }
 
         if (firstItem == null)
@@ -1005,7 +1011,25 @@ public sealed class AlbumPlayService
             return ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale));
         }
 
+        string item_id = firstItem.Id.ToString();
+
+        _logger.LogDebug(
+            "PlayPlaylist: returning AudioPlayer, itemId={ItemId}, playlist='{PlaylistName}', queueSize={QueueSize}",
+            item_id, playlist.Name, queueItems.Count);
+        SkillResponse response = _launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, _launch.GetStreamUrl(item_id, user), item_id, firstItem, user, context);
+
+        session.NowPlayingQueue = queueItems;  // ordered, so MirrorQueueToSession can read track metadata
         session.FullNowPlayingItem = firstItem;
+
+        if (shuffledQueue != null)
+        {
+            // Mirror the shuffled DeviceQueue order back into the session queue (metadata preserved).
+            ProgressReporter.MirrorQueueToSession(shuffledQueue, session);
+        }
+        else
+        {
+            queueManager?.SetQueue(deviceId, idList, 0);
+        }
 
         // Store continuation info so PlaybackNearlyFinished can fetch the rest
         if (totalCount > playlistItems.Count)
@@ -1027,12 +1051,7 @@ public sealed class AlbumPlayService
                 });
         }
 
-        string item_id = firstItem.Id.ToString();
-
-        _logger.LogDebug(
-            "PlayPlaylist: returning AudioPlayer, itemId={ItemId}, playlist='{PlaylistName}', queueSize={QueueSize}",
-            item_id, playlist.Name, queueItems.Count);
-        return _launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, _launch.GetStreamUrl(item_id, user), item_id, firstItem, user, context);
+        return response;
     }
 
     /// <summary>

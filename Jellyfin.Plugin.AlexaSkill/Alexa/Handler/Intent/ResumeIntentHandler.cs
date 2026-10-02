@@ -355,9 +355,9 @@ public class ResumeIntentHandler : BaseHandler
                 }
 
                 // Audio/AudioBook items use AudioPlayer response with offset
-                // (JF-693: the locale threads in so a refusal Tell answers in the
-                // request language; a seek-mode audio item can delegate to the
-                // token-gated video-audio endpoint inside the chokepoint.)
+                // (JF-699 item 1: a refusal throws and RequestPipeline answers it;
+                // a seek-mode audio item can delegate to the token-gated video-audio
+                // endpoint inside the chokepoint).
                 var audioResponse = Launch.BuildAudioPlayerResponse(
                     PlayBehavior.ReplaceAll,
                     Launch.GetStreamUrl(item_id, user),
@@ -365,8 +365,7 @@ public class ResumeIntentHandler : BaseHandler
                     resumeItem,
                     user,
                     context,
-                    offset,
-                    locale: locale);
+                    offset);
 
                 // Announce resume position if enabled. JF-693: the announce rides a
                 // delivered launch only (the static URL never refuses today; the gate
@@ -436,8 +435,7 @@ public class ResumeIntentHandler : BaseHandler
             tailItem,
             user,
             context,
-            queueManager: _queueManager,
-            locale: locale);
+            queueManager: _queueManager);
 
         Logger.LogDebug(
             "ResumeIntent: final response itemId={ItemId}, offset={OffsetMs}ms",
@@ -516,10 +514,9 @@ public class ResumeIntentHandler : BaseHandler
             if (fallbackTicks <= 0)
             {
                 // No position in either source: the same fresh VideoApp launch
-                // PlayBook's no-progress path uses (no start slice), kept silent.
-                // JF-693: the locale threads in so the JF-687 refusal Tell answers
-                // in the user's language.
-                return Launch.BuildVideoAppAudioResponse(item.Id.ToString(), item, user, context: context, locale: locale);
+                // PlayBook's no-progress path uses (no start slice), kept silent
+                // (JF-699 item 1: a refusal throws; RequestPipeline answers it).
+                return Launch.BuildVideoAppAudioResponse(item.Id.ToString(), item, user, context: context);
             }
 
             // Chapter progress only: return null so the caller flat-resumes the
@@ -529,26 +526,25 @@ public class ResumeIntentHandler : BaseHandler
 
         long startTicks = trackedTicks;
 
-        // JF-693: the request locale threads into the builder so the JF-687 refusal
-        // Tell answers in the user's language.
-        SkillResponse bookResponse = Launch.BuildAudiobookResumeResponse(item, startTicks, user, context, locale);
+        SkillResponse bookResponse = Launch.BuildAudiobookResumeResponse(item, startTicks, user, context);
 
         // JF-501: the announce rides the progressive vehicle on a VideoApp launch (a
         // directive-only final response can have its speech cut); non-intent requests
-        // and failed sends keep it on the final response.
-        // JF-693: gated on the delivered launch; the JF-687 empty-secret refusal Tell
-        // carries no directive, so neither the progressive send nor the final-response
-        // overwrite may touch it.
-        if (!PlaybackLaunchBuilder.HasLaunchDirective(bookResponse))
+        // and failed sends keep it on the final response. JF-699 item 1: throw-or-
+        // launch (a refusal throws and RequestPipeline answers it, so the JF-693
+        // refusal gate is gone); the remaining HasLaunchDirective check is the roster
+        // belt, kept as a DIRECT assignment (not the attach helper) because the
+        // vehicle's null-on-success result must CLEAR the speech, which the
+        // null-means-keep attach helper cannot express.
+        if (PlaybackLaunchBuilder.HasLaunchDirective(bookResponse))
         {
-            return bookResponse;
+            bookResponse.Response.OutputSpeech = await Launch.SpeakVideoLaunchAnnounceAsync(
+                context,
+                request,
+                new PlainTextOutputSpeech(
+                    ResponseStrings.Get("NowPlayingWithPosition", locale, item.Name, ResumeMath.FormatPosition(startTicks)))).ConfigureAwait(false);
         }
 
-        bookResponse.Response.OutputSpeech = await Launch.SpeakVideoLaunchAnnounceAsync(
-            context,
-            request,
-            new PlainTextOutputSpeech(
-                ResponseStrings.Get("NowPlayingWithPosition", locale, item.Name, ResumeMath.FormatPosition(startTicks)))).ConfigureAwait(false);
         return bookResponse;
     }
 }

@@ -9,6 +9,7 @@ using global::Alexa.NET.Request.Type;
 using global::Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Exceptions;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -643,9 +644,10 @@ public class SleepTimerIntentHandlerTests : PluginTestBase, IDisposable
     /// JF-693 residual 1: the re-issue is the ONE AudioPlayer.Play minted outside the
     /// guarded BuildAudioPlayerResponse chokepoint, so the JF-687 delivery gate runs at
     /// the handler itself, BEFORE the JF-628 ledger writes. A speed-routed (token-gated)
-    /// replay source with an empty StreamTokenSecret answers the localized configuration
-    /// Tell instead of a dead directive, and neither the launch scope nor the device
-    /// last-played ledger is re-recorded for a launch that did not happen.
+    /// replay source with an empty StreamTokenSecret refuses with the JF-699 item 1
+    /// typed exception (RequestPipeline translates it into the localized configuration
+    /// Tell), and neither the launch scope nor the device last-played ledger is
+    /// re-recorded for a launch that did not happen.
     /// </summary>
     [Fact]
     public async Task HandleAsync_ArmingDuringAtempoPlayback_EmptySecret_RefusesInsteadOfDeadDirective()
@@ -670,10 +672,9 @@ public class SleepTimerIntentHandlerTests : PluginTestBase, IDisposable
         string deviceId = context.System.Device.DeviceID!;
         _queueManager.RecordLaunchBase(deviceId, audioItem.Id.ToString(), (long)TimeSpan.FromMinutes(20).TotalMilliseconds, enqueued: false, ratePerMille: 1500);
 
-        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
-
-        // The honest configuration Tell, not the dead directive.
-        TestHelpers.AssertStreamTokenRefusalTell(response);
+        // JF-699 item 1: the guard THROWS; the Tell is RequestPipeline's translation.
+        await Assert.ThrowsAsync<StreamTokenNotConfiguredException>(
+            () => handler.HandleAsync(request, context, user, session, CancellationToken.None));
 
         // The pre-existing launch scope survives untouched and no last-played record
         // was minted for the refused re-issue.

@@ -1240,26 +1240,23 @@ public abstract class BaseHandler
             // mechanism and guards; a failed send falls back to the final response, the
             // pre-JF-538 shape). Callers that do not pass context/request (audio paths, side
             // effect delegates) keep the classic overwrite untouched.
-            // JF-693 (code-review finding 4): the whole qualifier block rides a DELIVERED
-            // launch only. The delegate's builder can answer the JF-687 empty-secret
-            // refusal Tell instead of a directive (a seek-mode user's static-URL launch
-            // delegates to the token-gated video-audio endpoint inside the chokepoint),
-            // and the configuration error must not be spoken over with "playing X".
-            if (PlaybackLaunchBuilder.HasLaunchDirective(playResponse))
+            // JF-693 (code-review finding 4) / JF-699 item 1: the JF-687 empty-secret
+            // refusal now THROWS from the delegate's builder (RequestPipeline answers
+            // it; this block never runs on a refusal), so the verdict wrapper is gone;
+            // the qualifier write rides the delivered-launch gate as the roster belt
+            // (a future non-launch builder return must not be spoken over).
+            if (playResponse.Response.OutputSpeech is null && context != null && request != null)
             {
-                if (playResponse.Response.OutputSpeech is null && context != null && request != null)
+                IOutputSpeech? fallback = await Launch.SpeakVideoLaunchAnnounceAsync(context, request, qualifier).ConfigureAwait(false);
+                if (fallback == null)
                 {
-                    IOutputSpeech? fallback = await Launch.SpeakVideoLaunchAnnounceAsync(context, request, qualifier).ConfigureAwait(false);
-                    if (fallback == null)
-                    {
-                        return (FuzzyMissOutcome.SuggestionHandled, playResponse);
-                    }
-
-                    qualifier = fallback;
+                    return (FuzzyMissOutcome.SuggestionHandled, playResponse);
                 }
 
-                playResponse.Response.OutputSpeech = qualifier;
+                qualifier = fallback;
             }
+
+            PlaybackLaunchBuilder.AttachAnnounceIfLaunched(playResponse, qualifier);
 
             return (FuzzyMissOutcome.SuggestionHandled, playResponse);
         }

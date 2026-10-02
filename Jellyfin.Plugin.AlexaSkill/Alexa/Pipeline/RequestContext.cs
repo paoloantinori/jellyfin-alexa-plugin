@@ -55,8 +55,10 @@ public class RequestContext
     /// <summary>
     /// Gets or sets a flag telling cold-library response interceptors
     /// (DynamicEntities) to skip their DB work: set on warming refusals, where the
-    /// whole point is answering fast while the database is still cold. Logging and
-    /// metrics interceptors still run (JF-419.2 review round 3).
+    /// whole point is answering fast while the database is still cold, and on JF-699
+    /// stream-token refusals for the same reason (a configuration-error answer pays no
+    /// library queries on the way out). Logging and metrics interceptors still run
+    /// (JF-419.2 review round 3).
     /// </summary>
     public bool SkipColdLibraryWork { get; set; }
 

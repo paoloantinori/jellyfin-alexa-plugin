@@ -272,11 +272,13 @@ public class FuzzyMatchAutoAcceptTests : PluginTestBase
     }
 
     /// <summary>
-    /// JF-693 (code-review finding 4): the closest-match qualifier never speaks over
-    /// the JF-687 empty-secret refusal Tell. The auto-play delegate's builder answered
-    /// the configuration error (speech, no directive); the qualifier block rides a
-    /// delivered launch only, so the Tell reaches the user instead of "playing X" for
-    /// a play that will not happen.
+    /// JF-693 (code-review finding 4), belt-only since JF-699 item 1: a REAL
+    /// auto-play delegate's builder now THROWS the empty-secret refusal (the
+    /// exception propagates; no qualifier can run), so the refusal case is
+    /// structurally protected. This pin holds the BELT: the qualifier write routes
+    /// through AttachAnnounceIfLaunched, so even a delegate that hands back a
+    /// non-launch response (a hypothetical future builder return) is never spoken
+    /// over with "playing X".
     /// </summary>
     [Fact]
     public async Task AutoPlayRefusedLaunch_QualifierNeverOverwritesTheRefusalTell()

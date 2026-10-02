@@ -267,13 +267,12 @@ public class SleepTimerIntentHandler : BaseHandler
         // guarded BuildAudioPlayerResponse chokepoint, so the JF-687 delivery gate
         // runs HERE, before the arm's ledger write and directive: a token-gated
         // replay URL (a speed/transcode-routed source) with an empty
-        // StreamTokenSecret is dead at the route gate, and the honest localized
-        // configuration Tell answers instead of a dead directive (static replay URLs
-        // carry no plugin token and still re-issue).
-        if (Launch.StreamTokenSecretRefusal(replaySource.Url, locale) is { } refusedReplay)
-        {
-            return Task.FromResult(refusedReplay);
-        }
+        // StreamTokenSecret is dead at the route gate, so the guard THROWS and
+        // RequestPipeline answers with the localized configuration Tell (static
+        // replay URLs carry no plugin token and still re-issue). JF-699 item 1: the
+        // refusal-response handling is gone; placement is unchanged (the arm path
+        // refuses before any write, the cancel branch above already re-issued).
+        Launch.EnsureStreamTokenDeliverable(replaySource.Url);
 
         RecordReissueLedger();
 

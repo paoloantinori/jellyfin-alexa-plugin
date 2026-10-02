@@ -369,6 +369,15 @@ public sealed class CrossMediaFallback
             queueItems.Add(new QueueItem { Id = sortedItems[i].Id });
         }
 
+        // JF-699 item 5: launch build BEFORE any queue/session/continuation write
+        // (the ordering policy lives on EnsureStreamTokenDeliverable; a refusal
+        // throws, so these writes must not land for a launch that will not happen).
+        string itemId = sortedItems[startIndex].Id.ToString();
+        _logger.LogDebug(
+            "{Label}: returning AudioPlayer, itemId={ItemId}, startIndex={StartIndex}, queueSize={QueueSize}",
+            logLabel, itemId, startIndex, queueItems.Count);
+        SkillResponse response = _launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, _launch.GetStreamUrl(itemId, user), itemId, sortedItems[startIndex], user, context, announceLocale: locale);
+
         session.NowPlayingQueue = queueItems;
         session.FullNowPlayingItem = sortedItems[startIndex];
 
@@ -395,33 +404,9 @@ public sealed class CrossMediaFallback
                 });
         }
 
-        string itemId = sortedItems[startIndex].Id.ToString();
-        _logger.LogDebug(
-            "{Label}: returning AudioPlayer, itemId={ItemId}, startIndex={StartIndex}, queueSize={QueueSize}",
-            logLabel, itemId, startIndex, queueItems.Count);
-        SkillResponse response = _launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, _launch.GetStreamUrl(itemId, user), itemId, sortedItems[startIndex], user, context, announceLocale: locale);
-
-        ApplyAnnouncement(response, announcement);
+        PlaybackLaunchBuilder.AttachAnnounceIfLaunched(response, announcement);
 
         return response;
-    }
-
-    /// <summary>
-    /// Overrides a play response's speech with the given announcement (JF-345: the
-    /// ONE override site; was a triplicated 3-liner across the artist/album/song play
-    /// builders). No-op for a null/whitespace announcement. JF-693: the delivered-
-    /// launch gate lives in <see cref="PlaybackLaunchBuilder.AttachAnnounceIfLaunched"/>
-    /// (the album builder can answer the JF-687 empty-secret refusal Tell instead of a
-    /// directive; that Tell must not be spoken over with a correction for a play that
-    /// will not happen), so this stays a thin string-to-speech adapter over it.
-    /// </summary>
-    /// <param name="response">The play response to speak over.</param>
-    /// <param name="announcement">The announcement text, or null to keep the default speech.</param>
-    internal static void ApplyAnnouncement(SkillResponse response, string? announcement)
-    {
-        PlaybackLaunchBuilder.AttachAnnounceIfLaunched(
-            response,
-            string.IsNullOrWhiteSpace(announcement) ? null : new PlainTextOutputSpeech { Text = announcement });
     }
 
     /// <summary>
@@ -449,14 +434,18 @@ public sealed class CrossMediaFallback
         string locale,
         string? announcement = null)
     {
+        // JF-699 item 5: launch build BEFORE the session/continuation writes (the
+        // ordering policy lives on EnsureStreamTokenDeliverable; see the artist path
+        // above).
+        string itemId = song.Id.ToString();
+        SkillResponse response = _launch.BuildAudioPlayerResponse(
+            PlayBehavior.ReplaceAll, _launch.GetStreamUrl(itemId, user), itemId, song, user, context, announceLocale: locale);
+
         session.NowPlayingQueue = new List<QueueItem> { new() { Id = song.Id } };
         session.FullNowPlayingItem = song;
         QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID);
 
-        string itemId = song.Id.ToString();
-        SkillResponse response = _launch.BuildAudioPlayerResponse(
-            PlayBehavior.ReplaceAll, _launch.GetStreamUrl(itemId, user), itemId, song, user, context, announceLocale: locale);
-        ApplyAnnouncement(response, announcement);
+        PlaybackLaunchBuilder.AttachAnnounceIfLaunched(response, announcement);
 
         return response;
     }

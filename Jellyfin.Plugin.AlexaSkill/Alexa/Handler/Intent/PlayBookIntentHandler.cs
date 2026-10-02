@@ -289,17 +289,17 @@ public class PlayBookIntentHandler : BaseHandler
             {
                 // JF-567: VideoApp.Launch responses must OMIT shouldEndSession (the repo
                 // reference rule; BuildAudiobookResumeResponse keeps it null).
-                // JF-693: the request locale threads into the builder so the JF-687
-                // refusal Tell answers in the user's language.
-                SkillResponse trackedResponse = Launch.BuildAudiobookResumeResponse(trackItems[startIndex], trackedTicks, user, context, locale);
-                if (!PlaybackLaunchBuilder.HasLaunchDirective(trackedResponse))
-                {
-                    return trackedResponse;
-                }
+                // JF-699 item 1: the builder either threw the StreamTokenNotConfigured
+                // refusal (RequestPipeline answers it; nothing below runs) or delivered
+                // the launch, so the JF-693 verdict wrapper is gone and the state/announce
+                // writes simply follow the launch.
+                SkillResponse trackedResponse = Launch.BuildAudiobookResumeResponse(trackItems[startIndex], trackedTicks, user, context);
 
                 ApplyBookPlaybackState();
-                trackedResponse.Response.OutputSpeech = SpeechBuilder.BuildOutputSpeech(
-                    "ResumingBookSsml", "ResumingBook", locale, books[0].Name, trackItems[startIndex].Name);
+                PlaybackLaunchBuilder.AttachAnnounceIfLaunched(
+                    trackedResponse,
+                    SpeechBuilder.BuildOutputSpeech(
+                        "ResumingBookSsml", "ResumingBook", locale, books[0].Name, trackItems[startIndex].Name));
                 return trackedResponse;
             }
 
@@ -320,36 +320,28 @@ public class PlayBookIntentHandler : BaseHandler
                     SpeechBuilder.BuildNowPlayingSpeech(books[0].Name, locale, Launch.GetAnnounceNowPlaying(user)),
                     user,
                     context,
-                    request,
-                    locale).ConfigureAwait(false);
-                if (!PlaybackLaunchBuilder.HasLaunchDirective(freshResponse))
-                {
-                    return freshResponse;
-                }
+                    request).ConfigureAwait(false);
 
+                // JF-699 item 1: throw-or-launch (see the tracked arm above).
                 ApplyBookPlaybackState();
                 return freshResponse;
             }
         }
 
         SkillResponse standardResponse = Launch.BuildAudioPlayerResponse(
-            PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, trackItems[startIndex], user, context, offsetMs, locale: locale);
+            PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, trackItems[startIndex], user, context, offsetMs);
 
-        // JF-693: the state writes and the resume announce ride a delivered launch.
-        // The static chapter URL never refuses today; the gate keeps that invariant
-        // structural rather than incidental.
-        if (!PlaybackLaunchBuilder.HasLaunchDirective(standardResponse))
-        {
-            return standardResponse;
-        }
-
+        // JF-699 item 1: throw-or-launch (see the tracked arm above); the state
+        // writes and the resume announce simply follow the launch.
         ApplyBookPlaybackState();
 
         // Add resume announcement when not starting from the beginning
         if (startIndex > 0 || resumeTicks > 0)
         {
-            standardResponse.Response.OutputSpeech = SpeechBuilder.BuildOutputSpeech(
-                "ResumingBookSsml", "ResumingBook", locale, books[0].Name, trackItems[startIndex].Name);
+            PlaybackLaunchBuilder.AttachAnnounceIfLaunched(
+                standardResponse,
+                SpeechBuilder.BuildOutputSpeech(
+                    "ResumingBookSsml", "ResumingBook", locale, books[0].Name, trackItems[startIndex].Name));
             standardResponse.Response.ShouldEndSession = true;
         }
 

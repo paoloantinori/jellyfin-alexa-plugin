@@ -275,16 +275,88 @@ internal static class IlCallScanner
     /// <param name="getter">The property getter to look for.</param>
     /// <returns>True when the method reads the property.</returns>
     internal static bool CallsGetter(MethodBase method, Module module, MethodInfo getter)
+        => CallsNamedMethod(method, module, getter.Name, getter.DeclaringType!);
+
+    /// <summary>
+    /// The name+declaringType generalization <see cref="CallsGetter"/> always was
+    /// (JF-699 hoist: the DeliveredLaunchOutputSpeechRosterTests needed the SETTER
+    /// twin for ResponseBody.OutputSpeech, the third hand copy of the technique).
+    /// Candidate tokens are resolved through the module; a failed resolution can
+    /// only SKIP a candidate (loud-only failure).
+    /// </summary>
+    /// <param name="method">The method whose IL to walk.</param>
+    /// <param name="module">The module the IL tokens resolve against.</param>
+    /// <param name="methodName">The callee name to look for (e.g. a property accessor name).</param>
+    /// <param name="declaringType">The type that must declare the callee.</param>
+    /// <returns>True when the method calls a method with that name on that type.</returns>
+    internal static bool CallsNamedMethod(MethodBase method, Module module, string methodName, Type declaringType)
     {
         foreach (int token in CallTokens(method))
         {
-            if (TryResolveMethod(module, token) is not MethodInfo m)
+            if (TryResolveMethod(module, token) is not { } callee)
             {
                 continue;
             }
 
-            if (m.Name == getter.Name
-                && m.DeclaringType == getter.DeclaringType)
+            if (callee.Name == methodName
+                && callee.DeclaringType == declaringType)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// The methods the given method calls that are declared under the SAME
+    /// top-level type (the helper-extraction shape, one level: a private helper
+    /// pulled out of the same handler). JF-699 hoist: the private copy lived in
+    /// AudioPlayerPlayConstructionRosterTests and was duplicated verbatim by the
+    /// DeliveredLaunchOutputSpeechRosterTests twin.
+    /// </summary>
+    /// <param name="method">The method whose direct callees to classify.</param>
+    /// <param name="module">The module the IL tokens resolve against.</param>
+    /// <returns>The same-top-level-type callees (the method itself excluded).</returns>
+    internal static IEnumerable<MethodBase> SameTypeHelpers(MethodBase method, Module module)
+    {
+        Type owner = TopLevelType(method.DeclaringType!);
+        foreach (int token in CallTokens(method))
+        {
+            if (TryResolveMethod(module, token) is { } callee
+                && callee.DeclaringType != null
+                && TopLevelType(callee.DeclaringType) == owner
+                && callee != method)
+            {
+                yield return callee;
+            }
+        }
+    }
+
+    /// <summary>
+    /// True when the method calls any target token directly, or calls (directly)
+    /// a method declared under the SAME top-level type that calls it: the
+    /// helper-extraction shape, so pulling a write/gate out into a private helper
+    /// of the same handler cannot detach a call site from its guard. MethodSpec
+    /// (generic) tokens are skipped because they need type context to resolve; a
+    /// skipped candidate can only fail this check loudly, never pass it silently.
+    /// JF-699 hoist from AudioPlayerPlayConstructionRosterTests (the second
+    /// consumer arrived with DeliveredLaunchOutputSpeechRosterTests).
+    /// </summary>
+    /// <param name="method">The method to check.</param>
+    /// <param name="module">The module the IL tokens resolve against.</param>
+    /// <param name="targetTokens">The same-assembly methoddef tokens of the acceptable call targets.</param>
+    /// <returns>True when the method (or a same-type helper) calls any target.</returns>
+    internal static bool CallsDirectlyOrViaSameTypeHelper(MethodBase method, Module module, IReadOnlyCollection<int> targetTokens)
+    {
+        if (ContainsCallToAnyToken(method, targetTokens))
+        {
+            return true;
+        }
+
+        foreach (MethodBase helper in SameTypeHelpers(method, module))
+        {
+            if (ContainsCallToAnyToken(helper, targetTokens))
             {
                 return true;
             }
@@ -308,5 +380,54 @@ internal static class IlCallScanner
         }
 
         return current;
+    }
+
+    /// <summary>
+    /// The source-level method name an IL method belongs to: compiler-generated
+    /// shapes map back to their owner (async state machine type
+    /// &lt;Owner&gt;d__N.MoveNext, lambda &lt;Owner&gt;b__12_0, local function
+    /// &lt;Owner&gt;g__Name|N); plain methods keep their own name. The AudioPlayerPlay
+    /// ConstructionRosterTests private original, hoisted for the JF-699
+    /// DeliveredLaunchOutputSpeechRosterTests twin (the JF-634 dedup direction).
+    /// </summary>
+    /// <param name="method">The (possibly compiler-generated) method.</param>
+    /// <returns>The logical source-level method name.</returns>
+    internal static string LogicalMethodName(MethodBase method)
+    {
+        Type declared = method.DeclaringType!;
+        string? owner = null;
+
+        if (method.Name == "MoveNext" && declared.IsNested)
+        {
+            owner = ExtractCompilerGeneratedOwner(declared.Name);
+        }
+
+        owner ??= ExtractCompilerGeneratedOwner(method.Name);
+
+        return owner ?? method.Name;
+    }
+
+    /// <summary>
+    /// The owner name inside a compiler-generated method/type name, or null when
+    /// the name is not compiler-generated. Double-nested compiler names (an async
+    /// LAMBDA's state machine is <<Owner>b__12_0>d and an async LOCAL FUNCTION's
+    /// is <<LocalFn>g__Make|0_1>d) need one bracket stripped before extraction.
+    /// </summary>
+    /// <param name="name">The candidate compiler-generated name.</param>
+    /// <returns>The extracted owner, or null.</returns>
+    internal static string? ExtractCompilerGeneratedOwner(string name)
+    {
+        if (name.StartsWith("<<", StringComparison.Ordinal))
+        {
+            name = name.Substring(1);
+        }
+
+        if (name.Length == 0 || name[0] != '<')
+        {
+            return null;
+        }
+
+        int close = name.IndexOf('>');
+        return close > 1 ? name.Substring(1, close - 1) : null;
     }
 }

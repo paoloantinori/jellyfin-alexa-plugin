@@ -192,17 +192,16 @@ public class RecommendIntentHandler : BaseHandler
         {
             new QueueItem { Id = item.Id }
         };
-        session.NowPlayingQueue = queueItems;
-        session.FullNowPlayingItem = item;
 
         // Use VideoApp for movies, AudioPlayer for audio
+        SkillResponse response;
         if (item is MediaBrowser.Controller.Entities.Movies.Movie)
         {
             var outputSpeech = SpeechBuilder.BuildOutputSpeech("RecommendPlayingSsml", "RecommendPlaying", locale, item.Name);
 
             // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
             // JF-501: the announce is spoken progressively (directive-only final response).
-            return await Launch.BuildVideoAppLaunchResponseAsync(
+            response = await Launch.BuildVideoAppLaunchResponseAsync(
                 context,
                 request,
                 locale,
@@ -210,16 +209,32 @@ public class RecommendIntentHandler : BaseHandler
                 item.Name,
                 outputSpeech).ConfigureAwait(false);
         }
-
-        // For audio, add NowPlaying speech before the audio directive
-        string? nowPlayingSsml = SpeechBuilder.GetSsml("NowPlayingSsml", locale, SpeechBuilder.EscapeXml(item.Name));
-        var audioResponse = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, item, user, context);
-        if (nowPlayingSsml != null && Launch.GetAnnounceNowPlaying(user))
+        else
         {
-            audioResponse.Response.OutputSpeech = new SsmlOutputSpeech { Ssml = $"<speak>{nowPlayingSsml}</speak>" };
+            response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, item, user, context);
         }
 
-        return audioResponse;
+        // JF-699 item 5: the session writes follow the launch build (a refusal
+        // throws; no phantom now-playing for a launch that will not happen). The
+        // movie arm can also answer the screenless capability Tell, whose
+        // session-state shape is the pre-existing behavior and unchanged here.
+        session.NowPlayingQueue = queueItems;
+        session.FullNowPlayingItem = item;
+
+        // For audio, add NowPlaying speech before the audio directive
+        // (JF-699 item 6: the write rides the delivered-launch gate; also safe by
+        // construction since JF-699 item 1 - BuildAudioPlayerResponse throws the
+        // refusal or always delivers a directive).
+        if (item is not MediaBrowser.Controller.Entities.Movies.Movie
+            && SpeechBuilder.GetSsml("NowPlayingSsml", locale, SpeechBuilder.EscapeXml(item.Name)) is { } nowPlayingSsml
+            && Launch.GetAnnounceNowPlaying(user))
+        {
+            PlaybackLaunchBuilder.AttachAnnounceIfLaunched(
+                response,
+                new SsmlOutputSpeech { Ssml = $"<speak>{nowPlayingSsml}</speak>" });
+        }
+
+        return response;
     }
 
     private static BaseItemKind[] GetItemTypes(string? mediaType)

@@ -206,13 +206,6 @@ public class PlayVideoIntentHandler : BaseHandler
 
         BaseItem video = videos[0];
 
-        List<QueueItem> queueItems = new List<QueueItem>
-        {
-            new QueueItem { Id = video.Id }
-        };
-        session.NowPlayingQueue = queueItems;
-        session.FullNowPlayingItem = video;
-
         // Check for existing playback progress and announce resume position.
         // Note: Alexa VideoApp does not support seek/offset natively, so the video
         // will start from the beginning, but we inform the user where they left off.
@@ -229,7 +222,10 @@ public class PlayVideoIntentHandler : BaseHandler
         // JF-501: the announce is spoken progressively (directive-only final response).
         // JF-587: the episode screenless degrade (audio-only on Dots); movies keep
         // the capability refusal inside the builder.
-        return await Launch.BuildEpisodeLaunchResponseAsync(
+        // JF-699 item 5: the session writes follow the launch build (the ordering
+        // policy lives on EnsureStreamTokenDeliverable; the codec-routed remux URL
+        // is token-gated UNCONDITIONALLY on this path, not only in seek mode).
+        SkillResponse response = await Launch.BuildEpisodeLaunchResponseAsync(
             context,
             request,
             locale,
@@ -238,6 +234,13 @@ public class PlayVideoIntentHandler : BaseHandler
             Launch.GetVideoAppLaunchUrl(video, user),
             resumeTicks,
             Launch.BuildVideoLaunchSpeech(video, locale, resumeTicks, Launch.GetAnnounceNowPlaying(user))).ConfigureAwait(false);
+
+        session.NowPlayingQueue = new List<QueueItem>
+        {
+            new QueueItem { Id = video.Id }
+        };
+        session.FullNowPlayingItem = video;
+        return response;
     }
 
     /// <summary>

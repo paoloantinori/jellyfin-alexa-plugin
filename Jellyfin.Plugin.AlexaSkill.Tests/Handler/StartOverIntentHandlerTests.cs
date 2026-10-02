@@ -11,6 +11,7 @@ using global::Alexa.NET.Response.Directive;
 using Alexa.NET.Assertions;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Exceptions;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Entities;
@@ -900,9 +901,11 @@ public class StartOverIntentHandlerTests : PluginTestBase, IDisposable
         string bookKey = Jellyfin.Plugin.AlexaSkill.Alexa.Util.ResumeMath.GetAudiobookBookKey(book);
         tracker.RecordSegment(book.Id.ToString(), 500);
 
-        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
-
-        TestHelpers.AssertStreamTokenRefusalTell(response);
+        // JF-699 item 1: the refusal is the typed exception (RequestPipeline
+        // translates it into the localized Tell); the handler tail, including the
+        // durable position clears, never runs on a refusal.
+        await Assert.ThrowsAsync<StreamTokenNotConfiguredException>(
+            () => handler.HandleAsync(request, context, user, session, CancellationToken.None));
 
         // The durable position survives: no server-side clear, no tracker clear.
         _fx.UserDataManager.Verify(

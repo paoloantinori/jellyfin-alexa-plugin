@@ -163,14 +163,15 @@ public class PlayRandomIntentHandler : BaseHandler
             queueItems.Add(new QueueItem { Id = shuffled[i].Id, PlaylistItemId = null });
         }
 
-        session.NowPlayingQueue = queueItems;
-
         BaseItem firstItem = shuffled[0];
-        session.FullNowPlayingItem = firstItem;
 
         string itemId = firstItem.Id.ToString();
 
         // Use VideoApp for movies/episodes, AudioPlayer for audio
+        // JF-699 item 5: the session writes follow the launch build in both arms
+        // (the ordering policy lives on EnsureStreamTokenDeliverable; a refusal
+        // must not leave a phantom now-playing).
+        SkillResponse response;
         if (firstItem is MediaBrowser.Controller.Entities.Movies.Movie
             or MediaBrowser.Controller.Entities.TV.Episode)
         {
@@ -178,7 +179,7 @@ public class PlayRandomIntentHandler : BaseHandler
             // JF-501: the announce is spoken progressively (directive-only final response).
             // JF-587: the episode screenless degrade (audio-only on Dots); movies keep
             // the capability refusal inside the builder. Fresh play: no resume ticks.
-            return await Launch.BuildEpisodeLaunchResponseAsync(
+            response = await Launch.BuildEpisodeLaunchResponseAsync(
                 context,
                 request,
                 locale,
@@ -188,8 +189,14 @@ public class PlayRandomIntentHandler : BaseHandler
                 resumeTicks: 0,
                 SpeechBuilder.BuildNowPlayingSpeech(firstItem.Name, locale, Launch.GetAnnounceNowPlaying(user))).ConfigureAwait(false);
         }
+        else
+        {
+            response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, firstItem, user, context);
+        }
 
-        return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, firstItem, user, context);
+        session.NowPlayingQueue = queueItems;
+        session.FullNowPlayingItem = firstItem;
+        return response;
     }
 
     // JF-466: returns the content-access-filtered kinds for the slot instead of

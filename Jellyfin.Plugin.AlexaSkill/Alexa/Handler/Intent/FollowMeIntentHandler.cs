@@ -119,22 +119,12 @@ public class FollowMeIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale));
         }
 
-        // Transfer the queue to the current device
-        _queueManager.SetQueue(
-            currentDeviceId,
-            sourceQueue.ItemIds,
-            sourceQueue.CurrentIndex,
-            sourceQueue.RepeatMode,
-            sourceQueue.PlaybackOrder);
-
         // Update Jellyfin session queue
         var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, session.UserId, locale);
         if (userError != null)
         {
             return userError;
         }
-
-        session.FullNowPlayingItem = item;
 
         // JF-375: carry the source device's playback position. Two signals, freshest
         // first: the queue's live per-device pointer (CurrentItemId/CurrentPositionTicks),
@@ -167,6 +157,11 @@ public class FollowMeIntentHandler : BaseHandler
         string streamUrl = Launch.GetStreamUrl(currentItemId, user);
         string title = item.Name ?? ResponseStrings.Get("UnknownMedia", locale);
 
+        // JF-699 item 5: the launch build runs BEFORE every transfer write (the
+        // ordering policy lives on EnsureStreamTokenDeliverable): a refused
+        // transfer must leave BOTH devices exactly as they were (no target queue,
+        // no phantom now-playing, and the source queue intact, since nothing
+        // transferred). The carry reads above already preceded the source Clear.
         SkillResponse response = Launch.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll,
             streamUrl,
@@ -176,12 +171,29 @@ public class FollowMeIntentHandler : BaseHandler
             context,
             offsetInMilliseconds: offsetMs);
 
+        // Transfer the queue to the current device
+        _queueManager.SetQueue(
+            currentDeviceId,
+            sourceQueue.ItemIds,
+            sourceQueue.CurrentIndex,
+            sourceQueue.RepeatMode,
+            sourceQueue.PlaybackOrder);
+
+        session.FullNowPlayingItem = item;
+
         // Replace the default speech with the follow-me announcement. Two wordings,
         // honest in both directions: the carried-position phrase only when an offset
         // actually applies (nothing stored = the transfer genuinely starts at 0).
-        response.Response.OutputSpeech = offsetMs > 0
-            ? SpeechBuilder.BuildOutputSpeech("FollowMeSuccessResumeSsml", "FollowMeSuccessResume", locale, title)
-            : SpeechBuilder.BuildOutputSpeech("FollowMeSuccessSsml", "FollowMeSuccess", locale, title);
+        // JF-699 item 6: the write rides the delivered-launch gate. Safe by
+        // construction too (BuildAudioPlayerResponse throws the refusal or always
+        // delivers a directive since JF-699 item 1), but the gate is the belt the
+        // output-speech roster scan requires, so a future non-launch builder return
+        // can never be spoken over here.
+        PlaybackLaunchBuilder.AttachAnnounceIfLaunched(
+            response,
+            offsetMs > 0
+                ? SpeechBuilder.BuildOutputSpeech("FollowMeSuccessResumeSsml", "FollowMeSuccessResume", locale, title)
+                : SpeechBuilder.BuildOutputSpeech("FollowMeSuccessSsml", "FollowMeSuccess", locale, title));
 
         // Clear the source device's queue so it doesn't keep appearing as "active"
         _queueManager.Clear(sourceDeviceId);

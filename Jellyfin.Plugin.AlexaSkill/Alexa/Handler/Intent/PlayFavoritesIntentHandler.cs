@@ -127,19 +127,21 @@ public class PlayFavoritesIntentHandler : BaseHandler
             });
         }
 
-        session.NowPlayingQueue = queueItems;
-
         BaseItem? firstItem = _libraryManager.GetItemById(queueItems[0].Id);
         if (firstItem == null)
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale));
         }
 
-        session.FullNowPlayingItem = firstItem;
-
         string item_id = firstItem.Id.ToString();
 
-        return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(item_id, user), item_id, firstItem, user, context);
+        // JF-699 item 5: launch build BEFORE the now-playing writes (the ordering
+        // policy lives on EnsureStreamTokenDeliverable; a seek-mode refusal must
+        // not leave a phantom now-playing).
+        SkillResponse response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(item_id, user), item_id, firstItem, user, context);
+        session.NowPlayingQueue = queueItems;
+        session.FullNowPlayingItem = firstItem;
+        return response;
     }
 
     /// <summary>

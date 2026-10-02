@@ -145,8 +145,7 @@ public class SkipForwardBackIntentHandler : BaseHandler
                 session.FullNowPlayingItem,
                 user,
                 context,
-                queueManager: _queueManager,
-                locale: locale);
+                queueManager: _queueManager);
 
             // JF-693: the seek source can be speed/transcode-routed (token-gated), so
             // the confirm rides a delivered launch; the JF-687 refusal Tell stands.
@@ -171,8 +170,7 @@ public class SkipForwardBackIntentHandler : BaseHandler
             session.FullNowPlayingItem,
             user,
             context,
-            queueManager: _queueManager,
-            locale: locale);
+            queueManager: _queueManager);
 
         // JF-693: same delivered-launch gate as the end-skip branch above.
         PlaybackLaunchBuilder.AttachAnnounceIfLaunched(

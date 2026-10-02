@@ -490,17 +490,17 @@ public class PlayMoodMusicIntentHandler : BaseHandler
 
         BaseItem selected = foundItems[Random.Shared.Next(foundItems.Count)];
 
-        List<QueueItem> queueItems = new List<QueueItem>
+        string itemId = selected.Id.ToString();
+
+        // JF-699 item 5: launch build BEFORE the now-playing writes (the ordering
+        // policy lives on EnsureStreamTokenDeliverable).
+        SkillResponse response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, selected, user, context);
+        session.NowPlayingQueue = new List<QueueItem>
         {
             new() { Id = selected.Id }
         };
-
-        session.NowPlayingQueue = queueItems;
         session.FullNowPlayingItem = selected;
-
-        string itemId = selected.Id.ToString();
-
-        return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, selected, user, context);
+        return response;
     }
 
     /// <summary>
