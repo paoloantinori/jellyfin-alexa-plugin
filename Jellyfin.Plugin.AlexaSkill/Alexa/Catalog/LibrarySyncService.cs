@@ -192,8 +192,13 @@ public class LibrarySyncService
                     // Test seam, null in production (see TypeLegEntryProbeForTest):
                     // fires inside the isolation try so the pins can simulate the
                     // drifted payload-build invariant the real factory cannot
-                    // produce by construction.
-                    TypeLegEntryProbeForTest?.Invoke(catalogType);
+                    // produce by construction. Guarded on items.Count > 0 so the
+                    // seam's reachability equals the real throw's (a zero-item
+                    // type never builds a payload, so it can never freeze).
+                    if (items.Count > 0)
+                    {
+                        TypeLegEntryProbeForTest?.Invoke(catalogType);
+                    }
 
                     return (await SyncCatalogForLocaleAsync(
                         user, user.SmapiDeviceToken.AccessToken, vendorId, catalogType, items,
@@ -359,9 +364,14 @@ public class LibrarySyncService
                 user.Id, string.Join(", ", result.FrozenTypes));
         }
 
+        // The completion line must not read clean on a freeze run: a tail-grep
+        // triage sees this line last, so the frozen types ride it too.
+        string frozenClause = result.FrozenTypes.Count > 0
+            ? $" (partial: {string.Join(", ", result.FrozenTypes)} frozen, Success=false)"
+            : string.Empty;
         _logger.LogInformation(
-            "Catalog sync completed for user {UserId}: {Succeeded}/{Total} locales, {Artists} artists, {Albums} albums, {Series} series, {ElapsedMs}ms total",
-            user.Id, localesSucceeded, locales.Count, result.ArtistCount, result.AlbumCount, result.SeriesCount, totalSw.ElapsedMilliseconds);
+            "Catalog sync completed for user {UserId}: {Succeeded}/{Total} locales, {Artists} artists, {Albums} albums, {Series} series, {ElapsedMs}ms total{FrozenClause}",
+            user.Id, localesSucceeded, locales.Count, result.ArtistCount, result.AlbumCount, result.SeriesCount, totalSw.ElapsedMilliseconds, frozenClause);
 
         return result;
     }

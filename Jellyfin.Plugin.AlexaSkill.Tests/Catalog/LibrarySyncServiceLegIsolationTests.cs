@@ -51,6 +51,7 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
     private readonly ILoggerFactory _loggerFactory;
     private readonly LibrarySyncService _service;
     private readonly List<(LogLevel Level, string Message)> _logCapture;
+    private readonly string _originalCatalogSyncLocales;
 
     public LibrarySyncServiceLegIsolationTests()
     {
@@ -80,11 +81,20 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
         // call issue a real manifest GET to api.amazonalexa.com (with the fake
         // token, falling back to it-IT only via the generic catch). Pin the
         // locale set so the suite never leaves the fake (code-review F1).
-        Plugin.Instance!.Configuration.CatalogSyncLocales = string.Empty;
+        _originalCatalogSyncLocales = Plugin.Instance!.Configuration.CatalogSyncLocales;
+        Plugin.Instance.Configuration.CatalogSyncLocales = string.Empty;
     }
 
     public void Dispose()
     {
+        // Restore the shared plugin instance's locale override: xUnit runs
+        // classes in arbitrary order, and a leaked string.Empty here would
+        // silently pin every later sync test to it-IT-only.
+        if (Plugin.Instance != null)
+        {
+            Plugin.Instance.Configuration.CatalogSyncLocales = _originalCatalogSyncLocales;
+        }
+
         _loggerFactory.Dispose();
     }
 
@@ -140,7 +150,9 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
 
         // Assert: partial failure is honest.
         Assert.False(result.Success);
-        Assert.Equal(new[] { CatalogType.Artist }, result.FrozenTypes);
+        // Order-independent: FrozenTypes is a set, its enumeration order is not a contract.
+        Assert.Single(result.FrozenTypes);
+        Assert.Contains(CatalogType.Artist, result.FrozenTypes);
 
         // The frozen type minted nothing: no catalog creation, no version upload,
         // no id persisted (the invariant fires inside the payload build, before
@@ -242,8 +254,10 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
         // Assert
         Assert.False(first.Success);
         Assert.False(second.Success);
-        Assert.Equal(new[] { CatalogType.Artist }, first.FrozenTypes);
-        Assert.Equal(new[] { CatalogType.Artist }, second.FrozenTypes);
+        Assert.Single(first.FrozenTypes);
+        Assert.Contains(CatalogType.Artist, first.FrozenTypes);
+        Assert.Single(second.FrozenTypes);
+        Assert.Contains(CatalogType.Artist, second.FrozenTypes);
 
         // The frozen type minted nothing across BOTH runs; the healthy types
         // re-minted per run (the payload-hash skip is per run, not persisted).
