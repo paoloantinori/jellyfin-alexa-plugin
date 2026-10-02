@@ -624,6 +624,13 @@ public abstract class BaseHandler
     /// outputSpeech" (live incident 2026-09-06 17:12:52, corr=e54b0532/1eab419e: the
     /// JF-477 session-lookup fast-fail degraded a PlaybackFailed event to the
     /// UserNotFound Tell). Shared with the controller's own degradation sites.
+    /// PlaybackController CommandIssued taps are DELIBERATELY not classified here:
+    /// the no-outputSpeech rule is undocumented for them, every consumer (the
+    /// RequestPipeline StreamTokenNotConfigured translation, the circuit-breaker
+    /// short-circuit, the controller degrade, the session-miss responses) answers
+    /// them with speech today, and no incident is recorded; the consequence and
+    /// revisit trigger are documented at the pipeline translation. Complete the
+    /// pattern match here only if Amazon documents the rule for that class.
     /// </summary>
     /// <param name="request">The incoming skill request.</param>
     /// <returns>True when the response must be the empty keep-alive shape.</returns>
