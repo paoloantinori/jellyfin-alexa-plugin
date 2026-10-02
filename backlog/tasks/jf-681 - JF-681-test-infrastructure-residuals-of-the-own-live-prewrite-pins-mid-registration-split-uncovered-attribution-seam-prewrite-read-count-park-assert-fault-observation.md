@@ -4,7 +4,7 @@ title: >-
   JF-681 - test-infrastructure residuals of the own-live prewrite pins:
   mid-registration split uncovered, attribution seam, prewrite read count,
   park-assert fault observation
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-30 09:27'
 labels:
