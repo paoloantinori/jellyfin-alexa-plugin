@@ -272,17 +272,19 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         // library walk): the JF-420/JF-652 pools fetch from the pinned index
         // scoped to the user's libraries, and the artist-songs query reuses the
         // same scope. The handler's own gates fetch the pool at most once per
-        // request and share it (JF-658); a MULTI-VALUE ER leg adds one earlier
-        // fetch inside MultiValueErDisambiguation.TryArbitrate (its Pool ships
-        // on the arbitration result for the JF-702 sharing adopters).
-        // Known seam (accepted with the fold): a
-        // library-scope cache invalidation landing between SearchAsync's internal
-        // resolution and this one would serve the gates a fresher scope than the
-        // search ran under; the window is milliseconds and the worst case is a
-        // disambiguation prompt naming a just-removed library's artist (the
-        // JF-457 name-only leak class).
+        // request and share it (JF-658). JF-702 closes the pool-sharing seam the
+        // JF-690 marker flagged: on a multi-value ER leg the gate already
+        // materialized the scoped pool, so its Pool seeds this cache and the
+        // JF-420/JF-652 gates consume that fetch instead of re-materializing
+        // (null on every closed-gate leg, byte-identical to before). Known seam
+        // (accepted, JF-658 and JF-702): a library-scope cache invalidation
+        // landing between the gate's scope resolution and this one would serve
+        // the gates a scope fetched before the search ran; the window is
+        // milliseconds and the worst case is unchanged (a disambiguation prompt
+        // naming a just-removed library's artist, the JF-457 name-only leak
+        // class).
         Guid[]? topParentIds = Util.LibraryFilter.ResolveForUser(user, _libraryManager, Logger);
-        IReadOnlyList<BaseItem>? artistPool = null;
+        IReadOnlyList<BaseItem>? artistPool = multiValue.Pool;
 
         if (artists.Count == 0)
         {
