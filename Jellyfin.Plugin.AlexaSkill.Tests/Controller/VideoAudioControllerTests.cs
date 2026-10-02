@@ -1220,14 +1220,17 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         {
             result = await endpointTask.WaitAsync(TimeSpan.FromSeconds(20)).ConfigureAwait(false);
         }
-        catch (Exception failure) when (endpointTask.IsFaulted)
+        catch (Exception) when (endpointTask.IsFaulted)
         {
             // JF-700: a faulting endpoint (the breach pins' FileNotFoundException)
             // never reaches the post-settle assert, so assert BEFORE the rethrow.
             // The filter admits only endpoint faults: a WaitAsync timeout or a
             // canceled endpoint propagates untouched with its own diagnosis
-            // instead of reading as a void attribution.
-            AssertProbeFired(failure);
+            // instead of reading as a void attribution. The embedded fault comes
+            // from endpointTask, not the caught exception: in the timeout-vs-fault
+            // race the caught one is the TimeoutException while the task's real
+            // fault is what the triage text must carry.
+            AssertProbeFired(endpointTask.Exception!.GetBaseException());
             throw;
         }
 
