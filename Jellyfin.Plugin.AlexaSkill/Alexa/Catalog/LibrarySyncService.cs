@@ -155,13 +155,38 @@ public class LibrarySyncService
         // per-attempt re-read below); catalog version creation and the model PUT are
         // both safe to re-submit, which the one-shot 401 retry relies on.
         // JF-513.3 (item 2): locale legs whose payload is identical to one already
-        // uploaded this run (ar-SA/hi-IN have no phonetic generator, so their
+        // (the byte-identical legs are the synonym-equivalence classes the
+        // JF-709 audit names: es x3, fr x2, and the 6-member en/hi cluster;
+        // ar-SA never reaches the sync, the JF-543 filter above.)
         // uploads are byte-identical to a previous leg's) are skipped: SMAPI stores
         // a new catalog version per upload, so re-minting identical content burns
         // quota and the 17-locale volume is the growth this item flagged. The
-        // version returned for the skipped type is the last uploaded one for that
-        // catalog, which the model-injection gate below already treats as current.
+        // version returned for the skipped type is null, so the injection below
+        // treats it exactly like a zero-item type (no id forwarded), and a leg
+        // whose types ALL skipped performs no model PUT at all; see JF-709 for
+        // the no-generator-locale consequence of that shape.
         Dictionary<string, string> uploadedPayloadHashes = new(StringComparer.Ordinal);
+
+        // JF-706: the ONE per-type wiring table for the whole sync (locale-
+        // invariant, built once; the getters read the user's stored catalog ids
+        // live). The per-leg loop inside RunLegAsync, the injection gate, and
+        // the per-type id/version extraction at the UpdateInteractionModelAsync
+        // call all derive from this list, collapsing three parallel call
+        // sites, the gate, and six positional injection arguments (the repo's
+        // "missed one" bug class: a missed site compiles clean and freezes or
+        // syncs inconsistently). The catalog id is a GETTER, not a snapshot:
+        // SyncCatalogForLocaleAsync assigns it when it creates the catalog, so
+        // it is read live at the leg call and re-read right after the leg
+        // returns (final from there: a leg writes only its own type's id). A
+        // fourth catalog type is a one-row edit HERE plus its write-back
+        // branch in SyncCatalogForLocaleAsync (still per-type there, tracked
+        // as JF-711).
+        var typeLegs = new (CatalogType Type, IReadOnlyList<BaseItem> Items, Func<string?> StoredCatalogId, string Name, string Description)[]
+        {
+            (CatalogType.Artist, artistItems, () => user.ArtistCatalogId, "Jellyfin Artists", "Artist catalog synced from Jellyfin library"),
+            (CatalogType.Album, albumItems, () => user.AlbumCatalogId, "Jellyfin Albums", "Album catalog synced from Jellyfin library"),
+            (CatalogType.Series, seriesItems, () => user.SeriesCatalogId, "Jellyfin Series", "Series catalog synced from Jellyfin library"),
+        };
 
         async Task<IReadOnlyList<CatalogType>> RunLegAsync(string locale)
         {
@@ -215,41 +240,51 @@ public class LibrarySyncService
                 }
             }
 
-            // Create/update catalogs with locale-specific phonetic synonyms
-            string? artistVersion = await SyncTypeLegAsync(
-                CatalogType.Artist, artistItems, user.ArtistCatalogId,
-                "Jellyfin Artists", "Artist catalog synced from Jellyfin library").ConfigureAwait(false);
-
-            string? albumVersion = await SyncTypeLegAsync(
-                CatalogType.Album, albumItems, user.AlbumCatalogId,
-                "Jellyfin Albums", "Album catalog synced from Jellyfin library").ConfigureAwait(false);
-
-            string? seriesVersion = await SyncTypeLegAsync(
-                CatalogType.Series, seriesItems, user.SeriesCatalogId,
-                "Jellyfin Series", "Series catalog synced from Jellyfin library").ConfigureAwait(false);
+            // Create/update catalogs with locale-specific phonetic synonyms.
+            // Each minted entry pairs the fresh version with the catalog id as
+            // it stands right after the leg; types that minted no version
+            // (frozen, zero items, or the JF-513.3 identical-payload skip) are
+            // simply absent, which is the JF-495 null-id-with-null-version
+            // rule the injection reads below.
+            var minted = new Dictionary<CatalogType, (string? Version, string? CatalogId)>();
+            foreach (var leg in typeLegs)
+            {
+                string? version = await SyncTypeLegAsync(
+                    leg.Type, leg.Items, leg.StoredCatalogId(), leg.Name, leg.Description).ConfigureAwait(false);
+                if (version != null)
+                {
+                    minted[leg.Type] = (version, leg.StoredCatalogId());
+                }
+            }
 
             // Update this locale's interaction model with the catalog references.
             // A frozen type's null version keeps its id out (the same JF-495
             // null-version rule the zero-items shape uses), so its last-good
             // catalog reference survives in the live model.
-            if (artistVersion != null || albumVersion != null || seriesVersion != null)
+            if (minted.Count > 0)
             {
                 // JF-495: forward a catalog id ONLY together with the version minted
                 // in THIS run. Forwarding a stored id with a null version (e.g. that
                 // entity type had zero items this run) made the injection pin the
                 // stale "1" fallback version; leaving the id null instead preserves
                 // whatever catalog reference the live model already carries.
+                // JF-706: CatalogManager keeps per-type id/version parameters (not
+                // a dictionary), so the arguments are extracted per type at this
+                // ONE place from the minted collection; an absent type reads as
+                // (null, null), which is that same rule made structural.
+                (string? Version, string? CatalogId) Minted(CatalogType type) => minted.GetValueOrDefault(type);
+
                 var modelUpdate = await _catalogManager.UpdateInteractionModelAsync(
                     user.SmapiDeviceToken.AccessToken,
                     skillId,
                     DevelopmentStage,
                     locale,
-                    artistVersion != null ? user.ArtistCatalogId : null,
-                    albumVersion != null ? user.AlbumCatalogId : null,
-                    seriesVersion != null ? user.SeriesCatalogId : null,
-                    artistVersion,
-                    albumVersion,
-                    seriesVersion,
+                    Minted(CatalogType.Artist).CatalogId,
+                    Minted(CatalogType.Album).CatalogId,
+                    Minted(CatalogType.Series).CatalogId,
+                    Minted(CatalogType.Artist).Version,
+                    Minted(CatalogType.Album).Version,
+                    Minted(CatalogType.Series).Version,
                     cancellationToken).ConfigureAwait(false);
 
                 // JF-495: catalog-sync model PUTs must appear in the per-locale
