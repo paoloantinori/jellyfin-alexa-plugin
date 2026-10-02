@@ -515,7 +515,7 @@ public class VideoAudioController : ControllerBase
         }
 
         // Cache miss — acquire per-item lock
-        using (await _cache.LockItemAsync(itemId, artModifiedTicks).ConfigureAwait(false))
+        using (await LockHlsItemAsync(itemId, artModifiedTicks).ConfigureAwait(false))
         {
             // Clean up any corrupt/partial HLS directory from a previous failed generation
             _cache.CleanupHlsStub(itemId, artModifiedTicks);
@@ -882,7 +882,7 @@ public class VideoAudioController : ControllerBase
         }
 
         // Cache miss: acquire per-item lock
-        using (await _cache.LockItemAsync(itemId, artModifiedTicks).ConfigureAwait(false))
+        using (await LockHlsItemAsync(itemId, artModifiedTicks).ConfigureAwait(false))
         {
             _cache.CleanupHlsStub(itemId, artModifiedTicks);
 
@@ -2101,7 +2101,7 @@ public class VideoAudioController : ControllerBase
             }
         }
 
-        using (await _cache.LockItemAsync(spec.CacheKey, spec.ArtModifiedTicks).ConfigureAwait(false))
+        using (await LockHlsItemAsync(spec.CacheKey, spec.ArtModifiedTicks).ConfigureAwait(false))
         {
             _cache.CleanupHlsStub(spec.CacheKey, spec.ArtModifiedTicks);
 
@@ -3124,7 +3124,7 @@ public class VideoAudioController : ControllerBase
 #pragma warning restore CA3003
 
         // Cache miss — acquire per-parent lock
-        using (await _cache.LockItemAsync(parentId, artModifiedTicks).ConfigureAwait(false))
+        using (await LockHlsItemAsync(parentId, artModifiedTicks).ConfigureAwait(false))
         {
             _cache.CleanupHlsStub(parentId, artModifiedTicks);
 
@@ -3830,6 +3830,43 @@ public class VideoAudioController : ControllerBase
     }
 
     /// <summary>
+    /// Internal test seam (JF-681, InternalsVisibleTo): force the MID-REGISTRATION
+    /// window on <paramref name="itemId"/>'s active-encode flag, with the registry
+    /// chosen by <see cref="EncodeRegistryFor"/>. The window is the brief production
+    /// state between <see cref="ActiveEncodeHandle.MarkActive"/>'s registry store and
+    /// its first slot write (<c>GetOrAdd</c> before <see cref="ActiveEncodeGenerations.RegisterIfStored"/>):
+    /// a stored holder with ZERO slots, where the four prewrite serve gates'
+    /// strict reader (<see cref="OwnTicksGenerationLive"/>) answers FALSE while the
+    /// debris verdicts' conservative reader
+    /// (<see cref="OwnTicksGenerationLiveOrRegistering"/>) answers TRUE - the
+    /// strict-vs-conservative split the full-slot seam
+    /// (<see cref="SetEncodeActiveForTest"/>) cannot produce, because a written slot
+    /// makes both predicates agree. This seam is the only way a pin can hold that
+    /// state deterministically. The registering arm REPLACES any stored holder with
+    /// a fresh zero-slot one (the indexer set, so the guarantee holds regardless of
+    /// prior state); the clear arm delegates to
+    /// <see cref="SetEncodeActiveForTest"/>'s clear arm (whose TEST-SEAM HAZARD
+    /// doc is the canonical one: fresh-Guid keys only, which is every current
+    /// caller). Test-only: production never calls this.
+    /// </summary>
+    /// <param name="itemId">The item ID (episode itemId, song itemId, or audiobook parentId).</param>
+    /// <param name="registering">True to store the zero-slot mid-registration holder, false to clear it.</param>
+    /// <param name="audiobook">True to target the audiobook registry (default episode).</param>
+    /// <param name="song">True to target the single-item registry (default episode).</param>
+    internal static void SetEncodeRegisteringForTest(string itemId, bool registering, bool audiobook = false, bool song = false)
+    {
+        if (registering)
+        {
+            var registry = EncodeRegistryFor(audiobook, song);
+            registry[itemId] = new ActiveEncodeGenerations(registry, itemId);
+        }
+        else
+        {
+            SetEncodeActiveForTest(itemId, active: false, audiobook, song);
+        }
+    }
+
+    /// <summary>
     /// Internal test seam (JF-665, InternalsVisibleTo): whether an active-encode
     /// flag is currently set for <paramref name="itemId"/>, with the same
     /// registry selectors as <see cref="SetEncodeActiveForTest"/>. Read-only.
@@ -3867,6 +3904,59 @@ public class VideoAudioController : ControllerBase
     /// Null in production; read-only observer.
     /// </summary>
     internal Action<string>? PlaylistContentReadForTest { get; set; }
+
+    /// <summary>
+    /// Internal test seam (JF-681, InternalsVisibleTo; same observer shape as
+    /// <see cref="FfmpegProcessStartedForTest"/>): when non-null, invoked at the
+    /// ENTRY of each HLS in-lock double-check scope, with the path's cache key,
+    /// the moment the per-item lock is held. Gives the in-lock pins a
+    /// DETERMINISTIC in-lock-vs-fast-path attribution: the test helper's 400ms
+    /// park assert cannot distinguish a parked request from one whose pre-lock
+    /// phase stalled past the window and then served from the FAST path (whose
+    /// own-live gate reads the same predicate at the same ticks and produces a
+    /// byte-identical serve), while this probe can only fire inside the lock
+    /// scope, so a pin asserting it can never be satisfied by a fast-path serve.
+    /// Scoped deliberately to the HLS scopes the pins exercise: the MP4 path has
+    /// no in-lock pins and keeps its direct
+    /// <see cref="VideoAudioCache.LockItemAsync"/> call. Fires once per scope
+    /// ENTERED, so a single-chapter audiobook redirect (audiobook core into the
+    /// song core) fires it twice; the pins read only the fired/never-fired
+    /// distinction. Null in production; read-only observer, no behavior.
+    /// </summary>
+    internal Action<string>? InLockWarmCacheProbeForTest { get; set; }
+
+    /// <summary>
+    /// The ONE HLS per-item lock acquisition (JF-681): awaits the cache lock and
+    /// fires <see cref="InLockWarmCacheProbeForTest"/> with the key before the
+    /// caller's scope body runs, so every HLS scope that routes through this
+    /// wrapper is born probed and the probe's rationale lives here once (the
+    /// <see cref="MarkEncodeActive"/> one-wrapper idiom: call sites cannot
+    /// drift). The MP4 path deliberately stays on the direct
+    /// <see cref="VideoAudioCache.LockItemAsync"/> call. Production behavior is
+    /// the lock alone; the invoke is a no-op while the seam is null.
+    /// </summary>
+    /// <param name="cacheKey">The per-item lock key (the path's cache key).</param>
+    /// <param name="artModifiedTicks">The art ticks half of the lock key.</param>
+    /// <returns>The lock scope disposable (release on dispose, unchanged).</returns>
+    private async Task<IDisposable> LockHlsItemAsync(string cacheKey, long artModifiedTicks)
+    {
+        IDisposable gate = await _cache.LockItemAsync(cacheKey, artModifiedTicks).ConfigureAwait(false);
+        try
+        {
+            InLockWarmCacheProbeForTest?.Invoke(cacheKey);
+            return gate;
+        }
+        catch
+        {
+            // A throwing observer (a test lambda asserting inside the seam) must
+            // never orphan the acquired gate: the caller's using never binds when
+            // this throws, so without this dispose the per-item lock would stay
+            // held for the process lifetime. Rethrow unchanged so the pin sees
+            // the observer's own exception.
+            gate.Dispose();
+            throw;
+        }
+    }
 
     /// <summary>
     /// The ONE full playlist content read on the verdict/serve paths (JF-677):

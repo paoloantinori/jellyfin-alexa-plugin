@@ -35,13 +35,28 @@ VERIFICATION: the new pins + red proofs per item 1 (predicate swap flips them); 
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization (N/A: no session attributes touched)
+- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress (N/A: no HttpClient touched)
+- [x] #6 NLU test fixtures updated if interaction model changed (N/A: no interaction model change)
+- [x] #7 E2E test added for new intent or handler logic (N/A: test-infrastructure only, no new intent or handler logic)
+- [x] #8 Locale response strings added to all 17 locales (N/A: no user-facing strings)
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Implementation Notes
+<!-- SECTION:IMPL:BEGIN -->
+Landed in the worker worktree (single commit, not pushed), baseline 7bc89eb1, suite 4891/4891 both TFMs (4887 + 4: the two mid-registration pins, the park-fault observation pin, the throwing-probe lock-release pin).
+
+ITEM 1 (mid-registration split): new seam `SetEncodeRegisteringForTest` (stores a ZERO-slot holder via the indexer set, mirroring MarkActive's GetOrAdd-before-RegisterIfStored window; clear arm delegates to SetEncodeActiveForTest(active:false); test-only, production never calls it) + pins `StreamHlsEpisode_InLockMidRegistrationWindow_SkipsPrewriteAndVerdictStaysConservative` and the song twin: in the window the strict gate skips the prewrite (seg_0999/seg_899 absent, zero prewrite reads, no prewrite log) while the verdict answers conservative (the "serving live ffmpeg playlist (encoding in progress)" own-live row fires, the discriminator an ABSENT entry cannot produce) and the live partial serves. RED PROOF: swapping both gates to OwnTicksGenerationLiveOrRegistering flips both pins (prewrite served, markers present).
+
+ITEM 2 (attribution seam): `InLockWarmCacheProbeForTest` (null-inert delegate) fired at the ONE `LockHlsItemAsync` wrapper that all four HLS in-lock scopes route through (MP4 stays direct), and `ServeInLockWarmCacheAsync` gained an optional `VideoAudioController? controller` param: when passed, the helper wires the seam and asserts the probe fired after the endpoint completes (the 400ms park assert can no longer be satisfied by a fast-path serve). EIGHT pins opted in (4 JF-677 twins, 2 JF-680, 2 mid-reg). RED PROOF on the final shape: removing the wrapper's invoke flips exactly those 8, the 9 other helper callers stay green. The JF-678 vanish/breach family (no controller passed) is filed same-turn at JF-700.
+
+ITEM 3 (prewrite read count): the two JF-680 own-live pins count reads through the shared `TrackPlaylistReads` funnel (prewrite==1 fresh serve read, live==0). RED PROOF: a discarded ReadPlaylistContentAsync hoisted into both TryServePrewritten* helpers flips both pins to 2.
+
+ITEM 4 (park-assert fault observation): the helper's park assert routes through `ParkAssertFailureMessage`, which unwraps a FAULTED endpoint task (Exception.GetBaseException, type+message+stack into the assert message) and names CANCELED, keeping the original fast-path wording verbatim for a real fast hit. Pin `ServeInLockWarmCacheHelper_FaultedEndpointTask_SurfacesExceptionThroughParkAssert` (verified Xunit 2.7 throws FalseException, not FailException). RED PROOF: reverting the builder to the old constant drops the exception text and the pin fails.
+
+GATES: simplify (4 agents; applied the helper-param probe shape, TrackPlaylistReads, the total GetBaseException unwrap, the LockHlsItemAsync one-definition wrapper, the clear-arm delegation; skipped justified: TestHelpers.CreateSong migration (file precedent is 45 inline constructions), double Snapshot calls (file-wide convention, micro)). Code-review high: finding 1 (throwing observer orphans the acquired gate) FIXED with the wrapper's dispose-and-rethrow catch + pin `StreamHlsVideoAudio_ThrowingInLockProbe_ReleasesTheItemLock` (RED PROOF: removing the catch times out the follow-up acquisition at 15s, both TFMs); finding 2 = the JF-678-family asymmetry, already tracked as JF-700 (not re-filed). Full suite on the final state: 4891/4891 both TFMs, 0 warnings, recipe dotnet test -m:1, never --no-build. DoD 4-8 N/A (test-infra). No deploy; do not push.
+<!-- SECTION:IMPL:END -->
