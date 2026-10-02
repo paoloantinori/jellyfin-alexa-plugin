@@ -9,9 +9,13 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 
 /// <summary>
 /// Global playback-position tracker for audiobooks played via the HLS concat endpoint.
-/// Keyed by the audiobook key the resume path reads (the book parent-folder ID; a
-/// root-level single-file book's own ID, JF-694) because segment requests are
-/// anonymous (no device/user/api_key). Single-user skill, global keying acceptable.
+/// Keyed by the audiobook key the resume path reads (the book parent-folder ID)
+/// because segment requests are anonymous (no device/user/api_key). Single-user
+/// skill, global keying acceptable. The root-level single-file book's own ID is a
+/// key shape the book-key resolver can return but that must stay COLD:
+/// the record gate (JF-694) deliberately never writes it, because a warm root key
+/// arms the dead audiobook/{ownId} resume URL the concat endpoint 404s on (a leaf
+/// has no AudioBook children). Do not re-widen the gate.
 ///
 /// Tracks the high-water-mark segment number seen via GetSegment requests and reports a
 /// conservative resume position: (highWaterMark - 1) * segmentDuration, so resume never
