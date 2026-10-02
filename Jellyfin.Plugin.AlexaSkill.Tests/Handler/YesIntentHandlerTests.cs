@@ -616,6 +616,9 @@ public class YesIntentHandlerTests : PluginTestBase
         Assert.NotNull(captured.IncludeItemTypes);
         Assert.Contains(Jellyfin.Data.Enums.BaseItemKind.Audio, captured.IncludeItemTypes);
         TestHelpers.AssertNoMediaTypesFilter(captured!, "artist query");
+        // JF-690 review: the confirm leg orders by popularity like every direct
+        // play path, so "yes" starts the artist on their most popular track.
+        Assert.NotEmpty(captured.OrderBy);
         response.HasDirective<AudioPlayerPlayDirective>();
     }
 

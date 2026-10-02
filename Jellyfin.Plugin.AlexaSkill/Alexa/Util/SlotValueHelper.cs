@@ -1,5 +1,7 @@
 #nullable enable
 
+using System;
+using System.Collections.Generic;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 
@@ -80,4 +82,62 @@ public static class SlotValueHelper
         => request.Intent.Slots != null && request.Intent.Slots.TryGetValue(slotName, out Slot? slot)
             ? GetCanonicalValue(slot)
             : null;
+
+    /// <summary>
+    /// ALL distinct canonical names of the first ER_SUCCESS_MATCH authority on
+    /// the slot (JF-690), de-duplicated by trimmed case-insensitive name (the
+    /// ER values array lists distinct catalog values ordered by Amazon's
+    /// likelihood rank; the de-dup is defensive against a pathological
+    /// same-name catalog pair). Empty when no authority matched, exactly like a
+    /// null <see cref="GetCanonicalValue(Slot)"/>; a single-entry list is the
+    /// ordinary shape, and its first entry is byte-identical to
+    /// <see cref="GetCanonicalValue(Slot)"/> (the raw name, never re-trimmed).
+    /// Callers arbitrating a multi-entry list must resolve the names against
+    /// the library themselves (a canonical name is catalog evidence, not a
+    /// library item id).
+    /// </summary>
+    /// <param name="slot">The slot to read entity resolution from; null (an absent slot) reads as no match.</param>
+    /// <returns>The distinct canonical names in authority order, or an empty list when no authority matched.</returns>
+    public static IReadOnlyList<string> GetCanonicalValues(Slot? slot)
+    {
+        if (slot?.Resolution?.Authorities is { Length: > 0 } authorities)
+        {
+            foreach (var authority in authorities)
+            {
+                if (authority.Status?.Code == "ER_SUCCESS_MATCH" && authority.Values is { Length: > 0 })
+                {
+                    List<string> names = new();
+                    HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
+                    foreach (var value in authority.Values)
+                    {
+                        if (value.Value?.Name is string name && !string.IsNullOrWhiteSpace(name) && seen.Add(name.Trim()))
+                        {
+                            names.Add(name);
+                        }
+                    }
+
+                    if (names.Count > 0)
+                    {
+                        return names;
+                    }
+                }
+            }
+        }
+
+        return Array.Empty<string>();
+    }
+
+    /// <summary>
+    /// All distinct canonical names of a named slot on an intent request
+    /// (JF-690): the same multi-value read as the slot overload, for call
+    /// sites that hold the request rather than the slot object. Empty when the
+    /// slot is absent or unmatched.
+    /// </summary>
+    /// <param name="request">The intent request carrying the slots.</param>
+    /// <param name="slotName">The slot name.</param>
+    /// <returns>The distinct canonical names in authority order, or an empty list when no authority matched.</returns>
+    public static IReadOnlyList<string> GetCanonicalValues(IntentRequest request, string slotName)
+        => request.Intent.Slots != null && request.Intent.Slots.TryGetValue(slotName, out Slot? slot)
+            ? GetCanonicalValues(slot)
+            : Array.Empty<string>();
 }

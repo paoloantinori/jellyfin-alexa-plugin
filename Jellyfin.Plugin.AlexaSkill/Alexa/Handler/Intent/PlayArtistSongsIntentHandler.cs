@@ -88,22 +88,6 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         return score * ratio;
     }
 
-    /// <summary>
-    /// JF-420.1: exact-name equality between the query and the
-    /// single tier-1 candidate (case-insensitive, end-trimmed; the same
-    /// normalization as FuzzyMatcher's exact-match concept). The JF-420 gate exists to
-    /// resolve CONTAINMENT matches
-    /// (artist name inside a LONGER query); equality is the degenerate case where the
-    /// containment exemption inflates both sides to ContainmentScore, the margin is
-    /// always 0, and an exact request is demoted to a disambiguation prompt (live:
-    /// "Soul Coughing" with "Soul Coughing &amp; Roni Size" in the library). An exact
-    /// match is the strongest possible signal: it must auto-play. NOT accent-insensitive
-    /// by design: an accented query ("måneskin" vs "Måneskin") is ASR accent drift,
-    /// which the phonetic tiers exist to resolve.
-    /// </summary>
-    private static bool IsExactNameMatch(string query, string name)
-        => string.Equals(query.Trim(), name.Trim(), StringComparison.OrdinalIgnoreCase);
-
     // The JF-381 tier-1 containment band (maximum extra characters a containment
     // candidate may have beyond the query, so "cup" in "Porcupine Tree" cannot short-
     // circuit the search) lives in Util.ArtistSearch as the single shared definition;
@@ -241,29 +225,57 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         // list against another's phonetic codes. Null on the cold-index path.
         IArtistIndex? pinnedIndex = _artistIndex?.IsReady == true ? _artistIndex.Pin() : null;
 
-        // JF-658: the JF-382 inline 4-tier duplicate is gone; this handler drives
-        // the ONE shared chain (ArtistSearch.SearchAsync) with its policy axes:
-        // Fast skips the recall tiers and the DB containment band, Thorough runs
-        // the parallel DB tiers (the inline chain's Task.WhenAll structure, kept
-        // verbatim per the JF-315 6b plan) and the ASR compound-word variants on
-        // tier 1. Observability deltas accepted with the fold (plan step 5): the
-        // per-tier retry labels collapse to the one "GetArtists" label, including
-        // the JF-457 album-scope verification queries the inline path labeled
-        // "ArtistAlbumScope" (scope-verify vs search triage now needs the query
-        // shape, not the label); SearchAsync's TOTAL log line carries the mode.
-        IReadOnlyList<BaseItem> artists = await Util.ArtistSearch.SearchAsync(
-            musicianQuery, user, _libraryManager, pinnedIndex, Logger,
-            (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", ct),
-            locale, cancellationToken,
-            mode: mode,
-            asrCompoundWordFixEnabled: _config.AsrCompoundWordFixEnabled,
-            parallelDbTiers: mode != SearchResponseMode.Fast).ConfigureAwait(false);
+        // JF-690: the shared multi-value-ER gate (it owns the full contract);
+        // placed after the pin so it reuses THIS view instead of pinning again,
+        // and before the search chain so the ask never pays for the search
+        // (only the earlier "searching" announcement is spoken). A REAL
+        // ambiguity returns the ask; a collapse to one library artist (stale
+        // catalog candidates) plays that proven survivor; the closed-gate legs
+        // keep the single-value path below byte-identical.
+        var multiValue = MultiValueErDisambiguation.TryArbitrate(
+            intentRequest, user, pinnedIndex, _libraryManager, Logger, locale);
+        if (multiValue.Ask != null)
+        {
+            return multiValue.Ask;
+        }
+
+        IReadOnlyList<BaseItem> artists;
+        if (multiValue.ResolvedArtist is { } resolvedArtist)
+        {
+            // The ambiguity collapsed to one library artist (stale catalog
+            // candidates): play the proven survivor, skip the search chain that
+            // would re-query the stale rank-#1 canonical.
+            artists = new List<BaseItem> { resolvedArtist };
+        }
+        else
+        {
+            // JF-658: the JF-382 inline 4-tier duplicate is gone; this handler drives
+            // the ONE shared chain (ArtistSearch.SearchAsync) with its policy axes:
+            // Fast skips the recall tiers and the DB containment band, Thorough runs
+            // the parallel DB tiers (the inline chain's Task.WhenAll structure, kept
+            // verbatim per the JF-315 6b plan) and the ASR compound-word variants on
+            // tier 1. Observability deltas accepted with the fold (plan step 5): the
+            // per-tier retry labels collapse to the one "GetArtists" label, including
+            // the JF-457 album-scope verification queries the inline path labeled
+            // "ArtistAlbumScope" (scope-verify vs search triage now needs the query
+            // shape, not the label); SearchAsync's TOTAL log line carries the mode.
+            artists = await Util.ArtistSearch.SearchAsync(
+                musicianQuery, user, _libraryManager, pinnedIndex, Logger,
+                (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", ct),
+                locale, cancellationToken,
+                mode: mode,
+                asrCompoundWordFixEnabled: _config.AsrCompoundWordFixEnabled,
+                parallelDbTiers: mode != SearchResponseMode.Fast).ConfigureAwait(false);
+        }
 
         // Re-resolved here for the post-search consumers (cached, so no extra
         // library walk): the JF-420/JF-652 pools fetch from the pinned index
         // scoped to the user's libraries, and the artist-songs query reuses the
-        // same scope. The pool itself is fetched at most once per request and
-        // shared by both gates (JF-658). Known seam (accepted with the fold): a
+        // same scope. The handler's own gates fetch the pool at most once per
+        // request and share it (JF-658); a MULTI-VALUE ER leg adds one earlier
+        // fetch inside MultiValueErDisambiguation.TryArbitrate (its Pool ships
+        // on the arbitration result for the JF-702 sharing adopters).
+        // Known seam (accepted with the fold): a
         // library-scope cache invalidation landing between SearchAsync's internal
         // resolution and this one would serve the gates a fresher scope than the
         // search ran under; the window is milliseconds and the worst case is a
@@ -332,7 +344,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         if (artists.Count == 1
             && musicianQuery.Contains(' ')
             && musicianQuery.Contains(artists[0].Name, StringComparison.OrdinalIgnoreCase)
-            && !IsExactNameMatch(musicianQuery, artists[0].Name)
+            && !ArtistSearch.IsExactNameMatch(musicianQuery, artists[0].Name)
             && pinnedIndex != null)
         {
             // Same pinned view the chain above used (JF-448): the alternative pool and

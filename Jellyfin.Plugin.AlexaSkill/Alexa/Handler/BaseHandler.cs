@@ -1275,7 +1275,16 @@ public abstract class BaseHandler
         response.SessionAttributes = DisambiguationHelper.BuildAttributes(matchInfos, 0, mediaType);
 
         // JF-398: activating the disambiguation flow supersedes any other flow's state.
-        ConversationalFlows.MarkOthersInactive(response, ConversationalFlows.DisambiguationKeys);
+        // JF-690 review tail: the FIFTH plain ask site (the four DisambiguationHelper
+        // builders were fixed in JF-690 itself) - mark ONLY the keys this ask writes,
+        // so a stale cross-media OFFER's crossmedia_notfound_* decline keys are
+        // superseded with the rest instead of surviving to answer a later "no" with
+        // the OLD song/album not-found.
+        ConversationalFlows.MarkOthersInactive(
+            response,
+            DisambiguationHelper.AttrMatches,
+            DisambiguationHelper.AttrIndex,
+            DisambiguationHelper.AttrType);
         return (FuzzyMissOutcome.SuggestionHandled, response);
     }
 

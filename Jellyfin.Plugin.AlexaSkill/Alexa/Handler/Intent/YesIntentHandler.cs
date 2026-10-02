@@ -431,6 +431,13 @@ public class YesIntentHandler : BaseHandler
             // JF-358: MediaTypes does not constrain an ArtistIds query (entire audio
             // library on 10.11.x, zero rows at offset on 12.x); use IncludeItemTypes.
             IncludeItemTypes = new[] { BaseItemKind.Audio },
+            // JF-690 (code-review finding): align the confirm leg with the direct
+            // play paths (PlayArtistSongsIntentHandler, CrossMediaFallback), which
+            // all order by popularity: an unsorted query started the confirm on an
+            // arbitrary DB-order track. Deliberately NO Limit: this confirm plays
+            // the artist's WHOLE catalog as the queue (the direct paths page via
+            // QueueContinuationStore, which this confirm leg does not wire).
+            OrderBy = CrossMediaFallback.PopularitySort,
             DtoOptions = new DtoOptions(true),
             ArtistIds = new[] { artist.Id }
         };
