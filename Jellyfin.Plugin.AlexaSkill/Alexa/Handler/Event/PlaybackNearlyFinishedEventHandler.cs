@@ -32,6 +32,21 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// JF-324: when the finishing item is an Episode played through AudioPlayer, it also
 /// auto-advances to the series' next episode (the only episode auto-advance path;
 /// VideoApp playback emits no events).
+/// JF-712 derive-then-commit: every SYNTHESIZED-continuation write in this handler
+/// (the device pointer via <see cref="UpdateRecoveryPointer"/>, the exhaustion arms'
+/// session-queue appends and RadioModeState arming via
+/// <see cref="CommitPendingContinuation"/>) commits only AFTER the launch build
+/// succeeds, so a refused launch (StreamTokenNotConfiguredException from the
+/// builder, translated once by RequestPipeline into the event keep-alive) leaves
+/// the pointer naming the finishing item with its position intact and the session
+/// queue un-appended. The pre-build queue writes that are NOT synthesized
+/// continuation stay pre-build by design, each marked at its site: the entry
+/// rehydration mirror, TryFetchContinuationBatch's fetched batches (the derivation
+/// input), and the exhaustion QueueContinuationStore.Remove. The build never reads
+/// the pointer or the appends (it consumes the resolved source/item locals), and
+/// the commit still runs before this method returns, preserving the JF-447
+/// directive-time-truth property the stop classifier relies on; the full decision
+/// record lives in the backlog task.
 /// </summary>
 #pragma warning disable CA1711
 public class PlaybackNearlyFinishedEventHandler : BaseHandler
@@ -152,11 +167,14 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
                         "PlaybackNearlyFinished: cache hit, responding instantly with pre-computed next='{NextItem}' (no library lookups)",
                         cachedItem.Name);
 
-                    UpdateRecoveryPointer(deviceId, cachedNextId.ToString(), context, cachedItem.Name);
-
                     // JF-636: the stored rate rides the launch so the chokepoint records
-                    // the launch scope the cached URL actually serves.
-                    return Launch.BuildAudioPlayerResponse(PlayBehavior.Enqueue, cachedUrl, cachedNextId.ToString(), cachedItem, user, context, ratePerMille: cachedRatePerMille, queueManager: _queueManager);
+                    // the launch scope the cached URL actually serves. JF-712: build
+                    // BEFORE the pointer write (the class doc's derive-then-commit; a
+                    // token-gated cached URL can refuse inside the builder).
+                    SkillResponse cachedResponse = Launch.BuildAudioPlayerResponse(PlayBehavior.Enqueue, cachedUrl, cachedNextId.ToString(), cachedItem, user, context, ratePerMille: cachedRatePerMille, queueManager: _queueManager);
+
+                    UpdateRecoveryPointer(deviceId, cachedNextId.ToString(), context, cachedItem.Name);
+                    return cachedResponse;
                 }
 
                 Logger.LogInformation(
@@ -195,17 +213,32 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         var postPlayMode = Progress.GetPostPlayBehavior(user);
         bool radioOn = RadioModeState.IsEnabled(session.UserId, deviceId);
 
+        // JF-712: the exhaustion arms below only DERIVE their continuation into this
+        // pending population; it commits at the single commit point after the launch
+        // build succeeds (the class doc's derive-then-commit).
+        PendingContinuation? pending = null;
+
         // If no next item and radio mode is on, auto-populate similar tracks. The
         // books-never-radio gate (JF-670) lives inside the seeders on the seed
         // source itself, so no branch can bypass it.
         if (nextItemId == null && radioOn)
         {
-            nextItemId = await AutoPopulateRadioTracks(currentItem, session, cancellationToken).ConfigureAwait(false);
+            pending = await DeriveSimilarTracksPopulation("Radio mode", armRadioMode: false, currentItem, session, cancellationToken).ConfigureAwait(false);
+            nextItemId = pending?.FirstNewId;
         }
 
         if (nextItemId == null)
         {
-            // Clean up continuation state when queue is exhausted
+            // Clean up continuation state when queue is exhausted (JF-712: stays
+            // pre-build because deferring it would resurrect a spent continuation
+            // on a refused launch and re-fetch an exhausted source forever. NOT a
+            // total-invariant claim (JF-712 gate-marker): two pre-existing shapes
+            // still drop a LIVE continuation here - a momentarily-absent finishing
+            // item (restart-wiped session the rehydration declined) skips the fetch
+            // guard while un-fetched batches remain, and an all-dupes fetched batch
+            // leaves the store entry alive until this Remove drops it. Both shapes
+            // predate JF-712; named here so a future reader does not trust a
+            // stronger invariant than the code provides.
             QueueContinuationStore.Remove(session.UserId, deviceId);
 
             // Music PostPlay populate only runs when radio mode is NOT active: radio
@@ -213,13 +246,20 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             // single-track playback that reaches queue exhaustion without radio. The
             // episode advance below deliberately ignores radioOn (a leftover radio
             // flag from earlier music must not stop a TV binge).
+            // BOUNDED COST (JF-712 gate-marker): under a SUSTAINED refusal the
+            // queue never appends, so each Near-finished refire re-runs this
+            // derive (a library query plus a shuffle) instead of the once-per-
+            // exhaustion the old derive-time append paid. Acceptable while it
+            // needs a misconfigured secret and refires are sparse; add a
+            // recent-refusal guard here if refire density ever grows.
             if (!radioOn && postPlayMode == PostPlayBehavior.AutoPlay)
             {
                 // AutoPlay: find similar tracks and enqueue for gapless transition.
                 // PlaybackNearlyFinished can return AudioPlayer.Play but NOT speech,
                 // so the music continues seamlessly without announcement.
-                nextItemId = await AutoPopulatePostPlayTracks(
-                    currentItem, session, user, context, cancellationToken).ConfigureAwait(false);
+                pending = await DeriveSimilarTracksPopulation(
+                    "PostPlay AutoPlay", armRadioMode: true, currentItem, session, cancellationToken).ConfigureAwait(false);
+                nextItemId = pending?.FirstNewId;
             }
 
             // JF-324 episode auto-advance (AudioPlayer-routed TV): when the finishing
@@ -234,8 +274,9 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             // binge. The branch itself never touches RadioModeState.
             if (nextItemId == null)
             {
-                nextItemId = await TryAutoAdvanceNextEpisodeAsync(
+                pending = await TryAutoAdvanceNextEpisodeAsync(
                     currentItem, session, user, postPlayMode, cancellationToken).ConfigureAwait(false);
+                nextItemId = pending?.FirstNewId;
             }
 
             if (nextItemId == null)
@@ -257,9 +298,6 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         }
 
         string itemId = item.Id.ToString();
-
-        // Update the device queue pointer for crash recovery (guarded, JF-424.1).
-        UpdateRecoveryPointer(deviceId, itemId, context, itemNameForLog: null);
 
         // JF-507: codec-gated audio-launch decision; an EAC3-family video item in the
         // queue routes to the audio-only transcode instead of dying on the raw static
@@ -284,7 +322,17 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             resolvedOrder,
             resolvedReshuffled);
 
-        return Launch.BuildAudioPlayerResponse(PlayBehavior.Enqueue, source, itemId, item, user, context, queueManager: _queueManager);
+        // JF-712: the ONE commit point (the class doc's derive-then-commit). The
+        // launch builds first; a refusal throws inside the builder before any of its
+        // own records and leaves every handler write unmade. The commit still runs
+        // before this method returns, so the JF-447 directive-time truth the stop
+        // classifier reads (the pointer names the enqueued item strictly before the
+        // displaced stream's stop can arrive) is preserved.
+        SkillResponse enqueueResponse = Launch.BuildAudioPlayerResponse(PlayBehavior.Enqueue, source, itemId, item, user, context, queueManager: _queueManager);
+
+        CommitPendingContinuation(pending, session, deviceId);
+        UpdateRecoveryPointer(deviceId, itemId, context, itemNameForLog: null);
+        return enqueueResponse;
     }
 
     /// <summary>
@@ -365,7 +413,12 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             return;
         }
 
-        // Append new items to the queue (deduplicating)
+        // Append new items to the queue (deduplicating). JF-712: this pre-build
+        // append is BY DESIGN (the class doc's exception list): the fetched batches
+        // ARE the derivation input (ResolveNextItemId resolves the successor from
+        // this queue view, and JF-666 requires the fetch before the precompute
+        // early return), and the items belong to the queue the user asked to play,
+        // not a synthesized continuation.
         var queue = new List<QueueItem>(session.NowPlayingQueue);
         var seen = SessionQueue.IdSet(session);
 
@@ -468,6 +521,10 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
     /// that does not mirror it, and a failed move must not leave CurrentItemId dangling
     /// at an item the queue does not contain. The position is also refreshed for
     /// resume-after-pause accuracy (NearlyFinished fires periodically).
+    /// JF-712 placement contract: every call site runs AFTER a successful launch
+    /// build (derive-then-commit, the class doc), so a refused launch leaves the
+    /// pointer on the finishing item with its position intact instead of a phantom
+    /// next-at-0.
     /// </summary>
     /// <param name="deviceId">The device whose queue pointer to update.</param>
     /// <param name="itemId">The item that is now current.</param>
@@ -606,25 +663,42 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         => _userManager.GetUserById(session.UserId);
 
     /// <summary>
-    /// Find similar tracks to the current item and append them to the queue.
-    /// Returns the first new track ID, or null if no tracks found.
+    /// Find similar tracks to the finishing item and DERIVE the continuation
+    /// population for them (JF-712 derive-then-commit, the class doc): neither the
+    /// session-queue append nor the RadioModeState arming happens here; both commit
+    /// via <see cref="CommitPendingContinuation"/> only after the launch build
+    /// succeeds, so a refused launch neither appends unplayed tracks nor arms radio
+    /// continuation (RadioModeState.Enable is the worst phantom of the family: an
+    /// armed-but-dead radio mode drives later continuation decisions). Shared by the
+    /// radio arm and the PostPlay AutoPlay arm. The finishing item is the caller's
+    /// ONE resolution (token-first with the session fallback); a non-Audio item
+    /// no-ops via the cast.
     /// </summary>
-    private async Task<Guid?> AutoPopulateRadioTracks(BaseItem? currentItem, SessionInfo session, CancellationToken cancellationToken)
+    /// <param name="source">The arm's name (log label): "Radio mode" or "PostPlay AutoPlay".</param>
+    /// <param name="armRadioMode">Whether the commit must arm RadioModeState (the PostPlay arm).</param>
+    /// <param name="currentItem">The finishing item (seed source).</param>
+    /// <param name="session">The current Jellyfin session (seed dedup scope + user).</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The pending population, or null when nothing new was found.</returns>
+    private async Task<PendingContinuation?> DeriveSimilarTracksPopulation(
+        string source,
+        bool armRadioMode,
+        BaseItem? currentItem,
+        SessionInfo session,
+        CancellationToken cancellationToken)
     {
         // JF-670 books never radio: the gate lives HERE, at the seed source (the
         // Audio cast is what makes books seedable; AudioBook derives from Audio on
         // both shipping refs, so without this gate a single-file book seeds genre
         // radio exactly like a song), not at the call sites, so no branch can
-        // bypass it. The seed comes from the caller's ONE finishing-item
-        // resolution (token-first with the session fallback), matching
-        // AutoPopulatePostPlayTracks. Detection reads the finished item's own
-        // book shape, the mechanism that survives the LAST continuation batch:
-        // the store entry is long gone at true end-of-book, but the item still
-        // names its book.
+        // bypass it. Detection reads the finished item's own book shape, the
+        // mechanism that survives the LAST continuation batch: the store entry is
+        // long gone at true end-of-book, but the item still names its book.
         var currentAudio = currentItem as MediaBrowser.Controller.Entities.Audio.Audio;
         bool bookShaped = AudiobookItems.IsAudioBookOrChapter(currentItem, _libraryManager);
         Logger.LogDebug(
-            "Radio mode seed gate on '{FinishingItem}': {GateOutcome}",
+            "{Source} seed gate on '{FinishingItem}': {GateOutcome}",
+            source,
             currentItem?.Name ?? "<unknown>",
             bookShaped ? "book-shaped, radio suppressed" : currentAudio == null ? "not an Audio item, nothing to seed from" : "seed allowed");
         if (currentAudio == null || bookShaped)
@@ -639,124 +713,43 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         }
 
         // JF-327: re-fetch must not drop the device-library scope (the funnel scoped
-            // a clone; GetUserById returns the unscoped config instance).
-            Entities.User? pluginUser = Util.DeviceLibraryBindingResolver.ApplyByDevice(
-                session.DeviceId, _config.GetUserById(session.UserId), _config, Logger);
+        // a clone; GetUserById returns the unscoped config instance).
+        Entities.User? pluginUser = Util.DeviceLibraryBindingResolver.ApplyByDevice(
+            session.DeviceId, _config.GetUserById(session.UserId), _config, Logger);
         IReadOnlyList<BaseItem> similar = await Radio.FindRadioTracksAsync(currentAudio, jellyfinUser, pluginUser!, _libraryManager, cancellationToken).ConfigureAwait(false);
 
         if (similar.Count == 0)
         {
-            Logger.LogInformation("Radio mode: no similar tracks found, ending radio");
+            Logger.LogInformation("{Source}: no similar tracks found for {ItemName}", source, currentAudio.Name);
             return null;
         }
 
         List<BaseItem> shuffled = Shuffler.ShuffleAndCap(similar, 15);
 
-        var queue = new List<QueueItem>(session.NowPlayingQueue);
+        var appended = new List<QueueItem>();
         var seen = SessionQueue.IdSet(session);
-        Guid? firstNewId = null;
-        int addedCount = 0;
 
         foreach (BaseItem track in shuffled)
         {
             if (seen.Add(track.Id))
             {
-                queue.Add(new QueueItem { Id = track.Id });
-                firstNewId ??= track.Id;
-                addedCount++;
+                appended.Add(new QueueItem { Id = track.Id });
             }
         }
 
-        if (firstNewId != null)
-        {
-            session.NowPlayingQueue = queue;
-            Logger.LogInformation("Radio mode: added {Count} similar tracks", addedCount);
-        }
-
-        return firstNewId;
-    }
-
-    /// <summary>
-    /// Find similar tracks to the specified item and append them to the queue
-    /// for PostPlay AutoPlay gapless transition. Enables RadioModeState for
-    /// subsequent continuation via the existing AutoPopulateRadioTracks flow.
-    /// The current item is resolved ONCE by the caller (HandleAsync's shared
-    /// resolution, token-first with the session fallback) and passed in; a
-    /// non-Audio item no-ops via the cast.
-    /// </summary>
-    private async Task<Guid?> AutoPopulatePostPlayTracks(
-        BaseItem? currentItem,
-        SessionInfo session,
-        Entities.User user,
-        Context context,
-        CancellationToken cancellationToken)
-    {
-        // JF-670 books never radio: same gate as AutoPopulateRadioTracks, on the
-        // seed source, at exhaustion treated as PostPlay=Stop for radio purposes
-        // and the book ends in silence.
-        var currentAudio = currentItem as MediaBrowser.Controller.Entities.Audio.Audio;
-        bool bookShaped = AudiobookItems.IsAudioBookOrChapter(currentItem, _libraryManager);
-        Logger.LogDebug(
-            "PostPlay AutoPlay seed gate on '{FinishingItem}': {GateOutcome}",
-            currentItem?.Name ?? "<unknown>",
-            bookShaped ? "book-shaped, radio suppressed" : currentAudio == null ? "not an Audio item, nothing to seed from" : "seed allowed");
-        if (currentAudio == null || bookShaped)
-        {
-            return null;
-        }
-
-        JellyfinUser? jellyfinUser = ResolveJellyfinUser(session);
-        if (jellyfinUser == null)
-        {
-            return null;
-        }
-
-        // JF-327: re-fetch must not drop the device-library scope (the funnel scoped
-            // a clone; GetUserById returns the unscoped config instance).
-            Entities.User? pluginUser = Util.DeviceLibraryBindingResolver.ApplyByDevice(
-                session.DeviceId, _config.GetUserById(session.UserId), _config, Logger);
-        IReadOnlyList<BaseItem> similar = await Radio.FindRadioTracksAsync(
-            currentAudio, jellyfinUser, pluginUser!, _libraryManager, cancellationToken).ConfigureAwait(false);
-
-        if (similar.Count == 0)
-        {
-            Logger.LogInformation("PostPlay AutoPlay: no similar tracks found for {ItemName}", currentAudio.Name);
-            return null;
-        }
-
-        List<BaseItem> shuffled = Shuffler.ShuffleAndCap(similar, 15);
-
-        var queue = new List<QueueItem>(session.NowPlayingQueue);
-        var seen = SessionQueue.IdSet(session);
-        Guid? firstNewId = null;
-        int addedCount = 0;
-
-        foreach (BaseItem track in shuffled)
-        {
-            if (seen.Add(track.Id))
-            {
-                queue.Add(new QueueItem { Id = track.Id });
-                firstNewId ??= track.Id;
-                addedCount++;
-            }
-        }
-
-        if (firstNewId != null)
-        {
-            session.NowPlayingQueue = queue;
-            RadioModeState.Enable(session.UserId, context.GetDeviceId());
-            Logger.LogInformation("PostPlay AutoPlay: added {Count} similar tracks, radio mode enabled", addedCount);
-        }
-
-        return firstNewId;
+        return appended.Count == 0
+            ? null
+            : new PendingContinuation(source, appended, armRadioMode);
     }
 
     /// <summary>
     /// JF-324 episode auto-advance: resolve the next episode of the finishing
     /// episode's series with ONE direct ordered-unplayed query scoped to the series
-    /// (AncestorIds + IsPlayed=false, season-then-episode order) and append the
-    /// first candidate outside the skip-set (current + queued ids) to the session
-    /// queue for a gapless AudioPlayer transition. Movies and every non-Episode
+    /// (AncestorIds + IsPlayed=false, season-then-episode order) and derive the
+    /// first candidate outside the skip-set (current + queued ids) as a pending
+    /// single-item session-queue append for a gapless AudioPlayer transition
+    /// (JF-712: the append commits only after the launch build succeeds).
+    /// Movies and every non-Episode
     /// item return null (a movie has no natural next; music keeps the radio/PostPlay
     /// paths above). End of series returns null so the caller falls through to
     /// today's end-of-queue behavior, and the intent path's "latest episode"
@@ -786,8 +779,8 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
     /// <param name="session">The current Jellyfin session (user + now-playing queue).</param>
     /// <param name="user">The plugin user (PostPlay mode + library scope).</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The next episode's item ID (appended to the queue), or null when the branch does not apply.</returns>
-    private async Task<Guid?> TryAutoAdvanceNextEpisodeAsync(
+    /// <returns>The pending population for the next episode's item ID (appended to the queue at commit), or null when the branch does not apply.</returns>
+    private async Task<PendingContinuation?> TryAutoAdvanceNextEpisodeAsync(
         BaseItem? currentItem,
         SessionInfo session,
         Entities.User user,
@@ -906,15 +899,97 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             return null;
         }
 
-        // Append to the session queue so the NEXT advance (and the queue-position
-        // machinery above) sees the finishing item's successor in place.
-        var queue = new List<QueueItem>(session.NowPlayingQueue) { new QueueItem { Id = next.Id } };
-        session.NowPlayingQueue = queue;
-
+        // JF-712: the append is derived, not committed here (the class doc); the
+        // NEXT advance still sees the successor in place on the success path, while
+        // a refused launch leaves the queue without an episode that never played.
         Logger.LogInformation(
-            "Episode auto-advance: enqueuing next episode '{NextEpisodeName}' after '{EpisodeName}' (gapless, no announcement)",
+            "Episode auto-advance: resolved next episode '{NextEpisodeName}' after '{EpisodeName}' (gapless, no announcement)",
             next.Name,
             episode.Name);
-        return next.Id;
+        return new PendingContinuation(
+            "Episode auto-advance",
+            new List<QueueItem> { new() { Id = next.Id } },
+            ArmRadioMode: false);
+    }
+
+    /// <summary>
+    /// JF-712: the ONE commit point of the exhaustion arms' derived continuation,
+    /// called only after the launch build succeeded (a refused launch throws before
+    /// this runs; the policy and its exceptions live on the class doc). The append
+    /// RE-RUNS the membership dedup against the queue as it stands at commit time:
+    /// Amazon multi-fires NearlyFinished as concurrent requests, and a sibling fire
+    /// may have committed its own derived population inside this request's
+    /// derive-to-commit window (which spans the whole launch build, far wider than
+    /// the old write-at-derive window, whose whole-list REPLACE made the same race
+    /// a benign last-write-wins); a blind AddRange would double-append.
+    /// </summary>
+    /// <param name="pending">The derived population to commit, or null (the plain queue-advance arms derive nothing).</param>
+    /// <param name="session">The session whose queue the population appends to.</param>
+    /// <param name="deviceId">The device the radio arming keys on.</param>
+    private void CommitPendingContinuation(PendingContinuation? pending, SessionInfo session, string deviceId)
+    {
+        if (pending == null)
+        {
+            return;
+        }
+
+        var queue = new List<QueueItem>(session.NowPlayingQueue);
+        var seen = SessionQueue.IdSet(session);
+        int appendedCount = 0;
+
+        foreach (QueueItem appended in pending.AppendedItems)
+        {
+            if (seen.Add(appended.Id))
+            {
+                queue.Add(appended);
+                appendedCount++;
+            }
+        }
+
+        if (appendedCount > 0)
+        {
+            // KNOWN RACE (JF-712 gate-marker): the copy-modify-assign above plus
+            // this whole-list replace is UNLOCKED, so two concurrent NearlyFinished
+            // fires whose commits interleave can drop one side's population (the
+            // re-dedup only prevents double-append, not lost update). The window is
+            // pre-existing (the old derive-time write had the same replace) and
+            // bounded to sibling fires near the same track end; a lock or a merge-
+            // style append belongs with the JF-720 helper extraction if the shape
+            // ever bites live.
+            session.NowPlayingQueue = queue;
+        }
+
+        if (pending.ArmRadioMode)
+        {
+            RadioModeState.Enable(session.UserId, deviceId);
+        }
+
+        Logger.LogInformation(
+            "{Source}: committed continuation after successful launch (appended {Count} session-queue items, radioArmed={RadioArmed})",
+            pending.Source, appendedCount, pending.ArmRadioMode);
+    }
+
+    /// <summary>
+    /// JF-712 derive-then-commit: an exhaustion arm's DERIVED but uncommitted
+    /// continuation population: the session-queue items to append (deduplicated at
+    /// derivation time, never empty), whether radio mode must be armed once the
+    /// stream really launches, and the arm's name for the commit log. Committing is
+    /// owned by <see cref="CommitPendingContinuation"/> (after a successful launch
+    /// build); nothing in this type mutates any store at derivation time.
+    /// </summary>
+    /// <param name="Source">The deriving arm's name (log label).</param>
+    /// <param name="AppendedItems">The session-queue items to append on commit (never empty).</param>
+    /// <param name="ArmRadioMode">Whether commit must arm RadioModeState (the PostPlay arm).</param>
+    private sealed record PendingContinuation(string Source, List<QueueItem> AppendedItems, bool ArmRadioMode)
+    {
+        /// <summary>
+        /// Gets the first appended item's id: the item the launch builds. Structural
+        /// guard (the JF-710 idiom): the derive arms must return NULL for an empty
+        /// population, so an empty list here is a construction-site bug and fails
+        /// with the contract named, not a distant index error.
+        /// </summary>
+        public Guid FirstNewId => AppendedItems.Count > 0
+            ? AppendedItems[0].Id
+            : throw new InvalidOperationException("PendingContinuation was constructed with an empty append list; a derive arm must return null instead (JF-712)");
     }
 }
