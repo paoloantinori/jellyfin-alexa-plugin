@@ -3,9 +3,10 @@ id: JF-710
 title: >-
   JF-710 - the startup skill-update capture overwrites the ledger Error=null,
   erasing the JF-705 frozen clause under the skip-gated restart
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-02 13:55'
+updated_date: '2026-10-02 21:29'
 labels:
   - catalog
   - observability
@@ -105,62 +106,6 @@ after the tail.
 
 ## Final Summary
 
-<!-- SECTION:FINALSUMMARY:BEGIN -->
-Landed 2026-10-02 by the JF-710 worker (base f44aef8c). The startup skill-update capture
-(`SkillStartup.CaptureLocaleModelStatusesAsync`, now internal for the InternalsVisibleTo
-test seam) no longer unconditionally writes Error=null: on a CLEAN capture (observed
-state SUCCEEDED, no build errors (the gate the coordination note specifies)), it calls
-the new `LibrarySyncService.PreserveLedgerErrorAcrossCapture(config.GetLocaleModelStatus(locale))`
-and writes the surviving segments instead. A capture with its own build errors still
-replaces the row wholesale, and a FAILED/IN_PROGRESS observation still overwrites
-(the IN_PROGRESS residual is filed as JF-719).
-
-THE PRESERVE PREDICATE (LibrarySyncService, next to the three shared constants it keys
-on: FrozenLedgerClauseMarker, NoPutLedgerTail, PreviousLedgerDiagnosticPrefix, all
-internal and now composed INTO FrozenLedgerClause / the no-PUT trail so the recognized
-text cannot drift):
-- WHAT SURVIVES: the frozen clause and any foreign diagnostic (JF-495 canary /
-  failed-PUT reason). The run-scoped "; no PUT this run" tail does NOT survive (a new
-  skill version was pushed, superseding the last run's no-PUT shape), and the
-  "; previous: " framing around a trailed foreign is un-framed (its content survives).
-  Because both writers compose Error from exactly those three literals, the preserve
-  is literally `Replace(tail, "")` + `Replace("; previous: ", "; ")` - byte-identical
-  on every reachable shape (simplify round collapsed the 26-line branch version into
-  this with all six shapes traced).
-- WHO PRESERVES: content-keyed, not Source-keyed (code-review F1). A row authored by
-  the catalog sync (Source == CatalogSyncLedgerSource) preserves, and so does a row a
-  PREVIOUS capture already preserved (that capture writes Source "Embedded", but its
-  Error still carries the clause/tail markers, and the durable freeze state must
-  survive every later capture while the skip-gated sync stays skipped; otherwise the
-  clause died exactly one restart later, which was F1's scenario, now pinned by a
-  double-capture assertion). Consequence: a BARE foreign diagnostic (no marker) rides
-  its Source label and survives ONE capture cycle, then clears (deliberate), the freeze
-  is durable state while a canary describes the build it followed, which the next
-  push replaces; pinned. A previous capture's or custom deployment's own build error
-  carries no marker and is always superseded; pinned.
-
-THE ONE-SHAPE HAZARD (coordination note): the no-PUT writer's own-shape predicate is
-now `IsOwnShapeLedgerError` = tail marker OR frozen-clause marker (Contains-anywhere;
-both writers lead with the clause, so in practice clause-led). A tail-only check would
-have classified the capture-preserved clause-without-tail row as foreign and trailed
-the same clause as "; previous: ..." once per restart. Accepted consequence (the
-strip-at-marker alternative was REJECTED in the JF-709 review): a foreign diagnostic
-riding a clause-led row is replaced rather than trailed, so with no intervening capture
-it is dropped one run earlier than the pre-JF-710 single trail; the capture preserve
-is its durable home.
-
-PINS (8 new): 6 startup-path tests in SkillStartupTests (clean capture over the no-PUT
-clause+tailed-foreign row preserves clause+foreign and drops tail+framing, plus the
-second-capture idempotence; clean row stays Error-null with a fresh timestamp; FAILED
-capture replaces with its own error; stale Embedded error cleared; bare canary preserved
-once then cleared; clause+canary PUT-writer shape preserved verbatim) driven through a
-FakeStatusSmapiManagement subclass serving a canned SkillStatus (GetSkillStatusAsync is
-virtual, the JF-366 SetSmapiManagementForTest seam); 2 no-PUT-writer pins in
-LibrarySyncServiceLegIsolationTests (capture-preserved clause-without-tail row is
-replaced without a self-referential trail; clause-led row with canary replaced
-entirely). Suites 4970/4970 both TFMs (baseline 4962). Gates: /simplify 4 agents,
-7 applied / 2 skipped with reasons; /code-review high: F1 applied + pinned, F3/F4/F5
-applied, F2 pre-filed as JF-719. Also filed: JF-719 (IN_PROGRESS clean captures still
-write Error=null and erase the clause; the capture runs before the per-locale builds
-settle, so the SUCCEEDED-only gate covers only the settled subset).
-<!-- SECTION:FINALSUMMARY:END -->
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed by the orchestrator after the full cycle: worker commit a09a0448 + gate-marker tail 27edcc89, merged as d3b945ac. The startup capture preserves catalog-sync ledger diagnostics on a clean SUCCEEDED capture: PreserveLedgerErrorAcrossCapture is content-keyed (idempotent across captures, pinned twice), byte-identical Remove+Replace over the two sync writers' shared literals, keeping the frozen clause and foreign diagnostics while dropping the run-scoped tail and previous-framing; IsOwnShapeLedgerError closes the clause-without-tail hazard; FAILED captures still replace wholesale. 8 worker pins driven through the real capture seam (reflection-verified Alexa.NET.Management shapes) plus the gate-marker tail's two-shape pin. Worker gates green (simplify 7 applied; code-review high 5 applied incl. the F1 content-keyed idempotence); JF-719 filed (the IN_PROGRESS clean-capture residual, gate-vs-settle-wait decision left to the coordinator; my read: widen the gate to any clean capture when taken, since the settle-wait adds startup latency to protect a sub-case the content-keyed preserve already handles safely). Gate-marker verified all five scrutiny axes with empirical pin re-runs; its 5 low findings all landed (prose fixes, the two-shape pin, the race and invariant docs, JF-721 filed for the structured-caveat design). Suites: worker and orchestrator independent 4970/4970 both TFMs, merged-tree 4971/4971 both TFMs as concurrent split-TFM jobs. Production surface changed (SkillStartup, LibrarySyncService): deployed in the post-closure deploy.
+<!-- SECTION:FINAL_SUMMARY:END -->
