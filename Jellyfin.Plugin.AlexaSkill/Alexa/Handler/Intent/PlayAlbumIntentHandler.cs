@@ -206,6 +206,13 @@ public class PlayAlbumIntentHandler : BaseHandler
         // the Alexa window otherwise).
         bool musicianSlotTitleRetryMissed = false;
 
+        // JF-702: set when the multi-value-ER gate resolved the artist by EXACT
+        // library-name equality (the collapse survivor). The JF-471/JF-473 gates
+        // below exist to re-judge SEARCH results (the word-coverage free pass); a
+        // survivor is proven evidence and must not be re-scored against the stale
+        // rank-#1 canonical the search never validated.
+        bool arbitrationResolvedArtist = false;
+
         // JF-448 (review F2), set inside the musician block so album-only requests
         // pay nothing: pin ONE index snapshot for the search AND the JF-471
         // acceptance gate below, so the phonetic codes the gate reads belong to the
@@ -274,6 +281,43 @@ public class PlayAlbumIntentHandler : BaseHandler
         if (!string.IsNullOrWhiteSpace(musician))
         {
             pinnedArtistIndex = _artistIndex.Pin();
+
+            // JF-702: the shared multi-value-ER gate (it owns the full contract),
+            // placed after the pin so it reuses THIS view, and restricted to the
+            // musician-only shape (the JF-411 album-by-artist resolution, the
+            // "un disco di pink" / "gli album di pink" forms): with an album TITLE
+            // in hand the confirm leg cannot preserve the requested album, so a
+            // multi-value musician keeps today's rank-#1 scoped title search (the
+            // PlaySong generic-word restriction applied to this handler's
+            // constraint slot). On the musician-only shape a REAL ambiguity asks
+            // which artist (the confirm leg plays the artist's songs instead of
+            // resolving an album, the accepted JF-690 contract shift) and a
+            // stale-catalog collapse proceeds on the proven survivor, which the
+            // JF-471/JF-473 re-judgment gates below deliberately skip (see the
+            // arbitrationResolvedArtist flag).
+            if (string.IsNullOrWhiteSpace(album))
+            {
+                var arbitration = MultiValueErDisambiguation.TryArbitrate(
+                    intentRequest, user, pinnedArtistIndex, _libraryManager, Logger, locale);
+                if (arbitration.Ask != null)
+                {
+                    return arbitration.Ask;
+                }
+
+                if (arbitration.ResolvedArtist is { } resolvedArtist)
+                {
+                    matchedArtist = resolvedArtist;
+                    matchedArtistName = resolvedArtist.Name;
+                    artistsIds.Add(resolvedArtist.Id);
+                    arbitrationResolvedArtist = true;
+                }
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(musician) && artistsIds.Count == 0)
+        {
+            // The closed-gate leg only: artistsIds non-empty means the JF-702
+            // gate already resolved the survivor above and the search is skipped.
             Logger.LogDebug("PlayAlbum: searching for artist filter='{Musician}'", musicianSearch);
             IReadOnlyList<BaseItem> artists = await Util.ArtistSearch.SearchAsync(
                 musicianSearch!, user, _libraryManager, pinnedArtistIndex, Logger,
@@ -381,6 +425,7 @@ public class PlayAlbumIntentHandler : BaseHandler
             // offer. Scoped to the album-by-artist resolution: an album TITLE
             // present keeps today's behavior unchanged.
             if (matchedArtist != null
+                && !arbitrationResolvedArtist
                 && !CrossMedia.PassesArtistMatchAcceptance(matchedArtist, musicianSearch!, user, pinnedArtistIndex, out int acceptanceScore, musicianKanaOrigin))
             {
                 Logger.LogInformation(
@@ -404,6 +449,7 @@ public class PlayAlbumIntentHandler : BaseHandler
             // YesIntentHandler.PlayArtist (disambig_type=artist); No walks the shared
             // disambiguation cycle to NoMoreMatches.
             if (matchedArtist != null
+                && !arbitrationResolvedArtist
                 && Util.ArtistSearch.IsCoincidentalContainmentMatch(musicianSearch!, matchedArtist.Name, locale))
             {
                 Logger.LogInformation(

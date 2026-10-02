@@ -121,20 +121,54 @@ public class AddToQueueIntentHandler : BaseHandler
         string? matchedArtistName = null;
         if (!string.IsNullOrWhiteSpace(musicianQuery))
         {
-            IReadOnlyList<BaseItem> artists = await Util.ArtistSearch.SearchAsync(
-                canonicalMusician ?? musicianQuery, user, _libraryManager, _artistIndex, Logger,
-                (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtistsForQueue", ct),
-                locale, cancellationToken).ConfigureAwait(false);
-
-            if (artists.Count == 0)
+            // JF-702: the shared multi-value-ER gate (it owns the full contract),
+            // with PlaySong's scope restriction: this handler carries the same
+            // song+musician slot pair, so a REAL song title plus a multi-value
+            // musician keeps today's rank-#1 scoped title search (the gate's
+            // confirm leg plays the artist and cannot preserve the requested
+            // song or the queue operation), while a generic music word
+            // ("metti in coda la musica di pink") lets the gate ask which artist
+            // or scope the song search to the proven survivor of a stale-catalog
+            // collapse (this handler has no PlaySong-style play-the-artist
+            // bypass; the generic-word title miss is pre-existing either way,
+            // and the collapse not-found names the survivor, exactly as it
+            // named Amazon's equally-unconfirmed rank-#1 before). On the ask leg
+            // the confirm plays the artist INSTEAD OF queueing (the accepted
+            // JF-690 contract shift: the queue operation is lost with the
+            // ambiguity, the disambiguation prompt takes over the turn).
+            if (PlaySongIntentHandler.IsGenericMusicQuery(songQuery!))
             {
-                return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByArtist", locale, musicianQuery));
+                var arbitration = MultiValueErDisambiguation.TryArbitrate(
+                    intentRequest, user, _artistIndex, _libraryManager, Logger, locale);
+                if (arbitration.Ask != null)
+                {
+                    return arbitration.Ask;
+                }
+
+                if (arbitration.ResolvedArtist is { } resolvedArtist)
+                {
+                    matchedArtistName = resolvedArtist.Name;
+                    artistIds.Add(resolvedArtist.Id);
+                }
             }
 
-            matchedArtistName = artists[0].Name;
-            foreach (BaseItem artist in artists)
+            if (artistIds.Count == 0)
             {
-                artistIds.Add(artist.Id);
+                IReadOnlyList<BaseItem> artists = await Util.ArtistSearch.SearchAsync(
+                    canonicalMusician ?? musicianQuery, user, _libraryManager, _artistIndex, Logger,
+                    (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtistsForQueue", ct),
+                    locale, cancellationToken).ConfigureAwait(false);
+
+                if (artists.Count == 0)
+                {
+                    return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByArtist", locale, musicianQuery));
+                }
+
+                matchedArtistName = artists[0].Name;
+                foreach (BaseItem artist in artists)
+                {
+                    artistIds.Add(artist.Id);
+                }
             }
         }
 

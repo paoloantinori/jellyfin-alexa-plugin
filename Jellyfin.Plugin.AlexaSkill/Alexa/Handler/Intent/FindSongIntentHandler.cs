@@ -233,20 +233,51 @@ public class FindSongIntentHandler : BaseHandler
             // SlotValueHelper owns the full contract).
             string artistSearchInput = SlotValueHelper.GetCanonicalValue(intentRequest, "musician") ?? artistInput;
 
-            IReadOnlyList<BaseItem> artists = await ArtistSearch.SearchAsync(
-                artistSearchInput, user, _libraryManager, _artistIndex, Logger,
-                (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", ct),
-                locale, cancellationToken).ConfigureAwait(false);
-
-            if (artists.Count > 0)
+            // JF-702: the shared multi-value-ER gate (it owns the full contract).
+            // This leg is a FIRST invocation: no FindSongSessionData exists yet,
+            // so the JF-690 deferral's force-route interplay cannot occur (the ask
+            // would be the first session state written, the plain JF-420.2
+            // machinery; the FindSong flow simply never opens). The ask's confirm
+            // leg plays the artist instead of returning to the keywords elicit
+            // (the accepted contract shift, same as every adopter); a stale-catalog
+            // collapse resolves the survivor INTO the flow, which continues to the
+            // keywords prompt with a proven ArtistId.
+            // JF-702 (code-review): restricted to the keywords-empty shape, the
+            // constraint principle every other site applies. A titleKeywords
+            // value in the SAME utterance is in-hand content the confirm leg
+            // cannot preserve, so that shape keeps today's rank-#1 resolution
+            // exactly (the handler re-elicits keywords on it either way).
+            BaseItem? firstTurnSurvivor = null;
+            if (string.IsNullOrWhiteSpace(titleKeywords))
             {
-                sessionData.ArtistId = artists[0].Id;
-                sessionData.ArtistName = artists[0].Name;
-                Logger.LogDebug("FindSong: resolved artist '{Input}' to '{Name}' (Id={Id})", artistInput, artists[0].Name, artists[0].Id);
+                if (ArbitrateMusicianMultiValue(intentRequest, user, locale, out firstTurnSurvivor) is { } firstTurnAsk)
+                {
+                    return firstTurnAsk;
+                }
+            }
+
+            if (firstTurnSurvivor != null)
+            {
+                sessionData.ArtistId = firstTurnSurvivor.Id;
+                sessionData.ArtistName = firstTurnSurvivor.Name;
             }
             else
             {
-                Logger.LogDebug("FindSong: could not resolve artist '{Input}', will search without artist filter", artistInput);
+                IReadOnlyList<BaseItem> artists = await ArtistSearch.SearchAsync(
+                    artistSearchInput, user, _libraryManager, _artistIndex, Logger,
+                    (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", ct),
+                    locale, cancellationToken).ConfigureAwait(false);
+
+                if (artists.Count > 0)
+                {
+                    sessionData.ArtistId = artists[0].Id;
+                    sessionData.ArtistName = artists[0].Name;
+                    Logger.LogDebug("FindSong: resolved artist '{Input}' to '{Name}' (Id={Id})", artistInput, artists[0].Name, artists[0].Id);
+                }
+                else
+                {
+                    Logger.LogDebug("FindSong: could not resolve artist '{Input}', will search without artist filter", artistInput);
+                }
             }
 
             return ElicitAnswer(ResponseStrings.Get("FindSongPromptKeywords", locale),
@@ -298,6 +329,36 @@ public class FindSongIntentHandler : BaseHandler
         string artistSearchInput = !string.IsNullOrWhiteSpace(musician)
             ? SlotValueHelper.GetCanonicalValue(intentRequest, "musician") ?? artistInput
             : artistInput;
+
+        // JF-702: the shared multi-value-ER gate, on the musician-supplied leg
+        // only (the input whose slot carries arbitrable ER; the elicit captures
+        // transcript answers into titleKeywords, a SearchQuery slot with no ER).
+        // The JF-690 deferral feared the ask would set disambig_* ALONGSIDE
+        // FindSongSessionData, dead-ending the yes/no under the HandlerSelector
+        // force-route; that is not the current machinery: AskMultipleArtists
+        // marks every OTHER flow's keys for removal (ConversationalFlows, JF-398),
+        // so the interceptor strips FindSongSessionData from the ask's session
+        // and the confirm/cycle turns route to Yes/NoIntentHandler normally (the
+        // coexistence pin lives in the JF-702 adoption suite). The ask therefore
+        // supersedes the song search with the artist disambiguation, the same
+        // newest-flow-wins rule every open-flow ask already follows; the stored
+        // keywords ride the superseded flow state and are dropped with it (the
+        // documented cost of the shift); a collapse resolves the survivor INTO
+        // the flow and the song search proceeds.
+        if (!string.IsNullOrWhiteSpace(musician))
+        {
+            if (ArbitrateMusicianMultiValue(intentRequest, user, locale, out BaseItem? awaitingSurvivor) is { } awaitingAsk)
+            {
+                return awaitingAsk;
+            }
+
+            if (awaitingSurvivor != null)
+            {
+                sessionData.ArtistId = awaitingSurvivor.Id;
+                sessionData.ArtistName = awaitingSurvivor.Name;
+                return await SearchAndRespondAsync(request, context, user, session, locale, sessionData, cancellationToken).ConfigureAwait(false);
+            }
+        }
 
         // Resolve the artist
         IReadOnlyList<BaseItem> artists = await ArtistSearch.SearchAsync(
@@ -775,6 +836,34 @@ public class FindSongIntentHandler : BaseHandler
         {
             return null;
         }
+    }
+
+    /// <summary>
+    /// JF-702: the ONE multi-value-ER arbitration entry for both musician legs
+    /// (first invocation and AwaitingArtist; the simplify round folded the
+    /// duplicated boilerplate and the collapse log literal here). Returns the
+    /// ask to return verbatim when the ER ambiguity is REAL, assigns the
+    /// collapse survivor to <paramref name="resolved"/> (null on every
+    /// closed-gate leg), and logs the collapse once, so a log grep cannot miss
+    /// one leg.
+    /// </summary>
+    private SkillResponse? ArbitrateMusicianMultiValue(IntentRequest intentRequest, Entities.User user, string locale, out BaseItem? resolved)
+    {
+        resolved = null;
+        var arbitration = MultiValueErDisambiguation.TryArbitrate(
+            intentRequest, user, _artistIndex, _libraryManager, Logger, locale);
+        if (arbitration.Ask != null)
+        {
+            return arbitration.Ask;
+        }
+
+        if (arbitration.ResolvedArtist is { } survivor)
+        {
+            resolved = survivor;
+            Logger.LogDebug("FindSong: multi-value ER collapsed to the single library artist '{Name}' (Id={Id})", survivor.Name, survivor.Id);
+        }
+
+        return null;
     }
 
     /// <summary>

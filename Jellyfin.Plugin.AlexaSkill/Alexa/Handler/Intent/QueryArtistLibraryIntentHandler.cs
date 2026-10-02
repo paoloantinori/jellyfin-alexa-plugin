@@ -129,10 +129,26 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
 
         string musicianSearch = canonicalMusician ?? musician;
 
-        IReadOnlyList<BaseItem> artists = await Util.ArtistSearch.SearchAsync(
-            musicianSearch, user, _libraryManager, _artistIndex, Logger,
-            (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", ct),
-            locale, cancellationToken).ConfigureAwait(false);
+        // JF-702: the shared multi-value-ER gate (it owns the full contract),
+        // PlayArtistSongs' shape: this intent's only content input IS the musician
+        // slot, so no constraint needs preserving and the gate runs unrestricted.
+        // A REAL ambiguity asks which artist (the confirm leg plays the artist's
+        // songs instead of listing them, the accepted JF-690 contract shift) and a
+        // stale-catalog collapse lists the proven survivor instead of letting the
+        // stale rank-#1 canonical drive the not-found.
+        var multiValue = MultiValueErDisambiguation.TryArbitrate(
+            intentRequest, user, _artistIndex, _libraryManager, Logger, locale);
+        if (multiValue.Ask != null)
+        {
+            return multiValue.Ask;
+        }
+
+        IReadOnlyList<BaseItem> artists = multiValue.ResolvedArtist is { } resolvedArtist
+            ? new List<BaseItem> { resolvedArtist }
+            : await Util.ArtistSearch.SearchAsync(
+                musicianSearch, user, _libraryManager, _artistIndex, Logger,
+                (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", ct),
+                locale, cancellationToken).ConfigureAwait(false);
 
         if (artists.Count == 0)
         {

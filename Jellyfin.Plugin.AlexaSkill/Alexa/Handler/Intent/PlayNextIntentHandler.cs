@@ -121,20 +121,48 @@ public class PlayNextIntentHandler : BaseHandler
         string? matchedArtistName = null;
         if (!string.IsNullOrWhiteSpace(musicianQuery))
         {
-            IReadOnlyList<BaseItem> artists = await Util.ArtistSearch.SearchAsync(
-                canonicalMusician ?? musicianQuery, user, _libraryManager, _artistIndex, Logger,
-                (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtistsForPlayNext", ct),
-                locale, cancellationToken).ConfigureAwait(false);
-
-            if (artists.Count == 0)
+            // JF-702: the shared multi-value-ER gate (it owns the full contract),
+            // with PlaySong's scope restriction (the AddToQueue twin documents the
+            // constraint: a REAL song title keeps today's rank-#1 scoped title
+            // search because the confirm leg cannot preserve the requested song
+            // or the insert-next operation; a generic music word lets the gate
+            // ask which artist or scope the song search to the proven collapse
+            // survivor). The AddToQueue twin documents the ask leg's accepted
+            // shift (the confirm plays the artist INSTEAD OF inserting next)
+            // and the collapse not-found naming the survivor.
+            if (PlaySongIntentHandler.IsGenericMusicQuery(songQuery!))
             {
-                return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByArtist", locale, musicianQuery));
+                var arbitration = MultiValueErDisambiguation.TryArbitrate(
+                    intentRequest, user, _artistIndex, _libraryManager, Logger, locale);
+                if (arbitration.Ask != null)
+                {
+                    return arbitration.Ask;
+                }
+
+                if (arbitration.ResolvedArtist is { } resolvedArtist)
+                {
+                    matchedArtistName = resolvedArtist.Name;
+                    artistIds.Add(resolvedArtist.Id);
+                }
             }
 
-            matchedArtistName = artists[0].Name;
-            foreach (BaseItem artist in artists)
+            if (artistIds.Count == 0)
             {
-                artistIds.Add(artist.Id);
+                IReadOnlyList<BaseItem> artists = await Util.ArtistSearch.SearchAsync(
+                    canonicalMusician ?? musicianQuery, user, _libraryManager, _artistIndex, Logger,
+                    (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtistsForPlayNext", ct),
+                    locale, cancellationToken).ConfigureAwait(false);
+
+                if (artists.Count == 0)
+                {
+                    return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByArtist", locale, musicianQuery));
+                }
+
+                matchedArtistName = artists[0].Name;
+                foreach (BaseItem artist in artists)
+                {
+                    artistIds.Add(artist.Id);
+                }
             }
         }
 
