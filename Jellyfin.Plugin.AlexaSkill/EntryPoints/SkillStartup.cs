@@ -428,7 +428,11 @@ public class SkillStartup : IHostedService, IDisposable
                     // writing between the read and the Set below is overwritten
                     // until its next run (sub-millisecond window, the pre-existing
                     // capture class; the acknowledgment is one-directional by
-                    // accepted trade, not by oversight).
+                    // accepted trade, not by oversight). FREQUENCY (JF-719 widening):
+                    // the preserve now fires on every in-flight IN_PROGRESS row too
+                    // (~10-17 of 17 locales per version-bump restart per the JF-722
+                    // corrected analysis), so the window opens an order of magnitude
+                    // more often than the pre-widening settled-only fire set.
                     error = LibrarySyncService.PreserveLedgerErrorAcrossCapture(config.GetLocaleModelStatus(locale));
 
                     // Branch-decision debug per the logging policy: this

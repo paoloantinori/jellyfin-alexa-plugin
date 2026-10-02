@@ -16,7 +16,7 @@ references:
   - >-
     backlog/tasks/jf-719 -
     JF-719-the-startup-capture-preserve-fires-only-on-SUCCEEDEDan-IN_PROGRESS-capture-still-writes-Error-null-and-erases-the-preserved-clause.md
-priority: low
+priority: medium
 ---
 
 ## Description
@@ -61,6 +61,29 @@ a per-locale try isolating the bad entry.
 Not defects of the JF-719 gate itself: the review verified the allowlist complete over
 the actual three-member SkillStatusState enum, null-safe on the non-nullable enum
 property, and failing safe on enum growth.
+
+AUDIT ADDENDUM (2026-10-03, JF-719 gate-marker round, premise CORRECTED and priority
+raised): this file's original mitigating fact ("the PUT loop settles the previous
+locale's build on every iteration, so only the last-PUT locale, maybe the last two,
+freeze IN_PROGRESS") is WRONG. The settle inside iteration i+1 is a
+GetLiveModelJsonAsync -> WaitForLocaleBuildToSettleAsync(locale_{i+1}) that polls
+locale i+1 BEFORE its own PUT this run - at that moment locale i+1's last build is the
+previous deploy's settled result, so the settle is a no-op, and no iteration ever waits
+on locale_i's fresh 15-30s build. The PUT loop paces ~1-2s per locale, so at capture
+time every locale whose build started in the final ~15-30s reads IN_PROGRESS:
+realistically ~10-17 of 17 locales, not 1-2. The frozen-IN_PROGRESS Status half (the
+panel's ModelsDeployed checklist false, most rows gray until the weekly sync) is
+therefore the COMMON case after every version-bump restart, and the settle-wait fix
+shape listed below would cost ~17x the settle budget it implicitly assumes (this
+strengthens the recorded WIDEN rejection; the real fix shapes are a post-capture
+settle-and-rewrite, a Status-normalization at panel read, or JF-721's structured
+field). ALSO FOLDED HERE (gate-marker finding 2, speculative, for triage): the
+errors-first branch attributes any non-empty Errors array to the capture's own build,
+so a stale previous-build error riding an IN_PROGRESS status on the freshly-PUT
+locales would still wipe the clause the widening exists to protect (whether SMAPI
+clears errors when a new build starts is undocumented and unverified from the
+referenced DLL); if it ever bites, the defensive shape is gating the preserve on
+"errors belong to a terminal observation" rather than array presence.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done
