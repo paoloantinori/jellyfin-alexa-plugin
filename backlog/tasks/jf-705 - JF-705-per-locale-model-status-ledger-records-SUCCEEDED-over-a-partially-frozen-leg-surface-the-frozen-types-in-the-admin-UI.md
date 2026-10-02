@@ -3,9 +3,10 @@ id: JF-705
 title: >-
   JF-705 - per-locale model-status ledger records SUCCEEDED over a partially
   frozen leg; surface the frozen types in the admin UI
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-02 10:12'
+updated_date: '2026-10-02 13:53'
 labels:
   - catalog
   - observability
@@ -71,36 +72,5 @@ message retains the off-by-one).
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Closed by the JF-705 worker (worktree agent-a2059cf67e47e4eaa, branch off ba8e72bf). CONSUMER
-READ (the decision's evidence): config.html's loadCustomModelStatus renders each locale entry
-with a green check iff status === "SUCCEEDED", shows the raw status text only when not
-SUCCEEDED, and renders the error field UNCONDITIONALLY when non-empty (substring(0,80)
-visible, full text in the title tooltip); DiagnosticsController.GetPanel matches Status
-strings only (failedModels = FAILED/TIMEOUT; ModelsDeployed = Any "Succeeded") so a distinct
-status value would flip ModelsDeployed false for a locale whose model build actually
-succeeded; ConfigurationController.GetCustomModelStatus passes status/error through
-untouched; SkillStartup.CaptureLocaleModelStatusesAsync is a fellow writer, not a parser.
-DECISION: keep Status as the PUT's own outcome and surface the frozen types in the Error
-field (the ledger's existing caveat channel, same as JF-495 canary mismatches); no
-config.html change needed, which also avoids the embedded-resource clean-build dance. WHAT
-LANDED: RunLegAsync passes its frozenTypes list into RecordModelUpdateInLedger, which
-composes "Artist + Album catalogs FROZEN (last-good pinned)" (plural and " + " join over the
-enum names, 58 chars worst case (gate-marker correction; the commit message retains the off-by-one), inside the 80-char visible window) LEADING any canary
-message so the persistent actionable condition survives truncation (code-review F1);
-LocaleModelStatus.Error's doc now names the caveat role; TWO pins extend
-LibrarySyncServiceLegIsolationTests: partial freeze with successful PUT surfaces the frozen
-type then a clean re-run leaves no clause, and a two-type freeze plus a post-PUT canary
-mismatch (new ServeCanaryMismatchAfterPut fake toggle) exercises the plural branch, the
-combined-message branch, and the clause-leads order. The all-types-frozen shape (no PUT, no
-ledger write, previous run's green entry stays) is deliberately OUT (the task text's own
-scope) and is filed as JF-709 with the deeper leg-boundary fix and the JF-513.3 hash-skip
-shape the reviewer added. SKIPPED with reasons: the shared frozen-types formatter (three
-surfaces with intentionally different wordings; consolidation question parked inside JF-709,
-the change that adds the fourth site), the pluralization-ternary simplification ("catalog
-type(s)" reads worse in admin-facing text than a one-expression ternary), and three
-low-value test-assert trims (NotNull converts a would-be ArgumentNullException into a clean
-failure; the clean-leg Status assert distinguishes a fresh clean write from a stale entry).
-Gates: Skill simplify (4 parallel angles) + Skill code-review high, both as literal Skill
-calls in the transcript; suites 4927/4927 both TFMs on the final state. No deploy; do not
-push.
+Closed by the orchestrator after the full cycle: worker commit 7a7982ee + gate-marker tail e0b85d0a, merged as 46a84f66. The per-locale ledger surfaces frozen catalog types via the Error field with Status unchanged (the consumer-read decision: config.html and DiagnosticsController key on Status strings and never parse Error; a distinct status value would have flipped ModelsDeployed for locales whose build succeeded). The frozen clause leads any canary message to survive the 80-char truncation; two new pins cover the partial-freeze surface and the two-type + canary co-occurrence with the ServeCanaryMismatchAfterPut fake toggle. Worker gates green (simplify 2 applied, code-review high 2 applied, JF-709 filed for the all-frozen no-entry shape), worker suites 4927/4927 both TFMs, orchestrator independent suite exit 0 on the identical tree (worktree base = current main; only markdown differed), gate-marker review verified all four scrutiny axes clean with 2 findings landed same-turn (JF-710 filed for the startup-capture Error-null overwrite residual; the clause worst-case corrected to 58 chars). Production surface changed (LibrarySyncService): deployed in the post-merge deploy.
 <!-- SECTION:FINAL_SUMMARY:END -->
