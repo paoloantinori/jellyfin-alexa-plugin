@@ -629,6 +629,86 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
     }
 
     /// <summary>
+    /// JF-694 mint-site pin: a ONE-chapter book holding a recorded position must mint the
+    /// sliced resume URL. The tracker is seeded with the translated contract the record
+    /// layer now writes for the one-chapter shape (pinned controller-side by
+    /// GetSegment_SingleChapterAudioBookLeaf_RecordsUnderBookKeyOnConcatTimeline: the
+    /// BOOK key at the translated 10s-timeline index), so this pin locks that the mint
+    /// reads THAT key and passes the position through unchanged: the VideoApp source is
+    /// audiobook/{parent}/stream.m3u8?start=50s. The serve side of that URL is pinned by
+    /// the JF-686 slice tests.
+    /// RED (the position seeded under the chapter LEAF key instead, the pre-JF-694
+    /// candidate-1 shape the old Folder-only gate would have produced): the mint reads
+    /// the book key, sees a cold tracker, and answers the fresh no-start launch, so the
+    /// ?start= assert flips.
+    /// </summary>
+    [Fact]
+    public async Task ServerProgressFallback_OneChapterBook_BookKeyPosition_MintsSlicedResumeUrl()
+    {
+        Plugin.Instance!.Configuration.NativeControlsForBooks = true;
+        var tracker = TestHelpers.CreatePositionTracker("resume-jf694-onechapter");
+        using var trackerSwap = TestHelpers.SwapPluginPositionTracker(tracker);
+        try
+        {
+            var handler = CreateHandler();
+            var request = CreateResumeRequest();
+            var context = CreateContextNoAudioPlayer();
+
+            var user = TestHelpers.CreateTestUser();
+            _fx.Config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
+            {
+                Id = user.Id,
+                AnnouncePositionOnResume = false
+            });
+
+            var session = CreateEmptySession();
+
+            // The ONE-chapter shape: the book folder's only child is the chapter itself,
+            // so the concat endpoint redirects to the chapter-leaf serve the record path
+            // now tracks.
+            Guid bookFolderId = Guid.NewGuid();
+            var chapter = new AudioBook
+            {
+                Name = "The Only Chapter",
+                Id = Guid.NewGuid(),
+                ParentId = bookFolderId,
+                Path = "/audiobooks/one-chapter-book/the-only-chapter.mp3"
+            };
+
+            _fx.LibraryManager.Setup(x => x.GetItemList(It.IsAny<InternalItemsQuery>()))
+                .Returns(new List<BaseItem> { chapter });
+
+            // The translated record shape (NOT a raw 4s index): book key, index 6.
+            tracker.RecordSegment(bookFolderId.ToString("N"), 6);
+            var userData = new UserItemData
+            {
+                Key = "test",
+                PlaybackPositionTicks = TimeSpan.FromSeconds(20).Ticks,
+                Played = false
+            };
+
+            _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<JellyfinUser>(), It.IsAny<BaseItem>()))
+                .Returns(userData);
+
+            var response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+            Assert.NotNull(response);
+
+            var videoDirective = Assert.IsType<global::Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>(
+                Assert.Single(response.Response.Directives));
+            Assert.Empty(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+            Assert.Contains(
+                $"alexaskill/api/video-audio/audiobook/{bookFolderId}/stream.m3u8?start={TimeSpan.FromSeconds(50).Ticks}&token=",
+                videoDirective.VideoItem!.Source,
+                StringComparison.Ordinal);
+        }
+        finally
+        {
+            Plugin.Instance.Configuration.NativeControlsForBooks = false;
+        }
+    }
+
+    /// <summary>
     /// JF-563: cold tracker (fresh restart) keeps the sliced launch; the slice falls back
     /// to the server-side progress ticks, the same fallback PlayBook applies.
     /// </summary>

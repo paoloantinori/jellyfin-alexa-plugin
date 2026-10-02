@@ -6663,6 +6663,157 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Assert.Equal(0, tracker.GetPositionTicks(episodeIdStr));
     }
 
+    /// <summary>
+    /// JF-694: segment fetches keyed by an AUDIOBOOK LEAF (the one-chapter redirect
+    /// serves the single chapter's segments keyed by the chapter id, so pre-JF-694 the
+    /// Folder-only gate never recorded and every mint site saw a permanently cold
+    /// tracker) must record under the BOOK key the resume path reads (ParentId, the
+    /// ResumeMath.GetAudiobookBookKey shape), TRANSLATED onto the tracker's 10s concat
+    /// timeline: the redirected core is the song core cutting SongHlsSegmentSeconds=4
+    /// segments, so a raw 4s index read as 10s would resume 2.5x past the listening
+    /// point. seg_0015 at 4s = 60s of content → book-timeline index 15*4/10 = 6 →
+    /// conservative resume (6-1)*10s = 50s under the PARENT key, and nothing under the
+    /// dead leaf key.
+    /// RED (the AudioBook arm reverted, gate back to Folder-only): the book-key assert
+    /// reads 0.
+    /// </summary>
+    [Fact]
+    public async Task GetSegment_SingleChapterAudioBookLeaf_RecordsUnderBookKeyOnConcatTimeline()
+    {
+        Guid parentId = Guid.NewGuid();
+        string parentIdStr = parentId.ToString("D");
+        var parentFolder = new MediaBrowser.Controller.Entities.Folder
+        {
+            Name = "One-Chapter Book",
+            Id = parentId
+        };
+        Guid chapterId = Guid.NewGuid();
+        string chapterIdStr = chapterId.ToString("D");
+        var chapter = new MediaBrowser.Controller.Entities.AudioBook
+        {
+            Name = "Only Chapter",
+            Id = chapterId,
+            ParentId = parentId,
+            Path = "/audiobooks/one-chapter-book/only-chapter.mp3"
+        };
+
+        _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns(parentFolder);
+        _libraryManagerMock.Setup(m => m.GetItemById(chapterId)).Returns(chapter);
+
+        // The segment sits in the CHAPTER's HLS cache dir (the redirect keys segments
+        // by the chapter leaf, not the parent).
+        string hlsDir = _cache.GetHlsDirectoryPath(chapterIdStr, 0);
+        Directory.CreateDirectory(hlsDir);
+        await File.WriteAllTextAsync(Path.Combine(hlsDir, "seg_0015.ts"), new string('x', 512));
+        _cache.RegisterHlsDirectory(chapterIdStr, 0);
+
+        var tracker = CreatePositionTracker("jf694-tracker-onechapter");
+        using var trackerSwap = SwapPluginPositionTracker(tracker);
+
+        var controller = CreateController(chapterIdStr);
+
+        ActionResult result = await controller.GetSegment(chapterIdStr, "seg_0015.ts");
+
+        Assert.IsType<PhysicalFileResult>(result);
+        // The read-aligned key: the mint sites read GetAudiobookBookKey(chapter) =
+        // chapter.ParentId, so the record must land there, at the TRANSLATED position.
+        Assert.Equal(5 * 10 * TimeSpan.TicksPerSecond, tracker.GetPositionTicks(parentIdStr));
+        // Nothing under the dead leaf key (the JF-499 W1 dead-weight contract).
+        Assert.Equal(0, tracker.GetPositionTicks(chapterIdStr));
+    }
+
+    /// <summary>
+    /// JF-625/JF-694 regression: a plain Audio track under a MusicAlbum (every song's
+    /// single-item HLS serve, and the single-track album redirect's shape) must NOT
+    /// start recording under ANY key. The album key is READ BACK: in seek mode
+    /// AlbumPlayService reads the tracker's album position as the resume truth (JF-625
+    /// criterion 3), so an Audio-leaf-to-parent canonicalization would not merely grow
+    /// the persisted file with dead entries, it would write a track-local 4s-timeline
+    /// index under a key whose reads count the 10s concat timeline, poisoning the
+    /// album resume mapping.
+    /// RED (the gate widened to any Audio leaf, canonicalizing to ParentId): the
+    /// album-key assert flips positive.
+    /// </summary>
+    [Fact]
+    public async Task GetSegment_AlbumTrackLeaf_DoesNotRecordUnderAnyKey()
+    {
+        Guid albumId = Guid.NewGuid();
+        string albumIdStr = albumId.ToString("D");
+        var album = new MediaBrowser.Controller.Entities.Audio.MusicAlbum
+        {
+            Name = "An Album",
+            Id = albumId
+        };
+        Guid trackId = Guid.NewGuid();
+        string trackIdStr = trackId.ToString("D");
+        var track = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "A Song",
+            Id = trackId,
+            ParentId = albumId
+        };
+
+        _libraryManagerMock.Setup(m => m.GetItemById(albumId)).Returns(album);
+        _libraryManagerMock.Setup(m => m.GetItemById(trackId)).Returns(track);
+
+        string hlsDir = _cache.GetHlsDirectoryPath(trackIdStr, 0);
+        Directory.CreateDirectory(hlsDir);
+        await File.WriteAllTextAsync(Path.Combine(hlsDir, "seg_0005.ts"), new string('x', 512));
+        _cache.RegisterHlsDirectory(trackIdStr, 0);
+
+        var tracker = CreatePositionTracker("jf694-tracker-album");
+        using var trackerSwap = SwapPluginPositionTracker(tracker);
+
+        var controller = CreateController(trackIdStr);
+
+        ActionResult result = await controller.GetSegment(trackIdStr, "seg_0005.ts");
+
+        Assert.IsType<PhysicalFileResult>(result);
+        // Neither the leaf key nor the canonicalized album key may grow.
+        Assert.Equal(0, tracker.GetPositionTicks(trackIdStr));
+        Assert.Equal(0, tracker.GetPositionTicks(albumIdStr));
+    }
+
+    /// <summary>
+    /// JF-694 code-review finding 1: a ROOT-LEVEL single-file AudioBook (empty
+    /// ParentId, served by the plain single-item route because the builder's concat
+    /// branch requires a ParentId) must NOT start recording. Its book key falls back to
+    /// its OWN id, and the resume mint would then build audiobook/{ownId}, an URL the
+    /// concat endpoint 404s on (a leaf has no AudioBook children), so the key must stay
+    /// cold for resume to keep the working plain single-item launch.
+    /// RED (the AudioBook arm's ParentId condition dropped): the leaf records under its
+    /// own id and the assert flips positive.
+    /// </summary>
+    [Fact]
+    public async Task GetSegment_RootLevelAudioBookLeaf_EmptyParentId_DoesNotRecord()
+    {
+        Guid bookId = Guid.NewGuid();
+        string bookIdStr = bookId.ToString("D");
+        var book = new MediaBrowser.Controller.Entities.AudioBook
+        {
+            Name = "Root-Level Book",
+            Id = bookId,
+            Path = "/audiobooks/root-level-book.m4b"
+        };
+
+        _libraryManagerMock.Setup(m => m.GetItemById(bookId)).Returns(book);
+
+        string hlsDir = _cache.GetHlsDirectoryPath(bookIdStr, 0);
+        Directory.CreateDirectory(hlsDir);
+        await File.WriteAllTextAsync(Path.Combine(hlsDir, "seg_0005.ts"), new string('x', 512));
+        _cache.RegisterHlsDirectory(bookIdStr, 0);
+
+        var tracker = CreatePositionTracker("jf694-tracker-rootlevel");
+        using var trackerSwap = SwapPluginPositionTracker(tracker);
+
+        var controller = CreateController(bookIdStr);
+
+        ActionResult result = await controller.GetSegment(bookIdStr, "seg_0005.ts");
+
+        Assert.IsType<PhysicalFileResult>(result);
+        Assert.Equal(0, tracker.GetPositionTicks(bookIdStr));
+    }
+
     // ---- W2a: evidence-based monitor budget ----
 
     /// <summary>
