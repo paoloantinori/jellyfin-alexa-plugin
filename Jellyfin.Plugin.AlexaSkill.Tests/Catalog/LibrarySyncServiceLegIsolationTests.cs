@@ -114,6 +114,15 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
             }
         };
 
+    /// <summary>
+    /// Shared arrange for the all-frozen pins (JF-709): every catalog type's
+    /// payload build deterministically fails its invariant, so no version mints,
+    /// the injection gate skips, and the leg completes with zero PUTs.
+    /// </summary>
+    private void FreezeAllTypesViaProbe() =>
+        _service.TypeLegEntryProbeForTest = type =>
+            throw new CatalogPayloadInvariantException(SimulatedDriftMessage);
+
     private void SetupLibraryWithAllTypes()
     {
         _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
@@ -359,6 +368,153 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
+    /// JF-709 core pin: an ALL-FROZEN leg performs no model PUT, and without the
+    /// leg-boundary write the locale would keep the PREVIOUS run's green
+    /// SUCCEEDED ledger row while every catalog type is pinned last-good. The
+    /// write must REPLACE that stale row and PRESERVE its Status (the live model
+    /// on Amazon is unchanged by this run, so its
+    /// recorded build status is still true, and the diagnostics panel's
+    /// ModelsDeployed stays truthful for single-locale setups); the freeze rides
+    /// Error with the "; no model update this run" clause, on a fresh
+    /// LastUpdated. The clean re-run overwrites with no clause, pinning that the
+    /// clause is freeze-driven (JF-705's #4 second half, extended to this path).
+    /// </summary>
+    [Fact]
+    public async Task SyncUserLibraryAsync_AllTypesFrozen_PreExistingGreenEntry_PreservedWithFrozenClause()
+    {
+        // Arrange: a previous healthy run's green entry, then everything freezes.
+        var seededTime = DateTime.UtcNow.AddHours(-1);
+        Plugin.Instance!.Configuration.SetLocaleModelStatus("it-IT", new LocaleModelStatus
+        {
+            Status = "SUCCEEDED",
+            LastUpdated = seededTime,
+            Source = "Embedded",
+            Error = "simulated prior diagnostic"
+        });
+        SetupLibraryWithAllTypes();
+        FreezeAllTypesViaProbe();
+        var user = CreateUser();
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
+
+        // Act
+        var result = await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
+
+        // Assert: the run is honest (run-level), no PUT happened.
+        Assert.False(result.Success);
+        Assert.Equal(3, result.FrozenTypes.Count);
+        Assert.Null(_smapiHandler.LastModelPutBody);
+
+        // The stale green row was reached and replaced: Status preserved, the
+        // freeze clause in Error on a fresh timestamp. Source is always this
+        // writer's own label (catalog sync authors the row, code-review F4).
+        var ledger = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(ledger);
+        Assert.Equal("SUCCEEDED", ledger!.Status);
+        Assert.Equal(LibrarySyncService.CatalogSyncLedgerSource, ledger.Source);
+        Assert.NotNull(ledger.Error);
+        Assert.Contains("Artist + Album + Series catalogs FROZEN", ledger.Error!, StringComparison.Ordinal);
+        Assert.Contains("no PUT this run", ledger.Error!, StringComparison.Ordinal);
+        // The prior entry's diagnostic trails the freeze clause, so a preserved
+        // non-SUCCEEDED status does not lose its failure reason (code-review F3).
+        int clauseAt = ledger.Error!.IndexOf("FROZEN", StringComparison.Ordinal);
+        int previousAt = ledger.Error.IndexOf("previous: simulated prior diagnostic", StringComparison.Ordinal);
+        Assert.True(previousAt > clauseAt, "the freeze clause must lead the composed Error");
+        Assert.True(ledger.LastUpdated > seededTime, "the replaced entry must carry a fresh timestamp");
+
+        // Clean re-run: the entry carries no clause (the freeze is the trigger).
+        _service.TypeLegEntryProbeForTest = null;
+        await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
+        ledger = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(ledger);
+        Assert.Equal("SUCCEEDED", ledger!.Status);
+        Assert.Null(ledger.Error);
+    }
+
+    /// <summary>
+    /// JF-709: the all-frozen shape with NO previous entry (fresh install,
+    /// everything frozen on the first run) must still write an entry - silence
+    /// here is the same observability hole. With nothing truthful to preserve,
+    /// the entry reads Status "Skipped" (the documented no-PUT meaning, extended
+    /// by JF-709) with the freeze clause in Error and the catalog-sync source.
+    /// </summary>
+    [Fact]
+    public async Task SyncUserLibraryAsync_AllTypesFrozen_NoPriorEntry_LedgerRecordsSkipped()
+    {
+        SetupLibraryWithAllTypes();
+        FreezeAllTypesViaProbe();
+        var user = CreateUser();
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
+
+        var result = await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.Equal(3, result.FrozenTypes.Count);
+        var ledger = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(ledger);
+        Assert.Equal("Skipped", ledger!.Status);
+        Assert.Equal(LibrarySyncService.CatalogSyncLedgerSource, ledger.Source);
+        Assert.NotNull(ledger.Error);
+        Assert.Contains("FROZEN", ledger.Error!, StringComparison.Ordinal);
+        Assert.Contains("no PUT this run", ledger.Error!, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-703 addendum pin (fix folded into JF-709): the payload hash must be
+    /// recorded only AFTER a successful upload. Sequence: attempt 1's artist
+    /// version upload gets a 401, the leg-level refresh-retry runs attempt 2;
+    /// with the old record-before-upload order attempt 2 hash-skipped the never-
+    /// minted artist version, the PUT omitted the artist catalog, and the leg
+    /// read as a clean completion. The pin discriminates: the artist version
+    /// upload runs TWICE (401 + real), the PUT carries the artist catalog id,
+    /// and the locale reports SUCCEEDED with all three catalogs wired.
+    /// </summary>
+    [Fact]
+    public async Task SyncUserLibraryAsync_ArtistUpload401_RetriedAttempt_ReuploadsUnmintedVersion()
+    {
+        SetupLibraryWithAllTypes();
+        _smapiHandler.FailVersionUpload401OnceForCatalogId = ArtistCatalogId;
+        var user = CreateUser();
+        user.SmapiRefreshToken = "refresh-token";
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
+
+        // The 401 retry refreshes via LWA; serve it locally (the SmapiTokenRefresherTests
+        // pattern). Credentials and the override are restored so the shared plugin
+        // instance never leaks them.
+        Plugin.Instance!.Configuration.LwaClientId = "test-client-id";
+        Plugin.Instance!.Configuration.LwaClientSecret = "test-client-secret";
+        LwaClient.HttpClientOverrideForTests = () => new HttpClient(new Lwa.SmapiTokenRefresherTests.HappyHandler());
+        try
+        {
+            var result = await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
+
+            // Attempt 2 RE-uploaded the artist version (401 POST + real POST),
+            // instead of hash-skipping the version attempt 1 never minted.
+            Assert.Equal(2, _smapiHandler.VersionUploadsFor(ArtistCatalogId));
+            Assert.Equal(1, _smapiHandler.VersionUpload401sServed);
+
+            // The PUT happened and wires ALL THREE catalogs, artist included.
+            Assert.NotNull(_smapiHandler.LastModelPutBody);
+            Assert.Equal(
+                ArtistCatalogId,
+                GetTypeNode(_smapiHandler.LastModelPutBody!, "JellyfinArtist")
+                    .GetProperty("valueSupplier").GetProperty("valueCatalog")
+                    .GetProperty("catalogId").GetString());
+
+            Assert.True(result.Success);
+            var ledger = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+            Assert.NotNull(ledger);
+            Assert.Equal("SUCCEEDED", ledger!.Status);
+            Assert.Null(ledger.Error);
+        }
+        finally
+        {
+            LwaClient.HttpClientOverrideForTests = null;
+            Plugin.Instance!.Configuration.LwaClientId = string.Empty;
+            Plugin.Instance!.Configuration.LwaClientSecret = string.Empty;
+        }
+    }
+
+    /// <summary>
     /// Extracts one slot-type node from a raw interaction-model JSON body.
     /// Clone() keeps the element valid after the owning document is disposed.
     /// </summary>
@@ -403,6 +559,15 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
         /// </summary>
         public bool ServeCanaryMismatchAfterPut { get; set; }
 
+        /// <summary>
+        /// JF-709/JF-703 addendum pin: when set to a catalog id, the FIRST version
+        /// upload POST for that catalog returns 401 (subsequent ones succeed), so
+        /// the leg's 401 refresh-retry re-runs the type leg.
+        /// </summary>
+        public string? FailVersionUpload401OnceForCatalogId { get; set; }
+
+        public int VersionUpload401sServed { get; private set; }
+
         private bool _modelPutSeen;
 
         private static string CatalogIdForName(string body) =>
@@ -438,7 +603,19 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
 
             if (request.Method == HttpMethod.Post && url.EndsWith("/versions", StringComparison.Ordinal))
             {
-                string catalogId = url.Split('/')[^3];
+                string catalogId = url.Split('/')[^2];
+
+                // JF-709/JF-703 addendum pin: the FIRST version upload for this
+                // catalog 401s (the leg-level refresh-retry then re-runs it).
+                if (catalogId == FailVersionUpload401OnceForCatalogId && VersionUpload401sServed == 0)
+                {
+                    VersionUpload401sServed++;
+                    return new HttpResponseMessage(HttpStatusCode.Unauthorized)
+                    {
+                        Content = new StringContent("{\"message\":\"Token is invalid/expired.\"}", Encoding.UTF8, "application/json")
+                    };
+                }
+
                 return new HttpResponseMessage(HttpStatusCode.Accepted)
                 {
                     Headers = { Location = new Uri($"{Base}/v1/skills/api/custom/interactionModel/catalogs/{catalogId}/updateRequest/req-1") }

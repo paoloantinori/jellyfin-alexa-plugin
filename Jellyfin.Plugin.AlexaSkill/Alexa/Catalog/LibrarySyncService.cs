@@ -292,6 +292,15 @@ public class LibrarySyncService
                 // JF-705: the leg's frozen types ride the entry too.
                 RecordModelUpdateInLedger(locale, modelUpdate, frozenTypes);
             }
+            else if (frozenTypes.Count > 0)
+            {
+                // JF-709: the all-frozen leg performed no PUT, so without this
+                // leg-boundary write the locale keeps the PREVIOUS run's green
+                // SUCCEEDED ledger row. A no-PUT leg with ZERO frozen types
+                // (zero-items / byte-identical hash-skips) deliberately writes
+                // nothing; the starved-locale product gap is JF-717.
+                RecordNoPutFrozenLegInLedger(locale, frozenTypes);
+            }
 
             return frozenTypes;
         }
@@ -437,6 +446,31 @@ public class LibrarySyncService
         CatalogModelUpdateResult modelUpdate,
         List<CatalogType> frozenTypes)
     {
+        string? error = modelUpdate.CanaryError;
+        if (frozenTypes.Count > 0)
+        {
+            // The frozen clause LEADS the combined message (rationale and the
+            // 80-char truncation constraint live on FrozenLedgerClause).
+            string frozenClause = FrozenLedgerClause(frozenTypes);
+            error = string.IsNullOrEmpty(error) ? frozenClause : $"{frozenClause}; {error}";
+        }
+
+        WriteLedgerEntry(locale, new Configuration.LocaleModelStatus
+        {
+            Status = modelUpdate.BuildStatus,
+            LastUpdated = DateTime.UtcNow,
+            Error = error,
+            Source = CatalogSyncLedgerSource
+        });
+    }
+
+    /// <summary>
+    /// The ONE ledger-write shell (guard, set, save, non-fatal catch) shared by
+    /// both ledger writers (the JF-705 PUT path above and the JF-709 no-PUT
+    /// path); the writers differ only in how the entry's fields are derived.
+    /// </summary>
+    private void WriteLedgerEntry(string locale, Configuration.LocaleModelStatus entry)
+    {
         try
         {
             var config = Plugin.Instance?.Configuration;
@@ -445,31 +479,73 @@ public class LibrarySyncService
                 return;
             }
 
-            string? error = modelUpdate.CanaryError;
-            if (frozenTypes.Count > 0)
-            {
-                // The frozen clause LEADS the combined message: config.html
-                // truncates Error at 80 chars visually, and the freeze is the
-                // persistent actionable condition while a canary error
-                // describes only this run's PUT verification.
-                string frozenClause =
-                    $"{string.Join(" + ", frozenTypes)} catalog{(frozenTypes.Count > 1 ? "s" : string.Empty)} FROZEN (last-good pinned)";
-                error = string.IsNullOrEmpty(error) ? frozenClause : $"{frozenClause}; {error}";
-            }
-
-            config.SetLocaleModelStatus(locale, new Configuration.LocaleModelStatus
-            {
-                Status = modelUpdate.BuildStatus,
-                LastUpdated = DateTime.UtcNow,
-                Error = error,
-                Source = CatalogSyncLedgerSource
-            });
+            config.SetLocaleModelStatus(locale, entry);
             Plugin.Instance!.SaveConfiguration();
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex,
                 "Failed to record catalog-sync model update in the locale status ledger for {Locale} (non-fatal)",
+                locale);
+        }
+    }
+
+    /// <summary>
+    /// The ledger-side frozen-types clause, shared by BOTH ledger writers so the
+    /// entry text cannot drift (JF-705 PUT path and JF-709 no-PUT path). The
+    /// run-level surfaces (LogError, the completion line) keep their own wordings
+    /// per the JF-705 code-review decision. THE 80-CHAR CONSTRAINT LIVES HERE:
+    /// config.html truncates Error at 80 chars visually (full text in the
+    /// tooltip), so this clause must stay short and lead any appended context in
+    /// every composition site.
+    /// </summary>
+    private static string FrozenLedgerClause(List<CatalogType> frozenTypes) =>
+        $"{string.Join(" + ", frozenTypes)} catalog{(frozenTypes.Count > 1 ? "s" : string.Empty)} FROZEN (last-good pinned)";
+
+    /// <summary>
+    /// Records an ALL-FROZEN leg (no version minted for any type, no model PUT)
+    /// in the per-locale status ledger (JF-709), replacing the locale's previous
+    /// row rather than leaving it stale. The previous entry's Status is
+    /// preserved verbatim when one exists: the live model on Amazon is UNCHANGED
+    /// by this run, so its recorded build status is still true, and keeping it
+    /// keeps the diagnostics panel's ModelsDeployed (Any Status=="Succeeded")
+    /// truthful for single-locale setups. With no previous entry (fresh install,
+    /// everything frozen on the first run) the entry reads "Skipped", whose
+    /// documented meaning this extends to the no-PUT leg shapes. The freeze
+    /// clause LEADS the Error (the live, actionable condition) and the previous
+    /// entry's Error, when present, trails as "previous: ..." so a preserved
+    /// FAILED status does not lose its failure diagnostic (code-review F3).
+    /// Source is always this writer's own label: catalog sync authors THIS row.
+    /// </summary>
+    private void RecordNoPutFrozenLegInLedger(string locale, List<CatalogType> frozenTypes)
+    {
+        // The previous-entry READ sits under the same non-fatal contract as the
+        // write (WriteLedgerEntry below): the startup capture can swap ledger
+        // rows concurrently, and a Collection mutation during the
+        // GetLocaleModelStatus scan must not fail a sync leg that otherwise
+        // completed.
+        try
+        {
+            Configuration.LocaleModelStatus? previous =
+                Plugin.Instance?.Configuration?.GetLocaleModelStatus(locale);
+            string error = $"{FrozenLedgerClause(frozenTypes)}; no PUT this run";
+            if (previous?.Error is { Length: > 0 } previousError)
+            {
+                error = $"{error}; previous: {previousError}";
+            }
+
+            WriteLedgerEntry(locale, new Configuration.LocaleModelStatus
+            {
+                Status = previous?.Status ?? "Skipped",
+                LastUpdated = DateTime.UtcNow,
+                Error = error,
+                Source = CatalogSyncLedgerSource
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Failed to record the all-frozen no-PUT leg in the locale status ledger for {Locale} (non-fatal)",
                 locale);
         }
     }
@@ -578,10 +654,16 @@ public class LibrarySyncService
         string payloadJson = JsonSerializer.Serialize(payload, CatalogManager.JsonOptions);
 
         // JF-513.3: skip the version upload when this exact payload was already
-        // minted in this run (same user/catalog type across locale legs). The last
-        // minted version for this catalog id is the one the live model already
-        // references, so a skip must NOT re-run the model injection either: report
-        // Version null so the caller treats this leg as no-op.
+        // minted in this run (same user/catalog type across locale legs). A skip
+        // reports Version null so the caller treats this leg as no-op for that
+        // type. The hash is recorded only AFTER a successful upload (JF-703
+        // addendum): recording before it made "already uploaded this run" really
+        // mean "already attempted", so a failed upload followed by the leg-level
+        // 401 retry hash-skipped a version that was never minted and dropped a
+        // needed upload for the rest of the run. The trade: a version minted on
+        // SMAPI but lost to a post-mint failure (timeout after acceptance) now
+        // re-uploads on the retry, burning one duplicate version - the narrow,
+        // self-healing direction to be wrong in.
         string payloadHash = Convert.ToHexString(
             SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(payloadJson)));
         string hashKey = $"{catalogType}:{catalogId}";
@@ -594,8 +676,6 @@ public class LibrarySyncService
                 locale);
             return (payload.Values.Count, null);
         }
-
-        uploadedPayloadHashes[hashKey] = payloadHash;
 
         string serverAddress = Plugin.Instance!.Configuration.ServerAddress.TrimEnd('/');
 
@@ -613,6 +693,10 @@ public class LibrarySyncService
             payload,
             catalogUrlFactory,
             cancellationToken).ConfigureAwait(false);
+
+        // Only a SUCCESSFUL upload records the hash (JF-703 addendum; full
+        // rationale at the skip check above).
+        uploadedPayloadHashes[hashKey] = payloadHash;
 
         return (payload.Values.Count, catalogVersion);
     }

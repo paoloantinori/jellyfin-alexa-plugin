@@ -107,7 +107,9 @@ public class SmapiTokenRefresherTests : IDisposable
             });
     }
 
-    private sealed class HappyHandler : HttpMessageHandler
+    /// <summary>Shared with the catalog-sync suites that need the 401-retry
+    /// refresh path served locally (e.g. the JF-709/JF-703 addendum pin).</summary>
+    internal sealed class HappyHandler : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
             => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
