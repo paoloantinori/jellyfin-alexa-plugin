@@ -465,9 +465,12 @@ public class LibrarySyncService
     }
 
     /// <summary>
-    /// The ONE ledger-write shell (guard, set, save, non-fatal catch) shared by
-    /// both ledger writers (the JF-705 PUT path above and the JF-709 no-PUT
-    /// path); the writers differ only in how the entry's fields are derived.
+    /// The ledger-write shell (guard, set, save, non-fatal catch) shared by
+    /// both catalog-sync ledger writers (the JF-705 PUT path above and the
+    /// JF-709 no-PUT path); the writers differ only in how the entry's fields
+    /// are derived. The startup capture (JF-710) is the third ledger writer
+    /// and keeps its own hand-rolled write under a whole-capture catch, whose
+    /// coarser failure granularity is that path's pre-existing shape.
     /// The what label names the failed write in the non-fatal log line so triage
     /// reads the right surface.
     /// </summary>
@@ -493,6 +496,15 @@ public class LibrarySyncService
     }
 
     /// <summary>
+    /// The invariant tail of every <see cref="FrozenLedgerClause"/> output (the
+    /// frozen-type list prefix varies). Doubles as the frozen-clause MARKER: the
+    /// no-PUT writer's own-shape predicate and the JF-710 startup capture's
+    /// preserve key on it, so the text they recognize can never drift from the
+    /// clause the writers compose.
+    /// </summary>
+    internal const string FrozenLedgerClauseMarker = " FROZEN (last-good pinned)";
+
+    /// <summary>
     /// The ledger-side frozen-types clause, shared by BOTH ledger writers so the
     /// entry text cannot drift (JF-705 PUT path and JF-709 no-PUT path). The
     /// run-level surfaces (LogError, the completion line) keep their own wordings
@@ -502,7 +514,7 @@ public class LibrarySyncService
     /// every composition site.
     /// </summary>
     private static string FrozenLedgerClause(List<CatalogType> frozenTypes) =>
-        $"{string.Join(" + ", frozenTypes)} catalog{(frozenTypes.Count > 1 ? "s" : string.Empty)} FROZEN (last-good pinned)";
+        $"{string.Join(" + ", frozenTypes)} catalog{(frozenTypes.Count > 1 ? "s" : string.Empty)}{FrozenLedgerClauseMarker}";
 
     /// <summary>
     /// The run-scoped tail this writer appends after the frozen clause. Doubles
@@ -514,6 +526,14 @@ public class LibrarySyncService
     internal const string NoPutLedgerTail = "; no PUT this run";
 
     /// <summary>
+    /// The framing the no-PUT writer wraps a trailed foreign diagnostic in.
+    /// Internal because the JF-710 startup capture preserve strips the same
+    /// framing when it keeps the foreign diagnostic alive, so the two cannot
+    /// drift.
+    /// </summary>
+    internal const string PreviousLedgerDiagnosticPrefix = "; previous: ";
+
+    /// <summary>
     /// Records an ALL-FROZEN leg (no version minted for any type, no model PUT)
     /// in the per-locale status ledger (JF-709), replacing the locale's previous
     /// row rather than leaving it stale. Status: PreservedOrSkippedStatus (the
@@ -521,9 +541,10 @@ public class LibrarySyncService
     /// frozen clause plus the run-scoped no-PUT tail, then a single
     /// "previous: ..." trailer ONLY when the previous Error is a FOREIGN
     /// diagnostic (a JF-495 canary mismatch or a failed PUT reason, i.e. an
-    /// Error WITHOUT this writer's tail marker). A previous Error carrying the
-    /// tail was
-    /// written by THIS writer and is REPLACED entirely, never nested: the
+    /// Error that is not this subsystem's own shape per
+    /// <see cref="IsOwnShapeLedgerError"/>: neither the no-PUT tail nor the
+    /// frozen-clause marker anywhere). An own-shape previous Error is
+    /// REPLACED entirely, never nested: the
     /// every-restart resync cadence would otherwise compound "previous:
     /// previous: ..." (rework F1; full story in the JF-709 task file). The
     /// window arithmetic is FrozenLedgerClause's; the tooltip-only position of a
@@ -552,9 +573,9 @@ public class LibrarySyncService
 
         string error = $"{FrozenLedgerClause(frozenTypes)}{NoPutLedgerTail}";
         if (previous?.Error is { Length: > 0 } previousError
-            && !previousError.Contains(NoPutLedgerTail, StringComparison.Ordinal))
+            && !IsOwnShapeLedgerError(previousError))
         {
-            error = $"{error}; previous: {previousError}";
+            error = $"{error}{PreviousLedgerDiagnosticPrefix}{previousError}";
         }
 
         WriteLedgerEntry(locale, new Configuration.LocaleModelStatus
@@ -583,6 +604,77 @@ public class LibrarySyncService
         || string.Equals(previousStatus, "TIMEOUT", StringComparison.OrdinalIgnoreCase)
             ? previousStatus!
             : "Skipped";
+
+    /// <summary>
+    /// Own-shape predicate for the no-PUT writer's "previous: ..." trail
+    /// decision (JF-709 rework F1, extended by JF-710): a previous Error
+    /// carrying the no-PUT tail OR the frozen-clause marker anywhere was
+    /// composed from this subsystem's own text and is REPLACED wholesale,
+    /// never trailed. Both ledger writers lead their Error with the clause,
+    /// so in practice the marker arm matches clause-led rows; it deliberately
+    /// matches anywhere so a marker embedded in trailed text also reads as
+    /// own shape. The marker arm is required now that the JF-710 startup
+    /// capture preserves the clause WITHOUT the tail: a tail-only check would
+    /// classify that row as foreign and trail the SAME clause back as
+    /// "previous: ..." once per restart (the JF-710 coordination-note
+    /// hazard). Accepted consequence of the marker arm: a foreign diagnostic
+    /// riding a clause-led row (a JF-705 canary after a frozen clause) is
+    /// replaced rather than trailed here, so with no intervening capture it
+    /// is dropped one run earlier than the pre-JF-710 single trail; the
+    /// strip-at-marker alternative that would keep it was rejected in the
+    /// JF-709 review, and the capture preserve is its durable home.
+    /// </summary>
+    private static bool IsOwnShapeLedgerError(string error) =>
+        error.Contains(NoPutLedgerTail, StringComparison.Ordinal)
+        || error.Contains(FrozenLedgerClauseMarker, StringComparison.Ordinal);
+
+    /// <summary>
+    /// The JF-710 startup-capture preserve, called by the capture ONLY on a
+    /// clean observation (SUCCEEDED, no build errors; the capture owns that
+    /// gate). A clean capture describes only the MODEL-BUILD surface, while a
+    /// catalog-sync row's Error describes CATALOG state from the last sync,
+    /// which a model rebuild does not reset (the next sync either re-freezes
+    /// and rewrites it or heals and clears it), so the segments that survive
+    /// are: the frozen clause and any FOREIGN diagnostic (a JF-495 canary
+    /// mismatch or failed PUT reason). The run-scoped no-PUT tail and the
+    /// "previous: " framing around a trailed foreign do NOT survive: a new
+    /// skill version WAS pushed, superseding the last run's no-PUT shape.
+    /// Recognition is content-keyed, not Source-keyed: a row authored by this
+    /// subsystem (Source == CatalogSyncLedgerSource) preserves, and so does a
+    /// row a PREVIOUS capture already preserved (that capture writes Source
+    /// "Embedded", but its Error still carries this subsystem's markers, and
+    /// the durable catalog state they name must survive every later capture
+    /// while the skip-gated sync stays skipped; code-review F1). A bare
+    /// foreign diagnostic without markers rides its Source label and survives
+    /// one capture cycle; a previous capture's or custom deployment's own
+    /// build error carries no marker and IS superseded by the fresh build.
+    /// Both writers compose the Error from exactly the three shared literals
+    /// below (clause, tail, framing), so deleting the tail and un-framing the
+    /// trailed foreign IS the full decomposition.
+    /// </summary>
+    /// <param name="existing">The locale's current ledger entry, if any.</param>
+    /// <returns>The recomposed Error carrying the surviving segments, or null
+    /// when nothing survives (and the capture's own Error stands).</returns>
+    internal static string? PreserveLedgerErrorAcrossCapture(Configuration.LocaleModelStatus? existing)
+    {
+        if (existing?.Error is not { Length: > 0 } existingError)
+        {
+            return null;
+        }
+
+        // Own content, regardless of which writer last saved the row: the
+        // catalog-sync source label, or this subsystem's markers surviving
+        // inside a capture-written row (IsOwnShapeLedgerError's vocabulary).
+        bool catalogAuthored = string.Equals(existing.Source, CatalogSyncLedgerSource, StringComparison.Ordinal);
+        if (!catalogAuthored && !IsOwnShapeLedgerError(existingError))
+        {
+            return null;
+        }
+
+        return existingError
+            .Replace(NoPutLedgerTail, string.Empty, StringComparison.Ordinal)
+            .Replace(PreviousLedgerDiagnosticPrefix, "; ", StringComparison.Ordinal);
+    }
 
     /// <summary>
     /// Fetch library items of a given type, filtered by the user's allowed libraries.

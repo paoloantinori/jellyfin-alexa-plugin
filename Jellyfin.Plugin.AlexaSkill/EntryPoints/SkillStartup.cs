@@ -8,6 +8,7 @@ using Alexa.NET.Management.AccountLinking;
 using Alexa.NET.Management.Skills;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
 using Jellyfin.Plugin.AlexaSkill.Alexa.InteractionModel;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Manifest;
 using Jellyfin.Plugin.AlexaSkill.Alexa.ModelDeployment;
@@ -363,8 +364,16 @@ public class SkillStartup : IHostedService, IDisposable
 
     /// <summary>
     /// Captures per-locale interaction model build status from SMAPI and stores it in configuration.
+    /// JF-710: a CLEAN capture (SUCCEEDED, no build errors) no longer wipes the
+    /// catalog-sync diagnostics off the row it replaces. The frozen clause and
+    /// any foreign diagnostic survive via
+    /// <see cref="LibrarySyncService.PreserveLedgerErrorAcrossCapture"/>
+    /// (a model rebuild does not reset the catalog state they describe), while
+    /// a capture with its own errors still replaces the row wholesale.
+    /// Internal for the InternalsVisibleTo test seam (the startup-path pins
+    /// drive the capture directly through a faked GetSkillStatusAsync).
     /// </summary>
-    private async Task CaptureLocaleModelStatusesAsync(Entities.User user, string skillId)
+    internal async Task CaptureLocaleModelStatusesAsync(Entities.User user, string skillId)
     {
         try
         {
@@ -386,6 +395,15 @@ public class SkillStartup : IHostedService, IDisposable
                     _logger.LogWarning(
                         "Interaction model build {Status} for locale {Locale}: {Error}",
                         state, locale, error);
+                }
+                else if (string.Equals(state, "SUCCEEDED", StringComparison.Ordinal))
+                {
+                    // JF-710: the capture describes the model-build surface only;
+                    // the existing catalog-sync row's Error describes catalog state
+                    // the rebuild did not reset. Non-SUCCEEDED clean observations
+                    // (IN_PROGRESS) still overwrite: the preserve is keyed to the
+                    // shape whose fresh outcome is actually known.
+                    error = LibrarySyncService.PreserveLedgerErrorAcrossCapture(config.GetLocaleModelStatus(locale));
                 }
 
                 config.SetLocaleModelStatus(locale, new Configuration.LocaleModelStatus
