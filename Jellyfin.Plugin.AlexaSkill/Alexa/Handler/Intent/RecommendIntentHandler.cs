@@ -188,11 +188,6 @@ public class RecommendIntentHandler : BaseHandler
         Logger.LogDebug("Recommend: picked '{ItemName}' ({ItemId}) from {Count} candidates", item.Name, item.Id, recommendations.Count);
         string itemId = item.Id.ToString();
 
-        List<QueueItem> queueItems = new List<QueueItem>
-        {
-            new QueueItem { Id = item.Id }
-        };
-
         // Use VideoApp for movies, AudioPlayer for audio
         SkillResponse response;
         if (item is MediaBrowser.Controller.Entities.Movies.Movie)
@@ -215,11 +210,16 @@ public class RecommendIntentHandler : BaseHandler
         }
 
         // JF-699 item 5: the session writes follow the launch build (a refusal
-        // throws; no phantom now-playing for a launch that will not happen). The
-        // movie arm can also answer the screenless capability Tell, whose
-        // session-state shape is the pre-existing behavior and unchanged here.
-        session.NowPlayingQueue = queueItems;
-        session.FullNowPlayingItem = item;
+        // throws; no phantom now-playing for a launch that will not happen).
+        // JF-714 closes the gap that in-code note left open: the movie arm can
+        // also answer the screenless capability Tell (no directive), and those
+        // writes now ride the delivered-launch gate instead of recording a
+        // recommended movie that never launched.
+        if (PlaybackLaunchBuilder.HasLaunchDirective(response))
+        {
+            session.NowPlayingQueue = new List<QueueItem> { new() { Id = item.Id } };
+            session.FullNowPlayingItem = item;
+        }
 
         // For audio, add NowPlaying speech before the audio directive
         // (JF-699 item 6: the write rides the delivered-launch gate; also safe by

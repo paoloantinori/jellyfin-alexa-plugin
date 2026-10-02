@@ -157,12 +157,6 @@ public class PlayRandomIntentHandler : BaseHandler
             }
         }
 
-        List<QueueItem> queueItems = new List<QueueItem>();
-        for (int i = 0; i < shuffled.Count; i++)
-        {
-            queueItems.Add(new QueueItem { Id = shuffled[i].Id, PlaylistItemId = null });
-        }
-
         BaseItem firstItem = shuffled[0];
 
         string itemId = firstItem.Id.ToString();
@@ -194,8 +188,17 @@ public class PlayRandomIntentHandler : BaseHandler
             response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, firstItem, user, context);
         }
 
-        session.NowPlayingQueue = queueItems;
-        session.FullNowPlayingItem = firstItem;
+        // JF-714: the StartOver pattern (a random MOVIE ask on a screenless device is the canonical phantom shape) on a screenless device
+        // gets the capability Tell (no directive; an EPISODE degrades to the
+        // audio-only launch, which carries one), and a phantom now-playing must
+        // not survive it. The queue list builds INSIDE the gate: it can hold the
+        // whole 500-item shuffle, wasted on the Tell path.
+        if (PlaybackLaunchBuilder.HasLaunchDirective(response))
+        {
+            session.NowPlayingQueue = shuffled.Select(i => new QueueItem { Id = i.Id, PlaylistItemId = null }).ToList();
+            session.FullNowPlayingItem = firstItem;
+        }
+
         return response;
     }
 
