@@ -3,9 +3,10 @@ id: JF-706
 title: >-
   JF-706 - collapse the three SyncTypeLegAsync call sites into a loop over a
   type-tuple list so a fourth catalog type cannot be partially wired
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-02 10:12'
+updated_date: '2026-10-02 16:15'
 labels:
   - catalog
   - code-quality
@@ -81,34 +82,5 @@ the three stored-id getters).
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Closed by the JF-706 worker (worktree agent-a05216a07a98e3859, branch off 8dbb9551). DERIVATION
-SHAPE: one per-type wiring table `(CatalogType, items, Func<string?> StoredCatalogId, name,
-description)` hoisted to sync scope in SyncUserLibraryAsync (locale-invariant, built once; the id
-is a live GETTER because SyncCatalogForLocaleAsync assigns it when creating the catalog, and a leg
-writes only its own type's id so the post-leg re-read is final). The leg loop inside RunLegAsync
-collects `(Version, CatalogId)` pairs keyed by type into `minted`; the injection gate is
-`minted.Count > 0`; the six UpdateInteractionModelAsync arguments are extracted per type at ONE
-place via a single `Minted(type)` local function over `minted.GetValueOrDefault` (an absent type
-reads as (null, null), making the JF-495 id-only-with-fresh-version rule structural).
-CatalogManager's per-type id/version signature untouched, per the task constraint.
-
-PINS: the structural pin ran red first against the pre-change code (3 call instructions to the
-SyncTypeLegAsync stub, all inside RunLegAsync's state machine MoveNext; a method-level count
-would have read 1 and pinned nothing, which is why the pin counts call instructions) and green
-after (exactly 1). A second pin asserts SyncCatalogForLocaleAsync is called only by the type-leg
-stub, so the JF-695 isolation try, the probe seam, and the minted bookkeeping cannot be bypassed
-by a direct call. Both live in a NEW standalone collection-free class
-(LibrarySyncServiceStructureTests) following the 4 existing IlCallScanner precedents; the JF-695
-isolation battery and its fixture are untouched. All pre-existing pins green unchanged, three
-full-suite runs across the cycle, final 4929/4929 both TFMs (baseline 4927 + 2).
-
-FILINGS from the gates: JF-711 (the catalog-id WRITE-back in SyncCatalogForLocaleAsync is still
-a per-type if/else chain, compile-silent for a fourth type; setter-threading design recorded,
-with the CatalogManager per-type surface documented as a deliberate boundary) and a JF-709 AUDIT
-UPDATE (the JF-513.3 hash-skip starves every later member of a synonym-equivalence class, es x3
-and fr x2 and en/hi x6, of its model PUT forever under the default "*" config, 8 of 16 synced
-locales today; corrects JF-709's "model genuinely still references current catalog versions"
-premise; the stale outer JF-513.3 comment claiming the skip returns the last uploaded version
-was fixed in-change). No deploy; do not push; production surface changed (LibrarySyncService), so
-the merge should deploy per the standing post-merge practice.
+Closed by the orchestrator after the full cycle: worker commit 1a2f7651 + gate-marker tail c43a21c3, merged as e12da9c9. The SyncTypeLegAsync de-triplication: one per-type wiring table (CatalogType, items, live-id Func, name, description), a leg loop collecting minted (Version, CatalogId) pairs, the injection gate minted.Count > 0 exactly equivalent to the old three-operand chain, and per-type argument extraction at one place via the Minted(type) local - the JF-495 id-only-with-fresh-version rule structural instead of hand-maintained; CatalogManager's per-type signature untouched per the task constraint. Two IL structure pins (call-instruction counting through the Roslyn g__ mangling; the sole-caller assertion closing the direct-call bypass), both run RED first on the pre-change code. Worker gates green (simplify 2 applied; code-review high 4 applied, 1 pre-existing landed as a JF-709 audit update; JF-711 filed for the catalog-id write-back if/else chain). Orchestrator gate-marker verified all four scrutiny axes clean with the pins run-executed; 5 findings dispositioned same-turn (JF-709 priority raised to HIGH with the code-confirmed starvation analysis - 8 of 16 synced locales never get their model PUT under the default config; JF-703's ordering hazard appended; the pin boundary documented; the equivalence-class comment corrected; JF-716 filed for the injection-seam pin). Suites: worker and orchestrator independent 4929/4929 both TFMs, merged-tree 4935/4935 both TFMs exit 0. Production surface changed (LibrarySyncService): deploying in the post-merge deploy.
 <!-- SECTION:FINAL_SUMMARY:END -->
