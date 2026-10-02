@@ -1149,12 +1149,19 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// pre-lock crash surfaces its real cause instead of reading as a fast
     /// serve). Passing <paramref name="controller"/> additionally makes the
     /// in-lock-vs-fast-path attribution DETERMINISTIC: the helper wires the
-    /// controller's InLockWarmCacheProbeForTest seam and, after the endpoint
-    /// completes, asserts the probe fired (it can only fire inside the per-item
+    /// controller's InLockWarmCacheProbeForTest seam and asserts the probe
+    /// fired once the endpoint settles (it can only fire inside the per-item
     /// lock scope, so a >400ms pre-lock stall whose request then served from the
-    /// fast path fails here instead of passing under a false attribution); omit
-    /// the parameter for constructions whose endpoint never reaches a lock scope
-    /// (the fault-observation pin).
+    /// fast path fails here instead of passing under a false attribution);
+    /// omit the parameter for constructions whose endpoint never reaches a
+    /// lock scope (the fault-observation pin). JF-700: a FAULTING endpoint
+    /// task (the breach pins' FileNotFoundException) never reaches a
+    /// post-await assert, so the same assert also runs in the fault path
+    /// BEFORE the rethrow; green (probe fired) rethrows the endpoint's own
+    /// exception for the pin's ThrowsAsync, red (probe never fired) fails
+    /// the ThrowsAsync with <see cref="InLockProbeNotFiredMessage"/> (plus
+    /// the endpoint's real fault embedded) instead of letting a void
+    /// attribution ride the ThrowsAsync unchecked.
     /// </summary>
     private static async Task<ActionResult> ServeInLockWarmCacheAsync(
         Func<Task<IDisposable>> acquireLock,
@@ -1184,18 +1191,57 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             gate.Dispose();
         }
 
-        ActionResult result = await endpointTask.WaitAsync(TimeSpan.FromSeconds(20)).ConfigureAwait(false);
-        if (controller != null)
+        // The one settle-state attribution assert (JF-681 success path, JF-700
+        // fault path): called below, whichever way the endpoint settled. The
+        // feature toggle is fixed at entry (controller null = no attribution);
+        // on the fault path the endpoint's real fault is embedded in the
+        // message (the JF-681 park-assert unwrap pattern) instead of discarded
+        // by the assert that replaces it.
+        bool assertAttribution = controller != null;
+        void AssertProbeFired(Exception? endpointFailure)
         {
-            Assert.True(inLockProbeFired, InLockProbeNotFiredMessage);
+            if (!assertAttribution || inLockProbeFired)
+            {
+                return;
+            }
+
+            string message = InLockProbeNotFiredMessage;
+            if (endpointFailure != null)
+            {
+                message += " THE ENDPOINT FAULTED, KEPT FOR TRIAGE: "
+                    + $"{endpointFailure.GetType().FullName}: {endpointFailure.Message}{Environment.NewLine}{endpointFailure.StackTrace}";
+            }
+
+            Assert.Fail(message);
         }
+
+        ActionResult result;
+        try
+        {
+            result = await endpointTask.WaitAsync(TimeSpan.FromSeconds(20)).ConfigureAwait(false);
+        }
+        catch (Exception) when (endpointTask.IsFaulted)
+        {
+            // JF-700: a faulting endpoint (the breach pins' FileNotFoundException)
+            // never reaches the post-settle assert, so assert BEFORE the rethrow.
+            // The filter admits only endpoint faults: a WaitAsync timeout or a
+            // canceled endpoint propagates untouched with its own diagnosis
+            // instead of reading as a void attribution. The embedded fault comes
+            // from endpointTask, not the caught exception: in the timeout-vs-fault
+            // race the caught one is the TimeoutException while the task's real
+            // fault is what the triage text must carry.
+            AssertProbeFired(endpointTask.Exception!.GetBaseException());
+            throw;
+        }
+
+        AssertProbeFired(null);
 
         return result;
     }
 
     /// <summary>The one failure message for the helper's in-lock attribution assert (JF-681), owned here once.</summary>
     private const string InLockProbeNotFiredMessage =
-        "the JF-681 in-lock probe never fired, so the request served WITHOUT entering the per-item lock scope (a fast-path serve won the race past the 400ms park window) and this pin's in-lock attribution is void";
+        "the JF-681 in-lock probe never fired, so the request settled WITHOUT entering the per-item lock scope (a fast-path serve won the race past the 400ms park window, or the endpoint faulted before reaching the lock) and this pin's in-lock attribution is void";
 
     /// <summary>
     /// The park assert's message (JF-681): the original single message conflated
@@ -7634,6 +7680,9 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// fires after the verdict's read and before the serve probe, exactly the
     /// verdict-to-serve window. RED (row un-wrapped): the FNF faults the
     /// endpoint task and the await rethrows it (the in-flight 500 shape).
+    /// JF-700: the controller is passed to the helper, so the in-lock
+    /// attribution is deterministic (the probe assert, not the 400ms park
+    /// alone; red proof: removing the LockHlsItemAsync invoke flips this pin).
     /// </summary>
     [Fact]
     public async Task StreamHlsVideoAudio_InLockCacheVanishedAtServe_FallsThroughToReencode()
@@ -7669,7 +7718,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             {
                 Directory.CreateDirectory(hlsDir);
                 File.WriteAllText(playlistPath, "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:4.000,\nseg_000.ts\n#EXT-X-ENDLIST\n");
-            });
+            },
+            controller);
 
         var content = Assert.IsType<ContentResult>(result);
         Assert.Contains("seg_000.ts?token=", content.Content, StringComparison.Ordinal);
@@ -7682,7 +7732,9 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// JF-678 (b), the episode path's in-lock verdict+serve row. Same
     /// construction and red proof as the song twin; the re-encode's first
     /// serve is the episode pre-write (45min runtime -> full listing), so the
-    /// content assert rides the prewrite's tokened first segment.
+    /// content assert rides the prewrite's tokened first segment. JF-700:
+    /// deterministic in-lock attribution (controller passed; see the song
+    /// twin).
     /// </summary>
     [Fact]
     public async Task StreamHlsEpisode_InLockCacheVanishedAtServe_FallsThroughToReencode()
@@ -7708,7 +7760,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             {
                 Directory.CreateDirectory(hlsDir);
                 File.WriteAllText(playlistPath, "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:4.000,\nseg_0000.ts\n#EXTINF:4.000,\nseg_0001.ts\n#EXT-X-ENDLIST\n");
-            });
+            },
+            controller);
 
         var content = Assert.IsType<ContentResult>(result);
         Assert.Contains("seg_0000.ts?token=", content.Content, StringComparison.Ordinal);
@@ -7721,7 +7774,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// JF-678 (b), the audio-variant path's in-lock verdict+serve row (keyed
     /// by the variant cache key). Same construction and red proof as the song
     /// twin; the re-encode serves ffmpeg's live partial (variants have no
-    /// prewrite by the JF-536 scope decision).
+    /// prewrite by the JF-536 scope decision). JF-700: deterministic in-lock
+    /// attribution (controller passed; see the song twin).
     /// </summary>
     [Fact]
     public async Task StreamHlsEpisodeAudio_InLockCacheVanishedAtServe_FallsThroughToReencode()
@@ -7755,7 +7809,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             {
                 Directory.CreateDirectory(hlsDir);
                 File.WriteAllText(playlistPath, "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:10.000,\nseg_0000.ts\n#EXTINF:10.000,\nseg_0001.ts\n#EXT-X-ENDLIST\n");
-            });
+            },
+            controller);
 
         var content = Assert.IsType<ContentResult>(result);
         Assert.Contains("seg_0000.ts?token=", content.Content, StringComparison.Ordinal);
@@ -7845,7 +7900,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// the fast-path twin, falling through to this scope's own concat+encode
     /// branch. Construction: the JF-677 in-lock core plus the deleting
     /// provider on the row's serve log. RED: the generic catch answers
-    /// PhysicalFile over the deleted path.
+    /// PhysicalFile over the deleted path. JF-700: deterministic in-lock
+    /// attribution (controller passed; see the song twin).
     /// </summary>
     [Fact]
     public async Task StreamHlsAudiobook_InLockCacheVanishedAtServe_FallsThroughToReencode()
@@ -7867,7 +7923,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             {
                 Directory.CreateDirectory(hlsDir);
                 File.WriteAllText(playlistPath, "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:10.000,\nseg_0000.ts\n#EXTINF:10.000,\nseg_0001.ts\n#EXT-X-ENDLIST\n");
-            });
+            },
+            controller);
 
         var content = Assert.IsType<ContentResult>(result);
         Assert.Contains("seg_0000.ts?token=", content.Content, StringComparison.Ordinal);
@@ -7929,7 +7986,12 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// fall-through runs the encode, the request answers 200, and ThrowsAsync
     /// fails with no exception thrown. Four per-path twins below share this
     /// construction (episode, song, audio-variant, audiobook); each red proof
-    /// removes only its own site's guard call.
+    /// removes only its own site's guard call. JF-700: all four twins pass the
+    /// controller to the helper (deterministic in-lock attribution even on
+    /// the faulting path; the helper asserts the probe fired before
+    /// rethrowing); red proof: removing the LockHlsItemAsync invoke flips
+    /// these four on the ThrowsAsync type-mismatch failure that embeds
+    /// InLockProbeNotFiredMessage (plus the endpoint's real fault).
     /// </summary>
     [Fact]
     public async Task StreamHlsEpisode_InLockLiveGenerationVanishAtServe_FailsLoudNoReencode()
@@ -7963,7 +8025,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
                     {
                         Directory.CreateDirectory(hlsDir);
                         File.WriteAllText(playlistPath, "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:4.000,\nseg_0000.ts\n#EXTINF:4.000,\nseg_0001.ts\n#EXT-X-ENDLIST\n");
-                    }));
+                    },
+                    controller));
 
             Assert.Contains("live pinned encode", ex.Message, StringComparison.Ordinal);
             Assert.Contains(
@@ -8024,7 +8087,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
                     {
                         Directory.CreateDirectory(hlsDir);
                         File.WriteAllText(playlistPath, "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:4.000,\nseg_000.ts\n#EXT-X-ENDLIST\n");
-                    }));
+                    },
+                    controller));
 
             Assert.Contains("live pinned encode", ex.Message, StringComparison.Ordinal);
             Assert.Contains(
@@ -8086,7 +8150,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
                     {
                         Directory.CreateDirectory(hlsDir);
                         File.WriteAllText(playlistPath, "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:10.000,\nseg_0000.ts\n#EXTINF:10.000,\nseg_0001.ts\n#EXT-X-ENDLIST\n");
-                    }));
+                    },
+                    controller));
 
             Assert.Contains("live pinned encode", ex.Message, StringComparison.Ordinal);
             Assert.Contains(
@@ -8141,7 +8206,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
                         VideoAudioController.SetEncodeActiveForTest(parentId.ToString(), active: true, audiobook: true);
                         Directory.CreateDirectory(hlsDir);
                         File.WriteAllText(playlistPath, "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:10.000,\nseg_0000.ts\n#EXTINF:10.000,\nseg_0001.ts\n#EXT-X-ENDLIST\n");
-                    }));
+                    },
+                    controller));
 
             Assert.Contains("live pinned encode", ex.Message, StringComparison.Ordinal);
             Assert.Contains(
