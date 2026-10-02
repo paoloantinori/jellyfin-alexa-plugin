@@ -127,11 +127,13 @@ public class SkillStartupTests : PluginTestBase
         return user;
     }
 
-    /// <summary>The shared act for every clean-capture pin: a SUCCEEDED, no-error
-    /// observation for it-IT driven through the capture.</summary>
-    private Task CaptureCleanAsync() =>
+    /// <summary>The shared act for every clean-capture pin: a no-error
+    /// observation for it-IT driven through the capture. SUCCEEDED by default;
+    /// the JF-719 twin passes IN_PROGRESS (the freshly-PUT locale the
+    /// no-settle-wait capture reads right after UpdateSkillAsync).</summary>
+    private Task CaptureCleanAsync(SkillStatusState state = SkillStatusState.SUCCEEDED) =>
         CreateStartup().CaptureLocaleModelStatusesAsync(
-            UserServing(StatusFor("it-IT", SkillStatusState.SUCCEEDED)),
+            UserServing(StatusFor("it-IT", state)),
             "amzn1.ask.skill.test-id");
 
     /// <summary>Seeds the it-IT ledger row the capture will overwrite, returning
@@ -232,6 +234,88 @@ public class SkillStartupTests : PluginTestBase
         Assert.Equal("Embedded", row.Source);
         Assert.Null(row.Error);
         Assert.True(row.LastUpdated > seeded, "the capture must still refresh the row's timestamp");
+    }
+
+    /// <summary>
+    /// JF-719 twin of the compound pin: the same clean capture driven with the
+    /// observed state IN_PROGRESS. The capture runs immediately after
+    /// UpdateSkillAsync with NO per-locale settle-wait, so freshly-PUT locales
+    /// legitimately read IN_PROGRESS (the settle-wait alternative was rejected:
+    /// startup latency to protect a sub-case the content-keyed preserve already
+    /// handles safely). The preserve must not depend on the build having
+    /// settled: the clause survives, the trailed foreign survives un-framed,
+    /// the run-scoped tail drops, and the row keeps the capture's own
+    /// IN_PROGRESS status. Under the pre-JF-719 SUCCEEDED-only gate this exact
+    /// world wrote Error=null and erased the clause (the filed residual).
+    /// </summary>
+    [Fact]
+    public async Task CaptureLocaleModelStatusesAsync_CleanInProgressCapture_OverNoPutClauseRow_PreservesClauseAndForeignDropsTail()
+    {
+        string clause = $"Artist catalog{LibrarySyncService.FrozenLedgerClauseMarker}";
+        string foreign = "canary mismatch: submitted 145 intents/900 samples but live model reports 144/899";
+        SeedLocaleRow($"{clause}{LibrarySyncService.NoPutLedgerTail}{LibrarySyncService.PreviousLedgerDiagnosticPrefix}{foreign}");
+
+        await CaptureCleanAsync(SkillStatusState.IN_PROGRESS);
+
+        var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(row);
+        Assert.Equal("IN_PROGRESS", row!.Status);
+        Assert.Equal("Embedded", row.Source);
+        Assert.Equal($"{clause}; {foreign}", row.Error);
+
+        // Idempotence mirrors the SUCCEEDED pin's second capture: another
+        // capture while the startup re-sync stays skip-gated must preserve the
+        // content-keyed clause off the capture-written row.
+        await CaptureCleanAsync(SkillStatusState.IN_PROGRESS);
+        row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(row);
+        Assert.Equal($"{clause}; {foreign}", row!.Error);
+    }
+
+    /// <summary>
+    /// JF-719: the gate is an allowlist (SUCCEEDED or IN_PROGRESS), so a FAILED
+    /// observation WITHOUT an Errors array still replaces wholesale. This is
+    /// the widened gate's guard: a naive "any no-errors capture preserves"
+    /// widening would fire the preserve here and park the catalog clause on a
+    /// row the diagnostics panel counts in failedModels, misattributing
+    /// catalog state to a build failure. Error lands null (nothing of the
+    /// capture's own to say; SMAPI sent no error details).
+    /// </summary>
+    [Fact]
+    public async Task CaptureLocaleModelStatusesAsync_FailedCaptureWithoutErrors_OverClauseRow_ReplacesWholesale()
+    {
+        SeedLocaleRow($"Artist catalog{LibrarySyncService.FrozenLedgerClauseMarker}");
+
+        await CreateStartup().CaptureLocaleModelStatusesAsync(
+            UserServing(StatusFor("it-IT", SkillStatusState.FAILED)),
+            "amzn1.ask.skill.test-id");
+
+        var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(row);
+        Assert.Equal("FAILED", row!.Status);
+        Assert.Null(row.Error);
+    }
+
+    /// <summary>
+    /// JF-719: build errors replace wholesale regardless of the observed
+    /// state; an IN_PROGRESS capture WITH its own errors is not clean, so the
+    /// preserve must not fire and the fresh failure must not be masked.
+    /// </summary>
+    [Fact]
+    public async Task CaptureLocaleModelStatusesAsync_InProgressCaptureWithErrors_OverClauseRow_ReplacesWithOwnError()
+    {
+        SeedLocaleRow($"Artist catalog{LibrarySyncService.FrozenLedgerClauseMarker}");
+
+        var status = StatusFor(
+            "it-IT",
+            SkillStatusState.IN_PROGRESS,
+            new[] { new InvocationError { Code = "INVALID_SKILL_PACKAGE", Message = "sample utterance is not unique" } });
+        await CreateStartup().CaptureLocaleModelStatusesAsync(UserServing(status), "amzn1.ask.skill.test-id");
+
+        var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(row);
+        Assert.Equal("IN_PROGRESS", row!.Status);
+        Assert.Equal("INVALID_SKILL_PACKAGE: sample utterance is not unique", row.Error);
     }
 
     /// <summary>

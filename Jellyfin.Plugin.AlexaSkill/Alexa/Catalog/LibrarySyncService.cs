@@ -637,9 +637,12 @@ public class LibrarySyncService
 
     /// <summary>
     /// The JF-710 startup-capture preserve, called by the capture ONLY on a
-    /// clean observation (SUCCEEDED, no build errors; the capture owns that
-    /// gate). A clean capture describes only the MODEL-BUILD surface, while a
-    /// catalog-sync row's Error describes CATALOG state from the last sync,
+    /// clean observation (no build errors of its own and a no-failure-weight
+    /// state, SUCCEEDED or IN_PROGRESS; the capture owns that gate, widened to
+    /// include IN_PROGRESS by JF-719 because the capture reads freshly-PUT
+    /// locales before their builds settle). A clean capture describes only the
+    /// MODEL-BUILD surface, while a catalog-sync row's Error describes CATALOG
+    /// state from the last sync,
     /// which a model rebuild does not reset (the next sync either re-freezes
     /// and rewrites it or heals and clears it), so the segments that survive
     /// are: the frozen clause and any FOREIGN diagnostic (a JF-495 canary
