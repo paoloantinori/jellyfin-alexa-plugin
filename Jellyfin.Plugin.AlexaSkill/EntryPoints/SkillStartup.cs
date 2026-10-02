@@ -364,12 +364,16 @@ public class SkillStartup : IHostedService, IDisposable
 
     /// <summary>
     /// Captures per-locale interaction model build status from SMAPI and stores it in configuration.
-    /// JF-710: a CLEAN capture (SUCCEEDED, no build errors) no longer wipes the
-    /// catalog-sync diagnostics off the row it replaces. The frozen clause and
-    /// any foreign diagnostic survive via
+    /// JF-710: a CLEAN capture (no build errors of its own, observed state
+    /// SUCCEEDED or IN_PROGRESS) no longer wipes the catalog-sync diagnostics
+    /// off the row it replaces. The frozen clause and any foreign diagnostic
+    /// survive via
     /// <see cref="LibrarySyncService.PreserveLedgerErrorAcrossCapture"/>
     /// (a model rebuild does not reset the catalog state they describe), while
-    /// a capture with its own errors still replaces the row wholesale.
+    /// a capture with its own errors or a failure-weight state still replaces
+    /// the row wholesale. JF-719 widened the gate from SUCCEEDED-only to the
+    /// two no-failure-weight states (the no-settle-wait rationale lives at
+    /// the gate).
     /// Internal for the InternalsVisibleTo test seam (the startup-path pins
     /// drive the capture directly through a faked GetSkillStatusAsync).
     /// </summary>
@@ -396,13 +400,28 @@ public class SkillStartup : IHostedService, IDisposable
                         "Interaction model build {Status} for locale {Locale}: {Error}",
                         state, locale, error);
                 }
-                else if (string.Equals(state, "SUCCEEDED", StringComparison.Ordinal))
+                else if (localeStatus.LastModified.Status is SkillStatusState.SUCCEEDED or SkillStatusState.IN_PROGRESS)
                 {
-                    // JF-710: the capture describes the model-build surface only;
-                    // the existing catalog-sync row's Error describes catalog state
-                    // the rebuild did not reset. Non-SUCCEEDED clean observations
-                    // (IN_PROGRESS) still overwrite: the preserve is keyed to the
-                    // shape whose fresh outcome is actually known.
+                    // JF-710/JF-719: the capture describes the model-build surface
+                    // only; the existing catalog-sync row's Error describes catalog
+                    // state the rebuild did not reset. The gate is an ALLOWLIST of
+                    // the two no-failure-weight states: SUCCEEDED (settled clean)
+                    // and IN_PROGRESS (the freshly-PUT locale this no-settle-wait
+                    // capture legitimately reads right after UpdateSkillAsync,
+                    // JF-719; the diagnostics panel counts IN_PROGRESS as healthy,
+                    // so a preserved clause on it beats the wiped row the
+                    // SUCCEEDED-only gate left behind). Anything else keeps its own
+                    // consumer weight (the panel's failedModels count) and
+                    // replaces wholesale, so a build-failure observation never
+                    // carries a catalog clause that had nothing to do with it;
+                    // an allowlist, not a FAILED/TIMEOUT denylist, so a state the
+                    // SkillStatusState enum grows into fails safe the same way.
+                    // TIMEOUT, the ledger's other failure vocabulary, is already
+                    // unreachable here: SkillStatusState is exactly
+                    // IN_PROGRESS|FAILED|SUCCEEDED (reflection-dumped from the
+                    // referenced Alexa.NET.Management), and TIMEOUT rows in the
+                    // ledger come from the sync writers' own poll outcome, never
+                    // from this status GET.
                     // KNOWN RACE (JF-710 gate-marker): this preserve is an unguarded
                     // read-modify-write of the row, while the sync writers guard
                     // their own reads against exactly this capture; a sync leg
@@ -411,6 +430,15 @@ public class SkillStartup : IHostedService, IDisposable
                     // capture class; the acknowledgment is one-directional by
                     // accepted trade, not by oversight).
                     error = LibrarySyncService.PreserveLedgerErrorAcrossCapture(config.GetLocaleModelStatus(locale));
+
+                    // Branch-decision debug per the logging policy: this
+                    // subsystem's incidents (JF-495/705/709/710/719) are
+                    // triaged from ledger forensics, and the preserve arm is
+                    // otherwise indistinguishable from an all-clean overwrite
+                    // in the written row.
+                    _logger.LogDebug(
+                        "Startup capture preserve fired for locale {Locale}: observed {Status}, surviving Error '{Error}'",
+                        locale, state, error ?? "(nothing survived)");
                 }
 
                 config.SetLocaleModelStatus(locale, new Configuration.LocaleModelStatus
