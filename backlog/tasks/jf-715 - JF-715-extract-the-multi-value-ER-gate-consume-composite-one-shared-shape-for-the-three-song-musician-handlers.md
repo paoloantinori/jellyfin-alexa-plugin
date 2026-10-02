@@ -73,6 +73,21 @@ then (the flag's doc comment carries the contract).
 None of the three blocks anything; the adoption diff is green and the pins
 hold. Sequence after landing: do finding 1 first (it subsumes the
 IsGenericMusicQuery home), findings 2-3 ride the same or a follow-up diff.
+
+AUDIT ADDENDUM (2026-10-02, JF-702 gate-marker round): Finding 2's site list (the
+discarded-arbitration-Pool waste on fall-through legs) named PlaySong, the twins, and
+PlayAlbum but MISSED the two adopters the JF-702 merge itself added:
+QueryArtistLibraryIntentHandler and FindSongIntentHandler's two gated legs (first-turn
+keywords-empty and AwaitingArtist musician) carry the identical waste (zero-resolve
+multi-value legs materialize the scoped pool in TryArbitrate, then the fall-through
+ArtistSearch.SearchAsync re-materializes it internally). When this task lands the
+SearchAsync pool-threading fix, cover ALL of: PlaySong, AddToQueue, PlayNext, PlayAlbum,
+QueryArtistLibrary, FindSong. ALSO fold the normalization divergence the same review
+documented: the twins probe the RAW song slot while PlaySong probes the
+carrier-stripped/romanized value (no reachable divergence today, Latin-only table); the
+composite's constraint-slot probe overload must OWN the normalization so the three
+song-musician sites cannot drift apart on a future generic word whose stripped form
+differs.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done

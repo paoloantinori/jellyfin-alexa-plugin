@@ -282,7 +282,7 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
         var floyd = PinkFloyd();
         var song = new Audio { Name = "Just Like a Pill", Id = Guid.NewGuid() };
         var queries = new List<InternalItemsQuery>();
-        SetupQueueLibrary(queries, new List<BaseItem> { pnk }, song);
+        SetupQueueLibrary(queries, new List<BaseItem> { pnk, floyd }, song);
 
         var handler = CreateQueueHandler(IndexOf(pnk, floyd));
         var session = _fx.CreateSession();
@@ -293,8 +293,16 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
         AssertNoDisambiguationState(response);
         Assert.NotNull(TestHelpers.GetPlayDirective(response));
         Assert.Equal(song.Id, session.FullNowPlayingItem!.Id);
-        // The song scope carried ONLY rank #1 (today's behavior for real titles).
-        Assert.Contains(queries, q => q.SearchTerm != null && q.ArtistIds!.Length == 1 && q.ArtistIds[0] == pnk.Id);
+        // EVERY title query is scoped to rank #1 ONLY (gate-marker tail
+        // strengthening: a regression that scopes to both matched artists, or
+        // that issues an extra unscoped query alongside, must FAIL, not
+        // coexist with a passing Contains; floyd is in the library so the
+        // multi-artist shape is representable).
+        var titleQueries = queries.Where(q => q.SearchTerm != null).ToList();
+        Assert.NotEmpty(titleQueries);
+        Assert.All(titleQueries, q => Assert.True(
+            q.ArtistIds is { Length: 1 } && q.ArtistIds[0] == pnk.Id,
+            $"title query was not rank-#1-only scoped: {q.SearchTerm}"));
     }
 
     [Fact]
@@ -370,7 +378,7 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
         var floyd = PinkFloyd();
         var song = new Audio { Name = "Get the Party Started", Id = Guid.NewGuid() };
         var queries = new List<InternalItemsQuery>();
-        SetupQueueLibrary(queries, new List<BaseItem> { pnk }, song);
+        SetupQueueLibrary(queries, new List<BaseItem> { pnk, floyd }, song);
 
         var handler = CreatePlayNextHandler(IndexOf(pnk, floyd));
         SkillResponse response = await handler.HandleAsync(
@@ -378,7 +386,11 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
             _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         AssertNoDisambiguationState(response);
-        Assert.Contains(queries, q => q.SearchTerm != null && q.ArtistIds!.Length == 1 && q.ArtistIds[0] == pnk.Id);
+        var pnTitleQueries = queries.Where(q => q.SearchTerm != null).ToList();
+        Assert.NotEmpty(pnTitleQueries);
+        Assert.All(pnTitleQueries, q => Assert.True(
+            q.ArtistIds is { Length: 1 } && q.ArtistIds[0] == pnk.Id,
+            $"title query was not rank-#1-only scoped: {q.SearchTerm}"));
     }
 
     [Fact]

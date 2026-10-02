@@ -130,6 +130,15 @@ public class PlayNextIntentHandler : BaseHandler
             // survivor). The AddToQueue twin documents the ask leg's accepted
             // shift (the confirm plays the artist INSTEAD OF inserting next)
             // and the collapse not-found naming the survivor.
+                // NORMALIZATION DIVERGENCE (JF-702 gate-marker, documented):
+                // this site probes the RAW song slot while the reference
+                // PlaySong site probes the carrier-stripped and romanized
+                // value. No reachable divergence today (the GenericMusicWords
+                // table is Latin-only and the article-stripping probe covers
+                // both forms), but a future generic word whose stripped form
+                // differs must move its normalization into the JF-715
+                // composite (the constraint-slot probe overload), not diverge
+                // per site.
             if (PlaySongIntentHandler.IsGenericMusicQuery(songQuery!))
             {
                 var arbitration = MultiValueErDisambiguation.TryArbitrate(

@@ -54,6 +54,25 @@ sites fetch the artist pool twice on a multi-value leg (once inside TryArbitrate
 resolution, once at the handler's JF-420/JF-652 gates); arbitration.Pool already ships
 the gate's fetch, so the adopters should consume it instead of re-fetching (the
 PlayArtistSongs/PlaySong sites can take the same fix in this task or a spin-off).
+
+GATE-MARKER TAIL (2026-10-02, orchestrator review of commit 42b62cbd, 3 findings; the
+review compensated for the worker's permission-denied red proofs with source-level
+byte-identity reads, mental sabotage of the load-bearing pins, and real suite runs of the
+new class 23/23 and the touched handlers 348/348 on both TFMs): all five scrutiny axes
+verified clean (the twins' restriction wrappers are genuine no-ops on excluded shapes,
+the gate inside IsGenericMusicQuery with the old body verbatim under artistIds.Count ==
+0; PlayAlbum's wrapper after the JF-489 strip; FindSong's keywords-empty wrapper; the
+coexistence pin drives the real interceptor and production HandlerSelector.Select
+end-to-end; the pool scopes match with Pin idempotent and identical ResolveForUser
+inputs; the QueryArtistLibrary listing-to-playback shift deliberate in three places; the
+musician-slot census closed at seven gated intents). F2 APPLIED (both real-title pins
+strengthened: floyd joins the library so the multi-artist shape is representable, and
+the assert became total - every title query rank-#1-only - so an extra unscoped query or
+a both-artists scoping FAILS instead of coexisting; 23/23 green after); F3 APPLIED (the
+raw-slot vs stripped-value probing divergence documented at both twin sites with the
+JF-715 composite named as the normalization's future owner); F1 APPLIED (JF-715's
+Finding-2 site list extended with QueryArtistLibrary and FindSong's two gated legs, plus
+the normalization fold note).
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done
