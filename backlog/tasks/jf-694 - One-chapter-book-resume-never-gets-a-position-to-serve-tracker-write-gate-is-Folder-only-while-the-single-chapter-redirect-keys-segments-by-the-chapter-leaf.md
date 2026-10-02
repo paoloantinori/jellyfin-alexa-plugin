@@ -4,7 +4,7 @@ title: >-
   JF-694 - one-chapter book resume never gets a position to serve: the tracker
   write gate is Folder-only while the single-chapter redirect keys segments by
   the chapter leaf; plus the overrun ?start= zero-segment slice
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-01'
 labels:
