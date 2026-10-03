@@ -1677,7 +1677,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         // ContinueWith's receiver the parameter by construction (nothing
         // else can sit under it on the stack); a body that never loads the
         // parameter, or loads something else first, reds here.
-        byte[] backstopMethodIl = backstopBody!.GetMethodBody()!.GetILAsByteArray();
+        byte[] backstopMethodIl = backstopBody!.GetMethodBody()!.GetILAsByteArray()
+            ?? throw new InvalidOperationException("MarkEndpointFaultObserved has no IL body");
         int receiverLoad = 0;
         while (receiverLoad < backstopMethodIl.Length && backstopMethodIl[receiverLoad] == 0x00)
         {
