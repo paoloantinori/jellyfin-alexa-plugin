@@ -43,6 +43,7 @@
   "DidNotCatchVideoTitle": "I didn't catch the video title. Please try again.",
   "DisambiguateNext": "How about {0}?",
   "DisambiguateMultipleArtists": "I found multiple artists: {0}. Shall I play the first one? Say no for the next.",
+  "DisambiguateMultipleArtistsMore": "Plus {0} more.",
   "DisambiguateNextSsml": "How about <break time=\"150ms\"/>{0}?",
   "DisambiguatePrompt": "I found multiple matches. Would you like to hear {0}?",
   "DisambiguatePromptSsml": "I found multiple matches.<break time=\"200ms\"/>Would you like to hear {0}?",

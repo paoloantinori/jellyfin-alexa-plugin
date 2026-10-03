@@ -74,6 +74,7 @@
   "DisambiguatePrompt": "複数の結果が見つかりました。{0} を聴きますか？",
   "DisambiguateNext": "{0} はいかがですか？",
   "DisambiguateMultipleArtists": "複数のアーティストが見つかりました：{0}。最初のアーティストを再生しますか？ 次の方は「いいえ」と言ってください。",
+  "DisambiguateMultipleArtistsMore": "このほかにも{0}件あります。",
   "DisambiguatePromptSsml": "複数の結果が見つかりました。<break time=\"200ms\"/>{0} を聴きますか？",
   "DisambiguateNextSsml": "<break time=\"150ms\"/>{0} はいかがですか？",
   "NoMoreMatches": "申し訳ありませんが、これ以上の結果はありません。",
