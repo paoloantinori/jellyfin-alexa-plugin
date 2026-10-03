@@ -1272,6 +1272,13 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// the stranded-endpoint settle below must wait on the same budget the
     /// normal settle uses, never a shorter one that strands again).
     /// </summary>
+    // GATE-MARKER NOTE: if the inner finally's gate.Dispose() itself throws
+    // before releasing the semaphore, the catch's observation await burns this
+    // full budget (the endpoint stays parked forever: it never settles, never
+    // faults, so neither observation mechanism has anything to see) and the
+    // endpoint task leaks for the process lifetime. Pre-existing corner (the
+    // old code leaked identically); documented rather than hardened because a
+    // throwing semaphore Dispose is not a shape any test constructs.
     private static readonly TimeSpan EndpointSettleBudget = TimeSpan.FromSeconds(20);
 
     /// <summary>
@@ -1317,7 +1324,11 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// and this await is what pulls the settle inside the test's lifetime
     /// (the eventual-fault observation half is the birth backstop, see
     /// <see cref="MarkEndpointFaultObserved"/>). A null endpoint means
-    /// startEndpoint itself threw (nothing started, nothing stranded).
+    /// startEndpoint itself threw (nothing started, nothing stranded);
+    /// GATE-MARKER NOTE: that skip assumes a SINGLE-EXPRESSION startEndpoint
+    /// delegate (start-then-return) - a future call site that starts work and
+    /// THEN throws synchronously would strand that work with nothing here
+    /// covering it (all current call sites are single-expression).
     /// </summary>
     private static async Task ObserveStrandedEndpointAsync(Task<ActionResult>? endpointTask)
     {
