@@ -333,6 +333,40 @@ public class DisambiguationHelperTests
         Assert.NotEmpty(response.Response.Directives);
     }
 
+    // ========== JF-707: the multi-artist ask caps its SPOKEN list, not its cycling list ==========
+
+    [Fact]
+    public void AskMultipleArtists_FiveMatches_SpeaksFirstThree_StoresAllFive()
+    {
+        // JF-684's shared-first-word catalog synonyms can make one spoken word
+        // resolve several same-first-word library artists (the JF-690 ER gate is
+        // the unbounded caller), so the ask speaks at most
+        // MultipleArtistsSpeakCap names. The cycling state keeps every match:
+        // no resolved artist becomes unaskable. The below-cap shape (the pair
+        // callers) is pinned end-to-end by the both-in-library legs of the
+        // MusicianMultiValueEr suites.
+        var matches = Enumerable.Range(1, 5)
+            .Select(i => new DisambiguationHelper.MatchInfo { Id = Guid.NewGuid().ToString(), Name = $"Artist {i}" })
+            .ToList();
+
+        var response = DisambiguationHelper.AskMultipleArtists(matches, "en-US");
+
+        response.Asks();
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Artist 1", speech);
+        Assert.Contains("Artist 2", speech);
+        Assert.Contains("Artist 3", speech);
+        Assert.DoesNotContain("Artist 4", speech);
+        Assert.DoesNotContain("Artist 5", speech);
+
+        // The FULL list rides the session state in rank order (winner first).
+        var state = DisambiguationHelper.ReadState(response.SessionAttributes);
+        Assert.NotNull(state);
+        Assert.Equal(matches.Select(m => m.Name), state!.Value.Matches.Select(m => m.Name));
+        Assert.Equal(0, state.Value.Index);
+        Assert.Equal(DisambiguationHelper.MediaTypeArtist, state.Value.MediaType);
+    }
+
     // ========== ResolvePick (candidate-names picker; moved from FindSongIntentHandlerTests, JF-524) ==========
 
     private static List<string> CreateTestCandidateNames(int count)

@@ -15,7 +15,6 @@ using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
 using Moq;
-using Newtonsoft.Json;
 using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
@@ -38,6 +37,8 @@ public class MusicianMultiValueErDisambiguationTests : PluginTestBase, IDisposab
     private BaseItem Pnk() => new MusicArtist { Name = "P!nk", Id = Guid.NewGuid() };
     private BaseItem PinkFloyd() => new MusicArtist { Name = "Pink Floyd", Id = Guid.NewGuid() };
     private BaseItem Abba() => new MusicArtist { Name = "ABBA", Id = Guid.NewGuid() };
+    private BaseItem PinkMartini() => new MusicArtist { Name = "Pink Martini", Id = Guid.NewGuid() };
+    private BaseItem PinkFairies() => new MusicArtist { Name = "Pink Fairies", Id = Guid.NewGuid() };
 
     private static IArtistIndex IndexOf(params BaseItem[] artists)
         => new FakeArtistIndex(artists, FakeArtistIndex.CodesFromArtistNames(artists));
@@ -82,25 +83,17 @@ public class MusicianMultiValueErDisambiguationTests : PluginTestBase, IDisposab
 
     /// <summary>
     /// The disambiguation ask the gate fires: open session, the multi-artist
-    /// prompt naming every resolved artist, and the JF-420.2 session state
-    /// (real ids, type=artist, cursor 0) that YesIntentHandler.PlayArtist and
+    /// prompt naming the top DisambiguationHelper.MultipleArtistsSpeakCap
+    /// resolved artists (every one, for the pair-shaped legs this helper
+    /// serves), and the JF-420.2 session state (the FULL resolved list, real
+    /// ids, type=artist, cursor 0) that YesIntentHandler.PlayArtist and
     /// NoIntentHandler's cycling consume unchanged.
     /// </summary>
     private static void AssertMultiArtistAsk(SkillResponse response, params BaseItem[] expected)
     {
         TestHelpers.AssertSessionOpen(response, "the ask keeps the session open");
         Assert.Null(TestHelpers.GetPlayDirective(response));
-        Assert.NotNull(response.SessionAttributes);
-        var matchesJson = response.SessionAttributes!.GetValueOrDefault(DisambiguationHelper.AttrMatches)?.ToString();
-        Assert.NotNull(matchesJson);
-        var matches = JsonConvert.DeserializeObject<List<DisambiguationHelper.MatchInfo>>(matchesJson!);
-        Assert.NotNull(matches);
-        // Rank order preserved: the first entry is Amazon's rank #1, the one
-        // "yes" plays (AskMultipleArtists' winner-first contract).
-        Assert.Equal(expected.Select(a => a.Id.ToString()), matches!.Select(m => m.Id));
-        Assert.Equal(expected.Select(a => a.Name), matches.Select(m => m.Name));
-        Assert.Equal(DisambiguationHelper.MediaTypeArtist, response.SessionAttributes.GetValueOrDefault(DisambiguationHelper.AttrType)?.ToString());
-        Assert.Equal(0, Convert.ToInt32(response.SessionAttributes.GetValueOrDefault(DisambiguationHelper.AttrIndex)));
+        TestHelpers.AssertStoredArtistMatches(response, expected);
         string speech = TestHelpers.GetSpeechText(response);
         foreach (BaseItem artist in expected)
         {
@@ -170,6 +163,70 @@ public class MusicianMultiValueErDisambiguationTests : PluginTestBase, IDisposab
             _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         AssertMultiArtistAsk(response, pnk, floyd);
+    }
+
+    [Fact]
+    public async Task PlayArtistSongs_MultiValueEr_FourInLibrary_SpeaksThree_CyclesToTheFourth()
+    {
+        // JF-707: the long first-word family. JF-684's shared-first-word
+        // synonyms can resolve 4-5 same-first-word artists from one spoken
+        // word, and the pre-cap ask spoke every name in one breath over a
+        // string designed for the two-name shape. The ask now speaks the top
+        // MultipleArtistsSpeakCap names while the cycling state keeps all
+        // four, so the unspoken rank stays reachable: the third "no" asks
+        // about it by name.
+        var pnk = Pnk();
+        var floyd = PinkFloyd();
+        var martini = PinkMartini();
+        var fairies = PinkFairies();
+        var song = new Audio { Name = "Get It Up", Id = Guid.NewGuid() };
+        SetupArtistSongs(song);
+
+        var handler = CreateArtistHandler(IndexOf(pnk, floyd, martini, fairies));
+        SkillResponse ask = await handler.HandleAsync(
+            CreateArtistIntent(TestHelpers.ResolvedSlotMultiValue("pink", "P!nk", "Pink Floyd", "Pink Martini", "Pink Fairies")),
+            _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
+
+        // The spoken list is capped at the first three ER ranks.
+        string askSpeech = TestHelpers.GetSpeechText(ask);
+        Assert.Contains(pnk.Name, askSpeech, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(floyd.Name, askSpeech, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(martini.Name, askSpeech, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(fairies.Name, askSpeech, StringComparison.OrdinalIgnoreCase);
+
+        // The cycling state keeps the FULL resolved list in rank order.
+        TestHelpers.AssertStoredArtistMatches(ask, pnk, floyd, martini, fairies);
+
+        // "no" walks the list; the third advance reaches and NAMES the fourth
+        // artist the initial breath never spoke.
+        var noHandler = new NoIntentHandler(_fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory);
+        var noRequest = new IntentRequest
+        {
+            Intent = new Intent { Name = "AMAZON.NoIntent" },
+            Locale = "it-IT",
+            RequestId = "test-no"
+        };
+
+        Dictionary<string, object>? attrs = ask.SessionAttributes;
+        string[] spokenOnAdvance = { floyd.Name, martini.Name, fairies.Name };
+        foreach (string expectedName in spokenOnAdvance)
+        {
+            SkillResponse next = await noHandler.HandleAsync(
+                noRequest, _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), attrs, CancellationToken.None);
+            TestHelpers.AssertSessionOpen(next, "each cycling advance keeps the session open");
+            Assert.Contains(expectedName, TestHelpers.GetSpeechText(next), StringComparison.OrdinalIgnoreCase);
+            attrs = next.SessionAttributes;
+        }
+
+        // The terminal leg: the fourth "no" exhausts the FULL stored list and
+        // ends the flow with NoMoreMatches. Pinned here because every
+        // pre-existing exhaustion pin covers only the below-cap two-name shape.
+        SkillResponse exhausted = await noHandler.HandleAsync(
+            noRequest, _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), attrs, CancellationToken.None);
+        Assert.True(exhausted.Response.ShouldEndSession, "exhaustion ends the session");
+        Assert.Equal(
+            Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("NoMoreMatches", "it-IT"),
+            TestHelpers.GetSpeechText(exhausted));
     }
 
     // ---------------------------------------------------------------

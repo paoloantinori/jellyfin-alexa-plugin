@@ -176,24 +176,17 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
 
     /// <summary>
     /// The disambiguation ask the gate fires: open session, the multi-artist
-    /// prompt naming every resolved artist, and the JF-420.2 session state
-    /// (real ids, type=artist, cursor 0) that YesIntentHandler.PlayArtist and
+    /// prompt naming the top DisambiguationHelper.MultipleArtistsSpeakCap
+    /// resolved artists (every one, for the pair-shaped legs this helper
+    /// serves), and the JF-420.2 session state (the FULL resolved list, real
+    /// ids, type=artist, cursor 0) that YesIntentHandler.PlayArtist and
     /// NoIntentHandler's cycling consume unchanged.
     /// </summary>
     private static void AssertMultiArtistAsk(SkillResponse response, params BaseItem[] expected)
     {
         TestHelpers.AssertSessionOpen(response, "the ask keeps the session open");
         Assert.Null(TestHelpers.GetPlayDirective(response));
-        Assert.NotNull(response.SessionAttributes);
-        var matchesJson = response.SessionAttributes!.GetValueOrDefault(DisambiguationHelper.AttrMatches)?.ToString();
-        Assert.NotNull(matchesJson);
-        var matches = JsonConvert.DeserializeObject<List<DisambiguationHelper.MatchInfo>>(matchesJson!);
-        Assert.NotNull(matches);
-        // Rank order preserved: the first entry is Amazon's rank #1, the one
-        // "yes" plays (AskMultipleArtists' winner-first contract).
-        Assert.Equal(expected.Select(a => a.Id.ToString()), matches!.Select(m => m.Id));
-        Assert.Equal(expected.Select(a => a.Name), matches.Select(m => m.Name));
-        Assert.Equal(DisambiguationHelper.MediaTypeArtist, response.SessionAttributes.GetValueOrDefault(DisambiguationHelper.AttrType)?.ToString());
+        TestHelpers.AssertStoredArtistMatches(response, expected);
         string speech = TestHelpers.GetSpeechText(response);
         foreach (BaseItem artist in expected)
         {

@@ -374,6 +374,25 @@ internal static class TestHelpers
             d => d is AudioPlayerPlayDirective);
 
     /// <summary>
+    /// JF-420.2/JF-707: the ONE oracle for the disambiguation session state a
+    /// multi-artist ask stores: the FULL resolved list (ids and names in rank
+    /// order, winner first, the entry a plain "yes" plays), type artist, cursor
+    /// 0. The ask's SPOKEN prompt names only the top
+    /// <see cref="DisambiguationHelper.MultipleArtistsSpeakCap"/> matches while
+    /// this state keeps every match (the yes/no cycling walks the full list);
+    /// the speech assertions stay with each suite's ask helper.
+    /// </summary>
+    internal static void AssertStoredArtistMatches(SkillResponse response, params BaseItem[] expected)
+    {
+        var state = DisambiguationHelper.ReadState(response.SessionAttributes);
+        Assert.NotNull(state);
+        Assert.Equal(expected.Select(a => a.Id.ToString()), state!.Value.Matches.Select(m => m.Id));
+        Assert.Equal(expected.Select(a => a.Name), state.Value.Matches.Select(m => m.Name));
+        Assert.Equal(DisambiguationHelper.MediaTypeArtist, state.Value.MediaType);
+        Assert.Equal(0, state.Value.Index);
+    }
+
+    /// <summary>
     /// JF-687/JF-693: the ONE oracle for the empty-StreamTokenSecret refusal Tell:
     /// no playback directive of either kind (the production predicate), the response
     /// is a session-ending Tell, and the speech is the localized
