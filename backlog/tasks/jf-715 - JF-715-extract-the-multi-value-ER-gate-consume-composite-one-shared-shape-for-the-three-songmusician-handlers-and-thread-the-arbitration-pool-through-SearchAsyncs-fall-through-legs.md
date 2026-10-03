@@ -2,11 +2,12 @@
 id: JF-715
 title: >-
   JF-715 - extract the multi-value-ER gate consume composite (one shared shape
-  for the three song+musician handlers) and thread the arbitration pool
-  through SearchAsync's fall-through legs
-status: To Do
+  for the three song+musician handlers) and thread the arbitration pool through
+  SearchAsync's fall-through legs
+status: Done
 assignee: []
 created_date: '2026-10-02'
+updated_date: '2026-10-03 18:29'
 labels:
   - routing
   - dedup
@@ -160,63 +161,5 @@ differs.
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Closed by the JF-715 worker. THE COMPOSITE SHAPE: MultiValueErDisambiguation
-grew TryArbitrateOrSearchAsync, the one gate-consume shape for the three
-song+musician sites (PlaySong, AddToQueue, PlayNext): pin the index once at
-composite entry (the structural one-publish guarantee, choke-preserving
-unguarded Pin), probe the constraint slot through the owned normalization
-(IsGenericSongConstraint: carrier-strip, romanize, article-strip membership,
-from the RAW slot), arbitrate via TryArbitrate's new rawConstraintSlot axis,
-return the ask / adopt the collapse survivor / run the fall-through artist
-search SEEDED with the gate's pool, and speak the artist not-found Terminal;
-the handlers keep only their tails (PlaySong's generic-word artist-play
-bypass, now probing the same ONE entry; the twins' queue operations). The
-site-specific retry label is the composite's one policy axis; the three
-~30-line sequences and the cross-handler PlaySongIntentHandler.IsGenericMusicQuery
-statics are gone (the whole probe family moved to the composite's home, the
-membership level private). PER-SITE PRESERVED RESTRICTIONS: PlayAlbum keeps
-its JF-411 musician-only wrapper around the plain (unrestricted) TryArbitrate
-plus the arbitrationResolvedArtist flag feeding the JF-471/JF-473 re-judgment
-gates; FindSong keeps both its restricted legs (first-turn keywords-empty and
-AwaitingArtist musician-supplied, the transcript leg ungated) and its helper
-now returns the full arbitration so each leg threads the pool itself;
-QueryArtistLibrary keeps the unrestricted PlayArtistSongs shape with the
-listing tail; the twins keep the ask-leg queue-shift contract documented at
-their composite calls. POOL-THREADING PER-SITE OUTCOMES: all six addendum
-sites DONE (PlaySong + the twins inside the composite; PlayAlbum,
-QueryArtistLibrary, and FindSong's two legs at their own SearchAsync calls),
-each pinned by a GetArtistsCalls == 1 counting test with real red proofs;
-CrossMediaFallback's TryEntityFallbackAsync hoists the scoped pool once for
-both its consumers (the chain and the JF-652 near-tie check), pinned by the
-kana-tie count; PlayArtistSongs NOT threaded (outside the enumerated surface
-despite being the seventh gate site with the identical double fetch) and
-FILED as JF-734 together with the altitude round's deeper alternative (a
-per-view scoped-fetch memo that would make the preloadedPool parameter
-structurally unnecessary) and the optional PinIfReady fold. The code-review
-high round caught one real regression before it shipped (the guarded pin's
-warming-choke defeat at FindSong, whose entry gate covers only the song
-index); the fix (unguarded Pin everywhere JF-715 pins) and its choke-point pin
-are red-proven. GATE-MARKER REWORK (5 findings): F1 applied as hardening
-  with a mechanism correction recorded honestly (today's CarrierPhrase
-  structurally refuses empty cuts, strict length compare plus the
-  empty-remainder continue, so no reachable slot reclassifies generic to
-  non-generic; the empty-normalized-is-generic guard plus the trailing-space
-  pins now own the class anyway); F2 applied (IsNullOrWhiteSpace sentinel, an
-  empty slot runs the gate unrestricted like null, pinned both ways); F3
-  applied (viewId/poolId identity in the pool-consumption log AND the gate's
-  zero-resolve fetch log, so a contract breach is diagnosable by comparing the
-  pair across one request's lines); F4 applied (CountingArtistIndex captures a
-  readiness-frozen view, honest about list/Count staying live for the
-  counting); F5 SKIPPED (normalize-once in PlaySong would force a second probe
-  entry or a signature change to save sub-microsecond duplicate normalization
-  on a DB-query-heavy path). The rework's own focused code-review pass
-  (behavioral delta exceeded trivial) returned 5 doc-sync findings: 3 applied
-  (the gate-side identity counterpart log, the F4 comment narrowed to what the
-  fake actually freezes, the sentinel docs naming whitespace with both guard
-  sites cross-referenced), 2 skipped (a shared test-view base for one
-  consumer; collapsing the layer-distinct empty-guard comments). Suites
-  5038/5038 both TFMs (baseline 5019 + 19 pins), final
-state, once; no new compiler warnings. Test-only production surface: six
-handlers plus the shared chain and the composite; no deploy (the orchestrator
-merges).
+Closed by the orchestrator after the full cycle including a rework round: worker commits e5777700 + 8e398268, merged (with JF-720) as 9b82e9dc's tree. The gate-consume composite: TryArbitrateOrSearchAsync as the one shape for PlaySong + AddToQueue + PlayNext (the index pinned once internally, retryLabel the only per-site axis), IsGenericSongConstraint owning the raw-slot normalization with the twins converged on the richer probe, and the SearchAsync preloadedPool axis threaded at all six audited sites plus the CrossMedia hoist - the JF-702 audit addendum's pool-waste list closed at every site it named. The worker's own code-review caught its guarded-pin regression (defeating SearchAsync's choke at FindSong) before the orchestrator saw the diff; the rework landed all five orchestrator findings (F1 as hardening with an honest mechanism correction - the claimed trailing-space empty-cut is structurally impossible against the real TryStripLeading, the guard and the pins went in anyway; the F2 whitespace sentinel; the F3 pool-identity logging tightened by the rework's own review into a cross-referenceable pair; the F4 readiness-frozen fake view; F5 skipped with reason). 19 new pins across both rounds (6 counting pins red-proven at two sites, the carrier-bleed probe-ownership pin, the warming choke pin, the trailing-space and sentinel families). JF-734 filed (the seventh pool site and the deeper view-memo alternative). Worker gates green on both rounds; the orchestrator gate-marker verified the five scrutiny axes at source. Suites: worker 5031 then 5038 after rework, orchestrator independent 5031/5031 green, merged-tree 5046/5046 both TFMs exit 0 on both split legs at ~1m55s. Production surface changed (MultiValueErDisambiguation, six handlers, ArtistSearch, CrossMediaFallback, TestHelpers fake): deployed in the batched post-closure deploy of main's HEAD.
 <!-- SECTION:FINAL_SUMMARY:END -->
