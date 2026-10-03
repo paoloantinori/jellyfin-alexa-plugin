@@ -6,7 +6,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-10-02 11:05'
-updated_date: '2026-10-03 12:41'
+updated_date: '2026-10-03 12:03'
 labels:
   - ux
   - disambiguation
@@ -92,37 +92,5 @@ which still satisfies the cover-both requirement.
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-The multi-artist ask no longer speaks long first-word families in one breath: the spoken
-list is capped at DisambiguationHelper.MultipleArtistsSpeakCap = 3 (AskFirstMatch's N)
-inside AskMultipleArtists itself, so every consumer is covered by construction: the
-JF-690 multi-value ER gate (the only unbounded caller; JF-684's shared-first-word
-synonyms can resolve 4-5 same-first-word artists from one spoken word) plus the three
-fixed-pair callers (the JF-420 containment gate, both JF-652 kana near-tie sites, and
-CrossMediaFallback's ResolveKanaOriginTie), whose output is byte-identical (2 is below
-the cap). The UX decision: speak top-N while the cycling state keeps the FULL resolved
-list; the alternative (capping both) would make exact library resolutions silently
-unaskable, and the unspoken rank is instead named by DisambiguateNext at its own turn.
-Two pins: the builder-level 5-match leg (speech 3, state 5, winner-first order) and the
-handler-level 4-artist leg driving the real gate and the real NoIntentHandler through
-three advances to the unspoken 4th name, then to NoMoreMatches exhaustion; the red
-proof ran on both TFMs (cap removed -> both pins fail, the 4th name spoken up front).
-Gates: simplify 4 agents (applications listed in DoD #9; efficiency clean; altitude
-verdict RIGHT at the builder) and code-review high (0 correctness bugs; 3 findings
-applied, 1 filed as JF-729, the locale-string discoverability gap). Suites 5015/5015
-both TFMs (baseline 5013 + 2 net new). No interaction-model, locale-string, or config
-changes; no deploy. The audit update's "second uncapped consumer" premise is corrected
-in the Decision note: the JF-363 offer never calls AskMultipleArtists, and
-CrossMediaFallback's actual call is the pair-shaped kana wrapper, covered as a no-op.
-
-REWORK ROUND (2026-10-03, gate-marker findings F1/F2, test-only): F1 closed the READ-side
-pin gap with PlayArtistSongs_MultiValueEr_FourInLibrary_YesAtUnspokenRank_PlaysIt (yes at
-cycled index 3 beyond the cap plays the UNSPOKEN 4th artist; red proof = the exact
-future-harmonization sabotage, a Take(3) at YesIntentHandler's stored-list consumer,
-which only this pin catches, both TFMs). F2 hoisted the byte-identical AssertMultiArtistAsk
-twins into ONE cap-aware TestHelpers oracle (Contains the top cap names, DoesNotContain
-the tail; the simplify round additionally folded the AssertNoDisambiguationState twin
-drift into the same home). Both gate Skills refreshed on the rework diff (simplify 4
-agents, code-review high 0 correctness bugs, 3 low findings applied). Final suites
-5016/5016 both TFMs (the prior round's 5015 + the F1 pin), full suite run once on the
-final state; no production behavior change beyond the commit's cap (one doc reword).
+Closed by the orchestrator after the full cycle including a rework round: worker commits b467a594 + b4358d40, merged as bd669793. The multi-artist ask's spoken list capped at MultipleArtistsSpeakCap=3 inside the shared builder (identity for every existing 2-element consumer; the JF-690 ER gate's unbounded leg the target), the cycling state keeping the FULL list so unspoken ranks stay reachable and are named at their turn. The audit premise corrected during the work (the JF-363 offer never called AskMultipleArtists; the kana near-tie pair is the real second consumer, covered as a no-op). The rework landed the orchestrator review's two findings: the yes-at-unspoken-rank pin (red-proven on both TFMs against the exact future-harmonization sabotage - a Take at the stored-list consumer fails ONLY this pin - then fully reverted) and the one cap-aware TestHelpers.AssertMultiArtistAsk oracle replacing the byte-identical twins across both suites. JF-729 filed (the 17-locale exhaustive-set wording). Worker gates green on both rounds (both Skills refreshed on the rework diff: simplify incl. the AssertNoDisambiguationState hoist; code-review high 0 correctness, 3 low all applied); the scaled orchestrator review verified all five axes at source (four production call sites traced, the blast-radius identity confirmed, the cycling-reads-stored-list confirmed, the 17 strings checked for active lies). Suites: worker 5015 then 5016 after rework (discipline held, prediction matched), filtered 101/101 and 130/130, merged-tree 5017/5017 both TFMs exit 0 on both split legs. Production surface changed (DisambiguationHelper): deployed in the post-closure deploy.
 <!-- SECTION:FINAL_SUMMARY:END -->
