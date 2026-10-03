@@ -235,20 +235,9 @@ public class PlayVideoIntentHandler : BaseHandler
             resumeTicks,
             Launch.BuildVideoLaunchSpeech(video, locale, resumeTicks, Launch.GetAnnounceNowPlaying(user))).ConfigureAwait(false);
 
-        // JF-714: the now-playing writes ride a DELIVERED launch (the StartOver
-        // pattern). NOT tautological: BuildEpisodeLaunchResponseAsync answers the
-        // VideoRequiresScreen capability Tell for a movie on a screenless device
-        // (a Tell, no directive), and writing now-playing for that would make a
-        // later "what's playing"/next/previous answer a movie that never launched.
-        if (PlaybackLaunchBuilder.HasLaunchDirective(response))
-        {
-            session.NowPlayingQueue = new List<QueueItem>
-            {
-                new QueueItem { Id = video.Id }
-            };
-            session.FullNowPlayingItem = video;
-        }
-
+        // JF-714/JF-718: the now-playing writes ride a DELIVERED launch; the
+        // rationale lives on AttachNowPlayingIfLaunched.
+        PlaybackLaunchBuilder.AttachNowPlayingIfLaunched(response, session, video);
         return response;
     }
 

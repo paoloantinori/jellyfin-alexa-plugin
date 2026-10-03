@@ -146,6 +146,56 @@ public sealed class PlaybackLaunchBuilder
     }
 
     /// <summary>
+    /// JF-718 (the JF-714 gate extraction, now 10 handler-side call sites; the
+    /// 11th gated site is the builder-internal channel launch, which keeps the raw
+    /// <see cref="HasLaunchDirective"/> block below): stamps the
+    /// now-playing session state (the queue + the full item) only when
+    /// <paramref name="response"/> actually carries a launch directive. The one
+    /// home of the NOT-tautological rationale this gate exists for: the VideoApp
+    /// launch family answers the <c>VideoRequiresScreen</c> capability Tell on a
+    /// screenless device and the channel builder a resolver-null Tell, both with
+    /// NO directive, and now-playing state written for that Tell is phantom state
+    /// (a later "what's playing"/next/previous answers an item that never
+    /// launched; the JF-714 live class). The JF-687 empty-secret refusal THROWS
+    /// before any post-build write, so the gate is belt there; it guards every
+    /// future builder return that is not a launch. The queue enumerates ONLY
+    /// inside the gate, so a lazy <c>Select</c> for a large queue is never
+    /// materialized on a refused/Tell path (the JF-714 PlayRandom efficiency
+    /// finding, preserved by construction). The builder-internal channel site
+    /// keeps the raw <see cref="HasLaunchDirective"/> block instead: it co-gates
+    /// the device last-played record under the same verdict.
+    /// </summary>
+    /// <param name="response">The builder response the now-playing state would ride.</param>
+    /// <param name="session">The Jellyfin session (queue + now-playing pointer).</param>
+    /// <param name="queue">The queue to install; a concrete <see cref="List{T}"/> of queue items is installed BY REFERENCE (the caller hands over ownership: the session's now-playing state aliases that list, so the caller must not mutate it afterwards), a lazy enumerable materialized only on a delivered launch.</param>
+    /// <param name="item">The item now playing at the queue head.</param>
+    internal static void AttachNowPlayingIfLaunched(SkillResponse response, SessionInfo session, IEnumerable<QueueItem> queue, BaseItem item)
+    {
+        if (HasLaunchDirective(response))
+        {
+            session.NowPlayingQueue = queue as List<QueueItem> ?? queue.ToList();
+            session.FullNowPlayingItem = item;
+        }
+    }
+
+    /// <summary>
+    /// The single-item form: the one-element queue (<c>Id = <paramref name="item"/>.Id</c>)
+    /// is built INSIDE the gate, so the Tell path allocates nothing and no call
+    /// site hand-constructs a one-element list only to have it re-copied.
+    /// </summary>
+    /// <param name="response">The builder response the now-playing state would ride.</param>
+    /// <param name="session">The Jellyfin session (queue + now-playing pointer).</param>
+    /// <param name="item">The item now playing (and the queue's single entry).</param>
+    internal static void AttachNowPlayingIfLaunched(SkillResponse response, SessionInfo session, BaseItem item)
+    {
+        if (HasLaunchDirective(response))
+        {
+            session.NowPlayingQueue = new List<QueueItem> { new() { Id = item.Id } };
+            session.FullNowPlayingItem = item;
+        }
+    }
+
+    /// <summary>
     /// JF-699 item 4, the string form of <see cref="AttachAnnounceIfLaunched(SkillResponse, IOutputSpeech)"/>:
     /// absorbs the adapter role CrossMediaFallback.ApplyAnnouncement played since JF-693
     /// (the JF-345 ONE override site), so string-announce callers reach the gated attach
@@ -1358,14 +1408,11 @@ public sealed class PlaybackLaunchBuilder
         string locale,
         CancellationToken cancellationToken)
     {
-        session.NowPlayingQueue = new List<QueueItem> { new() { Id = channel.Id } };
-        session.FullNowPlayingItem = channel;
-
         // JF-505 simplify: the capability gate runs FIRST, before the stream resolver's
         // bounded-5s PlaybackInfo round-trip: on a screenless device the whole resolution
         // would be spent on a launch the shared builder then refuses. Refusing early also
-        // makes the last-played record below unconditional-for-capable-devices (a refused
-        // channel can no longer be recorded and later offered as an unplayable resume).
+        // keeps the writes below reachable only for capable devices (a refused channel
+        // can no longer be recorded and later offered as an unplayable resume).
         if (!Interface.VideoAppCapabilities.DeviceSupportsVideoApp(context))
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("VideoRequiresScreen", locale));
@@ -1377,22 +1424,40 @@ public sealed class PlaybackLaunchBuilder
             return ResponseBuilder.Tell(ResponseStrings.Get("MediaTypeNotAvailable", locale));
         }
 
-        // Record the last-played channel for this device (the resume / continue-watching signal).
-        // Mirrors the chokepoint in BuildAudioPlayerResponse; needed here because the
-        // direct-remote stream URL has no /Videos/ segment for LastPlayedResponseInterceptor to parse.
-        string? deviceId = context?.System?.Device?.DeviceID;
-        if (!string.IsNullOrEmpty(deviceId))
-        {
-            Plugin.Instance?.DeviceQueueManager?.RecordLastPlayed(deviceId, channel.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
-        }
-
-        return await BuildVideoAppLaunchResponseAsync(
+        SkillResponse response = await BuildVideoAppLaunchResponseAsync(
             context,
             request,
             locale,
             stream.Url,
             channel.Name,
             SpeechBuilder.BuildNowPlayingSpeech(channel.Name, locale, GetAnnounceNowPlaying(user))).ConfigureAwait(false);
+
+        // JF-718: EVERY launch-state write rides the DELIVERED launch (the JF-699
+        // item-5 ordering policy + the JF-714 delivered-launch gate). The builder has
+        // TWO directive-less returns above (the capability Tell and the resolver-null
+        // Tell) and the VideoApp builder can learn more (JF-699 item 1: throw-or-
+        // launch covers the token refusal), so a gate-free write here recorded a
+        // phantom channel: a screenless Dot's "play channel CNN" left now-playing
+        // state and an unplayable last-played resume candidate behind. The raw gate
+        // block (not the AttachNowPlayingIfLaunched helper) because the last-played
+        // record co-gates under the same verdict; the helper's doc carries the full
+        // rationale.
+        if (HasLaunchDirective(response))
+        {
+            session.NowPlayingQueue = new List<QueueItem> { new() { Id = channel.Id } };
+            session.FullNowPlayingItem = channel;
+
+            // Record the last-played channel for this device (the resume / continue-watching signal).
+            // Mirrors the chokepoint in BuildAudioPlayerResponse; needed here because the
+            // direct-remote stream URL has no /Videos/ segment for LastPlayedResponseInterceptor to parse.
+            string? deviceId = context?.System?.Device?.DeviceID;
+            if (!string.IsNullOrEmpty(deviceId))
+            {
+                Plugin.Instance?.DeviceQueueManager?.RecordLastPlayed(deviceId, channel.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+            }
+        }
+
+        return response;
     }
 
     /// <summary>

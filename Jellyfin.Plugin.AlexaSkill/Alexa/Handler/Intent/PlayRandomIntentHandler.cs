@@ -188,17 +188,14 @@ public class PlayRandomIntentHandler : BaseHandler
             response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, firstItem, user, context);
         }
 
-        // JF-714: the StartOver pattern (a random MOVIE ask on a screenless device is the canonical phantom shape) on a screenless device
-        // gets the capability Tell (no directive; an EPISODE degrades to the
-        // audio-only launch, which carries one), and a phantom now-playing must
-        // not survive it. The queue list builds INSIDE the gate: it can hold the
-        // whole 500-item shuffle, wasted on the Tell path.
-        if (PlaybackLaunchBuilder.HasLaunchDirective(response))
-        {
-            session.NowPlayingQueue = shuffled.Select(i => new QueueItem { Id = i.Id, PlaylistItemId = null }).ToList();
-            session.FullNowPlayingItem = firstItem;
-        }
-
+        // JF-714/JF-718: the now-playing writes ride a DELIVERED launch (a random
+        // MOVIE ask on a screenless device is the canonical phantom shape); the
+        // extraction helper homes the rationale. The queue rides as a lazy Select:
+        // the helper materializes it ONLY inside the gate, so the whole 500-item
+        // shuffle is never allocated on the Tell path (the JF-714 efficiency shape,
+        // preserved by construction).
+        PlaybackLaunchBuilder.AttachNowPlayingIfLaunched(
+            response, session, shuffled.Select(i => new QueueItem { Id = i.Id, PlaylistItemId = null }), firstItem);
         return response;
     }
 

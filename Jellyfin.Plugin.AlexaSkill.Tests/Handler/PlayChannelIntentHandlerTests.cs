@@ -18,6 +18,7 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
+using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Alexa.NET.Assertions;
@@ -270,11 +271,19 @@ public class PlayChannelIntentHandlerTests : PluginTestBase
             .ReturnsAsync((LiveTvStream?)null);
 
         var handler = CreateHandler();
+        var session = CreateSession();
+
+        // A PRIOR launch's now-playing state must SURVIVE the failed ask (the gate
+        // withholds the new write, it never clears the old state).
+        var priorItem = new Movie { Name = "Before", Id = Guid.NewGuid() };
+        session.FullNowPlayingItem = priorItem;
+        session.NowPlayingQueue = new List<QueueItem> { new() { Id = priorItem.Id } };
+
         var response = await handler.HandleAsync(
             CreatePlayChannelRequest("CNN"),
             CreateContext(),
             TestHelpers.CreateTestUser(),
-            CreateSession(), CancellationToken.None);
+            session, CancellationToken.None);
 
         // When the stream cannot be resolved, the skill speaks an error instead of
         // launching a broken player.
@@ -282,6 +291,15 @@ public class PlayChannelIntentHandlerTests : PluginTestBase
         bool hasVideoApp = response.Response.Directives is not null
             && response.Response.Directives.Any(d => d is VideoAppLaunchDirective);
         Assert.False(hasVideoApp);
+
+        // JF-718: the resolver-null Tell is the channel builder's SECOND
+        // directive-less return (below the capability check, the shape the original
+        // "move below the capability gate" fix shape still leaked through): no
+        // phantom now-playing may survive it, and the pre-existing state is left
+        // untouched.
+        Assert.Same(priorItem, session.FullNowPlayingItem);
+        Assert.Single(session.NowPlayingQueue);
+        Assert.Equal(priorItem.Id, session.NowPlayingQueue[0].Id);
     }
 
     [Fact]

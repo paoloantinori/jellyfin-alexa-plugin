@@ -159,9 +159,6 @@ public class AplUserEventHandler : BaseHandler
 
         if (item is MediaBrowser.Controller.Entities.Movies.Movie)
         {
-            session.NowPlayingQueue = new List<QueueItem> { new() { Id = item.Id } };
-            session.FullNowPlayingItem = item;
-
             string locale = GetLocale(request);
             var (jellyfinUser, userError) = ResolveJellyfinUser(_userManager, session.UserId, locale);
             if (userError != null)
@@ -170,13 +167,25 @@ public class AplUserEventHandler : BaseHandler
             }
 
             // JF-498 codec-routed source; JF-505 screenless-device gate (shared launch builder).
-            return Launch.BuildVideoAppLaunchResponse(
+            SkillResponse movieResponse = Launch.BuildVideoAppLaunchResponse(
                 context,
                 locale,
                 Launch.GetVideoAppLaunchUrl(item, user),
                 item.Name,
                 Launch.BuildVideoLaunchSpeech(item, locale, _userDataManager, jellyfinUser, Launch.GetAnnounceNowPlaying(user)));
+
+            // JF-718: the writes follow the launch build and ride the delivered-launch
+            // gate; the rationale lives on AttachNowPlayingIfLaunched. Practically
+            // unreachable (an APL tap implies a rendered document, i.e. a screen),
+            // so the gate is belt here.
+            PlaybackLaunchBuilder.AttachNowPlayingIfLaunched(movieResponse, session, item);
+            return movieResponse;
         }
+
+        // JF-718: the queue each arm resolves rides the delivered-launch gate at the
+        // shared attach below (the writes used to run before the launch build, so the
+        // token-refusal throw left a phantom now-playing for a refused start).
+        IEnumerable<QueueItem> launchQueue;
 
         // Folder items (audiobooks, music folders, etc.) need to be resolved to their
         // first audio child. Without this, Launch.GetStreamUrl() generates /Audio/{folderId}/stream
@@ -259,20 +268,21 @@ public class AplUserEventHandler : BaseHandler
                     "AplUserEvent HandleSelectItem: resolved folder {FolderName} to first child {ChildName} ({ChildId})",
                     folder.Name, item.Name, itemIdStr);
 
-                // Queue remaining children
-                var queueItems = children.Select(c => new QueueItem { Id = c.Id }).ToList();
+                // Queue remaining children: the lazy Select rides the IEnumerable
+                // overload so the up-to-500-entry queue materializes ONLY inside
+                // the delivered-launch gate (the favorites/PlayRandom shape; the
+                // throw path allocates nothing).
                 if (isAlbum)
                 {
                     albumFolderId = folder.Id;
                 }
-                session.NowPlayingQueue = queueItems;
-                session.FullNowPlayingItem = item;
+
+                launchQueue = children.Select(c => new QueueItem { Id = c.Id });
             }
         }
         else
         {
-            session.NowPlayingQueue = new List<QueueItem> { new() { Id = item.Id } };
-            session.FullNowPlayingItem = item;
+            launchQueue = new List<QueueItem> { new() { Id = item.Id } };
         }
 
         int offsetMs = GetResumeOffset(item, session, request);
@@ -292,7 +302,13 @@ public class AplUserEventHandler : BaseHandler
         // The NowPlaying screen rides the BuildAudioPlayerResponse chokepoint since
         // JF-623 (every ReplaceAll play auto-attaches); the manual attach here was the
         // carousel-only leftover and would double-render.
-        return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source, itemIdStr, item, user, context, collectionParentId: albumFolderId);
+        SkillResponse response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source, itemIdStr, item, user, context, collectionParentId: albumFolderId);
+
+        // JF-718: the writes follow the launch build and ride the delivered-launch
+        // gate; the rationale lives on AttachNowPlayingIfLaunched
+        // (BuildAudioPlayerResponse is throw-or-launch today, so the gate is belt).
+        PlaybackLaunchBuilder.AttachNowPlayingIfLaunched(response, session, launchQueue, item);
+        return response;
     }
 
     private int GetResumeOffset(BaseItem item, SessionInfo session, Request request)

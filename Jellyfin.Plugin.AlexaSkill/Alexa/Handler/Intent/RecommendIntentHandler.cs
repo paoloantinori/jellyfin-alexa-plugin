@@ -209,17 +209,11 @@ public class RecommendIntentHandler : BaseHandler
             response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, item, user, context);
         }
 
-        // JF-699 item 5: the session writes follow the launch build (a refusal
-        // throws; no phantom now-playing for a launch that will not happen).
-        // JF-714 closes the gap that in-code note left open: the movie arm can
-        // also answer the screenless capability Tell (no directive), and those
-        // writes now ride the delivered-launch gate instead of recording a
-        // recommended movie that never launched.
-        if (PlaybackLaunchBuilder.HasLaunchDirective(response))
-        {
-            session.NowPlayingQueue = new List<QueueItem> { new() { Id = item.Id } };
-            session.FullNowPlayingItem = item;
-        }
+        // JF-699 item 5 / JF-714 / JF-718: the session writes follow the launch build
+        // and ride the delivered-launch gate; the rationale lives on
+        // AttachNowPlayingIfLaunched (a refusal throws; the movie arm can answer the
+        // screenless capability Tell).
+        PlaybackLaunchBuilder.AttachNowPlayingIfLaunched(response, session, item);
 
         // For audio, add NowPlaying speech before the audio directive
         // (JF-699 item 6: the write rides the delivered-launch gate; also safe by
