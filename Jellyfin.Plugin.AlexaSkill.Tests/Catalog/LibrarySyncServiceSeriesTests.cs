@@ -6,7 +6,6 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
@@ -56,7 +55,11 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
         _service = new LibrarySyncService(
             _libraryManagerMock.Object,
             catalogManager,
-            _loggerFactory.CreateLogger<LibrarySyncService>());
+            _loggerFactory.CreateLogger<LibrarySyncService>())
+        {
+            // The fake backend needs no rate limiting (JF-717 seam).
+            InterLocaleDelayMsForTest = 0
+        };
 
         // SyncCatalogForLocaleAsync reads Plugin.Instance.Configuration.ServerAddress
         // when building the hosted catalog URL.
@@ -171,28 +174,47 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
-    /// JF-513.3 item 2: with CatalogSyncLocales covering two locales whose payload
-    /// is IDENTICAL (no phonetic generator for the second), the second leg must
-    /// skip the version upload and report Version null - the first leg's minted
-    /// version stays referenced and the injection gate treats the leg as no-op.
-    /// The fake serves the same series catalog content for both legs.
+    /// JF-513.3 item 2 (pin restored by JF-717): with CatalogSyncLocales covering
+    /// two members of a byte-identical payload class (es-MX + es-US, same "es"
+    /// synonym prefix), the second es leg must SKIP the version upload: one
+    /// upload per distinct payload, not per locale. The original config for this
+    /// pin ("ar-SA") lost its discriminating power when JF-543 started filtering
+    /// ar-SA out of the sync entirely: no second leg ever ran, so the count
+    /// assertion passed vacuously. "Youth" keeps the it-IT payload distinct from
+    /// the es pair (Italian th-&gt;t gives "Yout", Spanish th-&gt;d gives
+    /// "Youd"; "Adolescence" transforms in neither locale), so the counts are
+    /// exact: it-IT uploads once, es-MX uploads once, es-US skips. JF-717's
+    /// flip side is visible in the same run: the skipped leg still receives its
+    /// model PUT wired with the class's shared catalog reference.
     /// </summary>
     [Fact]
     public async Task SyncUserLibraryAsync_IdenticalPayload_SecondLocaleLeg_SkipsVersionUpload()
     {
-        SetupLibraryWithSeries("Adolescence");
+        SetupLibraryWithSeries("Adolescence", "Youth");
         var user = CreateUser();
         var jellyfinUser = TestHelpers.CreateJellyfinUser();
-        Plugin.Instance!.Configuration.CatalogSyncLocales = "ar-SA";
+        Plugin.Instance!.Configuration.CatalogSyncLocales = "es-MX,es-US";
 
         try
         {
             var result = await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
 
             Assert.True(result.Success);
-            // ar-SA has no phonetic generator, so its Artist payload is byte-identical
-            // to the it-IT one already uploaded this run: one upload, not two.
-            Assert.Equal(1, _smapiHandler.VersionUploadsFor(SeriesCatalogId));
+            // it-IT's Italian-synonym payload + ONE es mint: es-US skipped the
+            // re-mint of byte-identical content (the JF-513.3 quota goal).
+            Assert.Equal(2, _smapiHandler.VersionUploadsFor(SeriesCatalogId));
+
+            // JF-717: the skipped leg is no longer starved of its model PUT: the
+            // PUT to the es-US LOCALE MODEL exists (the pre-fix shape left es-US
+            // unwired forever) and wires the series catalog reference.
+            string? esUsPutBody = _smapiHandler.Requests
+                .SingleOrDefault(r => r.Method == HttpMethod.Put && r.Url.EndsWith("/locales/es-US", StringComparison.Ordinal))
+                .Body;
+            Assert.NotNull(esUsPutBody);
+            var seriesType = TestHelpers.GetModelTypeNode(esUsPutBody!, "SeriesName");
+            Assert.Equal(
+                SeriesCatalogId,
+                seriesType.GetProperty("valueSupplier").GetProperty("valueCatalog").GetProperty("catalogId").GetString());
         }
         finally
         {
@@ -237,9 +259,7 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
         // The interaction model PUT replaced the static SeriesName seed with the
         // catalog-backed type definition.
         Assert.NotNull(_smapiHandler.LastModelPutBody);
-        using var doc = JsonDocument.Parse(_smapiHandler.LastModelPutBody!);
-        var types = doc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
-        var seriesType = types.EnumerateArray().Single(t => t.GetProperty("name").GetString() == "SeriesName");
+        var seriesType = TestHelpers.GetModelTypeNode(_smapiHandler.LastModelPutBody!, "SeriesName");
         var catalog = seriesType.GetProperty("valueSupplier").GetProperty("valueCatalog");
         Assert.Equal(SeriesCatalogId, catalog.GetProperty("catalogId").GetString());
         Assert.False(seriesType.TryGetProperty("values", out _), "static seed values must be replaced, not kept alongside the valueSupplier");
@@ -368,14 +388,11 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
         // Assert
         Assert.True(result.Success);
         Assert.NotNull(_smapiHandler.LastModelPutBody);
-        using var doc = JsonDocument.Parse(_smapiHandler.LastModelPutBody!);
-        var types = doc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
-
-        var seriesType = types.EnumerateArray().Single(t => t.GetProperty("name").GetString() == "SeriesName");
+        var seriesType = TestHelpers.GetModelTypeNode(_smapiHandler.LastModelPutBody!, "SeriesName");
         Assert.False(seriesType.TryGetProperty("valueSupplier", out _),
             "an entity type with no fresh version must not have its stored catalog id pinned");
 
-        var artistType = types.EnumerateArray().Single(t => t.GetProperty("name").GetString() == "JellyfinArtist");
+        var artistType = TestHelpers.GetModelTypeNode(_smapiHandler.LastModelPutBody!, "JellyfinArtist");
         Assert.Equal(user.ArtistCatalogId, artistType.GetProperty("valueSupplier").GetProperty("valueCatalog").GetProperty("catalogId").GetString());
     }
 
@@ -465,8 +482,11 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
             {
                 // JF-495 build-settle wait and JF-497 fallback tracker: nothing in
                 // progress, served at the non-staged /v1/skills/{id}/status URL
-                // (the stage-scoped shape 404s live).
-                return Json("""{"manifest":{"lastUpdateRequest":{"status":"SUCCEEDED"}},"interactionModel":{"it-IT":{"lastUpdateRequest":{"status":"SUCCEEDED"}}}}""");
+                // (the stage-scoped shape 404s live). es-MX/es-US report too: the
+                // JF-513.3 pin runs them as locale legs, and a locale absent from
+                // this map makes the post-PUT fallback tracker poll its full
+                // budget (~150s per locale).
+                return Json("""{"manifest":{"lastUpdateRequest":{"status":"SUCCEEDED"}},"interactionModel":{"it-IT":{"lastUpdateRequest":{"status":"SUCCEEDED"}},"es-MX":{"lastUpdateRequest":{"status":"SUCCEEDED"}},"es-US":{"lastUpdateRequest":{"status":"SUCCEEDED"}}}}""");
             }
 
             if (request.Method == HttpMethod.Get && url.Contains("/updateRequest/", StringComparison.Ordinal))

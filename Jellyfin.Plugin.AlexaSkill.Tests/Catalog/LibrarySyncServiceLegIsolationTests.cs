@@ -645,19 +645,10 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
 
     /// <summary>
     /// Extracts one slot-type node from a raw interaction-model JSON body.
-    /// Clone() keeps the element valid after the owning document is disposed.
+    /// Delegates to the hoisted TestHelpers.GetModelTypeNode (JF-717).
     /// </summary>
     private static JsonElement GetTypeNode(string modelJson, string typeName)
-    {
-        using var doc = JsonDocument.Parse(modelJson);
-        return doc.RootElement
-            .GetProperty("interactionModel")
-            .GetProperty("languageModel")
-            .GetProperty("types")
-            .EnumerateArray()
-            .Single(t => t.GetProperty("name").GetString() == typeName)
-            .Clone();
-    }
+        => TestHelpers.GetModelTypeNode(modelJson, typeName);
 
     /// <summary>
     /// Fake SMAPI backend serving all three catalog types: catalog creation

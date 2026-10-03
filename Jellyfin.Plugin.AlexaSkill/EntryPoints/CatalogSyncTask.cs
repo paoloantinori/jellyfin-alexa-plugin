@@ -43,6 +43,12 @@ public class CatalogSyncTask : IScheduledTask
     /// <inheritdoc />
     public string Description => "Syncs Jellyfin library artists and albums to Alexa custom slot type catalogs for improved voice recognition.";
 
+    /// <summary>
+    /// Spacing between consecutive users' SMAPI sync bursts in one scheduled
+    /// pass (JF-717; see the delay site for the rationale).
+    /// </summary>
+    private const int InterUserDelayMs = 2000;
+
     /// <inheritdoc />
     public string Category => "Alexa Skill";
 
@@ -60,6 +66,7 @@ public class CatalogSyncTask : IScheduledTask
 
         int totalUsers = config.Users.Count;
         int processed = 0;
+        bool syncedAnyUser = false;
 
         foreach (Entities.User user in config.Users)
         {
@@ -101,6 +108,24 @@ public class CatalogSyncTask : IScheduledTask
                     progress.Report((double)processed / totalUsers);
                     continue;
                 }
+
+                if (syncedAnyUser)
+                {
+                    // JF-717: spacing between consecutive users' sync bursts. The
+                    // inter-locale delay inside LibrarySyncService is BETWEEN legs
+                    // only, so without this the last SMAPI call of user N's sync
+                    // and the first of user N+1's fire back-to-back (the
+                    // pre-JF-717 shape spaced them only accidentally, via the
+                    // trailing leg delay).
+                    await Task.Delay(InterUserDelayMs, cancellationToken).ConfigureAwait(false);
+                }
+
+                // Gate-marker tail: set BEFORE the call so a sync that THROWS
+                // mid-burst still counts as a user who fired SMAPI calls - the
+                // spacing exists to separate back-to-back bursts, and a failed
+                // burst is still a burst (the skip conditions above have already
+                // run, so this user is genuinely syncing).
+                syncedAnyUser = true;
 
                 SyncResult result = await _syncService.SyncUserLibraryAsync(
                     user, jellyfinUser, cancellationToken).ConfigureAwait(false);
