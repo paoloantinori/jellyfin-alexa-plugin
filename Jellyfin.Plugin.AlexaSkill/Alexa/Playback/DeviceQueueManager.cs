@@ -811,10 +811,7 @@ public sealed class DeviceQueueManager : IDisposable
             PlaybackOrder = playbackOrder,
             LastModifiedUtc = DateTime.UtcNow,
         };
-        CopySurvivingStores(_queues.TryGetValue(deviceId, out DeviceQueue? oldQueue) ? oldQueue : null, queue);
-
-        _queues[deviceId] = queue;
-        SchedulePersistInternal(deviceId);
+        ReplaceQueue(deviceId, queue);
 
         _logger.LogDebug(
             "Queue set for device {DeviceId}: {Count} items, index={Index}, repeat={Repeat}, order={Order}",
@@ -822,18 +819,37 @@ public sealed class DeviceQueueManager : IDisposable
     }
 
     /// <summary>
-    /// Sets a freshly-shuffled queue for a device. Snapshots the original order into
-    /// <see cref="DeviceQueue.OriginalItemIds"/>, Fisher–Yates shuffles ALL items
-    /// (including position 0, so the first-played track is random), and sets
-    /// PlaybackOrder=Shuffle + CurrentIndex=0. Used by <c>ShufflePlayIntentHandler</c>
-    /// to start a playlist already shuffled. <paramref name="rng"/> is injectable for
-    /// deterministic unit tests; defaults to the process-global Random.Shared.
-    /// ADDITIVE: does not alter SetQueue/ShuffleRemaining/RestoreOrder (JF-301 path).
+    /// The ONE queue-replacement tail shared by <see cref="SetQueue"/> and
+    /// <see cref="CommitShuffledQueue"/> (the JF-713 code-review finding: the
+    /// CopySurvivingStores doc promises a reset-surviving store is wired once, so
+    /// the reset tail around it must exist once too; a future tail step added to
+    /// one reset path only would silently diverge the other). Carries the
+    /// surviving stores off the outgoing queue, installs the replacement, and
+    /// schedules the debounced persist.
     /// </summary>
-    /// <param name="deviceId">The Alexa device ID.</param>
-    /// <param name="itemIds">The list of media item IDs to shuffle and store.</param>
+    /// <param name="deviceId">The device whose queue is replaced.</param>
+    /// <param name="queue">The replacement queue, fully populated.</param>
+    private void ReplaceQueue(string deviceId, DeviceQueue queue)
+    {
+        CopySurvivingStores(_queues.TryGetValue(deviceId, out DeviceQueue? oldQueue) ? oldQueue : null, queue);
+
+        _queues[deviceId] = queue;
+        SchedulePersistInternal(deviceId);
+    }
+
+    /// <summary>
+    /// DERIVES (but does not store) a freshly-shuffled queue order: snapshots the
+    /// original order and Fisher-Yates shuffles ALL items (including position 0, so
+    /// the first-played track is random). The playlist shuffle arm's JF-713 derive
+    /// step; pair with <see cref="CommitShuffledQueue"/> after the launch build.
+    /// <paramref name="rng"/> is injectable for deterministic unit tests; defaults
+    /// to the process-global Random.Shared. ADDITIVE: does not alter
+    /// SetQueue/ShuffleRemaining/RestoreOrder (JF-301 path).
+    /// </summary>
+    /// <param name="itemIds">The list of media item IDs to shuffle.</param>
     /// <param name="rng">Optional injectable random source (defaults to Random.Shared).</param>
-    public void SetShuffledQueue(string deviceId, List<string> itemIds, Random? rng = null)
+    /// <returns>The derived snapshot (shuffle order + original order); nothing is written.</returns>
+    public PendingShuffledQueue DeriveShuffledQueue(List<string> itemIds, Random? rng = null)
     {
         Random random = rng ?? Random.Shared;
 
@@ -841,23 +857,39 @@ public sealed class DeviceQueueManager : IDisposable
         List<string> shuffled = new List<string>(itemIds);
         FisherYates(shuffled, random);
 
+        return new PendingShuffledQueue(shuffled, original);
+    }
+
+    /// <summary>
+    /// Commits a derived shuffle snapshot as the device's queue: stores the
+    /// snapshot's shuffled order VERBATIM (no re-shuffle; defensive copies, so the
+    /// stored queue owns its lists and a post-commit mutation of the snapshot, or
+    /// committing one snapshot to two devices, can never alias a live queue) with
+    /// PlaybackOrder=Shuffle + CurrentIndex=0 and the pre-shuffle order for
+    /// <see cref="RestoreOrder"/>, carrying surviving stores. The JF-713 commit
+    /// step; the caller MUST pass the snapshot its launch build derived from.
+    /// Returns the stored queue so the caller can mirror it into the session queue.
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID.</param>
+    /// <param name="pending">The snapshot derived by <see cref="DeriveShuffledQueue"/>.</param>
+    /// <returns>The stored queue (the same instance GetOrCreateQueue returns).</returns>
+    public DeviceQueue CommitShuffledQueue(string deviceId, PendingShuffledQueue pending)
+    {
         var queue = new DeviceQueue
         {
-            ItemIds = shuffled,
-            OriginalItemIds = original,
+            ItemIds = new List<string>(pending.ShuffledItemIds),
+            OriginalItemIds = new List<string>(pending.OriginalItemIds),
             CurrentIndex = 0,
             RepeatMode = "None",
             PlaybackOrder = "Shuffle",
             LastModifiedUtc = DateTime.UtcNow,
         };
-        CopySurvivingStores(_queues.TryGetValue(deviceId, out DeviceQueue? oldQueue) ? oldQueue : null, queue);
-
-        _queues[deviceId] = queue;
-        SchedulePersistInternal(deviceId);
+        ReplaceQueue(deviceId, queue);
 
         _logger.LogDebug(
             "Shuffled queue set for device {DeviceId}: {Count} items, order=Shuffle",
-            deviceId, shuffled.Count);
+            deviceId, pending.ShuffledItemIds.Count);
+        return queue;
     }
 
     /// <summary>
@@ -986,7 +1018,7 @@ public sealed class DeviceQueueManager : IDisposable
         return ResolveInsertPosition(placement, count, current);
     }
 
-    /// <summary>Fisher–Yates shuffle, in place. Used by SetShuffledQueue.
+    /// <summary>Fisher–Yates shuffle, in place. Used by DeriveShuffledQueue.
     /// (ShuffleRemaining keeps its own inline loop unchanged — spec non-goal.)</summary>
     private static void FisherYates(List<string> list, Random rng)
     {

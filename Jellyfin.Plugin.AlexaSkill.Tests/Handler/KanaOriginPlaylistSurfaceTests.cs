@@ -102,42 +102,12 @@ public class KanaOriginPlaylistSurfaceTests : PluginTestBase, IDisposable
         => new Folder { Name = name, Id = Guid.NewGuid(), Tags = Array.Empty<string>() };
 
     /// <summary>
-    /// The visibility filter inside BuildPlaylistPlayResponseAsync calls
-    /// BaseItem.IsVisible, which walks the STATIC BaseItem.LibraryManager and
-    /// BaseItem.Logger (unset in the unit-test host); needed only by the pins
-    /// whose server tier returns playlist rows (the PlayPlaylistIntentHandlerTests
-    /// shape, the second per-file twin of this stub).
+    /// The shared BaseItem statics stub scope (TestHelpers.StubBaseItemStatics,
+    /// the hoisted former per-file twin); needed only by the pins whose server
+    /// tier returns playlist rows.
     /// </summary>
     private IDisposable StubBaseItemStatics()
-    {
-        ILibraryManager? prevLibraryManager = BaseItem.LibraryManager;
-        ILogger<BaseItem>? prevLogger = BaseItem.Logger;
-
-        _fx.LibraryManager.Setup(l => l.GetCollectionFolders(It.IsAny<BaseItem>()))
-            .Returns(new List<Folder>());
-        BaseItem.LibraryManager = _fx.LibraryManager.Object;
-        BaseItem.Logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<BaseItem>.Instance;
-
-        return new RestoreBaseItemStatics(prevLibraryManager, prevLogger);
-    }
-
-    private sealed class RestoreBaseItemStatics : IDisposable
-    {
-        private readonly ILibraryManager? _libraryManager;
-        private readonly ILogger<BaseItem>? _logger;
-
-        public RestoreBaseItemStatics(ILibraryManager? libraryManager, ILogger<BaseItem>? logger)
-        {
-            _libraryManager = libraryManager;
-            _logger = logger;
-        }
-
-        public void Dispose()
-        {
-            BaseItem.LibraryManager = _libraryManager;
-            BaseItem.Logger = _logger;
-        }
-    }
+        => TestHelpers.StubBaseItemStatics(_fx.LibraryManager);
 
     /// <summary>
     /// The Folder stand-ins resolve no tracks (GetManageableItems is DB-coupled in

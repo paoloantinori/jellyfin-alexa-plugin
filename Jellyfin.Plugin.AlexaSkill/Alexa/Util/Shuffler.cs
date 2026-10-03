@@ -14,7 +14,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// (the consolidation tracked in JF-572). DeviceQueueManager keeps its own two
 /// Fisher-Yates copies deliberately: FisherYates(List&lt;string&gt;, Random) is
 /// rng-injectable for the deterministic shuffle tests (seeded through
-/// SetShuffledQueue's rng parameter), and ShuffleRemaining's inline tail shuffle
+/// DeriveShuffledQueue's rng parameter), and ShuffleRemaining's inline tail shuffle
 /// deliberately pins Random.Shared; neither was ever a BaseHandler member, so both
 /// are outside this family.
 /// </summary>

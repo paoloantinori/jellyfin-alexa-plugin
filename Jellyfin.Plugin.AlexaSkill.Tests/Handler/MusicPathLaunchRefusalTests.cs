@@ -43,10 +43,12 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// PlayBookIntentHandlerTests.HandleAsync_TrackedResume_LaunchLedgerSurvivesTheQueueReset).
 /// RED PROOFS: reverting a reorder (moving a write back above the builder call)
 /// flips that path's pin to a written-state assertion failure.
-/// The PLAYLIST path's twin reorder is not pinned end-to-end:
-/// <c>Playlist.GetManageableItems()</c> is non-virtual and DB-coupled (the same
-/// limitation DeviceQueueManagerTests documents), so the playlist fixture cannot
-/// reach the launch; the reorder there is the same mechanical pattern.
+/// The PLAYLIST path's twin reorder (including its shuffle arm, the JF-713
+/// derive-then-commit) is pinned at the SERVICE level in
+/// <see cref="AlbumPlayServicePlaylistShuffleTests"/> (JF-713 found the
+/// LinkedChildren + stubbed BaseItem.LibraryManager route through the
+/// non-virtual, DB-coupled <c>Playlist.GetManageableItems()</c>); the
+/// handler-level playlist path stays unpinned.
 /// </summary>
 [Collection("Plugin")]
 public class MusicPathLaunchRefusalTests : PluginTestBase

@@ -658,7 +658,7 @@ public class DeviceQueueManagerTests : IDisposable
         var b = Guid.NewGuid();
         var c = Guid.NewGuid();
         var added = Guid.NewGuid();
-        _manager.SetShuffledQueue("device-1", new List<string> { a.ToString(), b.ToString(), c.ToString() }, new Random(9));
+        _manager.CommitShuffledQueue("device-1", _manager.DeriveShuffledQueue(new List<string> { a.ToString(), b.ToString(), c.ToString() }, new Random(9)));
 
         _manager.Enqueue("device-1", added, DeviceQueueManager.QueueInsertPlacement.End);
         Assert.Contains(added.ToString(), _manager.GetQueue("device-1")!.OriginalItemIds!);
@@ -711,17 +711,18 @@ public class DeviceQueueManagerTests : IDisposable
     }
 
     // =====================================================================
-    // SetShuffledQueue (JF-305: shuffle-at-start playlist qualifier)
+    // Shuffle-at-start (JF-305; JF-713 split the write into
+    // DeriveShuffledQueue + CommitShuffledQueue around the launch build)
     // =====================================================================
 
     /// <summary>
     /// Non-shuffle playlist-play baseline (JF-305 Chunk 2 regression).
-    /// This is the counterpart to <see cref="SetShuffledQueue_ShufflesAllItems_StoresOriginal_SetsShuffleState"/>:
+    /// This is the counterpart to <see cref="DeriveAndCommit_ShufflesAllItems_StoresOriginal_SetsShuffleState"/>:
     /// the non-shuffle arm of the playlist play flow (<c>AlbumPlayService.BuildPlaylistPlayResponseAsync</c>)
     /// (shuffle: false) persists the queue via <see cref="DeviceQueueManager.SetQueue"/>
     /// and serves the first ordered track. The persisted <see cref="DeviceQueue"/> MUST
-    /// be in <c>Default</c> order with no stored original (pre-shuffle) id list — the
-    /// distinguishable state that makes Chunk 3's <c>shuffle:true</c> caller safe to add.
+    /// be in <c>Default</c> order with no stored original (pre-shuffle) id list; that is
+    /// the distinguishable state that makes Chunk 3's <c>shuffle:true</c> caller safe to add.
     /// </summary>
     /// <remarks>
     /// The full handler path (<c>PlayPlaylistIntentHandler → BuildPlaylistPlayResponseAsync</c>)
@@ -756,10 +757,10 @@ public class DeviceQueueManagerTests : IDisposable
     }
 
     [Fact]
-    public void SetShuffledQueue_ShufflesAllItems_StoresOriginal_SetsShuffleState()
+    public void DeriveAndCommit_ShufflesAllItems_StoresOriginal_SetsShuffleState()
     {
         List<string> ids = Enumerable.Range(0, 20).Select(i => i.ToString()).ToList();
-        _manager.SetShuffledQueue("dev", ids, new Random(42));
+        _manager.CommitShuffledQueue("dev", _manager.DeriveShuffledQueue(ids, new Random(42)));
 
         DeviceQueue q = _manager.GetOrCreateQueue("dev");
 
@@ -773,30 +774,24 @@ public class DeviceQueueManagerTests : IDisposable
     }
 
     [Fact]
-    public void SetShuffledQueue_MatchesSeededFisherYates()
+    public void DeriveAndCommit_MatchesSeededFisherYates()
     {
         List<string> ids = Enumerable.Range(0, 20).Select(i => i.ToString()).ToList();
-        List<string> expected = new(ids);
-        var rngExpected = new Random(42);
-        for (int i = expected.Count - 1; i > 0; i--)
-        {
-            int j = rngExpected.Next(i + 1);
-            (expected[i], expected[j]) = (expected[j], expected[i]);
-        }
+        List<string> expected = ExpectedSeededShuffle(ids);
 
-        _manager.SetShuffledQueue("dev", ids, new Random(42));
+        _manager.CommitShuffledQueue("dev", _manager.DeriveShuffledQueue(ids, new Random(42)));
         DeviceQueue q = _manager.GetOrCreateQueue("dev");
 
         Assert.Equal(expected, q.ItemIds);
         Assert.Equal(ids, q.OriginalItemIds);
-        Assert.NotEqual(ids[0], q.ItemIds[0]);   // position 0 changed — the FR's core requirement
+        Assert.NotEqual(ids[0], q.ItemIds[0]);   // position 0 changed, the FR's core requirement
     }
 
     [Fact]
-    public void SetShuffledQueue_SmallQueue_StillSetsState_PreservesItems()
+    public void DeriveAndCommit_SmallQueue_StillSetsState_PreservesItems()
     {
         var ids = new List<string> { "a", "b" };
-        _manager.SetShuffledQueue("dev", ids, new Random(1));
+        _manager.CommitShuffledQueue("dev", _manager.DeriveShuffledQueue(ids, new Random(1)));
 
         DeviceQueue q = _manager.GetOrCreateQueue("dev");
 
@@ -807,15 +802,92 @@ public class DeviceQueueManagerTests : IDisposable
     }
 
     [Fact]
-    public void SetShuffledQueue_PreservesItemPositionStateAcrossReset()
+    public void DeriveAndCommit_PreservesItemPositionStateAcrossReset()
     {
         _manager.SetQueue("dev", new List<string> { "a", "b", "c" }, 0);
         _manager.GetOrCreateQueue("dev").ItemPositionState["a"] = 1234L;
 
-        _manager.SetShuffledQueue("dev", new List<string> { "a", "b", "c" }, new Random(9));
+        _manager.CommitShuffledQueue("dev", _manager.DeriveShuffledQueue(new List<string> { "a", "b", "c" }, new Random(9)));
 
         DeviceQueue q = _manager.GetOrCreateQueue("dev");
         Assert.Equal(1234L, q.ItemPositionState["a"]);
+    }
+
+    // =====================================================================
+    // DeriveShuffledQueue / CommitShuffledQueue split pins (JF-713
+    // derive-then-commit; the tests above drive the two as a pair)
+    // =====================================================================
+
+    /// <summary>
+    /// JF-713: the derive step produces the seeded Fisher-Yates order, stores
+    /// NOTHING (the device-queue dictionary stays empty), and hands the caller
+    /// both the shuffled order and the pre-shuffle snapshot.
+    /// </summary>
+    [Fact]
+    public void DeriveShuffledQueue_MatchesSeededFisherYates_NothingStored()
+    {
+        List<string> ids = Enumerable.Range(0, 20).Select(i => i.ToString()).ToList();
+        List<string> expected = ExpectedSeededShuffle(ids);
+
+        PendingShuffledQueue pending = _manager.DeriveShuffledQueue(ids, new Random(42));
+
+        Assert.Equal(expected, pending.ShuffledItemIds);
+        Assert.Equal(expected[0], pending.FirstItemId);
+        Assert.Equal(ids, pending.OriginalItemIds);   // pre-shuffle order snapshotted
+        Assert.NotEqual(ids[0], pending.ShuffledItemIds[0]);   // position 0 changed (random first track)
+
+        // Derivation alone writes no queue: the playlist shuffle arm derives BEFORE
+        // the launch build and commits only on success (JF-713).
+        Assert.Equal(0, _manager.ActiveQueueCount);
+    }
+
+    /// <summary>
+    /// JF-713: the commit step stores the snapshot VERBATIM. Committing the same
+    /// snapshot twice yields identical orders on both devices: the snapshot
+    /// answer to the old in-code objection (shuffling AGAIN at commit would
+    /// re-shuffle and disagree with the stored order). The stored queues own
+    /// DEFENSIVE COPIES (the code-review aliasing finding): a second commit and
+    /// any later in-place queue mutation cannot reach through the snapshot.
+    /// </summary>
+    [Fact]
+    public void CommitShuffledQueue_StoresSnapshotVerbatim_NeverReshuffles()
+    {
+        List<string> ids = Enumerable.Range(0, 20).Select(i => i.ToString()).ToList();
+        PendingShuffledQueue pending = _manager.DeriveShuffledQueue(ids, new Random(42));
+        List<string> snapshotBefore = pending.ShuffledItemIds.ToList();
+
+        DeviceQueue q1 = _manager.CommitShuffledQueue("dev-a", pending);
+        DeviceQueue q2 = _manager.CommitShuffledQueue("dev-b", pending);
+
+        Assert.Equal("Shuffle", q1.PlaybackOrder);
+        Assert.Equal(0, q1.CurrentIndex);
+        Assert.Equal(snapshotBefore, q1.ItemIds);            // the snapshot's order, not a re-derivation
+        Assert.Equal(ids, q1.OriginalItemIds);
+        Assert.Equal(q1.ItemIds, q2.ItemIds);                // a second commit of the same snapshot cannot re-shuffle
+
+        // No aliasing (the code-review failure scenario): an AddToQueue on dev-a
+        // mutates only dev-a's copy, never dev-b's queue...
+        _manager.Enqueue("dev-a", Guid.NewGuid(), DeviceQueueManager.QueueInsertPlacement.End);
+        Assert.Equal(snapshotBefore, q2.ItemIds);
+        // ...and the commit does not mutate the snapshot it stored from.
+        Assert.Equal(snapshotBefore, pending.ShuffledItemIds);
+        Assert.Equal(ids, pending.OriginalItemIds);
+    }
+
+    /// <summary>
+    /// JF-713 (the JF-712 PendingContinuation structural-guard idiom): a snapshot
+    /// with an empty shuffled list is a derive-site bug; <see cref="PendingShuffledQueue.FirstItemId"/>
+    /// fails with the contract named instead of a distant index error.
+    /// </summary>
+    [Fact]
+    public void PendingShuffledQueue_EmptyList_FirstItemIdThrowsContract()
+    {
+        var pending = new PendingShuffledQueue(new List<string>(), new List<string>());
+
+        var ex = Record.Exception(() => pending.FirstItemId);
+
+        Assert.IsType<InvalidOperationException>(ex);
+        Assert.Contains("JF-713", ex.Message, StringComparison.Ordinal);
     }
 
     // =====================================================================
@@ -887,6 +959,25 @@ public class DeviceQueueManagerTests : IDisposable
 
     private void SeedStoredPosition(string deviceId, Guid itemId, long ticks)
         => _manager.GetOrCreateQueue(deviceId).ItemPositionState[itemId.ToString("N")] = ticks;
+
+    /// <summary>
+    /// The seeded Fisher-Yates oracle shared by the shuffle tests: an independent
+    /// in-place shuffle of a copy with <c>new Random(42)</c>, so the derive/commit
+    /// order is checked against the algorithm recomputed here, never against the
+    /// production <see cref="DeviceQueueManager"/> code under test.
+    /// </summary>
+    private static List<string> ExpectedSeededShuffle(List<string> ids)
+    {
+        List<string> expected = new(ids);
+        var rngExpected = new Random(42);
+        for (int i = expected.Count - 1; i > 0; i--)
+        {
+            int j = rngExpected.Next(i + 1);
+            (expected[i], expected[j]) = (expected[j], expected[i]);
+        }
+
+        return expected;
+    }
 
     // =====================================================================
     // Last-played launch route (JF-568)
