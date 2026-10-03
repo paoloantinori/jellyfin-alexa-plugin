@@ -820,6 +820,37 @@ internal static class TestHelpers
     }
 
     /// <summary>
+    /// JF-720: the ONE object-initializer AudioPlayer-event request factory (the
+    /// <see cref="CreatePlayCommand"/> convention), hoisted from the five private
+    /// per-suite PlaybackNearlyFinished copies (the hoist-on-the-third convention
+    /// had long fired) plus the byte-equivalent type-general twin EventHandlerTests
+    /// had carried all along (the /simplify reuse round's find; it delegates here
+    /// now too). The suites keep their local factory names as one-line delegations
+    /// so their scene defaults (the refusal suite's mid-listen offset, the nullable
+    /// token) stay where their fixtures read them, with ONE deliberate delta:
+    /// PreEnqueueOnStartTests' former copy set RequestId = "test-req", dropped
+    /// here because no assertion or exercised production path reads it (RequestId
+    /// is consumed only by diagnostics/progressive-response correlation, which
+    /// these direct-HandleAsync scenes never run). The type is the raw wire string
+    /// (e.g. "AudioPlayer.PlaybackNearlyFinished"), so any AudioPlayer-event suite
+    /// can share this. The JSON-deserializing AlexaRequestFactory variant
+    /// (PostPlayHandlerTests) is deliberately separate: it populates the
+    /// readonly requestId/timestamp/locale fields this initializer shape leaves
+    /// null, a different wire shape, not a duplicate.
+    /// </summary>
+    /// <param name="type">The AudioPlayer event type string.</param>
+    /// <param name="token">The stream token; null mints a random GUID (the no-token scenes).</param>
+    /// <param name="offsetMs">The reported playback offset in milliseconds.</param>
+    /// <returns>The AudioPlayer event request.</returns>
+    internal static AudioPlayerRequest CreateAudioPlayerEventRequest(string type, string? token = null, long offsetMs = 0)
+        => new()
+        {
+            Type = type,
+            Token = token ?? Guid.NewGuid().ToString(),
+            OffsetInMilliseconds = offsetMs
+        };
+
+    /// <summary>
     /// JF-440: the ONE song-index fake (was duplicated as FakeSongIndex in
     /// PlayArtistSongsIntentHandlerTests and FakeNgramIndex in PlaySongTitleFallbackTests).
     /// Returns the fixed scored set from both stages (no test distinguishes them).

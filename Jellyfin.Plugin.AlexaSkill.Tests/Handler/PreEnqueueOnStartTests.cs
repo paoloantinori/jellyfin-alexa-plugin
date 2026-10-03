@@ -113,15 +113,7 @@ public class PreEnqueueOnStartTests : PluginTestBase, IDisposable
     }
 
     private static AudioPlayerRequest CreateNearlyFinishedRequest(string token)
-    {
-        return new AudioPlayerRequest
-        {
-            Type = "AudioPlayer.PlaybackNearlyFinished",
-            Token = token,
-            OffsetInMilliseconds = 0,
-            RequestId = "test-req"
-        };
-    }
+        => TestHelpers.CreateAudioPlayerEventRequest("AudioPlayer.PlaybackNearlyFinished", token);
 
     private SessionInfo CreateSession(List<QueueItem>? queue = null, Guid? currentItem = null)
     {

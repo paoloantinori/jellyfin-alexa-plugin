@@ -133,14 +133,7 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
     }
 
     private static AudioPlayerRequest CreateNearlyFinishedRequest(string? token = null)
-    {
-        return new AudioPlayerRequest
-        {
-            Type = "AudioPlayer.PlaybackNearlyFinished",
-            Token = token ?? Guid.NewGuid().ToString(),
-            OffsetInMilliseconds = 0
-        };
-    }
+        => TestHelpers.CreateAudioPlayerEventRequest("AudioPlayer.PlaybackNearlyFinished", token);
 
     private PlaybackNearlyFinishedEventHandler CreatePlaybackHandler(ILoggerFactory? loggerFactory = null)
     {
