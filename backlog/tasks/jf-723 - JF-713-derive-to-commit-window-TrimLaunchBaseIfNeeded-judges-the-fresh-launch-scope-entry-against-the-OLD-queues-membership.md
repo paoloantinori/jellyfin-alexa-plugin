@@ -62,9 +62,9 @@ CommitShuffledQueue, and any future reset path take it together.
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [x] #1 dotnet build passes with 0 errors (full solution, both TFMs; the single CS8600 warning the Debug build emits at VideoAudioControllerTests.cs(1680,35) is pre-existing on base 3d0c6563 in the JF-726 backstop test, a file this diff does not touch)
-- [x] #2 dotnet test passes (full suite on the final state: 5073/5073 net9.0, 5073/5073 net10.0; baseline 5068 + the 5 new pins)
-- [x] #3 No new compiler warnings introduced (the one emitted warning is the pre-existing site above, verified untouched by `git status`)
+- [x] #1 dotnet build passes with 0 errors (full solution, both TFMs; the CS8600 warning the first builds emitted at VideoAudioControllerTests.cs(1680,35) was pre-existing on base 3d0c6563 on BOTH TFMs (the original evidence note wrongly said net9.0-only; the gate-marker round corrected it), in the JF-726 backstop test this diff never touched, and is FIXED on main by 770fc94f, which this branch carries after its rebase)
+- [x] #2 dotnet test passes (full suite on the final state after the rework round: both TFMs; counts in the Final Summary)
+- [x] #3 No new compiler warnings introduced (the only emitted warning was the pre-existing site above; post-rebase builds are warning-free)
 - [x] #4 N/A: no session attributes touched (DeviceQueueManager launch-scope maps and one comment only)
 - [x] #5 N/A: no HttpClient changes
 - [x] #6 N/A: no interaction model change
@@ -123,4 +123,30 @@ documented) and /code-review high (5 findings; 4 applied, 1 partially applied
 as documented doc-strengthening). Production surface changed
 (DeviceQueueManager guard + docs, AlbumPlayService comment): NOT deployed
 (test-and-hardening change; no handler behavior change on default paths).
+
+REWORK ROUND (gate-marker tail, 4 findings, all landed): F1 FILED as JF-739 -
+the guard exempts SELF-trim only, so a sibling RecordLaunchBase interleaved in
+the same derive-to-commit window (a PlaybackNearlyFinished enqueue, a
+queue-editing launch) can still evict the fresh entry, and the JF-738 fix will
+not close it because the fresh item is absent from the STORED queue until
+commit; the filing carries the JF-723 option-(b) fresh-stamping fix shape and
+its pin recipe, and the guard's doc phrase was corrected to the honest span
+("treated as queued by THIS call's trim only", with the JF-739 pointer). F2
+applied: MaxLaunchBaseEntries is now internal on the InternalsVisibleTo seam
+(VideoAudioCache / KeyedOneShotDebounce pattern) and all five pins seed their
+cap pressure from it, so a cap change can no longer degrade the pins to
+vacuous green. F3 applied: the JF-738 characterization pin carries the same
+Dictionary-order determinism note as the saturated-map pin, naming the two
+format-independent anchors. F4 applied: the CS8600 evidence claim was
+corrected (the warning was on BOTH TFMs, not net9.0-only; pre-existing in the
+untouched JF-726 file, fixed on main by 770fc94f). The branch was REBASED onto
+current main (770fc94f) to pick that fix up: post-rebase full-solution build
+is 0 warnings 0 errors, the guard commit re-landed as the rework parent, and
+the final state holds 5073/5073 net9.0 and 5073/5073 net10.0 (5068 + the 5
+const-seeded pins) plus 5/5 filtered pin runs on both TFMs. Gate refresh on
+the rework diff was judged unnecessary per the triviality bar: the rework
+changes no production logic (the guard line is untouched; the const visibility
+and two doc phrases are the only production deltas) and no test logic (the
+pins now read the very constant the reviewer specified), and every edit
+applies a reviewer-specified finding verbatim.
 <!-- SECTION:FINAL_SUMMARY:END -->

@@ -892,7 +892,7 @@ public class DeviceQueueManagerTests : IDisposable
 
     // =====================================================================
     // Launch-scope trim pins (JF-723: the derive-to-commit window's fresh entry
-    // is never its own trim's evictee; MaxLaunchBaseEntries = 200 cap pressure)
+    // is never its own trim's evictee; MaxLaunchBaseEntries cap pressure)
     // =====================================================================
 
     /// <summary>
@@ -910,7 +910,7 @@ public class DeviceQueueManagerTests : IDisposable
     [Fact]
     public void RecordLaunchBase_NonZeroBaseEntry_SurvivesOwnTrimAtQueuedCapPressure()
     {
-        SeedQueuedScopeResidents("dev-jf723", 200, "N");
+        SeedQueuedScopeResidents("dev-jf723", DeviceQueueManager.MaxLaunchBaseEntries, "N");
 
         string freshId = Guid.NewGuid().ToString();
         long baseMs = MinutesToMs(20);
@@ -931,7 +931,7 @@ public class DeviceQueueManagerTests : IDisposable
     [Fact]
     public void RecordLaunchBase_PreviousFreshEntry_IsEvictedByTheNextLaunchAtCapPressure()
     {
-        SeedQueuedScopeResidents("dev-jf723-aging", 200, "N");
+        SeedQueuedScopeResidents("dev-jf723-aging", DeviceQueueManager.MaxLaunchBaseEntries, "N");
 
         string firstFreshId = Guid.NewGuid().ToString();
         long firstBaseMs = MinutesToMs(5);
@@ -957,12 +957,16 @@ public class DeviceQueueManagerTests : IDisposable
     /// evictee is a QUEUED resident (the first-recorded seed), while the documented
     /// contract ("entries for queued items all stay") would evict the non-queued
     /// victim instead. This test is the red proof JF-738's format fix will produce;
-    /// do not "fix" it by weakening the assert.
+    /// do not "fix" it by weakening the assert. DETERMINISM NOTE: like the
+    /// saturated-map pin below, this rests on .NET Dictionary enumeration order
+    /// (implementation detail the production trim itself relies on for its
+    /// "oldest" semantics); the format-independent anchors for the guard are the
+    /// two queued-cap-pressure pins above (active and enqueued).
     /// </summary>
     [Fact]
     public void RecordLaunchBase_DashedQueueMembership_QueuedSeedIsTheEvicteeAtCapPressure_JF738Characterization()
     {
-        List<string> queuedIds = SeedQueuedScopeResidents("dev-jf738", 200, "D");
+        List<string> queuedIds = SeedQueuedScopeResidents("dev-jf738", DeviceQueueManager.MaxLaunchBaseEntries, "D");
 
         string victimId = Guid.NewGuid().ToString();
         _manager.RecordLaunchBase("dev-jf738", victimId, 0, enqueued: false);
@@ -989,7 +993,7 @@ public class DeviceQueueManagerTests : IDisposable
     [Fact]
     public void RecordLaunchBase_EnqueuedFreshPair_SurvivesOwnTrimAndPromotesAtQueuedCapPressure()
     {
-        SeedQueuedScopeResidents("dev-jf723-pending", 200, "N", enqueued: true);
+        SeedQueuedScopeResidents("dev-jf723-pending", DeviceQueueManager.MaxLaunchBaseEntries, "N", enqueued: true);
 
         string freshId = Guid.NewGuid().ToString();
         long baseMs = MinutesToMs(9);
@@ -1020,10 +1024,10 @@ public class DeviceQueueManagerTests : IDisposable
     public void RecordLaunchBase_SaturatedMapFreshInsert_SurvivesOwnTrimUnderDashedMembership()
     {
         // Old-queue membership (dashed, production format), no scope entries tied to it.
-        _manager.SetQueue("dev-jf723-sat", Enumerable.Range(0, 200).Select(_ => Guid.NewGuid().ToString()).ToList(), currentIndex: 0);
+        _manager.SetQueue("dev-jf723-sat", Enumerable.Range(0, DeviceQueueManager.MaxLaunchBaseEntries).Select(_ => Guid.NewGuid().ToString()).ToList(), currentIndex: 0);
 
-        // 200 distinct previously-launched items fill the map to the cap (no trim fires at count <= cap).
-        foreach (int i in Enumerable.Range(0, 200))
+        // Cap-filling distinct previously-launched items (no trim fires at count <= cap).
+        foreach (int i in Enumerable.Range(0, DeviceQueueManager.MaxLaunchBaseEntries))
         {
             _manager.RecordLaunchBase("dev-jf723-sat", Guid.NewGuid().ToString(), 0, enqueued: false);
         }

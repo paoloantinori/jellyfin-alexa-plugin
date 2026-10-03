@@ -706,13 +706,16 @@ public sealed class DeviceQueueManager : IDisposable
     /// single scope-per-key map named in <see cref="WritePendingLaunchScope"/>.
     /// The JF-723 exemption and the JF-738 membership-format residual are
     /// documented on the trim method itself (<see cref="TrimLaunchBaseIfNeeded"/>).
+    /// Internal for the InternalsVisibleTo test seam (the VideoAudioCache /
+    /// KeyedOneShotDebounce pattern): the JF-723 pins seed their cap pressure from
+    /// this constant so a cap change cannot silently degrade them to vacuous green.
     /// </summary>
-    private const int MaxLaunchBaseEntries = 200;
+    internal const int MaxLaunchBaseEntries = 200;
 
     /// <summary>
     /// JF-723 (derive-to-commit window): the entry <see cref="RecordLaunchBase"/>
     /// just wrote is EXEMPT from this trim via <paramref name="freshlyRecordedKey"/>
-    /// (treated as queued for the duration of the launch). The play paths build the
+    /// (treated as queued by THIS call's trim only). The play paths build the
     /// launch BEFORE committing the queue (the JF-687/JF-699/JF-713
     /// refusal-before-phantom-state ordering), so this trim runs while the OLD
     /// queue is still the stored one and the freshly launched item (on the
@@ -724,7 +727,14 @@ public sealed class DeviceQueueManager : IDisposable
     /// next launch ages the entry (the same over-cap tolerance
     /// <see cref="TrimPositionMap"/> already grants queued-pinned maps); the entry
     /// is NOT immortal: the NEXT launch's trim evicts it if it is still neither
-    /// queued nor fresh. RESIDUAL (JF-738, filed not fixed here): the membership
+    /// queued nor fresh. SCOPE OF THE EXEMPTION (JF-739, filed not fixed here):
+    /// it guards the entry against its OWN record's trim only; a SIBLING
+    /// <see cref="RecordLaunchBase"/> interleaved inside the same derive-to-commit
+    /// window (a PlaybackNearlyFinished enqueue or queue-editing launch between
+    /// the build and the commit) trims without exempting the earlier entry, whose
+    /// item is still absent from the STORED queue, so that sibling trim can evict
+    /// it; the JF-723 filing's fresh-stamping candidate (b) is JF-739's fix shape.
+    /// RESIDUAL (JF-738, filed not fixed here): the membership
     /// protection itself is inert in production today because the maps are keyed
     /// "N" while <see cref="SetQueue"/> callers store dashed ids, so no key ever
     /// matches the queued set and the trim degrades to pure insertion/slot-order
