@@ -4,9 +4,10 @@ title: >-
   JF-722 - two startup-capture residuals after JF-719: the capture freezes
   Status IN_PROGRESS on freshly-PUT locales with no later refresh, and one
   malformed per-locale entry aborts the whole capture
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-03 00:30'
+updated_date: '2026-10-03 03:55'
 labels:
   - catalog
   - observability
@@ -225,7 +226,6 @@ per skill creation, the pins deliberately document the call sequence, and reusin
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-
 - [x] #1 dotnet build passes with 0 errors. DONE: `dotnet build Jellyfin.Plugin.AlexaSkill.Tests` (builds both TFMs, plugin + tests) Build succeeded, 0 errors, on the final post-gates state.
 - [x] #2 dotnet test passes. DONE (rework final state): `dotnet test Jellyfin.Plugin.AlexaSkill.Tests -m:1` on the post-rework FINAL state: 5002/5002 passed net9.0 AND 5002/5002 net10.0, exit 0 (baseline 4981 + 21 new: 11 from the first round, 10 from the rework: the F1 marker end-to-end pair, the F3 recapture trio + capture-return pin, the F2 mid-poll cancellation pin, and the code-review-refresh trio: capture-checkpoint, recapture-leg cancellation, timeout-shape retry).
 - [x] #3 No new compiler warnings introduced. DONE: the only warnings in any build of the final state are the pre-existing xUnit1030 pair at VideoAudioControllerTests.cs:1337 (already documented pre-existing at JF-719's closure); zero warnings attributable to this diff.
@@ -241,58 +241,5 @@ per skill creation, the pins deliberately document the call sequence, and reusin
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Implemented 2026-10-03 (worker round, both gates run). SHAPE DECISIONS, weighed per the
-audit addendum and recorded in the Design decisions section above: residual 1 took
-shape (a), the post-capture settle-and-REWRITE: a fire-and-forget deferred refresh
-under the startup's linked cancellation token (45s initial delay, up to 4 polls 45s
-apart with early exit), scheduled at BOTH capture call sites through the structural
-CaptureAndScheduleStatusRefreshAsync wrapper (the simplify altitude round's fix for the
-"missed one" wiring class, enforced by the CaptureRefreshPairingTests IL roster). Shape
-(b), panel-read normalization, was rejected on a correctness axis: normalizing aged
-IN_PROGRESS rows would also normalize rows whose builds FAILED after the capture read
-them mid-flight, masking real failures behind a time heuristic (and needs the threshold
-duplicated across DiagnosticsController and config.html while the ledger keeps lying).
-Shape (c) was rejected because JF-721 owns the Error/caveat field, not the Status half,
-and the corrected analysis makes the frozen Status the COMMON case after every
-version-bump restart (~10-17 of 17 locales). config.html deliberately UNCHANGED: the
-writer-side refresh makes IN_PROGRESS a ~45-180s transient and the gray bullet is honest
-during it (verified against both consumers: ModelsDeployed needs a Succeeded row,
-failedModels counts FAILED/TIMEOUT only). The refresh rewrites ONLY Status
-IN_PROGRESS + Source "Embedded" rows (the capture family; the sync writers never author
-IN_PROGRESS: PreservedOrSkippedStatus clamps it, the PUT path records settled outcomes
-only, verified against CatalogModelUpdateResult's vocabulary) and does NOT re-run the
-JF-710/JF-719 preserve: a clean settle carries the capture-composed Error forward
-verbatim, while an observation with build errors or a failure-weight state replaces
-wholesale exactly like the capture's own branches. Residual 2 landed as the explicit
-LastModified-null skip (previous row untouched) PLUS the per-locale try/catch, mirrored
-in the refresh's poll pass, plus the capture's sparse-status InteractionModel null
-guard. Gate hardening folded in: fresh Configuration reads at every ledger use
-(UpdateConfiguration replaces the object), guarded ledger enumerations at every refresh
-read point, and observation-accurate budget-exhaustion logging. New shared helper
-LibrarySyncService.FormatInvocationErrors consolidates the three SMAPI build-error
-join sites (capture, refresh, InteractionModelRedeployer). 11 new tests: the isolation
-pin (malformed FIRST entry skipped, later locales still captured, previous row
-untouched), 8 refresh pins (settled carry-verbatim, FAILED wholesale with/without
-errors, re-poll until settled, budget-exhausted leaves row intact, no-network pre-check,
-sync-authored family boundary, shutdown cancellation, transient-poll retry), and the
-counterfactual-proven pairing roster. Gates: /simplify 8 applied / 3 skipped with
-reasons; /code-review high 7/7 applied, 2 pre-existing findings filed as JF-724.
-Suites on the first-round final state: 4992/4992 net9.0 AND net10.0 (baseline 4981 + 11).
-
-REWORK ROUND (same day, gate-marker findings F1-F7 + both gates refreshed): the
-cancellation token now threads through the entire refresh family with checkpoints
-after every await and before every save, token-state-filtered so an HttpClient
-timeout (a TaskCanceledException with NO cancellation) retries instead of silently
-killing the refresh; the ObservedBuildErrorsLedgerPrefix marker distinguishes the
-capture's observed-errors product (dropped on clean settle) from its preserve product
-(carried verbatim), pinned end to end both ways, with its prefix-rule quarantine
-invariant documented and JF-721's migration inventory appended same-turn; the
-recapture mode is DERIVED from the capture's own did-it-write-rows return (covering
-both sparse shapes at both sites, deleting the LedgerHasAnyRows global-ledger
-inference), so the creation path observes its first builds and a transient sparse
-version-bump capture does too; the race notes carry the multiplied sizing and the
-canary-loss victim (JF-724 item 3); the sparse-status log names both shapes and the
-budget-exhaustion logging has an honest third shape. Rework gates: /simplify 7
-applied / 3 skipped with reasons; /code-review high 5 applied / 1 skipped. Suites on
-the rework final state: 5002/5002 net9.0 AND net10.0 (baseline 4981 + 21).
+Closed by the orchestrator after the full cycle including a rework round: worker commits 01f35db7 + 19e4a0cc, merged as b175f615. The startup capture residuals closed: the post-capture settle-and-REWRITE (RefreshInProgressLocaleStatusesAsync with a 45s/4-poll budget, the cancellation token threaded through the family with checkpoints after every await and before every save, timeout-shaped TaskCanceledExceptions falling to warn-and-retry so one timed-out GET cannot kill the family, pinned); the arm-distinction marker (ObservedBuildErrorsLedgerPrefix composed on every observed-errors text and dropped on clean settle, the JF-710/JF-719 preserve product carried verbatim, both halves pinned end-to-end through capture-then-refresh); the creation-site pairing made real by derivation (the capture returns whether it wrote rows, driving the recapture across both sparse shapes and deleting the cross-user global-ledger inference); and the per-locale null-isolation guards in both passes. 21 new pins across the two rounds including the pairing roster counterfactual-proven twice. Worker gates green on both rounds (simplify 8+7 applied; code-review high 7/7 then 5/6 applied). The orchestrator gate-marker verified all six axes mechanically and its 7 findings all landed (the rework's three must-fixes F1/F2/F3, the race-sizing and dual-shape sparse-warning corrections, and JF-724 items 3-5: the multiplied refresh race exposure with the canary-loss victim, the family-membership pin gap, the cross-user pre-check interplay). JF-724 filed; JF-721 appended with the fourth writer's design input. Suites: worker 4992 then 5002 after rework, orchestrator independent 5002/5002 both TFMs on the rework head, merged-tree 5007/5007 both TFMs exit 0 on both split-TFM legs. Production surface changed (SkillStartup, LibrarySyncService, InteractionModelRedeployer): deployed in the post-closure deploy.
 <!-- SECTION:FINAL_SUMMARY:END -->
