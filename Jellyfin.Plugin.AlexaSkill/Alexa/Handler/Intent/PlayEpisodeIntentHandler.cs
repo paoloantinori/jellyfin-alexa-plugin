@@ -163,13 +163,6 @@ public class PlayEpisodeIntentHandler : BaseHandler
 
         string itemId = episode.Id.ToString();
 
-        List<QueueItem> queueItems = new List<QueueItem>
-        {
-            new QueueItem { Id = episode.Id }
-        };
-        session.NowPlayingQueue = queueItems;
-        session.FullNowPlayingItem = episode;
-
         Logger.LogDebug(
             "PlayEpisode: returning VideoApp, itemId={ItemId}, episode='{EpisodeName}'",
             itemId, episode.Name);
@@ -180,7 +173,7 @@ public class PlayEpisodeIntentHandler : BaseHandler
         // the AudioPlayer audio-only route instead of the screen-required refusal;
         // resumeTicks stays 0 (the JF-565 fresh-play pin: an explicit season/episode
         // ask is a relaunch-from-scratch).
-        return await Launch.BuildEpisodeLaunchResponseAsync(
+        SkillResponse response = await Launch.BuildEpisodeLaunchResponseAsync(
             context,
             request,
             locale,
@@ -189,5 +182,12 @@ public class PlayEpisodeIntentHandler : BaseHandler
             Launch.GetVideoAppLaunchUrl(episode, user),
             resumeTicks: 0,
             SpeechBuilder.BuildNowPlayingSpeech(episode.Name, locale, Launch.GetAnnounceNowPlaying(user))).ConfigureAwait(false);
+
+        // JF-718: the now-playing writes follow the launch build and ride the
+        // delivered-launch gate; the rationale lives on AttachNowPlayingIfLaunched
+        // (the remux URL is token-gated, so a refusal throws before any write; the
+        // episode degrade always carries a directive, so the gate is belt here).
+        PlaybackLaunchBuilder.AttachNowPlayingIfLaunched(response, session, episode);
+        return response;
     }
 }

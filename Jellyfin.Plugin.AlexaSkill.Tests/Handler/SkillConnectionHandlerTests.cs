@@ -13,6 +13,7 @@ using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
+using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
@@ -142,6 +143,58 @@ public class SkillConnectionHandlerTests : PluginTestBase
         Assert.NotNull(response);
         Assert.NotNull(response.Response?.Directives);
         Assert.NotEmpty(response.Response.Directives);
+
+        // JF-718: the delivered launch writes the now-playing state (the gate must
+        // not swallow the real-play arm).
+        Assert.Same(audio, session.FullNowPlayingItem);
+        Assert.Single(session.NowPlayingQueue);
+        Assert.Equal(audio.Id, session.NowPlayingQueue[0].Id);
+    }
+
+    // JF-718 (the addendum's sixth site): the favorites task's queue write used to
+    // precede BOTH the MediaNotFound early Tell and the refusal-throwing launch
+    // build, so a refused ask left a phantom queue a bare "open the skill" would
+    // resume from. This pin covers the directive-less leg; the ordering fix covers
+    // the throw (no throw leg is reachable without a token-gated source here).
+
+    [Fact]
+    public async Task HandleAsync_PlayFavoritesTask_FirstItemMissing_MediaNotFoundTellLeavesNoPhantomState()
+    {
+        var handler = CreateHandler();
+        var request = CreateTaskLaunchRequest("PlayFavorites");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        var audio = new Audio { Name = "Favorite Song", Id = Guid.NewGuid() };
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem> { audio });
+        // The favorites list is non-empty, but the head item cannot be re-fetched.
+        _libraryManagerMock.Setup(l => l.GetItemById(It.IsAny<Guid>()))
+            .Returns((BaseItem?)null);
+
+        // A PRIOR launch's now-playing state must SURVIVE the refused ask (the fix
+        // withholds the new write, it never clears the old state).
+        var priorItem = new Audio { Name = "Prior", Id = Guid.NewGuid() };
+        session.FullNowPlayingItem = priorItem;
+        session.NowPlayingQueue = new List<QueueItem> { new() { Id = priorItem.Id } };
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.NotNull(response.Response?.OutputSpeech);
+        // The speech text pins WHICH directive-less leg ran: the generic task-error
+        // catch (MediaSearchError) would leave the same session shape and green-light
+        // this pin without the ordering fix ever running.
+        Assert.Contains("could not find the media", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        Assert.True(response.Response?.Directives is null or { Count: 0 }, "the MediaNotFound Tell must carry no launch directive");
+
+        // No phantom write, and the pre-existing state is left untouched.
+        Assert.Same(priorItem, session.FullNowPlayingItem);
+        Assert.Single(session.NowPlayingQueue);
+        Assert.Equal(priorItem.Id, session.NowPlayingQueue[0].Id);
     }
 
     [Fact]

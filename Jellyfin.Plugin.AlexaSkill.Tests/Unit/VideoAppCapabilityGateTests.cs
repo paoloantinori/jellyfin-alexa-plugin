@@ -334,13 +334,22 @@ public class VideoAppCapabilityGateTests : PluginTestBase
         var handler = new PlayChannelIntentHandler(
             _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object, _fx.UserManager.Object, resolver.Object, _fx.LoggerFactory);
 
+        var session = _fx.CreateSession();
         SkillResponse response = await handler.HandleAsync(
             CreatePlayRequest("PlayChannelIntent", "channel", "CNN"),
-            TestHelpers.CreateScreenlessContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
+            TestHelpers.CreateScreenlessContext(), _fx.CreateUser(), session, CancellationToken.None);
 
         Assert.False(HasVideoAppDirective(response));
         Assert.True(response.Response.ShouldEndSession);
         Assert.Contains("requires a device with a screen", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+
+        // JF-718: the capability Tell is not a launch, so no phantom now-playing may
+        // survive it: the channel builder's session writes used to run BEFORE this
+        // check (inside the builder, unreachable by any handler-side gate),
+        // recording a phantom channel on the Dot that a later "what's playing"
+        // would answer.
+        Assert.Null(session.FullNowPlayingItem);
+        Assert.Empty(session.NowPlayingQueue);
     }
 
     // ========== Audio-content builders degrade to AudioPlayer ==========

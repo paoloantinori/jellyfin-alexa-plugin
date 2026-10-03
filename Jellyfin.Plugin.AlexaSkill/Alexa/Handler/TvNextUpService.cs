@@ -363,9 +363,6 @@ public sealed class TvNextUpService
             "EpisodeLaunch: resolved episode '{EpisodeName}' ({EpisodeId}) for series '{SeriesName}', announceLatest={AnnounceLatest}",
             episode.Name, episode.Id, series.Name, announceLatest);
 
-        session.NowPlayingQueue = new List<QueueItem> { new QueueItem { Id = episode.Id } };
-        session.FullNowPlayingItem = episode;
-
         // A next-up episode with playback progress is a resume: the JF-565 launch
         // slice restarts at the stored position and the announce says so. The
         // position resolves UserData-first with the plugin-owned ItemPositionState
@@ -443,10 +440,11 @@ public sealed class TvNextUpService
         // (observed case). JF-565: an in-progress next-up episode carries the resolved
         // position (the ?start= slice). JF-586: on a screenless device (an Echo Dot,
         // the web simulator) the episode launch degrades to the AudioPlayer audio-only
-        // route instead of the screen-required refusal; the session queue seeding above
-        // applies on both routes, so the JF-324 auto-advance (which exists only on the
-        // AudioPlayer event path) continues the series on the Dot.
-        return await _launch.BuildEpisodeLaunchResponseAsync(
+        // route instead of the screen-required refusal; the now-playing seeding below
+        // applies on BOTH routes (each delivers a directive), so the JF-324
+        // auto-advance (which exists only on the AudioPlayer event path) continues
+        // the series on the Dot.
+        SkillResponse response = await _launch.BuildEpisodeLaunchResponseAsync(
             context,
             request,
             locale,
@@ -455,6 +453,13 @@ public sealed class TvNextUpService
             episodeUrl,
             resumeTicks,
             speech).ConfigureAwait(false);
+
+        // JF-718: the now-playing writes follow the launch build and ride the
+        // delivered-launch gate; the rationale lives on AttachNowPlayingIfLaunched
+        // (the remux URL is token-gated, so a refusal throws before any write; the
+        // episode degrade always carries a directive, so the gate is belt here).
+        PlaybackLaunchBuilder.AttachNowPlayingIfLaunched(response, session, episode);
+        return response;
     }
 
     /// <summary>Delegates to RetryHelper.ExecuteWithRequestBudgetAsync with

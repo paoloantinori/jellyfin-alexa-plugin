@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
@@ -143,14 +144,10 @@ public class SkillConnectionHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("NoFavoriteItems", locale));
         }
 
-        var queueItems = new List<QueueItem>();
-        for (int i = 0; i < favoriteItems.Count; i++)
-        {
-            queueItems.Add(new QueueItem { Id = favoriteItems[i].Id });
-        }
-
-        session.NowPlayingQueue = queueItems;
-        BaseItem? firstItem = _libraryManager.GetItemById(queueItems[0].Id);
+        // The queue materializes ONLY inside the delivered-launch gate (the lazy
+        // Select, the same shape PlayRandom's shuffle rides): a deleted head item
+        // answers MediaNotFound without building the full favorites list first.
+        BaseItem? firstItem = _libraryManager.GetItemById(favoriteItems[0].Id);
         if (firstItem == null)
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale));
@@ -162,11 +159,15 @@ public class SkillConnectionHandler : BaseHandler
         // dying on the raw static bytes (JF-505 does not apply: audio-shaped launch).
         AudioLaunchSource source = Launch.ResolveAudioLaunchSource(firstItem, itemId, user, 0);
 
-        // JF-699 item 5: launch build BEFORE the now-playing write (the ordering
-        // policy lives on EnsureStreamTokenDeliverable; the transcode-routed source
-        // is token-gated, so a refusal must not leave a phantom now-playing).
+        // JF-699 item 5 + JF-718: launch build BEFORE the now-playing writes, and BOTH
+        // writes ride the delivered-launch gate. The queue write used to precede the
+        // MediaNotFound Tell (and the refusal-throwing build), so a bare
+        // "open the skill" afterwards resumed from the phantom favorites queue.
+        // BuildAudioPlayerResponse is throw-or-launch today, so the gate is belt;
+        // AttachNowPlayingIfLaunched homes the NOT-tautological rationale.
         SkillResponse response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source, itemId, firstItem, user, context);
-        session.FullNowPlayingItem = firstItem;
+        PlaybackLaunchBuilder.AttachNowPlayingIfLaunched(
+            response, session, favoriteItems.Select(f => new QueueItem { Id = f.Id }), firstItem);
         return response;
     }
 
