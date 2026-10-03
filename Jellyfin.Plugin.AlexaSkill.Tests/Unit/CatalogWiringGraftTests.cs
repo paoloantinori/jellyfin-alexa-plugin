@@ -1,7 +1,9 @@
 #nullable enable
 using System;
+using System.Reflection;
 using System.Text.Json;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
+using Jellyfin.Plugin.AlexaSkill.Tests.Catalog;
 using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
@@ -9,7 +11,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 /// <summary>
 /// JF-552: the graft that preserves live catalog wiring across an embedded-model
 /// rebuild PUT. Extraction tolerates anything; application delegates to the
-/// catalog sync's single injection implementation.
+/// catalog sync's single injection implementation. JF-727 adds the
+/// keyed-extraction pins: the extraction follows the slot-type-name table.
 /// </summary>
 public class CatalogWiringGraftTests
 {
@@ -95,6 +98,85 @@ public class CatalogWiringGraftTests
             + "{\"name\":\"AlbumName\",\"valueSupplier\":\"not-an-object\"}");
 
         Assert.Null(CatalogWiringGraft.ExtractWiring(live));
+    }
+
+    /// <summary>
+    /// JF-727 review: a non-string scalar in a type entry's name (parseable
+    /// JSON, e.g. a number) makes JsonElement.GetString() THROW
+    /// InvalidOperationException, which the JsonException-only catch does not
+    /// cover; the ValueKind guard must skip the entry per the tolerant
+    /// contract instead. The mixed shape also proves the skip is per-entry:
+    /// the well-formed sibling still extracts.
+    /// </summary>
+    [Fact]
+    public void ExtractWiring_ScalarNameType_SkipsEntryWithoutThrowing()
+    {
+        string live = LiveModelJson(
+            "{\"name\":123,\"valueSupplier\":{\"valueCatalog\":{\"catalogId\":\"bad\",\"version\":\"1\"}}},"
+            + WiredType(SeriesTypeName, "series-3", "9"));
+
+        var wiring = CatalogWiringGraft.ExtractWiring(live);
+
+        Assert.NotNull(wiring);
+        Assert.Equal("series-3", wiring!.SeriesId);
+        Assert.Null(wiring.ArtistId);
+        Assert.Null(wiring.AlbumId);
+    }
+
+    /// <summary>
+    /// JF-727: the extraction is keyed off CatalogSlotTypes.CatalogSlotTypeNames
+    /// (through its reverse lookup, TryGetCatalogTypeForSlotTypeName), not a hand
+    /// if/else of three names. That lookup's only call site in the plugin is
+    /// ExtractWiring; reverting the extraction to a per-type if/else drops the
+    /// call, and with it a future synced type's wiring, and fails this pin.
+    /// Uses the shared single-call-site assertion (LibrarySyncServiceStructureTests
+    /// .AssertOnlyCallerIs, the JF-727 simplify hoist of that idiom).
+    /// </summary>
+    [Fact]
+    public void ExtractWiring_IsKeyedByTheSlotTypeTable_TheReverseLookupCallSite()
+    {
+        MethodBase lookup = LibrarySyncServiceStructureTests.RequireMethod(
+            typeof(CatalogSlotTypes),
+            "TryGetCatalogTypeForSlotTypeName",
+            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static,
+            "an internal static method");
+
+        MethodBase expectedCaller = LibrarySyncServiceStructureTests.RequireMethod(
+            typeof(CatalogWiringGraft),
+            "ExtractWiring",
+            BindingFlags.NonPublic | BindingFlags.Static,
+            "an internal static method of CatalogWiringGraft");
+
+        LibrarySyncServiceStructureTests.AssertOnlyCallerIs(
+            typeof(CatalogWiringGraft).Assembly,
+            lookup,
+            "TryGetCatalogTypeForSlotTypeName",
+            expectedCaller,
+            "CatalogWiringGraft.ExtractWiring (the JF-727 keyed extraction)");
+    }
+
+    /// <summary>
+    /// JF-727: every slot type name the sync table declares
+    /// (CatalogSlotTypes.CatalogSlotTypeNames) must be extractable into a
+    /// non-empty CatalogWiring. Pins the coverage contract end to end: adding
+    /// a fourth synced type's table entry without extending CatalogWiring (and
+    /// the positional construction in ExtractWiring, which arity forces) fails
+    /// here, because that type's wiring would extract nowhere and Apply would
+    /// re-PUT its rebuilt model unwired.
+    /// </summary>
+    [Fact]
+    public void ExtractWiring_EveryCatalogSlotTypeName_ExtractsIntoWiring()
+    {
+        foreach (var (catalogType, slotTypeName) in CatalogSlotTypes.CatalogSlotTypeNames)
+        {
+            string live = LiveModelJson(WiredType(slotTypeName, "catalog-for-" + catalogType, "1"));
+
+            var wiring = CatalogWiringGraft.ExtractWiring(live);
+
+            Assert.True(
+                wiring != null && wiring.Any,
+                $"A live model wiring only {slotTypeName} ({catalogType}) must extract into a non-empty CatalogWiring: the extraction is keyed off CatalogSlotTypeNames, and the record must cover every synced type so a rebuild PUT never drops it unwired (JF-727)");
+        }
     }
 
     [Fact]

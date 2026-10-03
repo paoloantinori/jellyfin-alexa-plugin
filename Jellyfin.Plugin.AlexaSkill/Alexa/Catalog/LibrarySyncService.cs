@@ -141,16 +141,69 @@ public class LibrarySyncService
 
         var totalSw = System.Diagnostics.Stopwatch.StartNew();
 
-        // Fetch library items once (shared across locales)
-        var artistItems = FetchLibraryItems(jellyfinUser, user, BaseItemKind.MusicArtist);
-        var albumItems = FetchLibraryItems(jellyfinUser, user, BaseItemKind.MusicAlbum);
-        var seriesItems = FetchLibraryItems(jellyfinUser, user, BaseItemKind.Series);
+        // JF-706: the ONE per-type wiring table for the whole sync (locale-
+        // invariant, built once; the accessors read and write the user's
+        // stored catalog ids live). The per-leg loop inside RunLegAsync, the
+        // injection gate, the per-type id/version extraction at the
+        // UpdateInteractionModelAsync call, (JF-711) the stored-id write-back
+        // inside SyncCatalogForLocaleAsync, and (JF-727) the item sourcing
+        // loop right below all derive from this list, collapsing three
+        // parallel call sites, the gate, six positional injection arguments,
+        // the per-type id assignment, and the hand block of three fetches
+        // with its count assignments and emptiness conjunction (the repo's
+        // "missed one" bug class: a missed site compiles clean and freezes
+        // or syncs inconsistently). The catalog id is a GETTER, not a
+        // snapshot: SyncCatalogForLocaleAsync stores a newly created id
+        // through the getter's paired SETTER, so it is read live at the leg
+        // call and re-read right after the leg returns (final from there: a
+        // leg writes only its own type's id). JF-711: the setter is a
+        // required tuple element, so a fourth catalog type is a one-row edit
+        // HERE (plus, outside this file, the CatalogSlotTypeNames forward
+        // entry in CatalogSlotTypes that the injection and the graft
+        // extraction key on: forgetting it leaves the fourth type synced but
+        // never wired, surfacing only later as InjectCatalogReferences'
+        // KeyNotFoundException mid-sync; and the SyncResult count property
+        // the DTO boundary below owns) whose write-back, fetch, count, and
+        // conjunction term exist by construction. The CatalogManager
+        // per-type surface stays
+        // deliberately outside this table (the JF-706 context boundary: a
+        // real fourth synced type forces those edits loudly through
+        // signature arity), and so does the SyncResult DTO's fixed per-type
+        // count set (JF-727's deliberate stop: a public surface not worth
+        // generalizing; the counts ride the table through StoreCount
+        // instead). JF-727 folded the last two compile-silent per-type
+        // sites, this sourcing loop and CatalogWiringGraft.ExtractWiring
+        // (keyed off CatalogSlotTypes.CatalogSlotTypeNames), into
+        // table-driven shapes.
+        var typeLegs = new (CatalogType Type, BaseItemKind Kind, IReadOnlyList<BaseItem> Items, Func<string?> StoredCatalogId, Action<string> StoreCatalogId, Action<int> StoreCount, string Name, string Description)[]
+        {
+            (CatalogType.Artist, BaseItemKind.MusicArtist, Array.Empty<BaseItem>(), () => user.ArtistCatalogId, id => user.ArtistCatalogId = id, count => result.ArtistCount = count, "Jellyfin Artists", "Artist catalog synced from Jellyfin library"),
+            (CatalogType.Album, BaseItemKind.MusicAlbum, Array.Empty<BaseItem>(), () => user.AlbumCatalogId, id => user.AlbumCatalogId = id, count => result.AlbumCount = count, "Jellyfin Albums", "Album catalog synced from Jellyfin library"),
+            (CatalogType.Series, BaseItemKind.Series, Array.Empty<BaseItem>(), () => user.SeriesCatalogId, id => user.SeriesCatalogId = id, count => result.SeriesCount = count, "Jellyfin Series", "Series catalog synced from Jellyfin library"),
+        };
 
-        result.ArtistCount = artistItems.Count;
-        result.AlbumCount = albumItems.Count;
-        result.SeriesCount = seriesItems.Count;
+        // JF-727: item sourcing derives from the same table, replacing the
+        // hand block of three fetches, three count assignments, and a
+        // three-way emptiness conjunction. Each row's items are fetched once
+        // (shared across locales) by the row's Kind, in row order (Artist,
+        // Album, Series), preserving the pre-JF-727 fetch order so the
+        // per-type item feeds, and therefore the payload bytes the JF-717
+        // equivalence classes hash, are unchanged. The count lands through
+        // the row's StoreCount element; the emptiness pre-check reads the
+        // collection, so a fourth type's row cannot be silently excluded
+        // from it: the pre-JF-727 missed CONJUNCTION term was behavioral (a
+        // library holding only the missed type's items took the emptiness
+        // skip and never synced), the missed count only cosmetic. The Items
+        // placeholder is unconditionally replaced for every row before
+        // anything reads it.
+        for (int i = 0; i < typeLegs.Length; i++)
+        {
+            ref var leg = ref typeLegs[i];
+            leg.Items = FetchLibraryItems(jellyfinUser, user, leg.Kind);
+            leg.StoreCount(leg.Items.Count);
+        }
 
-        if (artistItems.Count == 0 && albumItems.Count == 0 && seriesItems.Count == 0)
+        if (typeLegs.All(leg => leg.Items.Count == 0))
         {
             _logger.LogWarning("No artists, albums or series found for user {UserId}, skipping sync", user.Id);
             return result;
@@ -169,37 +222,6 @@ public class LibrarySyncService
         // regardless of locale order. The full dedup/wiring contract lives at
         // the skip check in SyncCatalogForLocaleAsync.
         Dictionary<string, string> mintedVersionsByPayload = new(StringComparer.Ordinal);
-
-        // JF-706: the ONE per-type wiring table for the whole sync (locale-
-        // invariant, built once; the accessors read and write the user's
-        // stored catalog ids live). The per-leg loop inside RunLegAsync, the
-        // injection gate, the per-type id/version extraction at the
-        // UpdateInteractionModelAsync call, and (JF-711) the stored-id
-        // write-back inside SyncCatalogForLocaleAsync all derive from this
-        // list, collapsing three parallel call sites, the gate, six positional
-        // injection arguments, and the per-type id assignment (the repo's
-        // "missed one" bug class: a missed site compiles clean and freezes or
-        // syncs inconsistently). The catalog id is a GETTER, not a snapshot:
-        // SyncCatalogForLocaleAsync stores a newly created id through the
-        // getter's paired SETTER, so it is read live at the leg call and
-        // re-read right after the leg returns (final from there: a leg writes
-        // only its own type's id). JF-711: the setter is a required tuple
-        // element, so a fourth catalog type is a one-row edit HERE whose
-        // write-back exists by construction; the pre-JF-711 per-type if/else
-        // in SyncCatalogForLocaleAsync compiled clean without the new type's
-        // branch, leaving its getter null forever and re-creating its catalog
-        // on every run. The CatalogManager per-type surface stays deliberately
-        // outside this table (the JF-706 context boundary: a real fourth
-        // synced type forces those edits loudly through signature arity). The
-        // remaining compile-silent per-type sites OUTSIDE the table (the
-        // item-sourcing block above and CatalogWiringGraft.ExtractWiring) are
-        // tracked as JF-727.
-        var typeLegs = new (CatalogType Type, IReadOnlyList<BaseItem> Items, Func<string?> StoredCatalogId, Action<string> StoreCatalogId, string Name, string Description)[]
-        {
-            (CatalogType.Artist, artistItems, () => user.ArtistCatalogId, id => user.ArtistCatalogId = id, "Jellyfin Artists", "Artist catalog synced from Jellyfin library"),
-            (CatalogType.Album, albumItems, () => user.AlbumCatalogId, id => user.AlbumCatalogId = id, "Jellyfin Albums", "Album catalog synced from Jellyfin library"),
-            (CatalogType.Series, seriesItems, () => user.SeriesCatalogId, id => user.SeriesCatalogId = id, "Jellyfin Series", "Series catalog synced from Jellyfin library"),
-        };
 
         async Task<IReadOnlyList<CatalogType>> RunLegAsync(string locale)
         {

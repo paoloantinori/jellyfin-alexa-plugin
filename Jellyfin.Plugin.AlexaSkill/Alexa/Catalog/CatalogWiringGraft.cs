@@ -1,4 +1,5 @@
 #nullable enable
+using System.Collections.Generic;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
@@ -51,17 +52,26 @@ internal static class CatalogWiringGraft
                 return null;
             }
 
-            string? artistId = null, artistVersion = null;
-            string? albumId = null, albumVersion = null;
-            string? seriesId = null, seriesVersion = null;
+            // JF-727: per-type extraction keyed off the slot-type-name table
+            // (CatalogSlotTypes.CatalogSlotTypeNames through its reverse
+            // lookup), not a hand if/else: the pre-JF-727 chain matched
+            // exactly three names, so a fourth synced type's catalog reference
+            // was silently DROPPED here and Apply re-PUT its rebuilt model
+            // unwired after every model rebuild. Last-wins on a duplicate
+            // slot-type name, the if/else's behavior.
+            var wiringByType = new Dictionary<CatalogType, (string? Id, string? Version)>();
 
             foreach (var type in types.EnumerateArray())
             {
                 // ValueKind guards: TryGetProperty THROWS on non-object nodes, and a
                 // null/scalar valueSupplier or valueCatalog is exactly the malformed
-                // shape the tolerant contract must skip, not crash on (JF-555 S3).
+                // shape the tolerant contract must skip, not crash on (JF-555 S3;
+                // the name guard extended to non-string kinds by JF-727 review:
+                // GetString() THROWS InvalidOperationException on a scalar name,
+                // and the JsonException-only catch above does not cover it).
                 if (type.ValueKind != JsonValueKind.Object
                     || !type.TryGetProperty("name", out var nameEl)
+                    || nameEl.ValueKind != JsonValueKind.String
                     || nameEl.GetString() is not { } typeName
                     || !type.TryGetProperty("valueSupplier", out var supplier)
                     || supplier.ValueKind != JsonValueKind.Object
@@ -74,24 +84,26 @@ internal static class CatalogWiringGraft
                 string? id = catalog.TryGetProperty("catalogId", out var idEl) && idEl.ValueKind == JsonValueKind.String ? idEl.GetString() : null;
                 string? version = catalog.TryGetProperty("version", out var versionEl) && versionEl.ValueKind == JsonValueKind.String ? versionEl.GetString() : null;
 
-                if (typeName == CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Artist])
+                if (CatalogSlotTypes.TryGetCatalogTypeForSlotTypeName(typeName, out var catalogType))
                 {
-                    artistId = id;
-                    artistVersion = version;
-                }
-                else if (typeName == CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Album])
-                {
-                    albumId = id;
-                    albumVersion = version;
-                }
-                else if (typeName == CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Series])
-                {
-                    seriesId = id;
-                    seriesVersion = version;
+                    wiringByType[catalogType] = (id, version);
                 }
             }
 
-            var wiring = new CatalogWiring(artistId, artistVersion, albumId, albumVersion, seriesId, seriesVersion);
+            // The positional CatalogWiring construction is the deliberately loud
+            // edge (the JF-706 context boundary): a fourth synced type extends
+            // the record first, and this site fails to compile until its
+            // WiringOf read joins. An absent type reads as (null, null), the
+            // JF-495 rule the injection side applies structurally.
+            (string? Id, string? Version) WiringOf(CatalogType type) => wiringByType.GetValueOrDefault(type);
+
+            var wiring = new CatalogWiring(
+                WiringOf(CatalogType.Artist).Id,
+                WiringOf(CatalogType.Artist).Version,
+                WiringOf(CatalogType.Album).Id,
+                WiringOf(CatalogType.Album).Version,
+                WiringOf(CatalogType.Series).Id,
+                WiringOf(CatalogType.Series).Version);
             return wiring.Any ? wiring : null;
         }
     }

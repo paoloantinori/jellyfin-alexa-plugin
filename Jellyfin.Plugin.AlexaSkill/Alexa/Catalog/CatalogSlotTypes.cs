@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
 
@@ -100,4 +101,40 @@ public static class CatalogSlotTypes
         // the static type everywhere and no slot re-typing is needed.
         [CatalogType.Series] = "SeriesName"
     };
+
+    /// <summary>
+    /// JF-727: the reverse of <see cref="CatalogSlotTypeNames"/>, keying a live
+    /// model's slot-type name back to its catalog type for the wiring extraction
+    /// (CatalogWiringGraft.ExtractWiring). Lives beside the forward map it
+    /// inverts so the two directions cannot drift apart, and DERIVED from it so
+    /// a fourth synced type's forward entry joins the reverse lookup by
+    /// construction. The name-keyed extraction it feeds replaces the pre-JF-727
+    /// per-type if/else that silently dropped a fourth type's catalog reference
+    /// from a rebuild PUT (Apply would have re-PUT the rebuilt model unwired);
+    /// the CatalogWiring record and InjectCatalogReferences stay positional on
+    /// purpose (the JF-706 context boundary: a real fourth synced type forces
+    /// those edits loudly through signature arity).
+    /// INITIALIZATION CONTRACT: this field must stay declared AFTER
+    /// <see cref="CatalogSlotTypeNames"/> (static field initializers run in
+    /// textual order; inverting a not-yet-initialized forward map fails the
+    /// whole type at first touch with TypeInitializationException). A duplicate
+    /// VALUE in the forward map (two synced types sharing a slot-type name, a
+    /// copy-paste edit) makes the ToDictionary below throw ArgumentException at
+    /// type initialization, deliberately loud: the injection would otherwise
+    /// fight over one model type block. Duplicates in a LIVE MODEL's types
+    /// array are a different surface and stay last-wins in the extraction.
+    /// </summary>
+    private static readonly Dictionary<string, CatalogType> CatalogTypeBySlotTypeName =
+        CatalogSlotTypeNames.ToDictionary(kvp => kvp.Value, kvp => kvp.Key, StringComparer.Ordinal);
+
+    /// <summary>
+    /// Resolves the catalog type a slot-type name belongs to (JF-727); see
+    /// <see cref="CatalogTypeBySlotTypeName"/>. Internal: only the wiring
+    /// extraction (and its structure pin) needs the reverse direction.
+    /// </summary>
+    /// <param name="slotTypeName">The slot type name read from a live model's types array.</param>
+    /// <param name="catalogType">The matching catalog type, when the name is a synced catalog slot type.</param>
+    /// <returns>True when the name maps to a catalog type in sync scope.</returns>
+    internal static bool TryGetCatalogTypeForSlotTypeName(string slotTypeName, out CatalogType catalogType) =>
+        CatalogTypeBySlotTypeName.TryGetValue(slotTypeName, out catalogType);
 }
