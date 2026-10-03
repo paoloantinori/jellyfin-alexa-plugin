@@ -91,6 +91,14 @@ IlCallScanner.cs is next in an edit surface: graduate an
 scanner (expressing CallTokens/NewobjTokens/OperandTokens over it), add the
 ldc-int-operand surface beside them, and make the JF-726 pin delegate like
 every other roster consumer; then delete the private copy.
+
+GATE-MARKER ANNOTATION (2026-10-03, JF-726 orchestrator review): FINDING 1 (the CI-red
+discovery) is FIXED on main by 9353de90, verified green (CI run 37149291498; the fix
+removed the ConfigureAwait(false) from the [Fact] test method - xUnit1030 fires only on
+test methods, and ConfigureAwait is a no-op in xUnit anyway). This task's LIVE scope is
+FINDING 2 ONLY (the IlCallScanner.OperandTokens graduation: the offset-walk plus ldc
+surface moves into the shared scanner, CallTokens/NewobjTokens/OperandTokens expressed
+over it, the JF-726 copy deleted; the phantom-window opcode-aware-walk fix rides it).
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done

@@ -1572,7 +1572,14 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
         Assert.True(
             birthCalls.Count == 1
-                && IlCallScanner.LogicalMethodName(birthCalls[0].Method) == nameof(ServeInLockWarmCacheAsync),
+                && IlCallScanner.LogicalMethodName(birthCalls[0].Method) == nameof(ServeInLockWarmCacheAsync)
+                // Gate-marker tail (the RC1 asymmetry): confine by top-level
+                // type too, the same guard the continuation-body set carries,
+                // so a same-named method on a NESTED type (which can legally
+                // call this private static) cannot satisfy the fact while the
+                // real helper lost its birth attachment.
+                && birthCalls[0].Method.DeclaringType is not null
+                && IlCallScanner.TopLevelType(birthCalls[0].Method.DeclaringType) == typeof(VideoAudioControllerTests),
             $"MarkEndpointFaultObserved must be called exactly once, from ServeInLockWarmCacheAsync's own body (the endpoint's birth site; zero = the call was deleted, the JF-704 regression; a wrong site or a higher count = the attachment moved or multiplied); found {birthCalls.Count} at [{string.Join(", ", birthCalls.Select(call => $"{call.Method.DeclaringType!.FullName}.{IlCallScanner.LogicalMethodName(call.Method)}"))}]");
 
         // The birth property, as an ordering fact: the backstop call must
@@ -1660,6 +1667,26 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Assert.True(
             IlCallScanner.CallsGetter(continuationBodies[0], module, exceptionGetter),
             "the backstop's continuation body must read Task.Exception: reading it IS the observation, and an emptied body re-creates the unobserved-fault stranding the JF-704 backstop exists to close");
+
+        // Gate-marker tail F2 (the body-scoped receiver tie): the RC2 tie at
+        // the call site stops at the method boundary - nothing tied the
+        // ContinueWith RECEIVER inside MarkEndpointFaultObserved's body to
+        // the endpointTask parameter, so a wrong-task refactor one level
+        // deeper escaped all six facts. This straight-line body's first
+        // instruction being the parameter load (ldarg.0) makes the one
+        // ContinueWith's receiver the parameter by construction (nothing
+        // else can sit under it on the stack); a body that never loads the
+        // parameter, or loads something else first, reds here.
+        byte[] backstopMethodIl = backstopBody!.GetMethodBody()!.GetILAsByteArray();
+        int receiverLoad = 0;
+        while (receiverLoad < backstopMethodIl.Length && backstopMethodIl[receiverLoad] == 0x00)
+        {
+            receiverLoad++; // Debug-build nops precede the real first instruction
+        }
+
+        Assert.True(
+            receiverLoad < backstopMethodIl.Length && backstopMethodIl[receiverLoad] == 0x02,
+            "MarkEndpointFaultObserved's body's first real instruction must load the endpointTask parameter (ldarg.0), the receiver of its one ContinueWith: a body loading anything else first has detached the backstop from the task it exists to observe (JF-726 gate-marker F2)");
     }
 
     /// <summary>
@@ -1682,7 +1709,9 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// <see cref="TaskContinuationOptions"/>) compiles to. Scanning only the
     /// 0x20 encoding is TOTAL for the pin's fact, not an encoding gamble:
     /// any constant carrying the OnlyOnFaulted bits (0x50000 = 327680)
-    /// exceeds every short encoding (ldc.i4.s caps at 127, the no-operand
+    /// short encodings: any NON-NEGATIVE enum-folded constant carrying OnlyOnFaulted
+    /// (0x50000) exceeds them (sign-extended negatives like ldc.i4.m1 carry the bits yet
+    /// ARE short-encodable; the exact-value fact stays safe - 0xD0000 is positive).
     /// family at 8), so the compiler can only emit it as ldc.i4.
     /// </summary>
     private static IEnumerable<int> LdcI4Operands(MethodBase method)

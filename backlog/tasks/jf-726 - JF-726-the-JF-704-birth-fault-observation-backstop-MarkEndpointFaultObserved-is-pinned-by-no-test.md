@@ -74,6 +74,19 @@ registry writes after teardown; pulling the settle inside the test's lifetime
 happens solely on the throwing arm. A fix for THAT leg on the timeout exit is the
 20s wait itself (i.e. accepting the budget), so the honest options are the seam of
 shape 2 or explicitly declaring the timeout exit best-effort.
+
+GATE-MARKER TAIL (2026-10-03, orchestrator review of commit e940f9b3 + the rebase merge,
+6 findings; the reviewer closed the constants axis against the COMPILED merged-tree DLLs
+by byte-scanning both TFMs and executing the pin green, and re-derived the byte-walk
+bounds): F3 already satisfied by the orchestrator's rebased full-suite run (5068/5068
+both TFMs exit 0 on the exact merged tree). F4 APPLIED (the birth-caller fact gains the
+TopLevelType confinement the continuation-body set already carried). F2 APPLIED (the
+body-scoped receiver tie: MarkEndpointFaultObserved's body must begin with the ldarg.0
+parameter load, making the one ContinueWith's receiver the parameter by construction in
+the straight-line body - the RC2 call-site tie stopped at the method boundary). F5
+APPLIED (the LdcI4Operands impossibility doc scoped to non-negative enum-folded
+constants). F1 APPLIED (the JF-736 task file annotated: its finding 1 fixed by 9353de90,
+live scope narrowed to the scanner hoist). F6 already tracked as JF-736 finding 2.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done
