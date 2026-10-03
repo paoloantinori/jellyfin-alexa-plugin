@@ -204,6 +204,58 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
+    /// JF-711 write-back pin: on a clean first sync, each catalog type's
+    /// created id must land on its OWN user field through the per-type wiring
+    /// table's threaded setter (the getter/setter pair that replaced the
+    /// CatalogType-keyed if/else in SyncCatalogForLocaleAsync). Each row's
+    /// setter must hit its own field: a swapped or dropped row setter
+    /// misroutes an id, its getter then stays null, and every later run
+    /// re-creates that catalog (SMAPI quota burn), the compile-silent
+    /// missed-one shape this task closed at the table arity. The PUT body is
+    /// asserted too, closing the two shapes the field asserts alone miss: a
+    /// getter bound to a DIFFERENT field than its setter (fields pass, but
+    /// the minted pair re-reads the wrong getter and forwards a null id), and
+    /// a swapped row Type (fields pass, but the minted table is keyed by the
+    /// wrong CatalogType). The negative direction (a type that never reaches
+    /// creation stores nothing) is pinned above by the isolation test's
+    /// user.ArtistCatalogId null assert.
+    /// </summary>
+    [Fact]
+    public async Task SyncUserLibraryAsync_AllTypesCreated_PersistsEachTypeCatalogId()
+    {
+        // Arrange: all three types have items, nothing is frozen, it-IT only.
+        SetupLibraryWithAllTypes();
+        var user = CreateUser();
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
+
+        // Act
+        var result = await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
+
+        // Assert: every row's write-back landed on its own field (the fake
+        // mints a distinct id per catalog name, so a cross-wired setter
+        // cannot pass this).
+        Assert.True(result.Success);
+        Assert.Equal(ArtistCatalogId, user.ArtistCatalogId);
+        Assert.Equal(AlbumCatalogId, user.AlbumCatalogId);
+        Assert.Equal(SeriesCatalogId, user.SeriesCatalogId);
+
+        // And each row's getter/setter pair and Type key agree: the model PUT
+        // wires all three slot types with their own catalog ids (a misbound
+        // getter or swapped Type forwards a null id, leaving that slot type's
+        // static seed in place instead of a valueSupplier).
+        Assert.NotNull(_smapiHandler.LastModelPutBody);
+        Assert.Equal(
+            ArtistCatalogId,
+            GetTypeNode(_smapiHandler.LastModelPutBody!, "JellyfinArtist").GetProperty("valueSupplier").GetProperty("valueCatalog").GetProperty("catalogId").GetString());
+        Assert.Equal(
+            AlbumCatalogId,
+            GetTypeNode(_smapiHandler.LastModelPutBody!, "AlbumName").GetProperty("valueSupplier").GetProperty("valueCatalog").GetProperty("catalogId").GetString());
+        Assert.Equal(
+            SeriesCatalogId,
+            GetTypeNode(_smapiHandler.LastModelPutBody!, "SeriesName").GetProperty("valueSupplier").GetProperty("valueCatalog").GetProperty("catalogId").GetString());
+    }
+
+    /// <summary>
     /// Isolation must not swallow the leg-level machinery: a NON-invariant
     /// failure in one type (here an HttpRequestException from the album leg,
     /// simulating a network/SMAPI failure) still fails the WHOLE locale leg -
