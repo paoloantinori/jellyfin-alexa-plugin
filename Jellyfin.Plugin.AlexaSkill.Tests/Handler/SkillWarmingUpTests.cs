@@ -12,6 +12,7 @@ using Jellyfin.Plugin.AlexaSkill.Alexa.Handler.Intent;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
+using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using Microsoft.Extensions.Logging;
@@ -220,6 +221,31 @@ public class SkillWarmingUpTests : PluginTestBase
                 _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory,
                 artistIndex: ReadyArtistIndex(), songNgramIndex: index),
             CreateIntentRequest(IntentNames.FindSongIntent, titleKeywords: "cater street"));
+
+    /// <summary>
+    /// JF-715 (code-review round): FindSong's entry gate covers the SONG index
+    /// only (the keywords path); its musician legs rely on the ArtistSearch
+    /// JF-419.2 choke point for a warming ARTIST index. The JF-715 pool-threading
+    /// pin must pass the index THROUGH (the not-ready pinned view), never null it
+    /// out: a null would silently route the leg to the cold database chain
+    /// instead of the warming Tell (the JF-419 live-incident class). The fake's
+    /// capture is the identity, so this drives the not-ready-VIEW shape the
+    /// production CaptureSnapshot produces.
+    /// </summary>
+    [Fact]
+    public Task FindSong_MusicianLeg_ArtistIndexWarming_ThrowsAtTheChokePoint()
+    {
+        var handler = new FindSongIntentHandler(
+            _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object,
+            _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory,
+            artistIndex: new FakeArtistIndex(Array.Empty<BaseItem>(), isReady: false),
+            songNgramIndex: Mock.Of<ISongNgramIndex>(i => i.IsReady == true));
+
+        return AssertThrowsWarmingAsync(
+            handler,
+            CreateIntentRequest(IntentNames.FindSongIntent, musician: "pink floyd"),
+            "artist");
+    }
 
     [Fact]
     public Task PlaySong_SongIndexWarmingArtistReady_ThrowsAtEntry()

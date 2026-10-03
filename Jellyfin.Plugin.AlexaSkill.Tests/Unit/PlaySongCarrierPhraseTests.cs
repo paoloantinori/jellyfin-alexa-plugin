@@ -28,14 +28,14 @@ public class PlaySongCarrierPhraseTests
     [InlineData("La Canzone Sugar Free Jazz", "Sugar Free Jazz")]
     public void StripSongCarrierPhrase_RemovesCarrierPhrases(string input, string expected)
     {
-        string result = PlaySongIntentHandler.StripSongCarrierPhrase(input);
+        string result = MultiValueErDisambiguation.StripSongCarrierPhrase(input);
         Assert.Equal(expected, result);
     }
 
     [Fact]
     public void StripSongCarrierPhrase_MatchesDespiteLeadingWhitespace()
     {
-        string result = PlaySongIntentHandler.StripSongCarrierPhrase("  la canzone test song");
+        string result = MultiValueErDisambiguation.StripSongCarrierPhrase("  la canzone test song");
         Assert.Equal("test song", result);
     }
 }

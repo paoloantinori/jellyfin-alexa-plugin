@@ -792,6 +792,56 @@ public class ArtistSearchTests
         InternalItemsQuery q, CancellationToken t) =>
         throw new InvalidOperationException("In-memory path must not hit the database");
 
+    // --- JF-715: the preloadedPool axis (the gate's fetch seeds the chain) ---
+
+    [Fact]
+    public async Task SearchAsync_PreloadedPool_ConsumedInsteadOfTheInternalFetch_SameResults()
+    {
+        // The zero-resolve fall-through contract: a pool built exactly the way
+        // the parameter's contract demands (the same view's scoped fetch)
+        // replaces the in-memory tier-1 materialization (the counting index sees
+        // NO second GetArtists) and the chain returns the same artist the
+        // internal fetch would have found.
+        var koop = new MusicArtist { Name = "Koop", Id = Guid.NewGuid() };
+        var counting = new CountingArtistIndex(
+            new FakeArtistIndex(new[] { koop }, FakeArtistIndex.CodesFromArtistNames(koop)));
+
+        // The gate's fetch (the only GetArtists the leg pays).
+        IReadOnlyList<BaseItem> pool = counting.GetArtists(null);
+        Assert.Equal(1, counting.GetArtistsCalls);
+
+        var result = await ArtistSearch.SearchAsync(
+            "cup", user: null, libraryManager: Mock.Of<ILibraryManager>(), artistIndex: counting,
+            logger: Logger, dbQuery: NotCalled, locale: "en-US", cancellationToken: CancellationToken.None,
+            preloadedPool: pool);
+
+        var match = Assert.Single(result);
+        Assert.Equal("Koop", match.Name);
+        Assert.Equal(1, counting.GetArtistsCalls);
+    }
+
+    [Fact]
+    public async Task SearchAsync_PreloadedPool_NoIndex_TakesDbBranch_PoolIgnored()
+    {
+        // The pool is an IN-MEMORY-branch axis only: a chain with no index takes
+        // the database branch whatever pool is passed (no caller can thread a
+        // pool into a cold chain today, the gate ships none; a not-ready index
+        // is the WARMING shape and throws at the choke point before this). The
+        // pin locks the direction so a future caller cannot accidentally trust a
+        // stale pool on the DB path.
+        var koop = new MusicArtist { Name = "Koop", Id = Guid.NewGuid() };
+
+        var result = await ArtistSearch.SearchAsync(
+            "koop", user: null, libraryManager: Mock.Of<ILibraryManager>(), artistIndex: null,
+            logger: Logger,
+            dbQuery: (q, t) => Task.FromResult<IReadOnlyList<BaseItem>>(new List<BaseItem> { koop }),
+            locale: "en-US", cancellationToken: CancellationToken.None,
+            preloadedPool: new List<BaseItem> { koop });
+
+        var match = Assert.Single(result);
+        Assert.Equal("Koop", match.Name);
+    }
+
     // --- JF-457: album-scope post-filter on the items-by-name bypass DB tiers ---
 
     /// <summary>

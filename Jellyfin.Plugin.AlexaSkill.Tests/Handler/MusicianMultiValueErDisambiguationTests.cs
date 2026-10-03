@@ -63,16 +63,10 @@ public class MusicianMultiValueErDisambiguationTests : PluginTestBase, IDisposab
             _fx.LoggerFactory,
             index);
 
+    // JF-715: delegates to the ONE shared builder (TestHelpers.CreatePlaySongIntent,
+    // the CountingArtistIndex hoist convention) keeping this suite's local name.
     private static IntentRequest CreateSongIntent(string song, Slot musicianSlot, string locale = "it-IT")
-    {
-        var intent = new Intent { Name = IntentNames.PlaySong };
-        intent.Slots = new Dictionary<string, Slot>
-        {
-            ["song"] = new Slot { Name = "song", Value = song },
-            ["musician"] = musicianSlot
-        };
-        return new IntentRequest { Intent = intent, Locale = locale, RequestId = "test-req" };
-    }
+        => TestHelpers.CreatePlaySongIntent(song, musicianSlot, locale);
 
     private static IntentRequest CreateArtistIntent(Slot musicianSlot, string locale = "it-IT")
     {
@@ -490,6 +484,33 @@ public class MusicianMultiValueErDisambiguationTests : PluginTestBase, IDisposab
         Assert.NotNull(TestHelpers.GetPlayDirective(response));
         Assert.True(response.Response.ShouldEndSession == true);
         TestHelpers.AssertNoDisambiguationState(response);
+    }
+
+    // ---------------------------------------------------------------
+    // JF-715 rework F2: the rawConstraintSlot sentinel must not conflate
+    // null with empty
+    // ---------------------------------------------------------------
+
+    [Fact]
+    public void TryArbitrate_EmptyConstraintSlot_RunsGateUnrestricted_LikeNull()
+    {
+        // A future caller passing `slotValue ?? ""` must not permanently close
+        // the gate and strand multi-value musician requests: an empty slot
+        // carries no song constraint worth preserving, so it behaves exactly
+        // like null and the gate runs unrestricted (the multi-artist ask fires).
+        var pnk = Pnk();
+        var floyd = PinkFloyd();
+        var request = CreateSongIntent("pink", TestHelpers.ResolvedSlotMultiValue("pink", "P!nk", "Pink Floyd"));
+        var index = IndexOf(pnk, floyd);
+        var logger = _fx.LoggerFactory.CreateLogger("jf715-f2");
+
+        var viaEmpty = MultiValueErDisambiguation.TryArbitrate(
+            request, _fx.CreateUser(), index, _fx.LibraryManager.Object, logger, "it-IT", rawConstraintSlot: "");
+        var viaNull = MultiValueErDisambiguation.TryArbitrate(
+            request, _fx.CreateUser(), index, _fx.LibraryManager.Object, logger, "it-IT", rawConstraintSlot: null);
+
+        TestHelpers.AssertMultiArtistAsk(viaEmpty.Ask!, pnk, floyd);
+        TestHelpers.AssertMultiArtistAsk(viaNull.Ask!, pnk, floyd);
     }
 
     public void Dispose() => _fx.LoggerFactory.Dispose();

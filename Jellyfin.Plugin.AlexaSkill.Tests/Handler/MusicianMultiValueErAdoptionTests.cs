@@ -800,6 +800,270 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
     }
 
     // ===============================================================
+    // JF-715: the gate-consume composite (probe ownership) and the
+    // SearchAsync pool threading (one GetArtists per fall-through leg)
+    // ===============================================================
+
+    /// <summary>
+    /// The zero-resolve fall-through shape shared by the pool-threading pins: a
+    /// multi-value ER whose candidates name NO library artist exactly (the
+    /// stale-catalog rank-#1 "Pink Floyd Live" plus "Tribute Band"), while the
+    /// search's tier-2 prefix+fuzzy still lands on the contained "Pink Floyd"
+    /// (the JF-702 PlayArtistSongs pin's proven query shape).
+    /// </summary>
+    private static Slot ZeroResolveMusician()
+        => TestHelpers.ResolvedSlotMultiValue("pink", "Pink Floyd Live", "Tribute Band");
+
+    /// <summary>
+    /// Library mock for the artist-scoped legs: any ArtistIds query returns the
+    /// given items (the artist-songs fetch and FindSong's scoped song search);
+    /// everything else is empty (the ready in-memory index serves the artist
+    /// search itself, so no MusicArtist query runs).
+    /// </summary>
+    private void SetupArtistScopedLibrary(params BaseItem[] items)
+    {
+        _fx.SetupUserMock();
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) => q.ArtistIds != null && q.ArtistIds.Length > 0
+                ? new List<BaseItem>(items)
+                : new List<BaseItem>());
+    }
+
+    [Fact]
+    public async Task PlaySong_ZeroResolveFallThrough_SearchConsumesTheGatePool()
+    {
+        // The composite's fall-through search is SEEDED with the gate's pool: the
+        // counting index sees exactly ONE GetArtists (the gate's; SearchAsync's
+        // tier-1 materialization is skipped), never the second fetch the
+        // pre-JF-715 leg paid. The search still resolves the artist through the
+        // threaded pool (the generic-word bypass then plays the artist's songs).
+        var floyd = PinkFloyd();
+        var counting = new CountingArtistIndex(IndexOf(floyd));
+        var song = new Audio { Name = "Wish You Were Here", Id = Guid.NewGuid() };
+        SetupArtistScopedLibrary(song);
+
+        var handler = new PlaySongIntentHandler(
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory,
+            counting);
+        var session = _fx.CreateSession();
+        SkillResponse response = await handler.HandleAsync(
+            TestHelpers.CreatePlaySongIntent("la musica", ZeroResolveMusician()),
+            _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
+
+        TestHelpers.AssertNoDisambiguationState(response);
+        Assert.NotNull(TestHelpers.GetPlayDirective(response));
+        Assert.Equal(song.Id, session.FullNowPlayingItem!.Id);
+        Assert.Equal(1, counting.GetArtistsCalls);
+    }
+
+    [Fact]
+    public async Task AddToQueue_ZeroResolveFallThrough_SpeaksArtistNotFound_SearchConsumesTheGatePool()
+    {
+        // The composite's Terminal leg: the fall-through search finds nothing and
+        // the composite speaks the artist not-found (the adopt-vs-not-found tail
+        // the handlers used to own inline). One GetArtists total.
+        var counting = new CountingArtistIndex(IndexOf(Abba()));
+        var queries = new List<InternalItemsQuery>();
+        SetupQueueLibrary(queries, new List<BaseItem>());
+
+        var handler = CreateQueueHandler(counting);
+        SkillResponse response = await handler.HandleAsync(
+            CreateQueueIntent("la musica", ZeroResolveMusician(), IntentNames.AddToQueue),
+            _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
+
+        Assert.True(response.Response.ShouldEndSession == true, "the not-found Tell ends the session");
+        Assert.Contains("pink", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(1, counting.GetArtistsCalls);
+    }
+
+    [Fact]
+    public async Task PlayNext_ZeroResolveFallThrough_SearchConsumesTheGatePool()
+    {
+        var floyd = PinkFloyd();
+        var counting = new CountingArtistIndex(IndexOf(floyd));
+        var song = new Audio { Name = "Wish You Were Here", Id = Guid.NewGuid() };
+        var queries = new List<InternalItemsQuery>();
+        SetupQueueLibrary(queries, new List<BaseItem>(), song);
+
+        var handler = CreatePlayNextHandler(counting);
+        var session = _fx.CreateSession();
+        SkillResponse response = await handler.HandleAsync(
+            CreateQueueIntent("la musica", ZeroResolveMusician(), IntentNames.PlayNext),
+            _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
+
+        TestHelpers.AssertNoDisambiguationState(response);
+        Assert.NotNull(TestHelpers.GetPlayDirective(response));
+        Assert.Equal(song.Id, session.FullNowPlayingItem!.Id);
+        Assert.Equal(1, counting.GetArtistsCalls);
+    }
+
+    [Fact]
+    public async Task PlayAlbum_ZeroResolveFallThrough_SearchConsumesTheGatePool()
+    {
+        var floyd = PinkFloyd();
+        var counting = new CountingArtistIndex(IndexOf(floyd));
+        var (album, tracks) = MakeAlbumRelease("Wish You Were Here", 1975, 2, "Shine On You Crazy Diamond");
+        _fx.SetupUserMock();
+        _fx.SetupIndefiniteAlbumCatalog(
+            floyd,
+            new List<BaseItem> { album },
+            tracks,
+            new Dictionary<Guid, BaseItem> { [album.Id] = tracks[0] });
+
+        var handler = CreateAlbumHandler(counting);
+        SkillResponse response = await handler.HandleAsync(
+            CreateAlbumIntent(album: null, ZeroResolveMusician()),
+            _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
+
+        TestHelpers.AssertNoDisambiguationState(response);
+        var play = TestHelpers.GetPlayDirective(response);
+        Assert.NotNull(play);
+        Assert.Equal(tracks[0].Id.ToString(), play!.AudioItem.Stream.Token);
+        Assert.Equal(1, counting.GetArtistsCalls);
+    }
+
+    [Fact]
+    public async Task QueryArtistLibrary_ZeroResolveFallThrough_SearchConsumesTheGatePool()
+    {
+        var floyd = PinkFloyd();
+        var counting = new CountingArtistIndex(IndexOf(floyd));
+        var track = new Audio { Name = "Money", Id = Guid.NewGuid() };
+        SetupArtistScopedLibrary(track);
+
+        var handler = CreateQueryHandler(counting);
+        SkillResponse response = await handler.HandleAsync(
+            CreateQueryIntent(ZeroResolveMusician()),
+            _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
+
+        TestHelpers.AssertNoDisambiguationState(response);
+        Assert.Contains(track.Name, TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(1, counting.GetArtistsCalls);
+    }
+
+    [Fact]
+    public async Task FindSong_FirstTurn_ZeroResolveFallThrough_SearchConsumesTheGatePool()
+    {
+        var floyd = PinkFloyd();
+        var counting = new CountingArtistIndex(IndexOf(floyd));
+        _fx.SetupUserMock();
+
+        var handler = CreateFindSongHandler(counting);
+        SkillResponse response = await handler.HandleAsync(
+            CreateFindSongIntent(ZeroResolveMusician()),
+            _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
+
+        TestHelpers.AssertSessionOpen(response, "the keywords elicit keeps the session open");
+        TestHelpers.AssertNoDisambiguationState(response);
+        FindSongSessionData? state = ReadFindSongState(response);
+        Assert.NotNull(state);
+        Assert.Equal(FindSongState.AwaitingKeywords, state!.State);
+        Assert.Equal(floyd.Id, state.ArtistId);
+        Assert.Equal(1, counting.GetArtistsCalls);
+    }
+
+    [Fact]
+    public async Task FindSong_AwaitingArtist_ZeroResolveFallThrough_SearchConsumesTheGatePool()
+    {
+        var floyd = PinkFloyd();
+        var counting = new CountingArtistIndex(IndexOf(floyd));
+        var song = new Audio { Name = "Wish You Were Here", Id = Guid.NewGuid() };
+        SetupArtistScopedLibrary(song);
+
+        var handler = CreateFindSongHandler(counting);
+        var session = _fx.CreateSession();
+        SkillResponse response = await handler.HandleAsync(
+            CreateFindSongIntent(ZeroResolveMusician()),
+            _fx.CreateContext(), _fx.CreateUser(), session,
+            FindSongSession(FindSongState.AwaitingArtist, keywords: "wish you were here"),
+            CancellationToken.None);
+
+        TestHelpers.AssertNoDisambiguationState(response);
+        Assert.NotNull(TestHelpers.GetPlayDirective(response));
+        Assert.Equal(song.Id, session.FullNowPlayingItem!.Id);
+        Assert.Equal(1, counting.GetArtistsCalls);
+    }
+
+    [Fact]
+    public async Task AddToQueue_CarrierBleedGenericWord_CompositeNormalization_OpensTheGate()
+    {
+        // The probe-ownership pin (the addendum's fold): the raw slot "la canzone
+        // musica" is a carrier-bleed generic word. Pre-JF-715 this site probed
+        // the RAW value (article-strip "la" -> "canzone musica", not a member)
+        // and the gate stayed closed; the composite's owned normalization strips
+        // the carrier first ("musica") and the gate asks. This is the one shape
+        // where the fold is observable, so it is pinned HERE, on a twin.
+        var pnk = Pnk();
+        var floyd = PinkFloyd();
+        var queries = new List<InternalItemsQuery>();
+        SetupQueueLibrary(queries, new List<BaseItem>());
+
+        var handler = CreateQueueHandler(IndexOf(pnk, floyd));
+        SkillResponse response = await handler.HandleAsync(
+            CreateQueueIntent("la canzone musica", TestHelpers.ResolvedSlotMultiValue("pink", "P!nk", "Pink Floyd"), IntentNames.AddToQueue),
+            _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
+
+        TestHelpers.AssertMultiArtistAsk(response, pnk, floyd);
+    }
+
+    [Fact]
+    public async Task AddToQueue_TrailingSpaceCarrierSlot_StaysGeneric_OpensTheGate()
+    {
+        // Rework F1: the raw slot "la canzone " carries a TRAILING space, the
+        // wire shape of a carrier bleed cut off mid-phrase. The twin's old raw
+        // probe read it as generic through the article path ("la" -> "canzone");
+        // the converged probe must not reclassify it (the normalized result is
+        // non-empty here, so the empty-bleed guard is inert and the article
+        // path decides), and the gate asks.
+        var pnk = Pnk();
+        var floyd = PinkFloyd();
+        var queries = new List<InternalItemsQuery>();
+        SetupQueueLibrary(queries, new List<BaseItem>());
+
+        var handler = CreateQueueHandler(IndexOf(pnk, floyd));
+        SkillResponse response = await handler.HandleAsync(
+            CreateQueueIntent("la canzone ", TestHelpers.ResolvedSlotMultiValue("pink", "P!nk", "Pink Floyd"), IntentNames.AddToQueue),
+            _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
+
+        TestHelpers.AssertMultiArtistAsk(response, pnk, floyd);
+    }
+
+    [Theory]
+    [InlineData("la canzone ")]      // exact carrier length: no cut, article path
+    [InlineData("the track ")]       // English carrier, exact length
+    [InlineData("il brano  ")]       // one space past the carrier: the no-empty-cut guard
+    [InlineData("il brano musica")]  // carrier+generic: the fold's own shape
+    public void IsGenericSongConstraint_TrailingSpaceCarrierForms_StayGeneric(string raw)
+    {
+        // Rework F1 hardening: the probe verdict is pinned over the
+        // trailing-space carrier forms, including the exact-carrier-length
+        // shape (TryStripLeading's strict length compare means no cut) and the
+        // one-space-past shape (the no-empty-cut guard). A normalized-EMPTY
+        // verdict stays generic by construction (an all-carrier slot is a pure
+        // bleed), so a future CarrierPhrase that could produce one cannot
+        // silently close the gate.
+        Assert.True(MultiValueErDisambiguation.IsGenericSongConstraint(raw));
+    }
+
+    [Fact]
+    public void IsGenericSongConstraint_AllCarrierBleed_SlotsAreGeneric()
+    {
+        // The degenerate shape the empty-bleed guard OWNS: a raw slot that IS
+        // only carrier text would normalize to nothing searchable, and the
+        // probe must still call it generic (F1) rather than silently close the
+        // gate. Today's CarrierPhrase refuses empty cuts (the strict length
+        // compare plus the empty-remainder continue), so no reachable input
+        // lands there; the pin is the guard's contract, held alongside the
+        // article forms that do reach it.
+        Assert.True(MultiValueErDisambiguation.IsGenericSongConstraint("il brano"));
+        Assert.True(MultiValueErDisambiguation.IsGenericSongConstraint("the song"));
+    }
+
+    // ===============================================================
     // PlayArtistSongs: the JF-702 pool-sharing closure
     // ===============================================================
 
@@ -858,31 +1122,6 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
         TestHelpers.AssertNoDisambiguationState(response);
         Assert.NotNull(TestHelpers.GetPlayDirective(response));
         Assert.Equal(2, counting.GetArtistsCalls);
-    }
-
-    /// <summary>
-    /// FakeArtistIndex is sealed, so the JF-702 pool-sharing pin counts through
-    /// this delegating wrapper (the same interface, one call counter).
-    /// </summary>
-    private sealed class CountingArtistIndex : IArtistIndex
-    {
-        private readonly IArtistIndex _inner;
-        internal int GetArtistsCalls { get; private set; }
-
-        internal CountingArtistIndex(IArtistIndex inner) => _inner = inner;
-
-        public IReadOnlyList<BaseItem> GetArtists(Guid[]? topParentIds = null)
-        {
-            GetArtistsCalls++;
-            return _inner.GetArtists(topParentIds);
-        }
-
-        public bool IsReady => _inner.IsReady;
-        public bool IsDisabled => _inner.IsDisabled;
-        public int Count => _inner.Count;
-        public bool TryGetPhoneticCode(Guid artistId, out (string Primary, string? Alternate) codes)
-            => _inner.TryGetPhoneticCode(artistId, out codes);
-        public IArtistIndex CaptureSnapshot() => this;
     }
 
     public void Dispose()

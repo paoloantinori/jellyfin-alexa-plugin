@@ -346,6 +346,26 @@ internal static class TestHelpers
     }
 
     /// <summary>
+    /// JF-715: the ONE PlaySongIntent request builder (hoisted from the private
+    /// copies the two multi-value-ER suites carried; the CountingArtistIndex
+    /// convention): the song + musician slot pair on the it-IT wire shape.
+    /// </summary>
+    /// <param name="song">The raw song slot value.</param>
+    /// <param name="musicianSlot">The musician slot (any ER shape).</param>
+    /// <param name="locale">The request locale.</param>
+    /// <returns>The intent request.</returns>
+    internal static IntentRequest CreatePlaySongIntent(string song, Slot musicianSlot, string locale = "it-IT")
+    {
+        var intent = new Intent { Name = IntentNames.PlaySong };
+        intent.Slots = new Dictionary<string, Slot>
+        {
+            ["song"] = new Slot { Name = "song", Value = song },
+            ["musician"] = musicianSlot
+        };
+        return new IntentRequest { Intent = intent, Locale = locale, RequestId = "test-req" };
+    }
+
+    /// <summary>
     /// JF-562/JF-564: a context whose AudioPlayer carries the given stream token on a
     /// PLAYING device (the token-vs-ledger displacement shape the transport suites
     /// exercise; previously one private copy per suite). JF-315 batch 5: the player
@@ -985,6 +1005,75 @@ internal sealed class FakeArtistIndex : IArtistIndex
     /// </summary>
     public static Dictionary<Guid, (string Primary, string? Alternate)> CodesFromArtistNames(params BaseItem[] artists)
         => artists.ToDictionary(a => a.Id, a => DoubleMetaphone.Encode(a.Name!));
+}
+
+/// <summary>
+/// Delegating <see cref="IArtistIndex"/> wrapper with one GetArtists call
+/// counter, for the pool-sharing/pool-threading pins (JF-702 introduced it
+/// privately in MusicianMultiValueErAdoptionTests; JF-715 hoisted it here for
+/// the suites that need the same count: FakeArtistIndex is sealed, so counting
+/// runs through this wrapper). JF-715 rework (F4, test-fake honesty):
+/// CaptureSnapshot returns a CAPTURING view whose READINESS is frozen at
+/// capture time, the property production SnapshotView owns that the pin-shape
+/// tests depend on; the artist LIST and Count stay live through the delegated
+/// inner fake (rework review: not a full mirror, and deliberately so, the
+/// counting contract needs the live delegation), so a test pinning readiness
+/// capture cannot pass green against the fake while breaking against the real
+/// view. Every GetArtists the chain issues through the view still lands on the
+/// counter.
+/// </summary>
+internal sealed class CountingArtistIndex : IArtistIndex
+{
+    private readonly IArtistIndex _inner;
+    internal int GetArtistsCalls { get; private set; }
+
+    internal CountingArtistIndex(IArtistIndex inner) => _inner = inner;
+
+    public IReadOnlyList<BaseItem> GetArtists(Guid[]? topParentIds = null)
+    {
+        GetArtistsCalls++;
+        return _inner.GetArtists(topParentIds);
+    }
+
+    public bool IsReady => _inner.IsReady;
+    public bool IsDisabled => _inner.IsDisabled;
+    public int Count => _inner.Count;
+    public bool TryGetPhoneticCode(Guid artistId, out (string Primary, string? Alternate) codes)
+        => _inner.TryGetPhoneticCode(artistId, out codes);
+
+    public IArtistIndex CaptureSnapshot()
+        => new SnapshotCountingView(this, _inner.IsReady, _inner.IsDisabled);
+
+    /// <summary>
+    /// The pinned read view: readiness frozen at capture, every read delegated
+    /// back through the owner wrapper so the call counter stays complete,
+    /// capture-on-the-view the identity (pinned twice is still pinned once).
+    /// </summary>
+    private sealed class SnapshotCountingView : IArtistIndex
+    {
+        private readonly CountingArtistIndex _owner;
+        private readonly bool _isReady;
+        private readonly bool _isDisabled;
+
+        internal SnapshotCountingView(CountingArtistIndex owner, bool isReady, bool isDisabled)
+        {
+            _owner = owner;
+            _isReady = isReady;
+            _isDisabled = isDisabled;
+        }
+
+        public bool IsReady => _isReady;
+        public bool IsDisabled => _isDisabled;
+        public int Count => _owner.Count;
+
+        public IReadOnlyList<BaseItem> GetArtists(Guid[]? topParentIds = null)
+            => _owner.GetArtists(topParentIds);
+
+        public bool TryGetPhoneticCode(Guid artistId, out (string Primary, string? Alternate) codes)
+            => _owner.TryGetPhoneticCode(artistId, out codes);
+
+        public IArtistIndex CaptureSnapshot() => this;
+    }
 }
 
 /// <summary>

@@ -121,64 +121,29 @@ public class AddToQueueIntentHandler : BaseHandler
         string? matchedArtistName = null;
         if (!string.IsNullOrWhiteSpace(musicianQuery))
         {
-            // JF-702: the shared multi-value-ER gate (it owns the full contract),
-            // with PlaySong's scope restriction: this handler carries the same
-            // song+musician slot pair, so a REAL song title plus a multi-value
-            // musician keeps today's rank-#1 scoped title search (the gate's
-            // confirm leg plays the artist and cannot preserve the requested
-            // song or the queue operation), while a generic music word
-            // ("metti in coda la musica di pink") lets the gate ask which artist
-            // or scope the song search to the proven survivor of a stale-catalog
-            // collapse (this handler has no PlaySong-style play-the-artist
-            // bypass; the generic-word title miss is pre-existing either way,
-            // and the collapse not-found names the survivor, exactly as it
-            // named Amazon's equally-unconfirmed rank-#1 before). On the ask leg
-            // the confirm plays the artist INSTEAD OF queueing (the accepted
-            // JF-690 contract shift: the queue operation is lost with the
-            // ambiguity, the disambiguation prompt takes over the turn).
-                // NORMALIZATION DIVERGENCE (JF-702 gate-marker, documented):
-                // this site probes the RAW song slot while the reference
-                // PlaySong site probes the carrier-stripped and romanized
-                // value. No reachable divergence today (the GenericMusicWords
-                // table is Latin-only and the article-stripping probe covers
-                // both forms), but a future generic word whose stripped form
-                // differs must move its normalization into the JF-715
-                // composite (the constraint-slot probe overload), not diverge
-                // per site.
-            if (PlaySongIntentHandler.IsGenericMusicQuery(songQuery!))
+            // JF-715: the gate-consume composite shared by the three song+musician
+            // sites (PlaySong + this twin pair; full contract on
+            // TryArbitrateOrSearchAsync, which also owns the constraint probe and
+            // its normalization since the fold). Site-specific facts kept HERE:
+            // the ask leg's accepted JF-690 shift is queue-shaped (the confirm
+            // plays the artist INSTEAD OF queueing; the queue operation is lost
+            // with the ambiguity, the disambiguation prompt takes over the turn),
+            // and this handler has no PlaySong-style play-the-artist bypass, so
+            // the generic-word title miss is pre-existing either way.
+            var (gateTerminal, gateArtistIds, gateArtistName) = await MultiValueErDisambiguation.TryArbitrateOrSearchAsync(
+                intentRequest, user, _artistIndex, _libraryManager, Logger, locale,
+                songQuery,
+                canonicalMusician ?? musicianQuery,
+                musicianQuery,
+                "GetArtistsForQueue",
+                cancellationToken).ConfigureAwait(false);
+            if (gateTerminal != null)
             {
-                var arbitration = MultiValueErDisambiguation.TryArbitrate(
-                    intentRequest, user, _artistIndex, _libraryManager, Logger, locale);
-                if (arbitration.Ask != null)
-                {
-                    return arbitration.Ask;
-                }
-
-                if (arbitration.ResolvedArtist is { } resolvedArtist)
-                {
-                    matchedArtistName = resolvedArtist.Name;
-                    artistIds.Add(resolvedArtist.Id);
-                }
+                return gateTerminal;
             }
 
-            if (artistIds.Count == 0)
-            {
-                IReadOnlyList<BaseItem> artists = await Util.ArtistSearch.SearchAsync(
-                    canonicalMusician ?? musicianQuery, user, _libraryManager, _artistIndex, Logger,
-                    (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtistsForQueue", ct),
-                    locale, cancellationToken).ConfigureAwait(false);
-
-                if (artists.Count == 0)
-                {
-                    return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByArtist", locale, musicianQuery));
-                }
-
-                matchedArtistName = artists[0].Name;
-                foreach (BaseItem artist in artists)
-                {
-                    artistIds.Add(artist.Id);
-                }
-            }
+            artistIds = gateArtistIds;
+            matchedArtistName = gateArtistName;
         }
 
         var songSearchQuery = new InternalItemsQuery()

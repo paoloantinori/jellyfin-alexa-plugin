@@ -213,6 +213,12 @@ public class PlayAlbumIntentHandler : BaseHandler
         // rank-#1 canonical the search never validated.
         bool arbitrationResolvedArtist = false;
 
+        // JF-715: the gate's scoped pool, shipped on the arbitration result. On
+        // the zero-resolve fall-through leg the artist search below consumes it
+        // instead of re-materializing the same pinned-view fetch (null on every
+        // closed-gate leg, byte-identical to before).
+        IReadOnlyList<BaseItem>? arbitrationPool = null;
+
         // JF-448 (review F2), set inside the musician block so album-only requests
         // pay nothing: pin ONE index snapshot for the search AND the JF-471
         // acceptance gate below, so the phonetic codes the gate reads belong to the
@@ -304,6 +310,8 @@ public class PlayAlbumIntentHandler : BaseHandler
                     return arbitration.Ask;
                 }
 
+                arbitrationPool = arbitration.Pool;
+
                 if (arbitration.ResolvedArtist is { } resolvedArtist)
                 {
                     matchedArtist = resolvedArtist;
@@ -322,7 +330,7 @@ public class PlayAlbumIntentHandler : BaseHandler
             IReadOnlyList<BaseItem> artists = await Util.ArtistSearch.SearchAsync(
                 musicianSearch!, user, _libraryManager, pinnedArtistIndex, Logger,
                 (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", ct),
-                locale, cancellationToken).ConfigureAwait(false);
+                locale, cancellationToken, preloadedPool: arbitrationPool).ConfigureAwait(false);
 
             Logger.LogDebug("PlayAlbum: artist search returned {Count} results for '{Musician}'", artists.Count, musicianSearch);
 
