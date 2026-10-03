@@ -127,19 +127,32 @@ public class LibrarySyncServiceStructureTests
         var methodCalls = MethodCallTokens(typeof(LibrarySyncService).Assembly);
 
         // Gate-marker tail: the list is DERIVED (every User property ending in
-            // CatalogId) so a fourth synced type's stored id - the exact one-row
-            // edit JF-711 made compile-loud - joins the pin automatically
-            // instead of arriving unpinned (grep-verified: the suffix matches
-            // exactly Artist/Album/Series today).
-            foreach (PropertyInfo property in typeof(User)
-                         .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+        // CatalogId) so a fourth synced type's stored id - the exact one-row
+        // edit JF-711 made compile-loud - joins the pin automatically. The
+        // subset guard below keeps the rename tripwire the old per-name
+        // GetProperty lookup provided: an expected id dropping out of the
+        // derived set (a rename, a plain-field conversion, a non-public
+        // retreat) fails loudly, while additions join freely. NonPublic so a
+        // non-public property cannot silently leave the sweep (the same
+        // silent-loss class GetAccessors(true) closes at the accessor level).
+        var derivedIds = typeof(User)
+            .GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+            .Where(p => p.Name.EndsWith("CatalogId", StringComparison.Ordinal))
+            .OrderBy(p => p.Name)
+            .Select(p => p.Name)
+            .ToList();
+        foreach (string expected in new[] { "ArtistCatalogId", "AlbumCatalogId", "SeriesCatalogId" })
+        {
+            Assert.Contains(
+                expected,
+                derivedIds);
+        }
+
+        foreach (PropertyInfo property in typeof(User)
+                         .GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
                          .Where(p => p.Name.EndsWith("CatalogId", StringComparison.Ordinal))
                          .OrderBy(p => p.Name))
         {
-            string propertyName = property.Name;
-            Assert.True(
-                property != null,
-                $"User.{propertyName} must exist as a public instance property: a rename, or a conversion to a plain field, defuses this pin and must be a conscious edit");
 
             // Gate-marker tail: nonPublic so a future non-public accessor refactor
             // (e.g. internal set) keeps its coverage instead of silently
@@ -249,33 +262,37 @@ public class LibrarySyncServiceStructureTests
     /// pinned fact, so no logical-name mapping is applied.
     /// </summary>
     private static string DescribeCallSites(IEnumerable<(Type Type, MethodBase Method, int Count)> callSites)
-        => string.Join(", ", callSites.Select(s => $"{s.Type.FullName}.{s.Method.Name}{DecodeCompilerName(s.Method.Name)} x{s.Count}"));
+        => string.Join(", ", callSites.Select(s => $"{s.Type.FullName}.{s.Method.Name}{DecodeCompilerName(s.Type, s.Method)} x{s.Count}"));
 
     /// <summary>
-    /// Gate-marker tail: a parenthesized source-level hint for the Roslyn
-    /// mangled shapes (g__ local function, b__ lambda, d__ state machine), so a
-    /// triager can find the site without knowing the conventions; the raw name
-    /// stays the pinned fact.
+    /// Gate-marker tail (simplify round fix): a parenthesized source-level hint
+    /// for the Roslyn mangled shapes so a triager can find the site without
+    /// knowing the conventions. g__ (local function) and b__ (lambda) decode
+    /// from the METHOD name; the d__ state-machine marker lives on the nested
+    /// TYPE name while the method is MoveNext (empirically probed: zero method
+    /// names carry d__), so that branch reads the declaring type. The mangled
+    /// name stays the pinned fact; the mangling-convention OWNERSHIP lives on
+    /// IlCallScanner (LogicalMethodName maps to owners; this annotates shapes).
     /// </summary>
-    private static string DecodeCompilerName(string name)
+    private static string DecodeCompilerName(Type type, MethodBase method)
     {
-        int g = name.IndexOf("g__", StringComparison.Ordinal);
+        int g = method.Name.IndexOf("g__", StringComparison.Ordinal);
         if (g >= 0)
         {
-            int end = name.IndexOf('|', g);
-            return $" (local function {name.Substring(g + 3, (end < 0 ? name.Length : end) - g - 3)})";
+            int end = method.Name.IndexOf('|', g);
+            return $" (local function {method.Name.Substring(g + 3, (end < 0 ? method.Name.Length : end) - g - 3)})";
         }
 
-        int b = name.IndexOf("b__", StringComparison.Ordinal);
-        if (b >= 0)
+        if (method.Name.IndexOf("b__", StringComparison.Ordinal) >= 0)
         {
             return " (lambda)";
         }
 
-        int d = name.IndexOf("d__", StringComparison.Ordinal);
+        int d = type.Name.IndexOf("d__", StringComparison.Ordinal);
         if (d >= 0)
         {
-            return $" (state machine of {name.Substring(2, d - 2)})";
+            // "<Owner>d__N": the owner spans [1, d) (skip the leading '<').
+            return $" (state machine of {type.Name.Substring(1, d - 1)})";
         }
 
         return string.Empty;
