@@ -62,14 +62,65 @@ CommitShuffledQueue, and any future reset path take it together.
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #1 dotnet build passes with 0 errors (full solution, both TFMs; the single CS8600 warning the Debug build emits at VideoAudioControllerTests.cs(1680,35) is pre-existing on base 3d0c6563 in the JF-726 backstop test, a file this diff does not touch)
+- [x] #2 dotnet test passes (full suite on the final state: 5073/5073 net9.0, 5073/5073 net10.0; baseline 5068 + the 5 new pins)
+- [x] #3 No new compiler warnings introduced (the one emitted warning is the pre-existing site above, verified untouched by `git status`)
+- [x] #4 N/A: no session attributes touched (DeviceQueueManager launch-scope maps and one comment only)
+- [x] #5 N/A: no HttpClient changes
+- [x] #6 N/A: no interaction model change
+- [x] #7 N/A: no new intent or handler logic; the coverage is the 5 unit pins (the JF-713 house pattern: the handler path is DB-coupled and gets pinned at the DeviceQueueManager level, mirroring the exact calls the arms make)
+- [x] #8 N/A: no user-facing strings
+- [x] #9 /simplify passed (4 angles: reuse 2 findings, simplification 4, efficiency CLEAN with measured evidence, altitude CLEAN with a seam/mechanism/scope adjudication; 5 deduped findings applied - the seeding helper SeedQueuedScopeResidents, the MinutesToMs idiom, the redundant call-site comment dropped, the AlbumPlayService breadcrumb shortened, the two long test docs trimmed; consciously kept with reasons: the slot-reuse inline comment, the const-doc density, the hardcoded 200)
+- [x] #10 /code-review high passed (5 findings: 4 applied - the ENQUEUED-arm pin added, the JF-723 narrative doc relocated onto TrimLaunchBaseIfNeeded itself where the crefs point, TrimPositionMap's false "any key format" sentence replaced with an explicit FORMAT CONTRACT note, the banned parenthetical-hyphen prose forms rewritten; 1 partially applied - pin 4's BCL slot-reuse reliance is now documented with the format-independent anchors named, the mechanism left as-is because the shape is inherently slot-dependent and its degradation mode is vacuous green, not flaky red. The pending-pin addition exposed and fixed a seeding flaw in the first draft: the residents must be PENDING entries or the four-map OR gate never fires)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+DECISION: option (b), the identity guard - the key `RecordLaunchBase` just wrote
+is never that same call's trim's evictee (`TrimLaunchBaseIfNeeded(queue, key)`
+adds it to the trim's queued set). Rejected with evidence: (a) reordering the
+trim after the commit would revert the deliberate JF-687/JF-699/JF-713
+refusal-before-phantom-state ordering (every play path, both playlist arms
+included, now builds the launch BEFORE `CommitShuffledQueue`/`SetQueue`; the
+call sequence was read at AlbumPlayService.cs ~1024-1054 and
+PlaybackLaunchBuilder.cs ~1985); (c) moving the record to the commit side would
+break the `BuildAudioPlayerResponse` chokepoint that captures launches from
+paths that never commit a queue (carousel taps, resume confirmations). The
+guard is behavior-neutral on today's default playlist launches (base 0 / rate
+1000 compose identically to a missing entry) and becomes load-bearing exactly
+when a nonzero-base or non-identity-rate launch meets cap pressure.
+
+EVIDENCE THE DECISION RESTS ON: the filing's inertness argument turned out to
+be understated in both directions. (1) The eviction mechanism sentence in the
+filing ("removes the newest non-queued entries") mis-models `Take(toRemove)`,
+which removes the OLDEST non-queued entries; corrected in the JF-738 filing.
+(2) A NEW bug was found and filed as JF-738: the trim's queued-membership
+protection is inert in production because the four maps are "N"-keyed while
+every production SetQueue caller stores dashed ids (OrdinalIgnoreCase does not
+normalize dash format), degrading the trim to pure slot-order FIFO; under that
+behavior a fresh insert reusing a freed low slot is evicted by its OWN record's
+trim, so the JF-723 shape is reachable TODAY on a saturated map (200+ distinct
+previously-launched items), not only after a future nonzero-base playlist
+launch. The guard covers both behaviors by construction; JF-738's fix (which
+makes the queued-cap-pressure shape production-reachable) therefore cannot
+reopen this window.
+
+PINS (5, DeviceQueueManagerTests; red proofs run with the guard line disabled,
+4 of 5 red / JF-738 characterization green, then all green restored):
+queued-cap-pressure survival of a nonzero-base ACTIVE entry; aging (the
+previous fresh entry IS evictable by the next launch, so the guard never
+disables trimming); the JF-738 mismatch characterization (green on arrival,
+the red proof JF-738's fix will produce); saturated-map self-eviction survival
+under dashed membership; and the ENQUEUED arm (a fresh PENDING pair survives
+and promotes with its base and rate). The suite baseline held: 5073/5073 both
+TFMs (5068 + 5), full solution build clean apart from one pre-existing warning
+in the untouched JF-726 test file (net9.0 CS8600 at VideoAudioControllerTests
+cs:1680, present on base 3d0c6563).
+
+Gates: /simplify (4 parallel agents; 5 deduped findings applied, keeps
+documented) and /code-review high (5 findings; 4 applied, 1 partially applied
+as documented doc-strengthening). Production surface changed
+(DeviceQueueManager guard + docs, AlbumPlayService comment): NOT deployed
+(test-and-hardening change; no handler behavior change on default paths).
+<!-- SECTION:FINAL_SUMMARY:END -->
