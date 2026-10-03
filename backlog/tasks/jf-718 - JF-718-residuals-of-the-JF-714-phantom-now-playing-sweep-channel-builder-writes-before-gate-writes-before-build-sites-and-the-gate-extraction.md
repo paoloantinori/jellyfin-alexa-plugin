@@ -118,7 +118,7 @@ prose rules.
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [x] #1 Channel builder writes moved below the capability gate (ADDENDUM shape applied: ALL launch-state writes, session queue + item AND the RecordLastPlayed continuation record, now sit BELOW the resolver-null return, inside one HasLaunchDirective gate on the built response, so both directive-less Tells and any future non-launch builder return are covered; caller census confirmed at three: PlayChannel:107, PlayRadio:170, StartOver:132, all builder-side-fixed)
-- [x] #2 PlayEpisode / TvNextUp (+ AplUserEvent decision) writes moved after the launch build (SkillConnection favorites gate-pattern: the build consumes no written state there, so the derive-then-commit idiom does not apply; PlayEpisode + TvNextUp + AplUserEvent all three arms the same; APL gates rather than allowlists: the movie arm's capability Tell is practically unreachable but belt is free)
+- [x] #2 PlayEpisode / TvNextUp (+ AplUserEvent decision) writes moved after the launch build (SkillConnection favorites gate-pattern: the build consumes no written state there, so the derive-then-commit idiom does not apply; PlayEpisode + TvNextUp + AplUserEvent's movie and folder/audio arms the same; APL gates rather than allowlists: the movie arm's capability Tell is practically unreachable but belt is free. REWORK CORRECTION: the APL podcast Series-shape arm is NOT gated here, it returns at the PodcastEpisodeResolver delegation before the shared attach, so its writes are the resolver's and rest on the AudioPlayer throw-or-launch contract, the exact tail JF-732 discloses)
 - [x] #3 AttachNowPlayingIfLaunched extraction decided (DONE: the count update earned its place, 10 handler-side call sites + the builder-internal raw-gate site; two overloads: the IEnumerable form with in-gate materialization for the lazy/large queues, the single-item form building the queue inside the gate; the five JF-714 hand-gates all converted, the NOT-tautological rationale single-homed on the helper doc)
 - [x] #4 State-write roster pin decided (DONE, the IlCallScanner scan: DeliveredLaunchStateWriteRosterTests, empty allowlist, red-proven twice, once against the pre-fix tree flagging exactly the three ungated sites, once via raw-write sabotage on the final mechanics; PLUS behavior pins: PlayChannel screenless Tell no-phantom, PlayChannel resolver-null Tell no-phantom with pre-existing-state-survives, favorites MediaNotFound leg with speech-text pin and pre-existing-state-survives, favorites delivered-write assertions)
 - [x] #5 dotnet test passes both TFMs (5019/5019 net9.0 and 5019/5019 net10.0 on the final state, -m:1; baseline 5017 + 2 new tests; solution build 0 warnings)
@@ -141,9 +141,13 @@ idiom, with the same per-site reason: no builder in this set consumes the writte
 state (no builder takes a session), so there is nothing to derive from;
 SkillConnectionHandler favorites additionally lost the queue write that preceded
 the MediaNotFound Tell and now materializes its queue lazily inside the gate;
-AplUserEventHandler was gated rather than allowlisted across all three arms (the
-movie arm's capability Tell is practically unreachable given APL implies a
-screen, but the belt is free and the roster then covers the whole method).
+AplUserEventHandler was gated rather than allowlisted on its movie and
+folder/audio arms (the movie arm's capability Tell is practically unreachable
+given APL implies a screen, but the belt is free and the roster then covers the
+whole method); the podcast Series-shape arm is the exception the rework round
+corrected the record on: it returns at the PodcastEpisodeResolver delegation
+BEFORE the shared attach, so its writes are the resolver's and rest on the
+AudioPlayer throw-or-launch contract, the tail JF-732 carries.
 (3) The AttachNowPlayingIfLaunched extraction verdict FLIPPED to done on the count
 update: declined in JF-714 at five sites, it now serves 10 handler-side call
 sites (the five JF-714 gates converted, plus favorites, PlayEpisode, TvNextUp,
@@ -168,5 +172,14 @@ StartRadioPlayback then scan helpers), and the minor owner-skip refinement.
 Suites: 5019/5019 on BOTH TFMs on the final state (-m:1), baseline 5017 + 2 new
 tests; solution build clean, 0 warnings. VideoAudioControllerTests.cs untouched
 (the concurrent worker's file; its pre-existing xUnit1030 is the only warning the
-test build emits).
+test build emits). REWORK ROUND (gate-marker, 4 findings, no production
+correctness bug; all applied): the APL folder arm's up-to-500-entry queue rides
+the lazy Select like favorites and PlayRandom instead of materializing before the
+build; the record's "all three arms" wording corrected (the podcast arm delegates
+before the attach, see above); the roster's ACCEPTED BOUNDARIES now also name the
+gate-side looseness (any gate-family reference satisfies the verdict, so a
+speech/position gate reference in the same method would mask a future raw write)
+and the write-shape blind spot (a handler-side RecordLastPlayed beside a
+Tell-capable builder escapes the two-field probe, latent-only today, folded into
+JF-732's family if that belt lands).
 <!-- SECTION:FINAL_SUMMARY:END -->

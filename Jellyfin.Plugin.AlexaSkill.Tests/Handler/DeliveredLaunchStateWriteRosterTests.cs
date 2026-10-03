@@ -33,14 +33,31 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// audio-degrading builders) is throw-or-launch since JF-699 item 1, so its many
 /// post-build ungated writes are safe-by-construction TODAY; extending this roster
 /// to that family is the filed belt question (JF-732), not this one.
-/// ACCEPTED BOUNDARY (the roster idiom's documented-limit class): the state WRITE
-/// is detected in the scanned method's own IL only, while the builder call and the
-/// gate may sit in a one-level same-type helper. A write delegated to a helper on
-/// the same type escapes the conjunction when that helper itself calls no
-/// Tell-capable builder (the PlayRadio shape: HandleAsync launches channels, its
-/// StartRadioPlayback helper writes state around the AudioPlayer builder). A miss
-/// here cannot silently pass a gated site (the scan only adds candidates), it can
-/// only miss an ungated one, and the next same-method change re-surfaces it.
+/// ACCEPTED BOUNDARIES (the roster idiom's documented-limit class):
+/// 1. WRITE-DETECTION DEPTH: the state WRITE is detected in the scanned method's
+///    own IL only, while the builder call and the gate may sit in a one-level
+///    same-type helper. A write delegated to a helper on the same type escapes
+///    the conjunction when that helper itself calls no Tell-capable builder (the
+///    PlayRadio shape: HandleAsync launches channels, its StartRadioPlayback
+///    helper writes state around the AudioPlayer builder).
+/// 2. GATE-SIDE LOOSENESS: the gate verdict keys on ANY reference to the gate
+///    family in the method or its helpers, not on the write itself being gated.
+///    A method that references the family for a DIFFERENT purpose (ResumeIntent
+///    and StartOver gate speech/position clears with HasLaunchDirective;
+///    BaseHandler's fuzzy-miss block gates the qualifier send) satisfies the
+///    check even with a raw ungated state write added beside the builder call,
+///    and a same-type helper's legitimate gate call masks a raw write in the
+///    calling method the same way.
+/// 3. WRITE-SHAPE BLIND SPOT: the write probe covers only the two session
+///    fields, so a handler-side DeviceQueueManager.RecordLastPlayed beside a
+///    Tell-capable builder (the channel builder's exact pre-JF-718 shape)
+///    escapes this pin entirely. Latent-only today (the two non-builder
+///    RecordLastPlayed sites, SleepTimer's re-issue and the pipeline
+///    interceptor, call no Tell-capable builder); if JF-732's family belt
+///    lands, the RecordLastPlayed probe belongs on that roster.
+/// A miss under any boundary cannot silently pass a gated site (the scan only
+/// adds candidates), it can only miss an ungated one, and the next same-method
+/// change re-surfaces it.
 /// SELF-RED: removing the gate reference from a flagged method flips this test by
 /// itself (proven red against the pre-JF-718 tree, which flagged exactly the
 /// three then-ungated sites); a new builder+write site fails until its author

@@ -268,14 +268,16 @@ public class AplUserEventHandler : BaseHandler
                     "AplUserEvent HandleSelectItem: resolved folder {FolderName} to first child {ChildName} ({ChildId})",
                     folder.Name, item.Name, itemIdStr);
 
-                // Queue remaining children
-                var queueItems = children.Select(c => new QueueItem { Id = c.Id }).ToList();
+                // Queue remaining children: the lazy Select rides the IEnumerable
+                // overload so the up-to-500-entry queue materializes ONLY inside
+                // the delivered-launch gate (the favorites/PlayRandom shape; the
+                // throw path allocates nothing).
                 if (isAlbum)
                 {
                     albumFolderId = folder.Id;
                 }
 
-                launchQueue = queueItems;
+                launchQueue = children.Select(c => new QueueItem { Id = c.Id });
             }
         }
         else
