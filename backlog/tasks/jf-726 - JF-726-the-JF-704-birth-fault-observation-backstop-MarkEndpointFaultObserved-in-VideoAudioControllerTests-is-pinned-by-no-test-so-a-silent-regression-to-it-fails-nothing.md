@@ -1,12 +1,13 @@
 ---
 id: JF-726
 title: >-
-  JF-726 - the JF-704 birth fault-observation backstop (MarkEndpointFaultObserved in
-  VideoAudioControllerTests) is pinned by no test, so a silent regression to it fails
-  nothing
-status: To Do
+  JF-726 - the JF-704 birth fault-observation backstop
+  (MarkEndpointFaultObserved in VideoAudioControllerTests) is pinned by no test,
+  so a silent regression to it fails nothing
+status: Done
 assignee: []
 created_date: '2026-10-03 07:29'
+updated_date: '2026-10-03 20:18'
 labels:
   - test-infrastructure
   - tech-debt
@@ -106,53 +107,5 @@ live scope narrowed to the scanner hoist). F6 already tracked as JF-736 finding 
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-CHOSEN SHAPE: the filing's candidate 1, the IL-roster presence-and-shape pin
-(the CaptureRefreshPairingTests idiom), landed INSIDE VideoAudioControllerTests
-as ServeInLockWarmCacheHelper_BirthBackstop_AttachesOnlyOnFaultedContinuationBeforeParkAssert
-plus three small local scanner helpers (CallInstructionOffsets / LdcI4Operands
-over one InstructionOperands byte-walk). What it pins, all verified against the
-real emitted IL (probed before writing, not assumed): the backstop methoddef
-exists exactly once; it is called from exactly one place, the
-ServeInLockWarmCacheAsync family (the endpoint's birth); the call precedes the
-helper's first assert call (the park assert, an ordering fact anchored on any
-Xunit.Assert member); the call's ARGUMENT is the field the startEndpoint
-delegate's result was just stored into (the code-review RC2 argument-identity
-tie: ldfld-adjacency plus the stfld-immediately-after-Invoke store, raw token
-equality); the options operand is the exact documented
-OnlyOnFaulted|ExecuteSynchronously constant; and this class's one
-compiler-generated continuation body reads Task.Exception. RED PROOFS, all run
-on BOTH TFMs against the final assert shapes: dropping the OnlyOnFaulted flag,
-emptying the continuation body, deleting the birth-site call, attaching after
-the settle instead of at birth, and passing a task other than the started
-endpoint each red a distinct assert (the late-attachment proof also shows the
-ordering assert catches what the one-caller assert alone would pass).
-
-WHY THIS SHAPE AND NOT THE ALTERNATIVES: a behavioral pin of the backstop's
-unique exit (the settle-budget timeout) costs the whole 20s EndpointSettleBudget
-per TFM in every suite run, and the runtime observation effect is provable only
-via TaskScheduler.UnobservedTaskException after a forced GC (finalizer-timing
-flaky, candidate 3, rejected in the filing itself) or via a marker inside the
-continuation, which was rejected here because it MODIFIES the mechanism under
-test and breaks its zero-allocation static-lambda shape (the property the
-JF-704 doc names); the filing's candidate 2 budget seam was not taken because
-it grows the helper's signature and the settle-budget field's contract to
-prove the seam's plumbing, still not the observation (the filing itself records
-that limitation). What remains honestly unpinned is exactly the runtime
-observation EFFECT; the codebase-specific regression surface (flag, body, call
-site, birth ordering, argument identity) is now fully covered at a run cost of
-~30ms per TFM. The empirical probe also corrected two assumptions before they
-could ship wrong: ExecuteSynchronously is 0x80000 (the combined constant is
-0xD0000), and the continuation lambda emits as <>c.<MarkEndpointFaultObserved>b__N_M.
-
-GATES: /simplify (4 agents, outcomes in DoD #9) and /code-review high (6
-findings, outcomes in DoD #10) both run as literal Skill calls in the worker
-transcript; two findings were applied from each round and the one real
-out-of-scope item (the IlCallScanner byte-walk duplication, flagged by every
-angle) is JF-736 finding 2. DISCOVERED AND FILED AS JF-736 (finding 1, HIGH):
-main's CI has been red since JF-681 (25+ runs, last green 7bc89eb1) because
-the lock-release pin's ConfigureAwait(false) fails the Release -warnaserror
-build with xUnit1030; not caused by this task, evidence and fix options in the
-JF-736 file. SUITES: full suite once on the final state, 5047/5047 both TFMs
-(baseline 5046 + 1); the pin additionally verified green in Release on both
-TFMs. Test-only surface: no production code, no interaction models, no deploy.
+Closed by the orchestrator after the full cycle: worker commit e940f9b3 + the rebase onto the CI fix + gate-marker tail 27498ba5, merged as 103d8e9e. The birth fault-observation backstop pinned: the IL-roster shape pin holding six facts (one methoddef; one birth-site caller, TopLevelType-confined after the tail; the call-before-first-Assert ordering anchored on any Xunit.Assert member; the RC2 argument-identity tie; the exact 0xD0000 continuation-options constant; the one continuation body reading Task.Exception), plus the gate-marker tail's body-scoped receiver tie (the ldarg.0 first-real-instruction fact, its Debug-nop prefix discovered by the fact's own red proof). Five degradation red proofs on both TFMs; the IL reality probed before writing (0x80000+0x50000=0xD0000; the <>c emission shape); the orchestrator reviewer re-verified the constants against the compiled merged-tree DLLs by byte-scanning both TFMs and executing the pin. The worker's warning verification DISCOVERED main's CI-red streak (25+ runs since JF-681), verified against live run logs and fixed on main as 9353de90 (green run 37149291498). JF-736 filed (the IlCallScanner scanner hoist, the live scope after the CI half's fix). Worker gates green (simplify 2 applied, 3 skipped with reasons incl. the arithmetically-impossible ldc short-form; code-review high 4 applied, 1 filed, 1 skipped); the orchestrator review's 6 findings all landed (F3 already satisfied by the rebased run). Suites: worker 5047/5047 both TFMs plus Release pin runs; orchestrator rebased 5068/5068 both TFMs exit 0 on the exact merged tree; merged-tree 5068/5068 both TFMs exit 0 on both split legs. Test-only: no production surface, no deploy.
 <!-- SECTION:FINAL_SUMMARY:END -->
