@@ -49,7 +49,7 @@ exception, or by proving the encode generation count is clean after the failure)
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [x] #1 dotnet build passes with 0 errors (both TFMs, dotnet build Jellyfin.Plugin.AlexaSkill.Tests, 0 Errors on net9.0 and net10.0)
-- [x] #2 dotnet test passes (FINAL state: 5008/5008 net9.0 AND net10.0, exit 0, dotnet test -m:1, no --no-build; baseline 5007 + the 1 new pin; an intermediate pre-simplify-round run also 5008/5008 both TFMs, and the VideoAudioControllerTests class 265/265 both TFMs)
+- [x] #2 dotnet test passes (FINAL state: 5008/5008 net9.0 AND net10.0, exit 0, dotnet test -m:1, no --no-build; baseline 5007 + the 1 new pin; an intermediate pre-simplify-round run also 5008/5008 both TFMs, and the VideoAudioControllerTests class 265/265 both TFMs. MERGED TREE: main advanced under this branch while the work ran (the JF-717 line landed), so main was merged per the dispatch instruction, conflict-free with the one in-scope file untouched by the merge, and the merged tree re-verified 5012/5012 net9.0 AND net10.0, exit 0 = 5008 + JF-717's 4 equivalence-class pins, prediction matched)
 - [x] #3 No new compiler warnings introduced (the only build warnings are the documented pre-existing xUnit1030 pair: the UNTOUCHED JF-681 pin StreamHlsVideoAudio_ThrowingInLockProbe_ReleasesTheItemLock's ConfigureAwait at HEAD line 1337, shifted to 1488 by the diff; same pair, same count in every build, proven against git show HEAD)
 - [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization (N/A: test-only change, no session attributes)
 - [x] #5 HttpClient instances are not shared across calls that modify BaseAddress (N/A: no HttpClient changes)
@@ -93,5 +93,11 @@ agents, 1 applied, 2 skipped with reasons, 2 clean; /code-review high, 0 correct
 bugs, RC1 applied, RC2 filed as JF-726 (the birth backstop is unpinned, candidate pin
 shapes recorded), RC3 skipped with reason. Suites on the FINAL state: 5008/5008
 net9.0 AND net10.0 (baseline 5007 + 1), exit 0, only the documented pre-existing
-xUnit1030 pair. Test-only change: no production surface, no deploy needed.
+xUnit1030 pair. MERGED TREE follows: main advanced under the branch while the work
+ran (the JF-717 line, 4 commits), so main was merged per the dispatch instruction,
+conflict-free and leaving the one in-scope file untouched by the merge; merged-tree
+suites 5012/5012 net9.0 AND net10.0, exit 0 (= 5008 + JF-717's 4
+equivalence-class pins; the count was predicted before the run and matched), build
+0 errors with the same pre-existing xUnit1030 pair only. Test-only change: no
+production surface, no deploy needed.
 <!-- SECTION:FINAL_SUMMARY:END -->
