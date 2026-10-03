@@ -91,6 +91,10 @@ public static class CatalogSlotTypes
     /// (sync writes to these names). Verified 2026-07-12: changing PlayAlbumIntent
     /// album slot AlbumName→AMAZON.MusicRecording made "jazz cafe" route one-shot
     /// but abandoned the architecture; reverted. See CLAUDE.md anti-pattern #10.
+    /// MUTABILITY: this map is public and mutable, but the derived reverse map
+    /// (<see cref="CatalogTypeBySlotTypeName"/>) snapshots it at construction -
+    /// a runtime mutation must rebuild that map in the same change or
+    /// ExtractWiring silently stops recognizing the mutated name.
     /// </remarks>
     public static readonly Dictionary<CatalogType, string> CatalogSlotTypeNames = new()
     {

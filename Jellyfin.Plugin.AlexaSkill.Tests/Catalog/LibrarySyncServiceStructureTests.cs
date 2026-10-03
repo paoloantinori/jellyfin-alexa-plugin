@@ -172,10 +172,10 @@ public class LibrarySyncServiceStructureTests
     /// <summary>
     /// The derived count sweep both loops above iterate: every writable
     /// SyncResult property whose name ends in Count.
-    /// GATE-MARKER TAIL: the family predicate is the generic *Count suffix - a
-    /// future UNRELATED count property set outside the wiring table fails this pin;
-    /// the fix is widening the predicate or routing through a StoreCount row, judged
-    /// per addition.
+    /// GATE-MARKER TAIL: a future UNRELATED count property set outside the wiring
+    /// table fails this pin (it already matches the suffix); the fix is narrowing
+    /// or differentiating the predicate, or routing a sync-related count through a
+    /// StoreCount row, judged per addition.
     /// </summary>
     private static List<PropertyInfo> CountProperties() =>
         typeof(SyncResult)
