@@ -1515,7 +1515,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         // when the wrapper released it, and times out into the red shape when a
         // leaked gate holds the key.
         IDisposable reAcquired = await _cache.LockItemAsync(audioItem.Id.ToString("D"), 0)
-            .WaitAsync(TimeSpan.FromSeconds(15)).ConfigureAwait(false);
+            .WaitAsync(TimeSpan.FromSeconds(15));
         reAcquired.Dispose();
     }
 
