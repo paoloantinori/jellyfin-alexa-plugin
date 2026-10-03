@@ -171,41 +171,9 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
     }
 
     // ---------------------------------------------------------------
-    // Shared assertions (the JF-690 suite's shapes)
+    // Shared assertions (the JF-690 suite's shapes; the ask and no-state
+    // oracles live on TestHelpers since the JF-707 gate-marker rework)
     // ---------------------------------------------------------------
-
-    /// <summary>
-    /// The disambiguation ask the gate fires: open session, the multi-artist
-    /// prompt naming every resolved artist, and the JF-420.2 session state
-    /// (real ids, type=artist, cursor 0) that YesIntentHandler.PlayArtist and
-    /// NoIntentHandler's cycling consume unchanged.
-    /// </summary>
-    private static void AssertMultiArtistAsk(SkillResponse response, params BaseItem[] expected)
-    {
-        TestHelpers.AssertSessionOpen(response, "the ask keeps the session open");
-        Assert.Null(TestHelpers.GetPlayDirective(response));
-        Assert.NotNull(response.SessionAttributes);
-        var matchesJson = response.SessionAttributes!.GetValueOrDefault(DisambiguationHelper.AttrMatches)?.ToString();
-        Assert.NotNull(matchesJson);
-        var matches = JsonConvert.DeserializeObject<List<DisambiguationHelper.MatchInfo>>(matchesJson!);
-        Assert.NotNull(matches);
-        // Rank order preserved: the first entry is Amazon's rank #1, the one
-        // "yes" plays (AskMultipleArtists' winner-first contract).
-        Assert.Equal(expected.Select(a => a.Id.ToString()), matches!.Select(m => m.Id));
-        Assert.Equal(expected.Select(a => a.Name), matches.Select(m => m.Name));
-        Assert.Equal(DisambiguationHelper.MediaTypeArtist, response.SessionAttributes.GetValueOrDefault(DisambiguationHelper.AttrType)?.ToString());
-        string speech = TestHelpers.GetSpeechText(response);
-        foreach (BaseItem artist in expected)
-        {
-            Assert.Contains(artist.Name, speech, StringComparison.OrdinalIgnoreCase);
-        }
-    }
-
-    private static void AssertNoDisambiguationState(SkillResponse response)
-    {
-        Assert.Null(response.SessionAttributes?.GetValueOrDefault(DisambiguationHelper.AttrMatches));
-        Assert.Null(response.SessionAttributes?.GetValueOrDefault(DisambiguationHelper.AttrType));
-    }
 
     /// <summary>
     /// Library mock for the queue twins: the SONG title search (SearchTerm set,
@@ -269,7 +237,7 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
             CreateQueueIntent("la musica", TestHelpers.ResolvedSlotMultiValue("pink", "P!nk", "Pink Floyd"), IntentNames.AddToQueue),
             _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
-        AssertMultiArtistAsk(response, pnk, floyd);
+        TestHelpers.AssertMultiArtistAsk(response, pnk, floyd);
     }
 
     [Fact]
@@ -290,7 +258,7 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
             CreateQueueIntent("just like a pill", TestHelpers.ResolvedSlotMultiValue("pink", "P!nk", "Pink Floyd"), IntentNames.AddToQueue),
             _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
 
-        AssertNoDisambiguationState(response);
+        TestHelpers.AssertNoDisambiguationState(response);
         Assert.NotNull(TestHelpers.GetPlayDirective(response));
         Assert.Equal(song.Id, session.FullNowPlayingItem!.Id);
         // EVERY title query is scoped to rank #1 ONLY (gate-marker tail
@@ -322,7 +290,7 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
             CreateQueueIntent("la musica", TestHelpers.ResolvedSlotMultiValue("pink", "P!nk", "ABBA"), IntentNames.AddToQueue),
             _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
 
-        AssertNoDisambiguationState(response);
+        TestHelpers.AssertNoDisambiguationState(response);
         Assert.NotNull(TestHelpers.GetPlayDirective(response));
         Assert.Equal(song.Id, session.FullNowPlayingItem!.Id);
         // The survivor scoped the song search and no artist-search query ran
@@ -346,7 +314,7 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
             CreateQueueIntent("money", musicianSlot: null, IntentNames.AddToQueue),
             _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
 
-        AssertNoDisambiguationState(response);
+        TestHelpers.AssertNoDisambiguationState(response);
         Assert.NotNull(TestHelpers.GetPlayDirective(response));
         Assert.Contains(queries, q => q.SearchTerm == "money" && (q.ArtistIds == null || q.ArtistIds.Length == 0));
     }
@@ -368,7 +336,7 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
             CreateQueueIntent("la musica", TestHelpers.ResolvedSlotMultiValue("pink", "P!nk", "Pink Floyd"), IntentNames.PlayNext),
             _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
-        AssertMultiArtistAsk(response, pnk, floyd);
+        TestHelpers.AssertMultiArtistAsk(response, pnk, floyd);
     }
 
     [Fact]
@@ -385,7 +353,7 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
             CreateQueueIntent("get the party started", TestHelpers.ResolvedSlotMultiValue("pink", "P!nk", "Pink Floyd"), IntentNames.PlayNext),
             _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
-        AssertNoDisambiguationState(response);
+        TestHelpers.AssertNoDisambiguationState(response);
         var pnTitleQueries = queries.Where(q => q.SearchTerm != null).ToList();
         Assert.NotEmpty(pnTitleQueries);
         Assert.All(pnTitleQueries, q => Assert.True(
@@ -407,7 +375,7 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
             CreateQueueIntent("la musica", TestHelpers.ResolvedSlotMultiValue("pink", "P!nk", "ABBA"), IntentNames.PlayNext),
             _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
 
-        AssertNoDisambiguationState(response);
+        TestHelpers.AssertNoDisambiguationState(response);
         Assert.NotNull(TestHelpers.GetPlayDirective(response));
         Assert.Contains(queries, q => q.ArtistIds!.Length == 1 && q.ArtistIds[0] == abba.Id);
         Assert.DoesNotContain(queries, q => q.IncludeItemTypes?.Contains(BaseItemKind.MusicArtist) == true);
@@ -426,7 +394,7 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
             CreateQueueIntent("money", musicianSlot: null, IntentNames.PlayNext),
             _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
 
-        AssertNoDisambiguationState(response);
+        TestHelpers.AssertNoDisambiguationState(response);
         Assert.NotNull(TestHelpers.GetPlayDirective(response));
         Assert.Contains(queries, q => q.SearchTerm == "money" && (q.ArtistIds == null || q.ArtistIds.Length == 0));
     }
@@ -450,7 +418,7 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
             CreateAlbumIntent(album: null, TestHelpers.ResolvedSlotMultiValue("pink", "P!nk", "Pink Floyd")),
             _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
-        AssertMultiArtistAsk(response, pnk, floyd);
+        TestHelpers.AssertMultiArtistAsk(response, pnk, floyd);
     }
 
     [Fact]
@@ -474,7 +442,7 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
             CreateAlbumIntent("greatest hits", TestHelpers.ResolvedSlotMultiValue("pink", "P!nk", "Pink Floyd")),
             _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
-        AssertNoDisambiguationState(response);
+        TestHelpers.AssertNoDisambiguationState(response);
         Assert.NotNull(TestHelpers.GetPlayDirective(response));
     }
 
@@ -500,7 +468,7 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
             CreateAlbumIntent(album: null, TestHelpers.ResolvedSlotMultiValue("pink", "P!nk", "ABBA")),
             _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
-        AssertNoDisambiguationState(response);
+        TestHelpers.AssertNoDisambiguationState(response);
         var play = TestHelpers.GetPlayDirective(response);
         Assert.NotNull(play);
         Assert.Equal(tracks[0].Id.ToString(), play!.AudioItem.Stream.Token);
@@ -524,7 +492,7 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
             CreateAlbumIntent("arrival", musicianSlot: null),
             _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
-        AssertNoDisambiguationState(response);
+        TestHelpers.AssertNoDisambiguationState(response);
         Assert.NotNull(TestHelpers.GetPlayDirective(response));
     }
 
@@ -564,7 +532,7 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
             CreateQueryIntent(TestHelpers.ResolvedSlotMultiValue("pink", "P!nk", "Pink Floyd")),
             _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
-        AssertMultiArtistAsk(response, pnk, floyd);
+        TestHelpers.AssertMultiArtistAsk(response, pnk, floyd);
     }
 
     [Fact]
@@ -590,7 +558,7 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
             CreateQueryIntent(TestHelpers.ResolvedSlotMultiValue("pink", "P!nk", "ABBA")),
             _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
-        AssertNoDisambiguationState(response);
+        TestHelpers.AssertNoDisambiguationState(response);
         string speech = TestHelpers.GetSpeechText(response);
         Assert.Contains(track.Name, speech, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(queries, q => q.ArtistIds!.Length == 1 && q.ArtistIds[0] == abba.Id);
@@ -615,7 +583,7 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
             CreateQueryIntent(TestHelpers.ResolvedSlot("pink floyd", "Pink Floyd")),
             _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
-        AssertNoDisambiguationState(response);
+        TestHelpers.AssertNoDisambiguationState(response);
         Assert.Contains("Money", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
     }
 
@@ -639,7 +607,7 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
             CreateFindSongIntent(TestHelpers.ResolvedSlotMultiValue("pink", "P!nk", "Pink Floyd")),
             _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
-        AssertMultiArtistAsk(response, pnk, floyd);
+        TestHelpers.AssertMultiArtistAsk(response, pnk, floyd);
         Assert.Null(response.SessionAttributes!.GetValueOrDefault(FindSongIntentHandler.SessionDataKey));
     }
 
@@ -658,7 +626,7 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
             _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         TestHelpers.AssertSessionOpen(response, "the keywords elicit keeps the session open");
-        AssertNoDisambiguationState(response);
+        TestHelpers.AssertNoDisambiguationState(response);
         FindSongSessionData? state = ReadFindSongState(response);
         Assert.NotNull(state);
         Assert.Equal(FindSongState.AwaitingKeywords, state!.State);
@@ -682,7 +650,7 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
             CreateFindSongIntent(TestHelpers.ResolvedSlotMultiValue("pink", "P!nk", "Pink Floyd"), titleKeywords: "una canzone"),
             _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
-        AssertNoDisambiguationState(response);
+        TestHelpers.AssertNoDisambiguationState(response);
         TestHelpers.AssertSessionOpen(response, "the keywords elicit keeps the session open");
         FindSongSessionData? state = ReadFindSongState(response);
         Assert.NotNull(state);
@@ -710,7 +678,7 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
             FindSongSession(FindSongState.AwaitingArtist, keywords: "wish you were here"),
             CancellationToken.None);
 
-        AssertMultiArtistAsk(response, pnk, floyd);
+        TestHelpers.AssertMultiArtistAsk(response, pnk, floyd);
     }
 
     [Fact]
@@ -739,7 +707,7 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
             FindSongSession(FindSongState.AwaitingArtist, keywords: "dancing queen"),
             CancellationToken.None);
 
-        AssertNoDisambiguationState(response);
+        TestHelpers.AssertNoDisambiguationState(response);
         Assert.NotNull(TestHelpers.GetPlayDirective(response));
         Assert.Equal(song.Id, session.FullNowPlayingItem!.Id);
         Assert.Contains(queries, q => q.ArtistIds!.Length == 1 && q.ArtistIds[0] == abba.Id);
@@ -764,7 +732,7 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
             FindSongSession(FindSongState.AwaitingArtist, keywords: "wish you were here"),
             CancellationToken.None);
 
-        AssertNoDisambiguationState(response);
+        TestHelpers.AssertNoDisambiguationState(response);
         TestHelpers.AssertSessionOpen(response, "the flow continues with an open elicit");
         Assert.NotNull(ReadFindSongState(response));
     }
@@ -793,7 +761,7 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
         SkillResponse ask = await handler.HandleAsync(
             askRequest, _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(),
             incomingSession.Attributes, CancellationToken.None);
-        AssertMultiArtistAsk(ask, pnk, floyd);
+        TestHelpers.AssertMultiArtistAsk(ask, pnk, floyd);
 
         // The interceptor merge over the open FindSong session: incoming keys are
         // merged, then the removal marker strips the FindSong flow key.
@@ -887,7 +855,7 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
 
         // The request reached the play tail through the JF-420 gate's block
         // (single containment match, no alternative, no disambiguation).
-        AssertNoDisambiguationState(response);
+        TestHelpers.AssertNoDisambiguationState(response);
         Assert.NotNull(TestHelpers.GetPlayDirective(response));
         Assert.Equal(2, counting.GetArtistsCalls);
     }

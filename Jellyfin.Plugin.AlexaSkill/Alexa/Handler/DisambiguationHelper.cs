@@ -227,13 +227,34 @@ internal static class DisambiguationHelper
     }
 
     /// <summary>
+    /// The maximum number of candidate names the multi-artist ask speaks in one
+    /// breath (JF-707; the same count AskFirstMatch truncates at, though
+    /// deliberately NOT a shared constant, see below): the
+    /// DisambiguateMultipleArtists string was designed for the two-name shape,
+    /// and a long same-first-word family in one breath is incomprehensible.
+    /// Only the SPOKEN list is capped: the cycling state keeps every match, so
+    /// a rank beyond the cap is not spoken up front but stays reachable via
+    /// DisambiguateNext, which names it at its own turn. AskFirstMatch's
+    /// Take(3) truncates the STATE list as well, and the two constants stay
+    /// unlinked on purpose: its callers pass progressively weaker fuzzy
+    /// candidates, while this builder's unbounded caller (the JF-690 ER gate)
+    /// feeds exact library-name resolutions where every entry is a real
+    /// candidate; the counts coincide today but nothing enforces that.
+    /// </summary>
+    internal const int MultipleArtistsSpeakCap = 3;
+
+    /// <summary>
     /// Build the multi-artist disambiguation Ask (JF-420.2 shape: plain name list,
     /// yes/no cycling via DisambiguateNext, the family's yes/no reprompt). One
     /// construction for every site that fires the multi-artist prompt: the JF-420
     /// containment-vs-alternative gate (the extraction SOURCE), the JF-652 kana
-    /// near-tie block in PlayArtistSongsIntentHandler, and the JF-652 kana near-tie
-    /// wrapper in CrossMediaFallback.ResolveKanaOriginTie. The first match is the
-    /// one "yes" plays.
+    /// near-tie block in PlayArtistSongsIntentHandler, the JF-652 kana near-tie
+    /// wrapper in CrossMediaFallback.ResolveKanaOriginTie, and the JF-690
+    /// multi-value ER gate in MultiValueErDisambiguation (the only caller whose
+    /// list is unbounded). The spoken list is capped at
+    /// <see cref="MultipleArtistsSpeakCap"/> (JF-707); the session state keeps
+    /// the FULL resolved list so no artist the gate resolved becomes unaskable.
+    /// The first match is the one "yes" plays.
     /// </summary>
     /// <param name="matches">The candidates in spoken order (winner first).</param>
     /// <param name="locale">The request locale.</param>
@@ -242,7 +263,7 @@ internal static class DisambiguationHelper
     {
         // Plain name list: the flow is yes/no cycling (yes plays the first, no
         // advances via DisambiguateNext), so no numbering.
-        string matchList = string.Join(", ", matches.Select(m => m.Name));
+        string matchList = string.Join(", ", matches.Take(MultipleArtistsSpeakCap).Select(m => m.Name));
         var response = ResponseBuilder.Ask(
             ResponseStrings.Get("DisambiguateMultipleArtists", locale, matchList),
             new Reprompt(ResponseStrings.Get("DisambiguateReprompt", locale)));

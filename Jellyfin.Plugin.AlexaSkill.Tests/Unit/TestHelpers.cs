@@ -374,6 +374,68 @@ internal static class TestHelpers
             d => d is AudioPlayerPlayDirective);
 
     /// <summary>
+    /// JF-420.2/JF-707: the stored-state contract of a multi-artist ask: the
+    /// FULL resolved list (ids and names in rank order, winner first, the
+    /// entry a plain "yes" plays), type artist, cursor 0. The ask's SPOKEN
+    /// prompt names only the top
+    /// <see cref="DisambiguationHelper.MultipleArtistsSpeakCap"/> matches
+    /// while this state keeps every match (the yes/no cycling walks the full
+    /// list); <see cref="AssertMultiArtistAsk"/> composes this contract with
+    /// the cap-aware speech asserts.
+    /// </summary>
+    internal static void AssertStoredArtistMatches(SkillResponse response, params BaseItem[] expected)
+    {
+        var state = DisambiguationHelper.ReadState(response.SessionAttributes);
+        Assert.NotNull(state);
+        Assert.Equal(expected.Select(a => a.Id.ToString()), state!.Value.Matches.Select(m => m.Id));
+        Assert.Equal(expected.Select(a => a.Name), state.Value.Matches.Select(m => m.Name));
+        Assert.Equal(DisambiguationHelper.MediaTypeArtist, state.Value.MediaType);
+        Assert.Equal(0, state.Value.Index);
+    }
+
+    /// <summary>
+    /// JF-690: asserts a response carries NO disambiguation session state (the
+    /// complement of <see cref="AssertMultiArtistAsk"/>; hoisted from the
+    /// twin private copies in both MusicianMultiValueEr suites, which had
+    /// drifted to different key subsets). Checks both state keys: the primary
+    /// match list and the type marker.
+    /// </summary>
+    internal static void AssertNoDisambiguationState(SkillResponse response)
+    {
+        Assert.Null(response.SessionAttributes?.GetValueOrDefault(DisambiguationHelper.AttrMatches));
+        Assert.Null(response.SessionAttributes?.GetValueOrDefault(DisambiguationHelper.AttrType));
+    }
+
+    /// <summary>
+    /// JF-690/JF-707: the ONE oracle for the multi-artist disambiguation ask
+    /// (hoisted from the twin private copies in both MusicianMultiValueEr
+    /// suites): open session, no play directive, the stored FULL resolved list
+    /// via <see cref="AssertStoredArtistMatches"/>, and CAP-AWARE speech
+    /// asserts: the top <see cref="DisambiguationHelper.MultipleArtistsSpeakCap"/>
+    /// candidates must be spoken, every candidate beyond the cap must NOT be
+    /// (JF-707), so a leg with more than three expected artists pins the
+    /// capped breath instead of failing on correct behavior. Beware substring
+    /// fixtures: a tail name contained in a spoken head name would trip the
+    /// DoesNotContain pass.
+    /// </summary>
+    internal static void AssertMultiArtistAsk(SkillResponse response, params BaseItem[] expected)
+    {
+        AssertSessionOpen(response, "the ask keeps the session open");
+        Assert.Null(GetPlayDirective(response));
+        AssertStoredArtistMatches(response, expected);
+        string speech = GetSpeechText(response);
+        foreach (BaseItem artist in expected.Take(DisambiguationHelper.MultipleArtistsSpeakCap))
+        {
+            Assert.Contains(artist.Name, speech, StringComparison.OrdinalIgnoreCase);
+        }
+
+        foreach (BaseItem artist in expected.Skip(DisambiguationHelper.MultipleArtistsSpeakCap))
+        {
+            Assert.DoesNotContain(artist.Name, speech, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    /// <summary>
     /// JF-687/JF-693: the ONE oracle for the empty-StreamTokenSecret refusal Tell:
     /// no playback directive of either kind (the production predicate), the response
     /// is a session-ending Tell, and the speech is the localized
