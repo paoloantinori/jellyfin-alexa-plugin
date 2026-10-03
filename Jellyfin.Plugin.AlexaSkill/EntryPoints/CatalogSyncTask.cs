@@ -120,10 +120,15 @@ public class CatalogSyncTask : IScheduledTask
                     await Task.Delay(InterUserDelayMs, cancellationToken).ConfigureAwait(false);
                 }
 
+                // Gate-marker tail: set BEFORE the call so a sync that THROWS
+                // mid-burst still counts as a user who fired SMAPI calls - the
+                // spacing exists to separate back-to-back bursts, and a failed
+                // burst is still a burst (the skip conditions above have already
+                // run, so this user is genuinely syncing).
+                syncedAnyUser = true;
+
                 SyncResult result = await _syncService.SyncUserLibraryAsync(
                     user, jellyfinUser, cancellationToken).ConfigureAwait(false);
-
-                syncedAnyUser = true;
 
                 if (result.Success)
                 {

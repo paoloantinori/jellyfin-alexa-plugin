@@ -114,6 +114,20 @@ Test note: the JF-513.3 family pin
 SkipsVersionUpload) lost its discriminating power when JF-543 started filtering
 ar-SA out of the sync entirely (its config "ar-SA" now runs it-IT only, so no second
 leg exists); landing restores it with a real same-class pair (es-MX + es-US).
+
+GATE-MARKER TAIL (2026-10-03, orchestrator review of commit 9b612d48, 2 low findings; all
+six scrutiny axes verified mechanically - the reviewer re-ran the red proofs itself by
+reverting the skip's return and watching exactly the three fix-pins flip while the
+boundary pin stayed green, then restored the worktree byte-clean; the merge into main
+confirmed conflict-free via merge-tree): F1 APPLIED (syncedAnyUser now set BEFORE the
+sync call so a mid-burst THROW still counts as a burst the inter-user spacing must
+separate - the old after-await placement skipped the spacing exactly when the failed
+sync had fired SMAPI calls); F2 APPLIED (the fake's per-skill status map is now driven
+by a mutable ServedStatusLocales set defaulting to the four synced locales, so a future
+pin names its locale in the arrange instead of silently burning the fallback tracker's
+~150s per-locale budget; the status GET is per-skill with no locale parameter, so the
+map must enumerate its keys). Affected classes 16/16 both TFMs after the tail;
+independent suite 4990/4990 both TFMs on the worker commit; merged-tree follows.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done

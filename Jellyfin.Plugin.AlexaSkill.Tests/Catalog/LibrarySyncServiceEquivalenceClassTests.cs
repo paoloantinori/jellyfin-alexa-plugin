@@ -324,7 +324,11 @@ public class LibrarySyncServiceEquivalenceClassTests : PluginTestBase, IDisposab
     /// </summary>
     private sealed class FakeSmapiHandler : HttpMessageHandler
     {
-        private readonly Dictionary<string, int> _versionCounterByCatalog = new(StringComparer.Ordinal);
+        /// <summary>Locales this fake answers SUCCEEDED in the per-skill status map; extend in a pin's arrange when syncing another locale.</summary>
+            internal HashSet<string> ServedStatusLocales { get; } = new(StringComparer.Ordinal)
+            { "it-IT", "es-MX", "es-US", "de-DE" };
+
+            private readonly Dictionary<string, int> _versionCounterByCatalog = new(StringComparer.Ordinal);
         private readonly Dictionary<string, string> _modelPutBodiesByLocale = new(StringComparer.Ordinal);
         private bool _modelPut401Served;
 
@@ -379,10 +383,16 @@ public class LibrarySyncServiceEquivalenceClassTests : PluginTestBase, IDisposab
 
             if (request.Method == HttpMethod.Get && url.EndsWith("/status", StringComparison.Ordinal))
             {
-                return Json(
-                    """
-                    {"manifest":{"lastUpdateRequest":{"status":"SUCCEEDED"}},"interactionModel":{"it-IT":{"lastUpdateRequest":{"status":"SUCCEEDED"}},"es-MX":{"lastUpdateRequest":{"status":"SUCCEEDED"}},"es-US":{"lastUpdateRequest":{"status":"SUCCEEDED"}},"de-DE":{"lastUpdateRequest":{"status":"SUCCEEDED"}}}}
-                    """);
+                // Gate-marker tail: the map is driven by ServedStatusLocales (a
+                // mutable set, defaulting to the four locales this class's pins
+                // sync) so a future pin naming another locale adds it to the set
+                // in its arrange instead of silently burning the fallback
+                // tracker's full ~150s poll budget per unserved locale (the
+                // status GET is per-skill and carries no locale parameter, so
+                // the map must enumerate its keys).
+                string modelJson = string.Join(",",
+                    ServedStatusLocales.Select(l => $"\"{l}\":{{\"lastUpdateRequest\":{{\"status\":\"SUCCEEDED\"}}}}"));
+                return Json($"{{\"manifest\":{{\"lastUpdateRequest\":{{\"status\":\"SUCCEEDED\"}}}},\"interactionModel\":{{{modelJson}}}}}");
             }
 
             if (request.Method == HttpMethod.Get && url.Contains("/updateRequest/", StringComparison.Ordinal))
