@@ -891,6 +891,186 @@ public class DeviceQueueManagerTests : IDisposable
     }
 
     // =====================================================================
+    // Launch-scope trim pins (JF-723: the derive-to-commit window's fresh entry
+    // is never its own trim's evictee; MaxLaunchBaseEntries cap pressure)
+    // =====================================================================
+
+    /// <summary>
+    /// JF-723 pin: the entry <see cref="DeviceQueueManager.RecordLaunchBase"/> just
+    /// wrote is NEVER the evictee of that same call's trim, even at full cap
+    /// pressure. Seeded shape (<see cref="SeedQueuedScopeResidents"/> with "N"
+    /// membership, which matches the map keys per the documented
+    /// <c>TrimPositionMap</c> contract): every resident is queued, so the only
+    /// evictable key at this cap pressure is the fresh one, which is precisely the
+    /// eviction the guard forbids. The fresh launch carries the nonzero base and
+    /// non-identity rate whose silent loss JF-723 files (reads base 0 / rate
+    /// identity at every reader). The window narrative lives on
+    /// <c>TrimLaunchBaseIfNeeded</c>'s doc.
+    /// </summary>
+    [Fact]
+    public void RecordLaunchBase_NonZeroBaseEntry_SurvivesOwnTrimAtQueuedCapPressure()
+    {
+        SeedQueuedScopeResidents("dev-jf723", DeviceQueueManager.MaxLaunchBaseEntries, "N");
+
+        string freshId = Guid.NewGuid().ToString();
+        long baseMs = MinutesToMs(20);
+        _manager.RecordLaunchBase("dev-jf723", freshId, baseMs, enqueued: false, ratePerMille: 1500);
+
+        (long? recordedBase, int? recordedRate) = _manager.GetActiveLaunchScope("dev-jf723", freshId);
+        Assert.Equal(baseMs, recordedBase);
+        Assert.Equal(1500, recordedRate);
+    }
+
+    /// <summary>
+    /// JF-723 guard scope: the exemption belongs to the entry recorded in the SAME
+    /// call only. The previous launch's entry (protected while it was fresh) is an
+    /// ordinary aged entry at the NEXT launch's trim: with the map pinned over cap
+    /// by queued residents, the next fresh launch evicts it. The trim keeps
+    /// trimming; the guard never disables it.
+    /// </summary>
+    [Fact]
+    public void RecordLaunchBase_PreviousFreshEntry_IsEvictedByTheNextLaunchAtCapPressure()
+    {
+        SeedQueuedScopeResidents("dev-jf723-aging", DeviceQueueManager.MaxLaunchBaseEntries, "N");
+
+        string firstFreshId = Guid.NewGuid().ToString();
+        long firstBaseMs = MinutesToMs(5);
+        _manager.RecordLaunchBase("dev-jf723-aging", firstFreshId, firstBaseMs, enqueued: false);
+
+        // While fresh: present (the JF-723 guard's own claim, re-asserted on the aging path).
+        Assert.Equal(firstBaseMs, _manager.GetActiveLaunchScope("dev-jf723-aging", firstFreshId).BaseMs);
+
+        // The next launch ages it: still non-queued, no longer the just-recorded key.
+        string secondFreshId = Guid.NewGuid().ToString();
+        _manager.RecordLaunchBase("dev-jf723-aging", secondFreshId, 0, enqueued: false);
+
+        Assert.Null(_manager.GetActiveLaunchScope("dev-jf723-aging", firstFreshId).BaseMs);
+        Assert.Equal(0, _manager.GetActiveLaunchScope("dev-jf723-aging", secondFreshId).BaseMs);
+    }
+
+    /// <summary>
+    /// CHARACTERIZATION (green on arrival; JF-738 evidence, NOT a desired contract):
+    /// production <see cref="DeviceQueueManager.SetQueue"/> callers store DASHED
+    /// <c>Guid.ToString()</c> ids while the four launch-scope maps are keyed "N", so
+    /// the trim's queued-membership protection never matches and the trim runs as
+    /// pure insertion-order FIFO. Signature asserted here: at cap pressure the
+    /// evictee is a QUEUED resident (the first-recorded seed), while the documented
+    /// contract ("entries for queued items all stay") would evict the non-queued
+    /// victim instead. This test is the red proof JF-738's format fix will produce;
+    /// do not "fix" it by weakening the assert. DETERMINISM NOTE: like the
+    /// saturated-map pin below, this rests on .NET Dictionary enumeration order
+    /// (implementation detail the production trim itself relies on for its
+    /// "oldest" semantics); the format-independent anchors for the guard are the
+    /// two queued-cap-pressure pins above (active and enqueued).
+    /// </summary>
+    [Fact]
+    public void RecordLaunchBase_DashedQueueMembership_QueuedSeedIsTheEvicteeAtCapPressure_JF738Characterization()
+    {
+        List<string> queuedIds = SeedQueuedScopeResidents("dev-jf738", DeviceQueueManager.MaxLaunchBaseEntries, "D");
+
+        string victimId = Guid.NewGuid().ToString();
+        _manager.RecordLaunchBase("dev-jf738", victimId, 0, enqueued: false);
+
+        // The mismatch signature: the first QUEUED seed lost its entry, the
+        // non-queued 201st record survived (newest insertion, FIFO never reaches it).
+        Assert.Null(_manager.GetActiveLaunchScope("dev-jf738", queuedIds[0]).BaseMs);
+        Assert.NotNull(_manager.GetActiveLaunchScope("dev-jf738", victimId).BaseMs);
+    }
+
+    /// <summary>
+    /// JF-723 pin, ENQUEUED arm: the guard protects a freshly-written PENDING pair
+    /// (WritePendingLaunchScope) exactly like the active one; a regression that
+    /// drops the exemption from only the pending-map trims reds here. The residents
+    /// are seeded as PENDING entries so the pending maps sit at the cap and the
+    /// fresh enqueued record actually crosses it (the trim's count gate is an OR
+    /// across the four maps). The pending entry is observed through its promotion
+    /// (the only public read path): after
+    /// <see cref="DeviceQueueManager.PromotePendingLaunchBase"/> the ACTIVE scope
+    /// must carry the recorded base and rate. Without the guard, the fresh pending
+    /// pair is the only evictable key at this cap pressure and dies mid-window, so
+    /// the promotion no-ops and the scope reads empty.
+    /// </summary>
+    [Fact]
+    public void RecordLaunchBase_EnqueuedFreshPair_SurvivesOwnTrimAndPromotesAtQueuedCapPressure()
+    {
+        SeedQueuedScopeResidents("dev-jf723-pending", DeviceQueueManager.MaxLaunchBaseEntries, "N", enqueued: true);
+
+        string freshId = Guid.NewGuid().ToString();
+        long baseMs = MinutesToMs(9);
+        _manager.RecordLaunchBase("dev-jf723-pending", freshId, baseMs, enqueued: true, ratePerMille: 750);
+
+        _manager.PromotePendingLaunchBase("dev-jf723-pending", freshId);
+
+        (long? recordedBase, int? recordedRate) = _manager.GetActiveLaunchScope("dev-jf723-pending", freshId);
+        Assert.Equal(baseMs, recordedBase);
+        Assert.Equal(750, recordedRate);
+    }
+
+    /// <summary>
+    /// JF-723 pin (today's reachable shape under the JF-738 format mismatch): with
+    /// membership protection inert, a saturated map churns by slot order, and a
+    /// fresh insert that reuses the just-freed lowest slot is evicted by its OWN
+    /// record's trim (the 201st record frees the oldest slot; the next insert lands
+    /// there and becomes the oldest occupied entry). That self-evicted entry is the
+    /// launch-scope record of the track the device is about to play; the guard must
+    /// keep it observable. DETERMINISM NOTE: this pin rests on .NET Dictionary
+    /// enumeration and free-list slot reuse (implementation details the production
+    /// trim already relies on for its "oldest" semantics); a BCL change there
+    /// degrades this pin to vacuously green rather than red, and the
+    /// format-independent anchors for the guard are the two queued-cap-pressure
+    /// pins above (active and enqueued).
+    /// </summary>
+    [Fact]
+    public void RecordLaunchBase_SaturatedMapFreshInsert_SurvivesOwnTrimUnderDashedMembership()
+    {
+        // Old-queue membership (dashed, production format), no scope entries tied to it.
+        _manager.SetQueue("dev-jf723-sat", Enumerable.Range(0, DeviceQueueManager.MaxLaunchBaseEntries).Select(_ => Guid.NewGuid().ToString()).ToList(), currentIndex: 0);
+
+        // Cap-filling distinct previously-launched items (no trim fires at count <= cap).
+        foreach (int i in Enumerable.Range(0, DeviceQueueManager.MaxLaunchBaseEntries))
+        {
+            _manager.RecordLaunchBase("dev-jf723-sat", Guid.NewGuid().ToString(), 0, enqueued: false);
+        }
+
+        // The 201st distinct launch: pushes the map over cap, its trim frees the oldest slot.
+        _manager.RecordLaunchBase("dev-jf723-sat", Guid.NewGuid().ToString(), 0, enqueued: false);
+
+        // The fresh nonzero-base launch lands in the freed slot; its own trim must not evict it.
+        string freshId = Guid.NewGuid().ToString();
+        long baseMs = MinutesToMs(20);
+        _manager.RecordLaunchBase("dev-jf723-sat", freshId, baseMs, enqueued: false, ratePerMille: 1500);
+
+        (long? recordedBase, int? recordedRate) = _manager.GetActiveLaunchScope("dev-jf723-sat", freshId);
+        Assert.Equal(baseMs, recordedBase);
+        Assert.Equal(1500, recordedRate);
+    }
+
+    /// <summary>
+    /// Seeds the JF-723/JF-738 cap-pressure shape: a queue of
+    /// <paramref name="count"/> ids in the given GUID format, each with a
+    /// launch-scope entry (active or pending per <paramref name="enqueued"/>), so
+    /// that map family sits exactly at the trim cap with every resident queued
+    /// under the documented membership contract ("N" matches the map keys; "D" is
+    /// the production dashed format whose mismatch JF-738 files). Returns the
+    /// seeded ids.
+    /// </summary>
+    private List<string> SeedQueuedScopeResidents(string deviceId, int count, string guidFormat, bool enqueued = false)
+    {
+        List<string> ids = Enumerable.Range(0, count).Select(_ => Guid.NewGuid().ToString(guidFormat)).ToList();
+        _manager.SetQueue(deviceId, ids, currentIndex: 0);
+        foreach (string id in ids)
+        {
+            _manager.RecordLaunchBase(deviceId, id, 0, enqueued);
+        }
+
+        return ids;
+    }
+
+    /// <summary>The minutes-to-milliseconds idiom shared by the launch-scope pins
+    /// (the same per-file helper shape as PlaybackPositionProvenanceTests).</summary>
+    private static long MinutesToMs(double minutes) => (long)TimeSpan.FromMinutes(minutes).TotalMilliseconds;
+
+    // =====================================================================
     // ResolveResumeTicks (JF-581 seed resolution, shared by the JF-565 slice)
     // =====================================================================
 

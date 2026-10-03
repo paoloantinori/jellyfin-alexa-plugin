@@ -415,6 +415,10 @@ public sealed class DeviceQueueManager : IDisposable
     /// <param name="ratePerMille">The stream's playback rate in per-mille form (JF-636:
     /// 1000 = identity, the raw-static/transcode streams; 750..2000 = an atempo
     /// stream whose device offsets must scale before composing the base).</param>
+    /// <remarks>JF-723: the entry this call writes is exempt from this call's own
+    /// cap-pressure trim (see <see cref="TrimLaunchBaseIfNeeded"/>), because the
+    /// launch build runs before the queue commit on the play paths and the trim
+    /// would otherwise judge the fresh entry against the OLD queue's membership.</remarks>
     public void RecordLaunchBase(string deviceId, string itemId, long baseMs, bool enqueued, int ratePerMille = 1000)
     {
         if (!StreamTokenCodec.TryGetItemId(itemId, out Guid parsedItemId))
@@ -455,7 +459,7 @@ public sealed class DeviceQueueManager : IDisposable
                 RetirePendingLaunchScope(queue, key);
             }
 
-            TrimLaunchBaseIfNeeded(queue);
+            TrimLaunchBaseIfNeeded(queue, key);
         }
 
         SchedulePersistInternal(deviceId);
@@ -700,10 +704,47 @@ public sealed class DeviceQueueManager : IDisposable
     /// the cap; harmless while promotion defaults a missing rate to 1000 and the
     /// writers keep every NEW pair inserted together. The structural fix is the
     /// single scope-per-key map named in <see cref="WritePendingLaunchScope"/>.
+    /// The JF-723 exemption and the JF-738 membership-format residual are
+    /// documented on the trim method itself (<see cref="TrimLaunchBaseIfNeeded"/>).
+    /// Internal for the InternalsVisibleTo test seam (the VideoAudioCache /
+    /// KeyedOneShotDebounce pattern): the JF-723 pins seed their cap pressure from
+    /// this constant so a cap change cannot silently degrade them to vacuous green.
     /// </summary>
-    private const int MaxLaunchBaseEntries = 200;
+    internal const int MaxLaunchBaseEntries = 200;
 
-    private static void TrimLaunchBaseIfNeeded(DeviceQueue queue)
+    /// <summary>
+    /// JF-723 (derive-to-commit window): the entry <see cref="RecordLaunchBase"/>
+    /// just wrote is EXEMPT from this trim via <paramref name="freshlyRecordedKey"/>
+    /// (treated as queued by THIS call's trim only). The play paths build the
+    /// launch BEFORE committing the queue (the JF-687/JF-699/JF-713
+    /// refusal-before-phantom-state ordering), so this trim runs while the OLD
+    /// queue is still the stored one and the freshly launched item (on the
+    /// playlist arms, an item of the queue that is ABOUT to be committed) is not
+    /// in the membership the trim judges against. Without the exemption, a
+    /// cap-pressure trim could evict the fresh entry mid-window, and its absence
+    /// reads as base 0 / rate identity at every reader (a silent rate-identity on
+    /// a nonzero-base launch). The exemption can leave a map at cap+1 until the
+    /// next launch ages the entry (the same over-cap tolerance
+    /// <see cref="TrimPositionMap"/> already grants queued-pinned maps); the entry
+    /// is NOT immortal: the NEXT launch's trim evicts it if it is still neither
+    /// queued nor fresh. SCOPE OF THE EXEMPTION (JF-739, filed not fixed here):
+    /// it guards the entry against its OWN record's trim only; a SIBLING
+    /// <see cref="RecordLaunchBase"/> interleaved inside the same derive-to-commit
+    /// window (a PlaybackNearlyFinished enqueue or queue-editing launch between
+    /// the build and the commit) trims without exempting the earlier entry, whose
+    /// item is still absent from the STORED queue, so that sibling trim can evict
+    /// it; the JF-723 filing's fresh-stamping candidate (b) is JF-739's fix shape.
+    /// RESIDUAL (JF-738, filed not fixed here): the membership
+    /// protection itself is inert in production today because the maps are keyed
+    /// "N" while <see cref="SetQueue"/> callers store dashed ids, so no key ever
+    /// matches the queued set and the trim degrades to pure insertion/slot-order
+    /// FIFO (which is how a fresh insert can be its own evictee at saturation);
+    /// the exemption below holds under BOTH behaviors by construction.
+    /// </summary>
+    /// <param name="queue">The device queue whose four launch-scope maps are bounded.</param>
+    /// <param name="freshlyRecordedKey">The "N"-normalized key RecordLaunchBase just
+    /// wrote; never this trim's evictee (the JF-723 guard).</param>
+    private static void TrimLaunchBaseIfNeeded(DeviceQueue queue, string freshlyRecordedKey)
     {
         if (queue.ActiveLaunchBaseMs.Count <= MaxLaunchBaseEntries
             && queue.PendingLaunchBaseMs.Count <= MaxLaunchBaseEntries
@@ -714,6 +755,9 @@ public sealed class DeviceQueueManager : IDisposable
         }
 
         HashSet<string> queuedItems = new(queue.ItemIds, StringComparer.OrdinalIgnoreCase);
+        // The JF-723 identity guard: the just-recorded key is never this trim's
+        // evictee, whatever slot the dictionary reused for it.
+        queuedItems.Add(freshlyRecordedKey);
         TrimPositionMap(queue.ActiveLaunchBaseMs, queuedItems, MaxLaunchBaseEntries);
         TrimPositionMap(queue.PendingLaunchBaseMs, queuedItems, MaxLaunchBaseEntries);
         TrimPositionMap(queue.ActivePlaybackRatePerMille, queuedItems, MaxLaunchBaseEntries);
@@ -728,7 +772,13 @@ public sealed class DeviceQueueManager : IDisposable
     /// count gate keeps the set construction off the happy path.
     /// </summary>
     /// <param name="map">The bounded dictionary.</param>
-    /// <param name="queuedItems">The queued item ids (any key format; compared case-insensitively).</param>
+    /// <param name="queuedItems">The queued item ids, compared case-insensitively.
+    /// FORMAT CONTRACT (JF-738): an entry is protected only when its KEY is
+    /// string-equal (ignoring case) to a member of this set, so the set must be
+    /// built in the map's own key format; today the launch-scope maps are "N"-keyed
+    /// while production queue ItemIds are dashed, which makes the membership half
+    /// of this policy inert (the JF-738 filing). New call sites must not assume
+    /// "any key format" matches.</param>
     /// <param name="cap">The maximum entry count.</param>
     /// <typeparam name="T">The map's value type (position ticks, launch bases, per-mille rates).</typeparam>
     internal static void TrimPositionMap<T>(Dictionary<string, T> map, IEnumerable<string> queuedItems, int cap)

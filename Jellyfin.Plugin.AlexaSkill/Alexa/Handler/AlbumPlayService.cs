@@ -1042,9 +1042,9 @@ public sealed class AlbumPlayService
             // builder's OWN mid-build writes (last-played ledger, launch scope)
             // are carried by CopySurvivingStores. A lock belongs on
             // DeviceQueueManager.ReplaceQueue (extracted in this same change) if
-            // the shape ever bites live. Same window, launch-scope side:
-            // TrimLaunchBaseIfNeeded judges the fresh entry against the OLD
-            // queue's membership (JF-723).
+            // the shape ever bites live. The launch-scope side of this same window
+            // is covered by the JF-723 guard in TrimLaunchBaseIfNeeded (the fresh
+            // entry is never its own trim's evictee).
             Playback.DeviceQueue shuffledQueue = queueManager!.CommitShuffledQueue(deviceId, pendingShuffle);
             // Mirror the shuffled DeviceQueue order back into the session queue (metadata preserved).
             ProgressReporter.MirrorQueueToSession(shuffledQueue, session);
