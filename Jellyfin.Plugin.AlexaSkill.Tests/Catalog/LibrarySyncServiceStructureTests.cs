@@ -94,7 +94,11 @@ public class LibrarySyncServiceStructureTests
     /// state machine (code-review F3), not just any single caller: the fetch
     /// must stay once-per-run in the method body (shared across locales);
     /// moving the loop into RunLegAsync would re-fetch per locale with a
-    /// count-only pin still green.
+    /// count-only pin still green. GATE-MARKER TAIL: the binding is
+    /// METHOD-granular - a re-fetch loop moved INTO SyncUserLibraryAsync's own
+    /// locale foreach keeps this pin green (same MoveNext method); the
+    /// once-per-run contract is enforced only against moves OUT of the method
+    /// body.
     /// </summary>
     [Fact]
     public void FetchLibraryItems_HasExactlyOneCallSite_TheSourcingLoop()
@@ -168,6 +172,10 @@ public class LibrarySyncServiceStructureTests
     /// <summary>
     /// The derived count sweep both loops above iterate: every writable
     /// SyncResult property whose name ends in Count.
+    /// GATE-MARKER TAIL: the family predicate is the generic *Count suffix - a
+    /// future UNRELATED count property set outside the wiring table fails this pin;
+    /// the fix is widening the predicate or routing through a StoreCount row, judged
+    /// per addition.
     /// </summary>
     private static List<PropertyInfo> CountProperties() =>
         typeof(SyncResult)

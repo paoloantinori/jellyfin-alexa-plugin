@@ -55,6 +55,21 @@ which DO fail loudly) through signature arity on a fourth type).
    slot-type-name dictionary (or make CatalogWiring per-type); at minimum the
    boundary note recorded in JF-711's task file must name ExtractWiring
    explicitly so a fourth-type editor knows it is silent there.
+
+GATE-MARKER TAIL (2026-10-03, orchestrator review of commit 8d337ac5, 3 findings; all
+five scrutiny axes verified directly against the artifacts: the payload-byte order clean
+(table rows literally Artist/Album/Series, the for-loop fetches in order, per-type hashes
+unaffected; the interleaved count/fetch has no observable difference on a mid-loop throw),
+the reverse lookup loud-on-duplicate confirmed with the three current values distinct, the
+JF-716 constraint held (the six *CatalogId accesses never left the lambdas; SyncResult has
+exactly three writable counts never re-set outside them), and the JF-737 no-cheap-pin
+premise honest): F1 APPLIED (the fetch pin's doc states the METHOD-granular limit - a
+re-fetch loop moved INTO SyncUserLibraryAsync's own locale foreach keeps the pin green);
+F2 APPLIED (the count pin's doc names the generic *Count family predicate and its
+per-addition judgment); F3 APPLIED (the reverse map's construction-time-view contract
+documented at the field: no writer today, a mutation feature must rebuild in the same
+change). Independent suite 5072/5072 both TFMs on the worker commit; the rebased
+merged-tree split run follows.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done

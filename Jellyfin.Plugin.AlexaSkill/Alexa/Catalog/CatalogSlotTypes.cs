@@ -123,6 +123,12 @@ public static class CatalogSlotTypes
     /// type initialization, deliberately loud: the injection would otherwise
     /// fight over one model type block. Duplicates in a LIVE MODEL's types
     /// array are a different surface and stay last-wins in the extraction.
+    /// GATE-MARKER TAIL: the reverse map holds the CONSTRUCTION-TIME view of
+    /// the forward map; CatalogSlotTypeNames is a public mutable Dictionary,
+    /// so any runtime mutation after first touch leaves this lookup stale
+    /// (ExtractWiring would stop recognizing the mutated name). No writer
+    /// exists today; a mutation feature must rebuild this map in the same
+    /// change.
     /// </summary>
     private static readonly Dictionary<string, CatalogType> CatalogTypeBySlotTypeName =
         CatalogSlotTypeNames.ToDictionary(kvp => kvp.Value, kvp => kvp.Key, StringComparer.Ordinal);
