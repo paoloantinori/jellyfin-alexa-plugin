@@ -61,6 +61,18 @@ throw-on-null contract; the memo interplay clean with no double-write or stale-i
 the tuple arity compile-loud; the JF-727 premises verified and the JF-716 mooting note
 grep-confirmed): F1 APPLIED (the banned parenthetical hyphen in JF-727's own prose
 fixed, the same pattern the diff's review round had fixed in the pin doc).
+
+JF-727 UPDATE (2026-10-03): the two adjacent silent sites this boundary excluded are no
+longer silent. The item-sourcing block in LibrarySyncService now derives from the same
+wiring table (each row carries its BaseItemKind and a StoreCount lambda; one loop fetches
+and counts, and the emptiness pre-check reads the collection), and
+CatalogWiringGraft.ExtractWiring is keyed off a reverse lookup of
+CatalogSlotTypes.CatalogSlotTypeNames (TryGetCatalogTypeForSlotTypeName) instead of the
+per-type if/else. The boundary itself is UNCHANGED and still not to be re-litigated: the
+CatalogManager per-type surface (UpdateInteractionModelAsync's six positional id/version
+params, InjectCatalogReferences' three mapping blocks, WarnOnCrossTypeCatalogIds) and the
+SyncResult DTO's fixed per-type count set stay deliberately outside, loud through
+signature arity and the public-surface stop respectively.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done
