@@ -1289,7 +1289,14 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// in the backlog task); the failure mode of a too-short window is a LOUD
     /// red (the probe assert's <see cref="InLockProbeNotFiredMessage"/> or the
     /// not-completed assert itself), never a false pass, since both asserts
-    /// read the endpoint's own outcome.
+    /// read the endpoint's own outcome. The one residual: on a SLOW host a
+    /// scheduler stall can push the pre-lock path past the window, the plant
+    /// then lands while the endpoint is still walking, and the endpoint
+    /// serves the warm cache from its fast path without ever entering the
+    /// lock scope, so the probe assert reds as a false red. That environment
+    /// red is this constant's trade: the remedy is RAISING this value, never
+    /// loosening the asserts (a fast-path serve from a broken fixture is a
+    /// different, real red that raising cannot fix).
     /// </summary>
     private const int ParkWindowMs = 250;
 
@@ -4758,29 +4765,34 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         // the static gate, rebuilding away any un-restored static swap.
         const int gateCapacity = 2;
         bool gateRefilled = false;
-        int pid = 0;
         try
         {
             // Device A starts the 1.5x variant.
             var first = CreateController(episode.Id.ToString(), "device-A", fakeFfmpegPath);
-            ActionResult firstResult = await first.StreamHlsAudioSpeed(episode.Id.ToString(), speedRates[0], 0);
+            ActionResult firstResult = await LaunchWithinAsync(
+                () => first.StreamHlsAudioSpeed(episode.Id.ToString(), speedRates[0], 0),
+                "device A's initial");
             Assert.IsType<ContentResult>(firstResult);
 
             string hlsDir = _cache.GetHlsDirectoryPath(VideoAudioController.AudioSpeedCacheKey(episode.Id.ToString(), speedRates[0], 0), 0);
             string pidPath = Path.Combine(hlsDir, "ffmpeg.pid");
             Assert.True(File.Exists(pidPath), "the fake ffmpeg never ran");
-            pid = int.Parse(File.ReadAllText(pidPath).Trim());
+            int pid = int.Parse(File.ReadAllText(pidPath).Trim());
 
             // Device B launches a different variant of the SAME item: A's encode must
             // survive (a different Echo may be actively consuming it).
             var other = CreateController(episode.Id.ToString(), "device-B", fakeFfmpegPath);
-            ActionResult otherResult = await other.StreamHlsAudioSpeed(episode.Id.ToString(), speedRates[1], 0);
+            ActionResult otherResult = await LaunchWithinAsync(
+                () => other.StreamHlsAudioSpeed(episode.Id.ToString(), speedRates[1], 0),
+                "device B's spared-variant");
             Assert.IsType<ContentResult>(otherResult);
             Assert.False(ProcessDead(pid), "another device's launch must not kill device A's live variant");
 
             // Device A cycles to a new rate: its own 1.5x encode is superseded and dies.
             var second = CreateController(episode.Id.ToString(), "device-A", fakeFfmpegPath);
-            ActionResult secondResult = await second.StreamHlsAudioSpeed(episode.Id.ToString(), speedRates[2], 0);
+            ActionResult secondResult = await LaunchWithinAsync(
+                () => second.StreamHlsAudioSpeed(episode.Id.ToString(), speedRates[2], 0),
+                "device A's superseding");
             Assert.IsType<ContentResult>(secondResult);
 
             bool dead = false;
@@ -4799,30 +4811,114 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         }
         finally
         {
-            // Killing through the registry releases every slot within the gate's
-            // 500ms exit-poll. The drain wait rides in the finally so a failed
-            // in-try assert still leaves the gate drained (or, if a kill failed,
-            // bounds the wait) instead of stranding the sleep mid-class.
-            foreach (int rate in speedRates)
+            // Re-arming drain (JF-730 review round): the kills and the gate
+            // refill are polled TOGETHER, never one kill pass then one wait.
+            // A launch the tripwire abandoned (the supersede-kill ordering
+            // regression) acquires a slot only AFTER these kills free one (the
+            // gate's ~500ms exit-poll), then spawns its own sleep-300 fake; a
+            // one-shot pass runs before that and re-strands the class behind
+            // the zombie for a whole sleep. Re-killing until the gate actually
+            // holds its cap catches the zombie in a later pass (its registry
+            // entry or pid file appears the moment it starts), and the drain
+            // it delays is the drain that kills it.
+            DateTime drainDeadline = DateTime.UtcNow.AddSeconds(10);
+            while (true)
             {
-                try
+                foreach (int rate in speedRates)
                 {
-                    var live = VideoAudioController.LiveSpeedEncodeProcessForTest(
-                        VideoAudioController.AudioSpeedCacheKey(episode.Id.ToString(), rate, 0));
-                    if (live is { HasExited: false })
-                    {
-                        live.Kill(entireProcessTree: true);
-                    }
+                    string cacheKey = VideoAudioController.AudioSpeedCacheKey(episode.Id.ToString(), rate, 0);
+                    KillLiveEncode(cacheKey);
+                    KillEncodeByPidFile(_cache.GetHlsDirectoryPath(cacheKey, 0));
                 }
-                catch { /* raced to exit between the guard and the kill */ }
-            }
 
-            gateRefilled = await WaitUntilAsync(() => GateField().CurrentCount == gateCapacity, TimeSpan.FromSeconds(10), 100);
+                if (GateField().CurrentCount == gateCapacity)
+                {
+                    gateRefilled = true;
+                    break;
+                }
+
+                if (DateTime.UtcNow >= drainDeadline)
+                {
+                    break;
+                }
+
+                await Task.Delay(100);
+            }
         }
 
         Assert.True(
             gateRefilled,
             $"the speed-cycling teardown must return all {gateCapacity} encode-gate slots (rates {string.Join(", ", speedRates)}): a slot crossing the test boundary serializes every later gated test in this class behind this fake's sleep");
+    }
+
+    /// <summary>
+    /// The ONE kill-through-the-registry idiom (the JF-730 speed-cycling
+    /// teardown and the JF-668 finally are its callers): a live speed encode
+    /// holds an encode-gate slot until its process exits, so a test that
+    /// leaves one behind serializes every later gated test behind its run
+    /// (the 299.42s class stall JF-730 removed).
+    /// </summary>
+    private static void KillLiveEncode(string cacheKey)
+    {
+        try
+        {
+            var live = VideoAudioController.LiveSpeedEncodeProcessForTest(cacheKey);
+            if (live is { HasExited: false })
+            {
+                live.Kill(entireProcessTree: true);
+            }
+        }
+        catch { /* raced to exit between the guard and the kill */ }
+    }
+
+    /// <summary>
+    /// The pid-file corner backstop (JF-730 review round): an encode that
+    /// faults between process start and its registration never enters the
+    /// registry, so only its pid file names it; the fake writes the pid
+    /// first, so the file covers even that window. The kill is guarded by
+    /// liveness only, so a RECYCLED pid would name an unrelated process: a
+    /// theoretical hazard on this host class (64-bit pid_max makes a wrap
+    /// within one test run effectively impossible), accepted because a
+    /// shebang script has no stable owner handle to check (comm reads the
+    /// interpreter, not the script).
+    /// </summary>
+    private static void KillEncodeByPidFile(string variantDir)
+    {
+        string pidPath = Path.Combine(variantDir, "ffmpeg.pid");
+        if (!File.Exists(pidPath)
+            || !int.TryParse(File.ReadAllText(pidPath).Trim(), out int encodePid)
+            || ProcessDead(encodePid))
+        {
+            return;
+        }
+
+        try
+        {
+            using var encode = System.Diagnostics.Process.GetProcessById(encodePid);
+            encode.Kill(entireProcessTree: true);
+        }
+        catch { /* raced to exit between the probe and the kill */ }
+    }
+
+    /// <summary>
+    /// Per-launch tripwire (JF-730 gate round): a healthy speed launch
+    /// returns after its first-segment wait, bounded by the endpoint's own
+    /// ~20s ceiling; a supersede-kill ordering regression that moves the kill
+    /// AFTER the gate acquisition instead queues the launch behind the full
+    /// gate for a whole encode lifetime and would otherwise pass silently
+    /// ~300s later. The 30s budget sits above that ceiling and an order of
+    /// magnitude below one sleep-300 lifetime, so it reds the disease without
+    /// flaking on a slow host.
+    /// </summary>
+    private static async Task<ActionResult> LaunchWithinAsync(Func<Task<ActionResult>> launch, string label)
+    {
+        Task<ActionResult> request = launch();
+        if (!await CompletedWithinAsync(request, TimeSpan.FromSeconds(30)))
+        {
+            Assert.Fail($"{label} launch did not complete within 30s: is it queued behind the encode gate (a supersede-kill ordering regression moving the kill after the gate acquisition)?");
+        }
+
+        return await request;
     }
 
     /// <summary>
@@ -5020,15 +5116,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         finally
         {
             try { if (!prior.HasExited) { prior.Kill(entireProcessTree: true); } } catch { /* already exited */ }
-            try
-            {
-                var live = VideoAudioController.LiveSpeedEncodeProcessForTest(cacheKey);
-                if (live is { HasExited: false })
-                {
-                    live.Kill(entireProcessTree: true);
-                }
-            }
-            catch { /* already gone */ }
+            KillLiveEncode(cacheKey);
         }
     }
 
