@@ -632,7 +632,10 @@ public class LibrarySyncService
     /// Error (the canary format is fixed and failed-PUT reasons never reach
     /// the field); a future composer that lets external text into Error must
     /// either quarantine it or this family moves to a structured field (the
-    /// JF-721 design).
+    /// JF-721 design). The JF-722 rework added a FOURTH family literal with a
+    /// PREFIX-match rule (SkillStartup.ObservedBuildErrorsLedgerPrefix: foreign
+    /// diagnostics must never START with it); this predicate deliberately does
+    /// not match it, but the quarantine obligation above covers its rule too.
     /// </summary>
     private static bool IsOwnShapeLedgerError(string error) =>
         error.Contains(NoPutLedgerTail, StringComparison.Ordinal)

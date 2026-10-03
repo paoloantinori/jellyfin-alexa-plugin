@@ -351,12 +351,15 @@ public class SkillStartupTests : PluginTestBase
         var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
         Assert.NotNull(row);
         Assert.Equal("IN_PROGRESS", row!.Status);
-        Assert.Equal("INVALID_SKILL_PACKAGE: sample utterance is not unique", row.Error);
+        Assert.Equal("build errors: INVALID_SKILL_PACKAGE: sample utterance is not unique", row.Error);
     }
 
     /// <summary>
     /// JF-710: a capture WITH its own build errors still replaces the row
     /// wholesale with its own error; the preserve never masks a fresh failure.
+    /// JF-722 rework F1: the own-error composition carries the
+    /// ObservedBuildErrorsLedgerPrefix marker so the deferred refresh's
+    /// clean-settle arm can tell it from the preserve's product.
     /// </summary>
     [Fact]
     public async Task CaptureLocaleModelStatusesAsync_FailedCapture_OverClauseRow_ReplacesWithOwnError()
@@ -372,7 +375,7 @@ public class SkillStartupTests : PluginTestBase
         var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
         Assert.NotNull(row);
         Assert.Equal("FAILED", row!.Status);
-        Assert.Equal("INVALID_SKILL_PACKAGE: sample utterance is not unique", row.Error);
+        Assert.Equal("build errors: INVALID_SKILL_PACKAGE: sample utterance is not unique", row.Error);
     }
 
     /// <summary>
@@ -490,16 +493,55 @@ public class SkillStartupTests : PluginTestBase
         }
     }
 
+    /// <summary>
+    /// JF-722 rework F3 (the derivation's capture half): the capture's return is
+    /// the recapture-mode signal the pairing wrapper derives from. A healthy
+    /// capture returns TRUE (rows written); the sparse-status shapes return
+    /// FALSE: no interactionModel surface at all, and every locale entry still
+    /// pre-build (null LastModified, rows skipped). Pinned both ways so the
+    /// wrapper's derivation input cannot drift.
+    /// </summary>
+    [Fact]
+    public async Task CaptureLocaleModelStatusesAsync_ReturnsWhetherAnyRowWasWritten()
+    {
+        ClearLedger();
+
+        // Healthy: rows written.
+        bool healthy = await CreateStartup().CaptureLocaleModelStatusesAsync(
+            UserServing(StatusFor("it-IT", SkillStatusState.SUCCEEDED)), "amzn1.ask.skill.test-id");
+        Assert.True(healthy);
+
+        // Sparse: no interactionModel surface at all (freshly created skill, or
+        // a transient sparse response after a deploy).
+        var sparse = new SkillStatus();
+        bool sparseWrote = await CreateStartup().CaptureLocaleModelStatusesAsync(
+            UserServing(sparse), "amzn1.ask.skill.test-id");
+        Assert.False(sparseWrote);
+
+        // All entries pre-build: every locale skipped, zero rows written.
+        ClearLedger();
+        bool allPreBuild = await CreateStartup().CaptureLocaleModelStatusesAsync(
+            UserServing(StatusForLocales(("it-IT", null), ("en-US", null))), "amzn1.ask.skill.test-id");
+        Assert.False(allPreBuild);
+        Assert.Null(Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT"));
+    }
+
     // ------------------------------------------------------------------
     // JF-722 residual 1: the deferred IN_PROGRESS status refresh.
     // ------------------------------------------------------------------
 
     /// <summary>The shared act for the refresh pins: the deferred worker with no
     /// delays and a single poll unless a test extends it.</summary>
-    private Task RefreshAsync(Entities.User user, int maxPolls = 1) =>
+    private Task RefreshAsync(Entities.User user, int maxPolls = 1, bool captureWroteNoRows = false, CancellationToken cancellationToken = default) =>
         CreateStartup().RefreshInProgressLocaleStatusesAsync(
-            user, "amzn1.ask.skill.test-id", CancellationToken.None,
-            initialDelay: TimeSpan.Zero, pollInterval: TimeSpan.Zero, maxPolls: maxPolls);
+            user, "amzn1.ask.skill.test-id", cancellationToken,
+            initialDelay: TimeSpan.Zero, pollInterval: TimeSpan.Zero, maxPolls: maxPolls, captureWroteNoRows: captureWroteNoRows);
+
+    /// <summary>
+    /// Empties the shared ledger (the creation-path pins need the empty-ledger
+    /// world a freshly created skill leaves behind: zero rows anywhere).
+    /// </summary>
+    private static void ClearLedger() => Plugin.Instance!.Configuration.LocaleModelStatuses.Clear();
 
     /// <summary>
     /// JF-722 core pin: the settle-and-REWRITE refresh turns the frozen
@@ -542,7 +584,8 @@ public class SkillStartupTests : PluginTestBase
     /// JF-722: a FAILED settle with build errors replaces the row wholesale,
     /// mirroring the capture's own branch semantics (a build-failure
     /// observation never carries a catalog clause that had nothing to do with
-    /// it): the preserved clause is dropped and the fresh failure surfaces.
+    /// it): the preserved clause is dropped and the fresh failure surfaces,
+    /// marker-prefixed like the capture's own arm (rework F1's marker family).
     /// </summary>
     [Fact]
     public async Task RefreshInProgressLocaleStatusesAsync_FailedObservationWithErrors_ReplacesWholesale()
@@ -560,7 +603,169 @@ public class SkillStartupTests : PluginTestBase
         var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
         Assert.NotNull(row);
         Assert.Equal("FAILED", row!.Status);
-        Assert.Equal("INVALID_SKILL_PACKAGE: sample utterance is not unique", row.Error);
+        Assert.Equal("build errors: INVALID_SKILL_PACKAGE: sample utterance is not unique", row.Error);
+    }
+
+    /// <summary>
+    /// JF-722 rework F1, half A (stale observed errors do NOT survive a clean
+    /// settle), END TO END through both writers: the capture observes
+    /// IN_PROGRESS WITH an Errors array (the unverified-SMAPI shape where the
+    /// array may carry the PREVIOUS build's errors) and composes the row's Error
+    /// from them (marker-prefixed, wholesale); the refresh later observes the
+    /// clean SUCCEEDED settle and must DROP that text (it describes the
+    /// error-carrying observation, not the settled build) instead of carrying
+    /// it onto the green row.
+    /// </summary>
+    [Fact]
+    public async Task RefreshInProgressLocaleStatusesAsync_CleanSettle_OverStaleObservedErrorsRow_DropsThem()
+    {
+        // Capture half: IN_PROGRESS + own errors over any previous row.
+        var captureStatus = StatusFor(
+            "it-IT",
+            SkillStatusState.IN_PROGRESS,
+            new[] { new InvocationError { Code = "INVALID_SKILL_PACKAGE", Message = "previous build error" } });
+        await CreateStartup().CaptureLocaleModelStatusesAsync(UserServing(captureStatus), "amzn1.ask.skill.test-id");
+
+        var frozen = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(frozen);
+        Assert.Equal("IN_PROGRESS", frozen!.Status);
+        Assert.Equal("build errors: INVALID_SKILL_PACKAGE: previous build error", frozen.Error);
+
+        // Refresh half: clean settle.
+        var user = UserServing(StatusFor("it-IT", SkillStatusState.SUCCEEDED), out _);
+        await RefreshAsync(user);
+
+        var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(row);
+        Assert.Equal("SUCCEEDED", row!.Status);
+        Assert.Null(row.Error);
+    }
+
+    /// <summary>
+    /// JF-722 rework F1, half B (the preserve's product DOES survive), END TO
+    /// END through both writers: a clean IN_PROGRESS capture preserves the
+    /// frozen clause + foreign diagnostic onto the frozen row (JF-719), and the
+    /// refresh's clean settle carries it VERBATIM onto the SUCCEEDED row.
+    /// </summary>
+    [Fact]
+    public async Task RefreshInProgressLocaleStatusesAsync_CleanSettle_OverPreservedClauseRow_EndToEnd_CarriesIt()
+    {
+        string clause = $"Artist catalog{LibrarySyncService.FrozenLedgerClauseMarker}";
+        string foreign = "canary mismatch: submitted 145 intents/900 samples but live model reports 144/899";
+        SeedLocaleRow($"{clause}{LibrarySyncService.NoPutLedgerTail}{LibrarySyncService.PreviousLedgerDiagnosticPrefix}{foreign}");
+
+        // Capture half: clean IN_PROGRESS, preserve fires.
+        await CreateStartup().CaptureLocaleModelStatusesAsync(
+            UserServing(StatusFor("it-IT", SkillStatusState.IN_PROGRESS)), "amzn1.ask.skill.test-id");
+
+        var frozen = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(frozen);
+        Assert.Equal($"{clause}; {foreign}", frozen!.Error);
+
+        // Refresh half: clean settle carries it.
+        var user = UserServing(StatusFor("it-IT", SkillStatusState.SUCCEEDED), out _);
+        await RefreshAsync(user);
+
+        var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(row);
+        Assert.Equal("SUCCEEDED", row!.Status);
+        Assert.Equal($"{clause}; {foreign}", row.Error);
+    }
+
+    /// <summary>
+    /// JF-722 rework F3: when the paired capture wrote ZERO rows (the sparse
+    /// status of a freshly created skill), the plain pre-check would exit
+    /// before any poll; the derived recapture mode's first poll RE-CAPTURES
+    /// after the settle window and writes the first-build rows (here already
+    /// settled), then the rewrite pass finds no family rows and the refresh
+    /// exits. Two status GETs (recapture + rewrite).
+    /// </summary>
+    [Fact]
+    public async Task RefreshInProgressLocaleStatusesAsync_RecaptureMode_EmptyLedger_WritesFirstBuildRows()
+    {
+        ClearLedger();
+
+        var user = UserServing(StatusFor("it-IT", SkillStatusState.SUCCEEDED), out var fake);
+
+        await RefreshAsync(user, captureWroteNoRows: true);
+
+        var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(row);
+        Assert.Equal("SUCCEEDED", row!.Status);
+        Assert.Equal("Embedded", row.Source);
+        Assert.Equal(2, fake.GetStatusCalls);
+    }
+
+    /// <summary>
+    /// JF-722 rework F3: a transiently failing recapture (the first poll's GET
+    /// throws; the capture swallows it internally and reports writing nothing)
+    /// is RETRIED on the next poll instead of leaving the creation refresh
+    /// inert; once the recapture writes the in-flight rows, the normal rewrite
+    /// loop settles them.
+    /// </summary>
+    [Fact]
+    public async Task RefreshInProgressLocaleStatusesAsync_RecaptureMode_RetriesFailedRecaptureThenSettles()
+    {
+        ClearLedger();
+
+        var user = UserServing(StatusFor("it-IT", SkillStatusState.SUCCEEDED), out var fake);
+        fake.FailNextCalls = 1;
+        fake.SequenceToServe = new Queue<SkillStatus>(new[]
+        {
+            StatusFor("it-IT", SkillStatusState.IN_PROGRESS), // poll 2's recapture
+            StatusFor("it-IT", SkillStatusState.IN_PROGRESS), // poll 2's rewrite
+            StatusFor("it-IT", SkillStatusState.SUCCEEDED),   // poll 3's rewrite
+        });
+
+        await RefreshAsync(user, maxPolls: 3, captureWroteNoRows: true);
+
+        var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(row);
+        Assert.Equal("SUCCEEDED", row!.Status);
+        Assert.Equal(4, fake.GetStatusCalls);
+    }
+
+    /// <summary>
+    /// JF-722 rework F3 boundary: WITHOUT the creation mode, an empty ledger is
+    /// the nothing-to-refresh world (the version-bump capture just wrote settled
+    /// rows elsewhere or nothing froze) and the pre-check exits before any
+    /// network call.
+    /// </summary>
+    [Fact]
+    public async Task RefreshInProgressLocaleStatusesAsync_EmptyLedger_NoRecapture_MakesNoNetworkCall()
+    {
+        ClearLedger();
+
+        var user = UserServing(StatusFor("it-IT", SkillStatusState.SUCCEEDED), out var fake);
+
+        await RefreshAsync(user, maxPolls: 2);
+
+        Assert.Equal(0, fake.GetStatusCalls);
+        Assert.Null(Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT"));
+    }
+
+    /// <summary>
+    /// JF-722 rework F2: a cancellation landing DURING a poll's status GET (the
+    /// startup torn down while the GET was in flight) must abort the poll at the
+    /// checkpoint after the await, BEFORE any ledger rewrite or config save: the
+    /// worker exits quietly and the row stays exactly as the capture wrote it.
+    /// </summary>
+    [Fact]
+    public async Task RefreshInProgressLocaleStatusesAsync_CancelledDuringPollGet_LeavesRowUntouched()
+    {
+        SeedRow("it-IT", "IN_PROGRESS", null);
+
+        using var cts = new CancellationTokenSource();
+        var user = UserServing(StatusFor("it-IT", SkillStatusState.SUCCEEDED), out var fake);
+        fake.OnGetStatus = cts.Cancel;
+
+        await RefreshAsync(user, cancellationToken: cts.Token);
+
+        Assert.Equal(1, fake.GetStatusCalls);
+        var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(row);
+        Assert.Equal("IN_PROGRESS", row!.Status);
+        Assert.Null(row.Error);
     }
 
     /// <summary>
@@ -714,6 +919,74 @@ public class SkillStartupTests : PluginTestBase
     }
 
     /// <summary>
+    /// JF-722 rework RC6: the capture's OWN after-GET cancellation checkpoint:
+    /// a stop landing while the capture's GET is in flight must throw OCE out
+    /// of the capture (token-state-filtered rethrow) BEFORE any ledger write,
+    /// leaving the existing rows untouched.
+    /// </summary>
+    [Fact]
+    public async Task CaptureLocaleModelStatusesAsync_CancelledDuringGet_WritesNothing()
+    {
+        var seeded = SeedRow("it-IT", "SUCCEEDED", null);
+
+        using var cts = new CancellationTokenSource();
+        var user = UserServing(StatusFor("it-IT", SkillStatusState.SUCCEEDED), out var fake);
+        fake.OnGetStatus = cts.Cancel;
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => CreateStartup().CaptureLocaleModelStatusesAsync(user, "amzn1.ask.skill.test-id", cts.Token));
+
+        Assert.Equal(1, fake.GetStatusCalls);
+        var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(row);
+        Assert.Equal(seeded, row!.LastUpdated);
+    }
+
+    /// <summary>
+    /// JF-722 rework RC6: the recapture leg's cancellation boundary: a stop
+    /// landing during the recapture's GET exits the refresh quietly with NO
+    /// rows written (the capture's checkpoint fired before its loop).
+    /// </summary>
+    [Fact]
+    public async Task RefreshInProgressLocaleStatusesAsync_RecaptureMode_CancelledDuringRecaptureGet_ExitsQuietlyWithNoRows()
+    {
+        ClearLedger();
+
+        using var cts = new CancellationTokenSource();
+        var user = UserServing(StatusFor("it-IT", SkillStatusState.SUCCEEDED), out var fake);
+        fake.OnGetStatus = cts.Cancel;
+
+        await RefreshAsync(user, captureWroteNoRows: true, cancellationToken: cts.Token);
+
+        Assert.Equal(1, fake.GetStatusCalls);
+        Assert.Null(Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT"));
+    }
+
+    /// <summary>
+    /// JF-722 rework RC1: an HttpClient TIMEOUT surfaces as a
+    /// TaskCanceledException (an OCE subclass) with NO cancellation requested;
+    /// the token-state filters must treat it as a transient poll failure
+    /// (warn, return false, retry the recapture on the next poll) instead of
+    /// letting it silently kill the whole refresh through the quiet OCE exit.
+    /// </summary>
+    [Fact]
+    public async Task RefreshInProgressLocaleStatusesAsync_RecaptureMode_TimeoutShapedCancellation_RetriesAndWrites()
+    {
+        ClearLedger();
+
+        var user = UserServing(StatusFor("it-IT", SkillStatusState.SUCCEEDED), out var fake);
+        fake.FailNextCalls = 1;
+        fake.FailNextCallsException = new TaskCanceledException("the operation was canceled", new TimeoutException("100s HttpClient default timeout"));
+
+        await RefreshAsync(user, maxPolls: 2, captureWroteNoRows: true);
+
+        var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(row);
+        Assert.Equal("SUCCEEDED", row!.Status);
+        Assert.Equal(4, fake.GetStatusCalls);
+    }
+
+    /// <summary>
     /// Serves a canned <see cref="SkillStatus"/> without network: the capture
     /// path reads exactly one endpoint (GetSkillStatusAsync), which is virtual
     /// for this seam (the JF-366 SetSmapiManagementForTest pattern). JF-722
@@ -740,19 +1013,39 @@ public class SkillStartupTests : PluginTestBase
         public Queue<SkillStatus>? SequenceToServe { get; set; }
 
         /// <summary>
-        /// When positive, the next that many calls throw a transient
-        /// HttpRequestException (the 429/5xx poll-failure shape) before any
-        /// sequence dequeue, so the refresh's per-poll retry can be pinned.
+        /// When positive, the next that many calls throw (before any sequence
+        /// dequeue) the exception in <see cref="FailNextCallsException"/>, so
+        /// the refresh's per-poll retry can be pinned for both the 429/5xx
+        /// shape and the HttpClient-timeout shape.
         /// </summary>
         public int FailNextCalls { get; set; }
+
+        /// <summary>
+        /// The exception the fail-next arm throws. Default: the transient
+        /// 429/5xx HttpRequestException shape; the timeout pin overrides it
+        /// with a TaskCanceledException wrapping a TimeoutException, the exact
+        /// surface shape an HttpClient default-timeout GET produces (an OCE
+        /// subclass with NO cancellation requested).
+        /// </summary>
+        public Exception FailNextCallsException { get; set; } = new HttpRequestException("HTTP 429 Too Many Requests (fake)");
+
+        /// <summary>
+        /// When set, invoked at the start of every call BEFORE serving: the
+        /// mid-poll cancellation pin (JF-722 rework F2) cancels the worker's
+        /// token here, simulating the startup torn down while a poll's GET is
+        /// in flight, and the still-served status proves the checkpoint after
+        /// the await is what stops the poll.
+        /// </summary>
+        public Action? OnGetStatus { get; set; }
 
         public override Task<SkillStatus> GetSkillStatusAsync(string skillId)
         {
             GetStatusCalls++;
+            OnGetStatus?.Invoke();
             if (FailNextCalls > 0)
             {
                 FailNextCalls--;
-                throw new HttpRequestException("HTTP 429 Too Many Requests (fake)");
+                throw FailNextCallsException;
             }
 
             if (SequenceToServe is { Count: > 0 })

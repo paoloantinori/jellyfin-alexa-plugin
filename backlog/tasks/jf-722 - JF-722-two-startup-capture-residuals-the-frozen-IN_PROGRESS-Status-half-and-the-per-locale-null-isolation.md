@@ -146,18 +146,96 @@ admin could not distinguish from a complete one. The LibrarySyncService
 WriteLedgerEntry doc sentence describing the capture's whole-capture coarser failure
 granularity is updated with it.
 
+## Rework round (2026-10-03, gate-marker findings F1-F7, all dispositions)
+
+- F2 (lifecycle, MUST FIX) APPLIED: the cancellation token now runs through the whole
+  refresh family. The poll body checkpoints after every await and immediately before
+  every SaveConfiguration the family performs, INCLUDING inside
+  CaptureLocaleModelStatusesAsync itself (it takes an optional token; its non-fatal
+  whole-method catch rethrows OCE under a TOKEN-STATE filter). The refresh-round
+  code-review then sharpened the filter twice: (RC1) an HttpClient timeout surfaces as
+  TaskCanceledException, an OCE subclass with NO cancellation requested, so an
+  exception-type filter would silently kill the whole refresh on one timed-out GET;
+  both the capture's rethrow and the per-poll catch filter on
+  cancellationToken.IsCancellationRequested instead (the timeout shape falls to the
+  warn-and-retry arm; pinned by the TimeoutShapedCancellation test). (RC2) the
+  capture's rethrown shutdown OCE now bypasses the startup user loop's generic
+  per-user Error catch via an OCE-with-token-state rethrow clause, reaching the same
+  outer handler the loop-top check always did. Residual accepted and documented
+  in-code: the synchronous in-memory loop pass between checkpoints has no checkpoint.
+- F1 (behavioral, MUST FIX) APPLIED: ObservedBuildErrorsLedgerPrefix ("build errors: ")
+  is composed onto every observed-errors Error text (the capture's wholesale arm and
+  the refresh's own twin) and the refresh's clean-settle arm DROPS a marker-prefixed
+  existing.Error (the errors describe the error-carrying observation, stale on a clean
+  settle: the unverified SMAPI stale-errors shape) while carrying every non-marker
+  Error (the JF-710/JF-719 preserve's product) verbatim. Both halves pinned END TO
+  END through capture-then-refresh (CleanSettle_OverStaleObservedErrorsRow_DropsThem,
+  CleanSettle_OverPreservedClauseRow_EndToEnd_CarriesIt). The quarantine invariant the
+  PREFIX rule adds (foreign diagnostics must never START with the literal) is
+  documented on the constant and folded into the IsOwnShapeLedgerError invariant note
+  (code-review refresh RC4); JF-721's migration inventory was appended same-turn with
+  the fourth literal, the fourth writer, and the arm-distinction design input.
+- F3 (pairing inert at creation, MUST FIX) APPLIED, then DEEPENED by the rework
+  simplify altitude round: the recapture mode is now DERIVED, not a call-site literal:
+  CaptureLocaleModelStatusesAsync returns whether it wrote any row, and the pairing
+  wrapper computes captureWroteNoRows from that return. This covers BOTH sparse shapes
+  at BOTH sites (freshly created skill AND a transient sparse response on an
+  established skill after a version bump, which the call-site-literal design missed),
+  with no self-classification a future capture site could get wrong. The worker
+  retries the recapture until the CAPTURE ITSELF reports writing rows (the capture
+  swallows its own GET failures, so its return is the only per-skill, per-invocation
+  signal; the earlier LedgerHasAnyRows global-ledger inference and its cross-user
+  blindness were deleted with it). Pinned: the capture-return pin (both sparse shapes
+  return false, healthy returns true), the recapture-writes-first-builds pin, the
+  transient-failure retry pin, the empty-ledger-no-recapture boundary pin, and the
+  roster's refresh-worker allowance (counterfactual re-proven after both rounds).
+- F4 (APPLY) APPLIED: the KNOWN RACE notes at the capture's preserve gate and the
+  rewrite pass now carry the multiplied sizing (up to 4 polls x 17 locales across the
+  ~3-minute budget, overlapping the post-restart CatalogSyncTask window) and the
+  diagnostic-loss victim (a sync-authored settled row with a real canary clobbered
+  back to the stale read); appended to JF-724 item 3.
+- F7 (APPLY) APPLIED: the sparse-status warning names both shapes (freshly created
+  skill; transient sparse response after a deploy), and the code-review refresh added
+  the THIRD exhaustion shape's accurate message (the status never became observable
+  within the budget; no rows were written) instead of claiming in-flight rows over an
+  empty ledger (RC3).
+- F5 + F6 (FILE) FILED into JF-724 items 4 and 5 (the family-membership pin gap: the
+  Source default "Embedded" plus a roster that pins call wiring, not row content; the
+  cross-user pre-check interplay). JF-724 item 5's LedgerHasAnyRows instance was
+  ELIMINATED by the F3 derivation fix (the helper no longer exists); the pre-check's
+  cross-user read remains filed as before.
+
+Gates refreshed on the rework diff: /simplify (4 agents) returned 4 simplification
+findings (all APPLIED: the roster's hoisted callsCapture bool; the pre-check folded
+into a mode-initialized hasFrozenRows; the recapture rationale consolidated onto the
+wrapper with pointers elsewhere; RefreshAsync's token parameter) plus the altitude
+round's derivation, token-into-capture, and JF-721-connection findings (all APPLIED),
+2 efficiency findings SKIPPED with reasons (the second same-poll GET: one extra call
+per skill creation, the pins deliberately document the call sequence, and reusing the
+  recapture's own observation is semantically dead since family rows read still
+  IN_PROGRESS in it; the capture's unconditional save: pre-existing shape, negligible
+  magnitude) and 1 reuse borderline SKIPPED (the end-to-end carry pin duplicates its
+  halves' individual pins; the composition link IS the point, pairing with the
+  marker-drop twin). /code-review high refreshed: 6 findings, 5 APPLIED (RC1 the
+  timeout-shaped TCE token-state filter, RC2 the per-user OCE mislabel, RC3 the third
+  exhaustion shape, RC4 the prefix-rule invariant documentation, RC6 three new pins:
+  the capture's own cancellation checkpoint, the recapture-leg cancellation, and the
+  timeout-shape retry), 1 SKIPPED (RC5 the two-GETs-per-recapture-poll efficiency
+  duplicate of the simplify round's skipped finding, same reasons).
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
+
 - [x] #1 dotnet build passes with 0 errors. DONE: `dotnet build Jellyfin.Plugin.AlexaSkill.Tests` (builds both TFMs, plugin + tests) Build succeeded, 0 errors, on the final post-gates state.
-- [x] #2 dotnet test passes. DONE: `dotnet test Jellyfin.Plugin.AlexaSkill.Tests -m:1` on the FINAL state: 4992/4992 passed net9.0 AND 4992/4992 net10.0, exit 0 (baseline 4981 + 11 new: 9 initial pins in SkillStartupTests + the code-review F5 transient-retry pin + the F4 CaptureRefreshPairingTests roster pin).
+- [x] #2 dotnet test passes. DONE (rework final state): `dotnet test Jellyfin.Plugin.AlexaSkill.Tests -m:1` on the post-rework FINAL state: 5002/5002 passed net9.0 AND 5002/5002 net10.0, exit 0 (baseline 4981 + 21 new: 11 from the first round, 10 from the rework: the F1 marker end-to-end pair, the F3 recapture trio + capture-return pin, the F2 mid-poll cancellation pin, and the code-review-refresh trio: capture-checkpoint, recapture-leg cancellation, timeout-shape retry).
 - [x] #3 No new compiler warnings introduced. DONE: the only warnings in any build of the final state are the pre-existing xUnit1030 pair at VideoAudioControllerTests.cs:1337 (already documented pre-existing at JF-719's closure); zero warnings attributable to this diff.
 - [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization. N/A: no session attributes touched (startup/ledger surface only; the ledger row is the LocaleModelStatus record).
 - [x] #5 HttpClient instances are not shared across calls that modify BaseAddress. N/A: no HttpClient construction or BaseAddress change; the refresh reuses the SmapiManagement Refit surface through AlexaUtil.CallAsync exactly like the capture.
 - [x] #6 NLU test fixtures updated if interaction model changed. N/A: no interaction model, template, or sample change.
 - [x] #7 E2E test added for new intent or handler logic. N/A with justification: the changed surface is startup internals (SMAPI status reads + ledger writes), not an intent/handler or Alexa-speech path; the InternalsVisibleTo fake-status seam (the JF-710 harness JF-719 also drove) is the pinning harness for this path, and a live E2E would need a real version-bump restart plus SMAPI build windows on the production box.
 - [x] #8 Locale response strings added to all 17 locales. N/A: no user-facing Alexa speech added or changed.
-- [x] #9 /simplify passed (no blocking cleanups remaining). DONE: the 4-agent round (reuse / simplification / efficiency / altitude) returned 11 deduped findings: 8 APPLIED (FormatInvocationErrors extraction consolidating the three SMAPI build-error join sites; the refresh allowlist's dead IN_PROGRESS arm dropped with its misleading comment; skip-path filter reorder + per-pass UtcNow hoist; the CaptureAndScheduleStatusRefreshAsync structural pairing replacing hand-scheduling at two call sites; the CaptureLedgerSource constant shared by writer and family predicate; the fourth-ledger-writer sentence in WriteLedgerEntry's doc; the UserServing delegation; the fake's StatusToServe private set) and 3 SKIPPED with recorded reasons (the injected-Func compose-observation helper, optional by the reviewer's own rating and deliberately different clean arms; the HasInProgressCaptureRows LINQ Any one-liner, hand-rolled scans are this file's house style; the pre-check hoist before Task.Run, the efficiency agent's own clear). No blocking cleanups remain.
-- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked). DONE: 7 findings, ALL 7 APPLIED (F1/F3 per-locale + per-poll guards around every ledger enumeration incl. the pre-check's degrade-to-proceed; F2 fresh Configuration reads at every use, never captured across the ~3-minute budget; F4 the CaptureRefreshPairingTests IL roster pinning that only the wrapper calls the capture/scheduler, counterfactual-proven: an injected direct capture call fails the roster on both TFMs, reverted; F5 the transient-poll-failure retry pin via the fake's FailNextCalls; F6 the capture's sparse-status InteractionModel null guard; F7 the lastPollFailed-accurate exhaustion logging). The reviewer's two PRE-EXISTING observations (the admin panel's unguarded ledger enumerations able to 500 on a concurrent writer; the cross-user global-by-locale row ownership with two linked SMAPI users) are FILED as JF-724, not this diff's regressions.
+- [x] #9 /simplify passed (no blocking cleanups remaining). DONE across BOTH rounds: the first 4-agent round (reuse / simplification / efficiency / altitude): 8 APPLIED, 3 SKIPPED with recorded reasons (details in the round-1 commit message and Final Summary). The rework round refreshed all 4 agents on the new diff: 4 simplification findings APPLIED (roster hoisted bool; pre-check folded into a mode-initialized local; recapture rationale consolidated onto the wrapper; RefreshAsync token parameter), the altitude round's 3 APPLIED (the derived recapture mode replacing call-site literals; the token threaded into the capture with its save-boundary checkpoint; the JF-721 ownership connection incl. the same-turn task-file append), 2 efficiency SKIPPED (the second same-poll GET and the capture's unconditional save: negligible magnitude, pins document the call sequence) and 1 reuse borderline SKIPPED (the end-to-end carry pin's halves duplicate individual pins; the composition link is the point). No blocking cleanups remain.
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked). DONE across BOTH rounds: the first round's 7 findings ALL APPLIED (per-locale + per-poll ledger-enumeration guards; fresh Configuration reads; the CaptureRefreshPairingTests roster, counterfactual-proven twice; the transient-retry pin; the sparse-status guard; observation-accurate exhaustion logging) with the 2 pre-existing observations FILED as JF-724. The rework round refreshed code-review at effort high on the new diff: 6 findings, 5 APPLIED (RC1 the token-state OCE filters fixing the timeout-shaped-TaskCanceledException silent kill; RC2 the per-user loop's OCE rethrow clause; RC3 the third budget-exhaustion shape's honest message; RC4 the prefix-rule quarantine invariant documented on the constant and in the IsOwnShapeLedgerError invariant note; RC6 three new pins: the capture's own cancellation checkpoint, the recapture-leg cancellation, the timeout-shape retry), 1 SKIPPED (RC5, the two-GETs-per-recapture-poll efficiency duplicate of the simplify round's skipped finding, same reasons).
 <!-- DOD:END -->
 
 ## Final Summary
@@ -199,5 +277,22 @@ errors, re-poll until settled, budget-exhausted leaves row intact, no-network pr
 sync-authored family boundary, shutdown cancellation, transient-poll retry), and the
 counterfactual-proven pairing roster. Gates: /simplify 8 applied / 3 skipped with
 reasons; /code-review high 7/7 applied, 2 pre-existing findings filed as JF-724.
-Suites on the final state: 4992/4992 net9.0 AND net10.0 (baseline 4981 + 11).
+Suites on the first-round final state: 4992/4992 net9.0 AND net10.0 (baseline 4981 + 11).
+
+REWORK ROUND (same day, gate-marker findings F1-F7 + both gates refreshed): the
+cancellation token now threads through the entire refresh family with checkpoints
+after every await and before every save, token-state-filtered so an HttpClient
+timeout (a TaskCanceledException with NO cancellation) retries instead of silently
+killing the refresh; the ObservedBuildErrorsLedgerPrefix marker distinguishes the
+capture's observed-errors product (dropped on clean settle) from its preserve product
+(carried verbatim), pinned end to end both ways, with its prefix-rule quarantine
+invariant documented and JF-721's migration inventory appended same-turn; the
+recapture mode is DERIVED from the capture's own did-it-write-rows return (covering
+both sparse shapes at both sites, deleting the LedgerHasAnyRows global-ledger
+inference), so the creation path observes its first builds and a transient sparse
+version-bump capture does too; the race notes carry the multiplied sizing and the
+canary-loss victim (JF-724 item 3); the sparse-status log names both shapes and the
+budget-exhaustion logging has an honest third shape. Rework gates: /simplify 7
+applied / 3 skipped with reasons; /code-review high 5 applied / 1 skipped. Suites on
+the rework final state: 5002/5002 net9.0 AND net10.0 (baseline 4981 + 21).
 <!-- SECTION:FINAL_SUMMARY:END -->

@@ -9,11 +9,13 @@ using Xunit;
 namespace Jellyfin.Plugin.AlexaSkill.Tests.EntryPoints;
 
 /// <summary>
-/// JF-722 (code-review F4): the structural pairing of the startup capture and
-/// its deferred IN_PROGRESS refresh, pinned as a TEST instead of prose.
-/// SkillStartup.CaptureAndScheduleStatusRefreshAsync is the ONLY plugin-assembly
-/// method allowed to call CaptureLocaleModelStatusesAsync or
-/// ScheduleInProgressLocaleStatusRefresh, so a future capture call path that
+/// JF-722 (code-review F4, rework F3): the structural pairing of the startup
+/// capture and its deferred IN_PROGRESS refresh, pinned as a TEST instead of
+/// prose. SkillStartup.CaptureAndScheduleStatusRefreshAsync is the only
+/// plugin-assembly method allowed to call ScheduleInProgressLocaleStatusRefresh,
+/// and the only allowed capture callers are the wrapper itself plus the refresh
+/// worker (whose creation-mode recapture IS the deferred half of the pairing and
+/// cannot be unpaired by construction), so a future capture call path that
 /// hand-schedules (or forgets to schedule) its refresh cannot compile green and
 /// silently leave frozen IN_PROGRESS rows gray until the weekly sync (the
 /// "missed one" wiring class; same IL-scan discipline as
@@ -28,6 +30,8 @@ public class CaptureRefreshPairingTests
 {
     private const string PairingWrapperName = "CaptureAndScheduleStatusRefreshAsync";
 
+    private const string RefreshWorkerName = "RefreshInProgressLocaleStatusesAsync";
+
     [Fact]
     public void CaptureAndSchedulerCalls_AllRouteThroughThePairingWrapper()
     {
@@ -41,11 +45,13 @@ public class CaptureRefreshPairingTests
         var offenders = new SortedSet<string>();
         foreach (var (type, method) in IlCallScanner.DeclaredMethods(pluginAssembly))
         {
-            if (IlCallScanner.ContainsCallToAnyToken(method, captureTokens)
-                || IlCallScanner.ContainsCallToAnyToken(method, schedulerTokens))
+            bool callsCapture = IlCallScanner.ContainsCallToAnyToken(method, captureTokens);
+            if (callsCapture || IlCallScanner.ContainsCallToAnyToken(method, schedulerTokens))
             {
                 string logical = IlCallScanner.LogicalMethodName(method);
-                if (!string.Equals(logical, PairingWrapperName, StringComparison.Ordinal))
+                bool allowed = string.Equals(logical, PairingWrapperName, StringComparison.Ordinal)
+                    || (callsCapture && string.Equals(logical, RefreshWorkerName, StringComparison.Ordinal));
+                if (!allowed)
                 {
                     offenders.Add($"{type.FullName}.{logical}");
                 }
@@ -54,7 +60,7 @@ public class CaptureRefreshPairingTests
 
         Assert.True(
             offenders.Count == 0,
-            $"Capture/scheduler calls must route through {PairingWrapperName} (the JF-722 pairing); direct callers: [{string.Join(", ", offenders)}]. " +
+            $"Capture/scheduler calls must route through {PairingWrapperName} (the JF-722 pairing; the refresh worker {RefreshWorkerName} may call the capture itself, its own recapture mode); direct callers: [{string.Join(", ", offenders)}]. " +
             "Route the new capture site through the wrapper so its deferred refresh cannot be left unscheduled.");
     }
 }

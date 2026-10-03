@@ -51,6 +51,23 @@ embedded-resource clean-build dance applies); and the JF-705/JF-709/JF-710 pin f
 migrate from string assertions to field assertions. Sequence AFTER JF-719 (the
 IN_PROGRESS gate decision) lands or is decided, so the capture gate's final shape is
 what the field design serves.
+
+DESIGN-INPUT APPEND (2026-10-03, JF-722 rework round): the family this task deletes has
+grown past the three writers and three markers this description was written against.
+The startup capture's deferred refresh (JF-722) is the FOURTH ledger writer (it
+rewrites only capture-authored rows; already named in the WriteLedgerEntry writer
+inventory), and the rework added a FOURTH literal: SkillStartup's
+ObservedBuildErrorsLedgerPrefix ("build errors: "), composed by the capture's and the
+refresh's observed-errors arms and recognized-and-dropped by the refresh's clean-settle
+arm (StartsWith). Delete it with the rest of the parser family. Required design input
+for the caveat field: the field must encode WHICH arm composed an observation-era Error
+(the observed-errors arm vs the preserve arm), because a clean settle must drop the
+former and carry the latter; a caveat shape covering only frozen types + the no-PUT
+flag has no slot for that distinction and would re-invent it mid-migration. Recorded
+tradeoff worth weighing in the design (from the JF-722 altitude review): NOT composing
+observed errors onto IN_PROGRESS rows at all (leaving the previous-build error text off
+in-flight rows) would have made the fourth marker unnecessary entirely, at the cost of
+a budget-exhausted still-in-flight row showing no error text on the panel.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done

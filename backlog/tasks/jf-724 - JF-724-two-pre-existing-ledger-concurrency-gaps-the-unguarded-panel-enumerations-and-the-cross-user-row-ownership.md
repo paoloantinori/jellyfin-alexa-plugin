@@ -54,6 +54,36 @@ diff, which only widened the exposure windows):
    (both skills deploy the same embedded models, so the settled truths agree); a
    per-user key or a writer-priority rule is the fix if multi-user ever matters.
    Filed so the ownership model is a recorded decision rather than an accident.
+
+REWORK-ROUND APPENDS (2026-10-03, JF-722 gate-marker round, findings 4/5/6):
+
+3. MULTIPLIED RACE EXPOSURE + DIAGNOSTIC-LOSS VICTIM (rework F4, sharpening the
+   JF-722 code-review F1 tail): the JF-722 deferred refresh multiplies the KNOWN
+   RACE's unguarded read-modify-write up to 4 polls x 17 locales across its
+   ~3-minute budget, overlapping the post-restart CatalogSyncTask window, and the
+   clobber victim is not only the capture-side row: a sync-authored SETTLED row
+   carrying a real canary diagnostic that lands between a refresh pass's family
+   read and its SetLocaleModelStatus is overwritten with the STALE read's Error
+   (Source and carried text from the pre-write row), losing the diagnostic until
+   the next sync run. The capture's preserve-gate comment and the rewrite pass's
+   doc carry the sizing; the structural fix belongs with item 1's synchronization
+   (a lock owned by the ledger accessors closes both).
+4. FAMILY-MEMBERSHIP PIN GAP (rework F5): the refresh's family predicate keys on
+   Source == "Embedded", whose DTO default (LocaleModelStatus.Source initializer
+   and LocaleModelStatusEntry.Source) is ALSO "Embedded", so any future ledger
+   writer that composes a row without setting Source explicitly silently joins the
+   capture family and gets its rows rewritten by the refresh. The JF-722
+   CaptureRefreshPairingTests roster pins CALL wiring (who calls the capture /
+   scheduler), not ROW CONTENT (who writes family-eligible rows); a
+   row-content roster would scan for SetLocaleModelStatus call sites and pin the
+   writer set against {capture, refresh, sync writers' shell}.
+5. CROSS-USER PRE-CHECK INTERPLAY (rework F6, item 2 made concrete): the refresh's
+   no-frozen-rows pre-check scans the GLOBAL ledger while its observations are
+   per-skill, so user A's refresh stays alive on user B's frozen IN_PROGRESS rows
+   and settles them from A's skill's status (and vice versa); with both users'
+   skills mid-deploy the two refreshes also keep each other's budgets alive. Same
+   ownership model as item 2; listed separately because the pre-check (not just
+   the rewrite) is a concrete cross-user read-decides-for-other path.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done
