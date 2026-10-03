@@ -136,6 +136,28 @@ internal static class TestHelpers
             .Clone();
     }
 
+    /// <summary>
+    /// The ONE all-SUCCEEDED skill-status JSON body carrying a per-locale map,
+    /// for the catalog fakes (JF-725 hoist of the four private constructions,
+    /// the CreateSyncUser convention on the third-and-beyond identical copy):
+    /// manifest SUCCEEDED plus one SUCCEEDED interactionModel entry per given
+    /// locale. A locale ABSENT from the map makes the post-PUT fallback tracker
+    /// (CatalogManager.WaitForModelBuildOutcomeViaSkillStatusAsync) poll its full
+    /// ~150s budget, hanging the pin for minutes: every locale a fake's pins sync
+    /// must be listed (the status GET is per-skill and carries no locale
+    /// parameter, so the map must enumerate its keys). Shapes outside this body
+    /// stay hand-written: status maps that are not uniformly SUCCEEDED (e.g. an
+    /// IN_PROGRESS pin) and manifest-only bodies with no interactionModel map
+    /// (SmapiManagementWiringTests serves one; the helper would append an empty
+    /// map, a different byte shape).
+    /// </summary>
+    internal static string SmapiSkillStatusJson(params string[] succeededLocales)
+    {
+        string entries = string.Join(",", succeededLocales.Select(l =>
+            $"\"{l}\":{{\"lastUpdateRequest\":{{\"status\":\"SUCCEEDED\"}}}}"));
+        return $"{{\"manifest\":{{\"lastUpdateRequest\":{{\"status\":\"SUCCEEDED\"}}}},\"interactionModel\":{{{entries}}}}}";
+    }
+
     internal static DeviceToken CreateTestDeviceToken(
         string accessToken = "access",
         string refreshToken = "refresh",

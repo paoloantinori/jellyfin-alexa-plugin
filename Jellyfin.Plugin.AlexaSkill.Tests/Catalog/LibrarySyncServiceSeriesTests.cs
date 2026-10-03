@@ -50,7 +50,11 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
 
         var catalogManager = new CatalogManager(
             new StubHttpClientFactory(() => new HttpClient(_smapiHandler)),
-            _loggerFactory.CreateLogger<CatalogManager>());
+            _loggerFactory.CreateLogger<CatalogManager>())
+        {
+            // The fake backend answers instantly (JF-725 seam).
+            PollDelayMsForTest = 0
+        };
 
         _service = new LibrarySyncService(
             _libraryManagerMock.Object,
@@ -402,6 +406,10 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
     /// (SUCCEEDED), skill status, interaction model GET (static SeriesName seed;
     /// later GETs echo the last PUT body so the canary matches) and PUT
     /// (optionally 202 + poll location when <see cref="TrackModelBuild"/> is set).
+    /// Per-file by policy (JF-725): mode knobs diverge across the family's
+    /// full-sync fakes; the hoist boundary and the absent-locale hazard live on
+    /// TestHelpers.SmapiSkillStatusJson (the mode-knob enumeration sits on the
+    /// LegIsolation fake).
     /// </summary>
     private sealed class FakeSmapiHandler : HttpMessageHandler
     {
@@ -483,10 +491,9 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
                 // JF-495 build-settle wait and JF-497 fallback tracker: nothing in
                 // progress, served at the non-staged /v1/skills/{id}/status URL
                 // (the stage-scoped shape 404s live). es-MX/es-US report too: the
-                // JF-513.3 pin runs them as locale legs, and a locale absent from
-                // this map makes the post-PUT fallback tracker poll its full
-                // budget (~150s per locale).
-                return Json("""{"manifest":{"lastUpdateRequest":{"status":"SUCCEEDED"}},"interactionModel":{"it-IT":{"lastUpdateRequest":{"status":"SUCCEEDED"}},"es-MX":{"lastUpdateRequest":{"status":"SUCCEEDED"}},"es-US":{"lastUpdateRequest":{"status":"SUCCEEDED"}}}}""");
+                // JF-513.3 pin runs them as locale legs (the absent-locale hazard
+                // is documented on TestHelpers.SmapiSkillStatusJson).
+                return Json(TestHelpers.SmapiSkillStatusJson("it-IT", "es-MX", "es-US"));
             }
 
             if (request.Method == HttpMethod.Get && url.Contains("/updateRequest/", StringComparison.Ordinal))

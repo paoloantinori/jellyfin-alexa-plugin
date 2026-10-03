@@ -76,7 +76,11 @@ public class LibrarySyncServiceEquivalenceClassTests : PluginTestBase, IDisposab
 
         var catalogManager = new CatalogManager(
             new StubHttpClientFactory(() => new HttpClient(_smapiHandler)),
-            _loggerFactory.CreateLogger<CatalogManager>());
+            _loggerFactory.CreateLogger<CatalogManager>())
+        {
+            // The fake backend answers instantly (JF-725 seam).
+            PollDelayMsForTest = 0
+        };
 
         _service = new LibrarySyncService(
             _libraryManagerMock.Object,
@@ -320,7 +324,10 @@ public class LibrarySyncServiceEquivalenceClassTests : PluginTestBase, IDisposab
     /// from the es class's), per-locale model PUT capture, and a skill status
     /// that reports SUCCEEDED for every locale the tests run (a locale absent
     /// from the status map makes the post-PUT fallback tracker poll its full
-    /// budget, hanging the pin for minutes).
+    /// budget, hanging the pin for minutes). Per-file by policy (JF-725): mode
+    /// knobs diverge across the family's full-sync fakes; the hoist boundary and
+    /// the absent-locale hazard live on TestHelpers.SmapiSkillStatusJson (the
+    /// mode-knob enumeration sits on the LegIsolation fake).
     /// </summary>
     private sealed class FakeSmapiHandler : HttpMessageHandler
     {
@@ -387,12 +394,9 @@ public class LibrarySyncServiceEquivalenceClassTests : PluginTestBase, IDisposab
                 // mutable set, defaulting to the four locales this class's pins
                 // sync) so a future pin naming another locale adds it to the set
                 // in its arrange instead of silently burning the fallback
-                // tracker's full ~150s poll budget per unserved locale (the
-                // status GET is per-skill and carries no locale parameter, so
-                // the map must enumerate its keys).
-                string modelJson = string.Join(",",
-                    ServedStatusLocales.Select(l => $"\"{l}\":{{\"lastUpdateRequest\":{{\"status\":\"SUCCEEDED\"}}}}"));
-                return Json($"{{\"manifest\":{{\"lastUpdateRequest\":{{\"status\":\"SUCCEEDED\"}}}},\"interactionModel\":{{{modelJson}}}}}");
+                // tracker's full poll budget per unserved locale (the absent-
+                // locale hazard is documented on TestHelpers.SmapiSkillStatusJson).
+                return Json(TestHelpers.SmapiSkillStatusJson(ServedStatusLocales.ToArray()));
             }
 
             if (request.Method == HttpMethod.Get && url.Contains("/updateRequest/", StringComparison.Ordinal))
