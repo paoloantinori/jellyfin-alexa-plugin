@@ -1,12 +1,12 @@
 ---
 id: JF-704
 title: >-
-  JF-704 - a throwing plantWarmCache strands the parked endpoint task
-  unobserved (background encode mutates static registries after teardown)
+  JF-704 - a throwing plantWarmCache strands the parked endpoint task unobserved
+  (background encode mutates static registries after teardown)
 status: Done
 assignee: []
 created_date: '2026-10-02 11:20'
-updated_date: '2026-10-03 08:03'
+updated_date: '2026-10-03 06:59'
 labels:
   - test-infrastructure
   - tech-debt
@@ -63,41 +63,5 @@ exception, or by proving the encode generation count is clean after the failure)
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Closed 2026-10-03 in one worker round. The asymmetry is gone: in ServeInLockWarmCacheAsync
-(VideoAudioControllerTests.cs, the one file in scope) a plantWarmCache (or park assert)
-that throws now observes the parked endpoint BEFORE rethrowing. The try body was
-restructured into an inner try/finally (gate release) wrapped by an outer catch that
-calls ObserveStrandedEndpointAsync then rethrows with throw; (exception identity
-preserved, Assert.Same-pinned): the observation is a bounded WaitAsync on the hoisted
-EndpointSettleBudget (the ONE settle budget, previously inline at the normal settle)
-whose outcome is deliberately swallowed, so the plant failure stays the exception the
-caller sees while the settle is pulled inside the test's lifetime (fixtures alive,
-static EncodeActive/EncodeGenerationCount writes land before teardown, and the await
-itself observes an eventual fault). The simplify altitude round moved the
-fault-observation backstop (MarkEndpointFaultObserved: OnlyOnFaulted +
-ExecuteSynchronously continuation reading t.Exception) from the throwing arm to the
-endpoint's BIRTH, closing the same unobserved-fault hazard on the normal path's
-settle-budget-timeout exit (Task.WaitAsync's timeout does not observe the inner task);
-its doc states the honest scope, the fault-observation leg only (RC1). Non-throwing
-paths never enter the catch, so the 400ms park expectation and the probe-assert
-ordering are untouched (class suite duration unchanged at ~5m50s per TFM). New pin
-ServeInLockWarmCacheHelper_ThrowingPlant_ObservesStrandedEndpointBeforeRethrow: a
-synthetic endpoint parks on a REAL per-item gate, holds a 150ms settle distance after
-re-acquiring it, then faults; GREEN asserts the plant's own IOException surfaces by
-identity AND the endpoint had settled before it surfaced (the flag is written inside
-the endpoint before its fault, so its true value is reachable only through the
-helper's await); RED PROOF run on both TFMs twice (before and after the simplify
-rework): removing the catch's ObserveStrandedEndpointAsync call fails the pin with
-the settle assert while the JF-681 sibling pin stays green. Gates: /simplify 4
-agents, 1 applied, 2 skipped with reasons, 2 clean; /code-review high, 0 correctness
-bugs, RC1 applied, RC2 filed as JF-726 (the birth backstop is unpinned, candidate pin
-shapes recorded), RC3 skipped with reason. Suites on the FINAL state: 5008/5008
-net9.0 AND net10.0 (baseline 5007 + 1), exit 0, only the documented pre-existing
-xUnit1030 pair. MERGED TREE follows: main advanced under the branch while the work
-ran (the JF-717 line, 4 commits), so main was merged per the dispatch instruction,
-conflict-free and leaving the one in-scope file untouched by the merge; merged-tree
-suites 5012/5012 net9.0 AND net10.0, exit 0 (= 5008 + JF-717's 4
-equivalence-class pins; the count was predicted before the run and matched), build
-0 errors with the same pre-existing xUnit1030 pair only. Test-only change: no
-production surface, no deploy needed.
+Closed by the orchestrator after the full cycle: worker commits deedcd58 + the main merge 15248725 + evidence tail 169c93dd + gate-marker tail 3140f3bb, merged as 7de3ba7d. A throwing plantWarmCache no longer strands the parked endpoint: the helper's catch awaits a bounded ObserveStrandedEndpointAsync before the bare rethrow (plant exception identity Assert.Same-pinned), pulling the settle inside the test lifetime; the birth-attached MarkEndpointFaultObserved backstop covers post-budget faults. One new pin with red proofs run twice on both TFMs; the non-throwing paths' timing untouched. Worker gates green (simplify with the altitude backstop move applied; code-review high 0 correctness findings, 1 applied, 1 skipped, 1 filed as JF-726); the worker merged main itself mid-run and verified the merged tree (5012/5012 both TFMs, the predicted count). The orchestrator gate-marker verified all five scrutiny axes with its own pin runs and exit enumeration; its 2 findings applied as doc notes (the single-expression precondition, the Dispose-throwing corner). Suites: branch 5008/5008, class 265/265, merged-tree 5012/5012 both TFMs. Test-only: no production surface, no deploy.
 <!-- SECTION:FINAL_SUMMARY:END -->
