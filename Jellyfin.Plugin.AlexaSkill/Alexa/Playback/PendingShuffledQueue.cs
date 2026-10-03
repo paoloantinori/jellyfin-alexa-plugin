@@ -17,6 +17,15 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 /// <see cref="IReadOnlyList{T}"/> and <see cref="DeviceQueueManager.CommitShuffledQueue"/>
 /// stores defensive copies, so neither a post-commit mutation of the snapshot nor
 /// a second commit of it can reach a live queue's mutable state.
+    /// CONVENTION-ONLY CONTRACT (JF-713 gate-marker): nothing structural ties the
+    /// committed snapshot to the launch that was built from it (the record's
+    /// non-emptiness contract has the FirstItemId guard; this one does not). The
+    /// sole caller derives once and commits the same local; if a second commit
+    /// caller ever appears, give this a structural guard (or route the launch
+    /// build through the record so the pair cannot diverge) rather than relying
+    /// on this note - a divergent pair reintroduces exactly the
+    /// directive-versus-queue disagreement JF-713 fixed. The JF-712
+    /// PendingContinuation idiom shares this accepted shape.
 /// </summary>
 /// <param name="ShuffledItemIds">The shuffled playback order (never empty at a correct derive site).</param>
 /// <param name="OriginalItemIds">The pre-shuffle order, stored on commit for RestoreOrder.</param>

@@ -1032,17 +1032,19 @@ public sealed class AlbumPlayService
             // non-null on this arm: the snapshot is only derived under its null-check).
             // KNOWN RACE (the JF-712 derive-to-commit precedent): the commit's
             // whole-list replace is unlocked and the derive-to-commit window spans
-            // the launch build, so a sibling playback event (PlaybackNearlyFinished
-            // and friends) that mutates the OLD device queue's membership or pointer
-            // during the build has those writes dropped by the replace, where the
-            // pre-JF-713 order (queue written first) let them land on the stored
-            // queue. The window is bounded to sibling events during one launch build
-            // and shares its shape with the JF-699 SetQueue-after-build reorder on
-            // the ordered arm; the builder's OWN mid-build writes (last-played
-            // ledger, launch scope) are carried by CopySurvivingStores. A lock
-            // belongs with the queue-replace helper extraction if the shape ever
-            // bites live. Same window, launch-scope side: TrimLaunchBaseIfNeeded
-            // judges the fresh entry against the OLD queue's membership (JF-723).
+            // the launch build, so a sibling that mutates the OLD device queue's
+            // membership or pointer during the build (a playback event such as
+            // PlaybackNearlyFinished, or a queue-editing intent such as AddToQueue)
+            // has those writes dropped by the replace, where the pre-JF-713 order
+            // (queue written first) let them land on the stored queue. The window
+            // is bounded to siblings during one launch build and shares its shape
+            // with the JF-699 SetQueue-after-build reorder on the ordered arm; the
+            // builder's OWN mid-build writes (last-played ledger, launch scope)
+            // are carried by CopySurvivingStores. A lock belongs on
+            // DeviceQueueManager.ReplaceQueue (extracted in this same change) if
+            // the shape ever bites live. Same window, launch-scope side:
+            // TrimLaunchBaseIfNeeded judges the fresh entry against the OLD
+            // queue's membership (JF-723).
             Playback.DeviceQueue shuffledQueue = queueManager!.CommitShuffledQueue(deviceId, pendingShuffle);
             // Mirror the shuffled DeviceQueue order back into the session queue (metadata preserved).
             ProgressReporter.MirrorQueueToSession(shuffledQueue, session);

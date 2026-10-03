@@ -803,9 +803,15 @@ public sealed class DeviceQueueManager : IDisposable
     /// <param name="playbackOrder">Playback order: "Default" or "Shuffle".</param>
     public void SetQueue(string deviceId, List<string> itemIds, int currentIndex, string repeatMode = "None", string playbackOrder = "Default")
     {
+        // JF-713 gate-marker: the stored queue owns its lists (the ownership
+        // contract CommitShuffledQueue already documents); storing the caller's
+        // List by reference let a later caller-side mutation silently mutate the
+        // live queue, and it blinded the shuffle refusal pin (a seeded sentinel
+        // shared by reference could not distinguish untouched from
+        // mutated-in-place).
         var queue = new DeviceQueue
         {
-            ItemIds = itemIds,
+            ItemIds = new List<string>(itemIds),
             CurrentIndex = currentIndex,
             RepeatMode = repeatMode,
             PlaybackOrder = playbackOrder,

@@ -42,6 +42,23 @@ after a successful build (the comment's re-shuffle objection is answered by reus
 the snapshot, not by re-deriving). Pin the refused-shuffle shape if the harness allows
 (the JF-699 note says the playlist path is hard to pin end-to-end; a unit-level pin on
 the service method with a throwing builder seam is acceptable evidence).
+
+GATE-MARKER TAIL (2026-10-03, orchestrator review of commit 9fe2c4fd, 3 low findings;
+all five scrutiny axes verified mechanically: the snapshot agreement holds with nothing
+between derive and commit receiving the snapshot, the public-method deletion left zero
+live references with the JF-305 contract fully ported, ReplaceQueue is byte-identical
+to the two inlined tails so the surviving-stores set carries exactly, the race window
+matches the JF-699/JF-712 accepted class with no stale-payload persist possible, and
+JF-723's inertness-at-today's-values premise confirmed): F1 APPLIED (SetQueue now
+stores a defensive copy, giving both ReplaceQueue callers the same stored-queue-owns-
+its-lists ownership contract CommitShuffledQueue documented; this also un-blinds the
+shuffle refusal pin, whose seeded sentinel shared by reference could not distinguish
+untouched from mutated-in-place); F2 APPLIED (the race note names ReplaceQueue directly
+- the deferral target the same change completed - and names queue-editing intents
+alongside playback events in the fire set); F3 APPLIED (the convention-only
+snapshot/launch agreement documented on PendingShuffledQueue with the structural-guard
+instruction for a second caller). Affected classes 105/105 both TFMs after the tail;
+independent suite 4983/4983 both TFMs on the worker commit; merged-tree follows.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done
