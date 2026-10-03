@@ -3,12 +3,14 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Controller;
+using Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.MediaEncoding;
@@ -1314,10 +1316,15 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// <see cref="ObserveStrandedEndpointAsync"/>. Reading
     /// <c>t.Exception</c> marks the fault observed; OnlyOnFaulted plus
     /// ExecuteSynchronously keeps this a zero-cost registration until a fault
-    /// actually lands. No dedicated pin: exercising the timeout exit costs
-    /// the whole 20s budget per TFM, and the observation mechanism itself is
-    /// the one the pinned plant-throw arm shares (the coverage gap is tracked
-    /// as JF-726).
+    /// actually lands. Pinned since JF-726 by the IL-shape pin
+    /// <see cref="ServeInLockWarmCacheHelper_BirthBackstop_AttachesOnlyOnFaultedContinuationBeforeParkAssert"/>
+    /// (one methoddef, one birth-site call before the park assert, the
+    /// documented options operand, the Exception read, and the
+    /// argument-identity tie to the started endpoint); the residual gap that
+    /// pin states honestly is the RUNTIME observation effect, provable only
+    /// via UnobservedTaskException after a forced GC (finalizer-timing
+    /// flaky) or a marker inside the continuation (rejected: it would modify
+    /// this mechanism and break its zero-allocation static-lambda shape).
     /// </summary>
     private static void MarkEndpointFaultObserved(Task<ActionResult> endpointTask)
     {
@@ -1481,6 +1488,257 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Assert.True(
             endpointSettledBeforePlantSurfaced,
             "the helper surfaced the plant failure before the parked endpoint settled, so the endpoint is still running past this test: static registry writes after teardown and an unobserved eventual fault (JF-704)");
+    }
+
+    /// <summary>
+    /// JF-726 IL-shape pin for the JF-704 birth fault-observation backstop
+    /// (<see cref="MarkEndpointFaultObserved"/>): the backstop is pinned by no
+    /// behavioral test, because on every behaviorally-pinned arm the
+    /// endpoint's observation is provided by a direct await (the catch-arm
+    /// <see cref="ObserveStrandedEndpointAsync"/> or the normal-path settle),
+    /// and the ONE exit it uniquely covers, the settle-budget timeout (an
+    /// endpoint that neither completes nor faults within
+    /// <see cref="EndpointSettleBudget"/>, whose eventual fault only the birth
+    /// continuation observes), costs the whole 20s budget per TFM to exercise.
+    /// This pin holds the mechanism's SHAPE instead (the
+    /// CaptureRefreshPairingTests IL-roster idiom applied to this assembly's
+    /// own helper): the backstop method exists exactly once, is called from
+    /// exactly one place (ServeInLockWarmCacheAsync's own body, stub or state
+    /// machine, the endpoint's birth), the call precedes the helper's first
+    /// assert call, the park assert (attached before any await of the
+    /// endpoint, so a fault landing between a settle-budget timeout and a
+    /// later attachment cannot slip through), the call's ARGUMENT is the
+    /// field the startEndpoint delegate's result was just stored into (the
+    /// argument-identity tie; a wrong-task refactor cannot hide behind the
+    /// other asserts), the continuation-options operand is the documented
+    /// OnlyOnFaulted | ExecuteSynchronously constant (the filter; without
+    /// OnlyOnFaulted the continuation fires on every completion and observes
+    /// nothing on the timeout exit), and this class's one compiler-generated
+    /// continuation body reads <see cref="Task.Exception"/> (the observation
+    /// itself). RED PROOFS (run on both TFMs): dropping the OnlyOnFaulted
+    /// flag reds the options assert; emptying the continuation body reds the
+    /// exception-read assert; deleting the birth-site call reds the one-caller
+    /// assert; attaching late (after the settle) reds the ordering assert;
+    /// passing a task other than the started endpoint reds the
+    /// argument-identity tie. HONEST SCOPE:
+    /// this pins presence and shape, not the runtime observation effect.
+    /// Proving the effect needs UnobservedTaskException after a forced GC
+    /// (finalizer-timing flaky, rejected in the JF-726 filing) or a marker
+    /// inside the continuation (rejected here: it would modify the mechanism
+    /// under test and break its zero-allocation static-lambda shape, the
+    /// property the JF-704 doc names); the filing's budget-seam shape was not
+    /// taken either, since it grows the helper's signature to prove the
+    /// seam's plumbing, still not the observation.
+    /// </summary>
+    [Fact]
+    public void ServeInLockWarmCacheHelper_BirthBackstop_AttachesOnlyOnFaultedContinuationBeforeParkAssert()
+    {
+        Assembly testAssembly = typeof(VideoAudioControllerTests).Assembly;
+        Module module = typeof(VideoAudioControllerTests).Module;
+
+        List<int> backstopTokens = IlCallScanner.MethodTokens(
+            typeof(VideoAudioControllerTests),
+            nameof(MarkEndpointFaultObserved)).ToList();
+        Assert.True(
+            backstopTokens.Count == 1,
+            $"expected exactly one MarkEndpointFaultObserved methoddef token, found {backstopTokens.Count} (the backstop was renamed or duplicated; update this pin consciously)");
+
+        var birthCalls = new List<(MethodBase Method, int Offset)>();
+        var continuationBodies = new List<MethodBase>();
+        foreach ((_, MethodBase method) in IlCallScanner.DeclaredMethods(testAssembly))
+        {
+            string logical = IlCallScanner.LogicalMethodName(method);
+            if (logical == nameof(MarkEndpointFaultObserved)
+                && method.MetadataToken != backstopTokens[0]
+                && method.DeclaringType is not null
+                && IlCallScanner.TopLevelType(method.DeclaringType) == typeof(VideoAudioControllerTests))
+            {
+                // This class's backstop family minus the outer method itself
+                // (the code-review RC1 scoping: a same-named helper in ANOTHER
+                // test class must not satisfy the continuation-body assert
+                // below): today the static continuation lambda; any future
+                // capture shape lands here too.
+                continuationBodies.Add(method);
+            }
+
+            foreach ((int offset, int token) in CallInstructionOffsets(method))
+            {
+                if (token == backstopTokens[0])
+                {
+                    birthCalls.Add((method, offset));
+                }
+            }
+        }
+
+        Assert.True(
+            birthCalls.Count == 1
+                && IlCallScanner.LogicalMethodName(birthCalls[0].Method) == nameof(ServeInLockWarmCacheAsync)
+                // Gate-marker tail (the RC1 asymmetry): confine by top-level
+                // type too, the same guard the continuation-body set carries,
+                // so a same-named method on a NESTED type (which can legally
+                // call this private static) cannot satisfy the fact while the
+                // real helper lost its birth attachment.
+                && birthCalls[0].Method.DeclaringType is not null
+                && IlCallScanner.TopLevelType(birthCalls[0].Method.DeclaringType) == typeof(VideoAudioControllerTests),
+            $"MarkEndpointFaultObserved must be called exactly once, from ServeInLockWarmCacheAsync's own body (the endpoint's birth site; zero = the call was deleted, the JF-704 regression; a wrong site or a higher count = the attachment moved or multiplied); found {birthCalls.Count} at [{string.Join(", ", birthCalls.Select(call => $"{call.Method.DeclaringType!.FullName}.{IlCallScanner.LogicalMethodName(call.Method)}"))}]");
+
+        // The birth property, as an ordering fact: the backstop call must
+        // precede the helper's first assert call (the park assert) inside the
+        // same body. The anchor is any Xunit.Assert member, not Assert.False
+        // specifically, so an assert-flavor rewrite does not false-red this
+        // pin. parkAssertOffset -1 means no Assert call was found there (the
+        // helper's shape changed; update this pin).
+        (MethodBase birthMethod, int backstopOffset) = birthCalls[0];
+        int parkAssertOffset = -1;
+        foreach ((int offset, int token) in CallInstructionOffsets(birthMethod))
+        {
+            if (IlCallScanner.TryResolveMethod(module, token) is { } callee
+                && callee.DeclaringType == typeof(Assert))
+            {
+                parkAssertOffset = offset;
+                break;
+            }
+        }
+
+        Assert.True(
+            parkAssertOffset > backstopOffset,
+            $"the birth backstop must be attached BEFORE the park assert (backstop call at IL offset {backstopOffset}, first Assert call at {parkAssertOffset}): a late attachment, after an await of the endpoint, re-opens the window where a fault lands between the settle-budget timeout and the attachment, unobserved (JF-704/JF-726)");
+
+        // The argument-identity tie (code-review RC2): the task handed to the
+        // backstop must be the one startEndpoint just produced, so a refactor
+        // that passes some other task cannot keep every other assert green
+        // while the endpoint's eventual fault goes unobserved. Emission shape
+        // this rides on (verified Debug and Release): the call's argument is
+        // an ldfld of the state machine's endpoint-task field, and that same
+        // field's stfld sits immediately after the startEndpoint delegate's
+        // Func<Task<ActionResult>>.Invoke callvirt. Raw token equality, no
+        // resolution; a broken adjacency reds loudly for a conscious update.
+        byte[] birthIl = birthMethod.GetMethodBody()!.GetILAsByteArray()!;
+        int argumentLoadOffset = backstopOffset - 5;
+        Assert.True(
+            argumentLoadOffset >= 0 && birthIl[argumentLoadOffset] == 0x7B,
+            "the birth call's argument must be a field load (ldfld) of the just-started endpoint task; the emission shape changed, update this pin consciously (JF-726 argument-identity tie)");
+        int endpointFieldToken = BitConverter.ToInt32(birthIl, argumentLoadOffset + 1);
+        bool argumentTiedToStartedEndpoint = false;
+        for (int i = 0; i + 5 <= birthIl.Length; i++)
+        {
+            if (birthIl[i] != 0x7D || BitConverter.ToInt32(birthIl, i + 1) != endpointFieldToken)
+            {
+                continue;
+            }
+
+            int invokeOffset = i - 5;
+            if (invokeOffset >= 0
+                && birthIl[invokeOffset] == 0x6F
+                && IlCallScanner.TryResolveMethod(module, BitConverter.ToInt32(birthIl, invokeOffset + 1)) is { } invoked
+                && invoked.Name == nameof(Action.Invoke)
+                && invoked.DeclaringType == typeof(Func<Task<ActionResult>>))
+            {
+                argumentTiedToStartedEndpoint = true;
+                break;
+            }
+        }
+
+        Assert.True(
+            argumentTiedToStartedEndpoint,
+            "the backstop must observe the task the startEndpoint delegate produced (the field it loads at the birth call must be the one stored right after startEndpoint's Invoke): otherwise the endpoint's eventual fault is unobserved while every other shape assert stays green (JF-726 argument-identity tie)");
+
+        MethodBase? backstopBody = IlCallScanner.TryResolveMethod(module, backstopTokens[0]);
+        Assert.True(
+            backstopBody != null,
+            "the MarkEndpointFaultObserved methoddef did not resolve in its own module");
+        // The exact combined constant, not a bits-contains mask (code-review
+        // RC4): the byte-walk's every-offset window can in principle surface
+        // a PHANTOM ldc.i4 (a 0x20 byte inside another instruction's operand),
+        // and for this one assert a phantom works in the GREEN direction,
+        // against the loud-only discipline. The exact value makes the phantom
+        // window a 4-byte exact match; the honest residual (a phantom still
+        // possible, in principle, in a tiny body) is why the real fix, an
+        // opcode-aware walk, is filed with the scanner hoist as JF-736.
+        int documentedOptions = (int)(TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
+        Assert.True(
+            LdcI4Operands(backstopBody).Contains(documentedOptions),
+            $"the backstop's ContinueWith must pass TaskContinuationOptions.OnlyOnFaulted | ExecuteSynchronously (0x{documentedOptions:X}); without OnlyOnFaulted the continuation fires on every completion instead of observing the fault, re-creating the unobserved-fault stranding on the settle-budget timeout exit (JF-704/JF-726)");
+
+        Assert.True(
+            continuationBodies.Count == 1,
+            $"the backstop's compiler-generated continuation body must exist exactly once in this class (found {continuationBodies.Count}; a rename of MarkEndpointFaultObserved or a named-method refactor of the lambda changes the emission shape; update this pin consciously)");
+        MethodInfo exceptionGetter = typeof(Task).GetProperty(nameof(Task.Exception))!.GetGetMethod()!;
+        Assert.True(
+            IlCallScanner.CallsGetter(continuationBodies[0], module, exceptionGetter),
+            "the backstop's continuation body must read Task.Exception: reading it IS the observation, and an emptied body re-creates the unobserved-fault stranding the JF-704 backstop exists to close");
+
+        // Gate-marker tail F2 (the body-scoped receiver tie): the RC2 tie at
+        // the call site stops at the method boundary - nothing tied the
+        // ContinueWith RECEIVER inside MarkEndpointFaultObserved's body to
+        // the endpointTask parameter, so a wrong-task refactor one level
+        // deeper escaped all six facts. This straight-line body's first
+        // instruction being the parameter load (ldarg.0) makes the one
+        // ContinueWith's receiver the parameter by construction (nothing
+        // else can sit under it on the stack); a body that never loads the
+        // parameter, or loads something else first, reds here.
+        byte[] backstopMethodIl = backstopBody!.GetMethodBody()!.GetILAsByteArray()
+            ?? throw new InvalidOperationException("MarkEndpointFaultObserved has no IL body");
+        int receiverLoad = 0;
+        while (receiverLoad < backstopMethodIl.Length && backstopMethodIl[receiverLoad] == 0x00)
+        {
+            receiverLoad++; // Debug-build nops precede the real first instruction
+        }
+
+        Assert.True(
+            receiverLoad < backstopMethodIl.Length && backstopMethodIl[receiverLoad] == 0x02,
+            "MarkEndpointFaultObserved's body's first real instruction must load the endpointTask parameter (ldarg.0), the receiver of its one ContinueWith: a body loading anything else first has detached the backstop from the task it exists to observe (JF-726 gate-marker F2)");
+    }
+
+    /// <summary>
+    /// The (offset, operand) pairs of the call (0x28) / callvirt (0x6F)
+    /// instructions in the method body, in byte order: the one capability the
+    /// shared <see cref="IlCallScanner"/> does not expose (its token walks
+    /// drop the offset), needed by the JF-726 birth-ordering pin above, for
+    /// which the backstop call preceding the park assert is an ordering fact.
+    /// Same operand-window discipline as the scanner: opcodes are checked at
+    /// every byte offset, so a coincidental byte match inside another
+    /// instruction's operand can only ADD a candidate and fail loudly, never
+    /// hide one.
+    /// </summary>
+    private static IEnumerable<(int Offset, int Token)> CallInstructionOffsets(MethodBase method)
+        => InstructionOperands(method, 0x28, 0x6F);
+
+    /// <summary>
+    /// The int32 operands of the ldc.i4 (0x20) instructions in the method
+    /// body: the form a small enum-constant argument (the JF-726 backstop's
+    /// <see cref="TaskContinuationOptions"/>) compiles to. Scanning only the
+    /// 0x20 encoding is TOTAL for the pin's fact, not an encoding gamble:
+    /// any constant carrying the OnlyOnFaulted bits (0x50000 = 327680)
+    /// short encodings: any NON-NEGATIVE enum-folded constant carrying OnlyOnFaulted
+    /// (0x50000) exceeds them (sign-extended negatives like ldc.i4.m1 carry the bits yet
+    /// ARE short-encodable; the exact-value fact stays safe - 0xD0000 is positive).
+    /// family at 8), so the compiler can only emit it as ldc.i4.
+    /// </summary>
+    private static IEnumerable<int> LdcI4Operands(MethodBase method)
+        => InstructionOperands(method, 0x20).Select(instruction => instruction.Operand);
+
+    /// <summary>
+    /// The byte-walk under <see cref="CallInstructionOffsets"/> and
+    /// <see cref="LdcI4Operands"/>: operand ints for the given single-byte
+    /// opcodes whose operand is a 4-byte int32 (call, callvirt, ldc.i4).
+    /// </summary>
+    private static IEnumerable<(int Offset, int Operand)> InstructionOperands(MethodBase method, params byte[] opcodes)
+    {
+        MethodBody? body = method.GetMethodBody();
+        if (body == null)
+        {
+            yield break;
+        }
+
+        byte[] il = body.GetILAsByteArray() ?? Array.Empty<byte>();
+        for (int i = 0; i + 5 <= il.Length; i++)
+        {
+            if (opcodes.Contains(il[i]))
+            {
+                yield return (i, BitConverter.ToInt32(il, i + 1));
+            }
+        }
     }
 
     /// <summary>
