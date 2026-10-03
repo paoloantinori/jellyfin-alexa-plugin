@@ -1151,7 +1151,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// in-lock-vs-fast-path attribution DETERMINISTIC: the helper wires the
     /// controller's InLockWarmCacheProbeForTest seam and asserts the probe
     /// fired once the endpoint settles (it can only fire inside the per-item
-    /// lock scope, so a >400ms pre-lock stall whose request then served from the
+    /// lock scope, so a pre-lock stall longer than the park window whose request then served from the
     /// fast path fails here instead of passing under a false attribution);
     /// omit the parameter for constructions whose endpoint never reaches a
     /// lock scope (the fault-observation pin). JF-700: a FAULTING endpoint
@@ -1175,7 +1175,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// observes the endpoint BEFORE rethrowing
     /// (<see cref="ObserveStrandedEndpointAsync"/>, which pulls the settle
     /// inside the test's lifetime); the non-throwing paths never enter the
-    /// catch, so the 400ms park window and the probe-assert ordering are
+    /// catch, so the park window (<see cref="ParkWindowMs"/>) and the probe-assert ordering are
     /// unchanged.
     /// </summary>
     private static async Task<ActionResult> ServeInLockWarmCacheAsync(
@@ -1198,7 +1198,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             {
                 endpointTask = startEndpoint();
                 MarkEndpointFaultObserved(endpointTask);
-                await Task.Delay(400);
+                await Task.Delay(ParkWindowMs);
                 Assert.False(
                     endpointTask.IsCompleted,
                     ParkAssertFailureMessage(endpointTask));
@@ -1282,6 +1282,18 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     private static readonly TimeSpan EndpointSettleBudget = TimeSpan.FromSeconds(20);
 
     /// <summary>
+    /// The park window the helper gives the endpoint to walk its pre-lock path
+    /// (validation, cache miss, arg build, all in-process) and block on the
+    /// per-item lock before the not-completed assert. JF-730 measured the
+    /// requirement well below this value on this host (the sweep record lives
+    /// in the backlog task); the failure mode of a too-short window is a LOUD
+    /// red (the probe assert's <see cref="InLockProbeNotFiredMessage"/> or the
+    /// not-completed assert itself), never a false pass, since both asserts
+    /// read the endpoint's own outcome.
+    /// </summary>
+    private const int ParkWindowMs = 250;
+
+    /// <summary>
     /// JF-704 fault-observation backstop, attached at the endpoint's birth so
     /// EVERY exit of <see cref="ServeInLockWarmCacheAsync"/> observes an
     /// eventual fault: Task.WaitAsync's timeout does NOT observe the inner
@@ -1352,11 +1364,11 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
     /// <summary>The one failure message for the helper's in-lock attribution assert (JF-681), owned here once.</summary>
     private const string InLockProbeNotFiredMessage =
-        "the JF-681 in-lock probe never fired, so the request settled WITHOUT entering the per-item lock scope (a fast-path serve won the race past the 400ms park window, or the endpoint faulted before reaching the lock) and this pin's in-lock attribution is void";
+        "the JF-681 in-lock probe never fired, so the request settled WITHOUT entering the per-item lock scope (a fast-path serve won the race past the park window, or the endpoint faulted before reaching the lock) and this pin's in-lock attribution is void";
 
     /// <summary>
     /// The park assert's message (JF-681): the original single message conflated
-    /// the two ways a task can be completed at the 400ms probe. A RAN-TO-COMPLETION
+    /// the two ways a task can be completed at the park-window probe. A RAN-TO-COMPLETION
     /// task IS a fast-path hit and keeps the original guidance verbatim; a FAULTED
     /// task is a crash before the lock (a pre-lock NRE, an argument throw) whose
     /// real exception the suite would otherwise never surface (nothing awaited the
@@ -1798,8 +1810,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// answers own-live-or-registering at the correct ticks, so the fall-through
     /// is exactly the silent live-edge revert the task describes.
     /// JF-681 ADDITIONS: (1) ATTRIBUTION is now deterministic, closing the
-    /// boundary the original pin stated honestly (it rested on the 400ms park
-    /// assert, and a >400ms pre-lock stall would re-target the pin at the
+    /// boundary the original pin stated honestly (it rested on the park-window
+    /// assert, and a pre-lock stall longer than the window would re-target the pin at the
     /// fast-path gate, which reads the SAME predicate at the SAME ticks and
     /// serves byte-identically): the InLockWarmCacheProbeForTest seam fires only
     /// inside the per-item lock scope, so a fast-path serve can no longer
@@ -4724,54 +4736,110 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:10.000,\\nseg_0000.ts\\n' > \"$last_arg\"\n" +
             "sleep 300\n");
 
-        // Device A starts the 1.5x variant.
-        var first = CreateController(episode.Id.ToString(), "device-A", fakeFfmpegPath);
-        ActionResult firstResult = await first.StreamHlsAudioSpeed(episode.Id.ToString(), 1500, 0);
-        Assert.IsType<ContentResult>(firstResult);
-
-        string hlsDir = _cache.GetHlsDirectoryPath(VideoAudioController.AudioSpeedCacheKey(episode.Id.ToString(), 1500, 0), 0);
-        string pidPath = Path.Combine(hlsDir, "ffmpeg.pid");
-        Assert.True(File.Exists(pidPath), "the fake ffmpeg never ran");
-        int pid = int.Parse(File.ReadAllText(pidPath).Trim());
-
-        static bool ProcessDead(int p)
+        // JF-730: the launches and asserts sit inside try/finally because the
+        // scenario deliberately leaves live sleep-300 encodes (device B's spared
+        // 1.75x and device A's final 2.0x), each holding an encode-gate slot
+        // (default cap 2), and the encode gate releases a slot only on the
+        // process's own exit. A failing assert must not strand them: without the
+        // finally's kills the whole serialized class waited out the fake's sleep
+        // behind the full gate (the next gated test, measured on the pre-JF-730
+        // suite, blocked 299.42s on gate.WaitAsync, 84% of the class's wall
+        // clock, until the first sleeper's sleep expired).
+        // Every launch and the kill loop read the SAME rate list, so a rate
+        // added to the scenario cannot strand its encode behind the gate.
+        int[] speedRates = { 1500, 1750, 2000 };
+        // The refill target is the CONFIGURED cap, not a count captured at
+        // entry: a prior test's slot can still be draining through the gate's
+        // 500ms exit-poll when this test starts (an entry snapshot then reads
+        // the transient, and the teardown's own drain fails the compare; both
+        // TFMs red exactly this way). The cap is deterministically 2 here: the
+        // per-test Plugin reset pins the config to the default, and this
+        // test's own first CreateController re-applies the config capacity to
+        // the static gate, rebuilding away any un-restored static swap.
+        const int gateCapacity = 2;
+        bool gateRefilled = false;
+        int pid = 0;
+        try
         {
-            try
+            // Device A starts the 1.5x variant.
+            var first = CreateController(episode.Id.ToString(), "device-A", fakeFfmpegPath);
+            ActionResult firstResult = await first.StreamHlsAudioSpeed(episode.Id.ToString(), speedRates[0], 0);
+            Assert.IsType<ContentResult>(firstResult);
+
+            string hlsDir = _cache.GetHlsDirectoryPath(VideoAudioController.AudioSpeedCacheKey(episode.Id.ToString(), speedRates[0], 0), 0);
+            string pidPath = Path.Combine(hlsDir, "ffmpeg.pid");
+            Assert.True(File.Exists(pidPath), "the fake ffmpeg never ran");
+            pid = int.Parse(File.ReadAllText(pidPath).Trim());
+
+            // Device B launches a different variant of the SAME item: A's encode must
+            // survive (a different Echo may be actively consuming it).
+            var other = CreateController(episode.Id.ToString(), "device-B", fakeFfmpegPath);
+            ActionResult otherResult = await other.StreamHlsAudioSpeed(episode.Id.ToString(), speedRates[1], 0);
+            Assert.IsType<ContentResult>(otherResult);
+            Assert.False(ProcessDead(pid), "another device's launch must not kill device A's live variant");
+
+            // Device A cycles to a new rate: its own 1.5x encode is superseded and dies.
+            var second = CreateController(episode.Id.ToString(), "device-A", fakeFfmpegPath);
+            ActionResult secondResult = await second.StreamHlsAudioSpeed(episode.Id.ToString(), speedRates[2], 0);
+            Assert.IsType<ContentResult>(secondResult);
+
+            bool dead = false;
+            for (int i = 0; i < 50; i++)
             {
-                using var probe = System.Diagnostics.Process.GetProcessById(p);
-                return probe.HasExited;
+                if (ProcessDead(pid))
+                {
+                    dead = true;
+                    break;
+                }
+
+                await Task.Delay(100);
             }
-            catch (ArgumentException)
+
+            Assert.True(dead, $"the superseded speed encode (pid {pid}) survived the new launch");
+        }
+        finally
+        {
+            // Killing through the registry releases every slot within the gate's
+            // 500ms exit-poll. The drain wait rides in the finally so a failed
+            // in-try assert still leaves the gate drained (or, if a kill failed,
+            // bounds the wait) instead of stranding the sleep mid-class.
+            foreach (int rate in speedRates)
             {
-                return true;
+                try
+                {
+                    var live = VideoAudioController.LiveSpeedEncodeProcessForTest(
+                        VideoAudioController.AudioSpeedCacheKey(episode.Id.ToString(), rate, 0));
+                    if (live is { HasExited: false })
+                    {
+                        live.Kill(entireProcessTree: true);
+                    }
+                }
+                catch { /* raced to exit between the guard and the kill */ }
             }
+
+            gateRefilled = await WaitUntilAsync(() => GateField().CurrentCount == gateCapacity, TimeSpan.FromSeconds(10), 100);
         }
 
-        // Device B launches a different variant of the SAME item: A's encode must
-        // survive (a different Echo may be actively consuming it).
-        var other = CreateController(episode.Id.ToString(), "device-B", fakeFfmpegPath);
-        ActionResult otherResult = await other.StreamHlsAudioSpeed(episode.Id.ToString(), 1750, 0);
-        Assert.IsType<ContentResult>(otherResult);
-        Assert.False(ProcessDead(pid), "another device's launch must not kill device A's live variant");
+        Assert.True(
+            gateRefilled,
+            $"the speed-cycling teardown must return all {gateCapacity} encode-gate slots (rates {string.Join(", ", speedRates)}): a slot crossing the test boundary serializes every later gated test in this class behind this fake's sleep");
+    }
 
-        // Device A cycles to a new rate: its own 1.5x encode is superseded and dies.
-        var second = CreateController(episode.Id.ToString(), "device-A", fakeFfmpegPath);
-        ActionResult secondResult = await second.StreamHlsAudioSpeed(episode.Id.ToString(), 2000, 0);
-        Assert.IsType<ContentResult>(secondResult);
-
-        bool dead = false;
-        for (int i = 0; i < 50; i++)
+    /// <summary>
+    /// The <see cref="StreamHlsAudioSpeed_NewLaunch_KillsSameDeviceSupersededEncode_SparesOtherDevices"/>
+    /// pid probe (kept next to its only caller).
+    /// </summary>
+    private static bool ProcessDead(int p)
+    {
+        try
         {
-            if (ProcessDead(pid))
-            {
-                dead = true;
-                break;
-            }
-
-            await Task.Delay(100);
+            using var probe = System.Diagnostics.Process.GetProcessById(p);
+            return probe.HasExited;
         }
-
-        Assert.True(dead, $"the superseded speed encode (pid {pid}) survived the new launch");
+        catch (ArgumentException)
+        {
+            return true;
+        }
     }
 
     /// <summary>
@@ -7843,7 +7911,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// verdict-to-serve window. RED (row un-wrapped): the FNF faults the
     /// endpoint task and the await rethrows it (the in-flight 500 shape).
     /// JF-700: the controller is passed to the helper, so the in-lock
-    /// attribution is deterministic (the probe assert, not the 400ms park
+    /// attribution is deterministic (the probe assert, not the park window
     /// alone; red proof: removing the LockHlsItemAsync invoke flips this pin).
     /// </summary>
     [Fact]
