@@ -1,6 +1,5 @@
 using System;
 using System.Collections.ObjectModel;
-using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -219,7 +218,10 @@ public class SkillStartup : IHostedService, IDisposable
                                         return null;
                                     }).ConfigureAwait(false);
 
-                                    await CaptureLocaleModelStatusesAsync(user, user.UserSkill.SkillId!).ConfigureAwait(false);
+                                    // The structurally paired capture + deferred
+                                    // refresh (JF-722); the wrapper derives the
+                                    // recapture mode from the capture's outcome.
+                                    await CaptureAndScheduleStatusRefreshAsync(user, user.UserSkill.SkillId!, token).ConfigureAwait(false);
                                 }
 
                                 if (!accountLinkingData.AuthorizationUrl.Equals(endpointUriString, StringComparison.Ordinal)
@@ -264,7 +266,10 @@ public class SkillStartup : IHostedService, IDisposable
                             user.UserSkill.UserSkillStatus = UserSkillStatus.AccountLinkPending;
                             Plugin.Instance.SaveConfiguration();
 
-                            await CaptureLocaleModelStatusesAsync(user, skillId).ConfigureAwait(false);
+                            // The skill-creation twin of the version-mismatch
+                            // site above; typically the sparse-capture world whose
+                            // recapture rationale lives on the wrapper (JF-722).
+                            await CaptureAndScheduleStatusRefreshAsync(user, skillId, token).ConfigureAwait(false);
                         }
                     }
                 }
@@ -273,6 +278,15 @@ public class SkillStartup : IHostedService, IDisposable
                     _logger.LogWarning(
                         "SMAPI API error for user {UserId} during startup — skill sync deferred. Error: {Message}",
                         user.Id, ex.Message);
+                }
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
+                {
+                    // Shutdown racing the user loop (the JF-722 capture's
+                    // checkpoints rethrow it, as does the loop-top check):
+                    // propagate to the same outer handler the loop-top OCE
+                    // already reaches, instead of mislabeling it a per-user
+                    // skill failure at Error level (code-review refresh RC2).
+                    throw;
                 }
                 catch (Exception ex)
                 {
@@ -373,76 +387,608 @@ public class SkillStartup : IHostedService, IDisposable
     /// a capture with its own errors or a failure-weight state still replaces
     /// the row wholesale. JF-719 widened the gate from SUCCEEDED-only to the
     /// two no-failure-weight states (the no-settle-wait rationale lives at
-    /// the gate).
+    /// the gate). JF-722: per-locale failures (a null LastModified entry on a
+    /// freshly created skill, or any malformed per-locale shape) are isolated
+    /// to their own locale instead of aborting the capture for every later
+    /// locale in dictionary order.
     /// Internal for the InternalsVisibleTo test seam (the startup-path pins
-    /// drive the capture directly through a faked GetSkillStatusAsync).
+    /// drive the capture directly through a faked GetSkillStatusAsync); the
+    /// call sites reach it only through
+    /// <see cref="CaptureAndScheduleStatusRefreshAsync"/> so its deferred
+    /// refresh (which settles the IN_PROGRESS statuses this no-settle-wait
+    /// capture legitimately freezes, JF-722) is never left unscheduled.
+    /// Returns whether ANY row was written: false is the sparse-status shape
+    /// (no interactionModel surface, or every entry pre-build with a null
+    /// LastModified), which is what tells the paired refresh to recapture
+    /// later (JF-722 rework F3: both a freshly created skill and a transient
+    /// sparse response on an established skill land there). The optional
+    /// token exists for the refresh's creation-mode recapture leg: the capture
+    /// checkpoints after its GET and before its save so a recapture poll
+    /// cannot race process exit with an XML config write either (rework F2's
+    /// boundary, closed at the save every writer-driven capture shares).
     /// </summary>
-    internal async Task CaptureLocaleModelStatusesAsync(Entities.User user, string skillId)
+    internal async Task<bool> CaptureLocaleModelStatusesAsync(Entities.User user, string skillId, CancellationToken cancellationToken = default)
     {
         try
         {
             var status = await AlexaUtil.CallAsync(user, () => user.SmapiManagement!.GetSkillStatusAsync(skillId)).ConfigureAwait(false);
 
+            // Rework F2: the refresh's creation-mode recapture leg calls this
+            // capture with its own token; stop here if the startup was torn down
+            // while the GET was in flight, before any ledger write below.
+            cancellationToken.ThrowIfCancellationRequested();
+
             var config = Plugin.Instance!.Configuration;
             var now = DateTime.UtcNow;
+            bool wroteAny = false;
+
+            // Same sparse-status guard the deferred refresh carries: a status GET
+            // with no interactionModel surface at all means no locale has anything
+            // to report yet. TWO shapes land here (JF-722 rework F7: the log must
+            // not point a post-deploy triage at skill creation alone): a freshly
+            // created skill before its first builds register, and a transient
+            // sparse response on an established skill after a version bump. Skip
+            // the capture instead of letting the foreach dereference throw into
+            // the whole-method catch below.
+            if (status.InteractionModel == null)
+            {
+                _logger.LogWarning(
+                    "Startup capture found no per-locale build statuses at all for skill {SkillId} (expected on a freshly created skill until its first builds register, or a transient sparse status response on an established skill after a deploy); nothing captured this pass",
+                    skillId);
+                return false;
+            }
 
             foreach (var kvp in status.InteractionModel)
             {
                 string locale = kvp.Key;
                 var localeStatus = kvp.Value;
+
+                // JF-722 residual 2: a freshly created skill can register a locale
+                // whose first build has not started (LastModified null), exactly the
+                // skill-creation capture path below. There is no observation to
+                // record, so the locale is SKIPPED (its previous row, if any, stays
+                // the last settled truth) instead of throwing the
+                // NullReferenceException the old unguarded dereference did.
+                if (localeStatus?.LastModified == null)
+                {
+                    _logger.LogWarning(
+                        "Startup capture found no reported build status for locale {Locale} (a freshly created skill registers locales before their first build starts); skipping it and capturing the remaining locales",
+                        locale);
+                    continue;
+                }
+
+                try
+                {
+                    string state = localeStatus.LastModified.Status.ToString();
+
+                    string? error = LibrarySyncService.FormatInvocationErrors(localeStatus.Errors);
+                    if (error != null)
+                    {
+                        // JF-722 rework F1: the observed-errors composition carries
+                        // the marker prefix so the deferred refresh's clean-settle
+                        // arm can tell it from the preserve's product and drop it
+                        // when the settle observation is clean.
+                        error = ObservedBuildErrorsLedgerPrefix + error;
+                        _logger.LogWarning(
+                            "Interaction model build {Status} for locale {Locale}: {Error}",
+                            state, locale, error);
+                    }
+                    else if (localeStatus.LastModified.Status is SkillStatusState.SUCCEEDED or SkillStatusState.IN_PROGRESS)
+                    {
+                        // JF-710/JF-719: the capture describes the model-build surface
+                        // only; the existing catalog-sync row's Error describes catalog
+                        // state the rebuild did not reset. The gate is an ALLOWLIST of
+                        // the two no-failure-weight states: SUCCEEDED (settled clean)
+                        // and IN_PROGRESS (the freshly-PUT locale this no-settle-wait
+                        // capture legitimately reads right after UpdateSkillAsync,
+                        // JF-719; the diagnostics panel counts IN_PROGRESS as healthy,
+                        // so a preserved clause on it beats the wiped row the
+                        // SUCCEEDED-only gate left behind). Anything else keeps its own
+                        // consumer weight (the panel's failedModels count) and
+                        // replaces wholesale, so a build-failure observation never
+                        // carries a catalog clause that had nothing to do with it;
+                        // an allowlist, not a FAILED/TIMEOUT denylist, so a state the
+                        // SkillStatusState enum grows into fails safe the same way.
+                        // TIMEOUT, the ledger's other failure vocabulary, is already
+                        // unreachable here: SkillStatusState is exactly
+                        // IN_PROGRESS|FAILED|SUCCEEDED (reflection-dumped from the
+                        // referenced Alexa.NET.Management), and TIMEOUT rows in the
+                        // ledger come from the sync writers' own poll outcome, never
+                        // from this status GET.
+                        // KNOWN RACE (JF-710 gate-marker): this preserve is an unguarded
+                        // read-modify-write of the row, while the sync writers guard
+                        // their own reads against exactly this capture; a sync leg
+                        // writing between the read and the Set below is overwritten
+                        // until its next run (sub-millisecond window, the pre-existing
+                        // capture class; the acknowledgment is one-directional by
+                        // accepted trade, not by oversight). FREQUENCY (JF-719 widening):
+                        // the preserve now fires on every in-flight IN_PROGRESS row too
+                        // (~10-17 of 17 locales per version-bump restart per the JF-722
+                        // corrected analysis), so the window opens an order of magnitude
+                        // more often than the pre-widening settled-only fire set.
+                        // JF-722: the deferred refresh below is the same unguarded
+                        // read-modify-write class over the same rows, MULTIPLIED:
+                        // up to 4 polls x 17 locales across the ~3-minute budget,
+                        // overlapping the post-restart CatalogSyncTask window, and
+                        // its clobber victim can be a sync-authored settled row
+                        // carrying a real canary diagnostic (the refreshed Set
+                        // restores the stale read). The one-directional accepted
+                        // trade is the same; the multiplied exposure and the
+                        // diagnostic-loss victim are filed in JF-724 (rework F4).
+                        error = LibrarySyncService.PreserveLedgerErrorAcrossCapture(config.GetLocaleModelStatus(locale));
+
+                        // Branch-decision debug per the logging policy: this
+                        // subsystem's incidents (JF-495/705/709/710/719) are
+                        // triaged from ledger forensics, and the preserve arm is
+                        // otherwise indistinguishable from an all-clean overwrite
+                        // in the written row.
+                        _logger.LogDebug(
+                            "Startup capture preserve fired for locale {Locale}: observed {Status}, surviving Error '{Error}'",
+                            locale, state, error ?? "(nothing survived)");
+                    }
+
+                    config.SetLocaleModelStatus(locale, new Configuration.LocaleModelStatus
+                    {
+                        Status = state,
+                        LastUpdated = now,
+                        Error = error,
+                        Source = CaptureLedgerSource,
+                    });
+                    wroteAny = true;
+                }
+                catch (Exception ex)
+                {
+                    // JF-722 residual 2: one malformed per-locale entry (or a ledger
+                    // collection mutation racing the Get/Set below) must cost only
+                    // THIS locale's row, not every later locale in dictionary order;
+                    // the old whole-method catch turned it into a silent partial
+                    // capture the admin could not distinguish from a complete one.
+                    _logger.LogWarning(ex,
+                        "Startup capture failed for locale {Locale}; continuing with the remaining locales",
+                        locale);
+                }
+            }
+
+            // Rework F2: last cancellation checkpoint before the XML write, the
+            // save boundary every caller of this capture shares.
+            cancellationToken.ThrowIfCancellationRequested();
+            Plugin.Instance.SaveConfiguration();
+            return wroteAny;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Real shutdown, not a capture failure: the token-state filter keeps
+            // the generic warning below from mislabeling it. The filter is
+            // load-bearing: an HttpClient TIMEOUT surfaces as
+            // TaskCanceledException (an OCE subclass; Alexa.NET.Management's
+            // client carries the default 100s timeout) WITHOUT any cancellation,
+            // and rethrowing that shape would kill the whole deferred refresh
+            // silently instead of retrying (code-review refresh RC1).
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to capture per-locale model status for skill {SkillId}. Non-critical.", skillId);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// The ledger Source label shared by the startup capture and its deferred
+    /// refresh (the capture family). The refresh's family predicate keys on this
+    /// exact value (Ordinal), so writer and recognizer must be the one constant: a
+    /// drifted literal on either side silently no-ops the whole refresh (the
+    /// pre-check exits before any poll, no error anywhere) and the frozen
+    /// IN_PROGRESS rows come back (the JF-722 symptom). Same pattern as
+    /// <see cref="LibrarySyncService.CatalogSyncLedgerSource"/> for the sync writers.
+    /// </summary>
+    internal const string CaptureLedgerSource = "Embedded";
+
+    /// <summary>
+    /// The visible ledger prefix marking an Error composed from an OBSERVED SMAPI
+    /// build Errors array (the capture's wholesale arm and the refresh's own
+    /// twin). It exists for the refresh's clean-settle arm (JF-722 rework F1): an
+    /// IN_PROGRESS capture that carried a non-empty Errors array composed its row
+    /// from THAT observation's errors, and whether SMAPI serves stale
+    /// previous-build errors on an in-flight status is exactly the unverified
+    /// shape the task file flags, so on a later CLEAN settle those errors may be
+    /// stale and must be DROPPED, while the preserve's product (frozen clause,
+    /// foreign diagnostic) is durable catalog state and carries forward verbatim.
+    /// The row alone cannot otherwise distinguish the two composing arms, hence
+    /// this visible-text-doubles-as-marker literal, the same pattern as the
+    /// LibrarySyncService marker family. Deliberately NOT one of
+    /// IsOwnShapeLedgerError's literals: an own-observation Error is superseded
+    /// by the next clean capture (the pre-existing
+    /// CaptureClean_OverStaleEmbeddedError_ClearsIt boundary), never preserved.
+    /// JF-721 OWNERSHIP: this is a FOURTH literal of the marker family that
+    /// task's structured caveat field is filed to delete; its migration
+    /// inventory (updated same-turn from this rework) carries it, and the
+    /// distinction it encodes (the capture's errors-arm vs preserve-arm
+    /// product) is a required design input for the caveat field.
+    /// QUARANTINE INVARIANT (code-review refresh RC4): the clean-settle drop
+    /// matches on StartsWith, a PREFIX rule rather than the family's
+    /// Contains-matched literals, so it extends the invariant on
+    /// IsOwnShapeLedgerError with one more constraint: a foreign diagnostic
+    /// carried into a ledger Error must never START with this literal, or the
+    /// refresh's clean settle destroys it. Today's foreign formats (the fixed
+    /// "canary mismatch: ..." shape, clause-led compositions) satisfy it.
+    /// </summary>
+    internal const string ObservedBuildErrorsLedgerPrefix = "build errors: ";
+
+    /// <summary>
+    /// The structural pairing of the startup capture and its deferred IN_PROGRESS
+    /// refresh (JF-722 residual 1). Every capture site MUST go through here, so no
+    /// future capture call path can freeze the freshly-PUT locales' Status into the
+    /// ledger without also scheduling the background settle-and-rewrite that frees
+    /// it (the "missed one" wiring class; a hand-scheduled site compiles clean and
+    /// silently leaves rows gray until the weekly sync). The refresh's pre-check
+    /// makes unconditional scheduling free when nothing froze. The capture is
+    /// awaited FIRST so the refresh's ledger pre-check reads the rows it just
+    /// wrote.
+    /// THE RECAPTURE RATIONALE (JF-722 rework F3, authoritative here; the call
+    /// sites and the worker's parameter carry only pointers): a capture can
+    /// write ZERO rows when the status response is sparse, which happens BOTH
+    /// at skill creation (the capture runs before any build registers) and as a
+    /// transient sparse response on an established skill after a version bump.
+    /// A zero-row capture would leave the refresh's no-frozen-rows pre-check
+    /// nothing to find, so this build's builds would never be observed until
+    /// the weekly sync (the frozen-gray JF-722 symptom through a second door).
+    /// The wrapper therefore DERIVES the mode from the capture's own return
+    /// (did it write any row) instead of a call-site literal: both sparse
+    /// shapes are covered at both sites with no self-classification a future
+    /// site could get wrong.
+    /// </summary>
+    private async Task CaptureAndScheduleStatusRefreshAsync(Entities.User user, string skillId, CancellationToken cancellationToken)
+    {
+        bool captureWroteNoRows = !await CaptureLocaleModelStatusesAsync(user, skillId, cancellationToken).ConfigureAwait(false);
+        ScheduleInProgressLocaleStatusRefresh(user, skillId, captureWroteNoRows, cancellationToken);
+    }
+
+    /// <summary>
+    /// How long the deferred IN_PROGRESS refresh waits before its first poll: model
+    /// builds take ~15-30s and the capture fires at the PUT loop's end, so by
+    /// capture+45s every concurrently-running build has settled (the JF-722 corrected
+    /// analysis: ~10-17 of 17 locales read IN_PROGRESS at capture on a version-bump
+    /// restart).
+    /// </summary>
+    private static readonly TimeSpan InProgressRefreshInitialDelay = TimeSpan.FromSeconds(45);
+
+    /// <summary>
+    /// The interval between the deferred refresh's polls, and (with the 4-poll cap)
+    /// the shape of its budget: ~3 minutes of coverage, early-exit the moment the
+    /// family empties. The budget deliberately does NOT chase a fully SMAPI-serialized
+    /// 17-deep build queue (17 x 15s would need unbounded polling); rows still
+    /// IN_PROGRESS at exhaustion keep their healthy-neutral status and the weekly
+    /// catalog sync stays the backstop.
+    /// </summary>
+    private static readonly TimeSpan InProgressRefreshPollInterval = TimeSpan.FromSeconds(45);
+
+    /// <summary>See <see cref="InProgressRefreshPollInterval"/> for the budget shape.</summary>
+    private const int InProgressRefreshMaxPolls = 4;
+
+    /// <summary>
+    /// Fires the deferred IN_PROGRESS status refresh (JF-722 residual 1) for a
+    /// capture that just ran: fire-and-forget, so startup latency is unaffected (the
+    /// settle-wait alternative was rejected twice: once at JF-719 for the capture
+    /// itself, and by the corrected JF-722 analysis showing it would cost ~17x the
+    /// settle budget it implicitly assumes). Runs under the startup's linked
+    /// cancellation token, so shutdown cancels the delay and the worker exits
+    /// quietly; the discarded task never faults because the worker catches its own
+    /// exceptions. The captureWroteNoRows flag is the derived recapture mode
+    /// (see <see cref="CaptureAndScheduleStatusRefreshAsync"/>'s rationale).
+    /// </summary>
+    private void ScheduleInProgressLocaleStatusRefresh(Entities.User user, string skillId, bool captureWroteNoRows, CancellationToken cancellationToken)
+    {
+        _ = Task.Run(
+            () => RefreshInProgressLocaleStatusesAsync(
+                user,
+                skillId,
+                cancellationToken,
+                InProgressRefreshInitialDelay,
+                InProgressRefreshPollInterval,
+                InProgressRefreshMaxPolls,
+                captureWroteNoRows),
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// The deferred Status half of the startup capture (JF-722 residual 1): the
+    /// capture legitimately reads freshly-PUT locales as IN_PROGRESS (no settle-wait,
+    /// JF-719), but nothing re-reads them afterwards (both capture call sites gate on
+    /// version mismatch / manifest FAILED / skill creation, so an ordinary restart
+    /// runs no capture), which froze the momentary state into the ledger and left the
+    /// diagnostics panel's ModelsDeployed checklist false with most rows gray until
+    /// the weekly sync. This refresh waits out the settle window in the background,
+    /// then rewrites the frozen rows from a fresh observation: SUCCEEDED rows feed
+    /// the checklist, FAILED rows surface their errors, and still-in-flight rows keep
+    /// the healthy-neutral IN_PROGRESS. The JF-710/JF-719 preserve is NOT re-run
+    /// here: the capture already composed the row's Error, so a clean settle carries
+    /// it forward verbatim and only a failure-weight observation replaces wholesale
+    /// (the capture's own branch semantics; see
+    /// <see cref="RewriteSettledInProgressRowsAsync"/>). Internal for the
+    /// InternalsVisibleTo test seam, driven through the same faked
+    /// GetSkillStatusAsync as the capture.
+    /// </summary>
+    /// <param name="user">The user whose skill was captured.</param>
+    /// <param name="skillId">The skill the capture read.</param>
+    /// <param name="cancellationToken">The startup's cancellation token, observed
+    /// at every delay and inside each poll body (after every await), so a full
+    /// poll cannot run against a torn-down startup (JF-722 rework F2).</param>
+    /// <param name="initialDelay">Wait before the first poll (tests pass zero).</param>
+    /// <param name="pollInterval">Wait between polls (tests pass zero).</param>
+    /// <param name="maxPolls">Poll budget (tests shrink it).</param>
+    /// <param name="captureWroteNoRows">The derived recapture mode (see
+    /// <see cref="CaptureAndScheduleStatusRefreshAsync"/>'s rationale): the
+    /// paired capture wrote zero rows, so skip the no-frozen-rows pre-check
+    /// and re-run the capture after the settle window until it writes
+    /// rows.</param>
+    internal async Task RefreshInProgressLocaleStatusesAsync(
+        Entities.User user,
+        string skillId,
+        CancellationToken cancellationToken,
+        TimeSpan? initialDelay = null,
+        TimeSpan? pollInterval = null,
+        int? maxPolls = null,
+        bool captureWroteNoRows = false)
+    {
+        try
+        {
+            // The ledger is read FRESH at every use below (never captured across
+            // the ~3-minute budget): Jellyfin's UpdateConfiguration REPLACES the
+            // Configuration object on any admin save, so a captured reference
+            // would write settled rows into an orphan the next SaveConfiguration
+            // never persists (the JF-722 review's F2).
+            //
+            // Early exit BEFORE any delay or network call: captures whose every
+            // observation settled (or that hit no IN_PROGRESS branch) leave nothing
+            // to refresh. The scheduling is ordered after the capture completed, so
+            // its rows are already written when this pre-check reads them. The
+            // read carries its own degrade-to-proceed guard (the JF-709 shape): a
+            // concurrent ledger write colliding with the enumeration must not kill
+            // the refresh at its only unguarded point; the per-poll machinery
+            // below re-reads under its own catch and retries. In the derived
+            // recapture mode (captureWroteNoRows) the pre-check is skipped: a
+            // zero-row capture is the EXPECTED state there, not a
+            // nothing-to-refresh signal.
+            bool hasFrozenRows = captureWroteNoRows;
+            if (!captureWroteNoRows)
+            {
+                try
+                {
+                    hasFrozenRows = HasInProgressCaptureRows();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex,
+                        "Could not read the locale status ledger before the deferred IN_PROGRESS refresh for skill {SkillId}; proceeding (each poll re-reads under its own guard). Non-critical.",
+                        skillId);
+                    hasFrozenRows = true;
+                }
+            }
+
+            if (!hasFrozenRows)
+            {
+                _logger.LogDebug("No IN_PROGRESS capture rows to refresh for skill {SkillId}; skipping the deferred refresh", skillId);
+                return;
+            }
+
+            await Task.Delay(initialDelay ?? InProgressRefreshInitialDelay, cancellationToken).ConfigureAwait(false);
+
+            int polls = maxPolls ?? InProgressRefreshMaxPolls;
+            bool lastPollFailed = false;
+            bool recapturePending = captureWroteNoRows;
+            for (int poll = 1; poll <= polls; poll++)
+            {
+                try
+                {
+                    if (recapturePending)
+                    {
+                        // The derived recapture mode (JF-722 rework F3): write the
+                        // rows the zero-row capture could not see. The capture
+                        // swallows its own GET failures internally (its non-fatal
+                        // whole-method contract), so the retry signal is the
+                        // capture's OWN return, per-skill and per-invocation:
+                        // keep recapturing until it reports writing rows (covers
+                        // a still-sparse response AND transient GET failures, on
+                        // a fresh install and a recreate alike); then the normal
+                        // rewrite loop owns the settling.
+                        bool recaptureWroteAny = await CaptureLocaleModelStatusesAsync(user, skillId, cancellationToken).ConfigureAwait(false);
+                        cancellationToken.ThrowIfCancellationRequested();
+                        if (recaptureWroteAny)
+                        {
+                            recapturePending = false;
+                        }
+                    }
+
+                    await RewriteSettledInProgressRowsAsync(user, skillId, cancellationToken).ConfigureAwait(false);
+                    lastPollFailed = false;
+
+                    // Never early-exit while the recapture is still pending: an
+                    // empty ledger is the expected pre-recapture state, not the
+                    // all-settled signal it is on the version-bump path.
+                    if (!recapturePending && !HasInProgressCaptureRows())
+                    {
+                        return;
+                    }
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    // Token-state filter, same reason as the capture's: a
+                    // timeout-shaped TaskCanceledException from the status GET
+                    // must fall through to the retry arm below, not exit here.
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    lastPollFailed = true;
+
+                    // A failed poll (e.g. a transient 429/5xx on the status GET)
+                    // must not spend the whole budget: warn and let the next poll
+                    // retry if the budget allows. The rows keep their
+                    // healthy-neutral IN_PROGRESS.
+                    _logger.LogWarning(ex,
+                        "Deferred IN_PROGRESS status refresh poll {Poll}/{Polls} failed for skill {SkillId}. Non-critical.",
+                        poll, polls, skillId);
+                }
+
+                if (poll < polls)
+                {
+                    await Task.Delay(pollInterval ?? InProgressRefreshPollInterval, cancellationToken).ConfigureAwait(false);
+                }
+            }
+
+            // The two exhaustion shapes say different true things: rows OBSERVED
+            // still in flight vs a budget that ended without a final observation
+            // (this subsystem's incidents are triaged from log forensics; the
+            // pair must not claim an observation that never happened).
+            if (lastPollFailed)
+            {
+                _logger.LogWarning(
+                    "Deferred IN_PROGRESS refresh budget for skill {SkillId} elapsed without a final observation (the last poll failed); rows last observed IN_PROGRESS keep their healthy-neutral status and the next catalog sync rewrites them",
+                    skillId);
+            }
+            else if (recapturePending)
+            {
+                // The third exhaustion shape (code-review refresh RC3): the
+                // status never became observable within the budget (every
+                // recapture found nothing to report), so claiming rows are
+                // still in flight over an empty ledger would mislead triage.
+                _logger.LogWarning(
+                    "The skill status for skill {SkillId} never became observable within the deferred refresh budget (every recapture found no per-locale statuses to report); no rows were written and the next catalog sync remains the backstop",
+                    skillId);
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "Locale rows are still IN_PROGRESS after the deferred refresh budget for skill {SkillId}; they keep their healthy-neutral status (the diagnostics panel does not count IN_PROGRESS as failed) and the next catalog sync rewrites them",
+                    skillId);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Shutdown raced the refresh. The IN_PROGRESS rows keep their documented
+            // healthy-neutral weight; the next capture-and-refresh cycle owns them.
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Deferred IN_PROGRESS locale status refresh failed for skill {SkillId}. Non-critical.", skillId);
+        }
+    }
+
+    /// <summary>
+    /// One refresh poll: re-reads the skill status and rewrites the settled rows of
+    /// the capture family (see <see cref="IsInProgressCaptureStatus"/>). The ledger
+    /// is read fresh at poll time (an admin config save replaces the Configuration
+    /// object; a captured reference would orphan this pass's writes, and the next
+    /// poll simply redoes the work against the live ledger). This is another
+    /// unguarded read-modify-write of the ledger rows (the KNOWN RACE class the
+    /// JF-710 gate-marker recorded for the capture's preserve), MULTIPLIED by the
+    /// refresh's shape (JF-722 rework F4): up to 4 polls x 17 locales across the
+    /// ~3-minute budget, overlapping the post-restart CatalogSyncTask window, and
+    /// the clobber victim is not only the capture-side row: a sync-authored
+    /// settled row carrying a real canary diagnostic that lands between this
+    /// pass's family read and its Set is overwritten with the STALE read's Error,
+    /// losing the diagnostic until the next sync. The one-directional accepted
+    /// trade is unchanged; the multiplied exposure and the diagnostic-loss victim
+    /// are filed in JF-724. Error semantics per row mirror the capture's own
+    /// branches: observed build errors (marker-prefixed, like the capture's arm),
+    /// or a failure-weight state without them, replace the row wholesale; a clean
+    /// SUCCEEDED observation carries the existing Error forward per
+    /// <see cref="ObservedBuildErrorsLedgerPrefix"/> (preserve product verbatim,
+    /// stale observed-errors dropped), because the capture already ran the
+    /// JF-710/JF-719 preserve when it wrote the row and re-running it here would
+    /// re-decompose an already-decomposed product.
+    /// </summary>
+    private async Task RewriteSettledInProgressRowsAsync(Entities.User user, string skillId, CancellationToken cancellationToken)
+    {
+        var config = Plugin.Instance?.Configuration;
+        if (config == null)
+        {
+            return;
+        }
+
+        var status = await AlexaUtil.CallAsync(user, () => user.SmapiManagement!.GetSkillStatusAsync(skillId)).ConfigureAwait(false);
+        if (status.InteractionModel == null)
+        {
+            return;
+        }
+
+        // JF-722 rework F2: StopAsync/Dispose can have torn the startup's CTS down
+        // while the GET was in flight; stop BEFORE touching the shared ledger or
+        // saving, so a full poll cannot race process exit with an XML config
+        // write. The OperationCanceledException lands in the worker's quiet
+        // catch. Residual window (accepted, documented): the synchronous
+        // in-memory loop pass itself contains no further checkpoints.
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var now = DateTime.UtcNow;
+        bool any = false;
+        foreach (var kvp in status.InteractionModel)
+        {
+            string locale = kvp.Key;
+            var localeStatus = kvp.Value;
+
+            // Same malformed-entry guard as the capture (JF-722 residual 2): no
+            // LastModified means no observation for this locale; nothing to rewrite.
+            if (localeStatus?.LastModified == null)
+            {
+                continue;
+            }
+
+            // Still building; a later poll in the budget picks it up. Checked
+            // before the ledger read so the skip path does no discarded work.
+            if (localeStatus.LastModified.Status is SkillStatusState.IN_PROGRESS)
+            {
+                continue;
+            }
+
+            // Same per-locale isolation as the capture (JF-722 residual 2): a
+            // throw for one locale (a ledger collection mutation racing the
+            // Get/Set below) must cost only THIS locale's row, not every later
+            // locale's in dictionary order; the next poll retries what missed.
+            try
+            {
+                var existing = config.GetLocaleModelStatus(locale);
+                if (existing == null || !IsInProgressCaptureStatus(existing.Status, existing.Source))
+                {
+                    continue;
+                }
+
                 string state = localeStatus.LastModified.Status.ToString();
 
-                string? error = null;
-                if (localeStatus.Errors is { Length: > 0 })
+                string? error = LibrarySyncService.FormatInvocationErrors(localeStatus.Errors);
+                if (error != null)
                 {
-                    error = string.Join("; ", localeStatus.Errors.Select(e => $"{e.Code}: {e.Message}"));
+                    // Same marker as the capture's arm (JF-722 rework F1): this
+                    // text describes the OBSERVATION's own errors.
+                    error = ObservedBuildErrorsLedgerPrefix + error;
                     _logger.LogWarning(
-                        "Interaction model build {Status} for locale {Locale}: {Error}",
+                        "Interaction model build settled {Status} for locale {Locale}: {Error}",
                         state, locale, error);
                 }
-                else if (localeStatus.LastModified.Status is SkillStatusState.SUCCEEDED or SkillStatusState.IN_PROGRESS)
+                else if (localeStatus.LastModified.Status == SkillStatusState.SUCCEEDED)
                 {
-                    // JF-710/JF-719: the capture describes the model-build surface
-                    // only; the existing catalog-sync row's Error describes catalog
-                    // state the rebuild did not reset. The gate is an ALLOWLIST of
-                    // the two no-failure-weight states: SUCCEEDED (settled clean)
-                    // and IN_PROGRESS (the freshly-PUT locale this no-settle-wait
-                    // capture legitimately reads right after UpdateSkillAsync,
-                    // JF-719; the diagnostics panel counts IN_PROGRESS as healthy,
-                    // so a preserved clause on it beats the wiped row the
-                    // SUCCEEDED-only gate left behind). Anything else keeps its own
-                    // consumer weight (the panel's failedModels count) and
-                    // replaces wholesale, so a build-failure observation never
-                    // carries a catalog clause that had nothing to do with it;
-                    // an allowlist, not a FAILED/TIMEOUT denylist, so a state the
-                    // SkillStatusState enum grows into fails safe the same way.
-                    // TIMEOUT, the ledger's other failure vocabulary, is already
-                    // unreachable here: SkillStatusState is exactly
-                    // IN_PROGRESS|FAILED|SUCCEEDED (reflection-dumped from the
-                    // referenced Alexa.NET.Management), and TIMEOUT rows in the
-                    // ledger come from the sync writers' own poll outcome, never
-                    // from this status GET.
-                    // KNOWN RACE (JF-710 gate-marker): this preserve is an unguarded
-                    // read-modify-write of the row, while the sync writers guard
-                    // their own reads against exactly this capture; a sync leg
-                    // writing between the read and the Set below is overwritten
-                    // until its next run (sub-millisecond window, the pre-existing
-                    // capture class; the acknowledgment is one-directional by
-                    // accepted trade, not by oversight). FREQUENCY (JF-719 widening):
-                    // the preserve now fires on every in-flight IN_PROGRESS row too
-                    // (~10-17 of 17 locales per version-bump restart per the JF-722
-                    // corrected analysis), so the window opens an order of magnitude
-                    // more often than the pre-widening settled-only fire set.
-                    error = LibrarySyncService.PreserveLedgerErrorAcrossCapture(config.GetLocaleModelStatus(locale));
-
-                    // Branch-decision debug per the logging policy: this
-                    // subsystem's incidents (JF-495/705/709/710/719) are
-                    // triaged from ledger forensics, and the preserve arm is
-                    // otherwise indistinguishable from an all-clean overwrite
-                    // in the written row.
-                    _logger.LogDebug(
-                        "Startup capture preserve fired for locale {Locale}: observed {Status}, surviving Error '{Error}'",
-                        locale, state, error ?? "(nothing survived)");
+                    // Clean settle: the capture composed the row's Error in
+                    // exactly one of two arms. The preserve's product (frozen
+                    // clause, foreign diagnostic: durable catalog state the
+                    // settle says nothing about) carries forward VERBATIM, no
+                    // re-decomposition. The observed-errors arm's product is
+                    // marker-prefixed build errors from the error-carrying
+                    // observation: the settle observation is clean, so those
+                    // errors are stale (the unverified SMAPI shape where an
+                    // IN_PROGRESS status still carries the previous build's
+                    // Errors array, JF-722 rework F1) and are DROPPED.
+                    string? carried = existing.Error;
+                    error = carried is not null
+                        && carried.StartsWith(ObservedBuildErrorsLedgerPrefix, StringComparison.Ordinal)
+                            ? null
+                            : carried;
+                }
+                else
+                {
+                    // Failure-weight state without error details: wholesale, matching
+                    // the capture's FAILED-without-errors branch.
+                    error = null;
                 }
 
                 config.SetLocaleModelStatus(locale, new Configuration.LocaleModelStatus
@@ -450,15 +996,67 @@ public class SkillStartup : IHostedService, IDisposable
                     Status = state,
                     LastUpdated = now,
                     Error = error,
-                    Source = "Embedded",
+                    Source = existing.Source,
                 });
-            }
 
-            Plugin.Instance.SaveConfiguration();
+                // Branch-decision debug per the logging policy: the rewrite is otherwise
+                // indistinguishable from a fresh capture in the written row.
+                _logger.LogDebug(
+                    "Deferred refresh rewrote locale {Locale}: IN_PROGRESS -> {Status}, Error '{Error}'",
+                    locale, state, error ?? "(none)");
+
+                any = true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Deferred IN_PROGRESS refresh failed for locale {Locale}; continuing with the remaining locales",
+                    locale);
+            }
         }
-        catch (Exception ex)
+
+        if (any)
         {
-            _logger.LogWarning(ex, "Failed to capture per-locale model status for skill {SkillId}. Non-critical.", skillId);
+            // Last cancellation checkpoint before the XML write (JF-722 rework F2).
+            cancellationToken.ThrowIfCancellationRequested();
+            Plugin.Instance!.SaveConfiguration();
         }
+    }
+
+    /// <summary>
+    /// The refresh's family predicate: only rows the STARTUP CAPTURE wrote with a
+    /// still-frozen IN_PROGRESS status. The catalog-sync writers never author
+    /// IN_PROGRESS (PreservedOrSkippedStatus clamps it to Skipped; the PUT path
+    /// records only settled outcomes), so Status IN_PROGRESS plus the capture
+    /// family's Source label (<see cref="CaptureLedgerSource"/>, Ordinal as its
+    /// writer emits it; the Status compare is OrdinalIgnoreCase to match the panel
+    /// consumers) identifies exactly the frozen rows this refresh exists to settle.
+    /// </summary>
+    private static bool IsInProgressCaptureStatus(string? status, string? source) =>
+        string.Equals(status, "IN_PROGRESS", StringComparison.OrdinalIgnoreCase)
+        && string.Equals(source, CaptureLedgerSource, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Whether any ledger row still belongs to the frozen capture family. Reads
+    /// the LIVE configuration on every call (never a captured reference: an admin
+    /// config save replaces the Configuration object, JF-722 review F2).
+    /// </summary>
+    private static bool HasInProgressCaptureRows()
+    {
+        var config = Plugin.Instance?.Configuration;
+        if (config == null)
+        {
+            return false;
+        }
+
+        foreach (var entry in config.LocaleModelStatuses)
+        {
+            if (IsInProgressCaptureStatus(entry.Status, entry.Source))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

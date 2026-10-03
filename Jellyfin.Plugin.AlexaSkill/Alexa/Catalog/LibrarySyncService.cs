@@ -469,8 +469,11 @@ public class LibrarySyncService
     /// both catalog-sync ledger writers (the JF-705 PUT path above and the
     /// JF-709 no-PUT path); the writers differ only in how the entry's fields
     /// are derived. The startup capture (JF-710) is the third ledger writer
-    /// and keeps its own hand-rolled write under a whole-capture catch, whose
-    /// coarser failure granularity is that path's pre-existing shape.
+    /// and keeps its own hand-rolled write under a whole-capture catch, now
+    /// with per-locale isolation inside it (JF-722: a malformed per-locale
+    /// entry costs its own row, not every later locale's); the capture's
+    /// JF-722 deferred refresh is the fourth writer, same family (it only
+    /// rewrites capture-authored rows).
     /// The what label names the failed write in the non-fatal log line so triage
     /// reads the right surface.
     /// </summary>
@@ -629,7 +632,10 @@ public class LibrarySyncService
     /// Error (the canary format is fixed and failed-PUT reasons never reach
     /// the field); a future composer that lets external text into Error must
     /// either quarantine it or this family moves to a structured field (the
-    /// JF-721 design).
+    /// JF-721 design). The JF-722 rework added a FOURTH family literal with a
+    /// PREFIX-match rule (SkillStartup.ObservedBuildErrorsLedgerPrefix: foreign
+    /// diagnostics must never START with it); this predicate deliberately does
+    /// not match it, but the quarantine obligation above covers its rule too.
     /// </summary>
     private static bool IsOwnShapeLedgerError(string error) =>
         error.Contains(NoPutLedgerTail, StringComparison.Ordinal)
@@ -685,6 +691,22 @@ public class LibrarySyncService
             .Replace(NoPutLedgerTail, string.Empty, StringComparison.Ordinal)
             .Replace(PreviousLedgerDiagnosticPrefix, "; ", StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// The one formatter for a SMAPI per-locale build <c>Errors</c> array as it
+    /// lands in a ledger/deploy-result Error field ("Code: Message; Code: Message";
+    /// null for an empty or missing array). Shared by every observation writer
+    /// (the startup capture and its JF-722 deferred refresh in SkillStartup, the
+    /// redeployer's per-locale build result) so the format cannot drift between
+    /// writers describing byte-identical observations; this subsystem's incidents
+    /// are triaged from ledger forensics.
+    /// </summary>
+    /// <param name="errors">The observed build errors, if any.</param>
+    /// <returns>The joined error text, or null when there is nothing to report.</returns>
+    internal static string? FormatInvocationErrors(global::Alexa.NET.Management.Skills.InvocationError[]? errors) =>
+        errors is { Length: > 0 }
+            ? string.Join("; ", errors.Select(e => $"{e.Code}: {e.Message}"))
+            : null;
 
     /// <summary>
     /// Fetch library items of a given type, filtered by the user's allowed libraries.
