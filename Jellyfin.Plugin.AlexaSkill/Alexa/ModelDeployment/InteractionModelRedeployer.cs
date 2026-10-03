@@ -7,6 +7,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
 using Jellyfin.Plugin.AlexaSkill.Alexa.InteractionModel;
 using Jellyfin.Plugin.AlexaSkill.Entities;
 using Microsoft.Extensions.Logging;
@@ -202,9 +203,7 @@ public class InteractionModelRedeployer : IInteractionModelRedeployer
 
                 if (!results.ContainsKey(locale))
                 {
-                    string? error = localeStatus.Errors is { Length: > 0 }
-                        ? string.Join("; ", localeStatus.Errors.Select(e => $"{e.Code}: {e.Message}"))
-                        : null;
+                    string? error = LibrarySyncService.FormatInvocationErrors(localeStatus.Errors);
 
                     results[locale] = new ModelLocaleBuildResult(state == "SUCCEEDED", state, error);
                 }

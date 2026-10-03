@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -120,10 +121,36 @@ public class SkillStartupTests : PluginTestBase
         },
     };
 
-    private static Entities.User UserServing(SkillStatus status)
+    /// <summary>
+    /// Multi-locale snapshot with per-locale control, including the JF-722
+    /// malformed shape: a null State produces a StatusManifest whose LastModified
+    /// is null (the freshly-created-skill entry whose build has not started).
+    /// Dictionary enumeration follows insertion order for these insert-only
+    /// fixtures, so a malformed FIRST entry proves per-locale isolation.
+    /// </summary>
+    private static SkillStatus StatusForLocales(params (string Locale, SkillStatusState? State)[] entries) => new()
+    {
+        InteractionModel = new Dictionary<string, StatusManifest>(
+            entries.Select(e => new KeyValuePair<string, StatusManifest>(
+                e.Locale,
+                new StatusManifest
+                {
+                    LastModified = e.State.HasValue ? new LastModifiedInformation { Status = e.State.Value } : null,
+                }))),
+    };
+
+    private static Entities.User UserServing(SkillStatus status) =>
+        UserServing(status, out _);
+
+    /// <summary>
+    /// The JF-722 refresh twin of <see cref="UserServing(SkillStatus)"/>: hands back
+    /// the fake so the pins can assert the poll count and drive per-poll sequences.
+    /// </summary>
+    private static Entities.User UserServing(SkillStatus status, out FakeStatusSmapiManagement fake)
     {
         var user = TestHelpers.CreateSyncUser();
-        user.SetSmapiManagementForTest(new FakeStatusSmapiManagement(status));
+        fake = new FakeStatusSmapiManagement(status);
+        user.SetSmapiManagementForTest(fake);
         return user;
     }
 
@@ -138,12 +165,21 @@ public class SkillStartupTests : PluginTestBase
 
     /// <summary>Seeds the it-IT ledger row the capture will overwrite, returning
     /// the seeded timestamp for freshness assertions.</summary>
-    private static DateTime SeedLocaleRow(string? error, string source = LibrarySyncService.CatalogSyncLedgerSource)
+    private static DateTime SeedLocaleRow(string? error, string source = LibrarySyncService.CatalogSyncLedgerSource) =>
+        SeedRow("it-IT", "SUCCEEDED", error, source);
+
+    /// <summary>
+    /// Seeds an arbitrary ledger row (the JF-722 refresh pins need the frozen
+    /// IN_PROGRESS/Embedded shape the capture writes, plus non-family rows the
+    /// refresh must not touch), returning the seeded timestamp for freshness
+    /// assertions.
+    /// </summary>
+    private static DateTime SeedRow(string locale, string status, string? error, string source = "Embedded")
     {
         var seeded = DateTime.UtcNow.AddHours(-2);
-        Plugin.Instance!.Configuration.SetLocaleModelStatus("it-IT", new LocaleModelStatus
+        Plugin.Instance!.Configuration.SetLocaleModelStatus(locale, new LocaleModelStatus
         {
-            Status = "SUCCEEDED",
+            Status = status,
             LastUpdated = seeded,
             Error = error,
             Source = source,
@@ -407,10 +443,282 @@ public class SkillStartupTests : PluginTestBase
         Assert.Equal($"{clause}; {foreign}", row!.Error);
     }
 
+    // ------------------------------------------------------------------
+    // JF-722 residual 2: per-locale null isolation in the capture.
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// JF-722 residual 2: a malformed per-locale entry (LastModified null, the
+    /// freshly-created-skill shape where a locale is registered before its first
+    /// build starts) must cost only its own row. Under the old unguarded
+    /// dereference the NullReferenceException aborted the capture for every
+    /// LATER locale in dictionary order under the whole-method catch: a silent
+    /// partial capture the admin could not distinguish from a complete one. The
+    /// malformed locale is skipped (no observation to record; its previous row
+    /// stays the last settled truth) and both healthy locales after it still
+    /// capture.
+    /// </summary>
+    [Fact]
+    public async Task CaptureLocaleModelStatusesAsync_MalformedLocaleEntry_SkipsItAndCapturesTheRest()
+    {
+        string deError = "previous settled diagnostic";
+        var deSeeded = SeedRow("de-DE", "SUCCEEDED", deError, source: LibrarySyncService.CatalogSyncLedgerSource);
+        var before = DateTime.UtcNow;
+
+        var status = StatusForLocales(
+            ("de-DE", null),
+            ("it-IT", SkillStatusState.SUCCEEDED),
+            ("en-US", SkillStatusState.SUCCEEDED));
+        await CreateStartup().CaptureLocaleModelStatusesAsync(UserServing(status), "amzn1.ask.skill.test-id");
+
+        // The malformed locale: skipped, previous row untouched.
+        var de = Plugin.Instance!.Configuration.GetLocaleModelStatus("de-DE");
+        Assert.NotNull(de);
+        Assert.Equal("SUCCEEDED", de!.Status);
+        Assert.Equal(deError, de.Error);
+        Assert.Equal(deSeeded, de.LastUpdated);
+        Assert.Equal(LibrarySyncService.CatalogSyncLedgerSource, de.Source);
+
+        // Every later locale in dictionary order still captured.
+        foreach (var locale in new[] { "it-IT", "en-US" })
+        {
+            var row = Plugin.Instance!.Configuration.GetLocaleModelStatus(locale);
+            Assert.NotNull(row);
+            Assert.Equal("SUCCEEDED", row!.Status);
+            Assert.Equal("Embedded", row.Source);
+            Assert.True(row.LastUpdated >= before, $"{locale} must be captured, not skipped by the aborted loop");
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // JF-722 residual 1: the deferred IN_PROGRESS status refresh.
+    // ------------------------------------------------------------------
+
+    /// <summary>The shared act for the refresh pins: the deferred worker with no
+    /// delays and a single poll unless a test extends it.</summary>
+    private Task RefreshAsync(Entities.User user, int maxPolls = 1) =>
+        CreateStartup().RefreshInProgressLocaleStatusesAsync(
+            user, "amzn1.ask.skill.test-id", CancellationToken.None,
+            initialDelay: TimeSpan.Zero, pollInterval: TimeSpan.Zero, maxPolls: maxPolls);
+
+    /// <summary>
+    /// JF-722 core pin: the settle-and-REWRITE refresh turns the frozen
+    /// IN_PROGRESS capture row into the settled truth (Status SUCCEEDED feeds
+    /// the panel's ModelsDeployed checklist) while carrying the row's Error
+    /// VERBATIM: the capture already ran the JF-710/JF-719 preserve when it
+    /// wrote the row, and re-running it here would re-decompose an
+    /// already-decomposed product. A visited locale whose ledger row is not
+    /// the capture family (settled, not IN_PROGRESS) is untouched.
+    /// </summary>
+    [Fact]
+    public async Task RefreshInProgressLocaleStatusesAsync_SettledObservation_RewritesStatusAndCarriesErrorVerbatim()
+    {
+        string clause = $"Artist catalog{LibrarySyncService.FrozenLedgerClauseMarker}";
+        string carried = $"{clause}; canary mismatch: submitted 145 intents/900 samples but live model reports 144/899";
+        var itSeeded = SeedRow("it-IT", "IN_PROGRESS", carried);
+        var enSeeded = SeedRow("en-US", "SUCCEEDED", "settled row, not the refresh family");
+
+        var status = StatusForLocales(("it-IT", SkillStatusState.SUCCEEDED), ("en-US", SkillStatusState.SUCCEEDED));
+        var user = UserServing(status, out var fake);
+
+        await RefreshAsync(user);
+
+        var it = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(it);
+        Assert.Equal("SUCCEEDED", it!.Status);
+        Assert.Equal(carried, it.Error);
+        Assert.Equal("Embedded", it.Source);
+        Assert.True(it.LastUpdated > itSeeded, "the refresh must refresh the row's timestamp");
+
+        var en = Plugin.Instance!.Configuration.GetLocaleModelStatus("en-US");
+        Assert.NotNull(en);
+        Assert.Equal("SUCCEEDED", en!.Status);
+        Assert.Equal(enSeeded, en.LastUpdated);
+
+        Assert.Equal(1, fake.GetStatusCalls);
+    }
+
+    /// <summary>
+    /// JF-722: a FAILED settle with build errors replaces the row wholesale,
+    /// mirroring the capture's own branch semantics (a build-failure
+    /// observation never carries a catalog clause that had nothing to do with
+    /// it): the preserved clause is dropped and the fresh failure surfaces.
+    /// </summary>
+    [Fact]
+    public async Task RefreshInProgressLocaleStatusesAsync_FailedObservationWithErrors_ReplacesWholesale()
+    {
+        SeedRow("it-IT", "IN_PROGRESS", $"Artist catalog{LibrarySyncService.FrozenLedgerClauseMarker}");
+
+        var status = StatusFor(
+            "it-IT",
+            SkillStatusState.FAILED,
+            new[] { new InvocationError { Code = "INVALID_SKILL_PACKAGE", Message = "sample utterance is not unique" } });
+        var user = UserServing(status, out _);
+
+        await RefreshAsync(user);
+
+        var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(row);
+        Assert.Equal("FAILED", row!.Status);
+        Assert.Equal("INVALID_SKILL_PACKAGE: sample utterance is not unique", row.Error);
+    }
+
+    /// <summary>
+    /// JF-722: a FAILED settle WITHOUT error details clears the Error (the
+    /// capture's FAILED-without-errors twin: wholesale, nothing of the
+    /// observation's own to say).
+    /// </summary>
+    [Fact]
+    public async Task RefreshInProgressLocaleStatusesAsync_FailedObservationWithoutErrors_ClearsError()
+    {
+        SeedRow("it-IT", "IN_PROGRESS", $"Artist catalog{LibrarySyncService.FrozenLedgerClauseMarker}");
+
+        var user = UserServing(StatusFor("it-IT", SkillStatusState.FAILED), out _);
+
+        await RefreshAsync(user);
+
+        var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(row);
+        Assert.Equal("FAILED", row!.Status);
+        Assert.Null(row.Error);
+    }
+
+    /// <summary>
+    /// JF-722: a locale still IN_PROGRESS at poll N is left for poll N+1 within
+    /// the budget (the settle window is a background wait, not a skipped one).
+    /// </summary>
+    [Fact]
+    public async Task RefreshInProgressLocaleStatusesAsync_StillInProgress_RepollsUntilSettled()
+    {
+        SeedRow("it-IT", "IN_PROGRESS", null);
+        var user = UserServing(StatusFor("it-IT", SkillStatusState.SUCCEEDED), out var fake);
+        fake.SequenceToServe = new Queue<SkillStatus>(new[]
+        {
+            StatusFor("it-IT", SkillStatusState.IN_PROGRESS),
+            StatusFor("it-IT", SkillStatusState.SUCCEEDED),
+        });
+
+        await RefreshAsync(user, maxPolls: 2);
+
+        var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(row);
+        Assert.Equal("SUCCEEDED", row!.Status);
+        Assert.Equal(2, fake.GetStatusCalls);
+    }
+
+    /// <summary>
+    /// JF-722 (code-review F5): a transient poll failure (429/5xx on the status
+    /// GET) must not spend the whole budget: the next poll retries and the row
+    /// still settles within the same refresh.
+    /// </summary>
+    [Fact]
+    public async Task RefreshInProgressLocaleStatusesAsync_TransientPollFailure_RetriesOnNextPollAndSettles()
+    {
+        SeedRow("it-IT", "IN_PROGRESS", null);
+        var user = UserServing(StatusFor("it-IT", SkillStatusState.SUCCEEDED), out var fake);
+        fake.FailNextCalls = 1;
+
+        await RefreshAsync(user, maxPolls: 2);
+
+        var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(row);
+        Assert.Equal("SUCCEEDED", row!.Status);
+        Assert.Equal(2, fake.GetStatusCalls);
+    }
+
+    /// <summary>
+    /// JF-722: rows still IN_PROGRESS after the budget are left exactly as the
+    /// capture wrote them (healthy-neutral; the weekly sync is the backstop),
+    /// not re-frozen with a fresh timestamp.
+    /// </summary>
+    [Fact]
+    public async Task RefreshInProgressLocaleStatusesAsync_BudgetExhausted_LeavesRowIntact()
+    {
+        string clause = $"Artist catalog{LibrarySyncService.FrozenLedgerClauseMarker}";
+        var seeded = SeedRow("it-IT", "IN_PROGRESS", clause);
+
+        var user = UserServing(StatusFor("it-IT", SkillStatusState.IN_PROGRESS), out var fake);
+
+        await RefreshAsync(user, maxPolls: 2);
+
+        var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(row);
+        Assert.Equal("IN_PROGRESS", row!.Status);
+        Assert.Equal(clause, row.Error);
+        Assert.Equal(seeded, row.LastUpdated);
+        Assert.Equal(2, fake.GetStatusCalls);
+    }
+
+    /// <summary>
+    /// JF-722: the pre-check exits before any delay or network call when no
+    /// IN_PROGRESS capture-family row exists (captures whose every observation
+    /// settled schedule a refresh that costs nothing).
+    /// </summary>
+    [Fact]
+    public async Task RefreshInProgressLocaleStatusesAsync_NothingInProgress_MakesNoNetworkCall()
+    {
+        SeedRow("it-IT", "SUCCEEDED", null);
+        var user = UserServing(StatusFor("it-IT", SkillStatusState.IN_PROGRESS), out var fake);
+
+        await RefreshAsync(user, maxPolls: 3);
+
+        Assert.Equal(0, fake.GetStatusCalls);
+    }
+
+    /// <summary>
+    /// JF-722 family boundary: an IN_PROGRESS row NOT authored by the capture
+    /// (the catalog-sync source label; the sync writers never write IN_PROGRESS
+    /// today, so this is the defensive/hand-edited shape) is not the refresh's
+    /// to rewrite, and its presence does not even spend a poll.
+    /// </summary>
+    [Fact]
+    public async Task RefreshInProgressLocaleStatusesAsync_SyncAuthoredInProgressRow_IsNotTheRefreshFamily()
+    {
+        var seeded = SeedRow(
+            "it-IT", "IN_PROGRESS",
+            $"Artist catalog{LibrarySyncService.FrozenLedgerClauseMarker}",
+            source: LibrarySyncService.CatalogSyncLedgerSource);
+
+        var user = UserServing(StatusFor("it-IT", SkillStatusState.SUCCEEDED), out var fake);
+
+        await RefreshAsync(user);
+
+        var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(row);
+        Assert.Equal("IN_PROGRESS", row!.Status);
+        Assert.Equal(seeded, row.LastUpdated);
+        Assert.Equal(0, fake.GetStatusCalls);
+    }
+
+    /// <summary>
+    /// JF-722: shutdown racing the refresh (the startup's linked token cancels
+    /// the initial delay) exits quietly without polling; the frozen rows keep
+    /// their healthy-neutral status for the next capture-and-refresh cycle.
+    /// </summary>
+    [Fact]
+    public async Task RefreshInProgressLocaleStatusesAsync_CancelledDuringDelay_ExitsQuietlyWithoutPolling()
+    {
+        SeedRow("it-IT", "IN_PROGRESS", null);
+        var user = UserServing(StatusFor("it-IT", SkillStatusState.SUCCEEDED), out var fake);
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+
+        await CreateStartup().RefreshInProgressLocaleStatusesAsync(
+            user, "amzn1.ask.skill.test-id", cts.Token,
+            initialDelay: TimeSpan.FromHours(1), pollInterval: TimeSpan.Zero, maxPolls: 1);
+
+        Assert.Equal(0, fake.GetStatusCalls);
+        var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(row);
+        Assert.Equal("IN_PROGRESS", row!.Status);
+    }
+
     /// <summary>
     /// Serves a canned <see cref="SkillStatus"/> without network: the capture
     /// path reads exactly one endpoint (GetSkillStatusAsync), which is virtual
-    /// for this seam (the JF-366 SetSmapiManagementForTest pattern).
+    /// for this seam (the JF-366 SetSmapiManagementForTest pattern). JF-722
+    /// adds the call counter and the optional per-call sequence the refresh
+    /// pins drive (the refresh polls the same endpoint within its budget).
     /// </summary>
     private sealed class FakeStatusSmapiManagement : SmapiManagement
     {
@@ -420,8 +728,39 @@ public class SkillStartupTests : PluginTestBase
             StatusToServe = status;
         }
 
-        public SkillStatus StatusToServe { get; }
+        public SkillStatus StatusToServe { get; private set; }
 
-        public override Task<SkillStatus> GetSkillStatusAsync(string skillId) => Task.FromResult(StatusToServe);
+        /// <summary>How many GetSkillStatusAsync calls were served.</summary>
+        public int GetStatusCalls { get; private set; }
+
+        /// <summary>
+        /// When non-empty, each call dequeues its next status; once empty the
+        /// last StatusToServe keeps serving (the budget-exhaustion world).
+        /// </summary>
+        public Queue<SkillStatus>? SequenceToServe { get; set; }
+
+        /// <summary>
+        /// When positive, the next that many calls throw a transient
+        /// HttpRequestException (the 429/5xx poll-failure shape) before any
+        /// sequence dequeue, so the refresh's per-poll retry can be pinned.
+        /// </summary>
+        public int FailNextCalls { get; set; }
+
+        public override Task<SkillStatus> GetSkillStatusAsync(string skillId)
+        {
+            GetStatusCalls++;
+            if (FailNextCalls > 0)
+            {
+                FailNextCalls--;
+                throw new HttpRequestException("HTTP 429 Too Many Requests (fake)");
+            }
+
+            if (SequenceToServe is { Count: > 0 })
+            {
+                StatusToServe = SequenceToServe.Dequeue();
+            }
+
+            return Task.FromResult(StatusToServe);
+        }
     }
 }
