@@ -82,31 +82,6 @@ public class MusicianMultiValueErDisambiguationTests : PluginTestBase, IDisposab
     }
 
     /// <summary>
-    /// The disambiguation ask the gate fires: open session, the multi-artist
-    /// prompt naming the top DisambiguationHelper.MultipleArtistsSpeakCap
-    /// resolved artists (every one, for the pair-shaped legs this helper
-    /// serves), and the JF-420.2 session state (the FULL resolved list, real
-    /// ids, type=artist, cursor 0) that YesIntentHandler.PlayArtist and
-    /// NoIntentHandler's cycling consume unchanged.
-    /// </summary>
-    private static void AssertMultiArtistAsk(SkillResponse response, params BaseItem[] expected)
-    {
-        TestHelpers.AssertSessionOpen(response, "the ask keeps the session open");
-        Assert.Null(TestHelpers.GetPlayDirective(response));
-        TestHelpers.AssertStoredArtistMatches(response, expected);
-        string speech = TestHelpers.GetSpeechText(response);
-        foreach (BaseItem artist in expected)
-        {
-            Assert.Contains(artist.Name, speech, StringComparison.OrdinalIgnoreCase);
-        }
-    }
-
-    private static void AssertNoDisambiguationState(SkillResponse response)
-    {
-        Assert.Null(response.SessionAttributes?.GetValueOrDefault(DisambiguationHelper.AttrMatches));
-    }
-
-    /// <summary>
     /// Library mock for the legs that PLAY: the artist-scoped songs query
     /// (ArtistIds + Audio) returns the given songs; everything else empty.
     /// </summary>
@@ -143,7 +118,7 @@ public class MusicianMultiValueErDisambiguationTests : PluginTestBase, IDisposab
             CreateSongIntent("la musica", TestHelpers.ResolvedSlotMultiValue("pink", "P!nk", "Pink Floyd")),
             _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
-        AssertMultiArtistAsk(response, pnk, floyd);
+        TestHelpers.AssertMultiArtistAsk(response, pnk, floyd);
     }
 
     [Fact]
@@ -162,7 +137,7 @@ public class MusicianMultiValueErDisambiguationTests : PluginTestBase, IDisposab
             CreateArtistIntent(TestHelpers.ResolvedSlotMultiValue("pink", "P!nk", "Pink Floyd")),
             _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
-        AssertMultiArtistAsk(response, pnk, floyd);
+        TestHelpers.AssertMultiArtistAsk(response, pnk, floyd);
     }
 
     [Fact]
@@ -187,47 +162,117 @@ public class MusicianMultiValueErDisambiguationTests : PluginTestBase, IDisposab
             CreateArtistIntent(TestHelpers.ResolvedSlotMultiValue("pink", "P!nk", "Pink Floyd", "Pink Martini", "Pink Fairies")),
             _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
-        // The spoken list is capped at the first three ER ranks.
-        string askSpeech = TestHelpers.GetSpeechText(ask);
-        Assert.Contains(pnk.Name, askSpeech, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains(floyd.Name, askSpeech, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains(martini.Name, askSpeech, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain(fairies.Name, askSpeech, StringComparison.OrdinalIgnoreCase);
-
-        // The cycling state keeps the FULL resolved list in rank order.
-        TestHelpers.AssertStoredArtistMatches(ask, pnk, floyd, martini, fairies);
+        // Cap-aware oracle: the top three ER ranks are spoken, the fourth is
+        // not, and the session state keeps the FULL resolved list.
+        TestHelpers.AssertMultiArtistAsk(ask, pnk, floyd, martini, fairies);
 
         // "no" walks the list; the third advance reaches and NAMES the fourth
         // artist the initial breath never spoke.
-        var noHandler = new NoIntentHandler(_fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory);
-        var noRequest = new IntentRequest
-        {
-            Intent = new Intent { Name = "AMAZON.NoIntent" },
-            Locale = "it-IT",
-            RequestId = "test-no"
-        };
-
-        Dictionary<string, object>? attrs = ask.SessionAttributes;
-        string[] spokenOnAdvance = { floyd.Name, martini.Name, fairies.Name };
-        foreach (string expectedName in spokenOnAdvance)
-        {
-            SkillResponse next = await noHandler.HandleAsync(
-                noRequest, _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), attrs, CancellationToken.None);
-            TestHelpers.AssertSessionOpen(next, "each cycling advance keeps the session open");
-            Assert.Contains(expectedName, TestHelpers.GetSpeechText(next), StringComparison.OrdinalIgnoreCase);
-            attrs = next.SessionAttributes;
-        }
+        Dictionary<string, object>? attrs = await AdvanceDisambiguationAsync(
+            ask, floyd.Name, martini.Name, fairies.Name);
 
         // The terminal leg: the fourth "no" exhausts the FULL stored list and
         // ends the flow with NoMoreMatches. Pinned here because every
         // pre-existing exhaustion pin covers only the below-cap two-name shape.
-        SkillResponse exhausted = await noHandler.HandleAsync(
-            noRequest, _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), attrs, CancellationToken.None);
+        SkillResponse exhausted = await new NoIntentHandler(_fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory)
+            .HandleAsync(
+                CreateNoIntentRequest(), _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), attrs, CancellationToken.None);
         Assert.True(exhausted.Response.ShouldEndSession, "exhaustion ends the session");
         Assert.Equal(
             Jellyfin.Plugin.AlexaSkill.Alexa.Locale.ResponseStrings.Get("NoMoreMatches", "it-IT"),
             TestHelpers.GetSpeechText(exhausted));
     }
+
+    [Fact]
+    public async Task PlayArtistSongs_MultiValueEr_FourInLibrary_YesAtUnspokenRank_PlaysIt()
+    {
+        // JF-707 gate-marker rework (F1): the READ side of the full-state
+        // contract. The ask speaks only the top MultipleArtistsSpeakCap names,
+        // so a confirm at a cycled index BEYOND the cap is exactly the leg a
+        // future "harmonization" (a Take at the stored-list consumer) would
+        // silently break while every spoken-list pin stays green: "yes" at the
+        // unspoken fourth rank must still resolve and PLAY that artist.
+        var pnk = Pnk();
+        var floyd = PinkFloyd();
+        var martini = PinkMartini();
+        var fairies = PinkFairies();
+        var song = new Audio { Name = "Between the Lines", Id = Guid.NewGuid() };
+        _fx.SetupUserMock();
+        var playQueries = new List<InternalItemsQuery>();
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                playQueries.Add(q);
+                return q.ArtistIds != null && q.ArtistIds.Length > 0
+                    ? new List<BaseItem> { song }
+                    : new List<BaseItem>();
+            });
+
+        // The yes leg resolves the candidate by id (the PlayAlbumIntentHandler
+        // yes-pin construction): GetItemById serves the artist.
+        _fx.LibraryManager.Setup(l => l.GetItemById(fairies.Id)).Returns(fairies);
+
+        var handler = CreateArtistHandler(IndexOf(pnk, floyd, martini, fairies));
+        SkillResponse ask = await handler.HandleAsync(
+            CreateArtistIntent(TestHelpers.ResolvedSlotMultiValue("pink", "P!nk", "Pink Floyd", "Pink Martini", "Pink Fairies")),
+            _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
+        TestHelpers.AssertMultiArtistAsk(ask, pnk, floyd, martini, fairies);
+
+        Dictionary<string, object>? attrs = await AdvanceDisambiguationAsync(
+            ask, floyd.Name, martini.Name, fairies.Name);
+
+        var yesHandler = new YesIntentHandler(
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.LoggerFactory);
+        var session = _fx.CreateSession();
+        SkillResponse confirmed = await yesHandler.HandleAsync(
+            new IntentRequest { Intent = new Intent { Name = IntentNames.AmazonYes }, Locale = "it-IT", RequestId = "test-yes" },
+            _fx.CreateContext(), _fx.CreateUser(), session, attrs, CancellationToken.None);
+
+        // The play is scoped to the UNSPOKEN fourth artist, not to any of the
+        // spoken three, and the play itself is delivered (JF-299: session ends).
+        Assert.Contains(playQueries, q => q.ArtistIds!.Length == 1 && q.ArtistIds[0] == fairies.Id);
+        Assert.DoesNotContain(playQueries, q => q.ArtistIds!.Length == 1 && q.ArtistIds[0] == pnk.Id);
+        var playDirective = TestHelpers.GetPlayDirective(confirmed);
+        Assert.NotNull(playDirective);
+        Assert.Equal(song.Id.ToString(), playDirective!.AudioItem.Stream.Token);
+        Assert.True(confirmed.Response.ShouldEndSession == true, "a play ends the session (JF-299 rule)");
+        Assert.NotNull(session.NowPlayingQueue);
+        Assert.Equal(song.Id, session.NowPlayingQueue![0].Id);
+    }
+
+    /// <summary>
+    /// Drives NoIntentHandler through one "no" advance per given name over the
+    /// ask's session state, asserting each advance keeps the session open and
+    /// speaks the next candidate's name. Returns the session attributes to
+    /// feed the NEXT turn (a further "no" for the exhaustion leg, or a "yes"
+    /// for the confirm-at-cycled-index pin).
+    /// </summary>
+    private async Task<Dictionary<string, object>?> AdvanceDisambiguationAsync(SkillResponse ask, params string[] spokenOnAdvance)
+    {
+        var noHandler = new NoIntentHandler(_fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory);
+        Dictionary<string, object>? attrs = ask.SessionAttributes;
+        foreach (string expectedName in spokenOnAdvance)
+        {
+            SkillResponse next = await noHandler.HandleAsync(
+                CreateNoIntentRequest(), _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), attrs, CancellationToken.None);
+            TestHelpers.AssertSessionOpen(next, "each cycling advance keeps the session open");
+            Assert.Contains(expectedName, TestHelpers.GetSpeechText(next), StringComparison.OrdinalIgnoreCase);
+            attrs = next.SessionAttributes;
+        }
+
+        return attrs;
+    }
+
+    private static IntentRequest CreateNoIntentRequest() => new()
+    {
+        Intent = new Intent { Name = IntentNames.AmazonNo },
+        Locale = "it-IT",
+        RequestId = "test-no"
+    };
 
     // ---------------------------------------------------------------
     // The single-value control: the ordinary ER shape is unchanged
@@ -247,7 +292,7 @@ public class MusicianMultiValueErDisambiguationTests : PluginTestBase, IDisposab
 
         Assert.NotNull(TestHelpers.GetPlayDirective(response));
         Assert.True(response.Response.ShouldEndSession == true, "a play ends the session (JF-299 rule)");
-        AssertNoDisambiguationState(response);
+        TestHelpers.AssertNoDisambiguationState(response);
     }
 
     [Fact]
@@ -271,7 +316,7 @@ public class MusicianMultiValueErDisambiguationTests : PluginTestBase, IDisposab
 
         Assert.NotNull(TestHelpers.GetPlayDirective(response));
         Assert.True(response.Response.ShouldEndSession == true, "the exact-name hit auto-plays (JF-420.1)");
-        AssertNoDisambiguationState(response);
+        TestHelpers.AssertNoDisambiguationState(response);
         Assert.NotNull(session.NowPlayingQueue);
         Assert.Equal(song.Id, session.NowPlayingQueue![0].Id);
     }
@@ -301,7 +346,7 @@ public class MusicianMultiValueErDisambiguationTests : PluginTestBase, IDisposab
 
         Assert.NotNull(TestHelpers.GetPlayDirective(response));
         Assert.True(response.Response.ShouldEndSession == true);
-        AssertNoDisambiguationState(response);
+        TestHelpers.AssertNoDisambiguationState(response);
         Assert.NotNull(session.NowPlayingQueue);
         Assert.Equal(song.Id, session.NowPlayingQueue![0].Id);
     }
@@ -323,7 +368,7 @@ public class MusicianMultiValueErDisambiguationTests : PluginTestBase, IDisposab
 
         Assert.NotNull(TestHelpers.GetPlayDirective(response));
         Assert.True(response.Response.ShouldEndSession == true);
-        AssertNoDisambiguationState(response);
+        TestHelpers.AssertNoDisambiguationState(response);
     }
 
     // ---------------------------------------------------------------
@@ -360,7 +405,7 @@ public class MusicianMultiValueErDisambiguationTests : PluginTestBase, IDisposab
             CreateSongIntent("money", TestHelpers.ResolvedSlotMultiValue("pink", "P!nk", "Pink Floyd")),
             _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
 
-        AssertNoDisambiguationState(response);
+        TestHelpers.AssertNoDisambiguationState(response);
         Assert.NotNull(TestHelpers.GetPlayDirective(response));
         Assert.Equal(money.Id, session.NowPlayingQueue![0].Id);
         // The song scope carried ONLY rank #1 (today's behavior for real titles).
@@ -383,7 +428,7 @@ public class MusicianMultiValueErDisambiguationTests : PluginTestBase, IDisposab
             CreateSongIntent("la musica", TestHelpers.ResolvedSlotMultiValue("pink", "P!nk", "ABBA")),
             _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
 
-        AssertNoDisambiguationState(response);
+        TestHelpers.AssertNoDisambiguationState(response);
         Assert.NotNull(TestHelpers.GetPlayDirective(response));
         Assert.True(response.Response.ShouldEndSession == true);
         Assert.Equal(song.Id, session.NowPlayingQueue![0].Id);
@@ -444,7 +489,7 @@ public class MusicianMultiValueErDisambiguationTests : PluginTestBase, IDisposab
 
         Assert.NotNull(TestHelpers.GetPlayDirective(response));
         Assert.True(response.Response.ShouldEndSession == true);
-        AssertNoDisambiguationState(response);
+        TestHelpers.AssertNoDisambiguationState(response);
     }
 
     public void Dispose() => _fx.LoggerFactory.Dispose();

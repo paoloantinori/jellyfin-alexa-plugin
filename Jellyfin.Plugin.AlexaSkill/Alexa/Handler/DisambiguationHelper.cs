@@ -228,16 +228,18 @@ internal static class DisambiguationHelper
 
     /// <summary>
     /// The maximum number of candidate names the multi-artist ask speaks in one
-    /// breath (JF-707, AskFirstMatch's Take(3) convention): the
+    /// breath (JF-707; the same count AskFirstMatch truncates at, though
+    /// deliberately NOT a shared constant, see below): the
     /// DisambiguateMultipleArtists string was designed for the two-name shape,
     /// and a long same-first-word family in one breath is incomprehensible.
     /// Only the SPOKEN list is capped: the cycling state keeps every match, so
     /// a rank beyond the cap is not spoken up front but stays reachable via
     /// DisambiguateNext, which names it at its own turn. AskFirstMatch's
-    /// Take(3) truncates the STATE list as well, deliberately: its callers
-    /// pass progressively weaker fuzzy candidates, while this builder's
-    /// unbounded caller (the JF-690 ER gate) feeds exact library-name
-    /// resolutions where every entry is a real candidate.
+    /// Take(3) truncates the STATE list as well, and the two constants stay
+    /// unlinked on purpose: its callers pass progressively weaker fuzzy
+    /// candidates, while this builder's unbounded caller (the JF-690 ER gate)
+    /// feeds exact library-name resolutions where every entry is a real
+    /// candidate; the counts coincide today but nothing enforces that.
     /// </summary>
     internal const int MultipleArtistsSpeakCap = 3;
 

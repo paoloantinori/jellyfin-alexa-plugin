@@ -359,10 +359,13 @@ public class DisambiguationHelperTests
         Assert.DoesNotContain("Artist 4", speech);
         Assert.DoesNotContain("Artist 5", speech);
 
-        // The FULL list rides the session state in rank order (winner first).
+        // The FULL list rides the session state in rank order (winner first),
+        // ids included: the builder-level pin must hold both halves of the
+        // stored contract, not just the names (code-review round 2).
         var state = DisambiguationHelper.ReadState(response.SessionAttributes);
         Assert.NotNull(state);
-        Assert.Equal(matches.Select(m => m.Name), state!.Value.Matches.Select(m => m.Name));
+        Assert.Equal(matches.Select(m => m.Id), state!.Value.Matches.Select(m => m.Id));
+        Assert.Equal(matches.Select(m => m.Name), state.Value.Matches.Select(m => m.Name));
         Assert.Equal(0, state.Value.Index);
         Assert.Equal(DisambiguationHelper.MediaTypeArtist, state.Value.MediaType);
     }
