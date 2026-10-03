@@ -43,6 +43,20 @@ only. Alternative accepted shape if the scanner extension is disproportionate: a
 CatalogManager-side allowlist scan (per the review's alternative), or the JF-711
 setter-threading design landing first and making the negative assertion moot - in that
 order of preference, not in parallel.
+
+GATE-MARKER TAIL (2026-10-03, orchestrator scaled review of commit 8fa4d207, 4 findings,
+all applied; the scaled axes verified against source: the auto-property claim CONFIRMED
+with Roslyn never bypassing auto-property accessors at IL level (inlining is JIT-only),
+the ldfld refutation sound, no C# source able to name a backing field; the reviewer ran
+the class fresh 3/3 both TFMs and re-derived the red paths): F1 (GetAccessors(true) so a
+future internal-set refactor keeps setter coverage instead of silently dropping from the
+pin, probed public-only behavior); F2 (the property list DERIVED from every User
+*CatalogId property, so a fourth synced type's id joins the pin automatically - the exact
+one-row edit JF-711 made compile-loud - instead of arriving unpinned); F3 (the failure
+message names WHICH conjunct failed, count or shape, instead of "exactly one place" next
+to an x1 list); F4 (DescribeCallSites appends a decoded source-level hint - local
+function N, lambda, state machine of N - while the raw mangled name stays the pinned
+fact). Class 3/3 both TFMs after the tail.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done

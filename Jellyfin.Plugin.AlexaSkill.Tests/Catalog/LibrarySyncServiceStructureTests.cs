@@ -126,15 +126,26 @@ public class LibrarySyncServiceStructureTests
         // product is the per-method token array).
         var methodCalls = MethodCallTokens(typeof(LibrarySyncService).Assembly);
 
-        foreach (string propertyName in new[] { "ArtistCatalogId", "AlbumCatalogId", "SeriesCatalogId" })
+        // Gate-marker tail: the list is DERIVED (every User property ending in
+            // CatalogId) so a fourth synced type's stored id - the exact one-row
+            // edit JF-711 made compile-loud - joins the pin automatically
+            // instead of arriving unpinned (grep-verified: the suffix matches
+            // exactly Artist/Album/Series today).
+            foreach (PropertyInfo property in typeof(User)
+                         .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                         .Where(p => p.Name.EndsWith("CatalogId", StringComparison.Ordinal))
+                         .OrderBy(p => p.Name))
         {
-            PropertyInfo? property = typeof(User).GetProperty(
-                propertyName, BindingFlags.Public | BindingFlags.Instance);
+            string propertyName = property.Name;
             Assert.True(
                 property != null,
                 $"User.{propertyName} must exist as a public instance property: a rename, or a conversion to a plain field, defuses this pin and must be a conscious edit");
 
-            foreach (MethodInfo accessor in property.GetAccessors())
+            // Gate-marker tail: nonPublic so a future non-public accessor refactor
+            // (e.g. internal set) keeps its coverage instead of silently
+            // dropping out of the pin (probed: the parameterless overload
+            // returns public accessors only).
+            foreach (MethodInfo accessor in property.GetAccessors(true))
             {
                 AssertOnlyCallerIsTableLambda(methodCalls, accessor);
             }
@@ -154,9 +165,16 @@ public class LibrarySyncServiceStructureTests
 
         // Sum==1 is exactly one site with one instruction (the list holds only
         // Count > 0 sites), the same idiom AssertSingleCallSite reads.
+        int totalCalls = callSites.Sum(site => site.Count);
+        // Gate-marker tail: the message names WHICH conjunct failed - a count of
+        // 1 next to "exactly one place" reads as a passing count when the shape
+        // half is the actual failure (the helper-hoist sabotage shape).
         Assert.True(
-            callSites.Sum(site => site.Count) == 1 && IsWiringTableLambda(callSites[0].Method),
+            totalCalls == 1 && IsWiringTableLambda(callSites[0].Method),
             $"{accessor.Name} must be called from exactly one place: a lambda compiled in LibrarySyncService.SyncUserLibraryAsync (the JF-706 wiring-table rows' shape). "
+            + (totalCalls != 1
+                ? $"Found {totalCalls} call instructions. "
+                : "The single call site is not the wiring-table lambda shape. ")
             + $"Call sites found: [{DescribeCallSites(callSites)}]");
     }
 
@@ -231,5 +249,35 @@ public class LibrarySyncServiceStructureTests
     /// pinned fact, so no logical-name mapping is applied.
     /// </summary>
     private static string DescribeCallSites(IEnumerable<(Type Type, MethodBase Method, int Count)> callSites)
-        => string.Join(", ", callSites.Select(s => $"{s.Type.FullName}.{s.Method.Name} x{s.Count}"));
+        => string.Join(", ", callSites.Select(s => $"{s.Type.FullName}.{s.Method.Name}{DecodeCompilerName(s.Method.Name)} x{s.Count}"));
+
+    /// <summary>
+    /// Gate-marker tail: a parenthesized source-level hint for the Roslyn
+    /// mangled shapes (g__ local function, b__ lambda, d__ state machine), so a
+    /// triager can find the site without knowing the conventions; the raw name
+    /// stays the pinned fact.
+    /// </summary>
+    private static string DecodeCompilerName(string name)
+    {
+        int g = name.IndexOf("g__", StringComparison.Ordinal);
+        if (g >= 0)
+        {
+            int end = name.IndexOf('|', g);
+            return $" (local function {name.Substring(g + 3, (end < 0 ? name.Length : end) - g - 3)})";
+        }
+
+        int b = name.IndexOf("b__", StringComparison.Ordinal);
+        if (b >= 0)
+        {
+            return " (lambda)";
+        }
+
+        int d = name.IndexOf("d__", StringComparison.Ordinal);
+        if (d >= 0)
+        {
+            return $" (state machine of {name.Substring(2, d - 2)})";
+        }
+
+        return string.Empty;
+    }
 }
