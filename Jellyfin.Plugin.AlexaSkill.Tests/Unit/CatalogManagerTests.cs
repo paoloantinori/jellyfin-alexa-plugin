@@ -647,6 +647,9 @@ public class CatalogManagerTests
     }
 
     /// <summary>
+    /// Per-file by policy (JF-725): the catalog fake family stays per-file
+    /// (the god-fake consolidation declined; the divergence table and the
+    /// canonical mode-knob enumeration sit on the LegIsolation fake).
     /// Fake SMAPI backend for the UpdateInteractionModelAsync flow: skill status
     /// (settle wait; served at the JF-497 non-staged /v1/skills/{id}/status URL),
     /// model GET (first call returns the pre-modification model, later calls
@@ -853,7 +856,8 @@ public class CatalogManagerTests
             Times.Once);
     }
 
-    /// <summary>
+        /// Per-file by policy (JF-725): the catalog fake family stays per-file.
+/// <summary>
     /// Fake SMAPI backend for the UploadCatalogValuesAsync flow: catalog version
     /// creation (202 + Location) and a configurable update-request poll response
     /// (each poll gets a fresh instance; responses are disposed by the caller).

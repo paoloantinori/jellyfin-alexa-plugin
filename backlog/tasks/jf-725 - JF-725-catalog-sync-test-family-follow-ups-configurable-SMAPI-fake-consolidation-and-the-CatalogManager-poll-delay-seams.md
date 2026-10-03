@@ -66,6 +66,18 @@ every later class member. The rebuild is a 12h-cadence background cost measured
 in tens of MB of transient JSON; content-hash keying is self-verifying and keeps
 the dedup honest even if a future generator stops being prefix-pure. Keep the
 rebuild unless a library-size measurement says otherwise.
+
+
+GATE-MARKER TAIL (2026-10-04, orchestrator review of commit 02779c61, 3 findings; every
+load-bearing claim mechanically verified: the hoisted JSON byte-identical 4/4 by script,
+the divergence table's 7 axes real column-by-column, the seam's no-production-writer
+grepped, the bucket arithmetic decomposed): F1 APPLIED (the measured-effect line's
+"37 sync-family tests" relabeled to the honest grouping 26 sync + 11 polling; the
+GATEWAY_ERROR pin lives in the polling bucket); F2 APPLIED (the policy markers added to
+the two unmarked fakes - ModelPutFakeHandler and the PollingTests Func-routed namesake -
+so the grep contract covers the whole family population); F3 APPLIED (the LegIsolation
+canonical enumeration completed to all 7 axes, adding the model-GET-after-PUT and
+PUT-capture rows the other two markers cite).
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done
@@ -120,9 +132,9 @@ nonzero-value conflation documented on the seam, the code-review round's R1).
 The static WaitForLocaleBuildToSettleAsync takes the seed as an optional
 parameter so SmapiManagement.GetLiveModelJsonAsync (the out-of-class caller,
 verified) keeps production pacing. Effect, measured per TFM: the five
-delay-paying suites went from 41.3s (37 sync-family tests: every duration a
-near-exact multiple of the 500ms pre-delay, the GATEWAY_ERROR retry test 3.0s
-with the 2000ms backoff) + 5.2s (42 CatalogManagerTests, ten ~0.5s polling
+delay-paying suites went from 41.3s (37 delay-paying pins = 26 LibrarySyncService tests
++ 11 CatalogManagerPollingTests, where the GATEWAY_ERROR retry test 3.0s
+decomposes 500+2000+500) + 5.2s (42 CatalogManagerTests, ten ~0.5s polling
 pins) to 3s combined, 79/79 green; full suite 5078/5078 on BOTH TFMs,
 identical to baseline. LibrarySyncServiceTests, StructureTests and
 CatalogWiringLocalesTests never reach SMAPI HTTP and keep plain constructors.

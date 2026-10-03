@@ -713,7 +713,10 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
     /// model GET (static seeds for JellyfinArtist/AlbumName/SeriesName) and PUT.
     /// Per-file by policy (JF-725): the family's full-sync fakes diverge in MODE
     /// knobs, not values (catalog-id derivation, version numbering, 401-injection
-    /// target/cardinality, PUT response shape, status-map composition), so the
+    /// target/cardinality, PUT response shape, model-GET-after-PUT semantics
+    /// (static seeds + the canary-mismatch variant here vs echo-last-PUT in
+    /// Series vs static-seed in EquivalenceClass), PUT capture (last body vs
+    /// per-locale dictionary), status-map composition), so the
     /// hoist-on-third convention fires only on identical leaf constructions (the
     /// status map delegates to TestHelpers.SmapiSkillStatusJson), never on the
     /// routing surface.
