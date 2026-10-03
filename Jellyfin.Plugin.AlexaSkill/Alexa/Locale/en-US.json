@@ -74,6 +74,7 @@
   "DisambiguatePrompt": "I found multiple matches. Would you like to hear {0}?",
   "DisambiguateNext": "How about {0}?",
   "DisambiguateMultipleArtists": "I found multiple artists: {0}. Shall I play the first one? Say no for the next.",
+  "DisambiguateMultipleArtistsMore": "Plus {0} more.",
   "DisambiguatePromptSsml": "I found multiple matches.<break time=\"200ms\"/>Would you like to hear {0}?",
   "DisambiguateNextSsml": "How about <break time=\"150ms\"/>{0}?",
   "NoMoreMatches": "Sorry, there are no more matches.",

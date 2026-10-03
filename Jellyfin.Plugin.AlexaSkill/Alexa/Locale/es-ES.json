@@ -89,6 +89,7 @@
   "DisambiguatePrompt": "He encontrado varias coincidencias. ¿Quieres escuchar {0}?",
   "DisambiguateNext": "¿Qué tal {0}?",
   "DisambiguateMultipleArtists": "Encontré varios artistas: {0}. ¿Reproduzco el primero? Di no para el siguiente.",
+  "DisambiguateMultipleArtistsMore": "Y hay {0} más.",
   "DisambiguatePromptSsml": "He encontrado varias coincidencias.<break time=\"200ms\"/>¿Quieres escuchar {0}?",
   "DisambiguateNextSsml": "¿Qué tal <break time=\"150ms\"/>{0}?",
   "NoMoreMatches": "Lo siento, no hay más coincidencias.",

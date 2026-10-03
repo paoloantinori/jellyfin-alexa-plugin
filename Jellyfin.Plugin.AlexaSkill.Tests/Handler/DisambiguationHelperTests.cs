@@ -345,9 +345,7 @@ public class DisambiguationHelperTests
         // no resolved artist becomes unaskable. The below-cap shape (the pair
         // callers) is pinned end-to-end by the both-in-library legs of the
         // MusicianMultiValueEr suites.
-        var matches = Enumerable.Range(1, 5)
-            .Select(i => new DisambiguationHelper.MatchInfo { Id = Guid.NewGuid().ToString(), Name = $"Artist {i}" })
-            .ToList();
+        var matches = CreateArtistMatches(5);
 
         var response = DisambiguationHelper.AskMultipleArtists(matches, "en-US");
 
@@ -368,6 +366,54 @@ public class DisambiguationHelperTests
         Assert.Equal(matches.Select(m => m.Name), state.Value.Matches.Select(m => m.Name));
         Assert.Equal(0, state.Value.Index);
         Assert.Equal(DisambiguationHelper.MediaTypeArtist, state.Value.MediaType);
+    }
+
+    // ========== JF-729: above the cap, the ask names how many candidates it did NOT speak ==========
+
+    [Theory]
+    [InlineData(4)]  // the most common overflow: 1 unspoken
+    [InlineData(5)]
+    public void AskMultipleArtists_AboveCap_SpeaksOverflowHintWithUnspokenCount(int count)
+    {
+        // JF-729: the capped spoken list must not read as an exhaustive
+        // found-set. Above MultipleArtistsSpeakCap the speech carries the
+        // overflow hint naming the UNSPOKEN count (matches.Count - cap), not
+        // the total: cycling through "no" reaches exactly that many more.
+        var response = DisambiguationHelper.AskMultipleArtists(CreateArtistMatches(count), "en-US");
+
+        int unspoken = count - DisambiguationHelper.MultipleArtistsSpeakCap;
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains($"Plus {unspoken} more", speech);
+        Assert.DoesNotContain($"Plus {count} more", speech);
+    }
+
+    [Theory]
+    [InlineData(2)]  // the pair-callers shape (JF-420 gate, JF-652 kana ties)
+    [InlineData(3)]  // exactly at the cap
+    public void AskMultipleArtists_AtOrBelowCap_NoOverflowHint(int count)
+    {
+        // The hint fires ONLY above the cap: at or below it the speech stays
+        // byte-identical to the pre-JF-729 shape (the separate-string design's
+        // whole point; no empty second format arg ever reaches the string).
+        // The assert keys on the hint's own leading word ("Plus"), not a bare
+        // common word like "more"; that reduces the collision surface but is
+        // NOT immunity - a rewording of the MAIN string that happens to
+        // contain "Plus" can still false-fail this pin (gate-marker tail:
+        // the honest scope is "immune to the hint's other words").
+        var response = DisambiguationHelper.AskMultipleArtists(CreateArtistMatches(count), "en-US");
+
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.DoesNotContain("Plus", speech);
+    }
+
+    /// <summary>Ranked candidate list "Artist 1..N" for the multi-artist ask
+    /// pins (the one shape every AskMultipleArtists test builds; JF-729 hoisted
+    /// the third hand-rolled copy).</summary>
+    private static List<DisambiguationHelper.MatchInfo> CreateArtistMatches(int count)
+    {
+        return Enumerable.Range(1, count)
+            .Select(i => new DisambiguationHelper.MatchInfo { Id = Guid.NewGuid().ToString(), Name = $"Artist {i}" })
+            .ToList();
     }
 
     // ========== ResolvePick (candidate-names picker; moved from FindSongIntentHandlerTests, JF-524) ==========

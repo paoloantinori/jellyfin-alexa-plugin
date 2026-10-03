@@ -254,7 +254,21 @@ internal static class DisambiguationHelper
     /// list is unbounded). The spoken list is capped at
     /// <see cref="MultipleArtistsSpeakCap"/> (JF-707); the session state keeps
     /// the FULL resolved list so no artist the gate resolved becomes unaskable.
-    /// The first match is the one "yes" plays.
+    /// The first match is the one "yes" plays. Above the cap the speech also
+    /// carries the overflow hint (JF-729): a separate
+    /// DisambiguateMultipleArtistsMore sentence naming how many candidates were
+    /// NOT spoken, so the capped list no longer reads as an exhaustive found-set
+    /// (the reprompt's "say no for the next" tail stays the only cycling
+    /// instruction; the hint only says that more exist and how many). A separate
+    /// appended string rather than a second format arg on the main key keeps the
+    /// at/below-cap speech byte-identical to the pre-JF-729 shape. The hint
+    /// APPENDS after the yes/no question (the task's decided shape): the
+    /// reprompt, not the closing sentence, is the mic-open call to action, and
+    /// the count lands as the final beat before the user answers. Locale
+    /// phrasings are count-invariant by design: the most common overflow is
+    /// exactly 1 unspoken, so no locale's hint inflects for the numeral
+    /// (Arabic uses the count-predicate form, Hindi a verbless form; the
+    /// JF-487 singular/plural key split is not needed).
     /// </summary>
     /// <param name="matches">The candidates in spoken order (winner first).</param>
     /// <param name="locale">The request locale.</param>
@@ -264,8 +278,18 @@ internal static class DisambiguationHelper
         // Plain name list: the flow is yes/no cycling (yes plays the first, no
         // advances via DisambiguateNext), so no numbering.
         string matchList = string.Join(", ", matches.Take(MultipleArtistsSpeakCap).Select(m => m.Name));
+        string speech = ResponseStrings.Get("DisambiguateMultipleArtists", locale, matchList);
+
+        // JF-729: above the cap, speak the UNSPOKEN count (what cycling through
+        // "no" can still reach); at or below the cap the hint is absent.
+        int unspoken = matches.Count - MultipleArtistsSpeakCap;
+        if (unspoken > 0)
+        {
+            speech += " " + ResponseStrings.Get("DisambiguateMultipleArtistsMore", locale, unspoken);
+        }
+
         var response = ResponseBuilder.Ask(
-            ResponseStrings.Get("DisambiguateMultipleArtists", locale, matchList),
+            speech,
             new Reprompt(ResponseStrings.Get("DisambiguateReprompt", locale)));
         response.SessionAttributes = BuildAttributes(matches, 0, MediaTypeArtist);
         // JF-690 review: mark ONLY the keys this builder writes, so the

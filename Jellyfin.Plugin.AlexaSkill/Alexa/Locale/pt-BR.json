@@ -74,6 +74,7 @@
   "DisambiguatePrompt": "Encontrei vários resultados. Gostaria de ouvir {0}?",
   "DisambiguateNext": "Que tal {0}?",
   "DisambiguateMultipleArtists": "Encontrei vários artistas: {0}. Quer ouvir o primeiro? Diga não para o próximo.",
+  "DisambiguateMultipleArtistsMore": "E tem mais {0}.",
   "DisambiguatePromptSsml": "Encontrei vários resultados.<break time=\"200ms\"/>Gostaria de ouvir {0}?",
   "DisambiguateNextSsml": "Que tal <break time=\"150ms\"/>{0}?",
   "NoMoreMatches": "Desculpe, não há mais resultados.",

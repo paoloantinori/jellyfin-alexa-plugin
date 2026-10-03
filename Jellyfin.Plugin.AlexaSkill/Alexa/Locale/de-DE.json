@@ -74,6 +74,7 @@
   "DisambiguatePrompt": "Ich habe mehrere Treffer gefunden. Moechtest du {0} hoeren?",
   "DisambiguateNext": "Wie waere es mit {0}?",
   "DisambiguateMultipleArtists": "Ich habe mehrere Künstler gefunden: {0}. Soll ich den ersten abspielen? Sag nein für den nächsten.",
+  "DisambiguateMultipleArtistsMore": "Und noch {0} mehr.",
   "DisambiguatePromptSsml": "Ich habe mehrere Treffer gefunden.<break time=\"200ms\"/>Moechtest du {0} hoeren?",
   "DisambiguateNextSsml": "Wie waere es mit <break time=\"150ms\"/>{0}?",
   "NoMoreMatches": "Entschuldigung, es gibt keine weiteren Treffer.",

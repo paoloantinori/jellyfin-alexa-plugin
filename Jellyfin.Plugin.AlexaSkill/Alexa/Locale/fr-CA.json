@@ -80,6 +80,7 @@
   "DisambiguatePrompt": "J'ai trouvé plusieurs résultats. Voulez-vous écouter {0} ?",
   "DisambiguateNext": "Que pensez-vous de {0} ?",
   "DisambiguateMultipleArtists": "J'ai trouvé plusieurs artistes : {0}. Voulez-vous le premier ? Dites non pour le suivant.",
+  "DisambiguateMultipleArtistsMore": "Et {0} de plus.",
   "DisambiguatePromptSsml": "J'ai trouvé plusieurs résultats.<break time=\"200ms\"/>Voulez-vous écouter {0} ?",
   "DisambiguateNextSsml": "Que pensez-vous de <break time=\"150ms\"/>{0} ?",
   "NoMoreMatches": "Désolé, il n'y a plus d'autres résultats.",
