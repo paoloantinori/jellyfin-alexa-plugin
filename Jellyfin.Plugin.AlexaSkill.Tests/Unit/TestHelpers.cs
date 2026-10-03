@@ -29,6 +29,7 @@ using MediaBrowser.Model.Querying;
 using MediaBrowser.Model.Serialization;
 using Microsoft.Extensions.Logging;
 using Moq;
+using System.Text.Json;
 using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
@@ -114,6 +115,26 @@ internal static class TestHelpers
     /// </summary>
     internal static PlaybackLaunchBuilder CreateLaunchBuilder(PluginConfiguration config)
         => new(config, LoggerFactory.Create(b => { }).CreateLogger<PlaybackLaunchBuilder>(), (_, _, _) => Task.FromResult(true));
+
+    /// <summary>
+    /// The ONE interaction-model type-node extractor for the catalog suites'
+    /// PUT-body assertions (JF-717 hoist of LegIsolationTests' GetTypeNode,
+    /// the CreateSyncUser convention on the third private copy): parses a raw
+    /// interaction-model JSON body and returns the language-model slot-type
+    /// node with the given name. Clone() keeps the element valid after the
+    /// owning document is disposed.
+    /// </summary>
+    internal static JsonElement GetModelTypeNode(string modelJson, string typeName)
+    {
+        using var doc = JsonDocument.Parse(modelJson);
+        return doc.RootElement
+            .GetProperty("interactionModel")
+            .GetProperty("languageModel")
+            .GetProperty("types")
+            .EnumerateArray()
+            .Single(t => t.GetProperty("name").GetString() == typeName)
+            .Clone();
+    }
 
     internal static DeviceToken CreateTestDeviceToken(
         string accessToken = "access",
