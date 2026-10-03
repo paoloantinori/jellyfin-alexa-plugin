@@ -396,8 +396,10 @@ public class DisambiguationHelperTests
         // byte-identical to the pre-JF-729 shape (the separate-string design's
         // whole point; no empty second format arg ever reaches the string).
         // The assert keys on the hint's own leading word ("Plus"), not a bare
-        // common word like "more", so a future rewording of the MAIN string
-        // cannot false-fail this pin (code-review round 1).
+        // common word like "more"; that reduces the collision surface but is
+        // NOT immunity - a rewording of the MAIN string that happens to
+        // contain "Plus" can still false-fail this pin (gate-marker tail:
+        // the honest scope is "immune to the hint's other words").
         var response = DisambiguationHelper.AskMultipleArtists(CreateArtistMatches(count), "en-US");
 
         string speech = TestHelpers.GetSpeechText(response);

@@ -45,6 +45,17 @@ or below it. The cycling contract itself is already pinned by JF-707's
 `PlayArtistSongs_MultiValueEr_FourInLibrary_SpeaksThree_CyclesToTheFourth`. Deliberately
 NOT done inside JF-707: that task's decided scope was the cap plus its pin; a 17-locale
 string pass with its own validation is a separate work item.
+
+GATE-MARKER TAIL (2026-10-03, orchestrator review of commit 8b77909e, 2 findings; all
+four scrutiny axes verified against the artifacts - the reviewer read all 17 hint values
+plus their main strings, confirmed the count-invariance at 1 and 2+ in every language,
+confirmed the at/below-cap speech byte-identical and the reprompt untouched, confirmed
+the unspoken-vs-total pin semantics in both directions, and RE-RAN validate_locales.py
+itself: PASS with the key present 17/17 by grep and absent from the baseline): F1
+APPLIED (the AtOrBelowCap pin's comment no longer claims immunity - the honest scope is
+"immune to the hint's other words"; a MAIN-string rewording containing "Plus" can still
+false-fail); F2 APPLIED (the AskFirstMatch state-truncation observation FILED as JF-735
+per the review-recommendation rule - the summary mention was not tracking).
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done
