@@ -546,6 +546,49 @@ internal static class TestHelpers
             tracker, p => p.AudiobookPositionTracker, (p, v) => p.AudiobookPositionTracker = v);
 
     /// <summary>
+    /// The ONE BaseItem statics stub scope (JF-713 hoist, the CreateSong
+    /// convention on the third identical private construction): the playlist
+    /// suites' visibility filter and linked-child resolution walk the STATIC
+    /// <c>BaseItem.LibraryManager</c>/<c>BaseItem.Logger</c>, unset in the
+    /// unit-test host. Wires <paramref name="libraryManagerMock"/>'s
+    /// GetCollectionFolders to empty, installs the mock plus a null logger, and
+    /// restores both previous values on Dispose. The suite runs sequentially
+    /// (the "[Collection(\"Plugin\")]" classes), so the transient static mutation
+    /// cannot race. Former per-file twins: PlayPlaylistIntentHandlerTests,
+    /// KanaOriginPlaylistSurfaceTests, AlbumPlayServicePlaylistShuffleTests.
+    /// </summary>
+    internal static IDisposable StubBaseItemStatics(Mock<ILibraryManager> libraryManagerMock)
+    {
+        ILibraryManager? prevLibraryManager = BaseItem.LibraryManager;
+        ILogger<BaseItem>? prevLogger = BaseItem.Logger;
+
+        libraryManagerMock.Setup(l => l.GetCollectionFolders(It.IsAny<BaseItem>()))
+            .Returns(new List<Folder>());
+        BaseItem.LibraryManager = libraryManagerMock.Object;
+        BaseItem.Logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<BaseItem>.Instance;
+
+        return new RestoreBaseItemStatics(prevLibraryManager, prevLogger);
+    }
+
+    private sealed class RestoreBaseItemStatics : IDisposable
+    {
+        private readonly ILibraryManager? _libraryManager;
+        private readonly ILogger<BaseItem>? _logger;
+
+        internal RestoreBaseItemStatics(ILibraryManager? libraryManager, ILogger<BaseItem>? logger)
+        {
+            _libraryManager = libraryManager;
+            _logger = logger;
+        }
+
+        public void Dispose()
+        {
+            BaseItem.LibraryManager = _libraryManager;
+            BaseItem.Logger = _logger;
+        }
+    }
+
+    /// <summary>
     /// The ONE Plugin.Instance swap core behind <see cref="SwapPluginQueueManager"/>
     /// and <see cref="SwapPluginPositionTracker"/> (JF-633: the ordering invariant
     /// lives in exactly one place, not one hand-copied scope class per property).

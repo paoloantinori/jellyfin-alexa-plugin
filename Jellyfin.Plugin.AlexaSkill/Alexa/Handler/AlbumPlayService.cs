@@ -751,9 +751,10 @@ public sealed class AlbumPlayService
     /// <summary>
     /// Shared playlist-play flow used by <c>PlayPlaylistIntentHandler</c>
     /// (shuffle=false) and the shuffle-play handler (shuffle=true). Resolves the playlist,
-    /// builds the initial queue, optionally shuffles it via
-    /// <see cref="Playback.DeviceQueueManager.SetShuffledQueue"/>, persists the queue for
-    /// crash recovery, stores progressive-continuation state, and returns an
+    /// builds the initial queue, optionally derives a shuffle snapshot and commits it
+    /// after the launch build (JF-713, <see cref="Playback.DeviceQueueManager.DeriveShuffledQueue"/>/
+    /// <see cref="Playback.DeviceQueueManager.CommitShuffledQueue"/>), persists the
+    /// queue for crash recovery, stores progressive-continuation state, and returns an
     /// <c>AudioPlayer.Play</c> response for the first track.
     /// </summary>
     /// <param name="libraryManager">Library manager for querying playlists and items.</param>
@@ -764,7 +765,7 @@ public sealed class AlbumPlayService
     /// <param name="user">The plugin user.</param>
     /// <param name="session">The Jellyfin session.</param>
     /// <param name="locale">The locale for response strings.</param>
-    /// <param name="shuffle">When true and <paramref name="queueManager"/> is non-null, shuffles the queue via <see cref="Playback.DeviceQueueManager.SetShuffledQueue"/>.</param>
+    /// <param name="shuffle">When true and <paramref name="queueManager"/> is non-null, derives the shuffled order via <see cref="Playback.DeviceQueueManager.DeriveShuffledQueue"/> and commits it after the launch build (JF-713).</param>
     /// <param name="rng">Optional injectable random source for deterministic shuffle (tests); null uses <see cref="Random.Shared"/>.</param>
     /// <param name="kanaOrigin">JF-663: the flag captured on the caller's post-strip, PRE-romanization slot value (the JF-652/JF-660/JF-661 threading shape; kana in the stripped NAME is the transliteration evidence, kana in a stripped carrier is not). Both production callers pin it; null self-computes from <paramref name="playlistName"/> before this method's own romanization for raw-text callers.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -982,24 +983,28 @@ public sealed class AlbumPlayService
             });
         }
 
-        // JF-699 item 5: launch build BEFORE the session writes, the crash-recovery
-        // SetQueue/SetShuffledQueue tail, and the continuation store (the ordering
-        // policy lives on EnsureStreamTokenDeliverable). RESIDUAL, deliberate: on the
-        // shuffle branch SetShuffledQueue itself stays BEFORE the build because the
-        // first track is DERIVED from the shuffled queue (a shuffle preview would
-        // re-shuffle and disagree with the stored order); a refused shuffle start can
-        // therefore leave the device queue written, never the session now-playing or
-        // the continuation.
+        // JF-699 item 5 + JF-713: launch build BEFORE the session writes, the
+        // crash-recovery SetQueue/CommitShuffledQueue tail, and the continuation store
+        // (the ordering policy lives on EnsureStreamTokenDeliverable). The shuffle
+        // arm is derive-then-commit like every other arm: the shuffled order is
+        // derived ONCE into a PendingShuffledQueue snapshot, the first track (and
+        // so the launch) is built FROM the snapshot, and the commit stores the SAME
+        // snapshot after a successful build. A refused shuffle start therefore
+        // leaves the device queue untouched too (the former JF-699 residual:
+        // SetShuffledQueue used to land before the build, so a refused launch
+        // replaced the device queue with an order that never played); the old
+        // in-code reason for that order (shuffling again at commit would re-shuffle
+        // and disagree with the stored order) is answered by REUSING the snapshot,
+        // never re-deriving it.
         string deviceId = context.System.Device.DeviceID;
         List<string> idList = playlistItems.Select(i => i.Id.ToString()).ToList();
         BaseItem? firstItem;
-        Playback.DeviceQueue? shuffledQueue = null;
+        Playback.PendingShuffledQueue? pendingShuffle = null;
 
         if (shuffle && queueManager != null)
         {
-            queueManager.SetShuffledQueue(deviceId, idList, rng);
-            shuffledQueue = queueManager.GetOrCreateQueue(deviceId);
-            firstItem = libraryManager.GetItemById(Guid.Parse(shuffledQueue.ItemIds[0]));
+            pendingShuffle = queueManager.DeriveShuffledQueue(idList, rng);
+            firstItem = libraryManager.GetItemById(Guid.Parse(pendingShuffle.FirstItemId));
         }
         else
         {
@@ -1021,8 +1026,26 @@ public sealed class AlbumPlayService
         session.NowPlayingQueue = queueItems;  // ordered, so MirrorQueueToSession can read track metadata
         session.FullNowPlayingItem = firstItem;
 
-        if (shuffledQueue != null)
+        if (pendingShuffle != null)
         {
+            // JF-713: commit the SAME snapshot the launch built from (queueManager is
+            // non-null on this arm: the snapshot is only derived under its null-check).
+            // KNOWN RACE (the JF-712 derive-to-commit precedent): the commit's
+            // whole-list replace is unlocked and the derive-to-commit window spans
+            // the launch build, so a sibling that mutates the OLD device queue's
+            // membership or pointer during the build (a playback event such as
+            // PlaybackNearlyFinished, or a queue-editing intent such as AddToQueue)
+            // has those writes dropped by the replace, where the pre-JF-713 order
+            // (queue written first) let them land on the stored queue. The window
+            // is bounded to siblings during one launch build and shares its shape
+            // with the JF-699 SetQueue-after-build reorder on the ordered arm; the
+            // builder's OWN mid-build writes (last-played ledger, launch scope)
+            // are carried by CopySurvivingStores. A lock belongs on
+            // DeviceQueueManager.ReplaceQueue (extracted in this same change) if
+            // the shape ever bites live. Same window, launch-scope side:
+            // TrimLaunchBaseIfNeeded judges the fresh entry against the OLD
+            // queue's membership (JF-723).
+            Playback.DeviceQueue shuffledQueue = queueManager!.CommitShuffledQueue(deviceId, pendingShuffle);
             // Mirror the shuffled DeviceQueue order back into the session queue (metadata preserved).
             ProgressReporter.MirrorQueueToSession(shuffledQueue, session);
         }

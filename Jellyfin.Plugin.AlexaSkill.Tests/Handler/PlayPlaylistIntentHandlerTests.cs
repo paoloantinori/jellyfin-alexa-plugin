@@ -244,41 +244,10 @@ public class PlayPlaylistIntentHandlerTests : PluginTestBase
     }
 
     /// <summary>
-    /// The visibility filter inside BuildPlaylistPlayResponseAsync calls
-    /// BaseItem.IsVisible, which walks the STATIC BaseItem.LibraryManager and
-    /// BaseItem.Logger (unset in the unit-test host; the same off-host limitation
-    /// DeviceQueueManagerTests documents for the track-resolution path). Stub both
-    /// for the duration of one test and restore them on dispose (the suite runs
-    /// sequentially, so the transient static mutation cannot race).
+    /// The shared BaseItem statics stub scope (TestHelpers.StubBaseItemStatics,
+    /// the hoisted former per-file copy; the off-host limitation it works around
+    /// is the one DeviceQueueManagerTests documents for the track-resolution path).
     /// </summary>
     private IDisposable StubBaseItemStatics()
-    {
-        ILibraryManager? prevLibraryManager = BaseItem.LibraryManager;
-        Microsoft.Extensions.Logging.ILogger<BaseItem>? prevLogger = BaseItem.Logger;
-
-        _libraryManagerMock.Setup(l => l.GetCollectionFolders(It.IsAny<BaseItem>()))
-            .Returns(new List<Folder>());
-        BaseItem.LibraryManager = _libraryManagerMock.Object;
-        BaseItem.Logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<BaseItem>.Instance;
-
-        return new RestoreBaseItemStatics(prevLibraryManager, prevLogger);
-    }
-
-    private sealed class RestoreBaseItemStatics : IDisposable
-    {
-        private readonly ILibraryManager? _libraryManager;
-        private readonly Microsoft.Extensions.Logging.ILogger<BaseItem>? _logger;
-
-        public RestoreBaseItemStatics(ILibraryManager? libraryManager, Microsoft.Extensions.Logging.ILogger<BaseItem>? logger)
-        {
-            _libraryManager = libraryManager;
-            _logger = logger;
-        }
-
-        public void Dispose()
-        {
-            BaseItem.LibraryManager = _libraryManager;
-            BaseItem.Logger = _logger;
-        }
-    }
+        => TestHelpers.StubBaseItemStatics(_libraryManagerMock);
 }
