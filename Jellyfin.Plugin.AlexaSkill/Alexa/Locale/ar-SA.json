@@ -74,6 +74,7 @@
   "DisambiguatePrompt": "وجدت عدة نتائج. هل تريد الاستماع إلى {0}؟",
   "DisambiguateNext": "ما رأيك بـ {0}؟",
   "DisambiguateMultipleArtists": "وجدت عدة فنانين: {0}. هل أشغل الأول؟ قل لا للتالي.",
+  "DisambiguateMultipleArtistsMore": "وعدد الآخرين {0}.",
   "DisambiguatePromptSsml": "وجدت عدة نتائج.<break time=\"200ms\"/>هل تريد الاستماع إلى {0}؟",
   "DisambiguateNextSsml": "ما رأيك بـ <break time=\"150ms\"/>{0}؟",
   "NoMoreMatches": "عذراً، لا توجد نتائج أخرى.",

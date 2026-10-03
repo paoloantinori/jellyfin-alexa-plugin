@@ -74,6 +74,7 @@
   "DisambiguatePrompt": "Ik heb meerdere resultaten gevonden. Wil je {0} horen?",
   "DisambiguateNext": "Wat vind je van {0}?",
   "DisambiguateMultipleArtists": "Ik heb meerdere artiesten gevonden: {0}. Zal ik de eerste afspelen? Zeg nee voor de volgende.",
+  "DisambiguateMultipleArtistsMore": "En nog {0} meer.",
   "DisambiguatePromptSsml": "Ik heb meerdere resultaten gevonden.<break time=\"200ms\"/>Wil je {0} horen?",
   "DisambiguateNextSsml": "Wat vind je van <break time=\"150ms\"/>{0}?",
   "NoMoreMatches": "Sorry, er zijn geen andere resultaten.",

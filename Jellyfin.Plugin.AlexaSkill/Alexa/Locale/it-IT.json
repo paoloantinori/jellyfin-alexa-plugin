@@ -74,6 +74,7 @@
   "DisambiguatePrompt": "Ho trovato più risultati. Ti piacerebbe ascoltare {0}?",
   "DisambiguateNext": "Che ne dici di {0}?",
   "DisambiguateMultipleArtists": "Ho trovato più artisti: {0}. Vuoi il primo? Di' no per il successivo.",
+  "DisambiguateMultipleArtistsMore": "E {0} in più.",
   "DisambiguatePromptSsml": "Ho trovato più risultati.<break time=\"200ms\"/>Ti piacerebbe ascoltare {0}?",
   "DisambiguateNextSsml": "Che ne dici di <break time=\"150ms\"/>{0}?",
   "NoMoreMatches": "Spiacente, non ci sono altri risultati.",

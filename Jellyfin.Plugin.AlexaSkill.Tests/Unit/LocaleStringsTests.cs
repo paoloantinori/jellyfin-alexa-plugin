@@ -45,6 +45,23 @@ public class LocaleStringsTests
         Assert.Contains("{0}", singular);
     }
 
+    /// <summary>
+    /// JF-729: the above-cap multi-artist overflow hint ("plus N more") must
+    /// resolve in every locale (not fall back to the key NAME, which would speak
+    /// the literal "DisambiguateMultipleArtistsMore") and keep the {0} count
+    /// format arg. Per-locale key PRESENCE is guarded by
+    /// scripts/validate_locales.py in CI: this assert cannot see an en-US
+    /// fallback (the en-US value also resolves and carries {0}).
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(AllLocalesData))]
+    public void DisambiguateMultipleArtistsMore_ExistsWithCountArg(string locale)
+    {
+        string hint = ResponseStrings.Get("DisambiguateMultipleArtistsMore", locale);
+        Assert.NotEqual("DisambiguateMultipleArtistsMore", hint);
+        Assert.Contains("{0}", hint);
+    }
+
     [Fact]
     public void FindSongCountGrammar_ItItalian_Inflects()
     {
