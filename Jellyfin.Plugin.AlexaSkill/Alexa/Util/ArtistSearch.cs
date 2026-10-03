@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
@@ -674,10 +675,18 @@ internal static class ArtistSearch
             // JF-715: a caller-supplied pool (the multi-value-ER gate's fetch)
             // replaces the internal materialization; the contract on the
             // parameter guarantees it is this same view's scoped list, so the
-            // tiers below read list and phonetic codes from ONE publish.
+            // tiers below read list and phonetic codes from ONE publish. The
+            // identity pair in the log converts a contract breach (a pool from
+            // another view or scope) from a silent JF-448/JF-457 hazard into a
+            // diagnosable one: triage compares viewId against the gate's own
+            // fetch log line for the same request (gate-marker rework F3).
             if (preloadedPool != null)
             {
-                logger.LogDebug("ArtistSearch: consuming preloaded pool ({Count} artists, JF-715)", preloadedPool.Count);
+                logger.LogDebug(
+                    "ArtistSearch: consuming preloaded pool ({Count} artists, viewId={ViewId}, poolId={PoolId}, JF-715)",
+                    preloadedPool.Count,
+                    RuntimeHelpers.GetHashCode(pinned),
+                    RuntimeHelpers.GetHashCode(preloadedPool));
             }
 
             var allArtists = preloadedPool ?? pinned.GetArtists(topParentIds);

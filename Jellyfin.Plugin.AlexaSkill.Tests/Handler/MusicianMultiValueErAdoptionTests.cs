@@ -1010,6 +1010,59 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
         TestHelpers.AssertMultiArtistAsk(response, pnk, floyd);
     }
 
+    [Fact]
+    public async Task AddToQueue_TrailingSpaceCarrierSlot_StaysGeneric_OpensTheGate()
+    {
+        // Rework F1: the raw slot "la canzone " carries a TRAILING space, the
+        // wire shape of a carrier bleed cut off mid-phrase. The twin's old raw
+        // probe read it as generic through the article path ("la" -> "canzone");
+        // the converged probe must not reclassify it (the normalized result is
+        // non-empty here, so the empty-bleed guard is inert and the article
+        // path decides), and the gate asks.
+        var pnk = Pnk();
+        var floyd = PinkFloyd();
+        var queries = new List<InternalItemsQuery>();
+        SetupQueueLibrary(queries, new List<BaseItem>());
+
+        var handler = CreateQueueHandler(IndexOf(pnk, floyd));
+        SkillResponse response = await handler.HandleAsync(
+            CreateQueueIntent("la canzone ", TestHelpers.ResolvedSlotMultiValue("pink", "P!nk", "Pink Floyd"), IntentNames.AddToQueue),
+            _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
+
+        TestHelpers.AssertMultiArtistAsk(response, pnk, floyd);
+    }
+
+    [Theory]
+    [InlineData("la canzone ")]      // exact carrier length: no cut, article path
+    [InlineData("the track ")]       // English carrier, exact length
+    [InlineData("il brano  ")]       // one space past the carrier: the no-empty-cut guard
+    [InlineData("il brano musica")]  // carrier+generic: the fold's own shape
+    public void IsGenericSongConstraint_TrailingSpaceCarrierForms_StayGeneric(string raw)
+    {
+        // Rework F1 hardening: the probe verdict is pinned over the
+        // trailing-space carrier forms, including the exact-carrier-length
+        // shape (TryStripLeading's strict length compare means no cut) and the
+        // one-space-past shape (the no-empty-cut guard). A normalized-EMPTY
+        // verdict stays generic by construction (an all-carrier slot is a pure
+        // bleed), so a future CarrierPhrase that could produce one cannot
+        // silently close the gate.
+        Assert.True(MultiValueErDisambiguation.IsGenericSongConstraint(raw));
+    }
+
+    [Fact]
+    public void IsGenericSongConstraint_AllCarrierBleed_SlotsAreGeneric()
+    {
+        // The degenerate shape the empty-bleed guard OWNS: a raw slot that IS
+        // only carrier text would normalize to nothing searchable, and the
+        // probe must still call it generic (F1) rather than silently close the
+        // gate. Today's CarrierPhrase refuses empty cuts (the strict length
+        // compare plus the empty-remainder continue), so no reachable input
+        // lands there; the pin is the guard's contract, held alongside the
+        // article forms that do reach it.
+        Assert.True(MultiValueErDisambiguation.IsGenericSongConstraint("il brano"));
+        Assert.True(MultiValueErDisambiguation.IsGenericSongConstraint("the song"));
+    }
+
     // ===============================================================
     // PlayArtistSongs: the JF-702 pool-sharing closure
     // ===============================================================

@@ -126,11 +126,14 @@ differs.
   site with the same double fetch, FILED as JF-734 with both review rounds'
   evidence.)
 - [x] #4 dotnet test passes both TFMs
-  (5031/5031 net9.0 and 5031/5031 net10.0, the 5019 baseline + 12 new pins:
-  8 adoption-suite pins (six pool-threading count pins, the carrier-bleed probe
+  (5038/5038 net9.0 and 5038/5038 net10.0, the 5019 baseline + 19 pins: 8
+  adoption-suite pins (six pool-threading count pins, the carrier-bleed probe
   pin, the not-found Terminal pin folded into AddToQueue's), the kana-tie pool
-  pin, 2 ArtistSearch preloadedPool pins, and the FindSong warming choke pin.
-  Final-state full suite, dotnet test -m:1, once.)
+  pin, 2 ArtistSearch preloadedPool pins, the FindSong warming choke pin, and
+  the gate-marker rework's 7 (the trailing-space carrier end-to-end pin, the
+  4-row trailing-space/carrier probe theory, the all-carrier-bleed guard pin,
+  and the empty-constraint-slot-unrestricted F2 pin). Final-state full suite,
+  dotnet test -m:1, once per round.)
 - [x] #5 /simplify + /code-review high passed
   (simplify: 4 parallel angle agents, 6 findings applied (orphaned Dispose doc
   comment deleted; dbQuery lambda folded to the retryLabel axis with the
@@ -193,7 +196,26 @@ structurally unnecessary) and the optional PinIfReady fold. The code-review
 high round caught one real regression before it shipped (the guarded pin's
 warming-choke defeat at FindSong, whose entry gate covers only the song
 index); the fix (unguarded Pin everywhere JF-715 pins) and its choke-point pin
-are red-proven. Suites 5031/5031 both TFMs (baseline 5019 + 12 pins), final
+are red-proven. GATE-MARKER REWORK (5 findings): F1 applied as hardening
+  with a mechanism correction recorded honestly (today's CarrierPhrase
+  structurally refuses empty cuts, strict length compare plus the
+  empty-remainder continue, so no reachable slot reclassifies generic to
+  non-generic; the empty-normalized-is-generic guard plus the trailing-space
+  pins now own the class anyway); F2 applied (IsNullOrWhiteSpace sentinel, an
+  empty slot runs the gate unrestricted like null, pinned both ways); F3
+  applied (viewId/poolId identity in the pool-consumption log AND the gate's
+  zero-resolve fetch log, so a contract breach is diagnosable by comparing the
+  pair across one request's lines); F4 applied (CountingArtistIndex captures a
+  readiness-frozen view, honest about list/Count staying live for the
+  counting); F5 SKIPPED (normalize-once in PlaySong would force a second probe
+  entry or a signature change to save sub-microsecond duplicate normalization
+  on a DB-query-heavy path). The rework's own focused code-review pass
+  (behavioral delta exceeded trivial) returned 5 doc-sync findings: 3 applied
+  (the gate-side identity counterpart log, the F4 comment narrowed to what the
+  fake actually freezes, the sentinel docs naming whitespace with both guard
+  sites cross-referenced), 2 skipped (a shared test-view base for one
+  consumer; collapsing the layer-distinct empty-guard comments). Suites
+  5038/5038 both TFMs (baseline 5019 + 19 pins), final
 state, once; no new compiler warnings. Test-only production surface: six
 handlers plus the shared chain and the composite; no deploy (the orchestrator
 merges).

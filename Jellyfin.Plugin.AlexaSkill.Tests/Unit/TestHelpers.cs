@@ -981,8 +981,15 @@ internal sealed class FakeArtistIndex : IArtistIndex
 /// counter, for the pool-sharing/pool-threading pins (JF-702 introduced it
 /// privately in MusicianMultiValueErAdoptionTests; JF-715 hoisted it here for
 /// the suites that need the same count: FakeArtistIndex is sealed, so counting
-/// runs through this wrapper, whose capture keeps the identity so every
-/// GetArtists the chain issues stays visible).
+/// runs through this wrapper). JF-715 rework (F4, test-fake honesty):
+/// CaptureSnapshot returns a CAPTURING view whose READINESS is frozen at
+/// capture time, the property production SnapshotView owns that the pin-shape
+/// tests depend on; the artist LIST and Count stay live through the delegated
+/// inner fake (rework review: not a full mirror, and deliberately so, the
+/// counting contract needs the live delegation), so a test pinning readiness
+/// capture cannot pass green against the fake while breaking against the real
+/// view. Every GetArtists the chain issues through the view still lands on the
+/// counter.
 /// </summary>
 internal sealed class CountingArtistIndex : IArtistIndex
 {
@@ -1002,7 +1009,40 @@ internal sealed class CountingArtistIndex : IArtistIndex
     public int Count => _inner.Count;
     public bool TryGetPhoneticCode(Guid artistId, out (string Primary, string? Alternate) codes)
         => _inner.TryGetPhoneticCode(artistId, out codes);
-    public IArtistIndex CaptureSnapshot() => this;
+
+    public IArtistIndex CaptureSnapshot()
+        => new SnapshotCountingView(this, _inner.IsReady, _inner.IsDisabled);
+
+    /// <summary>
+    /// The pinned read view: readiness frozen at capture, every read delegated
+    /// back through the owner wrapper so the call counter stays complete,
+    /// capture-on-the-view the identity (pinned twice is still pinned once).
+    /// </summary>
+    private sealed class SnapshotCountingView : IArtistIndex
+    {
+        private readonly CountingArtistIndex _owner;
+        private readonly bool _isReady;
+        private readonly bool _isDisabled;
+
+        internal SnapshotCountingView(CountingArtistIndex owner, bool isReady, bool isDisabled)
+        {
+            _owner = owner;
+            _isReady = isReady;
+            _isDisabled = isDisabled;
+        }
+
+        public bool IsReady => _isReady;
+        public bool IsDisabled => _isDisabled;
+        public int Count => _owner.Count;
+
+        public IReadOnlyList<BaseItem> GetArtists(Guid[]? topParentIds = null)
+            => _owner.GetArtists(topParentIds);
+
+        public bool TryGetPhoneticCode(Guid artistId, out (string Primary, string? Alternate) codes)
+            => _owner.TryGetPhoneticCode(artistId, out codes);
+
+        public IArtistIndex CaptureSnapshot() => this;
+    }
 }
 
 /// <summary>

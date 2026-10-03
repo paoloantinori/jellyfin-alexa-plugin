@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET;
@@ -214,11 +215,33 @@ internal static class MultiValueErDisambiguation
     /// consumer reads the ONE derivation. Membership-test only: the song
     /// searches keep the values they always consumed.
     /// </summary>
+    /// <summary>
+    /// JF-715 rework (F2, review round): the has-constraint sentinel. The guard
+    /// here and the probe's own entry read the SAME IsNullOrWhiteSpace policy;
+    /// the doc comments name whitespace explicitly so a future editor
+    /// tightening one spot (e.g. to IsNullOrEmpty) sees the other and the F2
+    /// pin as the backstop.
+    /// </summary>
+
     /// <param name="rawSongSlot">The RAW song slot value (pre-normalization).</param>
     /// <returns>True when the slot carries no song constraint worth preserving.</returns>
     internal static bool IsGenericSongConstraint(string? rawSongSlot)
-        => !string.IsNullOrWhiteSpace(rawSongSlot)
-            && IsGenericMusicQuery(KatakanaRomanizer.Romanize(StripSongCarrierPhrase(rawSongSlot)));
+    {
+        if (string.IsNullOrWhiteSpace(rawSongSlot))
+        {
+            return false;
+        }
+
+        string normalized = KatakanaRomanizer.Romanize(StripSongCarrierPhrase(rawSongSlot));
+
+        // A slot whose entire value was carrier bleed normalizes to nothing: the
+        // constraint is generic by construction (gate-marker rework F1; today's
+        // CarrierPhrase refuses empty cuts so this cannot fire, the guard pins
+        // the class against a future strip that could produce one). Trailing-
+        // space carrier forms ("la canzone ") ride the article path below and
+        // stay generic, the twins' pre-fold behavior.
+        return normalized.Length == 0 || IsGenericMusicQuery(normalized);
+    }
 
     /// <summary>
     /// The gate's outcome: the ask to return verbatim when the ambiguity is REAL
@@ -255,13 +278,19 @@ internal static class MultiValueErDisambiguation
     /// <param name="libraryManager">The library manager (scope resolution).</param>
     /// <param name="logger">The handler's logger (the gate logs every leg, JF-690's observability).</param>
     /// <param name="locale">The request locale (the ask's strings).</param>
-    /// <param name="rawConstraintSlot">JF-715: the RAW song slot value. Non-null
-    /// enables the constraint restriction the three song+musician sites share:
-    /// the gate opens only when the slot normalizes to a generic music word
+    /// <param name="rawConstraintSlot">JF-715: the RAW song slot value. Non-empty
+    /// (IsNullOrWhiteSpace, the same guard the probe's own entry applies) enables
+    /// the constraint restriction the three song+musician sites share: the gate
+    /// opens only when the slot normalizes to a generic music word
     /// (<see cref="IsGenericSongConstraint"/> owns the normalization), because
     /// with a REAL title in hand the confirm leg cannot preserve the requested
-    /// song and the title keeps driving today's rank-#1 scoped search. Null
-    /// (the default) runs the gate unrestricted (the no-constraint sites).</param>
+    /// song and the title keeps driving today's rank-#1 scoped search. Null,
+    /// empty, or whitespace (the default and the degenerate `slot ?? ""` caller
+    /// shape) runs the gate unrestricted, since an empty slot carries no song
+    /// constraint worth preserving and closing the gate on it would strand
+    /// multi-value musician requests (gate-marker rework F2: the sentinel
+    /// conflated null with empty, permanently closing the gate for such
+    /// callers).</param>
     /// <returns>The arbitration outcome (see summary).</returns>
     internal static ErArtistArbitration TryArbitrate(
         IntentRequest request,
@@ -272,7 +301,7 @@ internal static class MultiValueErDisambiguation
         string locale,
         string? rawConstraintSlot = null)
     {
-        if (rawConstraintSlot != null && !IsGenericSongConstraint(rawConstraintSlot))
+        if (!string.IsNullOrWhiteSpace(rawConstraintSlot) && !IsGenericSongConstraint(rawConstraintSlot))
         {
             return default;
         }
@@ -306,8 +335,10 @@ internal static class MultiValueErDisambiguation
         if (resolved.Count < 2)
         {
             logger.LogDebug(
-                "MultiValueEr: {Count} ER values on the musician slot resolve to no library artist; proceeding on the single-value path (JF-690)",
-                candidates.Count);
+                "MultiValueEr: {Count} ER values on the musician slot resolve to no library artist; proceeding on the single-value path (JF-690; viewId={ViewId}, poolId={PoolId})",
+                candidates.Count,
+                RuntimeHelpers.GetHashCode(pinned),
+                RuntimeHelpers.GetHashCode(pool));
             return new ErArtistArbitration(null, null, pool);
         }
 
