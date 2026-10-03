@@ -49,6 +49,17 @@ params, `InjectCatalogReferences`' three mapping blocks, `WarnOnCrossTypeCatalog
 deliberately NOT part of this; CatalogType has five members with only three in sync scope
 by design, and a real fourth synced type forces those edits loudly through signature
 arity. Fold this only when touching the write path for its own sake.
+
+GATE-MARKER TAIL (2026-10-03, orchestrator review of commit 7d634ed5, 1 finding; all
+five scrutiny axes verified READ-LEVEL with the reviewer re-deriving all three pin
+failure modes against the fake and the injection code, compensating for the worker's
+permission-blocked sabotage proof: the swapped setter, the misbound getter/setter pair,
+and the swapped row Type each provably fail the pin, the PUT-body half load-bearing for
+exactly the misbind shape; Action<string> confirmed wipe-proof by CreateCatalogAsync's
+throw-on-null contract; the memo interplay clean with no double-write or stale-id shape;
+the tuple arity compile-loud; the JF-727 premises verified and the JF-716 mooting note
+grep-confirmed): F1 APPLIED (the banned parenthetical hyphen in JF-727's own prose
+fixed, the same pattern the diff's review round had fixed in the pin doc).
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done

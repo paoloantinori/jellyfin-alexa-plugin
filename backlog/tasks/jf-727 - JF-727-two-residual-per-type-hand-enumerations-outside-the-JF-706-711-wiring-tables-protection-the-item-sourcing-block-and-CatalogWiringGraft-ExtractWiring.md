@@ -26,8 +26,8 @@ both verified first-hand before filing). Both are the compile-silent "missed one
 class for a fourth synced catalog type, ADJACENT to but NOT protected by the
 JF-706/JF-711 recorded context boundary (which covers only the CatalogManager
 per-type surface: UpdateInteractionModelAsync's six positional id/version params,
-InjectCatalogReferences' three mapping blocks, WarnOnCrossTypeCatalogIds - all of
-which DO fail loudly through signature arity on a fourth type).
+InjectCatalogReferences' three mapping blocks, WarnOnCrossTypeCatalogIds (all of
+which DO fail loudly) through signature arity on a fourth type).
 
 1. LibrarySyncService item-sourcing block (~lines 145-157): three hand-written
    FetchLibraryItems calls keyed by per-type BaseItemKind, three
