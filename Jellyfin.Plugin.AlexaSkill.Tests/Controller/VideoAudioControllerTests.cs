@@ -1161,7 +1161,22 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// exception for the pin's ThrowsAsync, red (probe never fired) fails
     /// the ThrowsAsync with <see cref="InLockProbeNotFiredMessage"/> (plus
     /// the endpoint's real fault embedded) instead of letting a void
-    /// attribution ride the ThrowsAsync unchecked.
+    /// attribution ride the ThrowsAsync unchecked. JF-704: a park assert or
+    /// plant that THROWS must not strand the parked endpoint either: the
+    /// finally below releases the gate, so the still-running endpoint would
+    /// later run its in-lock encode after the test method (and its
+    /// using-scoped fixtures) had exited, landing static registry writes
+    /// after teardown and leaving its eventual fault as an
+    /// UnobservedTaskException candidate. Two mechanisms: a fault-observation
+    /// backstop attached at the endpoint's birth
+    /// (<see cref="MarkEndpointFaultObserved"/>, covering the
+    /// fault-observation leg on EVERY exit, including a settle-budget timeout
+    /// on the normal path below), and, on the throwing arm only, the catch
+    /// observes the endpoint BEFORE rethrowing
+    /// (<see cref="ObserveStrandedEndpointAsync"/>, which pulls the settle
+    /// inside the test's lifetime); the non-throwing paths never enter the
+    /// catch, so the 400ms park window and the probe-assert ordering are
+    /// unchanged.
     /// </summary>
     private static async Task<ActionResult> ServeInLockWarmCacheAsync(
         Func<Task<IDisposable>> acquireLock,
@@ -1176,19 +1191,32 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         }
 
         IDisposable gate = await acquireLock();
-        Task<ActionResult> endpointTask;
+        Task<ActionResult>? endpointTask = null;
         try
         {
-            endpointTask = startEndpoint();
-            await Task.Delay(400);
-            Assert.False(
-                endpointTask.IsCompleted,
-                ParkAssertFailureMessage(endpointTask));
-            plantWarmCache();
+            try
+            {
+                endpointTask = startEndpoint();
+                MarkEndpointFaultObserved(endpointTask);
+                await Task.Delay(400);
+                Assert.False(
+                    endpointTask.IsCompleted,
+                    ParkAssertFailureMessage(endpointTask));
+                plantWarmCache();
+            }
+            finally
+            {
+                gate.Dispose();
+            }
         }
-        finally
+        catch
         {
-            gate.Dispose();
+            // JF-704: the inner finally already released the gate, so the
+            // parked endpoint is free to settle. Observe it before the
+            // rethrow; the plant failure (or park assert) stays the exception
+            // the caller sees.
+            await ObserveStrandedEndpointAsync(endpointTask).ConfigureAwait(false);
+            throw;
         }
 
         // The one settle-state attribution assert (JF-681 success path, JF-700
@@ -1218,7 +1246,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         ActionResult result;
         try
         {
-            result = await endpointTask.WaitAsync(TimeSpan.FromSeconds(20)).ConfigureAwait(false);
+            result = await endpointTask.WaitAsync(EndpointSettleBudget).ConfigureAwait(false);
         }
         catch (Exception) when (endpointTask.IsFaulted)
         {
@@ -1237,6 +1265,89 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         AssertProbeFired(null);
 
         return result;
+    }
+
+    /// <summary>
+    /// The one settle budget for the helper's endpoint awaits (JF-704 hoisted:
+    /// the stranded-endpoint settle below must wait on the same budget the
+    /// normal settle uses, never a shorter one that strands again).
+    /// </summary>
+    // GATE-MARKER NOTE: if the inner finally's gate.Dispose() itself throws
+    // before releasing the semaphore, the catch's observation await burns this
+    // full budget (the endpoint stays parked forever: it never settles, never
+    // faults, so neither observation mechanism has anything to see) and the
+    // endpoint task leaks for the process lifetime. Pre-existing corner (the
+    // old code leaked identically); documented rather than hardened because a
+    // throwing semaphore Dispose is not a shape any test constructs.
+    private static readonly TimeSpan EndpointSettleBudget = TimeSpan.FromSeconds(20);
+
+    /// <summary>
+    /// JF-704 fault-observation backstop, attached at the endpoint's birth so
+    /// EVERY exit of <see cref="ServeInLockWarmCacheAsync"/> observes an
+    /// eventual fault: Task.WaitAsync's timeout does NOT observe the inner
+    /// task, so without this the settle-budget expiry on the normal path (an
+    /// endpoint that neither completes nor faults within budget) would leave
+    /// its eventual fault unobserved. Scope, honestly: the backstop covers
+    /// only the fault-observation leg of the JF-704 harm. On that timeout
+    /// exit the endpoint still runs its encode past the test's lifetime and
+    /// still lands static registry writes after teardown; pulling the settle
+    /// inside the test's lifetime happens solely on the throwing arm, via
+    /// <see cref="ObserveStrandedEndpointAsync"/>. Reading
+    /// <c>t.Exception</c> marks the fault observed; OnlyOnFaulted plus
+    /// ExecuteSynchronously keeps this a zero-cost registration until a fault
+    /// actually lands. No dedicated pin: exercising the timeout exit costs
+    /// the whole 20s budget per TFM, and the observation mechanism itself is
+    /// the one the pinned plant-throw arm shares (the coverage gap is tracked
+    /// as JF-726).
+    /// </summary>
+    private static void MarkEndpointFaultObserved(Task<ActionResult> endpointTask)
+    {
+        _ = endpointTask.ContinueWith(
+            static t =>
+            {
+                _ = t.Exception;
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+    }
+
+    /// <summary>
+    /// JF-704 stranded-endpoint settle, the plant-throw (and park-assert) arm
+    /// of <see cref="ServeInLockWarmCacheAsync"/>: the endpoint was parked on
+    /// the gate the failure just released, so it is still running and will
+    /// run its in-lock work AFTER the caller's test method has returned
+    /// unless someone awaits it here (inside the test's lifetime, with its
+    /// using-scoped fixtures still alive). Awaits the endpoint under the
+    /// helper's settle budget and swallows the outcome: the rethrown failure
+    /// (the plant's own exception, or the park assert) is the one under test,
+    /// and this await is what pulls the settle inside the test's lifetime
+    /// (the eventual-fault observation half is the birth backstop, see
+    /// <see cref="MarkEndpointFaultObserved"/>). A null endpoint means
+    /// startEndpoint itself threw (nothing started, nothing stranded);
+    /// GATE-MARKER NOTE: that skip assumes a SINGLE-EXPRESSION startEndpoint
+    /// delegate (start-then-return) - a future call site that starts work and
+    /// THEN throws synchronously would strand that work with nothing here
+    /// covering it (all current call sites are single-expression).
+    /// </summary>
+    private static async Task ObserveStrandedEndpointAsync(Task<ActionResult>? endpointTask)
+    {
+        if (endpointTask == null)
+        {
+            return;
+        }
+
+        try
+        {
+            _ = await endpointTask.WaitAsync(EndpointSettleBudget).ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // Deliberately swallowed: the endpoint's settle outcome is not
+            // under test on this path. The await observes whatever settle
+            // happened inside the budget, and the birth backstop holds the
+            // observation on the budget-expiry corner.
+        }
     }
 
     /// <summary>The one failure message for the helper's in-lock attribution assert (JF-681), owned here once.</summary>
@@ -1300,6 +1411,57 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Assert.Contains("THE TASK FAULTED BEFORE PARKING", failed.Message, StringComparison.Ordinal);
         Assert.Contains("InvalidOperationException", failed.Message, StringComparison.Ordinal);
         Assert.Contains("pre-lock boom (JF-681 fault observation)", failed.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-704 plant-throw observation: a plantWarmCache that throws used to
+    /// propagate its failure while the PARKED endpoint task kept running
+    /// unobserved (the helper's finally had released the gate, so the endpoint
+    /// later entered the lock scope and ran its encode after the test method
+    /// and its using-scoped fixtures had exited: static registry writes after
+    /// teardown, UnobservedTaskException candidate on its eventual fault).
+    /// The helper now observes the stranded endpoint before rethrowing (see
+    /// <see cref="ObserveStrandedEndpointAsync"/>). GREEN: the plant's own
+    /// exception is the one that surfaces (identity, not type: the endpoint's
+    /// own fault must not replace it) AND the endpoint had already settled by
+    /// then (the settle flag is written inside the endpoint before its fault,
+    /// so the flag's true value is reachable only through the helper's await
+    /// of the settle). The endpoint parks on a REAL per-item gate and holds a
+    /// 150ms settle distance after re-acquiring it, so the un-observed rethrow
+    /// (which fires at gate release, microseconds earlier) provably loses the
+    /// race. RED PROOF: removing the catch's ObserveStrandedEndpointAsync call
+    /// rethrows at gate release while the endpoint still holds its settle
+    /// distance, the flag reads false, and this pin fails on the settle assert.
+    /// </summary>
+    [Fact]
+    public async Task ServeInLockWarmCacheHelper_ThrowingPlant_ObservesStrandedEndpointBeforeRethrow()
+    {
+        string key = Guid.NewGuid().ToString("D");
+        bool endpointSettledBeforePlantSurfaced = false;
+        var plant = new IOException("plant boom (JF-704 stranded-endpoint observation)");
+
+        Task<ActionResult> StrandedEndpoint() => Task.Run<ActionResult>(async () =>
+        {
+            // Park exactly like a real endpoint: this acquisition blocks until
+            // the helper releases its gate, then keep the settle distance so
+            // the un-observed rethrow at gate release cannot win the race, and
+            // FAULT: the observation must swallow this fault without letting
+            // it replace the plant failure the caller asserts on.
+            using IDisposable reAcquired = await _cache.LockItemAsync(key, 0);
+            await Task.Delay(150);
+            endpointSettledBeforePlantSurfaced = true;
+            throw new InvalidOperationException("stranded endpoint fault (JF-704 pin)");
+        });
+
+        var surfaced = await Assert.ThrowsAsync<IOException>(() => ServeInLockWarmCacheAsync(
+            () => _cache.LockItemAsync(key, 0),
+            StrandedEndpoint,
+            () => throw plant));
+
+        Assert.Same(plant, surfaced);
+        Assert.True(
+            endpointSettledBeforePlantSurfaced,
+            "the helper surfaced the plant failure before the parked endpoint settled, so the endpoint is still running past this test: static registry writes after teardown and an unobserved eventual fault (JF-704)");
     }
 
     /// <summary>
