@@ -1,14 +1,17 @@
 ---
 id: JF-730
 title: >-
-  JF-730 - the VideoAudioControllerTests class is ~5.5 of the ~7 minutes per TFM;
-  timing-attributed splitting or park-window reduction with wall-clock proof
-status: To Do
+  JF-730 - the VideoAudioControllerTests class is ~5.5 of the ~7 minutes per
+  TFM; timing-attributed splitting or park-window reduction with wall-clock
+  proof
+status: Done
 assignee: []
 created_date: '2026-10-03 07:45'
+updated_date: '2026-10-03 15:42'
 labels:
   - test-infrastructure
   - performance
+dependencies: []
 priority: medium
 ---
 
@@ -186,27 +189,6 @@ lands mid-walk, the fast path serves warm, the probe reds).
 
 ## Final Summary
 
-JF-730 closed 2026-10-03 (rework round landed same day). The measured attribution
-REFUTED the task's premise: the class's 5.5 minutes were not the parks (18 sites
-x 400ms = 7.2s; the first commit message undercounts 17 and the attribution
-section carries the correction) or the settle budgets (reached by no test), but
-ONE test blocked 299.42s/299.67s (84% of the class) on the encode gate behind two
-live `sleep 300` fake encodes the SparesOtherDevices pin deliberately spared (the
-gate releases a slot only on process exit, cap 2, both slots held for the full
-sleep). The fix is that test's teardown: a re-arming kill-and-drain loop in a
-finally (registry kills via the shared KillLiveEncode, the pid-file backstop for
-unregistered encodes, polled together until the gate holds its configured cap)
-plus a per-launch tripwire so the guarded ordering regression reds at 30s instead
-of stalling the class again. Lever (a) was adopted on measurement (ParkWindowMs
-250, family green 10/10 at 250, 10/10 at 150, 6/6 at 100 on this host,
-loud-red-only failure mode, the slow-host false red and its remedy documented on
-the constant); levers (b) and (c) were declined with evidence (budgets never
-paid; the split needs the assembly-level parallelization switch opened for no
-remaining need). Wall clock per TFM: class 5m57s/5m44s -> 42s/42s (-88%/-87%),
-full suite 7m00s/6m56s -> 1m54s/1m55s (-73%/-72%), 5014/5014 green on both TFMs,
-pin families green UNCHANGED. Test-only: no production surface, no deploy. Gate
-rounds: /simplify (4 angles; the round caught my own sed collateral), /code-review
-high on the first diff (6 findings; 4 applied, 2 skipped with reasons), the
-coordinator's gate-marker rework round (7 findings: 6 applied, 1 filed as JF-731),
-and /code-review high on the rework diff (6 findings, all applied, including the
-zombie-leak fix that closed the tripwire's own regression-shaped hole).
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed by the orchestrator after the full cycle including an API-death recovery and a rework round: worker commits 41142f65 + 2229f537, merged as 66b33a7f. The suite wall-clock lever delivered by attribution, not guesswork: the task's premise (the parks) was REFUTED by TRX measurement - the class's cost was ONE test blocked 299s on the encode gate behind two deliberately spared sleep-300 fakes. The SparesOtherDevices teardown now kills every live encode through the hoisted KillLiveEncode registry helper (the JF-668 twin unified) with a KillEncodeByPidFile backstop, drains in a re-arming kill-and-poll loop, and refills to the configured cap; a per-launch 30s tripwire converts the supersede-kill ordering regression from a silent ~300s green into a red; the park window 400ms -> ParkWindowMs=250 with measured margins (10/10 at 250 and 150, 6/6 at 100; no false-green mechanism; the slow-host false red documented with its remedy). Wall-clock: full suite 7m00s -> 1m54s net9 (-73%), 6m56s -> 1m55s net10 (-72%); class -88%. The worker survived a glm-route corrupted-thought-signature death (resumed from transcript), and its rework gate refresh then caught the tripwire's own zombie-window flaw (a one-shot kill pass before an abandoned zombie could spawn its own sleep) - fixed with the re-arming drain. JF-731 filed (the Dispose-level class backstop). Suites: worker 5014/5014 both TFMs at the new speed, class 265/265 twice per TFM, and the merged-tree run itself 5019/5019 both TFMs exit 0 at 1m57s/2m11s - the dividend compounding its own verification. Test-only: no production surface, no deploy.
+<!-- SECTION:FINAL_SUMMARY:END -->
