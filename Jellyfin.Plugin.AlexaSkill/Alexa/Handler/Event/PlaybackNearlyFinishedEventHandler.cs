@@ -47,6 +47,11 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// the commit still runs before this method returns, preserving the JF-447
 /// directive-time-truth property the stop classifier relies on; the full decision
 /// record lives in the backlog task.
+/// JF-720: every session-queue APPEND in this handler routes through the
+/// SessionQueue append-unseen family (<see cref="SessionQueue.AppendUnseen(SessionInfo, System.Collections.Generic.IEnumerable{MediaBrowser.Model.Session.QueueItem})"/> at
+/// the fetch and the commit, <see cref="SessionQueue.UnseenItems"/> at the
+/// derive), pinned by the writer-side roster test; this handler never assigns
+/// NowPlayingQueue directly.
 /// </summary>
 #pragma warning disable CA1711
 public class PlaybackNearlyFinishedEventHandler : BaseHandler
@@ -418,24 +423,14 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
         // ARE the derivation input (ResolveNextItemId resolves the successor from
         // this queue view, and JF-666 requires the fetch before the precompute
         // early return), and the items belong to the queue the user asked to play,
-        // not a synthesized continuation.
-        var queue = new List<QueueItem>(session.NowPlayingQueue);
-        var seen = SessionQueue.IdSet(session);
-
+        // not a synthesized continuation. JF-720: the idiom lives in the ONE
+        // SessionQueue.AppendUnseen helper (a roster-pinned site).
         if (continuation.Shuffle)
         {
             newItems = Shuffler.ShuffleCopy(newItems);
         }
 
-        foreach (BaseItem item in newItems)
-        {
-            if (seen.Add(item.Id))
-            {
-                queue.Add(new QueueItem { Id = item.Id });
-            }
-        }
-
-        session.NowPlayingQueue = queue;
+        SessionQueue.AppendUnseen(session, newItems);
 
         // Remove continuation if we've fetched everything
         if (continuation.StartIndex >= continuation.TotalCount)
@@ -726,16 +721,10 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
 
         List<BaseItem> shuffled = Shuffler.ShuffleAndCap(similar, 15);
 
-        var appended = new List<QueueItem>();
-        var seen = SessionQueue.IdSet(session);
-
-        foreach (BaseItem track in shuffled)
-        {
-            if (seen.Add(track.Id))
-            {
-                appended.Add(new QueueItem { Id = track.Id });
-            }
-        }
+        // JF-720: the derive half of the append-unseen idiom
+        // (SessionQueue.UnseenItems, pure read; a roster-pinned site); the append
+        // itself waits for the commit.
+        List<QueueItem> appended = SessionQueue.UnseenItems(session, shuffled);
 
         return appended.Count == 0
             ? null
@@ -916,12 +905,13 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
     /// JF-712: the ONE commit point of the exhaustion arms' derived continuation,
     /// called only after the launch build succeeded (a refused launch throws before
     /// this runs; the policy and its exceptions live on the class doc). The append
-    /// RE-RUNS the membership dedup against the queue as it stands at commit time:
-    /// Amazon multi-fires NearlyFinished as concurrent requests, and a sibling fire
-    /// may have committed its own derived population inside this request's
-    /// derive-to-commit window (which spans the whole launch build, far wider than
-    /// the old write-at-derive window, whose whole-list REPLACE made the same race
-    /// a benign last-write-wins); a blind AddRange would double-append.
+    /// (JF-720: SessionQueue.AppendUnseen, whose derive half produced the pending
+    /// population) RE-RUNS the membership dedup against the queue as it stands at
+    /// commit time: Amazon multi-fires NearlyFinished as concurrent requests, and a
+    /// sibling fire may have committed its own derived population inside this
+    /// request's derive-to-commit window (which spans the whole launch build, far
+    /// wider than the old write-at-derive window, whose whole-list REPLACE made the
+    /// same race a benign last-write-wins); a blind AddRange would double-append.
     /// </summary>
     /// <param name="pending">The derived population to commit, or null (the plain queue-advance arms derive nothing).</param>
     /// <param name="session">The session whose queue the population appends to.</param>
@@ -933,31 +923,10 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             return;
         }
 
-        var queue = new List<QueueItem>(session.NowPlayingQueue);
-        var seen = SessionQueue.IdSet(session);
-        int appendedCount = 0;
-
-        foreach (QueueItem appended in pending.AppendedItems)
-        {
-            if (seen.Add(appended.Id))
-            {
-                queue.Add(appended);
-                appendedCount++;
-            }
-        }
-
-        if (appendedCount > 0)
-        {
-            // KNOWN RACE (JF-712 gate-marker): the copy-modify-assign above plus
-            // this whole-list replace is UNLOCKED, so two concurrent NearlyFinished
-            // fires whose commits interleave can drop one side's population (the
-            // re-dedup only prevents double-append, not lost update). The window is
-            // pre-existing (the old derive-time write had the same replace) and
-            // bounded to sibling fires near the same track end; a lock or a merge-
-            // style append belongs with the JF-720 helper extraction if the shape
-            // ever bites live.
-            session.NowPlayingQueue = queue;
-        }
+        // JF-720: the COMMIT half of the append-unseen idiom
+        // (SessionQueue.AppendUnseen, a roster-pinned site); the re-run's
+        // rationale lives on this method's doc, the race note in the helper's.
+        int appendedCount = SessionQueue.AppendUnseen(session, pending.AppendedItems).Count;
 
         if (pending.ArmRadioMode)
         {

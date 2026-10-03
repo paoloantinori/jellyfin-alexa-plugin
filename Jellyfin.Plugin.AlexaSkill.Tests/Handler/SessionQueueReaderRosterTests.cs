@@ -69,8 +69,12 @@ public class SessionQueueReaderRosterTests
     ///   through, and since JF-578 the both-stores queue-membership writer the
     ///   queue-editing intents route through (it calls the guard from inside, as
     ///   the owner).
-    /// - SessionQueue: passive index/id-set scan helper; its callers are
-    ///   PlaybackStarted (exempt), PlaybackNearlyFinished (adopted), and the
+    /// - SessionQueue: index/id-set scan plus the JF-720 append-unseen family
+    ///   (AppendUnseen is the ONE session-queue writer the PlaybackNearlyFinished
+    ///   arms' continuation appends route through; its call sites are pinned by
+    ///   PlaybackNearlyFinishedQueueWriteRosterTests); its callers are
+    ///   PlaybackStarted (exempt), PlaybackNearlyFinished and PlaybackFinished
+    ///   (both adopted, the latter via the JF-683 successor scan), and the
     ///   JF-578 writer's session leg inside ProgressReporter (owner), so adoption
     ///   is enforced at the callers.
     /// </summary>

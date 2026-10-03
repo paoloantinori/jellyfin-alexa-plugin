@@ -127,14 +127,7 @@ public class PauseResumeStateTests : PluginTestBase, IDisposable
     }
 
     private static AudioPlayerRequest CreateStoppedRequest(string token, long offsetMs)
-    {
-        return new AudioPlayerRequest
-        {
-            Type = "AudioPlayer.PlaybackStopped",
-            Token = token,
-            OffsetInMilliseconds = offsetMs
-        };
-    }
+        => TestHelpers.CreateAudioPlayerEventRequest("AudioPlayer.PlaybackStopped", token, offsetMs);
 
     // ---- DeviceQueue property tests ----
 

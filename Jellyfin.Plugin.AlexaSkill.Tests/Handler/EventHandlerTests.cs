@@ -83,15 +83,7 @@ public class EventHandlerTests : PluginTestBase, IDisposable
     }
 
     private static AudioPlayerRequest CreateAudioPlayerRequest(string type, string? token = null, long offset = 0)
-    {
-        var request = new AudioPlayerRequest
-        {
-            Type = type,
-            Token = token ?? Guid.NewGuid().ToString(),
-            OffsetInMilliseconds = offset
-        };
-        return request;
-    }
+        => TestHelpers.CreateAudioPlayerEventRequest(type, token, offset);
 
     [Fact]
     public void PlaybackStarted_CanHandle_ReturnsTrueForPlaybackStarted()
@@ -1419,12 +1411,7 @@ public class EventHandlerTests : PluginTestBase, IDisposable
     {
         var (config, _, sessionManager, context) = CreateSessionMissHarness();
         var handler = new PlaybackFailedEventHandler(sessionManager.Object, config, _loggerFactory);
-        var request = new AudioPlayerRequest
-        {
-            Type = "AudioPlayer.PlaybackFailed",
-            Token = Guid.NewGuid().ToString(),
-            OffsetInMilliseconds = 1
-        };
+        var request = TestHelpers.CreateAudioPlayerEventRequest("AudioPlayer.PlaybackFailed", offsetMs: 1);
 
         SkillResponse response = await handler.HandleRequestAsync(request, context, CancellationToken.None);
 
@@ -1541,12 +1528,7 @@ public class EventHandlerTests : PluginTestBase, IDisposable
         var (config, _, sessionManager, context) = CreateSessionMissHarness();
         RecordPreviousPlayOnHarnessDevice(context);
         var handler = new PlaybackFailedEventHandler(sessionManager.Object, config, _loggerFactory);
-        var request = new AudioPlayerRequest
-        {
-            Type = "AudioPlayer.PlaybackFailed",
-            Token = Guid.NewGuid().ToString(),
-            OffsetInMilliseconds = 1
-        };
+        var request = TestHelpers.CreateAudioPlayerEventRequest("AudioPlayer.PlaybackFailed", offsetMs: 1);
 
         SkillResponse response = await handler.HandleRequestAsync(request, context, CancellationToken.None);
 

@@ -102,12 +102,7 @@ public class PlaybackNearlyFinishedRefusalTests : PluginTestBase, IDisposable
             _queueManager);
 
     private static AudioPlayerRequest CreateNearlyFinishedRequest(string token, long offsetMs = 120_000)
-        => new()
-        {
-            Type = "AudioPlayer.PlaybackNearlyFinished",
-            Token = token,
-            OffsetInMilliseconds = offsetMs
-        };
+        => TestHelpers.CreateAudioPlayerEventRequest("AudioPlayer.PlaybackNearlyFinished", token, offsetMs);
 
     /// <summary>
     /// The two-track continuation scene: the device store carries the queue the play

@@ -83,14 +83,7 @@ public class RadioModeTests : PluginTestBase, IDisposable
     private static Context CreateContext() => TestHelpers.CreateTestContext();
 
     private static AudioPlayerRequest CreateNearlyFinishedRequest(string token)
-    {
-        return new AudioPlayerRequest
-        {
-            Type = "AudioPlayer.PlaybackNearlyFinished",
-            Token = token,
-            OffsetInMilliseconds = 0
-        };
-    }
+        => TestHelpers.CreateAudioPlayerEventRequest("AudioPlayer.PlaybackNearlyFinished", token);
 
     [Fact]
     public void PlayRadio_CanHandle_ReturnsTrue()

@@ -79,14 +79,7 @@ public class GaplessPlaybackTests : PluginTestBase, IDisposable
     }
 
     private static AudioPlayerRequest CreateNearlyFinishedRequest(string? token = null)
-    {
-        return new AudioPlayerRequest
-        {
-            Type = "AudioPlayer.PlaybackNearlyFinished",
-            Token = token ?? Guid.NewGuid().ToString(),
-            OffsetInMilliseconds = 0
-        };
-    }
+        => TestHelpers.CreateAudioPlayerEventRequest("AudioPlayer.PlaybackNearlyFinished", token);
 
     private PlaybackNearlyFinishedEventHandler CreateHandler()
     {
@@ -115,12 +108,7 @@ public class GaplessPlaybackTests : PluginTestBase, IDisposable
     public void CanHandle_ReturnsFalseForPlaybackStarted()
     {
         var handler = CreateHandler();
-        var request = new AudioPlayerRequest
-        {
-            Type = "AudioPlayer.PlaybackStarted",
-            Token = Guid.NewGuid().ToString(),
-            OffsetInMilliseconds = 0
-        };
+        var request = TestHelpers.CreateAudioPlayerEventRequest("AudioPlayer.PlaybackStarted");
 
         Assert.False(handler.CanHandle(request));
     }
