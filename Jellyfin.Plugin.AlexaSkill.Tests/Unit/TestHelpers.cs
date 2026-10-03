@@ -346,6 +346,26 @@ internal static class TestHelpers
     }
 
     /// <summary>
+    /// JF-715: the ONE PlaySongIntent request builder (hoisted from the private
+    /// copies the two multi-value-ER suites carried; the CountingArtistIndex
+    /// convention): the song + musician slot pair on the it-IT wire shape.
+    /// </summary>
+    /// <param name="song">The raw song slot value.</param>
+    /// <param name="musicianSlot">The musician slot (any ER shape).</param>
+    /// <param name="locale">The request locale.</param>
+    /// <returns>The intent request.</returns>
+    internal static IntentRequest CreatePlaySongIntent(string song, Slot musicianSlot, string locale = "it-IT")
+    {
+        var intent = new Intent { Name = IntentNames.PlaySong };
+        intent.Slots = new Dictionary<string, Slot>
+        {
+            ["song"] = new Slot { Name = "song", Value = song },
+            ["musician"] = musicianSlot
+        };
+        return new IntentRequest { Intent = intent, Locale = locale, RequestId = "test-req" };
+    }
+
+    /// <summary>
     /// JF-562/JF-564: a context whose AudioPlayer carries the given stream token on a
     /// PLAYING device (the token-vs-ledger displacement shape the transport suites
     /// exercise; previously one private copy per suite). JF-315 batch 5: the player
@@ -954,6 +974,35 @@ internal sealed class FakeArtistIndex : IArtistIndex
     /// </summary>
     public static Dictionary<Guid, (string Primary, string? Alternate)> CodesFromArtistNames(params BaseItem[] artists)
         => artists.ToDictionary(a => a.Id, a => DoubleMetaphone.Encode(a.Name!));
+}
+
+/// <summary>
+/// Delegating <see cref="IArtistIndex"/> wrapper with one GetArtists call
+/// counter, for the pool-sharing/pool-threading pins (JF-702 introduced it
+/// privately in MusicianMultiValueErAdoptionTests; JF-715 hoisted it here for
+/// the suites that need the same count: FakeArtistIndex is sealed, so counting
+/// runs through this wrapper, whose capture keeps the identity so every
+/// GetArtists the chain issues stays visible).
+/// </summary>
+internal sealed class CountingArtistIndex : IArtistIndex
+{
+    private readonly IArtistIndex _inner;
+    internal int GetArtistsCalls { get; private set; }
+
+    internal CountingArtistIndex(IArtistIndex inner) => _inner = inner;
+
+    public IReadOnlyList<BaseItem> GetArtists(Guid[]? topParentIds = null)
+    {
+        GetArtistsCalls++;
+        return _inner.GetArtists(topParentIds);
+    }
+
+    public bool IsReady => _inner.IsReady;
+    public bool IsDisabled => _inner.IsDisabled;
+    public int Count => _inner.Count;
+    public bool TryGetPhoneticCode(Guid artistId, out (string Primary, string? Alternate) codes)
+        => _inner.TryGetPhoneticCode(artistId, out codes);
+    public IArtistIndex CaptureSnapshot() => this;
 }
 
 /// <summary>

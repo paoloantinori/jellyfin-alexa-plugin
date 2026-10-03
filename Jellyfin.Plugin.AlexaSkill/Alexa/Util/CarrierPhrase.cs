@@ -10,7 +10,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// each call site and is documented there:
 /// <list type="bullet">
 /// <item><description>AlbumPlayService (JF-469): FALLBACK-ONLY, one bounded retry after a confirmed raw miss.</description></item>
-/// <item><description>PlaySongIntentHandler.StripSongCarrierPhrase: PREEMPTIVE, single cut before the search.</description></item>
+/// <item><description>MultiValueErDisambiguation.StripSongCarrierPhrase (JF-715 home, moved off PlaySongIntentHandler): PREEMPTIVE, single cut before the search (PlaySong's own path) and inside the song-constraint probe's normalization.</description></item>
 /// <item><description>PlaylistNameNormalizer (JF-600/602): PREEMPTIVE at read time for speech/create, RAW-FIRST inside the edit family's matching.</description></item>
 /// <item><description>PlayVideoIntentHandler (JF-509): RAW-FIRST and deliberately NOT on this primitive - its strip is three-state (null = no retry, stripped = retry) with a whole-value-is-the-noun collapse that a bool cut cannot express.</description></item>
 /// </list>

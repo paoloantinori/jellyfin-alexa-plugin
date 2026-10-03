@@ -761,10 +761,20 @@ public sealed class CrossMediaFallback
         // implementation cannot pin.
         IArtistIndex? pinnedArtistIndex = artistIndex.Pin();
 
+        // JF-715 pool threading (the SearchAsync preloadedPool axis): the chain's
+        // in-memory tier-1 materialization and the JF-652 near-tie pool below are
+        // the SAME scoped fetch over the SAME pinned view, so it is materialized
+        // ONCE here and handed to both consumers. Null on the cold/DB branch,
+        // which never reads a pool (the tie leg then re-fetches through the view
+        // or falls back to the chain results, the pre-JF-715 shape).
+        IReadOnlyList<BaseItem>? scopedPool = pinnedArtistIndex?.IsReady == true
+            ? pinnedArtistIndex.GetArtists(LibraryFilter.ResolveForUser(user, libraryManager, _logger))
+            : null;
+
         IReadOnlyList<BaseItem> artists = await ArtistSearch.SearchAsync(
             cleaned, user, libraryManager, pinnedArtistIndex, _logger,
             (q, ct) => RetryAsync(() => libraryManager.GetItemList(q), logLabel + ":GetArtistsFallback", ct),
-            locale, cancellationToken).ConfigureAwait(false);
+            locale, cancellationToken, preloadedPool: scopedPool).ConfigureAwait(false);
 
         if (artists.Count == 0)
         {
@@ -811,7 +821,7 @@ public sealed class CrossMediaFallback
             if (kana)
             {
                 SkillResponse? tieOutcome = ResolveKanaOriginTie(
-                    bestItem, bestScore, artists, cleaned, normalThreshold, user, pinnedArtistIndex, libraryManager, locale, logLabel);
+                    bestItem, bestScore, artists, cleaned, normalThreshold, user, pinnedArtistIndex, scopedPool, libraryManager, locale, logLabel);
                 if (tieOutcome != null)
                 {
                     return tieOutcome;
@@ -955,10 +965,12 @@ public sealed class CrossMediaFallback
     /// AskMultipleArtists, the PlayArtistSongs JF-420.2 shape) is fired instead of a
     /// wrong auto-play; null means a clear margin and playback proceeds. Pool
     /// sourcing (this method's only remaining job next to the ask) needs the FULL
-    /// artist pool because the search chain returns a single best: the pinned index
-    /// supplies it, library-scoped so an excluded-library name is never spoken (the
-    /// JF-457 contract). Without an index the chain result list is the only pool and
-    /// no rival can be found there (single-best shape).
+    /// artist pool because the search chain returns a single best: the caller's
+    /// preloaded pool (JF-715, the same fetch the search chain consumed) comes
+    /// first, then the pinned index's own scoped fetch (the cold shape re-fetching
+    /// through the view), library-scoped either way so an excluded-library name is
+    /// never spoken (the JF-457 contract). Without an index the chain result list
+    /// is the only pool and no rival can be found there (single-best shape).
     /// </summary>
     private SkillResponse? ResolveKanaOriginTie(
         BaseItem bestItem,
@@ -968,11 +980,14 @@ public sealed class CrossMediaFallback
         int normalThreshold,
         Entities.User user,
         IArtistIndex? pinnedIndex,
+        IReadOnlyList<BaseItem>? preloadedPool,
         ILibraryManager libraryManager,
         string locale,
         string logLabel)
     {
-        IReadOnlyList<BaseItem> pool = pinnedIndex?.GetArtists(LibraryFilter.ResolveForUser(user, libraryManager, _logger)) ?? chainResults;
+        IReadOnlyList<BaseItem> pool = preloadedPool
+            ?? pinnedIndex?.GetArtists(LibraryFilter.ResolveForUser(user, libraryManager, _logger))
+            ?? chainResults;
         var pair = Util.ArtistSearch.FindNearTiedRunnerUp(cleanedQuery, bestItem, bestScore, pool, pinnedIndex, normalThreshold);
         if (pair == null)
         {

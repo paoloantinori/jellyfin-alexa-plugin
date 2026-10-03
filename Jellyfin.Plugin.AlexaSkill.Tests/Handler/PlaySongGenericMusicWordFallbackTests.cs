@@ -240,7 +240,7 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
 
         foreach (var word in originalWords)
         {
-            Assert.True(PlaySongIntentHandler.GenericMusicWords.Contains(word),
+            Assert.True(MultiValueErDisambiguation.GenericMusicWords.Contains(word),
                 $"Expected '{word}' to be in GenericMusicWords");
         }
     }
@@ -269,7 +269,7 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
 
         foreach (var word in newWords)
         {
-            Assert.True(PlaySongIntentHandler.GenericMusicWords.Contains(word),
+            Assert.True(MultiValueErDisambiguation.GenericMusicWords.Contains(word),
                 $"Expected '{word}' to be in GenericMusicWords");
         }
     }
@@ -277,11 +277,11 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
     [Fact]
     public void GenericMusicWords_CaseInsensitive()
     {
-        Assert.Contains("MUSIC", PlaySongIntentHandler.GenericMusicWords);
-        Assert.Contains("Musica", PlaySongIntentHandler.GenericMusicWords);
-        Assert.Contains("BRANO", PlaySongIntentHandler.GenericMusicWords);
-        Assert.Contains("Chanson", PlaySongIntentHandler.GenericMusicWords);
-        Assert.Contains("LIED", PlaySongIntentHandler.GenericMusicWords);
+        Assert.Contains("MUSIC", MultiValueErDisambiguation.GenericMusicWords);
+        Assert.Contains("Musica", MultiValueErDisambiguation.GenericMusicWords);
+        Assert.Contains("BRANO", MultiValueErDisambiguation.GenericMusicWords);
+        Assert.Contains("Chanson", MultiValueErDisambiguation.GenericMusicWords);
+        Assert.Contains("LIED", MultiValueErDisambiguation.GenericMusicWords);
     }
 
     [Fact]
@@ -292,7 +292,7 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
 
         foreach (var word in excludedWords)
         {
-            Assert.False(PlaySongIntentHandler.GenericMusicWords.Contains(word),
+            Assert.False(MultiValueErDisambiguation.GenericMusicWords.Contains(word),
                 $"Did NOT expect structural word '{word}' to be in GenericMusicWords");
         }
     }
@@ -426,7 +426,12 @@ public class PlaySongGenericMusicWordFallbackTests : PluginTestBase
     [InlineData("der hugenottenfestmarsch", false)]
     public void IsGenericMusicQuery_MembershipTable(string query, bool expected)
     {
-        Assert.Equal(expected, PlaySongIntentHandler.IsGenericMusicQuery(query));
+        // JF-715: the membership test went private with the fold; the table is
+        // probed through the ONE raw-slot entry (IsGenericSongConstraint, the
+        // composite's constraint probe). Every row below is a raw-slot shape:
+        // the pipeline (carrier strip, romanize, article strip) is identity on
+        // all of them except the article forms, which the article strip handles.
+        Assert.Equal(expected, MultiValueErDisambiguation.IsGenericSongConstraint(query));
     }
 
     [Fact]

@@ -601,6 +601,19 @@ internal static class ArtistSearch
     /// <param name="mode">Fast skips recall tiers for speed; Thorough (default) runs the full chain.</param>
     /// <param name="asrCompoundWordFixEnabled">Whether the DB tier 1 retries ASR compound-word variants (Thorough only).</param>
     /// <param name="parallelDbTiers">Whether the Thorough DB tiers 2-4 run as Task.WhenAll with the 2&gt;3&gt;4 priority pick (the inline chain's structure kept verbatim per the JF-315 6b plan: the tier tasks' retry backoffs overlap, while the synchronous queries themselves share the request thread) instead of sequentially.</param>
+    /// <param name="preloadedPool">JF-715: an already-materialized scoped pool
+    /// the in-memory branch consumes instead of its own GetArtists fetch (the
+    /// fall-through legs of the multi-value-ER gate, whose TryArbitrate already
+    /// materialized the identical pool; without the threading the rarest leg
+    /// paid one redundant ResolveForUser plus a full artist-list copy).
+    /// CONTRACT: the pool must be
+    /// <c>artistIndex.Pin().GetArtists(LibraryFilter.ResolveForUser(user, libraryManager, logger))</c>
+    /// for the SAME <paramref name="artistIndex"/> instance passed here (exactly
+    /// what the multi-value-ER arbitration ships on its result), so the artist
+    /// list and the phonetic codes resolve from ONE publish (the JF-448
+    /// invariant; a pool from a different publish breaks it). Null (the
+    /// default) keeps the internal fetch; the database branch never consumes a
+    /// pool.</param>
     /// <returns>The matched artist candidates (possibly several; judgment is the caller's).</returns>
     public static async Task<IReadOnlyList<BaseItem>> SearchAsync(
         string musician,
@@ -613,7 +626,8 @@ internal static class ArtistSearch
         CancellationToken cancellationToken,
         SearchResponseMode mode = SearchResponseMode.Thorough,
         bool asrCompoundWordFixEnabled = false,
-        bool parallelDbTiers = false)
+        bool parallelDbTiers = false,
+        IReadOnlyList<BaseItem>? preloadedPool = null)
     {
         // JF-643: the ONE query-side romanization for the artist chain (both the
         // in-memory tiers and every database tier below search Latin library names;
@@ -646,12 +660,27 @@ internal static class ArtistSearch
         // Resolve the library scope ONCE for both branches (E4 hoist): the in-memory
         // read and every database tier below consume the same value, so no tier
         // re-resolves it (ResolveForUser is cached, but one call is still cheaper).
-        Guid[]? topParentIds = LibraryFilter.ResolveForUser(user, libraryManager, logger);
+        // JF-715: a preloaded pool the in-memory branch is about to consume makes
+        // the resolution dead on that branch (its only in-memory consumer is the
+        // fetch the pool replaces; the database tiers live in the other branch),
+        // so the pool-covered leg skips it (simplify/efficiency round).
+        Guid[]? topParentIds = preloadedPool != null && pinned?.IsReady == true
+            ? null
+            : LibraryFilter.ResolveForUser(user, libraryManager, logger);
 
         if (pinned?.IsReady == true)
         {
             searchSource = "InMemory";
-            var allArtists = pinned.GetArtists(topParentIds);
+            // JF-715: a caller-supplied pool (the multi-value-ER gate's fetch)
+            // replaces the internal materialization; the contract on the
+            // parameter guarantees it is this same view's scoped list, so the
+            // tiers below read list and phonetic codes from ONE publish.
+            if (preloadedPool != null)
+            {
+                logger.LogDebug("ArtistSearch: consuming preloaded pool ({Count} artists, JF-715)", preloadedPool.Count);
+            }
+
+            var allArtists = preloadedPool ?? pinned.GetArtists(topParentIds);
 
             // Tier 1: name contains query, with the JF-381 coincidental-containment gate.
             // Without the gate a short query inside a long name wins tier 1 and stops the

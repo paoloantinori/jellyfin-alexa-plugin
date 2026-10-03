@@ -177,6 +177,30 @@ public class KanaOriginAcceptanceTests : PluginTestBase, IDisposable
     }
 
     [Fact]
+    public async Task TryEntityFallback_KanaQuery_TiePool_ReusesTheChainFetch_NoSecondMaterialization()
+    {
+        // JF-715 pool threading at the cross-media gate: the chain's in-memory
+        // tier-1 materialization and the JF-652 near-tie pool are the SAME scoped
+        // fetch, so the tie leg that fires the ask sees exactly ONE GetArtists
+        // (the hoisted fetch both consumers share), never the second the
+        // pre-JF-715 re-fetch paid.
+        var queen = Queen();
+        var keane = Keane();
+        var counting = new CountingArtistIndex(new FakeArtistIndex(new[] { queen, keane }, CodesFromNames(queen, keane)));
+
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
+        var probe = new SharedGateProbeHandler(_fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory);
+
+        SkillResponse? result = await probe.CallTryEntityFallbackAsync(
+            "クイーン", jellyfinUser, _fx.CreateUser(), _fx.CreateSession(), _fx.CreateContext(), "en-US",
+            _fx.LibraryManager.Object, _fx.UserDataManager.Object, "kana probe", counting, CancellationToken.None);
+
+        Assert.NotNull(result);
+        Assert.True(IsDisambiguationAsk(result, "Queen", "Keane"), "the tie must still fire through the shared pool");
+        Assert.Equal(1, counting.GetArtistsCalls);
+    }
+
+    [Fact]
     public async Task TryEntityFallback_KanaQuery_PlainFuzzyOnlyMatch_ReturnsNull()
     {
         var sator = new MusicArtist { Name = "Sator", Id = Guid.NewGuid() };

@@ -63,16 +63,10 @@ public class MusicianMultiValueErDisambiguationTests : PluginTestBase, IDisposab
             _fx.LoggerFactory,
             index);
 
+    // JF-715: delegates to the ONE shared builder (TestHelpers.CreatePlaySongIntent,
+    // the CountingArtistIndex hoist convention) keeping this suite's local name.
     private static IntentRequest CreateSongIntent(string song, Slot musicianSlot, string locale = "it-IT")
-    {
-        var intent = new Intent { Name = IntentNames.PlaySong };
-        intent.Slots = new Dictionary<string, Slot>
-        {
-            ["song"] = new Slot { Name = "song", Value = song },
-            ["musician"] = musicianSlot
-        };
-        return new IntentRequest { Intent = intent, Locale = locale, RequestId = "test-req" };
-    }
+        => TestHelpers.CreatePlaySongIntent(song, musicianSlot, locale);
 
     private static IntentRequest CreateArtistIntent(Slot musicianSlot, string locale = "it-IT")
     {

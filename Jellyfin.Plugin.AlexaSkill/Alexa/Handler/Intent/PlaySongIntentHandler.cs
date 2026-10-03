@@ -29,127 +29,6 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// </summary>
 public class PlaySongIntentHandler : BaseHandler
 {
-    private static readonly string[] SongCarrierPhrases = new[]
-    {
-        // Phrases that appear right before {song} in utterance templates.
-        // Within each locale group, longer phrases come first (e.g. "the song called " before "the song ").
-        // English
-        "the song called ", "a song called ",
-        "that song ", "the song ", "the track ", "a song ", "a track ",
-        // Italian
-        "la canzone ", "il brano ", "il pezzo ", "la traccia ",
-        "una canzone ", "un brano ", "un pezzo ", "una traccia ",
-        "canzone ", "brano ", "pezzo ", "traccia ",
-        // German
-        "das lied ", "das stück ", "den titel ",
-        "ein lied ", "ein stück ",
-        // Spanish
-        "la canción ", "el tema ", "una canción ", "canción ",
-        // French
-        "la chanson ", "le titre ", "le morceau ", "une chanson ", "chanson ",
-        // Dutch
-        "het liedje ", "het nummer ", "liedje ", "nummer ",
-        // Portuguese
-        "a música ", "a faixa ", "música ",
-    };
-
-    // Generic words meaning "music/songs" across supported locales.
-    // When Alexa captures one of these as the {song} slot alongside a {musician} slot,
-    // the user means "play music by <artist>" not "play a song titled 'music'".
-    internal static readonly HashSet<string> GenericMusicWords = new(StringComparer.OrdinalIgnoreCase)
-    {
-        // English
-        "music", "songs", "song", "track", "tracks", "tune", "tunes",
-        // Italian
-        "musica", "canzoni", "canzone", "brani", "brano", "pezzo", "traccia",
-        // German
-        "musik", "lieder", "lied", "titel", "song",
-        // Spanish
-        "música", "musica", "canciones", "canción", "cancion", "tema", "temas",
-        // French
-        "chansons", "chanson", "musique", "morceau", "titre", "titres",
-        // Dutch
-        "muziek", "liedjes", "liedje", "nummer", "nummers",
-        // Portuguese
-        "canções", "cancoes", "músicas", "musicas", "faixa", "faixas",
-    };
-
-    // JF-697: leading articles of every language the GenericMusicWords set covers
-    // (en, it, de, es, fr, nl, pt). ASR delivers the carrier WITH its article
-    // ("la musica di pink" -> song slot "la musica"), so the generic-word gate
-    // must test the article-stripped form. Membership-test only: the probe never
-    // feeds the song search, so a real song titled with an article ("La Vie En
-    // Rose") still matches by title. Simple articles only by design: partitive
-    // and contracted forms ("della musica", "de la musique") are a deliberate
-    // scope cap, not yet observed in a captured slot.
-    // Sibling tables, deliberately independent: ArtistSearch.ItalianLeadingArticles
-    // (it-only, shapes the MUSICIAN search input), KeywordMatcher.StopWords
-    // (per-locale tokenizer vocabulary; its any-locale union over-strips real
-    // titles, and no existing helper covers the l'/un' elisions), and this file's
-    // own SongCarrierPhrases (carrier+NOUN phrases with a trailing space, which
-    // miss the no-trailing-space slot shape this table covers).
-    private static readonly string[] GenericMusicLeadingArticles = new[]
-    {
-        // Italian
-        "il", "lo", "la", "i", "gli", "le", "un", "una",
-        // English
-        "the", "a", "an",
-        // German
-        "der", "die", "das", "den", "dem", "ein", "eine",
-        // Spanish
-        "el", "los", "las",
-        // French
-        "le", "les", "une",
-        // Portuguese
-        "o", "os", "as", "um", "uma",
-        // Dutch
-        "de", "het", "een",
-    };
-
-    /// <summary>
-    /// JF-697 membership test for the generic-music-word fallback gate: true when
-    /// the song query is a generic music word either bare or after stripping one
-    /// leading article of the covered languages ("la musica" -> "musica").
-    /// The song search itself keeps the raw slot value.
-    /// </summary>
-    internal static bool IsGenericMusicQuery(string songQuery)
-    {
-        // When no article was stripped the probe returns the input unchanged, so
-        // this single Contains covers the bare-word case too.
-        return GenericMusicWords.Contains(StripGenericMusicLeadingArticle(songQuery));
-    }
-
-    /// <summary>
-    /// Strips ONE leading space-separated article from the query; returns the
-    /// input unchanged when no article is present (null/empty included, matching
-    /// the null-safe HashSet.Contains this probe replaced). Safe against real
-    /// titles by construction: the caller only consumes the result as a
-    /// GenericMusicWords membership probe.
-    /// </summary>
-    internal static string StripGenericMusicLeadingArticle(string songQuery)
-    {
-        if (string.IsNullOrEmpty(songQuery))
-        {
-            return songQuery;
-        }
-
-        string trimmed = songQuery.TrimStart();
-        int space = trimmed.IndexOf(' ');
-        if (space > 0)
-        {
-            string first = trimmed[..space];
-            foreach (string article in GenericMusicLeadingArticles)
-            {
-                if (string.Equals(first, article, StringComparison.OrdinalIgnoreCase))
-                {
-                    return trimmed[(space + 1)..].Trim();
-                }
-            }
-        }
-
-        return songQuery;
-    }
-
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
     private readonly IUserDataManager _userDataManager;
@@ -267,7 +146,11 @@ public class PlaySongIntentHandler : BaseHandler
             return musicDisabled;
         }
 
-        songQuery = StripSongCarrierPhrase(songQuery);
+        // JF-715: the RAW slot value feeds the gate-consume composite below (its
+        // constraint probe owns the normalization from the raw form); the local
+        // songQuery keeps its own search-path normalization as before.
+        string rawSongQuery = songQuery!;
+        songQuery = MultiValueErDisambiguation.StripSongCarrierPhrase(songQuery);
         // JF-643: the song title feeds the SearchTerm index and the keyword-matcher
         // fallbacks below, both Latin-script; romanize the query once (a ja-JP title
         // slot arrives as katakana).
@@ -291,65 +174,36 @@ public class PlaySongIntentHandler : BaseHandler
         string? matchedArtistName = null;
         if (!string.IsNullOrWhiteSpace(musicianQuery))
         {
-            // JF-690: the shared multi-value-ER gate (it owns the full contract),
-            // restricted to the generic-music-word shape: when the song slot
-            // carries a REAL title, the title itself keeps driving today's
-            // rank-#1 scoped search, because the gate's confirm leg cannot
-            // preserve the song constraint and asking here would drop the
-            // explicitly requested song (code-review finding, applied). Placed
-            // before the artist search so the ask never pays for the search
-            // (only the earlier "searching" announcement is spoken).
-            if (IsGenericMusicQuery(songQuery))
+            // JF-715: the gate-consume composite shared by the three song+musician
+            // sites (PlaySong + the AddToQueue/PlayNext twins; full contract on
+            // TryArbitrateOrSearchAsync). Site-specific tail kept HERE: the
+            // generic-word artist-play bypass below, which consumes the same
+            // resolved artist.
+            var (gateTerminal, gateArtistIds, gateArtistName) = await MultiValueErDisambiguation.TryArbitrateOrSearchAsync(
+                intentRequest, user, _artistIndex, _libraryManager, Logger, locale,
+                rawSongQuery,
+                canonicalMusician ?? musicianQuery,
+                musicianQuery,
+                "GetArtists",
+                cancellationToken).ConfigureAwait(false);
+            if (gateTerminal != null)
             {
-                var arbitration = MultiValueErDisambiguation.TryArbitrate(
-                    intentRequest, user, _artistIndex, _libraryManager, Logger, locale);
-                if (arbitration.Ask != null)
-                {
-                    return arbitration.Ask;
-                }
-
-                if (arbitration.ResolvedArtist is { } resolvedArtist)
-                {
-                    // The ambiguity collapsed to one library artist (stale
-                    // catalog candidates): proven evidence outranks a search
-                    // driven by the stale rank-#1 canonical.
-                    matchedArtistName = resolvedArtist.Name;
-                    artistsIds.Add(resolvedArtist.Id);
-                }
+                return gateTerminal;
             }
 
-            if (artistsIds.Count == 0)
-            {
-                string searchMusician = canonicalMusician ?? musicianQuery;
-                Logger.LogDebug("PlaySong: searching for artist filter='{Musician}'", searchMusician);
-                IReadOnlyList<BaseItem> artists = await Util.ArtistSearch.SearchAsync(
-                    searchMusician, user, _libraryManager, _artistIndex, Logger,
-                    (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", ct),
-                    locale, cancellationToken).ConfigureAwait(false);
-
-                Logger.LogDebug("PlaySong: artist search returned {Count} results for '{Musician}'", artists.Count, searchMusician);
-
-                if (artists.Count == 0)
-                {
-                    return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundSongByArtist", locale, musicianQuery));
-                }
-
-                matchedArtistName = artists[0].Name;
-                foreach (BaseItem artist in artists)
-                {
-                    artistsIds.Add(artist.Id);
-                }
-            }
+            artistsIds = gateArtistIds;
+            matchedArtistName = gateArtistName;
         }
 
         // When the song query is a generic word like "musica"/"music" and we have
         // a valid artist, skip the song search and go straight to artist playback.
         // This avoids 1-4 wasted DB queries searching for a literal "music" song.
-        // JF-697: membership via IsGenericMusicQuery (article forms "la musica",
-        // "die Musik", "la musique" now match); the article probe does NOT feed
-        // the song search below, which runs the pre-gate value (carrier-stripped,
-        // romanized slot) so article-titled real songs still match by title.
-        if (IsGenericMusicQuery(songQuery)
+        // JF-697: the article probe does NOT feed the song search below, which
+        // runs the pre-gate value (carrier-stripped, romanized slot) so
+        // article-titled real songs still match by title.
+        // JF-715: the ONE raw-slot probe (the composite's constraint probe;
+        // idempotent on the raw value, so no second derivation here).
+        if (MultiValueErDisambiguation.IsGenericSongConstraint(rawSongQuery)
             && !string.IsNullOrWhiteSpace(musicianQuery) && artistsIds.Count > 0)
         {
             Logger.LogInformation(
@@ -576,16 +430,6 @@ public class PlaySongIntentHandler : BaseHandler
 
         response.Response.OutputSpeech = await Launch.SpeakVideoLaunchAnnounceAsync(context, request, response.Response.OutputSpeech).ConfigureAwait(false);
         return response;
-    }
-
-    // Alexa's NLU can misalign slot boundaries, causing carrier phrases like
-    // "la canzone" to bleed into the slot value. Strip them before searching.
-    internal static string StripSongCarrierPhrase(string query)
-    {
-        // The ONE single-cut primitive (JF-610); returns the ORIGINAL query on
-        // no cut, the stripped remainder on a cut (preemptive policy).
-        string trimmed = query.TrimStart();
-        return Util.CarrierPhrase.TryStripLeading(ref trimmed, SongCarrierPhrases) ? trimmed : query;
     }
 
     /// <summary>

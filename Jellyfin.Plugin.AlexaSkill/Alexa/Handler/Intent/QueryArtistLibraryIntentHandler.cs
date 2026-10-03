@@ -129,6 +129,14 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
 
         string musicianSearch = canonicalMusician ?? musician;
 
+        // JF-448 caller-pins-first (the PlayAlbum precedent, the choke-preserving
+        // unguarded Pin): the gate below and the fall-through search read ONE
+        // publish, and the gate's pool seeds that search (JF-715) only through
+        // the pinned view; a warming index pins to a NOT-READY view so the
+        // search's JF-419.2 choke point still throws (redundant with this
+        // handler's own entry gate, kept uniform with the other JF-715 sites).
+        IArtistIndex? pinnedArtistIndex = _artistIndex.Pin();
+
         // JF-702: the shared multi-value-ER gate (it owns the full contract),
         // PlayArtistSongs' shape: this intent's only content input IS the musician
         // slot, so no constraint needs preserving and the gate runs unrestricted.
@@ -137,7 +145,7 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
         // stale-catalog collapse lists the proven survivor instead of letting the
         // stale rank-#1 canonical drive the not-found.
         var multiValue = MultiValueErDisambiguation.TryArbitrate(
-            intentRequest, user, _artistIndex, _libraryManager, Logger, locale);
+            intentRequest, user, pinnedArtistIndex, _libraryManager, Logger, locale);
         if (multiValue.Ask != null)
         {
             return multiValue.Ask;
@@ -146,9 +154,9 @@ public class QueryArtistLibraryIntentHandler : BaseHandler
         IReadOnlyList<BaseItem> artists = multiValue.ResolvedArtist is { } resolvedArtist
             ? new List<BaseItem> { resolvedArtist }
             : await Util.ArtistSearch.SearchAsync(
-                musicianSearch, user, _libraryManager, _artistIndex, Logger,
+                musicianSearch, user, _libraryManager, pinnedArtistIndex, Logger,
                 (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", ct),
-                locale, cancellationToken).ConfigureAwait(false);
+                locale, cancellationToken, preloadedPool: multiValue.Pool).ConfigureAwait(false);
 
         if (artists.Count == 0)
         {
