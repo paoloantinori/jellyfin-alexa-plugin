@@ -171,24 +171,34 @@ public class LibrarySyncService
         Dictionary<string, string> mintedVersionsByPayload = new(StringComparer.Ordinal);
 
         // JF-706: the ONE per-type wiring table for the whole sync (locale-
-        // invariant, built once; the getters read the user's stored catalog ids
-        // live). The per-leg loop inside RunLegAsync, the injection gate, and
-        // the per-type id/version extraction at the UpdateInteractionModelAsync
-        // call all derive from this list, collapsing three parallel call
-        // sites, the gate, and six positional injection arguments (the repo's
+        // invariant, built once; the accessors read and write the user's
+        // stored catalog ids live). The per-leg loop inside RunLegAsync, the
+        // injection gate, the per-type id/version extraction at the
+        // UpdateInteractionModelAsync call, and (JF-711) the stored-id
+        // write-back inside SyncCatalogForLocaleAsync all derive from this
+        // list, collapsing three parallel call sites, the gate, six positional
+        // injection arguments, and the per-type id assignment (the repo's
         // "missed one" bug class: a missed site compiles clean and freezes or
         // syncs inconsistently). The catalog id is a GETTER, not a snapshot:
-        // SyncCatalogForLocaleAsync assigns it when it creates the catalog, so
-        // it is read live at the leg call and re-read right after the leg
-        // returns (final from there: a leg writes only its own type's id). A
-        // fourth catalog type is a one-row edit HERE plus its write-back
-        // branch in SyncCatalogForLocaleAsync (still per-type there, tracked
-        // as JF-711).
-        var typeLegs = new (CatalogType Type, IReadOnlyList<BaseItem> Items, Func<string?> StoredCatalogId, string Name, string Description)[]
+        // SyncCatalogForLocaleAsync stores a newly created id through the
+        // getter's paired SETTER, so it is read live at the leg call and
+        // re-read right after the leg returns (final from there: a leg writes
+        // only its own type's id). JF-711: the setter is a required tuple
+        // element, so a fourth catalog type is a one-row edit HERE whose
+        // write-back exists by construction; the pre-JF-711 per-type if/else
+        // in SyncCatalogForLocaleAsync compiled clean without the new type's
+        // branch, leaving its getter null forever and re-creating its catalog
+        // on every run. The CatalogManager per-type surface stays deliberately
+        // outside this table (the JF-706 context boundary: a real fourth
+        // synced type forces those edits loudly through signature arity). The
+        // remaining compile-silent per-type sites OUTSIDE the table (the
+        // item-sourcing block above and CatalogWiringGraft.ExtractWiring) are
+        // tracked as JF-727.
+        var typeLegs = new (CatalogType Type, IReadOnlyList<BaseItem> Items, Func<string?> StoredCatalogId, Action<string> StoreCatalogId, string Name, string Description)[]
         {
-            (CatalogType.Artist, artistItems, () => user.ArtistCatalogId, "Jellyfin Artists", "Artist catalog synced from Jellyfin library"),
-            (CatalogType.Album, albumItems, () => user.AlbumCatalogId, "Jellyfin Albums", "Album catalog synced from Jellyfin library"),
-            (CatalogType.Series, seriesItems, () => user.SeriesCatalogId, "Jellyfin Series", "Series catalog synced from Jellyfin library"),
+            (CatalogType.Artist, artistItems, () => user.ArtistCatalogId, id => user.ArtistCatalogId = id, "Jellyfin Artists", "Artist catalog synced from Jellyfin library"),
+            (CatalogType.Album, albumItems, () => user.AlbumCatalogId, id => user.AlbumCatalogId = id, "Jellyfin Albums", "Album catalog synced from Jellyfin library"),
+            (CatalogType.Series, seriesItems, () => user.SeriesCatalogId, id => user.SeriesCatalogId = id, "Jellyfin Series", "Series catalog synced from Jellyfin library"),
         };
 
         async Task<IReadOnlyList<CatalogType>> RunLegAsync(string locale)
@@ -212,6 +222,7 @@ public class LibrarySyncService
                 CatalogType catalogType,
                 IReadOnlyList<BaseItem> items,
                 string? existingCatalogId,
+                Action<string> storeCatalogId,
                 string catalogName,
                 string catalogDescription)
             {
@@ -230,7 +241,7 @@ public class LibrarySyncService
 
                     return await SyncCatalogForLocaleAsync(
                         user, user.SmapiDeviceToken.AccessToken, vendorId, catalogType, items,
-                        existingCatalogId, catalogName, catalogDescription,
+                        existingCatalogId, storeCatalogId, catalogName, catalogDescription,
                         locale, mintedVersionsByPayload, cancellationToken).ConfigureAwait(false);
                 }
                 catch (CatalogPayloadInvariantException ex)
@@ -254,7 +265,7 @@ public class LibrarySyncService
             foreach (var leg in typeLegs)
             {
                 string? version = await SyncTypeLegAsync(
-                    leg.Type, leg.Items, leg.StoredCatalogId(), leg.Name, leg.Description).ConfigureAwait(false);
+                    leg.Type, leg.Items, leg.StoredCatalogId(), leg.StoreCatalogId, leg.Name, leg.Description).ConfigureAwait(false);
                 if (version != null)
                 {
                     minted[leg.Type] = (version, leg.StoredCatalogId());
@@ -746,8 +757,10 @@ public class LibrarySyncService
 
     /// <summary>
     /// Sync a catalog for a specific locale: build locale-specific payload with phonetic synonyms,
-    /// upload to SMAPI, and return the minted version. Creates the catalog ID if it doesn't exist
-    /// yet. Returns null when the type has no items this run. A payload byte-identical to one
+    /// upload to SMAPI, and return the minted version. Creates the catalog when no id is
+    /// stored yet, persisting the new id through <paramref name="storeCatalogId"/> (the
+    /// per-type wiring table's paired setter, JF-711). Returns null when the type has no
+    /// items this run. A payload byte-identical to one
     /// already uploaded this run skips the upload and returns the version that earlier leg
     /// minted (JF-717), so the caller wires the equivalence class's shared
     /// (catalogId, version) pair into this locale's model.
@@ -759,6 +772,7 @@ public class LibrarySyncService
         CatalogType catalogType,
         IReadOnlyList<BaseItem> items,
         string? existingCatalogId,
+        Action<string> storeCatalogId,
         string catalogName,
         string catalogDescription,
         string locale,
@@ -803,18 +817,11 @@ public class LibrarySyncService
                 catalogDescription,
                 cancellationToken).ConfigureAwait(false);
 
-            if (catalogType == CatalogType.Artist)
-            {
-                user.ArtistCatalogId = catalogId;
-            }
-            else if (catalogType == CatalogType.Album)
-            {
-                user.AlbumCatalogId = catalogId;
-            }
-            else if (catalogType == CatalogType.Series)
-            {
-                user.SeriesCatalogId = catalogId;
-            }
+            // Fires only on creation; the JF-717 memo key below uses this same
+            // local, and the caller's live re-read of the row's getter observes
+            // this assignment (the setter itself is the wiring table's paired
+            // row element; its rationale lives on the table, JF-711).
+            storeCatalogId(catalogId);
         }
         else
         {
