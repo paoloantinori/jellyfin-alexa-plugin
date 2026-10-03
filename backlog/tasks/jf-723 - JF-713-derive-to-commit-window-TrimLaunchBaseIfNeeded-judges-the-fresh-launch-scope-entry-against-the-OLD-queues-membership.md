@@ -1,11 +1,12 @@
 ---
 id: JF-723
 title: >-
-  JF-713 derive-to-commit window: TrimLaunchBaseIfNeeded judges the fresh launch-scope
-  entry against the OLD queue's membership
-status: To Do
+  JF-713 derive-to-commit window: TrimLaunchBaseIfNeeded judges the fresh
+  launch-scope entry against the OLD queue's membership
+status: Done
 assignee: []
 created_date: '2026-10-03 02:12'
+updated_date: '2026-10-03 22:13'
 labels:
   - playback
   - queue
@@ -77,76 +78,5 @@ CommitShuffledQueue, and any future reset path take it together.
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-DECISION: option (b), the identity guard - the key `RecordLaunchBase` just wrote
-is never that same call's trim's evictee (`TrimLaunchBaseIfNeeded(queue, key)`
-adds it to the trim's queued set). Rejected with evidence: (a) reordering the
-trim after the commit would revert the deliberate JF-687/JF-699/JF-713
-refusal-before-phantom-state ordering (every play path, both playlist arms
-included, now builds the launch BEFORE `CommitShuffledQueue`/`SetQueue`; the
-call sequence was read at AlbumPlayService.cs ~1024-1054 and
-PlaybackLaunchBuilder.cs ~1985); (c) moving the record to the commit side would
-break the `BuildAudioPlayerResponse` chokepoint that captures launches from
-paths that never commit a queue (carousel taps, resume confirmations). The
-guard is behavior-neutral on today's default playlist launches (base 0 / rate
-1000 compose identically to a missing entry) and becomes load-bearing exactly
-when a nonzero-base or non-identity-rate launch meets cap pressure.
-
-EVIDENCE THE DECISION RESTS ON: the filing's inertness argument turned out to
-be understated in both directions. (1) The eviction mechanism sentence in the
-filing ("removes the newest non-queued entries") mis-models `Take(toRemove)`,
-which removes the OLDEST non-queued entries; corrected in the JF-738 filing.
-(2) A NEW bug was found and filed as JF-738: the trim's queued-membership
-protection is inert in production because the four maps are "N"-keyed while
-every production SetQueue caller stores dashed ids (OrdinalIgnoreCase does not
-normalize dash format), degrading the trim to pure slot-order FIFO; under that
-behavior a fresh insert reusing a freed low slot is evicted by its OWN record's
-trim, so the JF-723 shape is reachable TODAY on a saturated map (200+ distinct
-previously-launched items), not only after a future nonzero-base playlist
-launch. The guard covers both behaviors by construction; JF-738's fix (which
-makes the queued-cap-pressure shape production-reachable) therefore cannot
-reopen this window.
-
-PINS (5, DeviceQueueManagerTests; red proofs run with the guard line disabled,
-4 of 5 red / JF-738 characterization green, then all green restored):
-queued-cap-pressure survival of a nonzero-base ACTIVE entry; aging (the
-previous fresh entry IS evictable by the next launch, so the guard never
-disables trimming); the JF-738 mismatch characterization (green on arrival,
-the red proof JF-738's fix will produce); saturated-map self-eviction survival
-under dashed membership; and the ENQUEUED arm (a fresh PENDING pair survives
-and promotes with its base and rate). The suite baseline held: 5073/5073 both
-TFMs (5068 + 5), full solution build clean apart from one pre-existing warning
-in the untouched JF-726 test file (net9.0 CS8600 at VideoAudioControllerTests
-cs:1680, present on base 3d0c6563).
-
-Gates: /simplify (4 parallel agents; 5 deduped findings applied, keeps
-documented) and /code-review high (5 findings; 4 applied, 1 partially applied
-as documented doc-strengthening). Production surface changed
-(DeviceQueueManager guard + docs, AlbumPlayService comment): NOT deployed
-(test-and-hardening change; no handler behavior change on default paths).
-
-REWORK ROUND (gate-marker tail, 4 findings, all landed): F1 FILED as JF-739 -
-the guard exempts SELF-trim only, so a sibling RecordLaunchBase interleaved in
-the same derive-to-commit window (a PlaybackNearlyFinished enqueue, a
-queue-editing launch) can still evict the fresh entry, and the JF-738 fix will
-not close it because the fresh item is absent from the STORED queue until
-commit; the filing carries the JF-723 option-(b) fresh-stamping fix shape and
-its pin recipe, and the guard's doc phrase was corrected to the honest span
-("treated as queued by THIS call's trim only", with the JF-739 pointer). F2
-applied: MaxLaunchBaseEntries is now internal on the InternalsVisibleTo seam
-(VideoAudioCache / KeyedOneShotDebounce pattern) and all five pins seed their
-cap pressure from it, so a cap change can no longer degrade the pins to
-vacuous green. F3 applied: the JF-738 characterization pin carries the same
-Dictionary-order determinism note as the saturated-map pin, naming the two
-format-independent anchors. F4 applied: the CS8600 evidence claim was
-corrected (the warning was on BOTH TFMs, not net9.0-only; pre-existing in the
-untouched JF-726 file, fixed on main by 770fc94f). The branch was REBASED onto
-current main (770fc94f) to pick that fix up: post-rebase full-solution build
-is 0 warnings 0 errors, the guard commit re-landed as the rework parent, and
-the final state holds 5073/5073 net9.0 and 5073/5073 net10.0 (5068 + the 5
-const-seeded pins) plus 5/5 filtered pin runs on both TFMs. Gate refresh on
-the rework diff was judged unnecessary per the triviality bar: the rework
-changes no production logic (the guard line is untouched; the const visibility
-and two doc phrases are the only production deltas) and no test logic (the
-pins now read the very constant the reviewer specified), and every edit
-applies a reviewer-specified finding verbatim.
+Closed by the orchestrator after the full cycle including a rework round: worker commits 4bdbe86f/ed598909 + rework 42c4fc31 (rebased onto the CS8600 fix 770fc94f), merged as e72b8234. The derive-to-commit window's launch-scope entry protected: RecordLaunchBase passes the just-written N key into the trim's queued set (option B on read evidence - both playlist arms build-before-commit by deliberate policy, and the record cannot move to the commit side without breaking the builder chokepoint). TWO load-bearing discoveries: the queued-membership protection INERT in production (the maps N-keyed, every SetQueue caller dashed - the hazard reachable today on a saturated map) filed as JF-738 with the corrected trim mechanism; and the sibling-trim hole (a sibling RecordLaunchBase in the window trims without the exemption; JF-738's fix cannot close it) filed as JF-739 with the fresh-stamping shape. Five const-seeded pins (MaxLaunchBaseEntries on the InternalsVisibleTo seam - a cap change can no longer degrade them to vacuous green), four red proofs mechanically reproduced by the orchestrator reviewer (who also caught the orchestrator's own CS8600 re-breaking CI, fixed as 770fc94f, green run 37155718492). Worker gates green on both rounds (the rework's gate-skip justified: reviewer-specified mechanical edits only); the orchestrator gate-marker verified all five axes including the guard mechanics and the option-A lineage at the cited lines, its 4 findings landed via the rework (JF-739 filed, the seam, the determinism note, the corrected warning claim). Suites: worker 5073/5073 post-rework both TFMs; orchestrator independent 5073/5073; merged-tree 5078/5078 both TFMs exit 0 on both split legs. Production surface changed (DeviceQueueManager): deployed in the batched post-closure deploy with JF-727.
 <!-- SECTION:FINAL_SUMMARY:END -->

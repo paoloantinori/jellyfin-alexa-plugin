@@ -1,12 +1,13 @@
 ---
 id: JF-727
 title: >-
-  JF-727 - two residual per-type hand enumerations outside the JF-706/711
-  wiring table's protection: the item-sourcing block and
+  JF-727 - two residual per-type hand enumerations outside the JF-706/711 wiring
+  table's protection: the item-sourcing block and
   CatalogWiringGraft.ExtractWiring
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-03 07:59'
+updated_date: '2026-10-03 22:07'
 labels:
   - catalog
   - code-quality
@@ -14,7 +15,8 @@ dependencies:
   - JF-711
 references:
   - >-
-    backlog/tasks/jf-711 - JF-711-the-catalog-id-WRITE-back-in-SyncCatalogForLocaleAsync-is-still-a-per-type-if-chain-the-JF-706-missed-one-residual.md
+    backlog/tasks/jf-711 -
+    JF-711-the-catalog-id-WRITE-back-in-SyncCatalogForLocaleAsync-is-still-a-per-type-if-chain-the-JF-706-missed-one-residual.md
 priority: low
 ---
 
@@ -89,34 +91,5 @@ merged-tree split run follows.
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Both residuals folded behind table-driven shapes. (1) The item-sourcing block in
-LibrarySyncService.SyncUserLibraryAsync derives from the JF-706/JF-711 wiring table: each
-row carries its BaseItemKind Kind, an Items element, and an Action<int> StoreCount lambda;
-one loop fetches per row (row order preserved as the pre-JF-727 fetch order, so the
-per-type item feeds and the JF-717 payload-hash equivalence classes are byte-identical),
-stores the counts through the row lambdas (the SyncResult DTO keeps its fixed public
-per-type properties, the task's deliberate stop), and the emptiness pre-check reads
-typeLegs.All(...), so a fourth type's row joins the fetch, the count, and the conjunction
-by construction instead of through three hand-remembered edit sites. (2)
-CatalogWiringGraft.ExtractWiring keys its extraction off a reverse lookup of
-CatalogSlotTypes.CatalogSlotTypeNames (new internal TryGetCatalogTypeForSlotTypeName,
-derived so the two directions cannot drift) into a per-type map, with the positional
-CatalogWiring construction kept as the deliberately arity-loud edge; the pre-JF-727
-if/else would have silently dropped a fourth synced type's wiring from every rebuild PUT.
-The JF-716 accessor pin constraint held by construction (the six User *CatalogId accesses
-never left the table lambdas; pin green unchanged). The boundary note in JF-711's task
-file carries the dated JF-727 amendment (both adjacent silent sites folded, the
-CatalogManager/SyncResult boundary itself unchanged), and the table comment now names the
-one remaining fourth-type edit site outside the table that is still silent-ish, the
-CatalogSlotTypeNames forward entry. Five new pins (2 IL structure + caller binding, 1
-derived closure sweep, 1 keyed-extraction call-site, 1 coverage contract) plus the
-review-round scalar-name tolerance pin; four live red proofs executed against real
-production edits (A: hand re-expansion, B: if/else revert passing all behavior tests
-while failing the IL pin, C: unfinished fourth table entry, D: the removed ValueKind
-guard reproducing the predicted InvalidOperationException). Gates: /simplify 3 applied +
-3 skipped with reasons; /code-review high 5 applied + 1 filed as JF-737 (the unpinned
-conjunction, no cheap pin exists). Suites: 5072/5072 both TFMs on the final state
-(baseline 5067 + 5); Release -warnaserror 0/0. Production surface changed
-(LibrarySyncService, CatalogSlotTypes, CatalogWiringGraft): needs the next deploy to
-reach minix; no model, locale, or manifest change.
+Closed by the orchestrator after the full cycle: worker commit 8d337ac5 + gate-marker tail ddd39610 (rebased) + the simplify-round fix 421cf320, merged as f31d0608. Both residual hand enumerations folded behind the wiring table: the item-sourcing block (rows gaining Kind/Items/StoreCount; one for-loop fetch in row order preserving the JF-717 payload hashes; the emptiness pre-check reading typeLegs.All) and CatalogWiringGraft.ExtractWiring keyed off the new TryGetCatalogTypeForSlotTypeName reverse lookup (loud-on-duplicate at type init; the construction-time-view contract on the field with the forward map's mutability cross-reference added by the simplify round). Five pins including the CALLER-BOUND fetch pin (its method-granular limit stated honestly after the gate-marker) and the fourth-entry coverage contract; FOUR live red proofs (the if/else revert keeping all behavior tests green while failing the IL pin). JF-737 filed. Worker gates green; the orchestrator gate-marker verified all five scrutiny axes at source with 3 doc findings applied; the closure-gate simplify round ran 4 angles with the F2 trim+wording fix and the cross-reference applied, the two internal overlaps kept as load-bearing with two-angle agreement. Suites: worker 5072/5072 both TFMs (prediction matched) plus the CI-exact Release -warnaserror clean; orchestrator independent 5072/5072; merged-tree 5073/5073 both TFMs exit 0 on both split legs. Production surface changed: deployed in the batched post-closure deploy with JF-723.
 <!-- SECTION:FINAL_SUMMARY:END -->
