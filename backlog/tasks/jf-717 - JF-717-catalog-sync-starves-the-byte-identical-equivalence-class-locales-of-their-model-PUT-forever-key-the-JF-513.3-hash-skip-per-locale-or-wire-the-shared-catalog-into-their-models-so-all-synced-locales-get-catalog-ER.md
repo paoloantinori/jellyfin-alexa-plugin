@@ -4,9 +4,10 @@ title: >-
   JF-717 - catalog sync starves the byte-identical equivalence-class locales of
   their model PUT forever; key the JF-513.3 hash-skip per locale (or wire the
   shared catalog into their models) so all synced locales get catalog ER
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-02 12:00'
+updated_date: '2026-10-03 04:37'
 labels:
   - catalog
   - interaction-model
@@ -141,48 +142,5 @@ independent suite 4990/4990 both TFMs on the worker commit; merged-tree follows.
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Landed by the JF-717 worker (design decision written into this file BEFORE coding,
-above). SHAPE 2 chosen over shape 1 with a keying refinement: the JF-513.3 skip
-keeps suppressing the redundant catalog VERSION upload but now returns the version
-minted by the byte-identical earlier leg, and the run-scoped memo is keyed PER
-PAYLOAD ("{type}:{catalogId}:{payloadHash}" -> version) instead of per catalog with
-a value comparison, because the single-slot keying was order-sensitive (an
-interleaved "*" order evicts the slot on every class switch and re-mints identical
-content, e.g. today's hi-IN re-mint after the fr legs). Weighed: shape 1 (per-locale
-hash keys) burns the exact SMAPI quota JF-513.3 protects and buys nothing (the
-class's content is identical by definition); shape 2 pays only model PUTs, which
-are idempotent on unchanged content (canary counts unchanged by injection), are
-not the JF-513.3 quota, and are 12h-gated; stated cost recorded (PUTs ~9 -> 16 per
-"*" run, uploads ~9 -> ~8 per type). The JF-706 seam is untouched (no hand-ternary
-re-expansion; JF-716 cannot recur from this change), the JF-495 rule survives
-strictly (an id is only ever paired with a version minted THIS run), the JF-703
-addendum ordering is kept, a newly-wired locale writes the normal JF-705 ledger
-path, and the JF-709 no-PUT writer remains reachable only via genuine freezes
-(comment corrected). 4 pins in the new LibrarySyncServiceEquivalenceClassTests
-(both class members wired, order independence, unique-payload boundary, and the
-401-retry x memo interplay the code-review round surfaced: a leg whose PUT 401s
-AFTER minting used to retry into a silently unwired clean success; counterfactual
-red proof 1-vs-2 PUTs), all red-proven against the pre-fix code; the JF-513.3
-SeriesTests pin restored to discriminating power (its ar-SA config had been
-vacuous since JF-543 filtered ar-SA out of the sync). Adjacents applied from the
-gates: TestHelpers.GetModelTypeNode hoist (third copy of the type-node walk; the
-LegIsolation twin and both SeriesTests inline copies now delegate), the
-SyncCatalogForLocaleAsync dead Count component collapsed to Task<string?>, the
-inter-locale delay made BETWEEN-legs-only with an InterLocaleDelayMsForTest seam
-(catalog family 55s -> 38s net9.0), and an explicit inter-user delay in
-CatalogSyncTask replacing the spacing the trailing-leg sleep used to provide
-accidentally. Gates: /simplify 4 agents, 6 findings applied (hoist, comment-trim
-to one canonical site, redundant finallys, dead Count, implied assertion,
-delay seam); 2 skipped findings FILED as JF-725 (the three-fake consolidation:
-the hoist-on-third convention fires on identical constructions, these diverge
-in knobs; plus the CatalogManager poll-delay seam) and 1 declined on merits
-(generator-identity memo keying would skip the class members' payload rebuilds,
-but content-hash keying is self-verifying and the rebuild is a negligible 12h
-background cost). /code-review high 5 findings, ALL 5 applied (the 401-retry
-pin, inter-user spacing, two leftover inline extractions, scratch-script
-cleanup, banned parenthetical-hyphen fixes in authored lines); nothing filed
-beyond the already-open JF-725. Suites: 4990/4990
-net9.0 AND net10.0 (baseline 4986 + 4 pins), build 0 errors with only the
-pre-existing xUnit1030 pair. Production surfaces changed (LibrarySyncService,
-CatalogSyncTask): deploying is the orchestrator's post-merge step.
+Closed by the orchestrator after the full cycle: worker commit 9b612d48 + gate-marker tail 284a3207, merged as 6bde26f9. The starved-locale wiring: shape 2 (wire the shared catalog) with per-payload memo keying ({type}:{catalogId}:{payloadHash} -> version), so the JF-513.3 skip still suppresses the redundant upload but returns the byte-identical earlier leg's minted version; the unchanged minted.Count > 0 gate fires the per-locale model PUT; 8 of 16 previously-never-wired locales become wired under the default config at model-PUT cost only. A second starvation shape (401 on the model PUT after the upload minted, retrying into a silently unwired success) found and fixed at the worker's own review with a counterfactual red proof. The vacuous legacy SeriesTests pin restored to a discriminating es pair. Worker gates green (simplify 6 applied, 2 filed as JF-725, 1 declined on merits; code-review high 5/5 applied). The orchestrator gate-marker verified all six scrutiny axes mechanically - re-running the red proofs itself (reverting the skip's return flipped exactly the three fix-pins; the worktree restored byte-clean) and confirming the main merge conflict-free via merge-tree; its 2 findings applied in the tail (the spacing flag set before the call so failed bursts still space; the fake's status map set-driven). Suites: worker and orchestrator independent 4990/4990 both TFMs, affected classes 16/16 after the tail, merged-tree 5011/5011 both TFMs exit 0 on both split legs. Production surface changed (LibrarySyncService, CatalogSyncTask): deployed in the post-closure deploy. The live verification (catalog ER activating in es/fr/en locales that never had it) rides the next catalog sync on the box.
 <!-- SECTION:FINAL_SUMMARY:END -->
