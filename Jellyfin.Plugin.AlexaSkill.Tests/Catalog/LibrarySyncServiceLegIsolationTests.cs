@@ -62,7 +62,11 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
 
         var catalogManager = new CatalogManager(
             new StubHttpClientFactory(() => new HttpClient(_smapiHandler)),
-            _loggerFactory.CreateLogger<CatalogManager>());
+            _loggerFactory.CreateLogger<CatalogManager>())
+        {
+            // The fake backend answers instantly (JF-725 seam).
+            PollDelayMsForTest = 0
+        };
 
         _service = new LibrarySyncService(
             _libraryManagerMock.Object,
@@ -707,6 +711,15 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
     /// (per-type id derived from the requested catalog name), version upload
     /// (202 + poll location), poll (SUCCEEDED v1), skill status, interaction
     /// model GET (static seeds for JellyfinArtist/AlbumName/SeriesName) and PUT.
+    /// Per-file by policy (JF-725): the family's full-sync fakes diverge in MODE
+    /// knobs, not values (catalog-id derivation, version numbering, 401-injection
+    /// target/cardinality, PUT response shape, model-GET-after-PUT semantics
+    /// (static seeds + the canary-mismatch variant here vs echo-last-PUT in
+    /// Series vs static-seed in EquivalenceClass), PUT capture (last body vs
+    /// per-locale dictionary), status-map composition), so the
+    /// hoist-on-third convention fires only on identical leaf constructions (the
+    /// status map delegates to TestHelpers.SmapiSkillStatusJson), never on the
+    /// routing surface.
     /// </summary>
     private sealed class FakeSmapiHandler : HttpMessageHandler
     {
@@ -796,7 +809,7 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
 
             if (request.Method == HttpMethod.Get && url.EndsWith("/status", StringComparison.Ordinal))
             {
-                return Json("""{"manifest":{"lastUpdateRequest":{"status":"SUCCEEDED"}},"interactionModel":{"it-IT":{"lastUpdateRequest":{"status":"SUCCEEDED"}}}}""");
+                return Json(TestHelpers.SmapiSkillStatusJson("it-IT"));
             }
 
             if (request.Method == HttpMethod.Get && url.Contains("/updateRequest/", StringComparison.Ordinal))

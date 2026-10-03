@@ -410,13 +410,25 @@ public class CatalogManagerTests
 
     #region UpdateInteractionModelAsync canary (JF-495)
 
+    /// <summary>
+    /// A CatalogManager routing HTTP through <paramref name="handler"/> with the
+    /// SMAPI poll pacing disabled (the JF-725 seam; see the seam's doc on
+    /// CatalogManager for the canonical statement). Constructors that never
+    /// reach HTTP keep the plain <c>new CatalogManager(...)</c> shape.
+    /// </summary>
+    private CatalogManager CreatePollingManager(HttpMessageHandler handler) =>
+        new(
+            new StubHttpClientFactory(() => new HttpClient(handler)),
+            _loggerMock.Object)
+        {
+            PollDelayMsForTest = 0
+        };
+
     [Fact]
     public async Task UpdateInteractionModelAsync_BuildSucceeded_CanaryMatches_ReturnsOkResult()
     {
         var handler = new ModelPutFakeHandler(PutLocation.UpdateRequest, liveModel: null);
-        var manager = new CatalogManager(
-            new StubHttpClientFactory(() => new HttpClient(handler)),
-            _loggerMock.Object);
+        var manager = CreatePollingManager(handler);
 
         var result = await manager.UpdateInteractionModelAsync(
             "token", "skill-1", "development", "it-IT",
@@ -449,9 +461,7 @@ public class CatalogManagerTests
         // carries different counts (a racing deploy replaced it).
         string staleLiveModel = """{"interactionModel":{"languageModel":{"invocationName":"mia collezione","intents":[{"name":"OnlyIntent"}]}}}""";
         var handler = new ModelPutFakeHandler(PutLocation.UpdateRequest, liveModel: staleLiveModel);
-        var manager = new CatalogManager(
-            new StubHttpClientFactory(() => new HttpClient(handler)),
-            _loggerMock.Object);
+        var manager = CreatePollingManager(handler);
 
         var result = await manager.UpdateInteractionModelAsync(
             "token", "skill-1", "development", "it-IT",
@@ -484,9 +494,7 @@ public class CatalogManagerTests
         // the build must still be tracked (via the skill-status endpoint) and the
         // canary must still run.
         var handler = new ModelPutFakeHandler(PutLocation.None, liveModel: null);
-        var manager = new CatalogManager(
-            new StubHttpClientFactory(() => new HttpClient(handler)),
-            _loggerMock.Object);
+        var manager = CreatePollingManager(handler);
 
         var result = await manager.UpdateInteractionModelAsync(
             "token", "skill-1", "development", "it-IT",
@@ -537,9 +545,7 @@ public class CatalogManagerTests
         // Location must dispatch to the skill-status tracker immediately and
         // resolve within the first poll iterations.
         var handler = new ModelPutFakeHandler(PutLocation.SkillStatus, liveModel: null);
-        var manager = new CatalogManager(
-            new StubHttpClientFactory(() => new HttpClient(handler)),
-            _loggerMock.Object);
+        var manager = CreatePollingManager(handler);
 
         var result = await manager.UpdateInteractionModelAsync(
             "token", "skill-1", "development", "it-IT",
@@ -571,9 +577,7 @@ public class CatalogManagerTests
         // update-request endpoint (the JF-332/JF-495 behavior), not get silently
         // rerouted to the skill-status tracker.
         var handler = new ModelPutFakeHandler(PutLocation.UpdateRequest, liveModel: null);
-        var manager = new CatalogManager(
-            new StubHttpClientFactory(() => new HttpClient(handler)),
-            _loggerMock.Object);
+        var manager = CreatePollingManager(handler);
 
         var result = await manager.UpdateInteractionModelAsync(
             "token", "skill-1", "development", "it-IT",
@@ -594,9 +598,7 @@ public class CatalogManagerTests
         // confirms); the stage-scoped /v1/skills/{id}/stages/{stage}/status
         // 404'd for every locale of the 2026-09-06 startup sync.
         var handler = new ModelPutFakeHandler(PutLocation.UpdateRequest, liveModel: null);
-        var manager = new CatalogManager(
-            new StubHttpClientFactory(() => new HttpClient(handler)),
-            _loggerMock.Object);
+        var manager = CreatePollingManager(handler);
 
         await manager.UpdateInteractionModelAsync(
             "token", "skill-1", "development", "it-IT",
@@ -645,6 +647,9 @@ public class CatalogManagerTests
     }
 
     /// <summary>
+    /// Per-file by policy (JF-725): the catalog fake family stays per-file
+    /// (the god-fake consolidation declined; the divergence table and the
+    /// canonical mode-knob enumeration sit on the LegIsolation fake).
     /// Fake SMAPI backend for the UpdateInteractionModelAsync flow: skill status
     /// (settle wait; served at the JF-497 non-staged /v1/skills/{id}/status URL),
     /// model GET (first call returns the pre-modification model, later calls
@@ -704,7 +709,7 @@ public class CatalogManagerTests
                     return NotFoundHtml();
                 }
 
-                return Json("""{"manifest":{"lastUpdateRequest":{"status":"SUCCEEDED"}},"interactionModel":{"it-IT":{"lastUpdateRequest":{"status":"SUCCEEDED"}}}}""");
+                return Json(TestHelpers.SmapiSkillStatusJson("it-IT"));
             }
 
             if (request.Method == HttpMethod.Put && url.Contains("/interactionModel/locales/", StringComparison.Ordinal))
@@ -777,9 +782,7 @@ public class CatalogManagerTests
         // That must read as terminal-completed (SUCCEEDED disposition, canary
         // still verifies the live model), never as an ERR or a failed locale.
         var handler = new ModelPutFakeHandler(PutLocation.UpdateRequest, liveModel: null, pollNotFound: true);
-        var manager = new CatalogManager(
-            new StubHttpClientFactory(() => new HttpClient(handler)),
-            _loggerMock.Object);
+        var manager = CreatePollingManager(handler);
 
         var result = await manager.UpdateInteractionModelAsync(
             "token", "skill-1", "development", "it-IT",
@@ -800,9 +803,7 @@ public class CatalogManagerTests
         // must take the quiet no-status path (debug log, settle skipped) instead of
         // ERR + warning, and the sync must proceed with the model update.
         var handler = new ModelPutFakeHandler(PutLocation.UpdateRequest, liveModel: null, statusNotFound: true);
-        var manager = new CatalogManager(
-            new StubHttpClientFactory(() => new HttpClient(handler)),
-            _loggerMock.Object);
+        var manager = CreatePollingManager(handler);
 
         var result = await manager.UpdateInteractionModelAsync(
             "token", "skill-1", "development", "it-IT",
@@ -823,9 +824,7 @@ public class CatalogManagerTests
         // The version minted by the upload is unknown, so the existing JF-495
         // "falling back to 1" warning path applies, but no ERR and no throw.
         var handler = new CatalogUploadFakeHandler(() => ModelPutFakeHandler.NotFoundHtml());
-        var manager = new CatalogManager(
-            new StubHttpClientFactory(() => new HttpClient(handler)),
-            _loggerMock.Object);
+        var manager = CreatePollingManager(handler);
 
         string version = await manager.UploadCatalogValuesAsync(
             "token", "cat-1", new CatalogPayload(), () => "https://example.test/catalog/x", CancellationToken.None);
@@ -842,9 +841,7 @@ public class CatalogManagerTests
         // Locks the distinction: only the 404 is terminal; any other HTTP failure
         // keeps the transient current behavior (ERR log + HttpRequestException).
         var handler = new CatalogUploadFakeHandler(() => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
-        var manager = new CatalogManager(
-            new StubHttpClientFactory(() => new HttpClient(handler)),
-            _loggerMock.Object);
+        var manager = CreatePollingManager(handler);
 
         await Assert.ThrowsAsync<HttpRequestException>(() => manager.UploadCatalogValuesAsync(
             "token", "cat-1", new CatalogPayload(), () => "https://example.test/catalog/x", CancellationToken.None));
@@ -859,7 +856,8 @@ public class CatalogManagerTests
             Times.Once);
     }
 
-    /// <summary>
+        /// Per-file by policy (JF-725): the catalog fake family stays per-file.
+/// <summary>
     /// Fake SMAPI backend for the UploadCatalogValuesAsync flow: catalog version
     /// creation (202 + Location) and a configurable update-request poll response
     /// (each poll gets a fresh instance; responses are disposed by the caller).

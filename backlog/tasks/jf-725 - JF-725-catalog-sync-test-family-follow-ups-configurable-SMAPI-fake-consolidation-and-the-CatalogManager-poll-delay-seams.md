@@ -66,11 +66,91 @@ every later class member. The rebuild is a 12h-cadence background cost measured
 in tens of MB of transient JSON; content-hash keying is self-verifying and keeps
 the dedup honest even if a future generator stops being prefix-pure. Keep the
 rebuild unless a library-size measurement says otherwise.
+
+
+GATE-MARKER TAIL (2026-10-04, orchestrator review of commit 02779c61, 3 findings; every
+load-bearing claim mechanically verified: the hoisted JSON byte-identical 4/4 by script,
+the divergence table's 7 axes real column-by-column, the seam's no-production-writer
+grepped, the bucket arithmetic decomposed): F1 APPLIED (the measured-effect line's
+"37 sync-family tests" relabeled to the honest grouping 26 sync + 11 polling; the
+GATEWAY_ERROR pin lives in the polling bucket); F2 APPLIED (the policy markers added to
+the two unmarked fakes - ModelPutFakeHandler and the PollingTests Func-routed namesake -
+so the grep contract covers the whole family population); F3 APPLIED (the LegIsolation
+canonical enumeration completed to all 7 axes, adding the model-GET-after-PUT and
+PUT-capture rows the other two markers cite).
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] The consolidation decision is made and executed (hoisted configurable fake with the three suites delegating, or a documented per-file-fake policy in the test family)
-- [ ] If adopted, the fake consolidation keeps every existing pin green on both TFMs with no assertion weakened
-- [ ] The CatalogManager delay seam decision lands the same way (seam adopted with the family using it, or declined with a reason recorded here)
+- [x] The consolidation decision is made and executed: DECLINED the configurable god-fake (count and divergence table in the Final Summary); the per-file-fake policy is documented IN the family, with every fake's doc comment carrying the greppable "Per-file by policy (JF-725)" marker, the mode-knob enumeration on the LegIsolation fake, and the hoist boundary plus the absent-locale ~150s hazard on the new TestHelpers.SmapiSkillStatusJson; the policy's one genuinely-identical leaf construction (the all-SUCCEEDED per-locale-map status JSON, FOUR copies: the three full-sync fakes plus CatalogManagerTests' ModelPutFakeHandler) IS hoisted there
+- [x] If adopted, the fake consolidation keeps every existing pin green on both TFMs with no assertion weakened: the leaf hoist changed zero assertions; full suite 5078/5078 net9.0 AND net10.0 (baseline 5078), the five delay-paying suites 79/79 on both TFMs; the code-review round verified the helper's output is byte-identical to all four replaced inline constructions
+- [x] The CatalogManager delay seam decision lands: ADOPTED as internal int? PollDelayMsForTest (the InterLocaleDelayMsForTest pattern, JF-717) + private int PollDelayMs computed property, read at the updateRequest poll loop seed, the skill-status fallback tracker's pre-delay and loop seed, the settle wait's loop seed (threaded as an optional initialDelayMs parameter so the static method's out-of-class caller SmapiManagement.GetLiveModelJsonAsync keeps the production default), and the transient-fetch retry backoff; wired to 0 in the five delay-paying suites (LegIsolation, Series, EquivalenceClass ctors; CatalogManagerTests.CreatePollingManager; CatalogManagerPollingTests.CreateManager). Measured: 41.3s + 5.2s per TFM before, 3s after (79 tests)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Both JF-717 simplify-round follow-ups decided on measured evidence; worktree
+commit follows this summary.
+
+DECISION 1, the three-fake consolidation: DECLINED the configurable shared
+fake; per-file fakes are now the DOCUMENTED policy for this family. The count
+today: THREE near-twin full-sync fakes (LibrarySyncServiceLegIsolationTests
+~120 lines, LibrarySyncServiceSeriesTests ~129, the JF-717
+LibrarySyncServiceEquivalenceClassTests ~113) plus ONE unrelated Func-routed
+namesake in CatalogManagerPollingTests (9 lines; no collision: the three are
+private nested classes in a different namespace). The divergence is in MODE
+knobs, not values: catalog-id derivation (name-derived 3-type ids | ctor
+injected | fixed artist id), version numbering (fixed "1" | fixed "1" |
+per-catalog incrementing), 401 injection (once per catalog id on the version
+upload | N times on the version upload | once on the MODEL PUT), model PUT
+response (200 | 200 or 202+pollable Location per TrackModelBuild | 200),
+model GET after PUT (static seeds + canary-mismatch variant | echo-last-PUT |
+static seed), PUT capture (last body | last body | per-locale dictionary),
+status map (static it-IT | static it/es-MX/es-US | mutable 4-locale set). A
+shared fake needs ~8 mode knobs whose combinations only 3 of N are ever
+exercised; each suite would lose the in-place "minimum surface" doc its fake
+carries, and a knob-default change would silently reshape distant suites'
+backends. Weighed against that, the lockstep-edit cost (realized once, the
+absent-locale status-map fix authored twice in JF-717) is addressed at its
+actual altitude: the ONE leaf construction that lockstep-edited (the
+all-SUCCEEDED status JSON, four copies) is hoisted to
+TestHelpers.SmapiSkillStatusJson with the ~150s absent-locale hazard
+documented once; per the simplify round, the pure-boilerplate Json() response
+helpers (5 trivial copies) stay per-file, hoistable opportunistically on the
+next family edit.
+
+DECISION 2, the poll-delay seams: ADOPTED the nullable-int instance seam over
+the alternatives (internal delay-func: grants power no test uses; TimeProvider:
+a DI-surface change for a test-only need with zero repo precedent; static
+seam: races under xUnit class parallelization). internal int?
+PollDelayMsForTest + a private int PollDelayMs computed property single-home
+the coalesce (the /simplify round's F1); four poll sites read the property,
+and the transient-fetch retry backoff keeps its explicit
+`PollDelayMsForTest ?? TransientFetchRetryDelayMs` (different fallback,
+nonzero-value conflation documented on the seam, the code-review round's R1).
+The static WaitForLocaleBuildToSettleAsync takes the seed as an optional
+parameter so SmapiManagement.GetLiveModelJsonAsync (the out-of-class caller,
+verified) keeps production pacing. Effect, measured per TFM: the five
+delay-paying suites went from 41.3s (37 delay-paying pins = 26 LibrarySyncService tests
++ 11 CatalogManagerPollingTests, where the GATEWAY_ERROR retry test 3.0s
+decomposes 500+2000+500) + 5.2s (42 CatalogManagerTests, ten ~0.5s polling
+pins) to 3s combined, 79/79 green; full suite 5078/5078 on BOTH TFMs,
+identical to baseline. LibrarySyncServiceTests, StructureTests and
+CatalogWiringLocalesTests never reach SMAPI HTTP and keep plain constructors.
+
+Gates: /simplify 4 angles (reuse CLEAN, efficiency CLEAN with the boxing/
+allocation adjudication, altitude CLEAN on 4 adjudications; simplification's 3
+findings applied: the PollDelayMs computed property, the policy-paragraph trim
+keeping the greppable per-file markers, the standardized one-liner wiring
+comments). /code-review high: verdict functionally correct (production pacing
+verified constant-for-constant, hoisted JSON byte-identical at all four
+sites, unwired constructors verified to never reach HTTP); all four findings
+applied, all doc-level (the nonzero seam-conflation note, two banned
+parenthetical-hyphen prose forms reworded, the param-doc corrected to the
+post-F1 PollDelayMs shape, the helper's ONE-claim narrowed to the
+per-locale-map shape naming the manifest-only survivor in
+SmapiManagementWiringTests); nothing cut, so no JF-740 filing was needed.
+Builds: Debug test project and BOTH Release -warnaserror builds (plugin +
+tests) clean, 0 warnings 0 errors.
+<!-- SECTION:FINAL_SUMMARY:END -->

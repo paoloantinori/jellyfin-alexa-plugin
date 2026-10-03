@@ -69,6 +69,40 @@ public class CatalogManager
     }
 
     /// <summary>
+    /// The pre-poll delay and backoff seed of every SMAPI poll wait in this class;
+    /// doubles up to the 2000ms cap on each iteration after the first.
+    /// </summary>
+    private const int SmapiPollInitialDelayMs = 500;
+
+    /// <summary>
+    /// Pacing delay between transient-fetch retries (SMAPI could not fetch the
+    /// catalog source URL; the brief pause lets the reverse proxy recover).
+    /// </summary>
+    private const int TransientFetchRetryDelayMs = 2000;
+
+    /// <summary>
+    /// Test seam (null in production, the InterLocaleDelayMsForTest pattern JF-717):
+    /// overrides the pacing delays of the SMAPI waits in this class, namely the
+    /// poll loop seed of <see cref="PollSmapiOperationAsync"/>, the pre-poll
+    /// settle delay and loop seed of
+    /// <see cref="WaitForModelBuildOutcomeViaSkillStatusAsync"/>, the loop seed
+    /// passed to <see cref="WaitForLocaleBuildToSettleAsync"/>, and the
+    /// transient-fetch retry backoff of <see cref="UploadCatalogValuesAsync"/>.
+    /// The catalog-sync suites drive instant in-memory fakes, so these
+    /// production-coded sleeps dominate their runtime (JF-725 measured ~46s per
+    /// TFM across the five delay-paying suites, almost all of it 500ms poll
+    /// pre-delays); zero makes each wait a no-op while leaving every budget
+    /// (poll count) and status-transition semantic untouched. Beware nonzero
+    /// values: they pace the transient-retry backoff at the SAME value, not the
+    /// production 2000ms (the knob is not scaled per site); every current suite
+    /// uses 0.
+    /// </summary>
+    internal int? PollDelayMsForTest { get; set; }
+
+    /// <summary>The seam-resolved poll delay every SMAPI wait in this class paces by.</summary>
+    private int PollDelayMs => PollDelayMsForTest ?? SmapiPollInitialDelayMs;
+
+    /// <summary>
     /// Creates a new SMAPI catalog for a slot type.
     /// </summary>
     /// <param name="accessToken">The SMAPI access token.</param>
@@ -210,7 +244,7 @@ public class CatalogManager
                 _logger.LogWarning(
                     "Catalog version for {CatalogId} failed with a transient fetch error (attempt {Attempt}/{Max}); retrying with a fresh source URL. Error: {Error}",
                     catalogId, attempt, TransientFetchMaxAttempts, ex.Message);
-                await Task.Delay(2000, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(PollDelayMsForTest ?? TransientFetchRetryDelayMs, cancellationToken).ConfigureAwait(false);
             }
         }
 
@@ -490,7 +524,9 @@ public class CatalogManager
         // rebuild (or any other writer) submitted a model moments ago, its build may
         // still be IN_PROGRESS and the GET would return the last SUCCEEDED (stale)
         // content; PUTting that content back redeploys yesterday's model.
-        await WaitForLocaleBuildToSettleAsync(accessToken, client, skillId, locale, _logger, cancellationToken).ConfigureAwait(false);
+        await WaitForLocaleBuildToSettleAsync(
+            accessToken, client, skillId, locale, _logger, cancellationToken,
+            PollDelayMs).ConfigureAwait(false);
 
         _logger.LogInformation("Fetching interaction model for skill {SkillId} locale {Locale}", skillId, locale);
 
@@ -741,15 +777,20 @@ public class CatalogManager
     /// (JF-495 GET-race guard). Best-effort: when the status cannot be read the
     /// wait is skipped rather than failing the sync.
     /// </summary>
+    /// <param name="initialDelayMs">Backoff seed; the sole in-class caller passes
+    /// <see cref="PollDelayMs"/> (the seam-resolved poll delay) so the suites can
+    /// skip the pacing against instant fakes. The out-of-class caller
+    /// (SmapiManagement.GetLiveModelJsonAsync) keeps the production default.</param>
     internal static async Task WaitForLocaleBuildToSettleAsync(
         string accessToken,
         HttpClient client,
         string skillId,
         string locale,
         ILogger logger,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int initialDelayMs = SmapiPollInitialDelayMs)
     {
-        int delay = 500;
+        int delay = initialDelayMs;
         for (int i = 0; i < 30; i++)
         {
             string? state = await TryGetLocaleModelStatusAsync(
@@ -792,9 +833,9 @@ public class CatalogManager
         // Give SMAPI a moment to flip the locale's status to IN_PROGRESS before
         // the first poll, so a stale terminal status from the previous build is
         // not mistaken for this PUT's outcome.
-        await Task.Delay(500, cancellationToken).ConfigureAwait(false);
+        await Task.Delay(PollDelayMs, cancellationToken).ConfigureAwait(false);
 
-        int delay = 500;
+        int delay = PollDelayMs;
         // 90 iterations with the 2s backoff cap is a ~150-170s budget: a full sync
         // queues FOUR serialized SMAPI builds per locale (3 catalog versions + the
         // model build), so a locale's model build legitimately settles deep in the
@@ -1159,7 +1200,7 @@ public class CatalogManager
         string location = locationUri.ToString();
         _logger.LogDebug("{Operation} creation accepted, polling at {Location}", operationName, location);
 
-        int delay = 500;
+        int delay = PollDelayMs;
         for (int i = 0; i < 30; i++)
         {
             await Task.Delay(delay, cancellationToken).ConfigureAwait(false);

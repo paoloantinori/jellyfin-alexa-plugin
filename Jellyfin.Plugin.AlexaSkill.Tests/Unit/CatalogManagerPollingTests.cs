@@ -27,7 +27,11 @@ public class CatalogManagerPollingTests
         var handler = new FakeSmapiHandler(respond);
         var factory = new StubHttpClientFactory(() => new HttpClient(handler));
         var logger = LoggerFactory.Create(_ => { }).CreateLogger<CatalogManager>();
-        return new CatalogManager(factory, logger);
+        return new CatalogManager(factory, logger)
+        {
+            // The fake backend answers instantly (JF-725 seam).
+            PollDelayMsForTest = 0
+        };
     }
 
     /// <summary>
