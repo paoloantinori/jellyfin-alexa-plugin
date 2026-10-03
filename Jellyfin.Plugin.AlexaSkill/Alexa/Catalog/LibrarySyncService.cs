@@ -56,6 +56,14 @@ public class LibrarySyncService
     internal Action<CatalogType>? TypeLegEntryProbeForTest { get; set; }
 
     /// <summary>
+    /// Test seam (null in production, the TypeLegEntryProbeForTest pattern):
+    /// overrides the inter-locale rate-limit delay so the multi-locale pins
+    /// (JF-717) skip the 2s sleeps against a fake backend that needs no rate
+    /// limiting. Zero disables the delay outright.
+    /// </summary>
+    internal int? InterLocaleDelayMsForTest { get; set; }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="LibrarySyncService"/> class.
     /// </summary>
     /// <param name="libraryManager">Jellyfin library manager.</param>
@@ -154,18 +162,13 @@ public class LibrarySyncService
         // JF-544: every SMAPI call in the leg reads the CURRENT token (see the
         // per-attempt re-read below); catalog version creation and the model PUT are
         // both safe to re-submit, which the one-shot 401 retry relies on.
-        // JF-513.3 (item 2): locale legs whose payload is identical to one already
-        // (the byte-identical legs are the synonym-equivalence classes the
-        // JF-709 audit names: es x3, fr x2, and the 6-member en/hi cluster;
-        // ar-SA never reaches the sync, the JF-543 filter above.)
-        // uploads are byte-identical to a previous leg's) are skipped: SMAPI stores
-        // a new catalog version per upload, so re-minting identical content burns
-        // quota and the 17-locale volume is the growth this item flagged. The
-        // version returned for the skipped type is null, so the injection below
-        // treats it exactly like a zero-item type (no id forwarded), and a leg
-        // whose types ALL skipped performs no model PUT at all; see JF-709 for
-        // the no-generator-locale consequence of that shape.
-        Dictionary<string, string> uploadedPayloadHashes = new(StringComparer.Ordinal);
+        // JF-513.3 (item 2) + JF-717: the run-scoped map below memoizes, per
+        // catalog payload ("{type}:{catalogId}:{payloadHash}"), the version
+        // this run minted for it, so each byte-identical payload (the
+        // synonym-prefix equivalence classes) uploads exactly once per run
+        // regardless of locale order. The full dedup/wiring contract lives at
+        // the skip check in SyncCatalogForLocaleAsync.
+        Dictionary<string, string> mintedVersionsByPayload = new(StringComparer.Ordinal);
 
         // JF-706: the ONE per-type wiring table for the whole sync (locale-
         // invariant, built once; the getters read the user's stored catalog ids
@@ -225,10 +228,10 @@ public class LibrarySyncService
                         TypeLegEntryProbeForTest?.Invoke(catalogType);
                     }
 
-                    return (await SyncCatalogForLocaleAsync(
+                    return await SyncCatalogForLocaleAsync(
                         user, user.SmapiDeviceToken.AccessToken, vendorId, catalogType, items,
                         existingCatalogId, catalogName, catalogDescription,
-                        locale, uploadedPayloadHashes, cancellationToken).ConfigureAwait(false)).Version;
+                        locale, mintedVersionsByPayload, cancellationToken).ConfigureAwait(false);
                 }
                 catch (CatalogPayloadInvariantException ex)
                 {
@@ -241,11 +244,12 @@ public class LibrarySyncService
             }
 
             // Create/update catalogs with locale-specific phonetic synonyms.
-            // Each minted entry pairs the fresh version with the catalog id as
-            // it stands right after the leg; types that minted no version
-            // (frozen, zero items, or the JF-513.3 identical-payload skip) are
-            // simply absent, which is the JF-495 null-id-with-null-version
-            // rule the injection reads below.
+            // Each entry pairs the minted version with the catalog id as it
+            // stands right after the leg; types that minted no version (frozen
+            // or zero items) are absent, which is the JF-495
+            // null-id-with-null-version rule the injection reads below. A
+            // byte-identical-payload skip contributes the class's shared mint
+            // (JF-717), a version this run minted for this same catalog.
             var minted = new Dictionary<CatalogType, (string? Version, string? CatalogId)>();
             foreach (var leg in typeLegs)
             {
@@ -297,8 +301,9 @@ public class LibrarySyncService
                 // JF-709: the all-frozen leg performed no PUT, so without this
                 // leg-boundary write the locale keeps the PREVIOUS run's green
                 // SUCCEEDED ledger row. A no-PUT leg with ZERO frozen types
-                // (zero-items / byte-identical hash-skips) deliberately writes
-                // nothing; the starved-locale product gap is JF-717.
+                // (all types zero-item; byte-identical hash-skips contribute a
+                // shared version and PUT since JF-717) deliberately writes
+                // nothing: there is genuinely no catalog state to report.
                 RecordNoPutFrozenLegInLedger(locale, frozenTypes);
             }
 
@@ -377,10 +382,13 @@ public class LibrarySyncService
                     locale, user.Id);
             }
 
-            // Inter-locale delay to avoid SMAPI rate limits
-            if (locales.Count > 1)
+            // Inter-locale delay to avoid SMAPI rate limits; BETWEEN this run's
+            // legs only (the final leg has no following call INSIDE the run to
+            // space out; the spacing to another user's sync is
+            // CatalogSyncTask's inter-user delay, JF-717).
+            if (locales.Count > 1 && locale != locales[^1])
             {
-                await Task.Delay(InterLocaleDelayMs, cancellationToken).ConfigureAwait(false);
+                await Task.Delay(InterLocaleDelayMsForTest ?? InterLocaleDelayMs, cancellationToken).ConfigureAwait(false);
             }
         }
 
@@ -716,9 +724,13 @@ public class LibrarySyncService
 
     /// <summary>
     /// Sync a catalog for a specific locale: build locale-specific payload with phonetic synonyms,
-    /// upload to SMAPI, and return the version. Creates the catalog ID if it doesn't exist yet.
+    /// upload to SMAPI, and return the minted version. Creates the catalog ID if it doesn't exist
+    /// yet. Returns null when the type has no items this run. A payload byte-identical to one
+    /// already uploaded this run skips the upload and returns the version that earlier leg
+    /// minted (JF-717), so the caller wires the equivalence class's shared
+    /// (catalogId, version) pair into this locale's model.
     /// </summary>
-    private async Task<(int Count, string? Version)> SyncCatalogForLocaleAsync(
+    private async Task<string?> SyncCatalogForLocaleAsync(
         Entities.User user,
         string accessToken,
         string vendorId,
@@ -728,12 +740,12 @@ public class LibrarySyncService
         string catalogName,
         string catalogDescription,
         string locale,
-        Dictionary<string, string> uploadedPayloadHashes,
+        Dictionary<string, string> mintedVersionsByPayload,
         CancellationToken cancellationToken)
     {
         if (items.Count == 0)
         {
-            return (0, null);
+            return null;
         }
 
         var itemTuples = items
@@ -790,27 +802,36 @@ public class LibrarySyncService
         string payloadJson = JsonSerializer.Serialize(payload, CatalogManager.JsonOptions);
 
         // JF-513.3: skip the version upload when this exact payload was already
-        // minted in this run (same user/catalog type across locale legs). A skip
-        // reports Version null so the caller treats this leg as no-op for that
-        // type. The hash is recorded only AFTER a successful upload (JF-703
-        // addendum): recording before it made "already uploaded this run" really
-        // mean "already attempted", so a failed upload followed by the leg-level
-        // 401 retry hash-skipped a version that was never minted and dropped a
-        // needed upload for the rest of the run. The trade: a version minted on
-        // SMAPI but lost to a post-mint failure (timeout after acceptance) now
-        // re-uploads on the retry, burning one duplicate version - the narrow,
-        // self-healing direction to be wrong in.
+        // minted in this run (same user/catalog type across locale legs). JF-717:
+        // the skip returns the version the identical earlier leg minted instead of
+        // null, so the caller's model PUT wires the class's shared catalog
+        // reference; the pre-JF-717 null return starved every later class member
+        // of its model PUT forever (its embedded model carries no valueCatalog
+        // blocks, so catalog ER never activated there). The version is recorded
+        // only AFTER a successful upload (JF-703 addendum): recording before it
+        // made "already uploaded this run" really mean "already attempted", so a
+        // failed upload followed by the leg-level 401 retry hash-skipped a
+        // version that was never minted and dropped a needed upload for the rest
+        // of the run. The trade: a version minted on SMAPI but lost to a
+        // post-mint failure (timeout after acceptance) now re-uploads on the
+        // retry, burning one duplicate version; the narrow, self-healing
+        // direction to be wrong in. The payload hash rides the KEY, not the
+        // value: a single per-catalog slot is order-sensitive (an interleaved
+        // locale order evicts it on every class switch and re-mints identical
+        // content), while keying by payload keeps the dedup at exactly one
+        // upload per byte-identical payload per run.
         string payloadHash = Convert.ToHexString(
             SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(payloadJson)));
-        string hashKey = $"{catalogType}:{catalogId}";
-        if (uploadedPayloadHashes.TryGetValue(hashKey, out var seenHash) && seenHash == payloadHash)
+        string payloadKey = $"{catalogType}:{catalogId}:{payloadHash}";
+        if (mintedVersionsByPayload.TryGetValue(payloadKey, out string? sharedVersion))
         {
             _logger.LogInformation(
-                "Catalog {Type} payload for user {UserId} locale {Locale} is identical to a payload already uploaded this run; skipping the version upload",
+                "Catalog {Type} payload for user {UserId} locale {Locale} is identical to a payload already uploaded this run; skipping the version upload and wiring the shared catalog version {Version} minted by the earlier locale leg (JF-717)",
                 catalogType,
                 user.Id,
-                locale);
-            return (payload.Values.Count, null);
+                locale,
+                sharedVersion);
+            return sharedVersion;
         }
 
         string serverAddress = Plugin.Instance!.Configuration.ServerAddress.TrimEnd('/');
@@ -830,11 +851,11 @@ public class LibrarySyncService
             catalogUrlFactory,
             cancellationToken).ConfigureAwait(false);
 
-        // Only a SUCCESSFUL upload records the hash (JF-703 addendum; full
-        // rationale at the skip check above).
-        uploadedPayloadHashes[hashKey] = payloadHash;
+        // Only a SUCCESSFUL upload records the minted version (JF-703 addendum;
+        // full rationale at the skip check above).
+        mintedVersionsByPayload[payloadKey] = catalogVersion;
 
-        return (payload.Values.Count, catalogVersion);
+        return catalogVersion;
     }
 
     /// <summary>

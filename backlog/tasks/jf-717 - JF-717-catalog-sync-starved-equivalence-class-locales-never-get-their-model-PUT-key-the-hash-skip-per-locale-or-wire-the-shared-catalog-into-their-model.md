@@ -69,12 +69,106 @@ model builds are not the scarcer quota.
 Pins when landing: a two-locale run in one equivalence class results in BOTH locales
 carrying valueCatalog references after the run; the it-IT-first ordering does not
 matter; the no-generator cluster stays within JF-513.3's quota goal.
+
+DESIGN DECISION (written before coding, 2026-10-03): SHAPE 2 (wire the shared
+catalog) with a keying refinement, NOT shape 1 (per-locale hash keys). The JF-513.3
+skip keeps suppressing the redundant catalog VERSION upload, but the skip now hands
+back the version minted by the byte-identical earlier leg, so RunLegAsync's minted
+table fills naturally and the unchanged injection gate (minted.Count > 0) fires the
+per-locale model PUT wiring the SHARED (catalogId, version) pair. The JF-706 seam is
+untouched: the Minted(type) extraction and the six positional arguments stay as
+they are (the JF-716 hand-ternary concern cannot recur: nothing at the seam
+changes), and the JF-495 rule survives in its strict form: a forwarded id is always
+paired with a version minted in THIS run (by the class's first member), never a
+stored id with a null version; zero-item and frozen types still contribute nothing.
+
+Keying refinement: the run-scoped dictionary becomes keyed PER PAYLOAD
+("{type}:{catalogId}:{payloadHash}" -> minted version) instead of per catalog with a
+value comparison. The old single-slot-per-catalog keying is order-sensitive: with an
+interleaved locale order (the production "*" list is manifest-order; alphabetically
+the hi-IN leg runs AFTER the fr legs, and hi-IN's no-generator payload is
+byte-identical to the en cluster's), each class switch evicts the slot and re-mints
+byte-identical content, so the old keying both starved models AND burned the exact
+quota it existed to save (today's "*" run re-mints hi-IN's payload per type).
+Per-payload keying makes the dedup exactly "one upload per byte-identical payload
+per catalog per run", order-independent.
+
+Weighing vs shape 1: (1) mints one version per LOCALE (16 uploads per type per run
+under "*"), the exact SMAPI quota burn JF-513.3 exists to prevent, and buys nothing
+shape 2 lacks; an independent version per locale adds no capability because the
+catalog CONTENT is identical by definition of the class. Shape 2 keeps uploads at
+one per class per type and pays only model PUTs, which are not the quota JF-513.3
+protects, are idempotent on unchanged content (GET-modify-PUT re-submits the live
+model with the injection applied; intent/sample counts are unchanged by injection,
+so the JF-495 canary keeps matching), and are frequency-bounded by the 12h
+CatalogSyncTask gate. Shape 3 (surface-only) rejected: fixes nothing. STATED COST
+OF SHAPE 2 (DoD item 2): model PUTs per full "*" run rise from ~9 (one per minting
+locale: it, de, en-AU, es-ES, fr-CA, hi-IN re-mint, ja, nl, pt) to 16 (one per
+synced locale); catalog version uploads per type DROP from ~9 to ~8 (the hi-IN
+re-mint disappears); each added PUT costs a settle+build+canary cycle (order 90s
+each per the JF-497 serialized-queue budget) inside a sync whose JF-544 per-leg
+token refresh already covers longer runs.
+
+Test note: the JF-513.3 family pin
+(LibrarySyncServiceSeriesTests.SyncUserLibraryAsync_IdenticalPayload_SecondLocaleLeg_
+SkipsVersionUpload) lost its discriminating power when JF-543 started filtering
+ar-SA out of the sync entirely (its config "ar-SA" now runs it-IT only, so no second
+leg exists); landing restores it with a real same-class pair (es-MX + es-US).
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] Under the default "*" config, every synced locale in each byte-identical equivalence class carries catalog valueCatalog references in its live interaction model after a full sync run
-- [ ] The JF-513.3 quota goal is not regressed beyond the chosen shape's stated cost (documented in the task on landing)
-- [ ] Pins: two-locale same-class run wires BOTH locales; result independent of which class member runs first
-- [ ] dotnet build 0 errors, dotnet test green both TFMs, no new warnings
+- [x] #1 Under the default "*" config, every synced locale in each byte-identical equivalence class carries catalog valueCatalog references in its live interaction model after a full sync run. DONE: the JF-513.3 skip now returns the version minted by the byte-identical earlier leg (the run-scoped memo is keyed PER PAYLOAD, "{type}:{catalogId}:{payloadHash}"), so RunLegAsync's minted table fills and the unchanged minted.Count > 0 gate fires the per-locale model PUT wiring the class's shared (catalogId, version); the JF-706 seam (Minted extraction, six positional args) is untouched. Pinned end-to-end through SyncUserLibraryAsync with two members of the REAL es class: LibrarySyncServiceEquivalenceClassTests pins both locales' PUTs wired (the skipped locale pins the class's fresh mint, not it-IT's different-payload version, via per-catalog incrementing fake versions), RED on the pre-fix code (3 fix-pins failed, the de-DE boundary pin passed as expected). The "*" list resolution itself rides Alexa.NET.Management's internal Refit client (no hermetic seam) and is upstream of the fix; pinned separately by LibrarySyncServiceLocaleTests.
+- [x] #2 The JF-513.3 quota goal is not regressed beyond the chosen shape's stated cost (documented in the task on landing). DONE: the stated cost is in the DESIGN DECISION above (model PUTs per "*" run ~9 -> 16, catalog uploads per type ~9 -> ~8); the pins assert the upload counts stay one-per-distinct-payload (2 uploads for it + one es class under "es-MX,es-US", both orderings), and the restored JF-513.3 family pin (SeriesTests) re-asserts the skip on a real class pair after its ar-SA config had been vacuous since JF-543's filter.
+- [x] #3 Pins: two-locale same-class run wires BOTH locales; result independent of which class member runs first. DONE: SyncUserLibraryAsync_SameClassSecondLocale_GetsModelPutWiredWithSharedVersion and SyncUserLibraryAsync_SameClassReversedOrder_BothLocalesStillWired (both orderings wire both locales with the same shared version); plus the boundary pin SyncUserLibraryAsync_UniquePayloadLocale_UploadsAndPinsItsOwnVersion (de-DE unaffected) and the review pin SyncUserLibraryAsync_MidLeg401AfterUpload_RetryPutsFromMemoHit (the 401-retry x memo interplay: pre-fix the retried leg silently skipped the PUT, counterfactual-proven 1-vs-2 PUT requests).
+- [x] #4 dotnet build 0 errors, dotnet test green both TFMs, no new warnings. DONE: dotnet build Jellyfin.Plugin.AlexaSkill.sln 0 errors, only the pre-existing xUnit1030 pair (VideoAudioControllerTests.cs:1337, untouched); dotnet test -m:1 4990/4990 net9.0 AND net10.0 (baseline 4986 + 4 pins), exit 0.
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Landed by the JF-717 worker (design decision written into this file BEFORE coding,
+above). SHAPE 2 chosen over shape 1 with a keying refinement: the JF-513.3 skip
+keeps suppressing the redundant catalog VERSION upload but now returns the version
+minted by the byte-identical earlier leg, and the run-scoped memo is keyed PER
+PAYLOAD ("{type}:{catalogId}:{payloadHash}" -> version) instead of per catalog with
+a value comparison, because the single-slot keying was order-sensitive (an
+interleaved "*" order evicts the slot on every class switch and re-mints identical
+content, e.g. today's hi-IN re-mint after the fr legs). Weighed: shape 1 (per-locale
+hash keys) burns the exact SMAPI quota JF-513.3 protects and buys nothing (the
+class's content is identical by definition); shape 2 pays only model PUTs, which
+are idempotent on unchanged content (canary counts unchanged by injection), are
+not the JF-513.3 quota, and are 12h-gated; stated cost recorded (PUTs ~9 -> 16 per
+"*" run, uploads ~9 -> ~8 per type). The JF-706 seam is untouched (no hand-ternary
+re-expansion; JF-716 cannot recur from this change), the JF-495 rule survives
+strictly (an id is only ever paired with a version minted THIS run), the JF-703
+addendum ordering is kept, a newly-wired locale writes the normal JF-705 ledger
+path, and the JF-709 no-PUT writer remains reachable only via genuine freezes
+(comment corrected). 4 pins in the new LibrarySyncServiceEquivalenceClassTests
+(both class members wired, order independence, unique-payload boundary, and the
+401-retry x memo interplay the code-review round surfaced: a leg whose PUT 401s
+AFTER minting used to retry into a silently unwired clean success; counterfactual
+red proof 1-vs-2 PUTs), all red-proven against the pre-fix code; the JF-513.3
+SeriesTests pin restored to discriminating power (its ar-SA config had been
+vacuous since JF-543 filtered ar-SA out of the sync). Adjacents applied from the
+gates: TestHelpers.GetModelTypeNode hoist (third copy of the type-node walk; the
+LegIsolation twin and both SeriesTests inline copies now delegate), the
+SyncCatalogForLocaleAsync dead Count component collapsed to Task<string?>, the
+inter-locale delay made BETWEEN-legs-only with an InterLocaleDelayMsForTest seam
+(catalog family 55s -> 38s net9.0), and an explicit inter-user delay in
+CatalogSyncTask replacing the spacing the trailing-leg sleep used to provide
+accidentally. Gates: /simplify 4 agents, 6 findings applied (hoist, comment-trim
+to one canonical site, redundant finallys, dead Count, implied assertion,
+delay seam); 2 skipped findings FILED as JF-725 (the three-fake consolidation:
+the hoist-on-third convention fires on identical constructions, these diverge
+in knobs; plus the CatalogManager poll-delay seam) and 1 declined on merits
+(generator-identity memo keying would skip the class members' payload rebuilds,
+but content-hash keying is self-verifying and the rebuild is a negligible 12h
+background cost). /code-review high 5 findings, ALL 5 applied (the 401-retry
+pin, inter-user spacing, two leftover inline extractions, scratch-script
+cleanup, banned parenthetical-hyphen fixes in authored lines); nothing filed
+beyond the already-open JF-725. Suites: 4990/4990
+net9.0 AND net10.0 (baseline 4986 + 4 pins), build 0 errors with only the
+pre-existing xUnit1030 pair. Production surfaces changed (LibrarySyncService,
+CatalogSyncTask): deploying is the orchestrator's post-merge step.
+<!-- SECTION:FINAL_SUMMARY:END -->
