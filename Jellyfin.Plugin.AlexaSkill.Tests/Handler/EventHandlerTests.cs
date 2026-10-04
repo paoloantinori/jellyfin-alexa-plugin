@@ -1613,6 +1613,63 @@ public class EventHandlerTests : PluginTestBase, IDisposable
         Assert.Empty(response.Response.Directives);
     }
 
+    // ========== JF-752: the session-miss SIDE-EFFECT pins (the roster's second-boundary pairing) ==========
+
+    /// <summary>
+    /// JF-752 site-level laziness pin, the event half: the dead-token side effects
+    /// must stay INSIDE the lazy factory, so a session-miss EVENT request in the
+    /// full dead-token shape (token-bearing user + recorded previous play) fires
+    /// NO AccountRelink diagnostic; the keep-alive shape is restated so the pin is
+    /// self-contained (the sibling test above owns the shape end to end). The
+    /// queue-read half of the laziness is deliberately unasserted; the canonical
+    /// rationale and the read's contract live on BuildSessionMissTell.
+    /// </summary>
+    [Fact]
+    public async Task HandleRequestAsync_EventRequest_SessionNotFound_DeadToken_NeverFiresAccountRelinkLog()
+    {
+        var (config, _, sessionManager, context) = CreateSessionMissHarness();
+        RecordPreviousPlayOnHarnessDevice(context);
+        var records = new List<(LogLevel Level, string Message)>();
+        var handler = new PlaybackFailedEventHandler(
+            sessionManager.Object, config, LoggerFactory.Create(b => b.AddProvider(TestCaptureLogger.Into(records))));
+        var request = TestHelpers.CreateAudioPlayerEventRequest("AudioPlayer.PlaybackFailed", offsetMs: 1);
+
+        SkillResponse response = await handler.HandleRequestAsync(request, context, CancellationToken.None);
+
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.Null(response.Response.ShouldEndSession);
+        Assert.Null(response.Response.Card);
+        Assert.Empty(response.Response.Directives);
+        Assert.DoesNotContain(
+            TestCaptureLogger.Snapshot(records),
+            r => r.Message.Contains("AccountRelink", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// JF-752 site-level laziness pin, the non-event twin: the SAME dead-token
+    /// session miss through an intent request DOES fire the AccountRelink
+    /// diagnostic (the operational half of the JF-527 relink path; the response
+    /// itself is pinned by the JF-527 tests above). Together with the event half
+    /// this holds the discrimination at the SITE, not just in the core.
+    /// </summary>
+    [Fact]
+    public async Task HandleRequestAsync_IntentRequest_SessionNotFound_DeadToken_FiresAccountRelinkLog()
+    {
+        var (config, _, sessionManager, context) = CreateSessionMissHarness();
+        RecordPreviousPlayOnHarnessDevice(context);
+        var records = new List<(LogLevel Level, string Message)>();
+        var handler = new PlaybackFailedEventHandler(
+            sessionManager.Object, config, LoggerFactory.Create(b => b.AddProvider(TestCaptureLogger.Into(records))));
+        var request = new IntentRequest { Intent = new Intent { Name = "WhoAmIIntent" } };
+
+        await handler.HandleRequestAsync(request, context, CancellationToken.None);
+
+        Assert.Contains(
+            TestCaptureLogger.Snapshot(records),
+            r => r.Level == LogLevel.Information
+                && r.Message.Contains("AccountRelink", StringComparison.Ordinal));
+    }
+
     // ========== JF-588: self-heal the session-miss miss by re-registering the session ==========
 
     /// <summary>

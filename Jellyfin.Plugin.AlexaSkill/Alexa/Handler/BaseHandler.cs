@@ -713,7 +713,11 @@ public abstract class BaseHandler
     /// only through the lazy overload: its dead-token branch reads
     /// <see cref="DeviceQueueManager"/> and writes the AccountRelink diagnostic log,
     /// which must not fire on event requests (the pre-JF-708 early return guaranteed
-    /// that; the laziness keeps it).
+    /// that; the laziness keeps it). The log half is pinned site-level in
+    /// EventHandlerTests' JF-752 set; the queue-read half is unassertable (the read
+    /// is non-virtual on a sealed class and leaves no trace, and the JF-588
+    /// self-heal predicate already reads it once per miss), so it is guarded by
+    /// this contract: keep the read HERE, inside the factory.
     /// </summary>
     /// <param name="request">The incoming skill request (never an event request here).</param>
     /// <param name="user">The resolved plugin user (user resolution succeeded; the session lookup missed).</param>

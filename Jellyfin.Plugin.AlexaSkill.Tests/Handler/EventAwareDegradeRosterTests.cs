@@ -29,8 +29,11 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// a copy that spells the type test itself (request is AudioPlayerRequest or
 /// SessionEndedRequest or SystemExceptionRequest) while calling
 /// BuildKeepAliveResponse directly, references only one scanned member and also
-/// escapes the conjunction; the site-level side-effect pin that pairs with this
-/// boundary is filed as JF-752.
+/// escapes the conjunction; the site-level side-effect pins that pair with this
+/// boundary live in EventHandlerTests' JF-752 set (the session-miss site, the
+/// one folded surface whose non-event factory has observable side effects; the
+/// other three build a pure single Tell on either leg, so a hoist there has
+/// no side effect to fire).
 /// </summary>
 public class EventAwareDegradeRosterTests
 {
