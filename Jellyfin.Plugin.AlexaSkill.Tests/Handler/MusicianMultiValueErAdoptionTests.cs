@@ -1064,19 +1064,21 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
     }
 
     // ===============================================================
-    // PlayArtistSongs: the JF-702 pool-sharing closure
+    // PlayArtistSongs: the JF-702 pool-sharing closure, completed by JF-734
     // ===============================================================
 
     [Fact]
-    public async Task PlayArtistSongs_MultiValueEr_Jf420Gate_ReusesTheGatePoolFetch_NoSecondMaterialization()
+    public async Task PlayArtistSongs_MultiValueEr_PoolThreadedSearchAndJf420Gate_ReusesOneFetch_NoSecondMaterialization()
     {
-        // The pool-sharing seam closed by JF-702: on a multi-value leg that
+        // The pool-sharing seam closed by JF-702 and completed by JF-734 (the
+        // seventh pool site, joining the JF-715 six): on a multi-value leg that
         // falls through to the search and then fires the JF-420
         // containment-vs-alternative gate, the scoped pool is materialized ONCE
-        // inside the arbitration (its Pool ships on the result) and the JF-420
-        // gate consumes that fetch. The counting index therefore sees exactly
-        // TWO GetArtists calls (the gate's and SearchAsync's tier-1), never the
-        // third the pre-JF-702 re-fetch paid.
+        // inside the arbitration (its Pool ships on the result), the SEARCH
+        // consumes that fetch through the preloadedPool axis, and the JF-420
+        // gate consumes the same fetch. The counting index therefore sees
+        // exactly ONE GetArtists call (the gate's), never the second the
+        // pre-JF-734 leg paid for SearchAsync's own tier-1 materialization.
         var floyd = PinkFloyd();
         var counting = new CountingArtistIndex(IndexOf(floyd));
 
@@ -1121,7 +1123,7 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
         // (single containment match, no alternative, no disambiguation).
         TestHelpers.AssertNoDisambiguationState(response);
         Assert.NotNull(TestHelpers.GetPlayDirective(response));
-        Assert.Equal(2, counting.GetArtistsCalls);
+        Assert.Equal(1, counting.GetArtistsCalls);
     }
 
     public void Dispose()
