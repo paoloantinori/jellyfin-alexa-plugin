@@ -334,11 +334,7 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
 
         // Assert
         Assert.True(result.Success);
-        var ledger = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
-        Assert.NotNull(ledger);
-        Assert.Equal(LibrarySyncService.CatalogSyncLedgerSource, ledger!.Source);
-        Assert.Equal("SUCCEEDED", ledger.Status);
-        Assert.Null(ledger.Error);
+        TestHelpers.AssertCatalogSyncLedgerSucceeded("it-IT");
     }
 
     /// <summary>
@@ -360,11 +356,7 @@ public class LibrarySyncServiceSeriesTests : PluginTestBase, IDisposable
 
         // Assert
         Assert.True(result.Success);
-        var ledger = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
-        Assert.NotNull(ledger);
-        Assert.Equal(LibrarySyncService.CatalogSyncLedgerSource, ledger!.Source);
-        Assert.Equal("SUCCEEDED", ledger.Status);
-        Assert.Null(ledger.Error);
+        TestHelpers.AssertCatalogSyncLedgerSucceeded("it-IT");
     }
 
     /// <summary>
