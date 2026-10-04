@@ -49,3 +49,26 @@ escapes the IL conjunction scan; a site-level side-effect pin per folded site is
 the only guard class that catches per-site divergence regardless of how it is
 spelled. Scope: the four JF-708 folded sites as they exist then; a blanket
 side-effect framework is NOT wanted.
+
+CORRECTIONS (2026-10-04, the simplify altitude round on the JF-708 tail, folded
+before anyone picks this up): (1) HALF THE WORK ALREADY EXISTS at the site
+level: EventHandlerTests.cs:1601
+(HandleRequestAsync_EventRequest_SessionNotFound_DeadToken_KeepsKeepAlive)
+already drives the session-miss site with an event request in the dead-token
+shape and asserts the keep-alive SHAPE; the residual gap is assertion (b) only
+(the side effects), since that shape test stays green under the hoist. (2) The
+harness question is ANSWERED by the existing suite: there is no shared-instance
+mock; the working seam is a real DeviceQueueManager attached via the internal
+setter + TestHelpers.CreateDeviceQueueManager/SwapPluginQueueManager (the
+JF-630 ONE swap scope) + CreateSessionMissHarness at EventHandlerTests.cs:1431,
+one file away. (3) Assertion (b)'s first half is NOT implementable as stated:
+DeviceQueueManager is public sealed with a non-virtual GetLastPlayedItemId, so
+Moq cannot spy it and the read leaves no side effect; only the LOG half is
+directly assertable with a capturing logger, and the read half needs a seam
+extraction (a production change) or a relaxed design (assert the log only, and
+guard the read by inspection) - the design decision is narrower than the
+original filing implied. (4) Wording: hoisting hadPreviousPlay alone re-fires
+the queue read, not the log (the log sits inside the lazy factory, gated on
+HasJellyfinToken && hadPreviousPlay); both fire only under a deeper
+de-lazification. SITE PATHS: BaseHandler.cs BuildSessionMissResponse :707,
+BuildSessionMissTell :722, the public caller at :321.

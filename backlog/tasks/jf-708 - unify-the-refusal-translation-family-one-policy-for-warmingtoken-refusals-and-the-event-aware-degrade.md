@@ -182,3 +182,5 @@ TFMs on the final state (baseline 5126 + 11); Release --no-restore -warnaserror 
 0 errors. No locale or model surface changed; no deploy (the orchestrator's batched deploy
 owns the DLL).
 <!-- SECTION:FINAL_SUMMARY:END -->
+
+FOLLOW-UP FILED: JF-752 (the site-level side-effect pin pairing the roster's SECOND BOUNDARY; the filing text corrected in the same turn by the altitude round).
