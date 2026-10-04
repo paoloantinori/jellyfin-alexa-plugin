@@ -1068,7 +1068,7 @@ public class MusicianMultiValueErAdoptionTests : PluginTestBase, IDisposable
     // ===============================================================
 
     [Fact]
-    public async Task PlayArtistSongs_MultiValueEr_Jf420Gate_ReusesTheGatePoolFetch_NoSecondMaterialization()
+    public async Task PlayArtistSongs_MultiValueEr_PoolThreadedSearchAndJf420Gate_ReusesOneFetch_NoSecondMaterialization()
     {
         // The pool-sharing seam closed by JF-702 and completed by JF-734 (the
         // seventh pool site, joining the JF-715 six): on a multi-value leg that

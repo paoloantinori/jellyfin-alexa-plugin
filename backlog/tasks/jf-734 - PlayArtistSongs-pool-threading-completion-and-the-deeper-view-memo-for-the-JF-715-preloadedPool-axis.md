@@ -83,6 +83,21 @@ extension in IArtistIndex.cs so the readiness policy has a single definition;
 do NOT mix the two shapes at one call site (the JF-715 code-review finding 1
 documents the choke-defeating trap of the guarded form below a handler that
 does not entry-gate).
+
+GATE-MARKER TAIL (2026-10-04, orchestrator scaled review of commit c2fc3b8f, 2 findings;
+all four axes verified at source with the pin INDEPENDENTLY RE-PROVEN - the reviewer
+sabotaged the threading to null and the pin failed 1-vs-2 on both TFMs, reverted; the
+same-view contract confirmed by construction (Pin is identity on the snapshot, the one
+pinnedIndex local feeds everything, a non-null pool implies gate-ready which makes the
+DB branch unreachable); the widened seam comment judged honest and its safety margin
+tighter than stated (the post-search ResolveForUser degrades stale-scope accepts to
+artist-found-no-songs, not removed-library playback); the JF-742 five-site premise
+counted at the source with PlayAlbum confirmed the deliberately divergent consumer):
+F1 APPLIED (the CLAUDE.md sentence's denominator named: seven gate-hosting HANDLERS,
+with the raw-grep caveat a call-site count gives six because FindSong contributes two
+and CrossMediaFallback's hoist is not a gate site); F2 APPLIED (the pin renamed from
+Jf420Gate_ReusesTheGatePoolFetch to PoolThreadedSearchAndJf420Gate_ReusesOneFetch so
+the JF-742 fold finds it as the threading pin it now is).
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done
