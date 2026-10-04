@@ -1,12 +1,12 @@
 ---
 id: JF-737
 title: >-
-  JF-737 - the JF-727 emptiness pre-check is the one unpinned per-type fact:
-  no cheap pin exists for the conjunction's collection derivation
+  JF-737 - the JF-727 emptiness pre-check is the one unpinned per-type fact: no
+  cheap pin exists for the conjunction's collection derivation
 status: Done
 assignee: []
 created_date: '2026-10-03 23:11'
-updated_date: '2026-10-04 12:00'
+updated_date: '2026-10-04 09:51'
 labels:
   - catalog
   - structure-pins
@@ -14,7 +14,8 @@ dependencies:
   - JF-727
 references:
   - >-
-    backlog/tasks/jf-727 - JF-727-two-residual-per-type-hand-enumerations-outside-the-JF-706-711-wiring-tables-protection-the-item-sourcing-block-and-CatalogWiringGraft-ExtractWiring.md
+    backlog/tasks/jf-727 -
+    JF-727-two-residual-per-type-hand-enumerations-outside-the-JF-706-711-wiring-tables-protection-the-item-sourcing-block-and-CatalogWiringGraft-ExtractWiring.md
 priority: low
 ---
 
@@ -138,4 +139,6 @@ full suite 5110/5110 net9.0 and 5110/5110 net10.0 on the final state (baseline
 non-reproducing net10.0 flake whose name was lost to a summary-only grep, three
 subsequent full runs green (two with trx capture). No deploy (the orchestrator's
 batched post-closure deploy owns it).
+
+CLOSED 2026-10-04 by the orchestrator after the full cycle: merged into main (worker commit eda1eb60 + rework 55ba1b8e, --no-ff), combined-tree suite 5116/5116 both TFMs (the JF-737 + JF-739 pair), CI green, deployed in the batched post-closure deploy. The orchestrator gate-marker verified all six axes at source; its three doc-truth findings applied in the rework (the false kick-off compiler mechanism corrected in both spots with the true Roslyn shape, and the empty-array contract documented on the predicate).
 <!-- SECTION:FINAL_SUMMARY:END -->

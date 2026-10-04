@@ -4,9 +4,10 @@ title: >-
   JF-739 - a sibling RecordLaunchBase inside the derive-to-commit window trims
   without the JF-723 exemption, so the fresh entry can still be evicted
   pre-commit
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-03'
+updated_date: '2026-10-04 09:52'
 labels:
   - playback
   - queue
@@ -14,8 +15,12 @@ labels:
 dependencies:
   - JF-723
 references:
-  - 'backlog/tasks/jf-723 - JF-713-derive-to-commit-window-TrimLaunchBaseIfNeeded-judges-the-fresh-launch-scope-entry-against-the-OLD-queues-membership.md'
-  - 'backlog/tasks/jf-738 - queued-membership-protection-in-the-bounded-map-trims-is-inert-maps-are-N-keyed-queue-ItemIds-are-dashed.md'
+  - >-
+    backlog/tasks/jf-723 -
+    JF-713-derive-to-commit-window-TrimLaunchBaseIfNeeded-judges-the-fresh-launch-scope-entry-against-the-OLD-queues-membership.md
+  - >-
+    backlog/tasks/jf-738 -
+    queued-membership-protection-in-the-bounded-map-trims-is-inert-maps-are-N-keyed-queue-ItemIds-are-dashed.md
 priority: low
 ---
 
@@ -187,6 +192,7 @@ the aging proof.
 
 ## Final Summary
 
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
 Chosen shape: (a), the JF-723 filing's fresh-stamping candidate - an
 in-memory per-device recently-record stamp registry on DeviceQueueManager
 (`_recentRecordStamps`, guarded by the existing `_launchScopeLock`; both
@@ -224,3 +230,6 @@ the builder's dashed-to-N normalization unchanged; the stamp keys are already
 "N"-normalized at their only writer sites). Gates: /simplify (4 agents),
 /code-review high (5 findings), and the orchestrator gate-marker round
 (GM-F1..GM-F4) as itemized under DoD #5; commits carry the Gates marker.
+
+CLOSED 2026-10-04 by the orchestrator after the full cycle: merged into main (worker commit f9445165 + rework fbf2ead6, --no-ff; the promote stamp and the SetTimeForTest guard verified by direct orchestrator read), combined-tree suite 5116/5116 both TFMs, CI green, deployed in the batched post-closure deploy. The orchestrator gate-marker verified all six axes (the amend claim checked byte-empty) plus the four rework findings applied, the promote stamp being the third write path the first cut missed, with its own fourth red proof.
+<!-- SECTION:FINAL_SUMMARY:END -->
