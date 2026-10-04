@@ -4,17 +4,22 @@ title: >-
   JF-743 - the caller-side Take(3) legs: PlayAlbum's alphabetically ordered
   direct search hits can drop the EXACT album name past rank 3, and PlayPodcast
   passes the full search-hit list into the helper's cap
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-04'
+updated_date: '2026-10-04 12:50'
 labels:
   - ux
   - disambiguation
 dependencies:
   - JF-735
 references:
-  - 'backlog/tasks/jf-735 - JF-735-AskFirstMatch-truncates-its-STATE-list-at-Take3-ranks-past-3-unaskable-and-unannounced.md'
-  - 'backlog/tasks/jf-729 - JF-729-the-capped-multi-artist-ask-presents-its-3-spoken-names-as-an-exhaustive-found-set-no-and-others-hint-in-the-17-locale-strings.md'
+  - >-
+    backlog/tasks/jf-735 -
+    JF-735-AskFirstMatch-truncates-its-STATE-list-at-Take3-ranks-past-3-unaskable-and-unannounced.md
+  - >-
+    backlog/tasks/jf-729 -
+    JF-729-the-capped-multi-artist-ask-presents-its-3-spoken-names-as-an-exhaustive-found-set-no-and-others-hint-in-the-17-locale-strings.md
 priority: low
 ---
 
@@ -189,4 +194,6 @@ touched suite 155/155 in isolation on both TFMs after every round). No
 locale or interaction-model change (leg 2 declined needs no string), so the
 validators are untouched. No deploy: the change is one handler + tests + doc;
 the orchestrator's batched deploy owns the DLL.
+
+CLOSED 2026-10-04 by the orchestrator after the full cycle: merged into main (worker commit 447c87eb + orchestrator tail 8fa3735e, --no-ff; the gate-marker's one finding - the vacuous 'Rush' speech assert - applied by the orchestrator per the doc-only-tail rule), combined-tree suite 5126/5126 both TFMs, deployed in the batched post-closure deploy. Leg 2's decline is evidence-backed and pin-locked; JF-749 unused, no out-of-scope finding.
 <!-- SECTION:FINAL_SUMMARY:END -->

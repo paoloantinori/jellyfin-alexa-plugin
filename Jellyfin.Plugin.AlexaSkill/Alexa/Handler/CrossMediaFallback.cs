@@ -397,7 +397,7 @@ public sealed class CrossMediaFallback
                     SourceType = "Artist",
                     ArtistId = artistId,
                     StartIndex = artistItems.Count,
-                    TotalCount = int.MaxValue,
+                    TotalCount = Util.SearchService.UnknownTotal,
                     UserId = jellyfinUser.Id,
                     SortOrder = PopularitySort,
                     Shuffle = _config.ShuffleArtistSongs,

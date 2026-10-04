@@ -12,6 +12,7 @@ using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Dto;
@@ -1692,6 +1693,92 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
         Assert.Single(batch);
         Assert.Equal(chapterId, batch[0].Id);
         Assert.Equal(6, continuation.StartIndex);
+    }
+
+    // JF-673 RED PROOF (tail side): when the head's initial page came through the
+    // NRE fallback it stores TotalCount=SearchService.UnknownTotal (GetItemList has
+    // no count), so the tail has NO total to exhaust against; the only end signal is
+    // a SHORT page, the FetchArtistSongs shape. The short page must mark the
+    // continuation exhausted (StartIndex=TotalCount) so the NEXT FetchNextBatch is
+    // terminal via the entry guard instead of querying past the end and WARNing.
+    [Fact]
+    public void QueueContinuation_AudiobookFetch_EndUnknownShortPage_MarksContinuationExhausted()
+    {
+        _fx.SetupUserMock();
+
+        var continuation = new QueueContinuation
+        {
+            SourceType = "Audiobook",
+            ParentId = Guid.NewGuid(),
+            UserId = Guid.NewGuid(),
+            StartIndex = 5,
+            TotalCount = SearchService.UnknownTotal,
+            BatchSize = 10
+        };
+
+        // The tail's own fetch may even succeed with a per-page total; the regime is
+        // carried by the continuation (what the head stored), and result totals are
+        // not read here either way.
+        _fx.LibraryManager
+            .Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem>
+            {
+                Items = new List<BaseItem>
+                {
+                    new Audio { Id = Guid.NewGuid(), Name = "Chapter 6" },
+                    new Audio { Id = Guid.NewGuid(), Name = "Chapter 7" },
+                    new Audio { Id = Guid.NewGuid(), Name = "Chapter 8" }
+                },
+                TotalRecordCount = 3
+            });
+
+        ILogger logger = _fx.LoggerFactory.CreateLogger("AudiobookEndUnknownTest");
+        IReadOnlyList<BaseItem> batch = QueueContinuationFetcher.FetchNextBatch(
+            continuation, _fx.LibraryManager.Object, _fx.UserManager.Object, logger);
+
+        // The batch is served whole; the short page marks the end.
+        Assert.Equal(3, batch.Count);
+        Assert.Equal(SearchService.UnknownTotal, continuation.StartIndex);
+
+        // The marked state is terminal: the next call returns empty via the entry
+        // guard WITHOUT a further library query.
+        IReadOnlyList<BaseItem> next = QueueContinuationFetcher.FetchNextBatch(
+            continuation, _fx.LibraryManager.Object, _fx.UserManager.Object, logger);
+        Assert.Empty(next);
+        _fx.LibraryManager.Verify(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()), Times.Once);
+    }
+
+    // JF-673 guardrail: a FULL page under the end-unknown regime advances the offset
+    // without exhausting; the book continues page by page until a short page ends it.
+    [Fact]
+    public void QueueContinuation_AudiobookFetch_EndUnknownFullPage_AdvancesWithoutExhausting()
+    {
+        _fx.SetupUserMock();
+
+        var continuation = new QueueContinuation
+        {
+            SourceType = "Audiobook",
+            ParentId = Guid.NewGuid(),
+            UserId = Guid.NewGuid(),
+            StartIndex = 5,
+            TotalCount = SearchService.UnknownTotal,
+            BatchSize = 10
+        };
+
+        List<BaseItem> fullBatch = Enumerable.Range(0, 10)
+            .Select(i => (BaseItem)new Audio { Id = Guid.NewGuid(), Name = $"Chapter {i + 6}" })
+            .ToList();
+        _fx.LibraryManager
+            .Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem> { Items = fullBatch, TotalRecordCount = 10 });
+
+        ILogger logger = _fx.LoggerFactory.CreateLogger("AudiobookEndUnknownFullPageTest");
+        IReadOnlyList<BaseItem> batch = QueueContinuationFetcher.FetchNextBatch(
+            continuation, _fx.LibraryManager.Object, _fx.UserManager.Object, logger);
+
+        Assert.Equal(10, batch.Count);
+        Assert.Equal(15, continuation.StartIndex);
+        Assert.Equal(SearchService.UnknownTotal, continuation.TotalCount);
     }
 
     [Fact]

@@ -86,6 +86,33 @@ public class SearchServiceTests : PluginTestBase
         Assert.Same(items, result.Items);
     }
 
+    // JF-673: the opt-in honest fallback total. The DEFAULT above keeps the page-size
+    // total (other callers read TotalRecordCount as a real count: the album
+    // count-only query stores it directly, where a sentinel would poison the
+    // pick-most-tracks choice); pagination-loop callers (the audiobook continuation
+    // head) opt in and get the end-unknown regime value instead of a "complete"-
+    // looking page size that stops the loop one page in.
+    [Fact]
+    public void SafeGetItemsResult_NreFallback_UnknownTotalOptIn_ReportsEndUnknown()
+    {
+        var libraryManager = new Mock<ILibraryManager>();
+        libraryManager
+            .Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Throws(new NullReferenceException());
+        var items = new List<BaseItem> { TestHelpers.CreateSong("A"), TestHelpers.CreateSong("B") };
+        libraryManager
+            .Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(items);
+        var query = new InternalItemsQuery { StartIndex = 7 };
+        var search = CreateSearchService(new PluginConfiguration());
+
+        QueryResult<BaseItem> result = search.SafeGetItemsResult(libraryManager.Object, query, unknownTotalOnFallback: true);
+
+        Assert.Equal(7, result.StartIndex);
+        Assert.Equal(SearchService.UnknownTotal, result.TotalRecordCount);
+        Assert.Equal(2, result.Items.Count);
+    }
+
     // ---------------------------------------------------------------------
     // GetSearchResponseMode
     // ---------------------------------------------------------------------

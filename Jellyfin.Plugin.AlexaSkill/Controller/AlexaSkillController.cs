@@ -362,7 +362,7 @@ public class AlexaSkillController : ControllerBase
                 if (user == null)
                 {
                     _logger.LogError("User not found or invalid access token: {UserId}", userId);
-                    return SkillResponseContent(DegradeForEventRequest(req.Request, "User not found. Please link your account in the Jellyfin Alexa plugin settings."));
+                    return SkillResponseContent(BaseHandler.DegradeForEventRequest(req.Request, "User not found. Please link your account in the Jellyfin Alexa plugin settings."));
                 }
 
                 if (req.Request == null)
@@ -412,7 +412,7 @@ public class AlexaSkillController : ControllerBase
                 {
                     string locale = BaseHandler.GetLocalePublic(req.Request);
                     _logger.LogWarning("Unhandled skill request: {RequestType} intent={IntentName} locale={Locale}", req.Request.Type, intentName, locale);
-                    return SkillResponseContent(DegradeForEventRequest(req.Request, ResponseStrings.Get("CouldNotUnderstand", locale)));
+                    return SkillResponseContent(BaseHandler.DegradeForEventRequest(req.Request, ResponseStrings.Get("CouldNotUnderstand", locale)));
                 }
 
                 if (selection.ForceRouted)
@@ -428,35 +428,15 @@ public class AlexaSkillController : ControllerBase
         {
             _counters.IncrementErrors();
             _logger.LogWarning("Request processing timed out");
-            return SkillResponseContent(DegradeForEventRequest(req?.Request, "Sorry, that took too long. Please try again."));
+            return SkillResponseContent(BaseHandler.DegradeForEventRequest(req?.Request, "Sorry, that took too long. Please try again."));
         }
         catch (Exception ex)
         {
             _counters.IncrementErrors();
             string errorRef = Guid.NewGuid().ToString("N")[..8];
             _logger.LogError(ex, "Unhandled exception processing Alexa request [ErrorRef:{ErrorRef}]", errorRef);
-            return SkillResponseContent(DegradeForEventRequest(req?.Request, $"Something went wrong. Reference: {errorRef}"));
+            return SkillResponseContent(BaseHandler.DegradeForEventRequest(req?.Request, $"Something went wrong. Reference: {errorRef}"));
         }
-    }
-
-    /// <summary>
-    /// JF-507: a degradation whose request is an Alexa EVENT request (AudioPlayer event,
-    /// SessionEnded, SystemExceptionEncountered) must answer with the empty keep-alive
-    /// shape: Amazon rejects outputSpeech on those responses with INVALID_RESPONSE
-    /// "Response may not contain an outputSpeech" (live incident 2026-09-06 17:12:52).
-    /// Every other request keeps the Tell.
-    /// </summary>
-    /// <param name="request">The deserialized request when available, else null.</param>
-    /// <param name="tellMessage">The Tell message for non-event requests.</param>
-    /// <returns>The keep-alive response for event requests, the Tell otherwise.</returns>
-    private SkillResponse DegradeForEventRequest(Request? request, string tellMessage)
-    {
-        if (request != null && BaseHandler.IsEventRequest(request))
-        {
-            return BaseHandler.BuildKeepAliveResponse();
-        }
-
-        return ResponseBuilder.Tell(tellMessage);
     }
 
     private ContentResult SkillResponseContent(SkillResponse response)

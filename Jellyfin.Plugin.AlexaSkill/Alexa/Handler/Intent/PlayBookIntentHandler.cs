@@ -164,17 +164,28 @@ public class PlayBookIntentHandler : BaseHandler
         // Initial page through the ONE shared chapters-page query (JF-670): the
         // continuation fetcher builds the same shape, so head and tail concatenate
         // in one order and cannot drift apart.
+        // JF-673: unknownTotalOnFallback because this page drives a pagination loop.
+        // On NRE-class servers the page arrives through the GetItemList fallback,
+        // whose honest total is UNKNOWN: a page-size total would read as "complete"
+        // here, the continuation store below would never engage, and the book would
+        // truncate at this page exactly on the servers the NRE guard exists for.
         QueryResult<BaseItem> bookTracks = await RetryAsync(
             () => Search.SafeGetItemsResult(_libraryManager,
                 QueueContinuationFetcher.BuildAudiobookChaptersQuery(
-                    jellyfinUser, books[0].Id, 0, ProgressiveQueueConstants.GetInitialFetchSize())),
+                    jellyfinUser, books[0].Id, 0, ProgressiveQueueConstants.GetInitialFetchSize()),
+                unknownTotalOnFallback: true),
             "GetBookTracks",
             cancellationToken).ConfigureAwait(false);
 
+        // JF-673: the end-unknown regime marker (the NRE fallback shape).
+        bool endUnknown = bookTracks.TotalRecordCount == SearchService.UnknownTotal;
+
         // Single-file audiobooks: the AudioBook item IS the audio track itself.
         // Multi-file audiobooks: children tracks exist under a parent folder.
+        // JF-673: the end-unknown arm keeps this branch working when the fallback
+        // reports UnknownTotal instead of 0 for an empty chapters page.
         IReadOnlyList<BaseItem> trackItems;
-        if (bookTracks.TotalRecordCount == 0)
+        if (bookTracks.TotalRecordCount == 0 || (endUnknown && bookTracks.Items.Count == 0))
         {
             if (books[0].MediaType == MediaType.Audio)
             {
@@ -255,7 +266,14 @@ public class PlayBookIntentHandler : BaseHandler
             // Store continuation info so PlaybackNearlyFinished can fetch the rest.
             // StartIndex uses the original page size because the database offset is
             // independent of the resume slice.
-            if (bookTracks.TotalRecordCount > bookTracks.Items.Count)
+            // JF-673: in the end-unknown regime there is no total to compare against;
+            // a FULL initial page means "maybe more" (the stored UnknownTotal keeps
+            // the tail fetching; a short page there ends the book, the FetchArtistSongs
+            // shape) and a short initial page means the book is already complete.
+            bool morePages = endUnknown
+                ? bookTracks.Items.Count >= ProgressiveQueueConstants.GetInitialFetchSize()
+                : bookTracks.TotalRecordCount > bookTracks.Items.Count;
+            if (morePages)
             {
                 QueueContinuationStore.Set(
                     session.UserId,

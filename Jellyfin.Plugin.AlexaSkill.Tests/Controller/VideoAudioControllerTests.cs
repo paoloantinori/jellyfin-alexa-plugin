@@ -1284,23 +1284,13 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     [Fact]
     public async Task StreamHlsVideoAudio_CacheHit_ValidatedServe_ReadsPlaylistOnce()
     {
-        var audioItem = new MediaBrowser.Controller.Entities.Audio.Audio
-        {
-            Name = "JF-677 Read Count Song",
-            Id = Guid.NewGuid()
-        };
-
-        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
-        _libraryManagerMock.Setup(m => m.GetItemById(audioItem.Id)).Returns(audioItem);
-
-        string hlsDir = _cache.GetHlsDirectoryPath(audioItem.Id.ToString("D"), 0);
+        (Guid itemId, string hlsDir, string playlistPath) = SetupSongVanishFixture("JF-677 Read Count Song");
         Directory.CreateDirectory(hlsDir);
-        string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
         await File.WriteAllTextAsync(
             playlistPath,
             "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:4.000,\nseg_000.ts\n#EXT-X-ENDLIST\n");
 
-        var controller = CreateController(audioItem.Id.ToString());
+        var controller = CreateController(itemId.ToString());
         controller.FfmpegPath = WriteRecordingFakeFfmpeg("fake-ffmpeg-jf677-readcount-song");
 
         int reads = 0;
@@ -1312,7 +1302,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             }
         };
 
-        ActionResult result = await controller.StreamHlsVideoAudio(audioItem.Id.ToString());
+        ActionResult result = await controller.StreamHlsVideoAudio(itemId.ToString());
 
         var contentResult = Assert.IsType<ContentResult>(result);
         Assert.Contains("seg_000.ts?token=", contentResult.Content, StringComparison.Ordinal);
@@ -8059,17 +8049,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     [Fact]
     public async Task StreamHlsVideoAudio_FastPathCacheVanishedAtServe_FallsThroughToReencode()
     {
-        var audioItem = new MediaBrowser.Controller.Entities.Audio.Audio
-        {
-            Name = "Vanishing Song",
-            Id = Guid.NewGuid()
-        };
-        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
-        _libraryManagerMock.Setup(m => m.GetItemById(audioItem.Id)).Returns(audioItem);
-
-        string hlsDir = _cache.GetHlsDirectoryPath(audioItem.Id.ToString("D"), 0);
+        (Guid itemId, string hlsDir, string playlistPath) = SetupSongVanishFixture("Vanishing Song");
         Directory.CreateDirectory(hlsDir);
-        string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
         await File.WriteAllTextAsync(
             playlistPath,
             "#EXTM3U\n#EXTINF:4.000,\nseg_000.ts\n#EXT-X-ENDLIST\n");
@@ -8090,9 +8071,9 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         string fakeFfmpegPath = WriteRecordingFakeFfmpeg("fake-ffmpeg-jf677-race-song", "seg_000.ts");
 
         var controller = CreateController(
-            audioItem.Id.ToString(), loggerFactory, ffmpegPath: fakeFfmpegPath);
+            itemId.ToString(), loggerFactory, ffmpegPath: fakeFfmpegPath);
 
-        ActionResult result = await controller.StreamHlsVideoAudio(audioItem.Id.ToString());
+        ActionResult result = await controller.StreamHlsVideoAudio(itemId.ToString());
 
         var content = Assert.IsType<ContentResult>(result);
         Assert.Contains("seg_000.ts?token=", content.Content, StringComparison.Ordinal);
@@ -8492,17 +8473,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     [Fact]
     public async Task StreamHlsVideoAudioCore_NoTokenServe_CacheVanishedAtServe_FallsThroughToReencode()
     {
-        var audioItem = new MediaBrowser.Controller.Entities.Audio.Audio
-        {
-            Name = "JF-685 No-Token Vanish Song",
-            Id = Guid.NewGuid()
-        };
-        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
-        _libraryManagerMock.Setup(m => m.GetItemById(audioItem.Id)).Returns(audioItem);
-
-        string hlsDir = _cache.GetHlsDirectoryPath(audioItem.Id.ToString("D"), 0);
+        (Guid itemId, string hlsDir, string playlistPath) = SetupSongVanishFixture("JF-685 No-Token Vanish Song");
         Directory.CreateDirectory(hlsDir);
-        string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
         await File.WriteAllTextAsync(
             playlistPath,
             "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:4.000,\nseg_000.ts\n#EXT-X-ENDLIST\n");
@@ -8533,7 +8505,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             }
         };
 
-        ActionResult result = await controller.StreamHlsVideoAudioCore(audioItem.Id.ToString());
+        ActionResult result = await controller.StreamHlsVideoAudioCore(itemId.ToString());
 
         Assert.True(
             deletingProvider.Fired,
@@ -8575,16 +8547,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     [Fact]
     public async Task StreamHlsVideoAudio_InLockCacheVanishedAtServe_FallsThroughToReencode()
     {
-        var audioItem = new MediaBrowser.Controller.Entities.Audio.Audio
-        {
-            Name = "JF-678 In-Lock Vanish Song",
-            Id = Guid.NewGuid()
-        };
-        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
-        _libraryManagerMock.Setup(m => m.GetItemById(audioItem.Id)).Returns(audioItem);
-
-        string hlsDir = _cache.GetHlsDirectoryPath(audioItem.Id.ToString("D"), 0);
-        string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
+        (Guid itemId, string hlsDir, string playlistPath) = SetupSongVanishFixture("JF-678 In-Lock Vanish Song");
 
         using var loggerFactory = LoggerFactory.Create(b =>
         {
@@ -8597,11 +8560,11 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         // own content assert to hold (the JF-499 song twin's rationale).
         string fakeFfmpegPath = WriteRecordingFakeFfmpeg("fake-ffmpeg-jf678-inlock-song", "seg_000.ts");
 
-        var controller = CreateController(audioItem.Id.ToString(), loggerFactory, ffmpegPath: fakeFfmpegPath);
+        var controller = CreateController(itemId.ToString(), loggerFactory, ffmpegPath: fakeFfmpegPath);
 
         ActionResult result = await ServeInLockWarmCacheAsync(
-            () => _cache.LockItemAsync(audioItem.Id.ToString("D"), 0),
-            () => controller.StreamHlsVideoAudio(audioItem.Id.ToString()),
+            () => _cache.LockItemAsync(itemId.ToString("D"), 0),
+            () => controller.StreamHlsVideoAudio(itemId.ToString()),
             () =>
             {
                 Directory.CreateDirectory(hlsDir);
@@ -8743,6 +8706,38 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
         string hlsDir = _cache.GetHlsDirectoryPath(parentId.ToString(), 0);
         return (parentId, hlsDir, Path.Combine(hlsDir, "stream.m3u8"));
+    }
+
+    /// <summary>
+    /// JF-692 shared fixture of the four song-path vanish/read-count pins
+    /// (<see cref="SetupAudiobookVanishFixture"/>'s sibling): a mock Audio
+    /// item with the encoder/library lookups wired, returning the item id and
+    /// the warm-cache paths. Each pin plants the playlist itself (the in-lock
+    /// pin plants it through the lock-park core, the others eagerly) with its
+    /// own bytes and wires its own logger factory: the four constructions
+    /// diverge on the provider trigger, the planted bytes, the read-count
+    /// wiring and the lock choreography, so only the item+mock+path arrange
+    /// is shared. The arrange is all three vanish pins exercise in common;
+    /// the fourth member (the JF-677 read-count twin) is a CLEAN cache-hit
+    /// pin that never vanishes anything and shares only this arrange, kept in
+    /// the family for its identical fixture shape. Song family only: the
+    /// episode/episode-audio vanish twins arrange the item through
+    /// <see cref="SetupEpisodeForHls"/> and the EpisodeAudioCacheKey, so they
+    /// cannot ride this helper.
+    /// </summary>
+    private (Guid ItemId, string HlsDir, string PlaylistPath) SetupSongVanishFixture(string songName)
+    {
+        var audioItem = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = songName,
+            Id = Guid.NewGuid()
+        };
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(audioItem.Id)).Returns(audioItem);
+
+        string hlsDir = _cache.GetHlsDirectoryPath(audioItem.Id.ToString("D"), 0);
+        return (audioItem.Id, hlsDir, Path.Combine(hlsDir, "stream.m3u8"));
     }
 
     /// <summary>

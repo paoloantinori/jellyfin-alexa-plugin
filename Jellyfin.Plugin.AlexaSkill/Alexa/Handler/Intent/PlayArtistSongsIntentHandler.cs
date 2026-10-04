@@ -600,7 +600,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                     SourceType = "Artist",
                     ArtistId = artists[0].Id,
                     StartIndex = artistItems.Count,
-                    TotalCount = int.MaxValue,
+                    TotalCount = Util.SearchService.UnknownTotal,
                     UserId = jellyfinUser!.Id,
                     SortOrder = CrossMediaFallback.PopularitySort,
                     Shuffle = _config.ShuffleArtistSongs,
