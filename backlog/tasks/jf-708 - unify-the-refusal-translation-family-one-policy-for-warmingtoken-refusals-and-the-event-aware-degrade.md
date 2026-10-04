@@ -117,7 +117,7 @@ answers keep-alive (fails pre-change: today it Tells); (2) the shared core's sha
 keep-alive; the Func factory NOT invoked on event requests, invoked on intent); (3) a
 structural roster pin (IlCallScanner idiom): the only plugin method referencing BOTH
 IsEventRequest and BuildKeepAliveResponse is the core's Func overload, so a fifth inline
-degrade copy cannot regrow silently.
+degrade copy cannot regrow silently (the roster's SECOND BOUNDARY note qualifies this for the one shape that escapes the scan, a copy spelling the type test itself; JF-752 pairs it).
 
 **DECLINED (with reason):** the TranslateRefusal-helper-only shape (keeps two catches, so
 the next refusal still re-decides policy per catch); unifying the two log lines' severity
@@ -173,7 +173,9 @@ pre-existing gap where Get fails soft and would speak a raw key). RED PROOFS: th
 sabotages (unconditional Tell in the catch, the ternary inlined back into
 BuildUserNotFoundResponse, the Func made eager) flipped exactly the three target pins on
 both TFMs, green on restore; all pre-existing pins (JF-699 pipeline set, JF-507/JF-527
-EventHandlerTests set, warming set) green with no pin method, assertion, or pin body edited (the shared seam helper's parameter in SkillWarmingUpTests was widened from IntentRequest to Request; the JF-708 gate-marker precision finding). Gates: /simplify 4 agents (8 findings: 7
+EventHandlerTests set, warming set) green with no pin method, assertion, or pin body edited; the shared seam
+helper's parameter in SkillWarmingUpTests was widened from IntentRequest to
+Request, and that precision was the JF-708 gate-marker finding. Gates: /simplify 4 agents (8 findings: 7
 applied, 1 declined-with-reason, the IndexName deletion superseded by the review's harder
 call); /code-review high 0 correctness bugs, 4 findings all applied. Suites: 5137/5137 both
 TFMs on the final state (baseline 5126 + 11); Release --no-restore -warnaserror 0 warnings
