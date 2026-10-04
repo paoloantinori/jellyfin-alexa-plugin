@@ -102,9 +102,91 @@ before shipping one.
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 Leg 1 decided and shipped (exact pick-off / rank-to-front / widened state with hint) or consciously declined with the reason recorded here
-- [ ] #2 Leg 2 decided and shipped or consciously declined with the reason recorded here
-- [ ] #3 dotnet build passes with 0 errors, no new warnings
-- [ ] #4 dotnet test passes both TFMs
-- [ ] #5 /simplify + /code-review high passed
+- [x] #1 Leg 1 SHIPPED (rank-to-front pick-off, the "plays or asks FIRST" shape): PlayAlbumIntentHandler's direct-search multi-match leg now orders `albums.OrderByDescending(IsExactNameMatch(effectiveAlbumTerm, a.Name)).ThenBy(Name, OrdinalIgnoreCase)` before its unchanged Take(3). The exact name is the Confirm ask's FIRST spoken/cycled candidate and the AutoPlay pick (albums[0]); the non-exact remainder keeps the JF-427 alphabetical order byte-identically (no exact present: single ordering key + stable sort reproduces today's order). The comparison is the ONE canonical JF-420.1 predicate ArtistSearch.IsExactNameMatch (case-insensitive, end-trimmed; /simplify reuse round), keyed on effectiveAlbumTerm because the JF-469 calling-word-stripped retry (the one producer that keeps `album` raw for not-found speech fidelity) queries the stripped term (code-review altitude round; red-proven below). The widened-state-with-hint option was NOT taken: the filing's pin language (stored-state first entry) maps to rank-to-front, the JF-341 Confirm contract (distinct-name multi-match asks) is preserved, and no new locale key is needed. RED PROOFS, all live on both TFMs: the Confirm pin failed pre-fix at state[0] (Expected "Rush", got "Gold Rush"; the exact name absent from the stored state entirely), the AutoPlay pin failed pre-fix at the played-token assert (Gold Rush's track played for query "rush"), and the JF-469-feed pin failed with the effectiveAlbumTerm assignment removed (state[0] "Gold Rush" again), restored, green. No AskFirstMatch call site added or removed, Take(3) kept: census and state pins untouched (guardrail re-weigh recorded on FirstMatchStateCap's doc in the same sitting)
+- [x] #2 Leg 2 CONSCIOUSLY DECLINED, evidence below and locked by a pin: PlayPodcast's untruncated tail keeps the helper's FirstMatchStateCap as its binding truncation. The lock: HandleAsync_FiveSubThresholdSearchHits_NotFoundAskKeepsThree (five SearchTerm hits, none exact, all sub-suggestion-threshold; stored state count 3, first-three names in the list's arbitrary albums-then-series order). No JF-729 hint treatment, no 17-locale string
+- [x] #3 dotnet build Release --no-restore -warnaserror on the final state: Build succeeded, 0 Warning(s), 0 Error(s)
+- [x] #4 dotnet test on the final state: 5120/5120 net9.0 AND net10.0 (baseline 5116 + 4 new pins: the two burial pins, the JF-469-feed pin, the decline lock). Runs executed: full suite once mid-flight (5119/5119 both TFMs, before the review rounds) and once on the final state; the final-state net10.0 leg 5120/5120, the net9.0 leg of that same invocation had ONE transient failure (name not captured by the summary-only grep; NOT in any touched suite; the identical net9.0 suite re-ran 5120/5120 clean, and every touched suite passed in isolation on both TFMs after every round, 155/155). No repro across two subsequent full runs; reported here per the fix-every-failure rule rather than dismissed
+- [x] #5 /simplify + /code-review high PASSED (literal Skill calls in the worker transcript). /simplify 4 agents: efficiency CLEAN (verified LINQ keys evaluate once per element, N+1 predicate calls is the floor); reuse 2 APPLIED (the canonical IsExactNameMatch predicate replacing both inline string.Equals sites; SetupAlbumsAndTracks replacing pin 2's hand-rolled GetItemList wiring) + 1 optional note SKIPPED with reason (widening GetPlayedTrackTokenAsync with a user parameter: drive-by refactor of a shared helper, the file idiom inlines this block for custom-user pins); simplification 2 APPLIED (banner collapsed to one line; FirstMatchStateCap doc session-history/tracker-status clauses cut, durable outcomes kept) + 1 RESOLVED BY THE REUSE FIX (the gated LogDebug stays: the exact-only signal is the debug policy's branch marker, and the lockstep hazard dissolved once both sites call the one named predicate); altitude 1 APPLIED (the JF-469 producer gap: effectiveAlbumTerm shadow + new pin, red-proven by sabotage). /code-review high: 0 correctness bugs, 4 low-severity findings ALL APPLIED (the false "same-name duplicates all equal the query" comment premise corrected to the real stable-sort rationale; the LogDebug gained the matched item id per the CLAUDE.md debug policy; the JF-469 pin now asserts the raw-then-stripped SearchTerm sequence, closing the raw-first contract blind spot; OrderByDescending on the positive predicate + the hoisted exactRankedFirst bool). No real-but-out-of-scope finding survived, so the reserved JF-749 number stays unused
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+LEG 1 (shipped, rank-to-front): the exact pick-off on PlayAlbum's direct-search
+multi-match leg is a single ordering change,
+`OrderByDescending(IsExactNameMatch(effectiveAlbumTerm, name)).ThenBy(name,
+OrdinalIgnoreCase)`, placed before the unchanged Take(3) so it feeds BOTH
+consumers: the Confirm ask (the exact name is candidate 0, first spoken, first
+cycled; a "no" walks the alphabetical remainder) and the AutoPlay pick
+(albums[0] is the album the user named, no longer the alphabetically-first
+partial match). The predicate is the ONE canonical JF-420.1
+ArtistSearch.IsExactNameMatch (case-insensitive, end-trimmed; the /simplify
+reuse round caught the first cut hand-rolling string.Equals beside the
+predicate its own comment cited). The keying term is effectiveAlbumTerm, not
+`album`: the /code-review altitude round proved the JF-469 calling-word
+stripped retry (the one producer that deliberately keeps `album` raw for
+not-found speech) queries the STRIPPED term, so a raw-keyed pick-off went
+inert exactly there and the burial defect survived one retry later
+("chiamato rush" -> query "rush" -> Gold/Love/Midnight Rush + Rush, exact at
+rank 4 again); the shadow assignment in the retry branch closes it, and the
+JF-489/JF-492 producers needed nothing (they already reassign `album` to the
+queried term; JF-411 and the fuzzy fallback produce single-item lists that
+bypass the block). THREE red proofs, all live on both TFMs: the Confirm pin
+failed pre-fix at state[0] (Expected "Rush", got "Gold Rush"; the exact name
+absent from the stored state), the AutoPlay pin failed pre-fix at the played
+token (Gold Rush's track), and the JF-469-feed pin failed with the shadow
+assignment removed (sabotage), green on restore. Byte-identity for no-exact
+lists holds by construction (single ordering key + LINQ stable sort), and the
+same-name-duplicate path is untouched (full-key ties keep insertion order; the
+review round corrected the first cut's false comment premise about WHY).
+
+LEG 2 (declined with evidence): PlayPodcast's tail keeps the helper cap as its
+binding truncation. The weighing: (1) the exact-name class, the only strongly
+user-relevant rank-4+ shape, never reaches this ask at all (the JF-640 exact
+pass filters the union to exactMatches BEFORE the multi-candidate leg; one
+exact plays directly, multiple exacts re-enter where the exact scores 100 and
+HandleFuzzyMiss diverts, so the NotFound ask's list is exact-free by
+construction); (2) the list that does reach the ask passed HandleFuzzyMiss's
+NotFound gate, so every SCORED candidate is below the suggestion threshold
+(default 40), the same sub-threshold-noise invariant the JF-735 decline rests
+on, with the identical one-directional length-band corner already documented
+on FirstMatchStateCap (an UNSCORED containment candidate; FuzzyMatcher
+untouched per the filing: context, not a work item); (3) the list order is
+arbitrary albums-then-series database concatenation, so rank 4+ is unranked
+tail, not deeper relevance, and a widened window cannot promise the wanted
+candidate lands inside it; (4) Jellyfin SearchTerm token matching pulls in
+article/short-token noise (a query sharing "the"/"il" matches every show
+carrying it), reinforcing the noise classification; (5) the cost side is
+structural: the binding truncation for this caller IS the helper's cap (the
+JF-735 decline, locked by two state pins and the enforced census), so widening
+means new widened-state helper surface plus a census roster edit with a
+by-hand re-weigh plus a NEW 17-locale hint key (DisambiguateMultipleArtistsMore
+is AskMultipleArtists-only and artist-worded), for a leg that fires only when
+4+ SearchTerm hits are ALL sub-threshold with no exact name. The decline is
+LOCKED by HandleAsync_FiveSubThresholdSearchHits_NotFoundAskKeepsThree (five
+seeded sub-threshold hits; state count 3; the first-three names pin the
+arbitrary-order fact the decision rests on).
+
+GUARDRAIL honored: no AskFirstMatch call site added or removed (census
+unchanged at PlayAlbum=2, PlayPodcast=2), Take(3) kept, helper cap untouched
+(the JF-735 state pins stay green); the by-hand census re-weigh is recorded on
+FirstMatchStateCap's doc in the same sitting, updated from "filed as JF-743"
+to the closure state (leg 1 fixed caller-side, leg 2 declined with the lock
+pin, band corner stays as documented).
+
+GATES: /simplify 4 agents (efficiency CLEAN; reuse 2 applied + 1 skipped with
+reason; simplification 2 applied + 1 resolved by the reuse fix; altitude 1
+applied, the JF-469 producer gap with its own red proof). /code-review high:
+0 correctness bugs, 4 low-severity findings all applied (comment-truth, the
+debug-policy item id, the raw-first sequence assert, the
+OrderByDescending/hoisted-bool shape). No out-of-scope finding survived, so
+the reserved JF-749 number stays free. Suites: 5120/5120 net9.0 and net10.0
+on the final state (baseline 5116 + 4 new pins); Release -warnaserror 0
+warnings 0 errors. One transient net9.0 failure appeared in the final-state
+invocation's first leg (name not captured by the summary grep, not in any
+touched suite, not reproducible across the two subsequent full runs; every
+touched suite 155/155 in isolation on both TFMs after every round). No
+locale or interaction-model change (leg 2 declined needs no string), so the
+validators are untouched. No deploy: the change is one handler + tests + doc;
+the orchestrator's batched deploy owns the DLL.
+<!-- SECTION:FINAL_SUMMARY:END -->
