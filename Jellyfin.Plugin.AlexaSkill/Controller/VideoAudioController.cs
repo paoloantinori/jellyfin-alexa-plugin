@@ -2043,6 +2043,29 @@ public class VideoAudioController : ControllerBase
         => _activeAudioSpeedEncodeProcesses.TryGetValue(cacheKey, out var entry) ? entry.Process : null;
 
     /// <summary>
+    /// Internal test seam (JF-731, InternalsVisibleTo; sibling of <see
+    /// cref="LiveSpeedEncodeProcessForTest"/>): a snapshot of the cache keys the
+    /// live speed-encode registry currently holds. ConcurrentDictionary.Keys
+    /// already builds a fresh snapshot collection per read (typed
+    /// ICollection, so the ToList only adapts the return shape), which means
+    /// the exit watchers' concurrent removals cannot mutate the caller's
+    /// iteration. The test class's Dispose-level encode-gate backstop
+    /// enumerates it to kill every leftover encode. Read-only.
+    /// </summary>
+    internal static IReadOnlyList<string> LiveSpeedEncodeCacheKeysForTest()
+        => _activeAudioSpeedEncodeProcesses.Keys.ToList();
+
+    /// <summary>
+    /// Internal test seam (JF-731, InternalsVisibleTo): the CONFIGURED capacity
+    /// of the current <see cref="_encodeGate"/> instance; this is the drain
+    /// target the test-side backstop compares <see cref="SemaphoreSlim.CurrentCount"/>
+    /// against (the BCL exposes no initial-count read, and the plugin
+    /// configuration can diverge from the static after a capacity swap).
+    /// Read-only.
+    /// </summary>
+    internal static int EncodeGateConfiguredCapacityForTest => _encodeGateCapacity;
+
+    /// <summary>
     /// The ONE variant-HLS serve core (JF-637, collapsing the JF-507 episode-audio
     /// and JF-636 audio-speed twins, each ~120 lines of copied machinery): cache
     /// fast path with the JF-499 W3 vanish guard, per-key lock + stub cleanup +

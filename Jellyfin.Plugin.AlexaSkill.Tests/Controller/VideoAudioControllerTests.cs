@@ -67,6 +67,11 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
     public void Dispose()
     {
+        // JF-731 class-level backstop: every live encode this test may have
+        // left dies HERE, once, before the temp-dir delete (the pid-file half
+        // of the sweep needs the cache tree on disk).
+        (bool cleanedUpAfterThisTest, string detail) = KillLeftoverEncodesAndDrainGate();
+
         _config.ServerAddress = string.Empty;
 
         try
@@ -79,7 +84,327 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         }
 
         GC.SuppressFinalize(this);
+
+        // Assert LAST, after all the cleanup above ran. A leftover encode at
+        // teardown is a test defect and must red the test whose teardown
+        // observed it; the throw cannot mask a body failure on this xUnit
+        // (2.7.0, probed on both TFMs 2026-10-04): DisposeTestClass AGGREGATES
+        // a body exception and a Dispose exception into one AggregateException
+        // preserving both messages and stack traces.
+        if (cleanedUpAfterThisTest)
+        {
+            Assert.Fail(
+                $"the JF-731 Dispose backstop had to clean up at this test's teardown ({detail}): "
+                + "a leaked gated encode serializes every later gated test in this class behind its run "
+                + "(the 299.42s class stall JF-730 removed), and a gate that never refilled hangs them; "
+                + "the leaking test must end the encodes it starts "
+                + "(the one exception: an encode born after a PRIOR test's sweep completed lands here; see "
+                + "the backstop's coverage note)");
+        }
     }
+
+    /// <summary>
+    /// The JF-731 class-level encode-gate backstop, owned by <see cref="Dispose"/>:
+    /// kill every live encode this test may have left, so a test leaking a gated
+    /// ffmpeg costs a bounded teardown instead of stranding the serialized class
+    /// behind its sleep (the 299.42s stall JF-730 removed per-test finallys for).
+    /// THREE kill halves run in every Dispose, each naming an encode the other
+    /// two cannot see:
+    /// (a) the live speed-encode registry, through the existing
+    /// <see cref="KillLiveEncode"/> idiom over the
+    /// <see cref="VideoAudioController.LiveSpeedEncodeCacheKeysForTest"/>
+    /// snapshot seam. SCOPE, stated honestly (rework round): this registry is
+    /// the AUDIO-SPEED path only (<see cref="VideoAudioController.RegisterLiveSpeedEncode"/>'s
+    /// one production call site is the speed OnEncodeLive), so an encode on
+    /// the episode, song, or audiobook paths never enters it;
+    /// (b) a pid-file sweep of the WHOLE per-test cache tree. Scope: only fakes
+    /// that write ffmpeg.pid (exactly one committed fake does; real ffmpeg
+    /// writes no pid file, and neither do the stop-gated or transcode fakes);
+    /// (c) a /proc process scan scoped to this test instance's temp dir
+    /// (<see cref="SweepProcessesUnderTempDir"/>), the half that makes the
+    /// coverage claim class-wide: every encode this class launches runs a
+    /// WriteFakeFfmpeg script stored under that unique per-instance path, so
+    /// the scan names a leaked encode on ANY endpoint path, registered or not,
+    /// pid file or not. It would miss a real-ffmpeg launch (no test constructs
+    /// one) and a process whose cmdline never mentions the temp dir (the
+    /// directly planted /bin/sh sleepers, which hold no gate slot and are
+    /// owned by their tests' own finallys).
+    /// The obligation this backstop imposes on every test: a test that
+    /// arranges an encode's death, whether through its own finally kills or
+    /// through the monitor's stall-budget kill, must return only after
+    /// OBSERVING the death (<see cref="FenceTempDirEncodesDeadAsync"/> is the
+    /// shared fence); a kill signal in flight at teardown reads as a leak
+    /// here, by design.
+    /// When a kill proves a leak, the SAME re-arming kill-and-poll loop drains
+    /// the gate (the JF-730 review-round shape: a launch the scenario abandoned
+    /// acquires its slot only AFTER a kill frees one, then spawns its own
+    /// sleeper; a one-shot pass runs before that zombie exists, so the kills
+    /// repeat until the gate actually holds its cap, and the drain that waits
+    /// is the drain that kills it). The refill check itself is UNCONDITIONAL
+    /// (rework review round): a below-cap gate with NOTHING killable is either
+    /// the mid-release transient of an already-exited encode (the gate's 500ms
+    /// exit-poll; self-heals, and the loop returns the moment it lands) or a
+    /// STUCK slot, an exit-poll release that never fires (the JF-730 teardown
+    /// asserted exactly this; skipping it let that regression pass green and
+    /// hang the next gated test on the untimed gate wait). The measured price
+    /// of waiting out the transients is accepted: ~18.6s per TFM across this
+    /// class (70ms average per Dispose, max ~600ms), and a stuck slot reds
+    /// within a 2s zero-kill budget instead of the 10s a kill chain may need.
+    /// DESIGN CONSTRAINTS carried from JF-730's measured experience:
+    /// 1. The drain target is the CONFIGURED capacity of the CURRENT gate
+    ///    instance (the <see
+    ///    cref="VideoAudioController.EncodeGateConfiguredCapacityForTest"/>
+    ///    seam), read fresh on every poll, never a count captured at test
+    ///    entry: an entry snapshot captures whatever transient drain a PRIOR
+    ///    test's 500ms exit-poll was mid-flight, and the teardown's own compare
+    ///    then false-reds (observed live on both TFMs during JF-730).
+    /// 2. The assert lives in <see cref="Dispose"/>, deliberately AFTER the
+    ///    cleanup, and reds the test whose teardown observed the leak: the
+    ///    leaker itself, except the post-sweep-arrival corner of point 3,
+    ///    where a late-born zombie lands on the successor (the no-masking
+    ///    probe evidence sits on the assert).
+    /// 3. Coverage corners, stated honestly: an encode STARTED after this
+    ///    sweep completed escapes everything (the JF-704 birth fault-observation
+    ///    machinery exists to keep stranded endpoints from outliving their
+    ///    test at all).
+    /// </summary>
+    /// <returns>
+    /// Whether the teardown had to clean up after this test (a killed leftover
+    /// encode, or a gate that never refilled), and the triage detail for the
+    /// failure message.
+    /// </returns>
+    private (bool CleanedUpAfterThisTest, string Detail) KillLeftoverEncodesAndDrainGate()
+    {
+        // DISTINCT targets (JF-731 review round): the re-arming loop re-kills
+        // a slow-to-die zombie every 100ms pass, so counting kill signals per
+        // pass would report one leak as dozens; the sets below count each
+        // target once, whichever half named it or how many passes it survived.
+        var killedRegistryKeys = new HashSet<string>();
+        var killedPidPaths = new HashSet<string>();
+        var killedTempDirPids = new HashSet<int>();
+        DateTime drainStart = DateTime.UtcNow;
+        while (true)
+        {
+            foreach (string cacheKey in VideoAudioController.LiveSpeedEncodeCacheKeysForTest())
+            {
+                if (KillLiveEncode(cacheKey))
+                {
+                    killedRegistryKeys.Add(cacheKey);
+                }
+            }
+
+            foreach (string pidPath in SweepPidFileEncodes())
+            {
+                killedPidPaths.Add(pidPath);
+            }
+
+            foreach (int pid in SweepProcessesUnderTempDir())
+            {
+                killedTempDirPids.Add(pid);
+            }
+
+            bool killedAnything = killedRegistryKeys.Count > 0 || killedPidPaths.Count > 0 || killedTempDirPids.Count > 0;
+            SemaphoreSlim gate = GateField();
+            int configuredCap = VideoAudioController.EncodeGateConfiguredCapacityForTest;
+            if (gate.CurrentCount == configuredCap)
+            {
+                return (killedAnything, $"gate refilled to its configured cap" + KillDetail(killedRegistryKeys, killedPidPaths, killedTempDirPids));
+            }
+
+            // Nothing killed: a transient needs at most one more 500ms exit-poll
+            // tick, so a 2s budget reds a stuck slot fast; a kill chain (an
+            // abandoned launch spawning its own sleeper after a kill frees a
+            // slot) may legitimately need longer, so it gets the 10s budget.
+            DateTime drainDeadline = drainStart.AddSeconds(killedAnything ? 10 : 2);
+            if (DateTime.UtcNow >= drainDeadline)
+            {
+                return (true, $"gate still below its configured cap ({gate.CurrentCount}/{configuredCap} slots free) after the {drainDeadline.Subtract(drainStart).TotalSeconds:F0}s budget"
+                    + (killedAnything ? string.Empty : " with NOTHING killable: a stuck slot (an exit-poll release that never landed?)")
+                    + KillDetail(killedRegistryKeys, killedPidPaths, killedTempDirPids));
+            }
+
+            Thread.Sleep(100);
+        }
+    }
+
+    /// <summary>
+    /// The per-half kill report appended to the backstop's failure detail (and
+    /// to the green-path detail when a kill happened): distinct targets per
+    /// half, capped key list, and the halves-may-overlap caveat.
+    /// </summary>
+    private static string KillDetail(IReadOnlyCollection<string> registryKeys, IReadOnlyCollection<string> pidPaths, IReadOnlyCollection<int> tempDirPids)
+        => $"; {registryKeys.Count} registry kill target(s) (keys: {DescribeKeys(registryKeys)}), "
+            + $"{pidPaths.Count} pid-file kill target(s), "
+            + $"{tempDirPids.Count} temp-dir process kill target(s) (the halves may name the same encodes)";
+
+    /// <summary>
+    /// The pid-file half of the JF-731 backstop: scan the whole per-test cache
+    /// tree (the cache's own <see cref="VideoAudioCache.CacheDir"/> root, the
+    /// directory the encodes actually wrote into) for fake-ffmpeg pid files,
+    /// covering the encodes the registry never saw (fault between process start
+    /// and registration). Liveness-guarded per <see cref="KillEncodeByPidFile"/>,
+    /// including its recycled-pid caveat. Enumeration is best-effort: a
+    /// fire-and-forget monitor's debris cleanup can delete a directory
+    /// mid-scan.
+    /// </summary>
+    /// <returns>The pid-file paths whose named encode was still live and got
+    /// the kill signal (the caller dedupes across the drain loop's passes).</returns>
+    private List<string> SweepPidFileEncodes()
+    {
+        var killedPidPaths = new List<string>();
+        string cacheRoot = _cache.CacheDir;
+        if (!Directory.Exists(cacheRoot))
+        {
+            return killedPidPaths;
+        }
+
+        try
+        {
+            foreach (string pidPath in Directory.EnumerateFiles(cacheRoot, "ffmpeg.pid", SearchOption.AllDirectories))
+            {
+                if (KillEncodeByPidFile(Path.GetDirectoryName(pidPath)!))
+                {
+                    killedPidPaths.Add(pidPath);
+                }
+            }
+        }
+        catch (IOException)
+        {
+            // Best effort: the tree can shift under the scan.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Best effort, same reason.
+        }
+
+        return killedPidPaths;
+    }
+
+    /// <summary>
+    /// The process half of the JF-731 backstop (rework round): the LIVE
+    /// processes whose command line references this test instance's temp dir.
+    /// That path is what makes the probe safe and complete at once: every fake
+    /// ffmpeg script lives under it (WriteFakeFfmpeg writes into
+    /// <see cref="_tempDir"/>) and every launched fake's argv names its script
+    /// path there, while CreateRegisteredTempDir mints a guid suffix, so the
+    /// probe can never name another testhost's fakes (the two TFM testhosts run
+    /// in parallel processes with disjoint temp dirs) or an ambient process.
+    /// This is the half that covers a leaked gated encode on the episode,
+    /// song, or audiobook endpoint paths (outside the speed-only registry) and
+    /// any fake that writes no pid file (the stop-gated and transcode fakes).
+    /// Limits, stated honestly: a real-ffmpeg launch carries no temp-dir
+    /// reference and would escape (no test constructs one), a zombie's cmdline
+    /// reads empty so already-killed encodes are skipped, and the liveness
+    /// check carries the same recycled-pid caveat as
+    /// <see cref="KillEncodeByPidFile"/>. Best-effort: pids can vanish between
+    /// the directory listing and the cmdline read.
+    /// </summary>
+    private List<int> LiveTempDirEncodePids()
+    {
+        var pids = new List<int>();
+        try
+        {
+            foreach (string procDir in Directory.EnumerateDirectories("/proc"))
+            {
+                if (!int.TryParse(Path.GetFileName(procDir), out int pid) || pid == Environment.ProcessId)
+                {
+                    continue;
+                }
+
+                // The cmdline filter runs BEFORE the liveness check (rework
+                // review: the scan runs in every Dispose, and the cmdline read
+                // rejects essentially every pid on the machine; the
+                // Process.GetProcessById allocation belongs only to the ~one
+                // match).
+                string? cmdline = TryReadProcCmdline(procDir);
+                if (cmdline is null || !cmdline.Contains(_tempDir, StringComparison.Ordinal) || ProcessDead(pid))
+                {
+                    continue;
+                }
+
+                pids.Add(pid);
+            }
+        }
+        catch (IOException)
+        {
+            // Best effort: /proc shifts under every scan.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Best effort, same reason.
+        }
+
+        return pids;
+    }
+
+    /// <summary>
+    /// The kill arm of the process half (see <see cref="LiveTempDirEncodePids"/>
+    /// for the scope and its honest limits).
+    /// </summary>
+    /// <returns>The pids that got a kill signal (the caller dedupes across the
+    /// drain loop's passes).</returns>
+    private List<int> SweepProcessesUnderTempDir()
+    {
+        var killedPids = new List<int>();
+        foreach (int pid in LiveTempDirEncodePids())
+        {
+            try
+            {
+                using var fake = System.Diagnostics.Process.GetProcessById(pid);
+                fake.Kill(entireProcessTree: true);
+                killedPids.Add(pid);
+            }
+            catch { /* raced to exit between the probe and the kill */ }
+        }
+
+        return killedPids;
+    }
+
+    /// <summary>
+    /// The shared death fence for every site that arranges an encode's death
+    /// (its own finally kills, or the monitor's stall-budget kill): poll until
+    /// every fake this test launched is OBSERVED dead, bounded at 5s (the
+    /// shared <see cref="TestHelpers.WaitUntilAsync"/>, hoisted under
+    /// JF-419.3). <see cref="Process.Kill"/> delivers the signal without
+    /// waiting for the exit observation, and the Dispose backstop counts a
+    /// still-alive process as a leak; without this fence a correctly
+    /// self-cleaned test could false-red on kill-delivery timing. A timeout is
+    /// not asserted here: anything surviving its own kill for 5s stays live
+    /// for the Dispose backstop to count and red honestly.
+    /// </summary>
+    private Task FenceTempDirEncodesDeadAsync()
+        => WaitUntilAsync(() => LiveTempDirEncodePids().Count == 0, TimeSpan.FromSeconds(5), 50);
+
+    /// <summary>
+    /// Reads /proc/&lt;pid&gt;/cmdline as one string (NUL-separated argv), or
+    /// null when the entry is unreadable (kernel thread, vanished pid, zombie:
+    /// a zombie's cmdline reads empty, which the caller's Contains treats as
+    /// no match, exactly the already-dead verdict the probe wants).
+    /// </summary>
+    private static string? TryReadProcCmdline(string procDir)
+    {
+        try
+        {
+            return File.ReadAllText(Path.Combine(procDir, "cmdline"));
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The failure-message key list, capped at five so a wide leak cannot drown
+    /// the diagnosis (the killed-count in the same message carries the size).
+    /// </summary>
+    private static string DescribeKeys(IReadOnlyCollection<string> keys)
+        => keys.Count == 0
+            ? "none (an unregistered pid-file encode)"
+            : string.Join(", ", keys.Take(5)) + (keys.Count > 5 ? $", ... (+{keys.Count - 5} more)" : string.Empty);
 
     /// <summary>
     /// Verify that the endpoint returns 400 when itemId is not a valid GUID.
@@ -3748,7 +4073,14 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     private string WriteFakeFfmpeg(string name, string scriptBody)
     {
         string fakeFfmpegPath = Path.Combine(_tempDir, name);
-        File.WriteAllText(fakeFfmpegPath, "#!/bin/sh\n" + scriptBody);
+        // Tail guard (JF-731 rework): dash (ubuntu-latest's /bin/sh) exec-optimizes
+        // a script's final simple external command into the same pid, so a script
+        // ending in a bare `sleep` would have its /proc cmdline rewritten to just
+        // "sleep N" and the temp-dir process half of the Dispose backstop could
+        // no longer name it on CI. Appending `exit $?` (a builtin, preserving the
+        // script's status exactly) keeps the shell image, and with it the script
+        // path in its cmdline, alive for the whole script, on every /bin/sh.
+        File.WriteAllText(fakeFfmpegPath, "#!/bin/sh\n" + scriptBody + "\nexit $?\n");
 #pragma warning disable CA3003, CA1416 // test-created path; Unix-only test
         File.SetUnixFileMode(fakeFfmpegPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
 #pragma warning restore CA3003, CA1416
@@ -5010,19 +5342,14 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         // behind the full gate (the next gated test, measured on the pre-JF-730
         // suite, blocked 299.42s on gate.WaitAsync, 84% of the class's wall
         // clock, until the first sleeper's sleep expired).
+        // Since JF-731 the finally is the KILL half only (defense-in-depth with
+        // the test's own scenario knowledge): the gate DRAIN and its assert are
+        // owned once for the whole class by the Dispose-level backstop
+        // (KillLeftoverEncodesAndDrainGate), which re-kills anything the
+        // scenario missed and reds this test if anything had to be killed.
         // Every launch and the kill loop read the SAME rate list, so a rate
         // added to the scenario cannot strand its encode behind the gate.
         int[] speedRates = { 1500, 1750, 2000 };
-        // The refill target is the CONFIGURED cap, not a count captured at
-        // entry: a prior test's slot can still be draining through the gate's
-        // 500ms exit-poll when this test starts (an entry snapshot then reads
-        // the transient, and the teardown's own drain fails the compare; both
-        // TFMs red exactly this way). The cap is deterministically 2 here: the
-        // per-test Plugin reset pins the config to the default, and this
-        // test's own first CreateController re-applies the config capacity to
-        // the static gate, rebuilding away any un-restored static swap.
-        const int gateCapacity = 2;
-        bool gateRefilled = false;
         try
         {
             // Device A starts the 1.5x variant.
@@ -5069,54 +5396,30 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         }
         finally
         {
-            // Re-arming drain (JF-730 review round): the kills and the gate
-            // refill are polled TOGETHER, never one kill pass then one wait.
-            // A launch the tripwire abandoned (the supersede-kill ordering
-            // regression) acquires a slot only AFTER these kills free one (the
-            // gate's ~500ms exit-poll), then spawns its own sleep-300 fake; a
-            // one-shot pass runs before that and re-strands the class behind
-            // the zombie for a whole sleep. Re-killing until the gate actually
-            // holds its cap catches the zombie in a later pass (its registry
-            // entry or pid file appears the moment it starts), and the drain
-            // it delays is the drain that kills it.
-            DateTime drainDeadline = DateTime.UtcNow.AddSeconds(10);
-            while (true)
+            // The kill half (JF-731 reduced this teardown from its own drain
+            // loop + assert to the scenario's kills; the Dispose-level backstop
+            // owns the re-arming drain and its assert for the whole class).
+            foreach (int rate in speedRates)
             {
-                foreach (int rate in speedRates)
-                {
-                    string cacheKey = VideoAudioController.AudioSpeedCacheKey(episode.Id.ToString(), rate, 0);
-                    KillLiveEncode(cacheKey);
-                    KillEncodeByPidFile(_cache.GetHlsDirectoryPath(cacheKey, 0));
-                }
-
-                if (GateField().CurrentCount == gateCapacity)
-                {
-                    gateRefilled = true;
-                    break;
-                }
-
-                if (DateTime.UtcNow >= drainDeadline)
-                {
-                    break;
-                }
-
-                await Task.Delay(100);
+                string cacheKey = VideoAudioController.AudioSpeedCacheKey(episode.Id.ToString(), rate, 0);
+                KillLiveEncode(cacheKey);
+                KillEncodeByPidFile(_cache.GetHlsDirectoryPath(cacheKey, 0));
             }
-        }
 
-        Assert.True(
-            gateRefilled,
-            $"the speed-cycling teardown must return all {gateCapacity} encode-gate slots (rates {string.Join(", ", speedRates)}): a slot crossing the test boundary serializes every later gated test in this class behind this fake's sleep");
+            await FenceTempDirEncodesDeadAsync();
+        }
     }
 
     /// <summary>
-    /// The ONE kill-through-the-registry idiom (the JF-730 speed-cycling
-    /// teardown and the JF-668 finally are its callers): a live speed encode
-    /// holds an encode-gate slot until its process exits, so a test that
-    /// leaves one behind serializes every later gated test behind its run
-    /// (the 299.42s class stall JF-730 removed).
+    /// The ONE kill-through-the-registry idiom (the JF-731 Dispose backstop, the
+    /// JF-730 speed-cycling kill-half, and the JF-668 finally are its callers):
+    /// a live speed encode holds an encode-gate slot until its process exits,
+    /// so a test that leaves one behind serializes every later gated test
+    /// behind its run (the 299.42s class stall JF-730 removed).
     /// </summary>
-    private static void KillLiveEncode(string cacheKey)
+    /// <returns>Whether a live process was targeted (the JF-731 backstop's
+    /// leak-detection signal); false for an absent or already-exited entry.</returns>
+    private static bool KillLiveEncode(string cacheKey)
     {
         try
         {
@@ -5124,9 +5427,43 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             if (live is { HasExited: false })
             {
                 live.Kill(entireProcessTree: true);
+                return true;
             }
         }
         catch { /* raced to exit between the guard and the kill */ }
+
+        return false;
+    }
+
+    /// <summary>
+    /// The ONE pid-file read (JF-731 review round): the pid of the variant
+    /// directory's fake-ffmpeg pid file, when the file exists, parses, and
+    /// names a LIVE process; null otherwise (absent, unparsable, already dead,
+    /// or the directory deleted between the exists check and the read: the
+    /// fire-and-forget monitors' debris cleanup races exactly there, and an
+    /// unguarded throw would escape the kill-half finallys and mask a body
+    /// failure). The liveness guard carries the recycled-pid caveat of
+    /// <see cref="KillEncodeByPidFile"/> unchanged.
+    /// </summary>
+    private static int? TryReadLivePidFromVariantDir(string variantDir)
+    {
+        try
+        {
+            string pidPath = Path.Combine(variantDir, "ffmpeg.pid");
+            return File.Exists(pidPath)
+                && int.TryParse(File.ReadAllText(pidPath).Trim(), out int encodePid)
+                && !ProcessDead(encodePid)
+                ? encodePid
+                : null;
+        }
+        catch (IOException)
+        {
+            return null;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     /// <summary>
@@ -5140,22 +5477,23 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// shebang script has no stable owner handle to check (comm reads the
     /// interpreter, not the script).
     /// </summary>
-    private static void KillEncodeByPidFile(string variantDir)
+    private static bool KillEncodeByPidFile(string variantDir)
     {
-        string pidPath = Path.Combine(variantDir, "ffmpeg.pid");
-        if (!File.Exists(pidPath)
-            || !int.TryParse(File.ReadAllText(pidPath).Trim(), out int encodePid)
-            || ProcessDead(encodePid))
+        int? encodePid = TryReadLivePidFromVariantDir(variantDir);
+        if (encodePid is null)
         {
-            return;
+            return false;
         }
 
         try
         {
-            using var encode = System.Diagnostics.Process.GetProcessById(encodePid);
+            using var encode = System.Diagnostics.Process.GetProcessById(encodePid.Value);
             encode.Kill(entireProcessTree: true);
+            return true;
         }
         catch { /* raced to exit between the probe and the kill */ }
+
+        return false;
     }
 
     /// <summary>
@@ -5375,6 +5713,12 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         {
             try { if (!prior.HasExited) { prior.Kill(entireProcessTree: true); } } catch { /* already exited */ }
             KillLiveEncode(cacheKey);
+
+            // Fence the kills to OBSERVED death (JF-731 review round; prior is
+            // this test's own handle, WaitForExit bounds it, the shared fence
+            // bounds the endpoint-launched encode).
+            prior.WaitForExit(5000);
+            await FenceTempDirEncodesDeadAsync();
         }
     }
 
@@ -7524,15 +7868,29 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         ActionResult result = await controller.StreamHlsEpisode(episode.Id.ToString());
         Assert.IsType<ContentResult>(result);
 
-        Assert.True(
-            await WaitUntilAsync(
-                () => TestCaptureLogger.Snapshot(logRecords).Any(r => r.Message.Contains("HLS encoding STALLED", StringComparison.Ordinal)),
-                TimeSpan.FromSeconds(10)),
-            "a hung encode must be declared STALLED and killed");
+        // JF-731: the stall-budget kill is the MONITOR's, and its delivery is
+        // asynchronous from this test's perspective; the Dispose backstop
+        // counts a still-alive fake at teardown as a leak, so observe the death
+        // before returning (the first run of the process half caught exactly
+        // this gap: the killed fake still read live at Dispose). In a FINALLY
+        // (rework review): a body assert failure must not skip the fence and
+        // then bury its own diagnostics under the backstop's second failure.
+        try
+        {
+            Assert.True(
+                await WaitUntilAsync(
+                    () => TestCaptureLogger.Snapshot(logRecords).Any(r => r.Message.Contains("HLS encoding STALLED", StringComparison.Ordinal)),
+                    TimeSpan.FromSeconds(10)),
+                "a hung encode must be declared STALLED and killed");
 
-        string doneMarker = Path.Combine(
-            _cache.GetHlsDirectoryPath(episode.Id.ToString(), 0), "encode-done.txt");
-        Assert.False(File.Exists(doneMarker), "the hung encode must be killed before its sleep finishes");
+            string doneMarker = Path.Combine(
+                _cache.GetHlsDirectoryPath(episode.Id.ToString(), 0), "encode-done.txt");
+            Assert.False(File.Exists(doneMarker), "the hung encode must be killed before its sleep finishes");
+        }
+        finally
+        {
+            await FenceTempDirEncodesDeadAsync();
+        }
     }
 
     // ---- W2b: resume slice on the episode remux path ----
