@@ -5,13 +5,15 @@ using System.Linq;
 using System.Reflection;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using MediaBrowser.Controller.Session;
 using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
 /// <summary>
-/// JF-674: the CONSTRUCTION-site roster for the queue-continuation identity. The
+/// JF-674: the CONSTRUCTION-site roster for the queue-continuation identity, plus
+/// its JF-753 sibling (the artist-sentinel fact below). The
 /// fetch-time validation (<see cref="QueueContinuation.IsForLiveQueue"/>, called by
 /// <see cref="PlaybackNearlyFinishedEventHandler.TryFetchContinuationBatch"/>) is
 /// only as good as the identity the mint sites capture: an entry minted WITHOUT
@@ -79,6 +81,57 @@ public class QueueContinuationIdentityRosterTests
             $"The scan found ZERO QueueContinuation construction sites (was {constructionSites}); " +
             "the roster went vacuous: the construction scan no longer sees the sites it guards. " +
             $"Today's expected site count is five (the two Artist arms, the Album and Playlist arms, PlayBook's ApplyBookPlaybackState); a different count with no offenders is a mint-site consolidation to review, not a scan failure.");
+    }
+
+    /// <summary>
+    /// JF-753 (code-review F1): the artist-sentinel half of the construction-site
+    /// roster. Artist continuations are end-unknown BY CONSTRUCTION (their fetcher
+    /// runs GetItemList, which has no count), so every construction site that sets
+    /// <see cref="QueueContinuation.ArtistId"/> (only the Artist arms do) must
+    /// store TotalCount = <c>SearchService.UnknownTotal</c>: the const folds to
+    /// ldc.i4 2147483647 at compile time (exceeding every short encoding, so the
+    /// 0x20 walk is total for it), and AdvanceOrMarkExhausted keys its
+    /// mark-on-short end signal on that sentinel, so an Artist mint storing a real
+    /// total would make the artist tail advance past the end and WARN on every
+    /// subsequent PlaybackNearlyFinished instead of marking exhaustion, with no
+    /// other test failing (the hand-constructed test continuations carry the
+    /// sentinel by habit, not by pin).
+    /// ACCEPTED BOUNDARY: same-method scope, like the identity roster above (the
+    /// sentinel must appear in the constructing method's own IL).
+    /// </summary>
+    [Fact]
+    public void ArtistContinuationConstructionSites_StoreTheEndUnknownSentinel()
+    {
+        Module pluginModule = typeof(BaseHandler).Module;
+        var offenders = new SortedSet<string>(StringComparer.Ordinal);
+        int artistSites = 0;
+
+        foreach ((Type _, MethodBase method) in IlCallScanner.DeclaredMethods(pluginModule.Assembly))
+        {
+            if (!IlCallScanner.ConstructsType(method, pluginModule, typeof(QueueContinuation))
+                || !IlCallScanner.CallsNamedMethod(method, pluginModule, "set_ArtistId", typeof(QueueContinuation)))
+            {
+                continue;
+            }
+
+            artistSites++;
+            if (!IlCallScanner.LdcI4Operands(method).Contains(SearchService.UnknownTotal))
+            {
+                offenders.Add(IlCallScanner.LogicalMethodName(method));
+            }
+        }
+
+        Assert.True(
+            offenders.Count == 0,
+            $"An Artist continuation mint stores a real TotalCount in [{string.Join(", ", offenders)}]. " +
+            "Artist continuations are end-unknown by construction (GetItemList has no count): " +
+            "AdvanceOrMarkExhausted marks exhaustion on a short page only under the sentinel, so a real total " +
+            "makes the artist tail crawl and WARN past the end instead of ending (JF-753).");
+        Assert.True(
+            artistSites > 0,
+            "The scan found ZERO Artist continuation construction sites; the sentinel roster went vacuous " +
+            "(the set_ArtistId marker no longer identifies the artist arms; today's expected count is two: " +
+            "PlayArtistSongsIntentHandler and CrossMediaFallback).");
     }
 
     /// <summary>

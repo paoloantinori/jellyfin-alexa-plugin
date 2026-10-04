@@ -47,10 +47,10 @@ public class QueueContinuation
     /// SENTINEL: when this equals <see cref="Util.SearchService.UnknownTotal"/>
     /// (int.MaxValue) the total is UNKNOWN and the continuation runs in the
     /// end-unknown regime (exhaustion decided by a short page, not by
-    /// StartIndex reaching the total; set by the audiobook head since JF-673
-    /// and the artist arms since their inception). Treat this value as the
-    /// sentinel, never as a real count: progress math against it silently
-    /// computes against int.MaxValue.
+    /// StartIndex reaching the total; set by the audiobook head since JF-673,
+    /// the album head since JF-753, and the artist arms since their inception).
+    /// Treat this value as the sentinel, never as a real count: progress math
+    /// against it silently computes against int.MaxValue.
     /// </summary>
     public int TotalCount { get; set; }
 

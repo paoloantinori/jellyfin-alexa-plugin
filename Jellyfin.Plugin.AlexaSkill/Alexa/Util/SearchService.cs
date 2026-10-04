@@ -63,9 +63,9 @@ public sealed class SearchService
     /// The end-unknown total (JF-673): the ONE encoding for "the executor could not
     /// learn the library total" (the NRE fallback's GetItemList path has no count).
     /// The same value is the end-unknown regime of <see cref="QueueContinuation.TotalCount"/>
-    /// (artist continuations carry it because GetItemList has no count; audiobook
-    /// continuations carry it when the initial page came through the fallback), which
-    /// <see cref="QueueContinuationFetcher.FetchNextBatch"/> renders as "end-unknown".
+    /// (artist continuations carry it because GetItemList has no count; audiobook and
+    /// album continuations carry it when the initial page came through the fallback),
+    /// which <see cref="QueueContinuationFetcher.FetchNextBatch"/> renders as "end-unknown".
     /// The fallback's page-size total must NEVER stand in for a library total: a full
     /// page then reads as "complete" and pagination loops stop one page in.
     /// </summary>

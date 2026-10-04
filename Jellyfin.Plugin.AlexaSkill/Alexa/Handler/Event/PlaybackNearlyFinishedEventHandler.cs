@@ -408,7 +408,8 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
 
         Logger.LogDebug(
             "ContinuationFetch: within prefetch window, fetching next batch (index={Index} of {QueueCount}, remaining={Remaining}, threshold={Threshold}, source={SourceType}, offset={StartIndex}/{Total})",
-            currentIndex, session.NowPlayingQueue.Count, remaining, threshold, continuation.SourceType, continuation.StartIndex, continuation.TotalCount);
+            currentIndex, session.NowPlayingQueue.Count, remaining, threshold, continuation.SourceType, continuation.StartIndex,
+            QueueContinuationFetcher.RenderTotal(continuation.TotalCount)); // JF-753: the ONE renderer
 
         // JF-327 (the radio-path shape): the request funnel scopes a user CLONE;
         // GetUserById returns the unscoped config instance, so re-apply the device

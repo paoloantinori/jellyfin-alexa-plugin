@@ -177,15 +177,12 @@ public class PlayBookIntentHandler : BaseHandler
             "GetBookTracks",
             cancellationToken).ConfigureAwait(false);
 
-        // JF-673: the end-unknown regime marker (the NRE fallback shape).
-        bool endUnknown = bookTracks.TotalRecordCount == SearchService.UnknownTotal;
-
         // Single-file audiobooks: the AudioBook item IS the audio track itself.
         // Multi-file audiobooks: children tracks exist under a parent folder.
-        // JF-673: the end-unknown arm keeps this branch working when the fallback
-        // reports UnknownTotal instead of 0 for an empty chapters page.
+        // JF-673: the zero check is regime-aware (the ONE predicate shared with the
+        // album head, QueueContinuationFetcher.PageHasNoItems).
         IReadOnlyList<BaseItem> trackItems;
-        if (bookTracks.TotalRecordCount == 0 || (endUnknown && bookTracks.Items.Count == 0))
+        if (QueueContinuationFetcher.PageHasNoItems(bookTracks))
         {
             if (books[0].MediaType == MediaType.Audio)
             {
@@ -266,14 +263,9 @@ public class PlayBookIntentHandler : BaseHandler
             // Store continuation info so PlaybackNearlyFinished can fetch the rest.
             // StartIndex uses the original page size because the database offset is
             // independent of the resume slice.
-            // JF-673: in the end-unknown regime there is no total to compare against;
-            // a FULL initial page means "maybe more" (the stored UnknownTotal keeps
-            // the tail fetching; a short page there ends the book, the FetchArtistSongs
-            // shape) and a short initial page means the book is already complete.
-            bool morePages = endUnknown
-                ? bookTracks.Items.Count >= ProgressiveQueueConstants.GetInitialFetchSize()
-                : bookTracks.TotalRecordCount > bookTracks.Items.Count;
-            if (morePages)
+            // JF-673: the gate is regime-aware (the ONE decision shared with the
+            // album head, see QueueContinuationFetcher.InitialPageHasMore).
+            if (QueueContinuationFetcher.InitialPageHasMore(bookTracks))
             {
                 QueueContinuationStore.Set(
                     session.UserId,

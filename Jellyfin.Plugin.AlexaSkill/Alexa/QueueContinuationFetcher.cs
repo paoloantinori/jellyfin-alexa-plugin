@@ -33,6 +33,101 @@ internal static class QueueContinuationFetcher
     };
 
     /// <summary>
+    /// Renders a sentinel-capable total (a result total or a continuation total)
+    /// for log lines: the end-unknown sentinel
+    /// (<see cref="Util.SearchService.UnknownTotal"/>) renders "end-unknown" instead
+    /// of a meaningless 2147483647. The ONE renderer: this dispatcher's lines, the
+    /// album head's page logs, and the event handler's prefetch-window debug line
+    /// share it (the JF-753 fold of the raw-TotalCount logs the JF-673 review
+    /// tracked).
+    /// </summary>
+    /// <param name="totalCount">The total to render.</param>
+    /// <returns>"end-unknown" or the total as invariant text.</returns>
+    internal static string RenderTotal(int totalCount)
+        => totalCount == Util.SearchService.UnknownTotal
+            ? "end-unknown"
+            : totalCount.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Whether a fetched FIRST page carries no items, in BOTH total regimes (the
+    /// JF-673 audiobook / JF-753 album head check; which arms carry the sentinel is
+    /// the roster on <see cref="QueueContinuation.TotalCount"/>). Known-total: a
+    /// zero <c>TotalRecordCount</c> is the server's "no rows at all". End-unknown
+    /// (the opted-in NRE fallback reported
+    /// <see cref="Util.SearchService.UnknownTotal"/>): the total is the sentinel,
+    /// never a count, so the empty PAGE is the only meaningful zero signal.
+    /// NOT the tail's split-album retry: that arm derives the regime from the
+    /// CONTINUATION's total (the tail's own result total never carries the sentinel
+    /// under the default-off executor), see FetchAlbumTracks.
+    /// </summary>
+    /// <param name="page">The first-page result to check.</param>
+    /// <returns>True when the page carries no items in either regime.</returns>
+    internal static bool PageHasNoItems(QueryResult<BaseItem> page)
+        => page.TotalRecordCount == 0
+           || (page.TotalRecordCount == Util.SearchService.UnknownTotal && page.Items.Count == 0);
+
+    /// <summary>
+    /// Whether a first page leaves more items to fetch, in BOTH total regimes (the
+    /// JF-673 audiobook / JF-753 album continuation-store gate). Known-total: more
+    /// rows exist beyond the page (<c>TotalRecordCount &gt; Items.Count</c>).
+    /// End-unknown: no total exists to compare against, so a FULL initial page
+    /// means "maybe more" (the stored sentinel keeps the tail fetching; a short
+    /// page there ends the source, the FetchArtistSongs shape) and a short initial
+    /// page means the source is already complete.
+    /// </summary>
+    /// <param name="page">The first-page result to judge.</param>
+    /// <returns>True when a continuation should be stored for the rest.</returns>
+    internal static bool InitialPageHasMore(QueryResult<BaseItem> page)
+        => page.TotalRecordCount == Util.SearchService.UnknownTotal
+            ? page.Items.Count >= ProgressiveQueueConstants.GetInitialFetchSize()
+            : page.TotalRecordCount > page.Items.Count;
+
+    /// <summary>
+    /// The always-end-unknown form of
+    /// <see cref="InitialPageHasMore(QueryResult{BaseItem})"/> (the artist heads:
+    /// GetItemList has no count, so the full-page check IS the decision), so all
+    /// four heads share the ONE maybe-more bar instead of hand-kept comparisons.
+    /// </summary>
+    /// <param name="fetchedCount">The number of items the first page served.</param>
+    /// <returns>True when a full initial page leaves more to fetch.</returns>
+    internal static bool InitialPageHasMore(int fetchedCount)
+        => fetchedCount >= ProgressiveQueueConstants.GetInitialFetchSize();
+
+    /// <summary>
+    /// The ONE advance-or-mark idiom after a fetched continuation page (the JF-753
+    /// consolidation of the three variants the JF-673 review tracked: album plain
+    /// advance, artist mark-on-short, audiobook mark-only-when-end-unknown).
+    /// Known-total continuations advance the offset; the entry guard ends them at
+    /// <c>StartIndex &gt;= TotalCount</c>. End-unknown continuations
+    /// (<c>TotalCount == <see cref="Util.SearchService.UnknownTotal"/></c>) have no
+    /// total to exhaust against, so a SHORT page is the end signal: marking
+    /// <c>StartIndex = TotalCount</c> makes the NEXT FetchNextBatch terminal via the
+    /// entry guard instead of querying past the end and WARNing. Artist continuations
+    /// always carry the sentinel (GetItemList has no count; both mint sites store it),
+    /// so their historical mark-on-short behavior IS this helper unchanged.
+    /// Accepted boundary noise (JF-673 review, same for albums JF-753): a source
+    /// whose item count is an exact multiple of the page sizes ends on a ZERO-item
+    /// tail batch, so the dispatcher's zero-page WARN fires once for a normally
+    /// completed source, and an end-unknown ALBUM additionally pays one empty
+    /// JF-338 AlbumIds retry query before the mark (FetchAlbumTracks fires the
+    /// retry on the empty terminal page); the audiobook tail, which has no retry,
+    /// carries only the WARN.
+    /// </summary>
+    /// <param name="continuation">The continuation whose offset the fetch advances.</param>
+    /// <param name="fetchedCount">The number of items the fetch served.</param>
+    private static void AdvanceOrMarkExhausted(QueueContinuation continuation, int fetchedCount)
+    {
+        if (continuation.TotalCount == Util.SearchService.UnknownTotal && fetchedCount < continuation.BatchSize)
+        {
+            continuation.StartIndex = continuation.TotalCount;
+        }
+        else
+        {
+            continuation.StartIndex += fetchedCount;
+        }
+    }
+
+    /// <summary>
     /// Fetch the next batch of items based on continuation data.
     /// Updates the continuation's StartIndex after fetching.
     /// </summary>
@@ -57,7 +152,7 @@ internal static class QueueContinuationFetcher
         var jellyfinUser = userManager.GetUserById(continuation.UserId);
 
         // Captured before the fetchers advance StartIndex: the zero-page diagnostic
-        // below must name the offset the query ran at (the artist fetcher marks
+        // below must name the offset the query ran at (an end-unknown fetcher marks
         // StartIndex=TotalCount on a short page, erasing it before the log).
         int queryOffset = continuation.StartIndex;
 
@@ -80,13 +175,10 @@ internal static class QueueContinuationFetcher
             _ => (Array.Empty<BaseItem>(), null)
         };
 
-        // Artist continuations carry TotalCount=UnknownTotal (GetItemList has no
-        // count); audiobook continuations carry it when the initial page came through
-        // the NRE fallback (JF-673). Render the regime honestly instead of a
-        // meaningless 2147483647.
-        string totalText = continuation.TotalCount == Util.SearchService.UnknownTotal
-            ? "end-unknown"
-            : continuation.TotalCount.ToString(CultureInfo.InvariantCulture);
+        // The continuation total may be the end-unknown sentinel (which arms carry
+        // it is the roster on QueueContinuation.TotalCount); render it honestly
+        // through the ONE renderer (see RenderTotal).
+        string totalText = RenderTotal(continuation.TotalCount);
 
         if (fetched.Items.Count > 0)
         {
@@ -136,13 +228,35 @@ internal static class QueueContinuationFetcher
         // widens the scope to every library the Jellyfin account sees.
         Util.LibraryFilter.ApplyLibraryFilter(query, pluginUser, libraryManager, logger);
 
-        QueryResult<BaseItem> result = libraryManager.GetItemsResult(query);
+        // Shared executor guard (the JF-670 head/tail contract the audiobook tail
+        // already runs under, extended to the album tail by JF-753): the album head
+        // survives NRE-class servers through SafeGetItemsResult, so the tail must
+        // too or the first continuation batch would die on the same query shape the
+        // head fell back on. Default-off opt-in: the tail never reads the fallback
+        // total as a count (the regime rides on the continuation), and the
+        // split-album retry's known-total arm keeps reading real totals.
+        QueryResult<BaseItem> result = Util.SearchService.SafeGetItemsResult(libraryManager, query, logger);
 
         // Tolerant fallback: for split / multi-disc / malformed-folder albums the
-        // folder-based ParentId query returns 0 (PlayAlbumIntentHandler's initial fetch
-        // retries by AlbumIds for the same reason — JF-338). Mirror that here or
-        // progressive continuation truncates the album to the initial page.
-        if (result.TotalRecordCount == 0 && continuation.ParentId.HasValue)
+        // folder-based ParentId query returns 0 (PlayAlbumIntentHandler's initial
+        // fetch retries by AlbumIds for the same reason, JF-338). Mirror that here
+        // or progressive continuation truncates the album to the initial page.
+        // JF-753 end-unknown arm: in that regime the result total is the fallback's
+        // page size (or the sentinel), never a library count, so the EMPTY PAGE is
+        // the retry trigger; TotalRecordCount == 0 stays meaningful only in the
+        // known-total regime.
+        // RESIDUAL (code-review JF-753, accepted): on a PARTIALLY split album this
+        // retry can switch row sets mid-stream (the head served ParentId rows; the
+        // retry then serves AlbumIds rows at the same offset, a different
+        // subsequence when the two link sets diverge). Already-played ids dedup out
+        // (SessionQueue.AppendUnseen) and tag-linked tracks ordered below the
+        // offset can be skipped. Continuing beats the alternative (truncating at
+        // the exhausted parented rows), and the head carries the same JF-338
+        // tolerance: it retries only on an empty FIRST page, so a partially split
+        // album's tag-linked tail is invisible there too.
+        if (continuation.ParentId.HasValue
+            && (result.TotalRecordCount == 0
+                || (continuation.TotalCount == Util.SearchService.UnknownTotal && result.Items.Count == 0)))
         {
             var albumIdsQuery = new InternalItemsQuery
             {
@@ -156,10 +270,11 @@ internal static class QueueContinuationFetcher
                 Limit = continuation.BatchSize
             };
             Util.LibraryFilter.ApplyLibraryFilter(albumIdsQuery, pluginUser, libraryManager, logger);
-            result = libraryManager.GetItemsResult(albumIdsQuery);
+            result = Util.SearchService.SafeGetItemsResult(libraryManager, albumIdsQuery, logger);
         }
 
-        continuation.StartIndex += result.Items.Count;
+        // JF-753: the ONE advance-or-mark idiom (see AdvanceOrMarkExhausted).
+        AdvanceOrMarkExhausted(continuation, result.Items.Count);
         return result.Items;
     }
 
@@ -227,25 +342,8 @@ internal static class QueueContinuationFetcher
         // fix.
         QueryResult<BaseItem> result = Util.SearchService.SafeGetItemsResult(libraryManager, query, logger);
 
-        // JF-673 end-unknown regime: the head stored UnknownTotal when the initial
-        // page came through the NRE fallback (GetItemList has no total), so there is
-        // no total to exhaust against; the only end signal is a SHORT page, the
-        // FetchArtistSongs shape. Marking the continuation exhausted here keeps the
-        // NEXT FetchNextBatch terminal via the entry guard instead of querying past
-        // the end and WARNing. In the known-total regime the shape is unchanged
-        // (advance; the entry guard ends it at StartIndex >= TotalCount).
-        // Accepted noise (code-review JF-673): a book whose chapter count is an exact
-        // multiple of the page sizes ends on a ZERO-item tail batch, so the
-        // dispatcher's zero-page WARN fires once for a normally completed book, the
-        // same boundary noise the artist fetcher has always carried.
-        if (continuation.TotalCount == Util.SearchService.UnknownTotal && result.Items.Count < continuation.BatchSize)
-        {
-            continuation.StartIndex = continuation.TotalCount;
-        }
-        else
-        {
-            continuation.StartIndex += result.Items.Count;
-        }
+        // JF-673: the ONE advance-or-mark idiom (see AdvanceOrMarkExhausted).
+        AdvanceOrMarkExhausted(continuation, result.Items.Count);
 
         return result.Items;
     }
@@ -285,16 +383,9 @@ internal static class QueueContinuationFetcher
         // dbQuery.Count() when ArtistIds + PopularitySort expressions are combined.
         IReadOnlyList<BaseItem> items = libraryManager.GetItemList(query);
 
-        // Detect end of results: if we got fewer items than requested, update TotalCount
-        // so FetchNextBatch knows there are no more items.
-        if (items.Count < continuation.BatchSize)
-        {
-            continuation.StartIndex = continuation.TotalCount;
-        }
-        else
-        {
-            continuation.StartIndex += items.Count;
-        }
+        // End of results: the ONE advance-or-mark idiom (artist arms are always
+        // end-unknown; see AdvanceOrMarkExhausted).
+        AdvanceOrMarkExhausted(continuation, items.Count);
 
         return items;
     }
@@ -316,7 +407,9 @@ internal static class QueueContinuationFetcher
                 .Take(continuation.BatchSize)
                 .ToList();
 
-            continuation.StartIndex += batch.Count;
+            // Known-total cached slice: the ONE idiom's advance branch (see
+            // AdvanceOrMarkExhausted; playlist totals are always real counts).
+            AdvanceOrMarkExhausted(continuation, batch.Count);
             return batch;
         }
 
@@ -342,7 +435,7 @@ internal static class QueueContinuationFetcher
             .Take(continuation.BatchSize)
             .ToList();
 
-        continuation.StartIndex += fallback.Count;
+        AdvanceOrMarkExhausted(continuation, fallback.Count);
         return fallback;
     }
 }

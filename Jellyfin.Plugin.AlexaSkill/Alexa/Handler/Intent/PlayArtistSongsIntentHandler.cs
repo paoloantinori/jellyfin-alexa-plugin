@@ -589,8 +589,10 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             0);
 
         // Store continuation info so PlaybackNearlyFinished can fetch the rest.
-        // Without TotalRecordCount, assume more items exist if we filled the page.
-        if (artistItems.Count >= ProgressiveQueueConstants.GetInitialFetchSize())
+        // Without TotalRecordCount, assume more items exist if we filled the page:
+        // the ONE maybe-more bar shared with the album/book heads (JF-753), in its
+        // always-end-unknown form.
+        if (QueueContinuationFetcher.InitialPageHasMore(artistItems.Count))
         {
             QueueContinuationStore.Set(
                 session.UserId,
