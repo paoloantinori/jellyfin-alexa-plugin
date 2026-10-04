@@ -190,11 +190,7 @@ public class LibrarySyncServiceEquivalenceClassTests : PluginTestBase, IDisposab
         Assert.Equal(mxVersion, usVersion);
 
         // The newly-wired locale writes the normal JF-705 ledger row.
-        var ledger = Plugin.Instance!.Configuration.GetLocaleModelStatus("es-US");
-        Assert.NotNull(ledger);
-        Assert.Equal(LibrarySyncService.CatalogSyncLedgerSource, ledger!.Source);
-        Assert.Equal("SUCCEEDED", ledger.Status);
-        Assert.Null(ledger.Error);
+        TestHelpers.AssertCatalogSyncLedgerSucceeded("es-US");
     }
 
     /// <summary>
@@ -276,6 +272,21 @@ public class LibrarySyncServiceEquivalenceClassTests : PluginTestBase, IDisposab
     /// (LibrarySyncServiceLegIsolationTests) covers the OTHER side: the upload
     /// itself 401s before any mint, so the memo must NOT hit and the type
     /// re-uploads.
+    /// JF-703 CLOSURE EXTENSION: this pin is also the lock for the JF-703
+    /// finding's ledger half (a model PUT dropped by the 401-retry reading as
+    /// a clean locale completion; the finding itself was already fixed by
+    /// JF-717's shared-mint return before pickup): the locale's green ledger
+    /// row is EARNED by the retried PUT. Non-vacuity needs no sentinel row:
+    /// PluginTestBase resets Plugin.Instance per test (xUnit builds a fresh
+    /// class instance per method) and this class's ctor mints a fresh
+    /// configuration whose LocaleModelStatuses is empty, so a non-null it-IT
+    /// row is by construction THIS run's write. The pre-JF-717 shape (attempt
+    /// 2 all-null versions, the gate skips the PUT, the zero-frozen no-PUT
+    /// writer also declines) leaves the row ABSENT and is caught one assert
+    /// earlier, at the PUT count (Expected 2, Actual 1); the bundle's NotNull
+    /// independently guards the complementary regression, a retried PUT that
+    /// fires twice while the ledger write is skipped. result.Success stays
+    /// true in both worlds, which is exactly why both asserts exist.
     /// </summary>
     [Fact]
     public async Task SyncUserLibraryAsync_MidLeg401AfterUpload_RetryPutsFromMemoHit()
@@ -309,6 +320,15 @@ public class LibrarySyncServiceEquivalenceClassTests : PluginTestBase, IDisposab
             var (catalog, version) = GetArtistCatalogPinning(_smapiHandler.ModelPutBodyFor("it-IT")!);
             Assert.Equal(ArtistCatalogId, catalog);
             Assert.Equal("1", version);
+
+            // JF-703: the ledger row was REPLACED by the retried PUT's own
+            // write (the JF-705 PUT path, not the sentinel, not a leftover
+            // from an earlier test): the locale's clean completion is earned
+            // by a real wired PUT, never settled by a dropped one. The
+            // Caveat=None extra (no freeze, no no-PUT bit) chains off the
+            // returned row.
+            var ledger = TestHelpers.AssertCatalogSyncLedgerSucceeded("it-IT");
+            Assert.Equal(CatalogLedgerCaveats.None, ledger.Caveat);
         }
         finally
         {

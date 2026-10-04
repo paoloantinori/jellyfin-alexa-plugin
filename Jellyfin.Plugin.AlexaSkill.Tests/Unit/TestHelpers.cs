@@ -590,6 +590,30 @@ internal static class TestHelpers
     }
 
     /// <summary>
+    /// Asserts that a locale's ledger row is a CLEAN catalog-sync success
+    /// authored by the GET-modify-PUT writer (JF-495 source label, SUCCEEDED
+    /// build, no canary error) and returns the row so a pin can chain
+    /// site-specific extras (e.g. Caveat=None) without re-fetching. The
+    /// shared bundle for the catalog-sync suite (extracted at the fourth
+    /// verbatim site by JF-703, the JF-692 zero-assert-diff mandate: the
+    /// pre-existing call sites keep exactly the asserts they had). Known
+    /// remaining PARTIAL sites, deliberately unconverted for that same
+    /// mandate (converting them would ADD asserts, a strengthening to be made
+    /// deliberately, not as a ride-along): LibrarySyncServiceLegIsolationTests
+    /// carries two blocks that assert SUCCEEDED with a differing field set
+    /// and no Source label.
+    /// </summary>
+    internal static LocaleModelStatus AssertCatalogSyncLedgerSucceeded(string locale)
+    {
+        var ledger = Plugin.Instance!.Configuration.GetLocaleModelStatus(locale);
+        Assert.NotNull(ledger);
+        Assert.Equal(Jellyfin.Plugin.AlexaSkill.Alexa.Catalog.LibrarySyncService.CatalogSyncLedgerSource, ledger!.Source);
+        Assert.Equal("SUCCEEDED", ledger.Status);
+        Assert.Null(ledger.Error);
+        return ledger;
+    }
+
+    /// <summary>
     /// Ensures a real Plugin instance exists (funnel/controller tests that read
     /// Plugin.Instance.Configuration deep inside the request path). Thin wrapper
     /// over <see cref="EnsurePluginInstance"/>: the construction block has ONE
