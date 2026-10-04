@@ -26,6 +26,9 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Catalog;
 /// (see StoredCatalogIdAccessors_AreCalledOnlyByTheWiringTableLambdas).
 /// JF-727 adds the sourcing pins: the single fetch call site and the
 /// count-setter closure over the wiring table's StoreCount row lambdas.
+/// JF-737 adds the emptiness pre-check's routing pin (the named predicate
+/// AllTypeLegsEmpty's single call site; the predicate's BODY is pinned
+/// behaviorally in LibrarySyncServiceEmptinessPrecheckTests).
 /// </summary>
 public class LibrarySyncServiceStructureTests
 {
@@ -111,24 +114,77 @@ public class LibrarySyncServiceStructureTests
             BindingFlags.NonPublic | BindingFlags.Instance,
             "a private instance method of LibrarySyncService");
 
-        // The d__ prefix with this exact shape matches only the method's own
-        // state machine; a local function's compiles as <<Owner>g__Name|i>d__,
-        // so Single() cannot accidentally bind RunLegAsync's.
-        Type stateMachine = typeof(LibrarySyncService)
-            .GetNestedTypes(BindingFlags.Public | BindingFlags.NonPublic)
-            .Single(t => t.Name.StartsWith("<SyncUserLibraryAsync>d__", StringComparison.Ordinal));
-        MethodBase sourcingLoop = RequireMethod(
-            stateMachine,
-            "MoveNext",
-            BindingFlags.NonPublic | BindingFlags.Instance,
-            "the state machine of SyncUserLibraryAsync");
-
         AssertOnlyCallerIs(
             assembly,
             worker,
             "FetchLibraryItems",
-            sourcingLoop,
+            SyncUserLibraryAsyncStateMachine(),
             "the JF-727 sourcing loop in SyncUserLibraryAsync (once per run, shared across locales)");
+    }
+
+    /// <summary>
+    /// JF-737: the emptiness pre-check routes through the ONE named predicate
+    /// (<see cref="LibrarySyncService.AllTypeLegsEmpty"/>), whose definition
+    /// is the All() over the full wiring table. This is the ROUTING half of
+    /// the JF-737 closure: inlining the check back into SyncUserLibraryAsync
+    /// (a raw All() or a hand conjunction) leaves the helper with zero call
+    /// instructions and fails here with the offender named. The BODY half (a
+    /// hand conjunction rewritten INSIDE the helper, which keeps this pin
+    /// green) is closed by the behavioral discriminator in
+    /// LibrarySyncServiceEmptinessPrecheckTests; the full hazard story lives
+    /// on the predicate's own doc. RESIDUAL, named: this pin binds WHERE the
+    /// predicate is called, not WHAT is passed, so a call site handing a
+    /// sliced table (typeLegs[..3]) passes; that edit is not a realistic
+    /// drift shape (the table initializer sits three lines above and a
+    /// fourth type's one-row edit lands inside it), and the discriminator
+    /// keeps the predicate itself honest regardless. FALSE-POSITIVE SHAPE,
+    /// named (code-review F2): the binding is also POSITIONAL in the method
+    /// body - everything here compiles into the state machine MoveNext only
+    /// while the block stays after SyncUserLibraryAsync's first await; moving
+    /// the fetch+pre-check block above that await compiles the call into the
+    /// method's kick-off body and fails this pin on an innocent reorder. That
+    /// is the conscious-widening path, the same property the JF-727 fetch pin
+    /// already carries (it binds to this same MoveNext).
+    /// </summary>
+    [Fact]
+    public void AllTypeLegsEmpty_HasExactlyOneCallSite_TheEmptinessPreCheck()
+    {
+        var assembly = typeof(LibrarySyncService).Assembly;
+
+        MethodBase worker = RequireMethod(
+            typeof(LibrarySyncService),
+            "AllTypeLegsEmpty",
+            BindingFlags.NonPublic | BindingFlags.Static,
+            "an internal static method of LibrarySyncService");
+
+        AssertOnlyCallerIs(
+            assembly,
+            worker,
+            "AllTypeLegsEmpty",
+            SyncUserLibraryAsyncStateMachine(),
+            "the JF-737 emptiness pre-check in SyncUserLibraryAsync");
+    }
+
+    /// <summary>
+    /// The MoveNext of SyncUserLibraryAsync's own state machine: everything
+    /// after the method's first await (the wiring table, the sourcing loop,
+    /// the emptiness pre-check) compiles there. The d__ prefix with this
+    /// exact shape matches only the method's own state machine; a local
+    /// function's compiles as &lt;&lt;Owner&gt;g__Name|i&gt;d__, so Single()
+    /// cannot accidentally bind RunLegAsync's. Hoisted at JF-737: the fetch
+    /// pin and the emptiness pre-check pin are two consumers (the
+    /// RequireMethod no-private-copies discipline).
+    /// </summary>
+    internal static MethodBase SyncUserLibraryAsyncStateMachine()
+    {
+        Type stateMachine = typeof(LibrarySyncService)
+            .GetNestedTypes(BindingFlags.Public | BindingFlags.NonPublic)
+            .Single(t => t.Name.StartsWith("<SyncUserLibraryAsync>d__", StringComparison.Ordinal));
+        return RequireMethod(
+            stateMachine,
+            "MoveNext",
+            BindingFlags.NonPublic | BindingFlags.Instance,
+            "the state machine of SyncUserLibraryAsync");
     }
 
     /// <summary>

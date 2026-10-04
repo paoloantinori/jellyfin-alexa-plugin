@@ -80,6 +80,31 @@ public class LibrarySyncService
     }
 
     /// <summary>
+    /// JF-737: the ONE emptiness predicate over the per-type wiring table,
+    /// named (not inline in SyncUserLibraryAsync) so the JF-727 filing's one
+    /// unpinned per-type fact is closed from both sides. The definition MUST
+    /// stay the All() over the FULL table, never a hand conjunction over the
+    /// first N rows: the filed hazard is a rewrite into a three-term
+    /// conjunction over the current rows, after which a fourth synced type's
+    /// row silently misses its term and a library holding only that type's
+    /// items takes the emptiness skip and never syncs (the repo's "missed
+    /// one" class). Two pins hold it: the call-site pin
+    /// (AllTypeLegsEmpty_HasExactlyOneCallSite_TheEmptinessPreCheck) fails
+    /// when the check is inlined back into the method, and the behavioral
+    /// discriminator (LibrarySyncServiceEmptinessPrecheckTests) feeds this
+    /// predicate a leg beyond the current three holding the library's only
+    /// items, the input the sync itself cannot construct today, on which the
+    /// hand conjunction and the All() derivation disagree. Placed directly
+    /// above the sync entry point (code-review F3): the table's reader meets
+    /// the predicate and this contract one screen before the initializer;
+    /// a local function under the table would be unpinnable by the
+    /// behavioral test.
+    /// </summary>
+    internal static bool AllTypeLegsEmpty(
+        (CatalogType Type, BaseItemKind Kind, IReadOnlyList<BaseItem> Items, Func<string?> StoredCatalogId, Action<string> StoreCatalogId, Action<int> StoreCount, string Name, string Description)[] legs)
+        => legs.All(leg => leg.Items.Count == 0);
+
+    /// <summary>
     /// Sync a user's library to SMAPI catalogs.
     /// Creates catalogs if they don't exist, updates them if they do.
     /// </summary>
@@ -190,12 +215,14 @@ public class LibrarySyncService
         // per-type item feeds, and therefore the payload bytes the JF-717
         // equivalence classes hash, are unchanged. The count lands through
         // the row's StoreCount element; the emptiness pre-check reads the
-        // collection, so a fourth type's row cannot be silently excluded
-        // from it: the pre-JF-727 missed CONJUNCTION term was behavioral (a
-        // library holding only the missed type's items took the emptiness
-        // skip and never synced), the missed count only cosmetic. The Items
-        // placeholder is unconditionally replaced for every row before
-        // anything reads it.
+        // collection through AllTypeLegsEmpty (JF-737: the named, doubly
+        // pinned predicate over the full table; the pin contract lives on
+        // the predicate), so a fourth type's row cannot be silently
+        // excluded from it: the pre-JF-727 missed CONJUNCTION term was
+        // behavioral (a library holding only the missed type's items took
+        // the emptiness skip and never synced), the missed count only
+        // cosmetic. The Items placeholder is unconditionally replaced for
+        // every row before anything reads it.
         for (int i = 0; i < typeLegs.Length; i++)
         {
             ref var leg = ref typeLegs[i];
@@ -203,7 +230,7 @@ public class LibrarySyncService
             leg.StoreCount(leg.Items.Count);
         }
 
-        if (typeLegs.All(leg => leg.Items.Count == 0))
+        if (AllTypeLegsEmpty(typeLegs))
         {
             _logger.LogWarning("No artists, albums or series found for user {UserId}, skipping sync", user.Id);
             return result;
