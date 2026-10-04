@@ -238,6 +238,41 @@ tests:
       season_number: {}
       episode_number: {}
 
+  # JF-551 (2026-10-04): the SUBJUNCTIVE wrapper payload ("pide a {inv} que
+  # reproduzca ...", series FIRST). Pre-family the NLU fuzzy-matched the
+  # imperative sample and glued the verb into the slot (series_name
+  # "reproduzca breaking bad" on every SELECTED reading, catalog-independent),
+  # so the exact-value pin below is the anti-pollution regression pin: it
+  # stays red until the rebuilt model with the "reproduzca" family is
+  # deployed, and any future verb-glue regression fails it again.
+  # Post-deploy triage: if this row routes to PlayNextIntent instead, that is
+  # the known es-ES bare-carrier competition (the imperative twin
+  # "reproduce {song} ..." steals the same shape for non-catalog values,
+  # live-observed 2026-10-04) - treat it as the competition to fix, never a
+  # fixture bug to weaken.
+  - utterance: "reproduzca breaking bad temporada uno episodio tres"
+    expected_intent: PlayEpisodeIntent
+    expected_slots:
+      series_name:
+        value: "breaking bad"
+      season_number: {}
+      episode_number: {}
+
+  # The connector-residue twin: the full one-shot wrapper is "pide a {inv}
+  # QUE reproduzca ...", and whether Amazon's invocation stripping drops the
+  # "que" before NLU is UNVERIFIED (the 2026-10-04 simulate round hit the
+  # documented per-locale outage: the favorites control also failed to
+  # invoke; it-IT's committed family carries the connector form "Di
+  # riprodurre ...", which suggests residue CAN ride). Pre-family this shape
+  # glued "que reproduzca {series}" (live-observed); if it stays red after
+  # the bare-family deploy, the connector form needs its own sample (the
+  # it-IT "Di" precedent), decided on a healthy simulate window.
+  - utterance: "que reproduzca breaking bad temporada uno episodio tres"
+    expected_intent: PlayEpisodeIntent
+    expected_slots:
+      series_name:
+        value: "breaking bad"
+
   # -------------------------------------------------------------------------
   # 19. BrowseLibraryIntent (browse_category)
   # -------------------------------------------------------------------------

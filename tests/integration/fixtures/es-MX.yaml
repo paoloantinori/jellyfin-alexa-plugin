@@ -253,6 +253,19 @@ tests:
       season_number: {}
       episode_number: {}
 
+  # JF-551 (2026-10-04): the SUBJUNCTIVE wrapper payload ("pide a {inv} que
+  # reproduzca ...", series FIRST), same family as es-ES's. The exact-value
+  # pin is the anti-pollution regression pin (pre-family the verb glued into
+  # series_name, live 4/4 probes); red until the rebuilt model with the
+  # "reproduzca" family is deployed. Season left unpinned per this locale's
+  # documented word-form asymmetry above.
+  - utterance: "reproduzca breaking bad temporada uno episodio tres"
+    expected_intent: PlayEpisodeIntent
+    expected_slots:
+      series_name:
+        value: "breaking bad"
+      episode_number: {}
+
   # -------------------------------------------------------------------------
   # 19. BrowseLibraryIntent (browse_category)
   # -------------------------------------------------------------------------

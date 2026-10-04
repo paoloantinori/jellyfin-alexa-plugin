@@ -1,13 +1,30 @@
 # Spanish (es-ES) interaction model template for the Alexa skill.
 #
 # JF-316 milestone 3: golden master. Faithful transcription of the
-# hand-grown model_es-ES.json (60 intents, 402 samples);
+# hand-grown model_es-ES.json (60 intents, 402 samples at the golden
+# master; enriched since by JF-399 / JF-583 / JF-551, whose notes carry
+# their own deltas - live counts are deliberately not restated here
+# because hand-maintained counts rot, as the pre-JF-551 headers showed);
 # `python3 scripts/generate_interaction_model.py es-ES` reproduces it
 # byte-identically. Every sample is verbatim in the committed order:
 # plain transcription over compression (the milestone-2 decision; no
 # vocabulary section).
 #
 # Run: python3 scripts/generate_interaction_model.py es-ES
+#
+# JF-551 (2026-10-04): PlayEpisodeIntent gained the SUBJUNCTIVE wrapper
+# family (reproduzca, both word orders). The es one-shot wrapper is
+# "pide a {inv} que + subjunctive", so the payload arrives as
+# "reproduzca {series} temporada ..." (or with a residual "que" in front,
+# see the fixtures); with no sample starting in reproduzca, the NLU
+# fuzzy-matched the imperative sample and glued the verb into series_name
+# ("reproduzca breaking bad" on every SELECTED reading; across identical
+# probe rounds the selection itself flipped between that glue and a plain
+# Fallback, the trainer-nondeterminism class, so BOTH readings are the
+# pre-family baseline). Catalog-independent (a library series glued the
+# same way) - the 2026-09-13 infinitive attempt (reproducir) was the
+# wrong morphology and was reverted; the subjunctive was the recorded
+# candidate.
 #
 # JF-399 (2026-09-26): FindSongByArtistIntent enriched 3 -> 11 (FindSong
 # openers crossed with the de-artist tail; the cancion/tema noun pair
@@ -16,7 +33,7 @@
 # locale's FindSong opener set.
 #
 # Invariants carried by this file:
-# - The intent sequence is IDENTICAL to en-GB's (same 59 names, same
+# - The intent sequence is IDENTICAL to en-GB's (same 66 names, same
 #   order). The structural divergences from en-GB are exactly three:
 #   musician slots are the BUILT-IN AMAZON.Musician (languageModel +
 #   dialog; the JellyfinArtist swap landed only in en-* + it-IT),
@@ -29,7 +46,7 @@
 #   additionally REPLACES the FindSong / FindSongByArtist sets with
 #   the English ones (their headers enumerate every delta).
 # - Key order is load-bearing for byte-identity: the same mix as
-#   en-GB (7 name/samples-only, 15 bare, 16 name/samples/slots, 21
+#   en-GB (7 name/samples-only, 16 bare, 21 name/samples/slots, 22
 #   name/slots/samples); type values mix value-only (Mood /
 #   SeriesName / AudiobookTitle), id-first (MediaType / MediaInfoType
 #   / Decade / LibraryQueryType), and the BrowseCategory JF-461 ids
@@ -430,6 +447,10 @@ intents:
       - reproduce la temporada {season_number} episodio {episode_number} de {series_name}
       - reproduce {series_name} temporada {season_number} episodio {episode_number}
       - ver temporada {season_number} episodio {episode_number} de {series_name}
+      # JF-551: the one-shot wrapper's subjunctive payload ("pide a X que
+      # reproduzca ..."); both word orders, mirroring the imperative carriers.
+      - reproduzca {series_name} temporada {season_number} episodio {episode_number}
+      - reproduzca la temporada {season_number} episodio {episode_number} de {series_name}
   # JF-583: the próximo/último carriers are slotted ({episode_position},
   # custom EpisodePosition type): próximo keeps NextUp, último resolves by
   # recency; 'continúa viendo' carries no position (NextUp by design).
