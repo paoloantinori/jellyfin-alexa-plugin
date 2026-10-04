@@ -139,9 +139,11 @@ public class SkillWarmingUpTests : PluginTestBase
 
     /// <summary>
     /// Drives a handler through the REAL pipeline (auth + session resolution +
-    /// translation): one shared seam test for the handler-throw-to-Tell contract.
+    /// translation): one shared seam test for the handler-throw-to-response
+    /// contract. Takes any request type (JF-708: the warming event-awareness pin
+    /// drives an AudioPlayer event through the same seam).
     /// </summary>
-    private async Task<SkillResponse> ExecuteViaPipelineAsync(BaseHandler handler, IntentRequest request)
+    private async Task<SkillResponse> ExecuteViaPipelineAsync(BaseHandler handler, Request request)
     {
         var user = TestHelpers.CreateTestUser();
         _fx.Config.Users.Add(user);
@@ -180,6 +182,27 @@ public class SkillWarmingUpTests : PluginTestBase
         SkillResponse response = await ExecuteViaPipelineAsync(handler, request);
 
         AssertWarmingTell(response);
+    }
+
+    /// <summary>
+    /// JF-708 RED PROOF: warming inherits event-awareness from the unified
+    /// SkillRefusalException translation (policy and the unreachable-today record
+    /// live on that base). Pre-JF-708 the warming twin always answered the Tell;
+    /// this pin failed on that shape (it asserted null speech and got the warming
+    /// Tell). The stub drives the pipeline translation directly; it is the contract
+    /// the next event-path index call relies on.
+    /// </summary>
+    [Fact]
+    public async Task Pipeline_WarmingRefusal_OnEventRequest_AnswersKeepAlive()
+    {
+        var handler = new WarmingStubHandler(_fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory);
+        var request = TestHelpers.CreateAudioPlayerEventRequest("AudioPlayer.PlaybackNearlyFinished", token: "warming-stub");
+
+        SkillResponse response = await ExecuteViaPipelineAsync(handler, request);
+
+        Assert.Null(response.Response.OutputSpeech);
+        Assert.Null(response.Response.ShouldEndSession);
+        Assert.Empty(response.Response.Directives);
     }
 
     /// <summary>

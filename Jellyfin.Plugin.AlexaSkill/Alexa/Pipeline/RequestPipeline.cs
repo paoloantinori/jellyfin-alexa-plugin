@@ -83,56 +83,32 @@ public class RequestPipeline
             {
                 requestContext.Response = await handler.HandleRequestAsync(skillRequest, context, alexaSession, cancellationToken).ConfigureAwait(false);
             }
-            catch (SkillWarmingUpException ex)
+            catch (SkillRefusalException ex)
             {
-                // JF-419.2/JF-419.3: an index warming gate threw (artist choke point
-                // or song-index entry gate); this is the single translation site for
-                // every entry point. Logging and metrics interceptors still run below;
-                // SkipColdLibraryWork keeps DynamicEntities from riding cold DB
-                // queries on the refusal.
-                _logger.LogInformation(
-                    "{IndexName} index warming: refusing intent={Intent} corr={CorrelationId}",
-                    ex.IndexName,
-                    requestContext.IntentName,
-                    requestContext.CorrelationId);
-                requestContext.SkipColdLibraryWork = true;
-                requestContext.Response = ResponseBuilder.Tell(
-                    ResponseStrings.Get("SkillWarmingUp", BaseHandler.GetLocalePublic(requestContext.SkillRequest)));
-            }
-            catch (StreamTokenNotConfiguredException ex)
-            {
-                // JF-699 item 1: a launch builder refused to deliver a token-gated
-                // stream URL with an empty secret (JF-687); the refusal propagates as
-                // the typed exception so NO handler tail (announce overwrites,
-                // now-playing state, persists) runs on it. This is the single
-                // translation site, the SkillWarmingUpException precedent: the locale
-                // comes from the request itself (replacing JF-687/JF-693 per-call-site
-                // threading), and an Alexa EVENT request (e.g. the
-                // PlaybackNearlyFinished rate-continuity enqueue, which mints atempo
-                // token-gated URLs) gets the speechless keep-alive shape because
-                // Amazon rejects outputSpeech on event responses (the JF-507
-                // INVALID_RESPONSE lesson; the pre-JF-699 builder-returned Tell was
-                // latently invalid there). DELIBERATE CLASSIFICATION (gate-marker
-                // note): IsEventRequest does NOT classify PlaybackController
-                // CommandIssued taps, so a refused tap-routed adjacent launch answers
-                // a speech Tell on that request class - the same response shape the
-                // happy path already produces there (no recorded incident); revisit
-                // only if Amazon documents the no-outputSpeech rule for it.
-                // SkipColdLibraryWork mirrors the warming
-                // stance: a configuration-error answer pays no library queries on the
-                // way out; logging and metrics interceptors still run below.
-                bool isEventRequest = BaseHandler.IsEventRequest(requestContext.SkillRequest);
-                _logger.LogError(
+                // JF-708: the ONE refusal-translation policy. A refusal is a
+                // SkillRefusalException subtype carrying its ResponseStrings key and
+                // log severity, so a new refusal adds a TYPE, never a catch block;
+                // the full response policy (one event-aware degrade core, locale from
+                // the request, the JF-507 keep-alive shape, warming's inherited
+                // event-awareness and its unreachable-today record, the PlaybackController
+                // classification) is documented ONCE on SkillRefusalException.
+                // SkipColdLibraryWork keeps DynamicEntities from riding library
+                // queries on a refusal answer; because refusals propagate as
+                // exceptions, no handler tail (announce overwrites, now-playing
+                // state, persists) runs on one (JF-699 item 1). Logging and metrics
+                // interceptors still run below.
+                _logger.Log(
+                    ex.Severity,
                     ex,
-                    "Stream token secret not configured: refusing launch intent={Intent} eventType={RequestType} corr={CorrelationId}",
+                    "Skill request refused ({RefusalType}) intent={Intent} eventType={RequestType} corr={CorrelationId}",
+                    ex.GetType().Name,
                     requestContext.IntentName,
                     requestContext.RequestType,
                     requestContext.CorrelationId);
                 requestContext.SkipColdLibraryWork = true;
-                requestContext.Response = isEventRequest
-                    ? BaseHandler.BuildKeepAliveResponse()
-                    : ResponseBuilder.Tell(
-                        ResponseStrings.Get("StreamTokenNotConfigured", BaseHandler.GetLocalePublic(requestContext.SkillRequest)));
+                requestContext.Response = BaseHandler.DegradeForEventRequest(
+                    requestContext.SkillRequest,
+                    () => ResponseBuilder.Tell(ResponseStrings.Get(ex.ResponseKey, BaseHandler.GetLocalePublic(requestContext.SkillRequest))));
             }
         }
 
