@@ -949,32 +949,67 @@ public class DeviceQueueManagerTests : IDisposable
     }
 
     /// <summary>
-    /// CHARACTERIZATION (green on arrival; JF-738 evidence, NOT a desired contract):
+    /// JF-738 pin (the FLIPPED characterization: green-on-arrival evidence of the
+    /// format mismatch until the JF-738 fix, red the moment the membership set
+    /// went through NormalizeToMapKeyFormat, now pinning the RESTORED contract):
     /// production <see cref="DeviceQueueManager.SetQueue"/> callers store DASHED
-    /// <c>Guid.ToString()</c> ids while the four launch-scope maps are keyed "N", so
-    /// the trim's queued-membership protection never matches and the trim runs as
-    /// pure insertion-order FIFO. Signature asserted here: at cap pressure the
-    /// evictee is a QUEUED resident (the first-recorded seed), while the documented
-    /// contract ("entries for queued items all stay") would evict the non-queued
-    /// victim instead. This test is the red proof JF-738's format fix will produce;
-    /// do not "fix" it by weakening the assert. DETERMINISM NOTE: like the
-    /// saturated-map pin below, this rests on .NET Dictionary enumeration order
-    /// (implementation detail the production trim itself relies on for its
-    /// "oldest" semantics); the format-independent anchors for the guard are the
-    /// two queued-cap-pressure pins above (active and enqueued).
+    /// <c>Guid.ToString()</c> ids while the four launch-scope maps are keyed "N",
+    /// and the trim's membership set re-keys the queue ids to "N", so a QUEUED
+    /// resident's entry is protected at cap pressure. Signature asserted: at cap
+    /// pressure (every resident queued) a non-queued launch evicts nothing
+    /// queued, the fresh non-queued entry survives its own trim via the JF-723
+    /// freshness guard, and the NEXT launch ages it into the evictee (the trim
+    /// still trims; membership never disables it).
+    /// DETERMINISM: order-independent, unlike the characterization it replaced
+    /// (residents are excluded from eviction by membership, not enumeration
+    /// order, and the aging step's only evictable candidate is the single aged
+    /// non-queued entry).
     /// </summary>
     [Fact]
-    public void RecordLaunchBase_DashedQueueMembership_QueuedSeedIsTheEvicteeAtCapPressure_JF738Characterization()
+    public void RecordLaunchBase_DashedQueueMembership_QueuedSeedsSurviveAndAgedNonQueuedEntryIsEvicted_JF738()
     {
         List<string> queuedIds = SeedQueuedScopeResidents("dev-jf738", DeviceQueueManager.MaxLaunchBaseEntries, "D");
 
-        string victimId = Guid.NewGuid().ToString();
-        _manager.RecordLaunchBase("dev-jf738", victimId, 0, enqueued: false);
+        // The first non-queued launch pushes the map over cap: every resident is
+        // membership-protected (the dashed queue ids match the "N" map keys through
+        // the normalization) and the fresh entry carries the JF-723 guard.
+        string firstVictimId = Guid.NewGuid().ToString();
+        _manager.RecordLaunchBase("dev-jf738", firstVictimId, 0, enqueued: false);
 
-        // The mismatch signature: the first QUEUED seed lost its entry, the
-        // non-queued 201st record survived (newest insertion, FIFO never reaches it).
-        Assert.Null(_manager.GetActiveLaunchScope("dev-jf738", queuedIds[0]).BaseMs);
-        Assert.NotNull(_manager.GetActiveLaunchScope("dev-jf738", victimId).BaseMs);
+        // The FLIP (pre-fix exactly inverted: the first QUEUED seed was the
+        // evictee and the non-queued 201st record survived): every seeded
+        // resident keeps its entry, and the fresh non-queued entry survives its
+        // own trim (the JF-723 guard, not membership).
+        Assert.All(queuedIds, id => Assert.True(_manager.GetActiveLaunchScope("dev-jf738", id).BaseMs.HasValue));
+        Assert.NotNull(_manager.GetActiveLaunchScope("dev-jf738", firstVictimId).BaseMs);
+
+        // The next launch ages the first victim: no longer fresh, still
+        // non-queued, so it is the trim's evictee.
+        string secondVictimId = Guid.NewGuid().ToString();
+        _manager.RecordLaunchBase("dev-jf738", secondVictimId, 0, enqueued: false);
+
+        Assert.Null(_manager.GetActiveLaunchScope("dev-jf738", firstVictimId).BaseMs);
+        Assert.NotNull(_manager.GetActiveLaunchScope("dev-jf738", secondVictimId).BaseMs);
+        Assert.All(queuedIds, id => Assert.True(_manager.GetActiveLaunchScope("dev-jf738", id).BaseMs.HasValue));
+    }
+
+    /// <summary>
+    /// JF-738 helper pin: <see cref="DeviceQueueManager.NormalizeToMapKeyFormat"/>
+    /// re-keys every parseable GUID (the dashed production ItemIds format, "N",
+    /// brace formats) into the bounded maps' "N" key format and passes non-GUID
+    /// entries through raw, so a non-GUID map key still compares equal to itself.
+    /// </summary>
+    [Fact]
+    public void NormalizeToMapKeyFormat_RekeysAnyGuidFormatToN_PassesNonGuidRaw()
+    {
+        Guid id = Guid.NewGuid();
+
+        List<string> normalized = DeviceQueueManager.NormalizeToMapKeyFormat(
+            new[] { id.ToString(), id.ToString("N"), id.ToString("B"), "not-a-guid" }).ToList();
+
+        Assert.Equal(
+            new[] { id.ToString("N"), id.ToString("N"), id.ToString("N"), "not-a-guid" },
+            normalized);
     }
 
     /// <summary>
@@ -1007,9 +1042,11 @@ public class DeviceQueueManagerTests : IDisposable
     }
 
     /// <summary>
-    /// JF-723 pin (today's reachable shape under the JF-738 format mismatch): with
-    /// membership protection inert, a saturated map churns by slot order, and a
-    /// fresh insert that reuses the just-freed lowest slot is evicted by its OWN
+    /// JF-723 pin (the saturated-churn shape; seeded under the JF-738 mismatch and
+    /// kept verbatim after the JF-738 fix, where the same seeding still exercises
+    /// the guard through the disjoint-membership route): with NO map key in the
+    /// queue's membership, a saturated map churns by slot order, and a fresh
+    /// insert that reuses the just-freed lowest slot is evicted by its OWN
     /// record's trim (the 201st record frees the oldest slot; the next insert lands
     /// there and becomes the oldest occupied entry). That self-evicted entry is the
     /// launch-scope record of the track the device is about to play; the guard must
@@ -1050,9 +1087,9 @@ public class DeviceQueueManagerTests : IDisposable
     /// <paramref name="count"/> ids in the given GUID format, each with a
     /// launch-scope entry (active or pending per <paramref name="enqueued"/>), so
     /// that map family sits exactly at the trim cap with every resident queued
-    /// under the documented membership contract ("N" matches the map keys; "D" is
-    /// the production dashed format whose mismatch JF-738 files). Returns the
-    /// seeded ids.
+    /// ("N" matches the map keys directly; "D" is the production dashed format,
+    /// which matched NOTHING pre-JF-738 and matches through
+    /// NormalizeToMapKeyFormat since). Returns the seeded ids.
     /// </summary>
     private List<string> SeedQueuedScopeResidents(string deviceId, int count, string guidFormat, bool enqueued = false)
     {

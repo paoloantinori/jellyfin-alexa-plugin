@@ -101,13 +101,176 @@ non-queued entries (enumeration/slot order). The reachable fresh-entry
 shapes are (a) the fresh key being the ONLY non-queued entry under
 working membership (queued-cap pressure) and (b) fresh inserts landing in
 reused low slots under the inert-membership FIFO this task files.
+
+### Design decision (2026-10-04, before implementation): set-side "N" normalization at the trim
+
+Shape (b) of the filing's option list, via ONE shared canonicalization
+helper on DeviceQueueManager (`NormalizeToMapKeyFormat`, internal static
+beside `TrimPositionMap`): each `queue.ItemIds` entry that parses as a
+GUID is re-keyed `ToString("N")` (any input format: dashed, "N", "B",
+"P"); non-parseable entries pass through raw so a non-GUID map key still
+compares equal to itself. On top of it, ONE membership-set builder
+(`BuildTrimMembershipSet(queue, freshKey)`: normalize + the JF-723-shaped
+fresh-key guard, capacity-hinted) so the normalize-and-guard invariant
+has a single definition. Both trim sites consume the builder:
+`TrimLaunchBaseIfNeeded` (gate already passed, one set shared by the four
+maps) and the PlaybackStopped position trim, which moved INTO the manager
+as the ONE locked write-then-trim entry point
+`DeviceQueueManager.RecordStoppedPositionAndTrim(deviceId, queue, itemId,
+ticks)` (the code-review round's finding, then tightened by the
+gate-marker round's GM-F1: the WRITE folds under the lock beside the trim,
+because the write is a structural Add for a new key and a sibling stop's
+unlocked write would throw inside the trim's map enumeration; the count
+gate runs first inside the lock so the set build stays off the under-cap
+happy path, one qualifying stop per track): the membership build runs
+under `_launchScopeLock`, because the build ENUMERATES the live
+`ItemIds` list that `Enqueue` mutates in place under that same lock (the
+JF-578 intent-thread/event-thread interleaving); the first JF-738 cut
+used a lazy projection into `TrimPositionMap`, whose enumerator version
+check is a throw path the pre-JF-738 CopyTo-based HashSet construction
+did not have.
+
+Why not (a) normalize the STORED queue at SetQueue/CommitShuffledQueue:
+far bigger blast radius for zero extra protection. The persisted-XML
+shape changes (legacy files stay dashed, so the trim would STILL need
+set-side normalization for old files); every dashed-string queue reader
+breaks or must be rewritten (`MoveTo`'s `IndexOf`, `Enqueue` and
+`ResolveInsertIndex`'s `ToString()` comparisons, PlaybackStopped's
+`queueContradictsEventToken` `Contains`); and it violates JF-713's
+verbatim-store contract on the shuffle commit. The stored queue's format
+is a de-facto public shape (FollowMe re-stores `sourceQueue.ItemIds`
+verbatim); the membership set is a private, per-trim transient. Why not
+(c) both directions: the maps are already uniformly "N"-keyed at every
+writer (`RecordLaunchBase`, `RecordItemPosition`, the PlaybackStopped
+position write), so there is exactly ONE direction needing
+canonicalization (queue ids -> "N"); a second direction would exist only
+to serve a dashed-keyed map, of which there are none. Why not INSIDE
+`TrimPositionMap` itself (this filing's scope-point-2 suggestion): its
+`as HashSet<string>` fast path means internal normalization would either
+apply only in the build branch (silently bypassed by any caller-passed
+HashSet: the same inert-membership hole, now type-dependent and harder
+to see) or must drop the fast path and re-normalize the same set on each
+of the four launch-map calls (4x projection of a 200+-item queue at the
+exact cap-pressure shape); and the JF-723 fresh-key guard already forces
+set construction to be caller-owned at both sites
+(`queuedItems.Add(freshlyRecordedKey)` / `.Append(freshlyWrittenKey)`),
+so moving only normalization down would split the membership invariant
+across two layers.
+
+DoD #2 decision: the fresh-entry guard for the ItemPositionState trim is
+ADDED (the JF-723-shaped exemption: the just-written stop-position key is
+added to the membership set for THAT call's trim only, inside the shared
+builder). Rationale: the
+write-then-trim shape is identical to RecordLaunchBase's; membership
+protects the stopped item only when it is QUEUED, and the documented
+single-item shape (JF-424.1: "single-item plays have no queue for MoveTo
+to succeed on, and resume-after-pause depends on it") leaves the fresh
+entry non-queued and evictable by its own trim at cap pressure; this
+store is the resume seed the JF-581 live incident made load-bearing
+(UserData write loss). Cost: the builder's single `Add`; the over-cap tolerance
+(cap+1 until the next write ages the entry) is the same documented shape
+the JF-723 guard already grants. A long run of non-queued single-item
+stops churns at cap+1, evicting exactly one aged entry per write, and a
+fully-navigated queue pins the map at the QUEUE's LENGTH, NOT at the cap
+(GM-F3 honesty, corrected from the first cut's "pins at cap" framing:
+every queued item's entry stays, so a 500-track queue carries ~500
+`string->long` pairs, tens of KB of persisted JSON scaling with the
+queue, which is the documented contract, not a leak). Each over-cap
+qualifying write on such a queue then pays an O(queue-length) GUID
+normalization under the launch-scope lock (recorded in the builder's
+honest-cost note); bounded by the write frequencies (a launch record, a
+qualifying stop, minutes apart), microseconds at playlist scale. A cheap
+bound was considered and DECLINED: caching the membership set per queue
+version adds invalidation surface on a correctness-critical set (every
+ItemIds mutation site) for a microsecond-scale cold-path win, and a
+length-32 pre-check to skip `Guid.TryParse` saves little (parsing a
+32-char hex string is already near the check's own cost).
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 The membership set and map keys share one format at both trim call sites (set-side "N" normalization or equivalent); the JF738 characterization test flips red and is updated to pin the restored contract (queued seed survives, non-queued victim evicted)
-- [ ] #2 A fresh-entry guard decision for the ItemPositionState trim (exemption added, or consciously declined with the reason recorded here)
-- [ ] #3 dotnet build passes with 0 errors, no new warnings
-- [ ] #4 dotnet test passes both TFMs
-- [ ] #5 /simplify + /code-review high passed
+- [x] #1 The membership set and map keys share one format at both trim call sites (set-side "N" normalization or equivalent); the JF738 characterization test flips red and is updated to pin the restored contract (queued seed survives, non-queued victim evicted)
+  Evidence: both trim sites build their sets through `DeviceQueueManager.BuildTrimMembershipSet` (normalize via `NormalizeToMapKeyFormat` plus the fresh-key guard): `TrimLaunchBaseIfNeeded` for the four launch-scope maps, and the position trim which moved into the manager as `DeviceQueueManager.TrimItemPositionState` (locked, gate-first). RED PROOF executed live before the flip: with the fix in and the old pin untouched, `RecordLaunchBase_DashedQueueMembership_QueuedSeedIsTheEvicteeAtCapPressure_JF738Characterization` failed on BOTH TFMs (`Assert.Null() Failure ... Actual: 0` at the queued-seed assert); the pin was then replaced by `RecordLaunchBase_DashedQueueMembership_QueuedSeedsSurviveAndAgedNonQueuedEntryIsEvicted_JF738` (all queued residents survive via `Assert.All`; the fresh non-queued entry survives its own trim via the JF-723 guard; the NEXT launch ages it into the evictee, so the trim still trims; deterministic, order-independent).
+- [x] #2 A fresh-entry guard decision for the ItemPositionState trim (exemption added, or consciously declined with the reason recorded here)
+  Evidence: ADDED (see the DoD #2 decision paragraph above: the JF-723-shaped exemption rides the shared builder; single-item plays leave the fresh entry non-queued and the store is the JF-581 resume seed). Pinned end-to-end by `PlaybackStopped_ItemPositionStateTrim_ProtectsQueuedResidentsUnderDashedMembership_JF738` (EventHandlerTests, through the real HandleAsync path), itself RED-PROVEN by temporarily reverting the membership wiring to a raw `queue.ItemIds` set (failed both TFMs, restored, green).
+- [x] #3 dotnet build passes with 0 errors, no new warnings
+  Evidence: `dotnet build Jellyfin.Plugin.AlexaSkill.sln` 0 warnings 0 errors; `dotnet build -c Release -warnaserror` 0 warnings 0 errors (both TFMs).
+- [x] #4 dotnet test passes both TFMs
+  Evidence: full suite ONCE on the final state: 5095/5095 net9.0 and 5095/5095 net10.0 (baseline 5093 + 2 new pins; the characterization was replaced in place). Filtered affected classes re-run green after every edit round (DeviceQueueManagerTests + EventHandlerTests, 170/170 both TFMs).
+- [x] #5 /simplify + /code-review high passed
+  Evidence: /simplify (4 parallel agents): duplicated inline comment APPLIED (deleted; the MEMBERSHIP doc paragraph carries the story), lost HashSet capacity hint APPLIED (capacity-hinted build, then folded into the builder), task-file missing inside-TrimPositionMap rebuttal APPLIED (Design decision), AudiobookPositionTracker.NormalizeKey near-duplicate FILED as JF-741 (out of surface). /code-review high: F1 the unlocked live-ItemIds enumeration (introduced throw path: the lazy foreach's version check vs the pre-fix CopyTo-based ctor) APPLIED (locked manager entry point), F3 membership+guard hand-rolled twice / convention-only format invariant APPLIED (the shared builder, named mandatory by TrimPositionMap's FORMAT CONTRACT), F2 the JF-739 escalation recorded in JF-739's filing (deterministic-only-non-queued-key note), F4 confirmed already filed as JF-741. Reviewer verdict on the fix itself: correct, premise verified at all writers, both new tests hand-executed deterministic. Gate-marker round (orchestrator, six named axes all PASS) returned four rework findings, ALL APPLIED: GM-F1 the write folded into the locked entry point (`RecordStoppedPositionAndTrim`), GM-F2 the locked `IsItemQueued` membership read for the contradiction check, GM-F3 the queue-length honesty in the docs and here (cheap bounds considered and declined with reasons), GM-F4 the cap moved beside `MaxLaunchBaseEntries` on the manager with the entry point defaulting to it; dispositions detailed in the gate-marker section of the Final Summary.
 <!-- DOD:END -->
+
+## Final Summary
+
+The queued-membership protection in the bounded-map trims is REAL: both
+trim sites (the four launch-scope maps via `TrimLaunchBaseIfNeeded`, and
+the ItemPositionState write+trim via the new locked
+`DeviceQueueManager.RecordStoppedPositionAndTrim` entry point the
+PlaybackStopped handler calls) build their membership sets through ONE
+shared builder, `BuildTrimMembershipSet`, which re-keys the stored
+queue's DASHED ids to the maps' "N" format
+(`NormalizeToMapKeyFormat`: Guid.TryParse, any input format, raw
+passthrough for non-GUIDs) and adds the caller's fresh key (the JF-723
+identity-guard shape). The normalization shape and the rejection of the
+stored-queue, both-directions, and inside-TrimPositionMap alternatives
+are recorded in the Design decision above.
+
+GATE-MARKER REWORK ROUND (2026-10-04, four findings, all applied):
+GM-F1 the ItemPositionState WRITE stayed outside the lock while the trim's
+map enumeration ran inside it (a sibling stop's structural Add on the same
+device would throw InvalidOperationException inside the locked region, the
+die-before-the-ack class): APPLIED by folding the write into
+`RecordStoppedPositionAndTrim` (write + count gate + membership build +
+trim as ONE locked unit; the debounced persist is scheduled by the manager
+after the lock). GM-F2 the queue-contradiction check's
+`ItemIds.Contains(cleanItemId, OrdinalIgnoreCase)` enumerated the live list
+unlocked 60 lines above the fixed trim (the identical throw class against
+Enqueue's in-place Insert): APPLIED via the manager's locked
+`IsItemQueued(queue, itemId)` read, short-circuit ordering preserved so the
+locked read only runs when the pointer already contradicts the token.
+GM-F3 the "pins the map at cap" framing understated the restored-membership
+growth margin: APPLIED in the docs and here; a fully-navigated queue pins
+the map at QUEUE LENGTH (see the DoD #2 paragraph), and each over-cap
+qualifying write pays an O(queue-length) normalization under the
+launch-scope lock; the cheap-bound options (per-version membership cache,
+length-32 pre-check) were considered and DECLINED with reasons above.
+GM-F4 `MaxItemPositionStateEntries` lived on the event handler while its
+sibling cap and the trim entry point live on the manager (an idiom break
+its own doc cited): APPLIED, the const moved beside
+`MaxLaunchBaseEntries` on DeviceQueueManager and the entry point's cap
+parameter defaults to it; the pin-seeding seam is now one place
+(EventHandlerTests seeds from `DeviceQueueManager.MaxItemPositionStateEntries`).
+
+The JF-723 characterization pin flipped exactly as filed: red on the fix
+(queued seed survived where the pin demanded its eviction, both TFMs),
+then replaced by the protected-world pin (residents survive; a fresh
+non-queued entry survives its own trim via the guard and is evicted once
+aged by the next launch, proving the trim still trims). A new
+handler-level pin covers the position-store arm end-to-end, red-proven
+by reverting the call-site wiring.
+
+JF-739 INTERPLAY (documented, NOT fixed here): restored membership does
+not close the sibling-trim hole. Membership protects only items already
+in the STORED queue; inside the derive-to-commit window the fresh item
+is still absent from it, so a sibling `RecordLaunchBase` in that window
+still judges the fresh entry non-queued and can evict it. The JF-738
+code-review round additionally established that in the
+queued-cap-pressure shape (which this fix itself makes
+production-reachable) the fresh entry is the ONLY non-queued key, making
+the sibling eviction deterministic rather than slot-luck; that
+escalation note is recorded in JF-739's filing. The JF-723 guard itself
+was re-verified green under the restored membership (its two
+"N"-seeded queued-cap-pressure pins pass for the matching reason, and
+the saturated-churn pin still exercises the guard through the
+disjoint-membership route).
+
+Fresh-entry guard for the position trim: ADDED (DoD #2), rationale in
+the Design decision. Behavior note for scope point 4 (GM-F3-corrected):
+a fully navigated queue pins the position map at the QUEUE's LENGTH, not
+at the cap (tens of KB of persisted JSON scaling with the queue, the
+documented contract); non-queued single-item churn rides at cap+1,
+evicting one aged entry per write.
+
+Out-of-scope gate finding FILED: JF-741 (the AudiobookPositionTracker
+NormalizeKey near-duplicate of the canonicalization rule).
