@@ -1044,7 +1044,9 @@ public sealed class AlbumPlayService
             // DeviceQueueManager.ReplaceQueue (extracted in this same change) if
             // the shape ever bites live. The launch-scope side of this same window
             // is covered by the JF-723 guard in TrimLaunchBaseIfNeeded (the fresh
-            // entry is never its own trim's evictee).
+            // entry is never its own trim's evictee) and by the JF-739 freshness
+            // stamps (a sibling record's trim inside the window cannot evict it
+            // either).
             Playback.DeviceQueue shuffledQueue = queueManager!.CommitShuffledQueue(deviceId, pendingShuffle);
             // Mirror the shuffled DeviceQueue order back into the session queue (metadata preserved).
             ProgressReporter.MirrorQueueToSession(shuffledQueue, session);

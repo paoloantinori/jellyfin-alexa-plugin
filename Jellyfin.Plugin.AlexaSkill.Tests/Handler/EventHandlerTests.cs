@@ -771,11 +771,17 @@ public class EventHandlerTests : PluginTestBase, IDisposable
     /// the cap. Asserted: every queued resident keeps its entry (the membership
     /// set re-keys the dashed ids to "N"), each fresh stop's own entry survives
     /// its trim (the JF-738 DoD #2 fresh-entry guard), and the SECOND stop ages
-    /// the first into the evictee (the trim still trims).
+    /// the first into the evictee (the trim still trims). JF-739: "aged" now
+    /// means past the freshness window too, and the pin proves that expiry with
+    /// the rule ON (the fake clock advanced past the window before the second
+    /// stop); the within-window sibling half is pinned in DeviceQueueManagerTests
+    /// (RecordStoppedPositionAndTrim_SiblingStopInWindow_...).
     /// </summary>
     [Fact]
     public async Task PlaybackStopped_ItemPositionStateTrim_ProtectsQueuedResidentsUnderDashedMembership_JF738()
     {
+        var fake = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        _queueManager.SetTimeForTest(fake);
         _sessionManagerMock
             .Setup(s => s.OnPlaybackStart(It.IsAny<PlaybackStartInfo>()))
             .Returns(Task.CompletedTask);
@@ -812,6 +818,10 @@ public class EventHandlerTests : PluginTestBase, IDisposable
         // fresh entry survived its own trim.
         Assert.All(residentIds, id => Assert.Equal(1234, queue.ItemPositionState[id.ToString("N")]));
         Assert.Contains(firstSingleItemId.ToString("N"), queue.ItemPositionState.Keys);
+
+        // The clock crosses the freshness window: the first stop's stamp expires
+        // (rule ON), so the second stop's trim may evict that entry again.
+        fake.Advance(DeviceQueueManager.RecentRecordFreshnessWindow.Add(TimeSpan.FromSeconds(1)));
 
         // Second non-queued stop ages the first entry: aged, non-queued, evicted.
         Guid secondSingleItemId = Guid.NewGuid();

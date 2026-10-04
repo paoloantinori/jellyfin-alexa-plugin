@@ -1342,3 +1342,31 @@ internal sealed class SharedGateProbeHandler : BaseHandler
         IOutputSpeech? outputSpeech = null)
         => Launch.BuildVideoAppLaunchResponse(context, locale, sourceUrl, title, outputSpeech);
 }
+
+/// <summary>
+/// JF-739: the ONE manual-clock <see cref="TimeProvider"/> for the test
+/// assembly (the clock CORE; gate-marker GM-F4 hoisted it out of
+/// PreEnqueueOnStartTests' private copy so the two fake clocks cannot drift).
+/// The DeviceQueueManager freshness pins assign it through the manager's
+/// instance <c>SetTimeForTest</c> seam and keep the clock frozen for
+/// within-window pins or call <see cref="Advance"/> past the window for the
+/// expiry pins, so no TTL test ever sleeps. The JF-424.2 static-seam tests
+/// derive from it (see PreEnqueueOnStartTests' nested adapter) adding only
+/// the NextTrackPrecomputeCache install/restore that global-state seam needs.
+/// </summary>
+internal class FakeTimeProvider : TimeProvider
+{
+    private DateTimeOffset _now;
+
+    public FakeTimeProvider(DateTimeOffset start) => _now = start;
+
+    /// <summary>Moves the fake clock forward deterministically.</summary>
+    public void Advance(TimeSpan delta) => _now += delta;
+
+    /// <summary>Parks the fake clock at an absolute instant (the JF-424.2
+    /// tests' settable surface; kept beside Advance so both seam styles share
+    /// the one clock core).</summary>
+    public void SetUtcNow(DateTimeOffset utcNow) => _now = utcNow;
+
+    public override DateTimeOffset GetUtcNow() => _now;
+}
