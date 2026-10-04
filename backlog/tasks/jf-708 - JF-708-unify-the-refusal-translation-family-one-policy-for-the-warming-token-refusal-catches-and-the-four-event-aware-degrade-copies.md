@@ -1,14 +1,20 @@
 ---
 id: JF-708
 title: >-
-  JF-708 - unify the refusal-translation family: one policy for the warming/token
-  refusal catches and the four event-aware degrade copies
-status: To Do
-priority: low
+  JF-708 - unify the refusal-translation family: one policy for the
+  warming/token refusal catches and the four event-aware degrade copies
+status: Done
+assignee: []
+created_date: ''
+updated_date: '2026-10-04 16:12'
 labels:
   - code-quality
+dependencies: []
 references:
-  - backlog/tasks/jf-699 - JF-693-declined-altitude-findings-pipeline-level-refusal-translation-the-locale-long-tail-and-a-structural-scan-pin.md
+  - >-
+    backlog/tasks/jf-699 -
+    JF-693-declined-altitude-findings-pipeline-level-refusal-translation-the-locale-long-tail-and-a-structural-scan-pin.md
+priority: low
 ---
 
 ## Description
@@ -181,6 +187,6 @@ call); /code-review high 0 correctness bugs, 4 findings all applied. Suites: 513
 TFMs on the final state (baseline 5126 + 11); Release --no-restore -warnaserror 0 warnings
 0 errors. No locale or model surface changed; no deploy (the orchestrator's batched deploy
 owns the DLL).
-<!-- SECTION:FINAL_SUMMARY:END -->
 
-FOLLOW-UP FILED: JF-752 (the site-level side-effect pin pairing the roster's SECOND BOUNDARY; the filing text corrected in the same turn by the altitude round).
+CLOSED 2026-10-04 by the orchestrator after the full cycle: merged into main (worker commit 9b9475cc + orchestrator tail 0c0e42c6 + the simplify-tail follow-ups merged as fbb1315b; the gate-marker ran its own full suite 5137/5137 both TFMs), its four low findings dispositioned (three doc tails applied, the site-level laziness pin filed as JF-752 pairing the roster's inline-evasion boundary; the JF-752 filing text itself corrected by the simplify altitude round before anyone picks it up, naming the existing shape test and the real harness seam). Awaiting the wave's batched deploy.
+<!-- SECTION:FINAL_SUMMARY:END -->
