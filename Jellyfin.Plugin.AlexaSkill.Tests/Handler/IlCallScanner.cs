@@ -91,10 +91,14 @@ internal static class IlCallScanner
     /// <summary>
     /// A type and every type nested under it, transitively (lambdas and local
     /// functions compiled to nested types are part of the declaring type's body).
+    /// Internal since JF-741: the tracker's no-inline-parse structural pin needs
+    /// the same closure for its whole-type scan, so a re-inline written as a
+    /// lambda or capturing local function cannot escape the nested display
+    /// class the compiler puts it on.
     /// </summary>
     /// <param name="root">The type whose nested closure to enumerate.</param>
     /// <returns>The root type and every transitively nested type.</returns>
-    private static IEnumerable<Type> NestedTypeClosure(Type root)
+    internal static IEnumerable<Type> NestedTypeClosure(Type root)
     {
         var queue = new Queue<Type>();
         queue.Enqueue(root);

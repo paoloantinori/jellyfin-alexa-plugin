@@ -157,11 +157,12 @@ public sealed class AudiobookPositionTracker : IDisposable
     /// <summary>
     /// Normalize a book ID to a canonical key (GUID "N" format, no dashes) so the record
     /// path (raw URL itemId with dashes) and the read path (ToString("N")) match. Falls back
-    /// to the raw input if it isn't a GUID.
+    /// to the raw input if it isn't a GUID. JF-741: delegates to the ONE shared
+    /// parse-or-raw rule (<see cref="DeviceQueueManager.NormalizeToMapKeyFormat(string)"/>).
     /// </summary>
     private static string NormalizeKey(string bookParentId)
     {
-        return Guid.TryParse(bookParentId, out Guid g) ? g.ToString("N") : bookParentId;
+        return DeviceQueueManager.NormalizeToMapKeyFormat(bookParentId);
     }
 
     private void SchedulePersist()
