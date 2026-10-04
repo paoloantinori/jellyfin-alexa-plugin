@@ -1,7 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Jellyfin.Data.Enums;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Session;
+using MediaBrowser.Model.Session;
 using SortOrder = Jellyfin.Database.Implementations.Enums.SortOrder;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa;
@@ -77,4 +81,70 @@ public class QueueContinuation
     /// next playback overwrites it. Bounded and negligible memory.
     /// </summary>
     public IReadOnlyList<BaseItem>? CachedTracks { get; init; }
+
+    /// <summary>
+    /// JF-674 queue identity: the item ids of the queue page this continuation was
+    /// minted over (the exact ids the minting play installed into the session's
+    /// now-playing queue, captured through <see cref="QueueIdsOf"/>). The
+    /// fetch-time validation (<see cref="IsForLiveQueue"/>) binds the entry to
+    /// THAT queue: a later playback whose queue does not contain every minted id
+    /// is a different logical queue, and the entry is discarded instead of
+    /// injecting its source's content after the later play (the filed scenario:
+    /// a stale Audiobook continuation appending mid-book chapters after a fresh
+    /// single-song play). SET membership, not order or full-list equality, is
+    /// the identity relation: the fetch's own appends, AddToQueue/PlayNext
+    /// inserts at any position, shuffle mirrors, and the JF-574 rehydration all
+    /// keep the minted page inside the live queue, while every resume-path
+    /// ReplaceAll relaunch leaves the queue untouched. An EMPTY list means NO
+    /// identity was captured and validation is skipped: the hand-constructed
+    /// test shape, or a mint whose installed page slice is itself empty (no
+    /// current producer returns a startIndex equal to the page count, so every
+    /// production capture is non-empty; the roster cannot see that case, it
+    /// guards only that the initializer is present). Production wiring is
+    /// enforced structurally by QueueContinuationIdentityRosterTests (every
+    /// plugin-assembly construction site must initialize this property).
+    /// </summary>
+    public IReadOnlyList<Guid> MintedQueueItemIds { get; init; } = Array.Empty<Guid>();
+
+    /// <summary>
+    /// JF-674: whether the live session queue is still the queue this continuation
+    /// was minted for, i.e. every <see cref="MintedQueueItemIds"/> entry is still
+    /// queued (membership through <see cref="SessionQueue.IdSet"/>, the ONE
+    /// session-queue membership source). Empty identity short-circuits true (see
+    /// the property doc). Called by the fetch guard in
+    /// <c>PlaybackNearlyFinishedEventHandler.TryFetchContinuationBatch</c> between
+    /// the current-index guard and the threshold guard; a mismatch discards the
+    /// store entry instead of fetching.
+    /// </summary>
+    /// <param name="session">The session whose now-playing queue is the live queue.</param>
+    /// <returns>True when the entry may serve this queue (or carries no identity).</returns>
+    public bool IsForLiveQueue(SessionInfo session)
+    {
+        if (MintedQueueItemIds.Count == 0)
+        {
+            return true;
+        }
+
+        HashSet<Guid> liveIds = SessionQueue.IdSet(session);
+        foreach (Guid mintedId in MintedQueueItemIds)
+        {
+            if (!liveIds.Contains(mintedId))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// JF-674: the ONE projection a mint site uses to capture its queue page as the
+    /// continuation's identity (the five creators pass the exact queue-items list they
+    /// install into <c>session.NowPlayingQueue</c>), so the capture shape cannot drift
+    /// per site.
+    /// </summary>
+    /// <param name="queueItems">The queue page being installed at mint time.</param>
+    /// <returns>The page's item ids, in queue order (identity is set-shaped; order is incidental).</returns>
+    public static IReadOnlyList<Guid> QueueIdsOf(IEnumerable<QueueItem> queueItems)
+        => queueItems.Select(q => q.Id).ToList();
 }

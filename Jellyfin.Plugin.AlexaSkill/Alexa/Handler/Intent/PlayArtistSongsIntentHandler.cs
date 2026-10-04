@@ -603,7 +603,9 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                     TotalCount = int.MaxValue,
                     UserId = jellyfinUser!.Id,
                     SortOrder = CrossMediaFallback.PopularitySort,
-                    Shuffle = _config.ShuffleArtistSongs
+                    Shuffle = _config.ShuffleArtistSongs,
+                    // JF-674: identity = the queue page just installed (see MintedQueueItemIds).
+                    MintedQueueItemIds = QueueContinuation.QueueIdsOf(queueItems)
                 });
         }
 

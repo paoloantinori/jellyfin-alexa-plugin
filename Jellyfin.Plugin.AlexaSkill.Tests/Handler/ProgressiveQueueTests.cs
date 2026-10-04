@@ -1739,4 +1739,315 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
 
         QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID);
     }
+
+    // =====================================================================
+    // JF-674: stale-continuation queue-identity validation
+    // =====================================================================
+
+    /// <summary>
+    /// JF-674: THE filed injection scenario, driven end-to-end through the REAL
+    /// mint (PlayBookIntentHandler on the flag-off AudioPlayer arm, where a book
+    /// continuation is live) and the REAL fetch (PlaybackNearlyFinished): play a
+    /// long book, stop mid-book (the store entry lingers by the documented
+    /// semantics; PlaybackStopped never removes it), then play ONE song (the
+    /// PlaySongIntentHandler inline shape: a one-item session queue, no
+    /// SetQueue, no store clear). At the song's exhaustion the fetch must serve
+    /// NOTHING: the stale book continuation is bound to the queue it was minted
+    /// for, the song's queue is not that queue, and the entry is discarded
+    /// instead of appending mid-book chapters after the song.
+    /// Theory legs: the FINITE total (20 chapters) and the END-UNKNOWN total
+    /// (int.MaxValue; the JF-673 SearchService.UnknownTotal sentinel once that
+    /// merge reaches this tree), which JF-673 makes a real stored shape on
+    /// NRE-class servers. The identity validation never reads TotalCount (the
+    /// sentinel only governs exhaustion arithmetic), so both legs must discard
+    /// identically.
+    /// </summary>
+    [Theory]
+    [InlineData(20)]
+    [InlineData(int.MaxValue)]
+    public async Task PlaybackNearlyFinished_SingleSongAfterBookPlay_FetchesNothingForStaleBookContinuation(int totalCount)
+    {
+        using var queueManager = TestHelpers.CreateDeviceQueueManager("JF674BookInjection");
+        var bookHandler = new PlayBookIntentHandler(
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory,
+            queueManager);
+
+        var session = CreateSession();
+        _fx.SetupUserMock();
+
+        var bookItem = new AudioBook { Id = Guid.NewGuid(), Name = "The Long Book" };
+        var chapters = Enumerable.Range(0, ProgressiveQueueConstants.GetInitialFetchSize())
+            .Select(i => new Audio { Id = Guid.NewGuid(), Name = $"Chapter {i + 1}" })
+            .ToList();
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
+            .Returns(new List<BaseItem> { bookItem });
+
+        // The initial chapters page (5 of totalCount). The SAME mock answers the
+        // stale continuation's tail query on the unfixed tree: that fetch is the
+        // bug.
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q => q.ParentId == bookItem.Id)))
+            .Returns(new QueryResult<BaseItem>
+            {
+                Items = chapters.Cast<BaseItem>().ToList(),
+                TotalRecordCount = totalCount
+            });
+
+        var context = CreateContext();
+        var bookResponse = await bookHandler.HandleAsync(
+            CreateBookIntent("The Long Book"), context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+        Assert.NotNull(bookResponse.Response.Directives?.OfType<AudioPlayerPlayDirective>().FirstOrDefault());
+
+        // The mint landed (the book has 20 chapters, the page holds 5).
+        QueueContinuation? minted = QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID);
+        Assert.NotNull(minted);
+        Assert.Equal("Audiobook", minted.SourceType);
+
+        // Stop mid-book: the store entry lingers (documented; no PlaybackStopped removal).
+        // Then the LATER single-song play, exactly as PlaySongIntentHandler's inline
+        // path writes it: a one-item queue and NO continuation-store clear.
+        var song = new Audio { Id = Guid.NewGuid(), Name = "One Song" };
+        session.NowPlayingQueue = new List<QueueItem> { new() { Id = song.Id } };
+        session.FullNowPlayingItem = song;
+        _fx.LibraryManager.Setup(l => l.GetItemById(song.Id)).Returns(song);
+
+        var playbackHandler = new PlaybackNearlyFinishedEventHandler(
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.LoggerFactory,
+            queueManager);
+
+        await playbackHandler.HandleAsync(
+            CreateNearlyFinishedRequest(song.Id.ToString()),
+            CreateContext(song.Id.ToString()),
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        Assert.Single(session.NowPlayingQueue);
+        Assert.Equal(song.Id, session.NowPlayingQueue[0].Id);
+        Assert.Null(QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID));
+    }
+
+    /// <summary>
+    /// JF-674 linger semantics, the JF-574 flow the fix must NOT break: play an
+    /// album (mint), stop mid-way (the entry lingers by design), lose the session
+    /// queue to a restart/re-registration, then resume the SAME album. The
+    /// rehydration guard rebuilds the session queue from the persisted device
+    /// queue, and the continuation must STILL serve: the minted page is a subset
+    /// of the rebuilt queue, so the identity validation passes and the fetch
+    /// extends the queue past its initial page. The second leg re-fires
+    /// NearlyFinished near the EXTENDED queue's tail: the identity must survive
+    /// the queue's own growth (the minted page stays a subset; an order-sensitive
+    /// or full-list fingerprint identity would fail here), and the exhausted
+    /// store entry is dropped by the existing exhaustion bookkeeping.
+    /// </summary>
+    [Fact]
+    public async Task PlaybackNearlyFinished_AlbumResumedAcrossSessionWipe_ContinuationStillServes()
+    {
+        using var queueManager = TestHelpers.CreateDeviceQueueManager("JF674AlbumLinger");
+        var handler = new PlayAlbumIntentHandler(
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory,
+            queueManager);
+
+        var session = CreateSession();
+        _fx.SetupUserMock();
+
+        var albumId = Guid.NewGuid();
+        var album = new MediaBrowser.Controller.Entities.Audio.MusicAlbum { Id = albumId, Name = "Linger Album" };
+        var allTracks = Enumerable.Range(0, 20)
+            .Select(i => new Audio { Id = Guid.NewGuid(), Name = $"Track {i + 1}" })
+            .ToList();
+        var byId = allTracks.ToDictionary(t => t.Id, t => (BaseItem)t);
+        byId[albumId] = album;
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum))))
+            .Returns(new List<BaseItem> { album });
+
+        // One page-shaped mock answering the initial page AND every continuation
+        // batch by offset (the album fetcher's pagination), so both legs fetch.
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q => q.ParentId == albumId)))
+            .Returns((InternalItemsQuery q) => new QueryResult<BaseItem>
+            {
+                Items = allTracks.Skip(q.StartIndex ?? 0).Take(q.Limit ?? int.MaxValue).Cast<BaseItem>().ToList(),
+                TotalRecordCount = 20
+            });
+
+        _fx.LibraryManager.Setup(l => l.GetItemById(It.IsAny<Guid>()))
+            .Returns((Guid id) => byId.TryGetValue(id, out BaseItem? item) ? item : null);
+
+        var context = CreateContext();
+        await handler.HandleAsync(CreateAlbumIntent("Linger Album"), context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        int pageSize = ProgressiveQueueConstants.GetInitialFetchSize();
+        Assert.Equal(pageSize, session.NowPlayingQueue.Count);
+        QueueContinuation? minted = QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID);
+        Assert.NotNull(minted);
+
+        // Stop mid-way (nothing to do: the entry lingers), then the JF-574 wiped
+        // shape: the restart/re-registration empties the session queue. The
+        // "resume" is the NearlyFinished for a mid-album item, whose rehydration
+        // leg rebuilds the queue from the device store before the fetch runs.
+        session.NowPlayingQueue = new List<QueueItem>();
+        session.FullNowPlayingItem = null;
+
+        var playbackHandler = new PlaybackNearlyFinishedEventHandler(
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.LoggerFactory,
+            queueManager);
+
+        Guid thirdTrack = allTracks[2].Id;
+        await playbackHandler.HandleAsync(
+            CreateNearlyFinishedRequest(thirdTrack.ToString()),
+            CreateContext(thirdTrack.ToString()),
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        // Rehydrated (5) + first batch (10): the continuation still serves.
+        Assert.Equal(15, session.NowPlayingQueue.Count);
+        Assert.NotNull(QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID));
+
+        // Second leg: near the EXTENDED tail, the minted page is still a subset.
+        Guid fourteenthTrack = allTracks[13].Id;
+        await playbackHandler.HandleAsync(
+            CreateNearlyFinishedRequest(fourteenthTrack.ToString()),
+            CreateContext(fourteenthTrack.ToString()),
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        Assert.Equal(20, session.NowPlayingQueue.Count);
+        Assert.Null(QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID));
+    }
+
+    /// <summary>
+    /// JF-674, the music-arm twin of the book injection pin (the filing notes the
+    /// Album/Artist/Playlist arms always had the same lingering-store property):
+    /// a stale ALBUM continuation must not append the album's tail after a later
+    /// single-song play either.
+    /// </summary>
+    [Fact]
+    public async Task PlaybackNearlyFinished_SingleSongAfterAlbumPlay_FetchesNothingForStaleAlbumContinuation()
+    {
+        var handler = new PlayAlbumIntentHandler(
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory);
+
+        var session = CreateSession();
+        _fx.SetupUserMock();
+
+        var albumId = Guid.NewGuid();
+        var album = new MediaBrowser.Controller.Entities.Audio.MusicAlbum { Id = albumId, Name = "Stale Album" };
+        var tracks = Enumerable.Range(0, ProgressiveQueueConstants.GetInitialFetchSize())
+            .Select(i => new Audio { Id = Guid.NewGuid(), Name = $"Track {i + 1}" })
+            .ToList();
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum))))
+            .Returns(new List<BaseItem> { album });
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q => q.ParentId == albumId)))
+            .Returns(new QueryResult<BaseItem>
+            {
+                Items = tracks.Cast<BaseItem>().ToList(),
+                TotalRecordCount = 20
+            });
+
+        var context = CreateContext();
+        await handler.HandleAsync(CreateAlbumIntent("Stale Album"), context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+        Assert.NotNull(QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID));
+
+        // The later single-song play (the inline PlaySong shape: one-item queue,
+        // no store clear).
+        var song = new Audio { Id = Guid.NewGuid(), Name = "One Song" };
+        session.NowPlayingQueue = new List<QueueItem> { new() { Id = song.Id } };
+        session.FullNowPlayingItem = song;
+        _fx.LibraryManager.Setup(l => l.GetItemById(song.Id)).Returns(song);
+
+        var playbackHandler = CreatePlaybackHandler();
+        await playbackHandler.HandleAsync(
+            CreateNearlyFinishedRequest(song.Id.ToString()),
+            CreateContext(song.Id.ToString()),
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        Assert.Single(session.NowPlayingQueue);
+        Assert.Null(QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID));
+    }
+
+    /// <summary>JF-674: an entry minted without ids (the hand-constructed shape) skips validation.</summary>
+    [Fact]
+    public void QueueContinuation_IsForLiveQueue_EmptyIdentity_AlwaysTrue()
+    {
+        var session = CreateSession();
+        session.NowPlayingQueue = new List<QueueItem> { new() { Id = Guid.NewGuid() } };
+
+        var continuation = new QueueContinuation { SourceType = "Album", UserId = Guid.Empty };
+        Assert.True(continuation.IsForLiveQueue(session));
+    }
+
+    /// <summary>JF-674: every minted id queued (queue may be a superset, order-free) validates.</summary>
+    [Fact]
+    public void QueueContinuation_IsForLiveQueue_AllMintedIdsQueued_True()
+    {
+        var minted = new[] { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid() };
+
+        // A superset in a DIFFERENT order, with fetched-batch items interleaved:
+        // the identity is set membership, so this still validates.
+        var session = CreateSession();
+        session.NowPlayingQueue = new List<QueueItem>
+        {
+            new() { Id = Guid.NewGuid() },
+            new() { Id = minted[2] },
+            new() { Id = Guid.NewGuid() },
+            new() { Id = minted[0] },
+            new() { Id = minted[1] },
+        };
+
+        var continuation = new QueueContinuation { SourceType = "Album", UserId = Guid.Empty, MintedQueueItemIds = minted };
+        Assert.True(continuation.IsForLiveQueue(session));
+    }
+
+    /// <summary>JF-674: any minted id absent from the live queue (the later-play shape) fails.</summary>
+    [Fact]
+    public void QueueContinuation_IsForLiveQueue_AnyMintedIdMissing_False()
+    {
+        var minted = new[] { Guid.NewGuid(), Guid.NewGuid() };
+        var session = CreateSession();
+        session.NowPlayingQueue = new List<QueueItem> { new() { Id = minted[0] } };
+
+        var continuation = new QueueContinuation { SourceType = "Audiobook", UserId = Guid.Empty, MintedQueueItemIds = minted };
+        Assert.False(continuation.IsForLiveQueue(session));
+    }
+
+    private static IntentRequest CreateBookIntent(string book)
+        => new()
+        {
+            Type = "IntentRequest",
+            Intent = new Intent
+            {
+                Name = IntentNames.PlayBook,
+                Slots = new Dictionary<string, Slot> { ["book"] = new() { Value = book } }
+            }
+        };
 }

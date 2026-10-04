@@ -713,7 +713,9 @@ public sealed class AlbumPlayService
                     ParentId = album.Id,
                     StartIndex = albumResult.Items.Count,
                     TotalCount = albumResult.TotalRecordCount,
-                    UserId = jellyfinUser.Id
+                    UserId = jellyfinUser.Id,
+                    // JF-674: identity = the queue page just installed (see MintedQueueItemIds).
+                    MintedQueueItemIds = QueueContinuation.QueueIdsOf(queueItems)
                 });
         }
 
@@ -1072,7 +1074,12 @@ public sealed class AlbumPlayService
                     UserId = jellyfinUser!.Id,
                     // Cache the resolved tracks so continuation batches slice this list
                     // instead of re-resolving every linked child on each PlaybackNearlyFinished.
-                    CachedTracks = allTracks
+                    CachedTracks = allTracks,
+                    // JF-674: bind the entry to THIS queue page. The shuffle arm
+                    // re-mirrors the session queue into the shuffled order right
+                    // above; the identity is set-shaped, so the ordered capture
+                    // validates against the shuffled install equally.
+                    MintedQueueItemIds = QueueContinuation.QueueIdsOf(queueItems)
                 });
         }
 

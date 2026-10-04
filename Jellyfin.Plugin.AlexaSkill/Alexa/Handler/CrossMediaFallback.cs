@@ -400,7 +400,9 @@ public sealed class CrossMediaFallback
                     TotalCount = int.MaxValue,
                     UserId = jellyfinUser.Id,
                     SortOrder = PopularitySort,
-                    Shuffle = _config.ShuffleArtistSongs
+                    Shuffle = _config.ShuffleArtistSongs,
+                    // JF-674: identity = the queue page just installed (see MintedQueueItemIds).
+                    MintedQueueItemIds = QueueContinuation.QueueIdsOf(queueItems)
                 });
         }
 
