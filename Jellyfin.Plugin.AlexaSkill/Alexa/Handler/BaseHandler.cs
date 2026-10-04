@@ -1122,6 +1122,15 @@ public abstract class BaseHandler
     /// - Confirm: returns "Did you mean X?" prompt via disambiguation session
     /// - AutoPlay: invokes playFunc with the closest match and returns an announcement response
     /// Returns (SuggestionHandled, response) when a suggestion was made, or (NotFound, null) when no close candidate exists.
+    /// The NotFound outcome (best SCORED candidate below the EFFECTIVE suggestion
+    /// threshold, FuzzyMatcher.GetSuggestionThreshold(user): the per-user
+    /// FuzzySuggestionThreshold override, default 40, config range 0-100; or
+    /// nothing scored at all, the length-band null) is the gate most
+    /// AskFirstMatch callers' candidate lists pass through, which is why
+    /// those lists are sub-threshold among scored candidates; see
+    /// DisambiguationHelper.FirstMatchStateCap for the JF-735 verdict that
+    /// rests on it (changing the threshold, the length band, or the outcome
+    /// set invalidates it).
     /// The auto-play delegate is async (JF-538) so video-launch sites can send the
     /// JF-501 progressive announce inside the play builder before the launch response
     /// is built; delegates that only record a side effect wrap their null result in

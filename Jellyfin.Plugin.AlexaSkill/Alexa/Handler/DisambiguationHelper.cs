@@ -53,6 +53,11 @@ internal static class DisambiguationHelper
 
     /// <summary>
     /// Build a disambiguation Ask response for the first match.
+    /// JF-735 verdict: the STATE list is truncated at
+    /// <see cref="FirstMatchStateCap"/> on purpose (no overflow hint, unlike
+    /// AskMultipleArtists); the defense and the enforced caller census live on
+    /// that constant. Do not widen the state or add a hint here without
+    /// re-weighing there.
     /// </summary>
     /// <param name="matches">The list of candidate matches.</param>
     /// <param name="mediaType">The media type being disambiguated.</param>
@@ -63,7 +68,7 @@ internal static class DisambiguationHelper
         string mediaType,
         string locale)
     {
-        var matchList = matches.Take(3).Select(m => new MatchInfo { Id = m.Id.ToString(), Name = m.Name }).ToList();
+        var matchList = matches.Take(FirstMatchStateCap).Select(m => new MatchInfo { Id = m.Id.ToString(), Name = m.Name }).ToList();
         int index = 0;
 
         SkillResponse response = SpeechBuilder.AskLocalized(
@@ -84,6 +89,11 @@ internal static class DisambiguationHelper
 
     /// <summary>
     /// Build a disambiguation Ask response for the first match, with optional APL carousel.
+    /// JF-735 verdict: the STATE list is truncated at
+    /// <see cref="FirstMatchStateCap"/> on purpose (no overflow hint, unlike
+    /// AskMultipleArtists); the defense and the enforced caller census live on
+    /// that constant. Do not widen the state or add a hint here without
+    /// re-weighing there.
     /// </summary>
     /// <param name="matches">The list of candidate matches with optional art URLs.</param>
     /// <param name="mediaType">The media type being disambiguated.</param>
@@ -96,7 +106,7 @@ internal static class DisambiguationHelper
         string locale,
         Context? context = null)
     {
-        var matchList = matches.Take(3).Select(m => new MatchInfo { Id = m.Id.ToString(), Name = m.Name, ArtUrl = m.ArtUrl }).ToList();
+        var matchList = matches.Take(FirstMatchStateCap).Select(m => new MatchInfo { Id = m.Id.ToString(), Name = m.Name, ArtUrl = m.ArtUrl }).ToList();
         int index = 0;
 
         SkillResponse response = SpeechBuilder.AskLocalized(
@@ -228,20 +238,73 @@ internal static class DisambiguationHelper
 
     /// <summary>
     /// The maximum number of candidate names the multi-artist ask speaks in one
-    /// breath (JF-707; the same count AskFirstMatch truncates at, though
-    /// deliberately NOT a shared constant, see below): the
-    /// DisambiguateMultipleArtists string was designed for the two-name shape,
-    /// and a long same-first-word family in one breath is incomprehensible.
-    /// Only the SPOKEN list is capped: the cycling state keeps every match, so
-    /// a rank beyond the cap is not spoken up front but stays reachable via
-    /// DisambiguateNext, which names it at its own turn. AskFirstMatch's
-    /// Take(3) truncates the STATE list as well, and the two constants stay
-    /// unlinked on purpose: its callers pass progressively weaker fuzzy
-    /// candidates, while this builder's unbounded caller (the JF-690 ER gate)
-    /// feeds exact library-name resolutions where every entry is a real
-    /// candidate; the counts coincide today but nothing enforces that.
+    /// breath (JF-707): the DisambiguateMultipleArtists string was designed for
+    /// the two-name shape, and a long same-first-word family in one breath is
+    /// incomprehensible. Only the SPOKEN list is capped: the cycling state
+    /// keeps every match, so a rank beyond the cap is not spoken up front but
+    /// stays reachable via DisambiguateNext, which names it at its own turn.
+    /// AskFirstMatch instead truncates its STATE at the same count (3); the
+    /// two constants are deliberately NOT shared, and that asymmetry was
+    /// re-weighed and kept in JF-735 (the full defense and the enforced caller
+    /// census live on <see cref="FirstMatchStateCap"/>).
     /// </summary>
     internal const int MultipleArtistsSpeakCap = 3;
+
+    /// <summary>
+    /// The maximum number of candidates AskFirstMatch keeps in its
+    /// disambiguation STATE: a rank past it is never spoken, never reachable
+    /// through the yes/no cycle, and never hinted. That is DELIBERATE,
+    /// re-weighed and kept in JF-735, and it is the intentional opposite of
+    /// <see cref="MultipleArtistsSpeakCap"/>, which caps only SPEECH: that
+    /// builder's unbounded caller (the JF-690 ER gate) feeds exact
+    /// library-name resolutions where every entry is a real candidate, so rank
+    /// 4+ must stay reachable and hinted (JF-729), while AskFirstMatch's
+    /// multi-candidate callers are the opposite shape and the defense is
+    /// structural, not a taste call: every one of them except PlayAlbum's
+    /// direct-search leg reaches the ask only through
+    /// BaseHandler.HandleFuzzyMiss's NotFound outcome, which fires when the
+    /// best SCORED candidate is below the EFFECTIVE suggestion threshold
+    /// (FuzzyMatcher.GetSuggestionThreshold(user): the per-user
+    /// FuzzySuggestionThreshold override, default 40, config range 0-100) or
+    /// nothing was scored at all. FuzzyMatcher.FindBestMatchWithScore returns
+    /// 100 for an exact name and ContainmentScore (90) whenever either string
+    /// contains the other, in BOTH directions (the JF-377 root-cause lock,
+    /// pinned in FuzzyMatcherTests), so at the DEFAULT threshold a genuine
+    /// exact or containment candidate the scorer SCORES diverts the flow to
+    /// auto-play or the Confirm ask: among scored candidates, a NotFound
+    /// list's rank-4+ tail is sub-threshold noise by construction. The
+    /// threshold-config exception: a user-configured
+    /// FuzzySuggestionThreshold above 90 admits a
+    /// scored 90-class containment candidate into a NotFound list, so the
+    /// construction holds at the default, not unconditionally. The narrow
+    /// scorer exception is the length band (maxLenDiff): an UNSCORED
+    /// containment-class candidate, a very short query inside names longer
+    /// than the query by more than max(2 x query length, 15), can sit in a
+    /// NotFound list. The band is ONE-DIRECTIONAL by arithmetic, not
+    /// symmetry: it scales on the QUERY length (maxLenDiff is always >= the
+    /// query length), so only candidates LONGER than the query can be
+    /// skipped; a candidate shorter than the query is never band-excluded,
+    /// and any either-direction containment hit it would score lands at
+    /// ContainmentScore (90) and diverts to auto-play or the Confirm ask,
+    /// so it cannot sit unscored in a NotFound list. The verdict
+    /// keeps despite that corner because the band is pre-existing
+    /// FuzzyMatcher recall behavior shared by every acceptance surface (not
+    /// something this cap adds), and at nine of the ten sites the binding
+    /// truncation is the caller's own Take(3) regardless. Nine of the ten
+    /// multi-candidate callers additionally pre-truncate with their own
+    /// Take(3) at the call site, so this cap is a backstop (the one
+    /// untruncated caller: PlayPodcastIntentHandler's multi-candidate leg).
+    /// That caller census is ENFORCED by AskFirstMatchCallerCensusTests (the
+    /// WarmingGateCoverageTests pattern): a new AskFirstMatch caller fails
+    /// that test's roster until the census is re-weighed here. The two
+    /// caller-side legs where a dropped rank-4+ candidate is user-relevant
+    /// despite all that (PlayAlbum's alphabetically ordered direct search
+    /// hits, where the exact album name can sit past rank 3, and PlayPodcast's
+    /// search-relevant sub-threshold tail) are filed as JF-743, as is the band-corner
+    /// shape above: a helper-side state change cannot reach a caller that
+    /// never passes rank 4 past its own Take(3).
+    /// </summary>
+    internal const int FirstMatchStateCap = 3;
 
     /// <summary>
     /// Build the multi-artist disambiguation Ask (JF-420.2 shape: plain name list,
