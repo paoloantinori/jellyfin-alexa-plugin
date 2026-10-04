@@ -263,17 +263,27 @@ internal static class DisambiguationHelper
     /// structural, not a taste call: every one of them except PlayAlbum's
     /// direct-search leg reaches the ask only through
     /// BaseHandler.HandleFuzzyMiss's NotFound outcome, which fires when the
-    /// best SCORED candidate is below SuggestionThreshold (40) or nothing was
-    /// scored at all. FuzzyMatcher.FindBestMatchWithScore returns 100 for an
-    /// exact name and ContainmentScore (90) whenever either string contains
-    /// the other, in BOTH directions (the JF-377 root-cause lock, pinned in
-    /// FuzzyMatcherTests), so a genuine exact or containment candidate the
-    /// scorer SCORES diverts the flow to auto-play or the Confirm ask: among
-    /// scored candidates, a NotFound list's rank-4+ tail is sub-40 noise by
-    /// construction. The narrow exception is the scorer's length band
-    /// (maxLenDiff): an UNSCORED containment-class candidate, a very short
-    /// query inside names longer than the query by more than
-    /// max(2 x query length, 15), can sit in a NotFound list. The verdict
+    /// best SCORED candidate is below the EFFECTIVE suggestion threshold
+    /// (FuzzyMatcher.GetSuggestionThreshold(user): the per-user
+    /// FuzzySuggestionThreshold override, default 40, config range 0-100) or
+    /// nothing was scored at all. FuzzyMatcher.FindBestMatchWithScore returns
+    /// 100 for an exact name and ContainmentScore (90) whenever either string
+    /// contains the other, in BOTH directions (the JF-377 root-cause lock,
+    /// pinned in FuzzyMatcherTests), so at the DEFAULT threshold a genuine
+    /// exact or containment candidate the scorer SCORES diverts the flow to
+    /// auto-play or the Confirm ask: among scored candidates, a NotFound
+    /// list's rank-4+ tail is sub-threshold noise by construction. The
+    /// threshold-config exception: a user-configured
+    /// FuzzySuggestionThreshold above 90 (the config accepts 0-100) admits a
+    /// scored 90-class containment candidate into a NotFound list, so the
+    /// construction holds at the default, not unconditionally. The narrow
+    /// scorer exception is the length band (maxLenDiff): an UNSCORED
+    /// containment-class candidate can sit in a NotFound list in EITHER
+    /// length direction, because the band cuts on the ABSOLUTE length
+    /// difference (more than max(2 x query length, 15)): a very short query
+    /// inside far longer names, and symmetrically a much shorter NAME inside
+    /// a long spoken query (spoken "u2 live from red rocks arena" against
+    /// the item "U2"), both escape scoring. The verdict
     /// keeps despite that corner because the band is pre-existing
     /// FuzzyMatcher recall behavior shared by every acceptance surface (not
     /// something this cap adds), and at nine of the ten sites the binding

@@ -75,9 +75,15 @@ THE EVIDENCE (all three axes the task demanded):
    containment candidate 90 and an exact name 100, while every multi-candidate
    AskFirstMatch caller except PlayAlbum's direct-search leg reaches the ask
    only through HandleFuzzyMiss's NotFound outcome (best SCORED candidate below
-   SuggestionThreshold 40): a scored exact/containment candidate diverts to
+   the EFFECTIVE suggestion threshold, FuzzyMatcher.GetSuggestionThreshold(user):
+   per-user FuzzySuggestionThreshold override, default 40, config range 0-100):
+   at the default threshold a scored exact/containment candidate diverts to
    auto-play or the Confirm ask and never lands in a NotFound list. The task's
-   hypothetical candidate therefore cannot exist among scored candidates.
+   hypothetical candidate therefore cannot exist among scored candidates at the
+   default; the one config exception is a user-set threshold above 90, which
+   CAN admit a scored 90-class containment candidate into a NotFound list (the
+   construction is default-conditional, not absolute; the gate-marker round
+   corrected this phrasing here and on the const's doc).
 2. Candidate ordering: the multi-candidate lists are NOT score-sorted (tier-1
    in library order, PlayAlbum alphabetical by JF-427 design), but that cuts
    FOR the decline: with the whole list sub-40 among scored candidates, no

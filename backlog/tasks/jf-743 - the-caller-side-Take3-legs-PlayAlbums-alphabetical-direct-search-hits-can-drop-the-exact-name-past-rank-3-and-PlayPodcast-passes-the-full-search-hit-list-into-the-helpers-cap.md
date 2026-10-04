@@ -67,13 +67,18 @@ BAND CORNER (JF-735 code-review finding, filed here because it widens both
 legs' user-relevance case without changing the helper verdict): the
 NotFound-gating premise has a narrow exception. FuzzyMatcher's length band
 skips candidates whose name differs from the query by more than
-max(2 x query length, 15) BEFORE scoring, and HandleFuzzyMiss treats the
-resulting null as NotFound, so an UNSCORED containment-class candidate (a
-very short spoken query inside much longer names, e.g. "u2" against
-"U2 Live from Red Rocks Arena") can sit in a NotFound-gated AskFirstMatch
-list; among SCORED candidates the sub-40-noise invariant holds exactly (an
-exact name scores 100 and either-string-contains-the-other scores 90, both
-diverting to auto-play or the Confirm ask). The JF-735 verdict kept the cap
+max(2 x query length, 15) BEFORE scoring (the cut is on the ABSOLUTE length
+difference), and HandleFuzzyMiss treats the resulting null as NotFound, so
+an UNSCORED containment-class candidate can sit in a NotFound-gated
+AskFirstMatch list in EITHER length direction: a very short spoken query
+inside much longer names (e.g. "u2" against "U2 Live from Red Rocks
+Arena"), and symmetrically a much shorter NAME inside a long spoken query
+(e.g. spoken "u2 live from red rocks arena" against the item "U2"). Among
+SCORED candidates the sub-threshold-noise invariant holds at the default
+threshold (an exact name scores 100 and either-string-contains-the-other
+scores 90, both diverting to auto-play or the Confirm ask); the one config
+exception is a user-set FuzzySuggestionThreshold above 90, which can admit a
+scored 90-class candidate into a NotFound list. The JF-735 verdict kept the cap
 despite the corner (pre-existing band behavior shared by every acceptance
 surface; the binding truncation at nine of ten sites is the caller-side
 Take(3) anyway), but a caller-side fix here is the natural place to absorb

@@ -100,8 +100,8 @@ public class DisambiguationHelperTests
     // this pin locks it; the full defense, the enforced caller census, and the
     // JF-743 filing live on that constant's doc. Do not widen the state
     // without re-weighing there. (This 2-tuple overload has zero production
-    // callers - every call site uses the ArtUrl overload - but it is pinned
-    // here and by AskFirstMatch_OriginalOverload_StillWorks below as public
+    // callers; every call site uses the ArtUrl overload. It is pinned here
+    // and by AskFirstMatch_OriginalOverload_StillWorks below as public
     // helper surface; removing it would be a separate cleanup.)
     [Fact]
     public void AskFirstMatch_TruncatesStateAtThree_DeliberateWeakTailCap()
