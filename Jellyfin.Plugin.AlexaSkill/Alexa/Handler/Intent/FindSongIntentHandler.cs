@@ -233,59 +233,42 @@ public class FindSongIntentHandler : BaseHandler
             // SlotValueHelper owns the full contract).
             string artistSearchInput = SlotValueHelper.GetCanonicalValue(intentRequest, "musician") ?? artistInput;
 
-            // JF-702: the shared multi-value-ER gate (it owns the full contract).
-            // This leg is a FIRST invocation: no FindSongSessionData exists yet,
-            // so the JF-690 deferral's force-route interplay cannot occur (the ask
-            // would be the first session state written, the plain JF-420.2
-            // machinery; the FindSong flow simply never opens). The ask's confirm
-            // leg plays the artist instead of returning to the keywords elicit
-            // (the accepted contract shift, same as every adopter); a stale-catalog
-            // collapse resolves the survivor INTO the flow, which continues to the
-            // keywords prompt with a proven ArtistId.
-            // JF-702 (code-review): restricted to the keywords-empty shape, the
-            // constraint principle every other site applies. A titleKeywords
-            // value in the SAME utterance is in-hand content the confirm leg
-            // cannot preserve, so that shape keeps today's rank-#1 resolution
-            // exactly (the handler re-elicits keywords on it either way).
-            // JF-448 caller-pins-first + JF-715 pool threading (the composite
-            // sites' shape): the gate, its pool, and the fall-through search
-            // below read ONE publish. The UNGUARDED Pin (code-review round): a
-            // warming index pins to a NOT-READY view, preserving the JF-419.2
-            // choke point this handler relies on (it gates only the song index
-            // at entry; the artist paths are SearchAsync's EnsureReady).
-            IArtistIndex? pinnedArtistIndex = _artistIndex.Pin();
-            MultiValueErDisambiguation.ErArtistArbitration arbitration = default;
-            if (string.IsNullOrWhiteSpace(titleKeywords))
+            // JF-702/JF-715/JF-742 (the artist composite owns the pin, the gate,
+            // and the fall-through search). This leg is a FIRST invocation: no
+            // FindSongSessionData exists yet, so the JF-690 deferral's force-route
+            // interplay cannot occur (the ask would be the first session state
+            // written, the plain JF-420.2 machinery; the FindSong flow simply never
+            // opens). The ask's confirm leg plays the artist instead of returning
+            // to the keywords elicit (the accepted contract shift, same as every
+            // adopter); a stale-catalog collapse resolves the survivor INTO the
+            // flow, which continues to the keywords prompt with a proven ArtistId.
+            // The gate runs only on the keywords-EMPTY shape (the code-review
+            // constraint principle every other site applies, expressed through the
+            // composite's arbitrate axis): a titleKeywords value in the SAME
+            // utterance is in-hand content the confirm leg cannot preserve, ANY
+            // value, a generic word included (a stricter predicate than the song
+            // sites' generic-word probe), so that shape keeps today's rank-#1
+            // resolution exactly. The composite's UNGUARDED pin preserves the
+            // JF-419.2 choke point this handler relies on (it gates only the song
+            // index at entry; the artist paths are SearchAsync's EnsureReady).
+            var gate = await MultiValueErDisambiguation.TryArbitrateOrSearchArtistsAsync(
+                intentRequest, user, _artistIndex, _libraryManager, Logger, locale, artistSearchInput,
+                arbitrate: string.IsNullOrWhiteSpace(titleKeywords),
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+            if (gate.Ask != null)
             {
-                arbitration = ArbitrateMusicianMultiValue(intentRequest, user, pinnedArtistIndex, locale);
-                if (arbitration.Ask != null)
-                {
-                    return arbitration.Ask;
-                }
+                return gate.Ask;
             }
 
-            if (arbitration.ResolvedArtist is { } firstTurnSurvivor)
+            if (gate.Artists.Count > 0)
             {
-                sessionData.ArtistId = firstTurnSurvivor.Id;
-                sessionData.ArtistName = firstTurnSurvivor.Name;
+                sessionData.ArtistId = gate.Artists[0].Id;
+                sessionData.ArtistName = gate.Artists[0].Name;
+                Logger.LogDebug("FindSong: resolved artist '{Input}' to '{Name}' (Id={Id})", artistInput, gate.Artists[0].Name, gate.Artists[0].Id);
             }
             else
             {
-                IReadOnlyList<BaseItem> artists = await ArtistSearch.SearchAsync(
-                    artistSearchInput, user, _libraryManager, pinnedArtistIndex, Logger,
-                    (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", ct),
-                    locale, cancellationToken, preloadedPool: arbitration.Pool).ConfigureAwait(false);
-
-                if (artists.Count > 0)
-                {
-                    sessionData.ArtistId = artists[0].Id;
-                    sessionData.ArtistName = artists[0].Name;
-                    Logger.LogDebug("FindSong: resolved artist '{Input}' to '{Name}' (Id={Id})", artistInput, artists[0].Name, artists[0].Id);
-                }
-                else
-                {
-                    Logger.LogDebug("FindSong: could not resolve artist '{Input}', will search without artist filter", artistInput);
-                }
+                Logger.LogDebug("FindSong: could not resolve artist '{Input}', will search without artist filter", artistInput);
             }
 
             return ElicitAnswer(ResponseStrings.Get("FindSongPromptKeywords", locale),
@@ -338,61 +321,45 @@ public class FindSongIntentHandler : BaseHandler
             ? SlotValueHelper.GetCanonicalValue(intentRequest, "musician") ?? artistInput
             : artistInput;
 
-        // JF-702: the shared multi-value-ER gate, on the musician-supplied leg
+        // JF-702/JF-715/JF-742 (the artist composite owns the pin, the gate, and
+        // the fall-through search). The gate runs on the musician-supplied leg
         // only (the input whose slot carries arbitrable ER; the elicit captures
-        // transcript answers into titleKeywords, a SearchQuery slot with no ER).
-        // The JF-690 deferral feared the ask would set disambig_* ALONGSIDE
-        // FindSongSessionData, dead-ending the yes/no under the HandlerSelector
-        // force-route; that is not the current machinery: AskMultipleArtists
-        // marks every OTHER flow's keys for removal (ConversationalFlows, JF-398),
-        // so the interceptor strips FindSongSessionData from the ask's session
-        // and the confirm/cycle turns route to Yes/NoIntentHandler normally (the
-        // coexistence pin lives in the JF-702 adoption suite). The ask therefore
-        // supersedes the song search with the artist disambiguation, the same
-        // newest-flow-wins rule every open-flow ask already follows; the stored
-        // keywords ride the superseded flow state and are dropped with it (the
-        // documented cost of the shift); a collapse resolves the survivor INTO
-        // the flow and the song search proceeds.
-        // JF-448 caller-pins-first + JF-715 pool threading (the composite sites'
-        // shape): the gate, its pool, and the fall-through search below read ONE
-        // publish; the UNGUARDED Pin preserves the JF-419.2 choke point (see the
-        // first-turn leg). The pin also covers the transcript leg (no musician
-        // slot), whose search keeps its own internal fetch (no gate ran, no pool
-        // shipped).
-        IArtistIndex? pinnedArtistIndex = _artistIndex.Pin();
-        MultiValueErDisambiguation.ErArtistArbitration arbitration = default;
-        if (!string.IsNullOrWhiteSpace(musician))
+        // transcript answers into titleKeywords, a SearchQuery slot with no ER),
+        // expressed through the composite's arbitrate axis. The JF-690 deferral
+        // feared the ask would set disambig_* ALONGSIDE FindSongSessionData,
+        // dead-ending the yes/no under the HandlerSelector force-route; that is
+        // not the current machinery: AskMultipleArtists marks every OTHER flow's
+        // keys for removal (ConversationalFlows, JF-398), so the interceptor
+        // strips FindSongSessionData from the ask's session and the confirm/cycle
+        // turns route to Yes/NoIntentHandler normally (the coexistence pin lives
+        // in the JF-702 adoption suite). The ask therefore supersedes the song
+        // search with the artist disambiguation, the same newest-flow-wins rule
+        // every open-flow ask already follows; the stored keywords ride the
+        // superseded flow state and are dropped with it (the documented cost of
+        // the shift); a collapse resolves the survivor INTO the flow and the song
+        // search proceeds. The composite's UNGUARDED pin preserves the JF-419.2
+        // choke point (see the first-turn leg) and covers the transcript leg (no
+        // musician slot), whose search keeps its own internal fetch (no gate ran,
+        // no pool shipped).
+        var gate = await MultiValueErDisambiguation.TryArbitrateOrSearchArtistsAsync(
+            intentRequest, user, _artistIndex, _libraryManager, Logger, locale, artistSearchInput,
+            arbitrate: !string.IsNullOrWhiteSpace(musician),
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (gate.Ask != null)
         {
-            arbitration = ArbitrateMusicianMultiValue(intentRequest, user, pinnedArtistIndex, locale);
-            if (arbitration.Ask != null)
-            {
-                return arbitration.Ask;
-            }
-
-            if (arbitration.ResolvedArtist is { } awaitingSurvivor)
-            {
-                sessionData.ArtistId = awaitingSurvivor.Id;
-                sessionData.ArtistName = awaitingSurvivor.Name;
-                return await SearchAndRespondAsync(request, context, user, session, locale, sessionData, cancellationToken).ConfigureAwait(false);
-            }
+            return gate.Ask;
         }
 
-        // Resolve the artist
-        IReadOnlyList<BaseItem> artists = await ArtistSearch.SearchAsync(
-            artistSearchInput, user, _libraryManager, pinnedArtistIndex, Logger,
-            (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", ct),
-            locale, cancellationToken, preloadedPool: arbitration.Pool).ConfigureAwait(false);
-
-        if (artists.Count == 0)
+        if (gate.Artists.Count == 0)
         {
             string notFoundMsg = ResponseStrings.Get("FindSongArtistNotFound", locale, artistInput);
             return ElicitAnswer(notFoundMsg,
                 sessionData, FindSongState.AwaitingArtist);
         }
 
-        // Artist found — store it and proceed to search
-        sessionData.ArtistId = artists[0].Id;
-        sessionData.ArtistName = artists[0].Name;
+        // Artist found (or the collapse survivor): store it and proceed to search
+        sessionData.ArtistId = gate.Artists[0].Id;
+        sessionData.ArtistName = gate.Artists[0].Name;
 
         return await SearchAndRespondAsync(request, context, user, session, locale, sessionData, cancellationToken).ConfigureAwait(false);
     }
@@ -853,33 +820,6 @@ public class FindSongIntentHandler : BaseHandler
         {
             return null;
         }
-    }
-
-    /// <summary>
-    /// JF-702: the ONE multi-value-ER arbitration entry for both musician legs
-    /// (first invocation and AwaitingArtist; the simplify round folded the
-    /// duplicated boilerplate and the collapse log literal here). JF-715:
-    /// returns the full arbitration so each leg also threads the zero-resolve
-    /// leg's Pool into its ArtistSearch.SearchAsync fall-through (the shared
-    /// pool-threading shape) and still logs the collapse once, so a log grep
-    /// cannot miss one leg.
-    /// </summary>
-    /// <param name="intentRequest">The intent request carrying the musician slot's ER.</param>
-    /// <param name="user">The plugin user.</param>
-    /// <param name="artistIndex">The caller-pinned artist index view (JF-448; the gate and the leg's fall-through search read one publish through it).</param>
-    /// <param name="locale">The request locale.</param>
-    /// <returns>The arbitration outcome (Ask to return verbatim, the collapse survivor, the gate's pool).</returns>
-    private MultiValueErDisambiguation.ErArtistArbitration ArbitrateMusicianMultiValue(
-        IntentRequest intentRequest, Entities.User user, IArtistIndex? artistIndex, string locale)
-    {
-        var arbitration = MultiValueErDisambiguation.TryArbitrate(
-            intentRequest, user, artistIndex, _libraryManager, Logger, locale);
-        if (arbitration.ResolvedArtist is { } survivor)
-        {
-            Logger.LogDebug("FindSong: multi-value ER collapsed to the single library artist '{Name}' (Id={Id})", survivor.Name, survivor.Id);
-        }
-
-        return arbitration;
     }
 
     /// <summary>
