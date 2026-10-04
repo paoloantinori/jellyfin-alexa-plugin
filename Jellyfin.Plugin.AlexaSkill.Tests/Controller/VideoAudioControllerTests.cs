@@ -1886,7 +1886,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
                 continuationBodies.Add(method);
             }
 
-            foreach ((int offset, int token) in CallInstructionOffsets(method))
+            foreach ((int offset, int token) in IlCallScanner.InstructionOperands(method, 0x28, 0x6F))
             {
                 if (token == backstopTokens[0])
                 {
@@ -1915,7 +1915,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         // helper's shape changed; update this pin).
         (MethodBase birthMethod, int backstopOffset) = birthCalls[0];
         int parkAssertOffset = -1;
-        foreach ((int offset, int token) in CallInstructionOffsets(birthMethod))
+        foreach ((int offset, int token) in IlCallScanner.InstructionOperands(birthMethod, 0x28, 0x6F))
         {
             if (IlCallScanner.TryResolveMethod(module, token) is { } callee
                 && callee.DeclaringType == typeof(Assert))
@@ -1945,23 +1945,27 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             "the birth call's argument must be a field load (ldfld) of the just-started endpoint task; the emission shape changed, update this pin consciously (JF-726 argument-identity tie)");
         int endpointFieldToken = BitConverter.ToInt32(birthIl, argumentLoadOffset + 1);
         bool argumentTiedToStartedEndpoint = false;
-        for (int i = 0; i + 5 <= birthIl.Length; i++)
+        // The stfld (0x7D) sites AND their callvirt (0x6F) predecessors via the
+        // SAME shared opcode-aware decode (JF-736 /simplify + gate-marker
+        // GM-F3: the first cut graduated the stfld scan but kept checking the
+        // predecessor through a raw storeOffset-5 fixed window; the decoder
+        // makes the real instruction boundary decodable, so no fixed-window
+        // assumption survives here).
+        (short Opcode, int OperandStart)? previous = null;
+        foreach ((_, short opcode, int operandStart, _) in IlCallScanner.Instructions(birthIl))
         {
-            if (birthIl[i] != 0x7D || BitConverter.ToInt32(birthIl, i + 1) != endpointFieldToken)
-            {
-                continue;
-            }
-
-            int invokeOffset = i - 5;
-            if (invokeOffset >= 0
-                && birthIl[invokeOffset] == 0x6F
-                && IlCallScanner.TryResolveMethod(module, BitConverter.ToInt32(birthIl, invokeOffset + 1)) is { } invoked
+            if (opcode == 0x7D
+                && BitConverter.ToInt32(birthIl, operandStart) == endpointFieldToken
+                && previous is { Opcode: 0x6F } prev
+                && IlCallScanner.TryResolveMethod(module, BitConverter.ToInt32(birthIl, prev.OperandStart)) is { } invoked
                 && invoked.Name == nameof(Action.Invoke)
                 && invoked.DeclaringType == typeof(Func<Task<ActionResult>>))
             {
                 argumentTiedToStartedEndpoint = true;
                 break;
             }
+
+            previous = (opcode, operandStart);
         }
 
         Assert.True(
@@ -1973,16 +1977,17 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             backstopBody != null,
             "the MarkEndpointFaultObserved methoddef did not resolve in its own module");
         // The exact combined constant, not a bits-contains mask (code-review
-        // RC4): the byte-walk's every-offset window can in principle surface
-        // a PHANTOM ldc.i4 (a 0x20 byte inside another instruction's operand),
-        // and for this one assert a phantom works in the GREEN direction,
-        // against the loud-only discipline. The exact value makes the phantom
-        // window a 4-byte exact match; the honest residual (a phantom still
-        // possible, in principle, in a tiny body) is why the real fix, an
-        // opcode-aware walk, is filed with the scanner hoist as JF-736.
+        // RC4). PHANTOM-WINDOW VERDICT (JF-736): the old every-offset window
+        // could surface a PHANTOM ldc.i4 (a 0x20 byte inside another
+        // instruction's operand bytes), and for this one assert a phantom
+        // worked in the GREEN direction, against the loud-only discipline.
+        // The graduated IlCallScanner.InstructionOperands walk is OPCODE-AWARE
+        // (it decodes instruction boundaries from the runtime's own opcode
+        // table), so only a real ldc.i4 instruction yields here; the residual
+        // the JF-726 review recorded is closed, not carried.
         int documentedOptions = (int)(TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
         Assert.True(
-            LdcI4Operands(backstopBody).Contains(documentedOptions),
+            IlCallScanner.LdcI4Operands(backstopBody).Contains(documentedOptions),
             $"the backstop's ContinueWith must pass TaskContinuationOptions.OnlyOnFaulted | ExecuteSynchronously (0x{documentedOptions:X}); without OnlyOnFaulted the continuation fires on every completion instead of observing the fault, re-creating the unobserved-fault stranding on the settle-budget timeout exit (JF-704/JF-726)");
 
         Assert.True(
@@ -2013,57 +2018,6 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Assert.True(
             receiverLoad < backstopMethodIl.Length && backstopMethodIl[receiverLoad] == 0x02,
             "MarkEndpointFaultObserved's body's first real instruction must load the endpointTask parameter (ldarg.0), the receiver of its one ContinueWith: a body loading anything else first has detached the backstop from the task it exists to observe (JF-726 gate-marker F2)");
-    }
-
-    /// <summary>
-    /// The (offset, operand) pairs of the call (0x28) / callvirt (0x6F)
-    /// instructions in the method body, in byte order: the one capability the
-    /// shared <see cref="IlCallScanner"/> does not expose (its token walks
-    /// drop the offset), needed by the JF-726 birth-ordering pin above, for
-    /// which the backstop call preceding the park assert is an ordering fact.
-    /// Same operand-window discipline as the scanner: opcodes are checked at
-    /// every byte offset, so a coincidental byte match inside another
-    /// instruction's operand can only ADD a candidate and fail loudly, never
-    /// hide one.
-    /// </summary>
-    private static IEnumerable<(int Offset, int Token)> CallInstructionOffsets(MethodBase method)
-        => InstructionOperands(method, 0x28, 0x6F);
-
-    /// <summary>
-    /// The int32 operands of the ldc.i4 (0x20) instructions in the method
-    /// body: the form a small enum-constant argument (the JF-726 backstop's
-    /// <see cref="TaskContinuationOptions"/>) compiles to. Scanning only the
-    /// 0x20 encoding is TOTAL for the pin's fact, not an encoding gamble:
-    /// any constant carrying the OnlyOnFaulted bits (0x50000 = 327680)
-    /// short encodings: any NON-NEGATIVE enum-folded constant carrying OnlyOnFaulted
-    /// (0x50000) exceeds them (sign-extended negatives like ldc.i4.m1 carry the bits yet
-    /// ARE short-encodable; the exact-value fact stays safe - 0xD0000 is positive).
-    /// family at 8), so the compiler can only emit it as ldc.i4.
-    /// </summary>
-    private static IEnumerable<int> LdcI4Operands(MethodBase method)
-        => InstructionOperands(method, 0x20).Select(instruction => instruction.Operand);
-
-    /// <summary>
-    /// The byte-walk under <see cref="CallInstructionOffsets"/> and
-    /// <see cref="LdcI4Operands"/>: operand ints for the given single-byte
-    /// opcodes whose operand is a 4-byte int32 (call, callvirt, ldc.i4).
-    /// </summary>
-    private static IEnumerable<(int Offset, int Operand)> InstructionOperands(MethodBase method, params byte[] opcodes)
-    {
-        MethodBody? body = method.GetMethodBody();
-        if (body == null)
-        {
-            yield break;
-        }
-
-        byte[] il = body.GetILAsByteArray() ?? Array.Empty<byte>();
-        for (int i = 0; i + 5 <= il.Length; i++)
-        {
-            if (opcodes.Contains(il[i]))
-            {
-                yield return (i, BitConverter.ToInt32(il, i + 1));
-            }
-        }
     }
 
     /// <summary>

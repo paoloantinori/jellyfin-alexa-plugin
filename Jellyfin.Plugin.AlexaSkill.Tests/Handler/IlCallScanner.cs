@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.Reflection.Emit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
@@ -12,10 +13,10 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// copy of the walking logic. It walks a method body's IL bytes and reports the
 /// metadata token of every call (0x28) / callvirt (0x6F) instruction, and since
 /// JF-631 also every newobj (0x73) construction.
-/// The operand window is checked at every byte offset, so a
-/// coincidental token match inside another instruction's operand could only ADD
-/// a type to a discovered set, which fails a roster equality loudly; it can never
-/// silently hide a real caller. Uses only MethodBase.GetMethodBody IL bytes and
+/// The operand walk is OPCODE-AWARE since JF-736 (it decodes instruction
+/// boundaries via the runtime's own <see cref="OpCodes"/> table), so only real
+/// instructions of the requested opcode yield; a decode that lost a real site
+/// would fail a roster equality loudly, never hide one. Uses only MethodBase.GetMethodBody IL bytes and
 /// MetadataToken resolution, so no IL disassembler dependency is needed.
 /// Since JF-634 it also owns the walk scaffolding the roster scans iterate
 /// (the flat assembly walk <see cref="DeclaredMethods"/>, the handler base-chain
@@ -140,10 +141,10 @@ internal static class IlCallScanner
     /// <summary>
     /// The metadata tokens of every newobj (0x73) instruction in the method body
     /// (empty for abstract/extern methods with no IL body), the construction
-    /// counterpart of <see cref="CallTokens"/> with the same operand-window
-    /// discipline: a coincidental token match inside another instruction's
-    /// operand can only ADD a construction site, which fails a roster equality
-    /// loudly; it can never silently hide a real site.
+    /// counterpart of <see cref="CallTokens"/> over the same opcode-aware walk
+    /// (<see cref="InstructionOperands"/>): a decode that lost a real
+    /// construction site fails a roster equality loudly; it can never silently
+    /// hide one.
     /// BOUNDARY (JF-631 review): discovery is NEWOBJ-ONLY - late-bound construction
     /// (Activator.CreateInstance, generic new() constraints, Expression.Compile,
     /// deserialized templates) emits no newobj and is invisible to these scans.
@@ -206,12 +207,32 @@ internal static class IlCallScanner
     }
 
     /// <summary>
-    /// The ONE byte-walk under <see cref="CallTokens"/> and <see cref="NewobjTokens"/>:
-    /// operand tokens for the given opcodes, checked at every byte offset so a
-    /// coincidental byte match can only ADD a candidate (the loud-only failure
-    /// philosophy this scanner follows).
+    /// The (offset, operand) pairs of every instruction whose SINGLE-BYTE opcode
+    /// is one of the given opcodes and whose operand is a 4-byte int32 (call,
+    /// callvirt, newobj, ldc.i4), in IL order (empty for abstract/extern methods
+    /// with no IL body). JF-736 graduation: the JF-726 pin carried this walk as a
+    /// private near-verbatim copy of <see cref="OperandTokens"/> plus the one
+    /// capability the scanner lacked, the OFFSET.
+    /// OPCODE-AWARE WINDOW (the JF-736 phantom-window fix): the walk decodes
+    /// instruction boundaries (opcode length and operand size from the runtime's
+    /// own <see cref="OpCodes"/> table, the switch opcode's variable operand
+    /// included) instead of checking the opcode byte at EVERY byte offset. The
+    /// old every-offset window could surface a PHANTOM candidate (a token byte
+    /// sequence inside another instruction's operand bytes). Roster EQUALITY
+    /// consumers were safe by direction: a phantom ADD failed the equality
+    /// loudly. Every BOOL/Contains consumer could pass GREEN on one, though:
+    /// this scanner's own ContainsCallToToken/CallsGetter/ConstructsType family
+    /// AND the JF-726 ldc pin's exact-value Contains alike. The decoded walk
+    /// closes that residual for all of them: only a real instruction of the
+    /// requested opcode yields. Real instructions cannot be hidden by this
+    /// either: a malformed or unknown opcode THROWS (never a silent truncation,
+    /// JF-736 code-review F1), and a decode that lost a real site fails the
+    /// roster equality loudly, the same loud-only philosophy as before.
     /// </summary>
-    private static IEnumerable<int> OperandTokens(MethodBase method, params byte[] opcodes)
+    /// <param name="method">The method whose IL to walk.</param>
+    /// <param name="opcodes">The single-byte opcodes to report; an opcode that does not carry a 4-byte int32 operand simply never yields (the loud-only discipline: the downstream roster equality or Contains fails loudly).</param>
+    /// <returns>The (IL byte offset, int32 operand) pairs, in IL order.</returns>
+    internal static IEnumerable<(int Offset, int Operand)> InstructionOperands(MethodBase method, params byte[] opcodes)
     {
         MethodBody? body = method.GetMethodBody();
         if (body == null)
@@ -220,14 +241,146 @@ internal static class IlCallScanner
         }
 
         byte[] il = body.GetILAsByteArray() ?? Array.Empty<byte>();
-        for (int i = 0; i + 5 <= il.Length; i++)
+        foreach ((int offset, short opcode, int operandStart, int operandBytes) in Instructions(il))
         {
-            if (opcodes.Contains(il[i]))
+            // Single-byte opcodes key their own byte (0..0xFF, positive); the
+            // 0xFE00 | second-byte form is a negative short, so >= 0 is exactly
+            // the single-byte family.
+            if (opcode >= 0 && operandBytes == 4 && opcodes.Contains((byte)opcode))
             {
-                yield return BitConverter.ToInt32(il, i + 1);
+                yield return (offset, BitConverter.ToInt32(il, operandStart));
             }
         }
     }
+
+    /// <summary>
+    /// The ONE instruction-boundary decode (JF-736 code-review F5: the walk's
+    /// advance arithmetic is directly consumable, so a test can pin that it
+    /// consumes every real IL body exactly). Yields one entry per instruction,
+    /// in order, from offset 0 to the stream end; the switch opcode's variable
+    /// operand is measured per instance. MALFORMED INPUT IS LOUD: a truncated
+    /// two-byte opcode, an opcode missing from the runtime's own
+    /// <see cref="OpCodes"/> table, a truncated switch count, a switch claiming
+    /// more target bytes than remain, or ANY operand overrunning the stream
+    /// end THROWS instead of silently truncating the candidate list (JF-736
+    /// code-review F1/F3 and the final-pass overrun hole); a whole stream from
+    /// GetMethodBody never contains any of them.
+    /// </summary>
+    /// <param name="il">The raw IL bytes of a method body.</param>
+    /// <returns>The (offset, opcode value, operand start, operand byte count) per instruction; two-byte opcodes report 0xFE00 | second byte.</returns>
+    internal static IEnumerable<(int Offset, short Opcode, int OperandStart, int OperandBytes)> Instructions(byte[] il)
+    {
+        int offset = 0;
+        while (offset < il.Length)
+        {
+            short opcodeValue = il[offset];
+            int opcodeLength = 1;
+            if (opcodeValue == 0xFE)
+            {
+                if (offset + 1 >= il.Length)
+                {
+                    throw new InvalidOperationException(
+                        $"truncated two-byte opcode at IL offset {offset}; a whole GetMethodBody stream never ends inside one");
+                }
+
+                opcodeValue = (short)(0xFE00 | il[offset + 1]);
+                opcodeLength = 2;
+            }
+
+            if (!OperandByteSizes.TryGetValue(opcodeValue, out int operandBytes))
+            {
+                throw new InvalidOperationException(
+                    $"unknown opcode 0x{(ushort)opcodeValue:X4} at IL offset {offset}: the runtime's own OpCodes table has no entry, so its operand size cannot be decoded (valid GetMethodBody IL never contains one)");
+            }
+
+            int operandStart = offset + opcodeLength;
+            if (operandBytes < 0)
+            {
+                // The switch operand is per-instance: 4 * (count + 1) bytes,
+                // measured in long so a malformed huge count cannot overflow
+                // into a negative advance (which would walk backwards).
+                long bytes = 4L * (BitConverter.ToUInt32(il, operandStart) + 1L);
+                if (operandStart + bytes > il.Length)
+                {
+                    throw new InvalidOperationException(
+                        $"switch at IL offset {offset} claims {bytes} operand bytes but only {il.Length - operandStart} remain; a whole GetMethodBody stream never ends inside an operand");
+                }
+
+                operandBytes = (int)bytes;
+            }
+            else if (operandStart + operandBytes > il.Length)
+            {
+                throw new InvalidOperationException(
+                    $"truncated operand at IL offset {offset}: {operandBytes} operand bytes claimed, {il.Length - operandStart} remain; a whole GetMethodBody stream never ends inside an operand");
+            }
+
+            yield return (offset, opcodeValue, operandStart, operandBytes);
+            offset = operandStart + operandBytes;
+        }
+    }
+
+    /// <summary>
+    /// The int32 operands of the ldc.i4 (0x20) instructions in the method body
+    /// (JF-736 hoist: the JF-726 pin's private copy), the form an enum-constant
+    /// argument compiles to when it exceeds the short encodings. TOTALITY for
+    /// the pin's fact (the argument the deleted private helper's doc carried,
+    /// restored by the JF-736 final review): scanning only the 0x20 encoding
+    /// is complete for any NON-NEGATIVE constant carrying the JF-726
+    /// TaskContinuationOptions bits (0x50000 and up), because those exceed the
+    /// short encodings (ldc.i4.s tops out at 127) and the compiler must emit
+    /// the full form; sign-extended negatives (ldc.i4.m1 and friends) CAN carry
+    /// such bits short-encoded, but the pinned combined value is positive
+    /// (0xD0000), so a Contains over these operands is total for it.
+    /// A thin delegate to <see cref="OperandTokens"/> (gate-marker GM-F4): the
+    /// ONE token projection, not a re-implementation beside it.
+    /// </summary>
+    /// <param name="method">The method whose IL to walk.</param>
+    /// <returns>The ldc.i4 operands, in IL order.</returns>
+    internal static IEnumerable<int> LdcI4Operands(MethodBase method)
+        => OperandTokens(method, 0x20);
+
+    /// <summary>
+    /// The operand byte size per opcode value (single-byte opcodes keyed by
+    /// their byte, two-byte opcodes as 0xFE00 | second byte), derived from the
+    /// runtime's own <see cref="OpCodes"/> table so no hand-maintained ECMA
+    /// table can drift; the switch opcode is keyed to -1 and its variable
+    /// operand is measured inline in <see cref="Instructions"/>.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<short, int> OperandByteSizes =
+        typeof(OpCodes).GetFields(BindingFlags.Public | BindingFlags.Static)
+            .Select(field => field.GetValue(null))
+            .OfType<OpCode>()
+            .ToDictionary(op => op.Value, op => OperandByteSizeOf(op));
+
+    /// <summary>
+    /// The operand byte size of one <see cref="OpCode"/> (the runtime exposes
+    /// the operand TYPE, not a byte count); InlineSwitch is -1 because its
+    /// operand size is per-instance and measured inline in
+    /// <see cref="Instructions"/> (the ONE encoding of that fact, JF-736
+    /// code-review F4).
+    /// </summary>
+    private static int OperandByteSizeOf(OpCode op) => op.OperandType switch
+    {
+        OperandType.InlineNone => 0,
+        OperandType.ShortInlineBrTarget => 1,
+        OperandType.ShortInlineI => 1,
+        OperandType.ShortInlineVar => 1,
+        OperandType.InlineVar => 2,
+        OperandType.InlineI8 => 8,
+        OperandType.InlineR => 8,
+        OperandType.ShortInlineR => 4,
+        OperandType.InlineSwitch => -1,
+        _ => 4
+    };
+
+    /// <summary>
+    /// The ONE token walk under <see cref="CallTokens"/> and
+    /// <see cref="NewobjTokens"/>, expressed over the graduated
+    /// <see cref="InstructionOperands"/> (JF-736: the window discipline the
+    /// rosters share now lives in one definition).
+    /// </summary>
+    private static IEnumerable<int> OperandTokens(MethodBase method, params byte[] opcodes)
+        => InstructionOperands(method, opcodes).Select(instruction => instruction.Operand);
 
     /// <summary>
     /// True when any newobj token names a constructor of the given type. The

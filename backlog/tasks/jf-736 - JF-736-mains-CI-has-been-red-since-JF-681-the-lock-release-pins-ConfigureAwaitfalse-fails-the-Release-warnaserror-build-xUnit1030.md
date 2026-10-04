@@ -107,7 +107,207 @@ over it, the JF-726 copy deleted; the phantom-window opcode-aware-walk fix rides
 <!-- DOD:BEGIN -->
 - [x] #1 The xUnit1030 site resolved (ConfigureAwait dropped or made true) and `dotnet build -c Release -warnaserror` over the solution exits 0
 - [x] #2 CI green again on the fixing push (build-and-test job)
-- [ ] #3 The InstructionOperands offset walk + ldc-int surface graduated into IlCallScanner (or consciously declined with a reason on this task)
-- [ ] #4 dotnet test passes both TFMs
-- [ ] #5 /simplify + /code-review high passed
+- [x] #3 The InstructionOperands offset walk + ldc-int surface graduated into IlCallScanner (or consciously declined with a reason on this task)
+- [x] #4 dotnet test passes both TFMs
+- [x] #5 /simplify + /code-review high passed
 <!-- DOD:END -->
+
+## DoD Evidence (Finding 2, the live scope)
+
+- #3 DONE 2026-10-04 (JF-736 worker, worktree branch). The graduated surface
+  is `IlCallScanner.InstructionOperands(method, params byte[] opcodes)`
+  yielding (Offset, Operand) pairs; `OperandTokens` (and with it
+  `CallTokens`/`NewobjTokens`) is now a Select projection over it, so the
+  operand-window discipline lives in ONE definition. `LdcI4Operands` sits
+  beside them. The JF-726 pin's private trio
+  (CallInstructionOffsets/LdcI4Operands/InstructionOperands) is DELETED from
+  VideoAudioControllerTests.cs and the pin delegates at all three use sites
+  (the two call-offset walks, the ldc assert), plus the stfld
+  argument-identity tie's every-offset loop, which the /simplify altitude
+  round caught as a fourth surviving copy of the same window shape (now
+  `InstructionOperands(birthMethod, 0x7D)`).
+  PHANTOM-WINDOW VERDICT: the phantom case is REAL and the pin's walk did NOT
+  handle it. The pin's own comment (pre-fix) recorded the residual: a 0x20
+  byte inside another instruction's operand bytes could satisfy the ldc
+  exact-value Contains in the GREEN direction, against the loud-only
+  discipline. The fix rides the graduation exactly as the filing prescribed:
+  the graduated walk is OPCODE-AWARE (it decodes instruction boundaries, with
+  opcode lengths and operand sizes derived from the runtime's own
+  System.Reflection.Emit.OpCodes table, the switch opcode's variable operand
+  included), so only a real instruction of the requested opcode yields.
+  RED-PROOFS (both documented by run): (a) the JF-726 pin passes on the real
+  IL through the scanner (266/266 VideoAudioControllerTests, then the full
+  suites); (b) sabotaging the graduated walk's ldc filter
+  (`&& opcode != 0x20`) reds the pin with its own JF-704/JF-726 message
+  (Verified: 1 failed / 0 passed on `FullyQualifiedName~BirthBackstop`,
+  reverted).
+- #4 DONE 2026-10-04: full suites on the final state,
+  `dotnet test Jellyfin.Plugin.AlexaSkill.Tests` per TFM: net9.0 5111/5111
+  PASSED, net10.0 5111/5111 PASSED (baseline 5109 + the two new decoder
+  tests; no test removed). Release CI-discipline build
+  `dotnet build Jellyfin.Plugin.AlexaSkill.sln -c Release --no-restore
+  -warnaserror`: 0 warnings, 0 errors.
+- #5 DONE 2026-10-04: /simplify ran as 4 parallel angle agents on the diff.
+  Applied: the stfld fourth-copy graduation (altitude), deletion of the
+  derivable `InstructionOperandsRequestedOpcodes` guard dictionary and its
+  up-front validation (reuse + simplification F1/F2/F3: the invariant was
+  encoded three times; the loud-only discipline makes the guard redundant),
+  and the unreachable truncation fallback in `SwitchOperandBytes`
+  (simplification F4). Skipped with reason: the four efficiency findings
+  (flat arrays instead of the short-keyed dictionary, a hoisted first-opcode
+  compare, non-params overloads, one fewer iterator layer), every one judged
+  NOT worth it at test-infra scale by the reviewer (tens of ms per
+  minutes-long suite) and the diff is net-positive (the Contains check moved
+  from per-byte to per-instruction).
+  /code-review high (background skill, full diff) returned 5 findings, ALL
+  applied: F1 the decode's silent `break` on an unknown opcode violated the
+  loud-only contract (now THROWS; the decode was restructured so the ONE
+  boundary decoder is `IlCallScanner.Instructions(byte[])`, consumed by both
+  the operand walk and a direct test); F2 banned "word - word" prose in an
+  authored doc comment (reworded to parentheses); F3 the truncated-switch
+  read was the only unguarded truncation path (now every malformed-input path
+  throws, consistent and loud); F4 the switch-is-minus-one fact was encoded
+  twice (OperandByteSizeOf now owns the single encoding); F5 the decoder had
+  no direct test (new IlCallScannerTests: one test asserts the decoded chain
+  consumes EVERY real body of the plugin+test assemblies exactly from offset
+  0 to the IL end, the other pins the synthetic branches real IL never
+  contains: the 16-bit local form, ldftn, switch, and the malformed-input
+  throws; the decoder-table sabotage was red-proven: an InlineVar size flip
+  reds the synthetic test). Because those fixes restructured the decoder, a
+  SECOND /code-review high pass ran on the final state and returned 5 more
+  findings, ALL applied: R1 an operand overrunning the stream end exited the
+  loop silently (the loudness contract's one remaining hole; now throws, with
+  the switch count measured in long so a malformed huge count cannot overflow
+  into a backwards walk), R2 the graduation's doc had overstated the JF-726
+  ldc pin as the only GREEN-direction phantom consumer (the scanner's own
+  Contains-family is equally exposed; wording corrected in code and here),
+  R3 the truncated-switch-count assert pinned ThrowsAny instead of the exact
+  ArgumentException, R4 a vacuous can-never-fail length assert in the
+  exhaustive body test (removed), R5 the LdcI4Operands hoist had dropped the
+  short-encoding totality argument the deleted private helper's doc carried
+  (restored: non-negative constants carrying the JF-726 bits exceed the short
+  encodings). No real out-of-scope finding emerged in either round, so the
+  reserved JF-747 number was NOT consumed.
+  ORCHESTRATOR GATE-MARKER ROUND (2026-10-04, six axes CONFIRMED at source on
+  a fresh Release build by the orchestrator itself: scope clean, projection
+  equivalence, the opcode-aware walk incl. two-byte keying empirically, no
+  surviving naive walk, red-proof shapes, both record corrections): FOUR
+  findings, all four applied as rework.
+  GM-F1 THE PHANTOM-IMMUNITY PIN (the headline deliverable had no test: on
+  real IL the old every-offset walk and the decoded walk agree, so a revert
+  to a byte scan kept the whole 5111 suite green): new test
+  InstructionOperands_RejectsOpcodeBytesInsideAnotherInstructionsOperand in
+  IlCallScannerTests, built on PhantomOpcodeBaitConstant() (compiled to
+  exactly `ldc.i4 0x28282828; ret`, four call-opcode bytes as OPERAND bytes):
+  asserts LdcI4Operands still finds the real constant AND
+  InstructionOperands(bait, 0x28) is EMPTY. RED-PROVEN by reverting
+  InstructionOperands to the naive i+5 byte scan: the pin failed with
+  "Collection was not empty: [Tuple (1, 707274792)]" (the phantom call
+  candidate at offset 1, token 0x2A282828 read from three operand bytes plus
+  the ret), then restored to green.
+  GM-F2 the two crefs left pointing at the deleted SwitchOperandBytes
+  (OperandByteSizes' and OperandByteSizeOf' doc blocks) now point at the
+  inline measurement in Instructions (they would have been CS1574 under doc
+  generation with warnaserror).
+  GM-F3 the stfld tie's callvirt-predecessor check still used the raw
+  storeOffset-5 fixed window: GRADUATED through Instructions (the walk tracks
+  the previous decoded instruction and checks its real boundary, Opcode 0x6F,
+  resolved token), so no fixed-window assumption survives in the tie; the
+  deliberate raw survivors are exactly the two the record names (the ldfld
+  byte+token read anchored at the walk-derived backstopOffset-5, and the
+  nop-prefix ldarg.0 first-instruction check).
+  GM-F4 LdcI4Operands re-implemented the OperandTokens projection one line
+  away: now a thin delegate `=> OperandTokens(method, 0x20)`.
+  Reruns after the rework: the pin + all scanner consumers 320/320 net9.0
+  (three consecutive runs; ONE transient failure in the first post-rework
+  run, name not captured before the log scrolled, class green in isolation
+  266/266 immediately after); full suites on the final state net9.0 5112/5112
+  and net10.0 5112/5112 (the net10.0 first run had ONE failure, the JF-731
+  Dispose backstop on StreamHlsEpisode_MusicStartProceedsWhileTranscodesOccupyTheTier,
+  the pre-existing flake documented on this exact class since f78515f2: green
+  in isolation 266/266 AND on the full-suite rerun; this diff touches only
+  IL-scan asserts and the scanner and cannot affect encode lifetimes);
+  Release --no-restore -warnaserror clean. Final count 5112 = 5109 baseline
+  + 3 new tests.
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed on its worktree branch by the JF-736 worker (live scope: Finding 2;
+Finding 1 was already fixed on main by 9353de90). The graduation landed in the
+direction the filing prescribed and one step deeper, because the code-review
+round found the first cut had re-introduced a silent-loss mode into a scanner
+whose whole contract is loudness.
+
+THE GRADUATED SURFACE: `IlCallScanner.InstructionOperands(method, opcodes)`
+yields (offset, operand) pairs for single-byte opcodes with a 4-byte int32
+operand (call/callvirt/newobj/ldc.i4/stfld/ldfld/ldstr...); `OperandTokens`
+and therefore `CallTokens`/`NewobjTokens`/`ContainsCallTo*` are Select
+projections over it; `LdcI4Operands` is the new int32-constant surface. The
+operand-window discipline lives in exactly one definition for the first time
+since JF-582.
+
+THE PHANTOM-WINDOW FIX: the walk is now OPCODE-AWARE. It decodes instruction
+boundaries instead of testing the opcode byte at every offset, with opcode
+lengths and operand sizes derived at type-init from the runtime's own
+System.Reflection.Emit.OpCodes table (no hand-maintained ECMA table to drift;
+the switch opcode's variable operand measured per instance). This closes the
+phantom case for real: previously a coincidental byte sequence inside another
+instruction's operand could add a candidate. The roster EQUALITY consumers
+were safe by direction (a phantom add failed the equality loudly); every
+BOOL/Contains consumer could pass GREEN on one, and not only the JF-726 ldc
+pin's exact-value Contains: the scanner's own ContainsCallToToken /
+CallsGetter / ConstructsType family equally (the first draft of this summary
+named the ldc pin as the sole exposed consumer; the final review corrected
+that inventory). Now only a real instruction of the requested opcode yields.
+The boundary decode itself is exposed as `Instructions(byte[])` and directly
+pinned by the new IlCallScannerTests: every real method body of the plugin
+and test assemblies must decode from offset 0 to the exact IL end with no
+gaps (a wrong operand size desyncs some body and names it), and the branches
+real IL never contains (16-bit local form, ldftn, switch, the malformed-input
+throws) are pinned synthetically. Malformed input now throws everywhere
+instead of silently truncating (code-review F1: the first cut's `break` on an
+unknown opcode was the scanner's first silent-loss mode; the final pass
+closed the last hole, an operand overrunning the stream end).
+
+PER-CONSUMER DISPOSITIONS: every roster consumer (CallTokens/NewobjTokens/
+ContainsCallTo*/ConstructsType/CallsGetter/CallsNamedMethod/SameTypeHelpers/
+CallsDirectlyOrViaSameTypeHelper) is unchanged at the call site; they inherit
+the opcode-aware window through the shared walk, verified by their suites
+(51/51 filtered, then full 5111/5111 per TFM). The JF-726 pin
+(ServeInLockWarmCacheHelper_BirthBackstop) delegates at all its walk sites and
+its private trio is deleted; its inline emission-tie byte reads (the ldfld
+byte check, the nop-prefix ldarg.0 check) stay, deliberately: single-byte
+shape inspection is not operand-walk duplication (the altitude round judged
+and cleared them). The stfld argument-identity tie's loop, which survived the
+first cut as a fourth every-offset copy, was graduated too.
+
+RED-PROOFS: the pin green on real IL through the scanner; the ldc-filter
+sabotage reds the pin with its own JF-704/JF-726 message; an InlineVar
+operand-size sabotage reds the synthetic decoder test (the first attempt at
+that sabotage exposed an honest coverage gap, the 16-bit family never occurs
+in real bodies, which is exactly why the synthetic test exists).
+
+GATES: /simplify (4 angles) applied 3 findings, skipped 4 efficiency findings
+with the reviewer's own not-worth-it-at-scale verdicts; /code-review high ran
+TWICE (the decoder restructure landed between the rounds): round 1 returned 5
+findings, all applied (F1 loud-only throw, F2 prose rule, F3 consistent
+malformed-input handling, F4 single encoding of the switch fact, F5 the
+direct decoder tests); the final-state round returned 5 more, all applied
+(the silent operand-overrun exit, the phantom-consumer inventory correction,
+the exact exception-type pin, the vacuous assert removed, the restored
+short-encoding totality argument); the orchestrator gate-marker round then
+confirmed all six axes at source on a fresh Release build and returned FOUR
+rework findings, all applied: the phantom-immunity pin itself (GM-F1, the
+headline behavior had no test; a bait method compiled to `ldc.i4 0x28282828`
+pins that four call-opcode operand bytes yield NO call candidate,
+red-proven by reverting the walk to a byte scan), the two dangling crefs to
+the deleted SwitchOperandBytes (GM-F2), the stfld tie's callvirt-predecessor
+fixed-window check graduated through Instructions so no fixed-window
+assumption survives (GM-F3), and LdcI4Operands made a thin delegate to
+OperandTokens (GM-F4). JF-747 was not needed: no real out-of-scope finding
+emerged in any round. Final suites net9.0 5112/5112, net10.0 5112/5112 (one
+transient net10.0 first-run failure, the pre-existing JF-731 Dispose
+backstop flake on this exact class, green in isolation and on rerun);
+Release -warnaserror clean.
+<!-- SECTION:FINAL_SUMMARY:END -->
