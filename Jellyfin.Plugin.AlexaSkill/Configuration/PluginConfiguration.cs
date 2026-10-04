@@ -674,6 +674,49 @@ public class PluginConfiguration : BasePluginConfiguration
 }
 
 /// <summary>
+/// The structured caveat bits of a <see cref="LocaleModelStatus"/> row (JF-721),
+/// replacing the marker-string wire protocol the ledger's Error field used to
+/// carry: every writer sets its own bits instead of composing recognizable
+/// literals into the free text, and every cross-writer decision (what a clean
+/// capture preserves, what a clean settle drops) reads these bits instead of
+/// parsing the text. Persisted through <see cref="LocaleModelStatusEntry"/> as
+/// the enum's name(s); additive, so a pre-JF-721 persisted row deserializes as
+/// <see cref="None"/> (its legacy composed Error text still renders verbatim).
+/// </summary>
+[Flags]
+public enum CatalogLedgerCaveats
+{
+    /// <summary>No caveat: a plain row whose Error (if any) is a free-text diagnostic.</summary>
+    None = 0,
+
+    /// <summary>The last catalog sync froze one or more catalog types for this
+    /// locale (JF-705/JF-709): their last-good catalog versions stay pinned. Durable
+    /// catalog state: survives a clean startup capture (JF-710) and heals only when
+    /// a later sync re-freezes (rewrites it) or succeeds (clears it). The frozen
+    /// type names ride the row's <see cref="LocaleModelStatus.FrozenCatalogTypes"/>.</summary>
+    FrozenCatalogs = 1,
+
+    /// <summary>Run-scoped (JF-709): the sync leg that authored this row performed
+    /// no model PUT because every catalog type was frozen. Never survives a clean
+    /// startup capture: a new skill version WAS pushed, superseding the last run's
+    /// no-PUT shape. Also the no-PUT writer's own-row marker: a later all-frozen run
+    /// reading this bit replaces the row wholesale instead of re-carrying its Error
+    /// (the once-only carry rule).</summary>
+    NoCatalogPut = 2,
+
+    /// <summary>Arm discriminator (JF-722, made structural by JF-721): the row's
+    /// <see cref="LocaleModelStatus.Error"/> is the SMAPI build Errors array observed
+    /// by THIS row's authoring observation (the startup capture or its deferred
+    /// refresh), not a preserved foreign diagnostic. A later clean settle DROPS that
+    /// Error and clears this bit (the errors describe an observation the settle
+    /// supersedes, possibly stale in the unverified SMAPI in-flight shape); a clean
+    /// capture never preserves an arm-tagged Error (the fresh build supersedes it).
+    /// Never co-occurs with <see cref="FrozenCatalogs"/>: the own-errors arms replace
+    /// the row wholesale and never preserve.</summary>
+    ObservedBuildErrors = 4,
+}
+
+/// <summary>
 /// Stores the SMAPI build status for a single locale's interaction model.
 /// </summary>
 public record LocaleModelStatus
@@ -688,16 +731,88 @@ public record LocaleModelStatus
     /// <summary>Gets the UTC timestamp when this status was last checked.</summary>
     public DateTime LastUpdated { get; init; }
 
-    /// <summary>Gets the error message if the build failed, or a non-fatal
-    /// caveat surfaced next to the status (a canary mismatch or frozen catalog
-    /// types on an otherwise successful build, JF-495/JF-705); null otherwise.
-    /// Catalog-sync caveats survive a clean startup capture's overwrite of the
-    /// row (JF-710: the model rebuild does not reset the catalog state they
-    /// describe). The admin UI renders this field regardless of Status.</summary>
+    /// <summary>Gets the free-text diagnostic for this row (a JF-495 canary
+    /// mismatch, a failed-PUT reason, or a formatted SMAPI build Errors array);
+    /// null otherwise. Since JF-721 this field is PURE free text: nothing composes
+    /// recognizable markers into it and nothing parses it (the structured caveats
+    /// live in <see cref="Caveat"/> and <see cref="FrozenCatalogTypes"/>), which
+    /// closes the JF-710 invariant exposure by construction. Durable catalog-sync
+    /// diagnostics survive a clean startup capture's overwrite of the row (JF-710:
+    /// the model rebuild does not reset the catalog state they describe). The
+    /// admin UI renders this field regardless of Status.</summary>
     public string? Error { get; init; }
+
+    /// <summary>Gets the structured caveat bits (JF-721); see
+    /// <see cref="CatalogLedgerCaveats"/> for each bit's writer and survival
+    /// semantics. Additive persisted field: pre-JF-721 rows read as
+    /// <see cref="CatalogLedgerCaveats.None"/>.</summary>
+    public CatalogLedgerCaveats Caveat { get; init; }
+
+    /// <summary>Gets the frozen catalog type names as a CSV ("Artist,Album").
+    /// Set by every field-era frozen write whenever
+    /// <see cref="Caveat"/> carries <see cref="CatalogLedgerCaveats.FrozenCatalogs"/>
+    /// (bit-implies-payload is the writers' factory rule, the copy paths'
+    /// guard, and the legacy migration's mint, which always recovers names
+    /// from the clause head); null under that bit ONLY on a hand-authored
+    /// persisted row, which renders the nameless clause. Names, not ids: only
+    /// <see cref="CaveatText"/> renders them, nothing parses them (the JF-721
+    /// no-wire-protocol rule).</summary>
+    public string? FrozenCatalogTypes { get; init; }
 
     /// <summary>Gets the model source: "Embedded" (bundled) or "Custom" (user-provided).</summary>
     public string Source { get; init; } = "Embedded";
+
+    /// <summary>
+    /// Renders the row's caveat bits as the admin-panel text shown beside the
+    /// free-text <see cref="Error"/> (JF-721): the frozen clause (JF-705's
+    /// wording kept), the run-scoped no-PUT tail (JF-709's), and the build-errors
+    /// label (JF-722's prefix, now a label not a marker), "; "-joined; null when
+    /// no caveat applies (pre-JF-721 rows: their legacy composed Error text
+    /// already carries its own clause and needs no duplicate). DISPLAY-ONLY: the
+    /// old marker family's invariant burden is gone, but these strings must stay
+    /// out of any recognition logic; nothing may ever parse ledger text again.
+    /// </summary>
+    public string? CaveatText
+    {
+        get
+        {
+            if (Caveat == CatalogLedgerCaveats.None)
+            {
+                return null;
+            }
+
+            var parts = new List<string>();
+            if (Caveat.HasFlag(CatalogLedgerCaveats.FrozenCatalogs))
+            {
+                if (!string.IsNullOrEmpty(FrozenCatalogTypes))
+                {
+                    string[] types = FrozenCatalogTypes.Split(',');
+                    parts.Add($"{string.Join(" + ", types)} catalog{(types.Length > 1 ? "s" : string.Empty)} FROZEN (last-good pinned)");
+                }
+                else
+                {
+                    // The legacy-migrated bit without recoverable names: the
+                    // nameless clause still names the freeze.
+                    parts.Add("catalogs FROZEN (last-good pinned)");
+                }
+            }
+
+            if (Caveat.HasFlag(CatalogLedgerCaveats.NoCatalogPut))
+            {
+                parts.Add("no PUT this run");
+            }
+
+            if (Caveat.HasFlag(CatalogLedgerCaveats.ObservedBuildErrors))
+            {
+                parts.Add("build errors");
+            }
+
+            // Every Caveat != None shape contributes a part (the frozen arm
+            // renders nameless when the payload is absent), so the join is
+            // never empty here; the None case returned early above.
+            return string.Join("; ", parts);
+        }
+    }
 }
 
 /// <summary>
@@ -716,6 +831,8 @@ public class LocaleModelStatusEntry
         Status = status.Status;
         LastUpdated = status.LastUpdated;
         Error = status.Error;
+        Caveat = status.Caveat;
+        FrozenCatalogTypes = status.FrozenCatalogTypes;
         Source = status.Source;
     }
 
@@ -723,6 +840,17 @@ public class LocaleModelStatusEntry
     public string Status { get; set; } = string.Empty;
     public DateTime LastUpdated { get; set; }
     public string? Error { get; set; }
+
+    /// <summary>The XML-persisted twin of <see cref="LocaleModelStatus.Caveat"/>
+    /// (JF-721). Additive: pre-JF-721 rows have no Caveat element and deserialize
+    /// as <see cref="CatalogLedgerCaveats.None"/>; an old DLL reading a newer
+    /// config ignores the unknown element (rollback-safe).</summary>
+    public CatalogLedgerCaveats Caveat { get; set; }
+
+    /// <summary>The XML-persisted twin of
+    /// <see cref="LocaleModelStatus.FrozenCatalogTypes"/> (JF-721).</summary>
+    public string? FrozenCatalogTypes { get; set; }
+
     public string Source { get; set; } = "Embedded";
 
     public LocaleModelStatus ToStatus() => new()
@@ -730,6 +858,8 @@ public class LocaleModelStatusEntry
         Status = Status,
         LastUpdated = LastUpdated,
         Error = Error,
+        Caveat = Caveat,
+        FrozenCatalogTypes = FrozenCatalogTypes,
         Source = Source,
     };
 }

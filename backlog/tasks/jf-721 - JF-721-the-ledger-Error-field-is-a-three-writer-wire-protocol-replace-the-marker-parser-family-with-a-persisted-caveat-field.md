@@ -3,9 +3,10 @@ id: JF-721
 title: >-
   JF-721 - the ledger Error field is a three-writer wire protocol; replace the
   marker-parser family with a persisted caveat field
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-02 21:05'
+updated_date: '2026-10-04 20:10'
 labels:
   - catalog
   - observability
@@ -70,16 +71,150 @@ in-flight rows) would have made the fourth marker unnecessary entirely, at the c
 a budget-exhausted still-in-flight row showing no error text on the panel.
 <!-- SECTION:DESCRIPTION:END -->
 
-## Definition of Done
+## Design decisions (2026-10-04, implementation round, written before coding)
+
+Sequencing satisfied: JF-719 and JF-722 are both closed, so the capture gate's
+final shape (clean = SUCCEEDED or IN_PROGRESS, no errors of its own) and the
+refresh's final shape (fourth writer, observed-errors arm) are what this field
+design serves.
+
+THE FIELD: a flags enum `CatalogLedgerCaveats` (None / FrozenCatalogs /
+NoCatalogPut / ObservedBuildErrors) plus a payload string `FrozenCatalogTypes`
+(CSV of CatalogType names, present iff FrozenCatalogs), both added to the
+`LocaleModelStatus` record AND the `LocaleModelStatusEntry` XML twin, both
+additive (the LastPlayedLaunchRoute compat pattern: a pre-JF-721 persisted row
+deserializes caveat-less and keeps rendering its legacy composed Error text;
+an old DLL reading post-JF-721 XML ignores the unknown elements, so a rollback
+is safe too). Plural enum name because CA1714 is live under
+AllEnabledByDefault + TreatWarningsAsErrors. CSV payload rather than per-type
+flag bits: a future synced type joins the caveat by simply appearing in the
+list, whereas a bit-per-type design loses a fourth type SILENTLY until someone
+widens the enum (the JF-711 loud-widening discipline inverts here: the payload
+degrades gracefully, the bits would not). CSV-of-names has an in-file precedent
+(MoodGenreOverride.Genres).
+
+ARM DISTINCTION (the JF-722 design input): ObservedBuildErrors is a CAVEAT BIT,
+not a prefix. The capture's and refresh's own-errors arms set
+`Caveat = ObservedBuildErrors` with the formatted Errors array as plain
+free-text Error; the refresh's clean-settle arm drops Error and clears the bit
+when the bit is set (field read, no StartsWith), and carries caveat + Error
+verbatim otherwise. The recorded JF-722 tradeoff (not composing observed errors
+onto IN_PROGRESS rows at all, saving the fourth marker) is REJECTED now the
+discriminator is a field: the marker fragility was the entire cost side of that
+tradeoff, and composing keeps the budget-exhausted in-flight row's error text
+on the panel.
+
+WRITERS (each sets its own fields; Error becomes pure free text, never
+protocol): PUT writer: Caveat=FrozenCatalogs when types froze (payload CSV),
+Error=CanaryError alone. No-PUT writer: Caveat=FrozenCatalogs|NoCatalogPut,
+Error=the previous row's foreign diagnostic carried VERBATIM, unframed (the
+"; previous: " framing literal dies); the once-only carry is keyed on the
+previous row's caveat bits (FrozenCatalogs or NoCatalogPut = this subsystem
+composed that row = replace, do not re-carry), the field successor of
+IsOwnShapeLedgerError. Capture: clean arm copies the previous row's caveat
+fields wholesale (PreserveLedgerCaveatAcrossCapture, a pure field copy: the
+catalog-sync Source label OR any caveat bit keys recognition; the
+run-scoped NoCatalogPut bit is masked off because a version WAS pushed; the
+ObservedBuildErrors bit never preserves). Refresh: mirrors the capture's arms
+with field reads.
+
+DELETED with the migration: FrozenLedgerClauseMarker, FrozenLedgerClause (its
+join/plural moves to the row renderer), NoPutLedgerTail,
+PreviousLedgerDiagnosticPrefix, ObservedBuildErrorsLedgerPrefix (all four
+literals), IsOwnShapeLedgerError, PreserveLedgerErrorAcrossCapture, and the
+RC4 quarantine invariant (nothing matches on Error text anymore, so no foreign
+text can collide with a recognizer). The display wordings survive exactly once
+each, as DISPLAY-ONLY strings inside `LocaleModelStatus.CaveatText` (a
+computed, non-persisted property rendering "Artist + Album catalogs FROZEN
+(last-good pinned)" / "; no PUT this run" / "build errors"); the JF-710
+LOAD-BEARING INVARIANT (only this subsystem can ever put the literals into an
+Error) closes by construction: no Error text is parsed by anything ever again.
+
+UPGRADE-TRANSITION TRADEOFF (accepted, documented in-code): a pre-JF-721
+persisted SYNC row (Source=catalog-sync, no caveat bits, legacy composed Error
+"clause tail; previous: foreign") has fields indistinguishable from a bare
+foreign diagnostic, so the no-PUT writer carries its legacy text verbatim for
+ONE run (the NoCatalogPut bit this write sets makes the next run drop it), and
+a clean capture preserves it verbatim rather than decomposing it. A
+pre-JF-721 CAPTURE-preserved row (Source=Embedded, clause-led Error, no bits)
+clears on the first post-upgrade clean capture (recognition is field-keyed
+now); both shapes self-heal at the next catalog sync. Rejecting any legacy
+text-sniffing migration is the point of this task.
+
+UI: ConfigurationController's status JSON gains `caveat` (the rendered
+CaveatText, null when none); config.html renders it as an amber span BEFORE
+the Error span (the clause-leads-within-80-chars concern becomes structural:
+separate spans), Error keeps its truncation/tooltip. The embedded-resource
+clean-build dance applies (delete the output DLL before building, verify the
+served markup string in the built DLL).
+
+## Rework round (2026-10-04, coordinator gate-marker findings F1-F4, all dispositions)
+
+- F1 (MUST FIX, persistence semantics) APPLIED: the legacy-row bound ("carried
+  once; the next all-frozen run drops it") did not hold under a skip-gated
+  capture chain, which copied the pre-JF-721 composed Error VERBATIM
+  indefinitely ("no PUT this run" for a run that DID push; the baked clause
+  duplicating beside the caveat span once the no-PUT carry minted a bitted row).
+  Fix: MigrateLegacyLedgerError, a ONE-SHOT decomposition of the old
+  composition grammar (the four literals live once more, as LEGACY-MIGRATION
+  vocabulary, clearly labeled scaffolding not protocol), wired into EVERY
+  text-carrying path (the preserve, the no-PUT writer's carry, and the refresh's
+  clean settle, the latter two via the shared CarryLedgerCaveatAcrossCleanObservation
+  owner): the clause becomes the caveat bit + the names parsed from the clause
+  head, the tail and framing drop, the bare foreign diagnostic survives, the
+  own-errors shape clears. The renderer gained a nameless arm for a
+  bit-without-payload row (hand-authored persisted XML only; the migration
+  always recovers names). Pinned end to end: the demanded legacy-row +
+  skip-gated-capture-chain pin (no stale wording, second capture idempotent),
+  the writer half (all-frozen run over a legacy row), the refresh mirror, and
+  the full grammar at unit level.
+- F2 (APPLY) APPLIED: the refresh's clean-settle payload copy now guards
+  bit-iff-payload like the preserve (both via the shared carry owner; pinned
+  with the NoCatalogPut-only stray-payload shape).
+- F3 (APPLY) APPLIED: the no-PUT writer's carried diagnostic is attributed
+  "previous run: " (CarriedDiagnosticLedgerPrefix, DISPLAY-ONLY, deliberately
+  shaped to match no migration literal, survives captures verbatim because it
+  stays true); the carry pins assert the attribution.
+- F4 (APPLY) APPLIED: the two "word - word" hyphen forms in the DoD prose
+  fixed.
+
+Gate refresh on the rework diff (the F1 migration exceeds trivial, so
+/code-review high was refreshed; the /simplify 4-agent round was NOT, stated
+skip: the incremental diff is one leaf helper plus three call-site wire-ups and
+pins, no reuse/simplification surface beyond round 1's coverage): 5 findings, 4
+APPLIED (R1 the clause arm HARDENED: a marker only counts as a clause when its
+head is clause-shaped (non-empty, no ';' or ':', ending in the catalog noun),
+so a foreign diagnostic quoting the marker mid-sentence neither mints a bogus
+FrozenCatalogs bit nor gets chopped, pinned; the remaining window, a foreign
+text carrying the bare tail/framing literals, is pinned as documented behavior
+with its heal bound; R2 the migrate+guard copy shape extracted into ONE shared
+owner, CarryLedgerCaveatAcrossCleanObservation, called by both the preserve and
+the refresh, with the preserve's NoCatalogPut mask named at its call site as
+the ONE deliberate divergence; R3 the FrozenCatalogTypes doc corrected: the
+migration never mints bit-without-names, the nameless render is the
+hand-authored-row shape; R4 the stale CaveatText trailing comment replaced),
+1 SKIPPED (R5 "the migration re-introduces text recognition": rejected because
+it contradicts the coordinator's MUST FIX, which explicitly mandates
+distinguishing legacy composed text and migrating it; the baseline's
+next-writer-rewrite bound was disproven for skip-gated capture chains, which
+copy text verbatim indefinitely; the helper's doc carries the old family's
+vigilance burden one last time, including why the attribution prefix matches
+no literal).
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #1 dotnet build passes with 0 errors (JF-721 worker 2026-10-04, both rounds: Debug build of plugin + tests clean on both TFMs; Release `dotnet build --configuration Release -warnaserror` at the worktree root on the final state of EACH round (round 1 and the rework): Build succeeded, 0 errors, 0 warnings, after deleting the output DLLs first for the config.html re-embed)
+- [x] #2 dotnet test passes (JF-721 worker 2026-10-04, REWORK FINAL STATE: full suite ONCE, `dotnet test Jellyfin.Plugin.AlexaSkill.Tests -m:1`: 5087/5087 net9.0 (1m28s) AND 5087/5087 net10.0 (1m28s), exit 0; baseline 5078 + 9 new pins: the 5 round-1 LocaleModelStatusCaveatTests pins + the round-1 file's migration-grammar test + the rework's capture-chain, writer-half, and refresh-mirror pins. The pre-rework state had passed 5083/5083 both TFMs)
+- [x] #3 No new compiler warnings introduced (Release -warnaserror over the whole tree, both rounds: 0 warnings; the pre-existing xUnit1030 pair did not fire under the flag on this stack)
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization (N/A: no session attributes touched; the new ValueTuple returns on the private helpers are method-local and never serialized; the persisted shape is the enum + string fields on LocaleModelStatusEntry, XML-round-trip-pinned)
+- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress (N/A: no HttpClient changes)
+- [x] #6 NLU test fixtures updated if interaction model changed (N/A: no interaction model change)
+- [x] #7 E2E test added for new intent or handler logic (N/A with justification: the surface is startup-ledger observability, not an intent/handler or Alexa-speech path; pinned through the InternalsVisibleTo fake-status seam (SkillStartupTests, the JF-710/722 harness), the real sync fakes (LegIsolation), the REAL controller action (GetCustomModelStatus driven directly in LocaleModelStatusCaveatTests), and the XML round-trip/legacy-read pins; a live E2E would need a version-bump restart on the production box)
+- [x] #8 Locale response strings added to all 17 locales (N/A: no user-facing Alexa speech)
+- [x] #9 /simplify passed (4 parallel agents: 5 findings APPLIED after dedup, namely the ComposeObservedErrorsCaveat one-owner helper for the observation arm's bit-and-text pairing, the FrozenCatalogCaveat factory pairing the bit with the payload for both sync writers, the shared DropObservedBuildErrors owner of the observation-era drop rule used by preserve + clean settle, the CaveatText third-null-path removal, the config.html tooltip drop for the never-truncated caveat; 3 SKIPPED with reasons: the controller-construction hoist to TestHelpers (the repo's hoist-on-third convention, this is the second copy), the CaveatText allocation micro-optimization (admin-only rare path, the agent itself judged it below the bar), the Replace-vs-Split nit (the split feeds the plural count))
+- [x] #10 /code-review high passed (round 1: 4 findings, ALL landed: F1 the third persisted upgrade-transition shape documented in the preserve's UPGRADE TRANSITION note (mainline unreachable because the pairing's capture rewrites every observed locale before the refresh reads it; the race-composed residual bounded by the next writer, same as the other transition shapes), F2 the preserve now enforces bit-iff-payload (payload nulled when FrozenCatalogs does not survive, pinned), F3 the dead else in the capture's preserve arm deleted, F4 the refresh's branch-decision debug log widened with the surviving Caveat like its capture twin; REWORK REFRESH on the incremental diff: 5 findings, 4 applied (R1 clause-arm hardening + pinned, R2 the shared CarryLedgerCaveatAcrossCleanObservation owner, R3/R4 doc corrections), 1 skipped (R5 contradicts the coordinator's MUST FIX, reasons recorded in the rework section); the reserved JF-742 number went UNUSED, nothing out-of-scope remained)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closed by the JF-721 worker 2026-10-04, reworked same-turn on the coordinator's gate-marker findings. THE FIELD DESIGN: LocaleModelStatus and its XML twin gain two additive persisted fields (the LastPlayedLaunchRoute compat pattern), a flags enum `CatalogLedgerCaveats` (None / FrozenCatalogs / NoCatalogPut / ObservedBuildErrors) and a `FrozenCatalogTypes` CSV payload; a pre-JF-721 row deserializes caveat-less with its legacy composed Error text still rendered (pinned against hand-written legacy XML, rename-proof), and an old DLL ignores the new elements on rollback. The arm distinction the JF-722 input required is the ObservedBuildErrors BIT: the observation family's own-errors arm (one shared composer, ComposeObservedErrorsCaveat in SkillStartup) tags its formatted Errors text with the bit, and the clean-settle drop keys on the bit through DropObservedBuildErrors (the one owner, also used by the capture preserve) instead of the old prefix StartsWith. The recorded JF-722 tradeoff (not composing observed errors on in-flight rows) was weighed and REJECTED: the marker fragility was its whole cost side. THE MIGRATION INVENTORY: all four literals, IsOwnShapeLedgerError (field successor IsOwnShapeLedgerCaveat on the caveat bits), PreserveLedgerErrorAcrossCapture with its two Replaces, and the RC4 quarantine invariant are DELETED from the steady-state protocol; the display wordings survive exactly once each, as DISPLAY-ONLY strings inside the computed LocaleModelStatus.CaveatText. Each of the four writers sets its own fields: the PUT writer (FrozenCatalogs + names when types froze, Error = canary alone), the no-PUT writer (FrozenCatalogs|NoCatalogPut, the previous row's foreign diagnostic carried once, MIGRATED if legacy and ATTRIBUTED "previous run: " per the rework), the capture (own-errors arm via the shared composer; clean arm via the field-copy preserve; wholesale otherwise), and the refresh (mirrors the arms through the SAME carry owner). THE REWORK (gate-marker F1-F4, all landed): the legacy-row upgrade transition now MIGRATES instead of carrying verbatim (MigrateLegacyLedgerError, a one-shot decomposition of the old composition grammar, clause-arm hardened so a foreign diagnostic quoting a literal mid-sentence passes through untouched; wired into every text-carrying path via the shared CarryLedgerCaveatAcrossCleanObservation owner), so a skip-gated capture chain can never keep displaying "no PUT this run" for a run that DID push nor duplicate the clause beside the caveat span; the refresh's payload copy guards bit-iff-payload like the preserve; the carried diagnostic is attributed. PINS: the JF-705/709/710/719/722 families migrated from string assertions to field assertions (24 round-1 pins, one renamed; carry pins assert the attribution), plus LocaleModelStatusCaveatTests (XML round-trip incl. combined flags, the legacy caveat-less read, the renderer phrases incl. the nameless arm, the preserve's field-copy rules incl. the payload guard, the drop-rule pair semantics, the full legacy migration grammar incl. the hardening and the documented residual window, and the REAL controller endpoint). THE CONFIG UI: ConfigurationController's status JSON ships `caveat` (the rendered CaveatText, null when none); config.html renders it as an amber span BEFORE the free-text Error span (clause-leads-within-80-chars now structural); the clean-build dance ran both rounds (output DLLs deleted before each Release build, markup strings-verified in both Release DLLs; the served-page curl-grep is deferred to the post-merge deploy). Runs: full suite ONCE on the rework final state 5087/5087 both TFMs (1m28s each; the pre-rework state 5083/5083); Release -warnaserror 0 warnings 0 errors on the whole tree after each round; affected classes green after every gate round. Gates: /simplify 4 agents (5 applied, 3 reasoned skips; not refreshed on the incremental diff, stated skip: one leaf helper plus wire-ups, no new abstraction surface); /code-review high round 1 (4/4 applied) and refreshed on the rework diff (5 findings: 4 applied incl. the R1 hardening and the R2 shared owner, 1 skipped as contradicting the coordinator's MUST FIX); JF-742 unused (nothing out-of-scope). Production surface changed (PluginConfiguration, LibrarySyncService, SkillStartup, ConfigurationController, config.html).
+<!-- SECTION:FINAL_SUMMARY:END -->

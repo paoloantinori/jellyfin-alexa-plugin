@@ -165,8 +165,12 @@ public class SkillStartupTests : PluginTestBase
 
     /// <summary>Seeds the it-IT ledger row the capture will overwrite, returning
     /// the seeded timestamp for freshness assertions.</summary>
-    private static DateTime SeedLocaleRow(string? error, string source = LibrarySyncService.CatalogSyncLedgerSource) =>
-        SeedRow("it-IT", "SUCCEEDED", error, source);
+    private static DateTime SeedLocaleRow(
+        string? error,
+        string source = LibrarySyncService.CatalogSyncLedgerSource,
+        CatalogLedgerCaveats caveat = CatalogLedgerCaveats.None,
+        string? frozenCatalogTypes = null) =>
+        SeedRow("it-IT", "SUCCEEDED", error, source, caveat, frozenCatalogTypes);
 
     /// <summary>
     /// Seeds an arbitrary ledger row (the JF-722 refresh pins need the frozen
@@ -174,7 +178,13 @@ public class SkillStartupTests : PluginTestBase
     /// refresh must not touch), returning the seeded timestamp for freshness
     /// assertions.
     /// </summary>
-    private static DateTime SeedRow(string locale, string status, string? error, string source = "Embedded")
+    private static DateTime SeedRow(
+        string locale,
+        string status,
+        string? error,
+        string source = "Embedded",
+        CatalogLedgerCaveats caveat = CatalogLedgerCaveats.None,
+        string? frozenCatalogTypes = null)
     {
         var seeded = DateTime.UtcNow.AddHours(-2);
         Plugin.Instance!.Configuration.SetLocaleModelStatus(locale, new LocaleModelStatus
@@ -182,28 +192,29 @@ public class SkillStartupTests : PluginTestBase
             Status = status,
             LastUpdated = seeded,
             Error = error,
+            Caveat = caveat,
+            FrozenCatalogTypes = frozenCatalogTypes,
             Source = source,
         });
         return seeded;
     }
 
     /// <summary>
-    /// JF-710 core pin: the compound skip-gated-restart path is (freeze wrote
-    /// the clause) + (restart with a version change runs the skill update and
-    /// THIS capture) + (the startup re-sync is skipped, so nothing rewrites the
-    /// row). A clean capture (SUCCEEDED, no build errors) must therefore not
-    /// erase the catalog-sync diagnostics: the frozen clause survives, the
-    /// foreign diagnostic a no-PUT run trailed survives WITHOUT its
-    /// "previous: " framing, and the run-scoped "; no PUT this run" tail drops
-    /// (a new skill version WAS pushed). Status and Source stay the capture's
-    /// own: the fresh model build really did succeed.
+    /// JF-710 core pin (field form since JF-721): the compound skip-gated-restart
+    /// path is (freeze wrote the caveat) + (restart with a version change runs
+    /// the skill update and THIS capture) + (the startup re-sync is skipped, so
+    /// nothing rewrites the row). A clean capture (SUCCEEDED, no build errors)
+    /// must therefore not erase the catalog-sync state: the FrozenCatalogs bit
+    /// and its names payload survive, the foreign diagnostic a no-PUT run
+    /// carried survives verbatim in Error, and the run-scoped NoCatalogPut bit
+    /// drops (a new skill version WAS pushed). Status and Source stay the
+    /// capture's own: the fresh model build really did succeed.
     /// </summary>
     [Fact]
     public async Task CaptureLocaleModelStatusesAsync_CleanCapture_OverNoPutClauseRow_PreservesClauseAndForeignDropsTail()
     {
-        string clause = $"Artist catalog{LibrarySyncService.FrozenLedgerClauseMarker}";
         string foreign = "canary mismatch: submitted 145 intents/900 samples but live model reports 144/899";
-        SeedLocaleRow($"{clause}{LibrarySyncService.NoPutLedgerTail}{LibrarySyncService.PreviousLedgerDiagnosticPrefix}{foreign}");
+        SeedLocaleRow(foreign, caveat: CatalogLedgerCaveats.FrozenCatalogs | CatalogLedgerCaveats.NoCatalogPut, frozenCatalogTypes: "Artist");
 
         await CaptureCleanAsync();
 
@@ -211,51 +222,99 @@ public class SkillStartupTests : PluginTestBase
         Assert.NotNull(row);
         Assert.Equal("SUCCEEDED", row!.Status);
         Assert.Equal("Embedded", row.Source);
-        Assert.Equal($"{clause}; {foreign}", row.Error);
+        Assert.Equal(CatalogLedgerCaveats.FrozenCatalogs, row.Caveat);
+        Assert.Equal("Artist", row.FrozenCatalogTypes);
+        Assert.Equal(foreign, row.Error);
 
         // Code-review F1 pin: the capture writes Source "Embedded", so the
         // NEXT clean capture (another version bump, or the FAILED-manifest
         // trigger, while the startup re-sync stays skip-gated) must STILL
-        // preserve: recognition is content-keyed (the clause marker), not
-        // Source-keyed, or the clause would die exactly one restart later
+        // preserve: recognition is field-keyed (the caveat bits), not
+        // Source-keyed, or the caveat would die exactly one restart later
         // than JF-710 was filed to fix.
         await CaptureCleanAsync();
         row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
         Assert.NotNull(row);
-        Assert.Equal($"{clause}; {foreign}", row!.Error);
+        Assert.Equal(CatalogLedgerCaveats.FrozenCatalogs, row!.Caveat);
+        Assert.Equal("Artist", row.FrozenCatalogTypes);
+        Assert.Equal(foreign, row.Error);
     }
 
     /// <summary>
-    /// JF-710 gate-marker tail: the PLAIN no-PUT row (clause + tail, no trailed
-    /// foreign) must reduce to clause-only through the capture, and that
-    /// clause-only product must be idempotent under a second capture (only the
-    /// compound clause+tail+foreign shape and its double capture were pinned
-    /// before; a future edit to the preserve that mishandles the tail-only
-    /// strip or the marker-only idempotence would otherwise pass the suite).
+    /// Gate-marker rework F1, the demanded pin: a pre-JF-721 persisted SYNC row
+    /// carries its composed Error TEXT (clause + no-PUT tail + framed foreign)
+    /// with NO caveat bits; a skip-gated capture chain must never keep
+    /// displaying the superseded "no PUT this run" wording for a run that DID
+    /// push, nor duplicate the clause beside the caveat span. The preserve
+    /// migrates the text once: the clause becomes the caveat bits + names
+    /// payload, the tail and framing drop, the bare foreign diagnostic
+    /// survives; the SECOND capture (the skip-gated chain) is then a plain
+    /// field-copy idempotence over field-era text.
     /// </summary>
     [Fact]
-    public async Task CaptureLocaleModelStatusesAsync_CleanCapture_OverPlainNoPutRow_ReducesToClauseAndStaysIdempotent()
+    public async Task CaptureLocaleModelStatusesAsync_CleanCapture_OverLegacyComposedRow_MigratesTextToFields()
     {
-        string clause = $"Artist catalog{LibrarySyncService.FrozenLedgerClauseMarker}";
-        SeedLocaleRow($"{clause}{LibrarySyncService.NoPutLedgerTail}");
+        SeedLocaleRow(
+            "Artist + Album catalogs FROZEN (last-good pinned); no PUT this run; previous: canary mismatch: submitted 145/900 but live reports 144/899");
 
         await CaptureCleanAsync();
 
         var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
         Assert.NotNull(row);
-        Assert.Equal(clause, row!.Error);
+        Assert.Equal("SUCCEEDED", row!.Status);
+        Assert.Equal("Embedded", row.Source);
+        Assert.Equal(CatalogLedgerCaveats.FrozenCatalogs, row.Caveat);
+        Assert.Equal("Artist,Album", row.FrozenCatalogTypes);
+        Assert.Equal("canary mismatch: submitted 145/900 but live reports 144/899", row.Error);
+        Assert.DoesNotContain("no PUT this run", row.Error, StringComparison.Ordinal);
+        Assert.Equal("Artist + Album catalogs FROZEN (last-good pinned)", row.CaveatText);
 
-        // The clause-only product has no tail left to strip; a second capture
-        // must be a Replace no-op, not a mutation.
+        // The skip-gated chain: another version bump, sync still skipped. The
+        // migrated row is field-era now, so the second capture is a plain
+        // idempotent field copy with no stale wording resurrection.
         await CaptureCleanAsync();
         row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
         Assert.NotNull(row);
-        Assert.Equal(clause, row!.Error);
+        Assert.Equal(CatalogLedgerCaveats.FrozenCatalogs, row!.Caveat);
+        Assert.Equal("Artist,Album", row.FrozenCatalogTypes);
+        Assert.Equal("canary mismatch: submitted 145/900 but live reports 144/899", row.Error);
+        Assert.DoesNotContain("no PUT this run", row.Error, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-710 gate-marker tail: the PLAIN no-PUT row (frozen caveat + no-PUT
+    /// bit, no carried foreign) must reduce to the frozen caveat alone through
+    /// the capture, and that product must be idempotent under a second capture
+    /// (only the compound caveat+noPut+foreign shape and its double capture
+    /// were pinned before; a future edit to the preserve that mishandles the
+    /// no-PUT-bit drop or the bit-only idempotence would otherwise pass the
+    /// suite).
+    /// </summary>
+    [Fact]
+    public async Task CaptureLocaleModelStatusesAsync_CleanCapture_OverPlainNoPutRow_ReducesToClauseAndStaysIdempotent()
+    {
+        SeedLocaleRow(null, caveat: CatalogLedgerCaveats.FrozenCatalogs | CatalogLedgerCaveats.NoCatalogPut, frozenCatalogTypes: "Artist");
+
+        await CaptureCleanAsync();
+
+        var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(row);
+        Assert.Equal(CatalogLedgerCaveats.FrozenCatalogs, row!.Caveat);
+        Assert.Equal("Artist", row.FrozenCatalogTypes);
+        Assert.Null(row.Error);
+
+        // The caveat-only product has no no-PUT bit left to drop; a second
+        // capture must be a copy no-op, not a mutation.
+        await CaptureCleanAsync();
+        row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(row);
+        Assert.Equal(CatalogLedgerCaveats.FrozenCatalogs, row!.Caveat);
+        Assert.Null(row.Error);
     }
 
     /// <summary>
     /// JF-710: the clean capture over a CLEAN row must stay byte-clean itself:
-    /// no clause is invented, Error stays null, only the timestamp refreshes.
+    /// no caveat is invented, Error stays null, only the timestamp refreshes.
     /// </summary>
     [Fact]
     public async Task CaptureLocaleModelStatusesAsync_CleanCapture_OverCleanRow_LeavesErrorNull()
@@ -268,6 +327,8 @@ public class SkillStartupTests : PluginTestBase
         Assert.NotNull(row);
         Assert.Equal("SUCCEEDED", row!.Status);
         Assert.Equal("Embedded", row.Source);
+        Assert.Equal(CatalogLedgerCaveats.None, row.Caveat);
+        Assert.Null(row.FrozenCatalogTypes);
         Assert.Null(row.Error);
         Assert.True(row.LastUpdated > seeded, "the capture must still refresh the row's timestamp");
     }
@@ -277,19 +338,18 @@ public class SkillStartupTests : PluginTestBase
     /// observed state IN_PROGRESS. The capture runs immediately after
     /// UpdateSkillAsync with NO per-locale settle-wait, so freshly-PUT locales
     /// legitimately read IN_PROGRESS (the settle-wait alternative was rejected:
-    /// startup latency to protect a sub-case the content-keyed preserve already
+    /// startup latency to protect a sub-case the field-keyed preserve already
     /// handles safely). The preserve must not depend on the build having
-    /// settled: the clause survives, the trailed foreign survives un-framed,
-    /// the run-scoped tail drops, and the row keeps the capture's own
+    /// settled: the caveat survives, the carried foreign survives verbatim,
+    /// the run-scoped no-PUT bit drops, and the row keeps the capture's own
     /// IN_PROGRESS status. Under the pre-JF-719 SUCCEEDED-only gate this exact
-    /// world wrote Error=null and erased the clause (the filed residual).
+    /// world wrote Error=null and erased the caveat (the filed residual).
     /// </summary>
     [Fact]
     public async Task CaptureLocaleModelStatusesAsync_CleanInProgressCapture_OverNoPutClauseRow_PreservesClauseAndForeignDropsTail()
     {
-        string clause = $"Artist catalog{LibrarySyncService.FrozenLedgerClauseMarker}";
         string foreign = "canary mismatch: submitted 145 intents/900 samples but live model reports 144/899";
-        SeedLocaleRow($"{clause}{LibrarySyncService.NoPutLedgerTail}{LibrarySyncService.PreviousLedgerDiagnosticPrefix}{foreign}");
+        SeedLocaleRow(foreign, caveat: CatalogLedgerCaveats.FrozenCatalogs | CatalogLedgerCaveats.NoCatalogPut, frozenCatalogTypes: "Artist");
 
         await CaptureCleanAsync(SkillStatusState.IN_PROGRESS);
 
@@ -297,22 +357,25 @@ public class SkillStartupTests : PluginTestBase
         Assert.NotNull(row);
         Assert.Equal("IN_PROGRESS", row!.Status);
         Assert.Equal("Embedded", row.Source);
-        Assert.Equal($"{clause}; {foreign}", row.Error);
+        Assert.Equal(CatalogLedgerCaveats.FrozenCatalogs, row.Caveat);
+        Assert.Equal("Artist", row.FrozenCatalogTypes);
+        Assert.Equal(foreign, row.Error);
 
         // Idempotence mirrors the SUCCEEDED pin's second capture: another
         // capture while the startup re-sync stays skip-gated must preserve the
-        // content-keyed clause off the capture-written row.
+        // field-keyed caveat off the capture-written row.
         await CaptureCleanAsync(SkillStatusState.IN_PROGRESS);
         row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
         Assert.NotNull(row);
-        Assert.Equal($"{clause}; {foreign}", row!.Error);
+        Assert.Equal(CatalogLedgerCaveats.FrozenCatalogs, row!.Caveat);
+        Assert.Equal(foreign, row!.Error);
     }
 
     /// <summary>
     /// JF-719: the gate is an allowlist (SUCCEEDED or IN_PROGRESS), so a FAILED
     /// observation WITHOUT an Errors array still replaces wholesale. This is
     /// the widened gate's guard: a naive "any no-errors capture preserves"
-    /// widening would fire the preserve here and park the catalog clause on a
+    /// widening would fire the preserve here and park the catalog caveat on a
     /// row the diagnostics panel counts in failedModels, misattributing
     /// catalog state to a build failure. Error lands null (nothing of the
     /// capture's own to say; SMAPI sent no error details).
@@ -320,7 +383,7 @@ public class SkillStartupTests : PluginTestBase
     [Fact]
     public async Task CaptureLocaleModelStatusesAsync_FailedCaptureWithoutErrors_OverClauseRow_ReplacesWholesale()
     {
-        SeedLocaleRow($"Artist catalog{LibrarySyncService.FrozenLedgerClauseMarker}");
+        SeedLocaleRow(null, caveat: CatalogLedgerCaveats.FrozenCatalogs, frozenCatalogTypes: "Artist");
 
         await CreateStartup().CaptureLocaleModelStatusesAsync(
             UserServing(StatusFor("it-IT", SkillStatusState.FAILED)),
@@ -329,6 +392,8 @@ public class SkillStartupTests : PluginTestBase
         var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
         Assert.NotNull(row);
         Assert.Equal("FAILED", row!.Status);
+        Assert.Equal(CatalogLedgerCaveats.None, row.Caveat);
+        Assert.Null(row.FrozenCatalogTypes);
         Assert.Null(row.Error);
     }
 
@@ -336,11 +401,15 @@ public class SkillStartupTests : PluginTestBase
     /// JF-719: build errors replace wholesale regardless of the observed
     /// state; an IN_PROGRESS capture WITH its own errors is not clean, so the
     /// preserve must not fire and the fresh failure must not be masked.
+    /// JF-722 rework F1 (structural since JF-721): the own-error composition
+    /// carries the ObservedBuildErrors caveat bit so the deferred refresh's
+    /// clean-settle arm can tell it from the preserve's product; the Error
+    /// text is the formatted Errors array alone.
     /// </summary>
     [Fact]
     public async Task CaptureLocaleModelStatusesAsync_InProgressCaptureWithErrors_OverClauseRow_ReplacesWithOwnError()
     {
-        SeedLocaleRow($"Artist catalog{LibrarySyncService.FrozenLedgerClauseMarker}");
+        SeedLocaleRow(null, caveat: CatalogLedgerCaveats.FrozenCatalogs, frozenCatalogTypes: "Artist");
 
         var status = StatusFor(
             "it-IT",
@@ -351,20 +420,22 @@ public class SkillStartupTests : PluginTestBase
         var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
         Assert.NotNull(row);
         Assert.Equal("IN_PROGRESS", row!.Status);
-        Assert.Equal("build errors: INVALID_SKILL_PACKAGE: sample utterance is not unique", row.Error);
+        Assert.Equal(CatalogLedgerCaveats.ObservedBuildErrors, row.Caveat);
+        Assert.Null(row.FrozenCatalogTypes);
+        Assert.Equal("INVALID_SKILL_PACKAGE: sample utterance is not unique", row.Error);
     }
 
     /// <summary>
     /// JF-710: a capture WITH its own build errors still replaces the row
     /// wholesale with its own error; the preserve never masks a fresh failure.
-    /// JF-722 rework F1: the own-error composition carries the
-    /// ObservedBuildErrorsLedgerPrefix marker so the deferred refresh's
+    /// JF-722 rework F1 (structural since JF-721): the own-error composition
+    /// carries the ObservedBuildErrors caveat bit so the deferred refresh's
     /// clean-settle arm can tell it from the preserve's product.
     /// </summary>
     [Fact]
     public async Task CaptureLocaleModelStatusesAsync_FailedCapture_OverClauseRow_ReplacesWithOwnError()
     {
-        SeedLocaleRow($"Artist catalog{LibrarySyncService.FrozenLedgerClauseMarker}");
+        SeedLocaleRow(null, caveat: CatalogLedgerCaveats.FrozenCatalogs, frozenCatalogTypes: "Artist");
 
         var status = StatusFor(
             "it-IT",
@@ -375,7 +446,8 @@ public class SkillStartupTests : PluginTestBase
         var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
         Assert.NotNull(row);
         Assert.Equal("FAILED", row!.Status);
-        Assert.Equal("build errors: INVALID_SKILL_PACKAGE: sample utterance is not unique", row.Error);
+        Assert.Equal(CatalogLedgerCaveats.ObservedBuildErrors, row.Caveat);
+        Assert.Equal("INVALID_SKILL_PACKAGE: sample utterance is not unique", row.Error);
     }
 
     /// <summary>
@@ -393,16 +465,17 @@ public class SkillStartupTests : PluginTestBase
         var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
         Assert.NotNull(row);
         Assert.Equal("SUCCEEDED", row!.Status);
+        Assert.Equal(CatalogLedgerCaveats.None, row.Caveat);
         Assert.Null(row.Error);
     }
 
     /// <summary>
     /// JF-710 (the JF-495 extension): a BARE foreign diagnostic from the
     /// catalog-sync PUT writer (a canary mismatch with no frozen types) has no
-    /// clause and no tail, and survives the clean capture verbatim. It rides
-    /// its Source label, so it survives ONE capture cycle only: unlike the
-    /// freeze (durable state), a canary describes the model build it followed,
-    /// which the next version-change push replaces.
+    /// caveat bits, and survives the clean capture verbatim. It rides its
+    /// Source label, so it survives ONE capture cycle only: unlike the freeze
+    /// (durable state), a canary describes the model build it followed, which
+    /// the next version-change push replaces.
     /// </summary>
     [Fact]
     public async Task CaptureLocaleModelStatusesAsync_CleanCapture_OverBareCanaryRow_PreservesItOnceThenClears()
@@ -415,35 +488,37 @@ public class SkillStartupTests : PluginTestBase
         var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
         Assert.NotNull(row);
         Assert.Equal("SUCCEEDED", row!.Status);
+        Assert.Equal(CatalogLedgerCaveats.None, row.Caveat);
         Assert.Equal(canary, row.Error);
 
         // The capture rewrote Source to "Embedded"; a bare diagnostic carries
-        // no marker to key recognition on, so the SECOND clean capture clears
-        // it (content-keyed preserve, code-review F1 boundary).
+        // no caveat bit to key recognition on, so the SECOND clean capture
+        // clears it (field-keyed preserve, code-review F1 boundary).
         await CaptureCleanAsync();
         row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
         Assert.NotNull(row);
+        Assert.Equal(CatalogLedgerCaveats.None, row!.Caveat);
         Assert.Null(row!.Error);
     }
 
     /// <summary>
-    /// JF-705 PUT-writer combined shape under the JF-710 preserve: a clause-led
-    /// row with a canary behind it survives a clean capture unchanged (the
-    /// decomposition must not lose the foreign diagnostic when no tail is
-    /// present to strip).
+    /// JF-705 PUT-writer combined shape under the JF-710 preserve: a frozen row
+    /// with a canary behind it survives a clean capture unchanged (the field
+    /// copy must not lose the foreign diagnostic alongside the caveat).
     /// </summary>
     [Fact]
     public async Task CaptureLocaleModelStatusesAsync_CleanCapture_OverClausePlusCanaryRow_PreservesBoth()
     {
-        string clause = $"Artist + Album catalogs{LibrarySyncService.FrozenLedgerClauseMarker}";
         string foreign = "canary mismatch: submitted 145 intents/900 samples but live model reports 144/899";
-        SeedLocaleRow($"{clause}; {foreign}");
+        SeedLocaleRow(foreign, caveat: CatalogLedgerCaveats.FrozenCatalogs, frozenCatalogTypes: "Artist,Album");
 
         await CaptureCleanAsync();
 
         var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
         Assert.NotNull(row);
-        Assert.Equal($"{clause}; {foreign}", row!.Error);
+        Assert.Equal(CatalogLedgerCaveats.FrozenCatalogs, row!.Caveat);
+        Assert.Equal("Artist,Album", row.FrozenCatalogTypes);
+        Assert.Equal(foreign, row.Error);
     }
 
     // ------------------------------------------------------------------
@@ -546,18 +621,19 @@ public class SkillStartupTests : PluginTestBase
     /// <summary>
     /// JF-722 core pin: the settle-and-REWRITE refresh turns the frozen
     /// IN_PROGRESS capture row into the settled truth (Status SUCCEEDED feeds
-    /// the panel's ModelsDeployed checklist) while carrying the row's Error
-    /// VERBATIM: the capture already ran the JF-710/JF-719 preserve when it
-    /// wrote the row, and re-running it here would re-decompose an
-    /// already-decomposed product. A visited locale whose ledger row is not
-    /// the capture family (settled, not IN_PROGRESS) is untouched.
+    /// the panel's ModelsDeployed checklist) while carrying the row's caveat
+    /// fields and Error VERBATIM: the capture already ran the JF-710/JF-719
+    /// preserve when it wrote the row, and re-running it here would re-copy an
+    /// already-copied product. A visited locale whose ledger row is not the
+    /// capture family (settled, not IN_PROGRESS) is untouched.
     /// </summary>
     [Fact]
     public async Task RefreshInProgressLocaleStatusesAsync_SettledObservation_RewritesStatusAndCarriesErrorVerbatim()
     {
-        string clause = $"Artist catalog{LibrarySyncService.FrozenLedgerClauseMarker}";
-        string carried = $"{clause}; canary mismatch: submitted 145 intents/900 samples but live model reports 144/899";
-        var itSeeded = SeedRow("it-IT", "IN_PROGRESS", carried);
+        string carried = "canary mismatch: submitted 145 intents/900 samples but live model reports 144/899";
+        var itSeeded = SeedRow(
+            "it-IT", "IN_PROGRESS", carried,
+            caveat: CatalogLedgerCaveats.FrozenCatalogs, frozenCatalogTypes: "Artist");
         var enSeeded = SeedRow("en-US", "SUCCEEDED", "settled row, not the refresh family");
 
         var status = StatusForLocales(("it-IT", SkillStatusState.SUCCEEDED), ("en-US", SkillStatusState.SUCCEEDED));
@@ -568,6 +644,8 @@ public class SkillStartupTests : PluginTestBase
         var it = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
         Assert.NotNull(it);
         Assert.Equal("SUCCEEDED", it!.Status);
+        Assert.Equal(CatalogLedgerCaveats.FrozenCatalogs, it.Caveat);
+        Assert.Equal("Artist", it.FrozenCatalogTypes);
         Assert.Equal(carried, it.Error);
         Assert.Equal("Embedded", it.Source);
         Assert.True(it.LastUpdated > itSeeded, "the refresh must refresh the row's timestamp");
@@ -583,14 +661,15 @@ public class SkillStartupTests : PluginTestBase
     /// <summary>
     /// JF-722: a FAILED settle with build errors replaces the row wholesale,
     /// mirroring the capture's own branch semantics (a build-failure
-    /// observation never carries a catalog clause that had nothing to do with
-    /// it): the preserved clause is dropped and the fresh failure surfaces,
-    /// marker-prefixed like the capture's own arm (rework F1's marker family).
+    /// observation never carries a catalog caveat that had nothing to do with
+    /// it): the preserved caveat is dropped and the fresh failure surfaces,
+    /// ObservedBuildErrors-tagged like the capture's own arm (rework F1's arm
+    /// distinction, structural since JF-721).
     /// </summary>
     [Fact]
     public async Task RefreshInProgressLocaleStatusesAsync_FailedObservationWithErrors_ReplacesWholesale()
     {
-        SeedRow("it-IT", "IN_PROGRESS", $"Artist catalog{LibrarySyncService.FrozenLedgerClauseMarker}");
+        SeedRow("it-IT", "IN_PROGRESS", null, caveat: CatalogLedgerCaveats.FrozenCatalogs, frozenCatalogTypes: "Artist");
 
         var status = StatusFor(
             "it-IT",
@@ -603,18 +682,20 @@ public class SkillStartupTests : PluginTestBase
         var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
         Assert.NotNull(row);
         Assert.Equal("FAILED", row!.Status);
-        Assert.Equal("build errors: INVALID_SKILL_PACKAGE: sample utterance is not unique", row.Error);
+        Assert.Equal(CatalogLedgerCaveats.ObservedBuildErrors, row.Caveat);
+        Assert.Null(row.FrozenCatalogTypes);
+        Assert.Equal("INVALID_SKILL_PACKAGE: sample utterance is not unique", row.Error);
     }
 
     /// <summary>
     /// JF-722 rework F1, half A (stale observed errors do NOT survive a clean
     /// settle), END TO END through both writers: the capture observes
     /// IN_PROGRESS WITH an Errors array (the unverified-SMAPI shape where the
-    /// array may carry the PREVIOUS build's errors) and composes the row's Error
-    /// from them (marker-prefixed, wholesale); the refresh later observes the
-    /// clean SUCCEEDED settle and must DROP that text (it describes the
-    /// error-carrying observation, not the settled build) instead of carrying
-    /// it onto the green row.
+    /// array may carry the PREVIOUS build's errors) and composes the row's
+    /// Error from them (arm-tagged, wholesale); the refresh later observes the
+    /// clean SUCCEEDED settle and must DROP that text together with the bit
+    /// (it describes the error-carrying observation, not the settled build)
+    /// instead of carrying it onto the green row.
     /// </summary>
     [Fact]
     public async Task RefreshInProgressLocaleStatusesAsync_CleanSettle_OverStaleObservedErrorsRow_DropsThem()
@@ -629,7 +710,8 @@ public class SkillStartupTests : PluginTestBase
         var frozen = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
         Assert.NotNull(frozen);
         Assert.Equal("IN_PROGRESS", frozen!.Status);
-        Assert.Equal("build errors: INVALID_SKILL_PACKAGE: previous build error", frozen.Error);
+        Assert.Equal(CatalogLedgerCaveats.ObservedBuildErrors, frozen.Caveat);
+        Assert.Equal("INVALID_SKILL_PACKAGE: previous build error", frozen.Error);
 
         // Refresh half: clean settle.
         var user = UserServing(StatusFor("it-IT", SkillStatusState.SUCCEEDED), out _);
@@ -638,21 +720,24 @@ public class SkillStartupTests : PluginTestBase
         var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
         Assert.NotNull(row);
         Assert.Equal("SUCCEEDED", row!.Status);
+        Assert.Equal(CatalogLedgerCaveats.None, row.Caveat);
         Assert.Null(row.Error);
     }
 
     /// <summary>
     /// JF-722 rework F1, half B (the preserve's product DOES survive), END TO
     /// END through both writers: a clean IN_PROGRESS capture preserves the
-    /// frozen clause + foreign diagnostic onto the frozen row (JF-719), and the
-    /// refresh's clean settle carries it VERBATIM onto the SUCCEEDED row.
+    /// frozen caveat + foreign diagnostic onto the frozen row (JF-719), and the
+    /// refresh's clean settle carries them VERBATIM onto the SUCCEEDED row.
     /// </summary>
     [Fact]
     public async Task RefreshInProgressLocaleStatusesAsync_CleanSettle_OverPreservedClauseRow_EndToEnd_CarriesIt()
     {
-        string clause = $"Artist catalog{LibrarySyncService.FrozenLedgerClauseMarker}";
         string foreign = "canary mismatch: submitted 145 intents/900 samples but live model reports 144/899";
-        SeedLocaleRow($"{clause}{LibrarySyncService.NoPutLedgerTail}{LibrarySyncService.PreviousLedgerDiagnosticPrefix}{foreign}");
+        SeedLocaleRow(
+            foreign,
+            caveat: CatalogLedgerCaveats.FrozenCatalogs | CatalogLedgerCaveats.NoCatalogPut,
+            frozenCatalogTypes: "Artist");
 
         // Capture half: clean IN_PROGRESS, preserve fires.
         await CreateStartup().CaptureLocaleModelStatusesAsync(
@@ -660,16 +745,63 @@ public class SkillStartupTests : PluginTestBase
 
         var frozen = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
         Assert.NotNull(frozen);
-        Assert.Equal($"{clause}; {foreign}", frozen!.Error);
+        Assert.Equal(CatalogLedgerCaveats.FrozenCatalogs, frozen!.Caveat);
+        Assert.Equal("Artist", frozen.FrozenCatalogTypes);
+        Assert.Equal(foreign, frozen.Error);
 
-        // Refresh half: clean settle carries it.
+        // Refresh half: clean settle carries them.
         var user = UserServing(StatusFor("it-IT", SkillStatusState.SUCCEEDED), out _);
         await RefreshAsync(user);
 
         var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
         Assert.NotNull(row);
         Assert.Equal("SUCCEEDED", row!.Status);
-        Assert.Equal($"{clause}; {foreign}", row.Error);
+        Assert.Equal(CatalogLedgerCaveats.FrozenCatalogs, row.Caveat);
+        Assert.Equal("Artist", row.FrozenCatalogTypes);
+        Assert.Equal(foreign, row.Error);
+    }
+
+    /// <summary>
+    /// Gate-marker rework F1, the refresh mirror (+ the F2 payload guard): a
+    /// capture-family row whose Error is still a pre-JF-721 composed text (the
+    /// race-composed path: the paired capture's per-locale write failed while
+    /// the refresh's succeeds) must MIGRATE on the clean settle, not carry the
+    /// stale clause/tail forward; and a stray payload whose FrozenCatalogs bit
+    /// does not survive must not ride the settled row (the preserve's guard,
+    /// mirrored here).
+    /// </summary>
+    [Fact]
+    public async Task RefreshInProgressLocaleStatusesAsync_CleanSettle_OverLegacyTextFamilyRow_MigratesAndGuardsPayload()
+    {
+        var seeded = SeedRow(
+            "it-IT", "IN_PROGRESS",
+            "Artist catalog FROZEN (last-good pinned); no PUT this run; previous: canary mismatch: submitted 145/900 but live reports 144/899");
+
+        var user = UserServing(StatusFor("it-IT", SkillStatusState.SUCCEEDED), out _);
+
+        await RefreshAsync(user);
+
+        var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(row);
+        Assert.Equal("SUCCEEDED", row!.Status);
+        Assert.Equal(CatalogLedgerCaveats.FrozenCatalogs, row.Caveat);
+        Assert.Equal("Artist", row.FrozenCatalogTypes);
+        Assert.Equal("canary mismatch: submitted 145/900 but live reports 144/899", row.Error);
+        Assert.DoesNotContain("no PUT this run", row.Error, StringComparison.Ordinal);
+        Assert.True(row.LastUpdated > seeded, "the settled row must carry a fresh timestamp");
+
+        // F2 mirror: the payload rides only when its bit survives. A
+        // NoCatalogPut-only family row (never minted today; the capture never
+        // writes the bit) with a stray payload must settle payload-less.
+        SeedRow("it-IT", "IN_PROGRESS", null, caveat: CatalogLedgerCaveats.NoCatalogPut, frozenCatalogTypes: "Artist");
+        var user2 = UserServing(StatusFor("it-IT", SkillStatusState.SUCCEEDED), out _);
+        await RefreshAsync(user2);
+
+        row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(row);
+        Assert.Equal("SUCCEEDED", row!.Status);
+        Assert.Equal(CatalogLedgerCaveats.NoCatalogPut, row.Caveat);
+        Assert.Null(row.FrozenCatalogTypes);
     }
 
     /// <summary>
@@ -769,14 +901,14 @@ public class SkillStartupTests : PluginTestBase
     }
 
     /// <summary>
-    /// JF-722: a FAILED settle WITHOUT error details clears the Error (the
-    /// capture's FAILED-without-errors twin: wholesale, nothing of the
-    /// observation's own to say).
+    /// JF-722: a FAILED settle WITHOUT error details clears the Error and the
+    /// caveat (the capture's FAILED-without-errors twin: wholesale, nothing of
+    /// the observation's own to say).
     /// </summary>
     [Fact]
     public async Task RefreshInProgressLocaleStatusesAsync_FailedObservationWithoutErrors_ClearsError()
     {
-        SeedRow("it-IT", "IN_PROGRESS", $"Artist catalog{LibrarySyncService.FrozenLedgerClauseMarker}");
+        SeedRow("it-IT", "IN_PROGRESS", null, caveat: CatalogLedgerCaveats.FrozenCatalogs, frozenCatalogTypes: "Artist");
 
         var user = UserServing(StatusFor("it-IT", SkillStatusState.FAILED), out _);
 
@@ -785,6 +917,8 @@ public class SkillStartupTests : PluginTestBase
         var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
         Assert.NotNull(row);
         Assert.Equal("FAILED", row!.Status);
+        Assert.Equal(CatalogLedgerCaveats.None, row.Caveat);
+        Assert.Null(row.FrozenCatalogTypes);
         Assert.Null(row.Error);
     }
 
@@ -839,8 +973,9 @@ public class SkillStartupTests : PluginTestBase
     [Fact]
     public async Task RefreshInProgressLocaleStatusesAsync_BudgetExhausted_LeavesRowIntact()
     {
-        string clause = $"Artist catalog{LibrarySyncService.FrozenLedgerClauseMarker}";
-        var seeded = SeedRow("it-IT", "IN_PROGRESS", clause);
+        var seeded = SeedRow(
+            "it-IT", "IN_PROGRESS", null,
+            caveat: CatalogLedgerCaveats.FrozenCatalogs, frozenCatalogTypes: "Artist");
 
         var user = UserServing(StatusFor("it-IT", SkillStatusState.IN_PROGRESS), out var fake);
 
@@ -849,7 +984,8 @@ public class SkillStartupTests : PluginTestBase
         var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
         Assert.NotNull(row);
         Assert.Equal("IN_PROGRESS", row!.Status);
-        Assert.Equal(clause, row.Error);
+        Assert.Equal(CatalogLedgerCaveats.FrozenCatalogs, row.Caveat);
+        Assert.Equal("Artist", row.FrozenCatalogTypes);
         Assert.Equal(seeded, row.LastUpdated);
         Assert.Equal(2, fake.GetStatusCalls);
     }
@@ -880,9 +1016,10 @@ public class SkillStartupTests : PluginTestBase
     public async Task RefreshInProgressLocaleStatusesAsync_SyncAuthoredInProgressRow_IsNotTheRefreshFamily()
     {
         var seeded = SeedRow(
-            "it-IT", "IN_PROGRESS",
-            $"Artist catalog{LibrarySyncService.FrozenLedgerClauseMarker}",
-            source: LibrarySyncService.CatalogSyncLedgerSource);
+            "it-IT", "IN_PROGRESS", null,
+            source: LibrarySyncService.CatalogSyncLedgerSource,
+            caveat: CatalogLedgerCaveats.FrozenCatalogs,
+            frozenCatalogTypes: "Artist");
 
         var user = UserServing(StatusFor("it-IT", SkillStatusState.SUCCEEDED), out var fake);
 
@@ -891,6 +1028,7 @@ public class SkillStartupTests : PluginTestBase
         var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
         Assert.NotNull(row);
         Assert.Equal("IN_PROGRESS", row!.Status);
+        Assert.Equal(CatalogLedgerCaveats.FrozenCatalogs, row.Caveat);
         Assert.Equal(seeded, row.LastUpdated);
         Assert.Equal(0, fake.GetStatusCalls);
     }

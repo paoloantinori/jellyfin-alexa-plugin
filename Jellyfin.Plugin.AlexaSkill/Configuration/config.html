@@ -2025,6 +2025,14 @@
                                 if (ls.status !== "SUCCEEDED") {
                                     html += "<span style='color:" + color + ";'>" + ls.status + "</span>";
                                 }
+                                // JF-721: the structured caveat (frozen catalogs, no-PUT run,
+                                // observed build errors) renders as its own amber span BEFORE the
+                                // free-text error, so the caveat is always visible without eating
+                                // the error's 80-char budget. No tooltip: the caveat text is never
+                                // truncated (unlike the error span below).
+                                if (ls.caveat) {
+                                    html += "<span style='color:#e5a00d;font-size:0.8em;'>" + ls.caveat + "</span>";
+                                }
                                 if (ls.error) {
                                     html += "<span style='color:#999;font-size:0.8em;' title='" + ls.error.replace(/'/g, "&#39;") + "'>" + ls.error.substring(0, 80) + (ls.error.length > 80 ? "..." : "") + "</span>";
                                 }

@@ -472,35 +472,29 @@ public class LibrarySyncService
     /// <summary>
     /// Records a catalog-sync model update outcome in the per-locale status ledger
     /// (JF-495). A canary mismatch lands in the entry's Error field so the admin UI
-    /// surfaces it next to the build status. JF-705: a partially frozen leg (its
-    /// model PUT succeeded while one catalog type froze) keeps Status as the PUT's
-    /// own outcome and composes a frozen-types clause into Error, ahead of any
-    /// canary message (config.html truncates Error at 80 chars visually and renders
-    /// it unconditionally next to the status icon, and the diagnostics panel's
-    /// status-string matching of SUCCEEDED/FAILED/TIMEOUT stays valid). A distinct
-    /// status value was rejected because the panel's ModelsDeployed checklist
-    /// matches Status == "Succeeded" and would read false for a locale whose model
-    /// build actually succeeded.
+    /// surfaces it next to the build status. JF-705 (made structural by JF-721): a
+    /// partially frozen leg (its model PUT succeeded while one catalog type froze)
+    /// keeps Status as the PUT's own outcome and records the frozen types in the
+    /// row's structured caveat (Caveat=FrozenCatalogs plus the names payload),
+    /// which the admin UI renders beside the free-text Error; the canary keeps
+    /// Error to itself, so nothing composes a clause into the diagnostic text
+    /// anymore. A distinct status value was rejected because the panel's
+    /// ModelsDeployed checklist matches Status == "Succeeded" and would read false
+    /// for a locale whose model build actually succeeded.
     /// </summary>
     private void RecordModelUpdateInLedger(
         string locale,
         CatalogModelUpdateResult modelUpdate,
         List<CatalogType> frozenTypes)
     {
-        string? error = modelUpdate.CanaryError;
-        if (frozenTypes.Count > 0)
-        {
-            // The frozen clause LEADS the combined message (rationale and the
-            // 80-char truncation constraint live on FrozenLedgerClause).
-            string frozenClause = FrozenLedgerClause(frozenTypes);
-            error = string.IsNullOrEmpty(error) ? frozenClause : $"{frozenClause}; {error}";
-        }
-
+        var (caveat, frozenCatalogTypes) = FrozenCatalogCaveat(frozenTypes);
         WriteLedgerEntry(locale, new Configuration.LocaleModelStatus
         {
             Status = modelUpdate.BuildStatus,
             LastUpdated = DateTime.UtcNow,
-            Error = error,
+            Error = modelUpdate.CanaryError,
+            Caveat = caveat,
+            FrozenCatalogTypes = frozenCatalogTypes,
             Source = CatalogSyncLedgerSource
         }, "catalog-sync model update");
     }
@@ -540,60 +534,35 @@ public class LibrarySyncService
     }
 
     /// <summary>
-    /// The invariant tail of every <see cref="FrozenLedgerClause"/> output (the
-    /// frozen-type list prefix varies). Doubles as the frozen-clause MARKER: the
-    /// no-PUT writer's own-shape predicate and the JF-710 startup capture's
-    /// preserve key on it, so the text they recognize can never drift from the
-    /// clause the writers compose.
+    /// The ONE frozen-caveat factory for BOTH catalog-sync ledger writers
+    /// (JF-705 PUT path and JF-709 no-PUT path): nothing froze -> (None, null);
+    /// types froze -> (FrozenCatalogs, the names as a CSV "Artist,Album").
+    /// Owning the pair here makes the bit-iff-payload invariant structural, so
+    /// a future writer cannot set one without the other. The payload is display
+    /// data only: the row's CaveatText renders it, nothing parses it.
     /// </summary>
-    internal const string FrozenLedgerClauseMarker = " FROZEN (last-good pinned)";
-
-    /// <summary>
-    /// The ledger-side frozen-types clause, shared by BOTH ledger writers so the
-    /// entry text cannot drift (JF-705 PUT path and JF-709 no-PUT path). The
-    /// run-level surfaces (LogError, the completion line) keep their own wordings
-    /// per the JF-705 code-review decision. THE 80-CHAR CONSTRAINT LIVES HERE:
-    /// config.html truncates Error at 80 chars visually (full text in the
-    /// tooltip), so this clause must stay short and lead any appended context in
-    /// every composition site.
-    /// </summary>
-    private static string FrozenLedgerClause(List<CatalogType> frozenTypes) =>
-        $"{string.Join(" + ", frozenTypes)} catalog{(frozenTypes.Count > 1 ? "s" : string.Empty)}{FrozenLedgerClauseMarker}";
-
-    /// <summary>
-    /// The run-scoped tail this writer appends after the frozen clause. Doubles
-    /// as the OWN-SHAPE MARKER: a previous Error carrying this tail was written
-    /// by this writer, so it is replaced wholesale on the next all-frozen run
-    /// instead of being trailed (see RecordNoPutFrozenLegInLedger). Internal for
-    /// the JF-710 startup capture, whose preserve spec keys on the same marker.
-    /// </summary>
-    internal const string NoPutLedgerTail = "; no PUT this run";
-
-    /// <summary>
-    /// The framing the no-PUT writer wraps a trailed foreign diagnostic in.
-    /// Internal because the JF-710 startup capture preserve strips the same
-    /// framing when it keeps the foreign diagnostic alive, so the two cannot
-    /// drift.
-    /// </summary>
-    internal const string PreviousLedgerDiagnosticPrefix = "; previous: ";
+    private static (Configuration.CatalogLedgerCaveats Caveat, string? FrozenCatalogTypes) FrozenCatalogCaveat(List<CatalogType> frozenTypes) =>
+        frozenTypes.Count == 0
+            ? (Configuration.CatalogLedgerCaveats.None, null)
+            : (Configuration.CatalogLedgerCaveats.FrozenCatalogs, string.Join(",", frozenTypes));
 
     /// <summary>
     /// Records an ALL-FROZEN leg (no version minted for any type, no model PUT)
     /// in the per-locale status ledger (JF-709), replacing the locale's previous
     /// row rather than leaving it stale. Status: PreservedOrSkippedStatus (the
-    /// policy and its consumer-weight rationale live on the helper). Error: the
-    /// frozen clause plus the run-scoped no-PUT tail, then a single
-    /// "previous: ..." trailer ONLY when the previous Error is a FOREIGN
-    /// diagnostic (a JF-495 canary mismatch or a failed PUT reason, i.e. an
-    /// Error that is not this subsystem's own shape per
-    /// <see cref="IsOwnShapeLedgerError"/>: neither the no-PUT tail nor the
-    /// frozen-clause marker anywhere). An own-shape previous Error is
-    /// REPLACED entirely, never nested: the
-    /// every-restart resync cadence would otherwise compound "previous:
-    /// previous: ..." (rework F1; full story in the JF-709 task file). The
-    /// window arithmetic is FrozenLedgerClause's; the tooltip-only position of a
-    /// trailed foreign diagnostic is ACCEPTED there per JF-709 rework F4.
-    /// Source is always this writer's own label: catalog sync authors THIS row.
+    /// policy and its consumer-weight rationale live on the helper). Caveat:
+    /// FrozenCatalogs | NoCatalogPut plus the names payload. Error: the previous
+    /// row's FREE-TEXT diagnostic, carried ONLY when the previous row was not
+    /// authored by this subsystem's own shapes per
+    /// <see cref="IsOwnShapeLedgerCaveat"/>, MIGRATED if it is still a
+    /// pre-JF-721 composed text (<see cref="MigrateLegacyLedgerError"/>, so the
+    /// stale clause/tail never bakes onto this caveat-carrying row) and
+    /// ATTRIBUTED with <see cref="CarriedDiagnosticLedgerPrefix"/> so it cannot
+    /// read as the current run's error. A carried diagnostic survives exactly
+    /// ONE all-frozen run, because this write's own NoCatalogPut bit makes the
+    /// NEXT all-frozen run replace the row wholesale instead of re-carrying it
+    /// (the JF-709 rework F1 no-nesting rule, field-keyed since JF-721). Source
+    /// is always this writer's own label: catalog sync authors THIS row.
     /// </summary>
     private void RecordNoPutFrozenLegInLedger(string locale, List<CatalogType> frozenTypes)
     {
@@ -615,18 +584,31 @@ public class LibrarySyncService
             previous = null;
         }
 
-        string error = $"{FrozenLedgerClause(frozenTypes)}{NoPutLedgerTail}";
+        string? carriedError = null;
         if (previous?.Error is { Length: > 0 } previousError
-            && !IsOwnShapeLedgerError(previousError))
+            && !IsOwnShapeLedgerCaveat(previous.Caveat))
         {
-            error = $"{error}{PreviousLedgerDiagnosticPrefix}{previousError}";
+            // Gate-marker rework F1: a pre-JF-721 composed previous Error
+            // migrates once here too; this carry is the path that would
+            // otherwise bake the stale clause/tail text onto a caveat-carrying
+            // row (the clause this run writes its own fields for). Gate-marker
+            // rework F3: the carried diagnostic is ATTRIBUTED in the free text
+            // so the admin can tell a prior-run failure from the current run's
+            // state; the prefix is display-only, nothing parses it.
+            carriedError = MigrateLegacyLedgerError(previousError).Error is { Length: > 0 } foreign
+                ? CarriedDiagnosticLedgerPrefix + foreign
+                : null;
         }
+
+        var (frozenCaveat, frozenCatalogTypes) = FrozenCatalogCaveat(frozenTypes);
 
         WriteLedgerEntry(locale, new Configuration.LocaleModelStatus
         {
             Status = PreservedOrSkippedStatus(previous?.Status),
             LastUpdated = DateTime.UtcNow,
-            Error = error,
+            Error = carriedError,
+            Caveat = frozenCaveat | Configuration.CatalogLedgerCaveats.NoCatalogPut,
+            FrozenCatalogTypes = frozenCatalogTypes,
             Source = CatalogSyncLedgerSource
         }, "all-frozen no-PUT leg");
     }
@@ -650,87 +632,307 @@ public class LibrarySyncService
             : "Skipped";
 
     /// <summary>
-    /// Own-shape predicate for the no-PUT writer's "previous: ..." trail
-    /// decision (JF-709 rework F1, extended by JF-710): a previous Error
-    /// carrying the no-PUT tail OR the frozen-clause marker anywhere was
-    /// composed from this subsystem's own text and is REPLACED wholesale,
-    /// never trailed. Both ledger writers lead their Error with the clause,
-    /// so in practice the marker arm matches clause-led rows; it deliberately
-    /// matches anywhere so a marker embedded in trailed text also reads as
-    /// own shape. The marker arm is required now that the JF-710 startup
-    /// capture preserves the clause WITHOUT the tail: a tail-only check would
-    /// classify that row as foreign and trail the SAME clause back as
-    /// "previous: ..." once per restart (the JF-710 coordination-note
-    /// hazard). Accepted consequence of the marker arm: a foreign diagnostic
-    /// riding a clause-led row (a JF-705 canary after a frozen clause) is
-    /// replaced rather than trailed here, so with no intervening capture it
-    /// is dropped one run earlier than the pre-JF-710 single trail; the
-    /// strip-at-marker alternative that would keep it was rejected in the
-    /// JF-709 review, and the capture preserve is its durable home.
-    /// LOAD-BEARING INVARIANT (JF-710 gate-marker): this predicate and the
-    /// capture's Replace-family rest on the assumption that ONLY this
-    /// subsystem's writers ever put the three marker literals into a ledger
-    /// Error (the canary format is fixed and failed-PUT reasons never reach
-    /// the field); a future composer that lets external text into Error must
-    /// either quarantine it or this family moves to a structured field (the
-    /// JF-721 design). The JF-722 rework added a FOURTH family literal with a
-    /// PREFIX-match rule (SkillStartup.ObservedBuildErrorsLedgerPrefix: foreign
-    /// diagnostics must never START with it); this predicate deliberately does
-    /// not match it, but the quarantine obligation above covers its rule too.
+    /// Own-shape predicate for the no-PUT writer's carry decision (JF-709
+    /// rework F1, extended by JF-710, made a FIELD read by JF-721): a previous
+    /// row whose caveat carries FrozenCatalogs or NoCatalogPut was authored by
+    /// this subsystem's own shapes (the frozen clause rode it, or it IS a
+    /// previous no-PUT row), so its Error is REPLACED wholesale, never carried.
+    /// The FrozenCatalogs arm is required because the startup capture preserves
+    /// that bit onto its own rows (Source "Embedded"): a caveat-blind check
+    /// would carry the preserved diagnostic forward forever while the skip-gated
+    /// sync stays skipped (the JF-710 coordination-note hazard, field form).
+    /// Accepted consequence (the JF-709 review's standing decision, kept): a
+    /// foreign diagnostic riding a frozen row (a JF-705 canary after a freeze)
+    /// is replaced rather than carried here; its durable home is the capture
+    /// preserve. ObservedBuildErrors deliberately does NOT match: that Error is
+    /// SMAPI's own text from the previous observation, foreign to this writer
+    /// (and carried like any other foreign diagnostic).
     /// </summary>
-    private static bool IsOwnShapeLedgerError(string error) =>
-        error.Contains(NoPutLedgerTail, StringComparison.Ordinal)
-        || error.Contains(FrozenLedgerClauseMarker, StringComparison.Ordinal);
+    private static bool IsOwnShapeLedgerCaveat(Configuration.CatalogLedgerCaveats caveat) =>
+        caveat.HasFlag(Configuration.CatalogLedgerCaveats.FrozenCatalogs)
+        || caveat.HasFlag(Configuration.CatalogLedgerCaveats.NoCatalogPut);
 
     /// <summary>
-    /// The JF-710 startup-capture preserve, called by the capture ONLY on a
-    /// clean observation (no build errors of its own and a no-failure-weight
-    /// state, SUCCEEDED or IN_PROGRESS; the capture owns that gate, widened to
-    /// include IN_PROGRESS by JF-719 because the capture reads freshly-PUT
-    /// locales before their builds settle). A clean capture describes only the
-    /// MODEL-BUILD surface, while a catalog-sync row's Error describes CATALOG
-    /// state from the last sync,
-    /// which a model rebuild does not reset (the next sync either re-freezes
-    /// and rewrites it or heals and clears it), so the segments that survive
-    /// are: the frozen clause and any FOREIGN diagnostic (a JF-495 canary
-    /// mismatch or failed PUT reason). The run-scoped no-PUT tail and the
-    /// "previous: " framing around a trailed foreign do NOT survive: a new
-    /// skill version WAS pushed, superseding the last run's no-PUT shape.
-    /// Recognition is content-keyed, not Source-keyed: a row authored by this
-    /// subsystem (Source == CatalogSyncLedgerSource) preserves, and so does a
-    /// row a PREVIOUS capture already preserved (that capture writes Source
-    /// "Embedded", but its Error still carries this subsystem's markers, and
+    /// The display attribution the no-PUT writer prefixes onto the previous
+    /// row's diagnostic it carries (gate-marker rework F3): without it a stale
+    /// prior-run failure renders fully visible beside "no PUT this run" and
+    /// reads as the current run's error. DISPLAY-ONLY, unlike the deleted
+    /// PreviousLedgerDiagnosticPrefix: nothing recognizes or strips it, and it
+    /// survives later captures verbatim because it stays true (the carried text
+    /// IS from a previous run). Deliberately not shaped like any legacy
+    /// migration literal, so <see cref="MigrateLegacyLedgerError"/> passes it
+    /// through untouched.
+    /// </summary>
+    internal const string CarriedDiagnosticLedgerPrefix = "previous run: ";
+
+    /// <summary>
+    /// The surviving caveat fields of a JF-710 startup-capture preserve: what a
+    /// CLEAN capture (no build errors of its own and a no-failure-weight state,
+    /// SUCCEEDED or IN_PROGRESS; the capture owns that gate, widened to include
+    /// IN_PROGRESS by JF-719) carries onto the row it writes instead of the old
+    /// Error-text decomposition. A pure FIELD COPY (JF-721): no parsing, no
+    /// literal vocabulary, nothing to drift.
+    /// </summary>
+    /// <param name="Caveat">The surviving caveat bits (NoCatalogPut already
+    /// masked off; the run-scoped bit never survives a capture).</param>
+    /// <param name="FrozenCatalogTypes">The surviving frozen-type names payload.</param>
+    /// <param name="Error">The surviving free-text diagnostic, verbatim.</param>
+    internal readonly record struct PreservedLedgerCaveat(
+        Configuration.CatalogLedgerCaveats Caveat,
+        string? FrozenCatalogTypes,
+        string? Error);
+
+    /// <summary>
+    /// The JF-710 startup-capture preserve (JF-721's field form): called by the
+    /// capture ONLY on a clean observation. A clean capture describes only the
+    /// MODEL-BUILD surface, while a catalog-sync row's caveat fields and Error
+    /// describe CATALOG state from the last sync, which a model rebuild does not
+    /// reset (the next sync either re-freezes and rewrites them or heals and
+    /// clears them), so they survive as a field copy. Recognition is
+    /// field-keyed, not Source-keyed: a row authored by this subsystem
+    /// (Source == CatalogSyncLedgerSource) preserves, and so does a row a
+    /// PREVIOUS capture already preserved (that capture writes Source
+    /// "Embedded", but its copied caveat bits are exactly what mark it ours, and
     /// the durable catalog state they name must survive every later capture
-    /// while the skip-gated sync stays skipped; code-review F1). A bare
-    /// foreign diagnostic without markers rides its Source label and survives
-    /// one capture cycle; a previous capture's or custom deployment's own
-    /// build error carries no marker and IS superseded by the fresh build.
-    /// Both writers compose the Error from exactly the three shared literals
-    /// below (clause, tail, framing), so deleting the tail and un-framing the
-    /// trailed foreign IS the full decomposition.
+    /// while the skip-gated sync stays skipped; code-review F1). A bare foreign
+    /// diagnostic without caveat bits rides its Source label and survives one
+    /// capture cycle; a previous capture's own build error carries neither the
+    /// Source label nor caveat bits and IS superseded by the fresh build, and an
+    /// observed-errors row's Error is superseded the same way through
+    /// <see cref="DropObservedBuildErrors"/> (its arm bit survives recognition
+    /// only to be dropped with its Error).
+    /// WHAT DROPS: the run-scoped NoCatalogPut bit (a new skill version WAS
+    /// pushed, superseding the last run's no-PUT shape) and any
+    /// ObservedBuildErrors-tagged Error with its bit
+    /// (<see cref="DropObservedBuildErrors"/>, the one owner of that rule).
+    /// UPGRADE TRANSITION (JF-721 design, hardened by the gate-marker rework
+    /// F1): a persisted row whose Error still carries a pre-JF-721 COMPOSED
+    /// text is MIGRATED once by <see cref="MigrateLegacyLedgerError"/> (the
+    /// clause becomes the caveat bits + names payload, the run-scoped tail and
+    /// framing drop, the bare foreign diagnostic survives) so a skip-gated
+    /// capture chain can never keep displaying "no PUT this run" for a run that
+    /// DID push, nor duplicate the clause beside the caveat span; the migration
+    /// runs on every text-carrying path (this preserve, the no-PUT writer's
+    /// carry, the refresh's clean settle). A pre-JF-721 CAPTURE-preserved row
+    /// (Source "Embedded", clause-led Error, no bits) still clears on the first
+    /// post-upgrade clean capture (recognition finds nothing), and a pre-JF-721
+    /// own-errors row clears the same way. All shapes self-heal at the next
+    /// catalog sync; steady state (every persisted row rewritten once by a
+    /// field-era writer) leaves the migration a no-op passthrough.
     /// </summary>
     /// <param name="existing">The locale's current ledger entry, if any.</param>
-    /// <returns>The recomposed Error carrying the surviving segments, or null
-    /// when nothing survives (and the capture's own Error stands).</returns>
-    internal static string? PreserveLedgerErrorAcrossCapture(Configuration.LocaleModelStatus? existing)
+    /// <returns>The surviving caveat fields, or null when nothing survives (and
+    /// the capture's own clean Error stands).</returns>
+    internal static PreservedLedgerCaveat? PreserveLedgerCaveatAcrossCapture(Configuration.LocaleModelStatus? existing)
     {
-        if (existing?.Error is not { Length: > 0 } existingError)
+        if (existing == null)
         {
             return null;
         }
 
         // Own content, regardless of which writer last saved the row: the
-        // catalog-sync source label, or this subsystem's markers surviving
-        // inside a capture-written row (IsOwnShapeLedgerError's vocabulary).
+        // catalog-sync source label, or this subsystem's caveat bits surviving
+        // inside a capture-written row.
         bool catalogAuthored = string.Equals(existing.Source, CatalogSyncLedgerSource, StringComparison.Ordinal);
-        if (!catalogAuthored && !IsOwnShapeLedgerError(existingError))
+        if (!catalogAuthored && existing.Caveat == Configuration.CatalogLedgerCaveats.None)
         {
             return null;
         }
 
-        return existingError
-            .Replace(NoPutLedgerTail, string.Empty, StringComparison.Ordinal)
-            .Replace(PreviousLedgerDiagnosticPrefix, "; ", StringComparison.Ordinal);
+        // The shared text-carrying copy (rework R2): observation-era errors
+        // drop, a legacy composed Error migrates once, and the payload rides
+        // only when its bit survives (the FrozenCatalogCaveat factory's pair
+        // rule, enforced on every copy path; code-review F2).
+        var (caveat, frozenCatalogTypes, error) = CarryLedgerCaveatAcrossCleanObservation(
+            existing.Caveat, existing.FrozenCatalogTypes, existing.Error);
+
+        // The preserve's ONE deliberate divergence from the refresh (named so
+        // the asymmetry cannot read as drift): the run-scoped no-PUT bit never
+        // survives a capture, because a capture follows a skill UPDATE that
+        // pushed a new version. The refresh does not mask it (its family rows
+        // never carry the bit today; it carries family bits verbatim).
+        return new PreservedLedgerCaveat(
+            caveat & ~Configuration.CatalogLedgerCaveats.NoCatalogPut,
+            frozenCatalogTypes,
+            error);
+    }
+
+    /// <summary>
+    /// The ONE owner of the text-carrying copy shape shared by the startup
+    /// capture's preserve and the deferred refresh's clean-settle arm (JF-721
+    /// gate-marker rework R2; the DropObservedBuildErrors one-owner precedent):
+    /// drop the observation-era arm with its Error, migrate a pre-JF-721
+    /// composed Error once (minting the frozen caveat from a clause the text
+    /// carried), and null the payload whenever the FrozenCatalogs bit does not
+    /// survive. The two callers differ ONLY in the preserve's run-scoped
+    /// NoCatalogPut mask, applied at its call site and named there; any future
+    /// rule of this copy shape lands here once for both writers.
+    /// </summary>
+    /// <param name="caveat">The source row's caveat bits.</param>
+    /// <param name="frozenCatalogTypes">The source row's names payload.</param>
+    /// <param name="error">The source row's free-text Error.</param>
+    /// <returns>The carried (caveat, payload, error) triple.</returns>
+    internal static (Configuration.CatalogLedgerCaveats Caveat, string? FrozenCatalogTypes, string? Error) CarryLedgerCaveatAcrossCleanObservation(
+        Configuration.CatalogLedgerCaveats caveat,
+        string? frozenCatalogTypes,
+        string? error)
+    {
+        var (carriedCaveat, carriedError) = DropObservedBuildErrors(caveat, error);
+        var (migratedError, migratedTypes) = MigrateLegacyLedgerError(carriedError);
+        if (migratedTypes != null)
+        {
+            carriedCaveat |= Configuration.CatalogLedgerCaveats.FrozenCatalogs;
+        }
+
+        return (
+            carriedCaveat,
+            carriedCaveat.HasFlag(Configuration.CatalogLedgerCaveats.FrozenCatalogs)
+                ? frozenCatalogTypes ?? migratedTypes
+                : null,
+            migratedError);
+    }
+
+    /// <summary>
+    /// The ONE owner of the observation-era survival rule (JF-721): an
+    /// ObservedBuildErrors-tagged Error and its bit never survive a later CLEAN
+    /// observation, because the tagged errors describe an observation the clean
+    /// one supersedes (possibly stale in the unverified SMAPI in-flight shape,
+    /// JF-722 rework F1). Called by the startup capture's preserve (over the
+    /// row it copies) and by the deferred refresh's clean-settle arm (over its
+    /// own family row), so the drop cannot drift between the two writers the
+    /// arm distinction exists for. Everything else about the row survives
+    /// untouched; today an arm-tagged row carries nothing else (the own-errors
+    /// arms replace wholesale), which is why this is a pure pair-drop.
+    /// </summary>
+    internal static (Configuration.CatalogLedgerCaveats Caveat, string? Error) DropObservedBuildErrors(
+        Configuration.CatalogLedgerCaveats caveat,
+        string? error) =>
+        caveat.HasFlag(Configuration.CatalogLedgerCaveats.ObservedBuildErrors)
+            ? (caveat & ~Configuration.CatalogLedgerCaveats.ObservedBuildErrors, null)
+            : (caveat, error);
+
+    /// <summary>The frozen-clause literal of the pre-JF-721 COMPOSED Error text
+    /// (the deleted FrozenLedgerClauseMarker). LEGACY MIGRATION vocabulary only:
+    /// no field-era writer emits it and nothing recognizes it as protocol; it
+    /// exists so <see cref="MigrateLegacyLedgerError"/> can date a persisted
+    /// row's text as pre-JF-721 and decompose it once.</summary>
+    private const string LegacyFrozenClauseText = " FROZEN (last-good pinned)";
+
+    /// <summary>The no-PUT tail literal of the pre-JF-721 composed Error text
+    /// (the deleted NoPutLedgerTail). Legacy migration vocabulary only.</summary>
+    private const string LegacyNoPutTailText = "; no PUT this run";
+
+    /// <summary>The trailed-foreign framing literal of the pre-JF-721 composed
+    /// Error text (the deleted PreviousLedgerDiagnosticPrefix). Legacy migration
+    /// vocabulary only.</summary>
+    private const string LegacyPreviousFramingText = "; previous: ";
+
+    /// <summary>The observed-errors prefix literal of the pre-JF-721 composed
+    /// Error text (the deleted ObservedBuildErrorsLedgerPrefix). Legacy
+    /// migration vocabulary only.</summary>
+    private const string LegacyObservedBuildErrorsText = "build errors: ";
+
+    /// <summary>
+    /// The ONE-SHOT migration of a pre-JF-721 COMPOSED ledger Error (JF-721
+    /// gate-marker F1). The old writers baked the frozen clause, the run-scoped
+    /// no-PUT tail, the "previous: " framing, and the build-errors prefix INTO
+    /// the free text; the field-era writers never emit any of them, so an Error
+    /// still carrying one dates the row as pre-JF-721 and must not be copied
+    /// forward verbatim (a skip-gated capture chain would keep displaying "no
+    /// PUT this run" for a run that DID push, and the baked clause would
+    /// duplicate beside the caveat span once the fields carry it). The
+    /// migration decomposes exactly the old composition grammar ONE way, into
+    /// fields: the frozen clause (when present) becomes the returned names
+    /// payload for the caller to OR into its caveat bits, the run-scoped tail
+    /// and framing drop, and what survives is the bare foreign diagnostic (or
+    /// null when nothing does). A pre-upgrade observed-errors text (the prefix
+    /// shape) is superseded observation-era text and clears entirely. A
+    /// field-era Error (no legacy literal anywhere) passes through UNTOUCHED,
+    /// which is the steady state after every persisted row has been rewritten
+    /// once; this helper is migration scaffolding, NOT a wire protocol.
+    /// RESIDUAL, HARDENED (code-review refresh R1): a field-era diagnostic that
+    /// incidentally CARRIES one of the literals is misdated and decomposed.
+    /// The clause arm guards against exactly that: the marker only counts as a
+    /// clause when the text before it is clause-SHAPED (non-empty, no ';' and
+    /// no ':', ending in the catalog noun, exactly what every legacy
+    /// composition's leading "names catalogs" head looks like), so a marker
+    /// quoted mid-sentence in a foreign diagnostic does NOT mint a bogus
+    /// FrozenCatalogs bit and the text passes through untouched. The remaining
+    /// window is a foreign text carrying the bare tail/framing literals or a
+    /// clause-shaped prefix, shapes the fixed canary format and SMAPI error
+    /// messages do not produce; a misdated row heals at the next sync rewrite.
+    /// VIGILANCE (the old family's burden, one last time): no writer may ever
+    /// emit these literals into an Error, which is why
+    /// <see cref="CarriedDiagnosticLedgerPrefix"/> is deliberately shaped to
+    /// match none of them.
+    /// </summary>
+    /// <param name="error">The Error text a writer is about to carry forward.</param>
+    /// <returns>The migrated free text (null when nothing survives) and the
+    /// frozen-type names the text carried (null when it carried no clause; the
+    /// caller ORs the FrozenCatalogs bit when non-null).</returns>
+    internal static (string? Error, string? MigratedFrozenCatalogTypes) MigrateLegacyLedgerError(string? error)
+    {
+        if (error is not { Length: > 0 })
+        {
+            return (error, null);
+        }
+
+        // The old own-errors shape (bare or trailed by the no-PUT writer):
+        // superseded observation-era text, clears like the field-era arm rows.
+        if (error.StartsWith(LegacyObservedBuildErrorsText, StringComparison.Ordinal))
+        {
+            return (null, null);
+        }
+
+        // The clause arm (R1 hardening): a marker counts as the legacy clause
+        // only when its head is clause-shaped, so a marker quoted inside a
+        // foreign diagnostic neither mints the frozen bit nor chops the text.
+        int markerAt = error.IndexOf(LegacyFrozenClauseText, StringComparison.Ordinal);
+        bool clauseLed = false;
+        string head = string.Empty;
+        if (markerAt >= 0)
+        {
+            head = error[..markerAt];
+            clauseLed = head.Length > 0
+                && !head.Contains(';')
+                && !head.Contains(':')
+                && (head.EndsWith(" catalogs", StringComparison.Ordinal) || head.EndsWith(" catalog", StringComparison.Ordinal));
+        }
+
+        if (!clauseLed
+            && !error.Contains(LegacyNoPutTailText, StringComparison.Ordinal)
+            && !error.Contains(LegacyPreviousFramingText, StringComparison.Ordinal))
+        {
+            // Field-era free text (or a foreign text quoting a literal in a
+            // non-legacy shape): untouched.
+            return (error, null);
+        }
+
+        string migrated = error
+            .Replace(LegacyNoPutTailText, string.Empty, StringComparison.Ordinal)
+            .Replace(LegacyPreviousFramingText, "; ", StringComparison.Ordinal);
+
+        // The clause LEADS every legacy composition, so chopping through the
+        // marker's end removes the names + noun + marker in one cut; the names
+        // for the payload are the head minus its trailing catalog noun.
+        string? migratedTypes = null;
+        if (clauseLed)
+        {
+            migrated = migrated[(markerAt + LegacyFrozenClauseText.Length)..];
+            foreach (string noun in new[] { " catalogs", " catalog" })
+            {
+                if (head.EndsWith(noun, StringComparison.Ordinal))
+                {
+                    head = head[..^noun.Length];
+                    break;
+                }
+            }
+
+            migratedTypes = head.Length == 0 ? null : head.Replace(" + ", ",");
+        }
+
+        migrated = migrated.Trim(' ', ';', ',');
+        return (migrated.Length == 0 ? null : migrated, migratedTypes);
     }
 
     /// <summary>

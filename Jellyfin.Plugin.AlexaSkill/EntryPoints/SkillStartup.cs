@@ -380,9 +380,9 @@ public class SkillStartup : IHostedService, IDisposable
     /// Captures per-locale interaction model build status from SMAPI and stores it in configuration.
     /// JF-710: a CLEAN capture (no build errors of its own, observed state
     /// SUCCEEDED or IN_PROGRESS) no longer wipes the catalog-sync diagnostics
-    /// off the row it replaces. The frozen clause and any foreign diagnostic
-    /// survive via
-    /// <see cref="LibrarySyncService.PreserveLedgerErrorAcrossCapture"/>
+    /// off the row it replaces. The structured caveat fields and any foreign
+    /// diagnostic survive via
+    /// <see cref="LibrarySyncService.PreserveLedgerCaveatAcrossCapture"/>
     /// (a model rebuild does not reset the catalog state they describe), while
     /// a capture with its own errors or a failure-weight state still replaces
     /// the row wholesale. JF-719 widened the gate from SUCCEEDED-only to the
@@ -461,14 +461,10 @@ public class SkillStartup : IHostedService, IDisposable
                 {
                     string state = localeStatus.LastModified.Status.ToString();
 
-                    string? error = LibrarySyncService.FormatInvocationErrors(localeStatus.Errors);
+                    var (error, caveat) = ComposeObservedErrorsCaveat(localeStatus.Errors);
+                    string? frozenCatalogTypes = null;
                     if (error != null)
                     {
-                        // JF-722 rework F1: the observed-errors composition carries
-                        // the marker prefix so the deferred refresh's clean-settle
-                        // arm can tell it from the preserve's product and drop it
-                        // when the settle observation is clean.
-                        error = ObservedBuildErrorsLedgerPrefix + error;
                         _logger.LogWarning(
                             "Interaction model build {Status} for locale {Locale}: {Error}",
                             state, locale, error);
@@ -476,25 +472,25 @@ public class SkillStartup : IHostedService, IDisposable
                     else if (localeStatus.LastModified.Status is SkillStatusState.SUCCEEDED or SkillStatusState.IN_PROGRESS)
                     {
                         // JF-710/JF-719: the capture describes the model-build surface
-                        // only; the existing catalog-sync row's Error describes catalog
-                        // state the rebuild did not reset. The gate is an ALLOWLIST of
-                        // the two no-failure-weight states: SUCCEEDED (settled clean)
-                        // and IN_PROGRESS (the freshly-PUT locale this no-settle-wait
-                        // capture legitimately reads right after UpdateSkillAsync,
-                        // JF-719; the diagnostics panel counts IN_PROGRESS as healthy,
-                        // so a preserved clause on it beats the wiped row the
-                        // SUCCEEDED-only gate left behind). Anything else keeps its own
-                        // consumer weight (the panel's failedModels count) and
-                        // replaces wholesale, so a build-failure observation never
-                        // carries a catalog clause that had nothing to do with it;
-                        // an allowlist, not a FAILED/TIMEOUT denylist, so a state the
-                        // SkillStatusState enum grows into fails safe the same way.
-                        // TIMEOUT, the ledger's other failure vocabulary, is already
-                        // unreachable here: SkillStatusState is exactly
-                        // IN_PROGRESS|FAILED|SUCCEEDED (reflection-dumped from the
-                        // referenced Alexa.NET.Management), and TIMEOUT rows in the
-                        // ledger come from the sync writers' own poll outcome, never
-                        // from this status GET.
+                        // only; the existing catalog-sync row's caveat fields and
+                        // Error describe catalog state the rebuild did not reset. The
+                        // gate is an ALLOWLIST of the two no-failure-weight states:
+                        // SUCCEEDED (settled clean) and IN_PROGRESS (the freshly-PUT
+                        // locale this no-settle-wait capture legitimately reads right
+                        // after UpdateSkillAsync, JF-719; the diagnostics panel counts
+                        // IN_PROGRESS as healthy, so a preserved clause on it beats
+                        // the wiped row the SUCCEEDED-only gate left behind). Anything
+                        // else keeps its own consumer weight (the panel's failedModels
+                        // count) and replaces wholesale, so a build-failure
+                        // observation never carries a catalog clause that had nothing
+                        // to do with it; an allowlist, not a FAILED/TIMEOUT denylist,
+                        // so a state the SkillStatusState enum grows into fails safe
+                        // the same way. TIMEOUT, the ledger's other failure
+                        // vocabulary, is already unreachable here: SkillStatusState
+                        // is exactly IN_PROGRESS|FAILED|SUCCEEDED (reflection-dumped
+                        // from the referenced Alexa.NET.Management), and TIMEOUT rows
+                        // in the ledger come from the sync writers' own poll outcome,
+                        // never from this status GET.
                         // KNOWN RACE (JF-710 gate-marker): this preserve is an unguarded
                         // read-modify-write of the row, while the sync writers guard
                         // their own reads against exactly this capture; a sync leg
@@ -515,7 +511,19 @@ public class SkillStartup : IHostedService, IDisposable
                         // restores the stale read). The one-directional accepted
                         // trade is the same; the multiplied exposure and the
                         // diagnostic-loss victim are filed in JF-724 (rework F4).
-                        error = LibrarySyncService.PreserveLedgerErrorAcrossCapture(config.GetLocaleModelStatus(locale));
+                        // JF-721: the preserve is a pure FIELD COPY (no parsing); the
+                        // run-scoped NoCatalogPut bit drops inside it because this
+                        // capture follows a skill UPDATE that pushed a new version.
+                        var preserved = LibrarySyncService.PreserveLedgerCaveatAcrossCapture(config.GetLocaleModelStatus(locale));
+                        if (preserved is { } survivor)
+                        {
+                            caveat = survivor.Caveat;
+                            frozenCatalogTypes = survivor.FrozenCatalogTypes;
+                            error = survivor.Error;
+                        }
+
+                        // Nothing survived: error and caveat stay as initialized
+                        // (null / None), the capture's own clean outcome.
 
                         // Branch-decision debug per the logging policy: this
                         // subsystem's incidents (JF-495/705/709/710/719) are
@@ -523,8 +531,8 @@ public class SkillStartup : IHostedService, IDisposable
                         // otherwise indistinguishable from an all-clean overwrite
                         // in the written row.
                         _logger.LogDebug(
-                            "Startup capture preserve fired for locale {Locale}: observed {Status}, surviving Error '{Error}'",
-                            locale, state, error ?? "(nothing survived)");
+                            "Startup capture preserve fired for locale {Locale}: observed {Status}, surviving Caveat {Caveat}, surviving Error '{Error}'",
+                            locale, state, caveat, error ?? "(nothing survived)");
                     }
 
                     config.SetLocaleModelStatus(locale, new Configuration.LocaleModelStatus
@@ -532,6 +540,8 @@ public class SkillStartup : IHostedService, IDisposable
                         Status = state,
                         LastUpdated = now,
                         Error = error,
+                        Caveat = caveat,
+                        FrozenCatalogTypes = frozenCatalogTypes,
                         Source = CaptureLedgerSource,
                     });
                     wroteAny = true;
@@ -585,35 +595,23 @@ public class SkillStartup : IHostedService, IDisposable
     internal const string CaptureLedgerSource = "Embedded";
 
     /// <summary>
-    /// The visible ledger prefix marking an Error composed from an OBSERVED SMAPI
-    /// build Errors array (the capture's wholesale arm and the refresh's own
-    /// twin). It exists for the refresh's clean-settle arm (JF-722 rework F1): an
-    /// IN_PROGRESS capture that carried a non-empty Errors array composed its row
-    /// from THAT observation's errors, and whether SMAPI serves stale
-    /// previous-build errors on an in-flight status is exactly the unverified
-    /// shape the task file flags, so on a later CLEAN settle those errors may be
-    /// stale and must be DROPPED, while the preserve's product (frozen clause,
-    /// foreign diagnostic) is durable catalog state and carries forward verbatim.
-    /// The row alone cannot otherwise distinguish the two composing arms, hence
-    /// this visible-text-doubles-as-marker literal, the same pattern as the
-    /// LibrarySyncService marker family. Deliberately NOT one of
-    /// IsOwnShapeLedgerError's literals: an own-observation Error is superseded
-    /// by the next clean capture (the pre-existing
-    /// CaptureClean_OverStaleEmbeddedError_ClearsIt boundary), never preserved.
-    /// JF-721 OWNERSHIP: this is a FOURTH literal of the marker family that
-    /// task's structured caveat field is filed to delete; its migration
-    /// inventory (updated same-turn from this rework) carries it, and the
-    /// distinction it encodes (the capture's errors-arm vs preserve-arm
-    /// product) is a required design input for the caveat field.
-    /// QUARANTINE INVARIANT (code-review refresh RC4): the clean-settle drop
-    /// matches on StartsWith, a PREFIX rule rather than the family's
-    /// Contains-matched literals, so it extends the invariant on
-    /// IsOwnShapeLedgerError with one more constraint: a foreign diagnostic
-    /// carried into a ledger Error must never START with this literal, or the
-    /// refresh's clean settle destroys it. Today's foreign formats (the fixed
-    /// "canary mismatch: ..." shape, clause-led compositions) satisfy it.
+    /// The ONE composer of the observation family's own-errors arm (JF-722
+    /// rework F1, made structural by JF-721), shared by the startup capture and
+    /// its deferred refresh: a non-empty observed Errors array becomes the row's
+    /// free-text Error TAGGED with the ObservedBuildErrors caveat bit, so the
+    /// clean-settle arm can tell this arm's product from the preserve's product
+    /// and drop the PAIR together (DropObservedBuildErrors, the drop rule's one
+    /// owner). The bit-and-text pairing is load-bearing: a writer that sets one
+    /// without the other re-creates a wire protocol, the exact failure class
+    /// JF-721 deleted, hence one owner here beside the shared
+    /// LibrarySyncService.FormatInvocationErrors formatter. A clean observation
+    /// yields (null, None) and the caller's own arm logic owns the row.
     /// </summary>
-    internal const string ObservedBuildErrorsLedgerPrefix = "build errors: ";
+    private static (string? Error, Configuration.CatalogLedgerCaveats Caveat) ComposeObservedErrorsCaveat(
+        global::Alexa.NET.Management.Skills.InvocationError[]? errors) =>
+        LibrarySyncService.FormatInvocationErrors(errors) is { } error
+            ? (error, Configuration.CatalogLedgerCaveats.ObservedBuildErrors)
+            : (null, Configuration.CatalogLedgerCaveats.None);
 
     /// <summary>
     /// The structural pairing of the startup capture and its deferred IN_PROGRESS
@@ -890,14 +888,16 @@ public class SkillStartup : IHostedService, IDisposable
     /// pass's family read and its Set is overwritten with the STALE read's Error,
     /// losing the diagnostic until the next sync. The one-directional accepted
     /// trade is unchanged; the multiplied exposure and the diagnostic-loss victim
-    /// are filed in JF-724. Error semantics per row mirror the capture's own
-    /// branches: observed build errors (marker-prefixed, like the capture's arm),
-    /// or a failure-weight state without them, replace the row wholesale; a clean
-    /// SUCCEEDED observation carries the existing Error forward per
-    /// <see cref="ObservedBuildErrorsLedgerPrefix"/> (preserve product verbatim,
-    /// stale observed-errors dropped), because the capture already ran the
-    /// JF-710/JF-719 preserve when it wrote the row and re-running it here would
-    /// re-decompose an already-decomposed product.
+    /// are filed in JF-724. Caveat/Error semantics per row mirror the capture's
+    /// own branches (field-keyed since JF-721): observed build errors
+    /// (ObservedBuildErrors-tagged, like the capture's arm), or a
+    /// failure-weight state without them, replace the row wholesale; a clean
+    /// SUCCEEDED observation carries the existing caveat fields and Error
+    /// forward verbatim, dropping them only when the row's
+    /// ObservedBuildErrors bit says its Error was this observation family's own
+    /// (stale observed-errors dropped, preserve product carried), because the
+    /// capture already ran the JF-710/JF-719 preserve when it wrote the row and
+    /// re-running it here would re-copy an already-copied product.
     /// </summary>
     private async Task RewriteSettledInProgressRowsAsync(Entities.User user, string skillId, CancellationToken cancellationToken)
     {
@@ -956,33 +956,37 @@ public class SkillStartup : IHostedService, IDisposable
 
                 string state = localeStatus.LastModified.Status.ToString();
 
-                string? error = LibrarySyncService.FormatInvocationErrors(localeStatus.Errors);
+                var (error, caveat) = ComposeObservedErrorsCaveat(localeStatus.Errors);
+                string? frozenCatalogTypes = null;
                 if (error != null)
                 {
-                    // Same marker as the capture's arm (JF-722 rework F1): this
-                    // text describes the OBSERVATION's own errors.
-                    error = ObservedBuildErrorsLedgerPrefix + error;
                     _logger.LogWarning(
                         "Interaction model build settled {Status} for locale {Locale}: {Error}",
                         state, locale, error);
                 }
                 else if (localeStatus.LastModified.Status == SkillStatusState.SUCCEEDED)
                 {
-                    // Clean settle: the capture composed the row's Error in
-                    // exactly one of two arms. The preserve's product (frozen
-                    // clause, foreign diagnostic: durable catalog state the
-                    // settle says nothing about) carries forward VERBATIM, no
+                    // Clean settle: the capture composed the row in exactly one of
+                    // two arms. The preserve's product (frozen caveat bits, foreign
+                    // diagnostic: durable catalog state the settle says nothing
+                    // about) carries forward VERBATIM as a field copy, no
                     // re-decomposition. The observed-errors arm's product is
-                    // marker-prefixed build errors from the error-carrying
-                    // observation: the settle observation is clean, so those
-                    // errors are stale (the unverified SMAPI shape where an
-                    // IN_PROGRESS status still carries the previous build's
-                    // Errors array, JF-722 rework F1) and are DROPPED.
-                    string? carried = existing.Error;
-                    error = carried is not null
-                        && carried.StartsWith(ObservedBuildErrorsLedgerPrefix, StringComparison.Ordinal)
-                            ? null
-                            : carried;
+                    // arm-tagged build errors from the error-carrying observation:
+                    // the settle observation is clean, so those errors are stale
+                    // (the unverified SMAPI shape where an IN_PROGRESS status still
+                    // carries the previous build's Errors array, JF-722 rework F1)
+                    // and are DROPPED together with the bit by the ONE shared owner
+                    // of that rule (LibrarySyncService.DropObservedBuildErrors, the
+                    // same helper the capture's preserve routes through; a field
+                    // read since JF-721, so no foreign text can ever collide with
+                    // it the way the old prefix StartsWith could). The whole
+                    // carry runs through the ONE shared owner of the copy shape
+                    // (CarryLedgerCaveatAcrossCleanObservation, the same helper
+                    // the capture's preserve routes through; gate-marker rework
+                    // R2), which also migrates a pre-JF-721 composed Error once
+                    // and guards payload-iff-bit (the preserve's F2 rule).
+                    (caveat, frozenCatalogTypes, error) = LibrarySyncService.CarryLedgerCaveatAcrossCleanObservation(
+                        existing.Caveat, existing.FrozenCatalogTypes, existing.Error);
                 }
                 else
                 {
@@ -996,14 +1000,20 @@ public class SkillStartup : IHostedService, IDisposable
                     Status = state,
                     LastUpdated = now,
                     Error = error,
+                    Caveat = caveat,
+                    FrozenCatalogTypes = frozenCatalogTypes,
                     Source = existing.Source,
                 });
 
                 // Branch-decision debug per the logging policy: the rewrite is otherwise
-                // indistinguishable from a fresh capture in the written row.
+                // indistinguishable from a fresh capture in the written row. The
+                // surviving Caveat rides the log like the capture's twin (JF-721
+                // code-review F4): this subsystem's incidents are triaged from
+                // ledger forensics, and the clean-settle arm carries or drops the
+                // caveat bits the preserve minted.
                 _logger.LogDebug(
-                    "Deferred refresh rewrote locale {Locale}: IN_PROGRESS -> {Status}, Error '{Error}'",
-                    locale, state, error ?? "(none)");
+                    "Deferred refresh rewrote locale {Locale}: IN_PROGRESS -> {Status}, Caveat {Caveat}, Error '{Error}'",
+                    locale, state, caveat, error ?? "(none)");
 
                 any = true;
             }
