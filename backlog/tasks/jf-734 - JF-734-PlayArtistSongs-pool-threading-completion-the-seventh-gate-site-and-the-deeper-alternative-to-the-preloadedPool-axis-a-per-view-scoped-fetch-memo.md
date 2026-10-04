@@ -1,16 +1,17 @@
 ---
 id: JF-734
 title: >-
-  JF-734 - PlayArtistSongs pool-threading completion (the seventh gate site)
-  and the deeper alternative to the preloadedPool axis: a per-view scoped-fetch
-  memo
-status: To Do
+  JF-734 - PlayArtistSongs pool-threading completion (the seventh gate site) and
+  the deeper alternative to the preloadedPool axis: a per-view scoped-fetch memo
+status: Done
 assignee: []
 created_date: '2026-10-03'
+updated_date: '2026-10-04 05:16'
 labels:
   - routing
   - dedup
   - efficiency
+dependencies: []
 priority: low
 ---
 
@@ -111,5 +112,5 @@ the JF-742 fold finds it as the threading pin it now is).
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
-Filed-2026-10-04 worker completion. The completion shape: the seventh pool site closed the JF-715 family the way the other six did, one named argument (`preloadedPool: multiValue.Pool`) on PlayArtistSongsIntentHandler's fall-through ArtistSearch.SearchAsync call, the ONLY leg that double-fetched (the zero-resolve multi-value-ER leg; the ask leg returns, the collapse leg skips the search, closed gates ship a null pool and keep the internal fetch byte-identical). The parameter's same-view contract holds by construction at this site (same pinnedIndex local to gate and chain, idempotent Pin, cached same-user scope), documented at the call site. The JF-702 counting pin tightened in place 2 -> 1 (the gate's fetch is the only GetArtists the leg pays) and RED-PROVEN live on both TFMs against the exact sabotage (threading nulled -> pin fails 1 vs 2), the first round the sabotage was permitted after two permission-blocked precedents (JF-702/JF-711). MEMO VERDICT (Finding 2): DECLINED, re-scoped with the reason in DoD #2; the completion leaves the memo zero present-day payoff while its costs (mutable state on the stateless SnapshotView, a forced thread-safety decision, value-equality Guid[] keying) all land on the hottest read object. FOLD VERDICT (Finding 3, PinIfReady): SKIPPED; the census remains exactly two guarded-pin sites (this handler's entry, TryArbitrate), the fold's own trigger ("if more sites appear") is not met, and a named PinIfReady extension would be MORE tempting than the inline ternary given the JF-715-documented choke-defeating trap of the guarded form below a non-entry-gating handler. The code-review high round's third finding (five hand-synced arbitration+threaded-search sites) filed as JF-742 with both reviews' counterweights. The seam above topParentIds was honestly WIDENED per that review: post-JF-734 a stale scope can auto-play unprompted through any tier accept, one leg wider than the JF-702 prompt-only exposure. Gates: simplify 4 agents (3 clean angles, simplification's 2+1 applied), code-review high (2 applied, 1 filed). Suites: 5093/5093 both TFMs once on the final state; Release -warnaserror clean. No deploy (the orchestrator batched post-closure deploy owns it).
+Closed by the orchestrator after the full cycle: worker commit c2fc3b8f + gate-marker tail a37dfc6f, merged as d677f7f5. The seventh pool site threaded: PlayArtistSongsIntentHandler's fall-through SearchAsync consumes arbitration.Pool via the preloadedPool axis (the same pinnedIndex local feeding gate and chain; the same-view contract by construction, the reviewer confirming Pin is identity on the snapshot and a non-null pool implies gate-ready making the DB branch unreachable), closing the family's only double-fetching leg. The JF-702 counting pin tightened 2->1 with a LIVE red proof (sabotage permitted this round) independently re-proven by the orchestrator reviewer (nulled threading, 1-vs-2, both TFMs, reverted). The memo verdict DECLINED with the four-cost reasoning; the PinIfReady fold SKIPPED (two sites, census re-verified). JF-742 filed (the five hand-synced sites, counted at the source with PlayAlbum the deliberately divergent consumer). Worker gates green (simplify 3 applied, efficiency/reuse/altitude clean; code-review high 2 applied incl. the widened seam comment, 1 filed as JF-742); the orchestrator gate-marker verified all four axes with its own red re-proof, its 2 findings applied in the tail (the CLAUDE.md denominator named with the raw-grep caveat; the pin renamed for the JF-742 fold). Suites: worker 5093/5093 both TFMs (baseline unchanged; the pin tightened in place), Release -warnaserror clean; orchestrator independent 5093/5093; merged-tree 5093/5093 both TFMs exit 0 on both split legs. Production surface changed (PlayArtistSongsIntentHandler): deployed in the post-closure deploy.
 <!-- SECTION:FINAL_SUMMARY:END -->
