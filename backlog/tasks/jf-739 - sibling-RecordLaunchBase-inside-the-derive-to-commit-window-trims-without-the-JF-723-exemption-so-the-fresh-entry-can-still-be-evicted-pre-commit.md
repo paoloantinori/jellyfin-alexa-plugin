@@ -50,6 +50,15 @@ still absent from the STORED queue, so nothing else protects F:
 
 Either way the JF-738 fix does NOT close this hole: F is absent from the
 STORED queue until the commit lands, which is the whole point of the window.
+ESCALATION NOTED BY THE JF-738 CODE-REVIEW ROUND (2026-10-04): restored
+membership makes the second bullet DETERMINISTIC in the queued-cap-pressure
+shape JF-738 itself made production-reachable (a fully-navigated 200+-track
+queue pins the map at cap with every entry queued, so the fresh un-committed
+entry F is the ONLY non-queued key and any sibling trim needing one removal
+evicts it with certainty, where pre-JF-738 the all-keys-non-queued FIFO hit
+F only via rare free-list slot reuse). The reachability bar is still the
+cap-pressure plus in-window-sibling conjunction below, but the conditional
+eviction became an unconditional one inside that shape.
 REACHABILITY: needs cap pressure on a launch-scope map plus a sibling launch
 in a sub-second window plus F evictable in that sibling's trim; narrow, same
 severity class as the JF-723 finding it generalizes (silent base 0 / rate

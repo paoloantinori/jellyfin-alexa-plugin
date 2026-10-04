@@ -704,7 +704,7 @@ public sealed class DeviceQueueManager : IDisposable
     /// the cap; harmless while promotion defaults a missing rate to 1000 and the
     /// writers keep every NEW pair inserted together. The structural fix is the
     /// single scope-per-key map named in <see cref="WritePendingLaunchScope"/>.
-    /// The JF-723 exemption and the JF-738 membership-format residual are
+    /// The JF-723 exemption and the JF-738 membership normalization are
     /// documented on the trim method itself (<see cref="TrimLaunchBaseIfNeeded"/>).
     /// Internal for the InternalsVisibleTo test seam (the VideoAudioCache /
     /// KeyedOneShotDebounce pattern): the JF-723 pins seed their cap pressure from
@@ -734,12 +734,17 @@ public sealed class DeviceQueueManager : IDisposable
     /// the build and the commit) trims without exempting the earlier entry, whose
     /// item is still absent from the STORED queue, so that sibling trim can evict
     /// it; the JF-723 filing's fresh-stamping candidate (b) is JF-739's fix shape.
-    /// RESIDUAL (JF-738, filed not fixed here): the membership
-    /// protection itself is inert in production today because the maps are keyed
-    /// "N" while <see cref="SetQueue"/> callers store dashed ids, so no key ever
-    /// matches the queued set and the trim degrades to pure insertion/slot-order
-    /// FIFO (which is how a fresh insert can be its own evictee at saturation);
-    /// the exemption below holds under BOTH behaviors by construction.
+    /// MEMBERSHIP (JF-738, fixed here): the queued set is built through
+    /// <see cref="NormalizeToMapKeyFormat"/>, so the stored queue's DASHED ids do
+    /// protect the maps' "N"-keyed entries; before JF-738 the set was a raw
+    /// ItemIds copy, never matched a key, and this trim ran as pure
+    /// insertion/slot-order FIFO (which is how a fresh insert could be its own
+    /// evictee at saturation); the exemption above held under BOTH behaviors by
+    /// construction. JF-739 INTERPLAY: restored membership does NOT close the
+    /// sibling-trim hole, because membership protects only items already in the
+    /// STORED queue; inside the derive-to-commit window the fresh item is still
+    /// absent from it, so a sibling trim (or this trim, without the exemption)
+    /// still judges the entry non-queued.
     /// </summary>
     /// <param name="queue">The device queue whose four launch-scope maps are bounded.</param>
     /// <param name="freshlyRecordedKey">The "N"-normalized key RecordLaunchBase just
@@ -754,14 +759,109 @@ public sealed class DeviceQueueManager : IDisposable
             return;
         }
 
-        HashSet<string> queuedItems = new(queue.ItemIds, StringComparer.OrdinalIgnoreCase);
-        // The JF-723 identity guard: the just-recorded key is never this trim's
-        // evictee, whatever slot the dictionary reused for it.
-        queuedItems.Add(freshlyRecordedKey);
+        // The JF-723 identity guard rides the shared builder: the just-recorded key
+        // is never this trim's evictee, whatever slot the dictionary reused for it.
+        HashSet<string> queuedItems = BuildTrimMembershipSet(queue, freshlyRecordedKey);
         TrimPositionMap(queue.ActiveLaunchBaseMs, queuedItems, MaxLaunchBaseEntries);
         TrimPositionMap(queue.PendingLaunchBaseMs, queuedItems, MaxLaunchBaseEntries);
         TrimPositionMap(queue.ActivePlaybackRatePerMille, queuedItems, MaxLaunchBaseEntries);
         TrimPositionMap(queue.PendingPlaybackRatePerMille, queuedItems, MaxLaunchBaseEntries);
+    }
+
+    /// <summary>
+    /// JF-738: projects queue ItemIds into the bounded maps' own key format for
+    /// the trims' queued-membership sets. Every bounded map on a device queue is
+    /// keyed <c>ToString("N")</c> at its writers (<see cref="RecordLaunchBase"/>,
+    /// <see cref="RecordItemPosition"/>, the PlaybackStopped position write)
+    /// while production queue ItemIds are dashed <c>Guid.ToString()</c> (every
+    /// <see cref="SetQueue"/> caller stores <c>i.Id.ToString()</c>;
+    /// <see cref="Enqueue"/> stores dashed too), so a raw copy of
+    /// <see cref="DeviceQueue.ItemIds"/> never matched a map key and the
+    /// membership half of the trim policy was inert: the trims ran as pure
+    /// insertion/slot-order FIFO and a QUEUED item's entry was evictable like
+    /// any other. Entries that do not parse as a GUID keep their raw form, so a
+    /// non-GUID key still compares equal to itself. Iterator form: both
+    /// consumers sit behind their own count gates
+    /// (<see cref="TrimLaunchBaseIfNeeded"/>'s four-map OR gate;
+    /// <see cref="TrimItemPositionState"/>'s map-count gate), so the projection
+    /// only ever runs over cap, and <see cref="BuildTrimMembershipSet"/> drains
+    /// it immediately into the capacity-hinted membership set (one set, shared
+    /// by the launch-scope trim's four maps).
+    /// </summary>
+    /// <param name="itemIds">The stored queue's item ids, any GUID format.</param>
+    /// <returns>The ids re-keyed to "N" where parseable, raw otherwise.</returns>
+    internal static IEnumerable<string> NormalizeToMapKeyFormat(IEnumerable<string> itemIds)
+    {
+        foreach (string id in itemIds)
+        {
+            yield return Guid.TryParse(id, out Guid parsed) ? parsed.ToString("N") : id;
+        }
+    }
+
+    /// <summary>
+    /// JF-738: the ONE membership-set builder for the bounded-map trims: the
+    /// stored queue's ids re-keyed to the maps' "N" format (through
+    /// <see cref="NormalizeToMapKeyFormat"/>) plus the caller's fresh key (the
+    /// JF-723 identity-guard shape: the entry a write just created is never that
+    /// write's own trim's evictee; idempotent on an already-"N" key). Every
+    /// <see cref="TrimPositionMap"/> WRITE-ADJACENT call site must consume its
+    /// set through this builder: a raw <c>queue.ItemIds</c> set never matches an
+    /// "N"-keyed map (the inert-membership bug JF-738 fixed), and the fresh-key
+    /// guard belongs beside the normalization, not re-derived per caller.
+    /// Capacity-hinted (queue size + the fresh key).
+    /// </summary>
+    /// <param name="queue">The device queue whose ItemIds form the membership.</param>
+    /// <param name="freshKey">The "N"-normalized key the caller's write just
+    /// created; treated as queued by THIS trim only.</param>
+    /// <returns>The queued-membership set in the maps' "N" key format.</returns>
+    internal static HashSet<string> BuildTrimMembershipSet(DeviceQueue queue, string freshKey)
+    {
+        HashSet<string> queuedItems = new(queue.ItemIds.Count + 1, StringComparer.OrdinalIgnoreCase);
+        foreach (string normalizedId in NormalizeToMapKeyFormat(queue.ItemIds))
+        {
+            queuedItems.Add(normalizedId);
+        }
+
+        queuedItems.Add(freshKey);
+        return queuedItems;
+    }
+
+    /// <summary>
+    /// JF-522/JF-738: the ONE ItemPositionState trim entry point, for the
+    /// PlaybackStopped handler's write-then-trim path. The count gate first
+    /// keeps the set build off the under-cap happy path (one qualifying stop per
+    /// track); the membership build then runs under
+    /// <see cref="_launchScopeLock"/> because it ENUMERATES the live
+    /// <see cref="DeviceQueue.ItemIds"/> list, which <see cref="Enqueue"/>
+    /// mutates in place under this same lock (the JF-578
+    /// intent-thread/event-thread interleaving): an unlocked enumeration of a
+    /// concurrently-mutated List throws, the JF-425/JF-447 class of dying inside
+    /// an event handler before the keep-alive ack Amazon requires.
+    /// JF-738 DoD #2, the fresh-entry guard: <paramref name="freshlyWrittenKey"/>
+    /// (the stop position THIS write just stored) is treated as queued by THIS
+    /// trim only. Membership protects the stopped item just when it is QUEUED;
+    /// the single-item play shape has no queue at all (the JF-424.1
+    /// store-unconditional rationale), so without the guard the fresh entry is
+    /// non-queued and evictable by its own trim at cap pressure, and
+    /// resume-after-pause loses the seed the JF-581 incident made load-bearing.
+    /// The guard can leave the map at cap+1 until the next write ages the entry
+    /// (the tolerance the JF-723 guard already documents); the trim still trims
+    /// aged non-queued entries.
+    /// </summary>
+    /// <param name="queue">The device queue whose ItemPositionState is bounded.</param>
+    /// <param name="freshlyWrittenKey">The "N"-normalized key the caller just wrote.</param>
+    /// <param name="cap">The maximum entry count (the caller's trim cap).</param>
+    internal void TrimItemPositionState(DeviceQueue queue, string freshlyWrittenKey, int cap)
+    {
+        if (queue.ItemPositionState.Count <= cap)
+        {
+            return;
+        }
+
+        lock (_launchScopeLock)
+        {
+            TrimPositionMap(queue.ItemPositionState, BuildTrimMembershipSet(queue, freshlyWrittenKey), cap);
+        }
     }
 
     /// <summary>
@@ -774,10 +874,11 @@ public sealed class DeviceQueueManager : IDisposable
     /// <param name="map">The bounded dictionary.</param>
     /// <param name="queuedItems">The queued item ids, compared case-insensitively.
     /// FORMAT CONTRACT (JF-738): an entry is protected only when its KEY is
-    /// string-equal (ignoring case) to a member of this set, so the set must be
-    /// built in the map's own key format; today the launch-scope maps are "N"-keyed
-    /// while production queue ItemIds are dashed, which makes the membership half
-    /// of this policy inert (the JF-738 filing). New call sites must not assume
+    /// string-equal (ignoring case) to a member of this set, and every bounded
+    /// map is "N"-keyed, so a write-adjacent call site must build its set through
+    /// <see cref="BuildTrimMembershipSet"/>; a raw copy of queue ItemIds
+    /// (dashed in production) never matches an "N"-keyed map, which is exactly
+    /// the inert-membership bug JF-738 fixed. New call sites must not assume
     /// "any key format" matches.</param>
     /// <param name="cap">The maximum entry count.</param>
     /// <typeparam name="T">The map's value type (position ticks, launch bases, per-mille rates).</typeparam>

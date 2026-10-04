@@ -761,6 +761,71 @@ public class EventHandlerTests : PluginTestBase, IDisposable
         Assert.True(PlaybackReportOrdering.IsDisplacementStop(device, itemA1.ToString()));
     }
 
+    /// <summary>
+    /// JF-738 (the position-store arm, through the REAL stop path): the
+    /// ItemPositionState trim's queued-membership protection works with DASHED
+    /// queue ids. The queue holds <see cref="PlaybackStoppedEventHandler.MaxItemPositionStateEntries"/>
+    /// DASHED ids (the production SetQueue format) whose "N"-keyed position
+    /// entries fill the store exactly to the cap; two stops for NON-queued
+    /// single items (the JF-424.1 shape: no queue membership at all) then cross
+    /// the cap. Asserted: every queued resident keeps its entry (the membership
+    /// set re-keys the dashed ids to "N"), each fresh stop's own entry survives
+    /// its trim (the JF-738 DoD #2 fresh-entry guard), and the SECOND stop ages
+    /// the first into the evictee (the trim still trims).
+    /// </summary>
+    [Fact]
+    public async Task PlaybackStopped_ItemPositionStateTrim_ProtectsQueuedResidentsUnderDashedMembership_JF738()
+    {
+        _sessionManagerMock
+            .Setup(s => s.OnPlaybackStart(It.IsAny<PlaybackStartInfo>()))
+            .Returns(Task.CompletedTask);
+        _sessionManagerMock
+            .Setup(s => s.OnPlaybackStopped(It.IsAny<PlaybackStopInfo>()))
+            .Returns(Task.CompletedTask);
+
+        var context = CreateContextForFreshDevice();
+        string device = context.System!.Device!.DeviceID;
+
+        // At-cap store: every entry's item is QUEUED (dashed, the production format).
+        var queue = _queueManager.GetOrCreateQueue(device);
+        List<Guid> residentIds = Enumerable
+            .Range(0, PlaybackStoppedEventHandler.MaxItemPositionStateEntries)
+            .Select(_ => Guid.NewGuid())
+            .ToList();
+        queue.ItemIds = residentIds.Select(g => g.ToString()).ToList();
+        foreach (Guid id in residentIds)
+        {
+            queue.ItemPositionState[id.ToString("N")] = 1234;
+        }
+
+        var user = TestHelpers.CreateTestUser();
+
+        // First NON-queued single-item stop: writes entry cap+1 and crosses the cap.
+        Guid firstSingleItemId = Guid.NewGuid();
+        await CreateStartHandler().HandleAsync(
+            CreateAudioPlayerRequest("AudioPlayer.PlaybackStarted", firstSingleItemId.ToString()), context, user, CreateSession(), CancellationToken.None);
+        await WaitForStartReportsToSettleAsync();
+        await CreateStopHandler().HandleAsync(
+            CreateAudioPlayerRequest("AudioPlayer.PlaybackStopped", firstSingleItemId.ToString(), offset: 5000), context, user, CreateSession(), CancellationToken.None);
+
+        // Membership + the fresh-entry guard: nothing queued was evicted and the
+        // fresh entry survived its own trim.
+        Assert.All(residentIds, id => Assert.Equal(1234, queue.ItemPositionState[id.ToString("N")]));
+        Assert.Contains(firstSingleItemId.ToString("N"), queue.ItemPositionState.Keys);
+
+        // Second non-queued stop ages the first entry: aged, non-queued, evicted.
+        Guid secondSingleItemId = Guid.NewGuid();
+        await CreateStartHandler().HandleAsync(
+            CreateAudioPlayerRequest("AudioPlayer.PlaybackStarted", secondSingleItemId.ToString()), context, user, CreateSession(), CancellationToken.None);
+        await WaitForStartReportsToSettleAsync();
+        await CreateStopHandler().HandleAsync(
+            CreateAudioPlayerRequest("AudioPlayer.PlaybackStopped", secondSingleItemId.ToString(), offset: 6000), context, user, CreateSession(), CancellationToken.None);
+
+        Assert.DoesNotContain(firstSingleItemId.ToString("N"), queue.ItemPositionState.Keys);
+        Assert.Contains(secondSingleItemId.ToString("N"), queue.ItemPositionState.Keys);
+        Assert.All(residentIds, id => Assert.Equal(1234, queue.ItemPositionState[id.ToString("N")]));
+    }
+
     [Fact]
     public async Task PlaybackStopped_BeforeNewStartProcessed_QueueAlreadyAdvanced_SkipsPositionOverwrite()
     {

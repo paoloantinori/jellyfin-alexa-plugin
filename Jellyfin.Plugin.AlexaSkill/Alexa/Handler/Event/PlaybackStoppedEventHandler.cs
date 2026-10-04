@@ -221,8 +221,11 @@ public class PlaybackStoppedEventHandler : BaseHandler
             string positionKey = stopItemId.ToString("N");
             queue.ItemPositionState[positionKey] = realPositionTicks;
 
-            // Evict stale entries when the dictionary grows beyond cap
-            TrimItemPositionState(queue);
+            // Evict stale entries when the dictionary grows beyond cap (JF-738: the
+            // manager's locked entry point; the membership build enumerates the live
+            // ItemIds list Enqueue mutates under the same lock, and carries the
+            // fresh-entry guard for the key just written above).
+            _queueManager.TrimItemPositionState(queue, positionKey, MaxItemPositionStateEntries);
 
             _queueManager.SchedulePersist(device);
             Logger.LogDebug(
@@ -293,13 +296,13 @@ public class PlaybackStoppedEventHandler : BaseHandler
     }
 
     /// <summary>
-    /// Evicts entries from ItemPositionState that are not in the current queue
-    /// when the dictionary exceeds the cap. This prevents unbounded growth.
-    /// The trim itself is the shared per-map eviction the queue manager owns
-    /// (JF-522: one definition for ItemPositionState and both launch-scope maps).
+    /// The ItemPositionState cap. Internal for the InternalsVisibleTo test seam
+    /// (the <see cref="DeviceQueueManager.MaxLaunchBaseEntries"/> idiom): the
+    /// JF-738 position-trim pins seed their cap pressure from this constant so a
+    /// cap change cannot silently degrade them to vacuous green. The trim itself
+    /// lives on the queue manager (JF-738:
+    /// <see cref="DeviceQueueManager.TrimItemPositionState"/>, the locked
+    /// membership-normalized entry point).
     /// </summary>
-    private static void TrimItemPositionState(DeviceQueue queue)
-        => DeviceQueueManager.TrimPositionMap(queue.ItemPositionState, queue.ItemIds, MaxItemPositionStateEntries);
-
-    private const int MaxItemPositionStateEntries = 200;
+    internal const int MaxItemPositionStateEntries = 200;
 }
