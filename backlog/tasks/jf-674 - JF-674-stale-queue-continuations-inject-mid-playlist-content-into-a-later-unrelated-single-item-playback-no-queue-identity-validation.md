@@ -3,10 +3,10 @@ id: JF-674
 title: >-
   JF-674 - stale queue continuations inject mid-playlist content into a later
   unrelated single-item playback (no queue-identity validation)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-29 15:02'
-updated_date: '2026-10-04 13:13'
+updated_date: '2026-10-04 16:41'
 labels:
   - playback
   - progressive-queue
@@ -164,6 +164,20 @@ merge reaches this tree). JF-753 (the album path's engagement gap) is
 separately tracked; this change's AlbumPlayService edit is the mint initializer
 only and deliberately does not touch it.
 
+## Definition of Done
+<!-- DOD:BEGIN -->
+- [x] #1 dotnet build passes with 0 errors (Release --no-restore -warnaserror: 0 warnings 0 errors on the final state; Debug builds clean throughout)
+- [x] #2 dotnet test passes (5155/5155 net9.0 AND net10.0 on the final merged state, after the gate-marker rework; 5136/5136 on the pre-merge final state)
+- [x] #3 No new compiler warnings introduced (Release -warnaserror 0 warnings)
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization (no session-attribute or serialized shape change: the store is in-memory only, the new property is IReadOnlyList<Guid> on a non-persisted type)
+- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress (no HttpClient touched)
+- [x] #6 NLU test fixtures updated if interaction model changed (N/A: no interaction-model change)
+- [x] #7 E2E test added for new intent or handler logic (N/A for the SMAPI e2e suite: no new intent/handler surface; the behavioral pins drive the REAL PlayBook/PlayAlbum mints end-to-end through the real PlaybackNearlyFinished fetch, which is this change's e2e)
+- [x] #8 Locale response strings added to all 17 locales (N/A: no user-facing string changed; the one new log line is operational, not spoken)
+- [x] #9 /simplify passed (4 angles; 2 applied, 1 skipped with reason, efficiency CLEAN)
+- [x] #10 /code-review high passed (two passes, 8 angles; 4 applied, 1 FILED as JF-750, 1 refuted with evidence, 0 open)
+<!-- DOD:END -->
+
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
@@ -254,18 +268,6 @@ Theory's two legs, and 4 roster facts); Release --no-restore -warnaserror 0
 warnings 0 errors (documentation crefs compile-checked on the merged tree).
 Per-arm fetchers untouched (JF-666/JF-670 shapes unchanged). No locale, model,
 or speech surface changed; no deploy.
-<!-- SECTION:FINAL_SUMMARY:END -->
 
-## Definition of Done
-<!-- DOD:BEGIN -->
-- [x] #1 dotnet build passes with 0 errors (Release --no-restore -warnaserror: 0 warnings 0 errors on the final state; Debug builds clean throughout)
-- [x] #2 dotnet test passes (5155/5155 net9.0 AND net10.0 on the final merged state, after the gate-marker rework; 5136/5136 on the pre-merge final state)
-- [x] #3 No new compiler warnings introduced (Release -warnaserror 0 warnings)
-- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization (no session-attribute or serialized shape change: the store is in-memory only, the new property is IReadOnlyList<Guid> on a non-persisted type)
-- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress (no HttpClient touched)
-- [x] #6 NLU test fixtures updated if interaction model changed (N/A: no interaction-model change)
-- [x] #7 E2E test added for new intent or handler logic (N/A for the SMAPI e2e suite: no new intent/handler surface; the behavioral pins drive the REAL PlayBook/PlayAlbum mints end-to-end through the real PlaybackNearlyFinished fetch, which is this change's e2e)
-- [x] #8 Locale response strings added to all 17 locales (N/A: no user-facing string changed; the one new log line is operational, not spoken)
-- [x] #9 /simplify passed (4 angles; 2 applied, 1 skipped with reason, efficiency CLEAN)
-- [x] #10 /code-review high passed (two passes, 8 angles; 4 applied, 1 FILED as JF-750, 1 refuted with evidence, 0 open)
-<!-- DOD:END -->
+CLOSED 2026-10-04 by the orchestrator after the full cycle: merged into main (implementation a8067fbd + rework d5322bff, --no-ff, on top of the main merge carrying the orchestrator's cref fix), combined-tree suite verifying, deployed in the wave's batched deploy. The gate-marker's seven axes PASS with every red proof independently reproduced; its two rework findings applied (the method-scoped resume roster fact by LogicalMethodName; the ClearQueue stop-semantics pin, red under the disabled guard). The gate-marker's finding 1 (the inherited CS1574 cref on main) was the orchestrator's own tail bug, fixed and Release-proven before this merge. JF-750 filed by this task.
+<!-- SECTION:FINAL_SUMMARY:END -->
