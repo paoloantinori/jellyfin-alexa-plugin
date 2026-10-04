@@ -259,13 +259,20 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             // the JF-457 album-scope verification queries the inline path labeled
             // "ArtistAlbumScope" (scope-verify vs search triage now needs the query
             // shape, not the label); SearchAsync's TOTAL log line carries the mode.
+            // JF-734 (the seventh pool site, completing JF-715's six): the
+            // zero-resolve fall-through leg seeds the chain with the gate's
+            // pool; the preloadedPool contract holds by construction here
+            // (TryArbitrate pinned the SAME pinnedIndex view, Pin is
+            // idempotent, and resolved the SAME user scope). Null on the
+            // closed-gate legs keeps the internal fetch.
             artists = await Util.ArtistSearch.SearchAsync(
                 musicianQuery, user, _libraryManager, pinnedIndex, Logger,
                 (q, ct) => RetryAsync(() => _libraryManager.GetItemList(q), "GetArtists", ct),
                 locale, cancellationToken,
                 mode: mode,
                 asrCompoundWordFixEnabled: _config.AsrCompoundWordFixEnabled,
-                parallelDbTiers: mode != SearchResponseMode.Fast).ConfigureAwait(false);
+                parallelDbTiers: mode != SearchResponseMode.Fast,
+                preloadedPool: multiValue.Pool).ConfigureAwait(false);
         }
 
         // Re-resolved here for the post-search consumers (cached, so no extra
@@ -277,12 +284,16 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         // materialized the scoped pool, so its Pool seeds this cache and the
         // JF-420/JF-652 gates consume that fetch instead of re-materializing
         // (null on every closed-gate leg, byte-identical to before). Known seam
-        // (accepted, JF-658 and JF-702): a library-scope cache invalidation
-        // landing between the gate's scope resolution and this one would serve
-        // the gates a scope fetched before the search ran; the window is
-        // milliseconds and the worst case is unchanged (a disambiguation prompt
-        // naming a just-removed library's artist, the JF-457 name-only leak
-        // class).
+        // (accepted, JF-658 and JF-702; WIDENED by JF-734, which routes the
+        // search itself through the gate's fetch): a library-scope cache
+        // invalidation landing between the gate's scope resolution and the
+        // search serves the search and the gates the gate's earlier scope; the
+        // window is milliseconds. Pre-JF-734 the search re-resolved the scope
+        // itself, so a stale scope could only reach the prompt shapes below
+        // (plus the JF-420 auto-select, which always read the gate's pool);
+        // with the search on the gate's pool, ANY tier accept can auto-play a
+        // just-removed library's artist unprompted. Same JF-457 name-only leak
+        // class, one leg wider.
         Guid[]? topParentIds = Util.LibraryFilter.ResolveForUser(user, _libraryManager, Logger);
         IReadOnlyList<BaseItem>? artistPool = multiValue.Pool;
 
