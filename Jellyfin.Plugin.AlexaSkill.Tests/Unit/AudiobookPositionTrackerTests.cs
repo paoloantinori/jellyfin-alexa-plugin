@@ -1,8 +1,10 @@
 using System;
 using System.IO;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
+using Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 using Microsoft.Extensions.Logging;
 using Xunit;
 
@@ -90,6 +92,91 @@ public class AudiobookPositionTrackerTests : IDisposable
         _tracker.RecordSegment("", 5);
         _tracker.RecordSegment("book1", -1);
         Assert.Equal(0, _tracker.GetPositionTicks("book1"));
+    }
+
+    /// <summary>
+    /// JF-741 equivalence pin: the tracker's key canonicalization goes through the
+    /// ONE shared parse-or-raw rule (DeviceQueueManager.NormalizeToMapKeyFormat),
+    /// so the record path's raw URL itemId (dashed) and the resume path's "N" book
+    /// key land on ONE entry, every GUID format of the same book is the SAME entry
+    /// (the high-water mark advances, never a second book), the shared rule's own
+    /// output is a valid READ key for an entry recorded through the record path
+    /// (the fold's invariant), Clear removes through any format, and non-GUID ids
+    /// keep their raw identity under the Ordinal comparer. Coverage note: before
+    /// JF-741 this suite never exercised the GUID re-key arm at all (the "book1"
+    /// fixtures are all non-GUID passthrough), so a shared-rule change on GUID
+    /// inputs had no tracker-side signal.
+    /// </summary>
+    [Fact]
+    public void RecordReadKeyAgreement_GoesThroughSharedGuidToNRule_JF741()
+    {
+        Guid book = Guid.NewGuid();
+
+        // Record arm: the raw URL itemId shape (dashed, the GetSegment record path).
+        _tracker.RecordSegment(book.ToString(), 5);
+
+        // Read arm: the "N" book key every resume mint site resolves.
+        Assert.Equal(4 * TicksPerSegment, _tracker.GetPositionTicks(book.ToString("N")));
+
+        // The fold's invariant: the shared rule's output IS the entry's key.
+        Assert.Equal(
+            4 * TicksPerSegment,
+            _tracker.GetPositionTicks(DeviceQueueManager.NormalizeToMapKeyFormat(book.ToString())));
+
+        // A different GUID format of the SAME book is the SAME entry: the mark
+        // advances rather than forking a second book.
+        _tracker.RecordSegment(book.ToString("B"), 7);
+        Assert.Equal(6 * TicksPerSegment, _tracker.GetPositionTicks(book.ToString("N")));
+
+        // Clear through any format removes the one entry.
+        _tracker.Clear(book.ToString("D"));
+        Assert.Equal(0, _tracker.GetPositionTicks(book.ToString("N")));
+
+        // Non-GUID ids pass through raw and stay distinct (Ordinal comparer).
+        _tracker.RecordSegment("book-raw", 3);
+        Assert.Equal(2 * TicksPerSegment, _tracker.GetPositionTicks("book-raw"));
+        Assert.Equal(0, _tracker.GetPositionTicks("BOOK-RAW"));
+    }
+
+    /// <summary>
+    /// JF-741 structural pin (the JF-737 inline-revert-loud precedent): the
+    /// parse-or-raw rule must not be re-implemented inside the tracker. Post-fold
+    /// the tracker type contains ZERO Guid.TryParse call instructions (its only
+    /// pre-fold copy lived in NormalizeKey), and NormalizeKey still exists (the
+    /// filing keeps both names) and calls the shared rule
+    /// DeviceQueueManager.NormalizeToMapKeyFormat. The behavioral pin above
+    /// catches every HARMFUL divergence (a shared-rule change, or a different
+    /// rule re-inlined); this pin holds the consolidation itself: a
+    /// behaviorally identical re-inline, exactly what a future /simplify pass
+    /// would write for a one-line delegation, reds BOTH legs, so undoing the
+    /// fold is a conscious pin-widening decision rather than silent drift back
+    /// to two copies.
+    /// </summary>
+    [Fact]
+    public void NormalizeKey_DelegatesToSharedRule_NoInlineParseCopy_JF741()
+    {
+        Module module = typeof(AudiobookPositionTracker).Module;
+
+        // Leg 1: no method anywhere on the tracker type (nested compiler-generated
+        // types included, so a lambda-shaped copy cannot hide on a display class)
+        // parses a GUID itself.
+        foreach (Type type in IlCallScanner.NestedTypeClosure(typeof(AudiobookPositionTracker)))
+        {
+            foreach (MethodBase method in IlCallScanner.DeclaredCallableMethods(type))
+            {
+                Assert.False(
+                    IlCallScanner.CallsNamedMethod(method, module, "TryParse", typeof(Guid)),
+                    $"{type.Name}.{method.Name} must not call Guid.TryParse: the parse-or-raw rule lives in DeviceQueueManager.NormalizeToMapKeyFormat (JF-741)");
+            }
+        }
+
+        // Leg 2: NormalizeKey delegates to the shared single-string rule.
+        MethodInfo? normalizeKey = typeof(AudiobookPositionTracker).GetMethod(
+            "NormalizeKey", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.True(normalizeKey != null, "AudiobookPositionTracker.NormalizeKey must still exist (the JF-741 filing keeps both names)");
+        Assert.True(
+            IlCallScanner.CallsNamedMethod(normalizeKey, module, "NormalizeToMapKeyFormat", typeof(DeviceQueueManager)),
+            "NormalizeKey must call the shared rule DeviceQueueManager.NormalizeToMapKeyFormat");
     }
 
     [Fact]

@@ -815,7 +815,7 @@ public sealed class DeviceQueueManager : IDisposable
     /// the identity guard below is now the per-call fast path of the same rule
     /// rather than the whole protection.
     /// MEMBERSHIP (JF-738): the queued set is built through
-    /// <see cref="NormalizeToMapKeyFormat"/>, so the stored queue's DASHED ids do
+    /// <see cref="NormalizeToMapKeyFormat(IEnumerable{string})"/>, so the stored queue's DASHED ids do
     /// protect the maps' "N"-keyed entries; before JF-738 the set was a raw
     /// ItemIds copy, never matched a key, and this trim ran as pure
     /// insertion/slot-order FIFO (which is how a fresh insert could be its own
@@ -870,7 +870,10 @@ public sealed class DeviceQueueManager : IDisposable
     /// <see cref="BuildTrimMembershipSet"/>'s honest-cost note), and
     /// <see cref="BuildTrimMembershipSet"/> drains it immediately into the
     /// capacity-hinted membership set (one set, shared by the launch-scope
-    /// trim's four maps).
+    /// trim's four maps). JF-741: the per-element rule is the single-string
+    /// core <see cref="NormalizeToMapKeyFormat(string)"/> (the ONE parse-or-raw
+    /// rule, shared with AudiobookPositionTracker's NormalizeKey), not a local
+    /// expression.
     /// </summary>
     /// <param name="itemIds">The stored queue's item ids, any GUID format.</param>
     /// <returns>The ids re-keyed to "N" where parseable, raw otherwise.</returns>
@@ -878,14 +881,43 @@ public sealed class DeviceQueueManager : IDisposable
     {
         foreach (string id in itemIds)
         {
-            yield return Guid.TryParse(id, out Guid parsed) ? parsed.ToString("N") : id;
+            yield return NormalizeToMapKeyFormat(id);
         }
+    }
+
+    /// <summary>
+    /// JF-741: the ONE single-string parse-or-raw canonicalization rule: any GUID
+    /// format parses and re-keys to <c>ToString("N")</c>; a non-GUID string (and
+    /// null/empty, which never parse) passes through unchanged at runtime. The
+    /// non-nullable annotations deliberately match both pre-fold signatures (the
+    /// fold changes nothing observable): no production caller passes null, and a
+    /// contract-breaking null flows through raw exactly as both former copies
+    /// did. Consumed by the enumerable projection above (the trim-membership
+    /// re-key) AND by <c>AudiobookPositionTracker.NormalizeKey</c> (the tracker's
+    /// record/read key agreement: the record path's dashed URL itemId and the
+    /// resume path's "N" book key must land on ONE dictionary entry), so the rule
+    /// can only change in one place. Do not re-inline a parse-or-raw copy at
+    /// either consumer: the key-format mismatches this rule exists to prevent
+    /// (JF-738's inert trim membership; the tracker's silent record/read drift)
+    /// are exactly what a second, later-divergent copy reintroduces. HOME: this
+    /// type is the rule's senior owner (the JF-738 membership re-key and the four
+    /// "N"-keyed bounded maps it serves); a neutral shared home (the filing's
+    /// GuidKey alternative) is deliberately NOT taken while both consumers sit in
+    /// this namespace. If a THIRD consumer outside Alexa/Playback ever appears,
+    /// promote the rule to that neutral home in the same change (both structural
+    /// pins name this type and move with it).
+    /// </summary>
+    /// <param name="itemId">The id, any GUID format (or any non-GUID string).</param>
+    /// <returns>The id re-keyed to "N" when parseable as a GUID, the input otherwise.</returns>
+    internal static string NormalizeToMapKeyFormat(string itemId)
+    {
+        return Guid.TryParse(itemId, out Guid parsed) ? parsed.ToString("N") : itemId;
     }
 
     /// <summary>
     /// JF-738: the ONE membership-set builder for the bounded-map trims: the
     /// stored queue's ids re-keyed to the maps' "N" format (through
-    /// <see cref="NormalizeToMapKeyFormat"/>) plus the caller's fresh key (the
+    /// <see cref="NormalizeToMapKeyFormat(IEnumerable{string})"/>) plus the caller's fresh key (the
     /// JF-723 identity-guard shape: the entry a write just created is never that
     /// write's own trim's evictee; idempotent on an already-"N" key) UNION the
     /// device's unexpired JF-739 freshness stamps (see

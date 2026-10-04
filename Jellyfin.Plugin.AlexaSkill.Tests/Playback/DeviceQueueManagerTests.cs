@@ -2,9 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
+using Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using Microsoft.Extensions.Logging;
 using Xunit;
@@ -1011,7 +1013,7 @@ public class DeviceQueueManagerTests : IDisposable
     }
 
     /// <summary>
-    /// JF-738 helper pin: <see cref="DeviceQueueManager.NormalizeToMapKeyFormat"/>
+    /// JF-738 helper pin: <see cref="DeviceQueueManager.NormalizeToMapKeyFormat(IEnumerable{string})"/>
     /// re-keys every parseable GUID (the dashed production ItemIds format, "N",
     /// brace formats) into the bounded maps' "N" key format and passes non-GUID
     /// entries through raw, so a non-GUID map key still compares equal to itself.
@@ -1027,6 +1029,57 @@ public class DeviceQueueManagerTests : IDisposable
         Assert.Equal(
             new[] { id.ToString("N"), id.ToString("N"), id.ToString("N"), "not-a-guid" },
             normalized);
+    }
+
+    /// <summary>
+    /// JF-741 structural pin, DeviceQueueManager side (the tracker twin lives in
+    /// AudiobookPositionTrackerTests): the enumerable overload delegates per
+    /// element to the single-string core and carries no parse of its own, so
+    /// re-inlining the parse-or-raw expression here (what a future /simplify
+    /// pass would write for a one-line wrapper) reds both legs and the two-copy
+    /// state JF-741 closed cannot return silently on THIS side either. The type's
+    /// OTHER Guid.TryParse sites (RecordLaunchBase and friends) are
+    /// parse-and-reject gates feeding Guid-typed ToString("N") writes, a
+    /// different rule, and are deliberately outside this pin's scope. The
+    /// overload is an ITERATOR: its own body only allocates the compiler
+    /// generated state machine, and both the delegation call and any re-inlined
+    /// parse compile onto that machine's MoveNext, so the scan attributes the
+    /// machine to the overload by the scanner's own naming convention
+    /// (<c>&lt;NormalizeToMapKeyFormat&gt;d__N</c>).
+    /// </summary>
+    [Fact]
+    public void NormalizeToMapKeyFormat_EnumerableDelegatesToCore_NoInlineParseCopy_JF741()
+    {
+        MethodInfo? enumerable = typeof(DeviceQueueManager).GetMethod(
+            "NormalizeToMapKeyFormat",
+            BindingFlags.NonPublic | BindingFlags.Static,
+            binder: null,
+            types: new[] { typeof(IEnumerable<string>) },
+            modifiers: null);
+        Assert.True(
+            enumerable != null,
+            "NormalizeToMapKeyFormat(IEnumerable<string>) must still exist (this pin's lookup target)");
+
+        Module module = typeof(DeviceQueueManager).Module;
+        var overloadBodies = new List<MethodBase> { enumerable };
+        foreach (Type nested in typeof(DeviceQueueManager).GetNestedTypes(BindingFlags.Public | BindingFlags.NonPublic))
+        {
+            if (IlCallScanner.ExtractCompilerGeneratedOwner(nested.Name) == "NormalizeToMapKeyFormat")
+            {
+                overloadBodies.AddRange(IlCallScanner.DeclaredCallableMethods(nested));
+            }
+        }
+
+        foreach (MethodBase body in overloadBodies)
+        {
+            Assert.False(
+                IlCallScanner.CallsNamedMethod(body, module, "TryParse", typeof(Guid)),
+                $"{body.Name} must not call Guid.TryParse: the enumerable overload delegates per element to NormalizeToMapKeyFormat(string) (JF-741)");
+        }
+
+        Assert.True(
+            overloadBodies.Any(body => IlCallScanner.CallsNamedMethod(body, module, "NormalizeToMapKeyFormat", typeof(DeviceQueueManager))),
+            "The enumerable overload (its body or its iterator state machine) must call the single-string core NormalizeToMapKeyFormat(string)");
     }
 
     /// <summary>
