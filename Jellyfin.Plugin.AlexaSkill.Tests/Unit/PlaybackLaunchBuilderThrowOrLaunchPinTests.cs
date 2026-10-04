@@ -17,20 +17,25 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 /// the full contract, its load-bearing role for the ungated now-playing write
 /// sites, and the removal policy live on that guard's doc, and the thinner-belt
 /// decision on DeliveredLaunchStateWriteRosterTests' SCOPE paragraph). Two
-/// halves here: the guard's SEMANTICS (directive-less, empty-list, and
-/// non-launch-directive responses throw; both launch directive types pass and
-/// the SAME instance is returned) and the WRAPS' PRESENCE (every family member
-/// verifies its own outward return: a method that CONSTRUCTS a response must
-/// call the pin, a pure delegation method must call another family member, so
-/// the convenience overloads inherit and a new non-delegating overload without
-/// a pin fails). RESIDUAL BOUNDARIES: a member with a pinned terminal return
-/// could still grow an UNPINNED mid-body return (per-return IL analysis would
-/// be needed to catch that shape), and the async wrapper's own pin is BELT
-/// BEYOND this check (its member passes via the delegation lane, so deleting
-/// that one wrap stays green; the three response-building members' wraps are
-/// what the structural half enforces). SELF-RED: weaken the verdict and the
-/// semantics tests flip; remove a response-building member's wrap or its
-/// delegation and the structural test flips.
+/// halves here: the guard's SEMANTICS (null response, directive-less,
+/// empty-list, and non-launch-directive responses throw; both launch directive
+/// types pass and the SAME instance is returned) and the WRAPS' PRESENCE in
+/// three invariants: the DEEP construct rule (every builder method that
+/// CONSTRUCTS a SkillResponse must call the pin unless it is one of the
+/// documented Tell-capable VideoApp members, so a fifth or renamed
+/// launch-building member cannot escape silently), STALENESS (every family and
+/// exempt name must still name a declared method, so a rename that strands an
+/// entry reds), and the FAMILY LANES (a family method that constructs pins, a
+/// pure delegation method delegates to another family member, the async
+/// kickoff stub exempt with its MoveNext checked). RESIDUAL BOUNDARIES: a
+/// member with a pinned terminal return could still grow an UNPINNED mid-body
+/// return (per-return IL analysis would be needed; that silent class is what
+/// the rejected per-site roster arm uniquely covered), and the async wrapper's
+/// own pin is BELT BEYOND the lanes (its member passes via delegation, so
+/// deleting that one wrap stays green; the three response-building members'
+/// wraps are what the construct rule enforces). SELF-RED: weaken the verdict
+/// and the semantics tests flip; remove a response-building member's wrap, its
+/// delegation, or its family entry and the structural test flips.
 /// </summary>
 public class PlaybackLaunchBuilderThrowOrLaunchPinTests
 {
@@ -47,11 +52,14 @@ public class PlaybackLaunchBuilderThrowOrLaunchPinTests
     [Fact]
     public void Pin_NullResponseBody_ThrowsTheContractNotNre()
     {
-        // The guard is null-total (code-review round): a contract-breaking return
-        // with NO ResponseBody surfaces as the actionable contract throw, not a
+        // The guard is null-total (code-review round: the body; gate-marker round:
+        // the response itself): a contract-breaking null response or a return with
+        // NO ResponseBody surfaces as the actionable contract throw, not a
         // NullReferenceException from inside the belt.
         var noBody = new SkillResponse();
         Assert.Throws<InvalidOperationException>(() => PlaybackLaunchBuilder.EnsureLaunchResponse(noBody));
+
+        Assert.Throws<InvalidOperationException>(() => PlaybackLaunchBuilder.EnsureLaunchResponse(null!));
     }
 
     [Fact]
@@ -102,19 +110,83 @@ public class PlaybackLaunchBuilderThrowOrLaunchPinTests
             nameof(PlaybackLaunchBuilder.BuildAudiobookVideoAppLaunchResponseAsync),
         };
 
+        // The deliberate NON-pinned builders (the state roster's Tell-capable
+        // VideoApp family: their capability/resolver Tells are their documented
+        // contract, and their consumers are governed by
+        // DeliveredLaunchStateWriteRosterTests). A constructing member in THIS
+        // set is exempt from the deep construct rule below.
+        string[] tellCapableExempt =
+        {
+            nameof(PlaybackLaunchBuilder.BuildVideoAppLaunchResponse),
+            nameof(PlaybackLaunchBuilder.BuildVideoAppLaunchResponseAsync),
+            nameof(PlaybackLaunchBuilder.BuildEpisodeLaunchResponseAsync),
+            nameof(PlaybackLaunchBuilder.BuildChannelLaunchResponseAsync),
+        };
+
         HashSet<int> familyTokens = new(family.SelectMany(
             member => IlCallScanner.MethodTokens(typeof(PlaybackLaunchBuilder), member)));
 
-        // Group by logical name: a member covers its overloads, its lambdas/local
-        // functions, and its async state machine (whose MoveNext maps back).
-        var methodsByMember = new Dictionary<string, List<MethodBase>>();
+        // ONE walk collects the builder type's declared methods (its nested
+        // closure included: async state machines, lambdas, local functions).
+        var builderMethods = new List<MethodBase>();
         foreach ((Type type, MethodBase method) in IlCallScanner.DeclaredMethods(module.Assembly))
         {
-            if (IlCallScanner.TopLevelType(method.DeclaringType ?? type) != typeof(PlaybackLaunchBuilder))
+            if (IlCallScanner.TopLevelType(method.DeclaringType ?? type) == typeof(PlaybackLaunchBuilder))
+            {
+                builderMethods.Add(method);
+            }
+        }
+
+        // A compiler-generated shape that is NOT a state-machine MoveNext (a
+        // formatting lambda, a display closure, a local function pulled out of a
+        // member) is machinery, not a member: its return flows through the named
+        // method that owns it, so the lanes below skip it (gate-marker F4).
+        static bool IsLaneChecked(MethodBase method)
+            => method.Name == "MoveNext" || (method.Name.Length > 0 && method.Name[0] != '<');
+
+        var failures = new List<string>();
+
+        // DEEP RULE (gate-marker F1): every method on the builder that CONSTRUCTS
+        // a SkillResponse must call the pin unless it belongs to the Tell-capable
+        // exempt set. Name-independent, so a FIFTH launch-building member or a
+        // RENAMED one that constructs without a pin cannot escape silently, and a
+        // rename of a Tell member strands its exempt entry into a loud red.
+        foreach (MethodBase method in builderMethods)
+        {
+            if (!IsLaneChecked(method)
+                || !IlCallScanner.ConstructsType(method, module, typeof(SkillResponse)))
             {
                 continue;
             }
 
+            string logical = IlCallScanner.LogicalMethodName(method);
+            if (!tellCapableExempt.Contains(logical)
+                && !IlCallScanner.ContainsCallToToken(method, pinToken))
+            {
+                failures.Add($"{logical} ({method.Name}) constructs a response with no pin");
+            }
+        }
+
+        // STALENESS (gate-marker F1): a family name with no declared method means
+        // a rename stranded the array entry and the renamed member escaped both
+        // lanes above under an unknown name.
+        foreach (string member in family.Concat(tellCapableExempt))
+        {
+            if (!builderMethods.Any(m => IlCallScanner.LogicalMethodName(m) == member))
+            {
+                failures.Add($"{member}: family/exempt name with no declared method (stale after a rename?)");
+            }
+        }
+
+        // FAMILY LANES: every method of a known family member either pins its own
+        // constructed return or delegates to another family member (the
+        // convenience overloads), with the async kickoff stub exempt (its body
+        // lives in the MoveNext sibling, which IS lane-checked; the ReturnType
+        // keys the exemption to the stub itself so a future SYNC overload cannot
+        // hide behind an async sibling's state machine).
+        var methodsByMember = new Dictionary<string, List<MethodBase>>();
+        foreach (MethodBase method in builderMethods)
+        {
             string logical = IlCallScanner.LogicalMethodName(method);
             if (!family.Contains(logical))
             {
@@ -130,20 +202,16 @@ public class PlaybackLaunchBuilderThrowOrLaunchPinTests
             methods.Add(method);
         }
 
-        var failures = new List<string>();
         foreach ((string member, List<MethodBase> methods) in methodsByMember)
         {
-            // The async kickoff stub carries no logic (the body lives in the
-            // MoveNext sibling, which IS lane-checked), so it is exempt; the
-            // ReturnType keys the exemption to the stub itself (code-review
-            // round), so a future SYNC overload of the same name cannot hide
-            // behind an async sibling's state machine.
             bool hasStateMachine = methods.Any(m => m.Name == "MoveNext");
             foreach (MethodBase method in methods)
             {
-                // A method that constructs its own response must pin the return; a
-                // pure delegation method draws its value from another family member
-                // (chains terminate at the master, whose terminal return is pinned).
+                if (!IsLaneChecked(method))
+                {
+                    continue;
+                }
+
                 bool satisfies = IlCallScanner.ConstructsType(method, module, typeof(SkillResponse))
                     ? IlCallScanner.ContainsCallToToken(method, pinToken)
                     : IlCallScanner.ContainsCallToAnyToken(method, familyTokens);
@@ -161,6 +229,6 @@ public class PlaybackLaunchBuilderThrowOrLaunchPinTests
 
         Assert.True(
             failures.Count == 0,
-            $"throw-or-launch family methods that neither pin their own return nor delegate to another family member: {string.Join(", ", failures)}");
+            $"throw-or-launch pin coverage failures: {string.Join("; ", failures)}");
     }
 }

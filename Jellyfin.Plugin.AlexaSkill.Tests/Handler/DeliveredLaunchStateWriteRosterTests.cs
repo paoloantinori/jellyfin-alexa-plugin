@@ -34,13 +34,17 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// family (<see cref="PlaybackLaunchBuilder.BuildAudioPlayerResponse"/> and the
 /// audio-degrading builders) is throw-or-launch, and since JF-732 that contract is
 /// PINNED AT THE SOURCE (<see cref="PlaybackLaunchBuilder.EnsureLaunchResponse"/>
-/// wraps every outward return, so a builder that grows a directive-less return
-/// throws instead of shipping), which covers that family's roughly thirty
-/// post-build ungated write sites at one chokepoint instead of thirty per-site
-/// gates. The speech belt went per-site because JF-699 item 6 had already swept
-/// every speech write (the JF-693 live class); the state sweep would have been
-/// thirty new no-op conversions for belt-only value. The pin's doc owns the full
-/// contract and its removal policy.
+/// wraps the family's CURRENT terminal returns, so a builder that grows a
+/// directive-less TERMINAL return throws instead of shipping), which covers that
+/// family's roughly thirty post-build ungated write sites at one chokepoint
+/// instead of thirty per-site gates. KNOWN RESIDUAL (honest, the trade this
+/// decision made): a directive-less return grown at a NEW MID-BODY site bypasses
+/// its member's terminal wrap and ships silently; only the per-site gate sweep
+/// (the rejected roster-extension arm) covers that class structurally. The speech
+/// belt went per-site because JF-699 item 6 had already swept every speech write
+/// (the JF-693 live class); the state sweep would have been thirty new no-op
+/// conversions for belt-only value. The pin's doc owns the full contract, the
+/// coverage limit, and the removal policy.
 /// ACCEPTED BOUNDARIES (the roster idiom's documented-limit class):
 /// 1. TWO-LEVEL DEPTH: the write, the builder call, and the gate are each
 ///    detected in the scanned method's own IL or its one-level SAME-TOP-LEVEL-TYPE

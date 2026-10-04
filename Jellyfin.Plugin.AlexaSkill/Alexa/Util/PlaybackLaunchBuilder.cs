@@ -122,38 +122,45 @@ public sealed class PlaybackLaunchBuilder
 
     /// <summary>
     /// JF-732: the AudioPlayer family's throw-or-launch contract, PINNED AT THE
-    /// SOURCE. Every family member verifies its OWN outward returns through this
-    /// guard (the <c>BuildAudioPlayerResponse</c> chokepoint and its terminal
-    /// return,
+    /// SOURCE. Every family member verifies its OWN CURRENT terminal returns
+    /// through this guard (the <c>BuildAudioPlayerResponse</c> chokepoint,
     /// <see cref="BuildVideoAppAudioResponse(string, BaseItem, Entities.User, string, Context, Guid?, long)"/>,
     /// <see cref="BuildAudiobookResumeResponse(BaseItem, long, Entities.User, Context)"/>,
     /// <see cref="BuildAudiobookVideoAppLaunchResponseAsync(string, BaseItem, IOutputSpeech, Entities.User, Context, Request)"/>;
     /// a delegation edge carries no second verdict because the callee's own return
     /// is already guarded): a refusal throws
     /// <see cref="Exceptions.StreamTokenNotConfiguredException"/>, every other
-    /// return carries exactly one launch directive. That contract is LOAD-BEARING
-    /// for the roughly thirty handler-side post-build now-playing writes the
-    /// JF-714/JF-718 state gate never swept (the state belt is deliberately
-    /// thinner than the speech belt: those writes are ungated because the builder
-    /// cannot hand them a non-launch response, and this pin is what makes that
-    /// "cannot" an enforced fact instead of a documented assumption). If this
-    /// guard ever fires, a builder grew a directive-less return and every one of
-    /// those sites just became a phantom-now-playing writer; if such a return is
-    /// the DELIBERATE new design, removing this pin requires extending
-    /// DeliveredLaunchStateWriteRosterTests to this builder family and gating
-    /// every flagged site through <c>AttachNowPlayingIfLaunched</c> in the same
-    /// change. Belt only: no code path can reach the throw today (every terminal
-    /// construction above sets a one-directive list), so firing it is a contract
-    /// break, not a runtime condition to handle.
+    /// pinned return carries exactly one launch directive. That contract is
+    /// LOAD-BEARING for the roughly thirty handler-side post-build now-playing
+    /// writes the JF-714/JF-718 state gate never swept (the state belt is
+    /// deliberately thinner than the speech belt: those writes are ungated
+    /// because the builder cannot hand them a non-launch response, and this pin
+    /// is what makes that "cannot" an enforced fact instead of a documented
+    /// assumption). COVERAGE LIMIT (honest, gate-marker round): the wraps guard
+    /// the terminal returns that exist today; a directive-less return grown at a
+    /// NEW MID-BODY site would bypass its member's terminal wrap and ship
+    /// silently, and only the per-site gate sweep (the roster-extension arm this
+    /// decision rejected) covers that class structurally. A new launch-building
+    /// member is covered structurally (PlaybackLaunchBuilderThrowOrLaunchPinTests
+    /// requires every SkillResponse-constructing builder method to call this
+    /// pin). If this guard ever fires, a builder grew a directive-less return and
+    /// every one of those sites just became a phantom-now-playing writer; if such
+    /// a return is the DELIBERATE new design, removing this pin requires
+    /// extending DeliveredLaunchStateWriteRosterTests to this builder family and
+    /// gating every flagged site through <c>AttachNowPlayingIfLaunched</c> in the
+    /// same change. Belt only: no code path can reach the throw today (every
+    /// terminal construction above sets a one-directive list), so firing it is a
+    /// contract break, not a runtime condition to handle.
     /// </summary>
     /// <param name="response">The response a throw-or-launch builder is about to return.</param>
     /// <returns>The same response, verified to carry a launch directive.</returns>
     internal static SkillResponse EnsureLaunchResponse(SkillResponse response)
     {
-        // Null-total (code-review round: HasLaunchDirective dereferences the body):
-        // a contract-breaking return with NO ResponseBody must surface as this
+        // Null-total (code-review round: HasLaunchDirective dereferences the body;
+        // gate-marker round: so does a null RESPONSE itself): a contract-breaking
+        // null response or a response with NO ResponseBody must surface as this
         // guard's actionable contract throw, not a NullReferenceException.
-        if (response.Response is null || !HasLaunchDirective(response))
+        if (response is null || response.Response is null || !HasLaunchDirective(response))
         {
             throw new InvalidOperationException(
                 "A throw-or-launch PlaybackLaunchBuilder member returned a response with no launch directive (the JF-699 item 1 / JF-732 contract). "

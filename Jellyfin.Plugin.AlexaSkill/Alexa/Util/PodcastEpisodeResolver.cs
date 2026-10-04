@@ -70,7 +70,7 @@ public static class PodcastEpisodeResolver
     /// <param name="context">The Alexa context.</param>
     /// <param name="locale">The request locale, for the empty answer.</param>
     /// <param name="offsetFor">Optional map from the resolved episode to a resume offset in ms (the APL tap); null plays from 0.</param>
-    /// <param name="attachScreen">Optional post-build hook receiving the response and the resolved episode (the APL tap attaches the NowPlaying screen; the intent and yes paths have none).</param>
+    /// <param name="attachScreen">Optional post-build hook receiving the response and the resolved episode. Currently DEAD WIRING: no caller passes one (all three entry points omit it), and the APL podcast screen actually comes from the chokepoint's JF-623 auto-attach, which only fires on a directive-carrying response. Kept for the documented APL tap shape and gated on the delivered-launch verdict since JF-732, so a future caller cannot un-gate it.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The play response, or the no-episodes Tell.</returns>
     public static async Task<SkillResponse> PlayLatestEpisodeAsync(
@@ -128,12 +128,13 @@ public static class PodcastEpisodeResolver
 
         // JF-699 item 1: the builder either threw the StreamTokenNotConfigured
         // refusal (RequestPipeline answers it; nothing below runs) or delivered the
-        // launch, so the JF-693 delivered-launch verdict wrapper is gone. JF-732: the
-        // writes AND the screen attach ride ONE delivered-launch verdict, because
-        // the APL podcast arm returns at this delegation BEFORE its caller's shared
-        // attach: a NowPlaying screen rendered for a launch that did not happen is
-        // the visible half of the phantom, so the tail gates both halves itself and
-        // every AplUserEventHandler arm lands on a gated write.
+        // launch, so the JF-693 delivered-launch verdict wrapper is gone. JF-732:
+        // the writes and the attachScreen hook ride ONE delivered-launch verdict,
+        // because the APL podcast arm returns at this delegation BEFORE its
+        // caller's shared attach. The hook is currently dead wiring (see the param
+        // doc; the APL screen comes from the chokepoint's JF-623 auto-attach, which
+        // only fires on a directive-carrying response), so the gate is belt: a
+        // future caller cannot un-gate it.
         if (PlaybackLaunchBuilder.AttachNowPlayingIfLaunched(response, session, episode))
         {
             attachScreen?.Invoke(response, episode);
