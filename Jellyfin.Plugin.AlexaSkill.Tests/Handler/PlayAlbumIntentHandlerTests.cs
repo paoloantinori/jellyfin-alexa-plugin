@@ -548,7 +548,12 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase, IDisposable
         // The ask speaks the first stored candidate (a Contains assert only: every
         // rival name contains 'Rush' as a substring, so the state asserts above are
         // the discriminating pins for WHICH name leads).
-        Assert.Contains("Rush", TestHelpers.GetSpeechText(response));
+        // Discriminating: the ask's only format arg is matchList[0].Name, so the
+        // exact name is the SPOKEN first candidate; "Rush" alone would match
+        // every rival (Gold Rush, Love Rush, Midnight Rush) vacuously.
+        var speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("Rush", speech);
+        Assert.DoesNotContain("Gold", speech);
     }
 
     /// <summary>
