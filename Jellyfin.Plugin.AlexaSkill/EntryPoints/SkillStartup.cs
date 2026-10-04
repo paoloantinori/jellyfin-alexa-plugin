@@ -979,9 +979,14 @@ public class SkillStartup : IHostedService, IDisposable
                     // of that rule (LibrarySyncService.DropObservedBuildErrors, the
                     // same helper the capture's preserve routes through; a field
                     // read since JF-721, so no foreign text can ever collide with
-                    // it the way the old prefix StartsWith could).
-                    frozenCatalogTypes = existing.FrozenCatalogTypes;
-                    (caveat, error) = LibrarySyncService.DropObservedBuildErrors(existing.Caveat, existing.Error);
+                    // it the way the old prefix StartsWith could). The whole
+                    // carry runs through the ONE shared owner of the copy shape
+                    // (CarryLedgerCaveatAcrossCleanObservation, the same helper
+                    // the capture's preserve routes through; gate-marker rework
+                    // R2), which also migrates a pre-JF-721 composed Error once
+                    // and guards payload-iff-bit (the preserve's F2 rule).
+                    (caveat, frozenCatalogTypes, error) = LibrarySyncService.CarryLedgerCaveatAcrossCleanObservation(
+                        existing.Caveat, existing.FrozenCatalogTypes, existing.Error);
                 }
                 else
                 {

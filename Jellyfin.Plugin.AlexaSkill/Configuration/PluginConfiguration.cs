@@ -748,9 +748,13 @@ public record LocaleModelStatus
     /// <see cref="CatalogLedgerCaveats.None"/>.</summary>
     public CatalogLedgerCaveats Caveat { get; init; }
 
-    /// <summary>Gets the frozen catalog type names as a CSV ("Artist,Album"),
-    /// present iff <see cref="Caveat"/> carries
-    /// <see cref="CatalogLedgerCaveats.FrozenCatalogs"/>. Names, not ids: only
+    /// <summary>Gets the frozen catalog type names as a CSV ("Artist,Album").
+    /// Set by every field-era frozen write whenever
+    /// <see cref="Caveat"/> carries <see cref="CatalogLedgerCaveats.FrozenCatalogs"/>
+    /// (bit-implies-payload is the writers' factory rule, the copy paths'
+    /// guard, and the legacy migration's mint, which always recovers names
+    /// from the clause head); null under that bit ONLY on a hand-authored
+    /// persisted row, which renders the nameless clause. Names, not ids: only
     /// <see cref="CaveatText"/> renders them, nothing parses them (the JF-721
     /// no-wire-protocol rule).</summary>
     public string? FrozenCatalogTypes { get; init; }
@@ -778,11 +782,19 @@ public record LocaleModelStatus
             }
 
             var parts = new List<string>();
-            if (Caveat.HasFlag(CatalogLedgerCaveats.FrozenCatalogs)
-                && !string.IsNullOrEmpty(FrozenCatalogTypes))
+            if (Caveat.HasFlag(CatalogLedgerCaveats.FrozenCatalogs))
             {
-                string[] types = FrozenCatalogTypes.Split(',');
-                parts.Add($"{string.Join(" + ", types)} catalog{(types.Length > 1 ? "s" : string.Empty)} FROZEN (last-good pinned)");
+                if (!string.IsNullOrEmpty(FrozenCatalogTypes))
+                {
+                    string[] types = FrozenCatalogTypes.Split(',');
+                    parts.Add($"{string.Join(" + ", types)} catalog{(types.Length > 1 ? "s" : string.Empty)} FROZEN (last-good pinned)");
+                }
+                else
+                {
+                    // The legacy-migrated bit without recoverable names: the
+                    // nameless clause still names the freeze.
+                    parts.Add("catalogs FROZEN (last-good pinned)");
+                }
             }
 
             if (Caveat.HasFlag(CatalogLedgerCaveats.NoCatalogPut))
@@ -795,9 +807,9 @@ public record LocaleModelStatus
                 parts.Add("build errors");
             }
 
-            // The lone-bit-impossible shapes (e.g. FrozenCatalogs with an empty
-            // payload, excluded above) join to the empty string, which the
-            // admin UI's truthiness check renders as absent.
+            // Every Caveat != None shape contributes a part (the frozen arm
+            // renders nameless when the payload is absent), so the join is
+            // never empty here; the None case returned early above.
             return string.Join("; ", parts);
         }
     }

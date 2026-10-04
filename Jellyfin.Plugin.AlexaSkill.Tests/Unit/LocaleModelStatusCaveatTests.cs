@@ -164,6 +164,73 @@ public class LocaleModelStatusCaveatTests : PluginTestBase, IDisposable
         Assert.Equal(
             "build errors",
             new LocaleModelStatus { Caveat = CatalogLedgerCaveats.ObservedBuildErrors, Error = "INVALID_SKILL_PACKAGE: boom" }.CaveatText);
+
+        // The legacy-migrated bit without recoverable names renders nameless
+        // (gate-marker rework F1): the freeze stays visible even when the
+        // migration could not parse a names head.
+        Assert.Equal(
+            "catalogs FROZEN (last-good pinned)",
+            new LocaleModelStatus { Caveat = CatalogLedgerCaveats.FrozenCatalogs }.CaveatText);
+    }
+
+    /// <summary>
+    /// The one-shot legacy migration over the FULL pre-JF-721 composition
+    /// grammar (gate-marker rework F1): every composed shape decomposes into
+    /// the bare foreign diagnostic plus the names the clause carried (or null
+    /// when it carried none), the run-scoped tail and framing drop, the
+    /// own-errors shape clears, and field-era free text passes through
+    /// untouched (the steady state once every persisted row is field-era).
+    /// </summary>
+    [Fact]
+    public void MigrateLegacyLedgerError_DecomposesTheLegacyGrammar()
+    {
+        // PUT-writer shapes.
+        Assert.Equal(
+            (null, "Artist"),
+            LibrarySyncService.MigrateLegacyLedgerError("Artist catalog FROZEN (last-good pinned)"));
+        Assert.Equal(
+            ("canary mismatch: submitted 145/900 but live reports 144/899", "Artist,Album"),
+            LibrarySyncService.MigrateLegacyLedgerError(
+                "Artist + Album catalogs FROZEN (last-good pinned); canary mismatch: submitted 145/900 but live reports 144/899"));
+
+        // No-PUT writer shapes: the run-scoped tail and the framing drop.
+        Assert.Equal(
+            (null, "Artist"),
+            LibrarySyncService.MigrateLegacyLedgerError("Artist catalog FROZEN (last-good pinned); no PUT this run"));
+        Assert.Equal(
+            ("simulated prior diagnostic", "Artist"),
+            LibrarySyncService.MigrateLegacyLedgerError(
+                "Artist catalog FROZEN (last-good pinned); no PUT this run; previous: simulated prior diagnostic"));
+
+        // Own-errors shape: superseded observation-era text, clears.
+        Assert.Equal(
+            (null, null),
+            LibrarySyncService.MigrateLegacyLedgerError("build errors: INVALID_SKILL_PACKAGE: boom"));
+
+        // Field-era free text: untouched; nothing to migrate.
+        Assert.Equal(
+            ("canary mismatch: submitted 145/900 but live reports 144/899", null),
+            LibrarySyncService.MigrateLegacyLedgerError("canary mismatch: submitted 145/900 but live reports 144/899"));
+        Assert.Equal((null, null), LibrarySyncService.MigrateLegacyLedgerError(null));
+
+        // Code-review refresh R1 hardening: a foreign diagnostic QUOTING the
+        // clause marker mid-sentence (its head carries ':' or ';' and does not
+        // end in the catalog noun) is not clause-led, so it passes through
+        // untouched: no bogus FrozenCatalogs mint, no chopped text.
+        const string quotedMarker =
+            "upstream note: another vendor's catalogs FROZEN (last-good pinned) by their sync";
+        Assert.Equal(
+            (quotedMarker, null),
+            LibrarySyncService.MigrateLegacyLedgerError(quotedMarker));
+
+        // The remaining accepted window, pinned as documented behavior: a
+        // foreign text carrying the bare tail literal alone is misdated and
+        // stripped (the canary format and SMAPI messages never produce it;
+        // heals at the next sync).
+        Assert.Equal(
+            ("canary mismatch: submitted 145/900 but live reports 144/899", null),
+            LibrarySyncService.MigrateLegacyLedgerError(
+                "canary mismatch: submitted 145/900 but live reports 144/899; no PUT this run"));
     }
 
     /// <summary>
@@ -253,6 +320,22 @@ public class LocaleModelStatusCaveatTests : PluginTestBase, IDisposable
         Assert.NotNull(payloadDropped);
         Assert.Equal(CatalogLedgerCaveats.None, payloadDropped!.Value.Caveat);
         Assert.Null(payloadDropped.Value.FrozenCatalogTypes);
+
+        // Gate-marker rework F1: a pre-JF-721 persisted SYNC row (composed
+        // text, no bits) migrates through the preserve: the clause mints the
+        // frozen caveat with the names parsed from the text, the tail and
+        // framing drop, and the bare foreign diagnostic survives. The
+        // skip-gated capture chain can never resurrect the stale wording.
+        var legacyPreserved = LibrarySyncService.PreserveLedgerCaveatAcrossCapture(new LocaleModelStatus
+        {
+            Status = "SUCCEEDED",
+            Source = LibrarySyncService.CatalogSyncLedgerSource,
+            Error = "Artist + Album catalogs FROZEN (last-good pinned); no PUT this run; previous: canary mismatch: submitted 145/900 but live reports 144/899",
+        });
+        Assert.NotNull(legacyPreserved);
+        Assert.Equal(CatalogLedgerCaveats.FrozenCatalogs, legacyPreserved!.Value.Caveat);
+        Assert.Equal("Artist,Album", legacyPreserved.Value.FrozenCatalogTypes);
+        Assert.Equal("canary mismatch: submitted 145/900 but live reports 144/899", legacyPreserved.Value.Error);
     }
 
     /// <summary>

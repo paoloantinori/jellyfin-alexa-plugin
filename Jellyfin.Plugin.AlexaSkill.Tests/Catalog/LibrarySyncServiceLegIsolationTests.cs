@@ -471,15 +471,16 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
 
         // The stale green row was reached and replaced: Status preserved, the
         // freeze in the caveat bits with the names payload, the prior diagnostic
-        // carried unframed in Error, on a fresh timestamp. Source is always this
-        // writer's own label (catalog sync authors the row, code-review F4).
+        // carried ATTRIBUTED in Error (gate-marker F3: a prior-run failure must
+        // not read as the current run's), on a fresh timestamp. Source is always
+        // this writer's own label (catalog sync authors the row, code-review F4).
         var ledger = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
         Assert.NotNull(ledger);
         Assert.Equal("SUCCEEDED", ledger!.Status);
         Assert.Equal(LibrarySyncService.CatalogSyncLedgerSource, ledger.Source);
         Assert.Equal(CatalogLedgerCaveats.FrozenCatalogs | CatalogLedgerCaveats.NoCatalogPut, ledger.Caveat);
         Assert.Equal("Artist,Album,Series", ledger.FrozenCatalogTypes);
-        Assert.Equal("simulated prior diagnostic", ledger.Error);
+        Assert.Equal($"{LibrarySyncService.CarriedDiagnosticLedgerPrefix}simulated prior diagnostic", ledger.Error);
         Assert.True(ledger.LastUpdated > seededTime, "the replaced entry must carry a fresh timestamp");
 
         // Clean re-run: the entry carries no caveat (the freeze is the trigger).
@@ -609,12 +610,13 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
         var entryAfterFirst = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
 
         // F3: the transient status clamped to the healthy neutral, and the
-        // foreign diagnostic carried exactly once, verbatim (no framing).
+        // foreign diagnostic carried exactly once, attributed (gate-marker
+        // rework F3: the prefix marks it a prior-run diagnostic).
         Assert.False(first.Success);
         Assert.NotNull(entryAfterFirst);
         Assert.Equal("Skipped", entryAfterFirst!.Status);
         Assert.Equal(CatalogLedgerCaveats.FrozenCatalogs | CatalogLedgerCaveats.NoCatalogPut, entryAfterFirst.Caveat);
-        Assert.Equal("simulated in-flight build", entryAfterFirst.Error);
+        Assert.Equal($"{LibrarySyncService.CarriedDiagnosticLedgerPrefix}simulated in-flight build", entryAfterFirst.Error);
 
         // Second all-frozen run with the probe still in place (the every-restart
         // cadence): the entry must NOT nest or grow.
@@ -704,6 +706,48 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
         Assert.Equal(CatalogLedgerCaveats.FrozenCatalogs | CatalogLedgerCaveats.NoCatalogPut, ledger.Caveat);
         Assert.Equal("Artist,Album,Series", ledger.FrozenCatalogTypes);
         Assert.Null(ledger.Error);
+    }
+
+    /// <summary>
+    /// Gate-marker rework F1, writer half: a pre-JF-721 persisted sync row
+    /// carries its composed Error TEXT (clause + no-PUT tail baked in) with NO
+    /// caveat bits, so the fields read it as a foreign diagnostic and this
+    /// writer would carry the text VERBATIM onto a caveat-carrying row,
+    /// displaying "no PUT this run" beside this run's own fresh clause (the
+    /// duplication the coordinator's finding names). The carry migrates the
+    /// legacy text once: the stale clause/tail drop, the fresh caveat carries
+    /// the freeze, and only a real foreign diagnostic (none here) would ride
+    /// attributed.
+    /// </summary>
+    [Fact]
+    public async Task SyncUserLibraryAsync_AllTypesFrozen_LegacyComposedRow_CarriesMigratedTextOnly()
+    {
+        Plugin.Instance!.Configuration.SetLocaleModelStatus("it-IT", new LocaleModelStatus
+        {
+            Status = "SUCCEEDED",
+            LastUpdated = DateTime.UtcNow.AddHours(-1),
+            Source = LibrarySyncService.CatalogSyncLedgerSource,
+            Error = "Artist + Album + Series catalogs FROZEN (last-good pinned); no PUT this run"
+        });
+        SetupLibraryWithAllTypes();
+        FreezeAllTypesViaProbe();
+        var user = CreateUser();
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
+
+        await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
+
+        var ledger = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(ledger);
+        Assert.Equal(CatalogLedgerCaveats.FrozenCatalogs | CatalogLedgerCaveats.NoCatalogPut, ledger.Caveat);
+        Assert.Equal("Artist,Album,Series", ledger.FrozenCatalogTypes);
+        Assert.Null(ledger.Error);
+
+        // The rendered tail is THIS run's own truthful wording (the leg really
+        // performed no PUT); what must never survive is the legacy text in the
+        // Error, asserted above as null.
+        Assert.Equal(
+            "Artist + Album + Series catalogs FROZEN (last-good pinned); no PUT this run",
+            ledger.CaveatText);
     }
 
     /// <summary>

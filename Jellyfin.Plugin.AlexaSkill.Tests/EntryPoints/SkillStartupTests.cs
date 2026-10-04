@@ -241,6 +241,47 @@ public class SkillStartupTests : PluginTestBase
     }
 
     /// <summary>
+    /// Gate-marker rework F1, the demanded pin: a pre-JF-721 persisted SYNC row
+    /// carries its composed Error TEXT (clause + no-PUT tail + framed foreign)
+    /// with NO caveat bits; a skip-gated capture chain must never keep
+    /// displaying the superseded "no PUT this run" wording for a run that DID
+    /// push, nor duplicate the clause beside the caveat span. The preserve
+    /// migrates the text once: the clause becomes the caveat bits + names
+    /// payload, the tail and framing drop, the bare foreign diagnostic
+    /// survives; the SECOND capture (the skip-gated chain) is then a plain
+    /// field-copy idempotence over field-era text.
+    /// </summary>
+    [Fact]
+    public async Task CaptureLocaleModelStatusesAsync_CleanCapture_OverLegacyComposedRow_MigratesTextToFields()
+    {
+        SeedLocaleRow(
+            "Artist + Album catalogs FROZEN (last-good pinned); no PUT this run; previous: canary mismatch: submitted 145/900 but live reports 144/899");
+
+        await CaptureCleanAsync();
+
+        var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(row);
+        Assert.Equal("SUCCEEDED", row!.Status);
+        Assert.Equal("Embedded", row.Source);
+        Assert.Equal(CatalogLedgerCaveats.FrozenCatalogs, row.Caveat);
+        Assert.Equal("Artist,Album", row.FrozenCatalogTypes);
+        Assert.Equal("canary mismatch: submitted 145/900 but live reports 144/899", row.Error);
+        Assert.DoesNotContain("no PUT this run", row.Error, StringComparison.Ordinal);
+        Assert.Equal("Artist + Album catalogs FROZEN (last-good pinned)", row.CaveatText);
+
+        // The skip-gated chain: another version bump, sync still skipped. The
+        // migrated row is field-era now, so the second capture is a plain
+        // idempotent field copy with no stale wording resurrection.
+        await CaptureCleanAsync();
+        row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(row);
+        Assert.Equal(CatalogLedgerCaveats.FrozenCatalogs, row!.Caveat);
+        Assert.Equal("Artist,Album", row.FrozenCatalogTypes);
+        Assert.Equal("canary mismatch: submitted 145/900 but live reports 144/899", row.Error);
+        Assert.DoesNotContain("no PUT this run", row.Error, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// JF-710 gate-marker tail: the PLAIN no-PUT row (frozen caveat + no-PUT
     /// bit, no carried foreign) must reduce to the frozen caveat alone through
     /// the capture, and that product must be idempotent under a second capture
@@ -718,6 +759,49 @@ public class SkillStartupTests : PluginTestBase
         Assert.Equal(CatalogLedgerCaveats.FrozenCatalogs, row.Caveat);
         Assert.Equal("Artist", row.FrozenCatalogTypes);
         Assert.Equal(foreign, row.Error);
+    }
+
+    /// <summary>
+    /// Gate-marker rework F1, the refresh mirror (+ the F2 payload guard): a
+    /// capture-family row whose Error is still a pre-JF-721 composed text (the
+    /// race-composed path: the paired capture's per-locale write failed while
+    /// the refresh's succeeds) must MIGRATE on the clean settle, not carry the
+    /// stale clause/tail forward; and a stray payload whose FrozenCatalogs bit
+    /// does not survive must not ride the settled row (the preserve's guard,
+    /// mirrored here).
+    /// </summary>
+    [Fact]
+    public async Task RefreshInProgressLocaleStatusesAsync_CleanSettle_OverLegacyTextFamilyRow_MigratesAndGuardsPayload()
+    {
+        var seeded = SeedRow(
+            "it-IT", "IN_PROGRESS",
+            "Artist catalog FROZEN (last-good pinned); no PUT this run; previous: canary mismatch: submitted 145/900 but live reports 144/899");
+
+        var user = UserServing(StatusFor("it-IT", SkillStatusState.SUCCEEDED), out _);
+
+        await RefreshAsync(user);
+
+        var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(row);
+        Assert.Equal("SUCCEEDED", row!.Status);
+        Assert.Equal(CatalogLedgerCaveats.FrozenCatalogs, row.Caveat);
+        Assert.Equal("Artist", row.FrozenCatalogTypes);
+        Assert.Equal("canary mismatch: submitted 145/900 but live reports 144/899", row.Error);
+        Assert.DoesNotContain("no PUT this run", row.Error, StringComparison.Ordinal);
+        Assert.True(row.LastUpdated > seeded, "the settled row must carry a fresh timestamp");
+
+        // F2 mirror: the payload rides only when its bit survives. A
+        // NoCatalogPut-only family row (never minted today; the capture never
+        // writes the bit) with a stray payload must settle payload-less.
+        SeedRow("it-IT", "IN_PROGRESS", null, caveat: CatalogLedgerCaveats.NoCatalogPut, frozenCatalogTypes: "Artist");
+        var user2 = UserServing(StatusFor("it-IT", SkillStatusState.SUCCEEDED), out _);
+        await RefreshAsync(user2);
+
+        row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(row);
+        Assert.Equal("SUCCEEDED", row!.Status);
+        Assert.Equal(CatalogLedgerCaveats.NoCatalogPut, row.Caveat);
+        Assert.Null(row.FrozenCatalogTypes);
     }
 
     /// <summary>
