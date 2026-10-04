@@ -10,6 +10,7 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
+using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Model.Querying;
@@ -43,7 +44,10 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 /// raw-slot normalization), and of the generic-music-word vocabulary the probe
 /// tests (moved from PlaySongIntentHandler so no handler reaches into another
 /// handler's statics: the twins referenced PlaySongIntentHandler
-/// .IsGenericMusicQuery cross-handler before the fold).
+/// .IsGenericMusicQuery cross-handler before the fold). JF-742: and of its
+/// ARTIST-ONLY sibling (<see cref="TryArbitrateOrSearchArtistsAsync"/>), the
+/// same gate-consume shape for the handlers whose content input is the musician
+/// slot (PlayArtistSongs, QueryArtistLibrary, FindSong's two musician legs).
 /// </summary>
 internal static class MultiValueErDisambiguation
 {
@@ -460,5 +464,146 @@ internal static class MultiValueErDisambiguation
         }
 
         return new SongMusicianGateResult(null, artistIds, artists[0].Name);
+    }
+
+    /// <summary>
+    /// JF-742: the ARTIST-ONLY gate-consume composite's outcome. <see cref="Ask"/>
+    /// is the response to return verbatim (the real multi-artist ask) and is
+    /// terminal: no other field is read on that leg. <see cref="Artists"/> is the
+    /// collapse survivor as a single-element list, or the fall-through search's
+    /// full result list (possibly empty; every artist caller owns a DIFFERENT
+    /// not-found tail, unlike the song composite's shared NotFoundSongByArtist
+    /// terminal). <see cref="Pool"/> carries the gate's scoped fetch so a caller
+    /// with its own pool cache (PlayArtistSongs' JF-420/JF-652 gates) seeds it
+    /// instead of re-materializing; null on every closed-gate and skipped-gate
+    /// leg. <see cref="PinnedIndex"/> is the ONE pinned view the gate and the
+    /// search read, returned because PlayArtistSongs' post-search gates consume
+    /// it (the song composite pins internally and returns no view, the first
+    /// counterweight that kept these sites off it).
+    /// </summary>
+    internal readonly record struct ArtistGateSearchResult(
+        SkillResponse? Ask,
+        IReadOnlyList<BaseItem> Artists,
+        IReadOnlyList<BaseItem>? Pool,
+        IArtistIndex? PinnedIndex);
+
+    /// <summary>
+    /// JF-742: the ARTIST-ONLY sibling of <see cref="TryArbitrateOrSearchAsync"/>,
+    /// folding the "pin view, TryArbitrate, ask-return, survivor-adopt, else
+    /// SearchAsync(preloadedPool: pool)" sequence JF-715/JF-734 threaded at four
+    /// hand-synced sites (a fifth consumer, PlayAlbumIntentHandler, is the
+    /// DOCUMENTED non-fold: its arbitration is conditional on the empty-album
+    /// branch, feeds matchedArtist/flag locals, and its search sits in a separate
+    /// JF-492-fallback block, so the sequence there is interleaved, not copied).
+    /// The sibling exists because the song composite structurally cannot host
+    /// these sites (the JF-734 reviews' counterweights): it returns no pinned view
+    /// while PlayArtistSongs needs one post-search; it hardcodes the default
+    /// policy axes while PlayArtistSongs passes mode/asr/parallelDbTiers; it
+    /// collapses results to ids plus one name while the artist handlers judge on
+    /// IReadOnlyList&lt;BaseItem&gt;; it speaks the shared NotFoundSongByArtist
+    /// terminal while each artist site owns a different tail. This composite
+    /// therefore takes the policy axes as parameters, returns the pinned view and
+    /// the full item list, and leaves every terminal tail and the survivor
+    /// ADOPTION shape at the caller: the caller switches on the outcome (Ask to
+    /// return it, Artists to adopt/judge, empty to run its own not-found).
+    /// <para>
+    /// Like the song composite, this pins ONCE at entry (the UNGUARDED
+    /// <see cref="ArtistIndexExtensions.Pin"/>, idempotent on a caller-pinned
+    /// view) and hands the view to both the gate and the search, so the pool and
+    /// the phonetic codes resolve from ONE publish. The unguarded shape preserves
+    /// the JF-419.2 warming choke at handlers whose entry gate covers only the
+    /// song index (FindSong: a warming artist index pins to a NOT-READY view and
+    /// SearchAsync's EnsureReady still throws, pinned by
+    /// FindSong_MusicianLeg_ArtistIndexWarming_ThrowsAtTheChokePoint). On a
+    /// DISABLED index the unguarded pin yields an empty-snapshot not-ready view,
+    /// which is EQUIVALENT to the pre-fold null for every consumer at the sites
+    /// that pass the live index (FindSong's legs, QueryArtistLibrary: SearchAsync
+    /// takes the database branch on a not-ready view exactly as on null, and
+    /// neither site reads the view post-search). One caller is NOT equivalent and
+    /// therefore keeps the caller-pins-first GUARDED shape, handing its view in
+    /// (PlayArtistSongs, the JF-742 code-review F1 catch): its Fast-mode best
+    /// pick passes the view to SearchService.FuzzyMatchPhonetic, whose null
+    /// branch runs the PLAIN matcher overload (early-return at the first
+    /// ContainmentScore hit) while a not-ready view runs the phonetic overload
+    /// (full scan for a winner above the phonetic floor), so null and an
+    /// empty-snapshot view can pick DIFFERENT artists among multi database hits.
+    /// </para>
+    /// </summary>
+    /// <param name="request">The intent request carrying the musician slot's ER.</param>
+    /// <param name="user">The plugin user (thresholds, library scope).</param>
+    /// <param name="artistIndex">The handler's artist index (live or already-pinned; the composite pins, idempotently on a view).</param>
+    /// <param name="libraryManager">The library manager (scope resolution; also the retry channel's query target).</param>
+    /// <param name="logger">The handler's logger.</param>
+    /// <param name="locale">The request locale.</param>
+    /// <param name="searchMusician">The artist search query (the ER canonical when the slot resolved, the raw value otherwise; the JF-659 contract stays at the caller's slot read).</param>
+    /// <param name="arbitrate">REQUIRED (no default, the fail-open guard the JF-742 code-review F4 finding added): whether the multi-value-ER gate runs at all. The artist sites close it STRUCTURALLY, not through the generic-word probe: FindSong's first turn runs the gate only when the keywords slot is EMPTY (ANY non-empty keywords are in-hand content, a generic word included, a stricter predicate than <see cref="IsGenericSongConstraint"/>'s), and its AwaitingArtist leg only when the musician slot supplied the input (the transcript leg has no slot ER). PlayArtistSongs and QueryArtistLibrary pass true (their only content input IS the musician slot). A future site with in-hand content the ask cannot preserve MUST pass false explicitly; the required parameter makes that decision un-skippable.</param>
+    /// <param name="mode">The caller's search-response policy (Fast skips recall tiers; Thorough runs the full chain).</param>
+    /// <param name="asrCompoundWordFixEnabled">Whether the DB tier 1 retries ASR compound-word variants (Thorough only).</param>
+    /// <param name="parallelDbTiers">Whether the Thorough DB tiers 2-4 run as Task.WhenAll (PlayArtistSongs' Fast/Thorough/Parallel caller; the other sites keep the sequential default).</param>
+    /// <param name="cancellationToken">Request cancellation token.</param>
+    /// <returns>The gate outcome (see <see cref="ArtistGateSearchResult"/>).</returns>
+    internal static async Task<ArtistGateSearchResult> TryArbitrateOrSearchArtistsAsync(
+        IntentRequest request,
+        Entities.User user,
+        IArtistIndex? artistIndex,
+        ILibraryManager libraryManager,
+        ILogger logger,
+        string locale,
+        string searchMusician,
+        bool arbitrate,
+        SearchResponseMode mode = SearchResponseMode.Thorough,
+        bool asrCompoundWordFixEnabled = false,
+        bool parallelDbTiers = false,
+        CancellationToken cancellationToken = default)
+    {
+        // The structural one-publish guarantee, same as the song composite: pin
+        // here so the gate's pool and the search's phonetic codes cannot split on
+        // a mid-request refresh; UNGUARDED (the class doc records the
+        // warming-choke, disabled-index, and caller-pins-first consequences per
+        // handler shape).
+        IArtistIndex? pinnedArtistIndex = artistIndex?.Pin();
+
+        var arbitration = default(ErArtistArbitration);
+        if (arbitrate)
+        {
+            arbitration = TryArbitrate(
+                request, user, pinnedArtistIndex, libraryManager, logger, locale);
+            if (arbitration.Ask != null)
+            {
+                return new ArtistGateSearchResult(arbitration.Ask, Array.Empty<BaseItem>(), null, pinnedArtistIndex);
+            }
+
+            if (arbitration.ResolvedArtist is { } survivor)
+            {
+                // The survivor is adopted exactly the way every folded site did it
+                // inline: a single-element artist list the caller's judgment gates
+                // score like any search hit. The debug line carries the Id the
+                // folded sites' per-leg collapse logs used to (JF-742 code-review
+                // F3: the FindSong wrapper that owned it is gone; TryArbitrate's
+                // Information line names the artist without it).
+                logger.LogDebug("MultiValueEr: artist gate collapsed to the survivor '{Name}' (Id={Id})", survivor.Name, survivor.Id);
+                return new ArtistGateSearchResult(
+                    null, new List<BaseItem> { survivor }, arbitration.Pool, pinnedArtistIndex);
+            }
+        }
+
+        // The fall-through search, SEEDED with the gate's pool when the gate ran
+        // (the JF-715/JF-734 threading; null on every closed-gate and skipped-gate
+        // leg keeps SearchAsync's internal fetch). All four folded sites shared
+        // this exact retry channel and label, so it lives here once.
+        logger.LogDebug("MultiValueEr: artist gate closed, searching for artist filter='{Musician}'", searchMusician);
+        IReadOnlyList<BaseItem> artists = await ArtistSearch.SearchAsync(
+            searchMusician, user, libraryManager, pinnedArtistIndex, logger,
+            (q, ct) => RetryHelper.ExecuteWithRequestBudgetAsync(
+                () => libraryManager.GetItemList(q), logger, "GetArtists", cancellationToken: ct),
+            locale, cancellationToken,
+            mode: mode,
+            asrCompoundWordFixEnabled: asrCompoundWordFixEnabled,
+            parallelDbTiers: parallelDbTiers,
+            preloadedPool: arbitration.Pool).ConfigureAwait(false);
+
+        logger.LogDebug("MultiValueEr: artist search returned {Count} results for '{Musician}'", artists.Count, searchMusician);
+
+        return new ArtistGateSearchResult(null, artists, arbitration.Pool, pinnedArtistIndex);
     }
 }
