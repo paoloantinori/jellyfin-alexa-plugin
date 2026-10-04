@@ -92,10 +92,14 @@ public class QueueContinuationIdentityRosterTests
     /// ldc.i4 2147483647 at compile time (exceeding every short encoding, so the
     /// 0x20 walk is total for it), and AdvanceOrMarkExhausted keys its
     /// mark-on-short end signal on that sentinel, so an Artist mint storing a real
-    /// total would make the artist tail advance past the end and WARN on every
-    /// subsequent PlaybackNearlyFinished instead of marking exhaustion, with no
-    /// other test failing (the hand-constructed test continuations carry the
-    /// sentinel by habit, not by pin).
+    /// total would make the artist tail advance past the end once (one wasted
+    /// library query plus one WARN; TryFetchContinuationBatch removes the store
+    /// on the empty batch, so the noise is per-continuation-lifetime, not per-
+    /// event, and an exactly-right real total ends silently via the entry
+    /// guard) with no other test failing (the hand-constructed test
+    /// continuations carry the sentinel by habit, not by pin). The invariant's
+    /// weight is the silent extra query, not a WARN storm (the JF-753
+    /// gate-marker corrected this phrasing).
     /// ACCEPTED BOUNDARY: same-method scope, like the identity roster above (the
     /// sentinel must appear in the constructing method's own IL).
     /// </summary>

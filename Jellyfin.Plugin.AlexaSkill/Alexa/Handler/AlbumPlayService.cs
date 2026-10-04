@@ -585,7 +585,7 @@ public sealed class AlbumPlayService
             }, unknownTotalOnFallback: true),
             logLabel + ":GetAlbumTracks",
             cancellationToken: cancellationToken).ConfigureAwait(false);
-        _logger.LogDebug("{Label}: Jellyfin returned {TrackCount} tracks (total={TotalCount})", logLabel, albumResult.Items.Count, QueueContinuationFetcher.RenderTotal(albumResult.TotalRecordCount));
+        _logger.LogDebug("{Label}: Jellyfin returned {TrackCount} tracks (total={TotalCount})", logLabel, albumResult.Items.Count, _logger.IsEnabled(LogLevel.Debug) ? QueueContinuationFetcher.RenderTotal(albumResult.TotalRecordCount) : null);
         if (QueueContinuationFetcher.PageHasNoItems(albumResult))
         {
             // Tolerant fallback: for split / multi-disc / malformed-folder albums, the
@@ -607,7 +607,7 @@ public sealed class AlbumPlayService
                 }, unknownTotalOnFallback: true),
                 logLabel + ":GetAlbumTracksByAlbumIds",
                 cancellationToken: cancellationToken).ConfigureAwait(false);
-            _logger.LogDebug("{Label}: AlbumIds fallback returned {TrackCount} tracks (total={TotalCount})", logLabel, albumResult.Items.Count, QueueContinuationFetcher.RenderTotal(albumResult.TotalRecordCount));
+            _logger.LogDebug("{Label}: AlbumIds fallback returned {TrackCount} tracks (total={TotalCount})", logLabel, albumResult.Items.Count, _logger.IsEnabled(LogLevel.Debug) ? QueueContinuationFetcher.RenderTotal(albumResult.TotalRecordCount) : null);
         }
 
         if (QueueContinuationFetcher.PageHasNoItems(albumResult))
@@ -1066,7 +1066,9 @@ public sealed class AlbumPlayService
         }
 
         // Store continuation info so PlaybackNearlyFinished can fetch the rest
-        if (totalCount > playlistItems.Count)
+        // (the ONE maybe-more decision; the playlist total is always real, so
+        // the two-int known-total form applies)
+        if (QueueContinuationFetcher.InitialPageHasMore(playlistItems.Count, totalCount))
         {
             QueueContinuationStore.Set(
                 session.UserId,

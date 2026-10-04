@@ -94,6 +94,19 @@ internal static class QueueContinuationFetcher
         => fetchedCount >= ProgressiveQueueConstants.GetInitialFetchSize();
 
     /// <summary>
+    /// The known-total two-int form of <see cref="InitialPageHasMore(int)"/> for
+    /// heads that hold the fetched page and its REAL total separately (the
+    /// playlist head): the maybe-more bar stays the ONE named decision instead
+    /// of a fifth hand-kept comparison in the minting file (the JF-753
+    /// gate-marker's finding).
+    /// </summary>
+    /// <param name="fetchedCount">The number of items the first page served.</param>
+    /// <param name="totalCount">The real total the server reported.</param>
+    /// <returns>True when the total exceeds the fetched page.</returns>
+    internal static bool InitialPageHasMore(int fetchedCount, int totalCount)
+        => totalCount > fetchedCount;
+
+    /// <summary>
     /// The ONE advance-or-mark idiom after a fetched continuation page (the JF-753
     /// consolidation of the three variants the JF-673 review tracked: album plain
     /// advance, artist mark-on-short, audiobook mark-only-when-end-unknown).
