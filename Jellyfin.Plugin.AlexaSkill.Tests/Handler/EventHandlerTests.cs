@@ -781,7 +781,7 @@ public class EventHandlerTests : PluginTestBase, IDisposable
     public async Task PlaybackStopped_ItemPositionStateTrim_ProtectsQueuedResidentsUnderDashedMembership_JF738()
     {
         var fake = new FakeTimeProvider(DateTimeOffset.UtcNow);
-        _queueManager.Time = fake;
+        _queueManager.SetTimeForTest(fake);
         _sessionManagerMock
             .Setup(s => s.OnPlaybackStart(It.IsAny<PlaybackStartInfo>()))
             .Returns(Task.CompletedTask);

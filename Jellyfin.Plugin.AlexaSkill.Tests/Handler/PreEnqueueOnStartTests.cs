@@ -657,30 +657,23 @@ public class PreEnqueueOnStartTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
-    /// Hand-rolled deterministic clock for the JF-424.2 TTL tests:
-    /// Microsoft.Extensions.TimeProvider.Testing is not referenced by the test project,
-    /// and the needed surface is just a settable UTC now. Parked at the epoch the test
-    /// chooses, so Store's ComputedAt stamp and the TTL check read the same clock.
+    /// The JF-424.2 static-seam adapter over the shared
+    /// <see cref="Jellyfin.Plugin.AlexaSkill.Tests.Unit.FakeTimeProvider"/> clock
+    /// core (GM-F4 hoist; the fully-qualified base is deliberate: the nested
+    /// class keeps the FakeTimeProvider name for its three call sites): only
+    /// the NextTrackPrecomputeCache install/restore lives here, because that
+    /// seam is STATIC global state the per-instance consumers do not have.
     /// Installing itself in the seam on construction and restoring
-    /// <see cref="TimeProvider.System"/> on Dispose keeps the global-state window
-    /// scoped to the declaring test.
+    /// <see cref="TimeProvider.System"/> on Dispose keeps the global-state
+    /// window scoped to the declaring test.
     /// </summary>
-    private sealed class FakeTimeProvider : TimeProvider, IDisposable
+    private sealed class FakeTimeProvider : Jellyfin.Plugin.AlexaSkill.Tests.Unit.FakeTimeProvider, IDisposable
     {
-        private DateTimeOffset _utcNow;
-
         public FakeTimeProvider(DateTimeOffset start)
+            : base(start)
         {
-            _utcNow = start;
             NextTrackPrecomputeCache.Time = this;
         }
-
-        public void SetUtcNow(DateTimeOffset utcNow)
-        {
-            _utcNow = utcNow;
-        }
-
-        public override DateTimeOffset GetUtcNow() => _utcNow;
 
         public void Dispose()
         {

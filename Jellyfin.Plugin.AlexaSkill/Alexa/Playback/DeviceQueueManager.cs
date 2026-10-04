@@ -61,11 +61,13 @@ public sealed class DeviceQueueManager : IDisposable
     /// JF-739: the recently-recorded stamp registry backing the bounded-map
     /// trims' freshness rule (deviceId -> { "N" map key -> UtcNow stamp }).
     /// GUARDED BY <see cref="_launchScopeLock"/>: every stamp write
-    /// (<see cref="StampRecentRecord"/> from both write-then-trim families)
-    /// and every consultation (<see cref="BuildTrimMembershipSet"/> from both
-    /// trim families) already sits inside that lock's critical sections, so a
-    /// plain dictionary is safe and the stamp becomes visible to a sibling
-    /// trim atomically with the map write it protects. In-memory by design (no
+    /// (<see cref="StampRecentRecord"/>, called by all THREE bounded-map write
+    /// paths: RecordLaunchBase, RecordStoppedPositionAndTrim,
+    /// PromotePendingLaunchBase) and every consultation
+    /// (<see cref="BuildTrimMembershipSet"/> from both trim families) already
+    /// sits inside that lock's critical sections, so a plain dictionary is
+    /// safe and the stamp becomes visible to a sibling trim atomically with
+    /// the map write it protects. In-memory by design (no
     /// persisted shape change: any restart outlives the
     /// <see cref="RecentRecordFreshnessWindow"/>). HONEST BOUND: an ACTIVE
     /// device's registry holds only window-span records (every stamp write
@@ -78,16 +80,36 @@ public sealed class DeviceQueueManager : IDisposable
     /// </summary>
     private readonly Dictionary<string, Dictionary<string, DateTimeOffset>> _recentRecordStamps = new(StringComparer.Ordinal);
 
+    private TimeProvider _time = TimeProvider.System;
+
     /// <summary>
     /// JF-739: time source for the stamp registry (the write-side stamps and
-    /// the trim-side expiry filter). Test seam in the
-    /// <see cref="NextTrackPrecomputeCache.Time"/> shape (JF-424.2):
-    /// production never assigns this and always runs on
-    /// <see cref="TimeProvider.System"/>, while tests substitute a fake to
-    /// advance past <see cref="RecentRecordFreshnessWindow"/> deterministically
-    /// instead of sleeping the window.
+    /// the trim-side expiry filter). READ-ONLY on every surface: production
+    /// always runs on <see cref="TimeProvider.System"/>, and tests install a
+    /// fake through <see cref="SetTimeForTest"/> to advance past
+    /// <see cref="RecentRecordFreshnessWindow"/> deterministically instead of
+    /// sleeping the window (the JF-424.2 seam shape, instance-scoped).
     /// </summary>
-    internal TimeProvider Time { get; set; } = TimeProvider.System;
+    public TimeProvider Time => _time;
+
+    /// <summary>
+    /// JF-739 (gate-marker GM-F3): the ONE test-only installer for
+    /// <see cref="Time"/>, and it fails fast on a SECOND assignment: a manager
+    /// left on a fake clock would freeze stamp expiry for every device on it,
+    /// so with the per-test manager instances any second assignment is a
+    /// fixture leaking its fake into a shared instance, and the guard turns
+    /// that silent freeze into a loud test failure.
+    /// </summary>
+    internal void SetTimeForTest(TimeProvider provider)
+    {
+        if (!ReferenceEquals(_time, TimeProvider.System))
+        {
+            throw new InvalidOperationException(
+                "JF-739: Time is already faked on this manager instance; a second SetTimeForTest means a fixture leaked its fake (stamp expiry would stay frozen for every device).");
+        }
+
+        _time = provider;
+    }
 
     private readonly string _dataDirectory;
     private readonly ILogger<DeviceQueueManager> _logger;
@@ -549,6 +571,18 @@ public sealed class DeviceQueueManager : IDisposable
                 ? pendingRate
                 : 1000;
             WriteActiveLaunchScope(queue, key, baseMs, ratePerMille);
+
+            // JF-739 (gate-marker GM-F1): the promotion is the launch family's
+            // THIRD write into the bounded maps, and the freshness rule must
+            // cover it: the promote typically fires LONG after the enqueue's
+            // stamp expired (enqueue, then the track starts later), and
+            // CopySurvivingStores can have carried the pending pair across a
+            // queue replace whose ItemIds do not contain the item, so without
+            // a fresh stamp here the just-promoted ACTIVE scope is non-queued
+            // and immediately evictable by the next sibling trim (the
+            // JF-723/JF-739 silent-loss class: the stream plays while the
+            // readers compose base 0 / rate identity).
+            StampRecentRecord(deviceId, key);
         }
 
         SchedulePersistInternal(deviceId);
@@ -930,11 +964,14 @@ public sealed class DeviceQueueManager : IDisposable
     internal static readonly TimeSpan RecentRecordFreshnessWindow = TimeSpan.FromSeconds(5);
 
     /// <summary>
-    /// JF-739: stamps a bounded-map key as recently recorded (both write-then-trim
-    /// families call this: <see cref="RecordLaunchBase"/> on every launch record,
-    /// including its unchanged-value short-circuits per the JF-619
-    /// <see cref="RecordLastPlayed"/> relaunch precedent, and
-    /// <see cref="RecordStoppedPositionAndTrim"/> on every qualifying stop), and
+    /// JF-739: stamps a bounded-map key as recently recorded (the THREE
+    /// bounded-map write paths call this: <see cref="RecordLaunchBase"/> on
+    /// every launch record, including its unchanged-value short-circuits per
+    /// the JF-619 <see cref="RecordLastPlayed"/> relaunch precedent;
+    /// <see cref="RecordStoppedPositionAndTrim"/> on every qualifying stop;
+    /// and <see cref="PromotePendingLaunchBase"/> when an enqueued stream
+    /// starts, since the promote fires long after the enqueue's stamp expired
+    /// and its item can be absent from the carried-over queue), and
     /// prunes the device's expired stamps so the registry holds only
     /// window-span records (a device's wholesale reclaim is <see cref="Clear"/>'s
     /// registry removal; this prune only drops expired KEYS, and the

@@ -936,7 +936,7 @@ public class DeviceQueueManagerTests : IDisposable
     public void RecordLaunchBase_PreviousFreshEntry_IsEvictedByTheNextLaunchAtCapPressure()
     {
         var fake = new FakeTimeProvider(DateTimeOffset.UtcNow);
-        _manager.Time = fake;
+        _manager.SetTimeForTest(fake);
         SeedQueuedScopeResidents("dev-jf723-aging", DeviceQueueManager.MaxLaunchBaseEntries, "N");
 
         string firstFreshId = Guid.NewGuid().ToString();
@@ -981,7 +981,7 @@ public class DeviceQueueManagerTests : IDisposable
     public void RecordLaunchBase_DashedQueueMembership_QueuedSeedsSurviveAndAgedNonQueuedEntryIsEvicted_JF738()
     {
         var fake = new FakeTimeProvider(DateTimeOffset.UtcNow);
-        _manager.Time = fake;
+        _manager.SetTimeForTest(fake);
         List<string> queuedIds = SeedQueuedScopeResidents("dev-jf738", DeviceQueueManager.MaxLaunchBaseEntries, "D");
 
         // The first non-queued launch pushes the map over cap: every resident is
@@ -1081,7 +1081,7 @@ public class DeviceQueueManagerTests : IDisposable
     public void RecordLaunchBase_SaturatedMapFreshInsert_SurvivesOwnTrimUnderDashedMembership()
     {
         var fake = new FakeTimeProvider(DateTimeOffset.UtcNow);
-        _manager.Time = fake;
+        _manager.SetTimeForTest(fake);
 
         // Old-queue membership (dashed, production format), no scope entries tied to it.
         _manager.SetQueue("dev-jf723-sat", Enumerable.Range(0, DeviceQueueManager.MaxLaunchBaseEntries).Select(_ => Guid.NewGuid().ToString()).ToList(), currentIndex: 0);
@@ -1129,7 +1129,7 @@ public class DeviceQueueManagerTests : IDisposable
     public void RecordLaunchBase_SiblingRecordInDeriveToCommitWindow_FreshEntrySurvivesToCommit_JF739()
     {
         var fake = new FakeTimeProvider(DateTimeOffset.UtcNow);
-        _manager.Time = fake;
+        _manager.SetTimeForTest(fake);
         SeedQueuedScopeResidents("dev-jf739", DeviceQueueManager.MaxLaunchBaseEntries, "D");
 
         string freshId = Guid.NewGuid().ToString();
@@ -1164,14 +1164,16 @@ public class DeviceQueueManagerTests : IDisposable
     /// shared gate, and its trim would evict F's pending pair pre-fix (F
     /// non-queued, only the sibling's key exempt). Observed through the
     /// promotion (the only public read path; the JF-723 enqueued pin's route).
-    /// The fake clock stays FROZEN (within-window determinism).
+    /// The fake clock stays FROZEN (within-window determinism). The seeded
+    /// pending residents are asserted too (GM-F2): the sibling's trim must not
+    /// have bought F's survival by evicting a resident.
     /// </summary>
     [Fact]
     public void RecordLaunchBase_EnqueuedFreshPair_SurvivesSiblingActiveTrimInWindow_JF739()
     {
         var fake = new FakeTimeProvider(DateTimeOffset.UtcNow);
-        _manager.Time = fake;
-        SeedQueuedScopeResidents("dev-jf739-pend", DeviceQueueManager.MaxLaunchBaseEntries, "D", enqueued: true);
+        _manager.SetTimeForTest(fake);
+        List<string> queuedIds = SeedQueuedScopeResidents("dev-jf739-pend", DeviceQueueManager.MaxLaunchBaseEntries, "D", enqueued: true);
 
         string freshId = Guid.NewGuid().ToString();
         long baseMs = MinutesToMs(9);
@@ -1181,11 +1183,61 @@ public class DeviceQueueManagerTests : IDisposable
         string siblingId = Guid.NewGuid().ToString();
         _manager.RecordLaunchBase("dev-jf739-pend", siblingId, 0, enqueued: false);
 
+        // Every seeded pending resident survived the sibling's trim (GM-F2; the
+        // pending maps have no public reader, so the pin reads the queue store
+        // directly, the EventHandlerTests JF-738 idiom).
+        DeviceQueue queue = _manager.GetQueue("dev-jf739-pend")!;
+        Assert.All(queuedIds, id => Assert.True(queue.PendingLaunchBaseMs.ContainsKey(Guid.Parse(id).ToString("N"))));
+
         _manager.PromotePendingLaunchBase("dev-jf739-pend", freshId);
 
         (long? recordedBase, int? recordedRate) = _manager.GetActiveLaunchScope("dev-jf739-pend", freshId);
         Assert.Equal(baseMs, recordedBase);
         Assert.Equal(750, recordedRate);
+    }
+
+    /// <summary>
+    /// JF-739 pin (gate-marker GM-F1, the replace-then-promote arm): the
+    /// promotion is the launch family's THIRD bounded-map write, and it fires
+    /// LONG after the enqueue's stamp expired. Seeded queued-cap-pressure, E
+    /// enqueued (stamped), the clock crosses the window, the queue is REPLACED
+    /// with the same residents (E's pending pair carried by
+    /// CopySurvivingStores, E's id absent from it), PlaybackStarted promotes
+    /// E, and a sibling launch trims at cap pressure. Without the promote's
+    /// stamp the just-promoted ACTIVE scope is non-queued and the sibling
+    /// deterministically evicts it (the JF-723 silent-loss class: base/rate
+    /// gone while the stream plays). Asserted: E's promoted scope survives
+    /// with its base and rate, every resident survives, the sibling is
+    /// recorded.
+    /// </summary>
+    [Fact]
+    public void PromotePendingLaunchBase_AfterQueueReplace_SurvivesSiblingTrimInWindow_JF739()
+    {
+        var fake = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        _manager.SetTimeForTest(fake);
+        List<string> queuedIds = SeedQueuedScopeResidents("dev-jf739-promo", DeviceQueueManager.MaxLaunchBaseEntries, "D");
+
+        string enqueuedId = Guid.NewGuid().ToString();
+        long baseMs = MinutesToMs(11);
+        _manager.RecordLaunchBase("dev-jf739-promo", enqueuedId, baseMs, enqueued: true, ratePerMille: 750);
+
+        // The enqueue-then-start gap: the enqueue's stamp expires, then the
+        // play path's commit replaces the queue WITHOUT the enqueued item.
+        fake.Advance(DeviceQueueManager.RecentRecordFreshnessWindow.Add(TimeSpan.FromSeconds(1)));
+        _manager.SetQueue("dev-jf739-promo", queuedIds, 0);
+
+        // PlaybackStarted promotes the carried-over pending pair to active.
+        _manager.PromotePendingLaunchBase("dev-jf739-promo", enqueuedId);
+
+        // The sibling launch, inside the promote's window.
+        string siblingId = Guid.NewGuid().ToString();
+        _manager.RecordLaunchBase("dev-jf739-promo", siblingId, 0, enqueued: false);
+
+        (long? promotedBase, int? promotedRate) = _manager.GetActiveLaunchScope("dev-jf739-promo", enqueuedId);
+        Assert.Equal(baseMs, promotedBase);
+        Assert.Equal(750, promotedRate);
+        Assert.NotNull(_manager.GetActiveLaunchScope("dev-jf739-promo", siblingId).BaseMs);
+        Assert.All(queuedIds, id => Assert.True(_manager.GetActiveLaunchScope("dev-jf739-promo", id).BaseMs.HasValue));
     }
 
     /// <summary>
@@ -1205,7 +1257,7 @@ public class DeviceQueueManagerTests : IDisposable
     public void RecordStoppedPositionAndTrim_SiblingStopInWindow_FreshPositionSurvives_JF739()
     {
         var fake = new FakeTimeProvider(DateTimeOffset.UtcNow);
-        _manager.Time = fake;
+        _manager.SetTimeForTest(fake);
         DeviceQueue queue = _manager.GetOrCreateQueue("dev-jf739-pos");
         List<Guid> residentIds = Enumerable.Range(0, DeviceQueueManager.MaxItemPositionStateEntries)
             .Select(_ => Guid.NewGuid()).ToList();
