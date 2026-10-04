@@ -7960,6 +7960,40 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
+    /// JF-751 shared micro-helper collapsing the 15 vanish-race logger factory
+    /// constructions (the JF-499/JF-677/JF-678/JF-682/JF-685 families): Trace
+    /// minimum plus the <see cref="FileDeletingLoggerProvider"/> on the given
+    /// trigger, with any extra providers registered AHEAD of it (each extras
+    /// site registers its single extra provider, a capture or clearing
+    /// provider, first and the deleting provider last). The provider overload
+    /// serves the two sites that assert
+    /// <see cref="FileDeletingLoggerProvider.Fired"/> on their own named local.
+    /// </summary>
+    private static ILoggerFactory CreateDeletingLoggerFactory(string trigger, string playlistPath, params ILoggerProvider[] extraProviders)
+        => CreateDeletingLoggerFactory(new FileDeletingLoggerProvider(trigger, playlistPath), extraProviders);
+
+    /// <summary>
+    /// See the string overload; construct the deleting provider yourself when
+    /// the test asserts its <see cref="FileDeletingLoggerProvider.Fired"/> flag.
+    /// MIND THE ORDER: the deleting provider is the FIRST argument but is
+    /// registered LAST (extras are registered ahead of it, the original sites'
+    /// AddProvider sequence), so a provider whose same-message side effect must
+    /// run before the file delete goes into <paramref name="extraProviders"/>,
+    /// not after it.
+    /// </summary>
+    private static ILoggerFactory CreateDeletingLoggerFactory(FileDeletingLoggerProvider deletingProvider, params ILoggerProvider[] extraProviders)
+        => LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Trace);
+            foreach (ILoggerProvider provider in extraProviders)
+            {
+                b.AddProvider(provider);
+            }
+
+            b.AddProvider(deletingProvider);
+        });
+
+    /// <summary>
     /// JF-499 W3: when the fast path's cached playlist vanishes between the cache
     /// read and the serve read, the request falls through to the RE-ENCODE path
     /// instead of throwing FileNotFoundException (a 500 in flight that only
@@ -7977,11 +8011,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             playlistPath,
             "#EXTM3U\n#EXTINF:4.000,\nseg_0000.ts\n#EXTINF:4.000,\nseg_0001.ts\n#EXT-X-ENDLIST\n");
 
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(new FileDeletingLoggerProvider("serving cached playlist for item", playlistPath));
-        });
+        using var loggerFactory = CreateDeletingLoggerFactory("serving cached playlist for item", playlistPath);
 
         var controller = CreateController(
             episode.Id.ToString(), loggerFactory, mediaSourceManager, WriteRecordingFakeFfmpeg("fake-ffmpeg-jf499-race"));
@@ -8018,11 +8048,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             playlistPath,
             "#EXTM3U\n#EXTINF:10.000,\nseg_0000.ts\n#EXTINF:10.000,\nseg_0001.ts\n#EXT-X-ENDLIST\n");
 
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(new FileDeletingLoggerProvider("serving cached playlist for item", playlistPath));
-        });
+        using var loggerFactory = CreateDeletingLoggerFactory("serving cached playlist for item", playlistPath);
 
         var controller = CreateController(
             episode.Id.ToString(), loggerFactory, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf499-race-audio"));
@@ -8055,11 +8081,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             playlistPath,
             "#EXTM3U\n#EXTINF:4.000,\nseg_000.ts\n#EXT-X-ENDLIST\n");
 
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(new FileDeletingLoggerProvider("serving cached playlist for item", playlistPath));
-        });
+        using var loggerFactory = CreateDeletingLoggerFactory("serving cached playlist for item", playlistPath);
 
         // The recording fake's SONG shape: 3-digit segments (seg_%03d). The
         // wait is bounded either way (WaitForFirstSegmentOrKillAsync polls a
@@ -8187,12 +8209,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
         var clearingProvider = new SecretClearingLoggerProvider("single chapter, serving single-item HLS inline");
         var deletingProvider = new FileDeletingLoggerProvider("serving cached playlist for item", playlistPath);
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(clearingProvider);
-            b.AddProvider(deletingProvider);
-        });
+        using var loggerFactory = CreateDeletingLoggerFactory(deletingProvider, clearingProvider);
 
         // 3-digit song shape: the redirected core is the song core (kept from
         // the JF-678 twin so the red proof reproduces the old re-encode shape).
@@ -8481,12 +8498,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
         var logRecords = new List<(LogLevel Level, string Message)>();
         var deletingProvider = new FileDeletingLoggerProvider("serving cached playlist for item", playlistPath);
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(TestCaptureLogger.Into(logRecords));
-            b.AddProvider(deletingProvider);
-        });
+        using var loggerFactory = CreateDeletingLoggerFactory(deletingProvider, TestCaptureLogger.Into(logRecords));
 
         // 3-digit song shape: the re-encode must actually serve for the
         // content assert (the JF-499/JF-677/JF-682 song twins' rationale).
@@ -8549,11 +8561,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     {
         (Guid itemId, string hlsDir, string playlistPath) = SetupSongVanishFixture("JF-678 In-Lock Vanish Song");
 
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(new FileDeletingLoggerProvider("serving playlist generated by concurrent request", playlistPath));
-        });
+        using var loggerFactory = CreateDeletingLoggerFactory("serving playlist generated by concurrent request", playlistPath);
 
         // 3-digit song shape: the fall-through RE-ENCODES, so the fake's segment
         // must match the song path's seg_000.ts first-segment wait for the twin's
@@ -8595,11 +8603,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         string hlsDir = _cache.GetHlsDirectoryPath(episode.Id.ToString(), 0);
         string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
 
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(new FileDeletingLoggerProvider("serving playlist generated by concurrent request", playlistPath));
-        });
+        using var loggerFactory = CreateDeletingLoggerFactory("serving playlist generated by concurrent request", playlistPath);
 
         var controller = CreateController(
             episode.Id.ToString(), loggerFactory, mediaSourceManager, WriteRecordingFakeFfmpeg("fake-ffmpeg-jf678-inlock-episode"));
@@ -8644,11 +8648,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         string hlsDir = _cache.GetHlsDirectoryPath(cacheKey, 0);
         string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
 
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(new FileDeletingLoggerProvider("serving playlist generated by concurrent request", playlistPath));
-        });
+        using var loggerFactory = CreateDeletingLoggerFactory("serving playlist generated by concurrent request", playlistPath);
 
         var controller = CreateController(
             episode.Id.ToString(), loggerFactory, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf678-inlock-audio"));
@@ -8761,11 +8761,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             playlistPath,
             "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:10.000,\nseg_0000.ts\n#EXTINF:10.000,\nseg_0001.ts\n#EXT-X-ENDLIST\n");
 
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(new FileDeletingLoggerProvider("serving cached playlist for parent", playlistPath));
-        });
+        using var loggerFactory = CreateDeletingLoggerFactory("serving cached playlist for parent", playlistPath);
 
         var controller = CreateController(parentId.ToString(), loggerFactory, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf678-fast-book"));
 
@@ -8791,11 +8787,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     {
         (Guid parentId, string hlsDir, string playlistPath) = SetupAudiobookVanishFixture("JF-678 In-Lock Vanish Book");
 
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(new FileDeletingLoggerProvider("serving playlist generated by concurrent request", playlistPath));
-        });
+        using var loggerFactory = CreateDeletingLoggerFactory("serving playlist generated by concurrent request", playlistPath);
 
         var controller = CreateController(parentId.ToString(), loggerFactory, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf678-inlock-book"));
 
@@ -8836,11 +8828,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             playlistPath,
             "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:10.000,\nseg_0000.ts\n#EXTINF:10.000,\nseg_0001.ts\n#EXT-X-ENDLIST\n");
 
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(new FileDeletingLoggerProvider("serving cached playlist for parent", playlistPath));
-        });
+        using var loggerFactory = CreateDeletingLoggerFactory("serving cached playlist for parent", playlistPath);
 
         var controller = CreateController(parentId.ToString(), loggerFactory, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf678-resume-book"));
 
@@ -8885,12 +8873,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
 
         var logRecords = new List<(LogLevel Level, string Message)>();
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(TestCaptureLogger.Into(logRecords));
-            b.AddProvider(new FileDeletingLoggerProvider("serving playlist generated by concurrent request", playlistPath));
-        });
+        using var loggerFactory = CreateDeletingLoggerFactory(
+            "serving playlist generated by concurrent request", playlistPath, TestCaptureLogger.Into(logRecords));
 
         var controller = CreateController(
             episode.Id.ToString(), loggerFactory, mediaSourceManager, WriteRecordingFakeFfmpeg("fake-ffmpeg-jf678-breach-episode"));
@@ -8949,12 +8933,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
 
         var logRecords = new List<(LogLevel Level, string Message)>();
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(TestCaptureLogger.Into(logRecords));
-            b.AddProvider(new FileDeletingLoggerProvider("serving playlist generated by concurrent request", playlistPath));
-        });
+        using var loggerFactory = CreateDeletingLoggerFactory(
+            "serving playlist generated by concurrent request", playlistPath, TestCaptureLogger.Into(logRecords));
 
         var controller = CreateController(
             audioItem.Id.ToString(), loggerFactory, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf678-breach-song", "seg_000.ts"));
@@ -9012,12 +8992,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
 
         var logRecords = new List<(LogLevel Level, string Message)>();
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(TestCaptureLogger.Into(logRecords));
-            b.AddProvider(new FileDeletingLoggerProvider("serving playlist generated by concurrent request", playlistPath));
-        });
+        using var loggerFactory = CreateDeletingLoggerFactory(
+            "serving playlist generated by concurrent request", playlistPath, TestCaptureLogger.Into(logRecords));
 
         var controller = CreateController(
             episode.Id.ToString(), loggerFactory, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf678-breach-audio"));
@@ -9065,12 +9041,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         (Guid parentId, string hlsDir, string playlistPath) = SetupAudiobookVanishFixture("JF-678 Breach Book");
 
         var logRecords = new List<(LogLevel Level, string Message)>();
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(TestCaptureLogger.Into(logRecords));
-            b.AddProvider(new FileDeletingLoggerProvider("serving playlist generated by concurrent request", playlistPath));
-        });
+        using var loggerFactory = CreateDeletingLoggerFactory(
+            "serving playlist generated by concurrent request", playlistPath, TestCaptureLogger.Into(logRecords));
 
         var controller = CreateController(parentId.ToString(), loggerFactory, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf678-breach-book"));
 
