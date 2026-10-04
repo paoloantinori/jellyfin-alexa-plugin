@@ -39,6 +39,7 @@ public class BrowseLibraryIntentHandler : BaseHandler
 
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
+    private readonly Cache.GenreVocabularyCache? _genreVocabularyCache;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="BrowseLibraryIntentHandler"/> class.
@@ -48,15 +49,18 @@ public class BrowseLibraryIntentHandler : BaseHandler
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
+    /// <param name="genreVocabularyCache">Optional TTL cache for the JF-643 kana genre-resolution tier's vocabulary (JF-645).</param>
     public BrowseLibraryIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILibraryManager libraryManager,
         IUserManager userManager,
-        ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
+        ILoggerFactory loggerFactory,
+        Cache.GenreVocabularyCache? genreVocabularyCache = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
+        _genreVocabularyCache = genreVocabularyCache;
     }
 
     /// <inheritdoc/>
@@ -223,7 +227,11 @@ public class BrowseLibraryIntentHandler : BaseHandler
 
         if (!string.IsNullOrWhiteSpace(filter))
         {
-            query.SearchTerm = filter;
+            // JF-645 (the JF-643 pattern): the filter feeds the SearchTerm index,
+            // Latin-script; a ja-JP filter slot arrives as katakana, so the QUERY is
+            // romanized (the raw value keeps driving the caller's speech; the fuzzy
+            // fallback romanizes internally at the SearchService choke point).
+            query.SearchTerm = KatakanaRomanizer.Romanize(filter);
         }
 
         IReadOnlyList<BaseItem> raw = await RetryAsync(() => _libraryManager.GetItemList(query), $"Get{itemType}Items", cancellationToken).ConfigureAwait(false);
@@ -340,7 +348,12 @@ public class BrowseLibraryIntentHandler : BaseHandler
             User = jellyfinUser,
             Recursive = true,
             IncludeItemTypes = genreKinds,
-            Genres = new[] { filter },
+            // JF-645 (the JF-643 pattern): the Genres filter is exact-match against
+            // the library's Latin tags, so a ja-JP filter slot ('ジャズ' vs 'Jazz')
+            // is romanized for the query; the speech paths below keep the raw
+            // filter (the user's own words). The filter slot is free-text in every
+            // locale, so no ER canonical ever rides it.
+            Genres = new[] { KatakanaRomanizer.Romanize(filter) },
             Limit = MaxDisplayItems,
             OrderBy = new[] { (ItemSortBy.SortName, SortOrder.Ascending) },
             DtoOptions = new DtoOptions(true)
@@ -348,6 +361,25 @@ public class BrowseLibraryIntentHandler : BaseHandler
         ApplyLibraryFilter(query, user, _libraryManager);
 
         IReadOnlyList<BaseItem> items = await RetryAsync(() => _libraryManager.GetItemList(query), "GetGenreItems", cancellationToken).ConfigureAwait(false);
+
+        if (items.Count == 0)
+        {
+            // JF-645: resolve a kana genre filter against the library's genre
+            // vocabulary and re-query with the canonical tag (contract on
+            // SearchService.ResolveKanaGenreTagAsync; Latin filters return null
+            // before any vocabulary fetch). The filter slot is free-text in every
+            // locale, so no ER canonical ever rides it here.
+            string? resolvedGenre = await Search.ResolveKanaGenreTagAsync(
+                null, filter, jellyfinUser, user, _libraryManager, _genreVocabularyCache, cancellationToken).ConfigureAwait(false);
+            if (resolvedGenre != null)
+            {
+                Logger.LogInformation(
+                    "BrowseLibrary: kana genre filter resolved to library tag '{Genre}' (JF-645)",
+                    resolvedGenre);
+                query.Genres = new[] { resolvedGenre };
+                items = await RetryAsync(() => _libraryManager.GetItemList(query), "GetGenreItems", cancellationToken).ConfigureAwait(false);
+            }
+        }
 
         if (items.Count == 0)
         {

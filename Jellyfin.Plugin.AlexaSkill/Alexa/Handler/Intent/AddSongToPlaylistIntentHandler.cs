@@ -116,11 +116,16 @@ public class AddSongToPlaylistIntentHandler : PlaylistEditHandlerBase
 
         // JF-614 review: resolve the song BEFORE the playlist elicit - a
         // mistyped title must fail fast, not waste the playlist turn first.
+        // JF-645 (the JF-643 pattern): the title feeds the SearchTerm index and
+        // the pick below, both Latin-script, so a katakana title slot is
+        // romanized for the search; the RAW songName keeps driving speech and
+        // the elicit's echoed slot values (the user's own words).
+        string songSearchName = Util.KatakanaRomanizer.Romanize(songName);
         var query = new InternalItemsQuery
         {
             User = jellyfinUser,
             Recursive = true,
-            SearchTerm = songName,
+            SearchTerm = songSearchName,
             IncludeItemTypes = new[] { Jellyfin.Data.Enums.BaseItemKind.Audio },
             DtoOptions = new DtoOptions(true)
         };
@@ -135,9 +140,9 @@ public class AddSongToPlaylistIntentHandler : PlaylistEditHandlerBase
             () => _libraryManager.GetItemList(query),
             "AddSongToPlaylist search",
             cancellationToken).ConfigureAwait(false);
-        BaseItem? match = candidates.FirstOrDefault(s => string.Equals(s.Name, songName, StringComparison.OrdinalIgnoreCase))
-            ?? candidates.FirstOrDefault(s => s.Name.StartsWith(songName, StringComparison.OrdinalIgnoreCase))
-            ?? candidates.FirstOrDefault(s => songName.EndsWith(s.Name, StringComparison.OrdinalIgnoreCase)
+        BaseItem? match = candidates.FirstOrDefault(s => string.Equals(s.Name, songSearchName, StringComparison.OrdinalIgnoreCase))
+            ?? candidates.FirstOrDefault(s => s.Name.StartsWith(songSearchName, StringComparison.OrdinalIgnoreCase))
+            ?? candidates.FirstOrDefault(s => songSearchName.EndsWith(s.Name, StringComparison.OrdinalIgnoreCase)
                 && s.Name.Length >= 3);
         if (match == null)
         {

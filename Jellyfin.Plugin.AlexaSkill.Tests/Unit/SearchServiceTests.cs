@@ -6,7 +6,9 @@ using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
+using System.Linq;
 using Jellyfin.Data.Enums;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
@@ -328,6 +330,154 @@ public class SearchServiceTests : PluginTestBase
         Assert.NotNull(handler.Search);
         // One instance per handler, not per call.
         Assert.Same(handler.Search, handler.Search);
+    }
+
+    // ---------------------------------------------------------------------
+    // ResolveKanaGenreTagAsync (the JF-643 kana genre-resolution tier, lifted
+    // from PlayByGenreIntentHandler by JF-645 item 2)
+    // ---------------------------------------------------------------------
+
+    [Fact]
+    public async Task ResolveKanaGenreTagAsync_KanaSlot_ResolvesLatinTag_JF645()
+    {
+        // 'ジャズ' romanizes to 'jazu'; the phonetic matcher bridges it to 'Jazz'
+        // (both share the Double Metaphone code, the load-bearing JF-643 property).
+        var libraryManager = new Mock<ILibraryManager>();
+        libraryManager
+            .Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) => GenreFlow.IsVocabularyQuery(q) ? (IReadOnlyList<BaseItem>)GenreFlow.VocabularyRows() : Array.Empty<BaseItem>());
+        var search = CreateSearchService(new PluginConfiguration());
+
+        string? resolved = await search.ResolveKanaGenreTagAsync(
+            canonicalGenre: null, rawGenreSlot: "ジャズ",
+            jellyfinUser: null, user: null, libraryManager: libraryManager.Object,
+            vocabularyCache: null, cancellationToken: CancellationToken.None);
+
+        Assert.Equal("Jazz", resolved);
+    }
+
+    [Fact]
+    public async Task ResolveKanaGenreTagAsync_LatinSlot_ReturnsNullWithoutVocabularyFetch_JF645()
+    {
+        var libraryManager = new Mock<ILibraryManager>();
+        libraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>())).Throws(new InvalidOperationException("no query expected"));
+        var search = CreateSearchService(new PluginConfiguration());
+
+        string? resolved = await search.ResolveKanaGenreTagAsync(
+            canonicalGenre: null, rawGenreSlot: "jazzz",
+            jellyfinUser: null, user: null, libraryManager: libraryManager.Object,
+            vocabularyCache: null, cancellationToken: CancellationToken.None);
+
+        Assert.Null(resolved);
+        libraryManager.Verify(l => l.GetItemList(It.IsAny<InternalItemsQuery>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ResolveKanaGenreTagAsync_ErCanonicalSlot_ReturnsNullWithoutVocabularyFetch_JF645()
+    {
+        // The tier is the ER_NO_MATCH long-tail path: a resolved canonical is
+        // exact by construction and must not trigger the vocabulary scan even
+        // when the raw slot is katakana (the JF-642 gate).
+        var libraryManager = new Mock<ILibraryManager>();
+        libraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>())).Throws(new InvalidOperationException("no query expected"));
+        var search = CreateSearchService(new PluginConfiguration());
+
+        string? resolved = await search.ResolveKanaGenreTagAsync(
+            canonicalGenre: "Jazz", rawGenreSlot: "ジャズ",
+            jellyfinUser: null, user: null, libraryManager: libraryManager.Object,
+            vocabularyCache: null, cancellationToken: CancellationToken.None);
+
+        Assert.Null(resolved);
+        libraryManager.Verify(l => l.GetItemList(It.IsAny<InternalItemsQuery>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ResolveKanaGenreTagAsync_UnrelatedKanaSlot_ReturnsNull_JF645()
+    {
+        // 'クラシック' (kurashikku, classical) shares no code with the vocabulary:
+        // the honest no-match outcome the tier's callers fall through on.
+        var libraryManager = new Mock<ILibraryManager>();
+        libraryManager
+            .Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) => GenreFlow.IsVocabularyQuery(q) ? (IReadOnlyList<BaseItem>)GenreFlow.VocabularyRows() : Array.Empty<BaseItem>());
+        var search = CreateSearchService(new PluginConfiguration());
+
+        string? resolved = await search.ResolveKanaGenreTagAsync(
+            canonicalGenre: null, rawGenreSlot: "クラシック",
+            jellyfinUser: null, user: null, libraryManager: libraryManager.Object,
+            vocabularyCache: null, cancellationToken: CancellationToken.None);
+
+        Assert.Null(resolved);
+    }
+
+    [Fact]
+    public async Task ResolveKanaGenreTagAsync_EmptyVocabulary_ReturnsNull_JF645()
+    {
+        var libraryManager = new Mock<ILibraryManager>();
+        libraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>())).Returns(Array.Empty<BaseItem>());
+        var search = CreateSearchService(new PluginConfiguration());
+
+        string? resolved = await search.ResolveKanaGenreTagAsync(
+            canonicalGenre: null, rawGenreSlot: "ジャズ",
+            jellyfinUser: null, user: null, libraryManager: libraryManager.Object,
+            vocabularyCache: null, cancellationToken: CancellationToken.None);
+
+        Assert.Null(resolved);
+    }
+
+    [Fact]
+    public async Task ResolveKanaGenreTagAsync_VocabularyCacheHit_SkipsSecondFetch_JF645()
+    {
+        // JF-645 item 3: with a cache, the second kana request for the same scope
+        // resolves from the cached vocabulary with NO second library query.
+        int vocabularyFetches = 0;
+        var libraryManager = new Mock<ILibraryManager>();
+        libraryManager
+            .Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) =>
+            {
+                if (GenreFlow.IsVocabularyQuery(q))
+                {
+                    vocabularyFetches++;
+                    return (IReadOnlyList<BaseItem>)GenreFlow.VocabularyRows();
+                }
+
+                return Array.Empty<BaseItem>();
+            });
+        var search = CreateSearchService(new PluginConfiguration());
+        var cache = new GenreVocabularyCache();
+
+        string? first = await search.ResolveKanaGenreTagAsync(null, "ジャズ", null, null, libraryManager.Object, cache, CancellationToken.None);
+        string? second = await search.ResolveKanaGenreTagAsync(null, "ロック", null, null, libraryManager.Object, cache, CancellationToken.None);
+
+        Assert.Equal("Jazz", first);
+        Assert.Equal("Rock", second);
+        Assert.Equal(1, vocabularyFetches);
+    }
+
+    [Fact]
+    public async Task ResolveKanaGenreTagAsync_EmptyVocabularyNeverCached_RefetchesEachCall_JF645()
+    {
+        // The tier's empty outcome is its no-match null and is re-derived per
+        // request: an empty vocabulary is never cached (a later library scan can
+        // add tags within the TTL window).
+        int vocabularyFetches = 0;
+        var libraryManager = new Mock<ILibraryManager>();
+        libraryManager
+            .Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) =>
+            {
+                vocabularyFetches++;
+                return Array.Empty<BaseItem>();
+            });
+        var search = CreateSearchService(new PluginConfiguration());
+        var cache = new GenreVocabularyCache();
+
+        await search.ResolveKanaGenreTagAsync(null, "ジャズ", null, null, libraryManager.Object, cache, CancellationToken.None);
+        await search.ResolveKanaGenreTagAsync(null, "ジャズ", null, null, libraryManager.Object, cache, CancellationToken.None);
+
+        Assert.Equal(2, vocabularyFetches);
+        Assert.Equal(0, cache.Count);
     }
 
     // ---------------------------------------------------------------------

@@ -362,4 +362,84 @@ public class PlayRandomIntentHandlerTests : PluginTestBase
         Assert.False(handler.Progressive.Contains("Rock & Roll"), "announce off must not send a progressive announce");
     }
 
+    // --- JF-645: katakana genre slot vs Latin genre tags (the JF-643 pattern) ---
+
+    [Fact]
+    public async Task HandleAsync_KatakanaGenreSlot_ResolvesToLatinTag_AndPlays_JF645()
+    {
+        // 'ジャズ' romanizes to 'jazu'; the exact Genres filter misses, the JF-643
+        // kana resolution tier (wired here by JF-645) matches the vocabulary
+        // phonetically and the re-query with the canonical tag 'Jazz' returns
+        // playable audio.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(mediaType: "music", genre: "ジャズ");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+        SetupUserMock();
+
+        var jazzSong = TestHelpers.CreateSong("Jazz Song", Guid.NewGuid());
+        var genreTable = new Dictionary<string, BaseItem> { ["Jazz"] = jazzSong };
+        var audioQueries = new List<string>();
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) => GenreFlow.Dispatch(q, genreTable, audioQueries));
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.NotNull(response.Response?.Directives);
+        Assert.NotEmpty(response.Response.Directives);
+        Assert.Equal(new[] { "jazu", "Jazz" }, audioQueries);
+    }
+
+    [Fact]
+    public async Task HandleAsync_LatinGenreSlot_NeverRunsVocabularyResolution_JF645()
+    {
+        // The kana gate: a Latin genre query keeps its exact-match behavior and
+        // must not even fetch the genre vocabulary.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(mediaType: "music", genre: "jazz");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+        SetupUserMock();
+
+        // DISCRIMINATING shape: the genre table is EMPTY, so the first (exact)
+        // query misses and the handler ENTERS the resolution branch; only the
+        // tier's Latin gate (null before any vocabulary fetch) keeps the flag
+        // false. A wiring that fetches the vocabulary on a Latin miss fails here.
+        bool vocabularyQueried = false;
+        var genreTable = new Dictionary<string, BaseItem>();
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) => GenreFlow.Dispatch(q, genreTable, new List<string>(), () => vocabularyQueried = true));
+
+        await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.False(vocabularyQueried);
+    }
+
+    [Fact]
+    public async Task HandleAsync_KatakanaGenreSlot_VocabularyMiss_KeepsGenreNotFound_JF645()
+    {
+        // A kana slot whose romanized form matches no vocabulary tag (the mock
+        // vocabulary holds Jazz/Rock/Pop; 'クラシック' = classical shares no code)
+        // falls through to the genre not-found unchanged, speaking the RAW slot.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(mediaType: "music", genre: "クラシック");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+        SetupUserMock();
+
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) => GenreFlow.Dispatch(q, new Dictionary<string, BaseItem>(), new List<string>()));
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response.Response?.OutputSpeech);
+        Assert.True(response.Response.ShouldEndSession);
+        string speech = TestHelpers.GetSpeechText(response);
+        Assert.Contains("クラシック", speech, StringComparison.Ordinal);
+    }
+
 }

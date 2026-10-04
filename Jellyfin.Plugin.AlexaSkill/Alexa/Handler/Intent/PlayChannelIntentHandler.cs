@@ -78,7 +78,11 @@ public class PlayChannelIntentHandler : BaseHandler
         {
             User = jellyfinUser,
             Recursive = true,
-            SearchTerm = channelQuery,
+            // JF-645 (the JF-643 pattern): the channel name feeds the SearchTerm
+            // index, Latin-script; a ja-JP channel slot arrives as katakana, so the
+            // QUERY is romanized. The not-found speech keeps the raw channelQuery
+            // and the fuzzy fallback romanizes internally (SearchService choke point).
+            SearchTerm = Util.KatakanaRomanizer.Romanize(channelQuery),
             IncludeItemTypes = new[] { BaseItemKind.LiveTvChannel },
             DtoOptions = new DtoOptions(true)
         };

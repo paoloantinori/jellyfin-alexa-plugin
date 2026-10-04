@@ -244,4 +244,84 @@ public class QueueIntentHandlerTests : PluginTestBase
         // ...and the pre-computed entry for the displaced successor is gone.
         Assert.False(NextTrackPrecomputeCache.TryGet(deviceId, currentId.ToString(), out _, out _, out _, out _));
     }
+
+    // --- JF-645: katakana song slot vs Latin library titles (the JF-643 pattern) ---
+
+    private static IntentRequest CreateSongRequest(string intentName, string songValue)
+        => new()
+        {
+            Intent = new Intent
+            {
+                Name = intentName,
+                Slots = new Dictionary<string, Slot>
+                {
+                    ["song"] = new Slot { Name = "song", Value = songValue },
+                    ["musician"] = new Slot { Name = "musician" } // no artist: read via the indexer, may be unfilled
+                }
+            },
+            RequestId = "kana-queue-req"
+        };
+
+    [Fact]
+    public async Task AddToQueue_KatakanaSongSlot_RomanizesSearchTerm_JF645()
+    {
+        // 'ロック' romanizes to 'rokku'; the SearchTerm index is Latin-script, so
+        // the slot must reach the query romanized (pre-JF-645 the raw katakana was
+        // a guaranteed miss).
+        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
+            .Returns(TestHelpers.CreateJellyfinUser());
+        MediaBrowser.Controller.Entities.InternalItemsQuery? capturedQuery = null;
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Callback<MediaBrowser.Controller.Entities.InternalItemsQuery>(q => capturedQuery = q)
+            .Returns(new List<MediaBrowser.Controller.Entities.BaseItem>
+            {
+                new MediaBrowser.Controller.Entities.Audio.Audio { Id = Guid.NewGuid(), Name = "Rokku Song" }
+            });
+
+        var handler = new AddToQueueIntentHandler(
+            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
+        var session = CreateSession();
+        // A live now-playing item keeps the handler on its enqueue path (no fresh
+        // launch, which the JF-699 refusal gate would reject on a token-less config).
+        Guid currentId = Guid.NewGuid();
+        session.FullNowPlayingItem = new MediaBrowser.Controller.Entities.Audio.Audio { Id = currentId, Name = "Current Song" };
+        session.NowPlayingQueue = new List<QueueItem> { new() { Id = currentId } };
+
+        await handler.HandleAsync(
+            CreateSongRequest("AddToQueueIntent", "ロック"),
+            CreateContext(), TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.NotNull(capturedQuery);
+        Assert.Equal("rokku", capturedQuery.SearchTerm);
+    }
+
+    [Fact]
+    public async Task PlayNext_KatakanaSongSlot_RomanizesSearchTerm_JF645()
+    {
+        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
+            .Returns(TestHelpers.CreateJellyfinUser());
+        MediaBrowser.Controller.Entities.InternalItemsQuery? capturedQuery = null;
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Callback<MediaBrowser.Controller.Entities.InternalItemsQuery>(q => capturedQuery = q)
+            .Returns(new List<MediaBrowser.Controller.Entities.BaseItem>
+            {
+                new MediaBrowser.Controller.Entities.Audio.Audio { Id = Guid.NewGuid(), Name = "Rokku Song" }
+            });
+
+        var handler = new PlayNextIntentHandler(
+            _sessionManagerMock.Object, _config, _libraryManagerMock.Object, _userManagerMock.Object, _loggerFactory);
+        var session = CreateSession();
+        // A live now-playing item keeps the handler on its insert path (no fresh
+        // launch, which the JF-699 refusal gate would reject on a token-less config).
+        Guid currentId = Guid.NewGuid();
+        session.FullNowPlayingItem = new MediaBrowser.Controller.Entities.Audio.Audio { Id = currentId, Name = "Current Song" };
+        session.NowPlayingQueue = new List<QueueItem> { new() { Id = currentId } };
+
+        await handler.HandleAsync(
+            CreateSongRequest("PlayNextIntent", "ロック"),
+            CreateContext(), TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.NotNull(capturedQuery);
+        Assert.Equal("rokku", capturedQuery.SearchTerm);
+    }
 }

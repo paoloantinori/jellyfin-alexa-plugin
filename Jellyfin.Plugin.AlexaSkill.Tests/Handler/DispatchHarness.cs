@@ -9,6 +9,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
@@ -280,6 +281,7 @@ public sealed class DispatchHarness : IDisposable
             _ when dependencyType == typeof(PluginConfiguration) => Config,
             _ when dependencyType == typeof(ILoggerFactory) => LoggerFactory,
             _ when dependencyType == typeof(ISessionManager) => SessionManager.Object,
+            _ when dependencyType == typeof(GenreVocabularyCache) => new GenreVocabularyCache(),
             _ when dependencyType == typeof(DeviceQueueManager) => new DeviceQueueManager(
                 _queueDataDir,
                 LoggerFactory.CreateLogger<DeviceQueueManager>()),

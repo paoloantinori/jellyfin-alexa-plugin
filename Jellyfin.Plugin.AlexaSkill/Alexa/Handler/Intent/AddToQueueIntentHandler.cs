@@ -146,6 +146,14 @@ public class AddToQueueIntentHandler : BaseHandler
             matchedArtistName = gateArtistName;
         }
 
+        // JF-645 (the JF-643 pattern): the song title feeds the SearchTerm index
+        // and the fuzzy disambiguation below, both Latin-script, so a katakana
+        // title slot is romanized once here. The gate composite above received
+        // the RAW slot (its constraint probe owns its own normalization); the
+        // not-found speech speaks the romanized form, the accepted JF-643 speech
+        // trade (a kana slot's pre-change outcome was total failure).
+        songQuery = Util.KatakanaRomanizer.Romanize(songQuery);
+
         var songSearchQuery = new InternalItemsQuery()
         {
             User = jellyfinUser,

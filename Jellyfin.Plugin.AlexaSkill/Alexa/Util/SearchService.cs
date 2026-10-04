@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Cache;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -385,6 +386,141 @@ public sealed class SearchService
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Bound on the genre-vocabulary query of the kana resolution tier: distinct
+    /// genre tags are low-cardinality (dozens to low hundreds), so 500 rows covers
+    /// every realistic library; a pathological auto-tagging library beyond the cap
+    /// resolves to not-found, the tier's no-match outcome. Moved from
+    /// PlayByGenreIntentHandler with the tier (JF-645 item 2).
+    /// </summary>
+    private const int MaxGenreVocabulary = 500;
+
+    /// <summary>
+    /// JF-643 kana genre-resolution tier, ONE definition on this collaborator
+    /// since JF-645 item 2 wired the first siblings (was private to
+    /// PlayByGenreIntentHandler; the JF-382 no-third-copy rule). A katakana genre
+    /// slot is romanized by the caller for its exact Genres query, but the
+    /// server-side Genres filter is exact CleanValue equality, so the romanized
+    /// form ('jazu') usually still misses the Latin tag ('Jazz'). This tier
+    /// matches the romanized value against the library's genre vocabulary through
+    /// the shared phonetic fuzzy matcher (the same Double Metaphone bridge the
+    /// artist path uses via its pre-computed index; genre items carry no
+    /// pre-computed codes, so the codes are computed once per vocabulary scan and
+    /// cached, JF-645 item 3) and returns the canonical tag for the caller to
+    /// re-query with. The KANA GATE is part of the contract: a slot that resolved
+    /// through entity resolution (non-null canonical, exact by construction) or
+    /// carries no kana returns null WITHOUT fetching the vocabulary, so Latin
+    /// queries keep their exact-match behavior byte-identically.
+    /// RECALL ONLY: the tier returns a tag name; the play/not-found decision and
+    /// the re-query shape stay at each caller (they differ legitimately).
+    /// </summary>
+    /// <param name="canonicalGenre">The ER canonical when the genre slot resolved, else null.</param>
+    /// <param name="rawGenreSlot">The raw (pre-romanization) genre slot value.</param>
+    /// <param name="jellyfinUser">The Jellyfin user (vocabulary query scoping).</param>
+    /// <param name="user">The plugin user (threshold + library filter).</param>
+    /// <param name="libraryManager">The library manager.</param>
+    /// <param name="vocabularyCache">Optional TTL cache for the built vocabulary (JF-645 item 3); null disables caching.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The canonical library genre tag, or null (no kana gate, no vocabulary, or no match above threshold).</returns>
+    public async Task<string?> ResolveKanaGenreTagAsync(
+        string? canonicalGenre,
+        string? rawGenreSlot,
+        Jellyfin.Database.Implementations.Entities.User? jellyfinUser,
+        Entities.User? user,
+        ILibraryManager libraryManager,
+        GenreVocabularyCache? vocabularyCache,
+        CancellationToken cancellationToken)
+    {
+        if (!ArtistSearch.IsKanaOriginQuery(canonicalGenre, rawGenreSlot))
+        {
+            return null;
+        }
+
+        GenreVocabulary vocabulary = await GetGenreVocabularyAsync(jellyfinUser, user, libraryManager, vocabularyCache, cancellationToken).ConfigureAwait(false);
+        if (vocabulary.Candidates.Count == 0)
+        {
+            return null;
+        }
+
+        BaseItem? best = FuzzyMatcher.FindBestMatch(
+            rawGenreSlot!,
+            vocabulary.Candidates,
+            g => g.Name!,
+            g => g.Id,
+            id => vocabulary.PhoneticCodes.TryGetValue(id, out var code) ? code : null,
+            FuzzyMatcher.GetDefaultThreshold(user));
+
+        return best?.Name;
+    }
+
+    /// <summary>
+    /// The vocabulary leg of <see cref="ResolveKanaGenreTagAsync"/>: cache lookup
+    /// first (JF-645 item 3), then one bounded genre-vocabulary fetch whose rows
+    /// are deduplicated by NAME (Genre + MusicGenre twins) with one Double
+    /// Metaphone code set per tag name. Non-empty vocabularies are cached for the
+    /// scope; an empty vocabulary is never cached (the tier's no-match null is
+    /// re-derived per request, the pre-cache behavior). The library scope is
+    /// resolved ONCE via <see cref="LibraryFilter.ResolveForUser"/> and drives
+    /// both the cache key (the CANONICAL resolved scope, so two allowed-id
+    /// spellings of one physical scope share an entry) and the query's filter
+    /// (the pre-resolved
+    /// <see cref="LibraryFilter.ApplyLibraryFilter(InternalItemsQuery, Guid[], bool)"/>
+    /// overload).
+    /// </summary>
+    private async Task<GenreVocabulary> GetGenreVocabularyAsync(
+        Jellyfin.Database.Implementations.Entities.User? jellyfinUser,
+        Entities.User? user,
+        ILibraryManager libraryManager,
+        GenreVocabularyCache? vocabularyCache,
+        CancellationToken cancellationToken)
+    {
+        Guid[]? libraryScope = LibraryFilter.ResolveForUser(user, libraryManager, _logger);
+        if (vocabularyCache != null
+            && vocabularyCache.TryGet(jellyfinUser?.Id ?? Guid.Empty, libraryScope, out GenreVocabulary? cached))
+        {
+            _logger.LogDebug("ResolveKanaGenreTag: genre vocabulary cache hit (user={UserId})", jellyfinUser?.Id);
+            return cached!;
+        }
+
+        var vocabularyQuery = new InternalItemsQuery
+        {
+            User = jellyfinUser,
+            Recursive = true,
+            IncludeItemTypes = new[] { BaseItemKind.Genre, BaseItemKind.MusicGenre },
+            Limit = MaxGenreVocabulary,
+            DtoOptions = new DtoOptions(false) { EnableImages = false, EnableUserData = false }
+        };
+        LibraryFilter.ApplyLibraryFilter(vocabularyQuery, libraryScope);
+
+        IReadOnlyList<BaseItem> genres = await RetryAsync(
+            () => libraryManager.GetItemList(vocabularyQuery),
+            "GetGenreVocabulary",
+            cancellationToken).ConfigureAwait(false);
+        if (genres.Count == 0)
+        {
+            return new GenreVocabulary(Array.Empty<BaseItem>(), new Dictionary<Guid, (string Primary, string? Alternate)>());
+        }
+
+        // Deduplicate by name (Genre + MusicGenre twins), computing one phonetic code set per tag.
+        var codes = new Dictionary<Guid, (string Primary, string? Alternate)>(genres.Count);
+        var candidates = new List<BaseItem>(genres.Count);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (BaseItem genre in genres)
+        {
+            if (string.IsNullOrEmpty(genre.Name) || !seen.Add(genre.Name))
+            {
+                continue;
+            }
+
+            codes[genre.Id] = DoubleMetaphone.Encode(genre.Name);
+            candidates.Add(genre);
+        }
+
+        var vocabulary = new GenreVocabulary(candidates, codes);
+        vocabularyCache?.Put(jellyfinUser?.Id ?? Guid.Empty, libraryScope, vocabulary);
+        return vocabulary;
     }
 
     /// <summary>

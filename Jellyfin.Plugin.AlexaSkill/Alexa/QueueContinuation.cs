@@ -40,7 +40,7 @@ public class QueueContinuation
 
     /// <summary>
     /// Gets or sets the total number of items available in the full result set.
-    /// SENTINEL: when this equals <see cref="SearchService.UnknownTotal"/>
+    /// SENTINEL: when this equals <see cref="Util.SearchService.UnknownTotal"/>
     /// (int.MaxValue) the total is UNKNOWN and the continuation runs in the
     /// end-unknown regime (exhaustion decided by a short page, not by
     /// StartIndex reaching the total; set by the audiobook head since JF-673

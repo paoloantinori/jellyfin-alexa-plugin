@@ -32,6 +32,7 @@ public class PlayByGenreIntentHandler : BaseHandler
     private readonly IUserDataManager _userDataManager;
     private readonly IArtistIndex? _artistIndex;
     private readonly DeviceQueueManager? _queueManager;
+    private readonly Cache.GenreVocabularyCache? _genreVocabularyCache;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PlayByGenreIntentHandler"/> class.
@@ -44,6 +45,7 @@ public class PlayByGenreIntentHandler : BaseHandler
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
     /// <param name="artistIndex">Optional in-memory artist index for fast search.</param>
     /// <param name="queueManager">Optional per-device queue manager for crash recovery.</param>
+    /// <param name="genreVocabularyCache">Optional TTL cache for the JF-643 kana genre-resolution tier's vocabulary (JF-645 item 3).</param>
     public PlayByGenreIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
@@ -52,13 +54,15 @@ public class PlayByGenreIntentHandler : BaseHandler
         IUserDataManager userDataManager,
         ILoggerFactory loggerFactory,
         IArtistIndex? artistIndex = null,
-        DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
+        DeviceQueueManager? queueManager = null,
+        Cache.GenreVocabularyCache? genreVocabularyCache = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
         _userDataManager = userDataManager;
         _artistIndex = artistIndex;
         _queueManager = queueManager;
+        _genreVocabularyCache = genreVocabularyCache;
     }
 
     /// <inheritdoc/>
@@ -158,18 +162,15 @@ public class PlayByGenreIntentHandler : BaseHandler
 
         IReadOnlyList<BaseItem> items = await GetGenreItemsAsync(genreQuery).ConfigureAwait(false);
 
-        if (items.Count == 0 && Util.ArtistSearch.IsKanaOriginQuery(canonicalGenre, genreSlot))
+        if (items.Count == 0)
         {
-            // JF-643: romanization puts the query in Latin script, but the server-side
-            // Genres filter is exact CleanValue equality, so 'jazu' still misses the tag
-            // 'Jazz'. This resolution tier fires ONLY for kana slots that did not
-            // resolve through entity resolution (the gate above). Match the
-            // romanized value against the library's genre vocabulary through the
-            // shared phonetic matcher (the same Double Metaphone bridge the artist
-            // path uses via its pre-computed index), then re-query with the canonical
-            // tag. No match falls through to the existing artist fallback and
+            // JF-643: resolve a kana slot against the library's genre vocabulary
+            // and re-query with the canonical tag (full contract, gate, and cache
+            // on SearchService.ResolveKanaGenreTagAsync, ONE definition since the
+            // JF-645 lift). A no-match falls through to the artist fallback and
             // not-found unchanged.
-            string? resolvedGenre = await ResolveGenreTagAsync(genreQuery, jellyfinUser!, user, cancellationToken).ConfigureAwait(false);
+            string? resolvedGenre = await Search.ResolveKanaGenreTagAsync(
+                canonicalGenre, genreSlot, jellyfinUser, user, _libraryManager, _genreVocabularyCache, cancellationToken).ConfigureAwait(false);
             if (resolvedGenre != null)
             {
                 Logger.LogInformation(
@@ -214,77 +215,5 @@ public class PlayByGenreIntentHandler : BaseHandler
         session.NowPlayingQueue = queueItems;
         session.FullNowPlayingItem = items[0];
         return response;
-    }
-
-    /// <summary>
-    /// Bound on the genre-vocabulary query of the JF-643 kana resolution tier:
-    /// distinct genre tags are low-cardinality (dozens to low hundreds), so 500
-    /// rows covers every realistic library; a pathological auto-tagging library
-    /// beyond the cap resolves to not-found, the tier's no-match outcome.
-    /// </summary>
-    private const int MaxGenreVocabulary = 500;
-
-    /// <summary>
-    /// JF-643: resolves a romanized katakana genre value ('jazu') to the library's
-    /// canonical Latin tag ('Jazz') through the shared phonetic fuzzy matcher. Genre
-    /// items carry no pre-computed phonetic codes (only the artist index has those),
-    /// so the codes are computed here once per vocabulary scan; candidates are
-    /// deduplicated by NAME because Genre and MusicGenre items can both exist for the
-    /// same tag. Returns null on no vocabulary or no match above threshold.
-    /// </summary>
-    /// <param name="romanizedGenre">The romanized genre query.</param>
-    /// <param name="jellyfinUser">The Jellyfin user (query scoping).</param>
-    /// <param name="user">The plugin user (library filter).</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>The canonical library genre tag, or null.</returns>
-    private async Task<string?> ResolveGenreTagAsync(
-        string romanizedGenre,
-        Jellyfin.Database.Implementations.Entities.User jellyfinUser,
-        Entities.User user,
-        CancellationToken cancellationToken)
-    {
-        var vocabularyQuery = new InternalItemsQuery
-        {
-            User = jellyfinUser,
-            Recursive = true,
-            IncludeItemTypes = new[] { BaseItemKind.Genre, BaseItemKind.MusicGenre },
-            Limit = MaxGenreVocabulary,
-            DtoOptions = new DtoOptions(false) { EnableImages = false, EnableUserData = false }
-        };
-        ApplyLibraryFilter(vocabularyQuery, user, _libraryManager);
-
-        IReadOnlyList<BaseItem> genres = await RetryAsync(
-            () => _libraryManager.GetItemList(vocabularyQuery),
-            "GetGenreVocabulary",
-            cancellationToken).ConfigureAwait(false);
-        if (genres.Count == 0)
-        {
-            return null;
-        }
-
-        // Deduplicate by name (Genre + MusicGenre twins), computing one phonetic code set per tag.
-        var codes = new Dictionary<Guid, (string Primary, string? Alternate)>(genres.Count);
-        var candidates = new List<BaseItem>(genres.Count);
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (BaseItem genre in genres)
-        {
-            if (string.IsNullOrEmpty(genre.Name) || !seen.Add(genre.Name))
-            {
-                continue;
-            }
-
-            codes[genre.Id] = DoubleMetaphone.Encode(genre.Name);
-            candidates.Add(genre);
-        }
-
-        BaseItem? best = FuzzyMatcher.FindBestMatch(
-            romanizedGenre,
-            candidates,
-            g => g.Name!,
-            g => g.Id,
-            id => codes.TryGetValue(id, out var code) ? code : null,
-            FuzzyMatcher.GetDefaultThreshold(user));
-
-        return best?.Name;
     }
 }

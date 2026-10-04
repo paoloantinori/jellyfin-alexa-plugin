@@ -758,4 +758,79 @@ public class BrowseLibraryIntentHandlerTests : PluginTestBase
         Assert.NotNull(response);
         Assert.NotNull(response.Response?.OutputSpeech);
     }
+
+    // --- JF-645: katakana slots vs Latin library text (the JF-643 pattern) ---
+
+    [Fact]
+    public async Task HandleAsync_GenresWithKatakanaFilter_ResolvesToLatinTag_AndLists_JF645()
+    {
+        // 'ジャズ' romanizes to 'jazu'; the exact Genres filter misses, the JF-643
+        // kana resolution tier (wired here by JF-645) matches the vocabulary
+        // phonetically, and the re-query with the canonical tag 'Jazz' returns
+        // listable items. The spoken list keeps the RAW filter (the user's words).
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(category: "genres", filter: "ジャズ");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+        SetupUserMock();
+
+        var jazzSong = TestHelpers.CreateSong("Jazz Song", Guid.NewGuid());
+        var genreTable = new Dictionary<string, BaseItem> { ["Jazz"] = jazzSong };
+        var genreQueries = new List<string>();
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) => GenreFlow.Dispatch(q, genreTable, genreQueries));
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.NotNull(response.Response?.OutputSpeech);
+        Assert.Equal(new[] { "jazu", "Jazz" }, genreQueries);
+    }
+
+    [Fact]
+    public async Task HandleAsync_GenresWithLatinFilter_NeverRunsVocabularyResolution_JF645()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(category: "genres", filter: "jazz");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+        SetupUserMock();
+
+        // DISCRIMINATING shape (see PlayRandom's twin): empty genre table, so the
+        // first query misses and the branch runs; the tier's Latin gate alone
+        // keeps the vocabulary fetch from firing.
+        bool vocabularyQueried = false;
+        var genreTable = new Dictionary<string, BaseItem>();
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) => GenreFlow.Dispatch(q, genreTable, new List<string>(), () => vocabularyQueried = true));
+
+        await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.False(vocabularyQueried);
+    }
+
+    [Fact]
+    public async Task HandleAsync_BrowseWithKatakanaFilter_RomanizesSearchTerm_JF645()
+    {
+        // The category browse's SearchTerm is Latin-script; a ja-JP filter slot
+        // ('クイーン' for Queen) is romanized to 'kuin' for the query.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(category: "artists", filter: "クイーン");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+        SetupUserMock();
+
+        InternalItemsQuery? capturedQuery = null;
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Callback<InternalItemsQuery>(q => capturedQuery = q)
+            .Returns(new List<BaseItem> { new MusicArtist { Name = "Queen", Id = Guid.NewGuid() } });
+
+        await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(capturedQuery);
+        Assert.Equal("kuin", capturedQuery.SearchTerm);
+    }
 }
