@@ -1,17 +1,19 @@
 ---
 id: JF-751
 title: >-
-  family-agnostic CreateDeletingLoggerFactory micro-helper: collapse the
-  15-site file-wide LoggerFactory+FileDeletingLoggerProvider idiom
-status: To Do
+  family-agnostic CreateDeletingLoggerFactory micro-helper: collapse the 15-site
+  file-wide LoggerFactory+FileDeletingLoggerProvider idiom
+status: Done
 assignee: []
 created_date: '2026-10-04'
+updated_date: '2026-10-04 19:52'
 labels:
   - test-hygiene
 dependencies: []
 references:
   - >-
-    backlog/tasks/jf-692 - extract-a-shared-song-path-vanish-fixture-helper-from-the-four-near-identical-song-vanish-pins.md
+    backlog/tasks/jf-692 -
+    extract-a-shared-song-path-vanish-fixture-helper-from-the-four-near-identical-song-vanish-pins.md
 priority: low
 ---
 
@@ -50,3 +52,9 @@ SECOND IDIOM, same class (added 2026-10-04 from the JF-692 /code-review high rou
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Done 2026-10-04. The 15-site LoggerFactory+FileDeletingLoggerProvider idiom in VideoAudioControllerTests.cs collapsed into CreateDeletingLoggerFactory(string trigger, string playlistPath, params ILoggerProvider[] extraProviders) plus a provider-first overload for the two Fired-asserting named-local sites; arrange-only, zero Assert/Fact lines changed (grep-proven), provider registration order and Trace minimum preserved byte-faithfully at every site (extras first, deleting last, today's actual sequence; the filing's "extras after" parenthetical described the order backwards). Non-vacuity: sabotage of the helper body (deleting provider dropped) redded 14 of 15 consumers on BOTH TFMs; the 15th (the JF-682 twin) stays green by design per its own doc (its Fired assert is the negative one). The SECOND IDIOM (EncoderPath mock triplication) was evaluated live and NOT shipped: the wire-up is inert at every fixture consumer (FfmpegPath override wins in ResolveFfmpegPath; a broken shared setup left all 266 class tests green on both TFMs), which fails the JF-692 non-vacuity bar - filed as JF-759 with the sabotage evidence instead. The simplify altitude round's follow-up (capture-only Trace factory idiom, ~21 sites + a SkillResponseLoggingTests sibling) filed as JF-760. Gates: Skill simplify (4 angles: doc-wording finding applied; reuse+efficiency CLEAN) + Skill code-review high (zero correctness findings; one low readability finding on argument-order-vs-registration-order applied as the provider overload's MIND THE ORDER doc contract). DoD evidence: #1+#3 solution Release --no-restore -warnaserror build 0 warnings 0 errors; #2 suites 5162/5162 BOTH net9.0 and net10.0 on the final state (baseline 5162, count unchanged); #4-#8 N/A per the boxes' own text; #9+#10 the gate transcripts above. One transient observation, not a regression: a single first-post-build filtered run had 1 net10.0 failure in the JF-731 Dispose backstop (the documented cross-test-sweep timing class); three subsequent filtered runs and the full suite were fully green on both TFMs.
+<!-- SECTION:FINAL_SUMMARY:END -->

@@ -4,10 +4,10 @@ title: >-
   One-shot wrapper episode-addressing untested in the 8 locales with no
   infinitive family (es-ES/MX/US, pt-BR, nl-NL, ar-SA, hi-IN, ja-JP): probe,
   then add families where the wrapper misroutes
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-12 16:55'
-updated_date: '2026-09-27 19:12'
+updated_date: '2026-10-04 21:17'
 labels:
   - interaction-model
   - nlu
@@ -32,9 +32,9 @@ AUDIT UPDATE (2026-10-02): the probe half is COMPLETE (2026-09-13); the es infin
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 For each of the 8 locales, a profile-nlu probe of the natural one-shot wrapper form for episode addressing selects PlayEpisodeIntent (not a sibling) with series_name filled, or the locale gains the infinitive/one-shot sample family in its template (both word orders) and the probe then passes
-- [ ] #2 If families are added: templates regenerate cleanly, the validator Phase 7 table is extended (or the table is derived from template vocabulary), NLU fixtures pin the new forms
-- [ ] #3 The decision per locale (probe-passes-as-is vs family-added) is recorded in the task notes
+- [x] #1 For each of the 8 locales, a profile-nlu probe of the natural one-shot wrapper form for episode addressing selects PlayEpisodeIntent (not a sibling) with series_name filled, or the locale gains the infinitive/one-shot sample family in its template (both word orders) and the probe then passes
+- [x] #2 If families are added: templates regenerate cleanly, the validator Phase 7 table is extended (or the table is derived from template vocabulary), NLU fixtures pin the new forms
+- [x] #3 The decision per locale (probe-passes-as-is vs family-added) is recorded in the task notes
 <!-- AC:END -->
 
 ## Implementation Notes
@@ -51,18 +51,28 @@ PROBE RESULTS 2026-09-13 (the AC#1 probe half is COMPLETE; recorded here because
 2026-09-21: JF-558 DECIDED AND DEPLOYED - the gate is LIFTED for es/ja. Native names live (Paolo confirmed). Pure open-verb probe PASSES in simulate for es-ES, es-MX, ja (previously broken with the English name - invocation layer FIXED); their model-side work (payload families, ja PlayVideo steal) is end-to-end testable via simulate. pt-BR/nl-NL/hi-IN/ar-SA remain simulate-BLIND (open probe fails with BOTH names - the documented simulator-outage class, A/B verified 2026-09-21): model-side work lands model-verified (profile-nlu), invocation needs device probes. es-US not probed this round.
 
 2026-09-27 audit: the ja rows are STALE - the last matrix (ja stolen by PlayByGenre/PlayVideo/PlaySong) predates both the 2026-09-27 ja sample additions (the JF-399 residue pass, PlayArtistSongs 13->21 samples) and JF-642's GenreType conversion (the genre slot can no longer resolve artist names, though the SELECTION steal persists per the live battery). Re-probe the ja competition landscape before any model surgery. pt-BR/nl/hi/ar remain simulate-blind per the outage memory; JF-656's harness fallback (when landed) widens coverage.
+
+2026-10-04 CLOSURE PROBE (JF-551 execution, post JF-399/JF-642 rebuilds; skill amzn1.ask.skill.33dfacd5... discovered fresh; 60+ profile-nlu calls, every candidate misroute re-probed 4x for stability per the nlu_trainer_nondeterminism memory; both response shapes read, selectedIntent first). THE REFRAMING FINDING: the old steals were dominated by the probe VALUE, not the samples. 'breaking bad' is in NO live catalog (CatalogSeedEnrichment.GetSeedNames seeds Album+Artist only; Series gets none, so the committed static SeriesName seeds die at the catalog graft and any non-library series is ER_SUCCESS_NO_MATCH, which drops selection confidence until greedy bare-carrier siblings win). Re-probed every failing shape with a real library series ('the bear', ER_SUCCESS_MATCH): pt-BR ALL FOUR shapes (tocar SF/SL, assistir SF/SL) route PlayEpisodeIntent with every slot filled; es-ES imperative-SF (the PlaySong steal) routes clean; nl-NL/hi-IN number quirks ('?' values, missing season) all resolve. PER-LOCALE DISPOSITION: es-ES/es-MX/es-US = FAMILY ADDED (the ONE true model-side defect: the subjunctive wrapper payload 'pide a X que reproduzca {series} temporada...' selects PlayEpisodeIntent but glues the verb into series_name, 'reproduzca breaking bad' / 'que reproduzca breaking bad' on es-US, stable 4/4 and catalog-INDEPENDENT; added the reproduzca family, both word orders, to the three templates + regenerated; validator Phase 7 table extended with the es entries, red-proven: deleting the series-first sample warns '[es-ES] ... only in the series-LAST order'); fixtures pin the new form with the EXACT-value series_name pin (the anti-pollution regression pin; red until the next model deploy goes live). pt-BR = PASS AS-IS for library series (no family; the breaking-bad steals are the catalog NO_MATCH penalty class, evidence recorded, filed with JF-761 context). nl-NL = PASS AS-IS (speel-SF clean; speel-SL 4/4 on repeat, the single FindSongByArtist reading was a trainer flip; the verb-final 'af te spelen' wrapper shape routes with season '?' only under NO_MATCH, clean with library series). ar-SA = PASS (both orders; uncataloged model, so no NO_MATCH penalty at all). hi-IN = PASS (both orders clean with library series). ja-JP = the 再生て forms both orders PASS (the stale PlayVideo steal is gone after the 09-26/09-27 rebuilds); the 見たい form still steals to PlayVideoIntent stably INCLUDING with library series (bare '{title} を見たい' SearchQuery absorber) -> FILED JF-761, out of template surface. CONTROLS: it-IT imperative+infinitive PASS; en-US series-first 'breaking bad' Fallback is the same NO_MATCH/segmentation class ('game of thrones' routes; PlayEpisode ranks #2 with series='bad'), not a family gap. REMAINING for the orchestrator: deploy the rebuilt es models via the rebuild endpoint, then the three red fixture pins go green; the JF-549 F3 residual (deriving the prefix table from template vocabulary) is not done, the table is extended literally with a guard comment.
+
+2026-10-04 GATES + RESIDUALS: /simplify 4-angle dispatch (reuse CLEAN; simplification applied: validator title de-contradicted, es-ES invariants' stale 59-name/15-bare/16-21 key-mix corrected to the measured 66/16-bare/21-22, es-MX header trimmed to the es-ES pointer, two fixture comment trims; efficiency applied: the template headers no longer restate live sample counts, golden-master counts only, because hand-maintained counts had already rotted once pre-JF-551; altitude applied: PLAY_EPISODE_ONESHOT_PREFIXES now PINNED in project CLAUDE.md Interaction Models as the JF-460-NOUNS-pattern source of truth - the JF-549 F3 residual). WRAPPER_MARKERS es gained 'reproduzca' so the wrapper-coverage lint's morphological claim matches the new family. /code-review high returned 5 findings, ALL applied: (1) the validator table comment now states the NO_MATCH-class framing precisely instead of 'all fine' (pt-BR steals + hi truncation + nl season '?' = the non-library-series catalog penalty, JF-684 class, evidence in these notes; only the ja steal is catalog-independent, JF-761); (2) the CONNECTOR-RESIDUE shape is now covered: es-ES battery row + an es-ES fixture exact-pin for 'que reproduzca {series} ...' (the full wrapper is 'pide a X QUE reproduzca'; whether Amazon strips the que before NLU is UNVERIFIED - the 2026-10-04 simulate round hit the documented per-locale outage, the favorites control also failed to invoke; it-IT's committed 'Di riprodurre ...' family says residue CAN ride, so if the que-pin stays red after the deploy the connector form needs its own sample, decided on a healthy simulate window); (3) the pre-family narratives now record BOTH readings (selection flipped between glue and Fallback across identical probe rounds; es-US's bare form DROPPED series while its que-form GLUED); (4) es-US fixture row now pins season+episode presence (every es-US subjunctive reading filled both); (5) the es-ES fixture carries the post-deploy triage note (a PlayNext steal on the row = the known bare-carrier competition to fix, never a fixture to weaken). Suite 5191/5191 both TFMs, 0 warnings; validators PASS at the 294-warning baseline; mirrors byte-in-sync (--check); fixture dry-run 1136 green; es-ES battery 2/2 PASS pre-deploy (intent-level by design, the pollution pins carry the slot contract).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+CLOSED 2026-10-04 by the orchestrator after the full cycle INCLUDING the live model deployment: merged into main (worker commit 04b5f41f, --no-ff), the new DLL (embedding the regenerated es models, 24 'reproduzca' strings verified) deployed to minix, the three es models rebuilt via the locale-scoped endpoint (all SUCCEEDED), and the decisive live re-probe verifying the anti-pollution fix end-to-end: 'reproduzca breaking bad temporada uno episodio tres' now routes PlayEpisodeIntent with series_name 'breaking bad' CLEAN (no verb glue) on es-ES, es-MX, and es-US - the red-by-design fixture pins are green. DEPLOY-SEQUENCE NOTE recorded for the future: the rebuild endpoint serves the DLL's EMBEDDED models, so a template/model change requires the DLL deploy FIRST, then the rebuild (the first rebuild attempt deployed the old embedded models and the probe caught it). JF-761 filed by this task.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
 - [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
 - [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
+- [x] #6 NLU test fixtures updated if interaction model changed
 - [ ] #7 E2E test added for new intent or handler logic
 - [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
