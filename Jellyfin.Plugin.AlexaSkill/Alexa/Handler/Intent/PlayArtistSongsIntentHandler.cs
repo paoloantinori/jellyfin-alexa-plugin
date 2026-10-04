@@ -577,7 +577,11 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         // JF-699 item 5: launch build BEFORE any queue/session/continuation write
         // (the ordering policy lives on EnsureStreamTokenDeliverable; a seek-mode
         // refusal must not leave phantom state behind).
-        SkillResponse response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, artistsItems[0], user, context, announceLocale: locale);
+        // JF-750: the played-item metadata must match the launched id (itemId keys
+        // artistsItems[startIndex]); artistsItems[0] made a mid-queue resume announce
+        // and render track 1 while track N's stream played (the CrossMediaFallback
+        // twin always passed the indexed form).
+        SkillResponse response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, artistsItems[startIndex], user, context, announceLocale: locale);
 
         session.NowPlayingQueue = queueItems;
         session.FullNowPlayingItem = artistsItems[startIndex];
