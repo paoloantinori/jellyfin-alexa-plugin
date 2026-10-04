@@ -1027,12 +1027,20 @@ public class ConfigurationController : ControllerBase
             lastModelDeployTime = config.LastModelDeployTime,
             lastModelDeployStatus = config.LastModelDeployStatus,
             localeModelStatuses = config.LocaleModelStatuses
-                .ToDictionary(e => e.Locale, e => new
+                .ToDictionary(e => e.Locale, e =>
                 {
-                    status = e.ToStatus().Status,
-                    lastUpdated = e.ToStatus().LastUpdated,
-                    error = e.ToStatus().Error,
-                    source = e.ToStatus().Source,
+                    var s = e.ToStatus();
+                    return new
+                    {
+                        status = s.Status,
+                        lastUpdated = s.LastUpdated,
+                        error = s.Error,
+                        // JF-721: the rendered structured caveat shown beside the
+                        // free-text error; null when the row carries no caveat bits
+                        // (pre-JF-721 rows render their legacy Error text alone).
+                        caveat = s.CaveatText,
+                        source = s.Source,
+                    };
                 })
         });
     }

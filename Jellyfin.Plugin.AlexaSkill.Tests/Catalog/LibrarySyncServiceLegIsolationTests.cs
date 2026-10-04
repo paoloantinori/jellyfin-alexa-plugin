@@ -338,11 +338,11 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
     /// ledger. Status stays the PUT's own outcome (SUCCEEDED: the build DID
     /// succeed for the injected types, and the diagnostics panel's
     /// ModelsDeployed/failedModels status-string matches stay truthful), while
-    /// the frozen types ride the entry's Error field, which config.html renders
-    /// unconditionally next to the status icon (80-char truncation, full text
-    /// in the tooltip). The clean re-run (probe cleared, same service and
-    /// user) overwrites the entry with no clause, pinning that the clause is
-    /// freeze-driven, not unconditional.
+    /// the frozen types ride the entry's structured caveat (JF-721: the
+    /// FrozenCatalogs bit plus the names payload), which config.html renders
+    /// unconditionally next to the status icon. The clean re-run (probe
+    /// cleared, same service and user) overwrites the entry with no caveat,
+    /// pinning that the caveat is freeze-driven, not unconditional.
     /// </summary>
     [Fact]
     public async Task SyncUserLibraryAsync_PartialFreezeWithSuccessfulPut_LedgerSurfacesFrozenTypes()
@@ -357,36 +357,40 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
         // Act
         await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
 
-        // Assert: the entry keeps the PUT's own outcome but names the frozen type.
+        // Assert: the entry keeps the PUT's own outcome but names the frozen
+        // type structurally (JF-721: fields, not a composed Error string).
         var ledger = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
         Assert.NotNull(ledger);
         Assert.Equal(LibrarySyncService.CatalogSyncLedgerSource, ledger!.Source);
         Assert.Equal("SUCCEEDED", ledger.Status);
-        Assert.NotNull(ledger.Error);
-        Assert.Contains("Artist", ledger.Error!, StringComparison.Ordinal);
-        Assert.Contains("FROZEN", ledger.Error!, StringComparison.Ordinal);
+        Assert.Equal(CatalogLedgerCaveats.FrozenCatalogs, ledger.Caveat);
+        Assert.Equal("Artist", ledger.FrozenCatalogTypes);
+        Assert.Null(ledger.Error);
 
         // Clean leg: the fresh entry for the same locale must carry no frozen
-        // clause (the canary matches against the fake backend, so Error is null).
+        // caveat (the canary matches against the fake backend, so Error is null).
         _service.TypeLegEntryProbeForTest = null;
         await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
         ledger = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
         Assert.NotNull(ledger);
         Assert.Equal("SUCCEEDED", ledger!.Status);
+        Assert.Equal(CatalogLedgerCaveats.None, ledger.Caveat);
+        Assert.Null(ledger.FrozenCatalogTypes);
         Assert.Null(ledger.Error);
     }
 
     /// <summary>
-    /// Covers the remaining two branches of the JF-705 Error composition under
-    /// one leg: TWO frozen types (the plural clause and the " + " join) plus a
-    /// post-PUT canary mismatch (the combined-message shape). The frozen clause
-    /// must LEAD the combined message: config.html truncates Error at 80 chars
-    /// visually, so an appended clause would be tooltip-only exactly when two
-    /// problems co-occur (code-review F1). Status still records the PUT's own
-    /// outcome: the build succeeded, only the verification mismatched.
+    /// Covers the remaining two branches of the JF-705 caveat under one leg:
+    /// TWO frozen types (the plural clause and the " + " join in the rendered
+    /// caveat) plus a post-PUT canary mismatch (the free-text shape). The
+    /// clause and the canary live in SEPARATE fields since JF-721, so the old
+    /// clause-leads-within-80-chars constraint is structural (the caveat renders
+    /// as its own span before the Error); this pin keeps the rendered caveat
+    /// text honest instead. Status still records the PUT's own outcome: the
+    /// build succeeded, only the verification mismatched.
     /// </summary>
     [Fact]
-    public async Task SyncUserLibraryAsync_PartialFreezeWithCanaryError_LedgerLeadsWithFrozenClause()
+    public async Task SyncUserLibraryAsync_PartialFreezeWithCanaryError_LedgerCarriesCaveatBesideCanary()
     {
         // Arrange: artist AND album freeze at leg entry, series still mints, the
         // model PUT succeeds, and the canary reads back a model whose sample
@@ -414,13 +418,14 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
         Assert.Equal(LibrarySyncService.CatalogSyncLedgerSource, ledger!.Source);
         Assert.Equal("SUCCEEDED", ledger.Status);
 
+        // The structured caveat names both frozen types (payload CSV), the
+        // free-text Error carries ONLY the canary, and the rendered caveat
+        // (what config.html shows) is the plural clause with the " + " join.
+        Assert.Equal(CatalogLedgerCaveats.FrozenCatalogs, ledger.Caveat);
+        Assert.Equal("Artist,Album", ledger.FrozenCatalogTypes);
         Assert.NotNull(ledger.Error);
-        string error = ledger.Error!;
-        Assert.Contains("Artist + Album catalogs FROZEN", error, StringComparison.Ordinal);
-        Assert.Contains("canary mismatch", error, StringComparison.Ordinal);
-        Assert.True(
-            error.IndexOf("FROZEN", StringComparison.Ordinal) < error.IndexOf("canary mismatch", StringComparison.Ordinal),
-            "the frozen clause must lead the combined Error (config.html truncates at 80 chars)");
+        Assert.Contains("canary mismatch", ledger.Error!, StringComparison.Ordinal);
+        Assert.Equal("Artist + Album catalogs FROZEN (last-good pinned)", ledger.CaveatText);
     }
 
     /// <summary>
@@ -431,10 +436,13 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
     /// on Amazon is unchanged by this run, so its
     /// recorded build status is still true, and the diagnostics panel's
     /// ModelsDeployed stays truthful for single-locale setups); the freeze rides
-    /// Error with the "; no PUT this run" tail (the NoPutLedgerTail constant),
-    /// on a fresh LastUpdated. The clean re-run overwrites with no clause,
-    /// pinning that the clause is freeze-driven (JF-705's #4 second half,
-    /// extended to this path).
+    /// the structured caveat (JF-721: FrozenCatalogs | NoCatalogPut plus the
+    /// names payload) on a fresh LastUpdated, and the previous row's free-text
+    /// diagnostic is carried VERBATIM in Error (no framing since JF-721), so a
+    /// preserved non-SUCCEEDED status does not lose its failure reason
+    /// (code-review F3). The clean re-run overwrites with no caveat, pinning
+    /// that the caveat is freeze-driven (JF-705's #4 second half, extended to
+    /// this path).
     /// </summary>
     [Fact]
     public async Task SyncUserLibraryAsync_AllTypesFrozen_PreExistingGreenEntry_PreservedWithFrozenClause()
@@ -462,28 +470,26 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
         Assert.Null(_smapiHandler.LastModelPutBody);
 
         // The stale green row was reached and replaced: Status preserved, the
-        // freeze clause in Error on a fresh timestamp. Source is always this
+        // freeze in the caveat bits with the names payload, the prior diagnostic
+        // carried unframed in Error, on a fresh timestamp. Source is always this
         // writer's own label (catalog sync authors the row, code-review F4).
         var ledger = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
         Assert.NotNull(ledger);
         Assert.Equal("SUCCEEDED", ledger!.Status);
         Assert.Equal(LibrarySyncService.CatalogSyncLedgerSource, ledger.Source);
-        Assert.NotNull(ledger.Error);
-        Assert.Contains("Artist + Album + Series catalogs FROZEN", ledger.Error!, StringComparison.Ordinal);
-        Assert.Contains("no PUT this run", ledger.Error!, StringComparison.Ordinal);
-        // The prior entry's diagnostic trails the freeze clause, so a preserved
-        // non-SUCCEEDED status does not lose its failure reason (code-review F3).
-        int clauseAt = ledger.Error!.IndexOf("FROZEN", StringComparison.Ordinal);
-        int previousAt = ledger.Error.IndexOf("previous: simulated prior diagnostic", StringComparison.Ordinal);
-        Assert.True(previousAt > clauseAt, "the freeze clause must lead the composed Error");
+        Assert.Equal(CatalogLedgerCaveats.FrozenCatalogs | CatalogLedgerCaveats.NoCatalogPut, ledger.Caveat);
+        Assert.Equal("Artist,Album,Series", ledger.FrozenCatalogTypes);
+        Assert.Equal("simulated prior diagnostic", ledger.Error);
         Assert.True(ledger.LastUpdated > seededTime, "the replaced entry must carry a fresh timestamp");
 
-        // Clean re-run: the entry carries no clause (the freeze is the trigger).
+        // Clean re-run: the entry carries no caveat (the freeze is the trigger).
         _service.TypeLegEntryProbeForTest = null;
         await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
         ledger = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
         Assert.NotNull(ledger);
         Assert.Equal("SUCCEEDED", ledger!.Status);
+        Assert.Equal(CatalogLedgerCaveats.None, ledger.Caveat);
+        Assert.Null(ledger.FrozenCatalogTypes);
         Assert.Null(ledger.Error);
     }
 
@@ -492,7 +498,8 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
     /// everything frozen on the first run) must still write an entry - silence
     /// here is the same observability hole. With nothing truthful to preserve,
     /// the entry reads Status "Skipped" (the documented no-PUT meaning, extended
-    /// by JF-709) with the freeze clause in Error and the catalog-sync source.
+    /// by JF-709) with the freeze caveat bits and no free-text Error (nothing
+    /// to carry) and the catalog-sync source.
     /// </summary>
     [Fact]
     public async Task SyncUserLibraryAsync_AllTypesFrozen_NoPriorEntry_LedgerRecordsSkipped()
@@ -510,9 +517,9 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
         Assert.NotNull(ledger);
         Assert.Equal("Skipped", ledger!.Status);
         Assert.Equal(LibrarySyncService.CatalogSyncLedgerSource, ledger.Source);
-        Assert.NotNull(ledger.Error);
-        Assert.Contains("FROZEN", ledger.Error!, StringComparison.Ordinal);
-        Assert.Contains("no PUT this run", ledger.Error!, StringComparison.Ordinal);
+        Assert.Equal(CatalogLedgerCaveats.FrozenCatalogs | CatalogLedgerCaveats.NoCatalogPut, ledger.Caveat);
+        Assert.Equal("Artist,Album,Series", ledger.FrozenCatalogTypes);
+        Assert.Null(ledger.Error);
     }
 
     /// <summary>
@@ -573,14 +580,15 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
 
     /// <summary>
     /// Rework pins F5 + F3 for the no-PUT writer: (a) two CONSECUTIVE all-frozen
-    /// runs must not nest this writer's own message; the second entry carries
-    /// exactly one frozen clause and one no-PUT tail with no "previous:" chain
-    /// and no length growth, which matters because the JF-695 cadence re-runs
-    /// the full sync on EVERY restart while the drift persists; (b) a TRANSIENT
-    /// previous status (IN_PROGRESS, the startup capture's poll world) clamps to
-    /// "Skipped" instead of being preserved forever, while a foreign previous
-    /// Error trails once on the first run and is replaced (not re-trailed) on
-    /// the second.
+    /// runs must not nest this writer's own message; since JF-721 the no-nesting
+    /// rule is field-keyed (the first run's NoCatalogPut bit makes the second
+    /// run replace wholesale, so the carried foreign Error drops to null: no
+    /// chain, no growth, structurally), which matters because the JF-695 cadence
+    /// re-runs the full sync on EVERY restart while the drift persists; (b) a
+    /// TRANSIENT previous status (IN_PROGRESS, the startup capture's poll
+    /// world) clamps to "Skipped" instead of being preserved forever, while a
+    /// foreign previous Error is carried once on the first run (verbatim,
+    /// unframed) and dropped on the second.
     /// </summary>
     [Fact]
     public async Task SyncUserLibraryAsync_AllTypesFrozen_ConsecutiveRuns_ErrorStaysSingleDepth()
@@ -601,12 +609,12 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
         var entryAfterFirst = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
 
         // F3: the transient status clamped to the healthy neutral, and the
-        // foreign diagnostic trailed exactly once behind the freeze clause.
+        // foreign diagnostic carried exactly once, verbatim (no framing).
         Assert.False(first.Success);
         Assert.NotNull(entryAfterFirst);
         Assert.Equal("Skipped", entryAfterFirst!.Status);
-        Assert.Contains("FROZEN", entryAfterFirst.Error!, StringComparison.Ordinal);
-        Assert.Contains("; previous: simulated in-flight build", entryAfterFirst.Error!, StringComparison.Ordinal);
+        Assert.Equal(CatalogLedgerCaveats.FrozenCatalogs | CatalogLedgerCaveats.NoCatalogPut, entryAfterFirst.Caveat);
+        Assert.Equal("simulated in-flight build", entryAfterFirst.Error);
 
         // Second all-frozen run with the probe still in place (the every-restart
         // cadence): the entry must NOT nest or grow.
@@ -617,39 +625,35 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
         Assert.NotNull(entryAfterSecond);
         Assert.Equal("Skipped", entryAfterSecond!.Status);
 
-        // Single depth, no growth: exactly one clause and one tail (the
-        // non-overlapping Split-count idiom), no nested "previous:" chain, and
-        // the once-trailed foreign diagnostic is replaced with the fresh
-        // message rather than re-trailed (own-shape replace).
-        string errorAfterSecond = entryAfterSecond.Error!;
-        Assert.Equal(2, errorAfterSecond.Split("FROZEN", StringSplitOptions.None).Length);
-        Assert.Equal(2, errorAfterSecond.Split("no PUT this run", StringSplitOptions.None).Length);
-        Assert.DoesNotContain("previous:", errorAfterSecond, StringComparison.Ordinal);
-        Assert.DoesNotContain("simulated in-flight build", errorAfterSecond, StringComparison.Ordinal);
-        Assert.True(errorAfterSecond.Length <= entryAfterFirst.Error!.Length,
-            "the composed Error must not grow across consecutive all-frozen runs");
+        // Single depth, no growth: the same caveat bits and payload, and the
+        // once-carried foreign diagnostic is DROPPED (own-shape replace keyed on
+        // the first run's NoCatalogPut bit) rather than re-carried.
+        Assert.Equal(CatalogLedgerCaveats.FrozenCatalogs | CatalogLedgerCaveats.NoCatalogPut, entryAfterSecond.Caveat);
+        Assert.Equal(entryAfterFirst.FrozenCatalogTypes, entryAfterSecond.FrozenCatalogTypes);
+        Assert.Null(entryAfterSecond.Error);
     }
 
     /// <summary>
-    /// JF-710 coordination-note hazard pin: the startup capture now preserves
-    /// the frozen clause WITHOUT the no-PUT tail (a new skill version was
-    /// pushed, so the run-scoped tail drops). A tail-only own-shape check
-    /// would classify that clause-led row as foreign and trail the SAME clause
-    /// back as "; previous: ..." once per restart. The predicate must
-    /// recognize the clause-led shape too, so the next all-frozen run REPLACES
-    /// the row with exactly its own composed message.
+    /// JF-710 coordination-note hazard pin (field form since JF-721): the
+    /// startup capture preserves the FrozenCatalogs bit WITHOUT the
+    /// run-scoped NoCatalogPut bit (a new skill version was pushed, so the
+    /// no-PUT shape drops). A caveat-blind own-shape check would classify that
+    /// preserved row as foreign and carry its diagnostic forever. The predicate
+    /// must recognize the frozen-caveat shape, so the next all-frozen run
+    /// REPLACES the row with exactly its own fields.
     /// </summary>
     [Fact]
     public async Task SyncUserLibraryAsync_AllTypesFrozen_CapturePreservedClauseRow_ReplacedWithoutSelfReferentialTrail()
     {
         // Arrange: the row exactly as the JF-710 capture preserve leaves it
-        // (clause-led, no tail, catalog-sync source).
+        // (frozen caveat, no no-PUT bit, catalog-sync source).
         Plugin.Instance!.Configuration.SetLocaleModelStatus("it-IT", new LocaleModelStatus
         {
             Status = "SUCCEEDED",
             LastUpdated = DateTime.UtcNow.AddHours(-1),
             Source = LibrarySyncService.CatalogSyncLedgerSource,
-            Error = $"Artist catalog{LibrarySyncService.FrozenLedgerClauseMarker}"
+            Caveat = CatalogLedgerCaveats.FrozenCatalogs,
+            FrozenCatalogTypes = "Artist"
         });
         SetupLibraryWithAllTypes();
         FreezeAllTypesViaProbe();
@@ -659,21 +663,22 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
         // Act
         await _service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
 
-        // Assert: exactly this writer's own composed message, no trailed clause.
+        // Assert: exactly this writer's own row (its caveat bits and payload,
+        // nothing carried), no self-referential trail.
         var ledger = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
         Assert.NotNull(ledger);
-        Assert.Equal(
-            $"Artist + Album + Series catalogs{LibrarySyncService.FrozenLedgerClauseMarker}{LibrarySyncService.NoPutLedgerTail}",
-            ledger!.Error);
+        Assert.Equal(CatalogLedgerCaveats.FrozenCatalogs | CatalogLedgerCaveats.NoCatalogPut, ledger.Caveat);
+        Assert.Equal("Artist,Album,Series", ledger.FrozenCatalogTypes);
+        Assert.Null(ledger.Error);
     }
 
     /// <summary>
-    /// Accepted consequence of the clause-led own-shape arm (the JF-709 review
-    /// rejected the strip-at-marker alternative): a foreign diagnostic riding
-    /// a clause-led row (the JF-705 PUT writer's clause + canary shape, which
-    /// the capture preserve also mints) is REPLACED by the next all-frozen
-    /// run, not trailed. Its durable home is the capture preserve; this pin
-    /// keeps the replace explicit rather than accidental.
+    /// Accepted consequence of the frozen-caveat own-shape arm (the JF-709
+    /// review rejected the strip-at-marker alternative): a foreign diagnostic
+    /// riding a frozen row (the JF-705 PUT writer's frozen + canary shape,
+    /// which the capture preserve also mints) is REPLACED by the next
+    /// all-frozen run, not carried. Its durable home is the capture preserve;
+    /// this pin keeps the replace explicit rather than accidental.
     /// </summary>
     [Fact]
     public async Task SyncUserLibraryAsync_AllTypesFrozen_ClauseLedRowWithCanary_ReplacedEntirely()
@@ -683,7 +688,9 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
             Status = "SUCCEEDED",
             LastUpdated = DateTime.UtcNow.AddHours(-1),
             Source = LibrarySyncService.CatalogSyncLedgerSource,
-            Error = $"Artist catalog{LibrarySyncService.FrozenLedgerClauseMarker}; canary mismatch: submitted 145/900 but live reports 144/899"
+            Caveat = CatalogLedgerCaveats.FrozenCatalogs,
+            FrozenCatalogTypes = "Artist",
+            Error = "canary mismatch: submitted 145/900 but live reports 144/899"
         });
         SetupLibraryWithAllTypes();
         FreezeAllTypesViaProbe();
@@ -694,9 +701,9 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
 
         var ledger = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
         Assert.NotNull(ledger);
-        Assert.Equal(
-            $"Artist + Album + Series catalogs{LibrarySyncService.FrozenLedgerClauseMarker}{LibrarySyncService.NoPutLedgerTail}",
-            ledger!.Error);
+        Assert.Equal(CatalogLedgerCaveats.FrozenCatalogs | CatalogLedgerCaveats.NoCatalogPut, ledger.Caveat);
+        Assert.Equal("Artist,Album,Series", ledger.FrozenCatalogTypes);
+        Assert.Null(ledger.Error);
     }
 
     /// <summary>
