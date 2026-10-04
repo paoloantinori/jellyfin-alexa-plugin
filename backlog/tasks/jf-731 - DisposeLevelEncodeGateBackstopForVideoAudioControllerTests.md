@@ -183,3 +183,90 @@ exit is observable and the backstop counts a still-alive process as a leak -
 the fence's first run caught its own missing disposed-Process guard live
 (a monitor-disposed registry entry makes HasExited THROW, not return false;
 now treated as dead, the production exit watcher's convention).
+
+## Rework Round (gate-marker findings, 2026-10-04)
+
+F1 (coverage honesty + widening, MUST FIX): the reviewer was right that the
+documented coverage overclaimed. The registry half covers only the AUDIO-SPEED
+path (RegisterLiveSpeedEncode's one production call site is the speed
+OnEncodeLive) and the pid-file half only the ONE committed fake that writes
+ffmpeg.pid; a leaked stop-gated fake or any episode/song/audiobook-path
+encode was invisible to both. Part (b) was chosen over filing: a THIRD sweep
+half landed now (LiveTempDirEncodePids + SweepProcessesUnderTempDir), a /proc
+scan for live processes whose cmdline references the test instance's own temp
+dir. That path makes it safe AND complete: every WriteFakeFfmpeg script lives
+under it, and CreateRegisteredTempDir's guid suffix means the two parallel
+TFM testhosts' temp dirs are disjoint, so the scan can never name another
+testhost's fakes or an ambient process (a zombie's cmdline reads empty, so
+already-killed encodes skip; a real-ffmpeg launch would escape, and no test
+constructs one). The widening's first run immediately caught a REAL residual
+leak the old halves could not see: MonitorHls_HungEncode_KilledAfterOneStallBudget
+returned after asserting the STALLED log while the monitor's kill was still in
+flight; that test now fences its observed death, and the class-wide obligation
+(a test arranging an encode's death must observe it before returning) is
+documented on the backstop. Sabotage v2 (temporary episode-path sleeper with
+NO pid file, invisible to both original halves) reds via the process half on
+both TFMs in ~0.6s with the other 266 green: the widening is proven, not just
+filed, so the reserved JF-741 number stays unused. The fence machinery
+consolidated onto the same probe (FenceTempDirEncodesDeadAsync built on the
+shared TestHelpers.WaitUntilAsync, JF-419.3), replacing the speed-keyed
+fence pair.
+
+F2 (doc block): the JF-730 pid-file summary that had drifted onto
+TryReadLivePidFromVariantDir when that helper was inserted is back on
+KillEncodeByPidFile, its actual subject.
+
+F3 (reuse): the fence now delegates to TestHelpers.WaitUntilAsync (hoisted
+under JF-419.3) instead of a hand-rolled deadline loop.
+
+F4 (prose): the banned "word - word" hyphen forms swept from all newly
+authored prose (code arithmetic exempt); the 19.6s wobble corrected to the
+honest ~18.6s (70ms x 266).
+
+Rework verification: rebase onto main 92d9878e clean (the JF-725 merge does
+not touch these files); class 266/266 both TFMs at 45s (the /proc half adds
+~2-3s per TFM over the 42s pre-widening cost); full suite ONCE on the final
+state 5078/5078 net9.0 (1m09s) and 5078/5078 net10.0 (1m08s); Release
+--no-restore -warnaserror clean; gate refresh (focused code-review high on
+the rework diff) run as its own round.
+
+### Gate-refresh round (code-review high on the rework diff, 5 findings, all applied)
+
+GR1 (the kill-gating was over-aggressive, reverted): the zero-kill early
+return skipped the gate-refill verification entirely, so a STUCK slot (an
+exit-poll release that never fires; process dead, nothing killable) passed
+teardown green and the next gated test would hang forever on the untimed
+gate.WaitAsync. The refill check is now UNCONDITIONAL again, exactly what
+the old JF-730 finally asserted: the loop polls to the configured cap with
+early exit (a transient returns the moment the 500ms exit-poll tick lands),
+a zero-kill deficit reds after a 2s budget with a distinct "stuck slot"
+message, and a kill chain keeps the 10s budget. The measured price is
+accepted and documented: waiting out the transients costs ~18s per TFM
+across the class (45s to 1m03s per TFM; full suite 1m09s to ~1m27s), the
+same price the pre-JF-731 finally paid per-scenario.
+
+GR2 (CI shell difference, would have silently defeated the new half on CI):
+dash, ubuntu-latest's /bin/sh, tail-execs a script's final simple external
+command into the same pid, so any fake at its trailing bare `sleep` has its
+/proc cmdline rewritten to "sleep N" and loses the temp-dir identity the
+process half matches on; local Fedora verification could never surface this
+because bash keeps the cmdline. Fix at the ONE writer: WriteFakeFfmpeg
+appends `exit $?` (a builtin, preserving the script's status exactly, so the
+deliberate fast-fail fake keeps its nonzero exit), which keeps the shell
+image alive through the sleep on every /bin/sh.
+
+GR3: the W2 death fence moved from the end of the test body into a finally,
+so an upstream assert failure no longer skips the fence and then buries its
+own diagnostics under the backstop's second failure.
+
+GR4: the /proc scan reads cmdline BEFORE the liveness check (the cmdline
+read rejects essentially every pid; the GetProcessById allocation now
+belongs only to the ~one match).
+
+GR5: the per-half kill report is built at the two return points only, not on
+every 100ms drain pass.
+
+Final state runs: class 266/266 both TFMs at 1m03s; sabotage v2 re-proven on
+this exact shape (episode-path pid-less leak reds via the temp-dir half in
+~0.6s, 266 others green); full suite ONCE 5078/5078 net9.0 (1m28s) and
+5078/5078 net10.0 (1m26s); Release --no-restore -warnaserror clean.

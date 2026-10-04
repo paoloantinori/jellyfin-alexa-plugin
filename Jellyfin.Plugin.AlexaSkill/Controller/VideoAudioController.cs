@@ -2057,8 +2057,8 @@ public class VideoAudioController : ControllerBase
 
     /// <summary>
     /// Internal test seam (JF-731, InternalsVisibleTo): the CONFIGURED capacity
-    /// of the current <see cref="_encodeGate"/> instance - the drain target the
-    /// test-side backstop compares <see cref="SemaphoreSlim.CurrentCount"/>
+    /// of the current <see cref="_encodeGate"/> instance; this is the drain
+    /// target the test-side backstop compares <see cref="SemaphoreSlim.CurrentCount"/>
     /// against (the BCL exposes no initial-count read, and the plugin
     /// configuration can diverge from the static after a capacity swap).
     /// Read-only.
