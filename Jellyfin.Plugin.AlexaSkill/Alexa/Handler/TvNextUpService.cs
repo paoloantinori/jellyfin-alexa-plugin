@@ -105,7 +105,11 @@ public sealed class TvNextUpService
         {
             User = jellyfinUser,
             Recursive = true,
-            SearchTerm = seriesName,
+            // JF-645 (the JF-643 pattern): the series name feeds the SearchTerm
+            // index, Latin-script; a ja-JP series slot arrives as katakana, so the
+            // QUERY is romanized. The not-found speech keeps the raw seriesName
+            // and the fuzzy fallback romanizes internally (SearchService choke point).
+            SearchTerm = Util.KatakanaRomanizer.Romanize(seriesName),
             IncludeItemTypes = seriesKinds,
             DtoOptions = new DtoOptions(true)
         };

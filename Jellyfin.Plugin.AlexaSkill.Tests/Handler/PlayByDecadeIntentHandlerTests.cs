@@ -322,4 +322,57 @@ public class PlayByDecadeIntentHandlerTests : PluginTestBase
 
         Assert.Null(result);
     }
+
+    // --- JF-645: katakana genre slot vs Latin genre tags (the JF-643 pattern) ---
+
+    [Fact]
+    public async Task HandleAsync_KatakanaGenreSlot_ResolvesToLatinTag_AndPlays_JF645()
+    {
+        // 'ジャズ' romanizes to 'jazu'; the exact Genres filter misses, the JF-643
+        // kana resolution tier (wired here by JF-645) matches the vocabulary
+        // phonetically, and the re-query with the canonical tag 'Jazz' (the decade
+        // constraint intact on the same query shape) returns playable audio.
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(decade: "80s", genre: "ジャズ");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+        SetupUserMock();
+
+        var jazzSong = TestHelpers.CreateSong("Jazz Song", Guid.NewGuid());
+        var genreTable = new Dictionary<string, BaseItem> { ["Jazz"] = jazzSong };
+        var genreQueries = new List<string>();
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) => GenreFlow.Dispatch(q, genreTable, genreQueries));
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.NotNull(response.Response?.Directives);
+        Assert.NotEmpty(response.Response.Directives);
+        Assert.Equal(new[] { "jazu", "Jazz" }, genreQueries);
+    }
+
+    [Fact]
+    public async Task HandleAsync_LatinGenreSlot_NeverRunsVocabularyResolution_JF645()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(decade: "80s", genre: "jazz");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+        SetupUserMock();
+
+        // DISCRIMINATING shape (see PlayRandom's twin): empty genre table, so the
+        // first query misses and the branch runs; the tier's Latin gate alone
+        // keeps the vocabulary fetch from firing.
+        bool vocabularyQueried = false;
+        var genreTable = new Dictionary<string, BaseItem>();
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) => GenreFlow.Dispatch(q, genreTable, new List<string>(), () => vocabularyQueried = true));
+
+        await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.False(vocabularyQueried);
+    }
 }

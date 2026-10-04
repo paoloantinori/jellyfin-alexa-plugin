@@ -31,6 +31,7 @@ public class PlayRandomIntentHandler : BaseHandler
     private const int MaxQueryResults = 500;
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
+    private readonly Cache.GenreVocabularyCache? _genreVocabularyCache;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PlayRandomIntentHandler"/> class.
@@ -40,15 +41,18 @@ public class PlayRandomIntentHandler : BaseHandler
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
+    /// <param name="genreVocabularyCache">Optional TTL cache for the JF-643 kana genre-resolution tier's vocabulary (JF-645).</param>
     public PlayRandomIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILibraryManager libraryManager,
         IUserManager userManager,
-        ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
+        ILoggerFactory loggerFactory,
+        Cache.GenreVocabularyCache? genreVocabularyCache = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
+        _genreVocabularyCache = genreVocabularyCache;
     }
 
     /// <inheritdoc/>
@@ -129,10 +133,33 @@ public class PlayRandomIntentHandler : BaseHandler
 
         if (!string.IsNullOrWhiteSpace(genreSlot))
         {
-            query.Genres = new[] { genreCanonical ?? genreSlot };
+            // JF-645 (the JF-643 pattern): the Genres filter is exact-match against
+            // the library's Latin tags, so a ja-JP genre slot arrives as katakana
+            // ('ジャズ' vs 'Jazz') and the QUERY is romanized. The ER canonical
+            // (JF-642, when one resolved) feeds the query VERBATIM; the not-found
+            // speech keeps genreSlot (the user's own words).
+            query.Genres = new[] { genreCanonical ?? Util.KatakanaRomanizer.Romanize(genreSlot) };
         }
 
         IReadOnlyList<BaseItem> items = await RetryAsync(() => _libraryManager.GetItemList(query), "GetRandomItems", cancellationToken).ConfigureAwait(false);
+
+        if (items.Count == 0 && !string.IsNullOrWhiteSpace(genreSlot))
+        {
+            // JF-645: resolve a kana genre slot against the library's genre
+            // vocabulary and re-query with the canonical tag (contract on
+            // SearchService.ResolveKanaGenreTagAsync; Latin slots and ER-resolved
+            // canonicals return null before any vocabulary fetch).
+            string? resolvedGenre = await Search.ResolveKanaGenreTagAsync(
+                genreCanonical, genreSlot, jellyfinUser, user, _libraryManager, _genreVocabularyCache, cancellationToken).ConfigureAwait(false);
+            if (resolvedGenre != null)
+            {
+                Logger.LogInformation(
+                    "PlayRandom: kana genre slot resolved to library tag '{Genre}' (JF-645)",
+                    resolvedGenre);
+                query.Genres = new[] { resolvedGenre };
+                items = await RetryAsync(() => _libraryManager.GetItemList(query), "GetRandomItems", cancellationToken).ConfigureAwait(false);
+            }
+        }
 
         if (items.Count == 0)
         {

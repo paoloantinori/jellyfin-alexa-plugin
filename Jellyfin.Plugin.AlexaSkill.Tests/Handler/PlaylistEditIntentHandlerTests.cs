@@ -482,4 +482,28 @@ public class PlaylistEditIntentHandlerTests : PluginTestBase
 
     private static string GetSpeech(SkillResponse response) =>
         ((PlainTextOutputSpeech)response.Response.OutputSpeech).Text;
+
+    // --- JF-645: katakana song slot vs Latin library titles (the JF-643 pattern) ---
+
+    [Fact]
+    public async void AddSong_KatakanaSongQuery_RomanizesSearchTermAndPick_JF645()
+    {
+        // 'ロック' romanizes to 'rokku': the SearchTerm query AND the carrier-noun
+        // pick below both run against Latin titles, so both must see the romanized
+        // form (pre-JF-645 the raw katakana was a guaranteed miss).
+        var kanaSongId = Guid.NewGuid();
+        MediaBrowser.Controller.Entities.InternalItemsQuery? capturedQuery = null;
+        _libraryManagerMock
+            .Setup(l => l.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Callback<MediaBrowser.Controller.Entities.InternalItemsQuery>(q => capturedQuery = q)
+            .Returns(new List<Audio> { new() { Name = "Rokku", Id = kanaSongId } });
+
+        SkillResponse response = await CreateAddSong().HandleAsync(
+            CreateRequest(IntentNames.AddSongToPlaylist, new() { [IntentNames.Slots.SongQuery] = "ロック", ["playlist_target"] = "road trip" }),
+            new Context(), CreateUser(), session: null!, CancellationToken.None);
+
+        Assert.NotNull(capturedQuery);
+        Assert.Equal("rokku", capturedQuery.SearchTerm);
+        VerifyAddItem(PlaylistId, id => id == kanaSongId, Times.Once());
+    }
 }

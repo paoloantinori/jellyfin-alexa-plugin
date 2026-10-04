@@ -30,6 +30,7 @@ public class PlayByDecadeIntentHandler : BaseHandler
     private const int MaxQueryResults = 500;
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
+    private readonly Cache.GenreVocabularyCache? _genreVocabularyCache;
 
     private static readonly Dictionary<string, int> WordDecadeMap = new()
     {
@@ -52,15 +53,18 @@ public class PlayByDecadeIntentHandler : BaseHandler
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
+    /// <param name="genreVocabularyCache">Optional TTL cache for the JF-643 kana genre-resolution tier's vocabulary (JF-645).</param>
     public PlayByDecadeIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILibraryManager libraryManager,
         IUserManager userManager,
-        ILoggerFactory loggerFactory) : base(sessionManager, config, loggerFactory)
+        ILoggerFactory loggerFactory,
+        Cache.GenreVocabularyCache? genreVocabularyCache = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
+        _genreVocabularyCache = genreVocabularyCache;
     }
 
     /// <inheritdoc/>
@@ -122,15 +126,41 @@ public class PlayByDecadeIntentHandler : BaseHandler
         ApplyLibraryFilter(query, user, _libraryManager);
 
         // Optional genre filter if provided
+        string? genreSlot = null;
+        string? genreCanonical = null;
         if (intentRequest.Intent.Slots != null && intentRequest.Intent.Slots.TryGetValue("genre", out Slot? genreSlotObj) && !string.IsNullOrWhiteSpace(genreSlotObj.Value))
         {
+            genreSlot = genreSlotObj.Value;
             // JF-642: ja-JP's GenreType canonical ('Jazz') is the exact library
             // tag; it wins over the spoken form. Other locales carry no
-            // resolution (raw kept).
-            query.Genres = new[] { SlotValueHelper.GetCanonicalValue(genreSlotObj) ?? genreSlotObj.Value };
+            // resolution.
+            // JF-645 (the JF-643 pattern): a raw kana slot ('ジャズ') is romanized
+            // for the exact Genres query; the not-found speech speaks decadeSlot,
+            // so no speech divergence here.
+            genreCanonical = SlotValueHelper.GetCanonicalValue(genreSlotObj);
+            query.Genres = new[] { genreCanonical ?? KatakanaRomanizer.Romanize(genreSlot) };
         }
 
         IReadOnlyList<BaseItem> items = await RetryAsync(() => _libraryManager.GetItemList(query), "GetDecadeItems", cancellationToken).ConfigureAwait(false);
+
+        if (items.Count == 0 && genreSlot != null)
+        {
+            // JF-645: resolve a kana genre slot against the library's genre
+            // vocabulary and re-query with the canonical tag, the decade
+            // constraint intact (contract on
+            // SearchService.ResolveKanaGenreTagAsync; Latin slots and ER-resolved
+            // canonicals return null before any vocabulary fetch).
+            string? resolvedGenre = await Search.ResolveKanaGenreTagAsync(
+                genreCanonical, genreSlot, jellyfinUser, user, _libraryManager, _genreVocabularyCache, cancellationToken).ConfigureAwait(false);
+            if (resolvedGenre != null)
+            {
+                Logger.LogInformation(
+                    "PlayByDecade: kana genre slot resolved to library tag '{Genre}' (JF-645)",
+                    resolvedGenre);
+                query.Genres = new[] { resolvedGenre };
+                items = await RetryAsync(() => _libraryManager.GetItemList(query), "GetDecadeItems", cancellationToken).ConfigureAwait(false);
+            }
+        }
 
         if (items.Count == 0)
         {

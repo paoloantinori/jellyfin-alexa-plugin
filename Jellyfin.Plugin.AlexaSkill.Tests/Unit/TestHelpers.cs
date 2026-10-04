@@ -1137,6 +1137,60 @@ internal sealed class CountingArtistIndex : IArtistIndex
     }
 }
 
+
+/// <summary>
+/// JF-645: the shared genre-flow test doubles (the ONE mock dispatcher, the
+/// standard vocabulary rows, and the vocabulary-query predicate) for the JF-643
+/// kana genre-resolution tier's handler and SearchService tests; hoisted at the
+/// fourth copy (PlayByGenre's JF-643 original plus the three JF-645 siblings,
+/// the suite's hoist-on-the-third-copy rule).
+/// </summary>
+internal static class GenreFlow
+{
+    /// <summary>Whether an <see cref="InternalItemsQuery"/> is the tier's
+    /// genre-vocabulary fetch (Genre/MusicGenre kinds), the predicate every
+    /// genre-flow mock dispatcher branches on.</summary>
+    internal static bool IsVocabularyQuery(InternalItemsQuery q)
+        => q.IncludeItemTypes?.Contains(BaseItemKind.Genre) == true
+           || q.IncludeItemTypes?.Contains(BaseItemKind.MusicGenre) == true;
+
+    /// <summary>The standard genre vocabulary the kana-tier tests scan
+    /// (Jazz/Rock/Pop): 'ジャズ' romanizes to 'jazu' and Double-Metaphone-collides
+    /// with 'Jazz' (the load-bearing JF-643 property) while 'クラシック' matches
+    /// none of them. The resolver only reads Name/Id from vocabulary rows, so any
+    /// BaseItem stand-in is faithful to what the mock returns.</summary>
+    internal static IReadOnlyList<BaseItem> VocabularyRows() => new List<BaseItem>
+    {
+        new MediaBrowser.Controller.Entities.Audio.MusicArtist { Name = "Jazz", Id = Guid.NewGuid() },
+        new MediaBrowser.Controller.Entities.Audio.MusicArtist { Name = "Rock", Id = Guid.NewGuid() },
+        new MediaBrowser.Controller.Entities.Audio.MusicArtist { Name = "Pop", Id = Guid.NewGuid() }
+    };
+
+    /// <summary>The genre-flow mock dispatcher: vocabulary queries return
+    /// <see cref="VocabularyRows"/> and report through <paramref name="onVocabularyQuery"/>;
+    /// genre-scoped queries resolve through the genre table (exact Genres equality,
+    /// missing = miss) and report themselves through <paramref name="genreQueriesSeen"/>.</summary>
+    internal static IReadOnlyList<BaseItem> Dispatch(InternalItemsQuery q, Dictionary<string, BaseItem> genreTable, List<string> genreQueriesSeen, Action? onVocabularyQuery = null)
+    {
+        if (IsVocabularyQuery(q))
+        {
+            onVocabularyQuery?.Invoke();
+            return VocabularyRows();
+        }
+
+        string? genre = q.Genres?.FirstOrDefault();
+        if (genre != null)
+        {
+            genreQueriesSeen.Add(genre);
+            return genreTable.TryGetValue(genre, out BaseItem? item)
+                ? new List<BaseItem> { item }
+                : new List<BaseItem>();
+        }
+
+        return new List<BaseItem>();
+    }
+}
+
 /// <summary>
 /// JF-465: the ONE handler-test fixture (the six standard mocks + config +
 /// logger factory, and the SetupUserMock/CreateSession/CreateContext/CreateUser

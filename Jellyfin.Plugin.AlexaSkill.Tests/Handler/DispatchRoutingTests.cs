@@ -67,6 +67,24 @@ public class DispatchRoutingTests : PluginTestBase
     }
 
     [Fact]
+    public void RealRegistrator_RegistersGenreVocabularyCache_JF645()
+    {
+        // JF-645 item 3's production wiring guard: the genre handlers take the
+        // vocabulary cache as an OPTIONAL ctor param, so a deleted registration
+        // silently leaves every handler on cache=null (uncached refetch of the
+        // ~500-row genre vocabulary on every kana genre request, the exact cost
+        // the item was filed to remove) while the whole suite stays green (handler
+        // tests construct the cache directly or not at all; DispatchHarness
+        // fabricates its own). This pin fails on the deleted or retyped
+        // registration (the RealRegistrator mirror shape above).
+        var services = new ServiceCollection();
+        new Jellyfin.Plugin.AlexaSkill.EntryPoints.Registrator()
+            .RegisterServices(services, Mock.Of<MediaBrowser.Controller.IServerApplicationHost>());
+
+        Assert.Contains(services, d => d.ServiceType == typeof(Jellyfin.Plugin.AlexaSkill.Alexa.Cache.GenreVocabularyCache));
+    }
+
+    [Fact]
     public void AllHandlers_ConstructViaDefaultFactory()
     {
         // Construction smoke: the default dependency factory must build every

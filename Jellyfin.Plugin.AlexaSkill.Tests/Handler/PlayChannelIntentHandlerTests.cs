@@ -448,4 +448,32 @@ public class PlayChannelIntentHandlerTests : PluginTestBase
 
         Assert.Equal(playChannelJson, playRadioJson);
     }
+
+    // --- JF-645: katakana channel slot vs Latin channel names (the JF-643 pattern) ---
+
+    [Fact]
+    public async Task Handle_KatakanaChannelSlot_RomanizesSearchTerm_AndLaunches_JF645()
+    {
+        // 'ロック' romanizes to 'rokku': the channel SearchTerm index is
+        // Latin-script, so the slot must reach the query romanized (pre-JF-645 the
+        // raw katakana was a guaranteed miss); the not-found speech would keep the
+        // raw slot (the user's own words).
+        var channel = CreateTestChannel("Rokku TV");
+        InternalItemsQuery? capturedQuery = null;
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Callback<InternalItemsQuery>(q => capturedQuery = q)
+            .Returns(new List<BaseItem> { channel });
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreatePlayChannelRequest("ロック"),
+            CreateContext(),
+            TestHelpers.CreateTestUser(),
+            CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(capturedQuery);
+        Assert.Equal("rokku", capturedQuery.SearchTerm);
+        response.HasDirective<VideoAppLaunchDirective>();
+    }
 }

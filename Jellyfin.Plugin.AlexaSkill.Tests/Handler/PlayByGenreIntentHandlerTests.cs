@@ -238,41 +238,6 @@ public class PlayByGenreIntentHandlerTests : PluginTestBase
 
     // --- JF-643: katakana genre slot vs Latin genre tags ---
 
-    /// <summary>
-    /// Mock dispatcher for the genre flow: audio-kind genre queries resolve
-    /// through the genre table below (exact Genres equality, empty = miss); the
-    /// genre-vocabulary query (Genre/MusicGenre kinds) returns the vocabulary
-    /// rows and reports itself through <paramref name="onVocabularyQuery"/> when
-    /// the test pins that the tier never ran. The resolver only reads Name/Id
-    /// from vocabulary rows, so any BaseItem stand-in is faithful to what the
-    /// mock returns.
-    /// </summary>
-    private static IReadOnlyList<BaseItem> DispatchGenreFlow(InternalItemsQuery q, Dictionary<string, Audio> genreTable, List<string> audioQueriesSeen, Action? onVocabularyQuery = null)
-    {
-        if (q.IncludeItemTypes.Contains(Jellyfin.Data.Enums.BaseItemKind.Genre)
-            || q.IncludeItemTypes.Contains(Jellyfin.Data.Enums.BaseItemKind.MusicGenre))
-        {
-            onVocabularyQuery?.Invoke();
-            return new List<BaseItem>
-            {
-                new MusicArtist { Name = "Jazz", Id = Guid.NewGuid() },
-                new MusicArtist { Name = "Rock", Id = Guid.NewGuid() },
-                new MusicArtist { Name = "Pop", Id = Guid.NewGuid() }
-            };
-        }
-
-        string? genre = q.Genres?.FirstOrDefault();
-        if (genre != null)
-        {
-            audioQueriesSeen.Add(genre);
-            return genreTable.TryGetValue(genre, out Audio? song)
-                ? new List<BaseItem> { song }
-                : new List<BaseItem>();
-        }
-
-        return new List<BaseItem>();
-    }
-
     [Fact]
     public async Task HandleAsync_KatakanaGenreSlot_ResolvesToLatinTag_AndPlays_JF643()
     {
@@ -288,10 +253,10 @@ public class PlayByGenreIntentHandlerTests : PluginTestBase
         _fx.SetupUserMock();
 
         var jazzSong = new Audio { Name = "Jazz Song", Id = Guid.NewGuid() };
-        var genreTable = new Dictionary<string, Audio> { ["Jazz"] = jazzSong };
+        var genreTable = new Dictionary<string, BaseItem> { ["Jazz"] = jazzSong };
         var audioQueries = new List<string>();
         _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns((InternalItemsQuery q) => DispatchGenreFlow(q, genreTable, audioQueries));
+            .Returns((InternalItemsQuery q) => GenreFlow.Dispatch(q, genreTable, audioQueries));
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -396,11 +361,11 @@ public class PlayByGenreIntentHandlerTests : PluginTestBase
         _fx.SetupUserMock();
 
         var jazzSong = new Audio { Name = "Jazz Song", Id = Guid.NewGuid() };
-        var genreTable = new Dictionary<string, Audio> { ["Jazz"] = jazzSong };
+        var genreTable = new Dictionary<string, BaseItem> { ["Jazz"] = jazzSong };
         var audioQueries = new List<string>();
         bool vocabularyQueried = false;
         _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns((InternalItemsQuery q) => DispatchGenreFlow(q, genreTable, audioQueries, () => vocabularyQueried = true));
+            .Returns((InternalItemsQuery q) => GenreFlow.Dispatch(q, genreTable, audioQueries, () => vocabularyQueried = true));
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -425,11 +390,11 @@ public class PlayByGenreIntentHandlerTests : PluginTestBase
         var session = _fx.CreateSession();
         _fx.SetupUserMock();
 
-        var genreTable = new Dictionary<string, Audio>();
+        var genreTable = new Dictionary<string, BaseItem>();
         var audioQueries = new List<string>();
         bool vocabularyQueried = false;
         _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns((InternalItemsQuery q) => DispatchGenreFlow(q, genreTable, audioQueries, () => vocabularyQueried = true));
+            .Returns((InternalItemsQuery q) => GenreFlow.Dispatch(q, genreTable, audioQueries, () => vocabularyQueried = true));
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 

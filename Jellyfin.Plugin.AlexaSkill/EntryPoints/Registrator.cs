@@ -49,6 +49,9 @@ public class Registrator : IPluginServiceRegistrator
         });
         serviceCollection.AddSingleton<RequestCounters>();
         serviceCollection.AddSingleton<SearchResultCache>();
+        // JF-645 item 3: TTL cache for the JF-643 kana genre-resolution tier's
+        // vocabulary (optional ctor param on the genre handlers; null disables caching).
+        serviceCollection.AddSingleton<Alexa.Cache.GenreVocabularyCache>();
         serviceCollection.AddSingleton<CircuitBreaker>();
         serviceCollection.AddSingleton<JellyfinConnectivityChecker>();
 

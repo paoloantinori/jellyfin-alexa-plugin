@@ -664,4 +664,34 @@ public class PlayNextEpisodeIntentHandlerTests : PluginTestBase
                 _config, _loggerFactory, c => c.VideosEnabled = true, "alexa-playnextepisode-test");
         }
     }
+
+    // --- JF-645: katakana series slot vs Latin series names (the JF-643 pattern) ---
+
+    [Fact]
+    public async Task HandleAsync_KatakanaSeriesName_RomanizesSearchTerm_JF645()
+    {
+        // 'ロック' romanizes to 'rokku': the series SearchTerm index is
+        // Latin-script, so the slot must reach the query romanized (pre-JF-645 the
+        // raw katakana was a guaranteed miss); the not-found speech keeps the raw
+        // seriesName (the user's own words).
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(seriesName: "ロック");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+        var series = new global::MediaBrowser.Controller.Entities.TV.Series { Name = "Rokku", Id = Guid.NewGuid() };
+        InternalItemsQuery? capturedQuery = null;
+        _libraryManagerMock.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.Series))))
+            .Callback<InternalItemsQuery>(q => capturedQuery = q)
+            .Returns(new List<BaseItem> { series });
+        SetupNextUp("Rokku Next", series.Id);
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(capturedQuery);
+        Assert.Equal("rokku", capturedQuery.SearchTerm);
+        response.HasDirective<VideoAppLaunchDirective>();
+    }
 }
