@@ -7,7 +7,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-09-27 08:20'
-updated_date: '2026-10-04'
+updated_date: '2026-10-04 17:00'
 labels:
   - tech-debt
   - refactor
@@ -53,12 +53,6 @@ THE CURRENT TRIPLICATION'S COST, named honestly (what a fourth sibling would dup
 RE-ARMING: the filing's second original trigger half is extinguished (item c, above), so the consolidation fires only when a FOURTH serve skeleton actually materializes (a new variant-HLS endpoint that cannot ride `ServeVariantHlsAsync`), or when JF-537.1 resolves AND an orchestration-order change must hit all three cores at once (the conjunction is this decline's own bar that the consolidation must also pay for itself; the filing's scope guard alone lifts the moment JF-537.1 lands or is declined, and that by itself does not re-arm the task). Until then this stays declined.
 <!-- SECTION:DESCRIPTION:END -->
 
-## Final Summary
-
-<!-- SECTION:FINAL_SUMMARY:BEGIN -->
-TRIGGER VERDICT FIRST: DECLINED, trigger verified UNMET at the verification baseline 628bb56a (main's tip at check time; main has since advanced via the JF-674 closure, no Controller/ file touched); no code ships, the delta is this task file only. Both trigger halves were checked against the code, not the notes: no fourth serve skeleton exists (still three cores, the variant core's two callers both predating the filing, and the 32 controller commits since are hardening on the existing three), and the loose-cleanup trigger is extinguished (JF-676/Done landed the debris verdict + vanish re-probe on the song core, code-verified); the scope guard would ALSO have blocked the attempt (JF-537.1 still To Do). The full verdict, the honestly-named triplication cost (what a fourth sibling would and would NOT duplicate, the four strategy-hook blockers, the accepted residual), and the re-arming conditions are in the Description's DECLINED section; the verification commands and line anchors are in the Notes. DoD: Release -warnaserror 0 errors 0 warnings on the final state; #2/#3 satisfied by the doc-only delta on a tree byte-identical to main's 5143/5143-verified state (no suite run required, no code shipped); #4-#8 N/A (no code, model, locale, or handler surface touched); #9/#10 the two gates on the doc diff, outcomes in the Notes. WORKTREE: agent-a0c93ac2e6d9edba1, baseline-aligned to the JF-703 merge before the verdict; no merge into main by the worker.
-<!-- SECTION:FINAL_SUMMARY:END -->
-
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [x] #1 dotnet build passes with 0 errors
@@ -88,3 +82,11 @@ GATE /simplify (4 parallel angles on the doc diff; all four returned). The altit
 
 GATE /code-review high (on the doc diff; the DECLINE VERDICT itself was independently confirmed sound: the reviewer re-verified the three-core inventory with exact line anchors, JF-676 Done at 33401491, JF-537.1 To Do, all six shared helpers called per-core including the audiobook rows, no fourth skeleton, and a net-zero route diff since the filing). 5 findings, ALL defects in the recorded evidence rather than the verdict, ALL APPLIED same-turn with every number re-verified by my own commands before rewriting: (1) the doc-only proof cited "current main (merge 628bb56a)" and `git diff main --stat`, false at commit time because main advanced to fa2f4e86 (the JF-674 closure, merged by another worker mid-session); re-anchored to the explicit baseline `git diff 628bb56a --stat` with the advance noted (its delta touches zero Controller/ files, verified); (2) "repo-wide -S StreamHls finds nothing outside VideoAudioController" was false as a command/conclusion pair (a repo-wide pickaxe hits 37 test/backlog commits); rescoped to the command actually run, the production-tree sweep excluding the controller, re-run and confirmed 0; (3) "the 30 commits" was a miscount through a name-only pipe; corrected to the rev-list-verified 32 (33a5cf52..HEAD); (4) the RE-ARMING parenthetical claimed the filing's scope guard is satisfied only at the full conjunction, but the guard text lifts on JF-537.1 resolving alone; rewritten to separate the guard (lifts on JF-537.1) from this decline's own pay-for-itself bar (the order-change conjunct); (5) DoD #10 was ticked with no /code-review outcome recorded; resolved by this paragraph (the gate could only be recorded after it returned).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+TRIGGER VERDICT FIRST: DECLINED, trigger verified UNMET at the verification baseline 628bb56a (main's tip at check time; main has since advanced via the JF-674 closure, no Controller/ file touched); no code ships, the delta is this task file only. Both trigger halves were checked against the code, not the notes: no fourth serve skeleton exists (still three cores, the variant core's two callers both predating the filing, and the 32 controller commits since are hardening on the existing three), and the loose-cleanup trigger is extinguished (JF-676/Done landed the debris verdict + vanish re-probe on the song core, code-verified); the scope guard would ALSO have blocked the attempt (JF-537.1 still To Do). The full verdict, the honestly-named triplication cost (what a fourth sibling would and would NOT duplicate, the four strategy-hook blockers, the accepted residual), and the re-arming conditions are in the Description's DECLINED section; the verification commands and line anchors are in the Notes. DoD: Release -warnaserror 0 errors 0 warnings on the final state; #2/#3 satisfied by the doc-only delta on a tree byte-identical to main's 5143/5143-verified state (no suite run required, no code shipped); #4-#8 N/A (no code, model, locale, or handler surface touched); #9/#10 the two gates on the doc diff, outcomes in the Notes. WORKTREE: agent-a0c93ac2e6d9edba1, baseline-aligned to the JF-703 merge before the verdict; no merge into main by the worker.
+
+CLOSED 2026-10-04 by the orchestrator after the full cycle: the DECLINE merged doc-only (--no-ff) under the scaled verification (the three load-bearing facts re-checked directly: three cores, JF-676 Done, JF-537.1 To Do), no deploy. JF-756 unused.
+<!-- SECTION:FINAL_SUMMARY:END -->
