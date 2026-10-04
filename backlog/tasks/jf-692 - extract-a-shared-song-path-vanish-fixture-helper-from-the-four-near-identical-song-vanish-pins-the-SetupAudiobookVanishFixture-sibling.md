@@ -1,11 +1,12 @@
 ---
 id: JF-692
 title: >-
-  extract a shared song-path vanish fixture helper from the four
-  near-identical song vanish pins (the SetupAudiobookVanishFixture sibling)
-status: To Do
+  extract a shared song-path vanish fixture helper from the four near-identical
+  song vanish pins (the SetupAudiobookVanishFixture sibling)
+status: Done
 assignee: []
 created_date: '2026-10-01'
+updated_date: '2026-10-04 14:04'
 labels:
   - encode-gate
   - test-hygiene
@@ -13,7 +14,8 @@ dependencies:
   - JF-685
 references:
   - >-
-    backlog/tasks/jf-685 - The-JF-678-no-token-serve-branch-lost-its-only-committed-test-in-the-JF-682-twin-rewrite-hardening-is-doc-enforced-only.md
+    backlog/tasks/jf-685 -
+    The-JF-678-no-token-serve-branch-lost-its-only-committed-test-in-the-JF-682-twin-rewrite-hardening-is-doc-enforced-only.md
 priority: low
 ---
 
@@ -30,20 +32,25 @@ WHY JF-685 DID NOT APPLY IT: the four constructions differ in provider trigger (
 
 FIX DIRECTION: extract `SetupSongVanishFixture` (sibling of SetupAudiobookVanishFixture) returning the (hlsDir, playlistPath) tuple, parameterized on the provider trigger and the planted bytes; migrate the four pins; keep each pin's distinct asserts in the pin.
 
-
 AUDIT UPDATE (2026-10-02): scope note - four EPISODE-path vanish pins (StreamHlsEpisode/EpisodeAudio fast-path at VideoAudioControllerTests.cs:7091/7124, in-lock at 7740/7781) hand-roll the same fixture shape with the same two provider triggers; the extraction can absorb both families (song + episode), not just the four song pins named in the filing.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
+- [x] #1 dotnet build passes with 0 errors (Debug 0/0; CI-exact Release --no-restore -warnaserror on the final state: 0 Warning(s), 0 Error(s))
+- [x] #2 dotnet test passes (full suite once on the final state: 5126/5126 net9.0 AND net10.0, exactly the baseline, no new tests; the four converted pins 4/4 both TFMs on every filtered round)
+- [x] #3 No new compiler warnings introduced (Release -warnaserror clean)
 - [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization (N/A: no session-attribute code touched)
 - [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress (N/A: no HttpClient code touched)
 - [ ] #6 NLU test fixtures updated if interaction model changed (N/A: no interaction model change)
 - [ ] #7 E2E test added for new intent or handler logic (N/A: test-hygiene refactor only)
 - [ ] #8 Locale response strings added to all 17 locales (N/A: no new strings)
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #9 /simplify passed (4 parallel agents: reuse CLEAN with TestHelpers.CreateSong and the per-helper EncoderPath idiom examined and declined with reasons; simplification CLEAN with one below-threshold naming note resolved for sibling symmetry; efficiency CLEAN; altitude CLEAN with one out-of-scope observation FILED as JF-751 the same turn)
+- [x] #10 /code-review high passed (0 correctness bugs; 3 low-severity findings: 2 APPLIED, 1 TRACKED - the read-count-member doc sharpening applied to the helper's doc; the untracked JF-751 file now rides the commit; the EncoderPath mock triplication across the three sibling fixtures tracked by amending JF-751's description, since a song-helper-only wire-up would be a one-consumer helper and converting the audiobook/episode siblings exceeds this task's four-song-pin surface)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+CLOSED 2026-10-04 by the orchestrator after the full cycle: merged into main (worker commit 9f1a96e3, --no-ff) under the scaled test-only verification - the orchestrator's own diff grep found ZERO changed Assert or handler-invocation lines (pure arrange consolidation) on top of the worker's shared sabotage proof (all four pins red under the broken helper seam on both TFMs). TEST-ONLY: no deploy. JF-751 filed by this task.
+<!-- SECTION:FINAL_SUMMARY:END -->

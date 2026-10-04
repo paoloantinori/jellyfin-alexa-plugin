@@ -4,9 +4,10 @@ title: >-
   JF-673 - SafeGetItemsResult fallback reports TotalRecordCount=page-size, so
   the PlayBook continuation store never engages on NRE-class servers and books
   still truncate at the initial page
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-29 13:44'
+updated_date: '2026-10-04 14:34'
 labels: []
 dependencies: []
 references:
@@ -30,18 +31,22 @@ CANDIDATE FIXES (owner decides): (a) expose a fallback-engaged signal from SafeG
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #1 dotnet build passes with 0 errors (Debug 0 errors; Release --no-restore -warnaserror 0 warnings 0 errors on the final state)
+- [x] #2 dotnet test passes (5132/5132 on BOTH TFMs, net9.0 + net10.0, baseline 5126 + 6 new pins)
+- [x] #3 No new compiler warnings introduced (Release -warnaserror clean)
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization (n/a: no session attributes touched)
+- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress (n/a: no HttpClient touched)
+- [x] #6 NLU test fixtures updated if interaction model changed (no model or locale change)
+- [x] #7 E2E test added for new intent or handler logic (n/a by nature: the NRE-class server shape cannot be forced through SMAPI simulate-skill; the RED PROOF unit pins carry the proof, red pre-fix on the behaviorally-unmodified base and green on both TFMs post-fix)
+- [x] #8 Locale response strings added to all 17 locales (no user-facing string change)
+- [x] #9 /simplify passed (4 agents: efficiency CLEAN; reuse + altitude applied, the two pre-existing int.MaxValue producer literals converted to SearchService.UnknownTotal in PlayArtistSongsIntentHandler + CrossMediaFallback; simplification skipped with reasons: tail advance/mark divergence is deliberate and the test setup repetition matches the file's per-test inline convention)
+- [x] #10 /code-review high passed (4 findings: the album head gap already FILED as JF-753 the same turn; the PlaybackNearlyFinished raw TotalCount log + the three-fetcher advance/mark consolidation + the exact-multiple zero-page WARN noise all TRACKED in JF-753's RELATED notes with the consolidation trigger documented; the last is also documented at the audiobook tail as accepted artist-precedent noise)
 <!-- DOD:END -->
 
-ORCHESTRATOR GATE-REVIEW ADDENDUM (2026-09-29, same-turn): the NRE-fallback executor now exists in TWO copies - SearchService.SafeGetItemsResult (the head) and QueueContinuationFetcher.FetchAudiobookChapters (the tail, JF-670). The JF-673 fix must lift ONE shared executor (static, logger-taking) and update both call sites; the fetcher copy's QueryResult TotalRecordCount (items.Count) is currently a dead value the caller never reads (TryFetchContinuationBatch reads continuation.TotalCount), so do not build on it.
+## Final Summary
 
-UPDATE 2026-09-29 (JF-670 rework round, CR3): the ONE shared executor now EXISTS - SearchService.SafeGetItemsResult(libraryManager, query, logger) is the single static core; both the head collaborator and the fetcher tail delegate to it. This task's remaining substance is the TOTAL semantics only (the fallback reports page-size totals, so the PlayBook store never engages on NRE-class servers).
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Closes the TOTAL-semantics remainder (2026-10-04). `SearchService.SafeGetItemsResult` gains an opt-in `unknownTotalOnFallback` parameter: the NRE fallback then reports `SearchService.UnknownTotal` (int.MaxValue, the ONE end-unknown encoding, lifted from the pre-existing QueueContinuation artist regime) instead of the page size. The default stays OFF because the album count-only caller reads TotalRecordCount as a real count. PlayBookIntentHandler's head opts in, and its store condition gains the end-unknown shape: a FULL initial page means "maybe more" (store engages, TotalCount=UnknownTotal; the tail ends the book on a short page, the FetchArtistSongs precedent) while a short initial page means complete; the zero-check gains an end-unknown arm so the single-file audiobook shape survives UnknownTotal-instead-of-0. FetchAudiobookChapters' tail marks exhaustion on a short page in the end-unknown regime (known-total regime byte-identical), and FetchNextBatch's renderer uses the constant. Both red proofs FAILED pre-fix on the behaviorally-unmodified base (store null on the head pin; StartIndex 8 vs UnknownTotal on the tail pin) and are green on both TFMs. Guardrail pins: short initial page stores no doomed continuation; zero-chapters single-file book still plays; full end-unknown page advances without exhausting. The two pre-existing artist-side int.MaxValue producer literals (PlayArtistSongsIntentHandler, CrossMediaFallback) converted to the constant (byte-identical, closes the one-encoding hole). The sibling album-head gap is FILED as JF-753 with its full fix shape. Suites: 5132/5132 net9.0 and net10.0 on the final state (baseline 5126 + 6); Release -warnaserror clean.
+
+CLOSED 2026-10-04 by the orchestrator after the full cycle: merged into main (worker commit 21c0c1fe + orchestrator doc tail 757b3353, --no-ff; gate-marker six axes PASS with the default-off neutrality enumerated caller-by-caller), JF-753 filed by the worker (the album path's same defect), the sentinel doc applied as the orchestrator tail, and finding 6 (the widened JF-674 stale-injection surface to books on NRE-class servers) routed to the in-flight JF-674 worker as design context. Awaiting the wave's batched deploy.
+<!-- SECTION:FINAL_SUMMARY:END -->

@@ -13,6 +13,7 @@ using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Exceptions;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Dto;
@@ -270,6 +271,141 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
         Assert.True(
             captured.OrderBy == null || captured.OrderBy.Count == 0,
             "head query must not grow an explicit order the tail does not run");
+    }
+
+    // JF-673 RED PROOF: on NRE-class servers the chapters page arrives through the
+    // SafeGetItemsResult fallback (GetItemList), which cannot know the library
+    // total. The pre-fix fallback wrapped the PAGE SIZE as TotalRecordCount, so a
+    // FULL initial page read as "complete", the store condition
+    // (TotalRecordCount > Items.Count) never fired, and the book truncated at the
+    // initial page exactly on the servers the NRE guard exists for. The honest
+    // end-unknown total must make the head engage the continuation store with the
+    // end-unknown regime so the tail keeps fetching (short page = end, the
+    // FetchArtistSongs shape).
+    [Fact]
+    public async Task PlayBook_NreFallbackFullInitialPage_StoresEndUnknownContinuation()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(bookName: "The Hobbit");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+
+        var bookItem = new Audio { Name = "The Hobbit", Id = Guid.NewGuid() };
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
+            .Returns(new List<BaseItem> { bookItem });
+
+        // The NRE-class server: GetItemsResult (used ONLY by the chapters query on
+        // this path; the book search itself goes through GetItemList) throws, and
+        // the fallback serves a FULL initial page (5 = GetInitialFetchSize).
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Throws(new NullReferenceException());
+        List<BaseItem> fullPage = Enumerable.Range(0, ProgressiveQueueConstants.GetInitialFetchSize())
+            .Select(i => (BaseItem)new Audio { Id = Guid.NewGuid(), Name = $"Chapter {i + 1}" })
+            .ToList();
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ParentId == bookItem.Id)))
+            .Returns(fullPage);
+
+        try
+        {
+            await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+            QueueContinuation? continuation = QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID!);
+            Assert.NotNull(continuation);
+            Assert.Equal("Audiobook", continuation!.SourceType);
+            Assert.Equal(bookItem.Id, continuation.ParentId);
+            Assert.Equal(SearchService.UnknownTotal, continuation.TotalCount);
+            Assert.Equal(fullPage.Count, continuation.StartIndex);
+        }
+        finally
+        {
+            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
+        }
+    }
+
+    // JF-673 guardrail: under the end-unknown regime a SHORT initial page IS the
+    // book's end signal; the head must not store a doomed continuation whose first
+    // batch would come back empty and WARN.
+    [Fact]
+    public async Task PlayBook_NreFallbackShortInitialPage_StoresNoContinuation()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(bookName: "The Hobbit");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+
+        var bookItem = new Audio { Name = "The Hobbit", Id = Guid.NewGuid() };
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
+            .Returns(new List<BaseItem> { bookItem });
+
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Throws(new NullReferenceException());
+        // A 2-chapter book: 2 < 5 = the short page that ends the book.
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ParentId == bookItem.Id)))
+            .Returns(new List<BaseItem>
+            {
+                new Audio { Id = Guid.NewGuid(), Name = "Chapter 1" },
+                new Audio { Id = Guid.NewGuid(), Name = "Chapter 2" }
+            });
+
+        try
+        {
+            await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+            Assert.Null(QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID!));
+        }
+        finally
+        {
+            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
+        }
+    }
+
+    // JF-673 guardrail: the single-file audiobook shape (zero chapter tracks; the
+    // AudioBook item IS the track) must keep working when the fallback reports the
+    // end-unknown total instead of 0: the zero-check carries its own end-unknown
+    // arm, and the book still plays.
+    [Fact]
+    public async Task PlayBook_NreFallbackZeroChapters_SingleFileBookStillPlays()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(bookName: "The Hobbit");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+
+        var bookItem = new Audio { Name = "The Hobbit", Id = Guid.NewGuid() };
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
+            .Returns(new List<BaseItem> { bookItem });
+
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Throws(new NullReferenceException());
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ParentId == bookItem.Id)))
+            .Returns(new List<BaseItem>());
+
+        try
+        {
+            SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+            // The single-file path: the book item itself is played as the one track.
+            var audioDirective = response.Response.Directives?[0] as AudioPlayerPlayDirective;
+            Assert.NotNull(audioDirective);
+            Assert.Equal(bookItem.Id.ToString(), audioDirective.AudioItem.Stream.Token);
+            Assert.Null(QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID!));
+        }
+        finally
+        {
+            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
+        }
     }
 
     [Fact]

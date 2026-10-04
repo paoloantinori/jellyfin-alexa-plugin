@@ -3,9 +3,10 @@ id: JF-674
 title: >-
   JF-674 - stale queue continuations inject mid-playlist content into a later
   unrelated single-item playback (no queue-identity validation)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-09-29 15:02'
+updated_date: '2026-10-04 13:13'
 labels:
   - playback
   - progressive-queue
@@ -51,5 +52,3 @@ OUT OF SCOPE: any change to the per-arm fetchers themselves (JF-666/JF-670 shape
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
-
-ORCHESTRATOR ADDENDUM 2 (2026-09-29, verified in source post-merge): the store site (PlayBookIntentHandler ~:249-262) sits BEFORE the NativeControlsForBooks split, so a VideoApp book play (the current production setting on the household box) mints an Audiobook continuation that no AudioPlayer event can ever serve - a dead entry by construction under this flag. The injection scenario is therefore reachable TODAY on the production config: VideoApp book (entry minted) -> later single-song AudioPlayer play on the same device -> song's exhaustion fetches mid-book chapters. The fix candidates in the description should weigh the cheap sub-case (do not mint a continuation on the VideoApp path, or clear it when the launch is VideoApp) alongside the full queue-identity design.
