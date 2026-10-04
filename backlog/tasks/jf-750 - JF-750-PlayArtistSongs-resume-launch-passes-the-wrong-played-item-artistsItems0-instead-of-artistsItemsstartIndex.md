@@ -3,9 +3,10 @@ id: JF-750
 title: >-
   JF-750 - PlayArtistSongs resume launch passes the wrong played item
   (artistsItems[0] instead of artistsItems[startIndex])
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-04'
+updated_date: '2026-10-04 19:29'
 labels:
   - playback
   - bug
@@ -151,4 +152,6 @@ unmodified base both TFMs with the final test shape, the family audited clean
 filed for the chokepoint belt-check hardening. Gates simplify + code-review
 high run with all findings applied; 5163/5163 both TFMs; awaiting the
 orchestrator's merge.
+
+CLOSED 2026-10-04 by the orchestrator after the full cycle: merged into main (worker commit 64b25081, --no-ff) under the scaled verification (the fix line, the pin's metadata asserts, and two family sites read directly); awaiting the batched deploy with the two workers still in flight. JF-758 filed by this task.
 <!-- SECTION:FINAL_SUMMARY:END -->
