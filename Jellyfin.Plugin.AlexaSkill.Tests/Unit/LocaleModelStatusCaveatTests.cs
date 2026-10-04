@@ -2,13 +2,16 @@
 
 using System;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
+using System.Threading.Tasks;
 using System.Xml.Serialization;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
 using Jellyfin.Plugin.AlexaSkill.Alexa.ModelDeployment;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Controller;
+using Jellyfin.Plugin.AlexaSkill.Diagnostics;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using Microsoft.AspNetCore.Mvc;
@@ -375,5 +378,196 @@ public class LocaleModelStatusCaveatTests : PluginTestBase, IDisposable
         Assert.True(
             en.TryGetProperty("caveat", out var none) && none.ValueKind == JsonValueKind.Null,
             "a caveat-less row (incl. every pre-JF-721 persisted row) must ship a null caveat, not a missing field");
+    }
+
+    // ------------------------------------------------------------------
+    // JF-724: the ledger accessors (lock, snapshot, atomic update) and the
+    // family-membership defaults.
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// JF-724 item 1's mechanism: the snapshot is a STABLE COPY. A writer
+    /// mutating the ledger (Add on a new locale, indexer-set on an existing
+    /// one: both bump the live collection's version) after the snapshot was
+    /// taken must not change what the snapshot says, because the admin
+    /// endpoints derive every answer from the snapshot.
+    /// </summary>
+    [Fact]
+    public void Snapshot_IsAStableCopy_WhileTheLiveLedgerMutates()
+    {
+        var config = Plugin.Instance!.Configuration;
+        config.SetLocaleModelStatus("it-IT", new LocaleModelStatus { Status = "SUCCEEDED", Source = "Embedded" });
+
+        var snapshot = config.GetLocaleModelStatusSnapshot();
+        config.SetLocaleModelStatus("it-IT", new LocaleModelStatus { Status = "FAILED", Source = "Embedded" });
+        config.SetLocaleModelStatus("en-US", new LocaleModelStatus { Status = "SUCCEEDED", Source = "Embedded" });
+
+        Assert.Single(snapshot);
+        Assert.Equal("SUCCEEDED", snapshot[0].Status);
+        Assert.Equal("SUCCEEDED", snapshot[0].ToStatus().Status);
+    }
+
+    /// <summary>
+    /// JF-724 item 3's contract: UpdateLocaleModelStatus hands the compose the
+    /// CURRENT row and stores its product; a compose that returns null
+    /// DECLINES and leaves the row untouched (the refresh's not-my-family
+    /// shape). Together with the one-lock acquisition this is the atomic
+    /// read-modify-write the capture preserve, the refresh settle, and the
+    /// no-PUT carry now route through.
+    /// </summary>
+    [Fact]
+    public void UpdateLocaleModelStatus_ComposesFromCurrentRow_AndDeclineLeavesItUntouched()
+    {
+        var config = Plugin.Instance!.Configuration;
+        var seeded = DateTime.UtcNow.AddHours(-3);
+        config.SetLocaleModelStatus("it-IT", new LocaleModelStatus
+        {
+            Status = "IN_PROGRESS",
+            LastUpdated = seeded,
+            Source = "Embedded",
+        });
+
+        LocaleModelStatus? seen = null;
+        var written = config.UpdateLocaleModelStatus("it-IT", existing =>
+        {
+            seen = existing;
+            return existing! with { Status = "SUCCEEDED" };
+        });
+
+        Assert.NotNull(seen!);
+        Assert.Equal("IN_PROGRESS", seen!.Status);
+        Assert.NotNull(written);
+        Assert.Equal("SUCCEEDED", written!.Status);
+        Assert.Equal("SUCCEEDED", config.GetLocaleModelStatus("it-IT")!.Status);
+
+        var declined = config.UpdateLocaleModelStatus("it-IT", _ => null);
+        Assert.Null(declined);
+        var row = config.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(row);
+        Assert.Equal("SUCCEEDED", row!.Status);
+
+        // A declined update on a locale with NO row must not mint one.
+        Assert.Null(config.UpdateLocaleModelStatus("de-DE", _ => null));
+        Assert.Null(config.GetLocaleModelStatus("de-DE"));
+    }
+
+    /// <summary>
+    /// JF-724 item 4: the record's Source default is EMPTY, so a writer that
+    /// composes a row without choosing a source lands OUTSIDE the capture
+    /// family (the old "Embedded" default drafted omitting writers into the
+    /// refresh's rewrite set, the JF-722 rework F5 gap); the ENTRY's default
+    /// stays "Embedded" because it is the XML-compat default for pre-Source
+    /// persisted rows. The asymmetry is deliberate and load-bearing.
+    /// </summary>
+    [Fact]
+    public void SourceDefaults_RecordOmissionStaysOutsideTheCaptureFamily_EntryStaysEmbedded()
+    {
+        var omission = new LocaleModelStatus { Status = "IN_PROGRESS" };
+        Assert.Equal(string.Empty, omission.Source);
+        Assert.NotEqual(global::Jellyfin.Plugin.AlexaSkill.EntryPoints.SkillStartup.CaptureLedgerSource, omission.Source);
+
+        Assert.Equal("Embedded", new LocaleModelStatusEntry().Source);
+    }
+
+    /// <summary>
+    /// JF-724 items 2/5: the observation family's skill-attribution field is
+    /// XML-additive. A stamped row round-trips; a pre-JF-724 persisted row (no
+    /// element in the XML) reads null, which the refresh's family predicate
+    /// treats as eligible for any refresh (legacy rows keep today's
+    /// behavior); an old DLL ignores the element (rollback-safe).
+    /// </summary>
+    [Fact]
+    public void ObservedSkillId_RoundTripsThroughXml_LegacyRowsReadNull()
+    {
+        var back = RoundTrip(new LocaleModelStatus
+        {
+            Status = "IN_PROGRESS",
+            Source = "Embedded",
+            ObservedSkillId = "amzn1.ask.skill.abc",
+        });
+        Assert.Equal("amzn1.ask.skill.abc", back.ObservedSkillId);
+
+        const string preJf724Xml = """
+            <LocaleModelStatusEntry xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+              <Locale>it-IT</Locale>
+              <Status>IN_PROGRESS</Status>
+              <LastUpdated>2026-10-01T12:00:00Z</LastUpdated>
+              <Source>Embedded</Source>
+            </LocaleModelStatusEntry>
+            """;
+        var legacy = (LocaleModelStatusEntry)new XmlSerializer(typeof(LocaleModelStatusEntry))
+            .Deserialize(new StringReader(preJf724Xml))!;
+        Assert.Null(legacy.ObservedSkillId);
+        Assert.Null(legacy.ToStatus().ObservedSkillId);
+    }
+
+    /// <summary>
+    /// JF-724 item 1's behavior: the two admin surfaces that read the ledger
+    /// (the setup panel and the custom-model status endpoint) must survive
+    /// concurrent ledger writers. Pre-fix, both enumerated the LIVE
+    /// collection, and a writer's Add/indexer-set bumping the version
+    /// mid-enumeration threw InvalidOperationException and 500ed the surface;
+    /// with the locked snapshot they can never observe a mutation. The stress
+    /// keeps the readers polling for the WHOLE writer phase (bounded writer
+    /// budgets, no reader loop of its own) over a ledger wide enough that the
+    /// pre-fix enumeration windows were microseconds each, so a regression
+    /// re-enumerating the live collection fails this reliably on a
+    /// multi-threaded runner (verified red pre-fix on this suite's hardware).
+    /// </summary>
+    [Fact]
+    public async Task AdminLedgerSurfaces_SurviveConcurrentLedgerWriters()
+    {
+        var config = Plugin.Instance!.Configuration;
+        config.LocaleModelStatuses.Clear();
+        var diagnostics = new DiagnosticsController(
+            new RequestCounters(),
+            new JellyfinConnectivityChecker(_loggerFactory.CreateLogger<JellyfinConnectivityChecker>()));
+
+        const int locales = 150;
+        const int writerTasks = 4;
+        const int writesPerTask = 5_000;
+        for (int l = 0; l < locales; l++)
+        {
+            config.SetLocaleModelStatus(
+                $"stress-{l}",
+                new LocaleModelStatus { Status = "SUCCEEDED", LastUpdated = DateTime.UtcNow, Source = "Embedded" });
+        }
+
+        var writersDone = new TaskCompletionSource();
+        // ToList MATERIALIZES the sequences (Task.Run fires on enumeration):
+        // without it both await points would start their tasks one at a time,
+        // the readers after the writers finished, and the stress would pass
+        // vacuously (the red-check caught exactly that).
+        var writers = Enumerable.Range(0, writerTasks).Select(w => Task.Run(() =>
+        {
+            for (int i = 0; i < writesPerTask; i++)
+            {
+                string locale = $"stress-{(w + i) % locales}";
+                config.SetLocaleModelStatus(
+                    locale,
+                    new LocaleModelStatus { Status = i % 2 == 0 ? "SUCCEEDED" : "IN_PROGRESS", LastUpdated = DateTime.UtcNow, Source = "Embedded" });
+            }
+        })).ToList();
+        var readers = Enumerable.Range(0, 3).Select(_ => Task.Run(async () =>
+        {
+            while (!writersDone.Task.IsCompleted)
+            {
+                // The ORACLE is threefold: the call must not throw (an
+                // enumeration fault surfaces at Task.WhenAll below), must be a
+                // JsonResult, and must carry a payload (a regression that
+                // swallowed the throw into a null/empty result cannot pass).
+                var panel = Assert.IsType<JsonResult>(await diagnostics.GetPanel());
+                Assert.NotNull(panel.Value);
+                var status = Assert.IsType<JsonResult>(_controller.GetCustomModelStatus());
+                Assert.NotNull(status.Value);
+                await Task.Delay(1); // keep the spin from starving the writers
+            }
+        })).ToList();
+
+        await Task.WhenAll(writers); // throws the first writer failure
+        writersDone.SetResult();
+        await Task.WhenAll(readers); // throws the first reader failure (the pre-fix InvalidOperationException)
+
+        Assert.Equal(locales, config.GetLocaleModelStatusSnapshot().Count);
     }
 }

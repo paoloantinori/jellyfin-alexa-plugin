@@ -1026,7 +1026,11 @@ public class ConfigurationController : ControllerBase
             customModelEnabled = config.CustomModelEnabled,
             lastModelDeployTime = config.LastModelDeployTime,
             lastModelDeployStatus = config.LastModelDeployStatus,
-            localeModelStatuses = config.LocaleModelStatuses
+            // JF-724: the locked snapshot (rationale on the ledger's lock doc
+            // in PluginConfiguration); additive JSON: observedSkillId is the
+            // ledger-forensics attribution of which skill's observation wrote
+            // the row (null on sync-authored and pre-JF-724 rows).
+            localeModelStatuses = config.GetLocaleModelStatusSnapshot()
                 .ToDictionary(e => e.Locale, e =>
                 {
                     var s = e.ToStatus();
@@ -1040,6 +1044,8 @@ public class ConfigurationController : ControllerBase
                         // (pre-JF-721 rows render their legacy Error text alone).
                         caveat = s.CaveatText,
                         source = s.Source,
+                        // JF-724: see the snapshot comment above.
+                        observedSkillId = s.ObservedSkillId,
                     };
                 })
         });
