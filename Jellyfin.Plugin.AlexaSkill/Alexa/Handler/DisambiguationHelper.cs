@@ -274,16 +274,19 @@ internal static class DisambiguationHelper
     /// auto-play or the Confirm ask: among scored candidates, a NotFound
     /// list's rank-4+ tail is sub-threshold noise by construction. The
     /// threshold-config exception: a user-configured
-    /// FuzzySuggestionThreshold above 90 (the config accepts 0-100) admits a
+    /// FuzzySuggestionThreshold above 90 admits a
     /// scored 90-class containment candidate into a NotFound list, so the
     /// construction holds at the default, not unconditionally. The narrow
     /// scorer exception is the length band (maxLenDiff): an UNSCORED
-    /// containment-class candidate can sit in a NotFound list in EITHER
-    /// length direction, because the band cuts on the ABSOLUTE length
-    /// difference (more than max(2 x query length, 15)): a very short query
-    /// inside far longer names, and symmetrically a much shorter NAME inside
-    /// a long spoken query (spoken "u2 live from red rocks arena" against
-    /// the item "U2"), both escape scoring. The verdict
+    /// containment-class candidate, a very short query inside names longer
+    /// than the query by more than max(2 x query length, 15), can sit in a
+    /// NotFound list. The band is ONE-DIRECTIONAL by arithmetic, not
+    /// symmetry: it scales on the QUERY length (maxLenDiff is always >= the
+    /// query length), so only candidates LONGER than the query can be
+    /// skipped; a candidate shorter than the query is never band-excluded,
+    /// and any either-direction containment hit it would score lands at
+    /// ContainmentScore (90) and diverts to auto-play or the Confirm ask,
+    /// so it cannot sit unscored in a NotFound list. The verdict
     /// keeps despite that corner because the band is pre-existing
     /// FuzzyMatcher recall behavior shared by every acceptance surface (not
     /// something this cap adds), and at nine of the ten sites the binding
@@ -297,7 +300,7 @@ internal static class DisambiguationHelper
     /// caller-side legs where a dropped rank-4+ candidate is user-relevant
     /// despite all that (PlayAlbum's alphabetically ordered direct search
     /// hits, where the exact album name can sit past rank 3, and PlayPodcast's
-    /// search-relevant sub-40 tail) are filed as JF-743, as is the band-corner
+    /// search-relevant sub-threshold tail) are filed as JF-743, as is the band-corner
     /// shape above: a helper-side state change cannot reach a caller that
     /// never passes rank 4 past its own Take(3).
     /// </summary>

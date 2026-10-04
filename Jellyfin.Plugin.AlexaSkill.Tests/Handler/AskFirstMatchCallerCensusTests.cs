@@ -13,8 +13,9 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// DisambiguationHelper.FirstMatchStateCap) rests on a premise about the
 /// callers: every multi-candidate caller except PlayAlbum's direct-search leg
 /// reaches the ask through HandleFuzzyMiss's NotFound outcome (so its list is
-/// sub-SuggestionThreshold among SCORED candidates; the narrow unscored
-/// length-band corner is documented on FirstMatchStateCap), and nine of the
+/// below the EFFECTIVE suggestion threshold, FuzzyMatcher.GetSuggestionThreshold
+/// (the per-user override, default 40), among SCORED candidates; the narrow
+/// unscored length-band corner is documented on FirstMatchStateCap), and nine of the
 /// ten multi-candidate callers pre-truncate with their own Take(3). A NEW
 /// caller can silently break that premise, and the state-cap pins would then
 /// resist the correct fix. This roster converts that drift into a loud

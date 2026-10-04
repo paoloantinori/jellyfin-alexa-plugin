@@ -28,7 +28,7 @@ reported). JF-735 declined to widen AskFirstMatch's state because a
 helper-side change cannot reach the truncations that actually bite: nine of
 the ten multi-candidate AskFirstMatch callers pre-truncate with their own
 Take(3) at the call site. This task covers the two of those ten legs where
-the dropped rank-4+ tail is user-relevant rather than sub-40 noise (the other
+the dropped rank-4+ tail is user-relevant rather than sub-threshold noise (the other
 eight are NotFound-gated fuzzy tails, where the defense proven in JF-735
 holds and no change is wanted).
 
@@ -56,7 +56,7 @@ PlayPodcastIntentHandler's multi-candidate leg (~line 235) is the ONLY
 AskFirstMatch caller that passes an UNTRUNCATED list; the helper's internal
 Take(3) is what caps it. The list is SearchTerm hits for the podcast name
 across both storage shapes (MusicAlbum + Series), so rank 4+ entries are
-name-relevant candidates even though they are sub-40 by the fuzzy judgment
+name-relevant candidates even though they are sub-threshold by the fuzzy judgment
 that gated the ask. Whether cycling past 3 through such a tail is worth the
 extra no-presses (versus the JF-735 noise-tail verdict) is this leg's
 decision to make; if widened, the JF-729 hint applies and the helper cap
@@ -67,18 +67,20 @@ BAND CORNER (JF-735 code-review finding, filed here because it widens both
 legs' user-relevance case without changing the helper verdict): the
 NotFound-gating premise has a narrow exception. FuzzyMatcher's length band
 skips candidates whose name differs from the query by more than
-max(2 x query length, 15) BEFORE scoring (the cut is on the ABSOLUTE length
-difference), and HandleFuzzyMiss treats the resulting null as NotFound, so
-an UNSCORED containment-class candidate can sit in a NotFound-gated
-AskFirstMatch list in EITHER length direction: a very short spoken query
-inside much longer names (e.g. "u2" against "U2 Live from Red Rocks
-Arena"), and symmetrically a much shorter NAME inside a long spoken query
-(e.g. spoken "u2 live from red rocks arena" against the item "U2"). Among
-SCORED candidates the sub-threshold-noise invariant holds at the default
-threshold (an exact name scores 100 and either-string-contains-the-other
-scores 90, both diverting to auto-play or the Confirm ask); the one config
-exception is a user-set FuzzySuggestionThreshold above 90, which can admit a
-scored 90-class candidate into a NotFound list. The JF-735 verdict kept the cap
+max(2 x query length, 15) BEFORE scoring, and HandleFuzzyMiss treats the
+resulting null as NotFound, so an UNSCORED containment-class candidate, a
+very short spoken query inside much longer names (e.g. "u2" against "U2
+Live from Red Rocks Arena"), can sit in a NotFound-gated AskFirstMatch
+list. The band is ONE-DIRECTIONAL by arithmetic: it scales on the QUERY
+length (maxLenDiff is always >= the query length), so only candidates
+LONGER than the query can be skipped; a shorter candidate is never
+band-excluded, and any either-direction containment hit it would score
+lands at ContainmentScore (90) and diverts, so the reverse-direction shape
+(spoken "u2 live from red rocks arena" against the item "U2") is SCORED at
+90 and cannot sit unscored in a NotFound list. Among SCORED candidates the
+sub-threshold-noise invariant holds at the default threshold; the one
+config exception is a user-set FuzzySuggestionThreshold above 90, which can
+admit a scored 90-class candidate into a NotFound list. The JF-735 verdict kept the cap
 despite the corner (pre-existing band behavior shared by every acceptance
 surface; the binding truncation at nine of ten sites is the caller-side
 Take(3) anyway), but a caller-side fix here is the natural place to absorb

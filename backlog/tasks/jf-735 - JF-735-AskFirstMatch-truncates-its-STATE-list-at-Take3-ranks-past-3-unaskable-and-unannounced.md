@@ -86,7 +86,7 @@ THE EVIDENCE (all three axes the task demanded):
    corrected this phrasing here and on the const's doc).
 2. Candidate ordering: the multi-candidate lists are NOT score-sorted (tier-1
    in library order, PlayAlbum alphabetical by JF-427 design), but that cuts
-   FOR the decline: with the whole list sub-40 among scored candidates, no
+   FOR the decline: with the whole list sub-threshold among scored candidates, no
    rank contains a strong candidate at nine of ten sites, so ordering cannot
    rescue a rank-4 exact match that the scorer already diverted.
 3. Exhaustion behavior verified: NoIntent at the end of the state list returns
@@ -98,7 +98,7 @@ THE EVIDENCE (all three axes the task demanded):
    PlayVideo, PlayBook, PlayNext, AlbumPlayService); the helper's Take(3)
    actually bites at exactly ONE caller (PlayPodcast's multi-candidate leg).
    A helper-side state change would therefore change behavior at one site
-   (sub-40 tail) and reach none of the caller-side truncations; the JF-729
+   (sub-threshold tail) and reach none of the caller-side truncations; the JF-729
    sibling fix has no such reachability gap (AskMultipleArtists's lists come
    from exact ER resolutions).
 
@@ -121,7 +121,7 @@ FILED: JF-743, the caller-side Take(3) legs where a dropped rank-4+ candidate
 IS user-relevant: PlayAlbum's alphabetical direct-search hits (the exact album
 name can sit past rank 3; the strongest leg, with the "rush" after "Gold
 Rush"/"Love Rush"/"Midnight Rush" shape and no exact pick-off in that flow)
-and PlayPodcast's untruncated search-relevant sub-40 tail, plus the band
+and PlayPodcast's untruncated search-relevant sub-threshold tail, plus the band
 corner; guardrail scope stated exactly (new/removed call sites trip the
 census; helper cap changes trip the state pins; caller-side list-shaping
 changes trip NOTHING and need the by-hand re-weigh).

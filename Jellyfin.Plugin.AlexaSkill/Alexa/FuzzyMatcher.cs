@@ -35,6 +35,9 @@ internal static class FuzzyMatcher
     /// Minimum similarity score for a candidate to be offered as a suggestion
     /// when no confident match is found. Scores between this and DefaultThreshold
     /// trigger "Did you mean?" or auto-play behavior depending on config.
+    /// This constant is the FALLBACK default of <see cref="GetSuggestionThreshold"/>:
+    /// the operative bar in every gating call is that method's per-user
+    /// FuzzySuggestionThreshold override (config range 0-100), not this value.
     /// </summary>
     public const int SuggestionThreshold = 40;
 
@@ -130,7 +133,12 @@ internal static class FuzzyMatcher
 
     /// <summary>
     /// Find the best matching item regardless of threshold, returning the item with its score.
-    /// Returns null only when query is empty/whitespace or candidates are empty.
+    /// Returns null when query is empty/whitespace or candidates are empty, and also
+    /// when every candidate is excluded by the length band BEFORE scoring: the band
+    /// skips candidates longer than the query by more than max(2 x query length, 15)
+    /// (one-directional by arithmetic, the band scales on the query length; shorter
+    /// candidates are never band-excluded). That length-band null is the third way
+    /// <c>HandleFuzzyMiss</c> reaches its NotFound outcome.
     /// </summary>
     /// <typeparam name="T">The type of candidate items.</typeparam>
     /// <param name="query">The user's search query.</param>
