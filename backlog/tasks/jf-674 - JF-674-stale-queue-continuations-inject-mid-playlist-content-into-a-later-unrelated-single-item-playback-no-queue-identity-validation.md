@@ -229,11 +229,29 @@ artistsItems[0] wrong-item launch, verified in source and confirmed by both
 passes), REFUTED 1 (the claimed PlayBook startIndex==Count crash:
 ResumeMath.cs:397 guards `lastPlayedIndex + 1 < tracks.Count`, the
 fully-played-page shape returns (0,0); refutation recorded inside JF-750 so the
-next round does not re-derive it).
+next round does not re-derive it). ORCHESTRATOR GATE-MARKER (all seven axes
+PASS at source, red proofs and sabotages independently reproduced on both
+TFMs; JF-750 confirmed real, the PlayBook refutation confirmed correct): two
+rework findings APPLIED - GM-F2 the resume-path roster's coverage gap
+(ProgressReporter.ServeAdjacentQueueItem and YesIntentHandler
+.HandleResumeConfirmation, the two design-named ReplaceAll sites on types that
+cannot be type-scoped) closed with the METHOD-SCOPED roster fact
+MethodScopedResumeSites_NeverAssignNowPlayingQueueDirectly (logical-name scan
+over the declaring chain including nested closures, with a vacuity assert if
+the method disappears, and the type-scoping boundary + callee-IL limit
+documented on the fact); GM-F3 the ClearQueue stop-semantics got its pin
+PlaybackNearlyFinished_AfterClearQueue_FetchesNothingAndDiscardsContinuation
+(real PlayAlbum mint, the REAL ClearQueueIntentHandler trim, NearlyFinished
+asserts queue-single + store-null; red under the disabled-guard sabotage with
+the collection holding 5 items, the old regrow semantics; the JF-424.1
+precompute-invalidation precedent cited on the pin).
 
-COUNTS: 5136/5136 both TFMs on the final state (merged-tree baseline 5126 +
-10: the 7-case ProgressiveQueueTests additions + 3 roster facts); every
-filtered round green; Release --no-restore -warnaserror 0 warnings 0 errors.
+COUNTS (final merged state: current main merged in AFTER the gate-marker, the
+JF-673 tail included, the UnknownTotal constant now used by the injection
+Theory): 5155/5155 net9.0 and net10.0 (the merged main's own additions plus
+this change's 12: the 8-case ProgressiveQueueTests additions counting the
+Theory's two legs, and 4 roster facts); Release --no-restore -warnaserror 0
+warnings 0 errors (documentation crefs compile-checked on the merged tree).
 Per-arm fetchers untouched (JF-666/JF-670 shapes unchanged). No locale, model,
 or speech surface changed; no deploy.
 <!-- SECTION:FINAL_SUMMARY:END -->
@@ -241,7 +259,7 @@ or speech surface changed; no deploy.
 ## Definition of Done
 <!-- DOD:BEGIN -->
 - [x] #1 dotnet build passes with 0 errors (Release --no-restore -warnaserror: 0 warnings 0 errors on the final state; Debug builds clean throughout)
-- [x] #2 dotnet test passes (5136/5136 net9.0 AND net10.0 on the final state)
+- [x] #2 dotnet test passes (5155/5155 net9.0 AND net10.0 on the final merged state, after the gate-marker rework; 5136/5136 on the pre-merge final state)
 - [x] #3 No new compiler warnings introduced (Release -warnaserror 0 warnings)
 - [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization (no session-attribute or serialized shape change: the store is in-memory only, the new property is IReadOnlyList<Guid> on a non-persisted type)
 - [x] #5 HttpClient instances are not shared across calls that modify BaseAddress (no HttpClient touched)

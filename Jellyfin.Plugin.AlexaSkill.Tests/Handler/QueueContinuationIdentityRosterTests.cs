@@ -113,10 +113,12 @@ public class QueueContinuationIdentityRosterTests
     /// makes every minted page fail IsForLiveQueue, so multi-page sources stop
     /// advancing after a resume with no other test failing; this setter scan is
     /// what reds (the JF-720 NowPlayingQueue-setter idiom, scoped to the resume
-    /// family). YesIntentHandler is deliberately NOT in the set: its confirm legs
-    /// legitimately rebuild the queue (a NEW logical queue whose full list supersets
-    /// the minted page, so the identity still validates), and its resume-confirm
-    /// arm shares the handler type with them.
+    /// family). TYPE-SCOPING BOUNDARY (gate-marker GM-F2): this fact covers the
+    /// five handler types whose EVERY method is a resume path. The design's other
+    /// two ReplaceAll resume sites live on types that CANNOT be type-scoped:
+    /// YesIntentHandler (its confirm legs legitimately rebuild the queue) and
+    /// ProgressReporter (MirrorQueueToSession and InsertIntoSessionQueue
+    /// legitimately assign); both are pinned METHOD-SCOPED by the fact below.
     /// </summary>
     [Fact]
     public void ResumePathHandlers_NeverAssignNowPlayingQueueDirectly()
@@ -149,5 +151,64 @@ public class QueueContinuationIdentityRosterTests
             "The resume paths must relaunch WITHOUT touching the queue: a queue replacement there breaks the JF-674 " +
             "identity validation (the minted page leaves the live queue) and multi-page sources stop advancing after " +
             "a resume; install the queue only on the play/confirm paths that mint it.");
+    }
+
+    /// <summary>
+    /// GM-F2: the METHOD-SCOPED half of the resume-path roster, for the two
+    /// ReplaceAll resume sites on types the type-scoped fact above cannot cover.
+    /// ProgressReporter.ServeAdjacentQueueItem (the next/previous relaunch) and
+    /// YesIntentHandler.HandleResumeConfirmation (the resume-offer confirm) must
+    /// relaunch WITHOUT assigning the session queue, exactly like the five
+    /// type-scoped handlers; a one-item queue installed on either shape makes
+    /// every minted page fail IsForLiveQueue, so multi-page sources silently stop
+    /// advancing after one "next"/"previous" or one resume-confirm. Scanned by
+    /// LOGICAL method name over the declaring type's chain INCLUDING nested
+    /// closures (local functions and async state machines attribute back through
+    /// LogicalMethodName), so the guard sees the method's own body wherever the
+    /// compiler put it. ACCEPTED BOUNDARY: the scan sees the method's own IL, not
+    /// its callees' - an assignment added inside a HELPER these methods call is
+    /// invisible here (the JF-720 roster's other-handler-delegation limit); the
+    /// deliberate rehydration leg these sites reach
+    /// (TryRehydrateSessionQueueFromDevice) restores an EMPTY session queue only,
+    /// which is a same-queue restore, not a replacement.
+    /// </summary>
+    [Fact]
+    public void MethodScopedResumeSites_NeverAssignNowPlayingQueueDirectly()
+    {
+        Module pluginModule = typeof(BaseHandler).Module;
+        (Type DeclaringType, string MethodName)[] methodScopedSites =
+        {
+            (typeof(ProgressReporter), "ServeAdjacentQueueItem"),
+            (typeof(YesIntentHandler), "HandleResumeConfirmation"),
+        };
+
+        var offenders = new SortedSet<string>(StringComparer.Ordinal);
+        foreach ((Type declaringType, string methodName) in methodScopedSites)
+        {
+            IEnumerable<MethodBase> siteMethods = IlCallScanner
+                .HandlerChainMethods(declaringType, typeof(BaseHandler))
+                .Where(m => string.Equals(IlCallScanner.LogicalMethodName(m), methodName, StringComparison.Ordinal));
+
+            Assert.True(
+                siteMethods.Any(),
+                $"{declaringType.Name}.{methodName} was not found by the scan; the method-scoped resume roster went " +
+                "vacuous (a rename or inlining moved the site this pin guards).");
+
+            foreach (MethodBase method in siteMethods)
+            {
+                if (IlCallScanner.CallsNamedMethod(method, pluginModule, "set_NowPlayingQueue", typeof(SessionInfo)))
+                {
+                    offenders.Add($"{declaringType.Name}.{methodName}");
+                }
+            }
+        }
+
+        Assert.True(
+            offenders.Count == 0,
+            $"A method-scoped resume site assigns session.NowPlayingQueue directly in [{string.Join(", ", offenders)}]. " +
+            "The next/previous and resume-confirm relaunches must not replace the session queue: doing so breaks the " +
+            "JF-674 identity validation (the minted page leaves the live queue) and multi-page sources stop advancing " +
+            "after that navigation; if the method genuinely needs a queue write, it is a play path and must mint the " +
+            "continuation it installs.");
     }
 }

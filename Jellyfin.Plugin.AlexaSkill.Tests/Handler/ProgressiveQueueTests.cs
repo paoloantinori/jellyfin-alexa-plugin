@@ -1843,15 +1843,14 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
     /// for, the song's queue is not that queue, and the entry is discarded
     /// instead of appending mid-book chapters after the song.
     /// Theory legs: the FINITE total (20 chapters) and the END-UNKNOWN total
-    /// (int.MaxValue; the JF-673 SearchService.UnknownTotal sentinel once that
-    /// merge reaches this tree), which JF-673 makes a real stored shape on
-    /// NRE-class servers. The identity validation never reads TotalCount (the
-    /// sentinel only governs exhaustion arithmetic), so both legs must discard
-    /// identically.
+    /// (the JF-673 SearchService.UnknownTotal sentinel), which JF-673 makes a
+    /// real stored shape on NRE-class servers. The identity validation never
+    /// reads TotalCount (the sentinel only governs exhaustion arithmetic), so
+    /// both legs must discard identically.
     /// </summary>
     [Theory]
     [InlineData(20)]
-    [InlineData(int.MaxValue)]
+    [InlineData(Jellyfin.Plugin.AlexaSkill.Alexa.Util.SearchService.UnknownTotal)]
     public async Task PlaybackNearlyFinished_SingleSongAfterBookPlay_FetchesNothingForStaleBookContinuation(int totalCount)
     {
         using var queueManager = TestHelpers.CreateDeviceQueueManager("JF674BookInjection");
@@ -2074,6 +2073,94 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
         await playbackHandler.HandleAsync(
             CreateNearlyFinishedRequest(song.Id.ToString()),
             CreateContext(song.Id.ToString()),
+            TestHelpers.CreateTestUser(),
+            session,
+            CancellationToken.None);
+
+        Assert.Single(session.NowPlayingQueue);
+        Assert.Null(QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID));
+    }
+
+    /// <summary>
+    /// JF-674 gate-marker GM-F3: ClearQueue's NEW stop-semantics, pinned. ClearQueue
+    /// trims the session queue to the currently-playing item and clears the device
+    /// queue, but historically left the continuation store entry alone, so at the
+    /// current item's end the fetch regrew the "cleared" queue with the album tail.
+    /// The identity validation closes that as a deliberate behavior change (the
+    /// trimmed-to-current queue no longer contains the other minted page ids, so
+    /// the entry is discarded): a cleared queue now truly stops the progressive
+    /// tail, the same discipline ClearQueue already applies to the precompute
+    /// cache (the JF-424.1 NextTrackPrecomputeCache invalidation, without needing
+    /// a new ClearQueue hook).
+    /// </summary>
+    [Fact]
+    public async Task PlaybackNearlyFinished_AfterClearQueue_FetchesNothingAndDiscardsContinuation()
+    {
+        using var queueManager = TestHelpers.CreateDeviceQueueManager("JF674ClearQueue");
+        var handler = new PlayAlbumIntentHandler(
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory,
+            queueManager);
+
+        var session = CreateSession();
+        _fx.SetupUserMock();
+
+        var albumId = Guid.NewGuid();
+        var album = new MediaBrowser.Controller.Entities.Audio.MusicAlbum { Id = albumId, Name = "Cleared Album" };
+        var tracks = Enumerable.Range(0, ProgressiveQueueConstants.GetInitialFetchSize())
+            .Select(i => new Audio { Id = Guid.NewGuid(), Name = $"Track {i + 1}" })
+            .ToList();
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum))))
+            .Returns(new List<BaseItem> { album });
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q => q.ParentId == albumId)))
+            .Returns(new QueryResult<BaseItem>
+            {
+                Items = tracks.Cast<BaseItem>().ToList(),
+                TotalRecordCount = 20
+            });
+        foreach (Audio track in tracks)
+        {
+            _fx.LibraryManager.Setup(l => l.GetItemById(track.Id)).Returns(track);
+        }
+
+        var context = CreateContext();
+        await handler.HandleAsync(CreateAlbumIntent("Cleared Album"), context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+        Assert.NotNull(QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID));
+
+        // "Alexa, clear the queue": the REAL handler trims the session queue to the
+        // current item and clears the device queue.
+        var clearHandler = new ClearQueueIntentHandler(
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LoggerFactory,
+            queueManager);
+        var clearRequest = new IntentRequest
+        {
+            Type = "IntentRequest",
+            Intent = new Intent { Name = IntentNames.ClearQueue, Slots = new Dictionary<string, Slot>() }
+        };
+        await clearHandler.HandleAsync(clearRequest, context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+        Assert.Single(session.NowPlayingQueue);
+
+        // The still-playing item's end: the trimmed queue cannot contain the minted
+        // page, so the fetch serves nothing, the entry is discarded, and the
+        // cleared queue does NOT regrow the album tail.
+        var playbackHandler = new PlaybackNearlyFinishedEventHandler(
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.LoggerFactory,
+            queueManager);
+        Guid currentTrack = tracks[0].Id;
+        await playbackHandler.HandleAsync(
+            CreateNearlyFinishedRequest(currentTrack.ToString()),
+            CreateContext(currentTrack.ToString()),
             TestHelpers.CreateTestUser(),
             session,
             CancellationToken.None);
