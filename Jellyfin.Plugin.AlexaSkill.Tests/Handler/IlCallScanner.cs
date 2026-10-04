@@ -331,18 +331,20 @@ internal static class IlCallScanner
     /// the full form; sign-extended negatives (ldc.i4.m1 and friends) CAN carry
     /// such bits short-encoded, but the pinned combined value is positive
     /// (0xD0000), so a Contains over these operands is total for it.
+    /// A thin delegate to <see cref="OperandTokens"/> (gate-marker GM-F4): the
+    /// ONE token projection, not a re-implementation beside it.
     /// </summary>
     /// <param name="method">The method whose IL to walk.</param>
     /// <returns>The ldc.i4 operands, in IL order.</returns>
     internal static IEnumerable<int> LdcI4Operands(MethodBase method)
-        => InstructionOperands(method, 0x20).Select(instruction => instruction.Operand);
+        => OperandTokens(method, 0x20);
 
     /// <summary>
     /// The operand byte size per opcode value (single-byte opcodes keyed by
     /// their byte, two-byte opcodes as 0xFE00 | second byte), derived from the
     /// runtime's own <see cref="OpCodes"/> table so no hand-maintained ECMA
     /// table can drift; the switch opcode is keyed to -1 and its variable
-    /// operand is measured by <see cref="SwitchOperandBytes"/>.
+    /// operand is measured inline in <see cref="Instructions"/>.
     /// </summary>
     private static readonly IReadOnlyDictionary<short, int> OperandByteSizes =
         typeof(OpCodes).GetFields(BindingFlags.Public | BindingFlags.Static)
@@ -353,8 +355,8 @@ internal static class IlCallScanner
     /// <summary>
     /// The operand byte size of one <see cref="OpCode"/> (the runtime exposes
     /// the operand TYPE, not a byte count); InlineSwitch is -1 because its
-    /// operand size is per-instance and measured by
-    /// <see cref="SwitchOperandBytes"/> (the ONE encoding of that fact, JF-736
+    /// operand size is per-instance and measured inline in
+    /// <see cref="Instructions"/> (the ONE encoding of that fact, JF-736
     /// code-review F4).
     /// </summary>
     private static int OperandByteSizeOf(OpCode op) => op.OperandType switch

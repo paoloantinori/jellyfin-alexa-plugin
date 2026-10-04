@@ -188,6 +188,47 @@ over it, the JF-726 copy deleted; the phantom-window opcode-aware-walk fix rides
   (restored: non-negative constants carrying the JF-726 bits exceed the short
   encodings). No real out-of-scope finding emerged in either round, so the
   reserved JF-747 number was NOT consumed.
+  ORCHESTRATOR GATE-MARKER ROUND (2026-10-04, six axes CONFIRMED at source on
+  a fresh Release build by the orchestrator itself: scope clean, projection
+  equivalence, the opcode-aware walk incl. two-byte keying empirically, no
+  surviving naive walk, red-proof shapes, both record corrections): FOUR
+  findings, all four applied as rework.
+  GM-F1 THE PHANTOM-IMMUNITY PIN (the headline deliverable had no test: on
+  real IL the old every-offset walk and the decoded walk agree, so a revert
+  to a byte scan kept the whole 5111 suite green): new test
+  InstructionOperands_RejectsOpcodeBytesInsideAnotherInstructionsOperand in
+  IlCallScannerTests, built on PhantomOpcodeBaitConstant() (compiled to
+  exactly `ldc.i4 0x28282828; ret`, four call-opcode bytes as OPERAND bytes):
+  asserts LdcI4Operands still finds the real constant AND
+  InstructionOperands(bait, 0x28) is EMPTY. RED-PROVEN by reverting
+  InstructionOperands to the naive i+5 byte scan: the pin failed with
+  "Collection was not empty: [Tuple (1, 707274792)]" (the phantom call
+  candidate at offset 1, token 0x2A282828 read from three operand bytes plus
+  the ret), then restored to green.
+  GM-F2 the two crefs left pointing at the deleted SwitchOperandBytes
+  (OperandByteSizes' and OperandByteSizeOf' doc blocks) now point at the
+  inline measurement in Instructions (they would have been CS1574 under doc
+  generation with warnaserror).
+  GM-F3 the stfld tie's callvirt-predecessor check still used the raw
+  storeOffset-5 fixed window: GRADUATED through Instructions (the walk tracks
+  the previous decoded instruction and checks its real boundary, Opcode 0x6F,
+  resolved token), so no fixed-window assumption survives in the tie; the
+  deliberate raw survivors are exactly the two the record names (the ldfld
+  byte+token read anchored at the walk-derived backstopOffset-5, and the
+  nop-prefix ldarg.0 first-instruction check).
+  GM-F4 LdcI4Operands re-implemented the OperandTokens projection one line
+  away: now a thin delegate `=> OperandTokens(method, 0x20)`.
+  Reruns after the rework: the pin + all scanner consumers 320/320 net9.0
+  (three consecutive runs; ONE transient failure in the first post-rework
+  run, name not captured before the log scrolled, class green in isolation
+  266/266 immediately after); full suites on the final state net9.0 5112/5112
+  and net10.0 5112/5112 (the net10.0 first run had ONE failure, the JF-731
+  Dispose backstop on StreamHlsEpisode_MusicStartProceedsWhileTranscodesOccupyTheTier,
+  the pre-existing flake documented on this exact class since f78515f2: green
+  in isolation 266/266 AND on the full-suite rerun; this diff touches only
+  IL-scan asserts and the scanner and cannot affect encode lifetimes);
+  Release --no-restore -warnaserror clean. Final count 5112 = 5109 baseline
+  + 3 new tests.
 
 ## Final Summary
 
@@ -255,7 +296,18 @@ malformed-input handling, F4 single encoding of the switch fact, F5 the
 direct decoder tests); the final-state round returned 5 more, all applied
 (the silent operand-overrun exit, the phantom-consumer inventory correction,
 the exact exception-type pin, the vacuous assert removed, the restored
-short-encoding totality argument). JF-747 was not needed: no real
-out-of-scope finding emerged in either round. Suites net9.0 5111/5111,
-net10.0 5111/5111; Release -warnaserror clean.
+short-encoding totality argument); the orchestrator gate-marker round then
+confirmed all six axes at source on a fresh Release build and returned FOUR
+rework findings, all applied: the phantom-immunity pin itself (GM-F1, the
+headline behavior had no test; a bait method compiled to `ldc.i4 0x28282828`
+pins that four call-opcode operand bytes yield NO call candidate,
+red-proven by reverting the walk to a byte scan), the two dangling crefs to
+the deleted SwitchOperandBytes (GM-F2), the stfld tie's callvirt-predecessor
+fixed-window check graduated through Instructions so no fixed-window
+assumption survives (GM-F3), and LdcI4Operands made a thin delegate to
+OperandTokens (GM-F4). JF-747 was not needed: no real out-of-scope finding
+emerged in any round. Final suites net9.0 5112/5112, net10.0 5112/5112 (one
+transient net10.0 first-run failure, the pre-existing JF-731 Dispose
+backstop flake on this exact class, green in isolation and on rerun);
+Release -warnaserror clean.
 <!-- SECTION:FINAL_SUMMARY:END -->

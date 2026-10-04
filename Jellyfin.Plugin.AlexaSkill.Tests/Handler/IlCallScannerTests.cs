@@ -135,4 +135,35 @@ public class IlCallScannerTests
         Assert.Throws<InvalidOperationException>(
             () => IlCallScanner.Instructions(new byte[] { 0x20, 1, 0, 0 }).ToList());
     }
+
+    /// <summary>
+    /// Returns the constant whose four bytes are each the call (0x28) opcode:
+    /// compiled to exactly `ldc.i4 0x28282828; ret`, so the body contains
+    /// four 0x28 bytes that are OPERAND bytes, never instruction boundaries.
+    /// </summary>
+    private static int PhantomOpcodeBaitConstant() => 0x28282828;
+
+    /// <summary>
+    /// THE phantom-immunity pin (gate-marker GM-F1: the JF-736 headline
+    /// deliverable had no test; on real IL the old every-offset walk and the
+    /// opcode-aware walk agree, because real bodies contain no phantom
+    /// candidates). A revert of InstructionOperands to a naive byte scan
+    /// turns these four operand bytes into a phantom call candidate; the
+    /// decoded walk must reject them. RED-PROVEN by reverting the walk to an
+    /// i+5 byte scan: the empty-call assertion below fails.
+    /// </summary>
+    [Fact]
+    public void InstructionOperands_RejectsOpcodeBytesInsideAnotherInstructionsOperand()
+    {
+        MethodBase bait = typeof(IlCallScannerTests)
+            .GetMethod(nameof(PhantomOpcodeBaitConstant), BindingFlags.NonPublic | BindingFlags.Static)!;
+
+        // The real ldc.i4 is still found (the decode did not over-reject).
+        Assert.Equal(new[] { 0x28282828 }, IlCallScanner.LdcI4Operands(bait));
+
+        // The four 0x28 operand bytes are NOT call candidates: a byte-scan
+        // walk would surface one here (its every-offset window reads the
+        // operand of the first 0x28 as a call token).
+        Assert.Empty(IlCallScanner.InstructionOperands(bait, 0x28));
+    }
 }

@@ -1945,26 +1945,27 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             "the birth call's argument must be a field load (ldfld) of the just-started endpoint task; the emission shape changed, update this pin consciously (JF-726 argument-identity tie)");
         int endpointFieldToken = BitConverter.ToInt32(birthIl, argumentLoadOffset + 1);
         bool argumentTiedToStartedEndpoint = false;
-        // The stfld (0x7D) sites via the SAME shared opcode-aware walk (JF-736
-        // /simplify: this loop had kept the pre-graduation every-offset window
-        // the rest of this pin had just stopped using).
-        foreach ((int storeOffset, int storedFieldToken) in IlCallScanner.InstructionOperands(birthMethod, 0x7D))
+        // The stfld (0x7D) sites AND their callvirt (0x6F) predecessors via the
+        // SAME shared opcode-aware decode (JF-736 /simplify + gate-marker
+        // GM-F3: the first cut graduated the stfld scan but kept checking the
+        // predecessor through a raw storeOffset-5 fixed window; the decoder
+        // makes the real instruction boundary decodable, so no fixed-window
+        // assumption survives here).
+        (short Opcode, int OperandStart)? previous = null;
+        foreach ((_, short opcode, int operandStart, _) in IlCallScanner.Instructions(birthIl))
         {
-            if (storedFieldToken != endpointFieldToken)
-            {
-                continue;
-            }
-
-            int invokeOffset = storeOffset - 5;
-            if (invokeOffset >= 0
-                && birthIl[invokeOffset] == 0x6F
-                && IlCallScanner.TryResolveMethod(module, BitConverter.ToInt32(birthIl, invokeOffset + 1)) is { } invoked
+            if (opcode == 0x7D
+                && BitConverter.ToInt32(birthIl, operandStart) == endpointFieldToken
+                && previous is { Opcode: 0x6F } prev
+                && IlCallScanner.TryResolveMethod(module, BitConverter.ToInt32(birthIl, prev.OperandStart)) is { } invoked
                 && invoked.Name == nameof(Action.Invoke)
                 && invoked.DeclaringType == typeof(Func<Task<ActionResult>>))
             {
                 argumentTiedToStartedEndpoint = true;
                 break;
             }
+
+            previous = (opcode, operandStart);
         }
 
         Assert.True(
