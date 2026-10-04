@@ -590,8 +590,10 @@ internal static class MultiValueErDisambiguation
         // The fall-through search, SEEDED with the gate's pool when the gate ran
         // (the JF-715/JF-734 threading; null on every closed-gate and skipped-gate
         // leg keeps SearchAsync's internal fetch). All four folded sites shared
-        // this exact retry channel and label, so it lives here once.
-        logger.LogDebug("MultiValueEr: artist gate closed, searching for artist filter='{Musician}'", searchMusician);
+        // this exact retry channel and label, so it lives here once. closed = the
+        // gate ran and found no survivor; skipped = arbitrate=false (FindSong's
+        // legs that never run TryArbitrate).
+        logger.LogDebug("MultiValueEr: artist gate {GateState}, searching for artist filter='{Musician}'", arbitrate ? "closed" : "skipped (arbitration off)", searchMusician);
         IReadOnlyList<BaseItem> artists = await ArtistSearch.SearchAsync(
             searchMusician, user, libraryManager, pinnedArtistIndex, logger,
             (q, ct) => RetryHelper.ExecuteWithRequestBudgetAsync(
