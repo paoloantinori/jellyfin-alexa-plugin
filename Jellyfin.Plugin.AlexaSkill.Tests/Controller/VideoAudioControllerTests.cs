@@ -3365,6 +3365,12 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             Id = chapterId
         };
 
+        // The ONE EncoderPath setup in this file that is actually consumed (JF-759
+        // marker probe): the controller below sets no FfmpegPath override, so both
+        // the entry check and the redirected single-item encode resolve ffmpeg
+        // through the mock (else the PATH scan or an empty path; the assert below
+        // stays green either way). Do not blind-delete in a file-wide EncoderPath
+        // sweep; give this test an explicit fake first (JF-765).
         _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
         _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns(parentItem);
         _libraryManagerMock.Setup(m => m.GetItemById(chapterId)).Returns(chapterItem);
@@ -6604,8 +6610,10 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
     /// <summary>
     /// Shared endpoint-test setup for the JF-531 episode family: an Episode with the
-    /// given codec (1080p video + eac3 audio streams), the encoder path, and the
-    /// GetItemById wiring.
+    /// given codec (1080p video + eac3 audio streams) and the GetItemById wiring.
+    /// No EncoderPath setup: every caller passes an explicit fake ffmpeg, and
+    /// ResolveFfmpegPath returns that override before ever consulting
+    /// IMediaEncoder (JF-759).
     /// </summary>
     private (MediaBrowser.Controller.Entities.TV.Episode Episode, Mock<IMediaSourceManager> MediaSources)
         SetupEpisodeForHls(string name, string videoCodec, TimeSpan? runtime)
@@ -6626,7 +6634,6 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
                 new() { Type = MediaStreamType.Audio, Codec = "eac3" }
             });
 
-        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
         _libraryManagerMock.Setup(m => m.GetItemById(episode.Id)).Returns(episode);
         return (episode, mediaSourceManager);
     }
@@ -8674,7 +8681,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// JF-678 shared fixture of the three audiobook vanish twins: a two-chapter
     /// book (chapters carry 10-minute runtimes so a fall-through re-encode's
     /// pre-write lists real segments for the content asserts) with the
-    /// encoder/library mocks wired. Returns the parent id and the warm-cache
+    /// library mocks wired. No EncoderPath setup, same JF-759 reasoning as
+    /// <see cref="SetupEpisodeForHls"/>. Returns the parent id and the warm-cache
     /// paths; each twin plants the playlist itself (the in-lock twin plants it
     /// through the lock-park core, the others eagerly).
     /// </summary>
@@ -8699,7 +8707,6 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             RunTimeTicks = TimeSpan.FromMinutes(10).Ticks
         };
 
-        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
         _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns(parentItem);
         _libraryManagerMock.Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
             .Returns(new List<MediaBrowser.Controller.Entities.BaseItem> { chapter1, chapter2 });
@@ -8711,7 +8718,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// <summary>
     /// JF-692 shared fixture of the four song-path vanish/read-count pins
     /// (<see cref="SetupAudiobookVanishFixture"/>'s sibling): a mock Audio
-    /// item with the encoder/library lookups wired, returning the item id and
+    /// item with the library lookups wired (no EncoderPath setup, same
+    /// JF-759 reasoning as the sibling), returning the item id and
     /// the warm-cache paths. Each pin plants the playlist itself (the in-lock
     /// pin plants it through the lock-park core, the others eagerly) with its
     /// own bytes and wires its own logger factory: the four constructions
@@ -8733,7 +8741,6 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             Id = Guid.NewGuid()
         };
 
-        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
         _libraryManagerMock.Setup(m => m.GetItemById(audioItem.Id)).Returns(audioItem);
 
         string hlsDir = _cache.GetHlsDirectoryPath(audioItem.Id.ToString("D"), 0);
