@@ -166,14 +166,14 @@ SkillRefusalException (the /simplify altitude round: it is refusal-ESCAPE policy
 per-site degrade, so a future subtype escapes by type instead of being swallowed as a task
 error speaking raw exception text). Pins: 11 new (warming event-request red proof through the
 real pipeline seam; the core's shape matrix incl. all three event request classes, the
-null-request leg, and the Func laziness; the roster pin - only the core's Func overload may
+null-request leg, and the Func laziness; the roster pin, under which only the core's Func overload may
 reference BOTH IsEventRequest and BuildKeepAliveResponse, self-red against the revert shape;
 the subtype ResponseKey ledger pin + SkillWarmingUp added to AllExpectedKeys, closing the
 pre-existing gap where Get fails soft and would speak a raw key). RED PROOFS: three
 sabotages (unconditional Tell in the catch, the ternary inlined back into
 BuildUserNotFoundResponse, the Func made eager) flipped exactly the three target pins on
 both TFMs, green on restore; all pre-existing pins (JF-699 pipeline set, JF-507/JF-527
-EventHandlerTests set, warming set) green unedited. Gates: /simplify 4 agents (8 findings: 7
+EventHandlerTests set, warming set) green with no pin method, assertion, or pin body edited (the shared seam helper's parameter in SkillWarmingUpTests was widened from IntentRequest to Request; the JF-708 gate-marker precision finding). Gates: /simplify 4 agents (8 findings: 7
 applied, 1 declined-with-reason, the IndexName deletion superseded by the review's harder
 call); /code-review high 0 correctness bugs, 4 findings all applied. Suites: 5137/5137 both
 TFMs on the final state (baseline 5126 + 11); Release --no-restore -warnaserror 0 warnings

@@ -25,7 +25,12 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// IlCallScanner rosters): ground truth is the IL call/callvirt stream, so a
 /// method reaching the two members only via reflection emits no call instructions
 /// and escapes the scan; same-assembly methoddef tokens only (the scanner's own
-/// constraint).
+/// constraint). SECOND BOUNDARY (JF-708 gate-marker): an INLINE pattern evasion,
+/// a copy that spells the type test itself (request is AudioPlayerRequest or
+/// SessionEndedRequest or SystemExceptionRequest) while calling
+/// BuildKeepAliveResponse directly, references only one scanned member and also
+/// escapes the conjunction; the site-level side-effect pin that pairs with this
+/// boundary is filed as JF-752.
 /// </summary>
 public class EventAwareDegradeRosterTests
 {
