@@ -60,22 +60,42 @@ public sealed class SearchService
     }
 
     /// <summary>
+    /// The end-unknown total (JF-673): the ONE encoding for "the executor could not
+    /// learn the library total" (the NRE fallback's GetItemList path has no count).
+    /// The same value is the end-unknown regime of <see cref="QueueContinuation.TotalCount"/>
+    /// (artist continuations carry it because GetItemList has no count; audiobook
+    /// continuations carry it when the initial page came through the fallback), which
+    /// <see cref="QueueContinuationFetcher.FetchNextBatch"/> renders as "end-unknown".
+    /// The fallback's page-size total must NEVER stand in for a library total: a full
+    /// page then reads as "complete" and pagination loops stop one page in.
+    /// </summary>
+    internal const int UnknownTotal = int.MaxValue;
+
+    /// <summary>
     /// Executes GetItemsResult with a fallback to GetItemList on NullReferenceException.
     /// Jellyfin's GetItemsResult evaluates dbQuery.Count() after applying query filters
     /// and ordering. Certain combinations (e.g. ArtistIds + PopularitySort referencing
     /// User data) cause EF Core's Count() translation to NRE. GetItemList skips the
     /// Count() step entirely.
     /// </summary>
-    public QueryResult<BaseItem> SafeGetItemsResult(ILibraryManager libraryManager, InternalItemsQuery query)
-        => SafeGetItemsResult(libraryManager, query, _logger);
+    /// <param name="libraryManager">The library manager to query.</param>
+    /// <param name="query">The query to execute.</param>
+    /// <param name="unknownTotalOnFallback">Opt-in (JF-673) for callers that drive a
+    /// pagination loop on the result total: the fallback then reports
+    /// <see cref="UnknownTotal"/> instead of the page size, because GetItemList has
+    /// no count and a page-size total reads as "complete" to a continuation gate.
+    /// Default off: other callers read TotalRecordCount as a real count (the album
+    /// count-only query stores it directly), where a sentinel would poison them.</param>
+    public QueryResult<BaseItem> SafeGetItemsResult(ILibraryManager libraryManager, InternalItemsQuery query, bool unknownTotalOnFallback = false)
+        => SafeGetItemsResult(libraryManager, query, _logger, unknownTotalOnFallback);
 
     /// <summary>
-    /// The static core of <see cref="SafeGetItemsResult(ILibraryManager, InternalItemsQuery)"/>,
+    /// The static core of <see cref="SafeGetItemsResult(ILibraryManager, InternalItemsQuery, bool)"/>,
     /// shared with query sites outside the collaborator (QueueContinuationFetcher's
     /// audiobook tail guard, JF-670) so head and tail executors cannot drift: one
     /// catch class, one log wording, one fallback shape.
     /// </summary>
-    internal static QueryResult<BaseItem> SafeGetItemsResult(ILibraryManager libraryManager, InternalItemsQuery query, ILogger logger)
+    internal static QueryResult<BaseItem> SafeGetItemsResult(ILibraryManager libraryManager, InternalItemsQuery query, ILogger logger, bool unknownTotalOnFallback = false)
     {
         try
         {
@@ -89,7 +109,10 @@ public sealed class SearchService
             // Fall back to GetItemList which skips the Count() step entirely.
             logger.LogWarning("GetItemsResult NRE, falling back to GetItemList");
             IReadOnlyList<BaseItem> items = libraryManager.GetItemList(query);
-            return new QueryResult<BaseItem>(query.StartIndex ?? 0, items.Count, items);
+            return new QueryResult<BaseItem>(
+                query.StartIndex ?? 0,
+                unknownTotalOnFallback ? UnknownTotal : items.Count,
+                items);
         }
     }
 
