@@ -623,19 +623,60 @@ public abstract class BaseHandler
     /// "The following directives are not supported: Response may not contain an
     /// outputSpeech" (live incident 2026-09-06 17:12:52, corr=e54b0532/1eab419e: the
     /// JF-477 session-lookup fast-fail degraded a PlaybackFailed event to the
-    /// UserNotFound Tell). Shared with the controller's own degradation sites.
+    /// UserNotFound Tell). Consumed by the shared
+    /// <see cref="DegradeForEventRequest(Request?, string)"/> core (JF-708: the
+    /// pipeline refusal translation, the user-not-found/session-miss degrades, and
+    /// the controller's catch-path degrades all route through it) and by the
+    /// circuit-breaker short-circuit.
     /// PlaybackController CommandIssued taps are DELIBERATELY not classified here:
     /// the no-outputSpeech rule is undocumented for them, every consumer (the
-    /// RequestPipeline StreamTokenNotConfigured translation, the circuit-breaker
-    /// short-circuit, the controller degrade, the session-miss responses) answers
-    /// them with speech today, and no incident is recorded; the consequence and
-    /// revisit trigger are documented at the pipeline translation. Complete the
-    /// pattern match here only if Amazon documents the rule for that class.
+    /// RequestPipeline refusal translation, the circuit-breaker short-circuit, the
+    /// controller degrade, the session-miss responses) answers them with speech
+    /// today, and no incident is recorded; the consequence and revisit trigger are
+    /// documented at the shared core and the SkillRefusalException base. Complete
+    /// the pattern match here only if Amazon documents the rule for that class.
     /// </summary>
     /// <param name="request">The incoming skill request.</param>
     /// <returns>True when the response must be the empty keep-alive shape.</returns>
     public static bool IsEventRequest(Request request)
         => request is AudioPlayerRequest or SessionEndedRequest or SystemExceptionRequest;
+
+    /// <summary>
+    /// JF-708: the ONE event-aware degrade. Every site that must answer a failure
+    /// with a Tell routes through here: an Alexa EVENT request
+    /// (<see cref="IsEventRequest"/>) gets the empty keep-alive response because
+    /// Amazon rejects outputSpeech on event responses with INVALID_RESPONSE (the
+    /// JF-507 live incident); a null request (the controller's catch paths, where
+    /// deserialization may have failed) cannot be an event, so it keeps the Tell;
+    /// everything else keeps the Tell. The string overload composes the message
+    /// eagerly (a pure <see cref="ResponseStrings"/> lookup, harmless on the event
+    /// leg); sites whose non-event response is NOT a single localized Tell, or
+    /// whose construction must not run on event requests, use the
+    /// <see cref="DegradeForEventRequest(Request?, Func{SkillResponse})"/> overload.
+    /// Former inline copies folded here: BuildUserNotFoundResponse,
+    /// BuildSessionMissResponse, the controller's per-catch degrades, and the
+    /// RequestPipeline refusal translation (via
+    /// <see cref="Exceptions.SkillRefusalException"/>).
+    /// </summary>
+    /// <param name="request">The deserialized request when available, else null.</param>
+    /// <param name="tellMessage">The Tell message for non-event requests.</param>
+    /// <returns>The keep-alive response for event requests, the Tell otherwise.</returns>
+    public static SkillResponse DegradeForEventRequest(Request? request, string tellMessage)
+        => DegradeForEventRequest(request, () => ResponseBuilder.Tell(tellMessage));
+
+    /// <summary>
+    /// The decision core behind <see cref="DegradeForEventRequest(Request?, string)"/>:
+    /// the non-event response is supplied lazily so multi-branch degrades (the
+    /// session-miss discrimination) pay nothing, and fire no diagnostic side
+    /// effects, on event requests.
+    /// </summary>
+    /// <param name="request">The deserialized request when available, else null.</param>
+    /// <param name="nonEventResponse">Builds the response for non-event requests; never invoked for event requests.</param>
+    /// <returns>The keep-alive response for event requests, the factory's response otherwise.</returns>
+    public static SkillResponse DegradeForEventRequest(Request? request, Func<SkillResponse> nonEventResponse)
+        => request != null && IsEventRequest(request)
+            ? BuildKeepAliveResponse()
+            : nonEventResponse();
 
     /// <summary>
     /// The user/session-resolution degradation in the legal shape for the request:
@@ -645,9 +686,7 @@ public abstract class BaseHandler
     /// <param name="request">The incoming skill request.</param>
     /// <returns>The degradation response.</returns>
     private SkillResponse BuildUserNotFoundResponse(Request request)
-        => IsEventRequest(request)
-            ? BuildKeepAliveResponse()
-            : ResponseBuilder.Tell(ResponseStrings.Get("UserNotFound", GetLocale(request)));
+        => DegradeForEventRequest(request, () => ResponseBuilder.Tell(ResponseStrings.Get("UserNotFound", GetLocale(request))));
 
     /// <summary>
     /// JF-527: the session-miss degradation, discriminated by evidence of a dead token.
@@ -658,19 +697,30 @@ public abstract class BaseHandler
     /// is a token that used to work: speak the actionable AccountRelinkRequired tell with
     /// a card pointing at the plugin settings page. Empty token or no play history keeps
     /// the existing UserNotFound tell. Event requests keep the keep-alive shape (JF-507)
-    /// in every branch.
+    /// in every branch, decided once by the shared
+    /// <see cref="DegradeForEventRequest(Request?, Func{SkillResponse})"/> core.
     /// </summary>
     /// <param name="request">The incoming skill request.</param>
     /// <param name="user">The resolved plugin user (user resolution succeeded; the session lookup missed).</param>
     /// <param name="deviceId">The Alexa device ID the request came from.</param>
     /// <returns>The degradation response.</returns>
     private SkillResponse BuildSessionMissResponse(Request request, Entities.User user, string deviceId)
-    {
-        if (IsEventRequest(request))
-        {
-            return BuildKeepAliveResponse();
-        }
+        => DegradeForEventRequest(request, () => BuildSessionMissTell(request, user, deviceId));
 
+    /// <summary>
+    /// The session-miss NON-EVENT tail (JF-527): the dead-token AccountRelink Tell+Card
+    /// when the evidence supports it, the plain UserNotFound Tell otherwise. Reached
+    /// only through the lazy overload: its dead-token branch reads
+    /// <see cref="DeviceQueueManager"/> and writes the AccountRelink diagnostic log,
+    /// which must not fire on event requests (the pre-JF-708 early return guaranteed
+    /// that; the laziness keeps it).
+    /// </summary>
+    /// <param name="request">The incoming skill request (never an event request here).</param>
+    /// <param name="user">The resolved plugin user (user resolution succeeded; the session lookup missed).</param>
+    /// <param name="deviceId">The Alexa device ID the request came from.</param>
+    /// <returns>The non-event degradation response.</returns>
+    private SkillResponse BuildSessionMissTell(Request request, Entities.User user, string deviceId)
+    {
         bool hadPreviousPlay = Plugin.Instance?.DeviceQueueManager?.GetLastPlayedItemId(deviceId) != null;
         if (user.HasJellyfinToken && hadPreviousPlay)
         {

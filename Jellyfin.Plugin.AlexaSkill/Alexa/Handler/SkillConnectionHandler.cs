@@ -116,15 +116,17 @@ public class SkillConnectionHandler : BaseHandler
             // Wrap the response with CompleteTask directive for connection-based invocations
             return WrapWithCompleteTask(response, locale);
         }
-        catch (Exception ex) when (ex is not Exceptions.StreamTokenNotConfiguredException)
+        catch (Exception ex) when (ex is not Exceptions.SkillRefusalException)
         {
             Logger.LogError(ex, "Error handling skill connection task: {TaskName}", taskName);
             return BuildTaskErrorResponse(locale, ex.Message);
         }
-        // JF-699 item 1: the JF-687 empty-secret launch refusal is NOT a task error:
-        // it must escape this catch so RequestPipeline's single translation site
-        // answers the localized configuration Tell (swallowing it here answered the
-        // generic MediaSearchError for a broken configuration).
+        // Refusals are NOT task errors: they must escape this catch so
+        // RequestPipeline's single SkillRefusalException translation site answers
+        // the localized response (JF-699 item 1: swallowing the JF-687 empty-secret
+        // launch refusal here answered the generic MediaSearchError for a broken
+        // configuration; JF-708 widened the guard to the base, so a future refusal
+        // subtype escapes by type instead of re-deciding the escape per catch).
     }
 
     private async Task<SkillResponse> HandlePlayFavoritesTask(Context context, Entities.User user, SessionInfo session, string locale, CancellationToken cancellationToken)

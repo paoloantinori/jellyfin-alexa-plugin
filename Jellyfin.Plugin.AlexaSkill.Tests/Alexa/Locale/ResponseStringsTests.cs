@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Exceptions;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Xunit;
 
@@ -22,8 +23,47 @@ public class ResponseStringsTests
         "TrackByArtist", "TrackByArtistFromAlbum", "SeasonEpisode", "SeriesTitle",
         "TitleWithYear", "SearchingMedia", "DisambiguatePrompt", "DisambiguateNext",
         "NoMoreMatches", "DisambiguateReprompt", "UnexpectedYes",
-        "StreamTokenNotConfigured"
+        "StreamTokenNotConfigured",
+        "SkillWarmingUp"
     };
+
+    /// <summary>
+    /// JF-708 (code-review finding): <see cref="ResponseStrings.Get"/> fails soft
+    /// (returns the raw key, see Get_MissingKey_ReturnsKey), so a
+    /// SkillRefusalException subtype whose ResponseKey is typo'd or missing from a
+    /// locale file would be SPOKEN verbatim to the user in that locale. The ledger
+    /// above (AllExpectedKeys, walked for all 17 locales by Get_AllKeysPresent) is
+    /// the enforcement; this pin ties every refusal subtype to it: each subtype's
+    /// ACTUAL ResponseKey (read from a constructed instance, never restated) must be
+    /// in the ledger, and a NEW subtype nobody constructed here fails the roster
+    /// assertion so its author adds it to both.
+    /// </summary>
+    [Fact]
+    public void SkillRefusalSubtypeResponseKeys_AreCoveredByTheLedger()
+    {
+        var constructed = new Dictionary<Type, SkillRefusalException>
+        {
+            [typeof(SkillWarmingUpException)] = new SkillWarmingUpException("artist"),
+            [typeof(StreamTokenNotConfiguredException)] = new StreamTokenNotConfiguredException(),
+        };
+
+        Type[] declared = typeof(SkillRefusalException).Assembly
+            .GetTypes()
+            .Where(t => t.IsSubclassOf(typeof(SkillRefusalException)) && !t.IsAbstract)
+            .ToArray();
+
+        Assert.True(
+            declared.All(constructed.ContainsKey) && constructed.Count == declared.Length,
+            "SkillRefusalException subtype roster drifted: declared [" +
+            string.Join(", ", declared.Select(t => t.Name).OrderBy(n => n)) +
+            "] vs constructed [" + string.Join(", ", constructed.Keys.Select(t => t.Name)) +
+            "]. Construct the new subtype here and add its ResponseKey to AllExpectedKeys.");
+
+        foreach (SkillRefusalException refusal in constructed.Values)
+        {
+            Assert.Contains(refusal.ResponseKey, AllExpectedKeys);
+        }
+    }
 
     [Fact]
     public void Get_EnUs_ReturnsEnglishString()
