@@ -138,7 +138,7 @@ public class LWAController : ControllerBase
             user.UserSkill = new UserSkill { InvocationName = string.Empty };
         }
 
-        Plugin.Instance!.SaveConfiguration();
+        Plugin.Instance!.Configuration.PersistUnderLedgerLock();
         lwaAuthorizationRequestHandler.RemoveLwaAuthorizeRequest(state);
 
         // If the skill already exists, this is a re-authorization — just refresh the token
@@ -150,7 +150,7 @@ public class LWAController : ControllerBase
         else
         {
             user.UserSkill.UserSkillStatus = UserSkillStatus.SkillCreating;
-            Plugin.Instance!.SaveConfiguration();
+            Plugin.Instance!.Configuration.PersistUnderLedgerLock();
 
             // Create or reuse the skill in background
             Guid userId = user.Id;
@@ -206,13 +206,13 @@ public class LWAController : ControllerBase
 
                     currentUser.UserSkill.SkillId = skillId;
                     currentUser.UserSkill.UserSkillStatus = UserSkillStatus.AccountLinkPending;
-                    Plugin.Instance!.SaveConfiguration();
+                    Plugin.Instance!.Configuration.PersistUnderLedgerLock();
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Error creating skill for user {UserId}", userId);
                     currentUser.UserSkill.UserSkillStatus = UserSkillStatus.LwaAuthPending;
-                    Plugin.Instance!.SaveConfiguration();
+                    Plugin.Instance!.Configuration.PersistUnderLedgerLock();
                 }
             });
         }

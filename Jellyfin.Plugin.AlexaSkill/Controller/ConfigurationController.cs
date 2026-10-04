@@ -285,7 +285,7 @@ public class ConfigurationController : ControllerBase
             return new JsonResult(new { error = "No valid fields to update" }) { StatusCode = 400 };
         }
 
-        Plugin.Instance!.SaveConfiguration();
+        Plugin.Instance!.Configuration.PersistUnderLedgerLock();
 
         // JF-297: an invocation-name change must reach Amazon. Rebuild and redeploy the
         // interaction models for the user's existing skill. Skipped when the name did not
@@ -309,7 +309,7 @@ public class ConfigurationController : ControllerBase
                 var config = Plugin.Instance!.Configuration;
                 config.LastModelDeployTime = DateTime.UtcNow;
                 config.LastModelDeployStatus = redeployResult.Status;
-                Plugin.Instance!.SaveConfiguration();
+                Plugin.Instance!.Configuration.PersistUnderLedgerLock();
 
                 redeployInfo = new
                 {
@@ -380,7 +380,7 @@ public class ConfigurationController : ControllerBase
             return new JsonResult(new { error = "User skill already exists" }) { StatusCode = 400 };
         }
 
-        Plugin.Instance!.SaveConfiguration();
+        Plugin.Instance!.Configuration.PersistUnderLedgerLock();
 
         return new JsonResult(user);
     }
@@ -401,7 +401,7 @@ public class ConfigurationController : ControllerBase
 
         string? skillId = pluginUser!.UserSkill?.SkillId;
         Plugin.Instance!.Configuration.DeleteUser(pluginUser.Id);
-        Plugin.Instance!.SaveConfiguration();
+        Plugin.Instance!.Configuration.PersistUnderLedgerLock();
 
         if (!string.IsNullOrEmpty(skillId))
         {
@@ -738,7 +738,7 @@ public class ConfigurationController : ControllerBase
             return new JsonResult(new { error = string.Join("; ", errors) }) { StatusCode = 400 };
         }
 
-        Plugin.Instance!.SaveConfiguration();
+        Plugin.Instance!.Configuration.PersistUnderLedgerLock();
         return new OkResult();
     }
 
@@ -846,7 +846,7 @@ public class ConfigurationController : ControllerBase
 
             config.LastModelDeployTime = DateTime.UtcNow;
             config.LastModelDeployStatus = result.Success ? $"deployed ({result.BuildStatus})" : $"failed: {result.Message}";
-            Plugin.Instance!.SaveConfiguration();
+            Plugin.Instance!.Configuration.PersistUnderLedgerLock();
 
             if (!result.Success)
             {
@@ -871,7 +871,7 @@ public class ConfigurationController : ControllerBase
         {
             config.LastModelDeployTime = DateTime.UtcNow;
             config.LastModelDeployStatus = "timed out";
-            Plugin.Instance!.SaveConfiguration();
+            Plugin.Instance!.Configuration.PersistUnderLedgerLock();
             return new JsonResult(new { error = "Deployment timed out" }) { StatusCode = 504 };
         }
         catch (HttpRequestException ex)
@@ -911,7 +911,7 @@ public class ConfigurationController : ControllerBase
 
             config.LastModelDeployTime = DateTime.UtcNow;
             config.LastModelDeployStatus = result.Success ? "restored" : $"restore failed: {result.Message}";
-            Plugin.Instance!.SaveConfiguration();
+            Plugin.Instance!.Configuration.PersistUnderLedgerLock();
 
             if (!result.Success)
             {
@@ -965,7 +965,7 @@ public class ConfigurationController : ControllerBase
             var config = Plugin.Instance.Configuration;
             config.LastModelDeployTime = DateTime.UtcNow;
             config.LastModelDeployStatus = result.Status;
-            Plugin.Instance!.SaveConfiguration();
+            Plugin.Instance!.Configuration.PersistUnderLedgerLock();
 
             return new JsonResult(new
             {
@@ -1026,7 +1026,11 @@ public class ConfigurationController : ControllerBase
             customModelEnabled = config.CustomModelEnabled,
             lastModelDeployTime = config.LastModelDeployTime,
             lastModelDeployStatus = config.LastModelDeployStatus,
-            localeModelStatuses = config.LocaleModelStatuses
+            // JF-724: the locked snapshot (rationale on the ledger's lock doc
+            // in PluginConfiguration); additive JSON: observedSkillId is the
+            // ledger-forensics attribution of which skill's observation wrote
+            // the row (null on sync-authored and pre-JF-724 rows).
+            localeModelStatuses = config.GetLocaleModelStatusSnapshot()
                 .ToDictionary(e => e.Locale, e =>
                 {
                     var s = e.ToStatus();
@@ -1040,6 +1044,8 @@ public class ConfigurationController : ControllerBase
                         // (pre-JF-721 rows render their legacy Error text alone).
                         caveat = s.CaveatText,
                         source = s.Source,
+                        // JF-724: see the snapshot comment above.
+                        observedSkillId = s.ObservedSkillId,
                     };
                 })
         });
@@ -1186,7 +1192,7 @@ public class ConfigurationController : ControllerBase
                 }
             }
 
-            Plugin.Instance.SaveConfiguration();
+            Plugin.Instance.Configuration.PersistUnderLedgerLock();
             _logger.LogInformation("Auto-provisioned plugin user for Jellyfin user {UserId}", userIdGuid);
         }
 

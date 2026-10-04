@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Threading;
@@ -14,6 +15,7 @@ using Jellyfin.Plugin.AlexaSkill.Diagnostics;
 using Jellyfin.Plugin.AlexaSkill.EntryPoints;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Session;
+using MediaBrowser.Model.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -176,7 +178,8 @@ public class SkillStartupTests : PluginTestBase
     /// Seeds an arbitrary ledger row (the JF-722 refresh pins need the frozen
     /// IN_PROGRESS/Embedded shape the capture writes, plus non-family rows the
     /// refresh must not touch), returning the seeded timestamp for freshness
-    /// assertions.
+    /// assertions. observedSkillId seeds the JF-724 attribution stamp (null by
+    /// default = the pre-JF-724/legacy shape every refresh may still settle).
     /// </summary>
     private static DateTime SeedRow(
         string locale,
@@ -184,7 +187,8 @@ public class SkillStartupTests : PluginTestBase
         string? error,
         string source = "Embedded",
         CatalogLedgerCaveats caveat = CatalogLedgerCaveats.None,
-        string? frozenCatalogTypes = null)
+        string? frozenCatalogTypes = null,
+        string? observedSkillId = null)
     {
         var seeded = DateTime.UtcNow.AddHours(-2);
         Plugin.Instance!.Configuration.SetLocaleModelStatus(locale, new LocaleModelStatus
@@ -195,6 +199,7 @@ public class SkillStartupTests : PluginTestBase
             Caveat = caveat,
             FrozenCatalogTypes = frozenCatalogTypes,
             Source = source,
+            ObservedSkillId = observedSkillId,
         });
         return seeded;
     }
@@ -605,11 +610,17 @@ public class SkillStartupTests : PluginTestBase
     // JF-722 residual 1: the deferred IN_PROGRESS status refresh.
     // ------------------------------------------------------------------
 
+    /// <summary>The skill id every refresh pin refreshes as (RefreshAsync's
+    /// second argument and the direct worker calls); the JF-724 cross-user
+    /// pins seed OTHER skills' rows against it and assert settles against it,
+    /// so the pairing is one definition, not a repeated literal.</summary>
+    private const string RefreshSkillId = "amzn1.ask.skill.test-id";
+
     /// <summary>The shared act for the refresh pins: the deferred worker with no
     /// delays and a single poll unless a test extends it.</summary>
     private Task RefreshAsync(Entities.User user, int maxPolls = 1, bool captureWroteNoRows = false, CancellationToken cancellationToken = default) =>
         CreateStartup().RefreshInProgressLocaleStatusesAsync(
-            user, "amzn1.ask.skill.test-id", cancellationToken,
+            user, RefreshSkillId, cancellationToken,
             initialDelay: TimeSpan.Zero, pollInterval: TimeSpan.Zero, maxPolls: maxPolls, captureWroteNoRows: captureWroteNoRows);
 
     /// <summary>
@@ -1047,13 +1058,197 @@ public class SkillStartupTests : PluginTestBase
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
 
         await CreateStartup().RefreshInProgressLocaleStatusesAsync(
-            user, "amzn1.ask.skill.test-id", cts.Token,
+            user, RefreshSkillId, cts.Token,
             initialDelay: TimeSpan.FromHours(1), pollInterval: TimeSpan.Zero, maxPolls: 1);
 
         Assert.Equal(0, fake.GetStatusCalls);
         var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
         Assert.NotNull(row);
         Assert.Equal("IN_PROGRESS", row!.Status);
+    }
+
+    // ------------------------------------------------------------------
+    // JF-724 items 2/5: cross-user row ownership (the ledger stays
+    // locale-keyed; the observation family's rows are skill-attributed).
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// JF-724: the capture stamps every row it writes with the OBSERVED
+    /// skill's id, so a later refresh can tell its own capture's rows from
+    /// another linked user's; a capture for a different skill re-stamps the
+    /// shared locale-keyed row (the recorded last-writer-wins ownership
+    /// decision: with two users both skills deploy the same embedded models,
+    /// so the settled truths agree).
+    /// </summary>
+    [Fact]
+    public async Task CaptureLocaleModelStatusesAsync_StampsTheObservedSkillId_LastWriterWinsBetweenSkills()
+    {
+        ClearLedger();
+
+        await CreateStartup().CaptureLocaleModelStatusesAsync(
+            UserServing(StatusFor("it-IT", SkillStatusState.SUCCEEDED)),
+            "amzn1.ask.skill.user-a");
+
+        var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(row);
+        Assert.Equal("amzn1.ask.skill.user-a", row!.ObservedSkillId);
+
+        await CreateStartup().CaptureLocaleModelStatusesAsync(
+            UserServing(StatusFor("it-IT", SkillStatusState.SUCCEEDED)),
+            "amzn1.ask.skill.user-b");
+
+        row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(row);
+        Assert.Equal("amzn1.ask.skill.user-b", row!.ObservedSkillId);
+    }
+
+    /// <summary>
+    /// JF-724 gate-marker F2 (+ round 2 F3): a FAILING save at the capture's
+    /// boundary is non-fatal WITHOUT flipping the return. The return is the
+    /// paired wrapper's ONLY input (captureWroteNoRows = !capture), so a
+    /// false here would flip the deferred refresh into its recapture mode and
+    /// spend the whole 4-poll budget re-GETting rows this capture already
+    /// wrote; the pin drives the failure through the PersistUnderLedgerLock
+    /// test seam and asserts the rows stand in memory, the capture still
+    /// reports true, and the follow-up capture's save REALLY ran: the
+    /// framework's BasePluginOfT save delegates to the injected
+    /// IXmlSerializer, whose shared Moq records the SerializeToFile call
+    /// carrying the live configuration with the captured row (round 2 F3: a
+    /// seam-count assertion alone would pass with the real save path broken).
+    /// </summary>
+    [Fact]
+    public async Task CaptureLocaleModelStatusesAsync_SaveFailure_IsNonFatalAndDoesNotFlipTheReturn()
+    {
+        ClearLedger();
+        var config = Plugin.Instance!.Configuration;
+        int saveAttempts = 0;
+        config.PersistInterceptorForTest = () =>
+        {
+            saveAttempts++;
+            throw new IOException("simulated config write failure");
+        };
+        try
+        {
+            bool wroteAny = await CreateStartup().CaptureLocaleModelStatusesAsync(
+                UserServing(StatusFor("it-IT", SkillStatusState.SUCCEEDED)),
+                RefreshSkillId);
+
+            Assert.True(wroteAny, "a save failure must not flip the capture's return (the paired refresh would enter recapture mode)");
+            Assert.Equal(1, saveAttempts);
+            var row = config.GetLocaleModelStatus("it-IT");
+            Assert.NotNull(row);
+            Assert.Equal("SUCCEEDED", row!.Status);
+
+            // The failure clears; the next capture persists for real: the
+            // seam fired AND the framework save reached the serializer with
+            // the live configuration carrying the captured row.
+            config.PersistInterceptorForTest = null;
+            int serializerCallsBefore = SerializeToFileCalls();
+            bool again = await CreateStartup().CaptureLocaleModelStatusesAsync(
+                UserServing(StatusFor("it-IT", SkillStatusState.SUCCEEDED)),
+                RefreshSkillId);
+            Assert.True(again);
+            Assert.Equal(1, saveAttempts); // the seam fired exactly once, in the failing phase
+            Assert.True(
+                SerializeToFileCalls() > serializerCallsBefore,
+                "the cleared-failure capture must reach the framework serializer's SerializeToFile (the real save path, not just the seam)");
+
+            // The payload the framework serialized is the live configuration
+            // and carries the captured row (the on-disk equivalent: in this
+            // seam BasePluginOfT writes through this very serializer).
+            var saved = TestHelpers.ConfigSerializerMock!.Invocations
+                .Where(i => i.Method.Name == nameof(IXmlSerializer.SerializeToFile))
+                .Select(i => i.Arguments[0])
+                .OfType<PluginConfiguration>()
+                .Last(c => ReferenceEquals(c, config));
+            Assert.Equal("SUCCEEDED", saved.GetLocaleModelStatus("it-IT")!.Status);
+        }
+        finally
+        {
+            config.PersistInterceptorForTest = null;
+        }
+    }
+
+    /// <summary>The recorded framework-serializer writes of the shared plugin
+    /// instance (Moq records invocations with no Setup).</summary>
+    private static int SerializeToFileCalls() => TestHelpers.ConfigSerializerMock!.Invocations
+        .Count(i => i.Method.Name == nameof(IXmlSerializer.SerializeToFile));
+
+    /// <summary>
+    /// JF-724 item 5's pre-check half: a frozen IN_PROGRESS row attributed to
+    /// ANOTHER linked user's skill is not this refresh's family, so the
+    /// pre-check exits before any delay or network call (before the fix, user
+    /// A's refresh stayed alive on user B's frozen rows and kept polling).
+    /// </summary>
+    [Fact]
+    public async Task RefreshInProgressLocaleStatusesAsync_OtherSkillsFrozenRow_PreCheckExitsWithoutPolling()
+    {
+        var seeded = SeedRow("it-IT", "IN_PROGRESS", null, observedSkillId: "amzn1.ask.skill.user-b");
+        var user = UserServing(StatusFor("it-IT", SkillStatusState.SUCCEEDED), out var fake);
+
+        await RefreshAsync(user, maxPolls: 3);
+
+        Assert.Equal(0, fake.GetStatusCalls);
+        var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(row);
+        Assert.Equal("IN_PROGRESS", row!.Status);
+        Assert.Equal(seeded, row.LastUpdated);
+        Assert.Equal("amzn1.ask.skill.user-b", row.ObservedSkillId);
+    }
+
+    /// <summary>
+    /// JF-724 item 5's rewrite half: a mixed two-skill ledger settles only
+    /// THIS refresh's own row (stamping it) and leaves the other skill's
+    /// frozen row byte-identical (status, timestamp, attribution) for ITS
+    /// refresh; before the fix, this refresh settled both rows from its own
+    /// skill's status.
+    /// </summary>
+    [Fact]
+    public async Task RefreshInProgressLocaleStatusesAsync_MixedSkillLedger_SettlesOnlyOwnRows()
+    {
+        var ownSeeded = SeedRow("it-IT", "IN_PROGRESS", null);
+        var otherSeeded = SeedRow(
+            "en-US", "IN_PROGRESS", null,
+            observedSkillId: "amzn1.ask.skill.user-b");
+
+        var status = StatusForLocales(("it-IT", SkillStatusState.SUCCEEDED), ("en-US", SkillStatusState.SUCCEEDED));
+        var user = UserServing(status, out var fake);
+
+        await RefreshAsync(user);
+
+        var own = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(own);
+        Assert.Equal("SUCCEEDED", own!.Status);
+        Assert.True(own.LastUpdated > ownSeeded);
+        Assert.Equal(RefreshSkillId, own.ObservedSkillId);
+
+        var other = Plugin.Instance!.Configuration.GetLocaleModelStatus("en-US");
+        Assert.NotNull(other);
+        Assert.Equal("IN_PROGRESS", other!.Status);
+        Assert.Equal(otherSeeded, other.LastUpdated);
+        Assert.Equal("amzn1.ask.skill.user-b", other.ObservedSkillId);
+        Assert.Equal(1, fake.GetStatusCalls);
+    }
+
+    /// <summary>
+    /// JF-724 legacy boundary: an UNATTRIBUTED family row (pre-JF-724
+    /// persisted, or hand-authored) stays eligible for any refresh (today's
+    /// behavior preserved), and the settle ATTRIBUTES it to the settling
+    /// skill so the next refresh can discriminate.
+    /// </summary>
+    [Fact]
+    public async Task RefreshInProgressLocaleStatusesAsync_UnattributedFrozenRow_StaysEligibleAndBecomesAttributed()
+    {
+        SeedRow("it-IT", "IN_PROGRESS", null);
+        var user = UserServing(StatusFor("it-IT", SkillStatusState.SUCCEEDED), out var fake);
+
+        await RefreshAsync(user);
+
+        var row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
+        Assert.NotNull(row);
+        Assert.Equal("SUCCEEDED", row!.Status);
+        Assert.Equal(RefreshSkillId, row.ObservedSkillId);
+        Assert.Equal(1, fake.GetStatusCalls);
     }
 
     /// <summary>

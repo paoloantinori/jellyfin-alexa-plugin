@@ -93,7 +93,7 @@ internal static class SmapiTokenRefresher
 
         try
         {
-            plugin!.SaveConfiguration();
+            plugin!.Configuration.PersistUnderLedgerLock();
         }
         catch (Exception ex)
         {
@@ -171,7 +171,7 @@ internal static class SmapiTokenRefresher
         // can lag the rotation (re-link risk if the process dies before a later save).
         try
         {
-            plugin!.SaveConfiguration();
+            plugin!.Configuration.PersistUnderLedgerLock();
         }
         catch (Exception ex)
         {

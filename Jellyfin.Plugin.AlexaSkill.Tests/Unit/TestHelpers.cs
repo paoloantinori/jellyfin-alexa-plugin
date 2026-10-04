@@ -830,8 +830,23 @@ internal static class TestHelpers
             loggerFactory,
             userManager.Object);
 
+        // The serializer mock the shared plugin instance persists through
+        // (JF-724 gate-marker round 2 F3): recorded at construction, so any
+        // test in the collection can prove a REAL SaveConfiguration reached
+        // the framework serializer (BasePluginOfT delegates to the injected
+        // IXmlSerializer, which in this seam is this mock).
+        ConfigSerializerMock = xmlSerializer;
+
         plugin.Configuration.ServerAddress = "http://localhost:8096";
     }
+
+    /// <summary>The Moq serializer the shared plugin instance was constructed
+    /// with (set by <see cref="EnsurePluginInstance"/> on first construction);
+    /// read-only surface for pins that assert a save really ran. Moq records
+    /// invocations without any Setup, so reading
+    /// <c>ConfigSerializerMock.Invocations</c> observes every SerializeToFile
+    /// the plugin performed, across the whole collection run.</summary>
+    internal static Mock<IXmlSerializer>? ConfigSerializerMock { get; private set; }
 
     /// <summary>
     /// Polls <paramref name="condition"/> until it returns true or the timeout

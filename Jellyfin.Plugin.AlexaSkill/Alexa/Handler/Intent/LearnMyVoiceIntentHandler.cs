@@ -75,7 +75,7 @@ public class LearnMyVoiceIntentHandler : BaseHandler
         }
 
         user.AlexaPersonId = personId;
-        Plugin.Instance?.SaveConfiguration();
+        Plugin.Instance?.Configuration.PersistUnderLedgerLock();
 
         Logger.LogInformation("Linked voice profile {PersonId} to user {Username}", personId, user.Username);
 

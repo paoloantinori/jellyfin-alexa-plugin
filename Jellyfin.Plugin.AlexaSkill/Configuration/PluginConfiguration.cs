@@ -350,10 +350,55 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <summary>
     /// Gets or sets per-locale interaction model build status from SMAPI.
     /// Stored as a list because XmlSerializer cannot serialize Dictionary.
+    /// OWNERSHIP MODEL (JF-724, the recorded decision): the ledger is keyed by
+    /// LOCALE ONLY and deliberately GLOBAL across linked SMAPI users, because
+    /// the admin panel's product surface is one row per locale; with two users
+    /// both skills deploy the same embedded models, so the settled truths agree
+    /// and a cross-user overwrite is invisible while the two skills' build
+    /// health agrees. HONEST BOUND (JF-724 code-review F3): a divergent
+    /// household (one account throttled so its builds FAIL while the other's
+    /// succeed) shows the LAST writer's truth in the shared rows, panel
+    /// consumer weight included (failedModels/ModelsDeployed), until the next
+    /// sync; the <see cref="LocaleModelStatus.ObservedSkillId"/> attribution
+    /// makes that divergence diagnosable, and a per-user key remains the fix if
+    /// multi-user ever matters. The one cross-user read-decides-for-other path
+    /// (the JF-722 deferred refresh settling the other user's frozen rows from
+    /// ITS skill's status) is closed by row authorship instead: the observation
+    /// family stamps <see cref="LocaleModelStatus.ObservedSkillId"/> and the
+    /// refresh matches it against its own skill.
+    /// CONCURRENCY (JF-724): every read and write of this collection MUST go
+    /// through the locked accessors below (<see cref="GetLocaleModelStatus"/>,
+    /// <see cref="SetLocaleModelStatus"/>, <see cref="UpdateLocaleModelStatus"/>,
+    /// <see cref="GetLocaleModelStatusSnapshot"/>; the family is ASSEMBLY-INTERNAL
+    /// so the plain Get/Set doors cannot be paired from outside the plugin+test
+    /// seam, gate-marker F3) in PLUGIN code, and every plugin-code save goes
+    /// through <see cref="PersistUnderLedgerLock"/> so
+    /// the XML serializer's enumeration is serialized against writer mutations
+    /// too; an unguarded enumeration 500s the admin surface on a concurrent
+    /// writer's Add/indexer-set, and an unguarded read-then-write loses the
+    /// intervening writer's row. The snapshot's copy is reference-shallow by
+    /// design: its stability rests on the accessors' replace-only discipline
+    /// (WriteLocaleModelStatusEntry swaps whole entry objects, never mutates
+    /// one in place); nothing may mutate a LocaleModelStatusEntry in place
+    /// anywhere. The lock is per Configuration object; the residual Jellyfin
+    /// admin-save swap (the whole Configuration object is REPLACED, so an
+    /// in-flight writer holding the pre-swap reference writes into an orphan
+    /// the next save never persists) is the pre-existing documented window
+    /// (the JF-722 refresh's read-fresh rationale) and is not lock-fixable
+    /// across objects.
     /// </summary>
 #pragma warning disable CA2227
     public Collection<LocaleModelStatusEntry> LocaleModelStatuses { get; set; } = new();
 #pragma warning restore CA2227
+
+    /// <summary>The ledger lock (JF-724): serializes every access to
+    /// <see cref="LocaleModelStatuses"/> through the accessors below, both the
+    /// plain reads/writes and the read-modify-write pairs (the capture
+    /// preserve, the refresh settle, the no-PUT carry), so a concurrent writer
+    /// can neither break an enumeration nor clobber a row landed between a
+    /// reader's Get and Set. Private by design: nothing outside this class may
+    /// enumerate or mutate the collection directly.</summary>
+    private readonly object _localeLedgerLock = new();
 
     /// <summary>
     /// Gets or sets admin-defined custom mood → genre overrides that augment the
@@ -400,25 +445,159 @@ public class PluginConfiguration : BasePluginConfiguration
     }
 
     /// <summary>
-    /// Gets locale model status by locale code.
+    /// Gets locale model status by locale code. Locked (JF-724): a concurrent
+    /// writer's collection mutation must not throw the scan. No production
+    /// reader uses this plain read today (the writers that decide from the
+    /// current row go through <see cref="UpdateLocaleModelStatus"/>); it
+    /// remains the assembly-internal plain-read door and the test-seeding
+    /// primitive (internal since gate-marker F3: a public Get paired with a
+    /// public Set is two lock acquisitions and resurrects the closed
+    /// read-modify-write from any future caller).
     /// </summary>
-    public LocaleModelStatus? GetLocaleModelStatus(string locale)
+    internal LocaleModelStatus? GetLocaleModelStatus(string locale)
     {
-        foreach (var entry in LocaleModelStatuses)
+        lock (_localeLedgerLock)
         {
-            if (string.Equals(entry.Locale, locale, StringComparison.OrdinalIgnoreCase))
+            return FindLocaleModelStatusEntry(locale)?.ToStatus();
+        }
+    }
+
+    /// <summary>
+    /// Sets or updates locale model status, delegating to
+    /// <see cref="UpdateLocaleModelStatus"/> so the lock and upsert plumbing
+    /// have ONE site. No production writer uses this plain write today (every
+    /// field-era writer decides its row from the current row); it remains the
+    /// assembly-internal plain-write door and the test-seeding primitive
+    /// (internal since gate-marker F3, the same closed-door reasoning as
+    /// GetLocaleModelStatus). Writers that
+    /// decide the row from the CURRENT row (the capture preserve, the refresh
+    /// settle, the no-PUT carry) must use
+    /// <see cref="UpdateLocaleModelStatus"/> directly, or the read and this
+    /// write are two lock acquisitions with a race between them.
+    /// </summary>
+    internal void SetLocaleModelStatus(string locale, LocaleModelStatus status)
+        => UpdateLocaleModelStatus(locale, _ => status);
+
+    /// <summary>
+    /// The atomic read-modify-write of one ledger row (JF-724): the existing
+    /// row is read, the compose callback derives the next row from it, and the
+    /// write lands, all under the ONE ledger lock acquisition that closed the
+    /// KNOWN RACE class (a sync-authored settled row with a real canary
+    /// diagnostic landing between a capture/refresh pass's family read and its
+    /// Set used to be overwritten with the stale read's fields until the next
+    /// sync run). The callback must be PURE (no I/O, no logging): it runs under
+    /// the lock.
+    /// </summary>
+    /// <param name="locale">The locale whose row to update.</param>
+    /// <param name="compose">Derives the next row from the current row (null
+    /// for a locale with no row yet). Returning null DECLINES the write and
+    /// leaves the row untouched (the refresh's not-my-family shape).</param>
+    /// <returns>The row now stored, or null when the callback declined to
+    /// write.</returns>
+    internal LocaleModelStatus? UpdateLocaleModelStatus(string locale, Func<LocaleModelStatus?, LocaleModelStatus?> compose)
+    {
+        lock (_localeLedgerLock)
+        {
+            var next = compose(FindLocaleModelStatusEntry(locale)?.ToStatus());
+            if (next == null)
             {
-                return entry.ToStatus();
+                return null;
+            }
+
+            WriteLocaleModelStatusEntry(locale, next);
+            return next;
+        }
+    }
+
+    /// <summary>
+    /// A locked copy of the whole ledger for read-only consumers (JF-724): the
+    /// diagnostics panel, the custom-model status endpoint, and the refresh's
+    /// family pre-check. Enumerating <see cref="LocaleModelStatuses"/> directly
+    /// throws (and 500s the admin surface) when a concurrent writer's
+    /// Add/indexer-set bumps the collection version mid-enumeration; every
+    /// consumer derives its answers from this snapshot instead. The copy is
+    /// REFERENCE-shallow (the entries carry the Locale key the record lacks):
+    /// it is stable because the accessors only ever REPLACE whole entry
+    /// objects, never mutate one in place, so the referenced rows can never
+    /// change under the snapshot's readers.
+    /// </summary>
+    /// <returns>A stable copy; never null, empty when the ledger is.</returns>
+    internal IReadOnlyList<LocaleModelStatusEntry> GetLocaleModelStatusSnapshot()
+    {
+        lock (_localeLedgerLock)
+        {
+            return LocaleModelStatuses.ToArray();
+        }
+    }
+
+    /// <summary>
+    /// The ONE save path for plugin code (JF-724 gate-marker F4, absorbing
+    /// code-review F1): persists the plugin's configuration under the ledger
+    /// lock, because Jellyfin's SaveConfiguration serializes the LIVE
+    /// LocaleModelStatuses collection and a concurrent ledger writer's
+    /// Add/replace landing mid-serialization throws INSIDE the save (the
+    /// write already succeeded, so the failure strands rows memory-only, and
+    /// on the capture path a false return would mis-derive the paired
+    /// refresh's recapture mode). Every plugin-code save that can execute
+    /// once background work exists goes through here, so the invariant is
+    /// structural instead of a repeated caller lambda. Reads
+    /// <see cref="Plugin.Instance"/> itself: there is exactly one Plugin
+    /// instance in production and in the test seam, and the saved
+    /// configuration is that instance's.
+    /// UNWRAPPED REMAINDER (the whole of it, JF-724 gate-marker F1's honest
+    /// scope): the two Plugin.cs LOAD-TIME migrations (JF-300/JF-534), which
+    /// run during plugin construction before any hosted service or scheduled
+    /// task can run a ledger writer in the process, are already best-effort
+    /// caught there; and Jellyfin's own configuration-save path when the
+    /// admin updates plugin config through the framework, which is outside
+    /// plugin code and human-paced. Nothing else may call
+    /// SaveConfiguration directly.
+    /// </summary>
+    internal void PersistUnderLedgerLock()
+    {
+        lock (_localeLedgerLock)
+        {
+            // Instance is resolved BEFORE the seam fires (gate-marker round 2
+            // F4): the interceptor must only ever count saves that will really
+            // run, so a null Instance is a silent no-op on both counts.
+            var plugin = Plugin.Instance;
+            if (plugin == null)
+            {
+                return;
+            }
+
+            PersistInterceptorForTest?.Invoke();
+            plugin.SaveConfiguration();
+        }
+    }
+
+    /// <summary>Test seam (the TypeLegEntryProbeForTest pattern): invoked
+    /// inside <see cref="PersistUnderLedgerLock"/> under the lock, ONLY when
+    /// the save will really run (Instance non-null, resolved first); a test
+    /// can throw from it to simulate a failing SaveConfiguration (the JF-724
+    /// gate-marker F2 capture save-honesty pin) or observe the save boundary.
+    /// Never set in production. Internal property: invisible to
+    /// XmlSerializer.</summary>
+    internal Action? PersistInterceptorForTest { get; set; }
+
+    /// <summary>The locked-scan row lookup shared by the accessors. Caller
+    /// holds <see cref="_localeLedgerLock"/>.</summary>
+    private LocaleModelStatusEntry? FindLocaleModelStatusEntry(string locale)
+    {
+        for (int i = 0; i < LocaleModelStatuses.Count; i++)
+        {
+            if (string.Equals(LocaleModelStatuses[i].Locale, locale, StringComparison.OrdinalIgnoreCase))
+            {
+                return LocaleModelStatuses[i];
             }
         }
 
         return null;
     }
 
-    /// <summary>
-    /// Sets or updates locale model status.
-    /// </summary>
-    public void SetLocaleModelStatus(string locale, LocaleModelStatus status)
+    /// <summary>The upsert shared by the accessors (replace the locale's row,
+    /// or append one). Caller holds <see cref="_localeLedgerLock"/>.</summary>
+    private void WriteLocaleModelStatusEntry(string locale, LocaleModelStatus status)
     {
         for (int i = 0; i < LocaleModelStatuses.Count; i++)
         {
@@ -759,8 +938,30 @@ public record LocaleModelStatus
     /// no-wire-protocol rule).</summary>
     public string? FrozenCatalogTypes { get; init; }
 
-    /// <summary>Gets the model source: "Embedded" (bundled) or "Custom" (user-provided).</summary>
-    public string Source { get; init; } = "Embedded";
+    /// <summary>Gets the model source label: the observation family's
+    /// <c>"Embedded"</c> (<see cref="EntryPoints.SkillStartup.CaptureLedgerSource"/>)
+    /// or the catalog-sync writers'
+    /// <c>"CatalogSyncGetModifyPut"</c>. Defaults to EMPTY (JF-724): the
+    /// capture-family recognizer matches this field Ordinal against the
+    /// capture's own constant, and a writer that composes a row WITHOUT
+    /// choosing a source must land OUTSIDE that family (the old "Embedded"
+    /// default silently drafted any omitting writer's IN_PROGRESS rows into
+    /// the refresh's rewrite set, the JF-722 rework F5 gap). Every field-era
+    /// writer sets Source explicitly.</summary>
+    public string Source { get; init; } = string.Empty;
+
+    /// <summary>Gets the skill whose status observation authored this row
+    /// (JF-724): set by the startup capture and its deferred refresh (the
+    /// observation family, which reads ONE skill's status into the shared
+    /// locale-keyed rows); null on the catalog-sync writers' rows, on
+    /// pre-JF-724 persisted rows, and on hand-authored rows. The refresh's
+    /// family predicate matches this field against ITS OWN skill id (null
+    /// matches any refresh, keeping legacy rows refreshable), so with two
+    /// linked SMAPI users one user's refresh no longer settles the other
+    /// user's frozen rows from its own skill's status, nor stays alive on
+    /// them. XML-additive: a missing element deserializes null and an old DLL
+    /// ignores the element (the JF-721 rollback-safe pattern).</summary>
+    public string? ObservedSkillId { get; init; }
 
     /// <summary>
     /// Renders the row's caveat bits as the admin-panel text shown beside the
@@ -834,6 +1035,7 @@ public class LocaleModelStatusEntry
         Caveat = status.Caveat;
         FrozenCatalogTypes = status.FrozenCatalogTypes;
         Source = status.Source;
+        ObservedSkillId = status.ObservedSkillId;
     }
 
     public string Locale { get; set; } = string.Empty;
@@ -851,7 +1053,19 @@ public class LocaleModelStatusEntry
     /// <see cref="LocaleModelStatus.FrozenCatalogTypes"/> (JF-721).</summary>
     public string? FrozenCatalogTypes { get; set; }
 
+    /// <summary>Unlike the record's EMPTY default (JF-724), the XML default
+    /// stays "Embedded" and is LOAD-BEARING: a row persisted before the Source
+    /// field existed deserializes with NO Source element and must keep reading
+    /// as an embedded-authored row. The asymmetry is deliberate and pinned;
+    /// do not "fix" it.</summary>
     public string Source { get; set; } = "Embedded";
+
+    /// <summary>The XML-persisted twin of
+    /// <see cref="LocaleModelStatus.ObservedSkillId"/> (JF-724). Additive:
+    /// pre-JF-724 rows have no element and deserialize null (legacy rows every
+    /// refresh may still settle); an old DLL ignores the element
+    /// (rollback-safe).</summary>
+    public string? ObservedSkillId { get; set; }
 
     public LocaleModelStatus ToStatus() => new()
     {
@@ -861,6 +1075,7 @@ public class LocaleModelStatusEntry
         Caveat = Caveat,
         FrozenCatalogTypes = FrozenCatalogTypes,
         Source = Source,
+        ObservedSkillId = ObservedSkillId,
     };
 }
 

@@ -488,7 +488,7 @@ public class LibrarySyncService
         List<CatalogType> frozenTypes)
     {
         var (caveat, frozenCatalogTypes) = FrozenCatalogCaveat(frozenTypes);
-        WriteLedgerEntry(locale, new Configuration.LocaleModelStatus
+        WriteLedgerEntry(locale, _ => new Configuration.LocaleModelStatus
         {
             Status = modelUpdate.BuildStatus,
             LastUpdated = DateTime.UtcNow,
@@ -500,19 +500,26 @@ public class LibrarySyncService
     }
 
     /// <summary>
-    /// The ledger-write shell (guard, set, save, non-fatal catch) shared by
-    /// both catalog-sync ledger writers (the JF-705 PUT path above and the
-    /// JF-709 no-PUT path); the writers differ only in how the entry's fields
-    /// are derived. The startup capture (JF-710) is the third ledger writer
-    /// and keeps its own hand-rolled write under a whole-capture catch, now
-    /// with per-locale isolation inside it (JF-722: a malformed per-locale
-    /// entry costs its own row, not every later locale's); the capture's
-    /// JF-722 deferred refresh is the fourth writer, same family (it only
-    /// rewrites capture-authored rows).
+    /// The ledger-write shell (guard, atomic update, save, non-fatal catch)
+    /// shared by both catalog-sync ledger writers (the JF-705 PUT path above
+    /// and the JF-709 no-PUT path); the writers differ only in how the entry's
+    /// fields are derived, and the compose callback is handed the CURRENT row
+    /// under the configuration's ledger lock (JF-724), so the no-PUT writer's
+    /// read-decide-carry runs atomically (the PUT path ignores the current row
+    /// but still writes through the one locked shell, so the guard/save/catch
+    /// plumbing stays single-sited). The startup capture (JF-710) is the third
+    /// ledger writer and keeps its own write under a whole-capture catch, now
+    /// with per-locale isolation inside it (JF-722) and routed through the same
+    /// atomic UpdateLocaleModelStatus (JF-724); the capture's JF-722 deferred
+    /// refresh is the fourth writer, same family (it only rewrites
+    /// capture-authored rows), same atomic path.
     /// The what label names the failed write in the non-fatal log line so triage
     /// reads the right surface.
     /// </summary>
-    private void WriteLedgerEntry(string locale, Configuration.LocaleModelStatus entry, string what)
+    private void WriteLedgerEntry(
+        string locale,
+        Func<Configuration.LocaleModelStatus?, Configuration.LocaleModelStatus?> compose,
+        string what)
     {
         try
         {
@@ -522,8 +529,11 @@ public class LibrarySyncService
                 return;
             }
 
-            config.SetLocaleModelStatus(locale, entry);
-            Plugin.Instance!.SaveConfiguration();
+            config.UpdateLocaleModelStatus(locale, compose);
+            // The ONE locked save path (JF-724): SaveConfiguration serializes
+            // the live collection, which would otherwise race another writer's
+            // Add/replace mid-enumeration.
+            config.PersistUnderLedgerLock();
         }
         catch (Exception ex)
         {
@@ -566,50 +576,41 @@ public class LibrarySyncService
     /// </summary>
     private void RecordNoPutFrozenLegInLedger(string locale, List<CatalogType> frozenTypes)
     {
-        // The previous-entry READ carries its own non-fatal guard (the write is
-        // WriteLedgerEntry's): the startup capture can swap ledger rows
-        // concurrently, and a Collection mutation during the GetLocaleModel
-        // Status scan must not fail a sync leg that otherwise completed. A
-        // failed read degrades to the no-previous-entry shape.
-        Configuration.LocaleModelStatus? previous;
-        try
-        {
-            previous = Plugin.Instance?.Configuration?.GetLocaleModelStatus(locale);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex,
-                "Failed to read the locale status ledger for {Locale} before recording the all-frozen no-PUT leg (non-fatal)",
-                locale);
-            previous = null;
-        }
-
-        string? carriedError = null;
-        if (previous?.Error is { Length: > 0 } previousError
-            && !IsOwnShapeLedgerCaveat(previous.Caveat))
-        {
-            // Gate-marker rework F1: a pre-JF-721 composed previous Error
-            // migrates once here too; this carry is the path that would
-            // otherwise bake the stale clause/tail text onto a caveat-carrying
-            // row (the clause this run writes its own fields for). Gate-marker
-            // rework F3: the carried diagnostic is ATTRIBUTED in the free text
-            // so the admin can tell a prior-run failure from the current run's
-            // state; the prefix is display-only, nothing parses it.
-            carriedError = MigrateLegacyLedgerError(previousError).Error is { Length: > 0 } foreign
-                ? CarriedDiagnosticLedgerPrefix + foreign
-                : null;
-        }
-
         var (frozenCaveat, frozenCatalogTypes) = FrozenCatalogCaveat(frozenTypes);
 
-        WriteLedgerEntry(locale, new Configuration.LocaleModelStatus
+        // The previous-row read-decide-carry runs INSIDE the locked compose
+        // (JF-724): it was the last unguarded read-modify-write of this writer
+        // (the startup capture or its deferred refresh landing between the old
+        // separate Get and the Set was overwritten until the next run); the
+        // read and the write now share one ledger-lock acquisition, and the
+        // non-fatal guard around the whole update is WriteLedgerEntry's.
+        WriteLedgerEntry(locale, previous =>
         {
-            Status = PreservedOrSkippedStatus(previous?.Status),
-            LastUpdated = DateTime.UtcNow,
-            Error = carriedError,
-            Caveat = frozenCaveat | Configuration.CatalogLedgerCaveats.NoCatalogPut,
-            FrozenCatalogTypes = frozenCatalogTypes,
-            Source = CatalogSyncLedgerSource
+            string? carriedError = null;
+            if (previous?.Error is { Length: > 0 } previousError
+                && !IsOwnShapeLedgerCaveat(previous.Caveat))
+            {
+                // Gate-marker rework F1: a pre-JF-721 composed previous Error
+                // migrates once here too; this carry is the path that would
+                // otherwise bake the stale clause/tail text onto a caveat-carrying
+                // row (the clause this run writes its own fields for). Gate-marker
+                // rework F3: the carried diagnostic is ATTRIBUTED in the free text
+                // so the admin can tell a prior-run failure from the current run's
+                // state; the prefix is display-only, nothing parses it.
+                carriedError = MigrateLegacyLedgerError(previousError).Error is { Length: > 0 } foreign
+                    ? CarriedDiagnosticLedgerPrefix + foreign
+                    : null;
+            }
+
+            return new Configuration.LocaleModelStatus
+            {
+                Status = PreservedOrSkippedStatus(previous?.Status),
+                LastUpdated = DateTime.UtcNow,
+                Error = carriedError,
+                Caveat = frozenCaveat | Configuration.CatalogLedgerCaveats.NoCatalogPut,
+                FrozenCatalogTypes = frozenCatalogTypes,
+                Source = CatalogSyncLedgerSource
+            };
         }, "all-frozen no-PUT leg");
     }
 

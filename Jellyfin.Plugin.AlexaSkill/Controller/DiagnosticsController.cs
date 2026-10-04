@@ -182,7 +182,10 @@ public class DiagnosticsController : ControllerBase
 
         ConnectivityResult connectivity = await _connectivityChecker.CheckAsync().ConfigureAwait(false);
 
-        var modelEntries = config.LocaleModelStatuses;
+        // JF-724: the locked snapshot, one copy for every derived answer below
+        // (Max, Count, Any); the rationale lives on the ledger's lock doc in
+        // PluginConfiguration (direct enumeration 500s on a concurrent writer).
+        var modelEntries = config.GetLocaleModelStatusSnapshot();
         var lastDeploy = modelEntries.Count == 0
             ? (DateTime?)null
             : modelEntries.Max(e => e.LastUpdated);

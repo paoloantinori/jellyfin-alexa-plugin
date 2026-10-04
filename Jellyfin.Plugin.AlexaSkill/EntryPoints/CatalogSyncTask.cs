@@ -150,7 +150,7 @@ public class CatalogSyncTask : IScheduledTask
             progress.Report((double)processed / totalUsers);
         }
 
-        Plugin.Instance.SaveConfiguration();
+        Plugin.Instance.Configuration.PersistUnderLedgerLock();
     }
 
     /// <inheritdoc />
