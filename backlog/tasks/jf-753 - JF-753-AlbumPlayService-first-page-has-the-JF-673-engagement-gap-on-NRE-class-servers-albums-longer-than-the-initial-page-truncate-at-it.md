@@ -1,14 +1,18 @@
 ---
 id: JF-753
 title: >-
-  JF-753 - AlbumPlayService first page has the JF-673 engagement gap on NRE-class
-  servers; albums longer than the initial page truncate at it
+  JF-753 - AlbumPlayService first page has the JF-673 engagement gap on
+  NRE-class servers; albums longer than the initial page truncate at it
 status: Done
 assignee: []
 created_date: '2026-10-04'
+updated_date: '2026-10-04 18:32'
 labels: []
+dependencies: []
 references:
-  - backlog/tasks/jf-673 - JF-673-SafeGetItemsResult-fallback-reports-TotalRecordCountpage-size-so-the-PlayBook-continuation-store-never-engages-on-NRE-class-servers-and-books-still-truncate-at-the-initial-page.md
+  - >-
+    backlog/tasks/jf-673 -
+    JF-673-SafeGetItemsResult-fallback-reports-TotalRecordCountpage-size-so-the-PlayBook-continuation-store-never-engages-on-NRE-class-servers-and-books-still-truncate-at-the-initial-page.md
 priority: low
 ---
 
@@ -57,3 +61,9 @@ Gates: worker Skill simplify (4 angles: reuse 3 findings applied incl. the two s
 - [x] #5 /code-review high passed (5 findings all applied or documented as accepted residual)
 - [x] #6 Red proof: album NRE-fallback full initial page stores the end-unknown continuation, failed pre-fix (store NULL on the unmodified base, both TFMs)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+CLOSED 2026-10-04 by the orchestrator after the full cycle: merged into main (worker commit ac57ba6b + orchestrator tail c30cb72b, --no-ff; the gate-marker's six axes PASS with its three findings applied as the tail, incl. the playlist head's fold through the new two-int overload), combined verification via the worker's 5162/5162 both TFMs plus the tail's Release build and affected classes; deployed in the wave's batched deploy. JF-757 filed by the worker.
+<!-- SECTION:FINAL_SUMMARY:END -->
