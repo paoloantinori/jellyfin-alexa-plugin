@@ -74,7 +74,7 @@ active edit rather than a passive miss, and the table comment documents the cont
 - [x] #7 N/A (behavior-preserving extraction, no new intent or handler; the pins ARE the proof and TWO live red proofs were executed against real production edits: sabotage A, the filed hazard itself - the helper body rewritten into a hand three-term conjunction over legs[0..2] - failed the behavioral discriminator on both TFMs while the routing pin and all six other pins stayed green, exactly the case the JF-727 weak-shape analysis said would keep every pin green; sabotage B, the inline revert - the call site back to a raw typeLegs.All() with the helper kept - failed the routing pin on both TFMs with "Found 0 call instructions" while the behavioral tests stayed green. The filtered 25-test battery incl. the JF-495 series-only-library sync, the conjunction's current-three-types behavioral surface, ran green both TFMs)
 - [x] #8 N/A (no Alexa speech)
 - [x] #9 /simplify passed (4 parallel angles: efficiency CLEAN, altitude CLEAN, reuse clean, simplification 2 findings: the narrative redundancy APPLIED - the four full copies of the hazard story trimmed to one canonical home on the predicate's XML doc plus one for the discriminator half on the behavioral class doc, with one-line pointers in the production call-site comment and the routing-pin doc; the tuple-alias/record finding SKIPPED with reasons: adding a row field is compile-loud at every spelling site (the tuple TYPE mismatches at the AllTypeLegsEmpty(typeLegs) call and the test builder, CS1503), so the cited "missed-one risk" does not hold; the row shape is the deliberate JF-711/JF-727 design; a file-scoped alias does not cross assemblies and would hide the shape from the table's own declaration site. The altitude agent independently declined the record-type refactor as touching the whole JF-727 table machinery)
-- [x] #10 /code-review high passed (5 findings, 3 applied / 2 dispositioned: F3 APPLIED - the predicate moved from the error-string helpers region 780 lines away to directly above SyncUserLibraryAsync, with the doc noting a local function under the table would be unpinnable by the behavioral test; F2 APPLIED as a doc sentence - the routing pin's POSITIONAL binding named: the block compiles into MoveNext only while it stays after the method's first await, a move above it fails the pin on an innocent reorder, the conscious-widening path the JF-727 fetch pin already carries; F4 APPLIED as the gate-marker-tail note on the test Legs builder - a contract growing past Items.Count must re-judge the placeholders per addition, and a predicate that starts dereferencing items NREs on the null elements and fails the pins loudly, which is vigilance not a hole; F1 DECLINED with reasons - the tuple alias/record, same disposition as the simplify round; F5 SKIPPED - the production doc's prose references to test names cannot become crefs across the plugin-to-test assembly boundary, prose-exact naming is the established house pattern. No real-but-out-of-scope finding remained, so the reserved JF-746 number was not consumed)
+- [x] #10 /code-review high passed (5 findings, 3 applied / 2 dispositioned: F3 APPLIED - the predicate moved from the error-string helpers region 780 lines away to directly above SyncUserLibraryAsync, with the doc noting a local function under the table would be unpinnable by the behavioral test; F2 APPLIED as a doc sentence - the routing pin's coupling named (later CORRECTED by the orchestrator gate-marker GM-F1: the first wording claimed a move above the method's first await fails the pin via the kick-off body, a false compiler mechanism - Roslyn compiles the whole async user body into MoveNext, so the pin is reorder-proof and the coupling is really "direct statement in the method's body, not a lambda/local function/extracted method"); F4 APPLIED as the gate-marker-tail note on the test Legs builder - a contract growing past Items.Count must re-judge the placeholders per addition, and a predicate that starts dereferencing items NREs on the null elements and fails the pins loudly, which is vigilance not a hole; F1 DECLINED with reasons - the tuple alias/record, same disposition as the simplify round; F5 SKIPPED - the production doc's prose references to test names cannot become crefs across the plugin-to-test assembly boundary, prose-exact naming is the established house pattern. No real-but-out-of-scope finding remained, so the reserved JF-746 number was not consumed)
 <!-- DOD:END -->
 
 ## Final Summary
@@ -113,9 +113,26 @@ touched the pre-check (its LibrarySyncService diff sits entirely in the ledger
 writer region past line 470; the check was byte-identical to the JF-727 shape).
 Gates: /simplify 4 angles (narrative dedup applied; tuple alias declined with
 reasons) and /code-review high 5 findings (3 applied: predicate relocation above
-the sync entry point, the positional-binding false-positive shape named, the
-test-builder re-judgment note; 2 dispositioned: tuple alias declined as above,
-prose test references skipped - no cref crosses the assembly boundary). Suites:
+the sync entry point, the routing-pin coupling doc, the test-builder re-judgment
+note; 2 dispositioned: tuple alias declined as above, prose test references
+skipped - no cref crosses the assembly boundary).
+ORCHESTRATOR GATE-MARKER (all six named axes verified at source, PASS; three
+doc-truth findings, all applied in the rework commit): GM-F1/GM-F2 - the
+routing-pin doc and this Final Summary carried a FALSE compiler mechanism (a
+move of the block above the method's first await fails the pin via the
+kick-off body); Roslyn compiles an async method's ENTIRE user body into
+MoveNext, the kick-off only creates the machine and dispatches, so the pin is
+REORDER-PROOF and its real coupling is "direct statement in the method's body"
+(a lambda, local function, or extracted method is what moves the call off
+MoveNext and fails the pin by construction); both spots corrected in one edit.
+GM-F3 - the predicate's vacuous-true-on-empty-table semantics were unreserved;
+the EMPTY-ARRAY CONTRACT sentence added to the predicate's doc, and a guard
+throw DECLINED with reasons (the table is a literal, the shape is unreachable
+today, and a dynamic-derivation edit is exactly the change that must re-judge
+the pin battery where the sentence lives). Rework runs: doc-only round; the
+structure+emptiness battery re-run green on the final state (8/8 both TFMs) and
+Release -warnaserror clean; no full dual-TFM re-run per the round's scope.
+Suites:
 full suite 5110/5110 net9.0 and 5110/5110 net10.0 on the final state (baseline
 5107 + 3), Release -warnaserror 0/0; one earlier full run carried a single
 non-reproducing net10.0 flake whose name was lost to a summary-only grep, three

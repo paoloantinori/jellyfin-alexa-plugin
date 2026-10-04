@@ -98,7 +98,14 @@ public class LibrarySyncService
     /// above the sync entry point (code-review F3): the table's reader meets
     /// the predicate and this contract one screen before the initializer;
     /// a local function under the table would be unpinnable by the
-    /// behavioral test.
+    /// behavioral test. EMPTY-ARRAY CONTRACT (orchestrator gate-marker
+    /// GM-F3): a zero-length table returns TRUE vacuously (All over an empty
+    /// sequence), so a future refactor that derives the table dynamically
+    /// instead of this method-local literal must not let an empty derivation
+    /// silently take the skip. A guard throw was considered and DECLINED for
+    /// now: the table is a literal, the shape is unreachable today, and a
+    /// dynamic-derivation edit is exactly the change that must re-judge this
+    /// pin battery, where this sentence lives.
     /// </summary>
     internal static bool AllTypeLegsEmpty(
         (CatalogType Type, BaseItemKind Kind, IReadOnlyList<BaseItem> Items, Func<string?> StoredCatalogId, Action<string> StoreCatalogId, Action<int> StoreCount, string Name, string Description)[] legs)

@@ -137,14 +137,18 @@ public class LibrarySyncServiceStructureTests
     /// sliced table (typeLegs[..3]) passes; that edit is not a realistic
     /// drift shape (the table initializer sits three lines above and a
     /// fourth type's one-row edit lands inside it), and the discriminator
-    /// keeps the predicate itself honest regardless. FALSE-POSITIVE SHAPE,
-    /// named (code-review F2): the binding is also POSITIONAL in the method
-    /// body - everything here compiles into the state machine MoveNext only
-    /// while the block stays after SyncUserLibraryAsync's first await; moving
-    /// the fetch+pre-check block above that await compiles the call into the
-    /// method's kick-off body and fails this pin on an innocent reorder. That
-    /// is the conscious-widening path, the same property the JF-727 fetch pin
-    /// already carries (it binds to this same MoveNext).
+    /// keeps the predicate itself honest regardless. SCOPE, stated truly
+    /// (orchestrator gate-marker GM-F1, correcting an earlier false compiler
+    /// mechanism in this doc): Roslyn compiles an async method's ENTIRE user
+    /// body, the statements before the first await included, into the state
+    /// machine's MoveNext - the kick-off only creates the machine and
+    /// dispatches - so the binding is REORDER-PROOF: hoisting the
+    /// table+sourcing+pre-check block above EnsureLifetimeBudgetAsync keeps
+    /// this pin green. What actually moves the call off MoveNext is moving
+    /// the check OUT of the method's statement body - into a local function
+    /// (g__), a lambda (b__), or an extracted method - and each such shape
+    /// change fails this pin by construction, which is the coupling it
+    /// exists to hold.
     /// </summary>
     [Fact]
     public void AllTypeLegsEmpty_HasExactlyOneCallSite_TheEmptinessPreCheck()
