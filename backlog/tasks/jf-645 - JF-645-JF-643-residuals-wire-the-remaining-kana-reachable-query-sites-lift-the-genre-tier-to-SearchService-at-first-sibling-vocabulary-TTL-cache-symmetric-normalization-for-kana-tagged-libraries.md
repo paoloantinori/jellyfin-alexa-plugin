@@ -7,7 +7,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-09-27 08:01'
-updated_date: '2026-10-04'
+updated_date: '2026-10-04 19:06'
 labels:
   - search
   - i18n
@@ -73,4 +73,6 @@ VERIFICATION BAR: for each wired site, a test pinning the katakana-in / Latin-ma
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 Landed 2026-10-04 as the filing's coherent subset (items 1+2+3), with item 4 (symmetric index-side kana normalization, carrying the JF-658 kana-canonical finding) and item 5 (the normalizer-chain trigger) FILED as JF-755 per the split the filing sanctioned. The JF-643 kana genre-resolution tier now lives ONCE on SearchService.ResolveKanaGenreTagAsync (the kana/ER gate inside: Latin slots and ER-resolved canonicals return null before any vocabulary fetch; the vocabulary dedupe + Double Metaphone codes behind a GenreVocabularyCache DI singleton, 30-minute TTL keyed by Jellyfin user + the canonical RESOLVED library scope, non-empty vocabularies only, FakeTimeProvider-tested expiry), wired at its first siblings: PlayRandom, PlayByDecade, and BrowseLibrary's genre browse, each re-querying with the canonical tag through its own query shape. Every remaining raw-kana SearchTerm site is wired (one-line Romanize at the slot-string/query entry, raw value kept for speech where a raw local survives): AddToQueue and PlayNext after the JF-715 gate composite, AddSongToPlaylist's search local feeding both the query and the carrier-noun pick, PlayChannel, TvNextUpService's series resolution, and BrowseLibrary's category SearchTerm. The wired Latin paths are byte-identical (pinned), and each wired site carries the katakana-in/Latin-match pin the filing's verification bar demands. One pre-existing build break repaired in passing: QueueContinuation's bare cref fails under system SDK 10.0.112 (CS1574, verified pre-existing on the clean tree via a stash probe; SDK 10.0.111 built it). Gates: /simplify 4 agents (9 applied, 4 skips with recorded reasons, incl. the declined resolve-and-requery helper fold and the generic TtlCache core with its fifth-consumer revisit trigger documented on the cache) + /code-review high (0 correctness bugs; 4 low findings all dispositioned: the vacuous handler-level Latin controls made discriminating, the cache's DI registration pinned by a RealRegistrator test, the sibling-copy skip reaffirmed, the record's UNEDITED claim precisioned). Suites: 5171/5171 net9.0 and net10.0 on the final state (measured baseline 5143/5143 at the pre-change merge commit, +28 tests); Release --no-restore -warnaserror 0 warnings 0 errors. No locale, model, or speech surface changed; no deploy (the orchestrator's batched deploy owns the DLL).
+
+CLOSED 2026-10-04 by the orchestrator after the full cycle: merged into main (worker commit f2d8390f + orchestrator tail f86d9325, --no-ff; the gate-marker's seven axes PASS with its three record-precision findings applied as the tail; the cref qualification merged as the identical blob to the earlier fix), combined-tree suite 5190/5190 both TFMs (5162 + 28, arithmetic exact), deployed in the wave's batched deploy. JF-755 filed by this task.
 <!-- SECTION:FINAL_SUMMARY:END -->
