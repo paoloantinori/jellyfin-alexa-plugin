@@ -224,17 +224,14 @@ internal static class QueueContinuationFetcher
         Entities.User? pluginUser,
         ILogger logger)
     {
-        var query = new InternalItemsQuery
-        {
-            User = jellyfinUser,
-            Recursive = true,
-            ParentId = continuation.ParentId ?? Guid.Empty,
-            IncludeItemTypes = new[] { BaseItemKind.Audio },
-            DtoOptions = new DtoOptions(true),
-            OrderBy = AlbumTrackOrder,
-            StartIndex = continuation.StartIndex,
-            Limit = continuation.BatchSize
-        };
+        // Shared builder with the album head's first page (JF-757): one query shape
+        // owns head and tail, both arms, see BuildAlbumTracksQuery's doc.
+        var query = BuildAlbumTracksQuery(
+            jellyfinUser,
+            continuation.ParentId ?? Guid.Empty,
+            continuation.StartIndex,
+            continuation.BatchSize,
+            byAlbumIds: false);
 
         // Same per-user library scope the initial album fetch runs under
         // (AlbumPlayService.BuildAlbumQuery); without it a continuation batch
@@ -271,17 +268,12 @@ internal static class QueueContinuationFetcher
             && (result.TotalRecordCount == 0
                 || (continuation.TotalCount == Util.SearchService.UnknownTotal && result.Items.Count == 0)))
         {
-            var albumIdsQuery = new InternalItemsQuery
-            {
-                User = jellyfinUser,
-                Recursive = true,
-                AlbumIds = new[] { continuation.ParentId.Value },
-                IncludeItemTypes = new[] { BaseItemKind.Audio },
-                DtoOptions = new DtoOptions(true),
-                OrderBy = AlbumTrackOrder,
-                StartIndex = continuation.StartIndex,
-                Limit = continuation.BatchSize
-            };
+            var albumIdsQuery = BuildAlbumTracksQuery(
+                jellyfinUser,
+                continuation.ParentId.Value,
+                continuation.StartIndex,
+                continuation.BatchSize,
+                byAlbumIds: true);
             Util.LibraryFilter.ApplyLibraryFilter(albumIdsQuery, pluginUser, libraryManager, logger);
             result = Util.SearchService.SafeGetItemsResult(libraryManager, albumIdsQuery, logger);
         }
@@ -289,6 +281,71 @@ internal static class QueueContinuationFetcher
         // JF-753: the ONE advance-or-mark idiom (see AdvanceOrMarkExhausted).
         AdvanceOrMarkExhausted(continuation, result.Items.Count);
         return result.Items;
+    }
+
+    /// <summary>
+    /// The ONE album-tracks query of the paged playback path (JF-757): the album
+    /// head's first page (both the ParentId arm and the JF-338 AlbumIds retry in
+    /// AlbumPlayService.BuildAlbumPlayResponseAsync) and the album tail's
+    /// continuation batches (the same two arms in <see cref="FetchAlbumTracks"/>)
+    /// MUST share one query shape so the pages concatenate in one deterministic
+    /// order (the JF-670 head/tail contract; the audiobook twin is
+    /// <see cref="BuildAudiobookChaptersQuery"/>). This builder replaced the four
+    /// hand-kept initializers, which would drift exactly like the stale-mirror
+    /// class that bit the interaction-model docs (anti-pattern 11).
+    /// Accepted boundary (JF-763): the album-concat endpoint
+    /// (VideoAudioController) still hand-keeps the same shape's arms for its
+    /// unpaged, user-less GetItemList enumeration (no session user on the
+    /// token-gated HTTP path, fetch-all paging); it shares only AlbumTrackOrder
+    /// today.
+    /// Deliberately IncludeItemTypes=Audio (the JF-358 discipline), unlike the
+    /// audiobook builder's MediaTypes: a ParentId/AlbumIds query IS constrained by
+    /// IncludeItemTypes and this shape returns the tracks in production. The
+    /// scoping term is the ONE arm difference: ParentId = folder children,
+    /// AlbumIds = membership by album tag (the split/malformed-folder retry,
+    /// JF-338). Paging is the caller's (the head passes 0 +
+    /// GetInitialFetchSize, the tail StartIndex + BatchSize). The UNSELECTED
+    /// scoping field stays at its constructor default: an explicitly set ParentId
+    /// on the membership arm (or AlbumIds on the folder arm) would AND a second
+    /// constraint into the server query and break the retry's recovery.
+    /// </summary>
+    /// <param name="jellyfinUser">The query user (session scope).</param>
+    /// <param name="albumId">The album ID, scoped by the chosen arm.</param>
+    /// <param name="startIndex">Page offset (0 for the initial page).</param>
+    /// <param name="limit">Page size.</param>
+    /// <param name="byAlbumIds">True for the JF-338 membership arm (AlbumIds),
+    /// false for the folder arm (ParentId).</param>
+    /// <returns>The query (executor and per-user library filtering differ by site,
+    /// as before: the head wraps in SafeGetItemsResult, the tail applies
+    /// ApplyLibraryFilter then SafeGetItemsResult).</returns>
+    internal static InternalItemsQuery BuildAlbumTracksQuery(
+        Jellyfin.Database.Implementations.Entities.User? jellyfinUser,
+        Guid albumId,
+        int startIndex,
+        int limit,
+        bool byAlbumIds)
+    {
+        var query = new InternalItemsQuery
+        {
+            User = jellyfinUser,
+            Recursive = true,
+            IncludeItemTypes = new[] { BaseItemKind.Audio },
+            DtoOptions = new DtoOptions(true),
+            OrderBy = AlbumTrackOrder,
+            StartIndex = startIndex,
+            Limit = limit
+        };
+
+        if (byAlbumIds)
+        {
+            query.AlbumIds = new[] { albumId };
+        }
+        else
+        {
+            query.ParentId = albumId;
+        }
+
+        return query;
     }
 
     /// <summary>

@@ -1533,6 +1533,134 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
             capturedFallback!.OrderBy);
     }
 
+    // JF-757 lockstep pin: the album-tracks query shape is ONE builder
+    // (QueueContinuationFetcher.BuildAlbumTracksQuery) shared by the head
+    // (BuildAlbumPlayResponseAsync first page: the ParentId arm plus the JF-338
+    // AlbumIds retry) and the tail (FetchAlbumTracks, the same two arms). This pin
+    // drives BOTH ends against a split-album server (empty ParentId pages,
+    // populated AlbumIds pages) and captures all four issued queries in call
+    // order, then asserts each arm's head and tail shapes are IDENTICAL except
+    // the paging fields. Division of labor with the literal pins above: they keep
+    // the ABSOLUTE OrderBy honest (a corrupted AlbumTrackOrder constant reds
+    // there); the absolute kind filter, DTO fields, and paging asserts live
+    // INSIDE this test's AssertArmLockstep (nowhere else), so do not trim them as
+    // redundant. This pin keeps the two ENDS from drifting apart (a hand-kept
+    // initializer reintroduced at either end reds here even while every literal
+    // pin still passes, which is the drift class the JF-757 consolidation exists
+    // to close).
+    [Fact]
+    public async Task AlbumTracks_HeadAndTail_ShareOneQueryShapeModuloPaging_BothArms()
+    {
+        var handler = new PlayAlbumIntentHandler(
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory);
+
+        var session = CreateSession();
+        _fx.SetupUserMock();
+
+        var albumId = Guid.NewGuid();
+        var album = new MusicAlbum { Id = albumId, Name = "Lockstep Album" };
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum))))
+            .Returns(new List<BaseItem> { album });
+
+        var captured = new List<InternalItemsQuery>();
+
+        // Split-album server shape (JF-338): the folder-based ParentId page is
+        // empty at both ends, the AlbumIds membership page carries the tracks, so
+        // all four queries issue (head primary, head retry, tail primary, tail
+        // retry, in that call order).
+        _fx.LibraryManager
+            .Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q =>
+                q.ParentId == albumId && (q.AlbumIds == null || q.AlbumIds.Length == 0))))
+            .Callback<InternalItemsQuery>(q => captured.Add(q))
+            .Returns(new QueryResult<BaseItem> { Items = new List<BaseItem>(), TotalRecordCount = 0 });
+        _fx.LibraryManager
+            .Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q =>
+                q.AlbumIds != null && q.AlbumIds.Contains(albumId))))
+            .Callback<InternalItemsQuery>(q => captured.Add(q))
+            .Returns(new QueryResult<BaseItem>
+            {
+                Items = Enumerable.Range(0, 5)
+                    .Select(i => (BaseItem)new Audio { Id = Guid.NewGuid(), Name = $"Track {i + 1}" })
+                    .ToList(),
+                TotalRecordCount = 25
+            });
+
+        var context = CreateContext();
+        await handler.HandleAsync(
+            CreateAlbumIntent("Lockstep Album"), context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        var continuation = new QueueContinuation
+        {
+            SourceType = "Album",
+            ParentId = albumId,
+            UserId = session.UserId,
+            StartIndex = 5,
+            TotalCount = 30,
+            BatchSize = 10
+        };
+        ILogger logger = _fx.LoggerFactory.CreateLogger("AlbumLockstepTest");
+        QueueContinuationFetcher.FetchNextBatch(
+            continuation, _fx.LibraryManager.Object, _fx.UserManager.Object, logger);
+
+        QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID);
+
+        Assert.Equal(4, captured.Count);
+        InternalItemsQuery headPrimary = captured[0];
+        InternalItemsQuery headRetry = captured[1];
+        InternalItemsQuery tailPrimary = captured[2];
+        InternalItemsQuery tailRetry = captured[3];
+
+        void AssertArmLockstep(InternalItemsQuery head, InternalItemsQuery tail)
+        {
+            // The shared shape: same user, same recursion, same kind filter, same
+            // disc/track order, same full-field DTO options.
+            Assert.Same(head.User, tail.User);
+            Assert.True(head.Recursive);
+            Assert.Equal(head.Recursive, tail.Recursive);
+            Assert.Equal(new[] { BaseItemKind.Audio }, head.IncludeItemTypes);
+            Assert.Equal(head.IncludeItemTypes, tail.IncludeItemTypes);
+            Assert.Equal(QueueContinuationFetcher.AlbumTrackOrder, head.OrderBy);
+            Assert.Equal(head.OrderBy, tail.OrderBy);
+            Assert.NotNull(head.DtoOptions);
+            Assert.NotNull(tail.DtoOptions);
+            // new DtoOptions(true) populates Fields with every ItemFields value; an
+            // end drifting to a minimal DtoOptions (e.g. AlbumPlay's CheapDtoOptions
+            // shape) reds here.
+            Assert.Equal(head.DtoOptions!.Fields, tail.DtoOptions!.Fields);
+
+            // Paging is the ONE intended head/tail difference: the head pages with
+            // 0 + the initial fetch size, the tail with its continuation offset
+            // and batch size.
+            Assert.Equal(0, head.StartIndex);
+            Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), head.Limit);
+            Assert.Equal(5, tail.StartIndex);
+            Assert.Equal(10, tail.Limit);
+        }
+
+        // Folder arm (ParentId): scoped by the album id, membership field untouched.
+        AssertArmLockstep(headPrimary, tailPrimary);
+        Assert.Equal(albumId, headPrimary.ParentId);
+        Assert.Equal(albumId, tailPrimary.ParentId);
+        Assert.Empty(headPrimary.AlbumIds ?? Array.Empty<Guid>());
+        Assert.Empty(tailPrimary.AlbumIds ?? Array.Empty<Guid>());
+
+        // Membership arm (AlbumIds): scoped by album membership, folder field
+        // untouched (a set ParentId here would AND a second constraint into the
+        // server query and defeat the JF-338 recovery).
+        AssertArmLockstep(headRetry, tailRetry);
+        Assert.Equal(new[] { albumId }, headRetry.AlbumIds);
+        Assert.Equal(new[] { albumId }, tailRetry.AlbumIds);
+        Assert.Equal(Guid.Empty, headRetry.ParentId);
+        Assert.Equal(Guid.Empty, tailRetry.ParentId);
+    }
+
     // JF-666: the artist continuation fetch must filter via IncludeItemTypes=Audio,
     // never MediaTypes=Audio (the JF-358 anti-pattern: MediaTypes does not constrain
     // an ArtistIds query; on the direct path it returned zero and silently exhausted

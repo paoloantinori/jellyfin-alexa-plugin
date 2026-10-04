@@ -573,16 +573,10 @@ public sealed class AlbumPlayService
         // there and the album would truncate at this page on NRE-class servers
         // (the JF-673 audiobook head shape).
         QueryResult<BaseItem> albumResult = await RetryAsync(
-            () => _search.SafeGetItemsResult(libraryManager, new InternalItemsQuery()
-            {
-                User = jellyfinUser,
-                Recursive = true,
-                ParentId = album.Id,
-                IncludeItemTypes = new[] { BaseItemKind.Audio },
-                DtoOptions = new DtoOptions(true),
-                OrderBy = QueueContinuationFetcher.AlbumTrackOrder,
-                Limit = ProgressiveQueueConstants.GetInitialFetchSize()
-            }, unknownTotalOnFallback: true),
+            () => _search.SafeGetItemsResult(libraryManager,
+                QueueContinuationFetcher.BuildAlbumTracksQuery(
+                    jellyfinUser, album.Id, 0, ProgressiveQueueConstants.GetInitialFetchSize(), byAlbumIds: false),
+                unknownTotalOnFallback: true),
             logLabel + ":GetAlbumTracks",
             cancellationToken: cancellationToken).ConfigureAwait(false);
         _logger.LogDebug("{Label}: Jellyfin returned {TrackCount} tracks (total={TotalCount})", logLabel, albumResult.Items.Count, _logger.IsEnabled(LogLevel.Debug) ? QueueContinuationFetcher.RenderTotal(albumResult.TotalRecordCount) : null);
@@ -595,16 +589,10 @@ public sealed class AlbumPlayService
             // ParentId+Recursive returns 0, AlbumIds returns all tracks. JF-338.
             _logger.LogDebug("{Label}: folder-based track query returned 0, retrying by AlbumIds for '{Name}'", logLabel, album.Name);
             albumResult = await RetryAsync(
-                () => _search.SafeGetItemsResult(libraryManager, new InternalItemsQuery()
-                {
-                    User = jellyfinUser,
-                    Recursive = true,
-                    AlbumIds = new[] { album.Id },
-                    IncludeItemTypes = new[] { BaseItemKind.Audio },
-                    DtoOptions = new DtoOptions(true),
-                    OrderBy = QueueContinuationFetcher.AlbumTrackOrder,
-                    Limit = ProgressiveQueueConstants.GetInitialFetchSize()
-                }, unknownTotalOnFallback: true),
+                () => _search.SafeGetItemsResult(libraryManager,
+                    QueueContinuationFetcher.BuildAlbumTracksQuery(
+                        jellyfinUser, album.Id, 0, ProgressiveQueueConstants.GetInitialFetchSize(), byAlbumIds: true),
+                    unknownTotalOnFallback: true),
                 logLabel + ":GetAlbumTracksByAlbumIds",
                 cancellationToken: cancellationToken).ConfigureAwait(false);
             _logger.LogDebug("{Label}: AlbumIds fallback returned {TrackCount} tracks (total={TotalCount})", logLabel, albumResult.Items.Count, _logger.IsEnabled(LogLevel.Debug) ? QueueContinuationFetcher.RenderTotal(albumResult.TotalRecordCount) : null);
