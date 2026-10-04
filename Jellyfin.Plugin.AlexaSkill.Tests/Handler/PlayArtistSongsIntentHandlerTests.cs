@@ -181,6 +181,66 @@ public class PlayArtistSongsIntentHandlerTests : PluginTestBase
         Assert.Equal("Sugar Free Jazz", metadata.Title); // Soul Coughing's song, not Soul's
     }
 
+    // --- JF-750: resumed artist play must launch the RESUMED track's metadata ---
+
+    /// <summary>
+    /// JF-750 red proof: a resumed artist play (first track fully played, so
+    /// SortAndFindResumeIndex returns startIndex 1, shuffle off) launches track 2's
+    /// stream (URL/token keyed artistsItems[startIndex]) and the user-visible
+    /// surfaces must name the SAME track. They all consume the chokepoint's single
+    /// played-item argument (AudioItem title/subtitle, the seek card, the APL
+    /// NowPlaying directive, the opt-in announce; PlaybackLaunchBuilder builds each
+    /// from the same item), which pre-fix was artistsItems[0] while track 2's
+    /// stream played (the CrossMediaFallback twin always passed the indexed form).
+    /// The pin asserts the two observables this harness reaches independently: the
+    /// directive metadata Title and, with the announce opted in, the spoken
+    /// now-playing speech.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_ResumedQueue_LaunchMetadataMatchesResumedTrack()
+    {
+        _fx.Config.AnnounceAudioPlays = true; // opt in: the announce is a pinned surface here
+        var artist = new MusicArtist { Name = "Soul Coughing", Id = Guid.NewGuid() };
+        _artistIndexMock.Setup(i => i.IsReady).Returns(true);
+        _artistIndexMock.Setup(i => i.GetArtists(It.IsAny<Guid[]?>())).Returns(new List<BaseItem> { artist });
+
+        var track1 = new Audio { Name = "Sugar Free Jazz", Id = Guid.NewGuid() };
+        var track2 = new Audio { Name = "Circles", Id = Guid.NewGuid() };
+        var track3 = new Audio { Name = "Screenwriter's Blues", Id = Guid.NewGuid() };
+        SetupSongResult(track1, track2, track3);
+
+        // Track 1 fully played, everything else virgin (one callback, so the
+        // seeding carries no Moq setup-ordering dependency): SortAndFindResumeIndex
+        // then returns startIndex 1, the mid-queue resume shape.
+        _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
+            .Returns((Jellyfin.Database.Implementations.Entities.User _, BaseItem item) => item == track1
+                ? new UserItemData { Key = "test", Played = true, PlaybackPositionTicks = 0 }
+                : null);
+
+        var handler = CreateHandler(_artistIndexMock.Object);
+        var request = CreateIntentRequest(musician: "soul coughing");
+        _fx.SetupUserMock();
+        var session = _fx.CreateSession();
+
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), _fx.CreateUser(), session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        var directive = TestHelpers.GetPlayDirective(response);
+        Assert.NotNull(directive);
+
+        // The resume shape held: the launched stream is track 2, and the queue
+        // starts at the resume index.
+        Assert.Contains(track2.Id.ToString(), directive.AudioItem.Stream.Url, StringComparison.Ordinal);
+        Assert.Equal(track2.Id, session.NowPlayingQueue[0].Id);
+        Assert.Equal(track2.Id, session.FullNowPlayingItem?.Id);
+
+        // THE JF-750 assertions: the metadata and the spoken announce both name the
+        // resumed track, not track 1 (two independent consumers of the chokepoint's
+        // played-item argument).
+        Assert.Equal("Circles", directive.AudioItem.Metadata?.Title);
+        Assert.Contains("Circles", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+    }
+
     // --- JF-382: coincidental-containment downgrade at the FINAL-pick surfaces ---
     // The JF-377 entry gate above only sees a single match coming out of the tier
     // chain. When the count>1 disambiguation branch narrows to ONE pick (here via
