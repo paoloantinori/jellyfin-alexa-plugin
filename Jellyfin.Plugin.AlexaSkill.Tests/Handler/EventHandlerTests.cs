@@ -764,7 +764,7 @@ public class EventHandlerTests : PluginTestBase, IDisposable
     /// <summary>
     /// JF-738 (the position-store arm, through the REAL stop path): the
     /// ItemPositionState trim's queued-membership protection works with DASHED
-    /// queue ids. The queue holds <see cref="PlaybackStoppedEventHandler.MaxItemPositionStateEntries"/>
+    /// queue ids. The queue holds <see cref="DeviceQueueManager.MaxItemPositionStateEntries"/>
     /// DASHED ids (the production SetQueue format) whose "N"-keyed position
     /// entries fill the store exactly to the cap; two stops for NON-queued
     /// single items (the JF-424.1 shape: no queue membership at all) then cross
@@ -789,7 +789,7 @@ public class EventHandlerTests : PluginTestBase, IDisposable
         // At-cap store: every entry's item is QUEUED (dashed, the production format).
         var queue = _queueManager.GetOrCreateQueue(device);
         List<Guid> residentIds = Enumerable
-            .Range(0, PlaybackStoppedEventHandler.MaxItemPositionStateEntries)
+            .Range(0, DeviceQueueManager.MaxItemPositionStateEntries)
             .Select(_ => Guid.NewGuid())
             .ToList();
         queue.ItemIds = residentIds.Select(g => g.ToString()).ToList();

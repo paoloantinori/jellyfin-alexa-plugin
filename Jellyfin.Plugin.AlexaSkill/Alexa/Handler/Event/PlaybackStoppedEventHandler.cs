@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET;
@@ -164,7 +163,9 @@ public class PlaybackStoppedEventHandler : BaseHandler
             && stopItemId != Guid.Empty
             && !string.IsNullOrEmpty(queue.CurrentItemId)
             && !string.Equals(queue.CurrentItemId, cleanItemId, StringComparison.OrdinalIgnoreCase)
-            && queue.ItemIds.Contains(cleanItemId, StringComparer.OrdinalIgnoreCase);
+            // JF-738 GM-F2: the locked membership read (an unlocked LINQ Contains
+            // on the live list throws when Enqueue inserts mid-enumeration).
+            && _queueManager.IsItemQueued(queue, cleanItemId);
         if (queueContradictsEventToken)
         {
             Logger.LogWarning(
@@ -217,17 +218,13 @@ public class PlaybackStoppedEventHandler : BaseHandler
         // and overwrite Jellyfin UserData for cross-client sync (web/mobile see correct position).
         if (!isDisplacement && !queueContradictsEventToken && realPositionTicks > 0 && stopItemId != Guid.Empty)
         {
-            // 1. Save to plugin's per-item state (normalize key to "N" format to match readers)
-            string positionKey = stopItemId.ToString("N");
-            queue.ItemPositionState[positionKey] = realPositionTicks;
-
-            // Evict stale entries when the dictionary grows beyond cap (JF-738: the
-            // manager's locked entry point; the membership build enumerates the live
-            // ItemIds list Enqueue mutates under the same lock, and carries the
-            // fresh-entry guard for the key just written above).
-            _queueManager.TrimItemPositionState(queue, positionKey, MaxItemPositionStateEntries);
-
-            _queueManager.SchedulePersist(device);
+            // 1. Save to plugin's per-item state and bound it: ONE locked manager
+            // entry point for the write AND the trim (JF-738 GM-F1: the write is a
+            // structural Add, and a sibling stop's unlocked write would throw
+            // inside this trim's map enumeration; the membership build and the
+            // fresh-entry guard ride the same lock, and the debounced persist is
+            // scheduled by the manager).
+            _queueManager.RecordStoppedPositionAndTrim(device, queue, stopItemId, realPositionTicks);
             Logger.LogDebug(
                 "Saved to ItemPositionState: item={ItemId}, ticks={Ticks}",
                 req.Token, realPositionTicks);
@@ -295,14 +292,4 @@ public class PlaybackStoppedEventHandler : BaseHandler
         return BuildEndSessionResponse();
     }
 
-    /// <summary>
-    /// The ItemPositionState cap. Internal for the InternalsVisibleTo test seam
-    /// (the <see cref="DeviceQueueManager.MaxLaunchBaseEntries"/> idiom): the
-    /// JF-738 position-trim pins seed their cap pressure from this constant so a
-    /// cap change cannot silently degrade them to vacuous green. The trim itself
-    /// lives on the queue manager (JF-738:
-    /// <see cref="DeviceQueueManager.TrimItemPositionState"/>, the locked
-    /// membership-normalized entry point).
-    /// </summary>
-    internal const int MaxItemPositionStateEntries = 200;
 }

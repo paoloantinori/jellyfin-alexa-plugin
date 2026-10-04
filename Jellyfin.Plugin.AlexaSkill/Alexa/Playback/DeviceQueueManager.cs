@@ -783,10 +783,13 @@ public sealed class DeviceQueueManager : IDisposable
     /// non-GUID key still compares equal to itself. Iterator form: both
     /// consumers sit behind their own count gates
     /// (<see cref="TrimLaunchBaseIfNeeded"/>'s four-map OR gate;
-    /// <see cref="TrimItemPositionState"/>'s map-count gate), so the projection
-    /// only ever runs over cap, and <see cref="BuildTrimMembershipSet"/> drains
-    /// it immediately into the capacity-hinted membership set (one set, shared
-    /// by the launch-scope trim's four maps).
+    /// <see cref="RecordStoppedPositionAndTrim"/>'s map-count gate), so the
+    /// projection runs only when a map is OVER its cap (NOT a transient state
+    /// for a fully-navigated queue, whose maps sit pinned at queue length; see
+    /// <see cref="BuildTrimMembershipSet"/>'s honest-cost note), and
+    /// <see cref="BuildTrimMembershipSet"/> drains it immediately into the
+    /// capacity-hinted membership set (one set, shared by the launch-scope
+    /// trim's four maps).
     /// </summary>
     /// <param name="itemIds">The stored queue's item ids, any GUID format.</param>
     /// <returns>The ids re-keyed to "N" where parseable, raw otherwise.</returns>
@@ -809,6 +812,14 @@ public sealed class DeviceQueueManager : IDisposable
     /// "N"-keyed map (the inert-membership bug JF-738 fixed), and the fresh-key
     /// guard belongs beside the normalization, not re-derived per caller.
     /// Capacity-hinted (queue size + the fresh key).
+    /// HONEST COST (GM-F3): with membership restored, a map whose backing queue
+    /// is fully navigated is pinned at QUEUE LENGTH, not at the cap (every
+    /// queued item's entry stays), so an over-cap write on a large queue pays an
+    /// O(queue-length) GUID normalization here, under
+    /// <see cref="_launchScopeLock"/>; bounded by the write frequencies (a
+    /// launch record, a qualifying stop), microseconds at playlist scale. The
+    /// pin itself is the documented contract ("entries for queued items all
+    /// stay"), not a leak.
     /// </summary>
     /// <param name="queue">The device queue whose ItemIds form the membership.</param>
     /// <param name="freshKey">The "N"-normalized key the caller's write just
@@ -827,40 +838,76 @@ public sealed class DeviceQueueManager : IDisposable
     }
 
     /// <summary>
-    /// JF-522/JF-738: the ONE ItemPositionState trim entry point, for the
-    /// PlaybackStopped handler's write-then-trim path. The count gate first
-    /// keeps the set build off the under-cap happy path (one qualifying stop per
-    /// track); the membership build then runs under
-    /// <see cref="_launchScopeLock"/> because it ENUMERATES the live
-    /// <see cref="DeviceQueue.ItemIds"/> list, which <see cref="Enqueue"/>
-    /// mutates in place under this same lock (the JF-578
-    /// intent-thread/event-thread interleaving): an unlocked enumeration of a
-    /// concurrently-mutated List throws, the JF-425/JF-447 class of dying inside
-    /// an event handler before the keep-alive ack Amazon requires.
-    /// JF-738 DoD #2, the fresh-entry guard: <paramref name="freshlyWrittenKey"/>
-    /// (the stop position THIS write just stored) is treated as queued by THIS
-    /// trim only. Membership protects the stopped item just when it is QUEUED;
-    /// the single-item play shape has no queue at all (the JF-424.1
+    /// JF-738 GM-F4: the ItemPositionState cap, beside its sibling
+    /// <see cref="MaxLaunchBaseEntries"/> (the cap governing a manager-owned map
+    /// lives on the manager that owns the map and the trim). Internal for the
+    /// InternalsVisibleTo test seam (the MaxLaunchBaseEntries idiom): the JF-738
+    /// position-trim pins seed their cap pressure from this constant so a cap
+    /// change cannot silently degrade them to vacuous green.
+    /// </summary>
+    internal const int MaxItemPositionStateEntries = 200;
+
+    /// <summary>
+    /// JF-522/JF-738: the ONE locked write-then-trim path for ItemPositionState
+    /// (the PlaybackStopped handler's position persist). The WRITE and the TRIM
+    /// are one locked unit (GM-F1): the write is a structural Add for a new key
+    /// (a dictionary version bump; same-key updates are not), and the trim's
+    /// per-map enumeration inside <see cref="TrimPositionMap"/> throws on a
+    /// concurrent structural change, so a sibling stop's unlocked write on the
+    /// same device must not be able to interleave (the JF-425/JF-447 class of
+    /// dying inside an event handler before the keep-alive ack Amazon
+    /// requires). The membership build shares the same lock against
+    /// <see cref="Enqueue"/>'s in-place <see cref="DeviceQueue.ItemIds"/>
+    /// mutation (the GM-F2 class). The count gate keeps the whole trim body off
+    /// the under-cap happy path (one qualifying stop per track); see
+    /// <see cref="BuildTrimMembershipSet"/> for the over-cap cost shape.
+    /// JF-738 DoD #2, the fresh-entry guard: the key THIS call just wrote is
+    /// treated as queued by THIS call's trim only (the JF-723 identity-guard
+    /// shape). Membership protects the stopped item just when it is QUEUED; the
+    /// single-item play shape has no queue at all (the JF-424.1
     /// store-unconditional rationale), so without the guard the fresh entry is
-    /// non-queued and evictable by its own trim at cap pressure, and
-    /// resume-after-pause loses the seed the JF-581 incident made load-bearing.
-    /// The guard can leave the map at cap+1 until the next write ages the entry
-    /// (the tolerance the JF-723 guard already documents); the trim still trims
+    /// evictable by its own trim at cap pressure, and resume-after-pause loses
+    /// the seed the JF-581 incident made load-bearing. The guard can leave the
+    /// map at cap+1 until the next write ages the entry; the trim still trims
     /// aged non-queued entries.
     /// </summary>
-    /// <param name="queue">The device queue whose ItemPositionState is bounded.</param>
-    /// <param name="freshlyWrittenKey">The "N"-normalized key the caller just wrote.</param>
-    /// <param name="cap">The maximum entry count (the caller's trim cap).</param>
-    internal void TrimItemPositionState(DeviceQueue queue, string freshlyWrittenKey, int cap)
+    /// <param name="deviceId">The device whose queue is persisted (debounced).</param>
+    /// <param name="queue">The device queue whose ItemPositionState is written and bounded.</param>
+    /// <param name="itemId">The stopped item (keyed "N").</param>
+    /// <param name="positionTicks">The item-absolute position in ticks.</param>
+    /// <param name="cap">The maximum entry count (defaults to
+    /// <see cref="MaxItemPositionStateEntries"/>).</param>
+    internal void RecordStoppedPositionAndTrim(string deviceId, DeviceQueue queue, Guid itemId, long positionTicks, int cap = MaxItemPositionStateEntries)
     {
-        if (queue.ItemPositionState.Count <= cap)
-        {
-            return;
-        }
-
+        string key = itemId.ToString("N");
         lock (_launchScopeLock)
         {
-            TrimPositionMap(queue.ItemPositionState, BuildTrimMembershipSet(queue, freshlyWrittenKey), cap);
+            queue.ItemPositionState[key] = positionTicks;
+            if (queue.ItemPositionState.Count > cap)
+            {
+                TrimPositionMap(queue.ItemPositionState, BuildTrimMembershipSet(queue, key), cap);
+            }
+        }
+
+        SchedulePersistInternal(deviceId);
+    }
+
+    /// <summary>
+    /// JF-738 GM-F2: the ONE locked ItemIds membership read. An unlocked LINQ
+    /// Contains on the live list (the stop handler's queue-contradiction check)
+    /// enumerates via the List enumerator, whose version check throws when
+    /// <see cref="Enqueue"/> mutates the list in place under
+    /// <see cref="_launchScopeLock"/> (the JF-425/JF-447 die-before-the-ack
+    /// class). OrdinalIgnoreCase preserves the previous comparison semantics.
+    /// </summary>
+    /// <param name="queue">The device queue whose membership is read.</param>
+    /// <param name="itemId">The item id, any casing.</param>
+    /// <returns>True when the item is in the stored queue.</returns>
+    internal bool IsItemQueued(DeviceQueue queue, string itemId)
+    {
+        lock (_launchScopeLock)
+        {
+            return queue.ItemIds.Contains(itemId, StringComparer.OrdinalIgnoreCase);
         }
     }
 
