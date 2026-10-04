@@ -171,6 +171,57 @@ public sealed class PlaybackLaunchBuilder
     }
 
     /// <summary>
+    /// JF-758: the launch-pairing belt, called at the entry of the two builder
+    /// members that accept an INDEPENDENT (itemId, item) pair (the
+    /// <c>BuildAudioPlayerResponse</c> chokepoint every AudioPlayer.Play funnels
+    /// through, and <see cref="BuildVideoAppAudioResponse(string, BaseItem, Entities.User, string?, Context?, Guid?, long)"/>,
+    /// reached directly by callers that never pass the chokepoint); it is the
+    /// argument-side sibling of <see cref="EnsureLaunchResponse"/>
+    /// (the same "cannot happen" contract style: firing it is a contract break, not
+    /// a runtime condition to handle). Every production caller passes the stream
+    /// <c>itemId</c> and the metadata <c>item</c> as INDEPENDENT arguments the
+    /// chokepoint cannot reconcile itself (it holds no ILibraryManager, a library
+    /// fetch on the PlaybackNearlyFinished pre-fetch hot path would cost
+    /// Alexa-budget latency for zero information, and the null-item shape is a
+    /// deliberate contract), so the pairing stays the callers' invariant, kept true
+    /// by construction at every site via one of three idioms (derive
+    /// <c>itemId = item.Id.ToString()</c>; fetch <c>item = GetItemById(itemId)</c>;
+    /// indexed, both args reading the same <c>[startIndex]</c>). JF-750 was the one
+    /// historical drift (indexed id, first-element item: the metadata named track 1
+    /// while track N's stream played), and this belt makes the NEXT drift of that
+    /// class fail at first fire HERE, where every metadata consumer of the item
+    /// argument (AudioItem metadata, the seek card, the announce, the NowPlaying
+    /// APL) originates, instead of as wrong-metadata on a device. BELT ONLY: dead
+    /// code on every call site today (the JF-750 family audit), pinned in
+    /// PlaybackLaunchBuilderLaunchPairingPinTests.
+    /// DESIGN CONSTRAINTS (why the check is Guid-based and why it skips):
+    /// the compare parses the id instead of comparing strings because the APL
+    /// carousel tap path (AplUserEventHandler) hands the dashless
+    /// <c>item.Id.ToString("N")</c> form up from the APL event argument while most
+    /// sites pass the dashed form, and a string compare would false-fire on every
+    /// tap; <c>item == null</c> skips because the null shape is deliberate
+    /// (PlayIntentHandler enqueues with only the queue id surviving); an
+    /// UNPARSEABLE id skips because composite stream tokens
+    /// (<c>{guid}|launch:n</c>, <c>{guid}|sleep:ticks</c>, StreamTokenCodec) and
+    /// any future non-GUID token id are outside the pairing the belt can assert,
+    /// which is only the pairing of resolvable ids.
+    /// </summary>
+    /// <param name="itemId">The item ID used as the stream token (dashed or dashless Guid form, or a composite stream token).</param>
+    /// <param name="item">The metadata item the launch response names, or null.</param>
+    private static void EnsureItemPairsWithLaunchId(string itemId, MediaBrowser.Controller.Entities.BaseItem? item)
+    {
+        if (item == null || !Guid.TryParse(itemId, out Guid launchedId) || launchedId == item.Id)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"PlaybackLaunchBuilder launch contract break (JF-758): the launched itemId {itemId} does not pair with the metadata item {item.Id} ('{item.Name}'). "
+            + "Every surface the item argument feeds (AudioItem metadata, seek card, now-playing announce, NowPlaying APL) would name an item other than the one that plays; "
+            + "fix the call site to derive both arguments from the same item (the JF-750 class).");
+    }
+
+    /// <summary>
     /// JF-693: attaches a handler-side announce onto a launch response ONLY when the
     /// response actually carries a launch directive. The JF-687 empty-secret refusal
     /// Tell carries none, so it survives instead of being replaced by a now-playing
@@ -1971,6 +2022,14 @@ public sealed class PlaybackLaunchBuilder
     /// <returns>A SkillResponse containing the AudioPlayer directive.</returns>
     public SkillResponse BuildAudioPlayerResponse(PlayBehavior playBehavior, string streamUrl, string itemId, MediaBrowser.Controller.Entities.BaseItem? item, Entities.User user, Context? context, int offsetInMilliseconds = 0, string? announceLocale = null, DeviceQueueManager? queueManager = null, long launchBaseMs = 0, Guid? collectionParentId = null, long collectionStartTicks = 0, int ratePerMille = 1000)
     {
+        // JF-758: the launch-pairing belt, first so a contract-breaking (itemId,
+        // item) pair dies before ANY effect (the JF-687 refusal below, the ledger
+        // record, the launch-scope write, the directive build). Runs before the
+        // native-controls VideoApp delegation too, so both delivery routes inherit
+        // the pairing verdict. Skips null items, unparseable ids, and both Guid
+        // formats (the constraints live on the guard's doc).
+        EnsureItemPairsWithLaunchId(itemId, item);
+
         // JF-687: the delivery gate for every AudioPlayer.Play. A token-gated stream URL
         // (the JF-636 speed route, the JF-507 audio-only episode transcode) with an empty
         // secret is dead at the route gate; refuse the launch before any ledger record,
@@ -2283,6 +2342,16 @@ public sealed class PlaybackLaunchBuilder
     /// <returns>A VideoApp.Launch response, or an AudioPlayer response on a screenless device.</returns>
     public SkillResponse BuildVideoAppAudioResponse(string itemId, BaseItem? item, Entities.User user, string? announceLocale = null, Context? context = null, Guid? collectionParentId = null, long collectionStartTicks = 0)
     {
+        // JF-758: the same launch-pairing belt as the AudioPlayer chokepoint. This
+        // member accepts the same INDEPENDENT (itemId, item) pair, and two direct
+        // call sites reach it without passing through the belted chokepoint (the
+        // builder-internal audiobook launch composition, carrying PlayBook,
+        // YesIntent and StartOver through it, and Resume's book arm), so its VideoApp
+        // branch needs its own verdict; the chokepoint's native-controls delegation
+        // and the screenless degrade below re-enter belted code, where the pair is
+        // checked again harmlessly.
+        EnsureItemPairsWithLaunchId(itemId, item);
+
         if (!Interface.VideoAppCapabilities.DeviceSupportsVideoApp(context))
         {
             _logger.LogDebug(

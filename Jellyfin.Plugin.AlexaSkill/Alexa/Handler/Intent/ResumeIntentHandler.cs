@@ -414,6 +414,42 @@ public class ResumeIntentHandler : BaseHandler
         // otherwise the session's now-playing item.
         BaseItem? tailItem = queueItem ?? session?.FullNowPlayingItem;
 
+        // JF-758 launch pairing: the tail's metadata item must be the item item_id
+        // NAMES, never the session pointer it displaced. Pre-belt this tail launched
+        // a displaced token's stream with the STALE session item's metadata (the
+        // JF-750 wrong-item class, live in the SessionHeldBook_DisplacedToken shape
+        // the server-progress suite pins); the builders' pairing belt now rejects
+        // that pair at first fire. The compare goes through StreamTokenCodec (the
+        // one-parser rule every token-vs-id comparison in this file follows), so a
+        // composite token ({guid}|launch:n, {guid}|sleep:t) resolves to the item it
+        // names and is followed too. A queue-adopted tail (fallback 3 above) never
+        // lands here in practice: adoption sets item_id and queueItem together from
+        // one candidate id, so the compare reads equal and skips. An id that names
+        // the session item keeps it; an id the library cannot resolve (deleted item,
+        // unknown-suffix token) degrades to the null-item contract, never a
+        // mismatch.
+        if (tailItem != null
+            && StreamTokenCodec.TryGetItemId(item_id, out Guid launchedId)
+            && launchedId != tailItem.Id)
+        {
+            BaseItem? tokenItem = _libraryManager.GetItemById(launchedId);
+            Logger.LogDebug(
+                "ResumeIntent: token names item {TokenItemId}, displaced from the session item {SessionItemId}; launch metadata follows the token (resolved in library: {TokenItemResolved})",
+                launchedId, tailItem.Id, tokenItem != null);
+            tailItem = tokenItem;
+
+            // The session-sourced offset (fallback 2) counts the DISPLACED session
+            // item's timeline, never the token item's; only the device-derived
+            // stream-relative offset (fallback 1) follows the token's own stream
+            // (the JF-520 discipline: never mint a foreign position). Drop the
+            // foreign one so the token item restarts honestly instead of seeking
+            // into a position another item never reached.
+            if (!offsetIsStreamRelative)
+            {
+                offset = 0;
+            }
+        }
+
         // The tail's JF-514 correction, adopted from the offer path (JF-520) and
         // re-scoped by JF-522: the AudioPlayer-context offset (Amazon-written) stays
         // stream-relative forever, so the tail rebases ONLY that one against the

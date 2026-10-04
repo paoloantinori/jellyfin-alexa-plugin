@@ -51,8 +51,12 @@ public class VideoAppForAudioPerUserTests : PluginTestBase
         _config.NativeControlsForAudio = true;
         _user.VideoAppForAudio = false;
 
+        // JF-758: one song feeds BOTH the id and the metadata item (the derive
+        // idiom every production site uses; two fresh NewSong() calls pair two
+        // different items and now trip the chokepoint's pairing belt).
+        var song = NewSong();
         var response = _handler.Launch.BuildAudioPlayerResponse(
-            PlayBehavior.ReplaceAll, "http://x/audio", NewSong().Id.ToString(), NewSong(), _user);
+            PlayBehavior.ReplaceAll, "http://x/audio", song.Id.ToString(), song, _user);
 
         Assert.IsType<AudioPlayerPlayDirective>(FirstDirective(response));
     }
@@ -80,8 +84,9 @@ public class VideoAppForAudioPerUserTests : PluginTestBase
         _config.NativeControlsForAudio = false;
         _user.VideoAppForAudio = true;
 
+        var song = NewSong(); // JF-758: the derive idiom, see the override-false twin above
         var response = _handler.Launch.BuildAudioPlayerResponse(
-            PlayBehavior.ReplaceAll, "http://x/audio", NewSong().Id.ToString(), NewSong(), _user);
+            PlayBehavior.ReplaceAll, "http://x/audio", song.Id.ToString(), song, _user);
 
         Assert.IsType<PluginVideoApp>(FirstDirective(response));
     }
@@ -92,8 +97,9 @@ public class VideoAppForAudioPerUserTests : PluginTestBase
         _config.NativeControlsForAudio = true;
         _user.VideoAppForAudio = null;
 
+        var song = NewSong(); // JF-758: the derive idiom, see the override-false twin above
         var response = _handler.Launch.BuildAudioPlayerResponse(
-            PlayBehavior.ReplaceAll, "http://x/audio", NewSong().Id.ToString(), NewSong(), _user);
+            PlayBehavior.ReplaceAll, "http://x/audio", song.Id.ToString(), song, _user);
 
         Assert.IsType<PluginVideoApp>(FirstDirective(response));
     }
@@ -104,8 +110,9 @@ public class VideoAppForAudioPerUserTests : PluginTestBase
         _config.NativeControlsForAudio = false;
         _user.VideoAppForAudio = null;
 
+        var song = NewSong(); // JF-758: the derive idiom, see the override-false twin above
         var response = _handler.Launch.BuildAudioPlayerResponse(
-            PlayBehavior.ReplaceAll, "http://x/audio", NewSong().Id.ToString(), NewSong(), _user);
+            PlayBehavior.ReplaceAll, "http://x/audio", song.Id.ToString(), song, _user);
 
         Assert.IsType<AudioPlayerPlayDirective>(FirstDirective(response));
     }

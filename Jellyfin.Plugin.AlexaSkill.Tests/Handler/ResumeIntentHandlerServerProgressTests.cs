@@ -998,11 +998,91 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
             var audioDirective = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
             Assert.Contains($"/Audio/{songId}/stream?static=true", audioDirective.AudioItem.Stream.Url, StringComparison.Ordinal);
             Assert.DoesNotContain("audiobook/", audioDirective.AudioItem.Stream.Url, StringComparison.Ordinal);
+
+            // JF-758: the token's item is not in the mocked library, so the launch
+            // degrades to the null-item contract; the STALE session chapter's name
+            // must not ride the token item's stream (pre-belt it did, the JF-750
+            // wrong-item class this shape was shipping).
+            Assert.Equal(string.Empty, audioDirective.AudioItem.Metadata?.Title);
         }
         finally
         {
             // Config flag only (not resource teardown): the tracker teardown lives
             // in the swap scope above (JF-633).
+            Plugin.Instance.Configuration.NativeControlsForBooks = false;
+        }
+    }
+
+    /// <summary>
+    /// JF-758 resolved arm, the twin of the displaced test above: when the displaced
+    /// token's item IS resolvable in the library, the launch metadata must name the
+    /// TOKEN item (the item that actually plays), not the session-held chapter. The
+    /// degrade twin above pins only the unresolvable shape; without this pin a
+    /// regression that nulls the resolved item would pass it (empty title either way).
+    /// </summary>
+    [Fact]
+    public async Task SessionHeldBook_DisplacedTokenItemResolvable_MetadataNamesTokenItem()
+    {
+        Plugin.Instance!.Configuration.NativeControlsForBooks = true;
+        try
+        {
+            var handler = CreateHandler();
+            var request = CreateResumeRequest();
+            var songId = Guid.NewGuid();
+            var tokenSong = new global::MediaBrowser.Controller.Entities.Audio.Audio
+            {
+                Name = "Token Song",
+                Id = songId
+            };
+            _fx.LibraryManager.Setup(l => l.GetItemById(songId)).Returns(tokenSong);
+
+            var context = new Context
+            {
+                System = new global::Alexa.NET.Request.AlexaSystem
+                {
+                    Device = new global::Alexa.NET.Request.Device { DeviceID = "test-device" },
+                    User = new global::Alexa.NET.Request.User { AccessToken = Guid.NewGuid().ToString() },
+                    ApiAccessToken = "test-token",
+                    ApiEndpoint = "https://api.amazonalexa.com"
+                },
+                AudioPlayer = new PlaybackState
+                {
+                    PlayerActivity = "IDLE",
+                    Token = songId.ToString(),
+                    OffsetInMilliseconds = 90_000
+                }
+            };
+
+            var user = TestHelpers.CreateTestUser();
+            _fx.Config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
+            {
+                Id = user.Id,
+                AnnouncePositionOnResume = false
+            });
+
+            var chapter = new AudioBook
+            {
+                Name = "Chapter 3",
+                Id = Guid.NewGuid(),
+                ParentId = Guid.NewGuid(),
+                Path = "/audiobooks/book/chapter3.mp3"
+            };
+
+            var session = CreateEmptySession();
+            session.FullNowPlayingItem = chapter;
+
+            var response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+            Assert.NotNull(response);
+
+            // The token item keeps the flat AudioPlayer path, and its OWN name rides
+            // the metadata (the resolved arm of the JF-758 pairing fix).
+            var audioDirective = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+            Assert.Contains($"/Audio/{songId}/stream?static=true", audioDirective.AudioItem.Stream.Url, StringComparison.Ordinal);
+            Assert.Equal("Token Song", audioDirective.AudioItem.Metadata?.Title);
+        }
+        finally
+        {
             Plugin.Instance.Configuration.NativeControlsForBooks = false;
         }
     }
