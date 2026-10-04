@@ -81,7 +81,7 @@ public class ProactiveSubscriptionChangedHandler : BaseHandler
         bool subscribed = IsSubscribedToMediaContent(request);
 
         matchedUser.ProactiveEventsEnabled = subscribed;
-        Plugin.Instance!.SaveConfiguration();
+        Plugin.Instance!.Configuration.PersistUnderLedgerLock();
 
         Logger.LogInformation("User {Username} proactive events: {Status}", matchedUser.Username, subscribed ? "enabled" : "disabled");
 

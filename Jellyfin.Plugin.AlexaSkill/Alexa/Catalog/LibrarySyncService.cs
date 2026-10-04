@@ -530,10 +530,10 @@ public class LibrarySyncService
             }
 
             config.UpdateLocaleModelStatus(locale, compose);
-            // The save runs under the ledger lock (JF-724 code-review F1):
-            // SaveConfiguration serializes the live collection, which would
-            // otherwise race another writer's Add/replace mid-enumeration.
-            config.SaveUnderLedgerLock(() => Plugin.Instance!.SaveConfiguration());
+            // The ONE locked save path (JF-724): SaveConfiguration serializes
+            // the live collection, which would otherwise race another writer's
+            // Add/replace mid-enumeration.
+            config.PersistUnderLedgerLock();
         }
         catch (Exception ex)
         {

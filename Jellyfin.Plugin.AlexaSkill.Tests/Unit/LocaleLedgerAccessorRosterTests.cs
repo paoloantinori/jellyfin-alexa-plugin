@@ -20,7 +20,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 /// PLUGIN-CODE-only by construction: this scan covers the plugin assembly,
 /// while the test assembly's own single-threaded seeding/clearing and
 /// Jellyfin's configuration serializer (which enumerates the live collection;
-/// the ledger writers' saves serialize against it via SaveUnderLedgerLock)
+/// every plugin-code save serializes against it via PersistUnderLedgerLock)
 /// sit outside it. The scan is
 /// loud-only: discovery walks every method body of the plugin assembly
 /// (compiler-generated state machines and closures included), so a new direct

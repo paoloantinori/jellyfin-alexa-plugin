@@ -246,7 +246,7 @@ public class SetPlaybackSpeedIntentHandler : BaseHandler
         // re-launch, so the JF-693 verdict wrapper is gone and the persist + success
         // speech simply follow the delivered launch.
         user.PodcastSpeedPerMille = targetRate;
-        Plugin.Instance?.SaveConfiguration();
+        Plugin.Instance?.Configuration.PersistUnderLedgerLock();
 
         Logger.LogInformation(
             "SetPlaybackSpeed: re-launching '{ItemName}' ({ItemId}) at rate {TargetRate}/1000 (from {CurrentRate}/1000), content position {ContentTicks} ticks (raw offset {RawOffsetMs}ms)",

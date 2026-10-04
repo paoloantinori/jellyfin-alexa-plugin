@@ -236,7 +236,7 @@ public class AlexaSkillController : ControllerBase
 
         user.JellyfinToken = authenticationResult.AccessToken;
         user.TryTransitionToReady();
-        Plugin.Instance!.SaveConfiguration();
+        Plugin.Instance!.Configuration.PersistUnderLedgerLock();
 
         // Implicit grant: the access token is returned in the URL fragment per the Alexa
         // implicit-grant flow. token_type MUST be "Bearer" (OAuth2 / Amazon spec), not "token".

@@ -153,7 +153,7 @@ public class SkillStartup : IHostedService, IDisposable
                                 user.UserSkill.UserSkillStatus = UserSkillStatus.LwaAuthPending;
                             }
 
-                            Plugin.Instance.SaveConfiguration();
+                            Plugin.Instance.Configuration.PersistUnderLedgerLock();
                             continue;
                         }
                         else
@@ -171,7 +171,7 @@ public class SkillStartup : IHostedService, IDisposable
                         try
                         {
                             user.VendorId = await AlexaUtil.CallAsync(user, () => user.SmapiManagement.GetVendorIdAsync()).ConfigureAwait(false);
-                            Plugin.Instance.SaveConfiguration();
+                            Plugin.Instance.Configuration.PersistUnderLedgerLock();
                             _logger.LogInformation("Persisted vendor ID {VendorId} for user {UserId}", user.VendorId, user.Id);
                         }
                         catch (Exception ex)
@@ -241,7 +241,7 @@ public class SkillStartup : IHostedService, IDisposable
                                 if (user.TryTransitionToReady())
                                 {
                                     _logger.LogInformation("Transitioning user {UserId} from AccountLinkPending to Ready (skill exists, token present)", user.Id);
-                                    Plugin.Instance.SaveConfiguration();
+                                    Plugin.Instance.Configuration.PersistUnderLedgerLock();
                                 }
                             }
                             else
@@ -249,7 +249,7 @@ public class SkillStartup : IHostedService, IDisposable
                                 _logger.LogWarning("Skill {SkillId} not found in cloud for user {UserId}. Clearing stored skill ID to trigger recreation.", user.UserSkill.SkillId, user.Id);
                                 user.UserSkill.SkillId = null;
                                 user.UserSkill.UserSkillStatus = UserSkillStatus.SkillCreating;
-                                Plugin.Instance.SaveConfiguration();
+                                Plugin.Instance.Configuration.PersistUnderLedgerLock();
                             }
                         }
 
@@ -264,7 +264,7 @@ public class SkillStartup : IHostedService, IDisposable
 
                             user.UserSkill.SkillId = skillId;
                             user.UserSkill.UserSkillStatus = UserSkillStatus.AccountLinkPending;
-                            Plugin.Instance.SaveConfiguration();
+                            Plugin.Instance.Configuration.PersistUnderLedgerLock();
 
                             // The skill-creation twin of the version-mismatch
                             // site above; typically the sparse-capture world whose
@@ -574,18 +574,16 @@ public class SkillStartup : IHostedService, IDisposable
             }
 
             // Rework F2: last cancellation checkpoint before the XML write, the
-            // save boundary every caller of this capture shares. The save runs
-            // under the ledger lock (JF-724 code-review F1: SaveConfiguration
-            // serializes the live collection and would otherwise race another
-            // writer's Add/replace mid-enumeration), and a save FAILURE is
-            // non-fatal WITHOUT flipping the return: the rows ARE written in
-            // memory, and returning false here would flip the paired refresh
-            // into its recapture mode, spending the whole budget re-GETting
-            // rows this capture already wrote.
+            // save boundary every caller of this capture shares. The save goes
+            // through the ONE locked save path (JF-724 gate-marker F4), and a
+            // save FAILURE is non-fatal WITHOUT flipping the return: the rows
+            // ARE written in memory, and returning false here would flip the
+            // paired refresh into its recapture mode, spending the whole
+            // budget re-GETting rows this capture already wrote.
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                config.SaveUnderLedgerLock(() => Plugin.Instance!.SaveConfiguration());
+                config.PersistUnderLedgerLock();
             }
             catch (Exception ex)
             {
@@ -1075,9 +1073,9 @@ public class SkillStartup : IHostedService, IDisposable
         if (any)
         {
             // Last cancellation checkpoint before the XML write (JF-722 rework
-            // F2); the save runs under the ledger lock (JF-724 code-review F1).
+            // F2); the ONE locked save path (JF-724 gate-marker F4).
             cancellationToken.ThrowIfCancellationRequested();
-            config.SaveUnderLedgerLock(() => Plugin.Instance!.SaveConfiguration());
+            config.PersistUnderLedgerLock();
         }
     }
 

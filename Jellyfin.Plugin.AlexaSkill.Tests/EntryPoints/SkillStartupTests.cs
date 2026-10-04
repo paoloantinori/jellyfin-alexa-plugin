@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Threading;
@@ -1098,6 +1099,54 @@ public class SkillStartupTests : PluginTestBase
         row = Plugin.Instance!.Configuration.GetLocaleModelStatus("it-IT");
         Assert.NotNull(row);
         Assert.Equal("amzn1.ask.skill.user-b", row!.ObservedSkillId);
+    }
+
+    /// <summary>
+    /// JF-724 gate-marker F2: a FAILING save at the capture's boundary is
+    /// non-fatal WITHOUT flipping the return. The return is the paired
+    /// wrapper's ONLY input (captureWroteNoRows = !capture), so a false here
+    /// would flip the deferred refresh into its recapture mode and spend the
+    /// whole 4-poll budget re-GETting rows this capture already wrote; the
+    /// pin drives the failure through the PersistUnderLedgerLock test seam
+    /// and asserts the rows stand in memory, the capture still reports true,
+    /// and a follow-up capture persists normally once the failure clears.
+    /// </summary>
+    [Fact]
+    public async Task CaptureLocaleModelStatusesAsync_SaveFailure_IsNonFatalAndDoesNotFlipTheReturn()
+    {
+        ClearLedger();
+        var config = Plugin.Instance!.Configuration;
+        int saveAttempts = 0;
+        config.PersistInterceptorForTest = () =>
+        {
+            saveAttempts++;
+            throw new IOException("simulated config write failure");
+        };
+        try
+        {
+            bool wroteAny = await CreateStartup().CaptureLocaleModelStatusesAsync(
+                UserServing(StatusFor("it-IT", SkillStatusState.SUCCEEDED)),
+                RefreshSkillId);
+
+            Assert.True(wroteAny, "a save failure must not flip the capture's return (the paired refresh would enter recapture mode)");
+            Assert.Equal(1, saveAttempts);
+            var row = config.GetLocaleModelStatus("it-IT");
+            Assert.NotNull(row);
+            Assert.Equal("SUCCEEDED", row!.Status);
+
+            // The failure clears; the next capture persists through the seam
+            // without throwing (the seam itself is exercised end to end).
+            config.PersistInterceptorForTest = () => saveAttempts++;
+            bool again = await CreateStartup().CaptureLocaleModelStatusesAsync(
+                UserServing(StatusFor("it-IT", SkillStatusState.SUCCEEDED)),
+                RefreshSkillId);
+            Assert.True(again);
+            Assert.Equal(2, saveAttempts);
+        }
+        finally
+        {
+            config.PersistInterceptorForTest = null;
+        }
     }
 
     /// <summary>

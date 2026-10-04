@@ -369,8 +369,10 @@ public class PluginConfiguration : BasePluginConfiguration
     /// CONCURRENCY (JF-724): every read and write of this collection MUST go
     /// through the locked accessors below (<see cref="GetLocaleModelStatus"/>,
     /// <see cref="SetLocaleModelStatus"/>, <see cref="UpdateLocaleModelStatus"/>,
-    /// <see cref="GetLocaleModelStatusSnapshot"/>) in PLUGIN code, and every
-    /// ledger writer's save goes through <see cref="SaveUnderLedgerLock"/> so
+    /// <see cref="GetLocaleModelStatusSnapshot"/>; the family is ASSEMBLY-INTERNAL
+    /// so the plain Get/Set doors cannot be paired from outside the plugin+test
+    /// seam, gate-marker F3) in PLUGIN code, and every plugin-code save goes
+    /// through <see cref="PersistUnderLedgerLock"/> so
     /// the XML serializer's enumeration is serialized against writer mutations
     /// too; an unguarded enumeration 500s the admin surface on a concurrent
     /// writer's Add/indexer-set, and an unguarded read-then-write loses the
@@ -447,11 +449,12 @@ public class PluginConfiguration : BasePluginConfiguration
     /// writer's collection mutation must not throw the scan. No production
     /// reader uses this plain read today (the writers that decide from the
     /// current row go through <see cref="UpdateLocaleModelStatus"/>); it
-    /// remains the public plain-read door and the test-seeding primitive, and
-    /// a caller pairing it with a later Set/Update is the two-lock-acquisition
-    /// race <see cref="SetLocaleModelStatus"/>'s doc warns about.
+    /// remains the assembly-internal plain-read door and the test-seeding
+    /// primitive (internal since gate-marker F3: a public Get paired with a
+    /// public Set is two lock acquisitions and resurrects the closed
+    /// read-modify-write from any future caller).
     /// </summary>
-    public LocaleModelStatus? GetLocaleModelStatus(string locale)
+    internal LocaleModelStatus? GetLocaleModelStatus(string locale)
     {
         lock (_localeLedgerLock)
         {
@@ -464,13 +467,15 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <see cref="UpdateLocaleModelStatus"/> so the lock and upsert plumbing
     /// have ONE site. No production writer uses this plain write today (every
     /// field-era writer decides its row from the current row); it remains the
-    /// public plain-write door and the test-seeding primitive. Writers that
+    /// assembly-internal plain-write door and the test-seeding primitive
+    /// (internal since gate-marker F3, the same closed-door reasoning as
+    /// GetLocaleModelStatus). Writers that
     /// decide the row from the CURRENT row (the capture preserve, the refresh
     /// settle, the no-PUT carry) must use
     /// <see cref="UpdateLocaleModelStatus"/> directly, or the read and this
     /// write are two lock acquisitions with a race between them.
     /// </summary>
-    public void SetLocaleModelStatus(string locale, LocaleModelStatus status)
+    internal void SetLocaleModelStatus(string locale, LocaleModelStatus status)
         => UpdateLocaleModelStatus(locale, _ => status);
 
     /// <summary>
@@ -489,7 +494,7 @@ public class PluginConfiguration : BasePluginConfiguration
     /// leaves the row untouched (the refresh's not-my-family shape).</param>
     /// <returns>The row now stored, or null when the callback declined to
     /// write.</returns>
-    public LocaleModelStatus? UpdateLocaleModelStatus(string locale, Func<LocaleModelStatus?, LocaleModelStatus?> compose)
+    internal LocaleModelStatus? UpdateLocaleModelStatus(string locale, Func<LocaleModelStatus?, LocaleModelStatus?> compose)
     {
         lock (_localeLedgerLock)
         {
@@ -517,7 +522,7 @@ public class PluginConfiguration : BasePluginConfiguration
     /// change under the snapshot's readers.
     /// </summary>
     /// <returns>A stable copy; never null, empty when the ledger is.</returns>
-    public IReadOnlyList<LocaleModelStatusEntry> GetLocaleModelStatusSnapshot()
+    internal IReadOnlyList<LocaleModelStatusEntry> GetLocaleModelStatusSnapshot()
     {
         lock (_localeLedgerLock)
         {
@@ -526,27 +531,43 @@ public class PluginConfiguration : BasePluginConfiguration
     }
 
     /// <summary>
-    /// Runs a configuration save under the ledger lock (JF-724 code-review
-    /// F1): Jellyfin's SaveConfiguration serializes the LIVE collection, and a
-    /// concurrent writer's Add/replace landing mid-serialization bumps the
-    /// collection version under the serializer's enumerator and throws INSIDE
-    /// the save (the writer's write already succeeded, so the failure mode is
-    /// a swallowed save: the row stays memory-only until the next one). Every
-    /// LEDGER writer saves through this wrapper so its save is serialized
-    /// against the other writers' mutations. RESIDUAL: an admin-triggered save
-    /// (config UI, skill creation) also enumerates the live collection outside
-    /// this lock; those saves are human-paced, and their failure surfaces in
-    /// their own caller's handling.
+    /// The ONE save path for plugin code (JF-724 gate-marker F4, absorbing
+    /// code-review F1): persists the plugin's configuration under the ledger
+    /// lock, because Jellyfin's SaveConfiguration serializes the LIVE
+    /// LocaleModelStatuses collection and a concurrent ledger writer's
+    /// Add/replace landing mid-serialization throws INSIDE the save (the
+    /// write already succeeded, so the failure strands rows memory-only, and
+    /// on the capture path a false return would mis-derive the paired
+    /// refresh's recapture mode). Every plugin-code save that can execute
+    /// once background work exists goes through here, so the invariant is
+    /// structural instead of a repeated caller lambda. Reads
+    /// <see cref="Plugin.Instance"/> itself: there is exactly one Plugin
+    /// instance in production and in the test seam, and the saved
+    /// configuration is that instance's.
+    /// UNWRAPPED REMAINDER (the whole of it, JF-724 gate-marker F1's honest
+    /// scope): the two Plugin.cs LOAD-TIME migrations (JF-300/JF-534), which
+    /// run during plugin construction before any hosted service or scheduled
+    /// task can run a ledger writer in the process, are already best-effort
+    /// caught there; and Jellyfin's own configuration-save path when the
+    /// admin updates plugin config through the framework, which is outside
+    /// plugin code and human-paced. Nothing else may call
+    /// SaveConfiguration directly.
     /// </summary>
-    /// <param name="save">The save to run (must not call the ledger
-    /// accessors; nothing needs to).</param>
-    public void SaveUnderLedgerLock(Action save)
+    internal void PersistUnderLedgerLock()
     {
         lock (_localeLedgerLock)
         {
-            save();
+            PersistInterceptorForTest?.Invoke();
+            Plugin.Instance?.SaveConfiguration();
         }
     }
+
+    /// <summary>Test seam (the TypeLegEntryProbeForTest pattern): invoked
+    /// inside <see cref="PersistUnderLedgerLock"/> before the save, under the
+    /// lock; a test can throw from it to simulate a failing SaveConfiguration
+    /// (the JF-724 gate-marker F2 capture save-honesty pin). Never set in
+    /// production. Internal property: invisible to XmlSerializer.</summary>
+    internal Action? PersistInterceptorForTest { get; set; }
 
     /// <summary>The locked-scan row lookup shared by the accessors. Caller
     /// holds <see cref="_localeLedgerLock"/>.</summary>
