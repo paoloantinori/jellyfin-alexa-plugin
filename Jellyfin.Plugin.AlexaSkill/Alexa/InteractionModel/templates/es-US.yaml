@@ -1,11 +1,21 @@
 # Spanish (US) interaction model template for the Alexa skill.
 #
 # JF-316 milestone 3: golden master. Faithful transcription of the
-# hand-grown model_es-US.json (60 intents, 390 samples, the leanest
-# es locale); `python3 scripts/generate_interaction_model.py es-US`
+# hand-grown model_es-US.json (60 intents, 390 samples at the golden
+# master, the leanest es locale; enriched since by JF-399 / JF-583 /
+# JF-551, whose notes carry their own deltas - live counts are
+# deliberately not restated here because hand-maintained counts rot, as
+# the pre-JF-551 headers showed); `python3 scripts/generate_interaction_model.py es-US`
 # reproduces it byte-identically.
 #
 # Run: python3 scripts/generate_interaction_model.py es-US
+#
+# JF-551 (2026-10-04): PlayEpisodeIntent gained the SUBJUNCTIVE wrapper
+# family (reproduzca, both word orders), identical to es-ES's (see its
+# header note for the wrapper morphology and probe evidence). es-US's own
+# pre-family readings: the BARE subjunctive dropped series_name entirely
+# while the connector-residue shape "que reproduzca {series}" glued into
+# it (live-observed; the five-way divergence list below is unchanged).
 #
 # es-US diverges from es-ES (otherwise identical: intent sequence,
 # key orders, types, dialog, Mood block) in exactly five ways:
@@ -402,6 +412,10 @@ intents:
       - reproduce la temporada {season_number} episodio {episode_number} de {series_name}
       - reproduce {series_name} temporada {season_number} episodio {episode_number}
       - ver temporada {season_number} episodio {episode_number} de {series_name}
+      # JF-551: the one-shot wrapper's subjunctive payload; both word
+      # orders, mirroring the imperative carriers (see header).
+      - reproduzca {series_name} temporada {season_number} episodio {episode_number}
+      - reproduzca la temporada {season_number} episodio {episode_number} de {series_name}
   # JF-583: the próximo/último carriers are slotted ({episode_position},
   # custom EpisodePosition type): próximo keeps NextUp, último resolves by
   # recency; 'continúa viendo' carries no position (NextUp by design).

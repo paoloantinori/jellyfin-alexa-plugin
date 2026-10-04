@@ -41,3 +41,22 @@ tests:
     expected_intent: BrowseLibraryIntent
     expected_slots:
       browse_category: {}
+
+  # JF-551 (2026-10-04): this locale's first PlayEpisode entries, pinning the
+  # SUBJUNCTIVE wrapper payload ("pide a {inv} que reproduzca ...", series
+  # FIRST). Pre-family evidence on es-US: the BARE form selected
+  # PlayEpisodeIntent but DROPPED series_name entirely, while the
+  # connector-residue form glued "que reproduzca breaking bad" into the slot;
+  # the exact-value pin is the anti-pollution regression pin and stays red
+  # until the rebuilt model with the "reproduzca" family is deployed. The
+  # number slots are pinned because every subjunctive reading on es-US filled
+  # both consistently. The imperative episode forms are deliberately NOT
+  # pinned: their probes on es-US filled slots inconsistently (JF-406
+  # divergence class).
+  - utterance: "reproduzca breaking bad temporada uno episodio tres"
+    expected_intent: PlayEpisodeIntent
+    expected_slots:
+      series_name:
+        value: "breaking bad"
+      season_number: {}
+      episode_number: {}

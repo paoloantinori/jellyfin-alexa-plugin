@@ -62,6 +62,27 @@ BATTERY: dict[str, list[tuple[str, str, str]]] = {
         ("simulate", "chiedi a mia collezione di riprodurre il podcast generazione", "PlayPodcastIntent"),
         ("simulate", "chiedi a mia collezione di leggere il libro il gattopardo", "PlayBookIntent"),
     ],
+    # JF-551 (2026-10-04): the es SUBJUNCTIVE episode wrapper payload ("pide a
+    # {inv} que + subjunctive"; the 2026-09-13 infinitive twin was the wrong
+    # morphology and was reverted). profile rows only: the bare payload needs
+    # no invocation layer, so the evergreen control does not apply. The battery
+    # asserts INTENT selection only; the verb-glue pollution (series_name
+    # "reproduzca {series}") is pinned by the exact-value fixture rows in
+    # tests/integration/fixtures/es-*.yaml, which stay red until the rebuilt
+    # models with the "reproduzca" family are deployed. "the bear" is a real
+    # library series (the battery convention for slot values).
+    "es-ES": [
+        ("profile", "reproduzca the bear temporada uno episodio tres", "PlayEpisodeIntent"),
+        # the connector-residue twin (the wrapper's "que" may ride into the
+        # payload; see the es-ES fixture comment for the open verification)
+        ("profile", "que reproduzca the bear temporada uno episodio tres", "PlayEpisodeIntent"),
+    ],
+    "es-MX": [
+        ("profile", "reproduzca the bear temporada uno episodio tres", "PlayEpisodeIntent"),
+    ],
+    "es-US": [
+        ("profile", "reproduzca the bear temporada uno episodio tres", "PlayEpisodeIntent"),
+    ],
 }
 
 # The simulate-outage control: a one-shot that has routed on-device every time

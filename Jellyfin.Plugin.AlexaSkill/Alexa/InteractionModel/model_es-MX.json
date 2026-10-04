@@ -539,7 +539,9 @@
         "samples": [
           "reproduce la temporada {season_number} episodio {episode_number} de {series_name}",
           "reproduce {series_name} temporada {season_number} episodio {episode_number}",
-          "ver temporada {season_number} episodio {episode_number} de {series_name}"
+          "ver temporada {season_number} episodio {episode_number} de {series_name}",
+          "reproduzca {series_name} temporada {season_number} episodio {episode_number}",
+          "reproduzca la temporada {season_number} episodio {episode_number} de {series_name}"
         ]
       },
       {

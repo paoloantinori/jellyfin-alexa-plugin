@@ -10796,7 +10796,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (439 phrases across 66 commands):
+Complete phrase list (441 phrases across 66 commands):
 
 #### Play music
 
@@ -10972,6 +10972,8 @@ Complete phrase list (439 phrases across 66 commands):
 - `reproduce la temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
 - `reproduce <nombre de la serie> temporada <número de temporada> episodio <número de episodio>`
 - `ver temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
+- `reproduzca <nombre de la serie> temporada <número de temporada> episodio <número de episodio>`
+- `reproduzca la temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
 
 **Play the next episode**
 
@@ -11468,7 +11470,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (439 phrases across 66 commands):
+Complete phrase list (441 phrases across 66 commands):
 
 #### Play music
 
@@ -11646,6 +11648,8 @@ Complete phrase list (439 phrases across 66 commands):
 - `reproduce la temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
 - `reproduce <nombre de la serie> temporada <número de temporada> episodio <número de episodio>`
 - `ver temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
+- `reproduzca <nombre de la serie> temporada <número de temporada> episodio <número de episodio>`
+- `reproduzca la temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
 
 **Play the next episode**
 
@@ -12140,7 +12144,7 @@ Placeholder legend:
 | `<palabras del título de la canción>` | `{titleKeywords}` |
 | `<nombre de usuario>` | `{username}` |
 
-Complete phrase list (427 phrases across 66 commands):
+Complete phrase list (429 phrases across 66 commands):
 
 #### Play music
 
@@ -12311,6 +12315,8 @@ Complete phrase list (427 phrases across 66 commands):
 - `reproduce la temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
 - `reproduce <nombre de la serie> temporada <número de temporada> episodio <número de episodio>`
 - `ver temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
+- `reproduzca <nombre de la serie> temporada <número de temporada> episodio <número de episodio>`
+- `reproduzca la temporada <número de temporada> episodio <número de episodio> de <nombre de la serie>`
 
 **Play the next episode**
 

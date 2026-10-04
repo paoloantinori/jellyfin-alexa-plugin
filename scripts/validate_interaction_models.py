@@ -649,10 +649,19 @@ def lint_browse_category_ids(all_models: dict[str, dict]) -> list[str]:
     return warnings
 
 
-# JF-549: PlayEpisodeIntent one-shot (infinitive) carrier prefixes per locale.
+# JF-549: PlayEpisodeIntent one-shot carrier prefixes per locale.
 # A locale is listed here only when its model ALREADY carries a one-shot carrier
-# family; locales without one (es-*, pt-BR, nl-NL, ar-SA, hi-IN, ja-JP) are out of
-# scope (their wrapper routing is tracked in the JF-551 probe task).
+# family; locales without one (pt-BR, nl-NL, ar-SA, hi-IN, ja-JP) are out of
+# scope - JF-551 probed all of them 2026-10-04: their wrapper payloads select
+# PlayEpisodeIntent on the existing bare/imperative families when the series IS
+# in the user's catalog, and every remaining misroute (pt-BR's PlayNext/PlayVideo
+# steals, the hi series-truncation, the nl season '?') is the catalog
+# ER_SUCCESS_NO_MATCH confidence penalty that hits any NON-library series value
+# (the JF-684 class; evidence and per-locale dispositions in the JF-551 notes),
+# EXCEPT the ja 見たい steal, which is catalog-independent and tracked as
+# JF-761. The es-* entries are the JF-551 SUBJUNCTIVE family: the es one-shot
+# wrapper ("pide a {inv} que ...") presents the subjunctive, not the infinitive
+# (the 2026-09-13 infinitive attempt was wrong morphology and reverted).
 PLAY_EPISODE_ONESHOT_PREFIXES = {
     "it-IT": "Di ",
     "de-DE": "Zu ",
@@ -663,6 +672,9 @@ PLAY_EPISODE_ONESHOT_PREFIXES = {
     "en-AU": "to ",
     "en-CA": "to ",
     "en-IN": "to ",
+    "es-ES": "reproduzca ",
+    "es-MX": "reproduzca ",
+    "es-US": "reproduzca ",
 }
 
 
@@ -1172,7 +1184,10 @@ WRAPPER_MARKERS: dict[str, list[str]] = {
     "it": _it_markers(),
     "en": ["to play", "to listen", "to hear", "to watch", "to stream", "to queue", "to give"],
     "de": ["abspielen", "wiedergeben", "hören", "anschauen"],
-    "es": ["reproducir", "escuchar", "ver ", "poner"],
+    # es: "reproduzca" joined JF-551 (the subjunctive is the real es wrapper
+    # morphology behind "pide a X que ..."; the infinitive marker stays for
+    # any locale that ever carries an infinitive twin).
+    "es": ["reproducir", "reproduzca", "escuchar", "ver ", "poner"],
     "fr": ["écouter", "lire ", "regarder", "mettre"],
     "pt": ["tocar", "ouvir", "assistir", "colocar"],
     "nl": ["afspelen", "luisteren", "kijken"],
