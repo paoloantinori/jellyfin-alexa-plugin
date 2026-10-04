@@ -96,8 +96,15 @@ public class DisambiguationHelperTests
         Assert.Equal("Test Song", storedMatches[0].Name);
     }
 
+    // JF-735: the state truncation at FirstMatchStateCap is DELIBERATE and
+    // this pin locks it; the full defense, the enforced caller census, and the
+    // JF-743 filing live on that constant's doc. Do not widen the state
+    // without re-weighing there. (This 2-tuple overload has zero production
+    // callers - every call site uses the ArtUrl overload - but it is pinned
+    // here and by AskFirstMatch_OriginalOverload_StillWorks below as public
+    // helper surface; removing it would be a separate cleanup.)
     [Fact]
-    public void AskFirstMatch_LimitsToThreeMatches()
+    public void AskFirstMatch_TruncatesStateAtThree_DeliberateWeakTailCap()
     {
         var matches = new List<(Guid, string)>
         {
@@ -110,8 +117,33 @@ public class DisambiguationHelperTests
 
         var response = DisambiguationHelper.AskFirstMatch(matches, "song", "en-US");
 
-        var storedMatches = JsonConvert.DeserializeObject<List<DisambiguationHelper.MatchInfo>>(
-            response.SessionAttributes["disambig_matches"].ToString()!);
+        var storedMatches = DisambiguationHelper.ReadState(response.SessionAttributes)!.Value.Matches;
+        Assert.Equal(3, storedMatches.Count);
+        Assert.Equal("Song 1", storedMatches[0].Name);
+        Assert.Equal("Song 2", storedMatches[1].Name);
+        Assert.Equal("Song 3", storedMatches[2].Name);
+    }
+
+    // JF-735: the same deliberate cap on the ArtUrl overload, the shape every
+    // production caller uses (the caller ROSTER is enforced by
+    // AskFirstMatchCallerCensusTests, which pools both overloads' tokens and
+    // tracks types, not overload choice); same defense as the tuple
+    // overload's pin above.
+    [Fact]
+    public void AskFirstMatch_WithArtUrls_TruncatesStateAtThree_DeliberateWeakTailCap()
+    {
+        var matches = new List<(Guid, string, string?)>
+        {
+            (Guid.NewGuid(), "Song 1", null),
+            (Guid.NewGuid(), "Song 2", null),
+            (Guid.NewGuid(), "Song 3", null),
+            (Guid.NewGuid(), "Song 4", null),
+            (Guid.NewGuid(), "Song 5", null)
+        };
+
+        var response = DisambiguationHelper.AskFirstMatch(matches, "song", "en-US");
+
+        var storedMatches = DisambiguationHelper.ReadState(response.SessionAttributes)!.Value.Matches;
         Assert.Equal(3, storedMatches.Count);
         Assert.Equal("Song 1", storedMatches[0].Name);
         Assert.Equal("Song 2", storedMatches[1].Name);
