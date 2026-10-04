@@ -148,6 +148,11 @@ public class PlayNextIntentHandler : BaseHandler
         // the RAW slot (its constraint probe owns its own normalization); the
         // not-found speech speaks the romanized form, the accepted JF-643 speech
         // trade (a kana slot's pre-change outcome was total failure).
+        // CONVENTION SPLIT (JF-645 gate-marker): the queue paths speak the
+        // ROMANIZED form on miss (PlaySong's JF-643 trade), while the genre/series
+        // sites wired in the same change keep the RAW kana slot for speech; both
+        // conventions are documented at their sites - apply the matching one at the
+        // next site rather than inventing a third.
         songQuery = Util.KatakanaRomanizer.Romanize(songQuery);
 
         var songSearchQuery = new InternalItemsQuery()
