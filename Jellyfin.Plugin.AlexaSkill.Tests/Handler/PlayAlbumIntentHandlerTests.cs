@@ -504,6 +504,135 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase, IDisposable
         Assert.NotNull(playDirective);
     }
 
+    // -------------------------------------------------------------------------
+    // JF-743 leg 1: the exact-name pick-off on the direct-search multi-match leg.
+    // -------------------------------------------------------------------------
+
+    /// <summary>
+    /// JF-743 red-proof pin (the Confirm half of "plays or asks FIRST"): query
+    /// 'rush' over four distinct-name SearchTerm hits whose alphabetical order
+    /// buries the exact name at rank 4 (Gold &lt; Love &lt; Midnight &lt; Rush).
+    /// Pre-fix red: the stored cycling state was [Gold Rush, Love Rush, Midnight
+    /// Rush], with 'Rush' absent, so a user who cycled to exhaustion got
+    /// NoMoreMatches without ever hearing the album they named. Post-fix the
+    /// exact name ranks FIRST and the remainder keeps the JF-427 alphabetical
+    /// order; the caller Take(3) cap itself stays (the JF-735 verdict).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_MultiMatchBuriesExactName_ExactAskedFirst_RemainderAlphabetical()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(album: "rush");
+        _fx.SetupUserMock();
+
+        var gold = new MusicAlbum { Name = "Gold Rush", Id = Guid.NewGuid() };
+        var love = new MusicAlbum { Name = "Love Rush", Id = Guid.NewGuid() };
+        var midnight = new MusicAlbum { Name = "Midnight Rush", Id = Guid.NewGuid() };
+        var rush = new MusicAlbum { Name = "Rush", Id = Guid.NewGuid() };
+        SetupAlbumsAndTracks(new List<BaseItem> { gold, love, midnight, rush });
+
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        // The disambiguation ask, not a play and not a not-found Tell.
+        Assert.False(response.Response.ShouldEndSession);
+        var state = DisambiguationHelper.ReadState(response.SessionAttributes)!.Value;
+        Assert.Equal(DisambiguationHelper.MediaTypeAlbum, state.MediaType);
+        // The caller Take(3) stays: rank 4+ of the NON-exact tail is still capped
+        // (the JF-735 verdict; this fix reaches the exact name, it does not widen).
+        Assert.Equal(3, state.Matches.Count);
+        Assert.Equal("Rush", state.Matches[0].Name);
+        Assert.Equal(rush.Id.ToString(), state.Matches[0].Id);
+        Assert.Equal("Gold Rush", state.Matches[1].Name);
+        Assert.Equal("Love Rush", state.Matches[2].Name);
+        // The ask speaks the first stored candidate (a Contains assert only: every
+        // rival name contains 'Rush' as a substring, so the state asserts above are
+        // the discriminating pins for WHICH name leads).
+        Assert.Contains("Rush", TestHelpers.GetSpeechText(response));
+    }
+
+    /// <summary>
+    /// JF-743 pin (the AutoPlay half of "plays or asks FIRST"): an AutoPlay user
+    /// auto-plays albums[0], which alphabetical order made the WRONG album ('Gold
+    /// Rush' for the query 'rush', pre-fix red). With the exact name ranked first
+    /// the album the user NAMED is the one that plays. The playback page query is
+    /// keyed by ParentId so the played token identifies which album won.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_MultiMatchBuriesExactName_AutoPlayUser_PlaysTheExactAlbum()
+    {
+        var user = TestHelpers.CreateTestUser();
+        user.FuzzyMatchBehavior = FuzzyMatchBehavior.AutoPlay;
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(album: "rush");
+        _fx.SetupUserMock();
+
+        var gold = new MusicAlbum { Name = "Gold Rush", Id = Guid.NewGuid() };
+        var love = new MusicAlbum { Name = "Love Rush", Id = Guid.NewGuid() };
+        var midnight = new MusicAlbum { Name = "Midnight Rush", Id = Guid.NewGuid() };
+        var rush = new MusicAlbum { Name = "Rush", Id = Guid.NewGuid() };
+        var goldTrack = new Audio { Name = "Gold First", Id = Guid.NewGuid() };
+        var rushTrack = new Audio { Name = "Rush First", Id = Guid.NewGuid() };
+
+        // The album-title query reuses the file's shared wiring; the playback page
+        // query is answered per album so the played token discriminates the winner
+        // (the gold branch is the discriminating wrong answer of the red proof).
+        SetupAlbumsAndTracks(new List<BaseItem> { gold, love, midnight, rush });
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) => q.ParentId == rush.Id
+                ? new QueryResult<BaseItem> { Items = new[] { rushTrack }, TotalRecordCount = 1 }
+                : new QueryResult<BaseItem> { Items = new[] { goldTrack }, TotalRecordCount = 1 });
+
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), user, CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        var playDirective = response.Response.Directives?.FirstOrDefault(d => d is AudioPlayerPlayDirective) as AudioPlayerPlayDirective;
+        Assert.NotNull(playDirective);
+        Assert.Equal(rushTrack.Id.ToString(), playDirective!.AudioItem.Stream.Token);
+    }
+
+    /// <summary>
+    /// JF-743 pin, the JF-469 feed of the same leg (code-review round): the raw
+    /// it-IT slot value ('chiamato rush') misses, the calling-word-stripped retry
+    /// ('rush') returns the four hits, and `album` deliberately KEEPS the raw
+    /// value for the not-found speech. The pick-off must compare against the
+    /// term the list was QUERIED with (effectiveAlbumTerm), or it goes inert on
+    /// exactly this producer and the burial defect survives one retry later
+    /// (pre-fix red: the stored state's first name was 'Gold Rush').
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_CallingWordStrippedRetry_MultiMatchBuriesExact_ExactStillAskedFirst()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(album: "chiamato rush", locale: "it-IT");
+        _fx.SetupUserMock();
+
+        var gold = new MusicAlbum { Name = "Gold Rush", Id = Guid.NewGuid() };
+        var love = new MusicAlbum { Name = "Love Rush", Id = Guid.NewGuid() };
+        var midnight = new MusicAlbum { Name = "Midnight Rush", Id = Guid.NewGuid() };
+        var rush = new MusicAlbum { Name = "Rush", Id = Guid.NewGuid() };
+        var queries = new List<InternalItemsQuery>();
+        SetupTitleSearchByTerm(
+            new Dictionary<string, List<BaseItem>> { ["rush"] = new() { gold, love, midnight, rush } },
+            queries);
+
+        SkillResponse response = await handler.HandleAsync(request, _fx.CreateContext(), TestHelpers.CreateTestUser(), CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.False(response.Response.ShouldEndSession);
+        var state = DisambiguationHelper.ReadState(response.SessionAttributes)!.Value;
+        Assert.Equal("Rush", state.Matches[0].Name);
+        Assert.Equal(rush.Id.ToString(), state.Matches[0].Id);
+        Assert.Equal("Gold Rush", state.Matches[1].Name);
+        Assert.Equal("Love Rush", state.Matches[2].Name);
+
+        // The JF-469 raw-first contract on this multi-match leg: the RAW value was
+        // queried first and the stripped value only after it missed (an album
+        // literally titled "Chiamato rush" must stay findable by the raw query).
+        List<string> searchTerms = queries.Where(q => q.SearchTerm != null).Select(q => q.SearchTerm!).ToList();
+        Assert.Equal(new[] { "chiamato rush", "rush" }, searchTerms);
+    }
+
     [Fact]
     public async Task HandleAsync_SingleAlbum_AutoPlays()
     {

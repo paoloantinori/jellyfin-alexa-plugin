@@ -300,9 +300,18 @@ internal static class DisambiguationHelper
     /// caller-side legs where a dropped rank-4+ candidate is user-relevant
     /// despite all that (PlayAlbum's alphabetically ordered direct search
     /// hits, where the exact album name can sit past rank 3, and PlayPodcast's
-    /// search-relevant sub-threshold tail) are filed as JF-743, as is the band-corner
-    /// shape above: a helper-side state change cannot reach a caller that
-    /// never passes rank 4 past its own Take(3).
+    /// search-relevant sub-threshold tail) were filed as JF-743 and fixed or
+    /// declined caller-side, without touching this cap: PlayAlbum's
+    /// direct-search leg ranks an exact album name (the shared JF-420.1
+    /// predicate, against the term the list was queried with) FIRST ahead of
+    /// the JF-427 alphabetical order before its own Take(3), so the exact
+    /// class is never a rank-4+ casualty while its non-exact tail stays
+    /// capped by that caller-side Take; PlayPodcast's untruncated tail KEEPS
+    /// this cap as its binding truncation by decision (the ask's list is
+    /// exact-free by the JF-640 pass and sub-suggestion-threshold among
+    /// scored candidates, in arbitrary albums-then-series order; the decline
+    /// is locked by a caller-level pin seeding five such hits). The band-corner
+    /// shape above stays as documented, FuzzyMatcher untouched.
     /// </summary>
     internal const int FirstMatchStateCap = 3;
 

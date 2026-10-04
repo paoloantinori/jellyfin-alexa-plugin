@@ -717,6 +717,56 @@ public class PlayPodcastIntentHandlerTests : PluginTestBase
     }
 
     /// <summary>
+    /// JF-743 leg 2 DECISION pin (the decline, locked at the caller): this is the
+    /// ONLY AskFirstMatch caller that passes an UNTRUNCATED list, so the helper's
+    /// FirstMatchStateCap is the binding truncation here, and the JF-743 verdict
+    /// KEEPS it. Five SearchTerm hits, none exact (the JF-640 exact pass picks
+    /// exact names off before this leg can see them) and every one
+    /// sub-suggestion-threshold (HandleFuzzyMiss answered NotFound), so the ask
+    /// carries the first three of an arbitrary albums-then-series database order:
+    /// rank 4+ is unranked tail, not deeper relevance. Widening (JF-729 hint
+    /// treatment) was declined; the full weighing lives in the JF-743 task file.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_FiveSubThresholdSearchHits_NotFoundAskKeepsThree()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(podcastName: "daily");
+        var context = CreateContext();
+        var user = CreateUser();
+        var session = CreateSession();
+
+        SetupUserMock();
+
+        // All five score ~20 partial-ratio against 'daily' (no containment either
+        // direction, all inside the length band), i.e. far below the suggestion
+        // threshold 40, so HandleFuzzyMiss returns NotFound and this leg builds
+        // the AskFirstMatch ask over the full five-entry list.
+        var podcasts = new List<BaseItem>
+        {
+            new MusicAlbum { Name = "Morning Edition", Id = Guid.NewGuid() },
+            new MusicAlbum { Name = "Fresh Air", Id = Guid.NewGuid() },
+            new MusicAlbum { Name = "Planet Money", Id = Guid.NewGuid() },
+            new MusicAlbum { Name = "This American Life", Id = Guid.NewGuid() },
+            new MusicAlbum { Name = "Hardcore History", Id = Guid.NewGuid() }
+        };
+
+        SetupShapeQueries(podcasts, new List<BaseItem>());
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.False(response.Response.ShouldEndSession);
+        var state = DisambiguationHelper.ReadState(response.SessionAttributes)!.Value;
+        Assert.Equal(DisambiguationHelper.MediaTypePodcast, state.MediaType);
+        // The decline lock: the helper cap keeps truncating this caller's state at 3.
+        Assert.Equal(3, state.Matches.Count);
+        Assert.Equal("Morning Edition", state.Matches[0].Name);
+        Assert.Equal("Fresh Air", state.Matches[1].Name);
+        Assert.Equal("Planet Money", state.Matches[2].Name);
+    }
+
+    /// <summary>
     /// JF-640 (the live incident shape): the album query returns music albums AND the
     /// series query returns the exactly-named podcast; asking 'morning' must play the
     /// SERIES, never fuzzy-accept an album (live: 'Euphoria Morning' scored 90 and

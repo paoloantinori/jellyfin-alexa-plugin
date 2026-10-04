@@ -521,6 +521,13 @@ public class PlayAlbumIntentHandler : BaseHandler
         // normalization, and a miss cascaded into the artist-less full-catalog query plus
         // the library-wide fuzzy match below, all inside the 6s retry budget. The BaseItem
         // is already in hand.
+        //
+        // JF-743: the term the `albums` list below was actually QUERIED with. `album`
+        // itself is the queried term on every producer except the JF-469 stripped retry,
+        // which deliberately keeps the raw value ("chiamato X") for the not-found speech;
+        // the exact-name pick-off in the multi-match block must compare against what was
+        // queried, so the retry updates this shadow instead.
+        string effectiveAlbumTerm = album!;
         IReadOnlyList<BaseItem> albums;
         if (resolvedAlbum != null)
         {
@@ -561,6 +568,7 @@ public class PlayAlbumIntentHandler : BaseHandler
                 Logger.LogInformation(
                     "PlayAlbum: raw album query '{RawAlbum}' missed, calling-word-stripped retry '{StrippedAlbum}' returned {ResultCount} albums (JF-469)",
                     album, strippedAlbumTitle, albums.Count);
+                effectiveAlbumTerm = strippedAlbumTitle;
             }
         }
 
@@ -675,7 +683,28 @@ public class PlayAlbumIntentHandler : BaseHandler
             // disambiguation prompt list, and the track-count policy would add a tracks query
             // to this multi-match hot path; the user named an album here, so alphabetical is
             // already a defensible pick. The two paths diverge on purpose.
-            albums = albums.OrderBy(a => a.Name, StringComparer.OrdinalIgnoreCase).ToList();
+            // JF-743 exact pick-off: the JF-427 alphabetical order also fed the Take(3)
+            // below, which could bury the album whose name IS the queried title at rank 4
+            // (query "rush" over Gold/Love/Midnight Rush + Rush): unaskable for Confirm
+            // users and the wrong auto-play for AutoPlay users. An exact name (the shared
+            // JF-420.1 predicate IsExactNameMatch: case-insensitive, end-trimmed) is the
+            // strongest signal in the set, so it ranks FIRST against the term the list was
+            // QUERIED with (effectiveAlbumTerm, so the JF-469 stripped retry is covered
+            // too): the ask speaks it first, albums[0] plays it, and the remaining list
+            // keeps the JF-427 alphabetical order. With no exact name present every
+            // candidate shares the first ordering key and the ThenBy reproduces today's
+            // order exactly; candidates tying on BOTH keys (same-name duplicates,
+            // whatever their relation to the query) keep insertion order via LINQ's
+            // stable sort, so the same-name auto-play below is unchanged.
+            albums = albums
+                .OrderByDescending(a => Util.ArtistSearch.IsExactNameMatch(effectiveAlbumTerm, a.Name))
+                .ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            bool exactRankedFirst = Util.ArtistSearch.IsExactNameMatch(effectiveAlbumTerm, albums[0].Name);
+            if (exactRankedFirst)
+            {
+                Logger.LogDebug("PlayAlbum: exact name '{ExactName}' (id={ExactId}) ranked first among {Count} matches (JF-743)", albums[0].Name, albums[0].Id, albums.Count);
+            }
             bool distinctNames = albums.Select(a => a.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() > 1;
             if (distinctNames && user.FuzzyMatchBehavior != FuzzyMatchBehavior.AutoPlay)
             {
