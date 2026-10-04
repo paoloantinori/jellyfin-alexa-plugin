@@ -3,7 +3,7 @@ id: JF-753
 title: >-
   JF-753 - AlbumPlayService first page has the JF-673 engagement gap on NRE-class
   servers; albums longer than the initial page truncate at it
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-04'
 labels: []
@@ -26,12 +26,34 @@ NOT DONE in JF-673 because AlbumPlayService is the queue-continuation lifecycle 
 RELATED (code-review high on JF-673, findings tracked here 2026-10-04): (1) PlaybackNearlyFinishedEventHandler.cs:395 logs continuation.TotalCount raw, so end-unknown continuations render "2147483647" while FetchNextBatch renders "end-unknown" (pre-existing for artist continuations; fold into the same renderer discipline when touching that file). (2) The advance-or-mark idiom now exists in three fetcher variants (Album plain +=, Artist mark-on-short, Audiobook mark-only-when-unknown); this task's FetchAlbumTracks regime work is the documented revisit trigger to consolidate into one shared helper (JF-673 declined to churn the third variant first). (3) An exact-multiple-of-page-size source ends on a zero-item tail batch that trips the dispatcher's zero-page WARN once; accepted boundary noise, documented at the audiobook tail, same treatment for albums.
 <!-- SECTION:DESCRIPTION:END -->
 
+## Implementation Notes (closed 2026-10-04)
+
+<!-- SECTION:NOTES:BEGIN -->
+CLOSED with the full four-piece fix plus the three RELATED items (all assigned here by the filing):
+
+1. Both album first-page calls (`BuildAlbumPlayResponseAsync` ParentId + AlbumIds retry) opt into `unknownTotalOnFallback: true`; the zero checks route through the ONE shared predicate `QueueContinuationFetcher.PageHasNoItems` (the JF-673 PlayBook inline check folded into it same-turn, the /simplify reuse finding); the store gate routes through the ONE shared decision `QueueContinuationFetcher.InitialPageHasMore` (the PlayBook ternary folded in likewise; a second `InitialPageHasMore(int)` overload carries the two artist heads' always-end-unknown form, the /code-review F3 finding). The JF-674 mint (MintedQueueItemIds) is untouched; only the gate above it changed.
+2. `FetchAlbumTracks` runs the shared `SafeGetItemsResult` executor (the JF-670 head/tail contract: pre-fix the raw `GetItemsResult` NRE'd on the first batch on NRE-class servers, proven RED by the split-album pin), its split-album retry gained the end-unknown zero-ITEMS arm (`TotalRecordCount == 0` stays the known-total trigger), and its advance routes through the ONE idiom `AdvanceOrMarkExhausted`, the consolidation of all THREE fetcher variants plus (code-review F5) the two playlist cached-slice arms.
+3. RELATED (1) DONE: `PlaybackNearlyFinishedEventHandler`'s prefetch-window line renders through the ONE renderer `QueueContinuationFetcher.RenderTotal`, which the dispatcher's own lines and the album head's two page logs also use (the head lines were the /simplify reuse finding: this same change made them sentinel-capable).
+4. RELATED (2) DONE: the advance-or-mark consolidation (above), the filing's documented revisit trigger.
+5. RELATED (3) DONE: the zero-page WARN documented as accepted boundary noise on `AdvanceOrMarkExhausted`'s doc, extended (code-review F4) to state the album's true boundary cost: the WARN plus ONE empty JF-338 AlbumIds retry query before the mark (the audiobook tail, which has no retry, carries only the WARN).
+
+RED PROOFS (JF-673 precedent, live both TFMs on the unmodified base): the head pin `PlayAlbum_NreFallbackFullInitialPage_StoresEndUnknownContinuation` failed with store NULL (the page-size total read as complete, the exact finding); the tail pin `QueueContinuation_AlbumFetch_EndUnknownShortPage_MarksContinuationExhausted` failed at StartIndex 8 vs UnknownTotal (blind advance); the executor pin `QueueContinuation_AlbumFetch_NreServer_SplitAlbumServedThroughFallbackRetry` failed with the raw-executor NullReferenceException at FetchAlbumTracks. All green post-fix on net9.0 and net10.0.
+
+PINS +7: the three red proofs above, the head guardrails (short page stores nothing; zero tracks on both queries still speaks NoSongsInAlbum through the end-unknown arm), the tail full-page guardrail, and the artist-sentinel roster fact `ArtistContinuationConstructionSites_StoreTheEndUnknownSentinel` (code-review F1: every construction site that sets ArtistId must store the UnknownTotal const; sabotage-RED-verified by storing a real total in CrossMediaFallback, which named BuildArtistSongsResponseAsync).
+
+RESIDUAL (code-review F2, accepted, documented at the retry arm): on a PARTIALLY split album the tail's AlbumIds retry can switch row sets mid-stream (ParentId rows played, AlbumIds rows served at the same offset); already-played ids dedup out and tag-linked tracks below the offset can be skipped. Continuing beats truncating at the exhausted parented rows, and the head carries the same JF-338 tolerance (it retries only on an empty FIRST page).
+
+FILED: JF-757 (the /simplify reuse observation out of scope here: the album-track query shape is hand-kept in four copies, head and tail x ParentId and AlbumIds; a BuildAlbumTracksQuery builder would own it).
+
+Gates: worker Skill simplify (4 angles: reuse 3 findings applied incl. the two shared head predicates; simplification 8 findings, comment-dedup + test hygiene applied, the Theory conversion skipped with the agent's own scope-creep reason; efficiency CLEAN; altitude endorsed the layer with the predicate hoist applied) + Skill code-review high (5 findings: F1 roster fact, F2 documented residual, F3 artist-head overload, F4 honest boundary doc, F5 playlist arms folded; all applied). Suites: 5162/5162 net9.0 AND net10.0 on the final state (main baseline 5155 + 7); Release --no-restore -warnaserror 0 warnings 0 errors.
+<!-- SECTION:NOTES:END -->
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 /simplify passed (no blocking cleanups remaining)
-- [ ] #5 /code-review high passed (no blocking findings remaining or findings applied/tracked)
-- [ ] #6 Red proof: album NRE-fallback full initial page stores the end-unknown continuation, failed pre-fix
+- [x] #1 dotnet build passes with 0 errors (Debug 0/0; Release --no-restore -warnaserror 0/0)
+- [x] #2 dotnet test passes (5162/5162 net9.0 AND net10.0)
+- [x] #3 No new compiler warnings introduced (0 warnings both configurations)
+- [x] #4 /simplify passed (4 angles; findings applied, skips reasoned in the notes)
+- [x] #5 /code-review high passed (5 findings all applied or documented as accepted residual)
+- [x] #6 Red proof: album NRE-fallback full initial page stores the end-unknown continuation, failed pre-fix (store NULL on the unmodified base, both TFMs)
 <!-- DOD:END -->

@@ -387,7 +387,9 @@ public sealed class CrossMediaFallback
             sortedItems.Skip(startIndex).Select(i => i.Id.ToString()).ToList(),
             0);
 
-        if (artistItems.Count >= ProgressiveQueueConstants.GetInitialFetchSize())
+        // The ONE maybe-more bar shared with the album/book heads (JF-753), in its
+        // always-end-unknown form (GetItemList has no count).
+        if (QueueContinuationFetcher.InitialPageHasMore(artistItems.Count))
         {
             QueueContinuationStore.Set(
                 session.UserId,

@@ -567,6 +567,11 @@ public sealed class AlbumPlayService
         // Get the first page of album tracks for fast time-to-audio.
         // Remaining tracks will be fetched on demand by PlaybackNearlyFinished.
         _logger.LogDebug("{Label}: querying tracks for album='{AlbumName}' (id={AlbumId})", logLabel, album.Name, album.Id);
+        // JF-753: this page and the AlbumIds retry below drive the continuation
+        // store gate, so the fallback total must be the sentinel
+        // (unknownTotalOnFallback): a page-size total would read as "complete"
+        // there and the album would truncate at this page on NRE-class servers
+        // (the JF-673 audiobook head shape).
         QueryResult<BaseItem> albumResult = await RetryAsync(
             () => _search.SafeGetItemsResult(libraryManager, new InternalItemsQuery()
             {
@@ -577,11 +582,11 @@ public sealed class AlbumPlayService
                 DtoOptions = new DtoOptions(true),
                 OrderBy = QueueContinuationFetcher.AlbumTrackOrder,
                 Limit = ProgressiveQueueConstants.GetInitialFetchSize()
-            }),
+            }, unknownTotalOnFallback: true),
             logLabel + ":GetAlbumTracks",
             cancellationToken: cancellationToken).ConfigureAwait(false);
-        _logger.LogDebug("{Label}: Jellyfin returned {TrackCount} tracks (total={TotalCount})", logLabel, albumResult.Items.Count, albumResult.TotalRecordCount);
-        if (albumResult.TotalRecordCount == 0)
+        _logger.LogDebug("{Label}: Jellyfin returned {TrackCount} tracks (total={TotalCount})", logLabel, albumResult.Items.Count, _logger.IsEnabled(LogLevel.Debug) ? QueueContinuationFetcher.RenderTotal(albumResult.TotalRecordCount) : null);
+        if (QueueContinuationFetcher.PageHasNoItems(albumResult))
         {
             // Tolerant fallback: for split / multi-disc / malformed-folder albums, the
             // folder-based ParentId query can return 0 even when the tracks exist (the
@@ -599,13 +604,13 @@ public sealed class AlbumPlayService
                     DtoOptions = new DtoOptions(true),
                     OrderBy = QueueContinuationFetcher.AlbumTrackOrder,
                     Limit = ProgressiveQueueConstants.GetInitialFetchSize()
-                }),
+                }, unknownTotalOnFallback: true),
                 logLabel + ":GetAlbumTracksByAlbumIds",
                 cancellationToken: cancellationToken).ConfigureAwait(false);
-            _logger.LogDebug("{Label}: AlbumIds fallback returned {TrackCount} tracks (total={TotalCount})", logLabel, albumResult.Items.Count, albumResult.TotalRecordCount);
+            _logger.LogDebug("{Label}: AlbumIds fallback returned {TrackCount} tracks (total={TotalCount})", logLabel, albumResult.Items.Count, _logger.IsEnabled(LogLevel.Debug) ? QueueContinuationFetcher.RenderTotal(albumResult.TotalRecordCount) : null);
         }
 
-        if (albumResult.TotalRecordCount == 0)
+        if (QueueContinuationFetcher.PageHasNoItems(albumResult))
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("NoSongsInAlbum", locale, album.Name));
         }
@@ -702,7 +707,9 @@ public sealed class AlbumPlayService
         // Store continuation info so PlaybackNearlyFinished can fetch the rest.
         // StartIndex uses the original page size because the database offset is
         // independent of the resume slice.
-        if (albumResult.TotalRecordCount > albumResult.Items.Count)
+        // JF-753: the gate is regime-aware (the ONE decision shared with the
+        // audiobook head, see QueueContinuationFetcher.InitialPageHasMore).
+        if (QueueContinuationFetcher.InitialPageHasMore(albumResult))
         {
             QueueContinuationStore.Set(
                 session.UserId,
@@ -1059,7 +1066,9 @@ public sealed class AlbumPlayService
         }
 
         // Store continuation info so PlaybackNearlyFinished can fetch the rest
-        if (totalCount > playlistItems.Count)
+        // (the ONE maybe-more decision; the playlist total is always real, so
+        // the two-int known-total form applies)
+        if (QueueContinuationFetcher.InitialPageHasMore(playlistItems.Count, totalCount))
         {
             QueueContinuationStore.Set(
                 session.UserId,

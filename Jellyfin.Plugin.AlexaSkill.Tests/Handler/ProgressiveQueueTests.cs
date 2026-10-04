@@ -856,6 +856,156 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
         Assert.Null(QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID));
     }
 
+    // JF-753 RED PROOF: on NRE-class servers the album's first track page arrives
+    // through the SafeGetItemsResult fallback (GetItemList), which cannot know the
+    // library total. The pre-fix fallback wrapped the PAGE SIZE as
+    // TotalRecordCount, so a FULL initial page read as "complete" at the store gate
+    // (TotalRecordCount > Items.Count), the album continuation never engaged, and
+    // the album truncated at the initial page exactly as books did before JF-673.
+    // The honest end-unknown total must make the head engage the store in the
+    // end-unknown regime so the tail keeps fetching (short page = end).
+    [Fact]
+    public async Task PlayAlbum_NreFallbackFullInitialPage_StoresEndUnknownContinuation()
+    {
+        var handler = new PlayAlbumIntentHandler(
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory);
+
+        var session = CreateSession();
+        _fx.SetupUserMock();
+
+        var albumId = Guid.NewGuid();
+        var album = new MusicAlbum { Id = albumId, Name = "NRE Album" };
+
+        // Mock: album search returns one result (the search runs on GetItemList;
+        // only the track query below uses GetItemsResult).
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum))))
+            .Returns(new List<BaseItem> { album });
+
+        // The NRE-class server: the track query's GetItemsResult throws, and the
+        // fallback serves a FULL initial page (5 = GetInitialFetchSize).
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Throws(new NullReferenceException());
+        List<BaseItem> fullPage = Enumerable.Range(0, ProgressiveQueueConstants.GetInitialFetchSize())
+            .Select(i => (BaseItem)new Audio { Id = Guid.NewGuid(), Name = $"Track {i + 1}" })
+            .ToList();
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ParentId == albumId)))
+            .Returns(fullPage);
+
+        var request = CreateAlbumIntent("NRE Album");
+        var context = CreateContext();
+
+        await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        QueueContinuation? continuation = QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID);
+        Assert.NotNull(continuation);
+        Assert.Equal("Album", continuation!.SourceType);
+        Assert.Equal(albumId, continuation.ParentId);
+        Assert.Equal(SearchService.UnknownTotal, continuation.TotalCount);
+        Assert.Equal(fullPage.Count, continuation.StartIndex);
+
+        // Cleanup
+        QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID);
+    }
+
+    // JF-753 guardrail: under the end-unknown regime a SHORT initial page IS the
+    // album's end signal; the head must not store a doomed continuation whose
+    // first batch would come back empty and WARN.
+    [Fact]
+    public async Task PlayAlbum_NreFallbackShortInitialPage_StoresNoContinuation()
+    {
+        var handler = new PlayAlbumIntentHandler(
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory);
+
+        var session = CreateSession();
+        _fx.SetupUserMock();
+
+        var albumId = Guid.NewGuid();
+        var album = new MusicAlbum { Id = albumId, Name = "Short NRE Album" };
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum))))
+            .Returns(new List<BaseItem> { album });
+
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Throws(new NullReferenceException());
+        // A 2-track album: 2 < 5 = the short page that ends the album.
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ParentId == albumId)))
+            .Returns(new List<BaseItem>
+            {
+                new Audio { Id = Guid.NewGuid(), Name = "Track 1" },
+                new Audio { Id = Guid.NewGuid(), Name = "Track 2" }
+            });
+
+        var request = CreateAlbumIntent("Short NRE Album");
+        var context = CreateContext();
+
+        await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.Equal(2, session.NowPlayingQueue.Count);
+        Assert.Null(QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID));
+    }
+
+    // JF-753 guardrail: an album with NO tracks on an NRE-class server (both the
+    // ParentId page and the JF-338 AlbumIds retry come back empty through the
+    // fallback) must still reach the NoSongsInAlbum tell: the zero check carries
+    // its own end-unknown arm because the opted-in fallback reports UnknownTotal
+    // (never 0) for an empty page.
+    [Fact]
+    public async Task PlayAlbum_NreFallbackZeroTracks_BothQueriesEmpty_SpeaksNoSongs()
+    {
+        var handler = new PlayAlbumIntentHandler(
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.LibraryManager.Object,
+            _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
+            _fx.LoggerFactory);
+
+        var session = CreateSession();
+        _fx.SetupUserMock();
+
+        var albumId = Guid.NewGuid();
+        var album = new MusicAlbum { Id = albumId, Name = "Empty NRE Album" };
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum))))
+            .Returns(new List<BaseItem> { album });
+
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Throws(new NullReferenceException());
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ParentId == albumId)))
+            .Returns(new List<BaseItem>());
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.AlbumIds != null && q.AlbumIds.Contains(albumId))))
+            .Returns(new List<BaseItem>());
+
+        var request = CreateAlbumIntent("Empty NRE Album");
+        var context = CreateContext();
+
+        SkillResponse response = await handler.HandleAsync(request, context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        // The NoSongsInAlbum tell: speech naming the album, no play directive,
+        // and no continuation for an album with no playable tracks.
+        var speech = (response.Response.OutputSpeech as PlainTextOutputSpeech)?.Text ?? string.Empty;
+        Assert.Contains("Empty NRE Album", speech, StringComparison.Ordinal);
+        Assert.True(
+            response.Response.Directives == null || response.Response.Directives.Count == 0,
+            "a no-songs album must not launch playback");
+        Assert.Empty(session.NowPlayingQueue);
+        Assert.Null(QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID));
+    }
+
     // =====================================================================
     // PlayArtistSongsIntentHandler - Progressive fetching
     // =====================================================================
@@ -1779,6 +1929,138 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
         Assert.Equal(10, batch.Count);
         Assert.Equal(15, continuation.StartIndex);
         Assert.Equal(SearchService.UnknownTotal, continuation.TotalCount);
+    }
+
+    // JF-753 RED PROOF (tail side): the album continuation the end-unknown head
+    // stores carries TotalCount=SearchService.UnknownTotal (the NRE fallback has no
+    // total), so the tail has NO total to exhaust against; the only end signal is a
+    // SHORT page, the same FetchArtistSongs shape as the audiobook tail. Pre-fix the
+    // album tail advanced blindly (StartIndex += count), so the next batch queried
+    // past the end and WARNed instead of ending at the entry guard.
+    [Fact]
+    public void QueueContinuation_AlbumFetch_EndUnknownShortPage_MarksContinuationExhausted()
+    {
+        _fx.SetupUserMock();
+
+        var continuation = new QueueContinuation
+        {
+            SourceType = "Album",
+            ParentId = Guid.NewGuid(),
+            UserId = Guid.NewGuid(),
+            StartIndex = 5,
+            TotalCount = SearchService.UnknownTotal,
+            BatchSize = 10
+        };
+
+        // The tail's own fetch may even succeed with a per-page total; the regime is
+        // carried by the continuation (what the head stored), and result totals are
+        // not read here either way (the JF-673 audiobook twin above).
+        _fx.LibraryManager
+            .Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem>
+            {
+                Items = new List<BaseItem>
+                {
+                    new Audio { Id = Guid.NewGuid(), Name = "Track 6" },
+                    new Audio { Id = Guid.NewGuid(), Name = "Track 7" },
+                    new Audio { Id = Guid.NewGuid(), Name = "Track 8" }
+                },
+                TotalRecordCount = 3
+            });
+
+        ILogger logger = _fx.LoggerFactory.CreateLogger("AlbumEndUnknownTest");
+        IReadOnlyList<BaseItem> batch = QueueContinuationFetcher.FetchNextBatch(
+            continuation, _fx.LibraryManager.Object, _fx.UserManager.Object, logger);
+
+        // The batch is served whole; the short page marks the end.
+        Assert.Equal(3, batch.Count);
+        Assert.Equal(SearchService.UnknownTotal, continuation.StartIndex);
+
+        // The marked state is terminal: the next call returns empty via the entry
+        // guard WITHOUT a further library query.
+        IReadOnlyList<BaseItem> next = QueueContinuationFetcher.FetchNextBatch(
+            continuation, _fx.LibraryManager.Object, _fx.UserManager.Object, logger);
+        Assert.Empty(next);
+        _fx.LibraryManager.Verify(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()), Times.Once);
+    }
+
+    // JF-753 guardrail: a FULL page under the end-unknown regime advances the offset
+    // without exhausting; the album continues page by page until a short page ends it.
+    [Fact]
+    public void QueueContinuation_AlbumFetch_EndUnknownFullPage_AdvancesWithoutExhausting()
+    {
+        _fx.SetupUserMock();
+
+        var continuation = new QueueContinuation
+        {
+            SourceType = "Album",
+            ParentId = Guid.NewGuid(),
+            UserId = Guid.NewGuid(),
+            StartIndex = 5,
+            TotalCount = SearchService.UnknownTotal,
+            BatchSize = 10
+        };
+
+        List<BaseItem> fullBatch = Enumerable.Range(0, 10)
+            .Select(i => (BaseItem)new Audio { Id = Guid.NewGuid(), Name = $"Track {i + 6}" })
+            .ToList();
+        _fx.LibraryManager
+            .Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem> { Items = fullBatch, TotalRecordCount = 10 });
+
+        ILogger logger = _fx.LoggerFactory.CreateLogger("AlbumEndUnknownFullPageTest");
+        IReadOnlyList<BaseItem> batch = QueueContinuationFetcher.FetchNextBatch(
+            continuation, _fx.LibraryManager.Object, _fx.UserManager.Object, logger);
+
+        Assert.Equal(10, batch.Count);
+        Assert.Equal(15, continuation.StartIndex);
+        Assert.Equal(SearchService.UnknownTotal, continuation.TotalCount);
+    }
+
+    // JF-753: the tail must share the head's NRE-guarded executor (the JF-670
+    // head/tail contract): once the end-unknown head engages the store on an
+    // NRE-class server, the tail's first batch runs the same query shape the head
+    // fell back on, so the raw GetItemsResult would throw there and kill every
+    // continuation batch. The shared SafeGetItemsResult keeps the tail alive, and
+    // the split-album AlbumIds retry fires on the fallback's empty ParentId page
+    // (the end-unknown zero-ITEMS arm) to serve a malformed/split album's tracks.
+    [Fact]
+    public void QueueContinuation_AlbumFetch_NreServer_SplitAlbumServedThroughFallbackRetry()
+    {
+        _fx.SetupUserMock();
+
+        var albumId = Guid.NewGuid();
+        var continuation = new QueueContinuation
+        {
+            SourceType = "Album",
+            ParentId = albumId,
+            UserId = Guid.NewGuid(),
+            StartIndex = 5,
+            TotalCount = SearchService.UnknownTotal,
+            BatchSize = 10
+        };
+
+        // The NRE-class server: every GetItemsResult throws; the fallback serves the
+        // pages. Split album: no ParentId rows, the AlbumIds membership has them.
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Throws(new NullReferenceException());
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ParentId == albumId)))
+            .Returns(new List<BaseItem>());
+        List<BaseItem> albumIdsBatch = Enumerable.Range(0, 10)
+            .Select(i => (BaseItem)new Audio { Id = Guid.NewGuid(), Name = $"Split Track {i + 6}" })
+            .ToList();
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.AlbumIds != null && q.AlbumIds.Contains(albumId))))
+            .Returns(albumIdsBatch);
+
+        ILogger logger = _fx.LoggerFactory.CreateLogger("AlbumNreSplitTest");
+        IReadOnlyList<BaseItem> batch = QueueContinuationFetcher.FetchNextBatch(
+            continuation, _fx.LibraryManager.Object, _fx.UserManager.Object, logger);
+
+        // The retry served the split album's page; the FULL page advances the offset
+        // without exhausting the end-unknown continuation.
+        Assert.Equal(albumIdsBatch, batch);
+        Assert.Equal(15, continuation.StartIndex);
     }
 
     [Fact]
