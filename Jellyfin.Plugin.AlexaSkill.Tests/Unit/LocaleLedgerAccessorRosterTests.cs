@@ -27,6 +27,12 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 /// consumer always appears here and fails the roster; the accessor family
 /// itself may touch the collection (compiler-generated shapes nested under
 /// PluginConfiguration attribute to it via TopLevelType).
+/// The SAVE side is machine-checked by the twin fact below (gate-marker
+/// round 2 F1): a plugin-assembly call to SaveConfiguration is allowed ONLY
+/// inside PersistUnderLedgerLock (the ONE locked save owner) and the two
+/// Plugin.cs pre-startup migrations, so the "nothing else may call
+/// SaveConfiguration directly" invariant fails the suite instead of resting
+/// on prose.
 /// </summary>
 public class LocaleLedgerAccessorRosterTests
 {
@@ -57,5 +63,56 @@ public class LocaleLedgerAccessorRosterTests
             offenders.Count == 0,
             $"LocaleModelStatuses must be read and written only through PluginConfiguration's locked accessors (GetLocaleModelStatus/SetLocaleModelStatus/GetLocaleModelStatusSnapshot/UpdateLocaleModelStatus, JF-724); direct touches: [{string.Join(", ", offenders)}]. " +
             "Route the new consumer through an accessor so a concurrent ledger writer cannot break its enumeration or clobber its row.");
+    }
+
+    /// <summary>
+    /// The save-side twin (JF-724 gate-marker round 2 F1): every plugin-assembly
+    /// call to the framework's SaveConfiguration must sit inside the ONE locked
+    /// save owner (PluginConfiguration.PersistUnderLedgerLock) or one of the two
+    /// Plugin.cs pre-startup migrations, because SaveConfiguration serializes
+    /// the LIVE LocaleModelStatuses collection and an unlocked call throws
+    /// inside the save when a ledger writer mutates concurrently (rows stranded
+    /// memory-only, or the capture's return flipped). The scan matches by
+    /// resolved callee NAME (SaveConfiguration is declared on the framework's
+    /// generic BasePluginOfT base, whose token resolves as the constructed
+    /// type): loud-only, so a coincidental same-named callee fails here and is
+    /// added to the allowlist deliberately, never silently.
+    /// </summary>
+    [Fact]
+    public void SaveConfiguration_IsCalledOnlyThroughTheLockedSaveOwnerOrPreStartupMigrations()
+    {
+        Assembly pluginAssembly = typeof(PluginConfiguration).Assembly;
+        Module module = typeof(PluginConfiguration).Module;
+
+        var allowed = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "PluginConfiguration.PersistUnderLedgerLock",
+            "Plugin.MigrateDefaultInvocationNames",
+            "Plugin.MigrateStaleCacheCapDefault",
+        };
+
+        var offenders = new SortedSet<string>();
+        foreach (var (type, method) in IlCallScanner.DeclaredMethods(pluginAssembly))
+        {
+            foreach (int token in IlCallScanner.CallTokens(method))
+            {
+                if (IlCallScanner.TryResolveMethod(module, token) is not { } callee
+                    || callee.Name != "SaveConfiguration")
+                {
+                    continue;
+                }
+
+                string site = $"{IlCallScanner.TopLevelType(type).Name}.{IlCallScanner.LogicalMethodName(method)}";
+                if (!allowed.Contains(site))
+                {
+                    offenders.Add($"{type.FullName}.{IlCallScanner.LogicalMethodName(method)}");
+                }
+            }
+        }
+
+        Assert.True(
+            offenders.Count == 0,
+            $"SaveConfiguration must be called only through PluginConfiguration.PersistUnderLedgerLock (the ONE locked save owner) or the two Plugin.cs pre-startup migrations (JF-724); direct calls: [{string.Join(", ", offenders)}]. " +
+            "Route the new save through PersistUnderLedgerLock so the serializer's enumeration of the live ledger cannot race a writer.");
     }
 }

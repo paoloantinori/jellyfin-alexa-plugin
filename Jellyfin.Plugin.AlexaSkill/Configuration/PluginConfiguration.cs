@@ -557,16 +557,27 @@ public class PluginConfiguration : BasePluginConfiguration
     {
         lock (_localeLedgerLock)
         {
+            // Instance is resolved BEFORE the seam fires (gate-marker round 2
+            // F4): the interceptor must only ever count saves that will really
+            // run, so a null Instance is a silent no-op on both counts.
+            var plugin = Plugin.Instance;
+            if (plugin == null)
+            {
+                return;
+            }
+
             PersistInterceptorForTest?.Invoke();
-            Plugin.Instance?.SaveConfiguration();
+            plugin.SaveConfiguration();
         }
     }
 
     /// <summary>Test seam (the TypeLegEntryProbeForTest pattern): invoked
-    /// inside <see cref="PersistUnderLedgerLock"/> before the save, under the
-    /// lock; a test can throw from it to simulate a failing SaveConfiguration
-    /// (the JF-724 gate-marker F2 capture save-honesty pin). Never set in
-    /// production. Internal property: invisible to XmlSerializer.</summary>
+    /// inside <see cref="PersistUnderLedgerLock"/> under the lock, ONLY when
+    /// the save will really run (Instance non-null, resolved first); a test
+    /// can throw from it to simulate a failing SaveConfiguration (the JF-724
+    /// gate-marker F2 capture save-honesty pin) or observe the save boundary.
+    /// Never set in production. Internal property: invisible to
+    /// XmlSerializer.</summary>
     internal Action? PersistInterceptorForTest { get; set; }
 
     /// <summary>The locked-scan row lookup shared by the accessors. Caller

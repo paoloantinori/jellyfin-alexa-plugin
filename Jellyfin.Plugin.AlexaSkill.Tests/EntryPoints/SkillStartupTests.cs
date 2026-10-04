@@ -15,6 +15,7 @@ using Jellyfin.Plugin.AlexaSkill.Diagnostics;
 using Jellyfin.Plugin.AlexaSkill.EntryPoints;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Session;
+using MediaBrowser.Model.Serialization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -1102,14 +1103,18 @@ public class SkillStartupTests : PluginTestBase
     }
 
     /// <summary>
-    /// JF-724 gate-marker F2: a FAILING save at the capture's boundary is
-    /// non-fatal WITHOUT flipping the return. The return is the paired
-    /// wrapper's ONLY input (captureWroteNoRows = !capture), so a false here
-    /// would flip the deferred refresh into its recapture mode and spend the
-    /// whole 4-poll budget re-GETting rows this capture already wrote; the
-    /// pin drives the failure through the PersistUnderLedgerLock test seam
-    /// and asserts the rows stand in memory, the capture still reports true,
-    /// and a follow-up capture persists normally once the failure clears.
+    /// JF-724 gate-marker F2 (+ round 2 F3): a FAILING save at the capture's
+    /// boundary is non-fatal WITHOUT flipping the return. The return is the
+    /// paired wrapper's ONLY input (captureWroteNoRows = !capture), so a
+    /// false here would flip the deferred refresh into its recapture mode and
+    /// spend the whole 4-poll budget re-GETting rows this capture already
+    /// wrote; the pin drives the failure through the PersistUnderLedgerLock
+    /// test seam and asserts the rows stand in memory, the capture still
+    /// reports true, and the follow-up capture's save REALLY ran: the
+    /// framework's BasePluginOfT save delegates to the injected
+    /// IXmlSerializer, whose shared Moq records the SerializeToFile call
+    /// carrying the live configuration with the captured row (round 2 F3: a
+    /// seam-count assertion alone would pass with the real save path broken).
     /// </summary>
     [Fact]
     public async Task CaptureLocaleModelStatusesAsync_SaveFailure_IsNonFatalAndDoesNotFlipTheReturn()
@@ -1134,20 +1139,40 @@ public class SkillStartupTests : PluginTestBase
             Assert.NotNull(row);
             Assert.Equal("SUCCEEDED", row!.Status);
 
-            // The failure clears; the next capture persists through the seam
-            // without throwing (the seam itself is exercised end to end).
-            config.PersistInterceptorForTest = () => saveAttempts++;
+            // The failure clears; the next capture persists for real: the
+            // seam fired AND the framework save reached the serializer with
+            // the live configuration carrying the captured row.
+            config.PersistInterceptorForTest = null;
+            int serializerCallsBefore = SerializeToFileCalls();
             bool again = await CreateStartup().CaptureLocaleModelStatusesAsync(
                 UserServing(StatusFor("it-IT", SkillStatusState.SUCCEEDED)),
                 RefreshSkillId);
             Assert.True(again);
-            Assert.Equal(2, saveAttempts);
+            Assert.Equal(1, saveAttempts); // the seam fired exactly once, in the failing phase
+            Assert.True(
+                SerializeToFileCalls() > serializerCallsBefore,
+                "the cleared-failure capture must reach the framework serializer's SerializeToFile (the real save path, not just the seam)");
+
+            // The payload the framework serialized is the live configuration
+            // and carries the captured row (the on-disk equivalent: in this
+            // seam BasePluginOfT writes through this very serializer).
+            var saved = TestHelpers.ConfigSerializerMock!.Invocations
+                .Where(i => i.Method.Name == nameof(IXmlSerializer.SerializeToFile))
+                .Select(i => i.Arguments[0])
+                .OfType<PluginConfiguration>()
+                .Last(c => ReferenceEquals(c, config));
+            Assert.Equal("SUCCEEDED", saved.GetLocaleModelStatus("it-IT")!.Status);
         }
         finally
         {
             config.PersistInterceptorForTest = null;
         }
     }
+
+    /// <summary>The recorded framework-serializer writes of the shared plugin
+    /// instance (Moq records invocations with no Setup).</summary>
+    private static int SerializeToFileCalls() => TestHelpers.ConfigSerializerMock!.Invocations
+        .Count(i => i.Method.Name == nameof(IXmlSerializer.SerializeToFile));
 
     /// <summary>
     /// JF-724 item 5's pre-check half: a frozen IN_PROGRESS row attributed to
