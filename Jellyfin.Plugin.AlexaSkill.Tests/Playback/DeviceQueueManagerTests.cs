@@ -926,11 +926,17 @@ public class DeviceQueueManagerTests : IDisposable
     /// call only. The previous launch's entry (protected while it was fresh) is an
     /// ordinary aged entry at the NEXT launch's trim: with the map pinned over cap
     /// by queued residents, the next fresh launch evicts it. The trim keeps
-    /// trimming; the guard never disables it.
+    /// trimming; the guard never disables it. JF-739: "aged" now means past the
+    /// freshness window too, and the pin proves that expiry with the rule ON (a
+    /// fake clock advanced past the window before the next launch), rather than
+    /// disabling the mechanism; the sibling pins below prove the within-window
+    /// half.
     /// </summary>
     [Fact]
     public void RecordLaunchBase_PreviousFreshEntry_IsEvictedByTheNextLaunchAtCapPressure()
     {
+        var fake = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        _manager.Time = fake;
         SeedQueuedScopeResidents("dev-jf723-aging", DeviceQueueManager.MaxLaunchBaseEntries, "N");
 
         string firstFreshId = Guid.NewGuid().ToString();
@@ -940,7 +946,10 @@ public class DeviceQueueManagerTests : IDisposable
         // While fresh: present (the JF-723 guard's own claim, re-asserted on the aging path).
         Assert.Equal(firstBaseMs, _manager.GetActiveLaunchScope("dev-jf723-aging", firstFreshId).BaseMs);
 
-        // The next launch ages it: still non-queued, no longer the just-recorded key.
+        // The clock crosses the freshness window: the first entry's stamp expires,
+        // rule ON, so the next launch's trim may evict it again.
+        fake.Advance(DeviceQueueManager.RecentRecordFreshnessWindow.Add(TimeSpan.FromSeconds(1)));
+
         string secondFreshId = Guid.NewGuid().ToString();
         _manager.RecordLaunchBase("dev-jf723-aging", secondFreshId, 0, enqueued: false);
 
@@ -963,11 +972,16 @@ public class DeviceQueueManagerTests : IDisposable
     /// DETERMINISM: order-independent, unlike the characterization it replaced
     /// (residents are excluded from eviction by membership, not enumeration
     /// order, and the aging step's only evictable candidate is the single aged
-    /// non-queued entry).
+    /// non-queued entry). JF-739: the aging half proves expiry with the rule ON
+    /// (a fake clock advanced past the freshness window before the second
+    /// launch), rather than disabling the mechanism; the within-window sibling
+    /// half is pinned separately below.
     /// </summary>
     [Fact]
     public void RecordLaunchBase_DashedQueueMembership_QueuedSeedsSurviveAndAgedNonQueuedEntryIsEvicted_JF738()
     {
+        var fake = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        _manager.Time = fake;
         List<string> queuedIds = SeedQueuedScopeResidents("dev-jf738", DeviceQueueManager.MaxLaunchBaseEntries, "D");
 
         // The first non-queued launch pushes the map over cap: every resident is
@@ -983,8 +997,11 @@ public class DeviceQueueManagerTests : IDisposable
         Assert.All(queuedIds, id => Assert.True(_manager.GetActiveLaunchScope("dev-jf738", id).BaseMs.HasValue));
         Assert.NotNull(_manager.GetActiveLaunchScope("dev-jf738", firstVictimId).BaseMs);
 
-        // The next launch ages the first victim: no longer fresh, still
-        // non-queued, so it is the trim's evictee.
+        // The clock crosses the freshness window: the first victim's stamp
+        // expires (rule ON), so the next launch ages it: no longer fresh, still
+        // non-queued, the trim's evictee.
+        fake.Advance(DeviceQueueManager.RecentRecordFreshnessWindow.Add(TimeSpan.FromSeconds(1)));
+
         string secondVictimId = Guid.NewGuid().ToString();
         _manager.RecordLaunchBase("dev-jf738", secondVictimId, 0, enqueued: false);
 
@@ -1055,18 +1072,28 @@ public class DeviceQueueManagerTests : IDisposable
     /// trim already relies on for its "oldest" semantics); a BCL change there
     /// degrades this pin to vacuously green rather than red, and the
     /// format-independent anchors for the guard are the two queued-cap-pressure
-    /// pins above (active and enqueued).
+    /// pins above (active and enqueued). JF-739: the fake clock advances past the
+    /// freshness window between records, so the mid-loop trims keep evicting
+    /// (slot churn, rule ON) and the pin keeps exercising the freshKey GUARD
+    /// under slot reuse rather than vacuously riding the freshness stamps.
     /// </summary>
     [Fact]
     public void RecordLaunchBase_SaturatedMapFreshInsert_SurvivesOwnTrimUnderDashedMembership()
     {
+        var fake = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        _manager.Time = fake;
+
         // Old-queue membership (dashed, production format), no scope entries tied to it.
         _manager.SetQueue("dev-jf723-sat", Enumerable.Range(0, DeviceQueueManager.MaxLaunchBaseEntries).Select(_ => Guid.NewGuid().ToString()).ToList(), currentIndex: 0);
 
-        // Cap-filling distinct previously-launched items (no trim fires at count <= cap).
+        // Cap-filling distinct previously-launched items (no trim fires at count <= cap);
+        // each step crosses the freshness window so the NEXT record's trim sees every
+        // earlier entry as expired.
+        TimeSpan windowPlus = DeviceQueueManager.RecentRecordFreshnessWindow.Add(TimeSpan.FromSeconds(1));
         foreach (int i in Enumerable.Range(0, DeviceQueueManager.MaxLaunchBaseEntries))
         {
             _manager.RecordLaunchBase("dev-jf723-sat", Guid.NewGuid().ToString(), 0, enqueued: false);
+            fake.Advance(windowPlus);
         }
 
         // The 201st distinct launch: pushes the map over cap, its trim frees the oldest slot.
@@ -1080,6 +1107,129 @@ public class DeviceQueueManagerTests : IDisposable
         (long? recordedBase, int? recordedRate) = _manager.GetActiveLaunchScope("dev-jf723-sat", freshId);
         Assert.Equal(baseMs, recordedBase);
         Assert.Equal(1500, recordedRate);
+    }
+
+    /// <summary>
+    /// JF-739 pin (the launch-scope arm, the derive-to-commit sibling): seeded
+    /// queued-cap-pressure on the OLD queue (dashed ids, the production format),
+    /// the play path's launch record F (nonzero base + non-identity rate, the
+    /// JF-723 silent-loss shape) survives its OWN trim, then a SIBLING
+    /// <see cref="DeviceQueueManager.RecordLaunchBase"/> interleaves BEFORE the
+    /// queue commit (a PlaybackNearlyFinished enqueue or a queue-editing launch
+    /// on another thread; F's item is still absent from the STORED queue, so
+    /// membership does not reach it, and the sibling's trim exempts only ITS
+    /// key). Pre-fix a DETERMINISTIC eviction: F was the only non-queued key and
+    /// the sibling trim needed one removal. The freshness stamp must keep F
+    /// observable through the sibling's trim AND the commit that follows
+    /// (SetQueue of the queue that finally contains F's item). The fake clock
+    /// stays FROZEN: everything the pin drives happens inside the window, so no
+    /// stamp may expire under it.
+    /// </summary>
+    [Fact]
+    public void RecordLaunchBase_SiblingRecordInDeriveToCommitWindow_FreshEntrySurvivesToCommit_JF739()
+    {
+        var fake = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        _manager.Time = fake;
+        SeedQueuedScopeResidents("dev-jf739", DeviceQueueManager.MaxLaunchBaseEntries, "D");
+
+        string freshId = Guid.NewGuid().ToString();
+        long baseMs = MinutesToMs(20);
+        _manager.RecordLaunchBase("dev-jf739", freshId, baseMs, enqueued: false, ratePerMille: 1500);
+
+        // F survives its own trim (the JF-723 identity guard).
+        Assert.Equal(baseMs, _manager.GetActiveLaunchScope("dev-jf739", freshId).BaseMs);
+
+        // The sibling, inside the window, before any commit.
+        string siblingId = Guid.NewGuid().ToString();
+        _manager.RecordLaunchBase("dev-jf739", siblingId, 0, enqueued: false);
+
+        Assert.Equal(baseMs, _manager.GetActiveLaunchScope("dev-jf739", freshId).BaseMs);
+        Assert.Equal(1500, _manager.GetActiveLaunchScope("dev-jf739", freshId).RatePerMille);
+        Assert.NotNull(_manager.GetActiveLaunchScope("dev-jf739", siblingId).BaseMs);
+
+        // The commit lands (the play path's SetQueue/CommitShuffledQueue): F's
+        // item finally queued, and the scope it kept through the window is the
+        // one the playback events compose against.
+        _manager.SetQueue("dev-jf739", new List<string> { freshId, siblingId }, 0);
+        Assert.Equal(baseMs, _manager.GetActiveLaunchScope("dev-jf739", freshId).BaseMs);
+        Assert.Equal(1500, _manager.GetActiveLaunchScope("dev-jf739", freshId).RatePerMille);
+    }
+
+    /// <summary>
+    /// JF-739 pin (the ENQUEUED arm): the sibling trim's pressure can come from
+    /// the OTHER map family (the trim's count gate is an OR across the four
+    /// maps), so a fresh PENDING pair must survive a sibling ACTIVE record in
+    /// the window too. Seeded pending residents pin the pending maps at cap;
+    /// F's enqueued record crosses them; the sibling's ACTIVE record trips the
+    /// shared gate, and its trim would evict F's pending pair pre-fix (F
+    /// non-queued, only the sibling's key exempt). Observed through the
+    /// promotion (the only public read path; the JF-723 enqueued pin's route).
+    /// The fake clock stays FROZEN (within-window determinism).
+    /// </summary>
+    [Fact]
+    public void RecordLaunchBase_EnqueuedFreshPair_SurvivesSiblingActiveTrimInWindow_JF739()
+    {
+        var fake = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        _manager.Time = fake;
+        SeedQueuedScopeResidents("dev-jf739-pend", DeviceQueueManager.MaxLaunchBaseEntries, "D", enqueued: true);
+
+        string freshId = Guid.NewGuid().ToString();
+        long baseMs = MinutesToMs(9);
+        _manager.RecordLaunchBase("dev-jf739-pend", freshId, baseMs, enqueued: true, ratePerMille: 750);
+
+        // A sibling launch on the ACTIVE family; the shared OR gate fires its trim.
+        string siblingId = Guid.NewGuid().ToString();
+        _manager.RecordLaunchBase("dev-jf739-pend", siblingId, 0, enqueued: false);
+
+        _manager.PromotePendingLaunchBase("dev-jf739-pend", freshId);
+
+        (long? recordedBase, int? recordedRate) = _manager.GetActiveLaunchScope("dev-jf739-pend", freshId);
+        Assert.Equal(baseMs, recordedBase);
+        Assert.Equal(750, recordedRate);
+    }
+
+    /// <summary>
+    /// JF-739 pin (the position-store arm, DoD #2): the same sibling shape on
+    /// ItemPositionState. Two stops on one device; at queued cap pressure the
+    /// first stop's fresh entry is the only non-queued key, and the sibling
+    /// stop's trim evicts it pre-fix, losing the JF-581 resume seed the store
+    /// exists to hold. The stop-path write-then-trim is
+    /// <see cref="DeviceQueueManager.RecordStoppedPositionAndTrim"/> (the
+    /// JF-738 fresh-entry guard covers only the entry's OWN trim); the
+    /// freshness stamp must keep the first entry through the sibling's trim.
+    /// Seeding is direct (the shared SeedStoredPosition helper and the
+    /// EventHandlerTests JF-738 pin idiom) so the seeds themselves carry no
+    /// stamps, and the fake clock stays FROZEN (within-window determinism).
+    /// </summary>
+    [Fact]
+    public void RecordStoppedPositionAndTrim_SiblingStopInWindow_FreshPositionSurvives_JF739()
+    {
+        var fake = new FakeTimeProvider(DateTimeOffset.UtcNow);
+        _manager.Time = fake;
+        DeviceQueue queue = _manager.GetOrCreateQueue("dev-jf739-pos");
+        List<Guid> residentIds = Enumerable.Range(0, DeviceQueueManager.MaxItemPositionStateEntries)
+            .Select(_ => Guid.NewGuid()).ToList();
+        queue.ItemIds = residentIds.Select(g => g.ToString()).ToList();
+        foreach (Guid id in residentIds)
+        {
+            SeedStoredPosition("dev-jf739-pos", id, 1234);
+        }
+
+        Guid firstId = Guid.NewGuid();
+        long firstTicks = TimeSpan.FromMinutes(3).Ticks;
+        _manager.RecordStoppedPositionAndTrim("dev-jf739-pos", queue, firstId, firstTicks);
+
+        // Survives its own trim (the JF-738 fresh-entry guard).
+        Assert.Equal(firstTicks, _manager.GetStoredPositionTicks("dev-jf739-pos", firstId.ToString()));
+
+        // The sibling stop, inside the window.
+        Guid siblingId = Guid.NewGuid();
+        long siblingTicks = TimeSpan.FromMinutes(4).Ticks;
+        _manager.RecordStoppedPositionAndTrim("dev-jf739-pos", queue, siblingId, siblingTicks);
+
+        Assert.Equal(firstTicks, _manager.GetStoredPositionTicks("dev-jf739-pos", firstId.ToString()));
+        Assert.Equal(siblingTicks, _manager.GetStoredPositionTicks("dev-jf739-pos", siblingId.ToString()));
+        Assert.All(residentIds, id => Assert.Equal((long?)1234, _manager.GetStoredPositionTicks("dev-jf739-pos", id.ToString())));
     }
 
     /// <summary>

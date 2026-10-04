@@ -56,6 +56,39 @@ public sealed class DeviceQueueManager : IDisposable
     /// before the keep-alive ack Amazon requires).
     /// </summary>
     private readonly object _launchScopeLock = new();
+
+    /// <summary>
+    /// JF-739: the recently-recorded stamp registry backing the bounded-map
+    /// trims' freshness rule (deviceId -> { "N" map key -> UtcNow stamp }).
+    /// GUARDED BY <see cref="_launchScopeLock"/>: every stamp write
+    /// (<see cref="StampRecentRecord"/> from both write-then-trim families)
+    /// and every consultation (<see cref="BuildTrimMembershipSet"/> from both
+    /// trim families) already sits inside that lock's critical sections, so a
+    /// plain dictionary is safe and the stamp becomes visible to a sibling
+    /// trim atomically with the map write it protects. In-memory by design (no
+    /// persisted shape change: any restart outlives the
+    /// <see cref="RecentRecordFreshnessWindow"/>). HONEST BOUND: an ACTIVE
+    /// device's registry holds only window-span records (every stamp write
+    /// prunes that device's expired keys) and <see cref="Clear"/> reclaims a
+    /// reset device wholesale; a device that bursts then goes SILENT pins its
+    /// last write-window's stamps until process exit (nothing runs for a
+    /// silent device), bounded by distinct-device count times writes per
+    /// window - a few KB at displacement-storm scale, accepted over a sweep
+    /// timer for 5-second-lifetime data.
+    /// </summary>
+    private readonly Dictionary<string, Dictionary<string, DateTimeOffset>> _recentRecordStamps = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// JF-739: time source for the stamp registry (the write-side stamps and
+    /// the trim-side expiry filter). Test seam in the
+    /// <see cref="NextTrackPrecomputeCache.Time"/> shape (JF-424.2):
+    /// production never assigns this and always runs on
+    /// <see cref="TimeProvider.System"/>, while tests substitute a fake to
+    /// advance past <see cref="RecentRecordFreshnessWindow"/> deterministically
+    /// instead of sleeping the window.
+    /// </summary>
+    internal TimeProvider Time { get; set; } = TimeProvider.System;
+
     private readonly string _dataDirectory;
     private readonly ILogger<DeviceQueueManager> _logger;
     private volatile bool _disposed;
@@ -418,7 +451,10 @@ public sealed class DeviceQueueManager : IDisposable
     /// <remarks>JF-723: the entry this call writes is exempt from this call's own
     /// cap-pressure trim (see <see cref="TrimLaunchBaseIfNeeded"/>), because the
     /// launch build runs before the queue commit on the play paths and the trim
-    /// would otherwise judge the fresh entry against the OLD queue's membership.</remarks>
+    /// would otherwise judge the fresh entry against the OLD queue's membership.
+    /// JF-739: the entry is additionally exempt from EVERY trim inside the
+    /// freshness window (<see cref="StampRecentRecord"/>), which closes the
+    /// sibling-trim half of that same derive-to-commit ordering.</remarks>
     public void RecordLaunchBase(string deviceId, string itemId, long baseMs, bool enqueued, int ratePerMille = 1000)
     {
         if (!StreamTokenCodec.TryGetItemId(itemId, out Guid parsedItemId))
@@ -430,6 +466,14 @@ public sealed class DeviceQueueManager : IDisposable
         lock (_launchScopeLock)
         {
             DeviceQueue queue = GetOrCreateQueue(deviceId);
+
+            // JF-739: every launch record (fresh write OR unchanged-value
+            // short-circuit) refreshes the freshness stamp BEFORE the branch:
+            // the entry this call writes or leaves in place must survive ANY
+            // sibling trim inside the derive-to-commit window, not just this
+            // call's own trim (the relaunch precedent is RecordLastPlayed's
+            // JF-619 stamp refresh).
+            StampRecentRecord(deviceId, key);
 
             if (enqueued)
             {
@@ -459,7 +503,7 @@ public sealed class DeviceQueueManager : IDisposable
                 RetirePendingLaunchScope(queue, key);
             }
 
-            TrimLaunchBaseIfNeeded(queue, key);
+            TrimLaunchBaseIfNeeded(deviceId, queue, key);
         }
 
         SchedulePersistInternal(deviceId);
@@ -727,29 +771,31 @@ public sealed class DeviceQueueManager : IDisposable
     /// next launch ages the entry (the same over-cap tolerance
     /// <see cref="TrimPositionMap"/> already grants queued-pinned maps); the entry
     /// is NOT immortal: the NEXT launch's trim evicts it if it is still neither
-    /// queued nor fresh. SCOPE OF THE EXEMPTION (JF-739, filed not fixed here):
-    /// it guards the entry against its OWN record's trim only; a SIBLING
+    /// queued nor fresh. SIBLING SCOPE (JF-739, fixed here): a SIBLING
     /// <see cref="RecordLaunchBase"/> interleaved inside the same derive-to-commit
     /// window (a PlaybackNearlyFinished enqueue or queue-editing launch between
-    /// the build and the commit) trims without exempting the earlier entry, whose
-    /// item is still absent from the STORED queue, so that sibling trim can evict
-    /// it; the JF-723 filing's fresh-stamping candidate (b) is JF-739's fix shape.
-    /// MEMBERSHIP (JF-738, fixed here): the queued set is built through
+    /// the build and the commit) runs THIS trim with only ITS key exempt, while
+    /// the earlier entry's item is still absent from the STORED queue; the
+    /// freshness stamps close that hole (every still-fresh key is as protected as
+    /// a queued one, see <see cref="BuildTrimMembershipSet"/>), so
+    /// the identity guard below is now the per-call fast path of the same rule
+    /// rather than the whole protection.
+    /// MEMBERSHIP (JF-738): the queued set is built through
     /// <see cref="NormalizeToMapKeyFormat"/>, so the stored queue's DASHED ids do
     /// protect the maps' "N"-keyed entries; before JF-738 the set was a raw
     /// ItemIds copy, never matched a key, and this trim ran as pure
     /// insertion/slot-order FIFO (which is how a fresh insert could be its own
     /// evictee at saturation); the exemption above held under BOTH behaviors by
-    /// construction. JF-739 INTERPLAY: restored membership does NOT close the
-    /// sibling-trim hole, because membership protects only items already in the
-    /// STORED queue; inside the derive-to-commit window the fresh item is still
-    /// absent from it, so a sibling trim (or this trim, without the exemption)
-    /// still judges the entry non-queued.
+    /// construction. Membership alone does NOT protect the derive-to-commit
+    /// window's fresh entry (its item is not yet in the STORED queue), which is
+    /// why the JF-739 stamps exist beside it.
     /// </summary>
+    /// <param name="deviceId">The device whose launch-scope maps are bounded (the
+    /// stamp registry key).</param>
     /// <param name="queue">The device queue whose four launch-scope maps are bounded.</param>
     /// <param name="freshlyRecordedKey">The "N"-normalized key RecordLaunchBase just
     /// wrote; never this trim's evictee (the JF-723 guard).</param>
-    private static void TrimLaunchBaseIfNeeded(DeviceQueue queue, string freshlyRecordedKey)
+    private void TrimLaunchBaseIfNeeded(string deviceId, DeviceQueue queue, string freshlyRecordedKey)
     {
         if (queue.ActiveLaunchBaseMs.Count <= MaxLaunchBaseEntries
             && queue.PendingLaunchBaseMs.Count <= MaxLaunchBaseEntries
@@ -759,9 +805,10 @@ public sealed class DeviceQueueManager : IDisposable
             return;
         }
 
-        // The JF-723 identity guard rides the shared builder: the just-recorded key
-        // is never this trim's evictee, whatever slot the dictionary reused for it.
-        HashSet<string> queuedItems = BuildTrimMembershipSet(queue, freshlyRecordedKey);
+        // The JF-723 identity guard and the JF-739 freshness stamps ride the same
+        // membership build: neither the just-recorded key nor any other
+        // still-fresh entry is this trim's evictee.
+        HashSet<string> queuedItems = BuildTrimMembershipSet(deviceId, queue, freshlyRecordedKey);
         TrimPositionMap(queue.ActiveLaunchBaseMs, queuedItems, MaxLaunchBaseEntries);
         TrimPositionMap(queue.PendingLaunchBaseMs, queuedItems, MaxLaunchBaseEntries);
         TrimPositionMap(queue.ActivePlaybackRatePerMille, queuedItems, MaxLaunchBaseEntries);
@@ -806,11 +853,29 @@ public sealed class DeviceQueueManager : IDisposable
     /// stored queue's ids re-keyed to the maps' "N" format (through
     /// <see cref="NormalizeToMapKeyFormat"/>) plus the caller's fresh key (the
     /// JF-723 identity-guard shape: the entry a write just created is never that
-    /// write's own trim's evictee; idempotent on an already-"N" key). Every
-    /// <see cref="TrimPositionMap"/> WRITE-ADJACENT call site must consume its
-    /// set through this builder: a raw <c>queue.ItemIds</c> set never matches an
-    /// "N"-keyed map (the inert-membership bug JF-738 fixed), and the fresh-key
-    /// guard belongs beside the normalization, not re-derived per caller.
+    /// write's own trim's evictee; idempotent on an already-"N" key) UNION the
+    /// device's unexpired JF-739 freshness stamps (see
+    /// <see cref="StampRecentRecord"/>). Every <see cref="TrimPositionMap"/>
+    /// WRITE-ADJACENT call site must consume its set through this builder: a
+    /// raw <c>queue.ItemIds</c> set never matches an "N"-keyed map (the
+    /// inert-membership bug JF-738 fixed), and the fresh-key guard and the
+    /// freshness stamps belong beside the normalization, not re-derived per
+    /// caller. The JF-739 stamps are why the builder is an INSTANCE method
+    /// taking <paramref name="deviceId"/>: a sibling record interleaved inside
+    /// the derive-to-commit window runs its trim with only its own key exempt
+    /// while the earlier entry's item is still absent from the STORED queue,
+    /// and in the queued-cap-pressure shape that fresh entry is the ONLY
+    /// non-queued key, so the sibling's needed removal would evict it with
+    /// certainty unless every still-fresh key joins the membership here. MUST
+    /// be called under <see cref="_launchScopeLock"/> (the stamp registry's
+    /// guard; both trim families already sit inside it). OVER-CAP TOLERANCE:
+    /// fresh entries are unevictable for the window, so a write burst can
+    /// leave a map at cap + (stamped keys in the window, BOTH families: the
+    /// union is one shared registry by design, so a fresh LAUNCH record also
+    /// shields that key's position entry and vice versa - deliberate, the
+    /// coherent freshness rule of JF-739 DoD #2); bounded by the write rate
+    /// and transient, the same tolerance class the JF-723 guard grants at
+    /// cap+1.
     /// Capacity-hinted (queue size + the fresh key).
     /// HONEST COST (GM-F3): with membership restored, a map whose backing queue
     /// is fully navigated is pinned at QUEUE LENGTH, not at the cap (every
@@ -821,11 +886,13 @@ public sealed class DeviceQueueManager : IDisposable
     /// pin itself is the documented contract ("entries for queued items all
     /// stay"), not a leak.
     /// </summary>
+    /// <param name="deviceId">The device whose stamps join the membership (the
+    /// stamp registry key).</param>
     /// <param name="queue">The device queue whose ItemIds form the membership.</param>
     /// <param name="freshKey">The "N"-normalized key the caller's write just
-    /// created; treated as queued by THIS trim only.</param>
-    /// <returns>The queued-membership set in the maps' "N" key format.</returns>
-    internal static HashSet<string> BuildTrimMembershipSet(DeviceQueue queue, string freshKey)
+    /// created; treated as queued by THIS trim only (the JF-723 guard).</param>
+    /// <returns>The queued+fresh membership set in the maps' "N" key format.</returns>
+    internal HashSet<string> BuildTrimMembershipSet(string deviceId, DeviceQueue queue, string freshKey)
     {
         HashSet<string> queuedItems = new(queue.ItemIds.Count + 1, StringComparer.OrdinalIgnoreCase);
         foreach (string normalizedId in NormalizeToMapKeyFormat(queue.ItemIds))
@@ -834,7 +901,82 @@ public sealed class DeviceQueueManager : IDisposable
         }
 
         queuedItems.Add(freshKey);
+
+        if (_recentRecordStamps.TryGetValue(deviceId, out Dictionary<string, DateTimeOffset>? deviceStamps))
+        {
+            DateTimeOffset now = Time.GetUtcNow();
+            foreach (KeyValuePair<string, DateTimeOffset> stamp in deviceStamps)
+            {
+                if (now - stamp.Value < RecentRecordFreshnessWindow)
+                {
+                    queuedItems.Add(stamp.Key);
+                }
+            }
+        }
+
         return queuedItems;
+    }
+
+    /// <summary>
+    /// JF-739: how long a freshly recorded bounded-map entry stays exempt from
+    /// EVERY trim, not just its own record's. The derive-to-commit window the
+    /// sibling trims interleave into is sub-second; the window covers it plus
+    /// launch-build latency with margin, and stays far under the
+    /// <see cref="LaunchVsStopGrace"/> scale (a different, delayed-stop
+    /// purpose). Internal for the InternalsVisibleTo test seam (the caps
+    /// idiom): the aging pins advance the clock past this window to prove
+    /// expiry under the rule ON, rather than disabling the rule.
+    /// </summary>
+    internal static readonly TimeSpan RecentRecordFreshnessWindow = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// JF-739: stamps a bounded-map key as recently recorded (both write-then-trim
+    /// families call this: <see cref="RecordLaunchBase"/> on every launch record,
+    /// including its unchanged-value short-circuits per the JF-619
+    /// <see cref="RecordLastPlayed"/> relaunch precedent, and
+    /// <see cref="RecordStoppedPositionAndTrim"/> on every qualifying stop), and
+    /// prunes the device's expired stamps so the registry holds only
+    /// window-span records (a device's wholesale reclaim is <see cref="Clear"/>'s
+    /// registry removal; this prune only drops expired KEYS, and the
+    /// just-written entry always keeps the dictionary non-empty in production).
+    /// MUST be called under <see cref="_launchScopeLock"/> (the registry's
+    /// guard). The stamp is what a SIBLING trim consults through
+    /// <see cref="BuildTrimMembershipSet"/>: until it expires, no trim on this
+    /// device may evict the entry, which is exactly the protection the
+    /// derive-to-commit window needs (the entry's own record already exempts
+    /// it from its own trim via the JF-723 fresh-key guard; the stamp extends
+    /// that to every other trim until the queue commit lands or the entry ages).
+    /// </summary>
+    /// <param name="deviceId">The device the record landed on.</param>
+    /// <param name="mapKey">The "N"-normalized map key just written (or left in
+    /// place by a short-circuit).</param>
+    private void StampRecentRecord(string deviceId, string mapKey)
+    {
+        if (!_recentRecordStamps.TryGetValue(deviceId, out Dictionary<string, DateTimeOffset>? deviceStamps))
+        {
+            deviceStamps = new Dictionary<string, DateTimeOffset>(StringComparer.Ordinal);
+            _recentRecordStamps[deviceId] = deviceStamps;
+        }
+
+        DateTimeOffset now = Time.GetUtcNow();
+        deviceStamps[mapKey] = now;
+
+        List<string>? expiredKeys = null;
+        foreach (KeyValuePair<string, DateTimeOffset> stamp in deviceStamps)
+        {
+            if (now - stamp.Value >= RecentRecordFreshnessWindow)
+            {
+                (expiredKeys ??= new List<string>()).Add(stamp.Key);
+            }
+        }
+
+        if (expiredKeys != null)
+        {
+            foreach (string expiredKey in expiredKeys)
+            {
+                deviceStamps.Remove(expiredKey);
+            }
+        }
     }
 
     /// <summary>
@@ -869,7 +1011,11 @@ public sealed class DeviceQueueManager : IDisposable
     /// evictable by its own trim at cap pressure, and resume-after-pause loses
     /// the seed the JF-581 incident made load-bearing. The guard can leave the
     /// map at cap+1 until the next write ages the entry; the trim still trims
-    /// aged non-queued entries.
+    /// aged non-queued entries. JF-739 (DoD #2, the window guard): the same key
+    /// is stamped into the recent-record registry, so a sibling stop's trim on
+    /// the same device cannot evict it inside the freshness window (see
+    /// <see cref="StampRecentRecord"/>: both write families stamp, both trim
+    /// families consult, one freshness rule).
     /// </summary>
     /// <param name="deviceId">The device whose queue is persisted (debounced).</param>
     /// <param name="queue">The device queue whose ItemPositionState is written and bounded.</param>
@@ -883,9 +1029,10 @@ public sealed class DeviceQueueManager : IDisposable
         lock (_launchScopeLock)
         {
             queue.ItemPositionState[key] = positionTicks;
+            StampRecentRecord(deviceId, key);
             if (queue.ItemPositionState.Count > cap)
             {
-                TrimPositionMap(queue.ItemPositionState, BuildTrimMembershipSet(queue, key), cap);
+                TrimPositionMap(queue.ItemPositionState, BuildTrimMembershipSet(deviceId, queue, key), cap);
             }
         }
 
@@ -923,7 +1070,8 @@ public sealed class DeviceQueueManager : IDisposable
     /// FORMAT CONTRACT (JF-738): an entry is protected only when its KEY is
     /// string-equal (ignoring case) to a member of this set, and every bounded
     /// map is "N"-keyed, so a write-adjacent call site must build its set through
-    /// <see cref="BuildTrimMembershipSet"/>; a raw copy of queue ItemIds
+    /// <see cref="BuildTrimMembershipSet"/> (which carries the JF-723 fresh-key
+    /// guard AND the JF-739 freshness stamps); a raw copy of queue ItemIds
     /// (dashed in production) never matches an "N"-keyed map, which is exactly
     /// the inert-membership bug JF-738 fixed. New call sites must not assume
     /// "any key format" matches.</param>
@@ -1433,6 +1581,23 @@ public sealed class DeviceQueueManager : IDisposable
     /// <param name="deviceId">The Alexa device ID.</param>
     public void Clear(string deviceId)
     {
+        // JF-739: reclaim the device's stamp registry entry BEFORE the queue
+        // removal (the registry's own prune only drops expired KEYS, so without
+        // this a cleared-and-never-heard-from-again device would pin its last
+        // window's stamps for the manager's lifetime). The ORDER closes the
+        // interleave: a concurrent record between the two steps has its map
+        // entries land on the outgoing queue object (they die with the
+        // TryRemove) while its stamp merely outlives them as harmless
+        // over-protection; a record after the TryRemove re-creates the queue
+        // and stamps AFTER this removal, so its in-window entry keeps its
+        // protection. A removal AFTER the queue removal would instead erase a
+        // live re-created queue's fresh stamp (the protection loss JF-739
+        // exists to prevent).
+        lock (_launchScopeLock)
+        {
+            _recentRecordStamps.Remove(deviceId);
+        }
+
         _queues.TryRemove(deviceId, out _);
 
         // Disarm BEFORE the file delete (JF-449): Disarm is a barrier, so a

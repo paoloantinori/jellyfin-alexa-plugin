@@ -1342,3 +1342,27 @@ internal sealed class SharedGateProbeHandler : BaseHandler
         IOutputSpeech? outputSpeech = null)
         => Launch.BuildVideoAppLaunchResponse(context, locale, sourceUrl, title, outputSpeech);
 }
+
+/// <summary>
+/// JF-739: a manual-clock <see cref="TimeProvider"/> shared by the DeviceQueueManager
+/// freshness-stamp pins. It MIRRORS the private nested fake in
+/// PreEnqueueOnStartTests (JF-424.2) rather than replacing it: that local one
+/// carries a Dispose that restores the STATIC <c>NextTrackPrecomputeCache.Time</c>
+/// seam, a global-state need the per-instance manager seam does not have, so
+/// the two coexist deliberately (shared = instance seams; local = the static
+/// seam with its restore). Assigning this fake into one test's own manager
+/// instance leaves every other test on TimeProvider.System. Tests keep the
+/// clock frozen for within-window pins and call <see cref="Advance"/> past the
+/// window for the expiry pins, so no TTL test ever sleeps.
+/// </summary>
+internal sealed class FakeTimeProvider : TimeProvider
+{
+    private DateTimeOffset _now;
+
+    public FakeTimeProvider(DateTimeOffset start) => _now = start;
+
+    /// <summary>Moves the fake clock forward deterministically.</summary>
+    public void Advance(TimeSpan delta) => _now += delta;
+
+    public override DateTimeOffset GetUtcNow() => _now;
+}
