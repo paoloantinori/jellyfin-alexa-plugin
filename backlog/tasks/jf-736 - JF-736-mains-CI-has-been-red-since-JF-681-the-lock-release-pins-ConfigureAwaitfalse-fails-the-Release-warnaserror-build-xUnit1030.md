@@ -6,9 +6,11 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-10-03'
+updated_date: '2026-10-04 08:17'
 labels:
   - ci
   - test-infrastructure
+dependencies: []
 priority: high
 ---
 
@@ -103,8 +105,8 @@ over it, the JF-726 copy deleted; the phantom-window opcode-aware-walk fix rides
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 The xUnit1030 site resolved (ConfigureAwait dropped or made true) and `dotnet build -c Release -warnaserror` over the solution exits 0
-- [ ] #2 CI green again on the fixing push (build-and-test job)
+- [x] #1 The xUnit1030 site resolved (ConfigureAwait dropped or made true) and `dotnet build -c Release -warnaserror` over the solution exits 0
+- [x] #2 CI green again on the fixing push (build-and-test job)
 - [ ] #3 The InstructionOperands offset walk + ldc-int surface graduated into IlCallScanner (or consciously declined with a reason on this task)
 - [ ] #4 dotnet test passes both TFMs
 - [ ] #5 /simplify + /code-review high passed

@@ -3,9 +3,10 @@ id: JF-735
 title: >-
   JF-735 - AskFirstMatch truncates its STATE list at Take(3): ranks past 3
   unaskable and unannounced (the stricter sibling of the JF-729 fix)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-03 19:35'
+updated_date: '2026-10-04 08:16'
 labels:
   - ux
   - disambiguation
@@ -135,4 +136,6 @@ the final state (baseline 5093 + 2 pins), filtered 64/64 after every round,
 census red-proofed both TFMs; CI-exact Release -warnaserror 0 warnings.
 No deploy (doc + test surface only; the orchestrator's batched post-closure
 deploy owns the DLL anyway).
+
+CLOSED 2026-10-04 by the orchestrator after the full cycle: DECLINE confirmed and merged (worker commit b3ef3f4b + orchestrator tails e8a10eca and 11493450, --no-ff), zero behavior change (the gate-marker's own full-suite rerun 5095/5095 both TFMs; the quad-merged tree suite covers the rest). The orchestrator gate-marker verified all four axes with live sabotage re-verification; the four simplify angles fully applied, including the corrective round that caught the tail's own F2 falsehood (the both-directions band phrasing was mechanically false: maxLenDiff = max(2Q,15) >= 2Q >= Q, so a shorter candidate is never band-excluded; proven by inequality, brute force over Q=1..59, and the worked example's own numbers) and placed the threshold truth at the mechanism docs (HandleFuzzyMiss, FuzzyMatcher's SuggestionThreshold const, FindBestMatchWithScore's band-null doc, the census test doc). JF-743 filed by this task for the caller-side legs.
 <!-- SECTION:FINAL_SUMMARY:END -->

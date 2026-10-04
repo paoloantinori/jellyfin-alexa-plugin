@@ -3,15 +3,19 @@ id: JF-738
 title: >-
   JF-738 - queued-membership protection in the bounded-map trims is inert: the
   maps are "N"-keyed while queue ItemIds are dashed, so no entry ever matches
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-03'
+updated_date: '2026-10-04 08:14'
 labels:
   - playback
   - queue
   - launch-scope
+dependencies: []
 references:
-  - 'backlog/tasks/jf-723 - JF-713-derive-to-commit-window-TrimLaunchBaseIfNeeded-judges-the-fresh-launch-scope-entry-against-the-OLD-queues-membership.md'
+  - >-
+    backlog/tasks/jf-723 -
+    JF-713-derive-to-commit-window-TrimLaunchBaseIfNeeded-judges-the-fresh-launch-scope-entry-against-the-OLD-queues-membership.md
 priority: low
 ---
 
@@ -203,6 +207,7 @@ length-32 pre-check to skip `Guid.TryParse` saves little (parsing a
 
 ## Final Summary
 
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
 The queued-membership protection in the bounded-map trims is REAL: both
 trim sites (the four launch-scope maps via `TrimLaunchBaseIfNeeded`, and
 the ItemPositionState write+trim via the new locked
@@ -274,3 +279,6 @@ evicting one aged entry per write.
 
 Out-of-scope gate finding FILED: JF-741 (the AudiobookPositionTracker
 NormalizeKey near-duplicate of the canonicalization rule).
+
+CLOSED 2026-10-04 by the orchestrator after the full cycle: merged into main (worker commits 445fb4b8 + rework 76390085, --no-ff; the locked RecordStoppedPositionAndTrim unit verified by direct orchestrator read), quad-merged tree suite as above (one pre-existing flake in isolation-green class on net9.0, full green net10.0); CI green on the pushed merge; deployed in the batched post-closure deploy. The orchestrator gate-marker's four rework findings all applied (the folded locked write unit, the locked IsItemQueued read, the queue-length honesty, the cap relocation). JF-741 filed by this task (the NormalizeKey near-duplicate); JF-739 carries the escalation note and is now IN PROGRESS on the merged base.
+<!-- SECTION:FINAL_SUMMARY:END -->
