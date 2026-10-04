@@ -121,6 +121,56 @@ public sealed class PlaybackLaunchBuilder
         => response.Response.Directives?.Any(d => d is Directive.VideoAppLaunchDirective) == true;
 
     /// <summary>
+    /// JF-732: the AudioPlayer family's throw-or-launch contract, PINNED AT THE
+    /// SOURCE. Every family member verifies its OWN CURRENT terminal returns
+    /// through this guard (the <c>BuildAudioPlayerResponse</c> chokepoint,
+    /// <see cref="BuildVideoAppAudioResponse(string, BaseItem, Entities.User, string, Context, Guid?, long)"/>,
+    /// <see cref="BuildAudiobookResumeResponse(BaseItem, long, Entities.User, Context)"/>,
+    /// <see cref="BuildAudiobookVideoAppLaunchResponseAsync(string, BaseItem, IOutputSpeech, Entities.User, Context, Request)"/>;
+    /// a delegation edge carries no second verdict because the callee's own return
+    /// is already guarded): a refusal throws
+    /// <see cref="Exceptions.StreamTokenNotConfiguredException"/>, every other
+    /// pinned return carries exactly one launch directive. That contract is
+    /// LOAD-BEARING for the roughly thirty handler-side post-build now-playing
+    /// writes the JF-714/JF-718 state gate never swept (the state belt is
+    /// deliberately thinner than the speech belt: those writes are ungated
+    /// because the builder cannot hand them a non-launch response, and this pin
+    /// is what makes that "cannot" an enforced fact instead of a documented
+    /// assumption). COVERAGE LIMIT (honest, gate-marker round): the wraps guard
+    /// the terminal returns that exist today; a directive-less return grown at a
+    /// NEW MID-BODY site would bypass its member's terminal wrap and ship
+    /// silently, and only the per-site gate sweep (the roster-extension arm this
+    /// decision rejected) covers that class structurally. A new launch-building
+    /// member is covered structurally (PlaybackLaunchBuilderThrowOrLaunchPinTests
+    /// requires every SkillResponse-constructing builder method to call this
+    /// pin). If this guard ever fires, a builder grew a directive-less return and
+    /// every one of those sites just became a phantom-now-playing writer; if such
+    /// a return is the DELIBERATE new design, removing this pin requires
+    /// extending DeliveredLaunchStateWriteRosterTests to this builder family and
+    /// gating every flagged site through <c>AttachNowPlayingIfLaunched</c> in the
+    /// same change. Belt only: no code path can reach the throw today (every
+    /// terminal construction above sets a one-directive list), so firing it is a
+    /// contract break, not a runtime condition to handle.
+    /// </summary>
+    /// <param name="response">The response a throw-or-launch builder is about to return.</param>
+    /// <returns>The same response, verified to carry a launch directive.</returns>
+    internal static SkillResponse EnsureLaunchResponse(SkillResponse response)
+    {
+        // Null-total (code-review round: HasLaunchDirective dereferences the body;
+        // gate-marker round: so does a null RESPONSE itself): a contract-breaking
+        // null response or a response with NO ResponseBody must surface as this
+        // guard's actionable contract throw, not a NullReferenceException.
+        if (response is null || response.Response is null || !HasLaunchDirective(response))
+        {
+            throw new InvalidOperationException(
+                "A throw-or-launch PlaybackLaunchBuilder member returned a response with no launch directive (the JF-699 item 1 / JF-732 contract). "
+                + "Every handler-side post-build now-playing write would be phantom state; restore the contract or extend DeliveredLaunchStateWriteRosterTests to this family and gate the write sites.");
+        }
+
+        return response;
+    }
+
+    /// <summary>
     /// JF-693: attaches a handler-side announce onto a launch response ONLY when the
     /// response actually carries a launch directive. The JF-687 empty-secret refusal
     /// Tell carries none, so it survives instead of being replaced by a now-playing
@@ -146,10 +196,12 @@ public sealed class PlaybackLaunchBuilder
     }
 
     /// <summary>
-    /// JF-718 (the JF-714 gate extraction, now 10 handler-side call sites; the
-    /// 11th gated site is the builder-internal channel launch, which keeps the raw
-    /// <see cref="HasLaunchDirective"/> block below): stamps the
-    /// now-playing session state (the queue + the full item) only when
+    /// JF-718 (the JF-714 gate extraction, 10 handler-side call sites plus the
+    /// builder-internal channel launch, which keeps the raw
+    /// <see cref="HasLaunchDirective"/> block below; JF-732 added the PlayRadio
+    /// radio-mode start and the podcast resolver tail, 12 handler-side sites
+    /// total): stamps the now-playing session state (the queue + the full item)
+    /// only when
     /// <paramref name="response"/> actually carries a launch directive. The one
     /// home of the NOT-tautological rationale this gate exists for: the VideoApp
     /// launch family answers the <c>VideoRequiresScreen</c> capability Tell on a
@@ -169,13 +221,17 @@ public sealed class PlaybackLaunchBuilder
     /// <param name="session">The Jellyfin session (queue + now-playing pointer).</param>
     /// <param name="queue">The queue to install; a concrete <see cref="List{T}"/> of queue items is installed BY REFERENCE (the caller hands over ownership: the session's now-playing state aliases that list, so the caller must not mutate it afterwards), a lazy enumerable materialized only on a delivered launch.</param>
     /// <param name="item">The item now playing at the queue head.</param>
-    internal static void AttachNowPlayingIfLaunched(SkillResponse response, SessionInfo session, IEnumerable<QueueItem> queue, BaseItem item)
+    /// <returns>True when the response carried a launch directive and the state was written; false on a non-launch response, so a caller with co-effects beside the writes (PlayRadio's RadioModeState arm) skips them with the state.</returns>
+    internal static bool AttachNowPlayingIfLaunched(SkillResponse response, SessionInfo session, IEnumerable<QueueItem> queue, BaseItem item)
     {
         if (HasLaunchDirective(response))
         {
             session.NowPlayingQueue = queue as List<QueueItem> ?? queue.ToList();
             session.FullNowPlayingItem = item;
+            return true;
         }
+
+        return false;
     }
 
     /// <summary>
@@ -186,13 +242,17 @@ public sealed class PlaybackLaunchBuilder
     /// <param name="response">The builder response the now-playing state would ride.</param>
     /// <param name="session">The Jellyfin session (queue + now-playing pointer).</param>
     /// <param name="item">The item now playing (and the queue's single entry).</param>
-    internal static void AttachNowPlayingIfLaunched(SkillResponse response, SessionInfo session, BaseItem item)
+    /// <returns>True when the response carried a launch directive and the state was written; false on a non-launch response.</returns>
+    internal static bool AttachNowPlayingIfLaunched(SkillResponse response, SessionInfo session, BaseItem item)
     {
         if (HasLaunchDirective(response))
         {
             session.NowPlayingQueue = new List<QueueItem> { new() { Id = item.Id } };
             session.FullNowPlayingItem = item;
+            return true;
         }
+
+        return false;
     }
 
     /// <summary>
@@ -1538,7 +1598,8 @@ public sealed class PlaybackLaunchBuilder
             (Plugin.Instance?.DeviceQueueManager)?.RecordLastPlayed(ledgerDeviceId, item.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
         }
 
-        return new SkillResponse
+        // JF-732: the throw-or-launch pin; this member verifies its own outward return.
+        return EnsureLaunchResponse(new SkillResponse
         {
             Version = "1.0",
             Response = new ResponseBody
@@ -1561,7 +1622,7 @@ public sealed class PlaybackLaunchBuilder
                     }
                 }
             }
-        };
+        });
     }
 
     /// <summary>
@@ -1598,7 +1659,8 @@ public sealed class PlaybackLaunchBuilder
             response.Response.OutputSpeech = await SpeakVideoLaunchAnnounceAsync(context, request, announce).ConfigureAwait(false);
         }
 
-        return response;
+        // JF-732: the throw-or-launch pin; this member verifies its own outward return.
+        return EnsureLaunchResponse(response);
     }
 
     private string BuildStreamUrl(string pathSegment, string itemId, Entities.User user)
@@ -1955,7 +2017,8 @@ public sealed class PlaybackLaunchBuilder
                 // guard, so a refused delegation leaves the ledger untouched (JF-699
                 // code-review finding 3: the Audio-route record used to sit BEFORE
                 // this return and flipped the ledger for a launch the delegation then
-                // refused).
+                // refused). JF-732: no pin here; the callee verifies its own outward
+                // returns, so a delegation edge needs no second verdict.
                 return BuildVideoAppAudioResponse(itemId, item, user, announceLocale, context, collectionParentId, collectionStartTicks);
             }
         }
@@ -2152,7 +2215,9 @@ public sealed class PlaybackLaunchBuilder
             // devices. Platform constraint documented in CLAUDE.md.
         }
 
-        return response;
+        // JF-732: the throw-or-launch pin; the chokepoint every ungated
+        // handler-side now-playing write rests on.
+        return EnsureLaunchResponse(response);
     }
 
     /// <summary>
@@ -2316,7 +2381,9 @@ public sealed class PlaybackLaunchBuilder
         };
 
         AttachAnnounceIfEnabled(response, item, user, announceLocale);
-        return response;
+
+        // JF-732: the throw-or-launch pin; this member verifies its own outward return.
+        return EnsureLaunchResponse(response);
     }
 
     /// <summary>

@@ -105,50 +105,16 @@ public class DeliveredLaunchOutputSpeechRosterTests
         HashSet<int> gateTokens = new(
             GateMethodNames.SelectMany(Name => IlCallScanner.MethodTokens(typeof(PlaybackLaunchBuilder), Name)));
 
-        var failures = new List<string>();
-        foreach ((Type type, MethodBase method) in IlCallScanner.DeclaredMethods(pluginModule.Assembly))
-        {
-            // The builder assembles its own responses; its speech writes are the
-            // announce machinery itself, not post-builder overwrites.
-            Type owner = IlCallScanner.TopLevelType(method.DeclaringType ?? type);
-            if (owner == typeof(PlaybackLaunchBuilder))
-            {
-                continue;
-            }
-
-            // ONE snapshot per method: the raw call tokens (same-assembly targets
-            // compare verbatim) plus the resolved same-type helpers.
-            int[] tokens = IlCallScanner.CallTokens(method).ToArray();
-            MethodBase[] helpers = IlCallScanner.SameTypeHelpers(method, pluginModule).ToArray();
-
-            bool callsBuilder = tokens.Any(builderTokens.Contains)
-                || helpers.Any(h => IlCallScanner.ContainsCallToAnyToken(h, builderTokens));
-            if (!callsBuilder)
-            {
-                continue;
-            }
-
-            bool writesSpeech = WritesOutputSpeech(method, pluginModule)
-                || helpers.Any(h => WritesOutputSpeech(h, pluginModule));
-            if (!writesSpeech)
-            {
-                continue;
-            }
-
-            bool gated = tokens.Any(gateTokens.Contains)
-                || helpers.Any(h => IlCallScanner.ContainsCallToAnyToken(h, gateTokens));
-            string site = $"{owner.Name}.{IlCallScanner.LogicalMethodName(method)}";
-            if (gated || Allowlist.Contains(site))
-            {
-                continue;
-            }
-
-            failures.Add(
-                $"{site}: calls a launch builder and writes ResponseBody.OutputSpeech with NO delivered-launch gate " +
-                "(HasLaunchDirective / HasVideoAppLaunchDirective / AttachAnnounceIfLaunched). Route the write through " +
-                "PlaybackLaunchBuilder.AttachAnnounceIfLaunched (or gate the block on HasLaunchDirective/HasVideoAppLaunchDirective), " +
-                "so a future non-launch builder return can never be spoken over (the JF-693 overwrite class; JF-699 item 3b/6).");
-        }
+        List<string> failures = DeliveredLaunchWriteRosterScan.FindUngatedPostBuilderWrites(
+            pluginModule,
+            builderTokens,
+            gateTokens,
+            WritesOutputSpeech,
+            Allowlist,
+            "calls a launch builder and writes ResponseBody.OutputSpeech with NO delivered-launch gate " +
+            "(HasLaunchDirective / HasVideoAppLaunchDirective / AttachAnnounceIfLaunched). Route the write through " +
+            "PlaybackLaunchBuilder.AttachAnnounceIfLaunched (or gate the block on HasLaunchDirective/HasVideoAppLaunchDirective), " +
+            "so a future non-launch builder return can never be spoken over (the JF-693 overwrite class; JF-699 item 3b/6).");
 
         Assert.True(failures.Count == 0, string.Join("\n", failures));
     }

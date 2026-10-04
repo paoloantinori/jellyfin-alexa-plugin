@@ -390,14 +390,19 @@ public class PlayRadioIntentHandler : BaseHandler
         // PlaybackNearlyFinished continuation decisions).
         var response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(first.Id.ToString(), user), first.Id.ToString(), first, user, context);
 
-        session.NowPlayingQueue = queue;
         // The now-playing pointer must follow the launch (review round 2026-09-22):
         // every FullNowPlayingItem-first consumer (next/previous, StartOver, the
         // queue continuation) would otherwise keep acting on the removed seed, and
         // the fire-and-forget start report that eventually refreshes it can stall
-        // (JF-410) or swallow (JF-477).
-        session.FullNowPlayingItem = first;
-        RadioModeState.Enable(session.UserId, context.System.Device.DeviceID);
+        // (JF-410) or swallow (JF-477). JF-732: the writes and the radio-mode arm
+        // ride ONE delivered-launch verdict (the attach's return); an armed-but-dead
+        // RadioModeState is the worst phantom of the family (the JF-699 item 5
+        // comment before the build). Belt by construction, the contract pinned at
+        // the chokepoint since JF-732.
+        if (PlaybackLaunchBuilder.AttachNowPlayingIfLaunched(response, session, queue, first))
+        {
+            RadioModeState.Enable(session.UserId, context.System.Device.DeviceID);
+        }
 
         if (Launch.GetAnnounceNowPlaying(user))
         {

@@ -366,6 +366,22 @@ internal static class IlCallScanner
     }
 
     /// <summary>
+    /// The snapshot form of <see cref="CallsDirectlyOrViaSameTypeHelper"/> (JF-732
+    /// hoist, the JF-582/JF-634/JF-699 precedent at the second consumer: both
+    /// delivered-launch roster twins snapshot a method's call tokens and
+    /// same-type helpers ONCE and derive several verdicts from that snapshot, so
+    /// the direct-or-helper token predicate lives here instead of inline in each
+    /// scan). Same semantics: any direct token hit, else any helper hit.
+    /// </summary>
+    /// <param name="callTokens">The method's pre-materialized call/callvirt tokens.</param>
+    /// <param name="sameTypeHelpers">The method's pre-resolved same-top-level-type helpers (deduped by the caller).</param>
+    /// <param name="targetTokens">The same-assembly methoddef tokens of the acceptable call targets.</param>
+    /// <returns>True when the method (or a same-type helper) calls any target.</returns>
+    internal static bool CallsAnyDirectlyOrViaHelpers(int[] callTokens, IReadOnlyList<MethodBase> sameTypeHelpers, IReadOnlyCollection<int> targetTokens)
+        => callTokens.Any(targetTokens.Contains)
+        || sameTypeHelpers.Any(h => ContainsCallToAnyToken(h, targetTokens));
+
+    /// <summary>
     /// A nested type's top-level declaring type (async state machines and
     /// closures are attributed to the type that owns them).
     /// </summary>
