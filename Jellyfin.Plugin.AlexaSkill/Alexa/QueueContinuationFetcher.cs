@@ -80,9 +80,11 @@ internal static class QueueContinuationFetcher
             _ => (Array.Empty<BaseItem>(), null)
         };
 
-        // Artist continuations carry TotalCount=int.MaxValue (GetItemList has no
-        // count); render that honestly instead of a meaningless 2147483647.
-        string totalText = continuation.TotalCount == int.MaxValue
+        // Artist continuations carry TotalCount=UnknownTotal (GetItemList has no
+        // count); audiobook continuations carry it when the initial page came through
+        // the NRE fallback (JF-673). Render the regime honestly instead of a
+        // meaningless 2147483647.
+        string totalText = continuation.TotalCount == Util.SearchService.UnknownTotal
             ? "end-unknown"
             : continuation.TotalCount.ToString(CultureInfo.InvariantCulture);
 
@@ -225,7 +227,26 @@ internal static class QueueContinuationFetcher
         // fix.
         QueryResult<BaseItem> result = Util.SearchService.SafeGetItemsResult(libraryManager, query, logger);
 
-        continuation.StartIndex += result.Items.Count;
+        // JF-673 end-unknown regime: the head stored UnknownTotal when the initial
+        // page came through the NRE fallback (GetItemList has no total), so there is
+        // no total to exhaust against; the only end signal is a SHORT page, the
+        // FetchArtistSongs shape. Marking the continuation exhausted here keeps the
+        // NEXT FetchNextBatch terminal via the entry guard instead of querying past
+        // the end and WARNing. In the known-total regime the shape is unchanged
+        // (advance; the entry guard ends it at StartIndex >= TotalCount).
+        // Accepted noise (code-review JF-673): a book whose chapter count is an exact
+        // multiple of the page sizes ends on a ZERO-item tail batch, so the
+        // dispatcher's zero-page WARN fires once for a normally completed book, the
+        // same boundary noise the artist fetcher has always carried.
+        if (continuation.TotalCount == Util.SearchService.UnknownTotal && result.Items.Count < continuation.BatchSize)
+        {
+            continuation.StartIndex = continuation.TotalCount;
+        }
+        else
+        {
+            continuation.StartIndex += result.Items.Count;
+        }
+
         return result.Items;
     }
 
