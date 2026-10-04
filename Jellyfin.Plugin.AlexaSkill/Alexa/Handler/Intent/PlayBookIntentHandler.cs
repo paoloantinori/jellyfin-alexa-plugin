@@ -284,7 +284,17 @@ public class PlayBookIntentHandler : BaseHandler
                         ParentId = books[0].Id,
                         StartIndex = bookTracks.Items.Count,
                         TotalCount = bookTracks.TotalRecordCount,
-                        UserId = jellyfinUser!.Id
+                        UserId = jellyfinUser!.Id,
+                        // JF-674: bind the entry to THIS queue page (the ids just
+                        // installed into session.NowPlayingQueue) so a later
+                        // different-queue playback discards it at fetch time. Minted
+                        // on ALL launch arms, VideoApp included: the identity
+                        // validation already discards the entry for any later queue
+                        // that is not the book page, while the chapter-relative
+                        // cold-tracker resume fallthrough (ResumeIntentHandler) can
+                        // still legitimately serve it through an AudioPlayer chapter
+                        // relaunch of the SAME queue.
+                        MintedQueueItemIds = QueueContinuation.QueueIdsOf(queueItems)
                     });
             }
         }

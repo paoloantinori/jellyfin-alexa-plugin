@@ -378,6 +378,22 @@ public class PlaybackNearlyFinishedEventHandler : BaseHandler
             return;
         }
 
+        // JF-674 queue-identity validation (the mechanism's rationale lives on
+        // MintedQueueItemIds). Placed after the current-index guard, the cheaper
+        // precondition that already owns the unlocatable-current-item skip (that
+        // shape's exhaustion tail drops the entry regardless, the JF-712-documented
+        // class), so the discard fires exactly where a fetch would actually have
+        // been considered. LogInformation, not Debug: this is a state change (the
+        // entry dies here), the JF-683 readable-log discipline.
+        if (!continuation.IsForLiveQueue(session))
+        {
+            Logger.LogInformation(
+                "ContinuationFetch: discard, the stored {SourceType} continuation's minted queue is no longer the live queue (minted {MintedCount} items, live queue holds {QueueCount}); device={DeviceId}",
+                continuation.SourceType, continuation.MintedQueueItemIds.Count, session.NowPlayingQueue.Count, deviceId);
+            QueueContinuationStore.Remove(session.UserId, deviceId);
+            return;
+        }
+
         // Only fetch when approaching the end of the current queue. The threshold is
         // read once so the logged value is provably the one the guard compared.
         int threshold = ProgressiveQueueConstants.GetPrefetchThreshold();
