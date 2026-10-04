@@ -17,29 +17,37 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// VideoApp-family launch builder that can answer a NON-LAUNCH response (the
 /// VideoRequiresScreen capability Tell, the channel builder's resolver-null Tell)
 /// AND writes <see cref="SessionInfo.NowPlayingQueue"/> or
-/// <see cref="SessionInfo.FullNowPlayingItem"/> in that same method must route the
-/// write through the delivered-launch gate family (a call to
+/// <see cref="SessionInfo.FullNowPlayingItem"/> in that same method (directly or
+/// via a one-level same-type helper) must route the write through the
+/// delivered-launch gate family (a call to
 /// <see cref="PlaybackLaunchBuilder.HasLaunchDirective"/> or
-/// <see cref="PlaybackLaunchBuilder.AttachNowPlayingIfLaunched"/>), directly or via
-/// a one-level same-type helper. Writing now-playing for a launch that will not
-/// happen is the phantom: a later "what's playing"/next/previous answers an item
-/// that never started. <see cref="PlaybackLaunchBuilder.HasVideoAppLaunchDirective"/>
+/// <see cref="PlaybackLaunchBuilder.AttachNowPlayingIfLaunched"/>), directly or
+/// via a one-level same-type helper. Writing now-playing for a launch that will
+/// not happen is the phantom: a later "what's playing"/next/previous answers an
+/// item that never started. <see cref="PlaybackLaunchBuilder.HasVideoAppLaunchDirective"/>
 /// is deliberately NOT an acceptable gate here: it is the ROUTE verdict
 /// (VideoApp-only), and the episode screenless degrade delivers an AudioPlayer.Play
 /// whose now-playing writes must survive.
-/// SCOPE (deliberate, the JF-718 filing shape): only the VideoApp-Tell-capable
-/// builders are in the conjunction. The AudioPlayer family
-/// (<see cref="PlaybackLaunchBuilder.BuildAudioPlayerResponse"/> and the
-/// audio-degrading builders) is throw-or-launch since JF-699 item 1, so its many
-/// post-build ungated writes are safe-by-construction TODAY; extending this roster
-/// to that family is the filed belt question (JF-732), not this one.
+/// SCOPE (the JF-732 DECISION, deliberate): only the VideoApp-Tell-capable
+/// builders are in the conjunction; the state belt stays THINNER than the speech
+/// belt, which sweeps the AudioPlayer family per-site. The reason: the AudioPlayer
+/// family (<see cref="PlaybackLaunchBuilder.BuildAudioPlayerResponse"/> and the
+/// audio-degrading builders) is throw-or-launch, and since JF-732 that contract is
+/// PINNED AT THE SOURCE (<see cref="PlaybackLaunchBuilder.EnsureLaunchResponse"/>
+/// wraps every outward return, so a builder that grows a directive-less return
+/// throws instead of shipping), which covers that family's roughly thirty
+/// post-build ungated write sites at one chokepoint instead of thirty per-site
+/// gates. The speech belt went per-site because JF-699 item 6 had already swept
+/// every speech write (the JF-693 live class); the state sweep would have been
+/// thirty new no-op conversions for belt-only value. The pin's doc owns the full
+/// contract and its removal policy.
 /// ACCEPTED BOUNDARIES (the roster idiom's documented-limit class):
-/// 1. WRITE-DETECTION DEPTH: the state WRITE is detected in the scanned method's
-///    own IL only, while the builder call and the gate may sit in a one-level
-///    same-type helper. A write delegated to a helper on the same type escapes
-///    the conjunction when that helper itself calls no Tell-capable builder (the
-///    PlayRadio shape: HandleAsync launches channels, its StartRadioPlayback
-///    helper writes state around the AudioPlayer builder).
+/// 1. TWO-LEVEL DEPTH: the write, the builder call, and the gate are each
+///    detected in the scanned method's own IL or its one-level SAME-TOP-LEVEL-TYPE
+///    helpers (JF-732 made the write probe helper-deep; the JF-718 depth-0 gap's
+///    one live shape, PlayRadio's StartRadioPlayback, became visible under the
+///    deeper probe and was gated in the same change). A write delegated to a
+///    helper on ANOTHER type escapes the conjunction.
 /// 2. GATE-SIDE LOOSENESS: the gate verdict keys on ANY reference to the gate
 ///    family in the method or its helpers, not on the write itself being gated.
 ///    A method that references the family for a DIFFERENT purpose (ResumeIntent
@@ -53,8 +61,8 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 ///    Tell-capable builder (the channel builder's exact pre-JF-718 shape)
 ///    escapes this pin entirely. Latent-only today (the two non-builder
 ///    RecordLastPlayed sites, SleepTimer's re-issue and the pipeline
-///    interceptor, call no Tell-capable builder); if JF-732's family belt
-///    lands, the RecordLastPlayed probe belongs on that roster.
+///    interceptor, call no Tell-capable builder); if this roster's family is
+///    ever extended, the RecordLastPlayed probe belongs on it.
 /// A miss under any boundary cannot silently pass a gated site (the scan only
 /// adds candidates), it can only miss an ungated one, and the next same-method
 /// change re-surfaces it.
@@ -71,7 +79,9 @@ public class DeliveredLaunchStateWriteRosterTests
     /// audio-degrading builders (BuildVideoAppAudioResponse,
     /// BuildAudiobookResumeResponse, BuildAudiobookVideoAppLaunchResponseAsync)
     /// and <see cref="PlaybackLaunchBuilder.BuildAudioPlayerResponse"/> always
-    /// deliver exactly one directive or throw, so they are out of the conjunction.
+    /// deliver exactly one directive or throw (pinned at the source since JF-732,
+    /// <see cref="PlaybackLaunchBuilder.EnsureLaunchResponse"/>), so they are out
+    /// of the conjunction by the documented SCOPE decision above.
     /// </summary>
     private static readonly string[] BuilderMethodNames =
     {
@@ -111,47 +121,16 @@ public class DeliveredLaunchStateWriteRosterTests
         HashSet<int> gateTokens = new(
             GateMethodNames.SelectMany(name => IlCallScanner.MethodTokens(typeof(PlaybackLaunchBuilder), name)));
 
-        var failures = new List<string>();
-        foreach ((Type type, MethodBase method) in IlCallScanner.DeclaredMethods(pluginModule.Assembly))
-        {
-            // The builder writes session state itself (the channel launch); its own
-            // methods are the machinery, not post-builder consumers.
-            Type owner = IlCallScanner.TopLevelType(method.DeclaringType ?? type);
-            if (owner == typeof(PlaybackLaunchBuilder))
-            {
-                continue;
-            }
-
-            // The write probe first: by far the most selective leg (only a handful
-            // of methods in the assembly write the setters), so the costlier
-            // builder/helper walks run only for actual write sites.
-            if (!WritesNowPlayingState(method, pluginModule))
-            {
-                continue;
-            }
-
-            if (!IlCallScanner.CallsDirectlyOrViaSameTypeHelper(method, pluginModule, builderTokens))
-            {
-                continue;
-            }
-
-            // The state write is detected in the method's OWN IL (the documented
-            // boundary above): the phantom shape is a write sitting beside the
-            // builder call in the same method, which is the house pattern every
-            // JF-714/JF-718 site follows.
-            string site = $"{owner.Name}.{IlCallScanner.LogicalMethodName(method)}";
-            if (IlCallScanner.CallsDirectlyOrViaSameTypeHelper(method, pluginModule, gateTokens)
-                || Allowlist.Contains(site))
-            {
-                continue;
-            }
-
-            failures.Add(
-                $"{site}: calls a Tell-capable VideoApp-family launch builder and writes NowPlayingQueue/FullNowPlayingItem " +
-                "in the same method with NO delivered-launch gate (HasLaunchDirective / AttachNowPlayingIfLaunched). " +
-                "Route the write through PlaybackLaunchBuilder.AttachNowPlayingIfLaunched (or gate the block on HasLaunchDirective), " +
-                "so a capability/resolver Tell can never leave phantom now-playing state (the JF-714/JF-718 class).");
-        }
+        List<string> failures = DeliveredLaunchWriteRosterScan.FindUngatedPostBuilderWrites(
+            pluginModule,
+            builderTokens,
+            gateTokens,
+            WritesNowPlayingState,
+            Allowlist,
+            "calls a Tell-capable VideoApp-family launch builder and writes NowPlayingQueue/FullNowPlayingItem " +
+            "in the same method with NO delivered-launch gate (HasLaunchDirective / AttachNowPlayingIfLaunched). " +
+            "Route the write through PlaybackLaunchBuilder.AttachNowPlayingIfLaunched (or gate the block on HasLaunchDirective), " +
+            "so a capability/resolver Tell can never leave phantom now-playing state (the JF-714/JF-718 class).");
 
         Assert.True(failures.Count == 0, string.Join("\n", failures));
     }

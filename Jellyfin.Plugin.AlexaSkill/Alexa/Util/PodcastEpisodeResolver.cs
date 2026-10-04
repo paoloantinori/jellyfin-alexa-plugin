@@ -128,11 +128,17 @@ public static class PodcastEpisodeResolver
 
         // JF-699 item 1: the builder either threw the StreamTokenNotConfigured
         // refusal (RequestPipeline answers it; nothing below runs) or delivered the
-        // launch, so the JF-693 delivered-launch verdict wrapper is gone and the
-        // now-playing writes + screen attach simply follow the launch.
-        session.NowPlayingQueue = new List<QueueItem> { new() { Id = episode.Id } };
-        session.FullNowPlayingItem = episode;
-        attachScreen?.Invoke(response, episode);
+        // launch, so the JF-693 delivered-launch verdict wrapper is gone. JF-732: the
+        // writes AND the screen attach ride ONE delivered-launch verdict, because
+        // the APL podcast arm returns at this delegation BEFORE its caller's shared
+        // attach: a NowPlaying screen rendered for a launch that did not happen is
+        // the visible half of the phantom, so the tail gates both halves itself and
+        // every AplUserEventHandler arm lands on a gated write.
+        if (PlaybackLaunchBuilder.AttachNowPlayingIfLaunched(response, session, episode))
+        {
+            attachScreen?.Invoke(response, episode);
+        }
+
         return response;
     }
 
