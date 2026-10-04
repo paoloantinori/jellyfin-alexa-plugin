@@ -36,14 +36,24 @@ AUDIT UPDATE (2026-10-02): scope note - four EPISODE-path vanish pins (StreamHls
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
+- [x] #1 dotnet build passes with 0 errors (Debug 0/0; CI-exact Release --no-restore -warnaserror on the final state: 0 Warning(s), 0 Error(s))
+- [x] #2 dotnet test passes (full suite once on the final state: 5126/5126 net9.0 AND net10.0, exactly the baseline, no new tests; the four converted pins 4/4 both TFMs on every filtered round)
+- [x] #3 No new compiler warnings introduced (Release -warnaserror clean)
 - [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization (N/A: no session-attribute code touched)
 - [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress (N/A: no HttpClient code touched)
 - [ ] #6 NLU test fixtures updated if interaction model changed (N/A: no interaction model change)
 - [ ] #7 E2E test added for new intent or handler logic (N/A: test-hygiene refactor only)
 - [ ] #8 Locale response strings added to all 17 locales (N/A: no new strings)
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #9 /simplify passed (4 parallel agents: reuse CLEAN with TestHelpers.CreateSong and the per-helper EncoderPath idiom examined and declined with reasons; simplification CLEAN with one below-threshold naming note resolved for sibling symmetry; efficiency CLEAN; altitude CLEAN with one out-of-scope observation FILED as JF-751 the same turn)
+- [x] #10 /code-review high passed (0 correctness bugs; 3 low-severity findings: 2 APPLIED, 1 TRACKED - the read-count-member doc sharpening applied to the helper's doc; the untracked JF-751 file now rides the commit; the EncoderPath mock triplication across the three sibling fixtures tracked by amending JF-751's description, since a song-helper-only wire-up would be a one-consumer helper and converting the audiobook/episode siblings exceeds this task's four-song-pin surface)
 <!-- DOD:END -->
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+THE HELPER: `SetupSongVanishFixture(string songName)` in VideoAudioControllerTests.cs, the SetupAudiobookVanishFixture sibling (placed beside it; the static Unit/TestHelpers has no access to the class's instance mocks and all four call sites live in this class): mock Audio item + the EncoderPath/GetItemById setups + the warm-cache path derivation, returning (Guid ItemId, string HlsDir, string PlaylistPath). The four pins (JF-499 fast-path, JF-677 read-count, JF-685 no-token, JF-678 in-lock) converted arrange-only: pin NAMES and assertion content unchanged; planting (with each pin's own bytes), logger factories, read-count wiring and lock choreography stay in the pins because they genuinely diverge (the filing's floated trigger/bytes parameterization deliberately NOT taken - absorbing them needs an eager/deferred flag or a params provider list, the exact complexity the filing itself warned about, and the orchestrator's cut keeps the vanish seeding pin-owned). 40 insertions / 49 deletions, one file.
+
+NON-VACUITY: ONE shared sabotage (documented judgment: all four pins consume identical helper seams), the helper's GetItemById wiring registered under a different Guid so the real id resolves null: all FOUR pins failed on BOTH TFMs (4 failed each; the in-lock twin red at the ServeInLockWarmCacheAsync park assert, the other three at their outcome asserts), restored, 4/4 green both TFMs.
+
+DECLINED WITH EVIDENCE: the audit note's episode-family absorption - the episode/episode-audio twins diverge at exactly the layer this helper shares (SetupEpisodeForHls must return the mediaSourceManager controller arg; the audio variant derives an EpisodeAudioCacheKey string from a bare inline Episode), so they cannot ride a song-item helper; recorded in the helper's doc. Pin 1's planted bytes keep their absent #EXT-X-VERSION:3 line byte-identically per the arrange-only mandate (normalizing would alter what the pin plants and needs its own re-verification).
+
+GATES: /simplify 4 agents all CLEAN (out-of-scope altitude observation FILED as JF-751: the 15-site file-wide LoggerFactory+FileDeletingLoggerProvider idiom, candidate CreateDeletingLoggerFactory micro-helper); /code-review high 0 correctness bugs, 3 low findings all applied or tracked (doc sharpening applied; JF-751 rides the commit; EncoderPath triplication amended into JF-751). SUITES: 5126/5126 net9.0 AND net10.0 on the final state (baseline 5126, no new tests); Release -warnaserror 0 warnings 0 errors. No locale/model/production-code change; no deploy (the orchestrator's batched deploy owns the DLL).
+<!-- SECTION:FINAL_SUMMARY:END -->
