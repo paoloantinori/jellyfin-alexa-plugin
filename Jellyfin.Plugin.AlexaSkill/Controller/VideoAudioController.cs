@@ -2988,21 +2988,21 @@ public class VideoAudioController : ControllerBase
         // encodes with the album cover as the video track. Audiobook folders keep the
         // AudioBook children query and the black-frame encode.
         bool isMusicAlbum = parent is MediaBrowser.Controller.Entities.Audio.MusicAlbum;
-        var childrenQuery = new InternalItemsQuery
-        {
-            ParentId = parentGuid,
-            IncludeItemTypes = new[] { isMusicAlbum ? BaseItemKind.Audio : BaseItemKind.AudioBook },
-            Recursive = true,
-            DtoOptions = new DtoOptions(true)
-        };
-        if (isMusicAlbum)
-        {
-            // The ONE album-track order (QueueContinuationFetcher.AlbumTrackOrder):
-            // AlbumPlayService sums the resume offset against this order and the
-            // concat timeline below encodes in it - a second copy here is the drift
-            // risk the constant exists to kill (wrong-track resume slices).
-            childrenQuery.OrderBy = Alexa.QueueContinuationFetcher.AlbumTrackOrder;
-        }
+
+        // JF-763: both isMusicAlbum arms route through the ONE album-tracks builder's
+        // unpaged, user-less form (BuildAlbumTracksQueryUnpaged; the row-set rationale
+        // lives on the builder's doc). The audiobook arm keeps its local initializer:
+        // AudioBook chapters are a different kind discipline with NO AlbumTrackOrder
+        // (the DB order IS the chapter order).
+        var childrenQuery = isMusicAlbum
+            ? Alexa.QueueContinuationFetcher.BuildAlbumTracksQueryUnpaged(parentGuid, byAlbumIds: false)
+            : new InternalItemsQuery
+            {
+                ParentId = parentGuid,
+                IncludeItemTypes = new[] { BaseItemKind.AudioBook },
+                Recursive = true,
+                DtoOptions = new DtoOptions(true)
+            };
 
         IReadOnlyList<MediaBrowser.Controller.Entities.BaseItem> chapters =
             _libraryManager.GetItemList(childrenQuery);
@@ -3010,18 +3010,15 @@ public class VideoAudioController : ControllerBase
         // JF-625 review: split/malformed-folder albums (the JF-338 'Jazz Cafe' shape)
         // resolve in AlbumPlayService via an AlbumIds fallback; the endpoint's
         // ParentId-only query would 404 the very URL that service launched. Mirror
-        // the fallback so the concat always finds the tracks the queue math summed.
+        // the fallback so both sides resolve a split album through the SAME arm
+        // pair. For a library-restricted user the endpoint's rows are a SUPERSET of
+        // the scoped paged path's (this endpoint is user-less by design; the
+        // seek-mode resume residual that leaves is filed as JF-767, see
+        // BuildAlbumTracksQuery's doc).
         if (chapters.Count == 0 && isMusicAlbum)
         {
-            var albumIdsQuery = new InternalItemsQuery
-            {
-                AlbumIds = [parentGuid],
-                IncludeItemTypes = new[] { BaseItemKind.Audio },
-                Recursive = true,
-                DtoOptions = new DtoOptions(true),
-                OrderBy = Alexa.QueueContinuationFetcher.AlbumTrackOrder,
-            };
-            chapters = _libraryManager.GetItemList(albumIdsQuery);
+            chapters = _libraryManager.GetItemList(
+                Alexa.QueueContinuationFetcher.BuildAlbumTracksQueryUnpaged(parentGuid, byAlbumIds: true));
         }
 
         if (chapters.Count == 0)

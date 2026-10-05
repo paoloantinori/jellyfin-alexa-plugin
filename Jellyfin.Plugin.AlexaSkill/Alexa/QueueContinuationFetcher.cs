@@ -226,8 +226,8 @@ internal static class QueueContinuationFetcher
     {
         // Shared builder with the album head's first page (JF-757): one query shape
         // owns head and tail, both arms, see BuildAlbumTracksQuery's doc.
-        var query = BuildAlbumTracksQuery(
-            jellyfinUser,
+        var query = BuildScopedAlbumTracksQuery(
+            jellyfinUser, pluginUser, libraryManager, logger,
             continuation.ParentId ?? Guid.Empty,
             continuation.StartIndex,
             continuation.BatchSize,
@@ -236,7 +236,6 @@ internal static class QueueContinuationFetcher
         // Same per-user library scope the initial album fetch runs under
         // (AlbumPlayService.BuildAlbumQuery); without it a continuation batch
         // widens the scope to every library the Jellyfin account sees.
-        Util.LibraryFilter.ApplyLibraryFilter(query, pluginUser, libraryManager, logger);
 
         // Shared executor guard (the JF-670 head/tail contract the audiobook tail
         // already runs under, extended to the album tail by JF-753): the album head
@@ -268,19 +267,41 @@ internal static class QueueContinuationFetcher
             && (result.TotalRecordCount == 0
                 || (continuation.TotalCount == Util.SearchService.UnknownTotal && result.Items.Count == 0)))
         {
-            var albumIdsQuery = BuildAlbumTracksQuery(
-                jellyfinUser,
+            var albumIdsQuery = BuildScopedAlbumTracksQuery(
+                jellyfinUser, pluginUser, libraryManager, logger,
                 continuation.ParentId.Value,
                 continuation.StartIndex,
                 continuation.BatchSize,
                 byAlbumIds: true);
-            Util.LibraryFilter.ApplyLibraryFilter(albumIdsQuery, pluginUser, libraryManager, logger);
             result = Util.SearchService.SafeGetItemsResult(libraryManager, albumIdsQuery, logger);
         }
 
         // JF-753: the ONE advance-or-mark idiom (see AdvanceOrMarkExhausted).
         AdvanceOrMarkExhausted(continuation, result.Items.Count);
         return result.Items;
+    }
+
+    /// <summary>
+    /// The ONE scoped album-tracks page builder (JF-763 gate-marker): builds via
+    /// <see cref="BuildAlbumTracksQuery"/> then applies
+    /// <c>Util.LibraryFilter.ApplyLibraryFilter</c> in the same call, so
+    /// the JF-666 head/tail scope-parity pairing is structural at every paged
+    /// site instead of a hand-repeated two-line convention a fifth site can
+    /// forget. The executors stay at the callers (RetryAsync wrap vs direct).
+    /// </summary>
+    internal static InternalItemsQuery BuildScopedAlbumTracksQuery(
+        Jellyfin.Database.Implementations.Entities.User? jellyfinUser,
+        AlexaSkill.Entities.User? pluginUser,
+        ILibraryManager libraryManager,
+        ILogger logger,
+        Guid albumId,
+        int startIndex,
+        int limit,
+        bool byAlbumIds)
+    {
+        InternalItemsQuery query = BuildAlbumTracksQuery(jellyfinUser, albumId, startIndex, limit, byAlbumIds);
+        Util.LibraryFilter.ApplyLibraryFilter(query, pluginUser, libraryManager, logger);
+        return query;
     }
 
     /// <summary>
@@ -293,21 +314,28 @@ internal static class QueueContinuationFetcher
     /// <see cref="BuildAudiobookChaptersQuery"/>). This builder replaced the four
     /// hand-kept initializers, which would drift exactly like the stale-mirror
     /// class that bit the interaction-model docs (anti-pattern 11).
-    /// Accepted boundary (JF-763): the album-concat endpoint
-    /// (VideoAudioController) still hand-keeps the same shape's arms for its
-    /// unpaged, user-less GetItemList enumeration (no session user on the
-    /// token-gated HTTP path, fetch-all paging); it shares only AlbumTrackOrder
-    /// today.
+    /// JF-763 closed the former accepted boundary: the album-concat endpoint
+    /// (VideoAudioController) also routes its two isMusicAlbum arms through this
+    /// shape via the unpaged, user-less form
+    /// (<see cref="BuildAlbumTracksQueryUnpaged"/>), so field set, arms, and order
+    /// are definitionally shared. RESIDUAL (accepted, filed as JF-767): the ROW SET
+    /// can still differ for a library-restricted user, because the endpoint is
+    /// deliberately user-less (no session user on the token-gated HTTP path) while
+    /// the paged path applies the plugin user's scope (JF-666/JF-763 head/tail
+    /// parity); the endpoint enumerates a superset there, which shifts the
+    /// seek-mode resume slice (AlbumPlayService sums the offset over its scoped
+    /// rows). The full fix threads the user scope through the JF-309 token.
     /// Deliberately IncludeItemTypes=Audio (the JF-358 discipline), unlike the
     /// audiobook builder's MediaTypes: a ParentId/AlbumIds query IS constrained by
     /// IncludeItemTypes and this shape returns the tracks in production. The
     /// scoping term is the ONE arm difference: ParentId = folder children,
     /// AlbumIds = membership by album tag (the split/malformed-folder retry,
     /// JF-338). Paging is the caller's (the head passes 0 +
-    /// GetInitialFetchSize, the tail StartIndex + BatchSize). The UNSELECTED
-    /// scoping field stays at its constructor default: an explicitly set ParentId
-    /// on the membership arm (or AlbumIds on the folder arm) would AND a second
-    /// constraint into the server query and break the retry's recovery.
+    /// GetInitialFetchSize, the tail StartIndex + BatchSize; the endpoint passes
+    /// none). The UNSELECTED scoping field stays at its constructor default: an
+    /// explicitly set ParentId on the membership arm (or AlbumIds on the folder
+    /// arm) would AND a second constraint into the server query and break the
+    /// retry's recovery.
     /// </summary>
     /// <param name="jellyfinUser">The query user (session scope).</param>
     /// <param name="albumId">The album ID, scoped by the chosen arm.</param>
@@ -315,14 +343,43 @@ internal static class QueueContinuationFetcher
     /// <param name="limit">Page size.</param>
     /// <param name="byAlbumIds">True for the JF-338 membership arm (AlbumIds),
     /// false for the folder arm (ParentId).</param>
-    /// <returns>The query (executor and per-user library filtering differ by site,
-    /// as before: the head wraps in SafeGetItemsResult, the tail applies
-    /// ApplyLibraryFilter then SafeGetItemsResult).</returns>
+    /// <returns>The query (executor and per-user library filtering differ by site:
+    /// head and tail both apply ApplyLibraryFilter then SafeGetItemsResult, the
+    /// JF-763 head/tail scope parity; the unpaged endpoint form applies neither,
+    /// having no session user).</returns>
     internal static InternalItemsQuery BuildAlbumTracksQuery(
         Jellyfin.Database.Implementations.Entities.User? jellyfinUser,
         Guid albumId,
         int startIndex,
         int limit,
+        bool byAlbumIds)
+        => BuildAlbumTracksQueryCore(jellyfinUser, albumId, startIndex, limit, byAlbumIds);
+
+    /// <summary>
+    /// The unpaged, user-less form of <see cref="BuildAlbumTracksQuery"/> for the
+    /// album-concat endpoint (VideoAudioController, JF-763): that HTTP path is
+    /// token-gated with no session user (User stays null) and enumerates the whole
+    /// album in one GetItemList call (paging stays null: fetch-all; null is the
+    /// SDK's no-paging value, NOT 0, which is Take(0) per JF-443). The row-set
+    /// rationale and the field set live on the ONE core (see
+    /// <see cref="BuildAlbumTracksQuery"/>'s doc).
+    /// </summary>
+    /// <param name="albumId">The album ID, scoped by the chosen arm.</param>
+    /// <param name="byAlbumIds">True for the JF-338 membership arm (AlbumIds),
+    /// false for the folder arm (ParentId).</param>
+    /// <returns>The unpaged query.</returns>
+    internal static InternalItemsQuery BuildAlbumTracksQueryUnpaged(Guid albumId, bool byAlbumIds)
+        => BuildAlbumTracksQueryCore(jellyfinUser: null, albumId, startIndex: null, limit: null, byAlbumIds);
+
+    /// <summary>
+    /// The ONE field-set owner both album-tracks entry points share (paged and
+    /// unpaged); a field added here reaches every consumer of the shape.
+    /// </summary>
+    private static InternalItemsQuery BuildAlbumTracksQueryCore(
+        Jellyfin.Database.Implementations.Entities.User? jellyfinUser,
+        Guid albumId,
+        int? startIndex,
+        int? limit,
         bool byAlbumIds)
     {
         var query = new InternalItemsQuery
@@ -332,6 +389,8 @@ internal static class QueueContinuationFetcher
             IncludeItemTypes = new[] { BaseItemKind.Audio },
             DtoOptions = new DtoOptions(true),
             OrderBy = AlbumTrackOrder,
+            // Nullable in the SDK: null = no paging (the unpaged form), 0 = Take(0)
+            // (JF-443), so the int? params pass through untouched.
             StartIndex = startIndex,
             Limit = limit
         };

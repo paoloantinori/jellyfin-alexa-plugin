@@ -1540,14 +1540,17 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
     // drives BOTH ends against a split-album server (empty ParentId pages,
     // populated AlbumIds pages) and captures all four issued queries in call
     // order, then asserts each arm's head and tail shapes are IDENTICAL except
-    // the paging fields. Division of labor with the literal pins above: they keep
-    // the ABSOLUTE OrderBy honest (a corrupted AlbumTrackOrder constant reds
-    // there); the absolute kind filter, DTO fields, and paging asserts live
-    // INSIDE this test's AssertArmLockstep (nowhere else), so do not trim them as
-    // redundant. This pin keeps the two ENDS from drifting apart (a hand-kept
-    // initializer reintroduced at either end reds here even while every literal
-    // pin still passes, which is the drift class the JF-757 consolidation exists
-    // to close).
+    // the paging fields. JF-763 joined the library-scope dimension to the
+    // lockstep: the plugin user is RESTRICTED and both ends' queries must carry
+    // the resolved allowed library as TopParentIds (head/tail parity, the JF-666
+    // tail rule extended to the head's track pages). Division of labor with the
+    // literal pins above: they keep the ABSOLUTE OrderBy honest (a corrupted
+    // AlbumTrackOrder constant reds there); the absolute kind filter, DTO fields,
+    // paging, and TopParentIds asserts live INSIDE this test's AssertArmLockstep
+    // (nowhere else), so do not trim them as redundant. This pin keeps the two
+    // ENDS from drifting apart (a hand-kept initializer reintroduced at either
+    // end reds here even while every literal pin still passes, which is the drift
+    // class the JF-757 consolidation exists to close).
     [Fact]
     public async Task AlbumTracks_HeadAndTail_ShareOneQueryShapeModuloPaging_BothArms()
     {
@@ -1561,6 +1564,11 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
 
         var session = CreateSession();
         _fx.SetupUserMock();
+
+        // JF-763: a RESTRICTED plugin user threads both ends, so the scope
+        // dimension is exercised (not just exempted as before).
+        Guid musicLibId = Guid.NewGuid();
+        var pluginUser = TestHelpers.CreateTestUser(allowedLibraryIds: new[] { musicLibId.ToString() });
 
         var albumId = Guid.NewGuid();
         var album = new MusicAlbum { Id = albumId, Name = "Lockstep Album" };
@@ -1594,7 +1602,7 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
 
         var context = CreateContext();
         await handler.HandleAsync(
-            CreateAlbumIntent("Lockstep Album"), context, TestHelpers.CreateTestUser(), session, CancellationToken.None);
+            CreateAlbumIntent("Lockstep Album"), context, pluginUser, session, CancellationToken.None);
 
         var continuation = new QueueContinuation
         {
@@ -1607,7 +1615,7 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
         };
         ILogger logger = _fx.LoggerFactory.CreateLogger("AlbumLockstepTest");
         QueueContinuationFetcher.FetchNextBatch(
-            continuation, _fx.LibraryManager.Object, _fx.UserManager.Object, logger);
+            continuation, _fx.LibraryManager.Object, _fx.UserManager.Object, logger, pluginUser);
 
         QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID);
 
@@ -1634,6 +1642,15 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
             // end drifting to a minimal DtoOptions (e.g. AlbumPlay's CheapDtoOptions
             // shape) reds here.
             Assert.Equal(head.DtoOptions!.Fields, tail.DtoOptions!.Fields);
+
+            // JF-763: the library-scope dimension joined the lockstep. Both ends
+            // carry the plugin user's resolved allowed library (the absolute id,
+            // so a consistently-wrong scope reds too, not only head-vs-tail
+            // drift); removing either end's ApplyLibraryFilter reds here (a
+            // restricted user's head page and tail batches must enumerate ONE
+            // row set or the pages switch sets mid-album).
+            Assert.Contains(musicLibId, head.TopParentIds);
+            Assert.Equal(head.TopParentIds, tail.TopParentIds);
 
             // Paging is the ONE intended head/tail difference: the head pages with
             // 0 + the initial fetch size, the tail with its continuation offset
