@@ -6435,11 +6435,14 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
             // Common case unchanged (same-ticks serve is byte-identical): while
             // the caller's OWN ticks-B generation is live, a ticks-B fetch
-            // serves the pre-written full listing, with no ENDLIST and the tail
-            // segment seg_0674 (45min / 4s) present.
+            // serves the PRE-WRITE (JF-778: windowed to the encoded region -
+            // the parked fake's head is seg_0000, so the 2-entry floor applies
+            // and its second entry seg_0001 is the pre-write-only marker; the
+            // live partial carries seg_0000 alone), with no ENDLIST.
             ActionResult midEncode = await controller.StreamHlsEpisode(itemIdStr);
             var midContent = Assert.IsType<ContentResult>(midEncode);
-            Assert.Contains("seg_0674.ts", midContent.Content, StringComparison.Ordinal);
+            Assert.Contains("seg_0001.ts", midContent.Content, StringComparison.Ordinal);
+            Assert.DoesNotContain("seg_0674", midContent.Content, StringComparison.Ordinal);
             Assert.DoesNotContain("#EXT-X-ENDLIST", midContent.Content, StringComparison.Ordinal);
 
             // Gen B finishes FIRST: its monitor's generation-aware clear drops
@@ -6702,12 +6705,15 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             // (killed) while a foreign-ticks generation holds the entry: the
             // ticks-scoped verdict must fire (clean dir_B's dead partial, never
             // dir_A) and the re-encode must serve its fresh pre-write, not the
-            // stale partial.
+            // stale partial. JF-778 note: the fresh pre-write serve is WINDOWED
+            // (the fake's head is seg_0000, so the 2-entry floor applies); its
+            // second entry seg_0001 is the pre-write-only marker, since the
+            // dead partial carries seg_0000 alone.
             ActionResult third = await controller.StreamHlsEpisode(itemIdStr);
             var content = Assert.IsType<ContentResult>(third);
             Assert.True(
-                content.Content.Contains("seg_0674.ts", StringComparison.Ordinal),
-                $"a killed own-ticks encode's stale partial must be cleaned and re-encoded, not served, while a foreign-ticks generation runs (JF-676); dead-partial marker seg_0000.ts present: {content.Content.Contains("seg_0000.ts", StringComparison.Ordinal)}");
+                content.Content.Contains("seg_0001.ts", StringComparison.Ordinal),
+                $"a killed own-ticks encode's stale partial must be cleaned and re-encoded, not served, while a foreign-ticks generation runs (JF-676); only the dead partial's single entry was served: {content.Content.Contains("seg_0001.ts", StringComparison.Ordinal) == false}");
             Assert.True(
                 TestCaptureLogger.Snapshot(logRecords).Any(r => r.Message.Contains("Episode HLS cache invalidated", StringComparison.Ordinal)),
                 "the ticks-scoped debris verdict must fire for the killed own-ticks generation");
@@ -7127,14 +7133,20 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
-    /// JF-531 endpoint level: on a cache miss the FIRST serve returns the pre-written
-    /// FULL listing (every segment name, durations summing to the runtime, no
-    /// ENDLIST), not ffmpeg's growing stream.m3u8, whose no-ENDLIST partial shape
-    /// ExoPlayer treats as LIVE (playback at the live edge, partial seekbar).
-    /// ffmpeg still writes its own stream.m3u8: it remains the recorded target.
+    /// JF-531 endpoint level, re-shaped by JF-778: on a cache miss the FIRST
+    /// serve returns the pre-write listing WINDOWED to the encoded region (the
+    /// floor of 2 entries when only seg_0000 exists), not ffmpeg's growing
+    /// stream.m3u8 (1 entry) and not the full listing (whose no-ENDLIST shape
+    /// puts the player's live-edge default start on the un-encoded tail: the
+    /// 2026-10-05 device death). The entry beyond the head is deliberate: it is
+    /// inside the JF-503 hold's +2 lookahead, which real encodes satisfy in
+    /// under a second per segment.
+    /// ffmpeg still writes its own stream.m3u8: it remains the recorded target,
+    /// and the pre-write FILE on disk stays the full listing (the post-encode
+    /// and resume-slice consumers).
     /// </summary>
     [Fact]
-    public async Task StreamHlsEpisode_CacheMiss_ServesPrewrittenFullListingNotLiveEdge()
+    public async Task StreamHlsEpisode_CacheMiss_ServesWindowedPrewriteNotLiveEdge()
     {
         var (episode, mediaSourceManager) = SetupEpisodeForHls("Adolescence S01E02", "h264", TimeSpan.FromMinutes(45));
 
@@ -7147,30 +7159,35 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         var content = Assert.IsType<ContentResult>(result);
         Assert.Equal("application/vnd.apple.mpegurl", content.ContentType);
 
-        // The FULL listing: 45 min = 2700s / 4s = 675 segments (seg_0000..seg_0674),
-        // no ENDLIST (event playlist), token injected on the segment lines.
+        // The WINDOWED listing: the 2-entry floor (head at seg_0000, prewrite age
+        // ~0), event shape, token on the segment lines, no full-runtime tail.
         Assert.DoesNotContain("#EXT-X-ENDLIST", content.Content, StringComparison.Ordinal);
         Assert.Contains("seg_0000.ts?token=", content.Content, StringComparison.Ordinal);
-        Assert.Contains("seg_0674.ts?token=", content.Content, StringComparison.Ordinal);
-        Assert.DoesNotContain("seg_0675", content.Content, StringComparison.Ordinal);
-        Assert.Equal(675, VideoAudioController.CountSegmentsInPlaylist(content.Content));
+        Assert.Contains("seg_0001.ts?token=", content.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("seg_0002", content.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("seg_0674", content.Content, StringComparison.Ordinal);
+        Assert.Equal(2, VideoAudioController.CountSegmentsInPlaylist(content.Content));
 
-        // The pre-written file exists next to ffmpeg's own target, and ffmpeg was
-        // still pointed at stream.m3u8 (the prewrite never feeds ffmpeg's file).
+        // The pre-written FULL file exists next to ffmpeg's own target (the
+        // windowing is serve-side only), and ffmpeg was still pointed at
+        // stream.m3u8 (the prewrite never feeds ffmpeg's file).
         string hlsDir = _cache.GetHlsDirectoryPath(episode.Id.ToString(), 0);
-        Assert.True(File.Exists(Path.Combine(hlsDir, "playlist-full.m3u8")), "pre-written listing must exist");
+        string prewritePath = Path.Combine(hlsDir, "playlist-full.m3u8");
+        Assert.True(File.Exists(prewritePath), "pre-written listing must exist");
+        Assert.Equal(675, VideoAudioController.CountSegmentsInPlaylist(File.ReadAllText(prewritePath)));
         string[] recordedArgs = File.ReadAllLines(Path.Combine(hlsDir, "episode-args.txt"));
         Assert.Equal("stream.m3u8", Path.GetFileName(recordedArgs[^1]));
     }
 
     /// <summary>
-    /// JF-531 AC#1: the TRANSCODE tier gets the same pre-written listing at first
-    /// serve. The live-edge mechanism is tier-independent (any no-ENDLIST partial
-    /// playlist is treated as live), and the incident episode itself was
-    /// transcode-tier HEVC.
+    /// JF-531 AC#1, re-shaped by JF-778: the TRANSCODE tier gets the same
+    /// WINDOWED pre-write listing at first serve (the 2-entry floor with the
+    /// fake ffmpeg's head at seg_0000). The live-edge mechanism is
+    /// tier-independent (any no-ENDLIST partial playlist is treated as live),
+    /// and the JF-778 incident episode itself was transcode-tier mpeg4.
     /// </summary>
     [Fact]
-    public async Task StreamHlsEpisode_TranscodeTier_FirstServeIsTheFullListing()
+    public async Task StreamHlsEpisode_TranscodeTier_FirstServeIsTheWindowedPrewrite()
     {
         var (episode, mediaSourceManager) = SetupEpisodeForHls("Adolescence S01E02", "hevc", TimeSpan.FromMinutes(51));
 
@@ -7180,10 +7197,11 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         ActionResult result = await controller.StreamHlsEpisode(episode.Id.ToString());
 
         var content = Assert.IsType<ContentResult>(result);
-        // 51 min = 3060s / 4s = 765 segments, no ENDLIST.
+        // The 2-entry windowed prefix of the 765-entry listing, no ENDLIST.
         Assert.DoesNotContain("#EXT-X-ENDLIST", content.Content, StringComparison.Ordinal);
-        Assert.Equal(765, VideoAudioController.CountSegmentsInPlaylist(content.Content));
-        Assert.Contains("seg_0764.ts?token=", content.Content, StringComparison.Ordinal);
+        Assert.Equal(2, VideoAudioController.CountSegmentsInPlaylist(content.Content));
+        Assert.Contains("seg_0001.ts?token=", content.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("seg_0764", content.Content, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -7279,37 +7297,20 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
-    /// JF-531 mid-encode fetch: while the encode flag is up, a playlist re-fetch (the
-    /// player polls an event playlist) returns the full pre-written listing, which
-    /// still includes the segments ffmpeg has already appended. Append semantics are
-    /// preserved: the listing never drops a segment that was listed before.
+    /// JF-531 mid-encode fetch, re-shaped by JF-778: while the encode flag is
+    /// up, playlist re-fetches (the player polls an event playlist) return the
+    /// pre-write listing WINDOWED to the encoded region, and the window is
+    /// APPEND-ONLY across fetches as the encode advances: a segment listed by
+    /// one fetch is never dropped by the next (the JF-531 append contract,
+    /// restated for the window; an ExoPlayer media-sequence regression would
+    /// reset the player). The full-runtime tail stays OUT of every mid-encode
+    /// serve (the JF-778 live-edge death shape).
     /// </summary>
     [Fact]
-    public async Task StreamHlsEpisode_ActiveEncode_MidEncodeFetchServesStableFullListing()
+    public async Task StreamHlsEpisode_ActiveEncode_MidEncodeFetchServesGrowingWindowedListing()
     {
-        Guid itemId = Guid.NewGuid();
-        string itemIdStr = itemId.ToString("D");
-
-        var episode = new MediaBrowser.Controller.Entities.TV.Episode
-        {
-            Name = "Adolescence S01E02",
-            Id = itemId,
-            RunTimeTicks = TimeSpan.FromMinutes(45).Ticks
-        };
-        _libraryManagerMock.Setup(m => m.GetItemById(itemId)).Returns(episode);
-
-        string hlsDir = _cache.GetHlsDirectoryPath(itemIdStr, 0);
-        Directory.CreateDirectory(hlsDir);
-
-        // ffmpeg's live playlist has appended two segments so far.
-        await File.WriteAllTextAsync(
-            Path.Combine(hlsDir, "stream.m3u8"),
-            "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:4.000,\nseg_0000.ts\n#EXTINF:4.000,\nseg_0001.ts\n");
-        VideoAudioController.WriteEpisodePlaylist(
-            Path.Combine(hlsDir, "playlist-full.m3u8"),
-            $"/alexaskill/api/video-audio/{itemIdStr}/segments/",
-            TimeSpan.FromMinutes(45).Ticks,
-            token: null);
+        (string itemIdStr, string hlsDir, string prewritePath) = PlantLiveEncodeFixture(
+            "Adolescence S01E02", headSegmentCount: 2, runtime: TimeSpan.FromMinutes(45));
 
         VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: true);
         try
@@ -7317,15 +7318,307 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             // Same ambient-ffmpeg note as the completed-encode test above.
             var controller = CreateController(itemIdStr, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf531-midencode"));
 
+            ActionResult firstFetch = await controller.StreamHlsEpisode(itemIdStr);
+
+            var firstContent = Assert.IsType<ContentResult>(firstFetch);
+            Assert.Contains("seg_0000.ts?token=", firstContent.Content, StringComparison.Ordinal);
+            Assert.Contains("seg_0001.ts?token=", firstContent.Content, StringComparison.Ordinal);
+            Assert.DoesNotContain("seg_0674", firstContent.Content, StringComparison.Ordinal);
+            Assert.DoesNotContain("#EXT-X-ENDLIST", firstContent.Content, StringComparison.Ordinal);
+
+            // The encode advances (four more segments) and 16s pass (the window's
+            // growth anchor: prewrite age backdated to simulate elapsed time).
+            for (int i = 2; i <= 5; i++)
+            {
+                await File.WriteAllBytesAsync(Path.Combine(hlsDir, $"seg_{i:D4}.ts"), new byte[16]);
+            }
+
+            File.SetLastWriteTimeUtc(prewritePath, DateTime.UtcNow.AddSeconds(-16));
+
+            ActionResult secondFetch = await controller.StreamHlsEpisode(itemIdStr);
+
+            var secondContent = Assert.IsType<ContentResult>(secondFetch);
+            // Append-only: the first fetch's entries survive; the window grew to
+            // the new head; no ENDLIST and no full-runtime tail.
+            Assert.Contains("seg_0000.ts?token=", secondContent.Content, StringComparison.Ordinal);
+            Assert.Contains("seg_0001.ts?token=", secondContent.Content, StringComparison.Ordinal);
+            Assert.Contains("seg_0005.ts?token=", secondContent.Content, StringComparison.Ordinal);
+            Assert.DoesNotContain("seg_0006", secondContent.Content, StringComparison.Ordinal);
+            Assert.DoesNotContain("seg_0674", secondContent.Content, StringComparison.Ordinal);
+            Assert.DoesNotContain("#EXT-X-ENDLIST", secondContent.Content, StringComparison.Ordinal);
+        }
+        finally
+        {
+            VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: false);
+        }
+    }
+
+    /// <summary>
+    /// Shared arrange of a LIVE episode encode over a planted cache directory
+    /// (the JF-778 device shape, parameterized): ffmpeg's own two-entry live
+    /// partial on disk, segment files seg_0000..seg_00{headSegmentCount-1} (the
+    /// encoded head), and the full prewrite for the given runtime. The JF-778
+    /// incident itself is head=7 at 1420.25s runtime (Sailor Moon R E054,
+    /// 2026-10-05 12:27: the "highest existing segment 7" log line and the
+    /// 356 x 3.989469s listing). Returns the item ID (for the controller and
+    /// the active-encode seam), the HLS dir (to advance the head mid-test), and
+    /// the prewrite path (to age the mtime, the window's growth anchor).
+    /// </summary>
+    private (string ItemIdStr, string HlsDir, string PrewritePath) PlantLiveEncodeFixture(
+        string episodeName, int headSegmentCount, TimeSpan runtime)
+    {
+        Guid itemId = Guid.NewGuid();
+        string itemIdStr = itemId.ToString("D");
+        var episode = new MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = episodeName,
+            Id = itemId,
+            RunTimeTicks = runtime.Ticks
+        };
+        _libraryManagerMock.Setup(m => m.GetItemById(itemId)).Returns(episode);
+
+        string hlsDir = _cache.GetHlsDirectoryPath(itemIdStr, 0);
+        Directory.CreateDirectory(hlsDir);
+
+        File.WriteAllText(
+            Path.Combine(hlsDir, "stream.m3u8"),
+            "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:4.000,\nseg_0000.ts\n#EXTINF:4.000,\nseg_0001.ts\n");
+        for (int i = 0; i < headSegmentCount; i++)
+        {
+            File.WriteAllBytes(Path.Combine(hlsDir, $"seg_{i:D4}.ts"), new byte[16]);
+        }
+
+        string prewritePath = Path.Combine(hlsDir, "playlist-full.m3u8");
+        VideoAudioController.WriteEpisodePlaylist(
+            prewritePath,
+            $"/alexaskill/api/video-audio/{itemIdStr}/segments/",
+            runtime.Ticks,
+            token: null);
+        return (itemIdStr, hlsDir, prewritePath);
+    }
+
+    /// <summary>
+    /// The REQUIRED RELATION between the JF-778 window floor and the JF-503 hold
+    /// lookahead (the floor const's doc): the floor's promise beyond the encode
+    /// head (floor - 1 entries) must stay within
+    /// <see cref="VideoAudioController.SegmentHoldLookahead"/>, or the listing
+    /// would promise entries that 404 past the hold's reach, the tail death the
+    /// window exists to prevent. A constants-only pin: retuning either number
+    /// without the other fails here instead of on a device.
+    /// </summary>
+    [Fact]
+    public void EpisodePrewriteWindowFloor_RespectsSegmentHoldLookahead()
+    {
+        Assert.True(
+            VideoAudioController.EpisodePrewriteWindowFloorSegments - 1 <= VideoAudioController.SegmentHoldLookahead,
+            $"EpisodePrewriteWindowFloorSegments ({VideoAudioController.EpisodePrewriteWindowFloorSegments}) promises floor-1 entries beyond the encode head; SegmentHoldLookahead ({VideoAudioController.SegmentHoldLookahead}) must cover them or the windowed listing 404s past the JF-503 hold");
+    }
+
+    /// <summary>
+    /// JF-778 core pin (the device failure, red on the unmodified tree): while the
+    /// episode encode is LIVE with its head at seg_0007, the prewrite serve must
+    /// NOT hand the player the full 356-entry listing. The Echo's ExoPlayer
+    /// resolves a no-ENDLIST playlist's default start at playlist end minus 3x
+    /// TARGETDURATION (media3 HlsMediaSource fallback; the incident's request was
+    /// seg_0353 = 1420.25s - 12s exactly), so the full listing makes the player's
+    /// FIRST fetch land on the un-encoded tail: 404 x3 within ~1-2s, playback dead
+    /// before the first frame. The windowed prefix (3 entries at prewrite age ~0:
+    /// the lead) puts the default start at segment 0 and every listed entry
+    /// inside the encoded head. RED PROOF (run before the fix landed, output in
+    /// the task notes): the unmodified serve returns all 356 entries
+    /// (seg_0353.ts?token= present), flipping the count assert to
+    /// expected 3 / actual 356.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_ColdEdgeEncode_ServesWindowedPrewritePrefix()
+    {
+        (string itemIdStr, _, string prewritePath) = PlantLiveEncodeFixture("JF-778 Cold Edge S01E01", headSegmentCount: 8, runtime: TimeSpan.FromSeconds(1420.25));
+
+        // Prewrite age ~0 (the mtime the production prewrite just wrote): the
+        // window is the 3-entry lead, well inside the head.
+        File.SetLastWriteTimeUtc(prewritePath, DateTime.UtcNow);
+
+        VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: true);
+        try
+        {
+            var controller = CreateController(itemIdStr, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf778-cold-edge"));
+
             ActionResult result = await controller.StreamHlsEpisode(itemIdStr);
 
             var content = Assert.IsType<ContentResult>(result);
-            // The already-appended segments stay listed, and the full runtime tail is
-            // there too, with no ENDLIST (encode still running).
+            // The windowed prefix: exactly the 3-entry lead, event shape intact.
+            Assert.Equal(3, VideoAudioController.CountSegmentsInPlaylist(content.Content));
             Assert.Contains("seg_0000.ts?token=", content.Content, StringComparison.Ordinal);
-            Assert.Contains("seg_0001.ts?token=", content.Content, StringComparison.Ordinal);
-            Assert.Contains("seg_0674.ts?token=", content.Content, StringComparison.Ordinal);
+            Assert.Contains("seg_0002.ts?token=", content.Content, StringComparison.Ordinal);
+            Assert.DoesNotContain("seg_0003", content.Content, StringComparison.Ordinal);
+            Assert.DoesNotContain("seg_0353", content.Content, StringComparison.Ordinal);
             Assert.DoesNotContain("#EXT-X-ENDLIST", content.Content, StringComparison.Ordinal);
+            Assert.Contains("#EXT-X-MEDIA-SEQUENCE:0", content.Content, StringComparison.Ordinal);
+            Assert.Contains("#EXT-X-TARGETDURATION:4", content.Content, StringComparison.Ordinal);
+        }
+        finally
+        {
+            VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: false);
+        }
+    }
+
+    /// <summary>
+    /// JF-778 growth + head-cap pin: the window grows with the prewrite's age
+    /// (one entry per 4s segment, the 1x playback pace that keeps the player
+    /// trailing the edge) but NEVER promises beyond the encoded head: at prewrite
+    /// age 40s the elapsed term (13) would list 13 entries while only 8 exist
+    /// (seg_0000..seg_0007), so the head cap holds the listing at 8 entries.
+    /// Asserting seg_0008's ABSENCE is the cap's red discriminator (an uncapped
+    /// window would promise the missing segment and reintroduce the tail 404).
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_WindowedPrewrite_GrowsWithElapsedAndCapsAtHead()
+    {
+        (string itemIdStr, _, string prewritePath) = PlantLiveEncodeFixture("JF-778 Window Growth S01E01", headSegmentCount: 8, runtime: TimeSpan.FromSeconds(1420.25));
+
+        File.SetLastWriteTimeUtc(prewritePath, DateTime.UtcNow.AddSeconds(-40));
+
+        VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: true);
+        try
+        {
+            var controller = CreateController(itemIdStr, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf778-growth"));
+
+            ActionResult result = await controller.StreamHlsEpisode(itemIdStr);
+
+            var content = Assert.IsType<ContentResult>(result);
+            Assert.Equal(8, VideoAudioController.CountSegmentsInPlaylist(content.Content));
+            Assert.Contains("seg_0007.ts?token=", content.Content, StringComparison.Ordinal);
+            Assert.DoesNotContain("seg_0008", content.Content, StringComparison.Ordinal);
+            Assert.DoesNotContain("seg_0353", content.Content, StringComparison.Ordinal);
+            Assert.DoesNotContain("#EXT-X-ENDLIST", content.Content, StringComparison.Ordinal);
+        }
+        finally
+        {
+            VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: false);
+        }
+    }
+
+    /// <summary>
+    /// JF-778 resume-beyond-window pin: a cold-cache resume whose position lies
+    /// past the grown window cannot be honored by a still-growing listing (the
+    /// JF-686 rule: slicing past the listed total yields a dead header-only
+    /// playlist), so the windowed serve DROPS the offset and serves from the
+    /// beginning, with the same Information-level drop log the song path's
+    /// cold-serve carries.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_WindowedPrewrite_ResumeBeyondWindow_DropsOffset()
+    {
+        (string itemIdStr, _, string prewritePath) = PlantLiveEncodeFixture("JF-778 Resume Beyond S01E01", headSegmentCount: 8, runtime: TimeSpan.FromSeconds(1420.25));
+
+        File.SetLastWriteTimeUtc(prewritePath, DateTime.UtcNow);
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Trace);
+            b.AddProvider(TestCaptureLogger.Into(logRecords));
+        });
+
+        VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: true);
+        try
+        {
+            var controller = CreateController(itemIdStr, loggerFactory, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf778-resume-beyond"));
+
+            ActionResult result = await controller.StreamHlsEpisode(itemIdStr, TimeSpan.FromMinutes(20).Ticks);
+
+            var content = Assert.IsType<ContentResult>(result);
+            // Unsliced from the beginning: segment 0 leads, no MEDIA-SEQUENCE shift.
+            Assert.Contains("seg_0000.ts?token=", content.Content, StringComparison.Ordinal);
+            Assert.Contains("#EXT-X-MEDIA-SEQUENCE:0", content.Content, StringComparison.Ordinal);
+            Assert.Contains(
+                TestCaptureLogger.Snapshot(logRecords),
+                r => r.Message.Contains("dropping the resume", StringComparison.Ordinal));
+        }
+        finally
+        {
+            VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: false);
+        }
+    }
+
+    /// <summary>
+    /// JF-778 resume-inside-window pin: a resume position INSIDE the grown window
+    /// still slices (the JF-499 W2 contract the prewrite serve carries). 1s into
+    /// the 1420.25s listing resolves to segment 1 (the builder's EXTINF walk:
+    /// cumulative 3.989s after segment 0 covers a 1s offset), so a 3-entry window
+    /// serves entries seg_0001..seg_0002 with MEDIA-SEQUENCE rebased to 1, and
+    /// the slice's ~8s duration keeps the live-edge default start at 0, i.e.
+    /// exactly the resume point.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_WindowedPrewrite_ResumeInsideWindow_SlicesWithinWindow()
+    {
+        (string itemIdStr, _, string prewritePath) = PlantLiveEncodeFixture("JF-778 Resume Inside S01E01", headSegmentCount: 8, runtime: TimeSpan.FromSeconds(1420.25));
+
+        File.SetLastWriteTimeUtc(prewritePath, DateTime.UtcNow);
+
+        VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: true);
+        try
+        {
+            var controller = CreateController(itemIdStr, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf778-resume-inside"));
+
+            ActionResult result = await controller.StreamHlsEpisode(itemIdStr, TimeSpan.FromSeconds(1).Ticks);
+
+            var content = Assert.IsType<ContentResult>(result);
+            Assert.DoesNotContain("seg_0000", content.Content, StringComparison.Ordinal);
+            Assert.Contains("seg_0001.ts?token=", content.Content, StringComparison.Ordinal);
+            Assert.Contains("seg_0002.ts?token=", content.Content, StringComparison.Ordinal);
+            Assert.DoesNotContain("seg_0003", content.Content, StringComparison.Ordinal);
+            Assert.Contains("#EXT-X-MEDIA-SEQUENCE:1", content.Content, StringComparison.Ordinal);
+            Assert.DoesNotContain("#EXT-X-ENDLIST", content.Content, StringComparison.Ordinal);
+        }
+        finally
+        {
+            VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: false);
+        }
+    }
+
+    /// <summary>
+    /// JF-778 mid-window resume pin (code-review F1's discriminator): a resume
+    /// position INSIDE the window but far from its edge is NOT honored, because a
+    /// sliced no-ENDLIST listing joins at its own live-edge default start (slice
+    /// end minus 3x TARGETDURATION), which would land minutes past the requested
+    /// position. The honor band is edge-within-LEAD; outside it the offset drops
+    /// (JF-686 rule) and playback starts at 0. Shape: elapsed 40s grows the window
+    /// to 8 entries; 8s resolves to segment 3; 8 - 3 = 5 entries from the edge,
+    /// beyond the 3-entry lead, so the serve must be unsliced from segment 0 with
+    /// the drop log.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_WindowedPrewrite_MidWindowResume_OutsideHonorBand_DropsOffset()
+    {
+        (string itemIdStr, _, string prewritePath) = PlantLiveEncodeFixture("JF-778 Mid Window S01E01", headSegmentCount: 8, runtime: TimeSpan.FromSeconds(1420.25));
+
+        File.SetLastWriteTimeUtc(prewritePath, DateTime.UtcNow.AddSeconds(-40));
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Trace);
+            b.AddProvider(TestCaptureLogger.Into(logRecords));
+        });
+
+        VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: true);
+        try
+        {
+            var controller = CreateController(itemIdStr, loggerFactory, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf778-mid-window"));
+
+            ActionResult result = await controller.StreamHlsEpisode(itemIdStr, TimeSpan.FromSeconds(8).Ticks);
+
+            var content = Assert.IsType<ContentResult>(result);
+            // Unsliced from the beginning: the resume band did not cover segment 3
+            // of an 8-entry window.
+            Assert.Contains("seg_0000.ts?token=", content.Content, StringComparison.Ordinal);
+            Assert.Contains("#EXT-X-MEDIA-SEQUENCE:0", content.Content, StringComparison.Ordinal);
+            Assert.Contains("seg_0007.ts?token=", content.Content, StringComparison.Ordinal);
+            Assert.Contains(
+                TestCaptureLogger.Snapshot(logRecords),
+                r => r.Message.Contains("outside the encode window's honor band", StringComparison.Ordinal));
         }
         finally
         {
@@ -8319,14 +8612,28 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
-    /// JF-499 W2, the watch-item scenario: the SELF-HEAL RE-ENCODE over interrupted
-    /// debris honors ?start=. The served pre-written full listing is sliced at the
-    /// resume position instead of restarting the timeline from 0:00.
+    /// JF-499 W2, the watch-item scenario, re-shaped by JF-778: the SELF-HEAL
+    /// RE-ENCODE over interrupted debris carries ?start=16s, but the fresh
+    /// encode's window (2-entry floor, head at seg_0000) cannot honor the
+    /// position, and the pre-JF-778 behavior (slicing the FULL pre-write at
+    /// 16s) was itself the live-edge death shape on device: the sliced listing
+    /// is a no-ENDLIST playlist spanning [16s..45min], so the player's default
+    /// start landed on its un-encoded END and 404'd. The serve now DROPS the
+    /// offset with the JF-686 still-growing log and plays from 0; the position
+    /// resumes on the next warm serve (the ENDLIST cache-hit slice, pinned by
+    /// StreamHlsEpisode_CacheHit_WithStart_ServesSlicedPlaylist above).
     /// </summary>
     [Fact]
-    public async Task StreamHlsEpisode_SelfHealReencode_WithStart_ServesSlicedFullListing()
+    public async Task StreamHlsEpisode_SelfHealReencode_WithStart_BeyondWindowDropsOffset()
     {
         var (episode, mediaSourceManager) = SetupEpisodeForHls("Interrupted S01E01", "h264", TimeSpan.FromMinutes(45));
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Trace);
+            b.AddProvider(TestCaptureLogger.Into(logRecords));
+        });
 
         // Debris of an interrupted encode: live-looking playlist (no ENDLIST), no
         // active flag.
@@ -8337,18 +8644,19 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             "#EXTM3U\n#EXTINF:4.000,\nseg_0000.ts\n");
 
         var controller = CreateController(
-            episode.Id.ToString(), null, mediaSourceManager, WriteRecordingFakeFfmpeg("fake-ffmpeg-jf499-selfheal"));
+            episode.Id.ToString(), loggerFactory, mediaSourceManager, WriteRecordingFakeFfmpeg("fake-ffmpeg-jf499-selfheal"));
 
         ActionResult result = await controller.StreamHlsEpisode(episode.Id.ToString(), 16 * TimeSpan.TicksPerSecond);
 
         var content = Assert.IsType<ContentResult>(result);
-        // The re-encode's full listing (675 segments for 45min) sliced at 16s / 4s:
-        Assert.Contains("seg_0004.ts?token=", content.Content, StringComparison.Ordinal);
-        Assert.Contains("seg_0674.ts?token=", content.Content, StringComparison.Ordinal);
-        Assert.DoesNotContain("seg_0003.ts", content.Content, StringComparison.Ordinal);
-        Assert.DoesNotContain("seg_0000", content.Content, StringComparison.Ordinal);
-        Assert.Contains("#EXT-X-MEDIA-SEQUENCE:4", content.Content, StringComparison.Ordinal);
+        // The re-encode's windowed listing, UNSLICED from segment 0:
+        Assert.Contains("seg_0000.ts?token=", content.Content, StringComparison.Ordinal);
+        Assert.Contains("#EXT-X-MEDIA-SEQUENCE:0", content.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("seg_0674", content.Content, StringComparison.Ordinal);
         Assert.DoesNotContain("#EXT-X-ENDLIST", content.Content, StringComparison.Ordinal);
+        Assert.Contains(
+            TestCaptureLogger.Snapshot(logRecords),
+            r => r.Message.Contains("dropping the resume", StringComparison.Ordinal));
     }
 
     // ---- W3: fast-path FileNotFoundException race ----
