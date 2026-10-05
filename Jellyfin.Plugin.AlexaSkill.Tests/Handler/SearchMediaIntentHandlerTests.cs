@@ -415,12 +415,15 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
     /// pre-check is the fuzzy pass's sibling song auto-play, one branch later. The
     /// tribute-band shape ('Bitoruzu Tribute Act' covers the verbatim keyword but
     /// widens the title far past the length band, score 85 below the near-exact
-    /// leg) is refused: the honest MediaNotFound rather than a fall-through into
-    /// HandleFuzzyMiss, whose >= 90 auto-accept would play the very item the bar
-    /// just refused.
+    /// leg) is refused. JF-777 superseded the refusal's OUTCOME: the pre-check is
+    /// now the refuse-and-continue walk, so the refused tribute is removed (never
+    /// played and never offered, the load-bearing JF-654 invariant) and the flow
+    /// falls through to the survivors' ask exactly as a withheld pick does; the
+    /// former honest MediaNotFound was the refuse-and-STOP collateral, kept only
+    /// for the walked-out pool (no survivors at all).
     /// </summary>
     [Fact]
-    public async Task HandleAsync_KanaQuery_TopMatchFullCoverage_NoEvidence_HonestNotFound()
+    public async Task HandleAsync_KanaQuery_TopMatchFullCoverage_NoEvidence_NeverPlaysOrOffersTheRefusedPick()
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest(query: "ビートルズ");
@@ -441,9 +444,10 @@ public class SearchMediaIntentHandlerTests : PluginTestBase
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
         Assert.NotNull(response);
-        Assert.True(response.Response.ShouldEndSession == true, "the honest outcome is the MediaNotFound Tell");
+        Assert.True(response.Response.ShouldEndSession != true, "the walk falls through to the survivors' ask (the pre-JF-777 MediaNotFound was the refuse-and-stop collateral)");
         Assert.True(response.Response.Directives?.All(d => d is not AudioPlayerPlayDirective) != false,
             "the full-coverage tribute pick must never auto-play for a kana-origin query without collision evidence");
+        Assert.DoesNotContain("Bitoruzu Tribute Act", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

@@ -59,8 +59,15 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// seam), the album bars' head-check refusal converted to the JF-412
 /// refuse-and-continue walk (a refused suffixed sibling no longer shadows an
 /// exact match listed after it), and the band's strip helper taught the
-/// full-width parenthetical pair. The song-side single-point kana bars keep
-/// their refuse-and-stop shape for now (tracked as JF-777); the cold-window
+/// full-width parenthetical pair. JF-777 converted the remaining SONG- and
+/// PLAYLIST-side single-point refuse-and-stop bars to the same walk
+/// (TrySongFallback's scored-chain head, SearchMedia's full-coverage pre-check,
+/// and the playlist fuzzy fallback's head-check, the last riding
+/// SearchItemsFuzzyAsync's acceptanceBar). Still single-point by design: the
+/// ARTIST-side acceptance gates (PlayArtistSongs' end-of-chain JF-652 bar,
+/// which composes with the JF-377/JF-420 gates above it, and the
+/// PassesArtistMatchAcceptance album/artist arms), whose refusals name a
+/// different candidate shape and carry their own keep-reasons; the cold-window
 /// database divergence above stands unchanged.
 /// </summary>
 internal static class KatakanaRomanizer

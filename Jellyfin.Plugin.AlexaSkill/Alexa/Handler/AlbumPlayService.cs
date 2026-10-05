@@ -899,19 +899,37 @@ public sealed class AlbumPlayService
 
         if (playlists.TotalRecordCount == 0)
         {
-            var fuzzy = await _search.SearchItemsFuzzyAsync(playlistName, jellyfinUser, user, libraryManager, new[] { BaseItemKind.Playlist }, cancellationToken, "PlayPlaylistFuzzyFallback", locale: locale).ConfigureAwait(false);
             // JF-663: the kana bar at the fuzzy fallback's single acceptance point.
             // A kana-origin query whose romaji plain-fuzzy scored into the default
             // bar (the containment floor scores exactly 90) would play silently with
             // no real length-banded Double Metaphone collision, the wrong-accept
-            // class the JF-652 family bars; the refusal converts the hit into the
-            // honest miss below.
-            if (fuzzy != null && kana && !PassesKanaOriginPlaylistAcceptance(playlistName, fuzzy.Value.Item))
+            // class the JF-652 family bars. JF-777: the bar rides the fuzzy pick as
+            // the acceptance predicate of the JF-776 B1 refuse-and-continue walk
+            // (SearchItemsFuzzyAsync's optional bar, the FindBestNonEmbeddedMatch
+            // idiom) instead of a post-pick refuse-and-stop, which shadowed the
+            // exact playlist behind a suffixed sibling the scan listed first (the
+            // pick's containment-class early exit is order-dependent, the JF-427
+            // note); the walk's refusal log replaces this site's former line. The
+            // query codes encode ONCE and only when armed (the encode-once idiom).
+            Func<BaseItem, bool>? playlistBar = null;
+            if (kana)
             {
-                _logger.LogInformation(
-                    "PlayPlaylist: kana bar armed={Kana} refused the fuzzy fallback hit for spoken='{SpokenName}' romanized='{Query}': playlist '{PlaylistName}' has no length-banded Double Metaphone collision, treating as a miss (JF-663)",
-                    kana, spokenName, playlistName, fuzzy.Value.Item.Name);
-                fuzzy = null;
+                var queryCodes = DoubleMetaphone.Encode(playlistName);
+                playlistBar = p => PassesKanaOriginPlaylistAcceptance(queryCodes, playlistName.Length, p);
+            }
+
+            var fuzzy = await _search.SearchItemsFuzzyAsync(playlistName, jellyfinUser, user, libraryManager, new[] { BaseItemKind.Playlist }, cancellationToken, "PlayPlaylistFuzzyFallback", locale: locale, acceptanceBar: playlistBar).ConfigureAwait(false);
+            if (kana && fuzzy == null)
+            {
+                // The walk's own lines name each refused candidate (romanized query
+                // + display name); this site line adds the SPOKEN form, which only
+                // the caller holds, so an operator correlating by the utterance
+                // from the voice history still finds the miss (the pre-JF-777
+                // refusal line's correlation, kept as a Debug leg because the
+                // walk's Information lines are the refusal surface).
+                _logger.LogDebug(
+                    "PlayPlaylist: kana fuzzy fallback found no playlist (refused by the bar, below threshold, or no candidates) for spoken='{SpokenName}' romanized='{Query}' (JF-663/JF-777)",
+                    spokenName, playlistName);
             }
 
             if (fuzzy != null)

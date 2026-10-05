@@ -231,30 +231,61 @@ public class SearchMediaIntentHandler : BaseHandler
         // (ScoringName): the coverage pre-check below and the kana bar's plain
         // score are already reading-side aware (the JF-755 TitleTokens union /
         // ScoringTokens), so only this leg was raw.
-        BaseItem? topMatch = Search.FuzzyMatch(query, deduped, i => Util.KeywordMatcher.ScoringName(i.Name), user);
-        // JF-526 (JF-508 sibling): this site-level pre-check returns before
-        // HandleFuzzyMiss, so the short-query full-coverage gate must be applied here
-        // too; a gated miss falls into HandleFuzzyMiss below, whose Confirm mode asks
-        // the yes/no "did you mean" prompt.
-        if (topMatch != null && KeywordMatcher.HasFullKeywordCoverage(KeywordMatcher.Tokenize(query, locale), topMatch.Name, locale))
+        // JF-777: the kana bar rides the pre-check as the JF-776 B1
+        // refuse-and-continue walk (the album arms' pattern): a refused pick is
+        // removed from the result list and the FuzzyMatch re-runs on the
+        // remainder, so a suffixed sibling listed before the exact song no
+        // longer shadows it. A coverage-WITHHELD pick still falls through to
+        // HandleFuzzyMiss below (the JF-526 gate's own outcome); only the BAR
+        // refusal walks. The removal is also the fall-through's filter: a
+        // refused bait must not ride into HandleFuzzyMiss, whose >= 90
+        // auto-accept would play the very item the bar just refused (the
+        // pre-fix refusal comment's doctrine), and a walked-out list is the
+        // honest not-found for the same reason. The bar's query codes encode
+        // once and only when armed (the encode-once idiom the codes-carried
+        // overloads document).
+        Func<BaseItem, double, bool>? songBar = null;
+        if (kanaOrigin)
         {
+            var queryCodes = DoubleMetaphone.Encode(query);
+            songBar = (song, score) => Util.SongIndexSearch.PassesKanaOriginSongAcceptance(queryCodes, query.Length, song, score);
+        }
+
+        var queryTokens = KeywordMatcher.Tokenize(query, locale);
+        while (true)
+        {
+            BaseItem? topMatch = Search.FuzzyMatch(query, deduped, i => Util.KeywordMatcher.ScoringName(i.Name), user);
+            // JF-526 (JF-508 sibling): this site-level pre-check returns before
+            // HandleFuzzyMiss, so the short-query full-coverage gate must be applied here
+            // too; a gated miss falls into HandleFuzzyMiss below, whose Confirm mode asks
+            // the yes/no "did you mean" prompt.
+            if (topMatch == null || !KeywordMatcher.HasFullKeywordCoverage(queryTokens, topMatch.Name, locale))
+            {
+                break;
+            }
+
             // JF-654 review round 2: the full-coverage pre-check is a song
             // auto-play on this handler (the fuzzy pass's sibling, one branch
-            // later); a kana-origin query takes the same shared bar. A refusal is
-            // the honest not-found rather than a fall-through into
-            // HandleFuzzyMiss, whose >= 90 auto-accept would play the very item
-            // the bar just refused.
-            var topScored = KeywordMatcher.Score(new[] { topMatch }, KeywordMatcher.Tokenize(query, locale), locale);
+            // later); a kana-origin query takes the same shared bar.
+            var topScored = KeywordMatcher.Score(new[] { topMatch }, queryTokens, locale);
             double topScore = topScored.Count > 0 ? topScored[0].Score : 0;
-            if (!kanaOrigin || Util.SongIndexSearch.PassesKanaOriginSongAcceptance(query, topMatch, topScore))
+            if (songBar == null || songBar(topMatch, topScore))
             {
                 Logger.LogInformation("Fuzzy match hit '{Item}' — auto-playing", topMatch.Name);
                 return await PlayItem(topMatch, user, session, context, request, locale, jellyfinUser).ConfigureAwait(false);
             }
 
             Logger.LogInformation(
-                "Fuzzy match hit '{Item}' for kana-origin query '{Query}' carries no length-banded Double Metaphone collision or near-exact score, honest not-found (JF-654)",
+                "Fuzzy match hit '{Item}' for kana-origin query '{Query}' carries no length-banded Double Metaphone collision or near-exact score, skipping and walking down the ranking (JF-654/JF-777)",
                 topMatch.Name, query);
+            deduped.Remove(topMatch);
+        }
+
+        if (deduped.Count == 0)
+        {
+            Logger.LogInformation(
+                "Every full-coverage fuzzy pick for kana-origin query '{Query}' was refused by the kana bar, honest not-found (JF-654/JF-777)",
+                query);
             return ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale));
         }
 
@@ -265,7 +296,31 @@ public class SearchMediaIntentHandler : BaseHandler
             best => new List<(Guid, string)> { (best.Id, FormatWithTypeLabel(best)) },
             DisambiguationHelper.MediaTypeSong,
             locale,
-            best => PlayItem(best, user, session, context, request, locale, jellyfinUser),
+            async best =>
+            {
+                // JF-777 code review CR1: the AutoPlay disjunct bypasses the
+                // coverage gate, so a pick that only that disjunct can reach
+                // (a partial-coverage survivor an AutoPlay user opted into)
+                // never met the pre-check's bar; judge it here so the bar
+                // protects the exemption exactly as the sibling walk inside
+                // SearchItemsFuzzyAsync does. A refused pick answers the
+                // honest not-found (the pre-check doctrine); a bar-passing
+                // pick plays normally.
+                if (songBar != null)
+                {
+                    var delegateScored = KeywordMatcher.Score(new[] { best }, queryTokens, locale);
+                    double delegateScore = delegateScored.Count > 0 ? delegateScored[0].Score : 0;
+                    if (!songBar(best, delegateScore))
+                    {
+                        Logger.LogInformation(
+                            "AutoPlay pick '{Item}' for kana-origin query '{Query}' carries no length-banded Double Metaphone collision or near-exact score, honest not-found (JF-654/JF-777)",
+                            best.Name, query);
+                        return ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale));
+                    }
+                }
+
+                return await PlayItem(best, user, session, context, request, locale, jellyfinUser).ConfigureAwait(false);
+            },
             user: user,
             context: context,
             request: request,
@@ -273,7 +328,11 @@ public class SearchMediaIntentHandler : BaseHandler
 
         if (missOutcome != FuzzyMissOutcome.NotFound)
         {
-            Logger.LogInformation("Fuzzy miss outcome: {Outcome}", missOutcome);
+            // JF-777 gate-marker F4: the delegate may return a MediaNotFound Tell
+            // from inside the auto-accept path (a bar-refused AutoPlay pick); the
+            // outcome enum still reads SuggestionHandled for that shape - correlate
+            // with the bar's refusal Debug line, not this label alone.
+            Logger.LogInformation("Fuzzy miss outcome: {Outcome} (bar-refused not-found logs as SuggestionHandled, JF-777 F4)", missOutcome);
             return missResponse!;
         }
 

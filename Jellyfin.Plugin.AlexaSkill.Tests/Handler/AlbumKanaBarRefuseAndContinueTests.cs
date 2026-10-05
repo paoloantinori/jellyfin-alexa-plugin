@@ -198,5 +198,22 @@ public class AlbumKanaBarRefuseAndContinueTests : PluginTestBase, IDisposable
         Assert.False(AlbumPlayService.PassesKanaOriginAlbumAcceptance(RomajiReading, widened));
     }
 
+    [Fact]
+    public void AlbumKanaBar_MixedWidthParentheticalPairs_Strip_JF777()
+    {
+        // The JF-777 addendum's mixed-form pin: the B2 helper's cut is the LAST
+        // OPENER OF EITHER FORM, so a half-width open with a full-width close
+        // (and the mirror) still strips (taggers mix the pairs), and a
+        // form-paired-only cut would leave the suffix and fail the band. Both
+        // directions land on the reading core 'yorunikakeru' (band 0,
+        // identical codes) and collide exactly like the matched-pair forms in
+        // the matrix above.
+        var halfOpen = new MusicAlbum { Name = "ヨルニカケル(デラックス）", Id = Guid.NewGuid() };
+        Assert.True(AlbumPlayService.PassesKanaOriginAlbumAcceptance(RomajiReading, halfOpen));
+
+        var fullOpen = new MusicAlbum { Name = "ヨルニカケル（デラックス)", Id = Guid.NewGuid() };
+        Assert.True(AlbumPlayService.PassesKanaOriginAlbumAcceptance(RomajiReading, fullOpen));
+    }
+
     public void Dispose() => _fx.LoggerFactory.Dispose();
 }
