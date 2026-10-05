@@ -294,6 +294,27 @@ public class KeywordMatcherTests
         Assert.NotEmpty(result);
     }
 
+    // ─── JF-773: the string-shaped reading resolver (album reachability) ───
+
+    [Fact]
+    public void ScoringName_LatinOrNullName_IdenticalToRaw_JF773()
+    {
+        // Control: kana-free names keep the raw string (the resolver is the
+        // identity for them), so every Latin album surface is byte-identical;
+        // null maps to empty (the old selectors' null-forgiven Name).
+        Assert.Equal("Hotel California", KeywordMatcher.ScoringName("Hotel California"));
+        Assert.Equal(string.Empty, KeywordMatcher.ScoringName(null));
+        Assert.Equal(string.Empty, KeywordMatcher.ScoringName(string.Empty));
+    }
+
+    [Fact]
+    public void ScoringName_KanaName_ResolvesRomajiReading_JF773()
+    {
+        // The replacement, not a union: the reading the always-romanized album
+        // queries score against (the ScoringTokens semantics at the string level).
+        Assert.Equal("yorunikakeru", KeywordMatcher.ScoringName("ヨルニカケル"));
+    }
+
     // ─── Score: Keyword Coverage (all must match) ───────────────────────
 
     [Fact]

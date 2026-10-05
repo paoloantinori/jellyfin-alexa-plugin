@@ -132,13 +132,13 @@ internal static class SongIndexSearch
         // KeywordMatcher.ScoringTokens applies to the coverage scorers). On the
         // raw kana title the leg was structurally dead for kana-tagged songs: the
         // encoder has no kana arm (empty codes, never collides) and the length
-        // band compared kana characters against romaji characters. The generic
-        // title-collision helper and the ALBUM wrapper stay raw (albums have no
-        // romaji counterpart yet, tracked as JF-773).
+        // band compared kana characters against romaji characters. JF-773 moved
+        // the derivation into KeywordMatcher.ScoringName (the ONE string-shaped
+        // definition) and the ALBUM bar now resolves through it too.
         => PassesLengthBandedTitleCollision(
             queryCodes,
             romanizedQueryLength,
-            KatakanaRomanizer.TryRomanize(song.Name, out string? romaji) ? romaji : song.Name ?? string.Empty);
+            KeywordMatcher.ScoringName(song.Name));
 
     /// <summary>
     /// Title-generic form of the collision leg (JF-661): album names carry the
