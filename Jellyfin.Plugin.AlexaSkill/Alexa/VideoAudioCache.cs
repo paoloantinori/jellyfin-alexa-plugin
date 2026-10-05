@@ -345,11 +345,14 @@ public class VideoAudioCache
     /// generation's entry (the per-key slot's exposure the liveness-accepted
     /// serve row used to inherit), which is what lets the resolver's
     /// exclusive arm stay exclusive under an art change mid-watch.
-    /// GROWTH BOUND (accepted, JF-783 filed): entries are never removed, so
-    /// the map grows one small record per distinct encoded generation (every
-    /// art refresh mints a ticks); an evicted or deleted directory leaves an
-    /// inert entry (readers re-check existence). Removal belongs with the
-    /// eviction sweep's integration, out of JF-782's serve-path scope.
+    /// GROWTH BOUND (JF-783, closed): an entry now dies with its directory on
+    /// every deterministic delete in this class
+    /// (<see cref="UnregisterHlsGenerationDirectoryAt"/>), so the map is
+    /// bounded by the generations whose directories are still on disk plus
+    /// out-of-band deletions (an operator rm outside the plugin), whose
+    /// entries stay inert exactly as before (readers re-check existence).
+    /// The per-key twin keeps its accepted no-removal shape (one entry per
+    /// key, displaced by the next registration).
     /// </summary>
     private readonly ConcurrentDictionary<(string ItemId, long ArtModifiedTicks), string> _hlsGenerationDirLookup = new();
 
@@ -391,6 +394,53 @@ public class VideoAudioCache
     }
 
     /// <summary>
+    /// JF-783: drop the generation registration(s) whose registered directory
+    /// is <paramref name="dirPath"/>, the value-matched removal behind the
+    /// generation map's bounded-growth invariant. Called ONLY where the
+    /// directory itself was just successfully deleted: the eviction sweep's
+    /// directory arm, <see cref="CleanupHlsGenerationAt"/> (the debris
+    /// verdicts and the transient-root idle reaper, that root's ONLY delete
+    /// owners since the cap sweep skips the transient subtree), the manual
+    /// <see cref="Cleanup"/> wipe, and <see cref="CleanupHlsStubInDir"/>
+    /// (whose in-lock early-return serve branch would otherwise strand the
+    /// dead entry: a probe hit in the other root returns without ever
+    /// re-registering). Value-matched rather than key-derived because the
+    /// delete sites hold a directory PATH: deriving (key, ticks) back out of
+    /// the directory name would re-encode the name format a second time,
+    /// while the registered value is the authoritative path, root included
+    /// (at most one entry can match in practice, the directory name embeds
+    /// the key and the generation; the walk stays general).
+    /// REMOVAL CONTRACT: the guard re-checks the directory's existence at
+    /// removal time, so an entry is removed only while its directory is
+    /// gone; a directory RE-CREATED between the delete and this walk means a
+    /// live encode of the same generation has already re-registered it and
+    /// the removal skips it. The residual window is the straight-line gap
+    /// between that existence check and the remove on this thread, closable
+    /// only under the per-item lock the sweep's callers do not hold. The
+    /// TryRemove is the remove-if-value-matches overload on the OBSERVED
+    /// pair, so a concurrent re-registration under a DIFFERENT directory
+    /// (the JF-537.1 root switch between plays) is never swallowed either.
+    /// A reader-observability note: the map's only reader
+    /// (<see cref="TryGetRegisteredGenerationHlsDirectory"/>, which re-checks
+    /// Directory.Exists) answers identically before and after a removal that
+    /// obeys this contract. A FAILED delete never reaches this method: the
+    /// directory still exists and can still serve.
+    /// </summary>
+    /// <param name="dirPath">The just-deleted generation directory path.</param>
+    private void UnregisterHlsGenerationDirectoryAt(string dirPath)
+    {
+#pragma warning disable CA3003 // registered paths come from GUID-derived cache keys
+        foreach (KeyValuePair<(string ItemId, long ArtModifiedTicks), string> pair in _hlsGenerationDirLookup)
+        {
+            if (string.Equals(pair.Value, dirPath, StringComparison.Ordinal) && !Directory.Exists(dirPath))
+            {
+                _hlsGenerationDirLookup.TryRemove(pair);
+            }
+        }
+#pragma warning restore CA3003
+    }
+
+    /// <summary>
     /// Clean up a corrupt/partial HLS directory from a previous failed generation.
     /// Only called inside the per-item lock to avoid racing with active generation.
     /// Deletes the directory only if the playlist file is missing or empty (0 bytes),
@@ -413,7 +463,16 @@ public class VideoAudioCache
 
     /// <summary>
     /// The per-directory core of <see cref="CleanupHlsStub"/>: delete one
-    /// generation directory when its playlist is missing or empty.
+    /// generation directory when its playlist is missing or empty. JF-783: a
+    /// successful delete also drops the stub's generation registration. The
+    /// removal is NOT redundant with the caller's encode re-registering the
+    /// same (key, ticks): the in-lock early-return serve branch (a valid
+    /// playlist found in the other root returns without ever registering)
+    /// would strand the dead entry for the process lifetime (the code-review
+    /// F2 counterexample), and on the encode branch the fresh registration
+    /// lands moments later under the same ticks-scoped lock, so the removal
+    /// is merely overwritten (see
+    /// <see cref="UnregisterHlsGenerationDirectoryAt"/>).
     /// </summary>
     /// <param name="dirPath">The generation directory path (cache or transient root).</param>
     private void CleanupHlsStubInDir(string dirPath)
@@ -428,7 +487,11 @@ public class VideoAudioCache
         if (!File.Exists(playlistPath))
         {
             _logger.LogWarning("VideoAudio HLS: removing stale directory (no playlist): {Path}", dirPath);
-            try { Directory.Delete(dirPath, recursive: true); }
+            try
+            {
+                Directory.Delete(dirPath, recursive: true);
+                UnregisterHlsGenerationDirectoryAt(dirPath);
+            }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { _logger.LogDebug(ex, "Failed to delete stale HLS directory: {Path}", dirPath); }
             return;
         }
@@ -437,7 +500,11 @@ public class VideoAudioCache
         if (fi.Length == 0)
         {
             _logger.LogWarning("VideoAudio HLS: removing stub directory (empty playlist): {Path}", dirPath);
-            try { Directory.Delete(dirPath, recursive: true); }
+            try
+            {
+                Directory.Delete(dirPath, recursive: true);
+                UnregisterHlsGenerationDirectoryAt(dirPath);
+            }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { _logger.LogDebug(ex, "Failed to delete HLS stub directory: {Path}", dirPath); }
         }
 #pragma warning restore CA3003
@@ -743,6 +810,12 @@ public class VideoAudioCache
                 if (entry.IsDirectory)
                 {
                     Directory.Delete(entry.Path, recursive: true);
+
+                    // JF-783: the evicted generation's registration dies with its
+                    // directory (success-only, unlike the unconditional access-record
+                    // drop below: a failed delete leaves a live dir whose entry is
+                    // still the O(1) resolution of a servable generation).
+                    UnregisterHlsGenerationDirectoryAt(entry.Path);
                     _logger.LogDebug("Evicted HLS cache directory: {Path} ({SizeMB:F1}MB)", entry.Path, entry.Size / (1024.0 * 1024.0));
                 }
                 else
@@ -979,6 +1052,7 @@ public class VideoAudioCache
                 {
                     Directory.Delete(dir, recursive: true);
                     _lastAccessUtc.TryRemove(dir, out _);
+                    UnregisterHlsGenerationDirectoryAt(dir);
                     deleted++;
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -1021,7 +1095,10 @@ public class VideoAudioCache
     /// transient root. That is the deliberate trade for never deleting a live
     /// generation's directory. Deliberately does NOT touch the generation's flat
     /// <c>{itemId}_{ticks}.mp4</c> files: they are a different endpoint's
-    /// artifact and not the verdict's subject. Best-effort, same failure family
+    /// artifact and not the verdict's subject. Since JF-783 a successful delete
+    /// also drops the directory's generation registration (the bounded-growth
+    /// invariant's scoped-delete arm; the per-key slot keeps its accepted
+    /// no-removal shape). Best-effort, same failure family
     /// as <see cref="Cleanup"/> (logged, swallowed).
     /// </summary>
     /// <param name="dirPath">The one generation directory to remove.</param>
@@ -1033,6 +1110,7 @@ public class VideoAudioCache
             {
                 Directory.Delete(dirPath, recursive: true);
                 _lastAccessUtc.TryRemove(dirPath, out _);
+                UnregisterHlsGenerationDirectoryAt(dirPath);
                 _logger.LogDebug("Cleaned up HLS generation directory: {Path}", dirPath);
             }
         }
@@ -1354,6 +1432,15 @@ public class VideoAudioCache
             : null;
 #pragma warning restore CA3003
     }
+
+    /// <summary>
+    /// TEST SEAM (JF-783): the generation map's live entry count, WITHOUT the
+    /// existence re-check <see cref="TryGetRegisteredGenerationHlsDirectory"/>
+    /// applies. The bounded-growth pins must discriminate "the entry was
+    /// removed" from "the entry answers null only because its directory is
+    /// gone", which the reader cannot.
+    /// </summary>
+    internal int HlsGenerationRegistrationCount => _hlsGenerationDirLookup.Count;
 
     /// <summary>
     /// Whether the PER-KEY registration provably belongs to a FOREIGN
