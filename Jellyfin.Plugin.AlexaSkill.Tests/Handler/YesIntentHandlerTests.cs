@@ -10,6 +10,7 @@ using Alexa.NET.Assertions;
 using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Entities;
@@ -577,6 +578,168 @@ public class YesIntentHandlerTests : PluginTestBase
         Assert.NotNull(captured);
         Assert.True(captured!.IncludeItemTypes == null || captured.IncludeItemTypes.Length == 0,
             "PlayAlbum must use MediaTypes=Audio for the album/audiobook path, not IncludeItemTypes — AudioBook chapters are BaseItemKind.AudioBook and would be dropped.");
+        response.HasDirective<AudioPlayerPlayDirective>();
+    }
+
+    // ========== JF-767 Finding A: the confirmation paths route through the ONE builders ==========
+
+    /// <summary>
+    /// JF-767 Finding A pin: a confirmed MUSIC album's whole-album enumeration routes
+    /// through the ONE album-tracks builder (unpaged, session-user form) under the
+    /// JF-666 library scope, WITH the JF-338 AlbumIds retry, the same triple the
+    /// paged head (AlbumPlayService) runs, so a confirm answers exactly what the
+    /// direct ask plays: split albums PLAY instead of answering NoSongsInAlbum, and
+    /// the queue rows feed the JF-625 concat timeline the same field set the endpoint
+    /// encodes (IncludeItemTypes=Audio, not the old hand-kept MediaTypes drift pair).
+    /// Split-album server shape (empty ParentId pages, populated AlbumIds pages) so
+    /// BOTH arms issue. RED on the pre-JF-767 tree (verified): no retry issues
+    /// (captured == 1), the folder arm carries MediaTypes with no IncludeItemTypes,
+    /// and neither arm carries TopParentIds.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_AlbumType_MusicAlbumConfirm_SplitAlbum_RoutesThroughBuilderScopeAndRetry()
+    {
+        var albumId = Guid.NewGuid();
+        var musicLib = Guid.NewGuid();
+        var album = new MusicAlbum { Name = "Split Album", Id = albumId };
+        var song = new Audio { Name = "Tag-Linked Track", Id = Guid.NewGuid() };
+
+        _libraryManagerMock.Setup(lm => lm.GetItemById(albumId)).Returns(album);
+
+        var captured = new List<InternalItemsQuery>();
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Callback<InternalItemsQuery>(q => captured.Add(q))
+            .Returns((InternalItemsQuery q) =>
+                q.AlbumIds != null && q.AlbumIds.Contains(albumId)
+                    ? new List<BaseItem> { song }
+                    : new List<BaseItem>());
+
+        var user = TestHelpers.CreateTestUser(allowedLibraryIds: new[] { musicLib.ToString() });
+
+        var matchInfo = new DisambiguationHelper.MatchInfo { Id = albumId.ToString(), Name = "Split Album" };
+        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreateYesIntentRequest(),
+            CreateContext(),
+            user,
+            CreateSession(),
+            attrs,
+            CancellationToken.None);
+
+        // The JF-338 retry issued: folder arm (empty) then the AlbumIds arm (populated).
+        Assert.Equal(2, captured.Count);
+
+        // Folder arm: the builder's field set (kind, order, scope).
+        var folderArm = captured[0];
+        Assert.True(folderArm.Recursive);
+        Assert.Equal(new[] { Jellyfin.Data.Enums.BaseItemKind.Audio }, folderArm.IncludeItemTypes);
+        Assert.Equal(QueueContinuationFetcher.AlbumTrackOrder, folderArm.OrderBy);
+        Assert.Equal(albumId, folderArm.ParentId);
+        Assert.NotNull(folderArm.User);
+        Assert.Contains(musicLib, folderArm.TopParentIds);
+
+        // AlbumIds arm (the retry): same scope, membership scoping field.
+        var membershipArm = captured[1];
+        Assert.Equal(new[] { albumId }, membershipArm.AlbumIds);
+        Assert.Equal(new[] { Jellyfin.Data.Enums.BaseItemKind.Audio }, membershipArm.IncludeItemTypes);
+        Assert.Contains(musicLib, membershipArm.TopParentIds);
+
+        // The split album PLAYS on confirm (the direct ask already did, JF-338).
+        response.HasDirective<AudioPlayerPlayDirective>();
+    }
+
+    /// <summary>
+    /// The ternary's other leg (JF-767 Finding A): a NON-MusicAlbum parent confirmed
+    /// under the "album" label keeps the LOCAL MediaTypes=Audio initializer, the JF-361
+    /// kind discipline (AudioBook chapter children are BaseItemKind.AudioBook, which
+    /// the builder's IncludeItemTypes=Audio would drop). The fold must not collapse
+    /// this leg into the builder.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_AlbumType_NonMusicAlbumParent_KeepsLocalMediaTypesChapterLeg()
+    {
+        var folderId = Guid.NewGuid();
+        var folder = new Folder { Name = "Chapter Folder", Id = folderId };
+        var chapter = new Audio { Name = "Chapter 1", Id = Guid.NewGuid() };
+
+        _libraryManagerMock.Setup(lm => lm.GetItemById(folderId)).Returns(folder);
+
+        InternalItemsQuery? captured = null;
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Callback<InternalItemsQuery>(q => captured = q)
+            .Returns(new List<BaseItem> { chapter });
+
+        var matchInfo = new DisambiguationHelper.MatchInfo { Id = folderId.ToString(), Name = "Chapter Folder" };
+        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreateYesIntentRequest(),
+            CreateContext(),
+            TestHelpers.CreateTestUser(),
+            CreateSession(),
+            attrs,
+            CancellationToken.None);
+
+        Assert.NotNull(captured);
+        Assert.Equal(new[] { Jellyfin.Data.Enums.MediaType.Audio }, captured!.MediaTypes);
+        Assert.True(captured.IncludeItemTypes == null || captured.IncludeItemTypes.Length == 0,
+            "the non-MusicAlbum leg must keep MediaTypes=Audio (JF-361: AudioBook chapters are BaseItemKind.AudioBook)");
+        response.HasDirective<AudioPlayerPlayDirective>();
+    }
+
+    /// <summary>
+    /// JF-767 Finding A pin (the PlayBook twin): a confirmed AudioBook resolves its
+    /// chapters through the ONE audiobook chapters query
+    /// (<see cref="QueueContinuationFetcher.BuildAudiobookChaptersQuery"/>) under the
+    /// JF-666 library scope, the identical field set the hand-kept initializer
+    /// carried (modulo the now-explicit StartIndex=0) plus the scope filter the
+    /// tail's FetchAudiobookChapters already runs. RED on the pre-JF-767 tree
+    /// (verified): the captured query carries no TopParentIds and no StartIndex.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_AlbumType_AudioBookConfirm_ChaptersQueryRoutesThroughBuilderWithScope()
+    {
+        var bookId = Guid.NewGuid();
+        var bookLib = Guid.NewGuid();
+        var book = new AudioBook { Name = "Scoped Book", Id = bookId };
+        var chapter = new Audio { Name = "Chapter 1", Id = Guid.NewGuid() };
+
+        _libraryManagerMock.Setup(lm => lm.GetItemById(bookId)).Returns(book);
+
+        InternalItemsQuery? captured = null;
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Callback<InternalItemsQuery>(q => captured = q)
+            .Returns(new List<BaseItem> { chapter });
+
+        var user = TestHelpers.CreateTestUser(allowedLibraryIds: new[] { bookLib.ToString() });
+
+        var matchInfo = new DisambiguationHelper.MatchInfo { Id = bookId.ToString(), Name = "Scoped Book" };
+        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
+
+        var handler = CreateHandler();
+        var response = await handler.HandleAsync(
+            CreateYesIntentRequest(),
+            CreateContext(),
+            user,
+            CreateSession(),
+            attrs,
+            CancellationToken.None);
+
+        Assert.NotNull(captured);
+        // The builder's field set (MediaTypes discipline is deliberate for chapters).
+        Assert.Equal(new[] { Jellyfin.Data.Enums.MediaType.Audio }, captured!.MediaTypes);
+        Assert.Equal(bookId, captured.ParentId);
+        Assert.True(captured.Recursive);
+        Assert.Equal(0, captured.StartIndex);
+        Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), captured.Limit);
+        // The JF-666 scope the tail runs under (FetchAudiobookChapters parity).
+        Assert.Contains(bookLib, captured.TopParentIds);
         response.HasDirective<AudioPlayerPlayDirective>();
     }
 

@@ -164,9 +164,10 @@ public class PlayBookIntentHandler : BaseHandler
             }
         }
 
-        // Initial page through the ONE shared chapters-page query (JF-670): the
-        // continuation fetcher builds the same shape, so head and tail concatenate
-        // in one order and cannot drift apart.
+        // Initial page through the ONE shared chapters-page query's scoped sibling
+        // (JF-670; JF-767 joined the scope axis so head, confirm, and tail all run
+        // the same JF-666 pairing and cannot drift apart): the continuation fetcher
+        // and the YesIntent PlayBook confirm build the same shape.
         // JF-673: unknownTotalOnFallback because this page drives a pagination loop.
         // On NRE-class servers the page arrives through the GetItemList fallback,
         // whose honest total is UNKNOWN: a page-size total would read as "complete"
@@ -174,8 +175,9 @@ public class PlayBookIntentHandler : BaseHandler
         // truncate at this page exactly on the servers the NRE guard exists for.
         QueryResult<BaseItem> bookTracks = await RetryAsync(
             () => Search.SafeGetItemsResult(_libraryManager,
-                QueueContinuationFetcher.BuildAudiobookChaptersQuery(
-                    jellyfinUser, books[0].Id, 0, ProgressiveQueueConstants.GetInitialFetchSize()),
+                QueueContinuationFetcher.BuildScopedAudiobookChaptersQuery(
+                    jellyfinUser, user, _libraryManager, Logger, books[0].Id,
+                    startIndex: 0, limit: ProgressiveQueueConstants.GetInitialFetchSize()),
                 unknownTotalOnFallback: true),
             "GetBookTracks",
             cancellationToken).ConfigureAwait(false);

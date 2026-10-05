@@ -316,26 +316,27 @@ internal static class QueueContinuationFetcher
     /// class that bit the interaction-model docs (anti-pattern 11).
     /// JF-763 closed the former accepted boundary: the album-concat endpoint
     /// (VideoAudioController) also routes its two isMusicAlbum arms through this
-    /// shape via the unpaged, user-less form
-    /// (<see cref="BuildAlbumTracksQueryUnpaged"/>), so field set, arms, and order
-    /// are definitionally shared. RESIDUAL (accepted, filed as JF-767): the ROW SET
-    /// can still differ for a library-restricted user, because the endpoint is
-    /// deliberately user-less (no session user on the token-gated HTTP path) while
-    /// the paged path applies the plugin user's scope (JF-666/JF-763 head/tail
-    /// parity); the endpoint enumerates a superset there, which shifts the
-    /// seek-mode resume slice (AlbumPlayService sums the offset over its scoped
-    /// rows). The full fix threads the user scope through the JF-309 token.
+    /// shape via the unpaged form (<see cref="BuildAlbumTracksQueryUnpaged"/>),
+    /// so field set, arms, and order are definitionally shared. JF-767 closed the
+    /// row-set residual that JF-763 filed: the endpoint applies the library scope
+    /// the JF-309 token now carries (minted from the launching user's
+    /// AllowedLibraryIds at the URL builder), so the concat enumeration runs under
+    /// the SAME per-user scope the paged path applies (JF-666 parity) and the
+    /// seek-mode resume slice AlbumPlayService sums over its scoped rows lands on
+    /// the timeline the endpoint encodes. Tokens minted before that change (or by
+    /// an unrestricted user) carry no scope and keep enumerating unscoped, the
+    /// pre-JF-767 behavior.
     /// Deliberately IncludeItemTypes=Audio (the JF-358 discipline), unlike the
     /// audiobook builder's MediaTypes: a ParentId/AlbumIds query IS constrained by
     /// IncludeItemTypes and this shape returns the tracks in production. The
     /// scoping term is the ONE arm difference: ParentId = folder children,
     /// AlbumIds = membership by album tag (the split/malformed-folder retry,
     /// JF-338). Paging is the caller's (the head passes 0 +
-    /// GetInitialFetchSize, the tail StartIndex + BatchSize; the endpoint passes
-    /// none). The UNSELECTED scoping field stays at its constructor default: an
-    /// explicitly set ParentId on the membership arm (or AlbumIds on the folder
-    /// arm) would AND a second constraint into the server query and break the
-    /// retry's recovery.
+    /// GetInitialFetchSize, the tail StartIndex + BatchSize; the endpoint and the
+    /// YesIntent confirm pass none). The UNSELECTED scoping field stays at its
+    /// constructor default: an explicitly set ParentId on the membership arm (or
+    /// AlbumIds on the folder arm) would AND a second constraint into the server
+    /// query and break the retry's recovery.
     /// </summary>
     /// <param name="jellyfinUser">The query user (session scope).</param>
     /// <param name="albumId">The album ID, scoped by the chosen arm.</param>
@@ -345,8 +346,8 @@ internal static class QueueContinuationFetcher
     /// false for the folder arm (ParentId).</param>
     /// <returns>The query (executor and per-user library filtering differ by site:
     /// head and tail both apply ApplyLibraryFilter then SafeGetItemsResult, the
-    /// JF-763 head/tail scope parity; the unpaged endpoint form applies neither,
-    /// having no session user).</returns>
+    /// JF-763 head/tail scope parity; the unpaged endpoint form reads the scope
+    /// off the stream token instead, having no session user).</returns>
     internal static InternalItemsQuery BuildAlbumTracksQuery(
         Jellyfin.Database.Implementations.Entities.User? jellyfinUser,
         Guid albumId,
@@ -356,20 +357,49 @@ internal static class QueueContinuationFetcher
         => BuildAlbumTracksQueryCore(jellyfinUser, albumId, startIndex, limit, byAlbumIds);
 
     /// <summary>
-    /// The unpaged, user-less form of <see cref="BuildAlbumTracksQuery"/> for the
-    /// album-concat endpoint (VideoAudioController, JF-763): that HTTP path is
-    /// token-gated with no session user (User stays null) and enumerates the whole
-    /// album in one GetItemList call (paging stays null: fetch-all; null is the
-    /// SDK's no-paging value, NOT 0, which is Take(0) per JF-443). The row-set
+    /// The unpaged form of <see cref="BuildAlbumTracksQuery"/>: the album-concat
+    /// endpoint (VideoAudioController, JF-763) passes <c>jellyfinUser: null</c>
+    /// (that HTTP path is token-gated with no session user; its library scope now
+    /// arrives on the token, JF-767), while the YesIntent MusicAlbum confirm
+    /// (JF-767 Finding A) passes the session user. Enumerates the whole album in
+    /// one GetItemList call (paging stays null: fetch-all; null is the SDK's
+    /// no-paging value, NOT 0, which is Take(0) per JF-443). The row-set
     /// rationale and the field set live on the ONE core (see
     /// <see cref="BuildAlbumTracksQuery"/>'s doc).
     /// </summary>
+    /// <param name="jellyfinUser">The query user (session scope), or null on the
+    /// token-gated endpoint path.</param>
     /// <param name="albumId">The album ID, scoped by the chosen arm.</param>
     /// <param name="byAlbumIds">True for the JF-338 membership arm (AlbumIds),
     /// false for the folder arm (ParentId).</param>
     /// <returns>The unpaged query.</returns>
-    internal static InternalItemsQuery BuildAlbumTracksQueryUnpaged(Guid albumId, bool byAlbumIds)
-        => BuildAlbumTracksQueryCore(jellyfinUser: null, albumId, startIndex: null, limit: null, byAlbumIds);
+    internal static InternalItemsQuery BuildAlbumTracksQueryUnpaged(
+        Jellyfin.Database.Implementations.Entities.User? jellyfinUser,
+        Guid albumId,
+        bool byAlbumIds)
+        => BuildAlbumTracksQueryCore(jellyfinUser, albumId, startIndex: null, limit: null, byAlbumIds);
+
+    /// <summary>
+    /// The unpaged, session-user sibling of
+    /// <see cref="BuildScopedAlbumTracksQuery"/> (JF-767 Finding A): builds via
+    /// <see cref="BuildAlbumTracksQueryUnpaged"/> then applies
+    /// <c>Util.LibraryFilter.ApplyLibraryFilter</c> in the same call, so the
+    /// JF-666 scope pairing is structural at the YesIntent MusicAlbum confirm the
+    /// same way it is at every paged site (a hand-repeated two-line convention a
+    /// sixth site can forget). The executors stay at the callers.
+    /// </summary>
+    internal static InternalItemsQuery BuildScopedAlbumTracksQueryUnpaged(
+        Jellyfin.Database.Implementations.Entities.User? jellyfinUser,
+        AlexaSkill.Entities.User? pluginUser,
+        ILibraryManager libraryManager,
+        ILogger logger,
+        Guid albumId,
+        bool byAlbumIds)
+    {
+        InternalItemsQuery query = BuildAlbumTracksQueryUnpaged(jellyfinUser, albumId, byAlbumIds);
+        Util.LibraryFilter.ApplyLibraryFilter(query, pluginUser, libraryManager, logger);
+        return query;
+    }
 
     /// <summary>
     /// The ONE field-set owner both album-tracks entry points share (paged and
@@ -442,6 +472,28 @@ internal static class QueueContinuationFetcher
             Limit = limit
         };
 
+    /// <summary>
+    /// The scoped sibling of <see cref="BuildAudiobookChaptersQuery"/> (JF-767 Finding A):
+    /// builds the chapters query then applies <c>Util.LibraryFilter.ApplyLibraryFilter</c>
+    /// in the same call, the same structural pairing
+    /// <see cref="BuildScopedAlbumTracksQuery"/> gives the album shape (one definition of
+    /// the JF-666 pairing instead of a hand-repeated two-line convention per site). The
+    /// executors stay at the callers.
+    /// </summary>
+    internal static InternalItemsQuery BuildScopedAudiobookChaptersQuery(
+        Jellyfin.Database.Implementations.Entities.User? jellyfinUser,
+        AlexaSkill.Entities.User? pluginUser,
+        ILibraryManager libraryManager,
+        ILogger logger,
+        Guid bookId,
+        int startIndex,
+        int limit)
+    {
+        InternalItemsQuery query = BuildAudiobookChaptersQuery(jellyfinUser, bookId, startIndex, limit);
+        Util.LibraryFilter.ApplyLibraryFilter(query, pluginUser, libraryManager, logger);
+        return query;
+    }
+
     private static IReadOnlyList<BaseItem> FetchAudiobookChapters(
         QueueContinuation continuation,
         ILibraryManager libraryManager,
@@ -450,18 +502,19 @@ internal static class QueueContinuationFetcher
         ILogger logger)
     {
         // Shared builder with PlayBookIntentHandler's initial page (JF-670): one query
-        // shape owns head and tail, see the builder's doc.
-        InternalItemsQuery query = BuildAudiobookChaptersQuery(
+        // shape owns head and tail, see the builder's doc. The scoped sibling carries
+        // the JF-666 pairing structurally (JF-767): the book folder itself was resolved
+        // under the same filter at PlayBook time, so its chapters cannot be scoped out;
+        // the parity matters for restricted-library accounts, not for this folder's row
+        // membership.
+        InternalItemsQuery query = BuildScopedAudiobookChaptersQuery(
             jellyfinUser,
+            pluginUser,
+            libraryManager,
+            logger,
             continuation.ParentId ?? Guid.Empty,
             continuation.StartIndex,
             continuation.BatchSize);
-
-        // Same per-user library scope the other continuation fetchers run under
-        // (JF-666 parity). The book folder itself was resolved under the same filter
-        // at PlayBook time, so its chapters cannot be scoped out; the parity matters
-        // for restricted-library accounts, not for this folder's row membership.
-        Util.LibraryFilter.ApplyLibraryFilter(query, pluginUser, libraryManager, logger);
 
         // Shared executor guard (JF-670 review): the initial page runs this same
         // query through SearchService.SafeGetItemsResult; head and tail share the

@@ -731,6 +731,10 @@ public sealed class AlbumPlayService
         // position is not carried in this first cut: playback resumes at the resume
         // track's beginning, matching the AudioPlayer queue behavior of starting the
         // queue at startIndex).
+        // JF-767 Finding B: this prefix sums over the SCOPED row set (JF-666/JF-763
+        // head scope), and the launch below mints the concat URL whose token carries
+        // this user's library scope, so the endpoint encodes the SAME scoped timeline
+        // this offset counts on (the former unscoped-superset residual, closed).
         long albumStartTicks = albumItems.Take(startIndex).Sum(i => i.RunTimeTicks ?? 0);
         // The seek-mode tracker path's in-track partial (tracked - prefix at the resume
         // track): added so a warm-cache slice lands mid-track where listening stopped.

@@ -3483,7 +3483,7 @@ public class VideoAudioController : ControllerBase
             return BadRequest(new { error = "Unsupported playback rate" });
         }
 
-        ActionResult? tokenError = ValidateStreamToken(itemId);
+        ActionResult? tokenError = ValidateStreamToken(itemId, out _);
         if (tokenError != null)
         {
             return tokenError;
@@ -3535,7 +3535,7 @@ public class VideoAudioController : ControllerBase
             return BadRequest(new { error = "Invalid parentId format" });
         }
 
-        ActionResult? tokenError = ValidateStreamToken(parentId);
+        ActionResult? tokenError = ValidateStreamToken(parentId, out Guid[]? tokenLibraryScope);
         if (tokenError != null)
         {
             return tokenError;
@@ -3571,12 +3571,12 @@ public class VideoAudioController : ControllerBase
         bool isMusicAlbum = parent is MediaBrowser.Controller.Entities.Audio.MusicAlbum;
 
         // JF-763: both isMusicAlbum arms route through the ONE album-tracks builder's
-        // unpaged, user-less form (BuildAlbumTracksQueryUnpaged; the row-set rationale
+        // unpaged form (BuildAlbumTracksQueryUnpaged; the row-set rationale
         // lives on the builder's doc). The audiobook arm keeps its local initializer:
         // AudioBook chapters are a different kind discipline with NO AlbumTrackOrder
         // (the DB order IS the chapter order).
         var childrenQuery = isMusicAlbum
-            ? Alexa.QueueContinuationFetcher.BuildAlbumTracksQueryUnpaged(parentGuid, byAlbumIds: false)
+            ? Alexa.QueueContinuationFetcher.BuildAlbumTracksQueryUnpaged(jellyfinUser: null, parentGuid, byAlbumIds: false)
             : new InternalItemsQuery
             {
                 ParentId = parentGuid,
@@ -3585,6 +3585,25 @@ public class VideoAudioController : ControllerBase
                 DtoOptions = new DtoOptions(true)
             };
 
+        // JF-767 Finding B: the enumeration runs under the library scope the token
+        // carries (both shapes: album tracks and audiobook chapters; row-neutral for
+        // legitimately launched content since the parent was found under the same
+        // scope, and the audiobook tail already scopes the same way). The scope rides
+        // as raw config ids and is resolved ONCE per request here, with the SAME
+        // resolver every paged query uses (one cache; serve-time resolution matches
+        // what any current query would resolve), then applied to both arms through
+        // the pre-resolved overload. A legacy or unrestricted token carries no scope
+        // and enumerates unscoped, byte-identical to the pre-JF-767 behavior.
+        // RESIDUAL (accepted, filed as JF-784): the scope governs the LIVE
+        // enumeration only; the shared concat CACHE is keyed by (parentId,
+        // artModifiedTicks) with no scope component, so a cache entry encoded under a
+        // different scope is served unchanged to a scoped request (the cross-user or
+        // config-changed shapes; the resume slice then lands on the cached timeline).
+        Guid[]? tokenTopParents = tokenLibraryScope is null
+            ? null
+            : Alexa.Util.LibraryFilter.ResolveTopParentIds(tokenLibraryScope, _libraryManager, _logger);
+        Alexa.Util.LibraryFilter.ApplyLibraryFilter(childrenQuery, tokenTopParents);
+
         IReadOnlyList<MediaBrowser.Controller.Entities.BaseItem> chapters =
             _libraryManager.GetItemList(childrenQuery);
 
@@ -3592,14 +3611,12 @@ public class VideoAudioController : ControllerBase
         // resolve in AlbumPlayService via an AlbumIds fallback; the endpoint's
         // ParentId-only query would 404 the very URL that service launched. Mirror
         // the fallback so both sides resolve a split album through the SAME arm
-        // pair. For a library-restricted user the endpoint's rows are a SUPERSET of
-        // the scoped paged path's (this endpoint is user-less by design; the
-        // seek-mode resume residual that leaves is filed as JF-767, see
-        // BuildAlbumTracksQuery's doc).
+        // pair, under the SAME token scope as the primary arm.
         if (chapters.Count == 0 && isMusicAlbum)
         {
-            chapters = _libraryManager.GetItemList(
-                Alexa.QueueContinuationFetcher.BuildAlbumTracksQueryUnpaged(parentGuid, byAlbumIds: true));
+            var albumIdsRetryQuery = Alexa.QueueContinuationFetcher.BuildAlbumTracksQueryUnpaged(jellyfinUser: null, parentGuid, byAlbumIds: true);
+            Alexa.Util.LibraryFilter.ApplyLibraryFilter(albumIdsRetryQuery, tokenTopParents);
+            chapters = _libraryManager.GetItemList(albumIdsRetryQuery);
         }
 
         if (chapters.Count == 0)
@@ -5024,7 +5041,7 @@ public class VideoAudioController : ControllerBase
             return BadRequest(new { error = "Invalid itemId format" });
         }
 
-        return ValidateStreamToken(itemId);
+        return ValidateStreamToken(itemId, out _);
     }
 
     /// <summary>
@@ -5034,9 +5051,15 @@ public class VideoAudioController : ControllerBase
     /// <see cref="StreamTokenSecretNotConfigured"/> on an empty secret, a 401 result on any
     /// token failure, or null when the request may proceed. Call after the GUID-format check
     /// (the token binds to the GUID).
+    /// JF-767 Finding B: the scope-reading out parameter carries the token's library scope
+    /// (null for the legacy / unrestricted two-field shape); only the concat enumeration
+    /// in <see cref="StreamHlsAudiobook"/> consumes it (resolved once per request there
+    /// and applied to both arms through the pre-resolved
+    /// <c>LibraryFilter.ApplyLibraryFilter(query, topParentIds)</c> overload).
     /// </summary>
-    private ActionResult? ValidateStreamToken(string itemId)
+    private ActionResult? ValidateStreamToken(string itemId, out Guid[]? allowedLibraryIds)
     {
+        allowedLibraryIds = null;
         string? secret = Plugin.Instance?.Configuration?.StreamTokenSecret;
         if (string.IsNullOrEmpty(secret))
         {
@@ -5044,7 +5067,7 @@ public class VideoAudioController : ControllerBase
         }
 
         string? token = HttpContext.Request.Query["token"];
-        if (!StreamTokenHelper.TryValidate(token, itemId, secret))
+        if (!StreamTokenHelper.TryValidate(token, itemId, secret, out allowedLibraryIds))
         {
             _logger.LogWarning("VideoAudio: rejected stream request for {ItemId} (missing/invalid/expired token)", itemId);
             return Unauthorized(new { error = "Invalid or expired stream token" });
