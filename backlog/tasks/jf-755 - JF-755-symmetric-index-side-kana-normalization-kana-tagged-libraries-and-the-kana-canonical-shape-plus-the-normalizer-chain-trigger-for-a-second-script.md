@@ -1,11 +1,13 @@
 ---
 id: JF-755
 title: >-
-  JF-755 - symmetric index-side kana normalization (kana-tagged libraries and the
-  kana-canonical shape) plus the normalizer-chain trigger for a second script
+  JF-755 - symmetric index-side kana normalization (kana-tagged libraries and
+  the kana-canonical shape) plus the normalizer-chain trigger for a second
+  script
 status: Done
 assignee: []
 created_date: '2026-10-04'
+updated_date: '2026-10-05 07:54'
 labels:
   - search
   - i18n
@@ -22,6 +24,7 @@ priority: low
 
 ## Description
 
+<!-- SECTION:DESCRIPTION:BEGIN -->
 Filed 2026-10-04 from the JF-645 split: items 1-3 of that filing (the remaining
 kana-reachable query sites, the genre-tier lift to SearchService, the vocabulary
 TTL cache) shipped as one coherent change; THIS task carries item 4 (symmetric
@@ -66,6 +69,7 @@ and Arabic (ar-SA) native-script values remain unmatched on every path. Nothing
 to build until a second script is actually needed; when it is, extract a
 normalizer-CHAIN shape (query-side script normalizers composed at the search
 choke points) rather than growing a parallel one-off per script.
+<!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
@@ -181,6 +185,7 @@ prescription for when one lands; nothing built.
 
 ## Final Summary
 
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
 DESIGN DECISION: SYMMETRIC INDEX-SIDE NORMALIZATION (option A). The
 kana-canonical-specific bar was rejected on mechanics, not taste: the
 'kuin'->Keane pick PASSES the JF-652 bar (real KN code collision), so the flag
@@ -233,3 +238,6 @@ the speech seam, the gate reading pair) + pa:reflect ALIGNED. Suites
 prediction held). Release --no-restore -warnaserror 0/0. NO deploy: index
 content and matcher layers only, no locale/model/speech surface; the DLL rides
 the orchestrator's wave.
+
+CLOSED 2026-10-05 by the orchestrator after the full cycle: merged into main (worker commit b3a2afd9 + orchestrator tail e6a30d9e, --no-ff; the gate-marker's seven axes PASS with the red proofs independently reproduced in a throwaway pre-change worktree and both full suites re-run green; its three low findings dispositioned: the stale comment applied, the benign tier-2 operand and the helper fold skipped with reasons), deployed in the final batched deploy. JF-773 filed by this task.
+<!-- SECTION:FINAL_SUMMARY:END -->
