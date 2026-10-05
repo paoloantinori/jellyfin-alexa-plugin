@@ -97,8 +97,11 @@ Evidence for fold-in over accepted-boundary: the endpoint's own pre-existing com
 (AlbumPlayService sums the resume offset against `AlbumTrackOrder` and the concat timeline encodes in it, so the
 encoded ROW SET must equal the paged queue's row set; that equality was hand-kept on 5 fields with only the ORDER
 constant shared), and the fold-in is behavior-identical because `StartIndex`/`Limit` are `int?` in the SDK (null =
-fetch-all, NOT `Limit=0` = Take(0), JF-443; proven by `q.StartIndex ?? 0` / `q.Limit ?? int.MaxValue` at
-SearchService.cs:114 and ProgressiveQueueTests.cs:2381) and `User = null` equals unset for the reference-typed
+fetch-all, NOT `Limit=0` = Take(0), JF-443; proven at the SDK source level,
+Jellyfin 10.11.8 BaseItemRepository.ApplyQueryPaging: Limit=0 is Take(0), null
+is no paging, the anchor recorded in BuildTrackCountQuery's doc at
+PlayAlbumIntentHandler.cs:812-814; the earlier plugin-side null-tolerance
+sites only show our own tolerance, not the SDK's behavior) and `User = null` equals unset for the reference-typed
 property. The ParentId arm's polymorphic kind switch stays endpoint-local as a ternary: the audiobook leg (AudioBook
 kind, NO AlbumTrackOrder) is a different kind discipline, the same declined class as the inventory below. Pins:
 `StreamHlsAudiobook_AlbumParent_BothArms_RouteThroughTheAlbumTracksBuilderUnpaged` (both arms field-for-field incl.

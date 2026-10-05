@@ -577,9 +577,9 @@ public sealed class AlbumPlayService
         // sets mid-album. Row-neutral otherwise: the filter no-ops for unrestricted
         // users and passes every folder child of an album the filtered search just
         // found (the tail's production shape since JF-666).
-        var tracksQuery = QueueContinuationFetcher.BuildAlbumTracksQuery(
-            jellyfinUser, album.Id, 0, ProgressiveQueueConstants.GetInitialFetchSize(), byAlbumIds: false);
-        Util.LibraryFilter.ApplyLibraryFilter(tracksQuery, user, libraryManager, _logger);
+        var tracksQuery = QueueContinuationFetcher.BuildScopedAlbumTracksQuery(
+            jellyfinUser, user, libraryManager, _logger, album.Id, 0,
+            ProgressiveQueueConstants.GetInitialFetchSize(), byAlbumIds: false);
         // JF-753: this page and the AlbumIds retry below drive the continuation
         // store gate, so the fallback total must be the sentinel
         // (unknownTotalOnFallback): a page-size total would read as "complete"
@@ -598,9 +598,9 @@ public sealed class AlbumPlayService
             // ignores folder structure. Verified on the malformed "Jazz Cafe" album:
             // ParentId+Recursive returns 0, AlbumIds returns all tracks. JF-338.
             _logger.LogDebug("{Label}: folder-based track query returned 0, retrying by AlbumIds for '{Name}'", logLabel, album.Name);
-            var albumIdsQuery = QueueContinuationFetcher.BuildAlbumTracksQuery(
-                jellyfinUser, album.Id, 0, ProgressiveQueueConstants.GetInitialFetchSize(), byAlbumIds: true);
-            Util.LibraryFilter.ApplyLibraryFilter(albumIdsQuery, user, libraryManager, _logger);
+            var albumIdsQuery = QueueContinuationFetcher.BuildScopedAlbumTracksQuery(
+                jellyfinUser, user, libraryManager, _logger, album.Id, 0,
+                ProgressiveQueueConstants.GetInitialFetchSize(), byAlbumIds: true);
             albumResult = await RetryAsync(
                 () => _search.SafeGetItemsResult(libraryManager, albumIdsQuery, unknownTotalOnFallback: true),
                 logLabel + ":GetAlbumTracksByAlbumIds",

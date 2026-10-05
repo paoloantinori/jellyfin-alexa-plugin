@@ -226,8 +226,8 @@ internal static class QueueContinuationFetcher
     {
         // Shared builder with the album head's first page (JF-757): one query shape
         // owns head and tail, both arms, see BuildAlbumTracksQuery's doc.
-        var query = BuildAlbumTracksQuery(
-            jellyfinUser,
+        var query = BuildScopedAlbumTracksQuery(
+            jellyfinUser, pluginUser, libraryManager, logger,
             continuation.ParentId ?? Guid.Empty,
             continuation.StartIndex,
             continuation.BatchSize,
@@ -236,7 +236,6 @@ internal static class QueueContinuationFetcher
         // Same per-user library scope the initial album fetch runs under
         // (AlbumPlayService.BuildAlbumQuery); without it a continuation batch
         // widens the scope to every library the Jellyfin account sees.
-        Util.LibraryFilter.ApplyLibraryFilter(query, pluginUser, libraryManager, logger);
 
         // Shared executor guard (the JF-670 head/tail contract the audiobook tail
         // already runs under, extended to the album tail by JF-753): the album head
@@ -268,19 +267,41 @@ internal static class QueueContinuationFetcher
             && (result.TotalRecordCount == 0
                 || (continuation.TotalCount == Util.SearchService.UnknownTotal && result.Items.Count == 0)))
         {
-            var albumIdsQuery = BuildAlbumTracksQuery(
-                jellyfinUser,
+            var albumIdsQuery = BuildScopedAlbumTracksQuery(
+                jellyfinUser, pluginUser, libraryManager, logger,
                 continuation.ParentId.Value,
                 continuation.StartIndex,
                 continuation.BatchSize,
                 byAlbumIds: true);
-            Util.LibraryFilter.ApplyLibraryFilter(albumIdsQuery, pluginUser, libraryManager, logger);
             result = Util.SearchService.SafeGetItemsResult(libraryManager, albumIdsQuery, logger);
         }
 
         // JF-753: the ONE advance-or-mark idiom (see AdvanceOrMarkExhausted).
         AdvanceOrMarkExhausted(continuation, result.Items.Count);
         return result.Items;
+    }
+
+    /// <summary>
+    /// The ONE scoped album-tracks page builder (JF-763 gate-marker): builds via
+    /// <see cref="BuildAlbumTracksQuery"/> then applies
+    /// <c>Util.LibraryFilter.ApplyLibraryFilter</c> in the same call, so
+    /// the JF-666 head/tail scope-parity pairing is structural at every paged
+    /// site instead of a hand-repeated two-line convention a fifth site can
+    /// forget. The executors stay at the callers (RetryAsync wrap vs direct).
+    /// </summary>
+    internal static InternalItemsQuery BuildScopedAlbumTracksQuery(
+        Jellyfin.Database.Implementations.Entities.User? jellyfinUser,
+        AlexaSkill.Entities.User? pluginUser,
+        ILibraryManager libraryManager,
+        ILogger logger,
+        Guid albumId,
+        int startIndex,
+        int limit,
+        bool byAlbumIds)
+    {
+        InternalItemsQuery query = BuildAlbumTracksQuery(jellyfinUser, albumId, startIndex, limit, byAlbumIds);
+        Util.LibraryFilter.ApplyLibraryFilter(query, pluginUser, libraryManager, logger);
+        return query;
     }
 
     /// <summary>
