@@ -44,7 +44,7 @@ The Echo's ExoPlayer treats the prewrite's no-ENDLIST playlist as LIVE and
 resolves its default start position at playlist end minus the live target
 offset, whose fallback is 3 x TARGETDURATION (media3
 HlsMediaSource.getLiveWindowDefaultStartPositionUs: startOffset else
-durationUs + liveEdgeOffsetUs - targetOffsetMs, with getTargetLiveOffsetUs
+durationUs + liveEdgeOffsetUs; targetOffsetMs, with getTargetLiveOffsetUs
 falling back to 3 x targetDuration absent SERVER-CONTROL; no PROGRAM-DATE-TIME
 => liveEdgeOffsetUs = 0). The device numbers match the arithmetic to the
 segment: 356 entries x 3.989469s = 1420.25s; 1420.25 - 12 = 1408.25s; seg_0353
@@ -81,7 +81,7 @@ report: 6-min bar, playback near the end), reintroduced for the whole encode
 window. REJECTED as the sole shape; kept as the growth MECHANISM inside (c).
 
 (c) HYBRID: keep the prewrite file as the URL/token source of truth, but SERVE
-IT WINDOWED while the encode is live - a time-anchored growing window whose
+IT WINDOWED while the encode is live; a time-anchored growing window whose
 edge never leaves the encoded region:
 K = max(FLOOR=2, min(head + 1, elapsedSegments + LEAD=3)) entries listed,
 elapsed anchored on the prewrite file's LastWriteTimeUtc (written per encode
@@ -97,7 +97,7 @@ encode completes, the existing cache-hit path serves ffmpeg's ENDLIST playlist
 and the player's live refresh lands on the full-runtime VOD (full seekbar, all
 segments present). COST, accepted deliberately: the full-runtime seekbar during
 the encode window is given up (it is unattainable: any no-ENDLIST listing that
-spans the runtime puts the default start at its end - the contradiction that
+spans the runtime puts the default start at its end; the contradiction that
 killed tonight's play), and seeks during the encode are bounded by the grown
 window rather than the encoded head. CHOSEN.
 
@@ -149,7 +149,7 @@ the same three-404 death, the window applies to those serves as the follow-up.
 <!-- NOTES:BEGIN -->
 2026-10-05: implemented as designed (shape c). TryServePrewrittenEpisodePlaylist
 now reads the prewrite once, computes K = max(2, min(head + 1, elapsedSegments +
-3)) with elapsed = UtcNow - prewrite.LastWriteTimeUtc and head from the
+3)) with elapsed = UtcNow; prewrite.LastWriteTimeUtc and head from the
 prewrite's own directory (root-agnostic), truncates the listing to the first K
 segment entries when the full listing is longer, and threads the windowed
 content through ServeEpisodePlaylistAsync as preloadedContent (one read per
@@ -164,20 +164,20 @@ pin is StreamHlsEpisode_ColdEdgeEncode_ServesWindowedPrewritePrefix plus the
 growth/head-cap, resume-drop, and resume-inside-window pins.
 
 RED RUN (unmodified tree, both TFMs, 2026-10-05): all four new pins failed with
-the full-listing serve - ColdEdgeEncode "Expected: 3 / Actual: 356",
+the full-listing serve; ColdEdgeEncode "Expected: 3 / Actual: 356",
 GrowsWithElapsedAndCapsAtHead "Expected: 8 / Actual: 356", the two resume pins
 failing on the sliced/dropped-shape asserts. Post-fix: 4/4 green both TFMs,
 and the full VideoAudioControllerTests class 279/279 both TFMs.
 
 GATES. /simplify (4 parallel agents, reuse/simplification/efficiency/altitude):
-applied - the stale GetHighestSegmentNumber hot-path doc, the windowed-predicate
+applied; the stale GetHighestSegmentNumber hot-path doc, the windowed-predicate
 dedupe, the device-narrative consolidation into the method doc, the
 PlantLiveEncodeFixture parameterization (adopted by the mid-encode pin, killing
 the inline arrange twin), the TruncateToFirstSegments move into
 AudiobookPlaylistBuilder next to its slice twin with the ONE IsSegmentUriLine
 predicate extraction (was the 4th inline copy), and the
 EpisodePrewriteWindowFloor_RespectsSegmentHoldLookahead relation pin. Skipped
-with reasons - the two-log merge (the "serving pre-written full listing"
+with reasons; the two-log merge (the "serving pre-written full listing"
 wording is the JF-680/JF-681 branch-attribution contract), the fixed-shape
 truncation (bakes the generator's 1:1 EXTINF:URI invariant; the general walk
 is 12 lines), the pre-emptive window-helper extraction (the extract-at-second-
@@ -215,7 +215,7 @@ TruncateToFirstSegments unit pins).
 ## Final Summary
 
 <!-- FINAL_SUMMARY:BEGIN -->
-CHOSEN SHAPE: (c) hybrid - the prewrite file stays the full-listing source of
+CHOSEN SHAPE: (c) hybrid; the prewrite file stays the full-listing source of
 truth, but while the encode is live the serve lists only a time-anchored
 growing window (floor 2 entries, +1 entry per 4s, capped at head+1, anchored on
 the prewrite's mtime), so the player's live-edge default start (playlist end -
@@ -256,3 +256,5 @@ DEVICE RETEST LIST for Paolo (AC#7):
 - [x] #9 /simplify passed
 - [x] #10 /code-review high passed
 <!-- DOD:END -->
+
+CLOCK-STEP NOTE (the JF-778 gate-marker F2): the window growth anchor is a wall-clock difference (UtcNow minus the prewrite mtime), so a BACKWARD clock step mid-encode (an NTP correction) makes prewriteAge negative, zeroes the growth term, and collapses the window to the floor 2-3 entries; the attached player current segment drops from the listing. The forward-touch variant is the code-review F5 degrade note; this self-inflicted variant is documented here. Neither is engineered; both ride the twins-adoption extraction trigger.

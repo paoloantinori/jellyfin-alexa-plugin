@@ -4605,11 +4605,12 @@ public class VideoAudioController : ControllerBase
         for (int i = 0; i < lines.Length; i++)
         {
             string line = lines[i].TrimEnd('\r');
-            // Segment URI lines (non-tag, contain seg_, end with .ts). Handles both bare filenames
-            // (seg_NNNN.ts) and full URLs (/alexaskill/.../segments/seg_NNNN.ts) — ffmpeg writes
-            // the latter via -hls_base_url. Mirrors AudiobookPlaylistBuilder's line-matching shape.
-            if (!line.StartsWith('#') && line.Length > 0
-                && line.Contains("seg_", StringComparison.Ordinal)
+            // Segment URI lines: the shared core delegates to the ONE predicate
+            // (Alexa.Playback.AudiobookPlaylistBuilder.IsSegmentUriLine, the contract
+            // extracted in JF-778) with the two token-injection-local conditions kept
+            // here (the .ts tail and the not-already-tokened guard); no second
+            // drift-prone copy (the JF-778 gate-marker F5).
+            if (Alexa.Playback.AudiobookPlaylistBuilder.IsSegmentUriLine(line)
                 && line.EndsWith(".ts", StringComparison.Ordinal)
                 && !line.Contains("?token="))
             {
