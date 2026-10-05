@@ -13,6 +13,7 @@ using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler.Intent;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Entities;
@@ -161,6 +162,85 @@ public class PlaylistEditIntentHandlerTests : PluginTestBase
         SkillResponse response = await CreateAddCurrent().HandleAsync(
             CreateRequest(IntentNames.AddCurrentToPlaylist, new() { ["playlist"] = "road trip" }),
             new Context(), CreateUser(), session: null!, CancellationToken.None);
+
+        Assert.Contains("playing", GetSpeech(response), StringComparison.OrdinalIgnoreCase);
+        VerifyAddItemNever();
+    }
+
+    /// <summary>
+    /// JF-627: the family rides the resolver's full displacement arbitration. During
+    /// a VideoApp movie launch, "add this to playlist X" must add the DISPLACED
+    /// movie (what is actually playing), exactly as "repeat this" and "rate this"
+    /// resolve it, not the stale pre-launch AudioPlayer token item the family's
+    /// former token+session-only shape resolved. RED on the pre-JF-627 tree (the
+    /// add carried SongId, the stale token item; the ledger was never read).
+    /// </summary>
+    [Fact]
+    public async void AddCurrent_VideoAppDisplacement_AddsDisplacedLedgerItem_JF627()
+    {
+        var movieId = Guid.NewGuid();
+        _libraryManagerMock.Setup(l => l.GetItemById(movieId))
+            .Returns(new MediaBrowser.Controller.Entities.Movies.Movie { Name = "Displacing Movie", Id = movieId });
+
+        var ledger = TestHelpers.CreateDeviceQueueManager("playlist-edit-jf627-ledger");
+        ledger.RecordLastPlayed("playlist-edit-jf627-ledger", movieId.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        using var _ = TestHelpers.SwapPluginLedgerScope(_config, _loggerFactory, ledger, "playlist-edit-jf627");
+
+        await CreateAddCurrent().HandleAsync(
+            CreateRequest(IntentNames.AddCurrentToPlaylist, new() { ["playlist"] = "road trip" }),
+            TestHelpers.CreateContextWithToken(SongId.ToString(), "playlist-edit-jf627-ledger"), CreateUser(),
+            session: null!, CancellationToken.None);
+
+        VerifyAddItem(PlaylistId, id => id == movieId, Times.Once());
+    }
+
+    /// <summary>
+    /// The JF-627 production wiring leg: DI injects the singleton manager into
+    /// the handler's ctor, so the displacement arbitration runs through the
+    /// EXPLICIT manager (no Plugin.Instance fallback involved) exactly as
+    /// Repeat/RateItem's injected legs do.
+    /// </summary>
+    [Fact]
+    public async void AddCurrent_InjectedQueueManager_DisplacementArbitration_JF627()
+    {
+        var movieId = Guid.NewGuid();
+        _libraryManagerMock.Setup(l => l.GetItemById(movieId))
+            .Returns(new MediaBrowser.Controller.Entities.Movies.Movie { Name = "Injected Movie", Id = movieId });
+
+        var ledger = TestHelpers.CreateDeviceQueueManager("playlist-edit-injected-jf627");
+        ledger.RecordLastPlayed("playlist-edit-injected-jf627", movieId.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        var handler = new AddCurrentToPlaylistIntentHandler(
+            _playlistManagerMock.Object, _sessionManagerMock.Object, _config, _userManagerMock.Object,
+            _libraryManagerMock.Object, _loggerFactory, ledger);
+
+        await handler.HandleAsync(
+            CreateRequest(IntentNames.AddCurrentToPlaylist, new() { ["playlist"] = "road trip" }),
+            TestHelpers.CreateContextWithToken(SongId.ToString(), "playlist-edit-injected-jf627"), CreateUser(),
+            session: null!, CancellationToken.None);
+
+        VerifyAddItem(PlaylistId, id => id == movieId, Times.Once());
+    }
+
+    /// <summary>
+    /// The JF-627 idle guard (the JF-629 shape, this family's stateful-write
+    /// edition): with neither an AudioPlayer token nor any session now-playing
+    /// shape, the resolver's newly-armed unbounded ledger tail must NOT add the
+    /// idle device's days-old last-played item; the family keeps answering
+    /// NoMediaPlaying. Green on the pre-JF-627 tree (the ledger was off), RED on
+    /// the unified-without-guard intermediate (the add carried the stale id),
+    /// green with the guard.
+    /// </summary>
+    [Fact]
+    public async void AddCurrent_IdleDevice_DaysOldLedgerNotAdded_JF627()
+    {
+        var ledger = TestHelpers.CreateDeviceQueueManager("playlist-edit-idle-jf627");
+        ledger.RecordLastPlayed("playlist-edit-idle-jf627", SongId.ToString(), DeviceQueueManager.LaunchRoute.Audio);
+        using var _ = TestHelpers.SwapPluginLedgerScope(_config, _loggerFactory, ledger, "playlist-edit-idle-jf627");
+
+        SkillResponse response = await CreateAddCurrent().HandleAsync(
+            CreateRequest(IntentNames.AddCurrentToPlaylist, new() { ["playlist"] = "road trip" }),
+            TestHelpers.CreateTestContext("playlist-edit-idle-jf627"), CreateUser(),
+            session: null!, CancellationToken.None);
 
         Assert.Contains("playing", GetSpeech(response), StringComparison.OrdinalIgnoreCase);
         VerifyAddItemNever();

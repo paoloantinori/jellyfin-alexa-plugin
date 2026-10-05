@@ -745,6 +745,49 @@ internal static class TestHelpers
             manager, p => p.DeviceQueueManager, (p, v) => p.DeviceQueueManager = v);
 
     /// <summary>
+    /// JF-627: the ONE per-test Plugin.Instance ledger scope (the
+    /// EnsurePluginInstance + <see cref="SwapPluginQueueManager"/> + ResetInstance
+    /// ceremony the resolver-fallback tests need; hoisted on the third identical
+    /// copy, the JF-713 convention). Ensures the plugin instance (flag sync
+    /// intentionally inert: the ledger tests read no configuration), installs the
+    /// given ledger as the plugin's DeviceQueueManager, and on Dispose tears the
+    /// swap down then restores the NULL-INSTANCE baseline the PluginTestBase
+    /// classes start from, so ledger-off pins in the same class stay hermetic
+    /// regardless of test order.
+    /// </summary>
+    internal static IDisposable SwapPluginLedgerScope(
+        PluginConfiguration config,
+        ILoggerFactory loggerFactory,
+        DeviceQueueManager ledger,
+        string tempDirSuffix)
+    {
+        EnsurePluginInstance(config, loggerFactory, c => { }, tempDirSuffix);
+        IDisposable swap = SwapPluginQueueManager(ledger);
+        return new ResetInstanceOnDispose(swap);
+    }
+
+    /// <summary>The Dispose chain behind <see cref="SwapPluginLedgerScope"/>:
+    /// swap teardown first, then the null-instance baseline restore.</summary>
+    private sealed class ResetInstanceOnDispose : IDisposable
+    {
+        private readonly IDisposable _inner;
+
+        internal ResetInstanceOnDispose(IDisposable inner) => _inner = inner;
+
+        public void Dispose()
+        {
+            try
+            {
+                _inner.Dispose();
+            }
+            finally
+            {
+                Plugin.ResetInstance();
+            }
+        }
+    }
+
+    /// <summary>
     /// JF-633: the ONE Plugin.Instance.AudiobookPositionTracker swap scope (was ten
     /// method-level assign / restore-null / dispose finallys). Same shared-core
     /// contract as <see cref="SwapPluginQueueManager"/>: restore-before-dispose and

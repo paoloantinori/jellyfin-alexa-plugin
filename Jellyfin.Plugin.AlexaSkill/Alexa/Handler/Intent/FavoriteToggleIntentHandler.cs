@@ -42,7 +42,7 @@ public abstract class FavoriteToggleIntentHandler : BaseHandler
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
-    /// <param name="queueManager">The device queue manager owning the last-played ledger the shared resolver reads; null disables the ledger arms (no <c>Plugin.Instance</c> fallback).</param>
+    /// <param name="queueManager">The device queue manager owning the last-played ledger the shared resolver reads; null falls back to <c>Plugin.Instance</c>'s (JF-627).</param>
     protected FavoriteToggleIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,

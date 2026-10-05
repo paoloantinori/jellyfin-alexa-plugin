@@ -7,6 +7,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Entities;
@@ -30,6 +31,7 @@ public abstract class PlaylistEditHandlerBase : BaseHandler
     private protected readonly IPlaylistManager _playlistManager;
     private protected readonly IUserManager _userManager;
     private protected readonly ILibraryManager _libraryManager;
+    private readonly DeviceQueueManager? _queueManager;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PlaylistEditHandlerBase"/> class.
@@ -40,18 +42,21 @@ public abstract class PlaylistEditHandlerBase : BaseHandler
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
+    /// <param name="queueManager">The device queue manager owning the last-played ledger the shared resolver reads (JF-627); null falls back to <c>Plugin.Instance</c>'s (the classifier-half idiom).</param>
     protected PlaylistEditHandlerBase(
         IPlaylistManager playlistManager,
         ISessionManager sessionManager,
         PluginConfiguration config,
         IUserManager userManager,
         ILibraryManager libraryManager,
-        ILoggerFactory loggerFactory)
+        ILoggerFactory loggerFactory,
+        DeviceQueueManager? queueManager = null)
         : base(sessionManager, config, loggerFactory)
     {
         _playlistManager = playlistManager;
         _userManager = userManager;
         _libraryManager = libraryManager;
+        _queueManager = queueManager;
     }
 
     /// <summary>Gets the intent name for this handler.</summary>
@@ -146,15 +151,30 @@ public abstract class PlaylistEditHandlerBase : BaseHandler
     /// <summary>
     /// Resolves the currently playing item through the ONE shared resolver
     /// (<see cref="PlaybackLaunchBuilder.ResolveCurrentPlayingItem"/>, JF-626).
-    /// The one local fact: this family deliberately passes NO queue manager
-    /// (null disables the resolver's device-ledger arms), keeping its
-    /// token+session-only semantics.
+    /// JF-627 closed the accidental no-ledger divergence: the family now rides
+    /// the resolver's full displacement arbitration, so "add this to playlist X"
+    /// during a VideoApp launch resolves the displaced item exactly as "repeat
+    /// this" and "rate this" do, instead of the stale pre-launch AudioPlayer
+    /// token item.
+    /// The JF-629 idle guard runs FIRST (<see cref="PlaybackLaunchBuilder.HasCurrentPlaybackEvidence"/>,
+    /// the ONE predicate) because this family's write is stateful on "this is
+    /// playing now": the resolver's unbounded ledger tail must not add the idle
+    /// device's days-old last-played item where the pre-JF-627 code answered
+    /// NoMediaPlaying.
     /// </summary>
     /// <param name="context">The Alexa request context.</param>
     /// <param name="session">The Jellyfin session.</param>
     /// <returns>The library item, or null when nothing is resolvable.</returns>
     protected BaseItem? ResolveCurrentItem(Context? context, SessionInfo? session)
-        => Launch.ResolveCurrentPlayingItem(context, session, _libraryManager, queueManager: null);
+    {
+        if (!PlaybackLaunchBuilder.HasCurrentPlaybackEvidence(context, session))
+        {
+            Logger.LogDebug("PlaylistEdit ({IntentName}): idle device (no token, no session item), answering NoMediaPlaying", IntentName);
+            return null;
+        }
+
+        return Launch.ResolveCurrentPlayingItem(context, session, _libraryManager, _queueManager);
+    }
 
     /// <summary>
     /// Adds an item to a playlist across the two Jellyfin API lines: 12.0 added a

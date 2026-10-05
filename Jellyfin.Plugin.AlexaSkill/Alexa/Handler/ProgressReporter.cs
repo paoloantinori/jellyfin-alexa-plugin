@@ -767,7 +767,7 @@ public sealed class ProgressReporter
     /// <param name="mode">The repeat mode to apply.</param>
     /// <param name="label">Log label identifying the calling intent.</param>
     /// <param name="libraryManager">The caller's library manager (the medium classification and the resolver read it).</param>
-    /// <param name="queueManager">The caller's device queue manager (the last-played ledger); null disables the ledger arms.</param>
+    /// <param name="queueManager">The caller's device queue manager (the last-played ledger); null falls back to <c>Plugin.Instance</c>'s (JF-627).</param>
     /// <returns>The spoken repeat-mode confirmation Tell, the honest refusal Tell over a VideoApp-routed medium, or the no-media tell when nothing is playing.</returns>
     public async Task<SkillResponse> ApplyRepeatModeAsync(
         Request request,
