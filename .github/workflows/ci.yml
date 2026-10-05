@@ -26,12 +26,13 @@ jobs:
             9.0.x
             10.0.x
 
-      # ubuntu-latest runner images no longer ship ffmpeg, and several test
-      # fixtures mock IMediaEncoder.EncoderPath as /usr/bin/ffmpeg which the
-      # controller File.Exists-gates (ResolveFfmpegPath). Install it so the
-      # ambient-path tests resolve instead of 503-ing (CI divergence class,
-      # confirmed 2026-09-10 when the first bare-controller cache-hit tests
-      # failed only on CI).
+      # ubuntu-latest runner images no longer ship ffmpeg. Historically
+      # installed because test fixtures mocked IMediaEncoder.EncoderPath as
+      # /usr/bin/ffmpeg (ResolveFfmpegPath File.Exists-gates it); those mocks
+      # are all deleted (JF-765 sweep) and the full suite is verified green
+      # with no ffmpeg on PATH on both TFMs, so nothing NEEDS it today. Kept
+      # as a seatbelt for the CI divergence class (an ambient-path test that
+      # passes locally and reds only on CI, the 2026-09-10 incident).
       - name: Install ffmpeg
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
 
