@@ -471,7 +471,7 @@ public class VideoAudioCacheTests : PluginTestBase, IDisposable
         File.WriteAllBytes(Path.Combine(dir, "seg_0001.ts"), new byte[16]);
         File.WriteAllText(Path.Combine(dir, "encode-metadata.json"), "{}");
 
-        _cache.DeleteHlsEncodeDebris(itemId, 7);
+        _cache.DeleteHlsEncodeDebris(_cache.GetHlsDirectoryPath(itemId, 7));
 
         Assert.False(File.Exists(playlist), "the stale playlist must be gone so append_list starts from an empty target");
         Assert.False(File.Exists(Path.Combine(dir, "seg_0000.ts")), "stale segments must be gone");
@@ -484,7 +484,7 @@ public class VideoAudioCacheTests : PluginTestBase, IDisposable
     [Fact]
     public void DeleteHlsEncodeDebris_MissingDirectory_IsNoOp()
     {
-        _cache.DeleteHlsEncodeDebris("30303030-3333-3333-3333-333333333333", 7);
+        _cache.DeleteHlsEncodeDebris(_cache.GetHlsDirectoryPath("30303030-3333-3333-3333-333333333333", 7));
 
         // Reaching here without throwing IS the assertion.
     }
@@ -513,7 +513,7 @@ public class VideoAudioCacheTests : PluginTestBase, IDisposable
         File.SetAttributes(dir, FileAttributes.ReadOnly);
         try
         {
-            _cache.DeleteHlsEncodeDebris(itemId, 7);
+            _cache.DeleteHlsEncodeDebris(_cache.GetHlsDirectoryPath(itemId, 7));
 
             Assert.True(File.Exists(playlist), "Deletion was denied; the file survives");
             Assert.True(File.Exists(Path.Combine(dir, "seg_0000.ts")), "Deletion was denied; the file survives");
@@ -845,5 +845,181 @@ public class VideoAudioCacheTests : PluginTestBase, IDisposable
         {
             // Clean re-acquire after multiple cycles
         }
+    }
+
+    // --- JF-537.1: the transient root and its idle reaper ---
+
+    /// <summary>
+    /// Seed a transient-root generation directory (the oversize transcode
+    /// encode's target, JF-537.1) with a playlist and a segment, optionally
+    /// aging its mtimes past the reap TTL. Returns the directory path.
+    /// </summary>
+    private string SeedTransientGeneration(string itemId, long ticks, bool agePastTtl)
+    {
+        string dir = _cache.GetTransientHlsDirectoryPath(itemId, ticks);
+        Directory.CreateDirectory(dir);
+        string playlist = Path.Combine(dir, "stream.m3u8");
+        File.WriteAllText(playlist, "#EXTM3U\n#EXTINF:4.000,\nseg_0000.ts\n#EXT-X-ENDLIST\n");
+        File.WriteAllBytes(Path.Combine(dir, "seg_0000.ts"), new byte[16]);
+        if (agePastTtl)
+        {
+            // Age BOTH the directory and its files: the reaper's no-serve
+            // fallback reads the newest file write time.
+            DateTime old = DateTime.UtcNow - _cache.TransientIdleReapTtl - TimeSpan.FromMinutes(5);
+            File.SetLastWriteTimeUtc(playlist, old);
+            File.SetLastWriteTimeUtc(Path.Combine(dir, "seg_0000.ts"), old);
+            Directory.SetLastWriteTimeUtc(dir, old);
+        }
+
+        return dir;
+    }
+
+    /// <summary>
+    /// JF-537.1: the idle reaper (riding the eviction sweep) deletes a transient
+    /// directory idle beyond the TTL, keeps a fresh one, keeps a PINNED one (the
+    /// JF-428 in-flight-encode protection extends to the reaper), and never
+    /// touches the capped cache root's own entries.
+    /// </summary>
+    [Fact]
+    public async Task EvictIfNeeded_ReapsIdleTransientDir_KeepsFreshAndPinned_KeepsCacheRoot()
+    {
+        string oldDir = SeedTransientGeneration("11111111-1111-1111-1111-111111111111", 1, agePastTtl: true);
+        string freshDir = SeedTransientGeneration("22222222-2222-2222-2222-222222222222", 1, agePastTtl: false);
+        string pinnedDir = SeedTransientGeneration("33333333-3333-3333-3333-333333333333", 1, agePastTtl: true);
+        string cacheRootFile = _cache.GetCacheFilePath("44444444-4444-4444-4444-444444444444", 1);
+        Directory.CreateDirectory(Path.GetDirectoryName(cacheRootFile)!);
+        File.WriteAllText(cacheRootFile, "real cache entry");
+
+        _cache.Pin(pinnedDir);
+        try
+        {
+            await _cache.EvictIfNeeded();
+        }
+        finally
+        {
+            _cache.Unpin(pinnedDir);
+        }
+
+        Assert.False(Directory.Exists(oldDir), "an idle transient dir past the TTL must be reaped");
+        Assert.True(Directory.Exists(freshDir), "a fresh transient dir (inside the TTL) must survive");
+        Assert.True(Directory.Exists(pinnedDir), "a pinned transient dir (an in-flight encode) must never be reaped");
+        Assert.True(File.Exists(cacheRootFile), "the reaper must never touch the capped cache root");
+    }
+
+    /// <summary>
+    /// JF-537.1: a recorded SERVE beats stale file mtimes: a transient directory
+    /// whose files were aged past the TTL survives the sweep when its playlist
+    /// was just served (the playback-recency liveness signal, refreshed by every
+    /// playlist/segment fetch, is what an active watch keeps alive).
+    /// </summary>
+    [Fact]
+    public async Task EvictIfNeeded_RecentlyServedTransientDir_SurvivesDespiteStaleMtimes()
+    {
+        string dir = SeedTransientGeneration("55555555-5555-5555-5555-555555555555", 1, agePastTtl: true);
+
+        FileInfo? served = await _cache.GetCachedHlsPlaylist("55555555-5555-5555-5555-555555555555", 1);
+
+        Assert.NotNull(served);
+        Assert.Contains("transient", served!.FullName, StringComparison.Ordinal);
+        await _cache.EvictIfNeeded();
+        Assert.True(Directory.Exists(dir), "a served transient dir is being watched; recency must keep it alive past stale mtimes");
+    }
+
+    /// <summary>
+    /// JF-537.1: transient bytes NEVER count against the cap and are never
+    /// deleted by cap pressure: a cache root over the cap evicts its own entry,
+    /// while a multi-MB transient directory (fresh, inside the TTL) survives the
+    /// same sweep untouched. This is the invisibility the transient root exists
+    /// to give oversize encodes.
+    /// </summary>
+    [Fact]
+    public async Task EvictIfNeeded_TransientBytesNeverCount_CacheRootEvictsItsOwn()
+    {
+        int originalCap = Plugin.Instance!.Configuration.VideoAudioCacheSizeMB;
+        Plugin.Instance!.Configuration.VideoAudioCacheSizeMB = 1;
+        try
+        {
+            string cacheFile = _cache.GetCacheFilePath("66666666-6666-6666-6666-666666666666", 1);
+            Directory.CreateDirectory(Path.GetDirectoryName(cacheFile)!);
+            File.WriteAllBytes(cacheFile, new byte[1536 * 1024]); // 1.5MB: over the 1MB cap ALONE, so the sweep must evict it
+            // Age its atime past the playback-exemption window so the sweep may
+            // evict it (a fresh file's atime reads as recently served).
+            File.SetLastAccessTimeUtc(cacheFile, DateTime.UtcNow.AddHours(-2));
+
+            string transientDir = SeedTransientGeneration("77777777-7777-7777-7777-777777777777", 1, agePastTtl: false);
+            File.WriteAllBytes(Path.Combine(transientDir, "seg_0001.ts"), new byte[2 * 1024 * 1024]); // 2MB: over the cap, invisible
+
+            await _cache.EvictIfNeeded();
+
+            Assert.False(File.Exists(cacheFile), "the cache root is over its cap and must evict its own entry");
+            Assert.True(Directory.Exists(transientDir), "the transient root must survive the same sweep");
+            Assert.True(File.Exists(Path.Combine(transientDir, "seg_0001.ts")), "transient bytes must not be deleted by cap pressure");
+        }
+        finally
+        {
+            Plugin.Instance!.Configuration.VideoAudioCacheSizeMB = originalCap;
+        }
+    }
+
+    /// <summary>
+    /// JF-537.1: after a simulated restart (a fresh cache instance over the same
+    /// cache path, so the in-memory directory lookup is empty), segment
+    /// resolution still finds a transient generation through the scan fallback:
+    /// FindHlsDirectoryByScan scans the cache root, then the transient root.
+    /// </summary>
+    [Fact]
+    public void FindSegmentPath_AfterRestart_ScanFallbackFindsTransientDir()
+    {
+        string dir = SeedTransientGeneration("88888888-8888-8888-8888-888888888888", 3, agePastTtl: false);
+
+        var appPaths = new Mock<IApplicationPaths>();
+        appPaths.Setup(p => p.CachePath).Returns(_tempDir);
+        var restarted = new VideoAudioCache(appPaths.Object, _logger);
+
+        string? segmentPath = restarted.FindSegmentPath("88888888-8888-8888-8888-888888888888", "seg_0000.ts");
+
+        Assert.NotNull(segmentPath);
+        Assert.Equal(Path.Combine(dir, "seg_0000.ts"), segmentPath);
+    }
+
+    /// <summary>
+    /// JF-537.1: the cache root WINS a scan tie for a key with generations in
+    /// both roots (the preferred permanent home), and GetCachedHlsPlaylist
+    /// serves the cache-root playlist when both roots hold one.
+    /// </summary>
+    [Fact]
+    public async Task GetCachedHlsPlaylist_BothRootsExist_CacheRootWins()
+    {
+        string itemId = "99999999-9999-9999-9999-999999999999";
+        string cacheDir = _cache.GetHlsDirectoryPath(itemId, 1);
+        Directory.CreateDirectory(cacheDir);
+        await File.WriteAllTextAsync(Path.Combine(cacheDir, "stream.m3u8"), "#EXTM3U\ncache-root\n#EXT-X-ENDLIST\n");
+        _ = SeedTransientGeneration(itemId, 1, agePastTtl: false);
+
+        FileInfo? served = await _cache.GetCachedHlsPlaylist(itemId, 1);
+
+        Assert.NotNull(served);
+        Assert.Equal(Path.Combine(cacheDir, "stream.m3u8"), served!.FullName);
+    }
+
+    /// <summary>
+    /// JF-537.1: CleanupHlsGenerationAt (the verdict's scoped cleanup) deletes
+    /// EXACTLY the directory it is handed: a key with a live cache-root
+    /// generation and a debris transient generation loses only the transient
+    /// one when the verdict was served from there.
+    /// </summary>
+    [Fact]
+    public void CleanupHlsGenerationAt_DeletesExactlyTheGivenDir()
+    {
+        string itemId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+        string cacheDir = _cache.GetHlsDirectoryPath(itemId, 1);
+        Directory.CreateDirectory(cacheDir);
+        File.WriteAllText(Path.Combine(cacheDir, "stream.m3u8"), "#EXTM3U\n#EXT-X-ENDLIST\n");
+        string transientDir = SeedTransientGeneration(itemId, 1, agePastTtl: false);
+
+        _cache.CleanupHlsGenerationAt(transientDir);
+
+        Assert.False(Directory.Exists(transientDir), "the named transient dir is deleted");
+        Assert.True(Directory.Exists(cacheDir), "the same-key cache-root dir must survive the scoped cleanup");
     }
 }
