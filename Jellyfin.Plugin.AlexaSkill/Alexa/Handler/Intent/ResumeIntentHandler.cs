@@ -463,7 +463,7 @@ public class ResumeIntentHandler : BaseHandler
                 offset = ResumeMath.TicksToMs(DeviceQueueManager.ResolveResumeTicks(
                     _queueManager,
                     swapDeviceId,
-                    item_id!,
+                    launchedId.ToString(),
                     tokenUserData?.PlaybackPositionTicks ?? 0,
                     tokenUserData?.Played == true,
                     Logger,
