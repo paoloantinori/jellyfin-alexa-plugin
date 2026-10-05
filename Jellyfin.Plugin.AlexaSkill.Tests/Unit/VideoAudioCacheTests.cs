@@ -1022,11 +1022,25 @@ public class VideoAudioCacheTests : PluginTestBase, IDisposable
             ? _cache.GetHlsDirectoryPath(itemId, 1)
             : _cache.GetTransientHlsDirectoryPath(itemId, 1);
         Directory.CreateDirectory(registeredDir);
-        _cache.RegisterHlsDirectoryPath(itemId, registeredDir);
+        _cache.RegisterHlsDirectoryPath(itemId, 1, registeredDir);
 
         string[] resolved = _cache.ResolveHlsGenerationDirPaths(itemId, 1, ownGenerationLiveOrRegistering: true);
 
         Assert.Equal(new[] { registeredDir }, resolved);
+    }
+
+    /// <summary>
+    /// Plant a FOREIGN-ticks generation registration for the key (JF-782
+    /// arrange, extracted at the second copy): the transient-root dir of
+    /// ANOTHER generation of the same key, created and registered the way a
+    /// real foreign-ticks encode does. Returns the planted dir.
+    /// </summary>
+    private string PlantForeignGenerationRegistration(string itemId, long ticks = 999)
+    {
+        string foreignDir = _cache.GetTransientHlsDirectoryPath(itemId, ticks);
+        Directory.CreateDirectory(foreignDir);
+        _cache.RegisterHlsDirectoryPath(itemId, ticks, foreignDir);
+        return foreignDir;
     }
 
     /// <summary>
@@ -1040,9 +1054,7 @@ public class VideoAudioCacheTests : PluginTestBase, IDisposable
     public void ResolveHlsGenerationDirPaths_RegistrationForForeignGeneration_FallsBackToStaticOrder()
     {
         string itemId = "cccccccc-cccc-cccc-cccc-cccccccccccc";
-        string foreignDir = _cache.GetTransientHlsDirectoryPath(itemId, 999);
-        Directory.CreateDirectory(foreignDir);
-        _cache.RegisterHlsDirectoryPath(itemId, foreignDir);
+        string foreignDir = PlantForeignGenerationRegistration(itemId);
 
         string[] resolved = _cache.ResolveHlsGenerationDirPaths(itemId, 1, ownGenerationLiveOrRegistering: true);
 
@@ -1064,13 +1076,81 @@ public class VideoAudioCacheTests : PluginTestBase, IDisposable
         string itemId = "dddddddd-dddd-dddd-dddd-dddddddddddd";
         string transientDir = _cache.GetTransientHlsDirectoryPath(itemId, 1);
         Directory.CreateDirectory(transientDir);
-        _cache.RegisterHlsDirectoryPath(itemId, transientDir);
+        _cache.RegisterHlsDirectoryPath(itemId, 1, transientDir);
 
         string[] resolved = _cache.ResolveHlsGenerationDirPaths(itemId, 1, ownGenerationLiveOrRegistering: false);
 
         Assert.Equal(
             new[] { _cache.GetHlsDirectoryPath(itemId, 1), transientDir },
             resolved);
+    }
+
+    /// <summary>
+    /// JF-782 leg 3 resolver rule (the generation-scoped arm): a concurrent
+    /// FOREIGN-ticks encode's registration displaces the PER-KEY slot (the
+    /// art-change-mid-flight shape) while the caller's own generation is fully
+    /// live; the exclusive arm reads the (key, ticks) generation entry the
+    /// foreign registration cannot touch, so the own generation's registered
+    /// dir still answers EXCLUSIVELY. On the per-key-reading resolver this
+    /// exact state fell back to the static order (rule 2's shape over a live
+    /// own slot), which is the exposure the controller-level pin red-proved.
+    /// </summary>
+    [Fact]
+    public void ResolveHlsGenerationDirPaths_ForeignPerKeyOverwrite_OwnGenerationEntryStillExclusive()
+    {
+        string itemId = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee";
+        string ownRegisteredDir = _cache.GetTransientHlsDirectoryPath(itemId, 1);
+        Directory.CreateDirectory(ownRegisteredDir);
+        _cache.RegisterHlsDirectoryPath(itemId, 1, ownRegisteredDir);
+
+        // The foreign-ticks encode's registration displaces the per-key slot.
+        string foreignDir = PlantForeignGenerationRegistration(itemId);
+
+        string[] resolved = _cache.ResolveHlsGenerationDirPaths(itemId, 1, ownGenerationLiveOrRegistering: true);
+
+        Assert.Equal(new[] { ownRegisteredDir }, resolved);
+        Assert.DoesNotContain(foreignDir, resolved);
+    }
+
+    /// <summary>
+    /// JF-782 leg 2 discriminator tri-state: the per-key registration is
+    /// "foreign" for the caller's ticks only when one is PRESENT and names a
+    /// dir outside the caller's (key, ticks) generation dirs; absent answers
+    /// not-foreign (the JF-681 zero-slot state keeps its conservative
+    /// acceptance), and both of the caller's own root forms answer contained.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void HasForeignHlsDirectoryRegistration_AbsentOrContained_AnswersFalse(bool registeredAtCacheRoot)
+    {
+        string itemId = "ffffffff-ffff-ffff-ffff-ffffffffffff";
+        string ownDir = registeredAtCacheRoot
+            ? _cache.GetHlsDirectoryPath(itemId, 1)
+            : _cache.GetTransientHlsDirectoryPath(itemId, 1);
+        Directory.CreateDirectory(ownDir);
+
+        // Absent: not foreign.
+        Assert.False(_cache.HasForeignHlsDirectoryRegistration(itemId, 1));
+
+        // Contained (either root form): not foreign.
+        _cache.RegisterHlsDirectoryPath(itemId, 1, ownDir);
+        Assert.False(_cache.HasForeignHlsDirectoryRegistration(itemId, 1));
+    }
+
+    /// <summary>
+    /// JF-782 leg 2 discriminator, the foreign arm: a registration for another
+    /// generation of the same key (present, not one of the caller's dirs)
+    /// answers TRUE, which is the verdict's signal to narrow its zero-slot
+    /// acceptance.
+    /// </summary>
+    [Fact]
+    public void HasForeignHlsDirectoryRegistration_ForeignGenerationDirectory_AnswersTrue()
+    {
+        string itemId = "abababab-abab-abab-abab-abababababab";
+        _ = PlantForeignGenerationRegistration(itemId);
+
+        Assert.True(_cache.HasForeignHlsDirectoryRegistration(itemId, 1));
     }
 
     /// <summary>

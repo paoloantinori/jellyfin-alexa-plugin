@@ -323,21 +323,49 @@ public class VideoAudioCache
     /// <summary>
     /// In-memory cache mapping itemId to HLS directory path.
     /// Avoids filesystem scanning on every segment request (~45-225 per playback).
-    /// Populated when HLS generation completes, cleaned up on eviction.
+    /// Populated at ENCODE START (register-before-mark, JF-782) and never
+    /// removed: a later registration of the same key displaces the value
+    /// (the one-per-key bound), and readers re-check the directory's
+    /// existence, so a stale entry is inert. The PER-KEY registration every
+    /// generation of the key shares: the
+    /// tick-blind consumers (<see cref="FindHlsDirectory"/>, post-restart
+    /// segment resolution) and the debris verdict's foreign-registration
+    /// discriminator (<see cref="HasForeignHlsDirectoryRegistration"/>) read
+    /// it; the serve question's resolver reads the GENERATION-scoped twin
+    /// (<see cref="_hlsGenerationDirLookup"/>) instead since JF-782 leg 3.
     /// </summary>
     private readonly ConcurrentDictionary<string, string> _hlsDirLookup = new();
 
     /// <summary>
+    /// The GENERATION-scoped HLS directory registration (JF-782 leg 3): one
+    /// entry per (key, art-ticks) generation, written by the same
+    /// <see cref="RegisterHlsDirectoryPath"/> call that writes the per-key
+    /// map. A concurrent FOREIGN-ticks encode of the same key registers under
+    /// its own generation key and can no longer displace the own
+    /// generation's entry (the per-key slot's exposure the liveness-accepted
+    /// serve row used to inherit), which is what lets the resolver's
+    /// exclusive arm stay exclusive under an art change mid-watch.
+    /// GROWTH BOUND (accepted, JF-783 filed): entries are never removed, so
+    /// the map grows one small record per distinct encoded generation (every
+    /// art refresh mints a ticks); an evicted or deleted directory leaves an
+    /// inert entry (readers re-check existence). Removal belongs with the
+    /// eviction sweep's integration, out of JF-782's serve-path scope.
+    /// </summary>
+    private readonly ConcurrentDictionary<(string ItemId, long ArtModifiedTicks), string> _hlsGenerationDirLookup = new();
+
+    /// <summary>
     /// Register the CACHE-root HLS directory path for an item so segment lookups
-    /// are O(1). Called after ffmpeg finishes generating the HLS playlist and
-    /// segments. Cache-rooted paths only; a transient encode registers its own
+    /// are O(1). Called at ENCODE START, before the active-encode mark, on every
+    /// path since JF-782 leg 2 (the register-before-mark ordering the verdict's
+    /// mid-registration narrowing and the resolver's exclusive arm consume).
+    /// Cache-rooted paths only; a transient encode registers its own
     /// resolved directory through <see cref="RegisterHlsDirectoryPath"/> (JF-537.1).
     /// </summary>
     /// <param name="itemId">The Jellyfin item ID.</param>
     /// <param name="artModifiedTicks">Ticks from the album art's DateModified.</param>
     public void RegisterHlsDirectory(string itemId, long artModifiedTicks)
     {
-        RegisterHlsDirectoryPath(itemId, GetHlsDirectoryPath(itemId, artModifiedTicks));
+        RegisterHlsDirectoryPath(itemId, artModifiedTicks, GetHlsDirectoryPath(itemId, artModifiedTicks));
     }
 
     /// <summary>
@@ -345,13 +373,21 @@ public class VideoAudioCache
     /// transient root, JF-537.1) for an item so segment lookups are O(1). The
     /// transient encode path uses this to register its transient-root directory;
     /// the value is an opaque path to the lookup, so segment resolution needs no
-    /// root awareness of its own.
+    /// root awareness of its own. Writes BOTH registration maps (JF-782 leg 3):
+    /// the per-key slot (tick-blind segment resolution) and the (key, ticks)
+    /// generation entry the liveness-aware resolver's exclusive arm reads. The
+    /// ticks are REQUIRED (the JF-686 no-default shape): a registration that
+    /// cannot name its generation would leave the resolver's exclusive arm
+    /// per-key-blind again, reopening the foreign-overwrite window this split
+    /// closes.
     /// </summary>
     /// <param name="itemId">The cache key (Jellyfin item or variant key).</param>
+    /// <param name="artModifiedTicks">Ticks of the generation being registered.</param>
     /// <param name="hlsDirPath">The resolved HLS directory path being encoded into.</param>
-    public void RegisterHlsDirectoryPath(string itemId, string hlsDirPath)
+    public void RegisterHlsDirectoryPath(string itemId, long artModifiedTicks, string hlsDirPath)
     {
         _hlsDirLookup[itemId] = hlsDirPath;
+        _hlsGenerationDirLookup[(itemId, artModifiedTicks)] = hlsDirPath;
     }
 
     /// <summary>
@@ -1079,39 +1115,47 @@ public class VideoAudioCache
     /// prewrite probe's registered-dir override, and the own-live warm serve's
     /// registered-dir fallback). Decision rule: when the caller's
     /// verdict-family liveness read is true
-    /// (<paramref name="ownGenerationLiveOrRegistering"/>: the SAME
-    /// conservative read the debris verdict accepts on, so the mid-registration
-    /// window is covered, where a stored zero-slot entry may be the incoming
-    /// registration for THIS very generation) AND the registered directory
-    /// (<see cref="TryGetRegisteredHlsDirectory"/>) IS one of this (key,
-    /// ticks)'s own generation dirs, the registered dir is returned
+    /// (<paramref name="ownGenerationLiveOrRegistering"/>: the conservative
+    /// read the debris verdict FAMILY reads; since JF-782 leg 2 the VERDICT
+    /// itself narrows its own zero-slot arm by foreign-registration evidence
+    /// while the PROBE keeps this unnarrowed form, so the mid-registration
+    /// window is covered on both sides, where a stored zero-slot entry may be
+    /// the incoming registration for THIS very generation) AND the
+    /// GENERATION-scoped
+    /// registered directory
+    /// (<see cref="TryGetRegisteredGenerationHlsDirectory"/>) IS one of this
+    /// (key, ticks)'s own generation dirs, the registered dir is returned
     /// EXCLUSIVELY: the
     /// live-or-registering encode owns the generation, and the other root's
     /// same-key file is necessarily stale (a same-key playlist that predates
-    /// the running encode's target dir; JF-774's exclusive rule). The
-    /// containment test is what keeps a foreign-ticks registration (a
-    /// concurrent encode of another generation of the same key, which shares
-    /// the per-key registration slot) from ever redirecting the answer.
+    /// the running encode's target dir; JF-774's exclusive rule). Since JF-782
+    /// leg 3 the registration is read through the (key, ticks) generation map:
+    /// a concurrent foreign-ticks encode of the same key registers under its
+    /// OWN generation key, so it can never displace this generation's entry
+    /// (the per-key slot's containment-refusal exposure, the pre-existing
+    /// JF-774 boundary this closed); the containment loop stays as defense so
+    /// a hand-planted or future registration value outside this
+    /// generation's dirs still falls through to the static order.
     /// Otherwise the static root-preference order answers
     /// (<see cref="HlsGenerationDirPaths"/>): a dead or unknown generation
     /// serves its resting entry, cache root preferred.
     /// CALLER PRECONDITION, load-bearing for the exclusive arm's soundness in
-    /// the mid-registration window: a path whose encodes can REGISTER the
-    /// transient root (i.e. any two-root path) must store the registration of
-    /// its resolved dir BEFORE marking the encode active, so the zero-slot
+    /// the mid-registration window: an encode path must store the registration
+    /// of its resolved dir BEFORE marking the encode active, so the zero-slot
     /// window never opens without the registration already naming the incoming
-    /// encode's dir; the episode path does this (registered at encode start
-    /// under the lock, the mark after it, the JF-774 review F1 ordering). The
-    /// song, variants, and audiobook paths currently register AFTER their
-    /// first-segment wait, which is sound ONLY because they are single-root
-    /// (their encodes never resolve the transient dir, so the exclusive arm's
-    /// containment can only ever name the same cache-root dir the static
-    /// order's first leg already probes); a path gaining transient mode must
-    /// adopt the register-before-mark ordering with it.
+    /// encode's dir. ALL FOUR encode paths do this since JF-782 leg 2 (the
+    /// episode path since the JF-774 review F1; the song, variants, and
+    /// audiobook paths moved off their first-segment-wait registrations),
+    /// which is also what makes the debris verdict's zero-slot narrowing
+    /// sound: in that window the PER-KEY registration (the verdict's
+    /// discriminator, <see cref="HasForeignHlsDirectoryRegistration"/>) always
+    /// names the marking encode's resolved dir, so contained means same-ticks
+    /// and foreign means an art change mid-flight.
     /// The tick-blind leg
     /// (segment resolution, <see cref="FindHlsDirectory"/>) does NOT call this:
     /// it has no ticks to key on and keeps its registration-first arm plus the
-    /// JF-774 cross-root recency scan.
+    /// JF-774 cross-root recency scan, on the per-key map it needs after a
+    /// restart.
     /// </summary>
     /// <param name="itemId">The cache key (Jellyfin item or variant key).</param>
     /// <param name="artModifiedTicks">Ticks of the generation.</param>
@@ -1125,17 +1169,45 @@ public class VideoAudioCache
         string[] staticOrder = HlsGenerationDirPaths(itemId, artModifiedTicks);
         if (ownGenerationLiveOrRegistering)
         {
-            string? registered = TryGetRegisteredHlsDirectory(itemId);
-            foreach (string ownDir in staticOrder)
+            string? registered = TryGetRegisteredGenerationHlsDirectory(itemId, artModifiedTicks);
+            if (IsOwnGenerationDirPath(registered, staticOrder))
             {
-                if (string.Equals(registered, ownDir, StringComparison.Ordinal))
-                {
-                    return new[] { registered! };
-                }
+                return new[] { registered! };
             }
         }
 
         return staticOrder;
+    }
+
+    /// <summary>
+    /// The ONE generation-dir containment predicate (JF-782, the
+    /// IsSegmentUriLine no-second-drift-prone-copy rule): whether
+    /// <paramref name="candidate"/> is one of a (key, ticks) generation's own
+    /// directories. Consumed by BOTH load-bearing containment readers, which
+    /// must never disagree about what "contained" means: the resolver's
+    /// exclusive arm (leg 3's defense loop) and the debris verdict's
+    /// foreign-registration discriminator (leg 2's narrowing); a future third
+    /// root or path-shape change lands here once.
+    /// </summary>
+    /// <param name="candidate">The registered directory path to test (null answers false).</param>
+    /// <param name="generationDirs">The generation's own candidate dirs (<see cref="HlsGenerationDirPaths"/> output).</param>
+    /// <returns>True when the candidate IS one of the generation's dirs.</returns>
+    private static bool IsOwnGenerationDirPath(string? candidate, string[] generationDirs)
+    {
+        if (candidate == null)
+        {
+            return false;
+        }
+
+        foreach (string ownDir in generationDirs)
+        {
+            if (string.Equals(candidate, ownDir, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -1156,11 +1228,13 @@ public class VideoAudioCache
     /// otherwise the static order (cache root first, then the transient root,
     /// an oversize encode's target).
     /// STRADDLE CAVEAT (JF-782 leg 1): this holds only when the probe's
-    /// liveness read agrees with the caller's verdict read; a monitor CLEAR
-    /// landing between the two reads serves the static order's first hit,
-    /// which can be the other root's stale shadow. The controller-side
-    /// wrapper doc carries the same caveat; do not treat the absolute claim
-    /// as the invariant across that window. One probe covers the episode fast path,
+    /// liveness read agrees with the caller's verdict read; a MARK landing
+    /// between the two reads serves the static order's first hit, which can
+    /// be the other root's stale shadow. CLOSED at the verdict since JF-782:
+    /// the controller-side wrapper returns this probe's liveness answer with
+    /// the file, and the paired verdict accepts unread only when BOTH reads
+    /// agree (the disagreement cell reads and judges the hit instead). One
+    /// probe covers the episode fast path,
     /// the in-lock double-check, and the concurrent-encode dedup at once; keys
     /// that never go transient (variants, audiobook, album) simply miss the
     /// transient probe.
@@ -1239,10 +1313,12 @@ public class VideoAudioCache
     /// directory while its encode is live (a stale prewrite that survived in
     /// the OTHER root cannot shadow the live encode's fresh listing); JF-775
     /// generalized that preference into the liveness-aware resolver
-    /// (<see cref="ResolveHlsGenerationDirPaths"/>), whose exclusive arm reads
-    /// this same registration under the verdict-family liveness read, so the
-    /// probe, the prewrite serve, and the warm serve all share ONE dir
-    /// authority.
+    /// (<see cref="ResolveHlsGenerationDirPaths"/>); since JF-782 leg 3 the
+    /// resolver's exclusive arm reads the GENERATION-scoped twin
+    /// (<see cref="TryGetRegisteredGenerationHlsDirectory"/>) and this per-key
+    /// read feeds only the tick-blind segment resolution and the verdict's
+    /// foreign-registration discriminator
+    /// (<see cref="HasForeignHlsDirectoryRegistration"/>).
     /// </summary>
     /// <param name="itemId">The cache key (Jellyfin item or variant key).</param>
     /// <returns>The registered directory when it still exists, else null.</returns>
@@ -1253,6 +1329,58 @@ public class VideoAudioCache
             ? registered
             : null;
 #pragma warning restore CA3003
+    }
+
+    /// <summary>
+    /// The GENERATION-scoped registration read (JF-782 leg 3): the directory
+    /// registered for exactly this (key, ticks) generation when it still
+    /// exists, else null. The liveness-aware resolver's exclusive arm reads
+    /// this (not the per-key <see cref="TryGetRegisteredHlsDirectory"/>), so a
+    /// concurrent foreign-ticks encode's per-key registration cannot mask the
+    /// own generation's registered dir. The value may be a PREVIOUS encode's
+    /// resting registration of the same generation (registrations are never
+    /// cleared on encode exit; the existence re-check bounds the staleness to
+    /// a still-present directory), which is exactly the static order's own
+    /// first-leg content when the generation is dead.
+    /// </summary>
+    /// <param name="itemId">The cache key (Jellyfin item or variant key).</param>
+    /// <param name="artModifiedTicks">Ticks of the generation.</param>
+    /// <returns>The generation's registered directory when it still exists, else null.</returns>
+    internal string? TryGetRegisteredGenerationHlsDirectory(string itemId, long artModifiedTicks)
+    {
+#pragma warning disable CA3003 // registered paths come from GUID-derived cache keys
+        return _hlsGenerationDirLookup.TryGetValue((itemId, artModifiedTicks), out string? registered) && Directory.Exists(registered)
+            ? registered
+            : null;
+#pragma warning restore CA3003
+    }
+
+    /// <summary>
+    /// Whether the PER-KEY registration provably belongs to a FOREIGN
+    /// generation of the key (JF-782 leg 2's discriminator): a registration is
+    /// present AND is not one of the caller's (key, ticks) generation dirs.
+    /// Deliberately I/O-FREE (a pure map + string read, no existence stat) and
+    /// tri-state-collapsed to the foreign case only: an ABSENT registration
+    /// answers FALSE (not foreign) so the debris verdict's zero-slot arm keeps
+    /// its conservative acceptance where there is no evidence to narrow on
+    /// (the JF-681 mid-registration state; with register-before-mark on every
+    /// encode path, a production zero-slot window always carries the marking
+    /// encode's registration, so foreign-false-with-absent-registration is the
+    /// seam-only shape). Read OUTSIDE the active-encode holder's gate by the
+    /// caller, AFTER the one-gate tri-state read (the verdict must not do
+    /// work under that gate, and the later map read is the fresher evidence:
+    /// a same-ticks registration landing between the two reads flips the
+    /// answer toward the conservative acceptance, never away from it), so the
+    /// combined race degrades to the read row judging a pre-mark file, never
+    /// to an unread acceptance of the static order's first hit.
+    /// </summary>
+    /// <param name="itemId">The cache key (Jellyfin item or variant key).</param>
+    /// <param name="artModifiedTicks">The caller's own art ticks.</param>
+    /// <returns>True only when a registration exists and names another generation's dir.</returns>
+    internal bool HasForeignHlsDirectoryRegistration(string itemId, long artModifiedTicks)
+    {
+        return _hlsDirLookup.TryGetValue(itemId, out string? registered)
+            && !IsOwnGenerationDirPath(registered, HlsGenerationDirPaths(itemId, artModifiedTicks));
     }
 
     /// <summary>
