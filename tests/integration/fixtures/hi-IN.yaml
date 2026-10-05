@@ -80,3 +80,13 @@ tests:
         value: "game of thrones"
       season_number: {}
       episode_number: {}
+
+  # JF-770: the strengthened qualified video-watch family. The वीडियो carrier
+  # routes PlayVideoIntent clean (live 2026-10-05, post-deploy 2fddf2be); the
+  # फिल्म anchor is under a trainer-side anomaly (see the JF-770 record) and is
+  # deliberately NOT pinned here - pin only proven rows.
+  - utterance: "वीडियो इंसेप्शन देखो"
+    expected_intent: PlayVideoIntent
+    expected_slots:
+      title:
+        value: "इंसेप्शन"
