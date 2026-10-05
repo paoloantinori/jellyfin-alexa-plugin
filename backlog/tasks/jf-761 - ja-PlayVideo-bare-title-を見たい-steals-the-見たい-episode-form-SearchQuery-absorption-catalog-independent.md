@@ -3,9 +3,10 @@ id: JF-761
 title: >-
   ja PlayVideo bare "{title} を見たい" steals the 見たい episode form (SearchQuery
   absorption, catalog-independent)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-04 20:05'
+updated_date: '2026-10-05 00:33'
 labels:
   - interaction-model
   - nlu
@@ -68,3 +69,9 @@ Run each utterance through `ask smapi profile-nlu --locale ja-JP`, 4 repeats, se
 - [x] #9 /simplify passed (no blocking cleanups remaining) (4 angles: reuse + simplification findings APPLIED, comment blocks trimmed per the JF-551 block convention; efficiency CLEAN; altitude CLEAN for ja, the hi-IN cross-locale finding filed as JF-766 same-turn)
 - [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked) (0 correctness bugs; 3 findings: ER-class claim fixed by switching the pin to the committed-type series 'Game of Thrones' with the committed-vs-live conflict recorded in the task file; ar-SA/nl-NL audit disposition recorded in JF-766; all applied same-turn)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+CLOSED 2026-10-04 by the orchestrator after the full cycle: merged into main (worker commit a6e89d31, --no-ff; direct verification: the removal, the regenerated model, and the fixture pin), combined-tree suite 5205/5205 both TFMs; the ja model rebuild + the 7-step live-probe matrix follow the batched DLL deploy (the model JSONs embed in it). JF-766 filed by this task.
+<!-- SECTION:FINAL_SUMMARY:END -->

@@ -6,14 +6,15 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-10-04'
-updated_date: '2026-10-05 01:05'
+updated_date: '2026-10-05 00:33'
 labels:
   - playback
   - hardening
 dependencies: []
 references:
   - >-
-    backlog/tasks/jf-750 - PlayArtistSongs-resume-launch-passes-the-wrong-played-item-artistsItems0-instead-of-artistsItemsstartIndex.md
+    backlog/tasks/jf-750 -
+    PlayArtistSongs-resume-launch-passes-the-wrong-played-item-artistsItems0-instead-of-artistsItemsstartIndex.md
 priority: low
 ---
 
@@ -205,4 +206,6 @@ harnesses (aligned to the derive idiom). Gates simplify (4 agents), code
 review high (5 findings dispositioned), and the orchestrator gate-marker
 round (4 findings, all applied) are closed with reasons recorded; JF-764
 unused. 5204/5204 both TFMs; Release 0/0; awaiting the orchestrator's merge.
+
+CLOSED 2026-10-04 by the orchestrator after the full cycle: merged into main (worker commits a142bc5f + rework 7edc482a + simplify tail d20ab6ec, --no-ff; the offset re-derivation verified by direct read; the simplify round's composite-token store-arm fix applied, its two misjudged findings reverted on compile evidence), combined-tree suites 5205/5205 both TFMs, deployed in the wave's batched deploy with the ja rebuild. JF-764 unused.
 <!-- SECTION:FINAL_SUMMARY:END -->
