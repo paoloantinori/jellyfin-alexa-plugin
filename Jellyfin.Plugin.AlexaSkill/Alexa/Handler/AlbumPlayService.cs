@@ -198,7 +198,14 @@ public sealed class AlbumPlayService
     /// 'bitoruzu' containment-matching 'Bitoruzu Deluxe' at the bar with the suffix
     /// widening the name past the band). The score bars (the callers' thresholds)
     /// compose unchanged; this predicate adds only the kana-specific collision
-    /// evidence.
+    /// evidence. JF-773: the collision input resolves through
+    /// <see cref="Util.KeywordMatcher.ScoringName"/> (the same romanized-reading
+    /// replacement the song bar applies since JF-755), so a kana-tagged album the
+    /// fuzzy arms' score-time reading matched can actually collide; on the raw kana
+    /// name the leg was structurally dead (empty codes, kana-vs-romaji length band),
+    /// which would have refused every kana-tagged album the reachability fix just
+    /// made reachable. Latin candidates are unchanged (ScoringName is the identity
+    /// for kana-free names), so the JF-661/JF-662 refusal pins hold as pinned.
     /// </summary>
     /// <param name="romanizedQuery">The romanized (post-KatakanaRomanizer) query string.</param>
     /// <param name="album">The candidate album.</param>
@@ -207,7 +214,7 @@ public sealed class AlbumPlayService
         => Util.SongIndexSearch.PassesLengthBandedTitleCollision(
             DoubleMetaphone.Encode(romanizedQuery),
             romanizedQuery.Length,
-            album.Name ?? string.Empty);
+            Util.KeywordMatcher.ScoringName(album.Name));
 
     /// <summary>
     /// JF-663: the kana-origin playlist bar, the playlist-surface sibling of
@@ -478,8 +485,12 @@ public sealed class AlbumPlayService
         // blocks only an embedded WINNER, never the whole tier; a substitution below the
         // 90 containment-grade bar stays refused by design (the incident's 61 for "Waltz
         // for Koop" does not substitute a song query; the DIRECT album path plays it).
+        // JF-773: the selector resolves through the score-time romaji reading
+        // (KeywordMatcher.ScoringName) so a kana-tagged album competes on the reading
+        // the always-romanized query is in (the JF-755 matched-reading pair; the
+        // embedded-containment guard below judges the same pair).
         int threshold = FuzzyMatcher.GetEffectiveThreshold(user, CrossMediaAlbumThreshold);
-        var eligible = _crossMedia.FindBestNonEmbeddedMatch(query, candidates, a => a.Name!, threshold);
+        var eligible = _crossMedia.FindBestNonEmbeddedMatch(query, candidates, a => Util.KeywordMatcher.ScoringName(a.Name), threshold);
         if (eligible is not { } match)
         {
             _logger.LogDebug(

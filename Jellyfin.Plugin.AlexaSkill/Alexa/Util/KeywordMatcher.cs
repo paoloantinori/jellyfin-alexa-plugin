@@ -412,6 +412,32 @@ internal static class KeywordMatcher
             : Tokenize(title, locale);
 
     /// <summary>
+    /// JF-773 album reachability, the string-shaped sibling of <see cref="ScoringTokens"/>:
+    /// the name the STRING-level candidate surfaces resolve a candidate name against
+    /// (the two album fuzzy arms' selectors in PlayAlbumIntentHandler and
+    /// AlbumPlayService.TryAlbumFallbackAsync, and the kana-origin album bar's
+    /// collision input): the ROMANIZED reading when the name has one, the raw name
+    /// otherwise. Albums have no in-memory index to carry a parallel romaji key (the
+    /// JF-755 artist shape) and building one is not justified, so the reading is
+    /// derived per candidate at score time; like ScoringTokens this is a
+    /// REPLACEMENT, not a union, because the query reaching those surfaces is ALWAYS
+    /// romanized (the JF-643/JF-645 entry wiring), so the raw kana name is
+    /// unreachable content that scores ~0 on the Latin-script Levenshtein scale.
+    /// Identical to the input for kana-free names (TryRomanize returns false), so
+    /// every Latin library keeps byte-identical behavior. The DISPLAY name is a
+    /// different concern: speech and announcements keep reading
+    /// <c>BaseItem.Name</c> (the JF-755 speechSelector seam). Besides the raw
+    /// scores, the reading also drives the matched-reading DECISIONS the selector
+    /// output feeds inside the fuzzy walk (the JF-408/478 embedded-containment
+    /// refusal and the JF-598 containment tie-break) and their log lines, which
+    /// print the compared reading.
+    /// </summary>
+    /// <param name="name">The candidate's display name.</param>
+    /// <returns>The romanized reading when the name has one, else the name (empty for null).</returns>
+    internal static string ScoringName(string? name)
+        => KatakanaRomanizer.TryRomanize(name, out string? romaji) ? romaji : name ?? string.Empty;
+
+    /// <summary>
     /// JF-526: folds a token to its accent-insensitive base form (Unicode Normalize
     /// FormD, then strip the combining marks) so gate membership treats "besame" and
     /// "bésame" as the same word. Coverage-only: <see cref="Tokenize"/> and the

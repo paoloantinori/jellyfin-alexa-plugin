@@ -52,12 +52,12 @@ lands, update that paragraph alongside.
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] dotnet build passes with 0 errors
-- [ ] dotnet test passes
-- [ ] No new compiler warnings introduced
-- [ ] Kana-tagged album reachable by a romaji query (red proof at the album fuzzy arm layer)
-- [ ] Latin album behavior byte-identical (control pin)
-- [ ] KatakanaRomanizer doc paragraph updated in the same change
+- [x] dotnet build passes with 0 errors (Release build 0 errors; the CI-discipline `--no-restore -warnaserror` build clean)
+- [x] dotnet test passes (5254/5254 both TFMs on the final state; 5245 baseline + 9 new pins)
+- [x] No new compiler warnings introduced (0 warnings on the `-warnaserror` build)
+- [x] Kana-tagged album reachable by a romaji query (red proof at the album fuzzy arm layer) (KanaTaggedAlbumReachabilityTests: the PlayAlbum arm and the cascade leg, romaji AND kana query directions; RED on the unmodified tree first, both TFMs: 5 failed / 2 controls passed per TFM, green after the fix)
+- [x] Latin album behavior byte-identical (control pin) (in-file Latin control + ScoringName identity pins + the JF-661/JF-662 refusal pins green + full suite green; ScoringName is the identity for kana-free names by TryRomanize's gate)
+- [x] KatakanaRomanizer doc paragraph updated in the same change (plus the now-stale SongIndexSearch "ALBUM wrapper stay raw" sentence and the ScoringName consumer doc per the review rounds)
 <!-- DOD:END -->
 
 ## Implementation Notes
@@ -68,4 +68,15 @@ lands, update that paragraph alongside.
   they stay on raw names unless the reachability change makes the romaji form
   the honest collision surface there too (decide with the JF-659-invariant doc
   in hand, the same weighing JF-755 recorded).
+- LANDED 2026-10-05: the bar decision went to the ROMAJI reading (the JF-755
+  song-bar weighing, recorded in the SongIndexSearch comment that reserved this
+  task: on the raw kana name the collision leg is structurally dead, so the
+  armed bar would have refused every kana-tagged album the fix just made
+  reachable). One resolver, KeywordMatcher.ScoringName (the string-shaped
+  sibling of ScoringTokens), feeds both album fuzzy arms' selectors and the
+  album bar's collision input, and the song bar's inline ternary consolidated
+  onto it. The JF-663 PLAYLIST bar deliberately stayed raw with its still-raw
+  matcher legs (they must move together); the review rounds' out-of-scope
+  findings (the SearchItemsFuzzyAsync mirror class and the album bars'
+  head-check/full-width-paren interaction pair) are filed as JF-776.
 <!-- SECTION:NOTES:END -->

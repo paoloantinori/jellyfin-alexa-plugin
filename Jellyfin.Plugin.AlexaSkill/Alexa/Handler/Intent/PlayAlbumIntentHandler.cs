@@ -605,7 +605,12 @@ public class PlayAlbumIntentHandler : BaseHandler
             // "Waltz for Koop" next at 61, above threshold, previously lost). NOTE: a
             // multi-match here still auto-plays the best; real disambiguation for
             // different-name collisions (several "Greatest Hits") is tracked in JF-341.
-            var fuzzyMatch = CrossMedia.FindBestNonEmbeddedMatch(album, allAlbums, a => a.Name!, FuzzyMatcher.GetDefaultThreshold(user));
+            // JF-773: the selector resolves through the score-time romaji reading
+            // (KeywordMatcher.ScoringName) so a kana-tagged album competes on the
+            // reading the always-romanized query is in (the JF-755 matched-reading
+            // pair, shared with the cascade's arm in AlbumPlayService); the
+            // announcement below still speaks the DISPLAY name.
+            var fuzzyMatch = CrossMedia.FindBestNonEmbeddedMatch(album, allAlbums, a => Util.KeywordMatcher.ScoringName(a.Name), FuzzyMatcher.GetDefaultThreshold(user));
 
             // JF-662: the kana-origin album bar on this arm, the FIRST fuzzy
             // acceptance point a kana album miss flows through and one gate before

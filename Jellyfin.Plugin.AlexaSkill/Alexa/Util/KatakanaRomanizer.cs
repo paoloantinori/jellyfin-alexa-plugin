@@ -43,12 +43,20 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// Residual (accepted, the JF-381/JF-417 cold-window divergence class): the
 /// database fallback tiers search Jellyfin's own index, which has no
 /// romanizer, so a kana query during the cold window still honestly
-/// not-finds a kana-tagged name. ALBUM surfaces sit in that narrowing
-/// PERMANENTLY, not just cold: the album query is romanized (AlbumPlayService,
-/// PlayAlbumIntentHandler) but albums have no in-memory index to carry a
-/// candidate-side romaji key, and the album candidate legs score raw names
-/// (tracked as JF-773; the cheap shape when picked up is the score-time
-/// KeywordMatcher.TitleTokens union, not a new index).
+/// not-finds a kana-tagged name. ALBUM surfaces sat in that narrowing
+/// PERMANENTLY until JF-773 closed them at SCORE TIME (no album index was
+/// built): the two album fuzzy arms' selectors (AlbumPlayService's cascade,
+/// PlayAlbumIntentHandler's own arm) and the kana-origin album bar's collision
+/// input resolve through KeywordMatcher.ScoringName, the string-shaped sibling
+/// of the song side's ScoringTokens replacement, so a kana-tagged album's
+/// romanized reading is what the always-romanized album query scores and
+/// collides against. The same narrowing class REMAINS on the other
+/// string-level fuzzy surfaces fed by a romanized query (SearchItemsFuzzyAsync's
+/// raw-name selector and its consumers: playlists, audiobooks, videos,
+/// podcasts, channels, series, SearchMedia/BrowseLibrary, plus their
+/// site-level FuzzyMatch legs), and the album kana bars' head-check judgment
+/// leaves an order-dependent reachability residual on suffixed kana pairs;
+/// both are tracked as JF-776.
 /// </summary>
 internal static class KatakanaRomanizer
 {
