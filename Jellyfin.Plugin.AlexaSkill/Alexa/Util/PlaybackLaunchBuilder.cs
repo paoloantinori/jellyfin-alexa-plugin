@@ -194,23 +194,25 @@ public sealed class PlaybackLaunchBuilder
     /// APL) originates, instead of as wrong-metadata on a device. BELT ONLY: dead
     /// code on every call site today (the JF-750 family audit), pinned in
     /// PlaybackLaunchBuilderLaunchPairingPinTests.
-    /// DESIGN CONSTRAINTS (why the check is Guid-based and why it skips):
+    /// DESIGN CONSTRAINTS (why the compare is Guid-based and why it skips):
     /// the compare parses the id instead of comparing strings because the APL
     /// carousel tap path (AplUserEventHandler) hands the dashless
     /// <c>item.Id.ToString("N")</c> form up from the APL event argument while most
     /// sites pass the dashed form, and a string compare would false-fire on every
-    /// tap; <c>item == null</c> skips because the null shape is deliberate
-    /// (PlayIntentHandler enqueues with only the queue id surviving); an
-    /// UNPARSEABLE id skips because composite stream tokens
-    /// (<c>{guid}|launch:n</c>, <c>{guid}|sleep:ticks</c>, StreamTokenCodec) and
-    /// any future non-GUID token id are outside the pairing the belt can assert,
-    /// which is only the pairing of resolvable ids.
+    /// tap; the id resolves through <see cref="StreamTokenCodec.TryGetItemId"/> (the
+    /// ONE stream-token parser, the same resolution the Resume tail's displaced-token
+    /// fix follows), so a COMPOSITE stream token (<c>{guid}|launch:n</c>,
+    /// <c>{guid}|sleep:ticks</c>) is judged by the item it names rather than waved
+    /// through, and only a genuinely UNPARSEABLE id (an unknown-suffix token, any
+    /// future non-GUID token id) skips, because there is no item id to compare;
+    /// <c>item == null</c> skips because the null shape is deliberate
+    /// (PlayIntentHandler enqueues with only the queue id surviving).
     /// </summary>
-    /// <param name="itemId">The item ID used as the stream token (dashed or dashless Guid form, or a composite stream token).</param>
+    /// <param name="itemId">The item ID used as the stream token (dashed or dashless Guid form, or a composite stream token the codec can resolve).</param>
     /// <param name="item">The metadata item the launch response names, or null.</param>
-    private static void EnsureItemPairsWithLaunchId(string itemId, MediaBrowser.Controller.Entities.BaseItem? item)
+    internal static void EnsureItemPairsWithLaunchId(string itemId, MediaBrowser.Controller.Entities.BaseItem? item)
     {
-        if (item == null || !Guid.TryParse(itemId, out Guid launchedId) || launchedId == item.Id)
+        if (item == null || !StreamTokenCodec.TryGetItemId(itemId, out Guid launchedId) || launchedId == item.Id)
         {
             return;
         }
@@ -2026,8 +2028,9 @@ public sealed class PlaybackLaunchBuilder
         // item) pair dies before ANY effect (the JF-687 refusal below, the ledger
         // record, the launch-scope write, the directive build). Runs before the
         // native-controls VideoApp delegation too, so both delivery routes inherit
-        // the pairing verdict. Skips null items, unparseable ids, and both Guid
-        // formats (the constraints live on the guard's doc).
+        // the pairing verdict. Skips null items and ids the token codec cannot
+        // resolve; both Guid formats and composite tokens compare by the item they
+        // name (the constraints live on the guard's doc).
         EnsureItemPairsWithLaunchId(itemId, item);
 
         // JF-687: the delivery gate for every AudioPlayer.Play. A token-gated stream URL

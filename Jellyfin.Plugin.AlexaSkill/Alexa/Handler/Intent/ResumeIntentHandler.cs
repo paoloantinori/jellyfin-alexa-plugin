@@ -438,15 +438,36 @@ public class ResumeIntentHandler : BaseHandler
                 launchedId, tailItem.Id, tokenItem != null);
             tailItem = tokenItem;
 
-            // The session-sourced offset (fallback 2) counts the DISPLACED session
-            // item's timeline, never the token item's; only the device-derived
-            // stream-relative offset (fallback 1) follows the token's own stream
-            // (the JF-520 discipline: never mint a foreign position). Drop the
-            // foreign one so the token item restarts honestly instead of seeking
-            // into a position another item never reached.
+            // The session-sourced offset (fallback 2) counts whatever item the
+            // session last progress-reported, and with a displaced token that is
+            // most plausibly the TOKEN item itself: the progress writers report the
+            // actually-playing item with item-absolute ticks (JF-522), so zeroing
+            // would throw away the token item's own position and restart a
+            // position-correct resume at 0:00. The honest re-derivation: resolve the
+            // offset from the TOKEN item's own sources through the ONE
+            // UserData-first resolver (UserData, then the plugin store, played
+            // items at 0), which keeps the common displaced-with-own-position shape
+            // resuming where it left off and reads 0 for a genuinely foreign
+            // session row (a stale position for another item is this item's
+            // nothing). Only the device-derived stream-relative offset (fallback 1)
+            // is kept as-is: it already counts the token item's own stream
+            // timeline.
             if (!offsetIsStreamRelative)
             {
-                offset = 0;
+                string? swapDeviceId = context.System?.Device?.DeviceID;
+                Jellyfin.Database.Implementations.Entities.User? swapUser =
+                    session != null ? ResolveJellyfinUser(_userManager, session.UserId, locale).User : null;
+                UserItemData? tokenUserData = tokenItem != null && swapUser != null
+                    ? _userDataManager.GetUserData(swapUser, tokenItem)
+                    : null;
+                offset = ResumeMath.TicksToMs(DeviceQueueManager.ResolveResumeTicks(
+                    _queueManager,
+                    swapDeviceId,
+                    item_id!,
+                    tokenUserData?.PlaybackPositionTicks ?? 0,
+                    tokenUserData?.Played == true,
+                    Logger,
+                    "ResumeIntent displaced token"));
             }
         }
 

@@ -1088,6 +1088,93 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
     }
 
     /// <summary>
+    /// JF-758 offset arm (the gate-marker round): the displaced-token tail with a
+    /// session-sourced offset (fallback 2, device offset absent). The PlayState row
+    /// counts whatever the session last progress-reported, and with a displaced
+    /// token that is most plausibly the TOKEN item itself, so the tail must
+    /// re-derive the offset from the token item's OWN sources (its UserData here:
+    /// 90s) rather than zero it (a position-correct resume would restart at 0:00)
+    /// or keep it (a stale foreign row would seek another item's position).
+    /// </summary>
+    [Fact]
+    public async Task SessionHeldBook_DisplacedToken_SessionOffset_ReDerivesFromTokenItemsOwnPosition()
+    {
+        Plugin.Instance!.Configuration.NativeControlsForBooks = true;
+        try
+        {
+            var handler = CreateHandler();
+            var request = CreateResumeRequest();
+            var songId = Guid.NewGuid();
+            var tokenSong = new global::MediaBrowser.Controller.Entities.Audio.Audio
+            {
+                Name = "Token Song",
+                Id = songId
+            };
+            _fx.LibraryManager.Setup(l => l.GetItemById(songId)).Returns(tokenSong);
+            _fx.UserDataManager.Setup(x => x.GetUserData(
+                    It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
+                .Returns((Jellyfin.Database.Implementations.Entities.User _, BaseItem item) => item == tokenSong
+                    ? new UserItemData { Key = "displaced-token", PlaybackPositionTicks = 900_000_000 }
+                    : null);
+
+            // Device offset absent: fallback 1 skips and the offset is session-sourced.
+            var context = new Context
+            {
+                System = new global::Alexa.NET.Request.AlexaSystem
+                {
+                    Device = new global::Alexa.NET.Request.Device { DeviceID = "test-device" },
+                    User = new global::Alexa.NET.Request.User { AccessToken = Guid.NewGuid().ToString() },
+                    ApiAccessToken = "test-token",
+                    ApiEndpoint = "https://api.amazonalexa.com"
+                },
+                AudioPlayer = new PlaybackState
+                {
+                    PlayerActivity = "IDLE",
+                    Token = songId.ToString(),
+                    OffsetInMilliseconds = 0
+                }
+            };
+
+            var user = TestHelpers.CreateTestUser();
+            _fx.Config.AddUser(new Jellyfin.Plugin.AlexaSkill.Entities.User
+            {
+                Id = user.Id,
+                AnnouncePositionOnResume = false
+            });
+
+            var chapter = new AudioBook
+            {
+                Name = "Chapter 3",
+                Id = Guid.NewGuid(),
+                ParentId = Guid.NewGuid(),
+                Path = "/audiobooks/book/chapter3.mp3"
+            };
+
+            var session = CreateEmptySession();
+            session.FullNowPlayingItem = chapter;
+            // The displaced session row: 3 minutes belonging to the session
+            // pointer's world, not the token item's.
+            session.PlayState = new MediaBrowser.Model.Session.PlayerStateInfo { PositionTicks = 180_000_000 };
+
+            var response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+            Assert.NotNull(response);
+
+            var audioDirective = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+            Assert.Contains($"/Audio/{songId}/stream?static=true", audioDirective.AudioItem.Stream.Url, StringComparison.Ordinal);
+            // THE JF-758 offset assertion: the launch carries the TOKEN item's own
+            // 90-second position (90_000ms), neither the foreign session row's
+            // 3 minutes nor a zeroed restart.
+            Assert.Equal(90_000, audioDirective.AudioItem.Stream.OffsetInMilliseconds);
+            Assert.Equal("Token Song", audioDirective.AudioItem.Metadata?.Title);
+        }
+        finally
+        {
+            Plugin.Instance.Configuration.NativeControlsForBooks = false;
+        }
+    }
+
+    /// <summary>
     /// JF-563 review: on a screenless device the book resume degrades to the flat
     /// AudioPlayer path, and the book-absolute tracker position is CLAMPED to the
     /// chapter runtime so the directive never carries an offset past the stream it plays.
