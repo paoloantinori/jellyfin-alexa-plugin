@@ -360,7 +360,7 @@ public sealed class SearchService
         // (KeywordMatcher.ScoringName, the JF-773 album arms' resolver): the query
         // reaching this scan is ALWAYS romanized (the JF-643 entry wiring above),
         // so a kana-tagged candidate's raw name was unreachable content scoring
-        // ~0 on the Latin-script Levenshtein scale - permanently, on every
+        // ~0 on the Latin-script Levenshtein scale: permanently, on every
         // consumer this method's own comment lists (none of them has an
         // in-memory index). Identity for kana-free names, so Latin libraries are
         // byte-identical; the coverage gate below reads the candidate through

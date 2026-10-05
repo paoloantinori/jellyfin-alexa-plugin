@@ -28,7 +28,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// query, and the DB lists the suffixed one first (GetItemList with no OrderBy,
 /// the JF-427 note), the walk returns the suffixed winner, the JF-661/JF-662 bar
 /// refuses it on the length band, and the old refuse-and-stop answered the album
-/// not-found although the exact album exists - reachability on JF-773's own
+/// not-found although the exact album exists; reachability on JF-773's own
 /// target shape was order-dependent. These pins hold the refuse-and-CONTINUE
 /// walk (the JF-412 embedded-walk pattern applied to the bar refusal at BOTH
 /// album arms): the suffixed sibling listed FIRST no longer shadows the exact

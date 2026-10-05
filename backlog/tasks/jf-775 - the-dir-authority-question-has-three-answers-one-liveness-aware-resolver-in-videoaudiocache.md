@@ -82,7 +82,7 @@ edge-fix task.
 <!-- DOD:END -->
 
 GATE-MARKER ADDENDUM (2026-10-05, from the JF-774 orchestrator review): the
-mid-registration window is NARROWED, not closed - a lock-free fast-path replay
+mid-registration window is NARROWED, not closed; a lock-free fast-path replay
 landing between the registry store and the first slot write inside
 MarkEncodeActive reads a registering verdict that accepts the cache-root
 shadow without reading (OwnTicksGenerationLiveOrRegistering), while the

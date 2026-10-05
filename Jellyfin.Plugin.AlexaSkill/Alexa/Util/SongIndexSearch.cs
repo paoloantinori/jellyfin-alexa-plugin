@@ -174,7 +174,7 @@ internal static class SongIndexSearch
     /// '(Deluxe) (Live)') from a title, the JF-654 band's evidence input. A title
     /// that is entirely parenthetical strips to empty and fails the band (the
     /// honest miss). JF-776 (B2): the STANDARD Japanese full-width pair (U+FF08
-    /// '（' / U+FF09 '）') strips with the same semantics - the romanizer passes
+    /// '（' / U+FF09 '）') strips with the same semantics; the romanizer passes
     /// non-kana through unchanged, so a kana reading keeps its full-width
     /// suffix ('ヨルニカケル（デラックス）' reads 'yorunikakeru（derakkusu）') and
     /// an ASCII-only strip failed the band on characters that carry no more

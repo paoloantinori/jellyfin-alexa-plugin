@@ -124,7 +124,7 @@ matrix unchanged.
       SearchItemsFuzzyAsync layer (red proof on the pre-change tree first,
       both TFMs), plus one playlist-surface and one audiobook-surface handler
       red proof (RED on the unmodified tree: 11 failed / 7 controls-green per
-      TFM - the SearchService romaji+kana legs, the playlist kana+romaji legs,
+      TFM; the SearchService romaji+kana legs, the playlist kana+romaji legs,
       the book kana+romaji legs, the playlist bar coupling unit pin, both B1
       arms, both B2 legs; all green post-fix, 18/18 both TFMs)
 - [x] Section A: Latin behavior byte-identical (control pin:
@@ -156,7 +156,7 @@ JF-773 parent, the same ScoringName resolver, and the same red-proof
 machinery; no bar demanded a split).
 
 **Section A (the romaji-mirror class beyond albums):** the ONE choke-point
-edit - SearchService.SearchItemsFuzzyAsync's bounded scan scores through
+edit; SearchService.SearchItemsFuzzyAsync's bounded scan scores through
 KeywordMatcher.ScoringName (the JF-773 resolver; the entry romanization
 already satisfies its always-romanized-query invariant), closing the whole
 consumer family (PlayBook/PlayPodcast/PlayVideo/PlayPlaylist/SearchMedia/
@@ -193,7 +193,7 @@ the album case: the fused-suffix form never passes the coverage gate), and
 each site picks through different machinery, so the walk lands there as its
 own task with the B1 red-proof template.
 
-**Gates:** /simplify (4 parallel angles; 6 applied - the PlayPodcast guard
+**Gates:** /simplify (4 parallel angles; 6 applied; the PlayPodcast guard
 leg, the album-mock third-copy hoist into TestHelpers/fixture, the playlist
 assertion-convention hoist, the shared FuzzyMissNotFound stub, the
 codes-carried album bar, the caller-agnostic walk log; 3 reasoned skips -
@@ -201,7 +201,7 @@ the walk re-scan memoization (sub-ms on bounded pools, would change the
 documented early-exit contract), the pre-check+HandleFuzzyMiss double pass
 (pre-existing architecture, coupled threshold models), a named shared
 selector pair (the inline pair IS the JF-755 convention)). /code-review high
-(5 findings; 4 applied - CR2 the refusal log's display name + JF tag chain,
+(5 findings; 4 applied; CR2 the refusal log's display name + JF tag chain,
 CR3 the encode-only-when-armed, CR4 the test-comment arithmetic, CR5 the
 forwarder-layer removal; CR1 = the JF-777 filing, consciously accepted).
 Red proofs ran base-compilable on the UNMODIFIED tree first (11 failed / 7

@@ -139,7 +139,7 @@ public sealed class CrossMediaFallback
     /// take the first eligible one. The loop is load-bearing: FindBestMatchWithScore keeps
     /// the maxLenDiff length-band filter and its first-crossing-90 early exit, which
     /// RankMatches would change. Same-name ties pick arbitrarily (JF-341). Bounded: each
-    /// iteration removes one candidate, and degenerate embedded winners are rare.
+    /// iteration removes one candidate, and degenerate embedded winners are rare. NOTE (JF-776 gate-marker): the acceptanceBar widens the re-scan set - every containment-class reading scoring >=90 that fails the bar refuses one at a time, each refusal re-scanning all remaining candidates with a fresh ScoringName romanization; worst case O(N^2) on a many-suffix kana catalog (unbounded romanization cost on the request budget; the memoization skip was recorded).
     /// JF-776 (B1): <paramref name="acceptanceBar"/> extends the same walk to the
     /// kana-origin bars (both album arms pass
     /// <see cref="AlbumPlayService.PassesKanaOriginAlbumAcceptance(string, BaseItem)"/> when armed). The

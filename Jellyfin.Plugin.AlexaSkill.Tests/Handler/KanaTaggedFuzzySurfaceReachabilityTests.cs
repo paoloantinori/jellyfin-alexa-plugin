@@ -171,7 +171,7 @@ public class KanaTaggedFuzzySurfaceReachabilityTests : PluginTestBase, IDisposab
         // The coupling proof (both halves in one red): a kana query whose
         // kana-tagged playlist exists. Pre-fix the choke point's raw-name
         // selector scored ~0 (not-found), and the choke point alone is NOT
-        // enough post-fix either - the JF-663 bar reads the collision input,
+        // enough post-fix either; the JF-663 bar reads the collision input,
         // which on the raw kana name is structurally dead (empty Double
         // Metaphone codes), so the bar would refuse the very candidate the fix
         // matched. The bar's input moves in the SAME change as the candidate

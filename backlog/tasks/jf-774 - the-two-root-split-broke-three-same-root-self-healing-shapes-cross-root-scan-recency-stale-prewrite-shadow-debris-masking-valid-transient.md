@@ -57,7 +57,7 @@ per-root-most-recent intent.
 FINDING 2 (the undeletable class): the transient leg's cache-root per-file
 backstop (~VideoAudioController.cs:1505 serving the 1032 backstop's gap)
 deletes stream.m3u8 and seg_*.ts but leaves playlist-full.m3u8, and the
-cache-first prewrite probe serves any existing file unvalidated - a stale
+cache-first prewrite probe serves any existing file unvalidated; a stale
 prewrite with an expired JF-309 token 401s every segment fetch for the whole
 encode window (~27min CPU for a 2h episode at the measured 4.4x). FIX: the
 1032 backstop also deletes the stale prewrite, or the prewrite probe prefers
