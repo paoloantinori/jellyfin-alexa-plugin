@@ -795,6 +795,10 @@ public sealed class PlaybackLaunchBuilder
 
     /// <summary>
     /// The ONE device-ledger read (JF-627): resolves the effective manager with the
+        /// (SCOPE NOTE, the JF-627 gate-marker's F4: the two GetLastPlayedItemId
+        /// announce readers in BaseHandler (~:403, ~:730) are deliberately OUTSIDE this
+        /// helper - they hold no queueManager to unify; a future edit keyed on 'the ONE
+        /// read' must not miss them.)
     /// classifier-half null contract (null falls back to <c>Plugin.Instance</c>'s)
     /// and returns the device's last-played snapshot, or <c>(null, null)</c> when
     /// no device id or no manager resolves. Every GetLastPlayedSnapshot reader
@@ -809,6 +813,11 @@ public sealed class PlaybackLaunchBuilder
         Context? context,
         DeviceQueueManager? queueManager)
     {
+        // NOTE (JF-627 gate-marker F3): the shared AlexaContextExtensions.GetDeviceId()
+        // returns empty-string-for-missing while this inline chain passes a present-but-empty
+        // DeviceID through as a literal ledger key; the difference is theoretical today
+        // (Alexa populates DeviceID whenever Device is present) but a device-key semantics
+        // change must touch both (the JF-447 drift class).
         string? deviceId = context?.System?.Device?.DeviceID;
         DeviceQueueManager? ledgerManager = deviceId != null
             ? queueManager ?? Plugin.Instance?.DeviceQueueManager

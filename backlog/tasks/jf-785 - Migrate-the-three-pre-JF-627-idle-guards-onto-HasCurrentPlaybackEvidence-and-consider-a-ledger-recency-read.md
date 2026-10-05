@@ -52,3 +52,5 @@ ROOT-FIX OBSERVATION (the JF-627 altitude review): the per-family guard layer as
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+JF-627 GATE-MARKER FINDINGS (2026-10-06): LEG A (the unresolvable-evidence door, finding 1): the idle guard gates on evidence PRESENCE not RESOLVABILITY, so an unresolvable now-playing DTO (item deleted mid-play, or Id == Guid.Empty) lets the resolver's unbounded ledger tail through and 'add this to playlist' ADDS a days-old unrelated item where pre-JF-627 answered NoMediaPlaying; fix shape: guard on resolvable evidence or have guarded families reject ledger-tail answers (displacement-arm answers only). LEG B (the VideoApp-no-token parity, finding 2): HasCurrentPlaybackEvidence has no VideoApp leg, so a video-first device (no AudioPlayer history, no token ever) refuses 'add this' during movies while 'rate this' acts on the same ledger entry; not a regression but the parity boundary is undocumented and unpinned, and video-first 1.0 users hit it on every movie-time 'add this'.
