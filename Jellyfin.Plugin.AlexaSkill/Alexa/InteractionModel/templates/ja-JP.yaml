@@ -214,7 +214,14 @@ intents:
       # title, profile-nlu 2026-09-13, 2/2 probes). The anchored video carriers
       # above and below remain; the song-family bare '{song} を再生して' stays
       # (different slot type, no recorded steal).
-      - '{title} を見たい'
+      # JF-761: the BARE '{title} を見たい' is REMOVED, same steal class as the
+      # JF-551 removal above: it absorbed the committed PlayEpisode episode
+      # address '... のシーズン N エピソード M を見たい' wholesale into title
+      # (live profile-nlu 2026-10-04, 4/4, catalog-INDEPENDENT, unlike the
+      # pt/es NO_MATCH class). The qualified 映画 {title} を見たい below keeps
+      # the watch-verb carrier anchored. '{title} を見せて' STAYS: no committed
+      # sample shares its tail, no steal recorded; removal would be speculative
+      # recall loss.
       - '{title} を見せて'
       - 映画 {title} を再生して
       - ビデオ {title} をスタートして
