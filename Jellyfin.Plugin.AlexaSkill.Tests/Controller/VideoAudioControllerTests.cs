@@ -4983,7 +4983,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         // transient dir is registered BEFORE the mark, so the mid-registration
         // gap already has the registration pointing at the incoming encode's
         // dir.
-        _cache.RegisterHlsDirectoryPath(itemId, transientDir);
+        _cache.RegisterHlsDirectoryPath(itemId, 0, transientDir);
 
         Directory.CreateDirectory(cacheDir);
         File.WriteAllText(Path.Combine(cacheDir, "stream.m3u8"), "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:4.000,\nseg_7777.ts\n");
@@ -4992,6 +4992,22 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         File.WriteAllText(livePath, "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:4.000,\nseg_0000.ts\n#EXTINF:4.000,\nseg_9999.ts\n");
 
         return (itemId, controller, reads);
+    }
+
+    /// <summary>
+    /// Plant a FOREIGN-ticks generation registration for the key (JF-782 legs
+    /// 2/3 arrange, extracted at the second copy): the transient-root dir of
+    /// ANOTHER generation of the same key, created and registered the way a
+    /// real foreign-ticks encode does (register-before-mark writes both maps;
+    /// the per-key slot is the one a later registration displaces). Returns
+    /// the planted dir.
+    /// </summary>
+    private string PlantForeignTicksRegistration(string itemId, long ticks = 999)
+    {
+        string foreignDir = _cache.GetTransientHlsDirectoryPath(itemId, ticks);
+        Directory.CreateDirectory(foreignDir);
+        _cache.RegisterHlsDirectoryPath(itemId, ticks, foreignDir);
+        return foreignDir;
     }
 
     /// <summary>
@@ -5071,6 +5087,170 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             Assert.True(
                 content.Content.Contains("seg_9999", StringComparison.Ordinal),
                 $"the own-live no-prewrite row must serve the REGISTERED dir's live partial, not the cache-root shadow (JF-774 F3 through the JF-775 resolver); shadow marker seg_7777 present: {content.Content.Contains("seg_7777", StringComparison.Ordinal)}");
+            Assert.DoesNotContain("seg_7777", content.Content, StringComparison.Ordinal);
+            Assert.Equal(1, reads.Lives());
+        }
+        finally
+        {
+            VideoAudioController.SetEncodeActiveForTest(itemId, active: false);
+        }
+    }
+
+    // ========== JF-782: the JF-775 dir-authority timing residuals ==========
+
+    /// <summary>
+    /// JF-782 leg 1 pin (the probe-vs-verdict liveness STRADDLE, and the
+    /// LEG-0 guard note's discriminating pin): a generation MARK landing
+    /// between the live-aware probe's liveness read and the paired verdict's
+    /// re-read is unseen by the probe (which resolved the static order, whose
+    /// first hit is the undeletable cache-root shadow) but accepted UNREAD by
+    /// the verdict (its loose read now true, Content null), so the serve row
+    /// served the shadow's stale bytes. The ProbeLivenessReadForTest seam
+    /// plants the mark inside exactly that gap (the only observer that fires
+    /// between the two reads). The single-snapshot fix threads the probe's
+    /// answer into the verdict: the disagreement cell READS and judges the
+    /// hit instead of accepting unread, the judged no-ENDLIST shadow is NOT
+    /// deleted (the own generation is live per the fresh read; the JF-676
+    /// delete gate stays own-dead), and the request falls through to the lock
+    /// scope, whose own probe now reads the mark and serves the REGISTERED
+    /// dir's live partial.
+    /// RED PROOF: on the pre-JF-782 tree the verdict accepts the shadow
+    /// unread and the strict prewrite gate's fall-through serves the shadow's
+    /// stale bytes (seg_7777 present, the shadow still on disk).
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_ProbeToVerdictMarkStraddle_ShadowJudgedNotServedUnread()
+    {
+        var (itemId, controller, _) = PlantTwoRootShadowFixture(
+            "JF-782 Straddle S01E01",
+            "fake-ffmpeg-jf782-straddle");
+        string shadowPath = Path.Combine(_cache.GetHlsDirectoryPath(itemId, 0), "stream.m3u8");
+
+        bool markPlanted = false;
+        controller.ProbeLivenessReadForTest = (key, answer) =>
+        {
+            if (!markPlanted && key == itemId && !answer)
+            {
+                // The straddle: the encode's mark lands AFTER the probe read
+                // false, BEFORE the verdict re-reads.
+                markPlanted = true;
+                VideoAudioController.SetEncodeActiveForTest(itemId, active: true);
+            }
+        };
+        try
+        {
+            ActionResult result = await controller.StreamHlsEpisode(itemId);
+
+            var content = Assert.IsType<ContentResult>(result);
+            Assert.True(
+                content.Content.Contains("seg_9999", StringComparison.Ordinal),
+                $"the straddled replay must fall through to the REGISTERED dir's live partial, not serve the static-order probe's cache-root shadow (JF-782 leg 1); shadow marker seg_7777 present: {content.Content.Contains("seg_7777", StringComparison.Ordinal)}");
+            Assert.DoesNotContain("seg_7777", content.Content, StringComparison.Ordinal);
+            Assert.True(
+                File.Exists(shadowPath),
+                "the straddle cell must not delete: the own generation is live per the verdict's fresh read (the JF-676 delete gate stays own-dead)");
+        }
+        finally
+        {
+            controller.ProbeLivenessReadForTest = null;
+            VideoAudioController.SetEncodeActiveForTest(itemId, active: false);
+        }
+    }
+
+    /// <summary>
+    /// JF-782 leg 2 pin (the FOREIGN-TICKS mid-registration sub-window): while
+    /// a foreign-ticks encode of the same key sits in the zero-slot
+    /// mid-registration window (the seam's registering holder), the per-key
+    /// registration names ITS resolved dir (the register-before-mark ordering
+    /// every encode path now performs), so the resolver's containment
+    /// correctly refuses it and the probe's hit is the caller's cache-root
+    /// shadow (its own generation's stale registration, the resting entry of
+    /// the previous same-ticks encode, is what the generation-scoped arm
+    /// reads); the registering verdict accepted that hit UNREAD (the
+    /// zero-slot arm of the loose read), serving the shadow's stale bytes.
+    /// The narrowing: the verdict's Registering arm accepts only while the
+    /// per-key registration is not provably foreign for the caller's ticks,
+    /// so the hit is READ and judged (the shadow is no-ENDLIST debris; not
+    /// deleted, the entry is mid-registration) and the request falls through
+    /// to the lock scope's re-encode, whose debris sweep removes the
+    /// deletable shadow and serves fresh bytes.
+    /// RED PROOF: on the pre-JF-782 tree the registering verdict serves the
+    /// shadow unread (seg_7777 present).
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_RegisteringForeignTicksRegistration_ShadowJudgedNotServedUnread()
+    {
+        var (episode, mediaSourceManager) = SetupEpisodeForHls("JF-782 Foreign Mid-Reg S01E01", "h264", TimeSpan.FromMinutes(45));
+        string itemId = episode.Id.ToString();
+
+        string cacheDir = _cache.GetHlsDirectoryPath(itemId, 0);
+        var controller = CreateController(itemId, loggerFactory: null, mediaSourceManager, WriteRecordingFakeFfmpeg("fake-ffmpeg-jf782-foreign-midreg"));
+
+        // The caller's own generation's STALE registration (the previous
+        // same-ticks encode's resting entry), then the incoming foreign-ticks
+        // encode's registration displacing the per-key slot: the
+        // art-change-mid-flight shape.
+        _cache.RegisterHlsDirectoryPath(itemId, 0, cacheDir);
+        _ = PlantForeignTicksRegistration(itemId);
+
+        Directory.CreateDirectory(cacheDir);
+        File.WriteAllText(
+            Path.Combine(cacheDir, "stream.m3u8"),
+            "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:4.000,\nseg_7777.ts\n");
+
+        VideoAudioController.SetEncodeRegisteringForTest(itemId, registering: true);
+        try
+        {
+            ActionResult result = await controller.StreamHlsEpisode(itemId);
+
+            // Post-fix the request re-encodes (the shadow judged debris) and
+            // serves the fresh encode's listing; the bar is the shadow's
+            // marker staying out of the served bytes.
+            var content = Assert.IsType<ContentResult>(result);
+            Assert.DoesNotContain("seg_7777", content.Content, StringComparison.Ordinal);
+        }
+        finally
+        {
+            VideoAudioController.SetEncodeRegisteringForTest(itemId, registering: false);
+        }
+    }
+
+    /// <summary>
+    /// JF-782 leg 3 pin (the full-slot FOREIGN-REGISTRATION OVERWRITE, the
+    /// pre-existing JF-774 containment boundary): while the caller's OWN-ticks
+    /// generation is fully live and its registration names the registered
+    /// (transient) dir, a concurrent foreign-ticks encode's registration
+    /// displaces the PER-KEY slot; the per-key-reading resolver then refused
+    /// the containment and the static order's first hit (the cache-root
+    /// shadow) won the liveness-ACCEPTED row, serving the shadow's stale
+    /// bytes unread. The generation-scoped registration closes it: the
+    /// resolver's exclusive arm reads the (key, ticks) entry a foreign
+    /// registration cannot touch, so the live own generation's registered
+    /// dir still serves.
+    /// RED PROOF: on the pre-JF-782 tree the own-live verdict accepts the
+    /// shadow unread and the strict gate's fall-through serves seg_7777.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_ForeignRegistrationOverwrite_OwnLiveGenerationStillServes()
+    {
+        var (itemId, controller, reads) = PlantTwoRootShadowFixture(
+            "JF-782 Foreign Overwrite S01E01",
+            "fake-ffmpeg-jf782-foreign-overwrite");
+
+        // The own generation FULLY live (a written own-ticks slot)...
+        VideoAudioController.SetEncodeActiveForTest(itemId, active: true);
+
+        // ...and the concurrent foreign-ticks encode's registration
+        // displacing the per-key slot (the art-change-mid-flight shape).
+        _ = PlantForeignTicksRegistration(itemId);
+        try
+        {
+            ActionResult result = await controller.StreamHlsEpisode(itemId);
+
+            var content = Assert.IsType<ContentResult>(result);
+            Assert.True(
+                content.Content.Contains("seg_9999", StringComparison.Ordinal),
+                $"the own-live generation's registered dir must survive a foreign per-key registration overwrite (JF-782 leg 3); shadow marker seg_7777 present: {content.Content.Contains("seg_7777", StringComparison.Ordinal)}");
             Assert.DoesNotContain("seg_7777", content.Content, StringComparison.Ordinal);
             Assert.Equal(1, reads.Lives());
         }
