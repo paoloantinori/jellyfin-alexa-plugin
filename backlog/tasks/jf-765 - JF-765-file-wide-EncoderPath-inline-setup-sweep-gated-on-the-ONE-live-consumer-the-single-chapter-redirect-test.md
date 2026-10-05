@@ -1,10 +1,12 @@
 ---
 id: JF-765
 title: >-
-  JF-765 - file-wide EncoderPath inline-setup sweep, gated on the ONE live consumer (the single-chapter redirect test)
+  JF-765 - file-wide EncoderPath inline-setup sweep, gated on the ONE live
+  consumer (the single-chapter redirect test)
 status: Done
 assignee: []
 created_date: '2026-10-05'
+updated_date: '2026-10-05 02:21'
 labels:
   - test-hygiene
 dependencies: []
@@ -106,6 +108,7 @@ copy-paste setups; fix the comment when next touching the file.
 
 ## Final Summary
 
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
 THE GATE, then the sweep, exactly in the filing's order. (1) The redirect test
 (StreamHlsAudiobook_SingleChapter_RedirectsToSingleItemHls) now drives an explicit
 WriteRecordingFakeFfmpeg with the 3-digit seg_000.ts (the redirect lands in the
@@ -166,3 +169,6 @@ surfaces under an artificial PATH restriction).
 
 TEST-ONLY plus doc comments and the ci.yml comment: no DLL deploy (the controller change
 is comment-only, verified by hunk inspection).
+
+CLOSED 2026-10-05 by the orchestrator after the full cycle: merged into main (worker commit 97411fbb, --no-ff) under the scaled verification (the comment-only controller hunk, the sweep count, and the hermetic fake read directly); 5205/5205 both TFMs both PATH states. TEST-ONLY: no deploy. JF-768 unused; the chmod ambient-binary note recorded in the task file below the filing bar.
+<!-- SECTION:FINAL_SUMMARY:END -->
