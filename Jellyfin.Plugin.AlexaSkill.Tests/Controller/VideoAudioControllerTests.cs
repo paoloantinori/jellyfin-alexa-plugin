@@ -4092,6 +4092,22 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             "exit 0\n");
 
     /// <summary>
+    /// The FLUSH-LAG degrade fake (extracted at the third byte-identical copy,
+    /// JF-763): writes the FIRST SEGMENT only, never the playlist, so the
+    /// first-segment wait passes while the playlist read one flush cycle later
+    /// still misses. This is the PhysicalFile-degrade shape the JF-678 flush-lag
+    /// pin and the JF-763 fold-in pins share. Do NOT switch these to
+    /// <see cref="WriteRecordingFakeFfmpeg"/>: that one also writes the playlist
+    /// and would flip the degrade into a full serve.
+    /// </summary>
+    private string WriteFlushLagFakeFfmpeg(string name)
+        => WriteFakeFfmpeg(name,
+            "for last_arg in \"$@\"; do :; done\n" +
+            "dir=$(dirname \"$last_arg\")\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0000.ts\" 2>/dev/null\n" +
+            "exit 0\n");
+
+    /// <summary>
     /// JF-498 review C1b (folded into the combined probe, JF-539): the bitrate side
     /// of <see cref="VideoAudioController.ResolveSourceCodecs"/> sums the FIRST
     /// video stream's BitRate and the FIRST audio stream's BitRate; later audio
@@ -9129,11 +9145,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
         // Writes the first SEGMENT only: the first-segment wait passes, the
         // playlist read one flush cycle later still misses.
-        string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-jf678-flushlag",
-            "for last_arg in \"$@\"; do :; done\n" +
-            "dir=$(dirname \"$last_arg\")\n" +
-            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0000.ts\" 2>/dev/null\n" +
-            "exit 0\n");
+        string fakeFfmpegPath = WriteFlushLagFakeFfmpeg("fake-ffmpeg-jf678-flushlag");
 
         var logRecords = new List<(LogLevel Level, string Message)>();
         using var loggerFactory = LoggerFactory.Create(b =>
@@ -9153,6 +9165,163 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Assert.Contains(
             TestCaptureLogger.Snapshot(logRecords),
             r => r.Message.Contains("Failed to rewrite audiobook playlist with token", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// JF-763 Decision 1 pin: the album-concat endpoint's TWO isMusicAlbum query
+    /// arms route through the ONE album-tracks builder
+    /// (<see cref="QueueContinuationFetcher.BuildAlbumTracksQueryUnpaged"/>), not a
+    /// hand-kept initializer. AlbumPlayService sums the resume offset against
+    /// AlbumTrackOrder and the concat timeline encodes this enumeration, so the rows
+    /// encoded must be definitionally the rows the paged head/tail play through; a
+    /// hand-kept copy here would drift from a builder evolution silently (the
+    /// wrong-track-resume-slice class). Split-album server shape (JF-338 'Jazz
+    /// Cafe') so BOTH arms issue: the ParentId page empty, the AlbumIds retry
+    /// populated. Each arm asserts the builder's field set INCLUDING the unpaged
+    /// invariants (User null, StartIndex/Limit null: fetch-all; null is the SDK's
+    /// no-paging value, NOT 0, which is Take(0) per JF-443).
+    /// SABOTAGE (verified red 2026-10-05): BuildAlbumTracksQueryCore's
+    /// IncludeItemTypes flipped to AudioBook reds the kind assert on BOTH arms
+    /// (the endpoint consumes the builder's field set, not a local copy).
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_AlbumParent_BothArms_RouteThroughTheAlbumTracksBuilderUnpaged()
+    {
+        Guid parentId = Guid.NewGuid();
+        var album = new MediaBrowser.Controller.Entities.Audio.MusicAlbum
+        {
+            Name = "JF-763 Fold-In Album",
+            Id = parentId
+        };
+        var track1 = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Track 1",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromMinutes(3).Ticks
+        };
+        var track2 = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Track 2",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromMinutes(3).Ticks
+        };
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns(album);
+
+        var captured = new List<MediaBrowser.Controller.Entities.InternalItemsQuery>();
+        _libraryManagerMock
+            .Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Callback<MediaBrowser.Controller.Entities.InternalItemsQuery>(q => captured.Add(q))
+            .Returns((MediaBrowser.Controller.Entities.InternalItemsQuery q) =>
+                q.AlbumIds != null && q.AlbumIds.Contains(parentId)
+                    ? new List<MediaBrowser.Controller.Entities.BaseItem> { track1, track2 }
+                    : new List<MediaBrowser.Controller.Entities.BaseItem>());
+
+        string fakeFfmpegPath = WriteFlushLagFakeFfmpeg("fake-ffmpeg-jf763-foldin");
+
+        var controller = CreateController(parentId.ToString(), ffmpegPath: fakeFfmpegPath);
+
+        ActionResult result = await controller.StreamHlsAudiobook(parentId.ToString());
+
+        // Both album arms issued in order (folder primary, AlbumIds retry); the
+        // retry found the tracks, so the endpoint proceeded past resolution (any
+        // 404/503 short-circuit would leave captured at 0 or 1).
+        Assert.Equal(2, captured.Count);
+
+        void AssertBuilderArm(MediaBrowser.Controller.Entities.InternalItemsQuery arm, bool byAlbumIds)
+        {
+            // The builder's shared field set (the paged twin of these asserts lives
+            // in ProgressiveQueueTests' lockstep pin; these are the endpoint's OWN).
+            Assert.True(arm.Recursive);
+            Assert.Equal(new[] { Jellyfin.Data.Enums.BaseItemKind.Audio }, arm.IncludeItemTypes);
+            Assert.Equal(QueueContinuationFetcher.AlbumTrackOrder, arm.OrderBy);
+            Assert.Equal(new MediaBrowser.Controller.Dto.DtoOptions(true).Fields, arm.DtoOptions!.Fields);
+            // The JF-358 discipline the builder's doc declares for this shape.
+            AssertNoMediaTypesFilter(arm, "album-concat builder arm");
+
+            // The unpaged invariants: no session user on the token-gated HTTP path,
+            // no paging (null = fetch-all, NOT Limit=0 = Take(0), JF-443).
+            Assert.Null(arm.User);
+            Assert.Null(arm.StartIndex);
+            Assert.Null(arm.Limit);
+
+            // The ONE arm difference: the scoping field.
+            if (byAlbumIds)
+            {
+                Assert.Equal(new[] { parentId }, arm.AlbumIds);
+                Assert.Equal(Guid.Empty, arm.ParentId);
+            }
+            else
+            {
+                Assert.Equal(parentId, arm.ParentId);
+                Assert.Empty(arm.AlbumIds ?? Array.Empty<Guid>());
+            }
+        }
+
+        AssertBuilderArm(captured[0], byAlbumIds: false);
+        AssertBuilderArm(captured[1], byAlbumIds: true);
+
+        // The tracks were found, so the endpoint proceeded PAST resolution to the
+        // encode and served its degrade row (the JF-678 flush-lag shape: the lazy
+        // PhysicalFile), not a 404 (queries never issued) and not a 500 (a
+        // post-resolution runtime failure this pin must also catch).
+        Assert.IsType<PhysicalFileResult>(result);
+    }
+
+    /// <summary>
+    /// The ternary's other leg (JF-763): a NON-MusicAlbum parent (an audiobook
+    /// folder) keeps its LOCAL AudioBook-kind initializer with NO AlbumTrackOrder
+    /// (the DB order IS the chapter order), so the fold-in must not collapse the
+    /// kind switch. The chapters query is captured field-for-field.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_AudiobookParent_KeepsLocalAudioBookQuery()
+    {
+        Guid parentId = Guid.NewGuid();
+        var book = new MediaBrowser.Controller.Entities.Folder
+        {
+            Name = "JF-763 Book Folder",
+            Id = parentId
+        };
+        var chapter1 = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Chapter 1",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromMinutes(3).Ticks
+        };
+        var chapter2 = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Chapter 2",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromMinutes(3).Ticks
+        };
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns(book);
+
+        var captured = new List<MediaBrowser.Controller.Entities.InternalItemsQuery>();
+        _libraryManagerMock
+            .Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Callback<MediaBrowser.Controller.Entities.InternalItemsQuery>(q => captured.Add(q))
+            .Returns(new List<MediaBrowser.Controller.Entities.BaseItem> { chapter1, chapter2 });
+
+        string fakeFfmpegPath = WriteFlushLagFakeFfmpeg("fake-ffmpeg-jf763-audiobook");
+
+        var controller = CreateController(parentId.ToString(), ffmpegPath: fakeFfmpegPath);
+
+        await controller.StreamHlsAudiobook(parentId.ToString());
+
+        MediaBrowser.Controller.Entities.InternalItemsQuery chaptersQuery = Assert.Single(captured);
+        Assert.Equal(parentId, chaptersQuery.ParentId);
+        Assert.Equal(new[] { Jellyfin.Data.Enums.BaseItemKind.AudioBook }, chaptersQuery.IncludeItemTypes);
+        Assert.True(chaptersQuery.Recursive);
+        // NO AlbumTrackOrder on the audiobook leg: the DB order IS the chapter
+        // order (an album-style disc/track sort here would reorder the book).
+        Assert.True(
+            chaptersQuery.OrderBy == null || chaptersQuery.OrderBy.Count == 0,
+            "audiobook chapters query must carry no explicit order");
+        Assert.NotNull(chaptersQuery.DtoOptions);
     }
 
     // ---- W4: permission-denied deletes must not surface as 500s ----

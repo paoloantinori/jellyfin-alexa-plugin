@@ -567,16 +567,26 @@ public sealed class AlbumPlayService
         // Get the first page of album tracks for fast time-to-audio.
         // Remaining tracks will be fetched on demand by PlaybackNearlyFinished.
         _logger.LogDebug("{Label}: querying tracks for album='{AlbumName}' (id={AlbumId})", logLabel, album.Name, album.Id);
+        // JF-763: head/tail library-scope parity (the JF-666 tail rule): the head's
+        // track pages run under the same per-user library scope as the tail's
+        // continuation batches (FetchAlbumTracks) and this service's own album
+        // search/playlist queries. Without it a restricted user's page 1 can
+        // enumerate tag-linked tracks from EXCLUDED libraries (the JF-338 AlbumIds
+        // retry's membership arm) that the filtered tail then never serves: an
+        // excluded-library track plays and the tail's continuation switches row
+        // sets mid-album. Row-neutral otherwise: the filter no-ops for unrestricted
+        // users and passes every folder child of an album the filtered search just
+        // found (the tail's production shape since JF-666).
+        var tracksQuery = QueueContinuationFetcher.BuildAlbumTracksQuery(
+            jellyfinUser, album.Id, 0, ProgressiveQueueConstants.GetInitialFetchSize(), byAlbumIds: false);
+        Util.LibraryFilter.ApplyLibraryFilter(tracksQuery, user, libraryManager, _logger);
         // JF-753: this page and the AlbumIds retry below drive the continuation
         // store gate, so the fallback total must be the sentinel
         // (unknownTotalOnFallback): a page-size total would read as "complete"
         // there and the album would truncate at this page on NRE-class servers
         // (the JF-673 audiobook head shape).
         QueryResult<BaseItem> albumResult = await RetryAsync(
-            () => _search.SafeGetItemsResult(libraryManager,
-                QueueContinuationFetcher.BuildAlbumTracksQuery(
-                    jellyfinUser, album.Id, 0, ProgressiveQueueConstants.GetInitialFetchSize(), byAlbumIds: false),
-                unknownTotalOnFallback: true),
+            () => _search.SafeGetItemsResult(libraryManager, tracksQuery, unknownTotalOnFallback: true),
             logLabel + ":GetAlbumTracks",
             cancellationToken: cancellationToken).ConfigureAwait(false);
         _logger.LogDebug("{Label}: Jellyfin returned {TrackCount} tracks (total={TotalCount})", logLabel, albumResult.Items.Count, _logger.IsEnabled(LogLevel.Debug) ? QueueContinuationFetcher.RenderTotal(albumResult.TotalRecordCount) : null);
@@ -588,11 +598,11 @@ public sealed class AlbumPlayService
             // ignores folder structure. Verified on the malformed "Jazz Cafe" album:
             // ParentId+Recursive returns 0, AlbumIds returns all tracks. JF-338.
             _logger.LogDebug("{Label}: folder-based track query returned 0, retrying by AlbumIds for '{Name}'", logLabel, album.Name);
+            var albumIdsQuery = QueueContinuationFetcher.BuildAlbumTracksQuery(
+                jellyfinUser, album.Id, 0, ProgressiveQueueConstants.GetInitialFetchSize(), byAlbumIds: true);
+            Util.LibraryFilter.ApplyLibraryFilter(albumIdsQuery, user, libraryManager, _logger);
             albumResult = await RetryAsync(
-                () => _search.SafeGetItemsResult(libraryManager,
-                    QueueContinuationFetcher.BuildAlbumTracksQuery(
-                        jellyfinUser, album.Id, 0, ProgressiveQueueConstants.GetInitialFetchSize(), byAlbumIds: true),
-                    unknownTotalOnFallback: true),
+                () => _search.SafeGetItemsResult(libraryManager, albumIdsQuery, unknownTotalOnFallback: true),
                 logLabel + ":GetAlbumTracksByAlbumIds",
                 cancellationToken: cancellationToken).ConfigureAwait(false);
             _logger.LogDebug("{Label}: AlbumIds fallback returned {TrackCount} tracks (total={TotalCount})", logLabel, albumResult.Items.Count, _logger.IsEnabled(LogLevel.Debug) ? QueueContinuationFetcher.RenderTotal(albumResult.TotalRecordCount) : null);
