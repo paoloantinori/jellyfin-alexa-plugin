@@ -200,6 +200,22 @@ intents:
       - फिल्म {title} चलाओ
       - वीडियो {title} शुरू करो
       - फिल्म {title} देखो
+      # JF-770: the JF-766 bare removal cost the देखो tail its second
+      # member and the qualified anchor stopped routing (live profile-nlu
+      # 2026-10-05: 'फिल्म इंसेप्शन देखो' Fallback 4/4 with the exact
+      # sample live in the model; an identical-content rebuild did NOT
+      # recover, ruling out trainer nondeterminism). The probe map
+      # (task JF-770) localizes the weakness to फिल्म-carried short
+      # forms: every non-फिल्म short form probed routes clean (the
+      # bare '{title} देखो' shape itself reads NO_SELECTION, the
+      # JF-766-accepted recall cost), and the other फिल्म-led failures
+      # are filed JF-771. Remediation: three more
+      # QUALIFIED देखो variants (the probe-proven वीडियो carrier, the
+      # fresh मूवी carrier, a फिल्म word-order twin), never bare
+      # (JF-459/JF-766 discipline).
+      - वीडियो {title} देखो
+      - मूवी {title} देखो
+      - फिल्म देखो {title}
       - मैं फिल्म {title} देखना चाहता हूँ
       - फिल्म {title} खोजो
     slots:
