@@ -248,11 +248,15 @@ public class SongNgramIndexService : DebouncedLibraryIndexService<SongNgramIndex
             // index is byte-identical). The query tokens reaching Search/SearchPhonetic
             // are always romanized (every caller romanizes the slot at entry), so the
             // romaji keys are what makes a kana-tagged title reachable at the O(1)
-            // lookup; the kana keys stay for kana-kana exactness. Index build and
-            // KeywordMatcher's coverage scoring share the ONE helper, so recall
-            // (dictionary hit) and admission (coverage) cannot drift. The boundary
-            // bigram between the two streams is junk but harmless (a lookup key
-            // nothing queries).
+            // lookup; the kana keys keep the dictionary recall step working for kana-kana
+            // exactness. NOTE (JF-755 gate-marker): scoring does NOT read this
+            // union - KeywordMatcher.Score/ScorePhonetic consume ScoringTokens,
+            // which REPLACES the kana tokens with the romanized reading, so a
+            // caller feeding un-romanized kana query tokens would recall via the
+            // kana keys but score 0 coverage and drop the title. Every current
+            // caller romanizes at entry; HasFullKeywordCoverage still honors the
+            // union. The boundary bigram between the two streams is junk but
+            // harmless (a lookup key nothing queries).
             string[] tokens = KeywordMatcher.TitleTokens(song.Name, "en-US");
 
             entries.Add(song);
