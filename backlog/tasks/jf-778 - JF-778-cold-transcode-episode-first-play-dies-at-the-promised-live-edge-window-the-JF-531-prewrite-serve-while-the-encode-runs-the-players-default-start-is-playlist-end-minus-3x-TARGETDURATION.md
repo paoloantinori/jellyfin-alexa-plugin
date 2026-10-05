@@ -4,9 +4,10 @@ title: >-
   JF-778 - cold transcode-episode first play dies at the promised live edge:
   window the JF-531 prewrite serve while the encode runs (the player's default
   start is playlist-end minus 3x TARGETDURATION)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-05'
+updated_date: '2026-10-05 14:04'
 labels:
   - bug
   - video
@@ -22,6 +23,7 @@ priority: high
 
 ## Description
 
+<!-- SECTION:DESCRIPTION:BEGIN -->
 Filed 2026-10-05 from Paolo's LIVE Echo Show device report (filing
 reconstructed from the dispatch + the orchestrator's verbatim log paste; the
 original heredoc filing was hook-blocked and never landed).
@@ -133,19 +135,22 @@ record (its 10s segments + per-segment discontinuities + ~250x copy encode make
 the timing picture different), and a cold single-chapter book is rare. Flagged
 for the device round: if Paolo's next cold audiobook/long-song first play shows
 the same three-404 death, the window applies to those serves as the follow-up.
+<!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
-
-- [x] #1 While an episode encode is live, the prewrite serve lists only the windowed prefix (floor 2 entries at first serve, growing 1 entry per segment-seconds, capped at head+1); the served listing never contains a segment beyond head+1 unless it is one of the floor's at-most-2 hold-covered entries
-- [x] #2 The served listing keeps the event-playlist shape (no ENDLIST, MEDIA-SEQUENCE:0, TARGETDURATION:4) and the token; the prewrite FILE on disk remains the full listing (post-encode and resume-slicing consumers unchanged)
-- [x] #3 A resume (?start=) beyond the grown window during the encode drops the offset with a log (the JF-686 still-growing rule); a resume inside the window slices within it
-- [x] #4 Red proof: the cold-edge pin (player asks the far-ahead shape while the encode head is at 7, the JF-778 device shape) fails on the unmodified tree and passes after; both TFMs; full suite green
-- [x] #5 The JF-503 hold constants and logic unchanged; the JF-680/JF-681/JF-774 prewrite-serve pins stay green (the 2-entry floor covers their short planted listings)
-- [x] #6 /simplify + code-review high gates run on the diff
-- [ ] #7 Paolo's device round: cold transcode-tier episode first play starts at 0 and does not die; seekbar grows for the encode window then completes; warm replay unchanged (see Final Summary)
+<!-- AC:BEGIN -->
+- [x] #1 #1 While an episode encode is live, the prewrite serve lists only the windowed prefix (floor 2 entries at first serve, growing 1 entry per segment-seconds, capped at head+1); the served listing never contains a segment beyond head+1 unless it is one of the floor's at-most-2 hold-covered entries
+- [x] #2 #2 The served listing keeps the event-playlist shape (no ENDLIST, MEDIA-SEQUENCE:0, TARGETDURATION:4) and the token; the prewrite FILE on disk remains the full listing (post-encode and resume-slicing consumers unchanged)
+- [x] #3 #3 A resume (?start=) beyond the grown window during the encode drops the offset with a log (the JF-686 still-growing rule); a resume inside the window slices within it
+- [x] #4 #4 Red proof: the cold-edge pin (player asks the far-ahead shape while the encode head is at 7, the JF-778 device shape) fails on the unmodified tree and passes after; both TFMs; full suite green
+- [x] #5 #5 The JF-503 hold constants and logic unchanged; the JF-680/JF-681/JF-774 prewrite-serve pins stay green (the 2-entry floor covers their short planted listings)
+- [x] #6 #6 /simplify + code-review high gates run on the diff
+- [ ] #7 #7 Paolo's device round: cold transcode-tier episode first play starts at 0 and does not die; seekbar grows for the encode window then completes; warm replay unchanged (see Final Summary)
+<!-- AC:END -->
 
 ## Implementation Notes
 
+<!-- SECTION:NOTES:BEGIN -->
 <!-- NOTES:BEGIN -->
 2026-10-05: implemented as designed (shape c). TryServePrewrittenEpisodePlaylist
 now reads the prewrite once, computes K = max(2, min(head + 1, elapsedSegments +
@@ -211,9 +216,11 @@ ResumeInsideWindow, MidWindowResume_OutsideHonorBand,
 EpisodePrewriteWindowFloor_RespectsSegmentHoldLookahead, and the two
 TruncateToFirstSegments unit pins).
 <!-- NOTES:END -->
+<!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
 <!-- FINAL_SUMMARY:BEGIN -->
 CHOSEN SHAPE: (c) hybrid; the prewrite file stays the full-listing source of
 truth, but while the encode is live the serve lists only a time-anchored
@@ -242,8 +249,10 @@ DEVICE RETEST LIST for Paolo (AC#7):
    window must extend to those serves (the song/audiobook prewrite twins).
 <!-- FINAL_SUMMARY:END -->
 
-## Definition of Done
+CLOSED (code-side) 2026-10-05 by the orchestrator after the full cycle: merged into main (worker dcfd3b84 + orchestrator tail fff2e06e, --no-ff; the gate-marker's seven axes PASS with the pins re-run in the review tree; its five findings: F4/F5/F2 applied/noted in the tail, F1/F3 the protocol residuals FILED as JF-780 with the discriminating device probes), combined-tree suite 5283/5283 both TFMs. AC#7 (the device round) stays OPEN pending Paolo's cold-Sailor-Moon retest: that retest is the close evidence, and the JF-780 probes ride the same session. Deploying now.
+<!-- SECTION:FINAL_SUMMARY:END -->
 
+## Definition of Done
 <!-- DOD:BEGIN -->
 - [x] #1 dotnet build passes with 0 errors (Release, -warnaserror, both TFMs)
 - [x] #2 dotnet test passes (both TFMs, full suite once on the final state)
@@ -256,5 +265,3 @@ DEVICE RETEST LIST for Paolo (AC#7):
 - [x] #9 /simplify passed
 - [x] #10 /code-review high passed
 <!-- DOD:END -->
-
-CLOCK-STEP NOTE (the JF-778 gate-marker F2): the window growth anchor is a wall-clock difference (UtcNow minus the prewrite mtime), so a BACKWARD clock step mid-encode (an NTP correction) makes prewriteAge negative, zeroes the growth term, and collapses the window to the floor 2-3 entries; the attached player current segment drops from the listing. The forward-touch variant is the code-review F5 degrade note; this self-inflicted variant is documented here. Neither is engineered; both ride the twins-adoption extraction trigger.
