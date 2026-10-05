@@ -271,4 +271,53 @@ seg_0004.ts
 
         Assert.Contains("#EXT-X-START:TIME-OFFSET=30.000,PRECISE=YES", result);
     }
+
+    // ---------- JF-778: TruncateToFirstSegments (the windowed prewrite serve's emitter) ----------
+
+    /// <summary>
+    /// JF-778: truncation keeps the header plus the first N (EXTINF, URI) pairs,
+    /// drops the tail AND any trailing ENDLIST (the windowed listing must stay an
+    /// event playlist: the player keeps polling for growth), and never leaks the
+    /// first DROPPED segment's EXTINF as a phantom entry (the pending-flush
+    /// boundary; an EXTINF without its URI skews every duration walk downstream).
+    /// </summary>
+    [Fact]
+    public void TruncateToFirstSegments_KeepsPrefixDropsTailAndEndlist()
+    {
+        string playlist = "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n"
+            + "#EXTINF:4.0,\nseg_0000.ts?token=t\n#EXTINF:4.0,\nseg_0001.ts?token=t\n#EXTINF:4.0,\nseg_0002.ts?token=t\n"
+            + "#EXT-X-ENDLIST\n";
+
+        string truncated = AudiobookPlaylistBuilder.TruncateToFirstSegments(playlist, maxSegments: 2);
+
+        Assert.StartsWith("#EXTM3U", truncated, StringComparison.Ordinal);
+        Assert.Contains("#EXT-X-MEDIA-SEQUENCE:0", truncated, StringComparison.Ordinal);
+        Assert.Contains("seg_0000.ts?token=t", truncated, StringComparison.Ordinal);
+        Assert.Contains("seg_0001.ts?token=t", truncated, StringComparison.Ordinal);
+        Assert.DoesNotContain("seg_0002", truncated, StringComparison.Ordinal);
+        Assert.DoesNotContain("#EXT-X-ENDLIST", truncated, StringComparison.Ordinal);
+        // Exactly two EXTINF lines: the boundary EXTINF of the dropped segment
+        // must not survive as a third.
+        Assert.Equal(2, truncated.Split("#EXTINF").Length - 1);
+    }
+
+    /// <summary>
+    /// JF-778: a maxSegments at or above the listing's own count keeps every line
+    /// (ENDLIST included; no truncation engages), and CRLF input survives the
+    /// walk with CR stripped on the kept lines.
+    /// </summary>
+    [Fact]
+    public void TruncateToFirstSegments_AtOrAboveCount_UnchangedAndCrlfTolerant()
+    {
+        string playlist = "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:4.0,\nseg_0000.ts\n#EXTINF:4.0,\nseg_0001.ts\n#EXT-X-ENDLIST\n";
+
+        string unchanged = AudiobookPlaylistBuilder.TruncateToFirstSegments(playlist, maxSegments: 5);
+        Assert.Equal(playlist, unchanged);
+
+        string crlf = playlist.Replace("\n", "\r\n");
+        string truncated = AudiobookPlaylistBuilder.TruncateToFirstSegments(crlf, maxSegments: 1);
+        Assert.Contains("seg_0000.ts", truncated, StringComparison.Ordinal);
+        Assert.DoesNotContain("seg_0001", truncated, StringComparison.Ordinal);
+        Assert.DoesNotContain("\r", truncated, StringComparison.Ordinal);
+    }
 }

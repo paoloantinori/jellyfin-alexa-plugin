@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 
@@ -134,7 +135,7 @@ public static class AudiobookPlaylistBuilder
             string line = rawLine.TrimEnd('\r');
 
             // A segment URI line (non-tag, references seg_NNNN.ts). Pair it with the buffered EXTINF.
-            if (!line.StartsWith('#') && line.Length > 0 && line.Contains("seg_", StringComparison.Ordinal))
+            if (IsSegmentUriLine(line))
             {
                 int segNum = TryParseSegmentNumber(line);
                 if (segNum >= startSegment && pendingInf != null)
@@ -178,6 +179,86 @@ public static class AudiobookPlaylistBuilder
     }
 
     /// <summary>
+    /// Whether a playlist line is a SEGMENT URI line (JF-778 extraction): a
+    /// non-tag, non-empty line referencing <c>seg_</c>. THE index-alignment
+    /// contract of the URI-walking transforms here and in the controller's
+    /// windowed prewrite serve (resolve, slice, truncate must agree on what a
+    /// segment line is, or a window computed against one walk truncates against
+    /// another; the serve's entry COUNT is
+    /// <c>VideoAudioController.CountSegmentsInPlaylist</c>, which counts
+    /// #EXTINF lines and aligns because every emitter in this family writes
+    /// exactly one EXTINF per segment URI). Deliberately broader than an
+    /// <c>EndsWith(".ts")</c> shape: the prewrite embeds the JF-309 token in
+    /// its URI lines (<c>seg_NNNN.ts?token=...</c>), which an .ts-suffixed
+    /// predicate would miss. The caller passes the already-newline-trimmed
+    /// line.
+    /// </summary>
+    /// <param name="line">The trimmed playlist line.</param>
+    /// <returns>True when the line is a segment URI.</returns>
+    internal static bool IsSegmentUriLine(string line)
+        => !line.StartsWith('#') && line.Length > 0 && line.Contains("seg_", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Truncate an HLS media playlist to its first <paramref name="maxSegments"/>
+    /// segment entries (JF-778): the header block and the first N
+    /// (EXTINF, segment URI) pairs verbatim, everything from segment N+1's
+    /// block onward dropped. The mirror of <see cref="BuildSlicedPlaylist"/>
+    /// (keep-first-N vs keep-from-N), sharing its segment-URI predicate and
+    /// EXTINF-pairing assumptions. Non-segment lines (header tags, an EXTINF
+    /// awaiting its URI, discontinuity tags inside the kept prefix) are emitted
+    /// in place, and a trailing ENDLIST is dropped with the tail because the
+    /// truncated listing must stay an event playlist (the player keeps polling
+    /// for growth). A <paramref name="maxSegments"/> at or above the listing's
+    /// own count returns the content unchanged in shape.
+    /// </summary>
+    /// <param name="playlistContent">The full playlist text.</param>
+    /// <param name="maxSegments">The number of leading segment entries to keep.</param>
+    /// <returns>The truncated playlist text.</returns>
+    internal static string TruncateToFirstSegments(string playlistContent, int maxSegments)
+    {
+        string[] lines = playlistContent.Split('\n');
+        var kept = new List<string>(Math.Min(lines.Length, (maxSegments * 2) + 8));
+        // Lines since the last kept segment URI (an EXTINF awaiting its URI, a
+        // discontinuity tag): flushed only when the segment they belong to is
+        // kept, so the first DROPPED segment's EXTINF never leaks into the
+        // truncated listing as a phantom extra entry.
+        var pending = new List<string>();
+        int segmentCount = 0;
+        bool truncated = false;
+        foreach (string rawLine in lines)
+        {
+            string line = rawLine.TrimEnd('\r');
+            if (IsSegmentUriLine(line))
+            {
+                if (segmentCount >= maxSegments)
+                {
+                    truncated = true;
+                    break;
+                }
+
+                kept.AddRange(pending);
+                pending.Clear();
+                kept.Add(line);
+                segmentCount++;
+            }
+            else
+            {
+                pending.Add(line);
+            }
+        }
+
+        // A walk that never truncated keeps the trailing non-URI lines (an
+        // ENDLIST, the final newline): maxSegments at or above the listing's
+        // own count returns the content unchanged, per the contract above.
+        if (!truncated)
+        {
+            kept.AddRange(pending);
+        }
+
+        return string.Join('\n', kept);
+    }
+
+    /// <summary>
     /// The ONE start-segment resolution (JF-686 review F5): the EXTINF walk when the
     /// playlist's durations decide, else the flat divisor over
     /// <paramref name="segmentDurationSeconds"/>. Extracted so the serve path can log the
@@ -214,7 +295,7 @@ public static class AudiobookPlaylistBuilder
         {
             string line = rawLine.TrimEnd('\r');
 
-            if (!line.StartsWith('#') && line.Length > 0 && line.Contains("seg_", StringComparison.Ordinal))
+            if (IsSegmentUriLine(line))
             {
                 if (pendingSeconds is not double seconds)
                 {
