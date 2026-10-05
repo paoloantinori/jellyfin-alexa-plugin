@@ -1,5 +1,5 @@
 ---
-id: JF-785
+id: JF-786
 title: >-
   JF-760 collapse residuals: the 5 Debug-floor sibling blocks (accept vs
   collapse decision) and the non-asserting SkillResponseLogging capture site
