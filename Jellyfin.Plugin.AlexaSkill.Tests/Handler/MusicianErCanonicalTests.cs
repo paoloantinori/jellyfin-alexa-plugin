@@ -43,13 +43,6 @@ public class MusicianErCanonicalTests : PluginTestBase, IDisposable
     private BaseItem Queen() => new MusicArtist { Name = "Queen", Id = Guid.NewGuid() };
     private BaseItem Keane() => new MusicArtist { Name = "Keane", Id = Guid.NewGuid() };
 
-    private static Dictionary<Guid, (string Primary, string? Alternate)> CodesFromNames(params BaseItem[] artists)
-    {
-        // The production encoder: the KN collision between Queen and Keane is the
-        // live tie shape, not a hand-written assumption.
-        return artists.ToDictionary(a => a.Id, a => DoubleMetaphone.Encode(a.Name!));
-    }
-
     private static IntentRequest CreateArtistIntent(string musician, string? canonical = null)
     {
         var intent = new Intent { Name = IntentNames.PlayArtistSongs };
@@ -119,7 +112,7 @@ public class MusicianErCanonicalTests : PluginTestBase, IDisposable
         // the multi-artist tie ask.
         var queen = Queen();
         var keane = Keane();
-        var index = new FakeArtistIndex(new[] { queen, keane }, CodesFromNames(queen, keane));
+        var index = new FakeArtistIndex(new[] { queen, keane }, FakeArtistIndex.CodesFromArtistNames(queen, keane));
         var song = new Audio { Name = "Bohemian Rhapsody", Id = Guid.NewGuid() };
 
         var artistScopedSongQueries = new List<Guid[]>();
@@ -151,7 +144,7 @@ public class MusicianErCanonicalTests : PluginTestBase, IDisposable
         // the raw romanized query genuinely cannot distinguish the winner.
         var queen = Queen();
         var keane = Keane();
-        var index = new FakeArtistIndex(new[] { queen, keane }, CodesFromNames(queen, keane));
+        var index = new FakeArtistIndex(new[] { queen, keane }, FakeArtistIndex.CodesFromArtistNames(queen, keane));
 
         var handler = CreateArtistHandler(index);
         _fx.SetupUserMock();
@@ -162,6 +155,160 @@ public class MusicianErCanonicalTests : PluginTestBase, IDisposable
         Assert.NotNull(response);
         Assert.True(IsDisambiguationAsk(response, "Queen", "Keane"), "the raw kana path keeps today's tie ask");
         Assert.False(HasAudioPlayerDirective(response));
+    }
+
+    // ---------------------------------------------------------------
+    // JF-755 (the 2026-09-29 JF-658 review finding, moved from JF-645
+    // item 4): the KANA canonical against a mixed library
+    // ---------------------------------------------------------------
+
+    [Fact]
+    public async Task HandleAsync_KanaCanonical_MixedLibrary_PlaysKanaNamedArtist_JF755()
+    {
+        // The finding's shape: the catalog value itself is kana ('クイーン'), a
+        // kana-tagged artist in an otherwise Latin library holding the Queen/Keane
+        // DM-colliding pair. The JF-658 fold routed the canonical through
+        // SearchAsync's entry romanization for the first time, so the query became
+        // 'kuin', lost the kana artist, and opened the tier-4 91-tie to a Latin
+        // artist while the JF-652 bar stayed inert (kanaOrigin=false whenever a
+        // canonical resolved). The symmetric index's romaji key makes the
+        // romanized canonical exact-hit the kana artist at tier 1, so the ER
+        // evidence resolves to the artist it names and plays it.
+        var kanaQueen = new MusicArtist { Name = "クイーン", Id = Guid.NewGuid() };
+        var queen = Queen();
+        var keane = Keane();
+        var index = new FakeArtistIndex(
+            new[] { kanaQueen, queen, keane },
+            FakeArtistIndex.CodesFromArtistNames(kanaQueen, queen, keane));
+        var song = new Audio { Name = "ボヘミアン・ラプソディ", Id = Guid.NewGuid() };
+
+        var artistScopedSongQueries = new List<Guid[]>();
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Length > 0)))
+            .Returns((InternalItemsQuery q) =>
+            {
+                artistScopedSongQueries.Add(q.ArtistIds);
+                return new List<BaseItem> { song };
+            });
+
+        var handler = CreateArtistHandler(index);
+        _fx.SetupUserMock();
+
+        SkillResponse response = await handler.HandleAsync(
+            CreateArtistIntent("クイーン", canonical: "クイーン"), _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.True(HasAudioPlayerDirective(response), "the kana canonical must resolve to the kana-named artist and play");
+        Assert.True(response.Response.ShouldEndSession == true, "a play ends the session (JF-299 rule)");
+        Assert.False(IsDisambiguationAsk(response, "Queen", "Keane"), "the Latin tie pair must not be offered for a kana canonical");
+        Assert.Contains(artistScopedSongQueries, ids => ids.Length == 1 && ids[0] == kanaQueen.Id);
+        Assert.DoesNotContain(artistScopedSongQueries, ids => ids.Contains(queen.Id) || ids.Contains(keane.Id));
+    }
+
+    [Fact]
+    public async Task HandleAsync_KanaCanonical_KanaArtistAbsent_FuzzyRecoversLikeALatinCanonical_JF755()
+    {
+        // The stale-catalog residual, pinned at its ACCEPTED boundary (the design
+        // decision in the task file): when the kana-named artist the canonical
+        // points at is NOT in the library, the romanized query falls to the tier-4
+        // 91-collision class with the JF-652 bar inert (kanaOrigin stays false, the
+        // JF-659 invariant), and the recovery behaves exactly like a LATIN canonical
+        // whose artist is absent: the colliding Latin artist fuzzy-recovers and
+        // plays. That is by design, not a regression to block: the user asked for
+        // the real-world artist (クイーン IS Queen), and the deleted entry is the
+        // catalog's staleness, not a wrong play. The tier-4 pick is deterministic
+        // in fixture order (the first 91-tie wins under the strict-greater rule).
+        var queen = Queen();
+        var keane = Keane();
+        var index = new FakeArtistIndex(
+            new[] { queen, keane },
+            FakeArtistIndex.CodesFromArtistNames(queen, keane));
+        var song = new Audio { Name = "Bohemian Rhapsody", Id = Guid.NewGuid() };
+
+        var artistScopedSongQueries = new List<Guid[]>();
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Length > 0)))
+            .Returns((InternalItemsQuery q) =>
+            {
+                artistScopedSongQueries.Add(q.ArtistIds);
+                return new List<BaseItem> { song };
+            });
+
+        var handler = CreateArtistHandler(index);
+        _fx.SetupUserMock();
+
+        SkillResponse response = await handler.HandleAsync(
+            CreateArtistIntent("クイーン", canonical: "クイーン"), _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.True(HasAudioPlayerDirective(response), "the resolved-but-absent entity fuzzy-recovers by design, as for a Latin canonical");
+        Assert.Contains(artistScopedSongQueries, ids => ids.Length == 1 && ids[0] == queen.Id);
+    }
+
+    // ---------------------------------------------------------------
+    // JF-755 code review: the judgment layers see the matched reading
+    // ---------------------------------------------------------------
+
+    [Fact]
+    public async Task HandleAsync_RomajiExactMatch_WithLatinSuperstringRival_PlaysTheKanaArtist_JF755()
+    {
+        // The multi-match leg: 'ニル' (romaji key 'niru') and 'Niru & Taro' BOTH
+        // match tier 1 for the raw kana query (Contains over the query-side names).
+        // Pre-fix, HandleFuzzyMiss scored raw names, so the Latin rival's containment
+        // 90 won the auto-accept while the exact kana match scored 0 and vanished;
+        // the JF-652 bar then refused the rival (no code collision: 'Niru & Taro'
+        // encodes NRT against the query's NR) and the honest answer was the
+        // NOT-FOUND despite the library holding the exact artist. Post-fix the
+        // scoring selector reads the romaji key: the exact match wins 100, clears
+        // the kana bar on a real collision, and the rival (outside the collision
+        // bar) is no near-tie, so the kana artist plays.
+        var kanaNiru = new MusicArtist { Name = "ニル", Id = Guid.NewGuid() };
+        var latinRival = new MusicArtist { Name = "Niru & Taro", Id = Guid.NewGuid() };
+        var index = new FakeArtistIndex(
+            new[] { kanaNiru, latinRival },
+            FakeArtistIndex.CodesFromArtistNames(kanaNiru, latinRival));
+        var song = new Audio { Name = "ニルの歌", Id = Guid.NewGuid() };
+
+        var artistScopedSongQueries = new List<Guid[]>();
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ArtistIds != null && q.ArtistIds.Length > 0)))
+            .Returns((InternalItemsQuery q) =>
+            {
+                artistScopedSongQueries.Add(q.ArtistIds);
+                return new List<BaseItem> { song };
+            });
+
+        var handler = CreateArtistHandler(index);
+        _fx.SetupUserMock();
+
+        SkillResponse response = await handler.HandleAsync(
+            CreateArtistIntent("ニル"), _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.True(HasAudioPlayerDirective(response), "the exact romaji match through the kana artist's key must play");
+        Assert.Contains(artistScopedSongQueries, ids => ids.Length == 1 && ids[0] == kanaNiru.Id);
+        Assert.DoesNotContain(artistScopedSongQueries, ids => ids.Contains(latinRival.Id));
+    }
+
+    [Fact]
+    public async Task HandleAsync_KanaNamedArtist_RomajiContainmentQuery_GetsTheJf377Ask_JF755()
+    {
+        // The string-gate leg: a kana-named artist ('ペイン', romaji key 'pein')
+        // reached through a qualifier query ('pein no uta') is the coincidental-
+        // containment shape; against the raw kana name the JF-377 predicate was
+        // script-blind and the match auto-played silently where the Latin
+        // equivalent ('Pain' inside a qualifier query) gets the yes/no ask. The
+        // matched reading pair makes the gate fire; the ask SPEAKS the kana name.
+        var kanaPein = new MusicArtist { Name = "ペイン", Id = Guid.NewGuid() };
+        var index = new FakeArtistIndex(
+            new[] { kanaPein }, FakeArtistIndex.CodesFromArtistNames(kanaPein));
+
+        var handler = CreateArtistHandler(index);
+        _fx.SetupUserMock();
+
+        SkillResponse response = await handler.HandleAsync(
+            CreateArtistIntent("pein no uta"), _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.False(HasAudioPlayerDirective(response), "a coincidental containment must downgrade to the ask, not auto-play");
+        Assert.True(IsDisambiguationAsk(response, "ペイン"), "the ask presents the kana-named artist (speech keeps the raw name)");
     }
 
     // ---------------------------------------------------------------
@@ -176,7 +323,7 @@ public class MusicianErCanonicalTests : PluginTestBase, IDisposable
         // between the DM-colliding pair) and the found song plays.
         var queen = Queen();
         var keane = Keane();
-        var index = new FakeArtistIndex(new[] { queen, keane }, CodesFromNames(queen, keane));
+        var index = new FakeArtistIndex(new[] { queen, keane }, FakeArtistIndex.CodesFromArtistNames(queen, keane));
         var song = new Audio { Name = "Bohemian Rhapsody", Id = Guid.NewGuid() };
 
         var artistScopedSongQueries = new List<Guid[]>();
@@ -286,7 +433,7 @@ public class MusicianErCanonicalTests : PluginTestBase, IDisposable
         // canonical ('Queen') resolves the artist, so the elicited session data
         // carrying the artist id proves the canonical drove the search.
         var queen = Queen();
-        var index = new FakeArtistIndex(new[] { queen }, CodesFromNames(queen));
+        var index = new FakeArtistIndex(new[] { queen }, FakeArtistIndex.CodesFromArtistNames(queen));
         var handler = new FindSongIntentHandler(
             _fx.SessionManager.Object,
             _fx.Config,
@@ -315,7 +462,7 @@ public class MusicianErCanonicalTests : PluginTestBase, IDisposable
         // the raw value alone resolves nothing; the stored session data must end
         // with the canonical artist resolved.
         var queen = Queen();
-        var index = new FakeArtistIndex(new[] { queen }, CodesFromNames(queen));
+        var index = new FakeArtistIndex(new[] { queen }, FakeArtistIndex.CodesFromArtistNames(queen));
         var handler = new FindSongIntentHandler(
             _fx.SessionManager.Object,
             _fx.Config,

@@ -95,6 +95,27 @@ internal static class ArtistSearch
     internal const int KanaOriginTieMargin = 5;
 
     /// <summary>
+    /// JF-755 symmetric index-side normalization: the ONE query-side name resolver
+    /// for the in-memory artist tiers. A kana-containing library name is indexed
+    /// alongside its romanized form (<see cref="IArtistIndex.TryGetRomajiName"/>),
+    /// and the query reaching these tiers is ALWAYS romanized (SearchAsync's entry
+    /// romanization, JF-643), so the string-shaped legs must compare against the
+    /// romaji key to see the kana-named artist at all. Lossless by construction for
+    /// the Latin side: <c>KatakanaRomanizer.Romanize</c> passes every Latin run
+    /// through unchanged, so a mixed name's romaji key contains everything Latin
+    /// the original name did, while a pure-kana name contains no Latin to lose.
+    /// The ORIGINAL name keeps serving every raw-name consumer (JF-690 exact-name
+    /// resolution, speech, the JF-377/JF-420 string gates): this resolver only
+    /// ADDS the parallel key. A null index (cold-window DB legs, test fakes without
+    /// the map) degrades to the raw name, the pre-JF-755 behavior.
+    /// </summary>
+    /// <param name="index">The pinned index view when one exists; null degrades to the raw name.</param>
+    /// <param name="artist">The candidate artist.</param>
+    /// <returns>The romaji key when the index has one for this artist, else the raw name.</returns>
+    internal static string QueryNameFor(IArtistIndex? index, BaseItem artist)
+        => index != null && index.TryGetRomajiName(artist.Id, out string? romaji) ? romaji : artist.Name ?? string.Empty;
+
+    /// <summary>
     /// JF-659: whether a musician query is kana-origin, the ONE definition of the
     /// origin flag the JF-652 acceptance bar consumes (PlayArtistSongs, the JF-471
     /// album-by-artist gate, CrossMediaFallback). A query carrying an ER canonical
@@ -102,12 +123,16 @@ internal static class ArtistSearch
     /// Latinity, is what makes the bar inert (the ER match IS the collision
     /// evidence the bar demands). Since JF-658 every musician handler feeds the
     /// canonical through <see cref="SearchAsync"/>, whose entry romanization is
-    /// the ONE query-side choke point: a kana canonical against a kana-tagged
-    /// library name rides the JF-643 accepted narrowing (query-side normalization
-    /// only; the symmetric index-side fix is tracked in JF-645), uniform across
-    /// all musician handlers. The canonical is slot-layer knowledge, so it
-    /// arrives here as a plain string rather than inside
-    /// <see cref="PassesKanaOriginAcceptance(string, BaseItem, int, int, IArtistIndex?)"/>,
+    /// the ONE query-side choke point. JF-755 makes that sound for kana canonicals
+    /// too: the romanized canonical now exact-hits the kana-tagged artist's
+    /// indexed romaji key at tier 1, so the ER evidence resolves to the artist it
+    /// points at instead of falling to the tier-4 Latin 91-tie the bar cannot see
+    /// (the JF-658 finding). Accepted residual: with a STALE catalog (canonical
+    /// resolved but the kana artist deleted) the romanized query fuzzy-recovers a
+    /// Latin artist with the bar inert, the same recovery a Latin canonical whose
+    /// artist is absent already performs, not a new class. The canonical is
+    /// slot-layer knowledge, so it arrives here as a plain string rather than
+    /// inside <see cref="PassesKanaOriginAcceptance(string, BaseItem, int, int, IArtistIndex?)"/>,
     /// which stays slot-agnostic by design.
     /// </summary>
     /// <param name="canonical">The ER canonical when the slot resolved, else null.</param>
@@ -182,7 +207,11 @@ internal static class ArtistSearch
     /// <summary>
     /// The pinned-index scoring ternary, one definition (the JF-382 no-third-copy
     /// rule): the phonetic overload when the pinned index exists, the plain overload
-    /// otherwise. Review round, F2c.
+    /// otherwise. Review round, F2c. JF-755: the phonetic branch scores through
+    /// <see cref="QueryNameFor"/> so a kana-named artist's romaji key (not its
+    /// raw-kana name, which the always-romanized query scores 0 against) reaches
+    /// the matcher, exact-hitting the romanized canonical instead of riding the
+    /// 91-floor tie the bar's near-tie margin then has to arbitrate.
     /// </summary>
     internal static (BaseItem Item, int Score)? ScoreBestWithCodes(
         string query, IReadOnlyList<BaseItem> candidates, IArtistIndex? pinnedIndex)
@@ -190,7 +219,7 @@ internal static class ArtistSearch
             ? FuzzyMatcher.FindBestMatchWithScore(
                 query,
                 candidates,
-                a => a.Name,
+                a => QueryNameFor(pinnedIndex, a),
                 a => a.Id,
                 id => pinnedIndex.TryGetPhoneticCode(id, out var codes) ? codes : null)
             : FuzzyMatcher.FindBestMatchWithScore(query, candidates, a => a.Name);
@@ -378,8 +407,17 @@ internal static class ArtistSearch
     /// <param name="query">The raw musician query.</param>
     /// <param name="pool">All candidate artists (the in-memory index list).</param>
     /// <param name="locale">The request locale, for stop-word stripping.</param>
+    /// <param name="index">The pinned index view when the caller has one; its
+    /// JF-755 romaji key (when present) tokenizes IN PLACE of the kana name, since
+    /// the query tokens reaching this tier are always romanized and the subset
+    /// check must hold for ONE coherent reading of the name (a union of both
+    /// readings would demand the query cover the kana tokens too, breaking the
+    /// subset for every kana-named artist). Deliberately REQUIRED (JF-755 altitude
+    /// round): the silent-default shape let the CrossMediaFallback valve below
+    /// omit it and quietly keep the pre-JF-755 kana degradation; callers without
+    /// a view pass null explicitly.</param>
     /// <returns>The best word-coverage candidates (possibly several on a tie), or an empty list.</returns>
-    internal static List<BaseItem> WordCoverageCandidates(string query, IEnumerable<BaseItem> pool, string locale)
+    internal static List<BaseItem> WordCoverageCandidates(string query, IEnumerable<BaseItem> pool, string locale, IArtistIndex? index)
     {
         string[] queryTokens = KeywordMatcher.Tokenize(query, locale);
         if (queryTokens.Length < 2)
@@ -399,7 +437,7 @@ internal static class ArtistSearch
                 continue;
             }
 
-            string[] nameWords = KeywordMatcher.Tokenize(candidate.Name, locale);
+            string[] nameWords = KeywordMatcher.Tokenize(QueryNameFor(index, candidate), locale);
             if (nameWords.Length == 0 || !nameWords.All(queryWords.Contains))
             {
                 continue;
@@ -551,16 +589,18 @@ internal static class ArtistSearch
     /// <param name="locale">The request locale.</param>
     /// <param name="logger">The caller's logger.</param>
     /// <param name="candidates">The selected word-coverage candidates when true.</param>
+    /// <param name="index">The pinned index view for the JF-755 romaji keys; null keeps raw names.</param>
     /// <returns>True when the tier produced candidates.</returns>
     internal static bool TryWordCoverageTier(
         string query,
         IEnumerable<BaseItem> pool,
         string locale,
         ILogger logger,
-        out List<BaseItem> candidates)
+        out List<BaseItem> candidates,
+        IArtistIndex? index)
     {
         var sw = Stopwatch.StartNew();
-        candidates = WordCoverageCandidates(query, pool, locale);
+        candidates = WordCoverageCandidates(query, pool, locale, index);
         sw.Stop();
         if (candidates.Count > 0)
         {
@@ -697,10 +737,16 @@ internal static class ArtistSearch
             // here and the album path played the wrong artist, while the inline
             // PlayArtistSongs search, which HAS the gate, correctly fell through to the
             // phonetic tier). Gating lets tiers 2-4 resolve the accent drift instead.
+            // JF-755: the operand is the query-side name (romaji key when present), so a
+            // kana-tagged artist is contained-matched through its indexed romaji form.
             tierSw.Restart();
             artists = allArtists
-                .Where(a => a.Name.Contains(musician, StringComparison.OrdinalIgnoreCase)
-                    && PassesContainmentBand(a.Name, musician))
+                .Where(a =>
+                {
+                    string name = QueryNameFor(pinned, a);
+                    return name.Contains(musician, StringComparison.OrdinalIgnoreCase)
+                        && PassesContainmentBand(name, musician);
+                })
                 .ToList();
             tierSw.Stop();
             tierReached = 1;
@@ -735,7 +781,7 @@ internal static class ArtistSearch
                     BaseItem? deferredTier2Match = null;
                     tierSw.Restart();
                     var prefixCandidates = allArtists
-                        .Where(a => a.Name.StartsWith(firstWord, StringComparison.OrdinalIgnoreCase))
+                        .Where(a => QueryNameFor(pinned, a).StartsWith(firstWord, StringComparison.OrdinalIgnoreCase))
                         .ToList();
                     BaseItem? fuzzy = FuzzyMatch(musician, prefixCandidates, user, pinned);
                     tierSw.Stop();
@@ -766,7 +812,7 @@ internal static class ArtistSearch
                     {
                         tierSw.Restart();
                         var fullPrefixCandidates = allArtists
-                            .Where(a => a.Name.StartsWith(musician, StringComparison.OrdinalIgnoreCase))
+                            .Where(a => QueryNameFor(pinned, a).StartsWith(musician, StringComparison.OrdinalIgnoreCase))
                             .ToList();
                         BaseItem? tier3Fuzzy = FuzzyMatch(musician, fullPrefixCandidates, user, pinned);
                         tierSw.Stop();
@@ -784,7 +830,7 @@ internal static class ArtistSearch
                     // tiers 2-3, before tier 4 (see TryWordCoverageTier for the placement)
                     // rationale). A single result flows through the caller's downstream
                     // judgment (JF-377 downgrade, JF-420 gate) unchanged; ties disambiguate.
-                    if (artists.Count == 0 && TryWordCoverageTier(musician, allArtists, locale, logger, out var wordCoverageMatches))
+                    if (artists.Count == 0 && TryWordCoverageTier(musician, allArtists, locale, logger, out var wordCoverageMatches, pinned))
                     {
                         artists = wordCoverageMatches;
                         tierReached = 4; // tier 1.5 preempted tier 4 (the tier_reached summary log is coarse)
@@ -1279,13 +1325,16 @@ internal static class ArtistSearch
     {
         int threshold = FuzzyMatcher.GetDefaultThreshold(user);
 
-        // Use phonetic-enhanced matching when artist index (with pre-computed codes) is available
+        // Use phonetic-enhanced matching when artist index (with pre-computed codes) is available.
+        // JF-755: both overloads score through QueryNameFor when the index is present, so a
+        // kana-named artist competes by its romaji key against the always-romanized query
+        // (exact 100 for the romanized canonical, clear of the 91-floor Latin tie).
         if (artistIndex?.IsReady == true)
         {
             return FuzzyMatcher.FindBestMatch(
                 query,
                 candidates,
-                a => a.Name,
+                a => QueryNameFor(artistIndex, a),
                 a => a.Id,
                 id =>
                 {

@@ -127,7 +127,18 @@ internal static class SongIndexSearch
         (string Primary, string? Alternate) queryCodes,
         int romanizedQueryLength,
         BaseItem song)
-        => PassesLengthBandedTitleCollision(queryCodes, romanizedQueryLength, song.Name ?? string.Empty);
+        // JF-755 code review: the collision leg reads the title's QUERY-SIDE
+        // reading (the romaji form when the title has one, the same replacement
+        // KeywordMatcher.ScoringTokens applies to the coverage scorers). On the
+        // raw kana title the leg was structurally dead for kana-tagged songs: the
+        // encoder has no kana arm (empty codes, never collides) and the length
+        // band compared kana characters against romaji characters. The generic
+        // title-collision helper and the ALBUM wrapper stay raw (albums have no
+        // romaji counterpart yet, tracked as JF-773).
+        => PassesLengthBandedTitleCollision(
+            queryCodes,
+            romanizedQueryLength,
+            KatakanaRomanizer.TryRomanize(song.Name, out string? romaji) ? romaji : song.Name ?? string.Empty);
 
     /// <summary>
     /// Title-generic form of the collision leg (JF-661): album names carry the

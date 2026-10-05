@@ -186,6 +186,42 @@ public class KanaOriginSongAcceptanceTests : PluginTestBase, IDisposable
         Assert.False(SongIndexSearch.PassesKanaOriginSongAcceptance("bitoruzu", BittersBait(), 68.0));
     }
 
+    // --- JF-755 code review: the bar must admit the kana-TAGGED title it exists to serve ---
+
+    [Fact]
+    public void PassesKanaOriginSongAcceptance_KanaTaggedTitle_ExactRomajiQuery_PlainLegAdmits_JF755()
+    {
+        // The song-side item-4 shape end to end: a kana-titled song reached by its
+        // exact romaji query scores 105 under ScoringTokens (the romanized reading
+        // replaces the diluting raw kana token in the coverage denominator), so the
+        // plain leg (>= 95) admits it. Pre-fix the union scored 85 and the bar
+        // refused exactly the class the symmetric index surfaced.
+        var kanaTitle = new Audio { Name = "ヨルニカケル", Id = Guid.NewGuid() };
+        double score = KeywordMatcher.Score(
+            new List<BaseItem> { kanaTitle },
+            KeywordMatcher.Tokenize("yorunikakeru", "ja-JP"),
+            "ja-JP")[0].Score;
+
+        Assert.True(score >= 95.0, $"the exact kana-title hit must be near-exact on the coverage scale, got {score}");
+        Assert.True(SongIndexSearch.PassesKanaOriginSongAcceptance("yorunikakeru", kanaTitle, score));
+    }
+
+    [Fact]
+    public void PassesKanaOriginSongAcceptance_KanaTaggedTitle_DriftedRomaji_CollisionLegAdmits_JF755()
+    {
+        // The collision leg reads the title's romanized reading: a drifted romaji
+        // query ('yorunikakelu', l/r ASR drift) code-collides with the romaji form
+        // inside the length band. On the raw kana title the leg was structurally
+        // dead (the encoder has no kana arm; the band compared 6 kana chars against
+        // 12 romaji chars).
+        var kanaTitle = new Audio { Name = "ヨルニカケル", Id = Guid.NewGuid() };
+        Assert.True(SongIndexSearch.PassesKanaOriginSongAcceptance("yorunikakelu", kanaTitle, 72.0));
+
+        // Control: an unrelated romaji query still refuses (no collision, and no
+        // plain score is carried by this direct call).
+        Assert.False(SongIndexSearch.PassesKanaOriginSongAcceptance("bohemian", kanaTitle, 72.0));
+    }
+
     [Fact]
     public void ApplyKanaOriginBar_LatinQuery_NoOp()
     {

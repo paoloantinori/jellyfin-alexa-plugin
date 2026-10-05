@@ -54,6 +54,12 @@ public class ArtistIndexService : DebouncedLibraryIndexService<ArtistIndexSnapsh
     }
 
     /// <inheritdoc />
+    public bool TryGetRomajiName(Guid artistId, out string romajiName)
+    {
+        return ReadRomajiName(CurrentSnapshot, artistId, out romajiName);
+    }
+
+    /// <inheritdoc />
     public IReadOnlyList<BaseItem> GetArtists(Guid[]? topParentIds = null)
     {
         // Capture once: the artist list and the parent map must come from the same publish
@@ -76,6 +82,14 @@ public class ArtistIndexService : DebouncedLibraryIndexService<ArtistIndexSnapsh
     /// </summary>
     private static bool ReadPhoneticCode(ArtistIndexSnapshot snapshot, Guid artistId, out (string Primary, string? Alternate) codes)
         => snapshot.PhoneticCodes.TryGetValue(artistId, out codes);
+
+    /// <summary>
+    /// The ONE romaji-name read over a snapshot (shared by the live service surface
+    /// and the pinned view). No emptiness re-guard: the write side (TryRomanize at
+    /// load) is the single owner of that invariant.
+    /// </summary>
+    private static bool ReadRomajiName(ArtistIndexSnapshot snapshot, Guid artistId, out string romajiName)
+        => snapshot.RomajiNames.TryGetValue(artistId, out romajiName!);
 
     /// <inheritdoc />
     protected override async Task LoadAsync(CancellationToken cancellationToken)
@@ -106,24 +120,45 @@ public class ArtistIndexService : DebouncedLibraryIndexService<ArtistIndexSnapsh
             albumScopedCount = await JoinAlbumLibraryScopeAsync(topParentMap, selfMappedArtists, cancellationToken).ConfigureAwait(false);
         }
 
-        // Pre-compute Double Metaphone phonetic codes for fuzzy matching
+        // Pre-compute Double Metaphone phonetic codes for fuzzy matching, plus the
+        // JF-755 symmetric romaji keys: a kana-containing name is indexed alongside
+        // its romanized form (the map the matching legs bridge kana-Latin through),
+        // and its phonetic code is computed from the ROMAJI form (the encoder has no
+        // kana arm, so the raw-kana code is empty and could never collide with, or
+        // pass the JF-652 bar for, the always-romanized query). The ORIGINAL name is
+        // never transliterated in place: raw-name consumers (JF-690 exact-name
+        // resolution, speech) are untouched, kana-kana exactness keeps its original
+        // key (KatakanaRomanizer's former KNOWN NARROWING, closed here on the
+        // in-memory path; the cold-window DB tiers still see only Jellyfin's own
+        // index, which has no romanizer). TryRomanize is the ONE derivation gate.
         var phoneticCodes = new Dictionary<Guid, (string Primary, string? Alternate)>(artists.Count);
+        var romajiNames = new Dictionary<Guid, string>();
         foreach (var artist in artists)
         {
-            if (!string.IsNullOrWhiteSpace(artist.Name))
+            if (string.IsNullOrWhiteSpace(artist.Name))
             {
-                phoneticCodes[artist.Id] = DoubleMetaphone.Encode(artist.Name);
+                continue;
             }
+
+            if (KatakanaRomanizer.TryRomanize(artist.Name, out string? romaji))
+            {
+                romajiNames[artist.Id] = romaji;
+                phoneticCodes[artist.Id] = DoubleMetaphone.Encode(romaji);
+                continue;
+            }
+
+            phoneticCodes[artist.Id] = DoubleMetaphone.Encode(artist.Name);
         }
 
         // One publish: all read paths see the new maps and the new list together (JF-432);
         // the snapshot constructor freezes (copies) the loader's locals (JF-448, review F5)
-        Publish(new ArtistIndexSnapshot(artists, topParentMap, phoneticCodes));
+        Publish(new ArtistIndexSnapshot(artists, topParentMap, phoneticCodes, romajiNames));
 
-        Logger.LogInformation("Artist index {Action}: {Count} artists, {PhoneticCount} with phonetic codes, {AlbumScopedCount} album-scoped",
+        Logger.LogInformation("Artist index {Action}: {Count} artists, {PhoneticCount} with phonetic codes, {RomajiCount} with romaji keys, {AlbumScopedCount} album-scoped",
             artists.Count > 0 ? "loaded" : "initialized (empty library)",
             artists.Count,
             phoneticCodes.Count,
+            romajiNames.Count,
             albumScopedCount);
     }
 
@@ -281,6 +316,10 @@ public class ArtistIndexService : DebouncedLibraryIndexService<ArtistIndexSnapsh
         /// <inheritdoc />
         public bool TryGetPhoneticCode(Guid artistId, out (string Primary, string? Alternate) codes)
             => ReadPhoneticCode(_snapshot, artistId, out codes);
+
+        /// <inheritdoc />
+        public bool TryGetRomajiName(Guid artistId, out string romajiName)
+            => ReadRomajiName(_snapshot, artistId, out romajiName);
 
         /// <inheritdoc />
         public IArtistIndex CaptureSnapshot() => this;

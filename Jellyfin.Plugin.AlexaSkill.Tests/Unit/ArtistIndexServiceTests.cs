@@ -512,6 +512,75 @@ public class ArtistIndexServiceTests : PluginTestBase
         Assert.NotEmpty(codes.Primary);
     }
 
+    // --- JF-755: symmetric index-side kana normalization (romaji keys) ---
+
+    [Fact]
+    public async Task StartAsync_KanaName_IndexesRomajiKeyAndRomajiPhoneticCodes_JF755()
+    {
+        // The parallel romaji key exists for the kana-containing name only (never a
+        // transliteration in place: GetArtists still serves the kana name), and the
+        // kana artist's phonetic code is computed from the ROMAJI form (the raw-kana
+        // code is empty, the encoder has no kana arm), so it can collide with the
+        // always-romanized query and pass the JF-652 bar.
+        var kanaId = Guid.NewGuid();
+        var latinId = Guid.NewGuid();
+        var artists = new List<BaseItem>
+        {
+            new MusicArtist { Name = "クイーン", Id = kanaId },
+            new MusicArtist { Name = "Queen", Id = latinId }
+        };
+
+        var service = CreateService(artists);
+        await service.StartAsync(CancellationToken.None);
+
+        Assert.True(service.TryGetRomajiName(kanaId, out var romaji));
+        Assert.Equal("kuin", romaji);
+        Assert.False(service.TryGetRomajiName(latinId, out _));
+
+        // The original name is preserved for every raw-name consumer
+        var served = Assert.Single(service.GetArtists(), a => a.Id == kanaId);
+        Assert.Equal("クイーン", served.Name);
+
+        Assert.True(service.TryGetPhoneticCode(kanaId, out var codes));
+        Assert.Equal(DoubleMetaphone.Encode("kuin"), codes);
+    }
+
+    [Fact]
+    public async Task StartAsync_LatinLibrary_NoRomajiKeys_JF755()
+    {
+        var artists = new List<BaseItem>
+        {
+            new MusicArtist { Name = "Queen", Id = Guid.NewGuid() }
+        };
+
+        var service = CreateService(artists);
+        await service.StartAsync(CancellationToken.None);
+
+        Assert.False(service.TryGetRomajiName(artists[0].Id, out _));
+        Assert.Empty(service.CurrentSnapshot.RomajiNames);
+    }
+
+    [Fact]
+    public async Task CaptureSnapshot_PinsRomajiKeysToOnePublish_JF755()
+    {
+        // The JF-448 contract extended to the new member: a pinned view keeps
+        // serving the romaji keys of ITS publish after a later refresh.
+        var kanaId = Guid.NewGuid();
+        var initial = new List<BaseItem> { new MusicArtist { Name = "クイーン", Id = kanaId } };
+        var updated = new List<BaseItem> { new MusicArtist { Name = "Miles Davis", Id = Guid.NewGuid() } };
+
+        int callCount = 0;
+        var service = CreateServiceWithLoad(() => ++callCount == 1 ? initial : updated);
+        await service.StartAsync(CancellationToken.None);
+
+        var pinned = service.CaptureSnapshot();
+        await service.StartAsync(CancellationToken.None); // the "refresh"
+
+        Assert.True(pinned.TryGetRomajiName(kanaId, out var pinnedRomaji));
+        Assert.Equal("kuin", pinnedRomaji);
+        Assert.False(service.TryGetRomajiName(kanaId, out _));
+    }
+
     [Fact]
     public async Task TryGetPhoneticCode_UnknownArtist_ReturnsFalse()
     {

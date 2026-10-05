@@ -1023,11 +1023,21 @@ internal static class TestHelpers
 /// JF-446 gate tests could share it. Ready by default (pass
 /// <c>isReady: false</c> for warming-gate shapes); phonetic codes are optional so a
 /// test can exercise either the phonetic or the plain FuzzyMatcher overload.
+/// JF-755: romaji keys are derived in the constructor exactly like the
+/// production load path (TryRomanize of every kana-containing name), so a fake
+/// over a kana-tagged fixture mirrors the real index's symmetric behavior
+/// without each test wiring it by hand. INVARIANT (production pairs these, the
+/// fake does not enforce it): production derives a kana artist's phonetic codes
+/// from the SAME romaji (one load loop), so a test that hand-writes
+/// phoneticCodes for a kana artist from its RAW name creates a state production
+/// never serves (romaji key + empty codes); use
+/// <see cref="CodesFromArtistNames"/> for the production-mirror table.
 /// </summary>
 internal sealed class FakeArtistIndex : IArtistIndex
 {
     private readonly IReadOnlyList<BaseItem> _artists;
     private readonly Dictionary<Guid, (string Primary, string? Alternate)> _phoneticCodes;
+    private readonly Dictionary<Guid, string> _romajiNames;
     private readonly bool _isReady;
 
     public FakeArtistIndex(
@@ -1037,6 +1047,15 @@ internal sealed class FakeArtistIndex : IArtistIndex
     {
         _artists = artists.ToList();
         _phoneticCodes = phoneticCodes ?? new Dictionary<Guid, (string Primary, string? Alternate)>();
+        _romajiNames = new Dictionary<Guid, string>();
+        foreach (BaseItem artist in _artists)
+        {
+            if (KatakanaRomanizer.TryRomanize(artist.Name, out string? romaji))
+            {
+                _romajiNames[artist.Id] = romaji;
+            }
+        }
+
         _isReady = isReady;
     }
 
@@ -1052,20 +1071,29 @@ internal sealed class FakeArtistIndex : IArtistIndex
         return _phoneticCodes.TryGetValue(artistId, out codes);
     }
 
+    public bool TryGetRomajiName(Guid artistId, out string romajiName)
+        => _romajiNames.TryGetValue(artistId, out romajiName!);
+
     // The fake's state is fixed per instance, so it is already pinned: capture is the
     // identity (the same contract ArtistIndexService.SnapshotView honors).
     public IArtistIndex CaptureSnapshot() => this;
 
     /// <summary>
     /// Phonetic-code table for a <see cref="FakeArtistIndex"/> from the artists'
-    /// own names, via the production encoder (the KN collision between Queen and
-    /// Keane is the live tie shape, not a hand-written assumption). Hoisted here
-    /// (JF-660) from the kana test family; the two pre-existing private copies
-    /// (KanaOriginAcceptanceTests, MusicianErCanonicalTests) fold in on their next
-    /// edit.
+    /// own names, via the production encoder and the production derivation gate
+    /// (the KN collision between Queen and Keane is the live tie shape, not a
+    /// hand-written assumption). Hoisted here (JF-660) from the kana test family;
+    /// the two pre-existing private copies (KanaOriginAcceptanceTests,
+    /// MusicianErCanonicalTests) fold in on their next edit. JF-755: mirrors the
+    /// production load path exactly, romaji form for kana-containing names (the
+    /// raw-kana code is empty, the encoder has no kana arm), raw name otherwise.
     /// </summary>
     public static Dictionary<Guid, (string Primary, string? Alternate)> CodesFromArtistNames(params BaseItem[] artists)
-        => artists.ToDictionary(a => a.Id, a => DoubleMetaphone.Encode(a.Name!));
+        => artists.ToDictionary(
+            a => a.Id,
+            a => KatakanaRomanizer.TryRomanize(a.Name, out string? romaji)
+                ? DoubleMetaphone.Encode(romaji)
+                : DoubleMetaphone.Encode(a.Name!));
 }
 
 /// <summary>
@@ -1102,6 +1130,9 @@ internal sealed class CountingArtistIndex : IArtistIndex
     public bool TryGetPhoneticCode(Guid artistId, out (string Primary, string? Alternate) codes)
         => _inner.TryGetPhoneticCode(artistId, out codes);
 
+    public bool TryGetRomajiName(Guid artistId, out string romajiName)
+        => _inner.TryGetRomajiName(artistId, out romajiName);
+
     public IArtistIndex CaptureSnapshot()
         => new SnapshotCountingView(this, _inner.IsReady, _inner.IsDisabled);
 
@@ -1132,6 +1163,9 @@ internal sealed class CountingArtistIndex : IArtistIndex
 
         public bool TryGetPhoneticCode(Guid artistId, out (string Primary, string? Alternate) codes)
             => _owner.TryGetPhoneticCode(artistId, out codes);
+
+        public bool TryGetRomajiName(Guid artistId, out string romajiName)
+            => _owner.TryGetRomajiName(artistId, out romajiName);
 
         public IArtistIndex CaptureSnapshot() => this;
     }

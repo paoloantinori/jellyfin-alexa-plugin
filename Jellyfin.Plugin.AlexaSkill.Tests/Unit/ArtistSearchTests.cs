@@ -524,7 +524,7 @@ public class ArtistSearchTests
         var theBeatles = new MusicArtist { Name = "The Beatles", Id = Guid.NewGuid() };
         var eagles = new MusicArtist { Name = "Eagles", Id = Guid.NewGuid() };
 
-        var result = ArtistSearch.WordCoverageCandidates("beatles live", new List<BaseItem> { theBeatles, eagles }, "en-US");
+        var result = ArtistSearch.WordCoverageCandidates("beatles live", new List<BaseItem> { theBeatles, eagles }, "en-US", null);
 
         var name = Assert.Single(result).Name;
         Assert.Equal("The Beatles", name);
@@ -541,7 +541,7 @@ public class ArtistSearchTests
         var milesDavis = new MusicArtist { Name = "Miles Davis", Id = Guid.NewGuid() };
         var miles = new MusicArtist { Name = "Miles", Id = Guid.NewGuid() };
 
-        var result = ArtistSearch.WordCoverageCandidates("miles davis live", new List<BaseItem> { milesDavis, miles }, "en-US");
+        var result = ArtistSearch.WordCoverageCandidates("miles davis live", new List<BaseItem> { milesDavis, miles }, "en-US", null);
 
         var name = Assert.Single(result).Name;
         Assert.Equal("Miles Davis", name);
@@ -559,7 +559,7 @@ public class ArtistSearchTests
         var theBand = new MusicArtist { Name = "The Band", Id = Guid.NewGuid() };
         var radiohead = new MusicArtist { Name = "Radiohead", Id = Guid.NewGuid() };
 
-        var result = ArtistSearch.WordCoverageCandidates("la band radiohead", new List<BaseItem> { theBand, radiohead }, "it-IT");
+        var result = ArtistSearch.WordCoverageCandidates("la band radiohead", new List<BaseItem> { theBand, radiohead }, "it-IT", null);
 
         Assert.Equal(2, result.Count);
     }
@@ -575,7 +575,7 @@ public class ArtistSearchTests
         var milesDavis = new MusicArtist { Name = "Miles Davis", Id = Guid.NewGuid() };
         var davisMiles = new MusicArtist { Name = "Davis Miles", Id = Guid.NewGuid() };
 
-        var result = ArtistSearch.WordCoverageCandidates("miles davis live", new List<BaseItem> { milesDavis, davisMiles }, "en-US");
+        var result = ArtistSearch.WordCoverageCandidates("miles davis live", new List<BaseItem> { milesDavis, davisMiles }, "en-US", null);
 
         var name = Assert.Single(result).Name;
         Assert.Equal("Miles Davis", name);
@@ -595,7 +595,7 @@ public class ArtistSearchTests
         var soul = new MusicArtist { Name = "Soul", Id = Guid.NewGuid() };
         var soulCoughing = new MusicArtist { Name = "Soul Coughing", Id = Guid.NewGuid() };
 
-        var result = ArtistSearch.WordCoverageCandidates("soul coughin", new List<BaseItem> { soul, soulCoughing }, "en-US");
+        var result = ArtistSearch.WordCoverageCandidates("soul coughin", new List<BaseItem> { soul, soulCoughing }, "en-US", null);
 
         var name = Assert.Single(result).Name;
         Assert.Equal("Soul", name);
@@ -607,7 +607,7 @@ public class ArtistSearchTests
     {
         var queen = new MusicArtist { Name = "Queen", Id = Guid.NewGuid() };
 
-        var result = ArtistSearch.WordCoverageCandidates("queen", new List<BaseItem> { queen }, "en-US");
+        var result = ArtistSearch.WordCoverageCandidates("queen", new List<BaseItem> { queen }, "en-US", null);
 
         Assert.Empty(result);
     }
@@ -622,7 +622,7 @@ public class ArtistSearchTests
         var tribute = new MusicArtist { Name = "The Beatles Tribute Band", Id = Guid.NewGuid() };
         var sugarRay = new MusicArtist { Name = "Sugar Ray feat. Super Cat", Id = Guid.NewGuid() };
 
-        var result = ArtistSearch.WordCoverageCandidates("beatles live", new List<BaseItem> { tribute, sugarRay }, "en-US");
+        var result = ArtistSearch.WordCoverageCandidates("beatles live", new List<BaseItem> { tribute, sugarRay }, "en-US", null);
 
         Assert.Empty(result);
     }
@@ -636,9 +636,31 @@ public class ArtistSearchTests
     {
         var ilVolo = new MusicArtist { Name = "Il Volo", Id = Guid.NewGuid() };
 
-        var result = ArtistSearch.WordCoverageCandidates("volo live", new List<BaseItem> { ilVolo }, "it-IT");
+        var result = ArtistSearch.WordCoverageCandidates("volo live", new List<BaseItem> { ilVolo }, "it-IT", null);
 
         Assert.Single(result);
+    }
+
+    /// <summary>
+    /// JF-755: the word-coverage subset check resolves a kana-named candidate
+    /// through the index's romaji key when the caller threads its view (the
+    /// search-chain tier and the CrossMediaFallback valve both do), and stays on
+    /// the raw kana tokens (unreachable for the always-romanized query) when the
+    /// caller has no view.
+    /// </summary>
+    [Fact]
+    public void WordCoverageCandidates_KanaName_ThreadedIndexCoversRomajiQuery_JF755()
+    {
+        var kana = new MusicArtist { Name = "ザ・ローラーズ", Id = Guid.NewGuid() };
+        var index = new FakeArtistIndex(new[] { kana });
+
+        // 'ザ・ローラーズ' romanizes to 'za・rorazu', tokenized by the middle dot
+        // into [za, rorazu]: a subset of the romaji qualifier query.
+        var threaded = ArtistSearch.WordCoverageCandidates("za rorazu live", new List<BaseItem> { kana }, "ja-JP", index);
+        Assert.Single(threaded);
+
+        var unthreaded = ArtistSearch.WordCoverageCandidates("za rorazu live", new List<BaseItem> { kana }, "ja-JP", null);
+        Assert.Empty(unthreaded);
     }
 
     /// <summary>
@@ -731,6 +753,13 @@ public class ArtistSearchTests
         public bool TryGetPhoneticCode(Guid artistId, out (string Primary, string? Alternate) codes)
             => _phoneticCodes.TryGetValue(artistId, out codes);
 
+        // Latin-only fixture (the JF-448 vehicle): no romaji keys to serve.
+        public bool TryGetRomajiName(Guid artistId, out string romajiName)
+        {
+            romajiName = string.Empty;
+            return false;
+        }
+
         public IArtistIndex CaptureSnapshot() => new PinnedView(_artists, _phoneticCodes);
 
         private sealed class PinnedView : IArtistIndex
@@ -754,6 +783,12 @@ public class ArtistSearchTests
 
             public bool TryGetPhoneticCode(Guid artistId, out (string Primary, string? Alternate) codes)
                 => _phoneticCodes.TryGetValue(artistId, out codes);
+
+            public bool TryGetRomajiName(Guid artistId, out string romajiName)
+            {
+                romajiName = string.Empty;
+                return false;
+            }
 
             public IArtistIndex CaptureSnapshot() => this;
         }

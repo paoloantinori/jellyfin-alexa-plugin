@@ -242,7 +242,18 @@ public class SongNgramIndexService : DebouncedLibraryIndexService<SongNgramIndex
 
         foreach (var song in songs)
         {
-            string[] tokens = KeywordMatcher.Tokenize(song.Name, "en-US");
+            // JF-755 symmetric index-side normalization: TitleTokens unions the raw
+            // title tokens with the ROMANIZED ones (kana-containing titles only;
+            // kana-free titles keep the identical single stream, so a Latin library's
+            // index is byte-identical). The query tokens reaching Search/SearchPhonetic
+            // are always romanized (every caller romanizes the slot at entry), so the
+            // romaji keys are what makes a kana-tagged title reachable at the O(1)
+            // lookup; the kana keys stay for kana-kana exactness. Index build and
+            // KeywordMatcher's coverage scoring share the ONE helper, so recall
+            // (dictionary hit) and admission (coverage) cannot drift. The boundary
+            // bigram between the two streams is junk but harmless (a lookup key
+            // nothing queries).
+            string[] tokens = KeywordMatcher.TitleTokens(song.Name, "en-US");
 
             entries.Add(song);
             topParentMap[song.Id] = ResolveTopParentIdMemoized(song, chainMemo);

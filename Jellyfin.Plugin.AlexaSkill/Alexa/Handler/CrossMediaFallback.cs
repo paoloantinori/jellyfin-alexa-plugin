@@ -883,7 +883,7 @@ public sealed class CrossMediaFallback
                 logLabel, bestItem.Name, bestScore, cleaned);
         }
         else if (bestItem != null && bestScore >= normalThreshold
-            && Util.ArtistSearch.WordCoverageCandidates(cleaned, new[] { bestItem }, locale).Count > 0)
+            && Util.ArtistSearch.WordCoverageCandidates(cleaned, new[] { bestItem }, locale, pinnedArtistIndex).Count > 0)
         {
             // JF-440 (F4): a word-coverage tier match scores LOW on the fuzzy scale
             // ('The Beatles' vs 'beatles live' = 27, below every cross-media gate),
@@ -923,7 +923,12 @@ public sealed class CrossMediaFallback
         // prompt is still a no-silent-substitution outcome and "yes" plays; and an Off
         // user with a STRICT-bar (>=85) coincidental match now gets the clean miss
         // instead of the old silent auto-play (pinned by tests).
-        if (Util.ArtistSearch.IsCoincidentalContainmentMatch(cleaned, bestItem!.Name, locale))
+        // JF-755 (code review): the matched reading pair, like the PlayArtistSongs
+        // gates (the raw kana name against the romanized query is script-blind, so
+        // the coincidental-containment downgrade would never fire for a kana-named
+        // artist reached through its romaji key).
+        if (Util.ArtistSearch.IsCoincidentalContainmentMatch(
+                cleaned, Util.ArtistSearch.QueryNameFor(pinnedArtistIndex, bestItem!), locale))
         {
             if (notFoundMediaType != null && GetCrossMediaArtistSuggestion(user) != CrossMediaArtistSuggestion.Off)
             {

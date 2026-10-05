@@ -28,14 +28,27 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// - hiragana maps with the same syllable values; kanji and every other
 ///   non-kana character pass through unchanged (no dictionary: a kanji run
 ///   cannot be romanized here, accepted and documented).
-/// KNOWN NARROWING (JF-643 review): normalization is asymmetric (query only,
-/// library values never), so a kana query against a KATAKANA-TAGGED library
-/// name, which previously exact-matched on the Contains tier, now misses on
-/// every tier ('クイーン' romanizes to 'kuin', which cannot equal the kana
-/// name, and Double Metaphone keeps kana, so the phonetic floor cannot
-/// rescue it). Accepted for Latin-tagged libraries (the common shape); the
-/// deeper fix for native-script-tagged libraries is symmetric index-side
-/// normalization at index-build time (tracked with the JF-643 residuals).
+/// KNOWN NARROWING (JF-643 review, CLOSED on the in-memory paths by JF-755):
+/// normalization was originally asymmetric (query only, library values never),
+/// so a kana query against a KATAKANA-TAGGED library name, which previously
+/// exact-matched on the Contains tier, missed on every tier ('クイーン'
+/// romanizes to 'kuin', which cannot equal the kana name, and Double
+/// Metaphone encodes kana to nothing, so the phonetic floor could not rescue
+/// it). JF-755 closes it symmetrically at INDEX-BUILD time: the artist index
+/// carries each kana-containing name's romaji alongside the original (the
+/// matching legs bridge through it, ArtistSearch.QueryNameFor), the song
+/// n-gram index unions the romanized token stream into its keys, and the
+/// kana-named artist's phonetic codes are computed from the romaji. Library
+/// values are STILL never transliterated in place (the parallel-key shape).
+/// Residual (accepted, the JF-381/JF-417 cold-window divergence class): the
+/// database fallback tiers search Jellyfin's own index, which has no
+/// romanizer, so a kana query during the cold window still honestly
+/// not-finds a kana-tagged name. ALBUM surfaces sit in that narrowing
+/// PERMANENTLY, not just cold: the album query is romanized (AlbumPlayService,
+/// PlayAlbumIntentHandler) but albums have no in-memory index to carry a
+/// candidate-side romaji key, and the album candidate legs score raw names
+/// (tracked as JF-773; the cheap shape when picked up is the score-time
+/// KeywordMatcher.TitleTokens union, not a new index).
 /// </summary>
 internal static class KatakanaRomanizer
 {
@@ -155,6 +168,41 @@ internal static class KatakanaRomanizer
     private static int KanaPriority(char kana)
         => kana is 'ァ' or 'ィ' or 'ゥ' or 'ェ' or 'ォ' or 'ャ' or 'ュ' or 'ョ' or 'ヮ'
            || kana is 'ヰ' or 'ヱ' or 'ヲ' or 'ヂ' or 'ヅ' ? 1 : 0;
+
+    /// <summary>
+    /// The ONE candidate-side derivation gate (JF-755): whether the input carries
+    /// kana AND romanizes to a usable form. False (romaji null) for null/empty
+    /// input, kana-free input, and inputs whose romanization is empty/whitespace
+    /// (a lone long vowel mark) or VALUE-IDENTICAL to the input: a name whose only
+    /// kana-block content is romanization-inert (the katakana middle dot '・'
+    /// inside 'AI・KITS' is within IsKatakana's range yet passes through
+    /// unchanged) must not gain a "romaji key" equal to the name itself. True
+    /// with the romanized form otherwise. Every site that derives a parallel
+    /// romaji key from library text (the artist index load, the song title token
+    /// union, the test fakes mirroring them) resolves through this helper so the
+    /// gate rule has one owner and can never drift between production and its
+    /// mirrors.
+    /// </summary>
+    /// <param name="input">The candidate text (library name or title).</param>
+    /// <param name="romaji">The romanized form when the input has one.</param>
+    /// <returns>True when the input contains kana and romanized to a non-blank, non-identical form.</returns>
+    internal static bool TryRomanize(string? input, [NotNullWhen(true)] out string? romaji)
+    {
+        romaji = null;
+        if (string.IsNullOrEmpty(input))
+        {
+            return false;
+        }
+
+        string romanized = Romanize(input);
+        if (string.Equals(romanized, input, StringComparison.Ordinal) || string.IsNullOrWhiteSpace(romanized))
+        {
+            return false;
+        }
+
+        romaji = romanized;
+        return true;
+    }
 
     /// <summary>
     /// Romanizes every kana run of the input, passing every other character

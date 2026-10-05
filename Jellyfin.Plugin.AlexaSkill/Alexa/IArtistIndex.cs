@@ -36,11 +36,30 @@ public interface IArtistIndex
     /// <summary>
     /// Try to get the pre-computed Double Metaphone phonetic codes for an artist.
     /// Codes are computed once at index build time for zero per-request cost.
+    /// JF-755: for a kana-containing name the published code is computed from the
+    /// name's ROMAJI form (the raw-kana code is empty, the encoder has no kana arm),
+    /// so a kana-named artist can phonetically collide with, and pass the JF-652
+    /// kana bar against, the always-romanized query.
     /// </summary>
     /// <param name="artistId">The artist's item ID.</param>
     /// <param name="codes">Primary and alternate phonetic codes if found.</param>
     /// <returns>True if phonetic codes were found for this artist.</returns>
     bool TryGetPhoneticCode(Guid artistId, out (string Primary, string? Alternate) codes);
+
+    /// <summary>
+    /// JF-755 symmetric index-side normalization: try to get the romanized
+    /// (kana-to-romaji) form of an artist's name. Present ONLY for kana-containing
+    /// names, so Latin libraries never hit the map. The original name is never
+    /// replaced: matching legs use this parallel key alongside it (see
+    /// <c>ArtistSearch.QueryNameFor</c>, the ONE resolver), while raw-name consumers
+    /// (JF-690 exact-name resolution, speech) keep reading <see cref="BaseItem.Name"/>.
+    /// Resolves from the same published snapshot as <see cref="GetArtists"/> and
+    /// <see cref="TryGetPhoneticCode"/> when read through a pinned view (JF-448).
+    /// </summary>
+    /// <param name="artistId">The artist's item ID.</param>
+    /// <param name="romajiName">The romanized name if the artist has one.</param>
+    /// <returns>True when the artist's name contains kana and a romanized form was indexed.</returns>
+    bool TryGetRomajiName(Guid artistId, out string romajiName);
 
     /// <summary>
     /// JF-448 (review F2): capture the currently published snapshot as a PINNED read

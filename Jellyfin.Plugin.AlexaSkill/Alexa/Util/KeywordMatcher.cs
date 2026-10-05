@@ -339,7 +339,9 @@ internal static class KeywordMatcher
 
         // Tokenize lowercases both sides, so ordinal set membership is case-insensitive;
         // each side then folds diacritics for accent-insensitive membership (JF-526).
-        var nameTokens = new HashSet<string>(Tokenize(candidateName, locale).Select(FoldDiacritics), StringComparer.Ordinal);
+        // JF-755: the candidate side resolves through TitleTokens so a kana-tagged
+        // title's romaji tokens count as coverage for the romanized query.
+        var nameTokens = new HashSet<string>(TitleTokens(candidateName, locale).Select(FoldDiacritics), StringComparer.Ordinal);
         foreach (string token in queryTokens)
         {
             if (!nameTokens.Contains(FoldDiacritics(token)))
@@ -350,6 +352,64 @@ internal static class KeywordMatcher
 
         return true;
     }
+
+    /// <summary>
+    /// JF-755 symmetric index-side normalization, title side: the token stream a
+    /// TITLE-side comparison resolves against, the union of the raw title's tokens
+    /// and its romanized form's tokens. The query side is ALWAYS romanized before
+    /// it reaches the keyword surfaces (every caller romanizes the slot at entry,
+    /// JF-643/JF-645), so a kana-tagged title's raw tokens are unreachable Latin
+    /// script for those queries; the union keeps them (kana-kana exactness: any
+    /// consumer that ever feeds kana tokens still finds them) while ADDING the
+    /// romaji tokens the romanized keywords can cover. Identical to
+    /// <see cref="Tokenize"/> for kana-free titles (Romanize returns the same
+    /// instance), so Latin behavior is byte-identical. Used by
+    /// <see cref="Score"/>, <see cref="ScorePhonetic"/>, and
+    /// <see cref="HasFullKeywordCoverage"/> (every TITLE-side tokenization);
+    /// QUERY-side tokenization deliberately stays on plain <see cref="Tokenize"/>
+    /// (unioning there would inflate the cross-media word-count guard's count for
+    /// kana slot values, a behavior change beyond this fix).
+    /// </summary>
+    /// <param name="title">The candidate title text.</param>
+    /// <param name="locale">The locale string used to resolve stop words.</param>
+    /// <returns>The union of the raw and romanized token streams, raw order first.</returns>
+    internal static string[] TitleTokens(string? title, string locale)
+    {
+        string[] tokens = Tokenize(title, locale);
+        if (!KatakanaRomanizer.TryRomanize(title, out string? romaji))
+        {
+            return tokens;
+        }
+
+        // Concat+Except, NOT Union: the raw stream's own duplicates ("St. St.")
+        // must survive (Score's title-coverage denominator counts them), so only
+        // the romaji side is deduped against what the raw stream already holds.
+        return tokens
+            .Concat(Tokenize(romaji, locale).Except(tokens, StringComparer.OrdinalIgnoreCase))
+            .ToArray();
+    }
+
+    /// <summary>
+    /// JF-755 code review: the token stream the COVERAGE SCORERS (<see cref="Score"/>,
+    /// <see cref="ScorePhonetic"/>) resolve a title against: the ROMANIZED reading
+    /// when the title has one, the raw stream otherwise. Every query reaching the
+    /// scorers is romanized at its caller (the JF-643/JF-645 wiring), so a kana
+    /// title's raw tokens are unreachable content that only dilutes the
+    /// title-coverage denominator and blocks the positional bonus: under the union
+    /// form an exact kana-title hit scored 85 (half title coverage, no positional)
+    /// where the identical Latin match scores 105, sinking it below the 90/95
+    /// auto-play and kana-bar legs. Unlike <see cref="TitleTokens"/> (the UNION,
+    /// for index lookup keys and membership gates, where the raw keys stay for
+    /// kana-kana exactness), this is a REPLACEMENT: the reading the query is in is
+    /// the reading scored. Identical to <see cref="Tokenize"/> for kana-free titles.
+    /// </summary>
+    /// <param name="title">The candidate title text.</param>
+    /// <param name="locale">The locale string used to resolve stop words.</param>
+    /// <returns>The romanized reading's tokens when the title has one, else the raw tokens.</returns>
+    internal static string[] ScoringTokens(string? title, string locale)
+        => KatakanaRomanizer.TryRomanize(title, out string? romaji)
+            ? Tokenize(romaji, locale)
+            : Tokenize(title, locale);
 
     /// <summary>
     /// JF-526: folds a token to its accent-insensitive base form (Unicode Normalize
@@ -426,7 +486,7 @@ internal static class KeywordMatcher
         foreach (var song in songs)
         {
             string title = song.Name ?? string.Empty;
-            string[] titleTokens = Tokenize(title, locale);
+            string[] titleTokens = ScoringTokens(title, locale);
 
             if (titleTokens.Length == 0)
             {
@@ -510,7 +570,7 @@ internal static class KeywordMatcher
         foreach (var song in songs)
         {
             string title = song.Name ?? string.Empty;
-            string[] titleTokens = Tokenize(title, locale);
+            string[] titleTokens = ScoringTokens(title, locale);
 
             if (titleTokens.Length == 0)
             {
