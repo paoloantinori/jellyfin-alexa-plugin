@@ -2,7 +2,7 @@
 id: JF-765
 title: >-
   JF-765 - file-wide EncoderPath inline-setup sweep, gated on the ONE live consumer (the single-chapter redirect test)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-05'
 labels:
@@ -78,9 +78,91 @@ copy-paste setups; fix the comment when next touching the file.
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 Gate applied: the single-chapter redirect test drives an explicit fake ffmpeg (its ambient-binary
+- [x] #1 Gate applied: the single-chapter redirect test drives an explicit fake ffmpeg (its ambient-binary
       dependence gone), or a keep decision recorded at the site with the reason
-- [ ] #2 If sweeping: every remaining inline EncoderPath setup deleted in one pass, marker probe re-run clean
+      (WriteRecordingFakeFfmpeg "fake-ffmpeg-single-chapter-redirect", 3-digit seg_000.ts = the redirected
+      song core's poll shape, threaded via CreateController(parentId, ffmpegPath:); assert upgraded from
+      IsNotType<NotFound> to IsType<ContentResult> + the exact m3u8 content type so a failed encode reds
+      (the weak assert is why no sabotage could see this consumer). Verification: single-test run with the
+      EncoderPath setup sabotaged to an executable MARKER script = GREEN with ZERO marker executions (the
+      override short-circuits both consult sites); PLUS the direct ambient proof = green with PATH stripped
+      of every ffmpeg (only the fake's shell tools symlinked into a scratch bin). The protective JF-759
+      comment folded into the arrange as the gate required.
+- [x] #2 If sweeping: every remaining inline EncoderPath setup deleted in one pass, marker probe re-run clean
       (zero consumers), class 266/266 green on BOTH TFMs before/after
-- [ ] #3 ResolveFfmpegPath's doc comment states the real precedence (override, then encoder, then PATH)
+      (all 53 residual setups pointed at the marker script in ONE pass: full class 266/266 green on BOTH
+      TFMs with ZERO marker executions across both runs; then all 53 deleted; class 266/266 green on BOTH
+      TFMs before AND after (baseline re-taken first). Sweep bonus, beyond the filing: a no-ffmpeg-on-PATH
+      class run caught ONE marker-invisible consumer the execution-counting probe structurally cannot see
+      (StreamHlsVideoAudio_ThrowingInLockProbe_ReleasesTheItemLock: entry validation 503s on an UNRESOLVED
+      ffmpeg before the in-lock probe runs, so the flow RESOLVES but never EXECUTES ffmpeg); it now carries
+      an explicit exit-0 fake and the WHOLE class is 266/266 green with no ffmpeg anywhere, both TFMs. Full
+      suite 5205/5205 on BOTH TFMs, normal PATH AND no-ffmpeg PATH (= main baseline).)
+- [x] #3 ResolveFfmpegPath's doc comment states the real precedence (override, then encoder, then PATH)
+      (VideoAudioController.cs ~5752; verified against the code by direct read BEFORE editing. The simplify
+      round also found and fixed the SECOND copy of the same misconception on the FfmpegPath property's own
+      summary ~:203 ("Resolved from Jellyfin's IMediaEncoder service"), the site a test author greps first.)
 <!-- DOD:END -->
+
+## Final Summary
+
+THE GATE, then the sweep, exactly in the filing's order. (1) The redirect test
+(StreamHlsAudiobook_SingleChapter_RedirectsToSingleItemHls) now drives an explicit
+WriteRecordingFakeFfmpeg with the 3-digit seg_000.ts (the redirect lands in the
+single-item SONG core, whose first-segment wait polls the 3-digit name) via
+CreateController(parentId, ffmpegPath:), and its assert was upgraded from the
+failure-tolerating IsNotType<NotFoundObjectResult> to IsType<ContentResult> + the
+exact application/vnd.apple.mpegurl content type, the shape that makes the hermeticity
+check NON-VACUOUS (with the weak assert, "green under sabotage" proves nothing; that is
+precisely how the JF-751 value-sabotage missed this consumer). Marker red-check: with the
+setup sabotaged to an executable marker script, the test is GREEN with ZERO marker
+executions, and it is green with every ffmpeg removed from PATH: the override
+short-circuits both consult sites (entry ~VideoAudioController.cs:2962 and the redirected
+core ~4482), so neither the mock nor the PATH scan is ever reached. The ambient-binary
+dependence (Finding 2) is gone. (2) All 53 remaining inline setups (54 in the filing
+minus the gate site's deleted one) pointed at the marker in ONE pass: class 266/266 green
+on BOTH TFMs with ZERO executions; then all 53 deleted; class 266/266 green on BOTH TFMs
+before AND after; full suite 5205/5205 on BOTH TFMs (= main baseline). (3) The
+ResolveFfmpegPath doc comment now states the real precedence (override, then IMediaEncoder
+gated on File.Exists, then PATH scan), verified against the code by direct read first.
+
+BEYOND THE FILING, two strengthenings earned by the same methodology: (a) a no-ffmpeg-
+on-PATH run of the whole class exposed ONE consumer the marker probe STRUCTURALLY cannot
+see (it counts executions; StreamHlsVideoAudio_ThrowingInLockProbe_ReleasesTheItemLock
+RESOLVES ffmpeg but never EXECUTES it, because entry validation 503s on an unresolved
+ffmpeg before the in-lock probe runs); it now carries an explicit exit-0 fake, and the
+WHOLE class is green with no ffmpeg anywhere on PATH on both TFMs. The JF-759
+classification's mechanism 3 ("flow never reaches ResolveFfmpegPath") had a hole for
+resolve-but-not-execute consumers; the restricted-PATH run is the tool that closes it.
+(b) The full 5205-test suite was additionally verified green on BOTH TFMs under the same
+no-ffmpeg PATH, so the ci.yml ffmpeg install is now provably unnecessary for the suite;
+the install is KEPT as a seatbelt with its comment rewritten to the post-sweep reality
+(the old comment's stated reason, "several test fixtures mock IMediaEncoder.EncoderPath",
+is falsified by the sweep).
+
+DOCUMENTATION consolidated: the never-configured contract now lives once, as a comment
+on the _mediaEncoderMock field itself (the first thing a future setup-writer touches,
+the regrowth vector that cost the JF-751 to JF-759 to JF-765 chain); the three per-fixture
+"No EncoderPath setup" clauses (JF-759) became vacuous non-distinctions post-sweep and
+were trimmed. The simplify round also fixed the SECOND copy of the precedence
+misconception on the FfmpegPath property's summary ("Resolved from Jellyfin's IMediaEncoder
+service"), the doc a test author greps first when injecting a fake.
+
+Gates: Skill simplify (4 angles: reuse CLEAN, efficiency CLEAN; applied 3 blank-line
+removals + the probe-comment tighten (simplification), the FfmpegPath property doc fix +
+the field-level contract replacing the three vacuous fixture clauses (altitude); skipped
+with reason: the redirect-test historical sentence (task-ID history convention) and the
+efficiency trivia on the shared WriteFakeFfmpeg helper (pre-existing shape, not
+diff-introduced)) + Skill code-review high (0 correctness bugs; its one low-severity
+finding, that the field comment overstated hermeticity and CI would mass-red without
+ambient ffmpeg, was adjudicated: the mass-red scenario REFUTED by the direct experiment
+(full suite green both TFMs with no ffmpeg on PATH, because the 404 families' plain-string
+.FfmpegPath overrides pass the non-empty gate with no File.Exists), and the legitimate
+wording half APPLIED). NOT FILED (noted, below the JF-761 noted-not-filed bar):
+VideoAudioCacheTests' two EvictIfNeeded_Unreadable* tests shell out to external
+chmod via PATH (Process.Start("chmod")), an ambient-binary dependence of the same class
+but with zero real-world risk (every Linux runner and dev box ships chmod; it only
+surfaces under an artificial PATH restriction).
+
+TEST-ONLY plus doc comments and the ci.yml comment: no DLL deploy (the controller change
+is comment-only, verified by hunk inspection).

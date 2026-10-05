@@ -201,9 +201,10 @@ public class VideoAudioController : ControllerBase
     }
 
     /// <summary>
-    /// Gets or sets the path to the ffmpeg binary.
-    /// Resolved from Jellyfin's <see cref="IMediaEncoder"/> service.
-    /// Overridden in tests to inject a mock path.
+    /// Gets or sets an optional explicit ffmpeg path that takes precedence over
+    /// every other resolution source. When empty, <see cref="ResolveFfmpegPath"/>
+    /// falls back to <see cref="IMediaEncoder"/> (gated on the file existing)
+    /// and then a PATH scan. Tests inject their fake ffmpeg here.
     /// </summary>
     internal string FfmpegPath { get; set; } = string.Empty;
 
@@ -5751,7 +5752,8 @@ public class VideoAudioController : ControllerBase
 
     /// <summary>
     /// Resolve the path to the ffmpeg binary.
-    /// Tries IMediaEncoder first, then falls back to PATH lookup.
+    /// Precedence: the explicit <see cref="FfmpegPath"/> override first, then
+    /// IMediaEncoder's path (only when it exists on disk), then a PATH scan.
     /// </summary>
     /// <returns>Path to ffmpeg or empty string if not found.</returns>
     private string ResolveFfmpegPath()
