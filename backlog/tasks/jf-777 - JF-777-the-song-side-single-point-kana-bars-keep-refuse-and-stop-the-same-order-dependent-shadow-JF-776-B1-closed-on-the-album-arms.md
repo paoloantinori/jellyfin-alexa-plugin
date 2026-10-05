@@ -6,7 +6,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-10-05'
-updated_date: '2026-10-05'
+updated_date: '2026-10-05 17:59'
 labels:
   - search
   - i18n
@@ -16,12 +16,14 @@ dependencies:
   - JF-776
 references:
   - >-
-    backlog/tasks/jf-776 - the-jf-773-residual-family-beyond-album-reachability-and-the-album-kana-bar-interaction-pair.md
+    backlog/tasks/jf-776 -
+    the-jf-773-residual-family-beyond-album-reachability-and-the-album-kana-bar-interaction-pair.md
 priority: low
 ---
 
 ## Description
 
+<!-- SECTION:DESCRIPTION:BEGIN -->
 Filed 2026-10-05 from the JF-776 implementation (the filing's B1 "consider the
 same weighing for the song bars so the family stays coherent" clause, weighed
 and deferred: each song site has its own acceptance shape and its own pinned
@@ -51,29 +53,34 @@ title's tokens), so it never reaches the bar at the SearchMedia pre-check. The
 DB/scorer listing order decides which sibling the walk returns, and the
 refuse-and-stop discards the exact match behind it. Narrower than the album
 case (the coverage gate pre-filters the fused form) but the same class.
+<!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done
-
-- [x] Red proof per site: the space-separated suffixed sibling listed FIRST,
+<!-- DOD:BEGIN -->
+- [x] #1 Red proof per site: the space-separated suffixed sibling listed FIRST,
       the exact song plays (kana query); pre-change tree first, both TFMs
       (all THREE named sites plus the fall-through leg: TrySongFallback's
       scored-chain head, SearchMedia's pre-check, the playlist fuzzy-fallback
       head-check, and the strengthened survivors-ask pin; RED on the unmodified
       tree 4 failed / 2 controls-green per TFM, BOTH TFMs, green post-fix)
-- [x] The existing JF-654 song-bar bait pins stay green (a bait with no
+- [x] #2 The existing JF-654 song-bar bait pins stay green (a bait with no
       alternate still lands the honest not-found) (KanaOriginSongAcceptanceTests
       green in the full suites; the new TrySongFallback bait-alone pin green on
       BOTH the unmodified and fixed trees)
-- [x] The list-narrowing forms (`ApplyKanaOriginBar`) are confirmed unaffected
+- [x] #3 The list-narrowing forms (`ApplyKanaOriginBar`) are confirmed unaffected
       (they already walk-equivalent; no change expected) (SongIndexSearch.cs is
       untouched by the diff; the ApplyKanaOriginBar pins and their
       FindSong/PlaySong/SearchMedia-retry consumers all green)
-- [x] dotnet build 0 errors, dotnet test green, no new warnings (Release
+- [x] #4 dotnet build 0 errors, dotnet test green, no new warnings (Release
       --no-restore -warnaserror clean; 5297/5297 net9.0 AND net10.0, the main
       baseline 5283 + 14 new proofs)
 
+GATE-MARKER F1 DISPOSITION (the orchestrator's tail, 2026-10-05): the discriminating fixture was ATTEMPTED and REJECTED after a live red on the fixed tree exposed the shape analysis error. The proposed suffix-only-survivor pool ('ヨルニカケル デラックス エディション' alone, query 'ヨルニカケル デラックス') yields a FULL-COVERAGE containment pick (the reading contains both query tokens), which the AutoPlay disjunct plays BY DESIGN on both the parent and the fixed tree (the classic containment auto-play, the JF-420.1 class); the walk's delegate never sees it because the pre-check passes full-coverage picks straight through. The reviewer's proposed shape conflated exact-match/containment auto-accept with the CR1 hole. The CR1 hole the worker actually closed (verified by their own pre-fix red) is the PARTIAL-COVERAGE survivor path, which the SIBLING pin already guards; the delegate's refusal Debug line plus that pin remain the guard. F1 closed as not-reproducible-as-proposed; the three log-accuracy findings (F2 message reworded, F3 full-pool count restored, F4 the SuggestionHandled correlation note) applied.
+<!-- DOD:END -->
+
 ## Implementation Notes
 
+<!-- SECTION:NOTES:BEGIN -->
 <!-- NOTES:BEGIN -->
 - Fix shape: mirror the JF-776 B1 pattern at each site (remove the refused
   winner, re-run the pick), NOT a new shared walker: the two sites pick through
@@ -85,6 +92,7 @@ case (the coverage gate pre-filters the fused form) but the same class.
 <!-- NOTES:END -->
 
 GATE-MARKER ADDENDUM (2026-10-05, from the JF-776 orchestrator review): this filing's scope widens by TWO legs and records a verification-debt note. (1) THE PLAYLIST HEAD-CHECK (AlbumPlayService ~:909): a THIRD single-point refuse-and-stop kana bar with the exact B1 shadow JF-776 just made reachable (the suffixed-sibling-first ordering refuses on the length band and NotFoundPlaylist is spoken although the exact playlist exists) - unconverted and previously untracked; the KatakanaRomanizer class doc's "only the song-side bars keep the shape" sentence is corrected by this addendum. (2) THE MIXED-FORM PIN: B2's documented half-width-open/full-width-close strip (the LAST-opener-of-either-form cut) has no pin - add one with the B2 matrix. (3) VERIFICATION DEBT: six of the eight HandleFuzzyMiss selector sites (AddToQueue, PlayNext, PlaySong, PlayVideo, SearchMedia, PlayPodcast) plus the PlayPodcast JF-640 guard leg have no per-surface red proof (5 of 11 changed sites tested); a regression reverting one passes the suite. The per-site pins ride this task's next pickup.
+<!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
@@ -151,6 +159,6 @@ refuse-and-stop, and non-Audio kinds have neither the walk nor the Audio-only
 song-title retry to recover). Suites: 5297/5297 both TFMs (the 5283 baseline +
 14 new proofs); Release --no-restore -warnaserror clean. Not deployed (worker
 branch only).
-<!-- SECTION:FINAL_SUMMARY:END -->
 
-GATE-MARKER F1 DISPOSITION (the orchestrator's tail, 2026-10-05): the discriminating fixture was ATTEMPTED and REJECTED after a live red on the fixed tree exposed the shape analysis error. The proposed suffix-only-survivor pool ('ヨルニカケル デラックス エディション' alone, query 'ヨルニカケル デラックス') yields a FULL-COVERAGE containment pick (the reading contains both query tokens), which the AutoPlay disjunct plays BY DESIGN on both the parent and the fixed tree (the classic containment auto-play, the JF-420.1 class); the walk's delegate never sees it because the pre-check passes full-coverage picks straight through. The reviewer's proposed shape conflated exact-match/containment auto-accept with the CR1 hole. The CR1 hole the worker actually closed (verified by their own pre-fix red) is the PARTIAL-COVERAGE survivor path, which the SIBLING pin already guards; the delegate's refusal Debug line plus that pin remain the guard. F1 closed as not-reproducible-as-proposed; the three log-accuracy findings (F2 message reworded, F3 full-pool count restored, F4 the SuggestionHandled correlation note) applied.
+CLOSED 2026-10-05 by the orchestrator after the full cycle: merged into main (worker 5d12c015 + orchestrator tail ffe8eaed, --no-ff; the gate-marker's six axes PASS with the red-revert independently reproduced; its four findings dispositioned: the three log fixes applied, the discriminating-fixture proposal honestly rejected after a live red on the fixed tree), suites 5297/5297 both TFMs. Deploys batched with JF-775. JF-781 filed by this task.
+<!-- SECTION:FINAL_SUMMARY:END -->
