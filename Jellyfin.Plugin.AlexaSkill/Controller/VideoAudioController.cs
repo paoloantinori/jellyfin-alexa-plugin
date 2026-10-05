@@ -887,6 +887,19 @@ public class VideoAudioController : ControllerBase
                 : await TryServeEpisodeCacheAsync(transientHit, logServe).ConfigureAwait(false);
         }
 
+        // The ONE transient-root fallback for both warm rows (JF-774 gate-marker:
+        // the block was duplicated verbatim; a drift at one row would silently
+        // leave the other row's masking behavior in place).
+        async Task<ActionResult?> TryServeTransientUnlessCachedAsync(FileInfo cached)
+        {
+            if (Path.GetDirectoryName(cached.FullName)!.Equals(transientDir, StringComparison.Ordinal))
+            {
+                return null;
+            }
+
+            return await TryServeTransientGenerationAsync(TransientServeLog()).ConfigureAwait(false);
+        }
+
         Action TransientServeLog()
             => () => _logger.LogDebug("VideoAudio episode HLS: serving transient-root playlist for item {ItemId} after a cache-root debris miss (JF-774)", itemId);
 
@@ -912,13 +925,10 @@ public class VideoAudioController : ControllerBase
                 return fastServed;
             }
 
-            if (!Path.GetDirectoryName(cached.FullName)!.Equals(transientDir, StringComparison.Ordinal))
+            ActionResult? transientFallback = await TryServeTransientUnlessCachedAsync(cached).ConfigureAwait(false);
+            if (transientFallback != null)
             {
-                ActionResult? transientServed = await TryServeTransientGenerationAsync(TransientServeLog()).ConfigureAwait(false);
-                if (transientServed != null)
-                {
-                    return transientServed;
-                }
+                return transientFallback;
             }
         }
 
@@ -958,13 +968,10 @@ public class VideoAudioController : ControllerBase
                 // request's fast path probed is newly visible at this
                 // double-check, still hidden behind the cache-first hit, and the
                 // encode branch below would per-file-wipe it.
-                if (!Path.GetDirectoryName(cached.FullName)!.Equals(transientDir, StringComparison.Ordinal))
+                ActionResult? transientRetry = await TryServeTransientUnlessCachedAsync(cached).ConfigureAwait(false);
+                if (transientRetry != null)
                 {
-                    ActionResult? transientServed = await TryServeTransientGenerationAsync(TransientServeLog()).ConfigureAwait(false);
-                    if (transientServed != null)
-                    {
-                        return transientServed;
-                    }
+                    return transientRetry;
                 }
             }
 

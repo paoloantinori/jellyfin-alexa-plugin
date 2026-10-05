@@ -9786,10 +9786,13 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         }
         finally
         {
+            // Restore writability BEFORE asserting: a failing assert throws, and the
+            // old order skipped the restore, leaving the dir read-only for the
+            // fixture's recursive cleanup (teardown noise instead of the signal).
+            File.SetUnixFileMode(dir, WritableDirMode);
             Assert.True(
                 Directory.Exists(dir),
                 $"the write-denied directory did not survive the act ({dir}): the denial never held (running as root?) and the undeletable-class pin is invalid on this runner");
-            File.SetUnixFileMode(dir, WritableDirMode);
         }
 #pragma warning restore CA1416, CA3003
     }
