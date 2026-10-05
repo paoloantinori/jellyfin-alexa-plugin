@@ -305,7 +305,9 @@ public sealed class SearchService
     /// The JF-508/JF-526 coverage gate keeps its own refuse-and-stop outcome (a
     /// coverage-withheld pick returns null, never walks; the bar and the gate are
     /// different judgments). JF-777: the playlist head-check
-    /// (AlbumPlayService.BuildPlaylistPlayResponseAsync's JF-663 bar) is the caller.</param>
+    /// (AlbumPlayService.BuildPlaylistPlayResponseAsync's JF-663 bar) is the caller;
+    /// JF-781 added SearchMedia's own fuzzy-pass gate (PassesKanaSongGate) on both
+    /// of its kind-scope calls.</param>
     /// <returns>The best match + score, or null if nothing above threshold.</returns>
     public async Task<(BaseItem Item, int Score)?> SearchItemsFuzzyAsync(
         string query,
