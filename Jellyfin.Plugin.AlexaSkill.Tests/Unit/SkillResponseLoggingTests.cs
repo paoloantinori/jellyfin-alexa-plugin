@@ -143,13 +143,13 @@ public class SkillResponseLoggingTests
     [Fact]
     public void SkillResponseContent_LogsAtDebugLevel_NotInformation()
     {
-        // Arrange: capture log records to verify level
+        // Arrange: the factory feeds the pipeline logger below; logRecords is
+        // deliberately not asserted here (this test pins only the counter
+        // buckets), so it is the one migrated site that stays green under a
+        // capture-provider sabotage. The Debug-level intent in the test name is
+        // unasserted; tracked as a JF-760 residual (JF-785).
         var logRecords = new List<(LogLevel Level, string Message)>();
-        var loggerFactory = LoggerFactory.Create(builder =>
-        {
-            builder.SetMinimumLevel(LogLevel.Trace);
-            builder.AddProvider(TestCaptureLogger.Into(logRecords));
-        });
+        var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
 
         var counters = new RequestCounters();
         var pipeline = new RequestPipeline(

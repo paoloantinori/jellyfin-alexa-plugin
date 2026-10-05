@@ -29,6 +29,28 @@ internal static class TestCaptureLogger
             return records.ToList();
         }
     }
+
+    /// <summary>
+    /// The capture-only Trace-level logger factory (JF-760: was a 24-site inline
+    /// LoggerFactory.Create block in VideoAudioControllerTests plus a
+    /// SkillResponseLoggingTests sibling; the shared home here because the idiom
+    /// spans files, unlike the file-private CreateDeletingLoggerFactory sibling
+    /// of JF-751). The Trace minimum level is load-bearing, not decorative: the
+    /// factory's rule filter drops Debug/Trace messages BEFORE the provider's
+    /// always-true IsEnabled is ever consulted, so a higher floor silently
+    /// empties the Debug-level log assertions. Non-vacuity contract (JF-692):
+    /// removing the AddProvider below must redden every log-asserting consumer.
+    /// Not to be confused with the private StructuredLoggingTests
+    /// CreateCapturingLoggerFactory (one word apart): that one is a
+    /// factory-level capturer with no provider registration and no Trace floor;
+    /// this one registers <see cref="Into"/> at the Trace floor.
+    /// </summary>
+    internal static ILoggerFactory CreateCaptureLoggerFactory(List<(LogLevel Level, string Message)> records)
+        => LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Trace);
+            b.AddProvider(Into(records));
+        });
 }
 
 internal sealed class CaptureLoggerProvider : ILoggerProvider

@@ -767,11 +767,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             "exit 0\n");
 
         var logRecords = new List<(LogLevel Level, string Message)>();
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(TestCaptureLogger.Into(logRecords));
-        });
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
         var controller = CreateController(audioItem.Id.ToString(), loggerFactory);
         controller.FfmpegPath = fakeFfmpegPath;
 
@@ -808,11 +804,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             "exit 3\n");
 
         var logRecords = new List<(LogLevel Level, string Message)>();
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(TestCaptureLogger.Into(logRecords));
-        });
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
         var controller = CreateController(audioItem.Id.ToString(), loggerFactory);
         controller.FfmpegPath = fakeFfmpegPath;
 
@@ -2108,11 +2100,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
 
         var logRecords = new List<(LogLevel Level, string Message)>();
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(TestCaptureLogger.Into(logRecords));
-        });
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
         var controller = CreateController(audioItem.Id.ToString(), loggerFactory, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf677-inlock-song"));
 
         int reads = 0;
@@ -2157,11 +2145,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
 
         var logRecords = new List<(LogLevel Level, string Message)>();
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(TestCaptureLogger.Into(logRecords));
-        });
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
         var controller = CreateController(episode.Id.ToString(), loggerFactory, mediaSourceManager, WriteRecordingFakeFfmpeg("fake-ffmpeg-jf677-inlock-episode"));
 
         int reads = 0;
@@ -2213,11 +2197,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
 
         var logRecords = new List<(LogLevel Level, string Message)>();
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(TestCaptureLogger.Into(logRecords));
-        });
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
         var controller = CreateController(episode.Id.ToString(), loggerFactory, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf677-inlock-audio"));
 
         int reads = 0;
@@ -2275,11 +2255,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
 
         var logRecords = new List<(LogLevel Level, string Message)>();
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(TestCaptureLogger.Into(logRecords));
-        });
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
         var controller = CreateController(parentId.ToString(), loggerFactory, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf677-inlock-book"));
 
         int reads = 0;
@@ -2371,11 +2347,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         string prewrittenPath = Path.Combine(hlsDir, "playlist-full.m3u8");
 
         var logRecords = new List<(LogLevel Level, string Message)>();
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(TestCaptureLogger.Into(logRecords));
-        });
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
         var controller = CreateController(episode.Id.ToString(), loggerFactory, mediaSourceManager, WriteRecordingFakeFfmpeg("fake-ffmpeg-jf680-inlock-episode"));
 
         var reads = TrackPlaylistReads(controller, prewrittenPath, playlistPath);
@@ -2457,11 +2429,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         string prewrittenPath = Path.Combine(hlsDir, "playlist-full.m3u8");
 
         var logRecords = new List<(LogLevel Level, string Message)>();
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(TestCaptureLogger.Into(logRecords));
-        });
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
         var controller = CreateController(audioItem.Id.ToString(), loggerFactory, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf680-inlock-song"));
 
         var reads = TrackPlaylistReads(controller, prewrittenPath, playlistPath);
@@ -2536,11 +2504,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         string prewrittenPath = Path.Combine(hlsDir, "playlist-full.m3u8");
 
         var logRecords = new List<(LogLevel Level, string Message)>();
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(TestCaptureLogger.Into(logRecords));
-        });
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
         var controller = CreateController(episode.Id.ToString(), loggerFactory, mediaSourceManager, WriteRecordingFakeFfmpeg("fake-ffmpeg-jf681-midreg-episode"));
 
         var reads = TrackPlaylistReads(controller, prewrittenPath, playlistPath);
@@ -2616,11 +2580,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         string prewrittenPath = Path.Combine(hlsDir, "playlist-full.m3u8");
 
         var logRecords = new List<(LogLevel Level, string Message)>();
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(TestCaptureLogger.Into(logRecords));
-        });
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
         var controller = CreateController(audioItem.Id.ToString(), loggerFactory, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf681-midreg-song"));
 
         var reads = TrackPlaylistReads(controller, prewrittenPath, playlistPath);
@@ -3031,11 +2991,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         await File.WriteAllTextAsync(Path.Combine(hlsDir, "seg_0007.ts"), new string('x', 1024));
 
         var logRecords = new List<(LogLevel Level, string Message)>();
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(TestCaptureLogger.Into(logRecords));
-        });
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
 
         var controller = new VideoAudioController(
             _libraryManagerMock.Object, _mediaEncoderMock.Object, _cache, loggerFactory);
@@ -4365,11 +4321,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         }
 
         var logRecords = new List<(LogLevel Level, string Message)>();
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(TestCaptureLogger.Into(logRecords));
-        });
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
 
         string? observedPinPath = null;
         int originalCap = _config.VideoAudioCacheSizeMB;
@@ -4660,11 +4612,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         string fakeFfmpegPath = WriteRecordingFakeFfmpeg("fake-ffmpeg-jf537-undercap");
 
         var logRecords = new List<(LogLevel Level, string Message)>();
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(TestCaptureLogger.Into(logRecords));
-        });
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
 
         var controller = CreateEpisodeController(mediaSourceManager, episode.Id.ToString(), fakeFfmpegPath, loggerFactory);
 
@@ -4725,11 +4673,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         string fakeFfmpegPath = WriteRecordingFakeFfmpeg("fake-ffmpeg-jf537-remux");
 
         var logRecords = new List<(LogLevel Level, string Message)>();
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(TestCaptureLogger.Into(logRecords));
-        });
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
 
         int originalCap = _config.VideoAudioCacheSizeMB;
         _config.VideoAudioCacheSizeMB = 256;
@@ -6456,11 +6400,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             "sleep 30\n");
 
         var logRecords = new List<(LogLevel Level, string Message)>();
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(TestCaptureLogger.Into(logRecords));
-        });
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
 
         var controller = CreateController(episode.Id.ToString(), loggerFactory, mediaSourceManager, fakeFfmpegPath);
         controller.HlsMonitorStallBudgetOverride = TimeSpan.FromSeconds(5);
@@ -6599,11 +6539,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             "exit 0\n");
 
         var logRecords = new List<(LogLevel Level, string Message)>();
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(TestCaptureLogger.Into(logRecords));
-        });
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
 
         var controller = CreateController(episode.Id.ToString(), loggerFactory, mediaSourceManager, fakeFfmpegPath);
 
@@ -6974,11 +6910,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             "exit 0\n");
 
         var logRecords = new List<(LogLevel Level, string Message)>();
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(TestCaptureLogger.Into(logRecords));
-        });
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
 
         var controller = CreateController(episode.Id.ToString(), loggerFactory, mediaSourceManager, fakeFfmpegPath);
 
@@ -7124,11 +7056,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             "exit 0\n");
 
         var logRecords = new List<(LogLevel Level, string Message)>();
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(TestCaptureLogger.Into(logRecords));
-        });
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
 
         var controller = CreateController(parentIdStr, loggerFactory, ffmpegPath: fakeFfmpegPath);
         try
@@ -7825,11 +7753,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         File.SetLastWriteTimeUtc(prewritePath, DateTime.UtcNow);
 
         var logRecords = new List<(LogLevel Level, string Message)>();
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(TestCaptureLogger.Into(logRecords));
-        });
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
 
         VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: true);
         try
@@ -7908,11 +7832,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         File.SetLastWriteTimeUtc(prewritePath, DateTime.UtcNow.AddSeconds(-40));
 
         var logRecords = new List<(LogLevel Level, string Message)>();
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(TestCaptureLogger.Into(logRecords));
-        });
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
 
         VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: true);
         try
@@ -8803,11 +8723,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             "exit 0\n");
 
         var logRecords = new List<(LogLevel Level, string Message)>();
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(TestCaptureLogger.Into(logRecords));
-        });
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
 
         var controller = CreateController(episode.Id.ToString(), loggerFactory, mediaSourceManager, fakeFfmpegPath);
         controller.HlsMonitorStallBudgetOverride = TimeSpan.FromMilliseconds(300);
@@ -8851,11 +8767,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             "exit 0\n");
 
         var logRecords = new List<(LogLevel Level, string Message)>();
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(TestCaptureLogger.Into(logRecords));
-        });
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
 
         var controller = CreateController(episode.Id.ToString(), loggerFactory, mediaSourceManager, fakeFfmpegPath);
         controller.HlsMonitorStallBudgetOverride = TimeSpan.FromMilliseconds(300);
@@ -8940,11 +8852,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         var (episode, mediaSourceManager) = SetupEpisodeForHls("Interrupted S01E01", "h264", TimeSpan.FromMinutes(45));
 
         var logRecords = new List<(LogLevel Level, string Message)>();
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(TestCaptureLogger.Into(logRecords));
-        });
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
 
         // Debris of an interrupted encode: live-looking playlist (no ENDLIST), no
         // active flag.
@@ -10182,11 +10090,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         string fakeFfmpegPath = WriteFlushLagFakeFfmpeg("fake-ffmpeg-jf678-flushlag");
 
         var logRecords = new List<(LogLevel Level, string Message)>();
-        using var loggerFactory = LoggerFactory.Create(b =>
-        {
-            b.SetMinimumLevel(LogLevel.Trace);
-            b.AddProvider(TestCaptureLogger.Into(logRecords));
-        });
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
 
         var controller = CreateController(parentId.ToString(), loggerFactory, ffmpegPath: fakeFfmpegPath);
 
