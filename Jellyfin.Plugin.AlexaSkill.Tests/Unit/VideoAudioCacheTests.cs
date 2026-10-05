@@ -406,7 +406,7 @@ public class VideoAudioCacheTests : PluginTestBase, IDisposable
 
         // A playing client: playlist fetch + segment fetch refresh the serve record
         // (the shared RecordAccess hooks used by the episode, song, and audiobook paths).
-        Assert.NotNull(await _cache.GetCachedHlsPlaylist(watchedItemId, 1));
+        Assert.NotNull(await _cache.GetCachedHlsPlaylist(watchedItemId, 1, ownGenerationLiveOrRegistering: false));
         Assert.NotNull(_cache.FindSegmentPath(watchedItemId, "seg_0000.ts"));
 
         // Filesystem atime ancient on BOTH sides: the survival must come from the
@@ -443,7 +443,7 @@ public class VideoAudioCacheTests : PluginTestBase, IDisposable
         await File.WriteAllBytesAsync(Path.Combine(dir, "seg_0000.ts"), new byte[1536 * 1024]);
 
         // Serve (records now), then age the record past the shrunk window.
-        Assert.NotNull(await _cache.GetCachedHlsPlaylist(itemId, 1));
+        Assert.NotNull(await _cache.GetCachedHlsPlaylist(itemId, 1, ownGenerationLiveOrRegistering: false));
         _cache.PlaybackEvictionExemptionTtl = TimeSpan.FromMilliseconds(30);
         await Task.Delay(200);
 
@@ -917,7 +917,7 @@ public class VideoAudioCacheTests : PluginTestBase, IDisposable
     {
         string dir = SeedTransientGeneration("55555555-5555-5555-5555-555555555555", 1, agePastTtl: true);
 
-        FileInfo? served = await _cache.GetCachedHlsPlaylist("55555555-5555-5555-5555-555555555555", 1);
+        FileInfo? served = await _cache.GetCachedHlsPlaylist("55555555-5555-5555-5555-555555555555", 1, ownGenerationLiveOrRegistering: false);
 
         Assert.NotNull(served);
         Assert.Contains("transient", served!.FullName, StringComparison.Ordinal);
@@ -996,10 +996,81 @@ public class VideoAudioCacheTests : PluginTestBase, IDisposable
         await File.WriteAllTextAsync(Path.Combine(cacheDir, "stream.m3u8"), "#EXTM3U\ncache-root\n#EXT-X-ENDLIST\n");
         _ = SeedTransientGeneration(itemId, 1, agePastTtl: false);
 
-        FileInfo? served = await _cache.GetCachedHlsPlaylist(itemId, 1);
+        FileInfo? served = await _cache.GetCachedHlsPlaylist(itemId, 1, ownGenerationLiveOrRegistering: false);
 
         Assert.NotNull(served);
         Assert.Equal(Path.Combine(cacheDir, "stream.m3u8"), served!.FullName);
+    }
+
+    /// <summary>
+    /// JF-775 resolver rule 1 (the exclusive arm): while the caller's own
+    /// generation is live-or-registering AND the registered directory is one of
+    /// that (key, ticks)'s generation dirs, the resolver returns the registered
+    /// dir ALONE, so the ordered probe never reaches the other root's same-key
+    /// file (the JF-774 exclusive rule, now covering the mid-registration
+    /// window; the cache-root containment arm included, not just the transient
+    /// one the hand-rolled JF-774 override checked, which is why the Theory
+    /// covers BOTH roots).
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ResolveHlsGenerationDirPaths_OwnLiveRegistrationContained_ReturnsRegisteredDirExclusively(bool registeredAtCacheRoot)
+    {
+        string itemId = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+        string registeredDir = registeredAtCacheRoot
+            ? _cache.GetHlsDirectoryPath(itemId, 1)
+            : _cache.GetTransientHlsDirectoryPath(itemId, 1);
+        Directory.CreateDirectory(registeredDir);
+        _cache.RegisterHlsDirectoryPath(itemId, registeredDir);
+
+        string[] resolved = _cache.ResolveHlsGenerationDirPaths(itemId, 1, ownGenerationLiveOrRegistering: true);
+
+        Assert.Equal(new[] { registeredDir }, resolved);
+    }
+
+    /// <summary>
+    /// JF-775 resolver rule 2 (the containment arm): a registration for a
+    /// DIFFERENT generation of the same key (a concurrent foreign-ticks encode
+    /// sharing the per-key registration slot) never redirects: the liveness
+    /// answer with no contained registration is the static root-preference
+    /// order (cache root first), the foreign dir absent from the answer.
+    /// </summary>
+    [Fact]
+    public void ResolveHlsGenerationDirPaths_RegistrationForForeignGeneration_FallsBackToStaticOrder()
+    {
+        string itemId = "cccccccc-cccc-cccc-cccc-cccccccccccc";
+        string foreignDir = _cache.GetTransientHlsDirectoryPath(itemId, 999);
+        Directory.CreateDirectory(foreignDir);
+        _cache.RegisterHlsDirectoryPath(itemId, foreignDir);
+
+        string[] resolved = _cache.ResolveHlsGenerationDirPaths(itemId, 1, ownGenerationLiveOrRegistering: true);
+
+        Assert.Equal(
+            new[] { _cache.GetHlsDirectoryPath(itemId, 1), _cache.GetTransientHlsDirectoryPath(itemId, 1) },
+            resolved);
+        Assert.DoesNotContain(foreignDir, resolved);
+    }
+
+    /// <summary>
+    /// JF-775 resolver rule 3 (the not-live arm): a false liveness answer
+    /// ignores the registration entirely and returns the static order, so a
+    /// dead generation serves its resting entry (cache root preferred) and
+    /// every not-live probe is byte-identical to the pre-JF-775 behavior.
+    /// </summary>
+    [Fact]
+    public void ResolveHlsGenerationDirPaths_NotLive_IgnoresRegistration()
+    {
+        string itemId = "dddddddd-dddd-dddd-dddd-dddddddddddd";
+        string transientDir = _cache.GetTransientHlsDirectoryPath(itemId, 1);
+        Directory.CreateDirectory(transientDir);
+        _cache.RegisterHlsDirectoryPath(itemId, transientDir);
+
+        string[] resolved = _cache.ResolveHlsGenerationDirPaths(itemId, 1, ownGenerationLiveOrRegistering: false);
+
+        Assert.Equal(
+            new[] { _cache.GetHlsDirectoryPath(itemId, 1), transientDir },
+            resolved);
     }
 
     /// <summary>

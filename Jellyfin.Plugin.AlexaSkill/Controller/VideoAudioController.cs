@@ -497,7 +497,7 @@ public class VideoAudioController : ControllerBase
         // art-tick generation runs (the pre-write listing below takes over), or
         // once it completed (ENDLIST); a KILLED generation's no-ENDLIST partial
         // is debris, cleaned and re-encoded, never served.
-        FileInfo? cached = await _cache.GetCachedHlsPlaylist(itemId, artModifiedTicks).ConfigureAwait(false);
+        FileInfo? cached = await GetCachedHlsPlaylistLiveAwareAsync(_activeVideoAudioEncodes, itemId, artModifiedTicks).ConfigureAwait(false);
         if (cached != null)
         {
             // JF-536/JF-675 own-live prewrite gate, ONE copy on
@@ -551,7 +551,7 @@ public class VideoAudioController : ControllerBase
             _cache.CleanupHlsStub(itemId, artModifiedTicks);
 
             // Double-check cache after acquiring lock
-            cached = await _cache.GetCachedHlsPlaylist(itemId, artModifiedTicks).ConfigureAwait(false);
+            cached = await GetCachedHlsPlaylistLiveAwareAsync(_activeVideoAudioEncodes, itemId, artModifiedTicks).ConfigureAwait(false);
             if (cached != null)
             {
                 // JF-536: the encode a concurrent request started is still running;
@@ -937,7 +937,7 @@ public class VideoAudioController : ControllerBase
         // is the debris of a killed encode (server restart mid-encode, or a
         // killed own-ticks generation under a live foreign-ticks sibling, JF-676)
         // and is re-encoded.
-        FileInfo? cached = await _cache.GetCachedHlsPlaylist(itemId, artModifiedTicks).ConfigureAwait(false);
+        FileInfo? cached = await GetCachedHlsPlaylistLiveAwareAsync(_activeEpisodeEncodes, itemId, artModifiedTicks).ConfigureAwait(false);
         if (cached != null)
         {
             // JF-499 W3: a concurrent lock-holder can invalidate this cache between
@@ -967,7 +967,7 @@ public class VideoAudioController : ControllerBase
             _cache.CleanupHlsStub(itemId, artModifiedTicks);
 
             // Double-check cache after acquiring lock
-            cached = await _cache.GetCachedHlsPlaylist(itemId, artModifiedTicks).ConfigureAwait(false);
+            cached = await GetCachedHlsPlaylistLiveAwareAsync(_activeEpisodeEncodes, itemId, artModifiedTicks).ConfigureAwait(false);
             if (cached != null)
             {
                 // JF-531: the encode a concurrent request started is still running;
@@ -1621,20 +1621,27 @@ public class VideoAudioController : ControllerBase
     /// known hazard: an external forward-touch of the prewrite's mtime
     /// mid-encode collapses the window for one poll, and the player sees a
     /// playlist regression; the fs stat has no defense against a touch).
-    /// PROBE ORDER (JF-774 finding 2): while the caller's own encode is LIVE and
-    /// registered at the TRANSIENT generation directory, that directory is the
-    /// ONLY prewrite source: a same-key playlist-full.m3u8 in the cache root is
-    /// necessarily stale debris of the other root (the undeletable class: the
-    /// per-file debris backstop removes stream.m3u8 and segments but not
-    /// playlist-full.m3u8), and serving it would 401 every segment fetch it
-    /// names for the whole encode window through its expired JF-309 token. When
-    /// the live prewrite is itself absent (the pre-prewrite race, or the
+    /// PROBE ORDER (JF-774 finding 2, consolidated into the cache's
+    /// liveness-aware resolver by JF-775): while the registration names one of
+    /// this generation's own directories (the transient one for an oversize
+    /// encode), that directory is the ONLY prewrite source: a same-key
+    /// playlist-full.m3u8 in the other root is necessarily stale debris (the
+    /// undeletable class: the per-file debris backstop removes stream.m3u8 and
+    /// segments but not playlist-full.m3u8), and serving it would 401 every
+    /// segment fetch it names for the whole encode window through its expired
+    /// JF-309 token. CALLER PRECONDITION: both call sites run inside
+    /// live-gated scopes (the warm row's strict OwnTicksGenerationLive gate
+    /// and the first serve's just-marked encode), and the probe pins the
+    /// resolver's liveness answer true instead of re-reading, so a monitor
+    /// clear landing between the caller's gate and the probe cannot flip the
+    /// source to the static order's stale cache-root leg (code-review F1).
+    /// When the live prewrite is itself absent (the pre-prewrite race, or the
     /// no-runtime skip) the probe returns null so the caller falls back to the
     /// LIVE playlist, never to the other root's stale listing. The registration
     /// is the encode's own resolved directory (registered at encode start under
-    /// the same lock) and the override is consumed only when it IS this
-    /// caller's transient generation dir, so a foreign-ticks registration can
-    /// never redirect the probe.
+    /// the same lock) and the resolver's containment rule consumes it only when
+    /// it IS one of this caller's generation dirs, so a foreign-ticks
+    /// registration can never redirect the probe.
     /// </summary>
     /// <param name="itemId">GUID-validated episode item ID.</param>
     /// <param name="artModifiedTicks">Art ticks of the item's HLS cache directory.</param>
@@ -1645,31 +1652,26 @@ public class VideoAudioController : ControllerBase
 #pragma warning disable CA3003 // path derived from GUID-validated itemId
         // Root-agnostic (JF-537.1): the prewrite lives in the CACHE root's
         // generation dir for a cacheable encode, the TRANSIENT root's for an
-        // oversize one. The probe order is the cache's single-homed
-        // root-preference list (cache root first, same order every root-agnostic
-        // resolver uses), replaced wholesale by the registered live dir when
-        // the live encode owns the transient generation (JF-774 finding 2, the
-        // override documented on the method).
-        string transientDir = _cache.GetTransientHlsDirectoryPath(itemId, artModifiedTicks);
+        // oversize one. The probe order is the cache's liveness-aware resolver
+        // (JF-775 collapsing JF-774 finding 2's hand-rolled override): while
+        // the registration names one of this generation's dirs, that dir is
+        // the ONLY prewrite source; otherwise the static root-preference order
+        // (cache root first). The liveness answer is pinned TRUE here, NOT
+        // re-read: both call sites run inside live-gated scopes (the warm
+        // row's strict gate, and the first serve's just-marked encode), and a
+        // monitor CLEAR landing between the caller's gate and a fresh read
+        // here would flip the source to the static order, whose cache-root
+        // first leg is exactly the stale shadow the exclusive rule exists to
+        // skip (code-review F1, the CLEAR-direction twin of the JF-782
+        // straddle). The caller owns the liveness question for this probe.
         string? prewrittenPath = null;
-        if (_cache.TryGetRegisteredHlsDirectory(itemId) == transientDir)
+        foreach (string dirPath in _cache.ResolveHlsGenerationDirPaths(itemId, artModifiedTicks, ownGenerationLiveOrRegistering: true))
         {
-            string liveCandidate = Path.Combine(transientDir, PrewrittenPlaylistFileName);
-            if (System.IO.File.Exists(liveCandidate))
+            string candidate = Path.Combine(dirPath, PrewrittenPlaylistFileName);
+            if (System.IO.File.Exists(candidate))
             {
-                prewrittenPath = liveCandidate;
-            }
-        }
-        else
-        {
-            foreach (string dirPath in _cache.HlsGenerationDirPaths(itemId, artModifiedTicks))
-            {
-                string candidate = Path.Combine(dirPath, PrewrittenPlaylistFileName);
-                if (System.IO.File.Exists(candidate))
-                {
-                    prewrittenPath = candidate;
-                    break;
-                }
+                prewrittenPath = candidate;
+                break;
             }
         }
 
@@ -1758,20 +1760,30 @@ public class VideoAudioController : ControllerBase
     /// prewrite under the lock) and serves ffmpeg's partial, not a validated
     /// cache. On the own-live row the verdict read nothing
     /// (<see cref="ValidatedHlsCache.Content"/> is null), the prewrite serve
-    /// reads the live listing fresh, and when no prewrite serves the row serves
-    /// the LIVE ENCODE's REGISTERED directory's playlist rather than the
-    /// verdict's first-hit file (JF-774 review finding 3: under the two-root
-    /// split the verdict's own-live acceptance of the ordered probe's first hit
-    /// can be the other root's stale file); on the own-dead ENDLIST row the
+    /// reads the live listing fresh, and when no prewrite serves the row
+    /// serves the verdict's file, which IS the live encode's REGISTERED
+    /// directory's playlist: JF-774 review finding 3 delivered that as a
+    /// redirect block here (the registered dir over the verdict's first-hit
+    /// file, which under the two-root split can be the other root's stale
+    /// file); JF-775 collapsed the dir authority into the liveness-aware
+    /// probe both warm sites consumed the verdict's file FROM, so every
+    /// liveness-accepted row's <see cref="ValidatedHlsCache.Playlist"/> is
+    /// already the registered dir's file and the redirect's target always
+    /// equals it (the block deleted; the resolver's containment rule carries
+    /// the foreign-ticks protection). On the own-dead ENDLIST row the
     /// verdict's read is threaded through to
     /// <see cref="ServeEpisodePlaylistAsync"/> (one full read per validated
     /// serve). A third row exists on the fast path: MID-REGISTRATION, where
     /// the verdict answers valid on the conservative
     /// OwnTicksGenerationLiveOrRegistering read (Content null) while this
     /// helper's strict gate is false, so no prewrite serves and the
-    /// fall-through reads the live playlist fresh; do not reconcile the
-    /// two-row story by hoisting the gate behind the verdict, that would
-    /// change the mid-registration window's serve. ORDER CONTRACT,
+    /// fall-through reads the live playlist fresh, which since JF-775 is the
+    /// REGISTERED dir's playlist for the same probe reason (the mid-registration
+    /// residual the JF-774 gate marker filed, closed at the probe: the ordered
+    /// first-hit shadow is never probed while the caller's own generation is
+    /// live-or-registering); do not reconcile the two-row story by hoisting
+    /// the gate behind the verdict, that would change the mid-registration
+    /// window's serve. ORDER CONTRACT,
     /// load-bearing for the vanish pins (JF-499 W3):
     /// the per-site log fires BETWEEN the prewrite branch and the serve, so a
     /// file deleted at that log leaves exactly the vanish-at-serve state the
@@ -1800,32 +1812,15 @@ public class VideoAudioController : ControllerBase
             {
                 return prewritten;
             }
-
-            logServe();
-#pragma warning disable CA3003 // path derived from GUID-validated itemId
-            // JF-774 review finding 3: on the own-live row the LIVE playlist is
-            // the live encode's REGISTERED directory's stream.m3u8. The verdict
-            // accepted the ordered probe's first hit without reading it, and
-            // under the two-root split that hit can be the OTHER root's stale
-            // file (the same shadow the prewrite probe's live override exists
-            // for), so when the registration points at one of the caller's OWN
-            // generation dirs, serve that dir's playlist instead. Contained to
-            // the caller's own generation dirs: a foreign-ticks registration
-            // (a concurrent encode of another generation) can never redirect
-            // the serve. valid.Content is null on this row (the verdict read
-            // nothing), so the serve reads the live playlist fresh either way.
-            string livePlaylistPath = valid.Playlist.FullName;
-            string? registered = _cache.TryGetRegisteredHlsDirectory(itemId);
-            if (registered == _cache.GetHlsDirectoryPath(itemId, artModifiedTicks)
-                || registered == _cache.GetTransientHlsDirectoryPath(itemId, artModifiedTicks))
-            {
-                livePlaylistPath = Path.Combine(registered, "stream.m3u8");
-            }
-
-            return await ServeEpisodePlaylistAsync(livePlaylistPath, startTicks, valid.Content).ConfigureAwait(false);
-#pragma warning restore CA3003
         }
 
+        // Both fall-through rows serve the verdict's file; on liveness-accepted
+        // rows the probe already resolved it to the live-or-registering
+        // encode's REGISTERED dir (JF-775). On the mid-registration row
+        // valid.Content is null, so the serve reads that file fresh; a vanish
+        // there falls the request through to the lock-scope concurrent serve,
+        // the hold the resolver chose over serving the other root's stale
+        // listing.
         logServe();
 #pragma warning disable CA3003 // path derived from GUID-validated itemId
         return await ServeEpisodePlaylistAsync(valid.Playlist.FullName, startTicks, valid.Content).ConfigureAwait(false);
@@ -2404,8 +2399,9 @@ public class VideoAudioController : ControllerBase
     /// <returns>The playlist, or an error result.</returns>
     private async Task<ActionResult> ServeVariantHlsAsync(ValidatedRequest validation, VariantHlsSpec spec)
     {
-        // Same cache-validity rule as the remux: completed (ENDLIST) or actively encoding.
-        FileInfo? cached = await _cache.GetCachedHlsPlaylist(spec.CacheKey, spec.ArtModifiedTicks).ConfigureAwait(false);
+        // Same cache-validity rule as the remux: completed (ENDLIST) or actively
+        // encoding (variant keys ride the episode registry).
+        FileInfo? cached = await GetCachedHlsPlaylistLiveAwareAsync(_activeEpisodeEncodes, spec.CacheKey, spec.ArtModifiedTicks).ConfigureAwait(false);
         if (cached != null)
         {
             // JF-499 W3 (same race and fix as the remux fast path): a lock-holder's
@@ -2433,7 +2429,7 @@ public class VideoAudioController : ControllerBase
         {
             _cache.CleanupHlsStub(spec.CacheKey, spec.ArtModifiedTicks);
 
-            cached = await _cache.GetCachedHlsPlaylist(spec.CacheKey, spec.ArtModifiedTicks).ConfigureAwait(false);
+            cached = await GetCachedHlsPlaylistLiveAwareAsync(_activeEpisodeEncodes, spec.CacheKey, spec.ArtModifiedTicks).ConfigureAwait(false);
             if (cached != null)
             {
                 // JF-678: the row rides the shared verdict+serve composite, so a
@@ -2724,7 +2720,12 @@ public class VideoAudioController : ControllerBase
     /// keep the conservative window direction while firing under a live
     /// FOREIGN-ticks generation, whose directory their ticks-scoped cleanup
     /// cannot name (canonical account on
-    /// <see cref="OwnTicksGenerationLiveOrRegistering"/>).
+    /// <see cref="OwnTicksGenerationLiveOrRegistering"/>). The DIRECTORY
+    /// RESOLVER joined the conservative family in JF-775: the liveness-aware
+    /// probe consumes the same live-or-registering read, so in this window the
+    /// registered dir (stored at encode start, BEFORE this mark on the episode
+    /// path, hence already naming the incoming encode's dir) is the only probe
+    /// source and the other root's stale shadow is never probed.
     /// </summary>
     /// <param name="activeEncodes">The path's active-encode registry.</param>
     /// <param name="cacheKey">The encode's cache key.</param>
@@ -2788,6 +2789,41 @@ public class VideoAudioController : ControllerBase
     private static bool OwnTicksGenerationLiveOrRegistering(ConcurrentDictionary<string, ActiveEncodeGenerations> activeEncodes, string cacheKey, long artModifiedTicks)
         => activeEncodes.TryGetValue(cacheKey, out ActiveEncodeGenerations? generations)
             && generations.IsTickLiveOrRegistering(artModifiedTicks);
+
+    /// <summary>
+    /// The ONE liveness-aware warm-cache probe wrapper (JF-775, the
+    /// LockHlsItemAsync call-sites-cannot-drift idiom): the cache's
+    /// <see cref="VideoAudioCache.GetCachedHlsPlaylist"/> paired with the
+    /// verdict-family liveness read over the caller's OWN registry, so every
+    /// warm site (episode/song/variants/audiobook fast path and in-lock
+    /// double-check) spells only its registry choice and the pairing can never
+    /// drift from the verdict it feeds. The liveness read is the SAME
+    /// PREDICATE the paired debris verdict accepts on
+    /// (<see cref="OwnTicksGenerationLiveOrRegistering"/>), evaluated at its
+    /// own instant: the verdict re-reads after the probe's file I/O, so a
+    /// generation marked between the two evaluations is seen by the verdict
+    /// even though the probe resolved the static order (the straddle is
+    /// conjunction-narrow and tracked; the verdict's later read is the
+    /// deliberate freshness, do not hoist a snapshot here). While the read is
+    /// true and the registration names one of the (key, ticks) generation
+    /// dirs, the probe returns ONLY that dir's file, so a liveness-accepted
+    /// verdict row's FileInfo is the live-or-registering encode's own
+    /// registered file, never the other root's stale shadow (the mid-registration
+    /// residual the JF-774 gate marker filed, closed at the probe). HONEST
+    /// SCOPE of that "never": it holds while the read is true AND the
+    /// registration is still contained. A concurrent FOREIGN-ticks encode of
+    /// the same key can overwrite the per-key registration slot while the
+    /// caller's own generation stays live (containment then fails, the static
+    /// order answers, and an undeletable other-root shadow can win it; the
+    /// pre-existing JF-774 containment boundary, filed as JF-782), and the
+    /// straddle above is the mark-direction timing hole in the same family.
+    /// </summary>
+    /// <param name="activeEncodes">The path's active-encode registry.</param>
+    /// <param name="cacheKey">The encode's cache key.</param>
+    /// <param name="artModifiedTicks">The caller's art ticks (its own cache directory generation).</param>
+    /// <returns>The probed playlist, or null on a miss.</returns>
+    private Task<FileInfo?> GetCachedHlsPlaylistLiveAwareAsync(ConcurrentDictionary<string, ActiveEncodeGenerations> activeEncodes, string cacheKey, long artModifiedTicks)
+        => _cache.GetCachedHlsPlaylist(cacheKey, artModifiedTicks, OwnTicksGenerationLiveOrRegistering(activeEncodes, cacheKey, artModifiedTicks));
 
     /// <summary>
     /// The live generation slots of ONE cache key's active-encode flag (JF-669):
@@ -3379,7 +3415,7 @@ public class VideoAudioController : ControllerBase
         // - During encoding: serve ffmpeg's live stream.m3u8 (only lists existing segments)
         // - After encoding: serve the completed cached stream.m3u8 (has ENDLIST)
         // We validate completeness by checking for ENDLIST + segment count >= chapter count.
-        FileInfo? cached = await _cache.GetCachedHlsPlaylist(parentId, artModifiedTicks).ConfigureAwait(false);
+        FileInfo? cached = await GetCachedHlsPlaylistLiveAwareAsync(_activeAudiobookEncodes, parentId, artModifiedTicks).ConfigureAwait(false);
         if (cached != null)
         {
             // JF-678: the vanish translation the fast paths have had since
@@ -3454,8 +3490,9 @@ public class VideoAudioController : ControllerBase
         {
             _cache.CleanupHlsStub(parentId, artModifiedTicks);
 
-            // Double-check cache after acquiring lock (another request's encode may have completed)
-            cached = await _cache.GetCachedHlsPlaylist(parentId, artModifiedTicks).ConfigureAwait(false);
+            // Double-check cache after acquiring lock (another request's encode may
+            // have completed)
+            cached = await GetCachedHlsPlaylistLiveAwareAsync(_activeAudiobookEncodes, parentId, artModifiedTicks).ConfigureAwait(false);
             if (cached != null)
             {
                 // JF-678: vanish translation, same as the fast-path row above;
@@ -5495,9 +5532,12 @@ public class VideoAudioController : ControllerBase
     /// until the idle reaper (<see cref="VideoAudioCache.ReapIdleTransientEntries"/>)
     /// judges them unwatched (segment-fetch recency; VideoApp emits no playback-stop
     /// event, so recency is the only observable liveness signal). The serve paths
-    /// resolve both roots (<see cref="VideoAudioCache.GetCachedHlsPlaylist"/> probes
-    /// cache then transient; <see cref="VideoAudioCache.FindHlsDirectoryByScan"/>
-    /// scans both), so a transient entry keeps serving across cap changes and
+    /// resolve both roots through the liveness-aware resolver
+    /// (<see cref="VideoAudioCache.GetCachedHlsPlaylist"/> probes the resolver's
+    /// order: the registered dir exclusively while the caller's own generation is
+    /// live-or-registering and contained, else cache then transient;
+    /// <see cref="VideoAudioCache.FindHlsDirectoryByScan"/> scans both), so a
+    /// transient entry keeps serving across cap changes and
     /// restarts. JF-537's interim answer (encode inside the capped cache anyway and
     /// WARN about the per-replay re-encode) is retired with the mode that avoids it.
     ///

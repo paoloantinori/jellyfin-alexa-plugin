@@ -4,7 +4,7 @@ title: >-
   JF-775 - the "which directory is authoritative for (key, ticks)" question has
   three answers at three sites; consolidate into one liveness-aware resolver in
   VideoAudioCache
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-05'
 labels:
@@ -69,17 +69,26 @@ edge-fix task.
 ## Definition of Done
 
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
 - [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
 - [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
 - [ ] #6 NLU test fixtures updated if interaction model changed
 - [ ] #7 E2E test added for new intent or handler logic
 - [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+DoD evidence: #1/#3 the Release --no-restore -warnaserror build succeeded
+with zero warnings (CI parity); #2 the FULL suite on the final state,
+5289/5289 BOTH TFMs (the ~5283 baseline + 6 new test cases: 2 controller
+pins, 3 resolver unit pins with the rule-1 Theory counting 2); #4-#8 N/A (no
+session-attribute, HttpClient, interaction-model, handler, or locale surface
+touched); #9/#10 the gate record in the Notes section (4 simplify angles: 4
+applied, 3 reasoned skips; code-review high: 4 findings, 2 applied, 2
+confirmed-filed as JF-782).
 
 GATE-MARKER ADDENDUM (2026-10-05, from the JF-774 orchestrator review): the
 mid-registration window is NARROWED, not closed; a lock-free fast-path replay
@@ -93,3 +102,154 @@ all CLOSED' sentence above is corrected by this addendum. The window is
 sub-second and requires the undeletable same-key shadow plus an oversize
 encode plus a replay in the gap; the liveness-aware resolver this task tracks
 is the shape that closes it.
+
+## Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+DESIGN (worker, 2026-10-05; written before the implementation per the
+design-first instruction).
+
+THE RESOLVER'S CONTRACT. One method in VideoAudioCache,
+
+  ResolveHlsGenerationDirPaths(itemId, artModifiedTicks,
+  ownGenerationLiveOrRegistering) -> string[]
+
+answering "which directory serves this key RIGHT NOW" as an ORDERED
+candidate list. Decision rule: when the caller's verdict-family liveness
+read is true (OwnTicksGenerationLiveOrRegistering over the path's registry,
+the SAME read the debris verdict accepts on) AND the registered directory
+(TryGetRegisteredHlsDirectory, stored at encode start BEFORE MarkEncodeActive
+on the episode path) IS one of the (key, ticks) generation dirs, the
+registered dir is returned EXCLUSIVELY: the live-or-registering encode owns
+the generation and the other root's same-key file is necessarily stale
+(JF-774's exclusive rule, now extended over the mid-registration window the
+addendum files: the registration already names the incoming encode's dir at
+exactly the moment the 0-slot verdict errs conservative). Otherwise the
+static root-preference order answers (cache root first, transient second,
+today's HlsGenerationDirPaths). The liveness bool is CALLER-SUPPLIED because
+the registries are controller-owned; the containment test keeps a
+foreign-ticks registration from ever redirecting (the JF-774 F3 rule).
+
+WHO CALLS IT. (1) GetCachedHlsPlaylist gains the required bool and probes
+the resolver's order; all eight controller call sites pass their own
+registry's loose read (episode fast + in-lock, song fast + in-lock, variants
+fast + in-lock, audiobook fast + in-lock). (2) The episode prewrite probe's
+hand-rolled arms (the registered == transientDir exclusive arm plus the
+ordered else-arm) collapse into one resolver-fed loop with the loose read.
+(3) The tick-blind leg does NOT call it: FindHlsDirectory/ByScan (the
+segment path) has no ticks to key on, keeps its registration-first arm
+consulting the same registration read, and keeps the JF-774 cross-root
+recency rule byte-identical. CleanupHlsStub also stays on the static order:
+cleanup asks "which directories exist", not "which serves".
+
+WHAT EACH OF THE THREE ANSWERS BECOMES. Answer 1 (HlsGenerationDirPaths'
+static order) becomes the resolver's not-live arm, unchanged for every
+not-live probe (the pin battery's resting-entry shapes are byte-identical).
+Answer 2 (the scan's cross-root recency) stays as-is, cross-referenced as
+the tick-blind boundary. Answer 3 (the serve rows' live-override) collapses
+INTO the probe: with the probe resolver-fed, the verdict's accepted FileInfo
+IS the registered dir's file on every liveness-accepted row, so the F3
+registered-dir fallback block on ServeEpisodeWarmCacheAsync deletes (its
+target now equals valid.Playlist.FullName) and the mid-registration
+fall-through row serves the registered dir's playlist instead of the ordered
+probe's first hit. The strict gate at the serve row itself is KEPT (the
+JF-681 "do not hoist the gate" warning stands: the mid-registration window
+still skips the prewrite; only the DIRECTORY each row reads changes).
+
+THE CLOSED RESIDUAL (the addendum's shape): in the mid-registration window
+the verdict accepts without reading, the strict gate skips prewrite and
+redirect, but the probe already returned only the registered dir's file, so
+the fall-through serve reads the REGISTERED dir's playlist (redirect) or
+misses the probe when the encode has not written stream.m3u8 yet and holds
+on the per-item lock until the first segment (the concurrent-request flow).
+The cache-root shadow is never probed in the window.
+
+DOCUMENTED DELTA: a replay inside the window when the registered dir has no
+stream.m3u8 yet (before the first segment) now misses and holds on the lock
+instead of serving the prewrite off the back of a shadow-hit verdict
+acceptance; that replay previously could only serve at all by accepting the
+stale shadow, which is the bug. The own-live no-prewrite row and both
+JF-774/JF-778 pin families keep their served bytes.
+
+RED PROOF: the pin plants the registering seam (SetEncodeRegisteringForTest,
+JF-681) plus the encode-start registration (RegisterHlsDirectoryPath at the
+transient dir, the production ordering) plus the undeletable cache-root
+shadow (a stale no-ENDLIST stream.m3u8) plus the transient live partial; on
+the current tree the ordered probe's first hit is the shadow, the
+registering verdict accepts it unread, the strict gate skips both redirects,
+and the fall-through serves the shadow's stale bytes (the marker). Post-fix
+the probe is exclusive to the registered dir and the same row serves the
+transient live partial.
+
+GATES (worker, 2026-10-05). /simplify (4 parallel angles): APPLIED the
+one-wrapper GetCachedHlsPlaylistLiveAwareAsync (the 8-site
+GetCachedHlsPlaylist/OwnTicksGenerationLiveOrRegistering pairing homed once,
+the LockHlsItemAsync call-sites-cannot-drift idiom; convergent
+simplification+reuse finding), the PlantTwoRootShadowFixture test planter
+(the two new controller pins' 35 duplicated lines extracted at the second
+copy, the PlantLiveEncodeFixture convention), the cache-root containment
+Theory variant (the rule-1 unit pin now covers BOTH roots' registrations),
+and the comment honesty pass (the probe-time vs verdict-time evaluation
+distinction made explicit in the wrapper doc; the per-site rationale copies
+trimmed; the ServeEpisodeWarmCacheAsync inline comment slimmed to the
+doc-unique facts). SKIPPED with reasons: threading the probe's liveness
+snapshot into the verdict (the verdict's post-I/O re-read is deliberate
+freshness; the residual straddle FILED as JF-782 leg 1), the raw
+registration read before containment in the resolver (would fork the ONE
+TryGetRegisteredHlsDirectory predicate into a second shape, the exact drift
+JF-774's single-homing rule exists to prevent, to save one warm stat on
+rare shapes), and Contains over the explicit Ordinal loop (the house style
+spells the comparison kind). /code-review high: 4 findings; F1 APPLIED (the
+prewrite probe's exclusive source selection pinned caller-gated instead of
+re-reading liveness: a monitor CLEAR landing between the serve row's strict
+gate and the probe's fresh read would have flipped the source to the static
+order's stale cache-root leg, a real narrowing the collapse introduced; the
+prewrite method now carries the caller-precondition doc), F2's doc half
+APPLIED (the wrapper's "never the other root's stale shadow" claim scoped to
+its honest containment+timing boundaries) and its behavioral half FILED as
+JF-782 leg 3 (the full-slot foreign-registration overwrite, PRE-EXISTING
+JF-774 containment design, not a JF-775 regression), F3/F4 confirmed as the
+JF-782 legs 1/2 this task filed from the simplify round (no double-file).
+<!-- SECTION:NOTES:END -->
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+IMPLEMENTED (worker branch, not merged): the ONE liveness-aware resolver
+VideoAudioCache.ResolveHlsGenerationDirPaths(key, ticks,
+ownGenerationLiveOrRegistering) unifying the three per-site dir-authority
+rules JF-774 left split: while the caller's verdict-family read is true AND
+the registration names one of the (key, ticks) generation dirs, that dir is
+the EXCLUSIVE probe source (JF-774's exclusive rule extended over the
+mid-registration window and to the cache-root containment arm); otherwise
+the static root-preference order (byte-identical to the old behavior on
+every not-live probe). Consumers: the ordered probe (GetCachedHlsPlaylist
+gained the REQUIRED bool, all eight controller sites fed through the ONE
+GetCachedHlsPlaylistLiveAwareAsync wrapper that pairs the cache probe with
+each path's registry read) and the episode prewrite probe (its hand-rolled
+registered==transientDir arm collapsed into the resolver, the liveness
+answer pinned caller-gated per code-review F1); the JF-774 F3 serve-row
+redirect block is DELETED (the probe already returns the registered dir's
+file on every liveness-accepted row), and the tick-blind scan leg keeps the
+JF-774 cross-root recency intact with the boundary documented. THE CLOSED
+RESIDUAL (the gate-marker addendum): in the mid-registration window the
+registering verdict accepts without reading, but the probe never reaches the
+cache-root shadow, so the fall-through serves the registered dir's live
+partial (redirect) or misses and holds on the per-item lock until the first
+segment (the concurrent-request flow). RED PROOF on the unmodified tree,
+both TFMs: the new pin failed with the predicted mode (the shadow's stale
+bytes served); post-fix green. TESTS: 2 controller pins (the mid-registration
+red proof; the F3-collapse guard, sharing the PlantTwoRootShadowFixture
+planter) + 3 resolver unit pins (rule 1 as a 2-case Theory over both roots'
+registrations, rule 2 the foreign-generation containment refusal, rule 3 the
+not-live static order) + 6 existing probe call sites migrated to the new
+required parameter. GATES: /simplify (4 parallel angles; 4 applied incl.
+the one-wrapper and the test planter; 3 reasoned skips) + /code-review high
+(4 findings: F1 the prewrite clear-race APPLIED, F2's doc scope APPLIED with
+its pre-existing behavioral half FILED as JF-782 leg 3, F3/F4 the JF-782
+legs 1/2 this task filed from the simplify round). SUITES: 5289/5289 BOTH
+TFMs, full run on the final state; Release --no-restore -warnaserror clean.
+RESIDUALS FILED: JF-782 (the probe-vs-verdict straddle, the foreign-ticks
+mid-registration sub-window, the full-slot foreign-registration overwrite).
+NOT DEPLOYED (worker branch only; no merge into main).
+<!-- SECTION:FINAL_SUMMARY:END -->
+
