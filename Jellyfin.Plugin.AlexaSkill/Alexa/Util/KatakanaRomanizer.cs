@@ -63,7 +63,9 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// PLAYLIST-side single-point refuse-and-stop bars to the same walk
 /// (TrySongFallback's scored-chain head, SearchMedia's full-coverage pre-check,
 /// and the playlist fuzzy fallback's head-check, the last riding
-/// SearchItemsFuzzyAsync's acceptanceBar). Still single-point by design: the
+/// SearchItemsFuzzyAsync's acceptanceBar); JF-781 added SearchMedia's own
+/// fuzzy-pass gate (PassesKanaSongGate) to that acceptanceBar's caller list
+/// (both of its kind-scope calls). Still single-point by design: the
 /// ARTIST-side acceptance gates (PlayArtistSongs' end-of-chain JF-652 bar,
 /// which composes with the JF-377/JF-420 gates above it, and the
 /// PassesArtistMatchAcceptance album/artist arms), whose refusals name a

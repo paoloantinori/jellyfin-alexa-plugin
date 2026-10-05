@@ -133,11 +133,11 @@ public class SearchMediaIntentHandler : BaseHandler
         // every auto-play this handler can reach: the ARTIST fallback's resolved
         // artist (live a7d42b09: tier-4 plain-fuzzy 'Sator' for 'bitoruzu'
         // auto-played; the JF-652 decision points never covered SearchMedia),
-        // the fuzzy pass's single-result pick (the fuzzy scan covers the playable
-        // kinds INCLUDING songs), the FuzzyMatch topMatch full-coverage
-        // pre-check, and the JF-506 song-title retry. The primary SearchTerm
-        // path stays ungated: a server-side index match on a romanized string is
-        // literal, not the fuzzy wrong-accept class.
+        // the fuzzy pass's pick (the JF-781 walk's acceptance bar; the fuzzy scan
+        // covers the playable kinds INCLUDING songs), the FuzzyMatch topMatch
+        // full-coverage pre-check, and the JF-506 song-title retry. The primary
+        // SearchTerm path stays ungated: a server-side index match on a romanized
+        // string is literal, not the fuzzy wrong-accept class.
         bool kanaOrigin = Util.ArtistSearch.IsKanaOriginQuery(null, query);
         query = Util.KatakanaRomanizer.Romanize(query);
 
@@ -183,19 +183,43 @@ public class SearchMediaIntentHandler : BaseHandler
             // be invisible (JF-456). Each call's ApplyLibraryFilter decides via the
             // kind-aware predicate, no flag at the call site.
             (BaseItemKind[] fuzzyPrimaryTypes, BaseItemKind[]? fuzzySiblingTypes) = KindScopes(libraryRestricted);
-            var fuzzy = await Search.SearchItemsFuzzyAsync(query, jellyfinUser, user, _libraryManager, fuzzyPrimaryTypes, cancellationToken, "SearchMediaFuzzyFallback", locale: locale).ConfigureAwait(false);
-            if (fuzzy == null && fuzzySiblingTypes != null)
+            // JF-781: the kana bar rides the fuzzy pass as the acceptance predicate
+            // of the JF-776 B1 refuse-and-continue walk (SearchItemsFuzzyAsync's
+            // optional bar, the playlist site's JF-777 idiom) instead of the
+            // post-pick refuse-and-stop this site kept: a refused single pick left
+            // results empty with the exact item still in the scan, and the only
+            // recovery leg, the JF-506 song-title retry below, is Audio-ONLY, so
+            // every other playable kind (Movie/Episode/Series/Playlist/AudioBook/
+            // MusicAlbum) answered the honest MediaNotFound with the exact item in
+            // the library (the JF-777 shadow; the JF-777 pins used song fixtures,
+            // so the retry masked the gap). The query's tokens and DM codes are
+            // derived once when the bar is armed (the encode-once idiom the
+            // codes-carried overloads document: the walk evaluates the bar once
+            // per refused winner); a disarmed (Latin) query passes a null bar and
+            // keeps the byte-identical single-pick path.
+            Func<BaseItem, bool>? fuzzyPassBar = null;
+            if (kanaOrigin)
             {
-                fuzzy = await Search.SearchItemsFuzzyAsync(query, jellyfinUser, user, _libraryManager, fuzzySiblingTypes, cancellationToken, "SearchMediaFuzzyOutOfLibrary", locale: locale).ConfigureAwait(false);
+                var fuzzyQueryTokens = KeywordMatcher.Tokenize(query, locale);
+                var fuzzyQueryCodes = DoubleMetaphone.Encode(query);
+                fuzzyPassBar = item => PassesKanaSongGate(item, fuzzyQueryTokens, fuzzyQueryCodes, query.Length, locale);
             }
 
-            if (fuzzy != null && PassesKanaSongGate(fuzzy.Value.Item, query, locale, kanaOrigin))
+            var fuzzy = await Search.SearchItemsFuzzyAsync(query, jellyfinUser, user, _libraryManager, fuzzyPrimaryTypes, cancellationToken, "SearchMediaFuzzyFallback", locale: locale, acceptanceBar: fuzzyPassBar).ConfigureAwait(false);
+            if (fuzzy == null && fuzzySiblingTypes != null)
+            {
+                fuzzy = await Search.SearchItemsFuzzyAsync(query, jellyfinUser, user, _libraryManager, fuzzySiblingTypes, cancellationToken, "SearchMediaFuzzyOutOfLibrary", locale: locale, acceptanceBar: fuzzyPassBar).ConfigureAwait(false);
+            }
+
+            if (fuzzy != null)
             {
                 results = new List<BaseItem> { fuzzy.Value.Item };
             }
             else
             {
-                // JF-506: song-title retry on the confirmed miss. Live evidence
+                // JF-506: song-title retry on the confirmed miss (no candidates,
+                // below threshold, coverage-withheld, or the JF-781 bar walked the
+                // whole scan out). Live evidence
                 // (corr=3240220d): a song title that reached this handler through a
                 // generic carrier ran the SearchTerm query (0), the 4-tier artist
                 // fallback (0), and the fuzzy pass, which scans only the FIRST 500
@@ -504,39 +528,50 @@ public class SearchMediaIntentHandler : BaseHandler
 
     /// <summary>
     /// JF-654 review round 2: the shared song-side kana bar applied to the fuzzy
-    /// pass's single-result pick. The fuzzy score rides the PartialRatio scale
-    /// the bar's plain leg cannot trust (the JF-652 review: plain 91-99 there
-    /// proves no collision), so the hit is re-scored through the same
-    /// KeywordMatcher chain the &gt;= 95 leg is calibrated on, then gated by the
-    /// shared definition. False is the honest miss: the caller falls through to
-    /// the gated song-title retry instead of auto-playing the soup match.
+    /// pass's pick, since JF-781 as the acceptance predicate of the walk inside
+    /// SearchItemsFuzzyAsync (the JF-776 B1 refuse-and-continue idiom; the shadow
+    /// the former post-pick refuse-and-stop left behind is documented at the
+    /// call site). The fuzzy score rides the PartialRatio scale the bar's plain
+    /// leg cannot trust (the JF-652 review: plain 91-99 there proves no
+    /// collision), so the pick is re-scored through the same KeywordMatcher
+    /// chain the &gt;= 95 leg is calibrated on (ScoreWithPhoneticFallback, the
+    /// phonetic-stage aware form, deliberately NOT the plain Score the pre-check
+    /// bar uses), and a pick that chain does not even admit is a refusal (the
+    /// pre-conversion gate's semantics, kept). The tokens and codes are
+    /// caller-hoisted per the encode-once rule (the walk evaluates the bar once
+    /// per refused winner). False removes the pick from the walk's candidate set
+    /// and the pick re-runs on the remainder; a fully refused scan walks out
+    /// (null) and the caller falls through to the gated song-title retry. The
+    /// walk's own refusal line is the one-line triage surface (this predicate
+    /// deliberately logs nothing; its semantics live in this doc, the shared
+    /// walk's convention).
     /// </summary>
-    /// <param name="item">The fuzzy pass's single best hit.</param>
-    /// <param name="romanizedQuery">The romanized query string.</param>
-    /// <param name="locale">The request locale.</param>
-    /// <param name="kanaOrigin">Whether the query carried kana pre-romanization.</param>
-    /// <returns>True when the hit may feed the result flow's auto-play.</returns>
-    private bool PassesKanaSongGate(BaseItem item, string romanizedQuery, string locale, bool kanaOrigin)
+    /// <param name="item">The fuzzy walk's current best pick.</param>
+    /// <param name="romanizedQueryTokens">The romanized query's pre-tokenized
+    /// keywords (hoisted once per request by the caller).</param>
+    /// <param name="queryCodes">The romanized query's Double Metaphone codes
+    /// (hoisted once per request by the caller).</param>
+    /// <param name="romanizedQueryLength">The romanized query's length (the band input).</param>
+    /// <param name="locale">The request locale (title-side tokenization).</param>
+    /// <returns>True when the pick may feed the result flow's auto-play.</returns>
+    private bool PassesKanaSongGate(
+        BaseItem item,
+        string[] romanizedQueryTokens,
+        (string Primary, string? Alternate) queryCodes,
+        int romanizedQueryLength,
+        string locale)
     {
-        if (!kanaOrigin)
-        {
-            return true;
-        }
-
         var scored = KeywordMatcher.ScoreWithPhoneticFallback(
             new[] { item },
-            KeywordMatcher.Tokenize(romanizedQuery, locale),
+            romanizedQueryTokens,
             locale,
             _config.PhoneticSongSearchEnabled);
-        if (Util.SongIndexSearch.ApplyKanaOriginBar(scored, romanizedQuery, kanaOrigin: true).Count > 0)
+        if (scored.Count == 0)
         {
-            return true;
+            return false;
         }
 
-        Logger.LogInformation(
-            "Fuzzy-pass hit '{ItemName}' for kana-origin query '{Query}' carries no length-banded Double Metaphone collision or near-exact score, treating as a miss (JF-654)",
-            item.Name, romanizedQuery);
-        return false;
+        return Util.SongIndexSearch.PassesKanaOriginSongAcceptance(queryCodes, romanizedQueryLength, item, scored[0].Score);
     }
 
     private async Task<IReadOnlyList<BaseItem>> SearchByArtistNameAsync(

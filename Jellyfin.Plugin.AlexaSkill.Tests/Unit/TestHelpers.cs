@@ -236,6 +236,16 @@ internal static class TestHelpers
         return audio;
     }
 
+    /// <summary>
+    /// The ONE plain Movie factory (name + optional id), the CreateSong shape
+    /// beside it (JF-781 hoist: the fourth private construction crossed the
+    /// third-copy rule; the pre-existing per-suite privates repoint here as
+    /// they are touched, no bulk migration).
+    /// </summary>
+    internal static MediaBrowser.Controller.Entities.Movies.Movie CreateMovie(
+        string name = "Test Movie", Guid? id = null)
+        => new() { Name = name, Id = id ?? Guid.NewGuid() };
+
     internal static Context CreateContextWithoutApl()
     {
         return new Context

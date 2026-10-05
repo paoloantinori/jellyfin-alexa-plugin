@@ -55,12 +55,24 @@ one line per refusal.
 
 ## Definition of Done
 
-- [ ] Red proof: a kana-tagged VIDEO (or Series/Playlist) library with the
+- [x] Red proof: a kana-tagged VIDEO (or Series/Playlist) library with the
       suffixed sibling listed first in the fuzzy scan, the exact item plays
       (kana query); pre-change tree first, both TFMs
-- [ ] The existing JF-654 fuzzy-pass bait pin stays green (the bait alone still
+      (DONE 2026-10-05: three red pins on the UNMODIFIED tree, both TFMs
+      net9.0/net10.0, each "Failed: 3, Passed: 1, Total: 4" in
+      SongKanaBarRefuseAndContinueTests - the Movie pin (video launch), the
+      MusicAlbum pin (audio launch, primary call), and the restricted-user
+      Playlist pin (the SearchMediaFuzzyOutOfLibrary sibling call, so BOTH
+      fuzzy calls' bars are armed and pinned); the fourth pin, the bait-alone
+      control, was green pre-fix by design and stays green)
+- [x] The existing JF-654 fuzzy-pass bait pin stays green (the bait alone still
       falls through to the Audio-only retry and the honest miss)
-- [ ] dotnet build 0 errors, dotnet test green, no new warnings
+      (DONE 2026-10-05: HandleAsync_KanaQuery_FuzzyPassSoupHit_GatedToHonestNotFound
+      green in the 88-test kana/SearchMedia neighborhood battery and in the full
+      suite; the new bait-alone control pins the same invariant at the walk)
+- [x] dotnet build 0 errors, dotnet test green, no new warnings
+      (DONE 2026-10-05: full suite 5307/5307 both TFMs (main baseline ~5303 +
+      4); Debug build 0 warnings; Release -warnaserror clean)
 
 ## Implementation Notes
 
@@ -71,4 +83,44 @@ one line per refusal.
 - `PassesKanaSongGate` uses `ScoreWithPhoneticFallback` (phonetic-stage aware)
   while the pre-check bar uses `KeywordMatcher.Score`; keep whichever the
   conversion preserves when the predicate moves inside the walk.
+- LANDED SHAPE (2026-10-05): both SearchItemsFuzzyAsync calls take
+  `acceptanceBar: fuzzyPassBar`, ONE local armed under `if (kanaOrigin)` (the
+  family idiom: this handler's pre-check `songBar`, CrossMediaFallback's
+  `songBar`, AlbumPlayService's `playlistBar`); the closure hoists the query's
+  tokens and DM codes once (the encode-once rule) and `PassesKanaSongGate`
+  became the codes-carried predicate over `PassesKanaOriginSongAcceptance`,
+  keeping `ScoreWithPhoneticFallback` per Implementation Note 2. One semantic
+  edge kept byte-identical to the pre-conversion gate: a pick the
+  KeywordMatcher chain does not even admit (empty scored list) is a REFUSAL,
+  not a score-0 collision acceptance (the pre-check bar's shape was
+  deliberately NOT adopted here; adopting it would widen acceptance). The
+  gate's own refusal log line was removed (the filing's dedupe rule): the
+  walk's shared Information line ("{Op}: acceptance-bar refusal ... walking
+  down the ranking") is the one line per refusal, and the walked-out scan has
+  its own exhaustion line.
+- GATES: /simplify (4 agents) applied/skipped - APPLIED the hoisted bar +
+  encode-once closure + codes-carried predicate (consensus of all four
+  angles), the registry-doc trims (SearchService param doc and
+  KatakanaRomanizer class doc now carry caller identity only; the rationale
+  lives at the call site), the TestHelpers.CreateMovie hoist (the fourth
+  private construction crossed the third-copy rule), the SetupFuzzyScanOnly
+  onlyKind parameter (the playlist pin reuses the helper), and the
+  single-negative no-directive assert; SKIPPED repointing the pre-existing
+  per-suite private Movie factories (out-of-diff churn; the helper's doc
+  notes they repoint as touched), and SKIPPED sharing one token/codes pair
+  between the fuzzy-pass bar and the pre-check bar (code-review F1: the fix
+  would hoist derivation to every request including primary-search hits,
+  moving cost onto the common path, and churns untouched lines; the duplicate
+  is once per REQUEST, not per candidate - the per-candidate hoist is the one
+  that mattered and is applied). /code-review high: no correctness defects;
+  F3 applied (a banned parenthetical hyphen in a test comment); F1 skipped as
+  above; F2 skipped (the mock's hardcoded Limit==500 matches the suite's
+  established raw-shape idiom - the JF-654 bait pin hardcodes the same shape -
+  and SearchItemsFuzzyAsync carries no named constant to reference; a Limit
+  change detaches the mock into a LOUD red, not a silent pass).
+- OBSERVATION (Altitude agent, non-blocking, recorded not filed): the
+  acceptanceBar walk has no seam-level pin on SearchItemsFuzzyAsync itself;
+  the mechanism is pinned transitively at every live caller (playlist
+  JF-777, the SearchMedia pre-check JF-777, this fuzzy-pass gate JF-781), so
+  no uncovered behavior exists and no task was cut for it.
 <!-- NOTES:END -->

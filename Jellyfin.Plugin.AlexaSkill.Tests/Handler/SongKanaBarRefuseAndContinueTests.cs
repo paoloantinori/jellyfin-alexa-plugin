@@ -8,6 +8,7 @@ using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler.Intent;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
@@ -36,6 +37,11 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 /// 'ヨルニカケル デラックス' reads 'yorunikakeru derakkusu' (25, band 13 &gt; 3);
 /// 'サトル' reads 'satoru' (6), 'サトル デラックス' reads 'satoru derakkusu'
 /// (17, band 11 &gt; 3) - the JF-773/JF-776 fixtures.
+/// JF-781 added the fourth site (SearchMedia's own fuzzy-pass gate,
+/// PassesKanaSongGate): the JF-777 pins all used song fixtures, so the gate's
+/// refuse-and-stop was invisible to them (Audio recovers through the song-title
+/// retry); the non-Audio playable kinds had NO recovery leg, and the pins below
+/// cover them.
 /// </summary>
 [Collection("Plugin")]
 public class SongKanaBarRefuseAndContinueTests : PluginTestBase, IDisposable
@@ -247,6 +253,117 @@ public class SongKanaBarRefuseAndContinueTests : PluginTestBase, IDisposable
             PlaylistIntent("サトル"), _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
 
         TestHelpers.AssertPlaylistAccepted(response, "ja-JP", "satoru");
+    }
+
+    // ---------------------------------------------------------------
+    // Site 4 (JF-781): SearchMedia's OWN fuzzy-pass gate
+    // (PassesKanaSongGate, riding SearchItemsFuzzyAsync's acceptanceBar)
+    // ---------------------------------------------------------------
+
+    /// <summary>
+    /// Wires every GetItemList shape to miss EXCEPT the fuzzy pass's scan
+    /// (SearchTerm null, no name-tier fallback, no artist scoping, Limit 500),
+    /// which returns <paramref name="scanItems"/> in the given order: the JF-427
+    /// order-dependence rides the mock's list order (the suffixed sibling must be
+    /// listed first for the containment early exit to hand it to the bar).
+    /// <paramref name="onlyKind"/> narrows the serving scan to one single-kind
+    /// IncludeItemTypes array, for the restricted-user pins where only the
+    /// out-of-library sibling call (an all-Playlist kind set) may hit.
+    /// </summary>
+    private void SetupFuzzyScanOnly(List<BaseItem> scanItems, BaseItemKind? onlyKind = null)
+    {
+        _fx.LibraryManager
+            .Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q => q.SearchTerm == null && q.NameStartsWith == null
+                && q.NameContains == null && q.ArtistIds is not { Length: > 0 } && q.Limit == 500
+                && (onlyKind == null || (q.IncludeItemTypes.Length == 1 && q.IncludeItemTypes[0] == onlyKind))
+                ? scanItems
+                : new List<BaseItem>());
+    }
+
+    [Fact]
+    public async Task SearchMedia_FuzzyPass_SuffixedKanaMovieSiblingListedFirst_ExactMoviePlays_JF781()
+    {
+        // The red proof at the gate, on a kind the retry cannot recover: the
+        // primary SearchTerm scan and the artist fallback miss (the kana-tagged
+        // library shape), the fuzzy scan lists the suffixed sibling first, the
+        // containment early exit hands it to the coverage gate (passed,
+        // space-separated) and then the bar (refused, 25 vs 12), and the pre-fix
+        // refuse-and-stop answered MediaNotFound with the exact MOVIE in the scan:
+        // the JF-506 song-title retry is Audio-only, so a video kind had no
+        // recovery leg at all. The walk inside SearchItemsFuzzyAsync removes the
+        // refused winner, re-picks on the remainder, and the exact movie's
+        // near-exact class launches.
+        SetupPlugin();
+        SetupFuzzyScanOnly(new List<BaseItem> { TestHelpers.CreateMovie(KanaSuffixedSongName), TestHelpers.CreateMovie(KanaSongName) });
+
+        SkillResponse response = await CreateSearchMediaHandler().HandleAsync(
+            SearchMediaIntent(KanaSongName), _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
+
+        Assert.True(
+            response.Response.Directives?.Any(d => d is VideoAppLaunchDirective) == true,
+            "the exact movie must not be shadowed by the suffixed sibling the bar refuses");
+    }
+
+    [Fact]
+    public async Task SearchMedia_FuzzyPass_SuffixedKanaAlbumSiblingListedFirst_ExactAlbumPlays_JF781()
+    {
+        // The MusicAlbum leg of the same hole (the filing's non-Audio kind list):
+        // identical mechanics, the audio-player launch arm of PlayItem.
+        SetupPlugin();
+        SetupFuzzyScanOnly(new List<BaseItem>
+        {
+            new MusicAlbum { Name = KanaSuffixedSongName, Id = Guid.NewGuid() },
+            new MusicAlbum { Name = KanaSongName, Id = Guid.NewGuid() }
+        });
+
+        SkillResponse response = await CreateSearchMediaHandler().HandleAsync(
+            SearchMediaIntent(KanaSongName), _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
+
+        Assert.True(TestHelpers.GetPlayDirective(response) != null, "the exact album must not be shadowed by the suffixed sibling the bar refuses");
+    }
+
+    [Fact]
+    public async Task SearchMedia_FuzzyPass_SuffixedBaitAlone_KanaQuery_StillTheHonestNotFound_JF781()
+    {
+        // The refusal-preservation control (green pre-fix AND post-fix, the
+        // JF-777 control shape): with no bar-passing alternate behind it, the
+        // walked-out scan returns null, the Audio-only song-title retry misses
+        // (no song index, a movie library), and the honest MediaNotFound stands
+        // exactly as the refuse-and-stop shape produced it; the bait never
+        // plays.
+        SetupPlugin();
+        SetupFuzzyScanOnly(new List<BaseItem> { TestHelpers.CreateMovie(KanaSuffixedSongName) });
+
+        SkillResponse response = await CreateSearchMediaHandler().HandleAsync(
+            SearchMediaIntent(KanaSongName), _fx.CreateContext(), _fx.CreateUser(), _fx.CreateSession(), CancellationToken.None);
+
+        TestHelpers.AssertNoAudioPlayDirective(response);
+        Assert.True(response.Response.Directives?.Any(d => d is VideoAppLaunchDirective) != true,
+            "the refused bait must never launch");
+        Assert.True(response.Response.ShouldEndSession == true, "the walked-out scan is the honest MediaNotFound Tell");
+    }
+
+    [Fact]
+    public async Task SearchMedia_RestrictedUser_OutOfLibraryFuzzyPass_SuffixedKanaPlaylistSiblingListedFirst_ExactPlaylistPlays_JF781()
+    {
+        // The SIBLING fuzzy call's bar (SearchMediaFuzzyOutOfLibrary): a
+        // library-restricted user's playlist rides the out-of-library scope
+        // (JF-456), so the walk conversion must arm the bar on BOTH calls. The
+        // pre-fix refuse-and-stop left the exact playlist unrecovered with the
+        // same Audio-only retry gap; post-fix the walk serves it.
+        SetupPlugin();
+        var playlist = new global::MediaBrowser.Controller.Playlists.Playlist { Name = "サトル", Id = Guid.NewGuid() };
+        var suffixed = new global::MediaBrowser.Controller.Playlists.Playlist { Name = "サトル デラックス", Id = Guid.NewGuid() };
+        SetupFuzzyScanOnly(new List<BaseItem> { suffixed, playlist }, onlyKind: BaseItemKind.Playlist);
+
+        var restrictedUser = _fx.CreateUser();
+        restrictedUser.AllowedLibraryIds = new List<string> { Guid.NewGuid().ToString() };
+
+        SkillResponse response = await CreateSearchMediaHandler().HandleAsync(
+            SearchMediaIntent("サトル"), _fx.CreateContext(), restrictedUser, _fx.CreateSession(), CancellationToken.None);
+
+        Assert.True(TestHelpers.GetPlayDirective(response) != null, "the exact playlist must not be shadowed by the suffixed sibling the sibling-scope bar refuses");
     }
 
     private static IntentRequest PlaylistIntent(string playlist, string locale = "ja-JP")
