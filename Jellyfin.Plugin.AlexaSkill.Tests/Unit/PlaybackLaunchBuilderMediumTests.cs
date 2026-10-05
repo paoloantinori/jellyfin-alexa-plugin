@@ -265,6 +265,22 @@ public class PlaybackLaunchBuilderMediumTests : PluginTestBase
     }
 
     /// <summary>
+    /// A <see cref="DeviceQueueManager"/> constructed over a pre-JF-568 persisted
+    /// queue file naming the given item as the device's last play (the ONLY way a
+    /// null recorded route exists; <c>RecordLastPlayed</c> always records one).
+    /// The file must exist before the ctor loads it, so this builds its own
+    /// one-file temp dir rather than riding <c>TestHelpers.CreateDeviceQueueManager</c>
+    /// (the JF-540 cross-loading rationale); hoisted here on the third identical
+    /// construction (the JF-713 convention).
+    /// </summary>
+    private static DeviceQueueManager LegacyQueueWith(Guid lastPlayedItemId, string deviceId)
+    {
+        string dir = TestHelpers.CreateRegisteredTempDir($"legacy-queue-{deviceId}");
+        File.WriteAllText(Path.Combine(dir, $"queue_{deviceId}.json"), LegacyQueueJson(lastPlayedItemId));
+        return new DeviceQueueManager(dir, Microsoft.Extensions.Logging.Abstractions.NullLogger<DeviceQueueManager>.Instance);
+    }
+
+    /// <summary>
     /// A pre-JF-568 persisted queue file: every then-existing member, no
     /// lastPlayedLaunchRoute (the field JF-568 added).
     /// </summary>
@@ -354,12 +370,13 @@ public class PlaybackLaunchBuilderMediumTests : PluginTestBase
     }
 
     /// <summary>
-    /// The playlist-edit shape: no queue manager means no ledger arm at all (no
-    /// Plugin.Instance fallback), so a token that misses the library falls to the
-    /// session's held item.
+    /// The no-manager-anywhere shape (null queueManager AND a null Plugin.Instance,
+    /// this class's baseline): the ledger arms stay off, so a token that misses the
+    /// library falls to the session's held item. Post-JF-627 null alone no longer
+    /// means this (see the fallback pin); only the absence of BOTH managers does.
     /// </summary>
     [Fact]
-    public void CurrentItem_WithoutQueueManager_TokenMissFallsToSessionItem()
+    public void CurrentItem_NoManagerAnywhere_TokenMissFallsToSessionItem()
     {
         var sessionSong = new Audio { Name = "Session Song", Id = Guid.NewGuid() };
         var library = new Mock<ILibraryManager>();
@@ -386,13 +403,106 @@ public class PlaybackLaunchBuilderMediumTests : PluginTestBase
         var library = new Mock<ILibraryManager>();
         library.Setup(l => l.GetItemById(movie.Id)).Returns(movie);
 
-        string dir = TestHelpers.CreateRegisteredTempDir("current-item-legacy");
-        File.WriteAllText(Path.Combine(dir, "queue_ci-legacy-device.json"), LegacyQueueJson(movie.Id));
-        using var queue = new DeviceQueueManager(dir, Microsoft.Extensions.Logging.Abstractions.NullLogger<DeviceQueueManager>.Instance);
+        using var queue = LegacyQueueWith(movie.Id, "ci-legacy-device");
 
         Context staleToken = TestHelpers.CreateContextWithToken(Guid.NewGuid().ToString(), "ci-legacy-device");
 
         Assert.Same(movie, _builder.ResolveCurrentPlayingItem(staleToken, null, library.Object, queue));
+    }
+
+    /// <summary>
+    /// JF-627: the null contract unified on the classifier-half idiom. A null
+    /// queueManager no longer disables the ledger arms; it falls back to
+    /// Plugin.Instance's manager (exactly <see cref="PlaybackLaunchBuilder.ResolvePlayingMedium"/>'s
+    /// shape), so the playlist-edit family's calls resolve the displaced VideoApp
+    /// item like every explicit-manager caller's do. RED on the pre-JF-627 tree
+    /// (the stale token item won; the ledger was never read).
+    /// </summary>
+    [Fact]
+    public void CurrentItem_NullQueueManager_FallsBackToPluginInstanceLedger()
+    {
+        var movie = new Movie { Name = "Fallback Movie", Id = Guid.NewGuid() };
+        var (library, queue) = LedgerWith(movie, "ci-fallback-device");
+        Context staleToken = TestHelpers.CreateContextWithToken(Guid.NewGuid().ToString(), "ci-fallback-device");
+
+        using var _ = TestHelpers.SwapPluginLedgerScope(
+            _config,
+            Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance,
+            queue,
+            "ci-fallback-plugin");
+
+        Assert.Same(movie, _builder.ResolveCurrentPlayingItem(staleToken, null, library.Object, queueManager: null));
+    }
+
+    /// <summary>
+    /// The JF-627 lockstep guard (the JF-625 miss-class class): for EVERY ledger
+    /// item-kind x route shape (the full 5 x 3 matrix: Movie, Episode,
+    /// LiveTvChannel, AudioBook, Audio across VideoApp, Audio, and the legacy
+    /// null route), the item resolver's displacement decision equals the
+    /// classifier's non-Audio classification. A future launch kind or ladder
+    /// arm added to ONE reader but not the other fails here even though each
+    /// reader's own suite stays green. The legacy leg covers the pre-JF-568
+    /// persisted null-route shape through the hand-written file (the only way a
+    /// null route exists; <c>RecordLastPlayed</c> always records one).
+    /// </summary>
+    [Theory]
+    [InlineData(typeof(Movie), "VideoApp")]
+    [InlineData(typeof(Movie), "Audio")]
+    [InlineData(typeof(Movie), "Legacy")]
+    [InlineData(typeof(Episode), "VideoApp")]
+    [InlineData(typeof(Episode), "Audio")]
+    [InlineData(typeof(Episode), "Legacy")]
+    [InlineData(typeof(MediaBrowser.Controller.LiveTv.LiveTvChannel), "VideoApp")]
+    [InlineData(typeof(MediaBrowser.Controller.LiveTv.LiveTvChannel), "Audio")]
+    [InlineData(typeof(MediaBrowser.Controller.LiveTv.LiveTvChannel), "Legacy")]
+    [InlineData(typeof(MediaBrowser.Controller.Entities.AudioBook), "VideoApp")]
+    [InlineData(typeof(MediaBrowser.Controller.Entities.AudioBook), "Audio")]
+    [InlineData(typeof(MediaBrowser.Controller.Entities.AudioBook), "Legacy")]
+    [InlineData(typeof(Audio), "VideoApp")]
+    [InlineData(typeof(Audio), "Audio")]
+    [InlineData(typeof(Audio), "Legacy")]
+    public void Lockstep_DisplacementDecision_EqualsClassifierNonAudioClassification(Type ledgerKind, string routeName)
+    {
+        var ledgerItem = (BaseItem)Activator.CreateInstance(ledgerKind)!;
+        ledgerItem.Id = Guid.NewGuid();
+        ledgerItem.Name = $"Ledger {ledgerKind.Name}";
+        var staleItem = new Audio { Name = "Stale Token Track", Id = Guid.NewGuid() };
+
+        void AssertLockstep(ILibraryManager library, DeviceQueueManager queue, string deviceId)
+        {
+            Context staleToken = TestHelpers.CreateContextWithToken(staleItem.Id.ToString(), deviceId);
+            PlaybackLaunchBuilder.PlayingMedium classified = _builder.ResolvePlayingMedium(staleToken, library, queue);
+            BaseItem? resolved = _builder.ResolveCurrentPlayingItem(staleToken, null, library, queue);
+
+            // The one invariant: the resolver hands back the ledger item exactly
+            // when the classifier says a non-Audio medium owns the device.
+            if (classified == PlaybackLaunchBuilder.PlayingMedium.Audio)
+            {
+                Assert.Same(staleItem, resolved);
+            }
+            else
+            {
+                Assert.Same(ledgerItem, resolved);
+            }
+        }
+
+        if (routeName == "Legacy")
+        {
+            using var legacyQueue = LegacyQueueWith(ledgerItem.Id, $"lockstep-legacy-{ledgerKind.Name}");
+            var library = new Mock<ILibraryManager>();
+            library.Setup(l => l.GetItemById(ledgerItem.Id)).Returns(ledgerItem);
+            library.Setup(l => l.GetItemById(staleItem.Id)).Returns(staleItem);
+
+            AssertLockstep(library.Object, legacyQueue, $"lockstep-legacy-{ledgerKind.Name}");
+        }
+        else
+        {
+            var route = Enum.Parse<DeviceQueueManager.LaunchRoute>(routeName);
+            var (library, queue) = LedgerWith(ledgerItem, "lockstep-device", route);
+            library.Setup(l => l.GetItemById(staleItem.Id)).Returns(staleItem);
+
+            AssertLockstep(library.Object, queue, "lockstep-device");
+        }
     }
 
     // ---- IsVideoAppMedium ----

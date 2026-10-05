@@ -6,6 +6,7 @@ using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
 using Alexa.NET.Response;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
@@ -32,14 +33,16 @@ public class AddCurrentToPlaylistIntentHandler : PlaylistEditHandlerBase
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
+    /// <param name="queueManager">The device queue manager owning the last-played ledger the shared resolver reads (JF-627); null falls back to <c>Plugin.Instance</c>'s.</param>
     public AddCurrentToPlaylistIntentHandler(
         IPlaylistManager playlistManager,
         ISessionManager sessionManager,
         PluginConfiguration config,
         IUserManager userManager,
         ILibraryManager libraryManager,
-        ILoggerFactory loggerFactory)
-        : base(playlistManager, sessionManager, config, userManager, libraryManager, loggerFactory)
+        ILoggerFactory loggerFactory,
+        DeviceQueueManager? queueManager = null)
+        : base(playlistManager, sessionManager, config, userManager, libraryManager, loggerFactory, queueManager)
     {
     }
 

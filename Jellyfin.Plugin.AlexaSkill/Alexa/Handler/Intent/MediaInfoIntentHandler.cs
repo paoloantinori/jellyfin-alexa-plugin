@@ -50,7 +50,7 @@ public class MediaInfoIntentHandler : BaseHandler
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
     /// <param name="artistIndex">Optional in-memory artist index for fast search.</param>
-    /// <param name="queueManager">The device queue manager owning the last-played ledger the shared resolver reads; null disables the ledger arms (no <c>Plugin.Instance</c> fallback).</param>
+    /// <param name="queueManager">The device queue manager owning the last-played ledger the shared resolver reads; null falls back to <c>Plugin.Instance</c>'s (JF-627).</param>
     public MediaInfoIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,

@@ -754,13 +754,8 @@ public sealed class PlaybackLaunchBuilder
             return PlayingMedium.Unknown;
         }
 
-        string? deviceId = context?.System?.Device?.DeviceID;
-        DeviceQueueManager? ledgerManager = deviceId != null
-            ? queueManager ?? Plugin.Instance?.DeviceQueueManager
-            : null;
         (string? lastPlayedId, DeviceQueueManager.LaunchRoute? recordedRoute) =
-            ledgerManager?.GetLastPlayedSnapshot(deviceId!)
-            ?? (null, null);
+            ReadLastPlayedSnapshot(context, queueManager);
         if (!Guid.TryParse(lastPlayedId, out Guid lastPlayedItemId))
         {
             return PlayingMedium.Unknown;
@@ -799,6 +794,30 @@ public sealed class PlaybackLaunchBuilder
     }
 
     /// <summary>
+    /// The ONE device-ledger read (JF-627): resolves the effective manager with the
+    /// classifier-half null contract (null falls back to <c>Plugin.Instance</c>'s)
+    /// and returns the device's last-played snapshot, or <c>(null, null)</c> when
+    /// no device id or no manager resolves. Every GetLastPlayedSnapshot reader
+    /// (the medium classifier, the current-item resolver, the screen-owner belt,
+    /// and RateItem's keep-alive check) goes through here so the null contract is
+    /// defined once.
+    /// </summary>
+    /// <param name="context">The Alexa context (the device id keys the ledger).</param>
+    /// <param name="queueManager">The caller's device queue manager; null falls back to <c>Plugin.Instance</c>'s.</param>
+    /// <returns>The (item id, recorded route) snapshot, or nulls when nothing is readable.</returns>
+    internal (string? ItemId, DeviceQueueManager.LaunchRoute? Route) ReadLastPlayedSnapshot(
+        Context? context,
+        DeviceQueueManager? queueManager)
+    {
+        string? deviceId = context?.System?.Device?.DeviceID;
+        DeviceQueueManager? ledgerManager = deviceId != null
+            ? queueManager ?? Plugin.Instance?.DeviceQueueManager
+            : null;
+        return ledgerManager?.GetLastPlayedSnapshot(deviceId!)
+            ?? (null, null);
+    }
+
+    /// <summary>
     /// The ONE belt-inclusive "does a VideoApp stream own the screen" answer
     /// (JF-632/JF-635): <see cref="ResolvePlayingMedium"/> first, then the raw
     /// ledger-route belt. The belt closes the classifier's two proven holes
@@ -831,7 +850,7 @@ public sealed class PlaybackLaunchBuilder
     /// </summary>
     /// <param name="context">The Alexa context (device id for the ledger read, AudioPlayer token).</param>
     /// <param name="libraryManager">The library manager, to resolve the ledger item id. Null keeps the classifier's answer (the belt cannot resolve).</param>
-    /// <param name="queueManager">The caller's device queue manager (the last-played ledger); null disables the BELT. The classifier half keeps its own inherited <c>Plugin.Instance</c> fallback (<see cref="ResolvePlayingMedium"/>), so null does not make the whole helper ledger-free; production callers pass their DI manager.</param>
+    /// <param name="queueManager">The caller's device queue manager (the last-played ledger); null falls back to <c>Plugin.Instance</c>'s (the ONE ledger-read contract, JF-627; formerly null disabled the belt alone, an artifact with no consumer since every production caller passes their DI manager).</param>
     /// <returns>The belt-corrected playing medium; the same values <see cref="ResolvePlayingMedium"/> yields, except the two belt holes resolve to their VideoApp-family mediums.</returns>
     internal PlayingMedium ResolveScreenOwningMedium(
         Context? context,
@@ -846,11 +865,8 @@ public sealed class PlaybackLaunchBuilder
 
         // The belt: a VideoApp-RECORDED route wins even when the classifier just
         // answered Audio (the same-item shape) or Unknown (nothing resolvable).
-        string? deviceId = context?.System?.Device?.DeviceID;
         (string? lastPlayedId, DeviceQueueManager.LaunchRoute? recordedRoute) =
-            deviceId != null && queueManager != null
-                ? queueManager.GetLastPlayedSnapshot(deviceId)
-                : (null, null);
+            ReadLastPlayedSnapshot(context, queueManager);
         if (recordedRoute != DeviceQueueManager.LaunchRoute.VideoApp)
         {
             return medium;
@@ -943,10 +959,14 @@ public sealed class PlaybackLaunchBuilder
     /// route not Audio) run BEFORE the ledger item resolve (the
     /// ResolvePlayingMedium doctrine), so the modal music path pays one item
     /// resolve, not two.
-    /// The ledger arm requires the caller's <paramref name="queueManager"/>: null
-    /// DISABLES it (deliberately NOT the <c>Plugin.Instance</c> fallback this
-    /// class's other queue reads use, because the playlist-edit family holds no
-    /// device queue and keeps its token+session-only semantics).
+    /// The ledger arm reads the caller's <paramref name="queueManager"/> with the
+    /// SAME null contract as <see cref="ResolvePlayingMedium"/> (JF-627, closing
+    /// the accidental divergence): null falls back to <c>Plugin.Instance</c>'s
+    /// manager, so every caller rides the displacement arbitration. The
+    /// playlist-edit family, whose pre-JF-627 shape was token+session-only by
+    /// omission (it never took a queue manager), now resolves the displaced
+    /// VideoApp item exactly as Repeat and RateItem do, and guards its stateful
+    /// write with the JF-629 idle guard at its call site.
     /// The ledger tail is UNBOUNDED with respect to recency: on a device whose
     /// last playback was days ago it still answers that item (RateItem's
     /// deliberate stance, JF-626). A caller whose WRITE is stateful on "this is
@@ -959,7 +979,7 @@ public sealed class PlaybackLaunchBuilder
     /// <param name="context">The Alexa context (device id for the ledger read, AudioPlayer token).</param>
     /// <param name="session">The Jellyfin session (full now-playing item first, DTO second).</param>
     /// <param name="libraryManager">The library manager, to resolve item ids.</param>
-    /// <param name="queueManager">The caller's device queue manager (Repeat, RateItem pass theirs); the parameter has NO default so every caller states its choice: null deliberately disables the ledger arms (the playlist-edit family).</param>
+    /// <param name="queueManager">The caller's device queue manager (Repeat, RateItem pass theirs); the parameter has NO default so every caller states its choice: null falls back to <c>Plugin.Instance</c>'s (the classifier-half idiom, JF-627); tests pass theirs to stay hermetic.</param>
     /// <param name="logLabel">Caller identity for the displacement log line.</param>
     /// <returns>The currently playing item, or null when nothing is resolvable.</returns>
     internal BaseItem? ResolveCurrentPlayingItem(
@@ -969,11 +989,11 @@ public sealed class PlaybackLaunchBuilder
         DeviceQueueManager? queueManager,
         string logLabel = "CurrentItem")
     {
-        string? deviceId = context?.System?.Device?.DeviceID;
+        // The ONE ledger read (its helper owns the unified null contract; the
+        // former "null disables the ledger arms" divergence was the playlist-edit
+        // family's omission, not a policy; see the contract story in the doc above).
         (string? lastPlayedId, DeviceQueueManager.LaunchRoute? recordedRoute) =
-            deviceId != null && queueManager != null
-                ? queueManager.GetLastPlayedSnapshot(deviceId)
-                : (null, null);
+            ReadLastPlayedSnapshot(context, queueManager);
         string? token = context?.AudioPlayer?.Token;
 
         BaseItem? ResolveId(string? id) =>
@@ -995,7 +1015,7 @@ public sealed class PlaybackLaunchBuilder
             && tokenItemId == ledgerGuid;
 
         bool displacementPossible =
-            queueManager != null
+            lastPlayedId != null
             && !string.IsNullOrEmpty(token)
             && !tokenNamesLedgerItem
             && recordedRoute != DeviceQueueManager.LaunchRoute.Audio;
@@ -1062,6 +1082,28 @@ public sealed class PlaybackLaunchBuilder
 
         return resolved;
     }
+
+    /// <summary>
+    /// The ONE current-evidence predicate for the JF-629 idle guard (JF-627 gave
+    /// it a shared home beside the resolver whose contract names it): does ANY
+    /// live evidence source exist, namely an AudioPlayer token or a session
+    /// now-playing item in either shape (the held full item, which the resolver
+    /// resolves first, or the DTO)? A stateful-write caller that skips its guard
+    /// with nothing live is answered by the resolver's deliberately unbounded
+    /// ledger tail (RateItem's JF-626 stance), so those callers refuse first and
+    /// keep their own idle REACTION strings. The three pre-JF-627 inline guards
+    /// (FavoriteToggle, MediaInfo, ProgressReporter.ApplyRepeatModeAsync) check
+    /// the token and the DTO only; migrating them onto this wider evidence set
+    /// changes behavior on the full-item-without-DTO shape and is tracked as
+    /// JF-785 with its own red proof.
+    /// </summary>
+    /// <param name="context">The Alexa context (the AudioPlayer token leg).</param>
+    /// <param name="session">The Jellyfin session (the held-item and DTO legs).</param>
+    /// <returns>True when at least one live evidence source exists.</returns>
+    internal static bool HasCurrentPlaybackEvidence(Context? context, SessionInfo? session)
+        => !string.IsNullOrEmpty(context?.AudioPlayer?.Token)
+            || session?.FullNowPlayingItem != null
+            || session?.NowPlayingItem != null;
 
     /// <summary>
     /// The ONE per-medium answer for the queue-navigation transport intents during a

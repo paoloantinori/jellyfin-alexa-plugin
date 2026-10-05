@@ -56,7 +56,7 @@ public class RateItemIntentHandler : BaseHandler
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
-    /// <param name="queueManager">The device queue manager owning the last-played ledger the shared resolver reads; null disables the ledger arms (no <c>Plugin.Instance</c> fallback).</param>
+    /// <param name="queueManager">The device queue manager owning the last-played ledger the shared resolver reads; null falls back to <c>Plugin.Instance</c>'s (JF-627).</param>
     public RateItemIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
@@ -158,12 +158,12 @@ public class RateItemIntentHandler : BaseHandler
 
     /// <summary>
     /// True when a VideoApp-routed ledger entry says a video-audio stream owns the
-    /// screen (the JF-632/JF-635 evidence class; no item resolution needed).
+    /// screen (the JF-632/JF-635 evidence class; no item resolution needed). Reads
+    /// through the ONE ledger read (<see cref="PlaybackLaunchBuilder.ReadLastPlayedSnapshot"/>,
+    /// rewired JF-627), so a null manager falls back to <c>Plugin.Instance</c>'s
+    /// exactly like the resolver call above it instead of silently skipping the
+    /// keep-alive.
     /// </summary>
     private bool PlayingMediumIsVideoAppAudio(Context? context)
-    {
-        string? deviceId = context != null && context.GetDeviceId() is { Length: > 0 } id ? id : null;
-        return deviceId != null
-            && _queueManager?.GetLastPlayedSnapshot(deviceId).Route == DeviceQueueManager.LaunchRoute.VideoApp;
-    }
+        => Launch.ReadLastPlayedSnapshot(context, _queueManager).Route == DeviceQueueManager.LaunchRoute.VideoApp;
 }
