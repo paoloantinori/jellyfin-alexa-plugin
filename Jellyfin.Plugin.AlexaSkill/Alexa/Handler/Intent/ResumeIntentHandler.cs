@@ -414,6 +414,63 @@ public class ResumeIntentHandler : BaseHandler
         // otherwise the session's now-playing item.
         BaseItem? tailItem = queueItem ?? session?.FullNowPlayingItem;
 
+        // JF-758 launch pairing: the tail's metadata item must be the item item_id
+        // NAMES, never the session pointer it displaced. Pre-belt this tail launched
+        // a displaced token's stream with the STALE session item's metadata (the
+        // JF-750 wrong-item class, live in the SessionHeldBook_DisplacedToken shape
+        // the server-progress suite pins); the builders' pairing belt now rejects
+        // that pair at first fire. The compare goes through StreamTokenCodec (the
+        // one-parser rule every token-vs-id comparison in this file follows), so a
+        // composite token ({guid}|launch:n, {guid}|sleep:t) resolves to the item it
+        // names and is followed too. A queue-adopted tail (fallback 3 above) never
+        // lands here in practice: adoption sets item_id and queueItem together from
+        // one candidate id, so the compare reads equal and skips. An id that names
+        // the session item keeps it; an id the library cannot resolve (deleted item,
+        // unknown-suffix token) degrades to the null-item contract, never a
+        // mismatch.
+        if (tailItem != null
+            && StreamTokenCodec.TryGetItemId(item_id, out Guid launchedId)
+            && launchedId != tailItem.Id)
+        {
+            BaseItem? tokenItem = _libraryManager.GetItemById(launchedId);
+            Logger.LogDebug(
+                "ResumeIntent: token names item {TokenItemId}, displaced from the session item {SessionItemId}; launch metadata follows the token (resolved in library: {TokenItemResolved})",
+                launchedId, tailItem.Id, tokenItem != null);
+            tailItem = tokenItem;
+
+            // The session-sourced offset (fallback 2) counts whatever item the
+            // session last progress-reported, and with a displaced token that is
+            // most plausibly the TOKEN item itself: the progress writers report the
+            // actually-playing item with item-absolute ticks (JF-522), so zeroing
+            // would throw away the token item's own position and restart a
+            // position-correct resume at 0:00. The honest re-derivation: resolve the
+            // offset from the TOKEN item's own sources through the ONE
+            // UserData-first resolver (UserData, then the plugin store, played
+            // items at 0), which keeps the common displaced-with-own-position shape
+            // resuming where it left off and reads 0 for a genuinely foreign
+            // session row (a stale position for another item is this item's
+            // nothing). Only the device-derived stream-relative offset (fallback 1)
+            // is kept as-is: it already counts the token item's own stream
+            // timeline.
+            if (!offsetIsStreamRelative)
+            {
+                string? swapDeviceId = context.System?.Device?.DeviceID;
+                Jellyfin.Database.Implementations.Entities.User? swapUser =
+                    session != null ? ResolveJellyfinUser(_userManager, session.UserId, locale).User : null;
+                UserItemData? tokenUserData = tokenItem != null && swapUser != null
+                    ? _userDataManager.GetUserData(swapUser, tokenItem)
+                    : null;
+                offset = ResumeMath.TicksToMs(DeviceQueueManager.ResolveResumeTicks(
+                    _queueManager,
+                    swapDeviceId,
+                    item_id!,
+                    tokenUserData?.PlaybackPositionTicks ?? 0,
+                    tokenUserData?.Played == true,
+                    Logger,
+                    "ResumeIntent displaced token"));
+            }
+        }
+
         // The tail's JF-514 correction, adopted from the offer path (JF-520) and
         // re-scoped by JF-522: the AudioPlayer-context offset (Amazon-written) stays
         // stream-relative forever, so the tail rebases ONLY that one against the
