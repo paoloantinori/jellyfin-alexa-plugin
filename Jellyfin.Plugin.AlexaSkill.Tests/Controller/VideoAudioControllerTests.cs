@@ -861,18 +861,23 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         string? itemIdForToken = null,
         ILoggerFactory? loggerFactory = null,
         Mock<IMediaSourceManager>? mediaSourceManager = null,
-        string? ffmpegPath = null)
+        string? ffmpegPath = null,
+        VideoAudioCache? cache = null)
     {
+        // cache: a FRESH cache instance over the same cache path simulates the
+        // post-restart state (no in-memory directory registration) for the
+        // scan-fallback pins (JF-774 finding 1); null shares the fixture cache.
+        VideoAudioCache resolvedCache = cache ?? _cache;
         var controller = mediaSourceManager == null
             ? new VideoAudioController(
                 _libraryManagerMock.Object,
                 _mediaEncoderMock.Object,
-                _cache,
+                resolvedCache,
                 loggerFactory ?? _loggerFactory)
             : new VideoAudioController(
                 _libraryManagerMock.Object,
                 _mediaEncoderMock.Object,
-                _cache,
+                resolvedCache,
                 loggerFactory ?? _loggerFactory,
                 mediaSourceManager.Object);
         if (ffmpegPath != null)
@@ -4077,6 +4082,26 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             "exit 0\n");
 
     /// <summary>
+    /// Fake ffmpeg for the run-counter pins (JF-537.1 arrange, JF-774 finding 3):
+    /// appends one line per invocation to the run counter (so a test can prove a
+    /// replay never started ffmpeg), then writes the first 4-digit segment and the
+    /// playlist, exiting 0. The playlist carries ENDLIST for the completed-encode
+    /// shape and omits it for the live/killed-partial shape.
+    /// </summary>
+    private string WriteRunCountingFakeFfmpeg(string name, string runCounterPath, bool endlist)
+    {
+        string playlist = "#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:4.000,\\nseg_0000.ts\\n"
+            + (endlist ? "#EXT-X-ENDLIST\\n" : string.Empty);
+        return WriteFakeFfmpeg(name,
+            $"printf 'run\\n' >> \"{runCounterPath}\"\n" +
+            "for last_arg in \"$@\"; do :; done\n" +
+            "dir=$(dirname \"$last_arg\")\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0000.ts\" 2>/dev/null\n" +
+            $"printf '{playlist}' > \"$last_arg\"\n" +
+            "exit 0\n");
+    }
+
+    /// <summary>
     /// The FLUSH-LAG degrade fake (extracted at the third byte-identical copy,
     /// JF-763): writes the FIRST SEGMENT only, never the playlist, so the
     /// first-segment wait passes while the playlist read one flush cycle later
@@ -4417,14 +4442,10 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         (var episode, var mediaSourceManager) = CreateOversizeHevcEpisode("jf5371-" + counterName);
 
         string runCounterPath = Path.Combine(_tempDir, counterName);
-        string fakeFfmpegPath = WriteFakeFfmpeg(
+        string fakeFfmpegPath = WriteRunCountingFakeFfmpeg(
             "fake-ffmpeg-jf5371-" + counterName,
-            "for last_arg in \"$@\"; do :; done\n" +
-            "dir=$(dirname \"$last_arg\")\n" +
-            $"printf 'run\\n' >> \"{runCounterPath}\"\n" +
-            $"dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0000.ts\" 2>/dev/null\n" +
-            "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:4.000,\\nseg_0000.ts\\n#EXT-X-ENDLIST\\n' > \"$last_arg\"\n" +
-            "exit 0\n");
+            runCounterPath,
+            endlist: true);
 
         int originalCap = _config.VideoAudioCacheSizeMB;
         _config.VideoAudioCacheSizeMB = 2;
@@ -4728,6 +4749,199 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             Assert.DoesNotContain(
                 TestCaptureLogger.Snapshot(logRecords),
                 r => r.Message.Contains("transient root", StringComparison.Ordinal));
+        }
+        finally
+        {
+            _config.VideoAudioCacheSizeMB = originalCap;
+        }
+    }
+
+    // ========== JF-774: the two-root split's same-root self-healing residuals ==========
+
+    /// <summary>
+    /// JF-774 finding 1 pin: the restart scan fallback must resolve the NEWEST
+    /// generation ACROSS BOTH ROOTS, not whichever the cache root happens to
+    /// hold. Shape: a media change re-keyed the item (t1 -> t2 = the caller's
+    /// art ticks), an oversize t2 play minted the transient root's {E}_t2, and
+    /// the cache root's {E}_t1 lingers as the documented JF-676 orphan. A
+    /// post-restart GetSegment (in-memory registration gone: a FRESH cache
+    /// instance over the same cache path) must serve the NEW generation's
+    /// segment; the cache-root-first order resolved the old t1 directory purely
+    /// because it existed (wrong content or 404 past the old cut, pinned for
+    /// the process lifetime). Creation times are set EXPLICITLY so filesystem
+    /// timestamp granularity cannot decide the pin.
+    /// </summary>
+    [Fact]
+    public async Task GetSegment_AfterRestart_ScanPrefersNewestGenerationAcrossRoots()
+    {
+        string itemId = Guid.NewGuid().ToString();
+
+        // The OLD cache-root generation (orphaned by the media change's re-key).
+        string orphanDir = _cache.GetHlsDirectoryPath(itemId, 637000000000000000L);
+        Directory.CreateDirectory(orphanDir);
+        await File.WriteAllTextAsync(Path.Combine(orphanDir, "stream.m3u8"), "#EXTM3U\n#EXTINF:4.000,\nseg_0000.ts\n#EXT-X-ENDLIST\n");
+        await File.WriteAllBytesAsync(Path.Combine(orphanDir, "seg_0000.ts"), new byte[16]);
+
+        // The CURRENT generation, resting in the transient root (the oversize t2 play).
+        string transientDir = _cache.GetTransientHlsDirectoryPath(itemId, 0);
+        Directory.CreateDirectory(transientDir);
+        await File.WriteAllTextAsync(Path.Combine(transientDir, "stream.m3u8"), "#EXTM3U\n#EXTINF:4.000,\nseg_0000.ts\n#EXT-X-ENDLIST\n");
+        await File.WriteAllBytesAsync(Path.Combine(transientDir, "seg_0000.ts"), new byte[16]);
+
+        DateTime now = DateTime.UtcNow;
+        Directory.SetCreationTimeUtc(orphanDir, now.AddDays(-2));
+        Directory.SetCreationTimeUtc(transientDir, now);
+
+        // A restarted cache over the same cache path: the in-memory directory
+        // lookup is empty, so segment resolution falls back to the scan.
+        var appPaths = new Mock<IApplicationPaths>();
+        appPaths.Setup(p => p.CachePath).Returns(_tempDir);
+        var restarted = new VideoAudioCache(appPaths.Object, _loggerFactory.CreateLogger<VideoAudioCache>());
+        var controller = CreateController(itemId, cache: restarted);
+
+        ActionResult result = await controller.GetSegment(itemId, "seg_0000.ts");
+
+        var file = Assert.IsType<PhysicalFileResult>(result);
+        Assert.Equal(Path.Combine(transientDir, "seg_0000.ts"), file.FileName);
+    }
+
+    /// <summary>
+    /// JF-774 finding 2 pin: while an oversize (transient-root) encode is LIVE,
+    /// a stale prewrite left in the same-key CACHE-root directory must not
+    /// shadow the live encode's fresh listing on the warm-cache prewrite probe
+    /// (the stale file's expired JF-309 token would 401 every segment fetch it
+    /// names for the whole encode window). The stale file's production origin is
+    /// the undeletable class (it survived the whole-dir cleanups; the per-file
+    /// debris backstop removes stream.m3u8 and segments but not
+    /// playlist-full.m3u8), so the pin PLANTS it mid-window, after the encode's
+    /// own cleanups ran, and asserts the probe serves the LIVE encode's
+    /// registered directory (the reviewer's fix shape: the probe prefers the
+    /// registered transient generation dir; the backstop-deletes-the-prewrite
+    /// shape is untestable against this bar because every DELETABLE stale
+    /// prewrite is already removed by an earlier whole-dir cleanup, and the
+    /// surviving class defeats per-file deletes equally).
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_LiveTransientEncode_StaleCacheRootPrewrite_DoesNotShadowFreshPrewrite()
+    {
+        (var episode, var mediaSourceManager) = CreateOversizeHevcEpisode("jf774-stale-prewrite");
+        string itemId = episode.Id.ToString();
+
+        string runCounterPath = Path.Combine(_tempDir, "jf774-prewrite-runs");
+        string releaseFile = Path.Combine(_tempDir, "jf774-prewrite-release");
+        string parkedFfmpeg = WriteBlockingFakeFfmpeg(runCounterPath, releaseFile);
+        string transientDir = _cache.GetTransientHlsDirectoryPath(itemId, 0);
+        string cacheDir = _cache.GetHlsDirectoryPath(itemId, 0);
+
+        int originalCap = _config.VideoAudioCacheSizeMB;
+        _config.VideoAudioCacheSizeMB = 2;
+        try
+        {
+            // First play: starts the oversize encode into the transient root and
+            // returns inside the encode window (the fake parks, playlist live).
+            var controller = CreateEpisodeController(mediaSourceManager, itemId, parkedFfmpeg);
+            ActionResult first = await controller.StreamHlsEpisode(itemId);
+            Assert.IsType<ContentResult>(first);
+            Assert.Equal(1, CountFfmpegSpawns(runCounterPath));
+
+            string freshPrewritePath = Path.Combine(transientDir, "playlist-full.m3u8");
+            Assert.True(File.Exists(freshPrewritePath), "the live encode wrote its prewrite into the transient root");
+
+            // The stale cache-root prewrite (mid-window plant: its production
+            // origin survived every earlier cleanup), naming segments with an
+            // expired-token stand-in.
+            Directory.CreateDirectory(cacheDir);
+            await File.WriteAllTextAsync(
+                Path.Combine(cacheDir, "playlist-full.m3u8"),
+                "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXTINF:4.000,\n"
+                    + "/alexaskill/api/video-audio/" + itemId + "/segments/seg_0000.ts?token=JF774-STALE-EXPIRED\n");
+
+            // The replay INSIDE the encode window: the warm-cache own-live row
+            // must serve the LIVE encode's prewrite, not the stale cache-root one.
+            var replayController = CreateEpisodeController(mediaSourceManager, itemId, parkedFfmpeg);
+            ActionResult replay = await replayController.StreamHlsEpisode(itemId);
+
+            var replayContent = Assert.IsType<ContentResult>(replay);
+            Assert.DoesNotContain("JF774-STALE-EXPIRED", replayContent.Content, StringComparison.Ordinal);
+            string freshToken = ExtractPrewriteToken(freshPrewritePath);
+            Assert.Contains(freshToken, replayContent.Content, StringComparison.Ordinal);
+            Assert.Equal(1, CountFfmpegSpawns(runCounterPath));
+        }
+        finally
+        {
+            _config.VideoAudioCacheSizeMB = originalCap;
+            File.WriteAllText(releaseFile, "go");
+            await ReleaseParkedEncodeFixturesAsync(itemId, new[] { transientDir, cacheDir });
+            await FenceTempDirEncodesDeadAsync();
+        }
+    }
+
+    /// <summary>
+    /// The stale-vs-fresh discriminator of the finding 2 pin: the token value
+    /// the LIVE encode embedded in its own prewrite's first token-suffixed
+    /// segment URL (WriteEpisodePlaylist's JF-309 embedding).
+    /// </summary>
+    private static string ExtractPrewriteToken(string prewritePath)
+    {
+        string tokenLine = File.ReadAllLines(prewritePath)
+            .First(l => l.Contains("token=", StringComparison.Ordinal));
+        int tokenAt = tokenLine.IndexOf("token=", StringComparison.Ordinal) + "token=".Length;
+        return tokenLine[tokenAt..];
+    }
+
+    /// <summary>
+    /// JF-774 finding 3 pin: an UNDELETABLE cache-root debris playlist must not
+    /// mask the same-key VALID transient entry into a from-zero re-encode. The
+    /// cache-root hit wins the ordered probe, its debris verdict's cleanup
+    /// cannot remove it (the JF-499 W4 write-denied directory idiom: the Linux
+    /// shape where recursive deletes and per-file deletes both fail while reads
+    /// still succeed), and the fall-through re-encode's per-file debris sweep
+    /// would wipe the transient entry the probe never reached. The fix probes
+    /// the TRANSIENT root after the cache-root hit's verdict nulls, so the
+    /// request serves the valid transient playlist with no encode at all (the
+    /// reviewer's fix shape: probe the transient root when the cache-root hit
+    /// fails its verdict cleanup).
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_UndeletableCacheRootDebris_DoesNotMaskValidTransientEntry()
+    {
+        (var episode, var mediaSourceManager) = CreateOversizeHevcEpisode("jf774-debris-mask");
+        string itemId = episode.Id.ToString();
+
+        // Cache root: DEBRIS of a killed encode (no ENDLIST, nothing live) that
+        // cannot be removed.
+        string cacheDir = _cache.GetHlsDirectoryPath(itemId, 0);
+        Directory.CreateDirectory(cacheDir);
+        await File.WriteAllTextAsync(Path.Combine(cacheDir, "stream.m3u8"), "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:4.000,\nseg_0000.ts\n");
+        await File.WriteAllBytesAsync(Path.Combine(cacheDir, "seg_0000.ts"), new byte[16]);
+
+        // Transient root: the VALID resting entry of a completed oversize encode
+        // (distinctive 4.444 durations prove which playlist served).
+        string transientDir = _cache.GetTransientHlsDirectoryPath(itemId, 0);
+        Directory.CreateDirectory(transientDir);
+        string transientSegment = Path.Combine(transientDir, "seg_0000.ts");
+        await File.WriteAllTextAsync(Path.Combine(transientDir, "stream.m3u8"), "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXTINF:4.444,\nseg_0000.ts\n#EXT-X-ENDLIST\n");
+        await File.WriteAllBytesAsync(transientSegment, new byte[16]);
+
+        string runCounterPath = Path.Combine(_tempDir, "jf774-mask-runs");
+        int originalCap = _config.VideoAudioCacheSizeMB;
+        _config.VideoAudioCacheSizeMB = 2;
+        try
+        {
+            var controller = CreateEpisodeController(
+                mediaSourceManager,
+                itemId,
+                WriteRunCountingFakeFfmpeg("fake-ffmpeg-jf774-mask", runCounterPath, endlist: false));
+
+            ActionResult result = await RunWithDeniedDirectoryAsync(
+                cacheDir,
+                () => controller.StreamHlsEpisode(itemId));
+
+            var content = Assert.IsType<ContentResult>(result);
+            Assert.Contains("#EXTINF:4.444,", content.Content, StringComparison.Ordinal);
+            Assert.Contains("#EXT-X-ENDLIST", content.Content, StringComparison.Ordinal);
+            Assert.False(File.Exists(runCounterPath), "the valid transient entry must serve with no encode at all");
+            Assert.True(File.Exists(transientSegment), "the valid transient entry's bytes must survive the request");
         }
         finally
         {
@@ -9547,6 +9761,34 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         }
         finally
         {
+            File.SetUnixFileMode(dir, WritableDirMode);
+        }
+#pragma warning restore CA1416, CA3003
+    }
+
+    /// <summary>
+    /// The async, result-passing sibling of <see cref="AssertSurvivesDeniedDirectory"/>
+    /// (JF-774): await the act inside the write-denied directory, always restoring
+    /// the mode for the fixture's recursive temp cleanup, and hand the act's result
+    /// back for the caller's content assertions. ASSERTS THE DENIAL HELD (the
+    /// directory survived the act): a root runner is not restricted by file
+    /// modes, the act's cleanups then succeed, and an undeletable-class pin would
+    /// silently degrade to the deletable shape while staying green (JF-774 review
+    /// finding 5); contract: the act must not legitimately remove the directory.
+    /// </summary>
+    private static async Task<T> RunWithDeniedDirectoryAsync<T>(string dir, Func<Task<T>> act)
+    {
+#pragma warning disable CA1416, CA3003 // Unix-only test; test-created path
+        File.SetUnixFileMode(dir, ReadOnlyDirMode);
+        try
+        {
+            return await act().ConfigureAwait(false);
+        }
+        finally
+        {
+            Assert.True(
+                Directory.Exists(dir),
+                $"the write-denied directory did not survive the act ({dir}): the denial never held (running as root?) and the undeletable-class pin is invalid on this runner");
             File.SetUnixFileMode(dir, WritableDirMode);
         }
 #pragma warning restore CA1416, CA3003
