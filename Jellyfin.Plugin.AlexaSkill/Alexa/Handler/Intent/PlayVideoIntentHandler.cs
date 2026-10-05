@@ -174,10 +174,12 @@ public class PlayVideoIntentHandler : BaseHandler
             // unrelated 'Cicada' at 50 while the stripped 'ada' picks the real match
             // among candidates the stripped query returned).
             string? multiMatchQuery = StripLeadingMediaNoun(titleQuery) ?? titleQuery;
+            // JF-776: scoring through the romaji reading (ScoringName), speech
+            // keeps the display name (the JF-755 speechSelector seam).
             var (missOutcome, missResponse) = await HandleFuzzyMiss(
                 multiMatchQuery,
                 videos,
-                v => v.Name,
+                v => Util.KeywordMatcher.ScoringName(v.Name),
                 best => new List<(Guid, string)> { (best.Id, best.Name) },
                 DisambiguationHelper.MediaTypeVideo,
                 locale,
@@ -186,7 +188,8 @@ public class PlayVideoIntentHandler : BaseHandler
                     videoMatch = best;
                     return Task.FromResult<SkillResponse>(null!);
                 },
-                user: user).ConfigureAwait(false);
+                user: user,
+                speechSelector: v => v.Name).ConfigureAwait(false);
 
             if (missOutcome != FuzzyMissOutcome.NotFound)
             {

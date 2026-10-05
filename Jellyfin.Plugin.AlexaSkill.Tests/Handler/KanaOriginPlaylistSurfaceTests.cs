@@ -110,29 +110,15 @@ public class KanaOriginPlaylistSurfaceTests : PluginTestBase, IDisposable
         => TestHelpers.StubBaseItemStatics(_fx.LibraryManager);
 
     /// <summary>
-    /// The Folder stand-ins resolve no tracks (GetManageableItems is DB-coupled in
-    /// the unit host), so an ACCEPTED match surfaces the session-ending
-    /// PlaylistEmpty Tell, reachable only past the acceptance point; a refused one
-    /// surfaces the NotFoundPlaylist Tell (the PlayPlaylistIntentHandlerTests
-    /// assertion convention).
+    /// The acceptance/refusal convention is hoisted into TestHelpers
+    /// (AssertPlaylistAccepted / AssertPlaylistRefusedAsNotFound, JF-776: the
+    /// second copy appeared with KanaTaggedFuzzySurfaceReachabilityTests).
     /// </summary>
     private static void AssertAccepted(SkillResponse response, string locale, string romanizedQuery)
-    {
-        TestHelpers.AssertNoAudioPlayDirective(response);
-        Assert.True(response.Response.ShouldEndSession == true, "an accepted match with unresolvable tracks ends in the PlaylistEmpty Tell");
-        string speech = TestHelpers.GetSpeechText(response);
-        Assert.Contains(ResponseStrings.Get("PlaylistEmpty", locale), speech, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain(ResponseStrings.Get("NotFoundPlaylist", locale, romanizedQuery), speech, StringComparison.OrdinalIgnoreCase);
-    }
+        => TestHelpers.AssertPlaylistAccepted(response, locale, romanizedQuery);
 
     private static void AssertRefusedAsNotFound(SkillResponse response, string locale, string romanizedQuery, string baitName)
-    {
-        TestHelpers.AssertNoAudioPlayDirective(response);
-        Assert.True(response.Response.ShouldEndSession == true, "the honest outcome is the playlist not-found Tell");
-        string speech = TestHelpers.GetSpeechText(response);
-        Assert.Contains(ResponseStrings.Get("NotFoundPlaylist", locale, romanizedQuery), speech, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain(baitName, speech, StringComparison.OrdinalIgnoreCase);
-    }
+        => TestHelpers.AssertPlaylistRefusedAsNotFound(response, locale, romanizedQuery, baitName);
 
     // ---------------------------------------------------------------
     // The fuzzy fallback tier (the SearchItemsFuzzyAsync adoption)

@@ -173,16 +173,24 @@ internal static class SongIndexSearch
     /// Removes trailing parenthetical groups ('(2011 Remaster)', stacked
     /// '(Deluxe) (Live)') from a title, the JF-654 band's evidence input. A title
     /// that is entirely parenthetical strips to empty and fails the band (the
-    /// honest miss).
+    /// honest miss). JF-776 (B2): the STANDARD Japanese full-width pair (U+FF08
+    /// '（' / U+FF09 '）') strips with the same semantics - the romanizer passes
+    /// non-kana through unchanged, so a kana reading keeps its full-width
+    /// suffix ('ヨルニカケル（デラックス）' reads 'yorunikakeru（derakkusu）') and
+    /// an ASCII-only strip failed the band on characters that carry no more
+    /// evidence than the ASCII suffixes do. One definition for both pairs (the
+    /// JF-654 one-title-collision-semantics note); a mixed half-width open with
+    /// a full-width close still strips because the cut is the LAST opener of
+    /// either form.
     /// </summary>
     /// <param name="title">The raw song title.</param>
     /// <returns>The title without trailing parenthetical groups.</returns>
     private static string StripTrailingParentheticalGroups(string title)
     {
         string stripped = title.TrimEnd();
-        while (stripped.EndsWith(')'))
+        while (stripped.EndsWith(')') || stripped.EndsWith('）'))
         {
-            int open = stripped.LastIndexOf('(');
+            int open = Math.Max(stripped.LastIndexOf('('), stripped.LastIndexOf('（'));
             if (open < 0)
             {
                 break;

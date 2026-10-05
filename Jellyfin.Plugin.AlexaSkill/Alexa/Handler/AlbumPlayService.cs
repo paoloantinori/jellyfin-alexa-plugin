@@ -67,12 +67,13 @@ public sealed class AlbumPlayService
     /// </summary>
     /// <param name="query">The original search query.</param>
     /// <param name="candidates">The full list of candidate items.</param>
-    /// <param name="selector">Function to extract the display name from an item.</param>
+    /// <param name="selector">Function to extract the SCORING text from an item: the reading-side resolver when the caller adopted it, the display name otherwise.</param>
     /// <param name="matchExtractor">Function to create disambiguation match list from the best candidate.</param>
     /// <param name="mediaType">The media type for disambiguation state.</param>
     /// <param name="locale">The locale for localized responses.</param>
     /// <param name="autoPlayFunc">Optional async function to play the suggested item in AutoPlay mode.</param>
     /// <param name="user">The plugin user (threshold override).</param>
+    /// <param name="speechSelector">Optional display-name selector for SPOKEN surfaces (the JF-755 seam, threaded by JF-776): pass it whenever <paramref name="selector"/> resolves through ScoringName, so the qualifier and the ask keep speaking the display name.</param>
     public delegate Task<(BaseHandler.FuzzyMissOutcome Outcome, SkillResponse? Response)> FuzzyMissHandler(
         string query,
         IReadOnlyList<BaseItem> candidates,
@@ -81,7 +82,8 @@ public sealed class AlbumPlayService
         string mediaType,
         string locale,
         Func<BaseItem, Task<SkillResponse>>? autoPlayFunc,
-        Entities.User? user);
+        Entities.User? user,
+        Func<BaseItem, string>? speechSelector = null);
 
     /// <summary>
     /// Minimum album-query length to attempt the bounded fuzzy album tier. Shorter
@@ -211,14 +213,34 @@ public sealed class AlbumPlayService
     /// <param name="album">The candidate album.</param>
     /// <returns>True when the album name carries a length-banded code collision with the query.</returns>
     internal static bool PassesKanaOriginAlbumAcceptance(string romanizedQuery, BaseItem album)
-        => Util.SongIndexSearch.PassesLengthBandedTitleCollision(
+        => PassesKanaOriginAlbumAcceptance(
             DoubleMetaphone.Encode(romanizedQuery),
             romanizedQuery.Length,
+            album);
+
+    /// <summary>
+    /// Codes-carried form of <see cref="PassesKanaOriginAlbumAcceptance(string, BaseItem)"/>
+    /// (the PassesKanaOriginSongAcceptance / playlist encode-once shape): the JF-776
+    /// refuse-and-continue walk evaluates the bar once per refused winner, so both
+    /// album arms encode the query's codes once and close over them instead of
+    /// re-encoding the identical query string per iteration.
+    /// </summary>
+    /// <param name="queryCodes">The Double Metaphone codes of the romanized query.</param>
+    /// <param name="romanizedQueryLength">The romanized query's length (the band input).</param>
+    /// <param name="album">The candidate album.</param>
+    /// <returns>True when the album name carries a length-banded code collision with the query.</returns>
+    internal static bool PassesKanaOriginAlbumAcceptance(
+        (string Primary, string? Alternate) queryCodes,
+        int romanizedQueryLength,
+        BaseItem album)
+        => Util.SongIndexSearch.PassesLengthBandedTitleCollision(
+            queryCodes,
+            romanizedQueryLength,
             Util.KeywordMatcher.ScoringName(album.Name));
 
     /// <summary>
     /// JF-663: the kana-origin playlist bar, the playlist-surface sibling of
-    /// <see cref="PassesKanaOriginAlbumAcceptance"/> (the song wrapper and the album
+    /// <see cref="PassesKanaOriginAlbumAcceptance(string, BaseItem)"/> (the song wrapper and the album
     /// predicate are the existing per-surface names over the ONE shared
     /// <see cref="Util.SongIndexSearch.PassesLengthBandedTitleCollision"/> primitive;
     /// no private strip+band+encode copy). Playlist names are the same title-shaped
@@ -239,7 +261,15 @@ public sealed class AlbumPlayService
     /// for callers that encode the query once and reuse it across several candidate
     /// checks (the PassesKanaOriginSongAcceptance encode-once shape): the
     /// multi-match narrowing in <see cref="BuildPlaylistPlayResponseAsync"/> loops
-    /// this predicate over the server-narrowed candidate list.
+    /// this predicate over the server-narrowed candidate list. JF-776: the
+    /// collision input resolves through <see cref="Util.KeywordMatcher.ScoringName"/>
+    /// and moves TOGETHER with the playlist surface's candidate legs (the
+    /// site-level FuzzyMatch pre-check and the HandleFuzzyMiss selector below,
+    /// the JF-755/JF-773 coupling the JF-773 commit message recorded as this
+    /// surface's pending move): on the raw kana name the leg is structurally
+    /// dead (empty Double Metaphone codes, the kana-vs-romaji length band), so a
+    /// bar left raw would refuse every kana-tagged playlist the candidate legs
+    /// just made reachable.
     /// </summary>
     /// <param name="queryCodes">The Double Metaphone codes of the romanized query.</param>
     /// <param name="romanizedQueryLength">The romanized query's length (the band input).</param>
@@ -252,7 +282,7 @@ public sealed class AlbumPlayService
         => Util.SongIndexSearch.PassesLengthBandedTitleCollision(
             queryCodes,
             romanizedQueryLength,
-            playlist.Name ?? string.Empty);
+            Util.KeywordMatcher.ScoringName(playlist.Name));
 
     private readonly PluginConfiguration _config;
     private readonly ILogger _logger;
@@ -378,7 +408,7 @@ public sealed class AlbumPlayService
     /// album names overlap far more than artists and moods), then the JF-408
     /// interior-containment rejection. JF-661: a kana-origin query adds the album
     /// kana bar on top of the threshold (a real length-banded Double Metaphone
-    /// collision, <see cref="PassesKanaOriginAlbumAcceptance"/>); a plain-fuzzy
+    /// collision, <see cref="PassesKanaOriginAlbumAcceptance(string, BaseItem)"/>); a plain-fuzzy
     /// accept is the honest miss, and the bar composes over BOTH candidate tiers
     /// (the JF-652 precedent: the chain result is judged at the acceptance point
     /// whatever tier produced it, so a tier-1 SearchTerm winner needs the same
@@ -489,28 +519,32 @@ public sealed class AlbumPlayService
         // (KeywordMatcher.ScoringName) so a kana-tagged album competes on the reading
         // the always-romanized query is in (the JF-755 matched-reading pair; the
         // embedded-containment guard below judges the same pair).
+        // JF-661: the kana-origin album bar composes over BOTH candidate tiers (the
+        // JF-652 precedent: the chain result is judged at the acceptance point
+        // whatever tier produced it). JF-776 (B1): the bar rides the walk as the
+        // acceptance predicate instead of a post-walk refuse-and-stop, so a refused
+        // suffixed sibling no longer shadows an exact album behind it (the walk's
+        // >= 90 early exit is order-dependent, the JF-427 note); a refused library
+        // with no alternate above threshold still lands the honest miss below (the
+        // JF-661 bait pins).
         int threshold = FuzzyMatcher.GetEffectiveThreshold(user, CrossMediaAlbumThreshold);
-        var eligible = _crossMedia.FindBestNonEmbeddedMatch(query, candidates, a => Util.KeywordMatcher.ScoringName(a.Name), threshold);
+        // The bar's query codes encode ONCE and only when the bar is armed (the
+        // encode-once idiom the song/playlist codes-carried bars document);
+        // disarmed (Latin) requests pay no encode at all.
+        Func<BaseItem, bool>? albumBar = null;
+        if (kana)
+        {
+            var queryCodes = DoubleMetaphone.Encode(query);
+            albumBar = a => PassesKanaOriginAlbumAcceptance(queryCodes, query.Length, a);
+        }
+
+        var eligible = _crossMedia.FindBestNonEmbeddedMatch(
+            query, candidates, a => Util.KeywordMatcher.ScoringName(a.Name), threshold, albumBar);
         if (eligible is not { } match)
         {
             _logger.LogDebug(
                 "{Label}: no album above threshold={Threshold} (or all embedded) for query='{Query}', not substituting",
                 logLabel, threshold, query);
-            return null;
-        }
-
-        // JF-661: the kana-origin album bar. A threshold-clearing match that carries
-        // no length-banded Double Metaphone collision is the plain-fuzzy class the
-        // romaji query shape false-accepts (the containment floor scores exactly the
-        // 90 bar: 'bitoruzu' containment-matched 'Bitoruzu Deluxe' with the suffix
-        // widening the name past the collision band), so it is the honest miss here
-        // (one shared definition, PassesKanaOriginAlbumAcceptance; Latin queries
-        // never reach this check).
-        if (kana && !PassesKanaOriginAlbumAcceptance(query, match.Item))
-        {
-            _logger.LogInformation(
-                "{Label}: kana-origin query '{Query}' matched album '{AlbumName}' score={Score} without a length-banded Double Metaphone collision, treating as a miss (JF-661)",
-                logLabel, query, match.Item.Name, match.Score);
             return null;
         }
 
@@ -928,7 +962,11 @@ public sealed class AlbumPlayService
                 }
             }
 
-            BaseItem? topMatch = _search.FuzzyMatch(playlistName, fuzzyCandidates, p => p.Name, user);
+            // JF-776: both candidate legs here score through the romaji reading
+            // (ScoringName) with speech keeping the display name (the JF-755
+            // speechSelector seam), moving in the same change as the playlist
+            // bar's collision input above (the coupling rule).
+            BaseItem? topMatch = _search.FuzzyMatch(playlistName, fuzzyCandidates, p => KeywordMatcher.ScoringName(p.Name), user);
             // JF-526 (JF-508 sibling): this site-level pre-check returns before
             // HandleFuzzyMiss, so the short-query full-coverage gate must be applied
             // here too; a gated miss falls into HandleFuzzyMiss below, whose Confirm
@@ -942,7 +980,7 @@ public sealed class AlbumPlayService
                 var (missOutcome, missResponse) = await _handleFuzzyMiss(
                     playlistName,
                     fuzzyCandidates,
-                    p => p.Name,
+                    p => KeywordMatcher.ScoringName(p.Name),
                     best => new List<(Guid, string)> { (best.Id, best.Name) },
                     DisambiguationHelper.MediaTypePlaylist,
                     locale,
@@ -951,7 +989,8 @@ public sealed class AlbumPlayService
                         playlistMatch = best;
                         return Task.FromResult<SkillResponse>(null!);
                     },
-                    user: user).ConfigureAwait(false);
+                    user: user,
+                    speechSelector: p => p.Name).ConfigureAwait(false);
 
                 if (missOutcome != BaseHandler.FuzzyMissOutcome.NotFound)
                 {

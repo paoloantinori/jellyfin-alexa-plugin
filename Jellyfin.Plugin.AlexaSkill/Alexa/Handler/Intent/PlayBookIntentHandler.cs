@@ -130,10 +130,12 @@ public class PlayBookIntentHandler : BaseHandler
         if (books.Count > 1)
         {
             BaseItem? bookMatch = null;
+            // JF-776: scoring through the romaji reading (ScoringName), speech
+            // keeps the display name (the JF-755 speechSelector seam).
             var (missOutcome, missResponse) = await HandleFuzzyMiss(
                 book,
                 books,
-                b => b.Name,
+                b => Util.KeywordMatcher.ScoringName(b.Name),
                 best => new List<(Guid, string)> { (best.Id, best.Name) },
                 DisambiguationHelper.MediaTypeAlbum,
                 locale,
@@ -142,7 +144,8 @@ public class PlayBookIntentHandler : BaseHandler
                     bookMatch = best;
                     return Task.FromResult<SkillResponse>(null!);
                 },
-                user: user).ConfigureAwait(false);
+                user: user,
+                speechSelector: b => b.Name).ConfigureAwait(false);
 
             if (missOutcome != FuzzyMissOutcome.NotFound)
             {

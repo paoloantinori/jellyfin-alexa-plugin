@@ -204,22 +204,30 @@ public class PlayPodcastIntentHandler : BaseHandler
                     podcastMatch = best;
                     return Task.FromResult<SkillResponse>(null!);
                 };
-            var fuzzyBest = FuzzyMatcher.FindBestMatchWithScore(podcastName, podcasts, p => p.Name);
+            // JF-776 (/simplify F1): this guard leg scores the SAME romanized
+            // query over the SAME candidates as the miss block below, so it
+            // resolves the candidate through the same reading - the flow's own
+            // coupling rule; on the raw name the guard's "fuzzy best" could be
+            // a different item than the reading-aware acceptance scores.
+            var fuzzyBest = FuzzyMatcher.FindBestMatchWithScore(podcastName, podcasts, p => Util.KeywordMatcher.ScoringName(p.Name));
             if (fuzzyBest?.Item is MusicAlbum)
             {
                 Logger.LogDebug("PlayPodcast: fuzzy best for '{Query}' is the music album '{Name}' (score={Score}) - downgrading to confirm prompt", podcastName, fuzzyBest.Value.Item.Name, fuzzyBest.Value.Score);
                 autoPlay = null;
             }
 
+            // JF-776: scoring through the romaji reading (ScoringName), speech
+            // keeps the display name (the JF-755 speechSelector seam).
             var (missOutcome, missResponse) = await HandleFuzzyMiss(
                 podcastName,
                 podcasts,
-                p => p.Name,
+                p => Util.KeywordMatcher.ScoringName(p.Name),
                 best => new List<(Guid, string)> { (best.Id, best.Name) },
                 DisambiguationHelper.MediaTypePodcast,
                 locale,
                 autoPlay,
-                user: user).ConfigureAwait(false);
+                user: user,
+                speechSelector: p => p.Name).ConfigureAwait(false);
 
             if (missOutcome != FuzzyMissOutcome.NotFound)
             {

@@ -340,10 +340,12 @@ public class PlaySongIntentHandler : BaseHandler
         if (songs.Count > 1)
         {
             Logger.LogDebug("PlaySong: {Count} songs matched, running disambiguation", songs.Count);
+            // JF-776: scoring through the romaji reading (ScoringName), speech
+            // keeps the display name (the JF-755 speechSelector seam).
             var (missOutcome, missResponse) = await HandleFuzzyMiss(
                 songQuery,
                 songs,
-                s => s.Name,
+                s => Util.KeywordMatcher.ScoringName(s.Name),
                 best => new List<(Guid, string)> { (best.Id, best.Name) },
                 DisambiguationHelper.MediaTypeSong,
                 locale,
@@ -367,7 +369,8 @@ public class PlaySongIntentHandler : BaseHandler
                     session.FullNowPlayingItem = best;
                     return await SwapOntoAnnounceVehicleAsync(fuzzyPlay, request, context, user).ConfigureAwait(false);
                 },
-                user: user).ConfigureAwait(false);
+                user: user,
+                speechSelector: s => s.Name).ConfigureAwait(false);
 
             if (missOutcome != FuzzyMissOutcome.NotFound)
             {

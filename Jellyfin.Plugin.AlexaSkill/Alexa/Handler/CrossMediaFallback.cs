@@ -140,9 +140,28 @@ public sealed class CrossMediaFallback
     /// the maxLenDiff length-band filter and its first-crossing-90 early exit, which
     /// RankMatches would change. Same-name ties pick arbitrarily (JF-341). Bounded: each
     /// iteration removes one candidate, and degenerate embedded winners are rare.
+    /// JF-776 (B1): <paramref name="acceptanceBar"/> extends the same walk to the
+    /// kana-origin bars (both album arms pass
+    /// <see cref="AlbumPlayService.PassesKanaOriginAlbumAcceptance(string, BaseItem)"/> when armed). The
+    /// bar's pre-JF-776 shape was refuse-and-STOP at the single best, which shadowed an
+    /// exact match behind a containment-class reading: FindBestMatchWithScore early-exits
+    /// at the FIRST >= 90 winner, so a suffixed sibling listed before the exact album
+    /// ('ヨルニカケルデラックス' before 'ヨルニカケル', GetItemList with no OrderBy, the
+    /// JF-427 note) won the walk, the band refused it, and the exact album never got
+    /// consulted. A bar refusal now skips the refused winner exactly as the embedded
+    /// guard does; a refused library with no alternate above threshold still lands in
+    /// the caller's honest miss (the JF-661/JF-662 bait pins).
     /// </summary>
+    /// <param name="query">The query string.</param>
+    /// <param name="candidates">The candidate pool.</param>
+    /// <param name="selector">The scoring selector (the reading-side resolver at the album arms).</param>
+    /// <param name="threshold">The minimum accepting score.</param>
+    /// <param name="acceptanceBar">Optional extra acceptance predicate (the kana-origin
+    /// collision bar); a winner it refuses is removed and the walk continues.</param>
+    /// <returns>The first winner that clears the threshold and both guards, or null.</returns>
     public (BaseItem Item, int Score)? FindBestNonEmbeddedMatch(
-        string query, IReadOnlyList<BaseItem> candidates, Func<BaseItem, string> selector, int threshold)
+        string query, IReadOnlyList<BaseItem> candidates, Func<BaseItem, string> selector, int threshold,
+        Func<BaseItem, bool>? acceptanceBar = null)
     {
         var remaining = new List<BaseItem>(candidates);
         while (remaining.Count > 0)
@@ -160,6 +179,22 @@ public sealed class CrossMediaFallback
                 _logger.LogInformation(
                     "Embedded-containment match '{Name}' score={Score} for query='{Query}' skipped (JF-408/478/JF-412), walking down the ranking",
                     selector(match.Item), match.Score, query);
+                remaining.Remove(match.Item);
+                continue;
+            }
+
+            if (acceptanceBar is not null && !acceptanceBar(match.Item))
+            {
+                // Information, not Debug: same triage visibility as the embedded
+                // skip (the JF-408/478 device correlations were read from these
+                // refusal lines), and the DISPLAY name rides alongside the
+                // compared reading so an operator correlating by what the user
+                // said still finds the line. Deliberately mechanism-generic (the
+                // walk is shared infrastructure): the refusing predicate's own
+                // semantics live in its documentation, not in this line.
+                _logger.LogInformation(
+                    "Acceptance-bar refusal for query='{Query}': match '{Name}' (reading '{Reading}') score={Score} skipped, walking down the ranking (JF-661/JF-662/JF-776)",
+                    query, match.Item.Name, selector(match.Item), match.Score);
                 remaining.Remove(match.Item);
                 continue;
             }

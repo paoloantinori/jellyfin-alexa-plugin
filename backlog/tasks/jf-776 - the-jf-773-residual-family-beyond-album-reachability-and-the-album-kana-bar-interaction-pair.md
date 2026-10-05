@@ -115,23 +115,98 @@ matrix unchanged.
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] dotnet build passes with 0 errors
-- [ ] dotnet test passes
-- [ ] No new compiler warnings introduced
-- [ ] Section A: kana-tagged candidate reachable by a romaji query at the
+- [x] dotnet build passes with 0 errors (Release --no-restore -warnaserror: 0
+      warnings, 0 errors, both TFMs)
+- [x] dotnet test passes (5275/5275 net9.0 AND net10.0; the main baseline
+      5257 + 18 new proofs)
+- [x] No new compiler warnings introduced (Release -warnaserror clean)
+- [x] Section A: kana-tagged candidate reachable by a romaji query at the
       SearchItemsFuzzyAsync layer (red proof on the pre-change tree first,
       both TFMs), plus one playlist-surface and one audiobook-surface handler
-      red proof
-- [ ] Section A: Latin behavior byte-identical (control pin)
-- [ ] Section A: the JF-663 playlist bar's collision input moves in the same
+      red proof (RED on the unmodified tree: 11 failed / 7 controls-green per
+      TFM - the SearchService romaji+kana legs, the playlist kana+romaji legs,
+      the book kana+romaji legs, the playlist bar coupling unit pin, both B1
+      arms, both B2 legs; all green post-fix, 18/18 both TFMs)
+- [x] Section A: Latin behavior byte-identical (control pin:
+      SearchItemsFuzzyAsync_LatinCandidate / PlayPlaylist_LatinPlaylist /
+      PlayBook_LatinBook, all green on the unmodified tree AND post-fix; the
+      5257 pre-existing tests stay green)
+- [x] Section A: the JF-663 playlist bar's collision input moves in the same
       change as the playlist candidate legs (the coupling above)
-- [ ] Section A: HandleFuzzyMiss callers that adopt ScoringName use the
-      speechSelector seam (speech keeps the display name)
-- [ ] Section B1: the shadowing red proof (suffixed sibling listed first)
-      plays the exact album; the JF-661/JF-662 bait pins stay green
-- [ ] Section B2: the full-width parenthetical form plays through the album
-      bar; the ASCII strip matrix is unchanged
+      (PassesKanaOriginPlaylistAcceptance resolves through ScoringName; the
+      kana-query playlist proof needs BOTH halves and was red with either
+      alone)
+- [x] Section A: HandleFuzzyMiss callers that adopt ScoringName use the
+      speechSelector seam (speech keeps the display name) (all 8 adopting
+      sites pass speechSelector: x => x.Name; the FuzzyMissHandler delegate
+      threads the seam; the JF-773 review's speech assertions hold)
+- [x] Section B1: the shadowing red proof (suffixed sibling listed first)
+      plays the exact album; the JF-661/JF-662 bait pins stay green (both
+      arms pinned; KanaOriginAlbumCascadeTests / KanaOriginAlbumFuzzyArmTests
+      green in the 5275)
+- [x] Section B2: the full-width parenthetical form plays through the album
+      bar; the ASCII strip matrix is unchanged (unit + handler proofs; the
+      ASCII matrix pin covers strip / stacked / non-parenthetical-widening)
 <!-- DOD:END -->
+
+## Final Summary
+
+Landed 2026-10-05 as ONE task (both sections coherent: they share the
+JF-773 parent, the same ScoringName resolver, and the same red-proof
+machinery; no bar demanded a split).
+
+**Section A (the romaji-mirror class beyond albums):** the ONE choke-point
+edit - SearchService.SearchItemsFuzzyAsync's bounded scan scores through
+KeywordMatcher.ScoringName (the JF-773 resolver; the entry romanization
+already satisfies its always-romanized-query invariant), closing the whole
+consumer family (PlayBook/PlayPodcast/PlayVideo/PlayPlaylist/SearchMedia/
+SeriesFuzzyFallback/PlayChannel/PlayRadio/BrowseLibrary). Site-level legs:
+SearchMedia's FuzzyMatch pre-check, the playlist surface's FuzzyMatch +
+HandleFuzzyMiss delegate + the JF-663 bar's collision input (moved TOGETHER
+per the coupling rule), and the eight HandleFuzzyMiss sibling sites
+(PlayBook/PlayPodcast/PlayVideo/SearchMedia/AddToQueue/PlaySong/PlayNext +
+the playlist delegate) scoring through ScoringName with speech kept on the
+display name via the JF-755 speechSelector seam (threaded through the
+FuzzyMissHandler delegate). PlayPodcast's JF-640 cross-type guard leg
+converted too (the /simplify F1 flow-coupling find). No index built (the
+filing's prohibition).
+
+**Section B1 (the head-check shadow):** the album kana bars ride the JF-412
+walk as an acceptance predicate (FindBestNonEmbeddedMatch's new optional
+acceptanceBar parameter) at BOTH arms instead of refuse-and-stop; a refused
+suffixed sibling no longer shadows the exact album listed after it, and a
+bait with no alternate above threshold still lands the honest miss (the
+JF-661/JF-662 pins green). The bar's query codes encode once and only when
+armed (codes-carried PassesKanaOriginAlbumAcceptance overload, the
+song/playlist encode-once idiom); the walk's refusal log keeps the display
+name alongside the compared reading.
+
+**Section B2 (the full-width parenthetical):** StripTrailingParentheticalGroups
+(the ONE strip+band+encode primitive behind all three kana bars) strips the
+U+FF08/U+FF09 pair with the same last-opener-of-either-form cut; the ASCII
+matrix unchanged.
+
+**Filed from this task:** JF-777 - the song-side single-point kana bars
+(TrySongFallback's scored[0] acceptance, SearchMedia's pre-check) keep their
+refuse-and-stop shape; section A makes their shadow reachable (narrower than
+the album case: the fused-suffix form never passes the coverage gate), and
+each site picks through different machinery, so the walk lands there as its
+own task with the B1 red-proof template.
+
+**Gates:** /simplify (4 parallel angles; 6 applied - the PlayPodcast guard
+leg, the album-mock third-copy hoist into TestHelpers/fixture, the playlist
+assertion-convention hoist, the shared FuzzyMissNotFound stub, the
+codes-carried album bar, the caller-agnostic walk log; 3 reasoned skips -
+the walk re-scan memoization (sub-ms on bounded pools, would change the
+documented early-exit contract), the pre-check+HandleFuzzyMiss double pass
+(pre-existing architecture, coupled threshold models), a named shared
+selector pair (the inline pair IS the JF-755 convention)). /code-review high
+(5 findings; 4 applied - CR2 the refusal log's display name + JF tag chain,
+CR3 the encode-only-when-armed, CR4 the test-comment arithmetic, CR5 the
+forwarder-layer removal; CR1 = the JF-777 filing, consciously accepted).
+Red proofs ran base-compilable on the UNMODIFIED tree first (11 failed / 7
+controls per TFM, both TFMs), all green post-fix. Suites: 5275/5275 both
+TFMs (5257 baseline + 18); Release -warnaserror clean.
 
 ## Implementation Notes
 

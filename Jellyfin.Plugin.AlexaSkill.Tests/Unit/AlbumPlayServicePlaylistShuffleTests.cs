@@ -85,7 +85,7 @@ public class AlbumPlayServicePlaylistShuffleTests : PluginTestBase
         var crossMedia = new CrossMediaFallback(config, logger, launch, requestTimeoutMs: 6000);
         return new AlbumPlayService(
             config, logger, launch, search, crossMedia, requestTimeoutMs: 6000,
-            (_, _, _, _, _, _, _, _) => Task.FromResult((BaseHandler.FuzzyMissOutcome.NotFound, (SkillResponse?)null)));
+            TestHelpers.FuzzyMissNotFound);
     }
 
     /// <summary>

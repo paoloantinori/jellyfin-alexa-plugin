@@ -213,10 +213,12 @@ public abstract class BaseHandler
         // The lambda closes the generic fuzzy-miss decision block over BaseItem, the
         // one shape the playlist flow calls (the SendProgressiveResponse delegate-seam
         // precedent; the JF-408 decision block itself STAYS here, see AlbumPlayService).
+        // JF-776: the seam carries the JF-755 speechSelector so the playlist flow can
+        // score through the romaji reading while speech keeps the display name.
         AlbumPlay = new AlbumPlayService(
             config, Logger, Launch, Search, CrossMedia, RetryHelper.AlexaRequestTimeoutMs,
-            (query, candidates, selector, matchExtractor, mediaType, locale, autoPlayFunc, user)
-                => HandleFuzzyMiss(query, candidates, selector, matchExtractor, mediaType, locale, autoPlayFunc, user: user));
+            (query, candidates, selector, matchExtractor, mediaType, locale, autoPlayFunc, user, speechSelector)
+                => HandleFuzzyMiss(query, candidates, selector, matchExtractor, mediaType, locale, autoPlayFunc, user: user, speechSelector: speechSelector));
         // Progress takes this handler's SessionManager (the progress writers report
         // through it) and the already-built Launch (launch-base reads).
         Progress = new ProgressReporter(sessionManager, config, Logger, Launch);

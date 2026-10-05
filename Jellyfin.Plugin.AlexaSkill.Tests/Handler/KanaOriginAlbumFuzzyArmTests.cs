@@ -69,56 +69,18 @@ public class KanaOriginAlbumFuzzyArmTests : PluginTestBase, IDisposable
     /// no artist exists anywhere (the JF-336 class: an accent/spelling miss over
     /// a real library).
     /// </summary>
-    private void SetupExactMissWithFuzzyAlbums(List<BaseItem> fuzzyAlbums)
-    {
-        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns<InternalItemsQuery>(q =>
-            {
-                // The exact tier (MusicAlbum + SearchTerm): misses.
-                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum) && q.SearchTerm != null)
-                {
-                    return new List<BaseItem>();
-                }
-
-                // The JF-336 arm's full-catalog scan (MusicAlbum, no SearchTerm).
-                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum))
-                {
-                    return fuzzyAlbums;
-                }
-
-                // Everything else (artist fallback queries): empty.
-                return new List<BaseItem>();
-            });
-    }
-
-    private void SetupAlbumTracks(MusicAlbum album, List<BaseItem> tracks)
-    {
-        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
-            .Returns<InternalItemsQuery>(q =>
-            {
-                Guid playKey = q.ParentId != Guid.Empty
-                    ? q.ParentId
-                    : q.AlbumIds is { Length: > 0 } ? q.AlbumIds[0] : Guid.Empty;
-                return playKey == album.Id
-                    ? new QueryResult<BaseItem> { Items = tracks, TotalRecordCount = tracks.Count }
-                    : new QueryResult<BaseItem> { Items = new List<BaseItem>(), TotalRecordCount = 0 };
-            });
-    }
-
-    private static (MusicAlbum Album, List<BaseItem> Tracks) MakeAlbum(string name)
-    {
-        var album = new MusicAlbum { Name = name, Id = Guid.NewGuid() };
-        var tracks = new List<BaseItem> { new Audio { Name = $"{name} track 1", Id = Guid.NewGuid(), ParentId = album.Id } };
-        return (album, tracks);
-    }
+    // The mock shape lives on the fixture/TestHelpers since JF-776 (the
+    // third-copy rule; this file was the FIRST copy, KanaTaggedAlbumReachabilityTests
+    // the second, AlbumKanaBarRefuseAndContinueTests the third that triggered the
+    // hoist).
 
     [Fact]
     public async Task PlayAlbum_KanaAlbum_PlainFuzzyBait_HonestAlbumNotFound_NeverBaitPlay()
     {
         SetupPlugin();
-        var (bait, baitTracks) = MakeAlbum("Bitorudzu");
-        SetupExactMissWithFuzzyAlbums(new List<BaseItem> { bait });
-        SetupAlbumTracks(bait, baitTracks);
+        var (bait, baitTracks) = TestHelpers.MakeAlbum("Bitorudzu");
+        _fx.SetupExactMissWithFuzzyAlbums(new List<BaseItem> { bait });
+        _fx.SetupAlbumTracks(bait, baitTracks);
 
         // The task's verification shape: album=ビートルズ romanizes to
         // 'bitoruzu', whose plain-fuzzy match on 'Bitorudzu' scores 75, over the
@@ -145,9 +107,9 @@ public class KanaOriginAlbumFuzzyArmTests : PluginTestBase, IDisposable
         // above the same 60 bar the bait cleared, and with no kana origin the
         // matrix is byte-identical: the match plays with FoundAlbumInstead.
         SetupPlugin();
-        var (album, tracks) = MakeAlbum("Beatles");
-        SetupExactMissWithFuzzyAlbums(new List<BaseItem> { album });
-        SetupAlbumTracks(album, tracks);
+        var (album, tracks) = TestHelpers.MakeAlbum("Beatles");
+        _fx.SetupExactMissWithFuzzyAlbums(new List<BaseItem> { album });
+        _fx.SetupAlbumTracks(album, tracks);
 
         var handler = CreateAlbumHandler();
 
@@ -167,9 +129,9 @@ public class KanaOriginAlbumFuzzyArmTests : PluginTestBase, IDisposable
         // composes with the arm's threshold, it does not replace it: a real
         // collision still plays through the arm on a kana-origin query.
         SetupPlugin();
-        var (album, tracks) = MakeAlbum("Satoru");
-        SetupExactMissWithFuzzyAlbums(new List<BaseItem> { album });
-        SetupAlbumTracks(album, tracks);
+        var (album, tracks) = TestHelpers.MakeAlbum("Satoru");
+        _fx.SetupExactMissWithFuzzyAlbums(new List<BaseItem> { album });
+        _fx.SetupAlbumTracks(album, tracks);
 
         var handler = CreateAlbumHandler();
 
