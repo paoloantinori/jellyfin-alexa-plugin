@@ -1050,12 +1050,13 @@ public class VideoAudioCache
 
     /// <summary>
     /// The ordered generation-directory candidates for a key, cache root FIRST,
-    /// transient root second (JF-537.1): the ONE home of the load-bearing
-    /// root-preference order (a key with live generations in both roots resolves
-    /// to the cache one, the preferred permanent home). Every root-agnostic
-    /// resolver that walks per-key directories consumes this order
-    /// (<see cref="GetCachedHlsPlaylist"/>, the controller's prewrite probe,
-    /// <see cref="CleanupHlsStub"/>); the scan fallback
+    /// transient root second (JF-537.1): the static root-preference order (a
+    /// key with live generations in both roots resolves to the cache one, the
+    /// preferred permanent home). Since JF-775 this is the NOT-LIVE arm of the
+    /// liveness-aware resolver (<see cref="ResolveHlsGenerationDirPaths"/>, the
+    /// serve question's ONE owner) plus the direct source of the exhaustive
+    /// walks that ask "which directories EXIST" rather than "which serves"
+    /// (<see cref="CleanupHlsStub"/>); the scan fallback
     /// (<see cref="FindHlsDirectoryByScan"/>) covers the same two roots at the
     /// generation level but orders by generation RECENCY across them (the cache
     /// root winning ties; JF-774), because a scan has no caller ticks to prefer
@@ -1072,24 +1073,109 @@ public class VideoAudioCache
         };
 
     /// <summary>
+    /// The ONE liveness-aware resolver of the serve question "which directory
+    /// is authoritative for (key, ticks) RIGHT NOW" (JF-775, consolidating the
+    /// three per-site rules JF-774 had left split: the static probe order, the
+    /// prewrite probe's registered-dir override, and the own-live warm serve's
+    /// registered-dir fallback). Decision rule: when the caller's
+    /// verdict-family liveness read is true
+    /// (<paramref name="ownGenerationLiveOrRegistering"/>: the SAME
+    /// conservative read the debris verdict accepts on, so the mid-registration
+    /// window is covered, where a stored zero-slot entry may be the incoming
+    /// registration for THIS very generation) AND the registered directory
+    /// (<see cref="TryGetRegisteredHlsDirectory"/>) IS one of this (key,
+    /// ticks)'s own generation dirs, the registered dir is returned
+    /// EXCLUSIVELY: the
+    /// live-or-registering encode owns the generation, and the other root's
+    /// same-key file is necessarily stale (a same-key playlist that predates
+    /// the running encode's target dir; JF-774's exclusive rule). The
+    /// containment test is what keeps a foreign-ticks registration (a
+    /// concurrent encode of another generation of the same key, which shares
+    /// the per-key registration slot) from ever redirecting the answer.
+    /// Otherwise the static root-preference order answers
+    /// (<see cref="HlsGenerationDirPaths"/>): a dead or unknown generation
+    /// serves its resting entry, cache root preferred.
+    /// CALLER PRECONDITION, load-bearing for the exclusive arm's soundness in
+    /// the mid-registration window: a path whose encodes can REGISTER the
+    /// transient root (i.e. any two-root path) must store the registration of
+    /// its resolved dir BEFORE marking the encode active, so the zero-slot
+    /// window never opens without the registration already naming the incoming
+    /// encode's dir; the episode path does this (registered at encode start
+    /// under the lock, the mark after it, the JF-774 review F1 ordering). The
+    /// song, variants, and audiobook paths currently register AFTER their
+    /// first-segment wait, which is sound ONLY because they are single-root
+    /// (their encodes never resolve the transient dir, so the exclusive arm's
+    /// containment can only ever name the same cache-root dir the static
+    /// order's first leg already probes); a path gaining transient mode must
+    /// adopt the register-before-mark ordering with it.
+    /// The tick-blind leg
+    /// (segment resolution, <see cref="FindHlsDirectory"/>) does NOT call this:
+    /// it has no ticks to key on and keeps its registration-first arm plus the
+    /// JF-774 cross-root recency scan.
+    /// </summary>
+    /// <param name="itemId">The cache key (Jellyfin item or variant key).</param>
+    /// <param name="artModifiedTicks">Ticks of the generation.</param>
+    /// <param name="ownGenerationLiveOrRegistering">The caller's
+    /// OwnTicksGenerationLiveOrRegistering read over its path's active-encode
+    /// registry (the controller owns the registries; the verdict's acceptance
+    /// gate is the canonical pairing).</param>
+    /// <returns>The authoritative candidate directories in probe order.</returns>
+    internal string[] ResolveHlsGenerationDirPaths(string itemId, long artModifiedTicks, bool ownGenerationLiveOrRegistering)
+    {
+        string[] staticOrder = HlsGenerationDirPaths(itemId, artModifiedTicks);
+        if (ownGenerationLiveOrRegistering)
+        {
+            string? registered = TryGetRegisteredHlsDirectory(itemId);
+            foreach (string ownDir in staticOrder)
+            {
+                if (string.Equals(registered, ownDir, StringComparison.Ordinal))
+                {
+                    return new[] { registered! };
+                }
+            }
+        }
+
+        return staticOrder;
+    }
+
+    /// <summary>
     /// Returns the cached HLS playlist file if it exists and has any content, null otherwise.
     /// HLS playlists are served even when small because ffmpeg writes them atomically
     /// (.tmp rename): a non-empty file is always a valid partial or complete playlist.
     /// This allows the Echo Show to start playback as soon as the first segment is ready,
     /// without waiting for the entire content to be encoded.
-    /// Root-agnostic since JF-537.1: the generation directories are probed in
-    /// <see cref="HlsGenerationDirPaths"/> order (cache root first, then the
-    /// transient root, an oversize encode's target). One probe pair covers the
-    /// episode fast path, the in-lock double-check, and the concurrent-encode
-    /// dedup at once; keys that never go transient (variants, audiobook, album)
-    /// simply miss the transient probe.
+    /// Root-agnostic since JF-537.1, liveness-aware since JF-775: the generation
+    /// directories are probed in <see cref="ResolveHlsGenerationDirPaths"/>
+    /// order. While the caller's own generation is live or mid-registration and
+    /// the registration names one of its generation dirs, that dir is the ONLY
+    /// probe source, so the FileInfo every liveness-accepted verdict row sees is
+    /// the live-or-registering encode's own file (this is what closed the
+    /// mid-registration residual the JF-774 gate marker filed: the registering
+    /// verdict used to accept the ordered first hit, which under the two-root
+    /// split could be the other root's undeletable stale shadow, unread);
+    /// otherwise the static order (cache root first, then the transient root,
+    /// an oversize encode's target).
+    /// STRADDLE CAVEAT (JF-782 leg 1): this holds only when the probe's
+    /// liveness read agrees with the caller's verdict read; a monitor CLEAR
+    /// landing between the two reads serves the static order's first hit,
+    /// which can be the other root's stale shadow. The controller-side
+    /// wrapper doc carries the same caveat; do not treat the absolute claim
+    /// as the invariant across that window. One probe covers the episode fast path,
+    /// the in-lock double-check, and the concurrent-encode dedup at once; keys
+    /// that never go transient (variants, audiobook, album) simply miss the
+    /// transient probe.
     /// </summary>
     /// <param name="itemId">The Jellyfin item ID.</param>
     /// <param name="artModifiedTicks">Ticks from the album art's DateModified.</param>
+    /// <param name="ownGenerationLiveOrRegistering">The caller's
+    /// OwnTicksGenerationLiveOrRegistering read over its path's active-encode
+    /// registry (REQUIRED since JF-775, the JF-686 review F4 shape: a future
+    /// call site must decide its liveness answer instead of silently probing
+    /// the static order behind a default).</param>
     /// <returns>Cached playlist file info or null if not cached.</returns>
-    public Task<FileInfo?> GetCachedHlsPlaylist(string itemId, long artModifiedTicks)
+    public Task<FileInfo?> GetCachedHlsPlaylist(string itemId, long artModifiedTicks, bool ownGenerationLiveOrRegistering)
     {
-        string[] generationDirs = HlsGenerationDirPaths(itemId, artModifiedTicks);
+        string[] generationDirs = ResolveHlsGenerationDirPaths(itemId, artModifiedTicks, ownGenerationLiveOrRegistering);
         foreach (string dirPath in generationDirs)
         {
             FileInfo? hit = ProbeHlsPlaylist(dirPath);
@@ -1100,7 +1186,7 @@ public class VideoAudioCache
         }
 
         _logger.LogDebug(
-            "VideoAudio HLS cache miss (probed {Roots} roots, cache root {CacheDir} first)",
+            "VideoAudio HLS cache miss (probed {Roots} candidate dirs, first {FirstDir})",
             generationDirs.Length,
             generationDirs[0]);
         return Task.FromResult<FileInfo?>(null);
@@ -1149,9 +1235,14 @@ public class VideoAudioCache
     /// The in-memory registration half of <see cref="FindHlsDirectory"/> WITHOUT
     /// the scan fallback: the directory a live or recently finished encode
     /// registered for the item, or null when no registration exists (e.g. after
-    /// a restart). JF-774 finding 2: the episode prewrite probe prefers this
-    /// directory while its encode is live, so a stale prewrite that survived in
-    /// the OTHER root cannot shadow the live encode's fresh listing.
+    /// a restart). JF-774 finding 2 made the episode prewrite probe prefer this
+    /// directory while its encode is live (a stale prewrite that survived in
+    /// the OTHER root cannot shadow the live encode's fresh listing); JF-775
+    /// generalized that preference into the liveness-aware resolver
+    /// (<see cref="ResolveHlsGenerationDirPaths"/>), whose exclusive arm reads
+    /// this same registration under the verdict-family liveness read, so the
+    /// probe, the prewrite serve, and the warm serve all share ONE dir
+    /// authority.
     /// </summary>
     /// <param name="itemId">The cache key (Jellyfin item or variant key).</param>
     /// <returns>The registered directory when it still exists, else null.</returns>
@@ -1321,6 +1412,14 @@ public class VideoAudioCache
     /// <see cref="FindSegmentPath"/>. Returns null when no directory exists.
     /// JF-503: used by the controller's hold-for-segment path to compute the running
     /// encode's head (the highest existing segment number in the directory).
+    /// TICK-BLIND BOUNDARY (JF-775): this is the SEGMENT question's resolver
+    /// (GetSegment and the hold carry no art ticks), deliberately NOT the serve
+    /// question's; the serve-side authority is
+    /// <see cref="ResolveHlsGenerationDirPaths"/>, which keys the same
+    /// registration read on (key, ticks) plus liveness. The two must not be
+    /// merged: a ticks-blind reader cannot express the resolver's containment
+    /// rule, and a ticks-aware reader would 404 every post-restart segment
+    /// fetch whose caller lost its ticks.
     /// </summary>
     /// <param name="itemId">The Jellyfin item ID.</param>
     /// <returns>The HLS directory path, or null when none exists.</returns>

@@ -3180,7 +3180,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
         await File.WriteAllTextAsync(playlistPath, new string('x', 12 * 1024));
 
-        FileInfo? result = await _cache.GetCachedHlsPlaylist(itemId, 0);
+        FileInfo? result = await _cache.GetCachedHlsPlaylist(itemId, 0, ownGenerationLiveOrRegistering: false);
 
         Assert.NotNull(result);
         Assert.Equal(playlistPath, result!.FullName);
@@ -3192,7 +3192,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     [Fact]
     public async Task HlsCacheMiss_ReturnsNull()
     {
-        FileInfo? result = await _cache.GetCachedHlsPlaylist("nonexistent", 0);
+        FileInfo? result = await _cache.GetCachedHlsPlaylist("nonexistent", 0, ownGenerationLiveOrRegistering: false);
 
         Assert.Null(result);
     }
@@ -4946,6 +4946,137 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         finally
         {
             _config.VideoAudioCacheSizeMB = originalCap;
+        }
+    }
+
+    /// <summary>
+    /// The JF-775 two-root shadow planter (the PlantLiveEncodeFixture
+    /// convention, extracted at the second copy): an episode whose TRANSIENT
+    /// generation dir is REGISTERED (the production encode-start ordering: the
+    /// resolved dir registered before the mark), an UNDELETABLE cache-root
+    /// shadow (a stale no-ENDLIST stream.m3u8, the seg_7777 marker, whose
+    /// expired-token segment URLs would 401 every fetch for the whole encode
+    /// window, the JF-774 finding 2 class), and the encode's live partial in
+    /// the registered transient dir (seg_9999). NO playlist-full.m3u8
+    /// anywhere (the no-prewrite row). Returns the wired controller and the
+    /// read counters over the transient dir's two playlists.
+    /// </summary>
+    private (string ItemId, VideoAudioController Controller, (Func<int> Prewrites, Func<int> Lives) Reads) PlantTwoRootShadowFixture(
+        string episodeName,
+        string fakeFfmpegName)
+    {
+        var (episode, mediaSourceManager) = SetupEpisodeForHls(episodeName, "h264", TimeSpan.FromMinutes(45));
+        string itemId = episode.Id.ToString();
+
+        string cacheDir = _cache.GetHlsDirectoryPath(itemId, 0);
+        string transientDir = _cache.GetTransientHlsDirectoryPath(itemId, 0);
+        string livePath = Path.Combine(transientDir, "stream.m3u8");
+
+        var controller = CreateController(
+            itemId,
+            loggerFactory: null,
+            mediaSourceManager,
+            WriteRecordingFakeFfmpeg(fakeFfmpegName));
+        var reads = TrackPlaylistReads(controller, Path.Combine(transientDir, "playlist-full.m3u8"), livePath);
+
+        // The encode-start ordering the production code performs: the resolved
+        // transient dir is registered BEFORE the mark, so the mid-registration
+        // gap already has the registration pointing at the incoming encode's
+        // dir.
+        _cache.RegisterHlsDirectoryPath(itemId, transientDir);
+
+        Directory.CreateDirectory(cacheDir);
+        File.WriteAllText(Path.Combine(cacheDir, "stream.m3u8"), "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:4.000,\nseg_7777.ts\n");
+
+        Directory.CreateDirectory(transientDir);
+        File.WriteAllText(livePath, "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:4.000,\nseg_0000.ts\n#EXTINF:4.000,\nseg_9999.ts\n");
+
+        return (itemId, controller, reads);
+    }
+
+    /// <summary>
+    /// JF-775 red proof (the JF-774 gate-marker addendum's mid-registration
+    /// residual): a lock-free fast-path replay landing between the registry
+    /// store and the first slot write inside MarkEncodeActive reads a
+    /// REGISTERING verdict that accepts the ordered probe's first hit without
+    /// reading, while the prewrite override and the registered-dir fallback
+    /// both sit in the strict OwnTicksGenerationLive gate (false in the
+    /// window), so the fall-through serve served the stale listing
+    /// unredirected. The liveness-aware resolver closes it at the PROBE: while
+    /// the caller's own generation is live-or-registering and the registration
+    /// names one of its generation dirs, that dir is the ONLY probe source, so
+    /// the shadow is never probed and the fall-through row serves the
+    /// registered dir's live partial.
+    /// RED PROOF: on the pre-JF-775 tree the probe's first hit IS the shadow,
+    /// the registering verdict accepts it unread, and the strict gate's
+    /// fall-through serves the shadow's stale bytes (seg_7777 present).
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_MidRegistrationWindow_CacheRootShadowNeverProbed_ProbeFeedsRegisteredDir()
+    {
+        var (itemId, controller, reads) = PlantTwoRootShadowFixture(
+            "JF-775 Mid-Registration Shadow S01E01",
+            "fake-ffmpeg-jf775-midreg-shadow");
+
+        // The MID-REGISTRATION marking (a stored holder with ZERO slots, the
+        // window where the strict gate and the conservative verdict disagree).
+        VideoAudioController.SetEncodeRegisteringForTest(itemId, registering: true);
+        try
+        {
+            ActionResult result = await controller.StreamHlsEpisode(itemId);
+
+            var content = Assert.IsType<ContentResult>(result);
+            Assert.True(
+                content.Content.Contains("seg_9999", StringComparison.Ordinal),
+                $"the mid-registration replay must serve the REGISTERED dir's live partial, not the ordered probe's cache-root shadow (JF-775); shadow marker seg_7777 present: {content.Content.Contains("seg_7777", StringComparison.Ordinal)}");
+            Assert.DoesNotContain("seg_7777", content.Content, StringComparison.Ordinal);
+            Assert.Equal(1, reads.Lives());
+        }
+        finally
+        {
+            VideoAudioController.SetEncodeRegisteringForTest(itemId, registering: false);
+        }
+    }
+
+    /// <summary>
+    /// JF-775 collapse guard (the JF-774 review F3 row through the resolver):
+    /// on the own-live no-prewrite row the serve must read the LIVE encode's
+    /// REGISTERED dir's stream.m3u8, never the ordered probe's first-hit
+    /// cache-root shadow. JF-774 delivered this as a redirect block INSIDE
+    /// ServeEpisodeWarmCacheAsync (registered contained ? registered dir :
+    /// verdict file); JF-775 collapses the dir authority into the
+    /// liveness-aware probe, which returns ONLY the registered dir's file on
+    /// every liveness-accepted row, so the redirect's target equals the
+    /// verdict file and the block is deleted. This pin holds GREEN on both
+    /// shapes (it guards the collapse's equivalence, not a defect): a FULL own
+    /// slot (SetEncodeActiveForTest, the ticks-0 sentinel this no-art fixture
+    /// encodes at), so the strict gate reads true, unlike the mid-registration
+    /// pin's zero-slot window.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_LiveTransientEncode_NoPrewrite_FallbackServesRegisteredDirNotCacheShadow()
+    {
+        var (itemId, controller, reads) = PlantTwoRootShadowFixture(
+            "JF-775 Own-Live No-Prewrite S01E01",
+            "fake-ffmpeg-jf775-ownlive-noprewrite");
+
+        // A FULL own-ticks slot: the strict gate reads true (unlike the
+        // mid-registration pin, whose zero-slot window it exists to contrast).
+        VideoAudioController.SetEncodeActiveForTest(itemId, active: true);
+        try
+        {
+            ActionResult result = await controller.StreamHlsEpisode(itemId);
+
+            var content = Assert.IsType<ContentResult>(result);
+            Assert.True(
+                content.Content.Contains("seg_9999", StringComparison.Ordinal),
+                $"the own-live no-prewrite row must serve the REGISTERED dir's live partial, not the cache-root shadow (JF-774 F3 through the JF-775 resolver); shadow marker seg_7777 present: {content.Content.Contains("seg_7777", StringComparison.Ordinal)}");
+            Assert.DoesNotContain("seg_7777", content.Content, StringComparison.Ordinal);
+            Assert.Equal(1, reads.Lives());
+        }
+        finally
+        {
+            VideoAudioController.SetEncodeActiveForTest(itemId, active: false);
         }
     }
 
