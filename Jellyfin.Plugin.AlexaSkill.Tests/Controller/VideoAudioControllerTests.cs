@@ -854,7 +854,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         ILoggerFactory? loggerFactory = null,
         Mock<IMediaSourceManager>? mediaSourceManager = null,
         string? ffmpegPath = null,
-        VideoAudioCache? cache = null)
+        VideoAudioCache? cache = null,
+        Guid[]? tokenScope = null)
     {
         // cache: a FRESH cache instance over the same cache path simulates the
         // post-restart state (no in-memory directory registration) for the
@@ -880,10 +881,12 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         // Attach an HttpContext so ValidateStreamToken can read the query string.
         // When itemIdForToken is provided, mint a valid token for that item so the request passes
         // the token check. When null, no token is set (simulates a bare-GUID attack).
+        // tokenScope (JF-767): mint the library-scoped form a restricted user's launch
+        // would present instead of the legacy two-field one.
         var query = new Dictionary<string, Microsoft.Extensions.Primitives.StringValues>();
         if (itemIdForToken != null && !string.IsNullOrEmpty(_config.StreamTokenSecret))
         {
-            string token = StreamTokenHelper.Mint(itemIdForToken, _config.StreamTokenSecret);
+            string token = StreamTokenHelper.MintScoped(itemIdForToken, _config.StreamTokenSecret, tokenScope);
             query["token"] = token;
         }
 
@@ -10205,6 +10208,98 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         // PhysicalFile), not a 404 (queries never issued) and not a 500 (a
         // post-resolution runtime failure this pin must also catch).
         Assert.IsType<PhysicalFileResult>(result);
+    }
+
+    /// <summary>
+    /// JF-767 Finding B pin: the concat endpoint applies the library scope the JF-309
+    /// token carries. A restricted user's launch mints the scoped token (raw
+    /// AllowedLibraryIds ids, see PlaybackLaunchBuilder.GetAudiobookResumeUrl); the
+    /// endpoint resolves them to TopParentIds with the SAME resolver the paged path
+    /// uses and filters BOTH isMusicAlbum arms (folder primary + JF-338 AlbumIds
+    /// retry), so the encoded concat timeline IS the scoped timeline
+    /// AlbumPlayService.BuildAlbumPlayResponseAsync summed the seek-mode resume
+    /// offset over (the JF-763 residual closed). SABOTAGE (verified red): removing
+    /// the scope application at the endpoint reddens this pin (both arms enumerate
+    /// with empty TopParentIds).
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_AlbumParent_ScopedToken_EnumeratesUnderTokenLibraryScope()
+    {
+        Guid musicLib = Guid.NewGuid();
+        var (captured, result) = await ServeSplitAlbumConcatWithTokenScope(new[] { musicLib }, "jf767-scoped");
+
+        // Both album arms issued (split shape) and BOTH carry the token's scope.
+        Assert.Equal(2, captured.Count);
+        Assert.Equal(new[] { musicLib }, captured[0].TopParentIds);
+        Assert.Equal(new[] { musicLib }, captured[1].TopParentIds);
+        Assert.IsType<PhysicalFileResult>(result);
+    }
+
+    /// <summary>
+    /// The backward-compat row (JF-767 Finding B): a legacy two-field token (an
+    /// unrestricted user, or any URL minted before the change within its 10h TTL)
+    /// carries no scope, and the endpoint enumerates UNSCOPED exactly as before.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_AlbumParent_LegacyToken_StaysUnscoped()
+    {
+        var (captured, result) = await ServeSplitAlbumConcatWithTokenScope(tokenScope: null, "jf767-legacy");
+
+        // Both arms issued (the split shape resolves via the retry) and NEITHER
+        // carries a scope.
+        Assert.Equal(2, captured.Count);
+        Assert.Empty(captured[0].TopParentIds);
+        Assert.Empty(captured[1].TopParentIds);
+        Assert.IsType<PhysicalFileResult>(result);
+    }
+
+    /// <summary>
+    /// Shared fixture for the two JF-767 endpoint rows: a split-shape MusicAlbum
+    /// concat request (empty folder pages, populated AlbumIds pages) under the given
+    /// token scope, capturing every query the endpoint issues.
+    /// </summary>
+    private async Task<(List<MediaBrowser.Controller.Entities.InternalItemsQuery> Captured, ActionResult Result)> ServeSplitAlbumConcatWithTokenScope(
+        Guid[]? tokenScope,
+        string fakeFfmpegTag)
+    {
+        Guid parentId = Guid.NewGuid();
+        var album = new MediaBrowser.Controller.Entities.Audio.MusicAlbum
+        {
+            Name = $"Concat Album ({fakeFfmpegTag})",
+            Id = parentId
+        };
+        var track1 = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Track 1",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromMinutes(3).Ticks
+        };
+        var track2 = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Track 2",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromMinutes(3).Ticks
+        };
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns(album);
+        // Scope resolution: GetItemById of any library id is unstubbed (returns null),
+        // so ResolveTopParentIds unions nothing and TopParentIds == the token's ids.
+
+        var captured = new List<MediaBrowser.Controller.Entities.InternalItemsQuery>();
+        _libraryManagerMock
+            .Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Callback<MediaBrowser.Controller.Entities.InternalItemsQuery>(q => captured.Add(q))
+            .Returns((MediaBrowser.Controller.Entities.InternalItemsQuery q) =>
+                q.AlbumIds != null && q.AlbumIds.Contains(parentId)
+                    ? new List<MediaBrowser.Controller.Entities.BaseItem> { track1, track2 }
+                    : new List<MediaBrowser.Controller.Entities.BaseItem>());
+
+        string fakeFfmpegPath = WriteFlushLagFakeFfmpeg($"fake-ffmpeg-{fakeFfmpegTag}");
+
+        var controller = CreateController(parentId.ToString(), ffmpegPath: fakeFfmpegPath, tokenScope: tokenScope);
+        ActionResult result = await controller.StreamHlsAudiobook(parentId.ToString());
+        return (captured, result);
     }
 
     /// <summary>
