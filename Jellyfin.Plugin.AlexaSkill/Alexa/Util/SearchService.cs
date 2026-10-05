@@ -295,6 +295,17 @@ public sealed class SearchService
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <param name="operationLabel">Label for logging.</param>
     /// <param name="locale">The request locale, for the JF-508/JF-526 short-query coverage gate on the match return.</param>
+    /// <param name="acceptanceBar">Optional extra acceptance predicate (a kana-origin
+    /// collision bar), the same idiom FindBestNonEmbeddedMatch's optional parameter
+    /// established in JF-776 B1 (the JF-412 embedded-winner walk on the
+    /// CrossMediaFallback collaborator): a winner the bar refuses is
+    /// removed and the pick re-runs on the remainder, so a refused suffixed sibling
+    /// no longer shadows an exact match listed after it, while a refused library with
+    /// no alternate above threshold still returns null (the caller's honest miss).
+    /// The JF-508/JF-526 coverage gate keeps its own refuse-and-stop outcome (a
+    /// coverage-withheld pick returns null, never walks; the bar and the gate are
+    /// different judgments). JF-777: the playlist head-check
+    /// (AlbumPlayService.BuildPlaylistPlayResponseAsync's JF-663 bar) is the caller.</param>
     /// <returns>The best match + score, or null if nothing above threshold.</returns>
     public async Task<(BaseItem Item, int Score)?> SearchItemsFuzzyAsync(
         string query,
@@ -307,7 +318,8 @@ public sealed class SearchService
         Guid[]? artistIds = null,
         int minQueryLength = 3,
         MediaType[]? mediaTypes = null,
-        string locale = "en-US")
+        string locale = "en-US",
+        Func<BaseItem, bool>? acceptanceBar = null)
     {
         if (string.IsNullOrWhiteSpace(query) || query.Length < minQueryLength)
         {
@@ -365,36 +377,79 @@ public sealed class SearchService
         // in-memory index). Identity for kana-free names, so Latin libraries are
         // byte-identical; the coverage gate below reads the candidate through
         // TitleTokens (the JF-755 union), already reading-side aware.
-        var match = FuzzyMatcher.FindBestMatchWithScore(query, allItems, item => KeywordMatcher.ScoringName(item.Name));
-        // JF-526 (JF-508 sibling): this zero-result fallback feeds callers that
-        // auto-play the returned item (PlayBook/PlayPodcast/PlayVideo/PlayPlaylist/
-        // SearchMedia/SeriesFuzzyFallback), so the short-query full-coverage gate
-        // applies to the match return too. A gated miss returns null, this method's
-        // existing below-threshold outcome: callers speak their own not-found instead
-        // of auto-playing a partial-coverage pick ("soul coffee" -> "Starfish & Coffee").
-        if (match.HasValue && match.Value.Score >= FuzzyMatcher.GetDefaultThreshold(user))
+        // JF-777: the optional acceptanceBar widens the re-scan set exactly as
+        // FindBestNonEmbeddedMatch's NOTE documents for its walk (every refused
+        // winner re-scans all remaining candidates with a fresh ScoringName
+        // romanization; worst case O(N^2) on the bounded 500-row scan, refusals
+        // rare); the removal list materializes lazily so the default (bar null)
+        // path is byte-identical to the single-pick shape below.
+        int threshold = FuzzyMatcher.GetDefaultThreshold(user);
+        var queryTokens = KeywordMatcher.Tokenize(query, locale);
+        List<BaseItem>? remaining = null;
+        while (true)
         {
+            if (remaining is { Count: 0 })
+            {
+                // The walked-out terminal state, distinguishable at triage from
+                // the silent below-threshold null below (the SearchMedia walk's
+                // exhaustion line is the same shape).
+                _logger.LogInformation(
+                    "{Op}: acceptance bar refused every candidate for query='{Query}', no match (JF-777)",
+                    operationLabel, query);
+                return null;
+            }
+
+            var match = FuzzyMatcher.FindBestMatchWithScore(query, remaining ?? allItems, item => KeywordMatcher.ScoringName(item.Name));
+            // JF-526 (JF-508 sibling): this zero-result fallback feeds callers that
+            // auto-play the returned item (PlayBook/PlayPodcast/PlayVideo/PlayPlaylist/
+            // SearchMedia/SeriesFuzzyFallback), so the short-query full-coverage gate
+            // applies to the match return too. A gated miss returns null, this method's
+            // existing below-threshold outcome: callers speak their own not-found instead
+            // of auto-playing a partial-coverage pick ("soul coffee" -> "Starfish & Coffee").
+            if (match is not { } picked || picked.Score < threshold)
+            {
+                return null;
+            }
+
             // AutoPlay users are exempt from the coverage gate (they asked to never
             // be prompted): the same exemption HandleFuzzyMiss's AutoPlay disjunct
             // and PlayAlbum's guard apply (JF-526 review F1 - policy parity).
-            if (KeywordMatcher.HasFullKeywordCoverage(KeywordMatcher.Tokenize(query, locale), match.Value.Item.Name, locale)
-                || (user?.FuzzyMatchBehavior ?? FuzzyMatchBehavior.Confirm) == FuzzyMatchBehavior.AutoPlay)
+            if (!KeywordMatcher.HasFullKeywordCoverage(queryTokens, picked.Item.Name, locale)
+                && (user?.FuzzyMatchBehavior ?? FuzzyMatchBehavior.Confirm) != FuzzyMatchBehavior.AutoPlay)
             {
-                _logger.LogInformation(
-                    "{Op}: fuzzy fallback matched '{Name}' score={Score} for query='{Query}'",
-                    operationLabel, match.Value.Item.Name, match.Value.Score, query);
-                return match;
+                // JF-526: the score bar was crossed but the gate withheld the auto-play
+                // (partial keyword coverage on a short query). Logged so triage can tell
+                // a withheld match from a below-threshold one (the JF-508/corr=269e622d class).
+                _logger.LogDebug(
+                    "{Op}: coverage gate withheld partial-coverage match '{Name}' score={Score} for query='{Query}'",
+                    operationLabel, picked.Item.Name, picked.Score, query);
+                return null;
             }
 
-            // JF-526: the score bar was crossed but the gate withheld the auto-play
-            // (partial keyword coverage on a short query). Logged so triage can tell
-            // a withheld match from a below-threshold one (the JF-508/corr=269e622d class).
-            _logger.LogDebug(
-                "{Op}: coverage gate withheld partial-coverage match '{Name}' score={Score} for query='{Query}'",
-                operationLabel, match.Value.Item.Name, match.Value.Score, query);
-        }
+            if (acceptanceBar != null && !acceptanceBar(picked.Item))
+            {
+                // Information, not Debug (the FindBestNonEmbeddedMatch precedent): the
+                // refusal lines are the triage surface for the shadow class this walk
+                // exists to kill. Deliberately mechanism-generic (the walk is shared
+                // infrastructure, the same convention that line's model documents):
+                // {Op} identifies the caller, the refusing predicate's semantics live
+                // in its documentation. The line carries the ROMANIZED query and the
+                // candidate's display name; the spoken (kana) form of the query is
+                // caller-side context (the playlist site logs it on its kana misses)
+                // and cannot be reconstructed here.
+                _logger.LogInformation(
+                    "{Op}: acceptance-bar refusal for query='{Query}': match '{Name}' score={Score} skipped, walking down the ranking (JF-777)",
+                    operationLabel, query, picked.Item.Name, picked.Score);
+                remaining ??= new List<BaseItem>(allItems);
+                remaining.Remove(picked.Item);
+                continue;
+            }
 
-        return null;
+            _logger.LogInformation(
+                "{Op}: fuzzy fallback matched '{Name}' score={Score} for query='{Query}'",
+                operationLabel, picked.Item.Name, picked.Score, query);
+            return match;
+        }
     }
 
     /// <summary>

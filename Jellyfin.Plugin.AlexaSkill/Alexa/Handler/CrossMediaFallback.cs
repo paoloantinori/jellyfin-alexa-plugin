@@ -502,11 +502,16 @@ public sealed class CrossMediaFallback
     /// kana bar (one shared definition, SongIndexSearch
     /// .PassesKanaOriginSongAcceptance(string, BaseItem, double);
     /// the bar's evidence, the length band, and the live wrong-accept it kills are
-    /// documented there). The bar is applied to the BEST candidate only,
-    /// deliberately: this is a fallback GUESS on a coin-flipped slot, and walking
-    /// the ranking to serve a lower-scoring collision carrier is a deeper guess
-    /// than the head check (the list-walking ApplyKanaOriginBar form belongs to
-    /// the primary search paths). The kana-origin flag defaults to self-computed
+    /// documented there). JF-777: the bar rides the chain as the JF-776 B1
+    /// refuse-and-continue walk (the album arms' pattern) instead of the
+    /// head-check refuse-and-stop, which shadowed an exact song behind a
+    /// space-separated suffixed sibling the DB/scorer listed first (the pick's
+    /// containment-class early exit is order-dependent, the JF-427 note); the
+    /// scored chain arrives best-first, so removing a refused winner and
+    /// re-running the pick is the index advance, and a bait with no
+    /// bar-passing alternate above the threshold still lands the caller's
+    /// honest not-found (the JF-654 bait pins). The kana-origin flag defaults
+    /// to self-computed
     /// from the input pre-romanization (the TryEntityFallbackAsync shape), which
     /// is exact for every caller that passes the RAW slot value; the ONE
     /// exception that must pass it explicitly is PlayArtistSongsIntentHandler,
@@ -579,29 +584,66 @@ public sealed class CrossMediaFallback
             return null;
         }
 
-        if (scored.Count == 0 || scored[0].Score < CrossMediaSongThreshold)
+        // JF-654/JF-777: the song-side kana bar rides the chain as the acceptance
+        // predicate of the refuse-and-continue walk (see the method doc); the
+        // bar's query codes encode ONCE and only when armed (the encode-once
+        // idiom the codes-carried overloads document), so disarmed (Latin)
+        // requests pay no encode at all.
+        Func<BaseItem, double, bool>? songBar = null;
+        if (kana)
+        {
+            var queryCodes = DoubleMetaphone.Encode(musician);
+            songBar = (song, score) => Util.SongIndexSearch.PassesKanaOriginSongAcceptance(queryCodes, musician.Length, song, score);
+        }
+
+        if (scored.Count == 0)
         {
             _logger.LogDebug(
-                "{Label}: song fallback rejected for query='{Query}' (best score {Score:F0} over {Count} candidates, bar={Bar})",
-                logLabel, musician, scored.Count > 0 ? scored[0].Score : 0, scored.Count, CrossMediaSongThreshold);
+                "{Label}: song fallback rejected for query='{Query}' (best score 0 over 0 candidates, bar={Bar})",
+                logLabel, musician, CrossMediaSongThreshold);
             return null;
         }
 
-        // JF-654: the song-side kana bar, head candidate (see the method doc).
-        // `musician` is the romanized local here, so the collision codes are
-        // computed from it and the song title.
-        if (kana && !Util.SongIndexSearch.PassesKanaOriginSongAcceptance(musician, scored[0].Item, scored[0].Score))
+        int head = 0;
+        while (true)
         {
-            _logger.LogInformation(
-                "{Label}: kana-origin query '{Query}' matched song '{SongName}' at score {Score:F0} without a length-banded Double Metaphone collision or a near-exact plain score, treating as a miss (JF-654)",
-                logLabel, musician, scored[0].Item.Name, scored[0].Score);
-            return null;
+            if (head >= scored.Count)
+            {
+                // The walked-out terminal state (every candidate refused by the
+                // bar; the head only advances on a refusal), the same
+                // exhaustion line the SearchMedia walk logs. The empty-pool
+                // exit above and the below-threshold leg keep their Debug
+                // shapes.
+                _logger.LogInformation(
+                    "{Label}: kana bar refused every song candidate for query='{Query}', no match (JF-777)",
+                    logLabel, musician);
+                return null;
+            }
+
+            if (scored[head].Score < CrossMediaSongThreshold)
+            {
+                _logger.LogDebug(
+                    "{Label}: song fallback rejected for query='{Query}' (best score {Score:F0} over {Count} candidates, bar={Bar})",
+                    logLabel, musician, scored[head].Score, scored.Count - head, CrossMediaSongThreshold);
+                return null;
+            }
+
+            if (songBar != null && !songBar(scored[head].Item, scored[head].Score))
+            {
+                _logger.LogInformation(
+                    "{Label}: kana-origin query '{Query}' matched song '{SongName}' at score {Score:F0} without a length-banded Double Metaphone collision or a near-exact plain score, skipping and walking down the ranking (JF-654/JF-777)",
+                    logLabel, musician, scored[head].Item.Name, scored[head].Score);
+                head++;
+                continue;
+            }
+
+            break;
         }
 
-        BaseItem song = scored[0].Item;
+        BaseItem song = scored[head].Item;
         _logger.LogInformation(
             "Song fallback found '{SongName}' itemId={ItemId} (score={Score:F0}) for query='{Query}'",
-            song.Name, song.Id, scored[0].Score, musician);
+            song.Name, song.Id, scored[head].Score, musician);
 
         return BuildSingleSongResponse(
             song, user, session, context, locale,
