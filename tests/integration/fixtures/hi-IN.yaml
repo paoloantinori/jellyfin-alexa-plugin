@@ -66,8 +66,12 @@ tests:
   # regression pin: red until the rebuilt hi-IN model deploys. The pin value
   # is the RAW slot value 'game of thrones', NOT the canonical committed-type
   # 'Game of Thrones': the suite's exact-value comparison runs against
-  # slot.value, and Amazon returns the spoken raw text (deviation from the
-  # ja JF-761 pin; JF-769).
+  # slot.value, and the hi-IN probes returned the spoken raw text (the ja
+  # JF-761 pin now carries the same raw value, corrected by JF-769; the ER
+  # status behind the surface is unresolved there, the raw reading is the
+  # observed fact). After the deploy, a red value row means slot drift OR a
+  # surface flip: re-probe to distinguish before editing the pin (the ja
+  # twin comment carries the full conflict record).
   # ------------------------------------------------------------------------
   - utterance: "game of thrones सीज़न 1 एपिसोड 3 देखो"
     expected_intent: PlayEpisodeIntent

@@ -130,16 +130,25 @@ tests:
   # JF-761 (2026-10-05): the PlayVideo bare '{title} を見たい' thief is removed
   # (same class as the header's JF-551 removal; see the template's PlayVideoIntent
   # comment). The exact-value series_name pin below is the anti-pollution
-  # regression pin: red until the rebuilt ja model deploys. Series is the
-  # committed static SeriesName type value 'Game of Thrones' (deterministic
-  # ER_SUCCESS_MATCH against the saved model, so a red pin means intent-routing
-  # trouble, never an ER-class artifact; the JF-551 probe's 'the bear' reading
-  # is recorded in the task file with its committed-vs-live type conflict).
+  # regression pin. The pin value is the RAW slot value 'game of thrones',
+  # NOT the canonical committed-type 'Game of Thrones': the suite's
+  # exact-value comparison runs against slot.value, and the live probe
+  # (2026-10-05, post-ja-rebuild, green) returned the spoken raw text. The ER
+  # status behind that surface is an UNRESOLVED conflict: JF-761's 2026-10-04
+  # round recorded 'catalog-INDEPENDENT: ER_SUCCESS_MATCH changed nothing'
+  # for this title (see the JF-761 task file's recorded committed-vs-live
+  # conflict, incl. the JF-551 'the bear' reading); the raw surface is the
+  # observed fact the pin consumes (JF-769 corrected this pin from the
+  # original canonical reading; same raw-value choice as the hi-IN JF-766
+  # pin). A red intent row means the steal regressed. A red value row means
+  # slot drift OR a surface flip (whatever the live model/catalog returns
+  # for this utterance changed): re-probe to distinguish before editing
+  # the pin.
   # ------------------------------------------------------------------------
   - utterance: "game of thrones のシーズン 1 エピソード 3 を見たい"
     expected_intent: PlayEpisodeIntent
     expected_slots:
       series_name:
-        value: "Game of Thrones"
+        value: "game of thrones"
       season_number: {}
       episode_number: {}
