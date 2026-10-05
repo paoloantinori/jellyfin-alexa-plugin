@@ -3,7 +3,7 @@ id: JF-767
 title: >-
   JF-767 - JF-763 review-round out-of-scope findings: the YesIntent confirmation-path
   siblings, and the user-less concat endpoint vs the scoped paged path
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-05'
 labels: []
@@ -86,3 +86,5 @@ siblings.
       re-verified and re-documented at its new home
 - [ ] #3 Any behavior change ships with red proofs (the JF-763 sabotage convention) and the suite green both TFMs
 <!-- DOD:END -->
+
+CLOSED 2026-10-06 by the orchestrator: merged at 85792dcb, gate-marker six axes PASS, F3/F4 applied, F1 filed into JF-784. Production deploys with JF-627.
