@@ -89,7 +89,7 @@ public static class StreamTokenHelper
     /// <summary>
     /// Validate a token against an item id and the shared secret. Returns false for any missing,
     /// malformed, expired, tampered, or wrong-item token. Constant-time signature comparison.
-    /// Never parses the scope field (the discarding hot paths: per-segment validation).
+    /// Never parses the scope field (tests only: no production caller (per-segment validation uses the scope-reading 4-arg form since JF-767; the doc previously claimed this is the hot path which is no longer true)).
     /// </summary>
     public static bool TryValidate(string? token, string itemId, string secret)
         => TryValidateCore(token, itemId, secret, out _);

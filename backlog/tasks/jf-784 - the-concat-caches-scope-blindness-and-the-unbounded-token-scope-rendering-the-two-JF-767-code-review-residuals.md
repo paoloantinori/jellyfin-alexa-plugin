@@ -77,3 +77,5 @@ or a server-side scope digest table (bounded token, new state + eviction).
 - [ ] #2 Finding 2 decided: the scope rendering bounded (compact or digest encoding), or the
       bound re-verified as acceptable at realistic library counts and recorded here
 <!-- DOD:END -->
+
+LEG 3 (the JF-767 gate-marker's F1): the endpoint's audiobook arm (IncludeItemTypes=[AudioBook]) and the ONE chapters builder (MediaTypes=Audio) now fed by PlayBook head/confirm/tail diverge on the KIND axis of the same endpoint-vs-paged seam JF-767 closed on the scope axis. A book parent with mixed children (AudioBook chapters plus Audio-typed siblings after a metadata remap) queues all chapters via MediaTypes=Audio but the concat endpoint enumerates only the AudioBook subset; a fully Audio-typed folder yields 0 rows at the endpoint (404) for a book the confirm just launched. Fix shape: align the kind axis (either the endpoint accepts both kinds for the audiobook arm or the builder narrows to AudioBook when the parent is a book) with a mixed-children red proof.

@@ -3602,7 +3602,8 @@ public class VideoAudioController : ControllerBase
         Guid[]? tokenTopParents = tokenLibraryScope is null
             ? null
             : Alexa.Util.LibraryFilter.ResolveTopParentIds(tokenLibraryScope, _libraryManager, _logger);
-        Alexa.Util.LibraryFilter.ApplyLibraryFilter(childrenQuery, tokenTopParents);
+
+            _logger.LogDebug("VideoAudio concat enumeration: token scope resolved ({LibCount} libraries) vs legacy unscoped", tokenTopParents?.Length ?? 0);        Alexa.Util.LibraryFilter.ApplyLibraryFilter(childrenQuery, tokenTopParents);
 
         IReadOnlyList<MediaBrowser.Controller.Entities.BaseItem> chapters =
             _libraryManager.GetItemList(childrenQuery);
