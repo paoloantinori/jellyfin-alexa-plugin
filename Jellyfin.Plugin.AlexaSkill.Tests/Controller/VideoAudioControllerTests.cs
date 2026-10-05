@@ -9782,17 +9782,18 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         File.SetUnixFileMode(dir, ReadOnlyDirMode);
         try
         {
-            return await act().ConfigureAwait(false);
-        }
-        finally
-        {
-            // Restore writability BEFORE asserting: a failing assert throws, and the
-            // old order skipped the restore, leaving the dir read-only for the
-            // fixture's recursive cleanup (teardown noise instead of the signal).
-            File.SetUnixFileMode(dir, WritableDirMode);
+            T result = await act().ConfigureAwait(false);
+            // Assert inside the try: the act's exception keeps precedence when both
+            // fire, and the finally still restores writability either way (a failing
+            // assert must not leave the dir read-only for the fixture cleanup).
             Assert.True(
                 Directory.Exists(dir),
                 $"the write-denied directory did not survive the act ({dir}): the denial never held (running as root?) and the undeletable-class pin is invalid on this runner");
+            return result;
+        }
+        finally
+        {
+            File.SetUnixFileMode(dir, WritableDirMode);
         }
 #pragma warning restore CA1416, CA3003
     }
