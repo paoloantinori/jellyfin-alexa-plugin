@@ -165,3 +165,6 @@ DoD: #1/#3 the Release build above; #2 5248/5248 both TFMs; #4-#8 N/A (no
 session-attribute, HttpClient, model, handler, or locale surface touched);
 #9/#10 the two gates above. NOT DEPLOYED (worker branch only).
 <!-- SECTION:FINAL_SUMMARY:END -->
+
+CLOSED 2026-10-05 by the orchestrator after the full cycle: merged into main (worker 06ebf585 + tails 8ce81a53 and 40d31fc0, --no-ff; the gate-marker's six axes PASS with the red proofs independently reproduced in a throwaway base worktree; the four simplify angles CLEAN with the altitude reshuffle applied), combined-tree suite 5257/5257 both TFMs. NOTE: the MCP status-flip hit the ENAMETOOLONG slug limit AND left the file deleted in the working tree (the JF-724 casualty class); restored from d0d69087 (the file already carried status Done from the worker's own edit) with this closure note appended by hand.
+
