@@ -80,3 +80,16 @@ edge-fix task.
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+GATE-MARKER ADDENDUM (2026-10-05, from the JF-774 orchestrator review): the
+mid-registration window is NARROWED, not closed - a lock-free fast-path replay
+landing between the registry store and the first slot write inside
+MarkEncodeActive reads a registering verdict that accepts the cache-root
+shadow without reading (OwnTicksGenerationLiveOrRegistering), while the
+prewrite override and the registered-dir fallback both sit in the strict
+OwnTicksGenerationLive gate, so the fall-through serve at the ordered probe's
+first hit serves the stale listing unredirected. The 'runtime windows were
+all CLOSED' sentence above is corrected by this addendum. The window is
+sub-second and requires the undeletable same-key shadow plus an oversize
+encode plus a replay in the gap; the liveness-aware resolver this task tracks
+is the shape that closes it.
