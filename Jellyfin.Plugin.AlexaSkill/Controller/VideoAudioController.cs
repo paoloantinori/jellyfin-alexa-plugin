@@ -933,20 +933,29 @@ public class VideoAudioController : ControllerBase
             bool videoTranscodeTier = !VideoAppStreamPolicy.VideoSupportsRemux(sourceMedia.Video);
             long runtimeTicks = validation.Item.RunTimeTicks ?? 0;
             long transcodeEstimateBytes = EstimateEpisodeTranscodeEncodeBytes(runtimeTicks);
+            int cacheCapMB = _cache.EffectiveCacheCapMB;
+
+            // JF-537.1 transient mode: an oversize transcode estimate (above the
+            // cap the sweep enforces) encodes into the TRANSIENT root instead of
+            // the capped cache root, so its bytes never count against the cap,
+            // never evict the real cache, and survive for replay until the idle
+            // reaper judges them unwatched (segment-fetch recency; VideoApp emits
+            // no playback-stop event). Replaces the JF-537 announced-churn
+            // resting point (the Warning about unavoidable per-replay re-encodes)
+            // with the mode that actually avoids it. Remux tier excluded (the
+            // JF-537 scope pin: copy speed bounds its churn).
+            bool oversizeTransient = videoTranscodeTier
+                && TranscodeEstimateExceedsCacheCap(transcodeEstimateBytes, cacheCapMB);
             if (videoTranscodeTier)
             {
                 _logger.LogInformation(
                     "VideoAudio episode HLS: item {ItemId} video codec '{VideoCodec}' is not known h264; using the video transcode tier (libx264 ultrafast CRF 23, measured 4.40x realtime on the minix 2026-09-08, JF-500)",
                     itemId, sourceMedia.Video ?? "(unknown)");
 
-                // JF-537 oversize decision (announced churn): the churn is kept,
-                // but ANNOUNCED - full rationale and the no-cache scope-out on
-                // TranscodeEstimateExceedsCacheCap.
-                int cacheCapMB = _cache.EffectiveCacheCapMB;
-                if (TranscodeEstimateExceedsCacheCap(transcodeEstimateBytes, cacheCapMB))
+                if (oversizeTransient)
                 {
-                    _logger.LogWarning(
-                        "VideoAudio episode transcode for item {ItemId} is estimated at {EstimateMB:F0}MB, above the configured cache cap of {CapMB}MB (VideoAudioCacheSizeMB): the completed encode cannot be retained and every replay re-encodes from zero (JF-537). Consider raising VideoAudioCacheSizeMB",
+                    _logger.LogInformation(
+                        "VideoAudio episode transcode for item {ItemId} is estimated at {EstimateMB:F0}MB, above the configured cache cap of {CapMB}MB (VideoAudioCacheSizeMB): encoding into the transient root instead (JF-537.1), so the capped cache is not evicted for it and the entry survives replay until idle",
                         itemId,
                         transcodeEstimateBytes / (1024.0 * 1024.0),
                         cacheCapMB);
@@ -968,7 +977,9 @@ public class VideoAudioController : ControllerBase
                 sourceMedia.Audio ?? "(unknown)");
 
 #pragma warning disable CA3003 // paths derived from GUID-validated itemId
-            string hlsDir = _cache.GetHlsDirectoryPath(itemId, artModifiedTicks);
+            string hlsDir = oversizeTransient
+                ? _cache.GetTransientHlsDirectoryPath(itemId, artModifiedTicks)
+                : _cache.GetHlsDirectoryPath(itemId, artModifiedTicks);
             Directory.CreateDirectory(hlsDir);
 
             string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
@@ -998,13 +1009,28 @@ public class VideoAudioController : ControllerBase
 
             // Review I1 (JF-498): remove any debris that survived the cleanup attempts
             // above. The whole-directory deletes (ValidateEpisodeCacheAsync's
-            // ticks-scoped CleanupHlsGeneration, CleanupHlsStub) are all-or-nothing
+            // ticks-scoped CleanupHlsGenerationAt, CleanupHlsStub) are all-or-nothing
             // and swallow failures; a playlist that
             // survived them would make append_list append this encode's entries to the
             // stale ones, baking a doubled playlist into the cache. Per-file deletion
             // (best-effort, warning + proceed on failure) so ffmpeg always starts over
-            // a clean target.
-            _cache.DeleteHlsEncodeDebris(itemId, artModifiedTicks);
+            // a clean target. DIR-SCOPED (JF-537.1): exactly this encode's resolved
+            // directory (cache root or transient root), never a same-key valid
+            // entry in the other root.
+            _cache.DeleteHlsEncodeDebris(hlsDir);
+            if (oversizeTransient)
+            {
+                // The transient leg ALSO per-file-cleans the same-key CACHE-root
+                // directory (code-review round, JF-537.1): if that dir holds a
+                // debris playlist whose whole-dir delete failed above (the locked
+                // or permission-denied class), it would shadow the fast path's
+                // cache-first probe on EVERY replay and force a full transient
+                // re-encode each time, resurrecting the churn this mode removes.
+                // Safe against valid entries: the in-lock double-check above
+                // already served any valid cache-root playlist, so whatever
+                // remains here under the same key is debris or nothing.
+                _cache.DeleteHlsEncodeDebris(_cache.GetHlsDirectoryPath(itemId, artModifiedTicks));
+            }
 
             // Mark the encode active BEFORE starting ffmpeg (inside the lock):
             // the mark-before-start invariant all four HLS paths share (this
@@ -1025,14 +1051,21 @@ public class VideoAudioController : ControllerBase
             Process ffmpegProcess;
             try
             {
+                // Oversize headroom is 0 on purpose (JF-537.1): the JF-428
+                // pre-encode reservation exists to make room IN THE CACHE for the
+                // incoming encode, and a transient encode writes nothing there;
+                // reserving multi-GB headroom would evict real cache entries for
+                // nothing (the exact churn this mode removes). Headroom 0 is the
+                // sweep's post-encode shape, so the cap is still enforced.
+                long cacheFootprintBytes = oversizeTransient
+                    ? 0
+                    : videoTranscodeTier
+                        ? transcodeEstimateBytes
+                        : EstimateEpisodeEncodeBytes(runtimeTicks, sourceMedia.TotalBitrateBps);
                 ffmpegProcess = await StartFfmpegProcessGatedAsync(
                     validation.FfmpegPath,
                     ffmpegArgs,
-                    videoTranscodeTier
-                        ? transcodeEstimateBytes
-                        : EstimateEpisodeEncodeBytes(
-                            runtimeTicks,
-                            sourceMedia.TotalBitrateBps),
+                    cacheFootprintBytes,
                     hlsDir,
                     videoTranscodeTier ? _episodeTranscodeSlot : null).ConfigureAwait(false);
             }
@@ -1047,9 +1080,11 @@ public class VideoAudioController : ControllerBase
                 // JF-536: pre-write the FULL segment listing (the audiobook pattern,
                 // playlist-full.m3u8) only AFTER the pin inside
                 // StartFfmpegProcessGatedAsync succeeded (the JF-428 rule: a listing
-                // written before the pin can be deleted by a concurrent eviction
-                // sweep in the creation-to-pin window, silently reverting the serve
-                // to the live playlist). ffmpeg keeps writing its own stream.m3u8
+                // written before the pin can be deleted in the creation-to-pin
+                // window by a concurrent eviction sweep, or on the transient leg by
+                // its idle reaper, silently reverting the serve to the live
+                // playlist; both honor pins, so the ordering invariant is
+                // root-independent). ffmpeg keeps writing its own stream.m3u8
                 // (append_list growth, ENDLIST at completion); what we SERVE while
                 // the encode runs is this full listing. Why: ExoPlayer treats a
                 // no-ENDLIST playlist as LIVE, starts playback at the live edge
@@ -1099,8 +1134,11 @@ public class VideoAudioController : ControllerBase
                     return firstSegmentFailure;
                 }
 
-                // Register the HLS directory for fast segment lookups.
-                _cache.RegisterHlsDirectory(itemId, artModifiedTicks);
+                // Register the RESOLVED HLS directory for fast segment lookups:
+                // the transient root's path on the oversize leg (JF-537.1), the
+                // cache root's otherwise. The lookup holds opaque paths, so
+                // segment resolution stays root-agnostic.
+                _cache.RegisterHlsDirectoryPath(itemId, hlsDir);
             }
             catch
             {
@@ -1217,8 +1255,10 @@ public class VideoAudioController : ControllerBase
     /// the optional <paramref name="endlistDebrisReason"/> hook, valid (a
     /// completed encode, the JF-675 fall-through serve); otherwise DEBRIS of a
     /// killed or incomplete generation: warn, delete ONLY the caller's own
-    /// generation directory
-    /// (<see cref="VideoAudioCache.CleanupHlsGeneration"/>; safe to fire while
+    /// generation directory, the one this playlist was served from
+    /// (<see cref="VideoAudioCache.CleanupHlsGenerationAt"/> since JF-537.1, so a
+    /// transient-root debris verdict cannot destroy a same-key cache-root
+    /// generation; safe to fire while
     /// a foreign-ticks sibling writes, whose directory this delete cannot
     /// name), return null so the caller re-encodes. A playlist that vanishes
     /// mid-validation (a concurrent verdict or cleanup deleted the directory
@@ -1283,7 +1323,10 @@ public class VideoAudioController : ControllerBase
             _logger.LogWarning(
                 "{LogLabel} HLS cache invalidated for {ItemId}: playlist has no ENDLIST and its own art-tick generation is not live (interrupted encode?), re-encoding",
                 logLabel, cacheKey);
-            _cache.CleanupHlsGeneration(cacheKey, artModifiedTicks);
+            // Dir-scoped delete (JF-537.1): the generation directory this playlist
+            // was SERVED FROM (cache root or transient root), never its same-key
+            // sibling in the other root.
+            _cache.CleanupHlsGenerationAt(Path.GetDirectoryName(cached.FullName)!);
             return null;
         }
 
@@ -1295,7 +1338,7 @@ public class VideoAudioController : ControllerBase
                 _logger.LogWarning(
                     "{LogLabel} HLS cache invalidated for {ItemId}: {Reason}, re-encoding",
                     logLabel, cacheKey, reason);
-                _cache.CleanupHlsGeneration(cacheKey, artModifiedTicks);
+                _cache.CleanupHlsGenerationAt(Path.GetDirectoryName(cached.FullName)!);
                 return null;
             }
         }
@@ -1453,10 +1496,23 @@ public class VideoAudioController : ControllerBase
     private async Task<ActionResult?> TryServePrewrittenEpisodePlaylist(string itemId, long artModifiedTicks, long startTicks)
     {
 #pragma warning disable CA3003 // path derived from GUID-validated itemId
-        string prewrittenPath = Path.Combine(
-            _cache.GetHlsDirectoryPath(itemId, artModifiedTicks),
-            PrewrittenPlaylistFileName);
-        if (!System.IO.File.Exists(prewrittenPath))
+        // Root-agnostic (JF-537.1): the prewrite lives in the CACHE root's
+        // generation dir for a cacheable encode, the TRANSIENT root's for an
+        // oversize one. The probe order comes from the cache's single-homed
+        // root-preference list (cache root first, same order every root-agnostic
+        // resolver uses).
+        string? prewrittenPath = null;
+        foreach (string dirPath in _cache.HlsGenerationDirPaths(itemId, artModifiedTicks))
+        {
+            string candidate = Path.Combine(dirPath, PrewrittenPlaylistFileName);
+            if (System.IO.File.Exists(candidate))
+            {
+                prewrittenPath = candidate;
+                break;
+            }
+        }
+
+        if (prewrittenPath == null)
         {
             return null;
         }
@@ -2186,8 +2242,9 @@ public class VideoAudioController : ControllerBase
             }
 
             // Per-file debris cleanup so ffmpeg always starts over a clean target (the
-            // JF-498 review I1 concern, same as every sibling path).
-            _cache.DeleteHlsEncodeDebris(spec.CacheKey, spec.ArtModifiedTicks);
+            // JF-498 review I1 concern, same as every sibling path). Dir-scoped
+            // since JF-537.1; the variant paths are always cache-rooted.
+            _cache.DeleteHlsEncodeDebris(hlsDir);
 
             // Mark before the process start: the mark-before-start invariant all
             // four HLS paths share (see the remux mark site's comment).
@@ -2468,7 +2525,7 @@ public class VideoAudioController : ControllerBase
     /// holds the verdict; own-dead means the verdict may fire EVEN WHILE a
     /// foreign-ticks generation of the same key runs, because the verdict's
     /// cleanup deletes only the caller's own generation directory
-    /// (<see cref="VideoAudioCache.CleanupHlsGeneration"/>, never the key-wide
+    /// (<see cref="VideoAudioCache.CleanupHlsGenerationAt"/>, never the key-wide
     /// <c>Cleanup</c>): directory protection comes from scoping the delete, not
     /// from holding the verdict (the JF-669 any-generation short-circuit's
     /// precision cost, dropped: a killed own-ticks encode's stale no-ENDLIST
@@ -5163,9 +5220,11 @@ public class VideoAudioController : ControllerBase
     /// live measurement confirmed the rate (~3.2GB/h for a 51-min HEVC episode;
     /// why the default changed: the VideoAudioCacheSizeMB field doc). Content
     /// beyond one rounded hour still outgrows even the raised cap (the reserve
-    /// rounds UP per hour) and relies on the playback-recency window plus
-    /// oldest-first eviction (the regime
-    /// <see cref="TranscodeEstimateExceedsCacheCap"/> announces, JF-537).
+    /// rounds UP per hour), which routes such encodes into the transient root
+    /// instead of the capped cache (the regime
+    /// <see cref="TranscodeEstimateExceedsCacheCap"/> decides, JF-537.1; under
+    /// it the reserve still drives the pre-encode headroom and the playback pin
+    /// protects the entry being watched).
     /// </summary>
     /// <param name="runtimeTicks">Content duration (item runtime).</param>
     /// <returns>Estimated bytes the encode writes.</returns>
@@ -5173,28 +5232,22 @@ public class VideoAudioController : ControllerBase
         => FlatHourlyEncodeBytes(runtimeTicks, 3072L * 1024 * 1024);
 
     /// <summary>
-    /// JF-537: whether the transcode tier's pre-encode estimate exceeds the cache cap
-    /// the eviction sweep enforces (<see cref="VideoAudioCache.EffectiveCacheCapMB"/>).
-    /// Strictly greater: an estimate EQUAL to the cap still fits (the sweep's target is
-    /// cap minus headroom, and the JF-428 half-cap floor bounds how far it evicts).
-    /// This is the ANNOUNCED-CHURN decision point, not a routing decision: the encode
-    /// proceeds exactly as before either way; when the estimate exceeds the cap the
-    /// completed entry can never be retained (the post-encode-completion sweep evicts
-    /// it once the playback-recency window expires), so every replay re-encodes from zero, and the
-    /// caller must make that churn visible with a Warning instead of letting it churn
-    /// invisibly (the JF-534 review finding).
-    ///
-    /// Scoping note (why encode-WITHOUT-caching was rejected for this task): the
-    /// encode target dir is load-bearing in every serving path -- GetSegment resolves
-    /// dirs only through <see cref="VideoAudioCache.FindSegmentPath"/> (the in-memory
-    /// lookup RegisterHlsDirectory populates from the CACHE path, plus a scan bounded
-    /// to the cache root), the concurrent-request dedup (fast path and in-lock double
-    /// check) detects an in-flight encode via GetCachedHlsPlaylist on the cache path,
-    /// and the JF-531 pre-written listing is served from the same dir. An uncached
-    /// sibling dir would need its own registration/scan/dedup plumbing, and its
-    /// deletion semantics would need playback-stop detection the platform does not
-    /// provide (VideoApp emits no events; only segment-fetch recency is observable),
-    /// i.e. a new idle-reaper subsystem. That is a refactor, not this task.
+    /// JF-537 (superseded resting point) / JF-537.1 (current): whether the transcode
+    /// tier's pre-encode estimate exceeds the cache cap the eviction sweep enforces
+    /// (<see cref="VideoAudioCache.EffectiveCacheCapMB"/>). Strictly greater: an
+    /// estimate EQUAL to the cap still fits (the sweep's target is cap minus headroom,
+    /// and the JF-428 half-cap floor bounds how far it evicts). Since JF-537.1 this is
+    /// a ROUTING decision: when true, the episode transcode encodes into the TRANSIENT
+    /// root (<see cref="VideoAudioCache.GetTransientHlsDirectoryPath"/>), whose bytes
+    /// never count against the cap, never evict the real cache, and survive for replay
+    /// until the idle reaper (<see cref="VideoAudioCache.ReapIdleTransientEntries"/>)
+    /// judges them unwatched (segment-fetch recency; VideoApp emits no playback-stop
+    /// event, so recency is the only observable liveness signal). The serve paths
+    /// resolve both roots (<see cref="VideoAudioCache.GetCachedHlsPlaylist"/> probes
+    /// cache then transient; <see cref="VideoAudioCache.FindHlsDirectoryByScan"/>
+    /// scans both), so a transient entry keeps serving across cap changes and
+    /// restarts. JF-537's interim answer (encode inside the capped cache anyway and
+    /// WARN about the per-replay re-encode) is retired with the mode that avoids it.
     ///
     /// Scope is the TRANSCODE tier only. The remux tier is excluded deliberately: its
     /// copy writes at the source's own bitrate (the bytes the user already chose to

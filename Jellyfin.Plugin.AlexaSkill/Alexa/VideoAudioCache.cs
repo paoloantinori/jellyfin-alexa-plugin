@@ -24,6 +24,18 @@ public class VideoAudioCache
     private const string CacheSubDir = "alexaskill-video-audio";
 
     /// <summary>
+    /// Name of the transient subtree under the cache root (JF-537.1): oversize
+    /// transcode encodes write their HLS generation directories inside it instead
+    /// of the capped cache root. The name is load-bearing: it carries NO
+    /// underscore, so neither top-directory-only enumeration of the eviction
+    /// sweep (<c>*_*</c> generation dirs, <c>*.mp4</c> files) can ever match it,
+    /// and it holds no top-level playlist. Transient bytes therefore never count
+    /// toward the cap and the cap sweep never deletes them; the idle reaper
+    /// (<see cref="ReapIdleTransientEntries"/>) owns their lifecycle.
+    /// </summary>
+    private const string TransientSubDirName = "transient";
+
+    /// <summary>
     /// Default cache cap in MB when the plugin configuration is unavailable (the
     /// <c>?? </c> fallback of <see cref="EffectiveCacheCapMB"/> and
     /// <see cref="EvictIfNeededCore"/>). Single definition so the JF-537 oversize
@@ -33,6 +45,7 @@ public class VideoAudioCache
 
     private readonly ILogger<VideoAudioCache> _logger;
     private readonly string _cacheDir;
+    private readonly string _transientDir;
 
     /// <summary>
     /// Per-item locks keyed by cache file path. Prevents concurrent ffmpeg
@@ -68,6 +81,24 @@ public class VideoAudioCache
     /// exercise TTL expiry without wall-clock sleeps.
     /// </summary>
     internal TimeSpan PlaybackEvictionExemptionTtl { get; set; } = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// JF-537.1: how long after the last liveness signal (a recorded playlist or
+    /// segment serve, else the directory's latest file write) a TRANSIENT-root
+    /// oversize encode directory may linger before the idle reaper deletes it.
+    /// VideoApp emits no playback-stop event, so segment-fetch recency is the only
+    /// observable liveness signal (the platform fact that made deletion semantics
+    /// the fifth point of the JF-537 no-cache rejection). 30 minutes = 3x the
+    /// playback-pin window: far above any live client fetch cadence, sized to
+    /// survive a long pause mid-watch, while bounding disk hold to roughly the
+    /// watched entry plus entries idle within the window. There is deliberately
+    /// NO byte budget on the transient root: qualification means the entry alone
+    /// exceeds the cache cap, so any cap-derived budget would reap idle entries
+    /// immediately and collapse this TTL (and the replay benefit) to zero.
+    /// Internal test hook (the InternalsVisibleTo seam): shrink it to
+    /// milliseconds to exercise reaping without wall-clock sleeps.
+    /// </summary>
+    internal TimeSpan TransientIdleReapTtl { get; set; } = TimeSpan.FromMinutes(30);
 
     /// <summary>Record that a cache entry was served, for in-memory LRU eviction (JF-320 part 2).</summary>
     private void RecordAccess(string? path)
@@ -142,6 +173,7 @@ public class VideoAudioCache
     {
         _logger = logger;
         _cacheDir = Path.Combine(appPaths.CachePath, CacheSubDir);
+        _transientDir = Path.Combine(_cacheDir, TransientSubDirName);
     }
 
     /// <summary>
@@ -296,27 +328,60 @@ public class VideoAudioCache
     private readonly ConcurrentDictionary<string, string> _hlsDirLookup = new();
 
     /// <summary>
-    /// Register the HLS directory path for an item so segment lookups are O(1).
-    /// Called after ffmpeg finishes generating the HLS playlist and segments.
+    /// Register the CACHE-root HLS directory path for an item so segment lookups
+    /// are O(1). Called after ffmpeg finishes generating the HLS playlist and
+    /// segments. Cache-rooted paths only; a transient encode registers its own
+    /// resolved directory through <see cref="RegisterHlsDirectoryPath"/> (JF-537.1).
     /// </summary>
     /// <param name="itemId">The Jellyfin item ID.</param>
     /// <param name="artModifiedTicks">Ticks from the album art's DateModified.</param>
     public void RegisterHlsDirectory(string itemId, long artModifiedTicks)
     {
-        _hlsDirLookup[itemId] = GetHlsDirectoryPath(itemId, artModifiedTicks);
+        RegisterHlsDirectoryPath(itemId, GetHlsDirectoryPath(itemId, artModifiedTicks));
+    }
+
+    /// <summary>
+    /// Register an explicitly resolved HLS directory path (cache root or
+    /// transient root, JF-537.1) for an item so segment lookups are O(1). The
+    /// transient encode path uses this to register its transient-root directory;
+    /// the value is an opaque path to the lookup, so segment resolution needs no
+    /// root awareness of its own.
+    /// </summary>
+    /// <param name="itemId">The cache key (Jellyfin item or variant key).</param>
+    /// <param name="hlsDirPath">The resolved HLS directory path being encoded into.</param>
+    public void RegisterHlsDirectoryPath(string itemId, string hlsDirPath)
+    {
+        _hlsDirLookup[itemId] = hlsDirPath;
     }
 
     /// <summary>
     /// Clean up a corrupt/partial HLS directory from a previous failed generation.
     /// Only called inside the per-item lock to avoid racing with active generation.
     /// Deletes the directory only if the playlist file is missing or empty (0 bytes),
-    /// which indicates ffmpeg never successfully wrote a segment.
+    /// which indicates ffmpeg never successfully wrote a segment. Since JF-537.1 the
+    /// check covers BOTH roots' (itemId, ticks) directories: a generation of the
+    /// same key can sit in the cache root (a previous under-cap encode) or the
+    /// transient root (a previous oversize encode), and a stub in either is debris.
+    /// Safe by contract against valid entries of either root: a non-empty playlist
+    /// is never touched here.
     /// </summary>
     /// <param name="itemId">The Jellyfin item ID.</param>
     /// <param name="artModifiedTicks">Ticks from the album art's DateModified.</param>
     public void CleanupHlsStub(string itemId, long artModifiedTicks)
     {
-        string dirPath = GetHlsDirectoryPath(itemId, artModifiedTicks);
+        foreach (string dirPath in HlsGenerationDirPaths(itemId, artModifiedTicks))
+        {
+            CleanupHlsStubInDir(dirPath);
+        }
+    }
+
+    /// <summary>
+    /// The per-directory core of <see cref="CleanupHlsStub"/>: delete one
+    /// generation directory when its playlist is missing or empty.
+    /// </summary>
+    /// <param name="dirPath">The generation directory path (cache or transient root).</param>
+    private void CleanupHlsStubInDir(string dirPath)
+    {
 #pragma warning disable CA3003
         if (!Directory.Exists(dirPath))
         {
@@ -343,7 +408,7 @@ public class VideoAudioCache
     }
 
     /// <summary>
-    /// Delete the playlist and segment files of an item's HLS cache directory,
+    /// Delete the playlist and segment files of one HLS generation directory,
     /// best-effort (JF-498 review I1). Unlike <see cref="CleanupHlsStub"/> (which only
     /// removes directories whose playlist is missing or empty) and <see cref="Cleanup"/>
     /// (whose recursive directory delete is all-or-nothing and swallows
@@ -353,23 +418,24 @@ public class VideoAudioCache
     /// episode encode runs ffmpeg with <c>append_list</c>, which would otherwise append
     /// the new encode's entries to the stale playlist's entries and bake a doubled
     /// playlist into the cache. Per-file deletion also removes everything deletable
-    /// when one undeletable file would have failed the whole recursive delete. Only
-    /// call while holding the per-item lock. Failures are logged as warnings and
-    /// swallowed: the encode proceeds degraded (stale entries may survive) rather than
-    /// failing the play.
+    /// when one undeletable file would have failed the whole recursive delete.
+    /// DIR-SCOPED since JF-537.1 (was key-scoped): the caller passes the exact
+    /// directory its encode is about to write into (cache root or transient root),
+    /// so a same-key VALID entry in the other root is never destroyed before a
+    /// transient re-encode. Only call while holding the per-item lock. Failures are
+    /// logged as warnings and swallowed: the encode proceeds degraded (stale entries
+    /// may survive) rather than failing the play.
     /// </summary>
-    /// <param name="itemId">The Jellyfin item ID.</param>
-    /// <param name="artModifiedTicks">Ticks from the album art's DateModified.</param>
-    public void DeleteHlsEncodeDebris(string itemId, long artModifiedTicks)
+    /// <param name="hlsDirPath">The HLS generation directory the encode targets.</param>
+    public void DeleteHlsEncodeDebris(string hlsDirPath)
     {
-#pragma warning disable CA3003 // itemId is GUID-validated by the caller (VideoAudioController)
-        string dirPath = GetHlsDirectoryPath(itemId, artModifiedTicks);
-        if (!Directory.Exists(dirPath))
+#pragma warning disable CA3003 // paths are GUID-derived by the caller (VideoAudioController)
+        if (!Directory.Exists(hlsDirPath))
         {
             return;
         }
 
-        string playlistPath = Path.Combine(dirPath, "stream.m3u8");
+        string playlistPath = Path.Combine(hlsDirPath, "stream.m3u8");
         try
         {
             File.Delete(playlistPath); // no-op when absent (fresh encode)
@@ -381,7 +447,7 @@ public class VideoAudioCache
 
         try
         {
-            foreach (string segmentPath in Directory.EnumerateFiles(dirPath, "seg_*.ts"))
+            foreach (string segmentPath in Directory.EnumerateFiles(hlsDirPath, "seg_*.ts"))
             {
                 try
                 {
@@ -395,7 +461,7 @@ public class VideoAudioCache
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            _logger.LogWarning(ex, "Failed to enumerate stale HLS segments before re-encode: {Path}", dirPath);
+            _logger.LogWarning(ex, "Failed to enumerate stale HLS segments before re-encode: {Path}", hlsDirPath);
         }
 #pragma warning restore CA3003
     }
@@ -404,17 +470,33 @@ public class VideoAudioCache
     /// Checks total cache size and evicts oldest entries until under the limit.
     /// Handles both flat MP4 files (legacy) and HLS directories.
     /// Entries are evicted by last access time (oldest first).
+    /// Since JF-537.1 this POST-ENCODE form also runs the transient-root idle
+    /// reaper first: the production callers are the background monitor sweeps
+    /// (<c>Task.Run</c> after an encode completes), so the reaper's recursive
+    /// deletes of multi-GB idle entries never land on the Alexa request path
+    /// (the pre-encode budget sweep <see cref="EnsureDiskBudgetBeforeEncodeAsync"/>
+    /// deliberately does NOT reap: a transient encode reserves nothing in the
+    /// capped cache, so there is no budget reason to reclaim transient bytes
+    /// before it starts).
     /// </summary>
     /// <returns>A task representing the asynchronous eviction operation.</returns>
     public Task EvictIfNeeded()
-        => EvictIfNeeded(0);
+    {
+        ReapIdleTransientEntries();
+        return EvictIfNeeded(0);
+    }
 
     /// <summary>
     /// Pre-encode disk budget reservation (JF-310/JF-428): eviction sweep with the
     /// incoming encode's estimated size reserved as headroom; no refusal path by
     /// design (see <see cref="EvictIfNeededCore"/> for the floor and the pin contract).
+    /// The estimate means the encode's IN-CACHE footprint: JF-537.1 transient
+    /// encodes pass 0 (they write nothing into the capped cache, so reserving
+    /// headroom there would evict real entries for nothing); any future change
+    /// that floors or inflates headroom inside the sweep silently regresses that
+    /// leg back to the real-cache churn the transient mode exists to remove.
     /// </summary>
-    /// <param name="estimatedEncodeBytes">The estimated on-disk size of the incoming encode.</param>
+    /// <param name="estimatedEncodeBytes">The estimated on-disk size the incoming encode writes into the capped cache.</param>
     public Task EnsureDiskBudgetBeforeEncodeAsync(long estimatedEncodeBytes)
         => EvictIfNeeded(estimatedEncodeBytes);
 
@@ -476,6 +558,10 @@ public class VideoAudioCache
         {
             var cacheDirInfo = new DirectoryInfo(_cacheDir);
 
+            // LOAD-BEARING: both enumerations below are top-directory-only, the
+            // file glob cannot reach a subtree, and the DIRECTORY loop below
+            // skips the transient subtree BY NAME (not by glob shape): the
+            // transient root's bytes must never count toward the cap (JF-537.1).
             // Collect flat MP4 files (legacy cache entries)
             foreach (var file in cacheDirInfo.GetFiles("*.mp4", SearchOption.TopDirectoryOnly))
             {
@@ -490,6 +576,13 @@ public class VideoAudioCache
             // Collect HLS directories (each directory is one cache entry)
             foreach (var dir in cacheDirInfo.GetDirectories("*_*", SearchOption.TopDirectoryOnly))
             {
+                // Structural exclusion (not glob-emergent): even a broadened
+                // pattern above must never sweep the transient subtree.
+                if (dir.Name == TransientSubDirName)
+                {
+                    continue;
+                }
+
                 // Only count directories that contain an HLS playlist
                 string playlistPath = Path.Combine(dir.FullName, "stream.m3u8");
                 if (!File.Exists(playlistPath))
@@ -684,6 +777,110 @@ public class VideoAudioCache
     }
 
     /// <summary>
+    /// The JF-537.1 idle reaper: delete every TRANSIENT-root generation directory
+    /// whose last liveness signal is older than <see cref="TransientIdleReapTtl"/>
+    /// and that holds no <see cref="Pin"/>. Liveness signal: a recorded serve in
+    /// <see cref="_lastAccessUtc"/> (every playlist and segment fetch refreshes it,
+    /// so an entry being watched right now is never reaped), else the directory's
+    /// own write time: every write ffmpeg makes here is a NEW directory entry
+    /// (each segment is a new file; the playlist lands via tmp+rename), so the
+    /// dir mtime IS the last write, a fresh encode's dir is live by construction,
+    /// and an untouched pre-restart entry is judged by when its encode last wrote
+    /// it. The pin covers the in-flight encode window exactly as it does for the
+    /// cap sweep. Best-effort like the cap sweep: an undeletable or unreadable
+    /// directory is skipped, never thrown. Trigger: the POST-ENCODE eviction
+    /// sweep (<see cref="EvictIfNeeded()"/>, run by the background monitors via
+    /// Task.Run) deliberately, with no background timer, because a timer-owned
+    /// reaper would leak per test-constructed cache instance and need
+    /// host-lifetime disposal this cache singleton does not have, and running it
+    /// on the pre-encode budget sweep would put recursive multi-GB deletes inline
+    /// on the Alexa play path for no budget reason (a transient encode reserves
+    /// nothing in the capped cache). The honest cost is that an idle entry
+    /// lingers until the next encode completes anywhere in the plugin.
+    /// The scan below carries its own cost tripwire at the same
+    /// <see cref="SlowEvictionScanThresholdMs"/> budget as the cap sweep's
+    /// enumeration (JF-431): this root is deliberately unbounded (no byte
+    /// budget), so its growth must stay visible.
+    /// </summary>
+    internal void ReapIdleTransientEntries()
+    {
+        if (!Directory.Exists(_transientDir))
+        {
+            return;
+        }
+
+        DateTime reapCutoffUtc = DateTime.UtcNow - TransientIdleReapTtl;
+        var scanWatch = Stopwatch.StartNew();
+
+        DirectoryInfo[] generationDirs = Array.Empty<DirectoryInfo>();
+        int reaped = 0;
+        try
+        {
+            generationDirs = new DirectoryInfo(_transientDir)
+                .GetDirectories("*_*", SearchOption.TopDirectoryOnly);
+
+            foreach (DirectoryInfo dir in generationDirs)
+            {
+                // JF-428: never reap an in-use (pinned) directory; an encode writing
+                // here right now holds the pin from process start to exit (+500ms poll).
+                if (_pinnedPaths.ContainsKey(dir.FullName))
+                {
+                    continue;
+                }
+
+                // Recorded serve (playlist/segment fetch) beats the write time; a
+                // serve inside the TTL means the entry is being watched.
+                DateTime lastLivenessUtc = dir.LastWriteTimeUtc;
+                if (_lastAccessUtc.TryGetValue(dir.FullName, out DateTime lastServed) && lastServed > lastLivenessUtc)
+                {
+                    lastLivenessUtc = lastServed;
+                }
+
+                if (lastLivenessUtc >= reapCutoffUtc)
+                {
+                    continue;
+                }
+
+                // The delete itself is the dir-scoped cleanup helper's contract
+                // (best-effort recursive delete + access-record drop); the reaper
+                // only adds the announcement, and only when the delete actually
+                // landed (the helper swallows its failures at Debug).
+                CleanupHlsGenerationAt(dir.FullName);
+                if (!Directory.Exists(dir.FullName))
+                {
+                    _logger.LogInformation(
+                        "VideoAudio transient HLS reaped (idle beyond {TtlMinutes:F0}min): {Path}",
+                        TransientIdleReapTtl.TotalMinutes,
+                        dir.FullName);
+                    reaped++;
+                }
+            }
+        }
+        catch (Exception ex) when (ex is DirectoryNotFoundException or IOException or UnauthorizedAccessException)
+        {
+            // Vanished mid-scan or read-denied: reap what already happened, then
+            // stop; the next sweep retries.
+            _logger.LogDebug(ex, "Error scanning the transient root for idle reaping: {Path}", _transientDir);
+        }
+
+        double scanMs = scanWatch.Elapsed.TotalMilliseconds;
+        _logger.LogDebug(
+            "VideoAudio transient root reap scan: {Entries} entries, {Reaped} reaped, {ElapsedMs:F1}ms",
+            generationDirs.Length,
+            reaped,
+            scanMs);
+        if (scanMs >= SlowEvictionScanThresholdMs)
+        {
+            _logger.LogInformation(
+                "VideoAudio transient root reap scan took {ElapsedMs:F1}ms for {Entries} entries, above the {ThresholdMs:F0}ms measured-cheap budget (JF-431); idle oversize encodes are accumulating under {Path} (raise VideoAudioCacheSizeMB so fewer encodes qualify transient, or clear that directory)",
+                scanMs,
+                generationDirs.Length,
+                SlowEvictionScanThresholdMs,
+                _transientDir);
+        }
+    }
+
+    /// <summary>
     /// Represents a cache entry for eviction — either a flat file or a directory.
     /// </summary>
     private sealed class CacheEntry
@@ -708,7 +905,7 @@ public class VideoAudioCache
     /// ticks-scoped this method has NO production caller; never call it from a
     /// serve/verdict path, where a sibling art-tick generation of the same key
     /// may be live-writing a directory this wipe would delete mid-write; use
-    /// <see cref="CleanupHlsGeneration"/> there (one generation's directory,
+    /// <see cref="CleanupHlsGenerationAt"/> there (one generation's directory,
     /// never a sibling's).
     /// </summary>
     /// <param name="itemId">The Jellyfin item ID to invalidate.</param>
@@ -768,38 +965,39 @@ public class VideoAudioCache
     }
 
     /// <summary>
-    /// Removes ONLY the HLS directory of ONE art-tick generation of the given item
-    /// (JF-676): the ticks-scoped sibling of <see cref="Cleanup"/> (which removes
-    /// every <c>{itemId}_*</c> directory and flat file regardless of ticks). The
-    /// ticks-scoped debris verdicts of <c>VideoAudioController</c> trigger this, so
-    /// a verdict on one art-tick generation's stale playlist can never delete a
-    /// sibling generation's directory, including a live foreign-ticks encode's,
-    /// which the key-wide Cleanup would wipe mid-write. ORPHAN COLLECTOR (the
-    /// JF-676 rework's honest residual): a debris directory of a NON-current art
-    /// tick has no deterministic cleaner anymore (the verdict deletes only the
-    /// CALLER's own ticks directory, <see cref="CleanupHlsStub"/> skips
-    /// non-empty playlists, and the per-file debris sweep runs only on the
-    /// encode path for the caller's own ticks); the size-cap LRU eviction sweep
-    /// (<see cref="EvictIfNeeded()"/>) is the eventual collector, bounded by the
-    /// cap and unbounded in time. That is the deliberate trade for never
-    /// deleting a live generation's directory. Deliberately does NOT touch the
-    /// generation's flat <c>{itemId}_{ticks}.mp4</c> files: they are a different
-    /// endpoint's artifact and not the verdict's subject. Best-effort, same
-    /// failure family as <see cref="Cleanup"/> (logged, swallowed).
+    /// Removes EXACTLY ONE generation directory (JF-676 ticks-scoping, JF-537.1
+    /// dir-scoping): the ticks-scoped debris verdicts of <c>VideoAudioController</c>
+    /// pass the directory the playlist they validated CAME FROM
+    /// (<c>Path.GetDirectoryName(cached.FullName)</c>), so a verdict on one
+    /// art-tick generation's stale playlist can never delete a sibling
+    /// generation's directory (including a live foreign-ticks encode's, which the
+    /// key-wide <see cref="Cleanup"/> would wipe mid-write), and since JF-537.1 it
+    /// cannot destroy a same-key generation in the OTHER root either (the cap
+    /// changed between plays): a key holding directories in both roots loses
+    /// exactly the one that was served. ORPHAN COLLECTOR (the JF-676 rework's
+    /// honest residual): a debris directory nobody requests again has no
+    /// deterministic cleaner (the verdict deletes only the served-from
+    /// directory, <see cref="CleanupHlsStub"/> skips non-empty playlists, and the
+    /// per-file debris sweep runs only on the encode path for the caller's own
+    /// directory); the size-cap LRU eviction sweep
+    /// (<see cref="EvictIfNeeded()"/>) is the eventual collector for the cache
+    /// root, and the idle reaper (<see cref="ReapIdleTransientEntries"/>) for the
+    /// transient root. That is the deliberate trade for never deleting a live
+    /// generation's directory. Deliberately does NOT touch the generation's flat
+    /// <c>{itemId}_{ticks}.mp4</c> files: they are a different endpoint's
+    /// artifact and not the verdict's subject. Best-effort, same failure family
+    /// as <see cref="Cleanup"/> (logged, swallowed).
     /// </summary>
-    /// <param name="itemId">The Jellyfin item ID whose generation directory is removed.</param>
-    /// <param name="artModifiedTicks">The generation's art ticks (the directory suffix).</param>
-    public void CleanupHlsGeneration(string itemId, long artModifiedTicks)
+    /// <param name="dirPath">The one generation directory to remove.</param>
+    public void CleanupHlsGenerationAt(string dirPath)
     {
-#pragma warning disable CA3003 // itemId is GUID-validated by callers before reaching this method
-        string dirPath = GetHlsDirectoryPath(itemId, artModifiedTicks);
         try
         {
             if (Directory.Exists(dirPath))
             {
                 Directory.Delete(dirPath, recursive: true);
                 _lastAccessUtc.TryRemove(dirPath, out _);
-                _logger.LogDebug("Cleaned up HLS cache directory for item {ItemId} art ticks {ArtModifiedTicks}", itemId, artModifiedTicks);
+                _logger.LogDebug("Cleaned up HLS generation directory: {Path}", dirPath);
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException)
@@ -808,7 +1006,6 @@ public class VideoAudioCache
             // directory is undeletable: the verdict's caller re-encodes either way.
             _logger.LogDebug(ex, "Failed to delete HLS cache directory: {Path}", dirPath);
         }
-#pragma warning restore CA3003
     }
 
     /// <summary>
@@ -837,31 +1034,99 @@ public class VideoAudioCache
     }
 
     /// <summary>
+    /// Returns the TRANSIENT-root HLS directory path for the given key and art
+    /// ticks (JF-537.1): the target of oversize transcode encodes, whose bytes
+    /// never count against the cap and are never swept by it. Same
+    /// <c>{itemId}_{artModifiedTicks}</c> generation-name shape as the cache root,
+    /// so every root-agnostic resolver just probes both roots.
+    /// </summary>
+    /// <param name="itemId">The Jellyfin item ID (or variant cache key).</param>
+    /// <param name="artModifiedTicks">Ticks from the album art's DateModified.</param>
+    /// <returns>Full path to the transient-root HLS directory.</returns>
+    public string GetTransientHlsDirectoryPath(string itemId, long artModifiedTicks)
+    {
+        return Path.Combine(_transientDir, $"{itemId}_{artModifiedTicks}");
+    }
+
+    /// <summary>
+    /// The ordered generation-directory candidates for a key, cache root FIRST,
+    /// transient root second (JF-537.1): the ONE home of the load-bearing
+    /// root-preference order (a key with live generations in both roots resolves
+    /// to the cache one, the preferred permanent home). Every root-agnostic
+    /// resolver that walks per-key directories consumes this order
+    /// (<see cref="GetCachedHlsPlaylist"/>, the controller's prewrite probe,
+    /// <see cref="CleanupHlsStub"/>); the scan fallback
+    /// (<see cref="FindHlsDirectoryByScan"/>) enumerates the same roots in the
+    /// same order at the generation level.
+    /// </summary>
+    /// <param name="itemId">The cache key (Jellyfin item or variant key).</param>
+    /// <param name="artModifiedTicks">Ticks of the generation.</param>
+    /// <returns>The candidate directories in preference order.</returns>
+    internal string[] HlsGenerationDirPaths(string itemId, long artModifiedTicks)
+        => new[]
+        {
+            GetHlsDirectoryPath(itemId, artModifiedTicks),
+            GetTransientHlsDirectoryPath(itemId, artModifiedTicks)
+        };
+
+    /// <summary>
     /// Returns the cached HLS playlist file if it exists and has any content, null otherwise.
     /// HLS playlists are served even when small because ffmpeg writes them atomically
-    /// (.tmp rename) — a non-empty file is always a valid partial or complete playlist.
+    /// (.tmp rename): a non-empty file is always a valid partial or complete playlist.
     /// This allows the Echo Show to start playback as soon as the first segment is ready,
     /// without waiting for the entire content to be encoded.
+    /// Root-agnostic since JF-537.1: the generation directories are probed in
+    /// <see cref="HlsGenerationDirPaths"/> order (cache root first, then the
+    /// transient root, an oversize encode's target). One probe pair covers the
+    /// episode fast path, the in-lock double-check, and the concurrent-encode
+    /// dedup at once; keys that never go transient (variants, audiobook, album)
+    /// simply miss the transient probe.
     /// </summary>
     /// <param name="itemId">The Jellyfin item ID.</param>
     /// <param name="artModifiedTicks">Ticks from the album art's DateModified.</param>
     /// <returns>Cached playlist file info or null if not cached.</returns>
     public Task<FileInfo?> GetCachedHlsPlaylist(string itemId, long artModifiedTicks)
     {
-        string path = GetHlsPlaylistPath(itemId, artModifiedTicks);
-#pragma warning disable CA3003
-        var fi = new FileInfo(path);
+        string[] generationDirs = HlsGenerationDirPaths(itemId, artModifiedTicks);
+        foreach (string dirPath in generationDirs)
+        {
+            FileInfo? hit = ProbeHlsPlaylist(dirPath);
+            if (hit != null)
+            {
+                return Task.FromResult<FileInfo?>(hit);
+            }
+        }
+
+        _logger.LogDebug(
+            "VideoAudio HLS cache miss (probed {Roots} roots, cache root {CacheDir} first)",
+            generationDirs.Length,
+            generationDirs[0]);
+        return Task.FromResult<FileInfo?>(null);
+    }
+
+    /// <summary>
+    /// One root-probe of <see cref="GetCachedHlsPlaylist"/>: a non-empty
+    /// <c>stream.m3u8</c> inside <paramref name="dirPath"/> records a serve of
+    /// that directory (the playback-recency source) and returns its FileInfo,
+    /// else null.
+    /// </summary>
+    /// <param name="dirPath">One root's generation directory.</param>
+    /// <returns>The playlist FileInfo on a hit, null on a miss.</returns>
+    private FileInfo? ProbeHlsPlaylist(string dirPath)
+    {
+        string playlistPath = Path.Combine(dirPath, "stream.m3u8");
+#pragma warning disable CA3003 // paths are GUID-derived by the callers
+        var fi = new FileInfo(playlistPath);
 #pragma warning restore CA3003
 
         if (fi.Exists && fi.Length > 0)
         {
-            _logger.LogDebug("VideoAudio HLS cache hit: {Path} ({Size} bytes)", path, fi.Length);
-            RecordAccess(GetHlsDirectoryPath(itemId, artModifiedTicks));
-            return Task.FromResult<FileInfo?>(fi);
+            _logger.LogDebug("VideoAudio HLS cache hit: {Path} ({Size} bytes)", playlistPath, fi.Length);
+            RecordAccess(dirPath);
+            return fi;
         }
 
-        _logger.LogDebug("VideoAudio HLS cache miss: {Path}", path);
-        return Task.FromResult<FileInfo?>(null);
+        return null;
     }
 
     /// <summary>
@@ -903,7 +1168,8 @@ public class VideoAudioCache
 
     /// <summary>
     /// Finds the segment file path for a given item and segment name.
-    /// Uses the in-memory directory lookup (O(1)) populated by <see cref="RegisterHlsDirectory"/>.
+    /// Uses the in-memory directory lookup (O(1)) populated by <see cref="RegisterHlsDirectoryPath"/>
+    /// (directly or via the ticks-form <see cref="RegisterHlsDirectory"/>).
     /// Falls back to filesystem scan if the in-memory cache misses (e.g. after restart).
     /// </summary>
     /// <param name="itemId">The Jellyfin item ID.</param>
@@ -940,12 +1206,31 @@ public class VideoAudioCache
     /// Finds the HLS directory for an item by scanning the cache directory for subdirectories
     /// matching the pattern {itemId}_*. Returns the most recently created one, or null if
     /// no matching directory exists. Used as a fallback when the in-memory lookup misses.
+    /// Root-agnostic since JF-537.1: the cache root is scanned first, then the
+    /// transient root (the restart fallback for a transient encode whose
+    /// in-memory registration is gone; each root picks its own most-recent
+    /// generation, and the cache root wins a tie because it is the preferred
+    /// permanent home).
     /// </summary>
     /// <param name="itemId">The Jellyfin item ID.</param>
     /// <returns>Full path to the HLS directory, or null if not found.</returns>
     internal string? FindHlsDirectoryByScan(string itemId)
     {
-        if (!Directory.Exists(_cacheDir))
+        string? cacheHit = ScanRootForNewestGeneration(_cacheDir, itemId);
+        return cacheHit ?? ScanRootForNewestGeneration(_transientDir, itemId);
+    }
+
+    /// <summary>
+    /// One root-scan of <see cref="FindHlsDirectoryByScan"/>: the most recently
+    /// created <c>{itemId}_*</c> generation directory under <paramref name="root"/>,
+    /// or null when the root or the generation is absent or unreadable.
+    /// </summary>
+    /// <param name="root">The root directory to scan (cache or transient).</param>
+    /// <param name="itemId">The Jellyfin item ID.</param>
+    /// <returns>Full path to the newest matching directory, or null.</returns>
+    private string? ScanRootForNewestGeneration(string root, string itemId)
+    {
+        if (!Directory.Exists(root))
         {
             return null;
         }
@@ -954,7 +1239,7 @@ public class VideoAudioCache
 
         try
         {
-            var dirs = new DirectoryInfo(_cacheDir)
+            var dirs = new DirectoryInfo(root)
                 .GetDirectories($"{prefix}*", SearchOption.TopDirectoryOnly);
 
             if (dirs.Length == 0)
@@ -980,7 +1265,8 @@ public class VideoAudioCache
 
     /// <summary>
     /// Resolve the HLS cache directory for an item: the in-memory O(1) lookup first
-    /// (populated by <see cref="RegisterHlsDirectory"/>), falling back to the
+    /// (populated by <see cref="RegisterHlsDirectoryPath"/>, directly or via the
+    /// ticks-form <see cref="RegisterHlsDirectory"/>), falling back to the
     /// filesystem scan (e.g. after a restart). Same resolution order as
     /// <see cref="FindSegmentPath"/>. Returns null when no directory exists.
     /// JF-503: used by the controller's hold-for-segment path to compute the running

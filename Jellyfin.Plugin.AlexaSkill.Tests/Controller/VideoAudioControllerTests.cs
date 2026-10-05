@@ -4309,34 +4309,35 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
-    /// JF-537 (announced churn): a transcode-tier estimate above the configured cap
-    /// must log a WARNING naming the item, the estimate, and the cap (with the
-    /// VideoAudioCacheSizeMB hint), while the encode itself proceeds exactly as
-    /// before: playlist served, transcode argument set, i.e. no behavior change on
-    /// the encode path. 2h HEVC at the 3072MB/h flat rate reserves 6144MB against a
-    /// 512MB cap.
+    /// JF-537.1 RED PROOF (ran red on the unmodified base, both TFMs, before the
+    /// fix landed): an oversize transcode encode (2h HEVC = 6144MB estimate vs a
+    /// 2MB cap) must go to the TRANSIENT root and must NOT evict the real cache.
+    /// The seeded real cache holds three 512KB entries (1.5MB total): above the
+    /// 1MB half-cap floor, under the 2MB cap. On the base the oversize leg
+    /// reserved 6144MB of headroom, the sweep's target floored at half the cap,
+    /// and it EVICTED seeded entries for an encode that could never be retained;
+    /// the encode also landed in the capped cache root. With the transient mode:
+    /// headroom 0 (the sweep's post-encode shape) keeps every seed, the encode
+    /// dir is under {cache}/transient/, the pin covers that dir, the transcode
+    /// tier ran as usual, and the serve works. Also asserts the decision log
+    /// (the JF-537 churn Warning's replacement) and that the pin the encode
+    /// holds is the TRANSIENT dir (the JF-428 protocol stays intact, reaper-aware).
     /// </summary>
     [Fact]
-    public async Task StreamHlsEpisode_TranscodeTier_EstimateOverCap_LogsOversizeWarningAndEncodesNormally()
+    public async Task StreamHlsEpisode_TranscodeTier_OversizeEncode_GoesTransient_RealCacheSurvives_StillServes()
     {
-        var episode = new MediaBrowser.Controller.Entities.TV.Episode
+        (var episode, var mediaSourceManager) = CreateOversizeHevcEpisode("jf5371-oversize");
+        string fakeFfmpegPath = WriteRecordingFakeFfmpeg("fake-ffmpeg-jf5371-oversize");
+
+        // Seed the REAL cache: three 512KB entries (1.5MB total).
+        var seededPaths = new List<string>();
+        for (int i = 0; i < 3; i++)
         {
-            Name = "Adolescence S01E01",
-            Id = Guid.NewGuid(),
-            RunTimeTicks = TimeSpan.FromHours(2).Ticks
-        };
-
-        var mediaSourceManager = new Mock<IMediaSourceManager>();
-        mediaSourceManager
-            .Setup(m => m.GetMediaStreams(episode.Id))
-            .Returns(new List<MediaStream>
-            {
-                new() { Type = MediaStreamType.Video, Codec = "hevc", Height = 1080 },
-                new() { Type = MediaStreamType.Audio, Codec = "eac3" }
-            });
-
-        _libraryManagerMock.Setup(m => m.GetItemById(episode.Id)).Returns(episode);
-        string fakeFfmpegPath = WriteRecordingFakeFfmpeg("fake-ffmpeg-jf537-overcap");
+            string seedPath = _cache.GetCacheFilePath($"00000000-0000-0000-0000-{i:x012}", 1);
+            Directory.CreateDirectory(Path.GetDirectoryName(seedPath)!);
+            File.WriteAllBytes(seedPath, new byte[512 * 1024]);
+            seededPaths.Add(seedPath);
+        }
 
         var logRecords = new List<(LogLevel Level, string Message)>();
         using var loggerFactory = LoggerFactory.Create(b =>
@@ -4345,32 +4346,54 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             b.AddProvider(TestCaptureLogger.Into(logRecords));
         });
 
+        string? observedPinPath = null;
         int originalCap = _config.VideoAudioCacheSizeMB;
-        _config.VideoAudioCacheSizeMB = 512;
+        _config.VideoAudioCacheSizeMB = 2;
         try
         {
             var controller = CreateEpisodeController(mediaSourceManager, episode.Id.ToString(), fakeFfmpegPath, loggerFactory);
+            controller.FfmpegProcessStartedForTest = pinPath => observedPinPath = pinPath;
 
             ActionResult result = await controller.StreamHlsEpisode(episode.Id.ToString());
 
-            // The encode was NOT refused or rerouted: the playlist is served.
+            // (a) The encode was NOT refused or rerouted: the playlist is served.
             var content = Assert.IsType<ContentResult>(result);
             Assert.Contains("seg_0000.ts?token=", content.Content, StringComparison.Ordinal);
 
-            // And it ran the transcode tier as usual.
-            string hlsDir = _cache.GetHlsDirectoryPath(episode.Id.ToString(), 0);
-            string[] tokens = File.ReadAllLines(Path.Combine(hlsDir, "episode-args.txt"));
+            // (b) The encode landed in the TRANSIENT root (transcode args recorded
+            // there) and NOTHING sits at the key's cache-root dir. The dir is
+            // hand-built (not GetTransientHlsDirectoryPath) so this test also
+            // compiles against the pre-JF-537.1 base, where this exact file ran
+            // red on both TFMs; keep it base-compilable.
+            string transientDir = Path.Combine(_cache.CacheDir, "transient", $"{episode.Id}_0");
+            Assert.True(Directory.Exists(transientDir), $"the oversize encode must target the transient root ({transientDir})");
+            string[] tokens = File.ReadAllLines(Path.Combine(transientDir, "episode-args.txt"));
             Assert.Equal("libx264", tokens[Array.IndexOf(tokens, "-c:v") + 1]);
+            Assert.False(
+                Directory.Exists(_cache.GetHlsDirectoryPath(episode.Id.ToString(), 0)),
+                "the oversize encode must not write into the capped cache root");
 
-            // The oversize warning fired with item, estimate, and cap.
-            var warnings = TestCaptureLogger.Snapshot(logRecords)
-                .Where(r => r.Level == LogLevel.Warning && r.Message.Contains("cannot be retained", StringComparison.Ordinal))
+            // (c) The real cache SURVIVED the pre-encode sweep: every seeded
+            // entry is still on disk.
+            foreach (string seed in seededPaths)
+            {
+                Assert.True(File.Exists(seed), $"the oversize encode's pre-encode sweep must not evict the real cache ({seed} was deleted)");
+            }
+
+            // (d) The transient-mode decision is announced (the JF-537 churn
+            // Warning's replacement) with item, estimate, and cap.
+            var decisions = TestCaptureLogger.Snapshot(logRecords)
+                .Where(r => r.Message.Contains("transient root", StringComparison.Ordinal))
                 .ToList();
-            Assert.Single(warnings);
-            Assert.Contains(episode.Id.ToString(), warnings[0].Message, StringComparison.Ordinal);
-            Assert.Contains("6144MB", warnings[0].Message, StringComparison.Ordinal);
-            Assert.Contains("512MB", warnings[0].Message, StringComparison.Ordinal);
-            Assert.Contains("VideoAudioCacheSizeMB", warnings[0].Message, StringComparison.Ordinal);
+            Assert.Single(decisions);
+            Assert.Equal(LogLevel.Information, decisions[0].Level);
+            Assert.Contains(episode.Id.ToString(), decisions[0].Message, StringComparison.Ordinal);
+            Assert.Contains("6144MB", decisions[0].Message, StringComparison.Ordinal);
+            Assert.Contains("2MB", decisions[0].Message, StringComparison.Ordinal);
+
+            // (e) The JF-428 pin the encode holds is the TRANSIENT directory
+            // (path-keyed as before; the reaper honors it).
+            Assert.Equal(transientDir, observedPinPath);
         }
         finally
         {
@@ -4379,12 +4402,222 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
-    /// JF-537: the under-cap transcode encode logs the cacheable DECISION at Debug
-    /// (the debug-logging policy: handler branching decisions are debug-visible) and
-    /// emits NO oversize warning. 45min HEVC reserves 3072MB under the default 4096.
+    /// The shared arrange of the JF-537.1 transient-mode pins below: an oversize
+    /// (2h HEVC, 6144MB estimate vs a 2MB cap) episode encode through the
+    /// controller, using a fake ffmpeg that writes the COMPLETED-encode playlist
+    /// shape (ENDLIST present) and appends one line per invocation to a run
+    /// counter, so a test can prove a replay never started ffmpeg again. The
+    /// endpoint call is AWAITED (the file's rule: a scenario never abandons an
+    /// endpoint task for the Dispose backstop to find).
+    /// Returns the episode's transient directory, the counter path, and the item id.
+    /// </summary>
+    private async Task<(string TransientDir, string RunCounterPath, string ItemId)> ArrangeOversizeTransientEncodeAsync(
+        string counterName)
+    {
+        (var episode, var mediaSourceManager) = CreateOversizeHevcEpisode("jf5371-" + counterName);
+
+        string runCounterPath = Path.Combine(_tempDir, counterName);
+        string fakeFfmpegPath = WriteFakeFfmpeg(
+            "fake-ffmpeg-jf5371-" + counterName,
+            "for last_arg in \"$@\"; do :; done\n" +
+            "dir=$(dirname \"$last_arg\")\n" +
+            $"printf 'run\\n' >> \"{runCounterPath}\"\n" +
+            $"dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0000.ts\" 2>/dev/null\n" +
+            "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:4.000,\\nseg_0000.ts\\n#EXT-X-ENDLIST\\n' > \"$last_arg\"\n" +
+            "exit 0\n");
+
+        int originalCap = _config.VideoAudioCacheSizeMB;
+        _config.VideoAudioCacheSizeMB = 2;
+        try
+        {
+            var controller = CreateEpisodeController(mediaSourceManager, episode.Id.ToString(), fakeFfmpegPath);
+            _ = await controller.StreamHlsEpisode(episode.Id.ToString());
+        }
+        finally
+        {
+            _config.VideoAudioCacheSizeMB = originalCap;
+        }
+
+        string transientDir = _cache.GetTransientHlsDirectoryPath(episode.Id.ToString(), 0);
+        return (transientDir, runCounterPath, episode.Id.ToString());
+    }
+
+    /// <summary>
+    /// The shared arrange episode of the JF-537.1 transient-mode pins (extracted
+    /// at the fourth copy): a 2h HEVC 1080p + EAC3 episode whose transcode-tier
+    /// estimate (6144MB) exceeds any small test cap, with the media-streams mock
+    /// wired. Returns the episode and its mock for the caller's own wiring.
+    /// </summary>
+    private (MediaBrowser.Controller.Entities.TV.Episode Episode, Mock<IMediaSourceManager> MediaSourceManager) CreateOversizeHevcEpisode(string name)
+    {
+        var episode = new MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = name,
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromHours(2).Ticks
+        };
+        var mediaSourceManager = new Mock<IMediaSourceManager>();
+        mediaSourceManager
+            .Setup(m => m.GetMediaStreams(episode.Id))
+            .Returns(new List<MediaStream>
+            {
+                new() { Type = MediaStreamType.Video, Codec = "hevc", Height = 1080 },
+                new() { Type = MediaStreamType.Audio, Codec = "eac3" }
+            });
+        _libraryManagerMock.Setup(m => m.GetItemById(episode.Id)).Returns(episode);
+        return (episode, mediaSourceManager);
+    }
+
+    /// <summary>
+    /// JF-537.1: the transient entry serves a REPLAY without re-encoding: after
+    /// the oversize encode completes (the fake writes the ENDLIST completed-encode
+    /// shape), a second request must hit the warm-cache path on the TRANSIENT
+    /// playlist and never start ffmpeg again (the run counter stays at one; the
+    /// served playlist is ffmpeg's own ENDLIST one, proving the validated-serve
+    /// row, not a re-encode that would coincidentally serve too).
     /// </summary>
     [Fact]
-    public async Task StreamHlsEpisode_TranscodeTier_EstimateUnderCap_NoOversizeWarning_LogsCacheableDecision()
+    public async Task StreamHlsEpisode_OversizeTransientReplay_ServesFromTransientRootWithoutReEncode()
+    {
+        (string transientDir, string runCounterPath, string itemId) = await ArrangeOversizeTransientEncodeAsync("replay-runs");
+
+        // Let the monitor's generation clear land so the second request reads the
+        // deterministic own-dead ENDLIST row (not the bounded own-live window).
+        await WaitUntilAsync(() => VideoAudioController.EncodeGenerationCountForTest(itemId, audiobook: false, song: false) == 0, TimeSpan.FromSeconds(10), 100);
+        Assert.Single(File.ReadAllLines(runCounterPath));
+
+        // The replay: same cache, same item, fresh controller (with an unused
+        // fake; the counter proves it never runs).
+        var replayController = CreateController(itemId, ffmpegPath: WriteFakeFfmpeg("fake-ffmpeg-jf5371-replay-unused", "exit 0\n"));
+
+        ActionResult replay = await replayController.StreamHlsEpisode(itemId);
+
+        var replayContent = Assert.IsType<ContentResult>(replay);
+        Assert.Contains("#EXT-X-ENDLIST", replayContent.Content, StringComparison.Ordinal);
+        Assert.Single(File.ReadAllLines(runCounterPath));
+        Assert.True(Directory.Exists(transientDir), "the transient entry survives its own replay (only the idle reaper may delete it)");
+    }
+
+    /// <summary>
+    /// JF-537.1: segments of a transient encode resolve through the generic
+    /// segment route (the same URLs a cache-rooted encode serves): the encode
+    /// registered its TRANSIENT directory, and the resolved file serves from
+    /// there. This is the registration half of the "own registration/scan/dedup
+    /// plumbing" the JF-537 scope-out demanded.
+    /// </summary>
+    [Fact]
+    public async Task GetSegment_ResolvesFromTransientRoot_RegisteredByOversizeEncode()
+    {
+        (string transientDir, _, string itemId) = await ArrangeOversizeTransientEncodeAsync("segment-runs");
+
+        var controller = CreateController(itemId);
+
+        ActionResult result = await controller.GetSegment(itemId, "seg_0000.ts");
+
+        var file = Assert.IsType<PhysicalFileResult>(result);
+        Assert.Equal(Path.Combine(transientDir, "seg_0000.ts"), file.FileName);
+    }
+
+    /// <summary>
+    /// JF-537.1 root preference pin: the CACHE root wins a key that has a valid
+    /// (ENDLIST) cache-root entry AND a debris (no-ENDLIST, not live) transient
+    /// entry: the serve must come from the cache root, no re-encode may start,
+    /// and the verdict's cleanup must NOT destroy the other root's directory
+    /// (the scoped CleanupHlsGenerationAt contract; a key-wide wipe would delete
+    /// a live generation's directory).
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_ValidCacheEntry_ShadowsTransientDebris_NeitherDeleted()
+    {
+        var episode = new MediaBrowser.Controller.Entities.TV.Episode
+        {
+            Name = "Dual Root Episode",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromMinutes(45).Ticks
+        };
+        string itemId = episode.Id.ToString();
+        _libraryManagerMock.Setup(m => m.GetItemById(episode.Id)).Returns(episode);
+
+        // Cache root: a valid completed encode (ENDLIST playlist + a segment).
+        string cacheDir = _cache.GetHlsDirectoryPath(itemId, 0);
+        Directory.CreateDirectory(cacheDir);
+        await File.WriteAllTextAsync(Path.Combine(cacheDir, "stream.m3u8"), "#EXTM3U\n#EXTINF:4.000,\nseg_0000.ts\n#EXT-X-ENDLIST\n");
+        await File.WriteAllBytesAsync(Path.Combine(cacheDir, "seg_0000.ts"), new byte[16]);
+
+        // Transient root: debris of a killed encode (no ENDLIST, nothing live).
+        string transientDir = _cache.GetTransientHlsDirectoryPath(itemId, 0);
+        Directory.CreateDirectory(transientDir);
+        await File.WriteAllTextAsync(Path.Combine(transientDir, "stream.m3u8"), "#EXTM3U\n#EXTINF:4.000,\nseg_0000.ts\n");
+        await File.WriteAllBytesAsync(Path.Combine(transientDir, "seg_0000.ts"), new byte[16]);
+
+        string runCounterPath = Path.Combine(_tempDir, "shadow-runs");
+        var controller = CreateController(itemId, ffmpegPath: WriteFakeFfmpeg(
+            "fake-ffmpeg-jf5371-shadow",
+            $"printf 'run\\n' >> \"{runCounterPath}\"\nexit 0\n"));
+
+        ActionResult result = await controller.StreamHlsEpisode(itemId);
+
+        var content = Assert.IsType<ContentResult>(result);
+        Assert.Contains("#EXT-X-ENDLIST", content.Content, StringComparison.Ordinal);
+        Assert.False(File.Exists(runCounterPath), "a valid cache-root entry must serve without any encode");
+        Assert.True(Directory.Exists(cacheDir), "the valid cache-root generation must survive its own serve");
+        Assert.True(Directory.Exists(transientDir), "the verdict must delete only the directory it served from, never the other root's");
+    }
+
+    /// <summary>
+    /// JF-537.1: ALONE transient debris (no-ENDLIST, nothing live, no cache-root
+    /// sibling) is verdict-cleaned on the next request for its key: the no-ENDLIST
+    /// row deletes the served-from TRANSIENT directory (the scoped cleanup) and
+    /// the re-encode runs INTO THE TRANSIENT ROOT again, over a clean target
+    /// (the stale segment is gone, so append_list cannot bake a doubled playlist).
+    /// On the unmodified base both halves fail: the debris is invisible to the
+    /// cache-root-only lookup and the re-encode lands in the cache root.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_TransientDebrisAlone_CleanedByVerdict_ReencodedIntoTransient()
+    {
+        (var episode, var mediaSourceManager) = CreateOversizeHevcEpisode("jf5371-debris");
+
+        // Seed debris in the transient root only: a stale no-ENDLIST playlist and
+        // a stale segment a fresh encode must never see.
+        string transientDir = _cache.GetTransientHlsDirectoryPath(episode.Id.ToString(), 0);
+        Directory.CreateDirectory(transientDir);
+        string staleSegment = Path.Combine(transientDir, "seg_0009.ts");
+        await File.WriteAllTextAsync(Path.Combine(transientDir, "stream.m3u8"), "#EXTM3U\n#EXTINF:4.000,\nseg_0009.ts\n");
+        await File.WriteAllBytesAsync(staleSegment, new byte[16]);
+
+        string fakeFfmpegPath = WriteRecordingFakeFfmpeg("fake-ffmpeg-jf5371-debris");
+
+        int originalCap = _config.VideoAudioCacheSizeMB;
+        _config.VideoAudioCacheSizeMB = 2;
+        try
+        {
+            var controller = CreateEpisodeController(mediaSourceManager, episode.Id.ToString(), fakeFfmpegPath);
+
+            ActionResult result = await controller.StreamHlsEpisode(episode.Id.ToString());
+
+            var content = Assert.IsType<ContentResult>(result);
+            Assert.Contains("seg_0000.ts?token=", content.Content, StringComparison.Ordinal);
+            Assert.True(Directory.Exists(transientDir), "the re-encode targets the transient root again");
+            Assert.False(File.Exists(staleSegment), "the verdict's cleanup must remove the served-from transient debris before the re-encode");
+            Assert.False(
+                Directory.Exists(_cache.GetHlsDirectoryPath(episode.Id.ToString(), 0)),
+                "the re-encode must stay out of the capped cache root");
+        }
+        finally
+        {
+            _config.VideoAudioCacheSizeMB = originalCap;
+        }
+    }
+
+    /// <summary>
+    /// JF-537 (kept through JF-537.1): the under-cap transcode encode stays in
+    /// the CACHE ROOT and logs the cacheable DECISION at Debug (the debug-logging
+    /// policy: handler branching decisions are debug-visible); the transient mode
+    /// is never announced. 45min HEVC reserves 3072MB under the default 4096.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsEpisode_TranscodeTier_EstimateUnderCap_StaysInCacheRoot_LogsCacheableDecision()
     {
         var episode = new MediaBrowser.Controller.Entities.TV.Episode
         {
@@ -4417,13 +4650,19 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         ActionResult result = await controller.StreamHlsEpisode(episode.Id.ToString());
 
         Assert.IsType<ContentResult>(result);
+        Assert.True(
+            Directory.Exists(_cache.GetHlsDirectoryPath(episode.Id.ToString(), 0)),
+            "an under-cap transcode must keep encoding into the cache root");
+        Assert.False(
+            Directory.Exists(_cache.GetTransientHlsDirectoryPath(episode.Id.ToString(), 0)),
+            "an under-cap transcode must not touch the transient root");
         // The encode keeps logging from its background poll thread after the
         // awaited call returns; enumerate a lock-consistent snapshot (CI flake
         // 2026-09-13: "Collection was modified").
         var finalRecords = TestCaptureLogger.Snapshot(logRecords);
         Assert.DoesNotContain(
             finalRecords,
-            r => r.Message.Contains("cannot be retained", StringComparison.Ordinal));
+            r => r.Message.Contains("transient root", StringComparison.Ordinal));
         var decisions = finalRecords
             .Where(r => r.Message.Contains("cacheable", StringComparison.Ordinal))
             .ToList();
@@ -4434,15 +4673,16 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
-    /// JF-537 scope pin: the oversize decision targets the TRANSCODE tier ONLY. A
-    /// REMUX-tier estimate above the cap (h264 source, 4h runtime, flat 1280MB/h =
-    /// 5120MB against a 256MB cap) must NOT fire the oversize warning: the remux
-    /// copies at the source's own bitrate and replays at ~20x realtime, so its churn
-    /// is not the multi-hour re-encode pain the decision exists to announce (full
+    /// JF-537 scope pin, carried into JF-537.1: the oversize decision targets the
+    /// TRANSCODE tier ONLY. A REMUX-tier estimate above the cap (h264 source, 4h
+    /// runtime, flat 1280MB/h = 5120MB against a 256MB cap) must stay in the
+    /// CACHE ROOT and never announce the transient mode: the remux copies at the
+    /// source's own bitrate and replays at ~20x realtime, so its churn is not
+    /// the multi-hour re-encode pain the transient mode exists to avoid (full
     /// rationale on <see cref="VideoAudioController.TranscodeEstimateExceedsCacheCap"/>).
     /// </summary>
     [Fact]
-    public async Task StreamHlsEpisode_RemuxTier_EstimateOverCap_NoOversizeWarning()
+    public async Task StreamHlsEpisode_RemuxTier_EstimateOverCap_StaysInCacheRoot_NoTransientMode()
     {
         var episode = new MediaBrowser.Controller.Entities.TV.Episode
         {
@@ -4478,12 +4718,16 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
             ActionResult result = await controller.StreamHlsEpisode(episode.Id.ToString());
 
-            // Remux tier ran (video copy), no oversize warning fired.
+            // Remux tier ran (video copy) into the CACHE root, and no transient
+            // mode was announced.
             var content = Assert.IsType<ContentResult>(result);
             Assert.Contains("seg_0000.ts?token=", content.Content, StringComparison.Ordinal);
+            Assert.True(
+                Directory.Exists(_cache.GetHlsDirectoryPath(episode.Id.ToString(), 0)),
+                "the remux tier must keep encoding into the cache root");
             Assert.DoesNotContain(
                 TestCaptureLogger.Snapshot(logRecords),
-                r => r.Message.Contains("cannot be retained", StringComparison.Ordinal));
+                r => r.Message.Contains("transient root", StringComparison.Ordinal));
         }
         finally
         {
@@ -5730,6 +5974,12 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         finally
         {
             VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: false);
+
+            // Fence the monitor's stall kill to OBSERVED death (the sibling
+            // JF-665/668 tests' idiom; added in the JF-537.1 cycle after two
+            // full-suite net10.0 runs observed the still-dying fake here and
+            // the Dispose backstop counted it as this test's leak).
+            await FenceTempDirEncodesDeadAsync();
         }
     }
 
