@@ -2,11 +2,12 @@
 id: JF-769
 title: >-
   ja JF-761 NLU pin expects canonical "Game of Thrones" but the suite's
-  exact-value comparison reads the RAW slot value (row will read red on its
-  next live run despite correct routing)
-status: To Do
+  exact-value comparison reads the RAW slot value (row will read red on its next
+  live run despite correct routing)
+status: Done
 assignee: []
 created_date: '2026-10-05 00:00'
+updated_date: '2026-10-05 03:12'
 labels:
   - nlu
   - tests
@@ -65,4 +66,6 @@ text).
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 Fixture-only fix, no production or model change. The ja JF-761 pin value moved from the canonical 'Game of Thrones' to the raw spoken 'game of thrones' (tests/integration/fixtures/ja-JP.yaml) with the pin comment rewritten to the observed raw-surface rationale; the suite's JF-426 exact-value comparison in test_nlu.py was confirmed raw (slot.value from parse_profile_nlu_result, plain ==) and deliberately left untouched: a canonical-aware comparison fixes only this case subclass, while the surface-substitution subclass (it-IT P!nk catalog substitution, the Duration ISO pins) needs per-pin probe-derived values regardless, so exact == stays. The 16-pin sweep found zero other raw-vs-canonical mismatches; the deliberate non-raw pins are documented, live-verified, and a different class. Green on the live ja-JP suite the same day. Note for future pins: the returned surface is row-specific and must come from a live probe of that row, never from the committed type values; the it-IT P!nk row returned the catalog surface on an ER match while the ja row returned raw on both recorded probes, and JF-761 recorded 'catalog-INDEPENDENT: ER_SUCCESS_MATCH changed nothing' for that title, so the ER mechanism behind the surface is an unresolved conflict, surfaced not averaged; a raw pin can flip red when the live surface changes, and the flip is distinguished from real drift by re-probing.
+
+CLOSED 2026-10-05 by the orchestrator after the full cycle: merged into main (worker commit 2e527b1a, --no-ff; direct verification of the pin line and the hi-IN sync); live ja NLU suite 19/19 with the corrected row green. FIXTURE-ONLY: no deploy. The reserve number unused (no out-of-scope finding; note JF-770 was filed by the orchestrator directly as the hi-IN anchor regression).
 <!-- SECTION:FINAL_SUMMARY:END -->
