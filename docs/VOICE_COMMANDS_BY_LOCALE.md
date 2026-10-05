@@ -7207,7 +7207,7 @@ Placeholder legend:
 | `<गाने के नाम के शब्द>` | `{titleKeywords}` |
 | `<उपयोगकर्ता का नाम>` | `{username}` |
 
-Complete phrase list (362 phrases across 66 commands):
+Complete phrase list (361 phrases across 66 commands):
 
 #### Play music
 
@@ -7356,7 +7356,6 @@ Complete phrase list (362 phrases across 66 commands):
 - `वीडियो <वीडियो या फिल्म का नाम> चलाओ`
 - `वीडियो <वीडियो या फिल्म का नाम> लगाओ`
 - `<वीडियो या फिल्म का नाम> शुरू करो`
-- `<वीडियो या फिल्म का नाम> देखो`
 - `क्या तुम <वीडियो या फिल्म का नाम> चला सकते हो`
 - `मैं <वीडियो या फिल्म का नाम> देखना चाहता हूँ`
 - `चलो <वीडियो या फिल्म का नाम> देखते हैं`

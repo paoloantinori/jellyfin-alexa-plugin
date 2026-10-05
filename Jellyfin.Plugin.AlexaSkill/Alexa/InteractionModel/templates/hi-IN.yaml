@@ -182,7 +182,18 @@ intents:
       - वीडियो {title} चलाओ
       - वीडियो {title} लगाओ
       - '{title} शुरू करो'
-      - '{title} देखो'
+      # JF-766: the BARE '{title} देखो' is REMOVED, the hi-IN twin of the
+      # JF-761 ja removal (same SearchQuery-absorption class): it absorbed
+      # the committed PlayEpisode episode address '{series_name} सीज़न N
+      # एपिसोड M देखो' wholesale into title (live profile-nlu 2026-10-05,
+      # 4/4 on the 'game of thrones' and 'breaking bad' legs). hi-IN
+      # nuance vs ja: the
+      # steal is ER-status-dependent here (catalog-matched 'the bear' routed
+      # PlayEpisode clean 4/4 while the ER_NO_MATCH legs were stolen), so the
+      # library-wired SeriesName catalog masks it only for matched series.
+      # The qualified फिल्म {title} देखो below keeps the watch-verb carrier
+      # anchored. '{title} शुरू करो' STAYS: no committed sample shares its
+      # tail, no steal recorded; removal would be speculative recall loss.
       - क्या तुम {title} चला सकते हो
       - मैं {title} देखना चाहता हूँ
       - चलो {title} देखते हैं
