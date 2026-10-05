@@ -9591,7 +9591,7 @@ Placeholder legend:
 | `<曲名のキーワード>` | `{titleKeywords}` |
 | `<ユーザー名>` | `{username}` |
 
-Complete phrase list (332 phrases across 66 commands):
+Complete phrase list (331 phrases across 66 commands):
 
 #### Play music
 
@@ -9725,7 +9725,6 @@ Complete phrase list (332 phrases across 66 commands):
 
 - `ビデオ <動画または映画のタイトル> を再生して`
 - `動画 <動画または映画のタイトル> を流して`
-- `<動画または映画のタイトル> を見たい`
 - `<動画または映画のタイトル> を見せて`
 - `映画 <動画または映画のタイトル> を再生して`
 - `ビデオ <動画または映画のタイトル> をスタートして`

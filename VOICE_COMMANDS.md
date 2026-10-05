@@ -877,7 +877,7 @@ Invocation name: **"jellyfin player"**
 | Play Radio | `ラジオを再生して` · `ラジオステーション {station} を再生して` · `ラジオモードを再生して` · `ラジオをスタートして` · `似たような音楽を再生して` · `似た曲を再生して` |
 | Play Random | `ランダムな {media_type} を再生して` · `ランダムに何か再生して` · `ランダムな {genre} {media_type} を再生して` · `{media_type} をシャッフルして` · `ランダムな曲を再生して` · `ランダムな音楽を再生して` |
 | Play Song | `{song} を再生して` · `{musician} の {song} を再生して` · `曲 {song} を再生して` · `{musician} の曲 {song} を再生して` · `{song} を聴かせて` · `{musician} の {song} を聴かせて` |
-| Play Video | `ビデオ {title} を再生して` · `動画 {title} を流して` · `{title} を見たい` · `{title} を見せて` · `映画 {title} を再生して` · `ビデオ {title} をスタートして` |
+| Play Video | `ビデオ {title} を再生して` · `動画 {title} を流して` · `{title} を見せて` · `映画 {title} を再生して` · `ビデオ {title} をスタートして` · `映画 {title} を見たい` |
 | Query Artist Library | `{musician} のトラックは何がある` · `{musician} の {query_type} を見せて` · `{musician} の曲は何がある` · `{musician} のアルバムは何がある` · `{musician} には何がある` · `{musician} のトラックを見せて` |
 | Query Recently Added | `新着はある` · `最近追加されたものは` · `ライブラリの新着は` · `最近追加されたものを見せて` · `最近何か新しいものある` · `最新のアイテムは何` |
 | Rate Item | `これを星 {star_rating} で評価して` · `この曲を星 {star_rating} で評価して` · `これに星 {star_rating} をつけて` · `この曲に星 {star_rating} をつけて` · `星 {star_rating} で評価して` |

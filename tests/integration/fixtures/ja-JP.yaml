@@ -125,3 +125,21 @@ tests:
     expected_intent: PlayByGenreIntent
     expected_slots:
       genre: {}
+
+  # ------------------------------------------------------------------------
+  # JF-761 (2026-10-05): the PlayVideo bare '{title} を見たい' thief is removed
+  # (same class as the header's JF-551 removal; see the template's PlayVideoIntent
+  # comment). The exact-value series_name pin below is the anti-pollution
+  # regression pin: red until the rebuilt ja model deploys. Series is the
+  # committed static SeriesName type value 'Game of Thrones' (deterministic
+  # ER_SUCCESS_MATCH against the saved model, so a red pin means intent-routing
+  # trouble, never an ER-class artifact; the JF-551 probe's 'the bear' reading
+  # is recorded in the task file with its committed-vs-live type conflict).
+  # ------------------------------------------------------------------------
+  - utterance: "game of thrones のシーズン 1 エピソード 3 を見たい"
+    expected_intent: PlayEpisodeIntent
+    expected_slots:
+      series_name:
+        value: "Game of Thrones"
+      season_number: {}
+      episode_number: {}
