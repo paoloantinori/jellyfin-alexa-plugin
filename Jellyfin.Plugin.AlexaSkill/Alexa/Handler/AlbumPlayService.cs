@@ -928,7 +928,7 @@ public sealed class AlbumPlayService
                 // refusal line's correlation, kept as a Debug leg because the
                 // walk's Information lines are the refusal surface).
                 _logger.LogDebug(
-                    "PlayPlaylist: kana fuzzy fallback found no acceptable playlist for spoken='{SpokenName}' romanized='{Query}' (JF-663/JF-777)",
+                    "PlayPlaylist: kana fuzzy fallback found no playlist (refused by the bar, below threshold, or no candidates) for spoken='{SpokenName}' romanized='{Query}' (JF-663/JF-777)",
                     spokenName, playlistName);
             }
 

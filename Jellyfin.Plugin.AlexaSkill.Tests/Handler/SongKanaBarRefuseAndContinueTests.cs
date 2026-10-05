@@ -226,7 +226,9 @@ public class SongKanaBarRefuseAndContinueTests : PluginTestBase, IDisposable
             .Returns(fuzzyScanItems ?? new List<BaseItem>());
     }
 
-    [Fact]
+    
+
+[Fact]
     public async Task PlayPlaylist_FuzzyFallback_SuffixedKanaSiblingListedFirst_ExactPlaylistAccepted_JF777()
     {
         // The red proof at the third single-point bar: the server SearchTerm

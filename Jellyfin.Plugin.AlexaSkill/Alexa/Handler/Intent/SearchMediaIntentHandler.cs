@@ -328,7 +328,11 @@ public class SearchMediaIntentHandler : BaseHandler
 
         if (missOutcome != FuzzyMissOutcome.NotFound)
         {
-            Logger.LogInformation("Fuzzy miss outcome: {Outcome}", missOutcome);
+            // JF-777 gate-marker F4: the delegate may return a MediaNotFound Tell
+            // from inside the auto-accept path (a bar-refused AutoPlay pick); the
+            // outcome enum still reads SuggestionHandled for that shape - correlate
+            // with the bar's refusal Debug line, not this label alone.
+            Logger.LogInformation("Fuzzy miss outcome: {Outcome} (bar-refused not-found logs as SuggestionHandled, JF-777 F4)", missOutcome);
             return missResponse!;
         }
 

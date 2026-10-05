@@ -624,7 +624,7 @@ public sealed class CrossMediaFallback
             {
                 _logger.LogDebug(
                     "{Label}: song fallback rejected for query='{Query}' (best score {Score:F0} over {Count} candidates, bar={Bar})",
-                    logLabel, musician, scored[head].Score, scored.Count - head, CrossMediaSongThreshold);
+                    logLabel, musician, scored[head].Score, scored.Count, CrossMediaSongThreshold);
                 return null;
             }
 
