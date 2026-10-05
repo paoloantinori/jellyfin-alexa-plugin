@@ -875,6 +875,25 @@ public class VideoAudioCacheTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
+    /// Seed a cache-root HLS generation directory (the JF-783 pins' fixture):
+    /// a playlist plus a caller-sized segment, with the directory's and its
+    /// files' access times backdated together (the eviction sweep's recency
+    /// read is the max of the two). The cache-root twin of
+    /// <see cref="SeedTransientGeneration"/>. Returns the directory path.
+    /// </summary>
+    private string SeedCacheGenerationDir(string itemId, long ticks, int segmentBytes, DateTime age)
+    {
+        string dir = _cache.GetHlsDirectoryPath(itemId, ticks);
+        Directory.CreateDirectory(dir);
+        File.WriteAllText(Path.Combine(dir, "stream.m3u8"), "#EXTM3U\n#EXTINF:4.000,\nseg_0000.ts\n#EXT-X-ENDLIST\n");
+        File.WriteAllBytes(Path.Combine(dir, "seg_0000.ts"), new byte[segmentBytes]);
+        File.SetLastAccessTimeUtc(dir, age);
+        File.SetLastAccessTimeUtc(Path.Combine(dir, "stream.m3u8"), age);
+        File.SetLastAccessTimeUtc(Path.Combine(dir, "seg_0000.ts"), age);
+        return dir;
+    }
+
+    /// <summary>
     /// JF-537.1: the idle reaper (riding the eviction sweep) deletes a transient
     /// directory idle beyond the TTL, keeps a fresh one, keeps a PINNED one (the
     /// JF-428 in-flight-encode protection extends to the reaper), and never
@@ -1172,5 +1191,153 @@ public class VideoAudioCacheTests : PluginTestBase, IDisposable
 
         Assert.False(Directory.Exists(transientDir), "the named transient dir is deleted");
         Assert.True(Directory.Exists(cacheDir), "the same-key cache-root dir must survive the scoped cleanup");
+    }
+
+    // --- JF-783: the generation map's bounded growth (removal with the delete owners) ---
+
+    /// <summary>
+    /// JF-783 red-proof pin (the eviction arm): seeding several generations of
+    /// ONE key and driving the eviction of the old generation's directory must
+    /// remove that generation's entry from the (key, ticks) registration map;
+    /// the map may not keep one inert entry per evicted generation for the
+    /// process lifetime. The surviving generation's registration must still
+    /// resolve through the exclusive-arm reader (removal spares neighbors),
+    /// and the removed one must read exactly like the pre-removal inert entry
+    /// (null through the existence re-check), so the removal is observably
+    /// invisible to serve paths.
+    /// </summary>
+    [Fact]
+    public async Task EvictIfNeeded_EvictedGenerationDir_ItsRegistrationIsRemoved()
+    {
+        Plugin.Instance!.Configuration.VideoAudioCacheSizeMB = 1;
+
+        string itemId = "cacacaca-caca-caca-caca-cacacacacaca";
+
+        // Old generation: big and ancient (the eviction victim); new: small and fresh.
+        string oldDir = SeedCacheGenerationDir(itemId, 1, 1536 * 1024, DateTime.UtcNow.AddHours(-5));
+        string newDir = SeedCacheGenerationDir(itemId, 2, 16 * 1024, DateTime.UtcNow);
+
+        _cache.RegisterHlsDirectoryPath(itemId, 1, oldDir);
+        _cache.RegisterHlsDirectoryPath(itemId, 2, newDir);
+        Assert.Equal(2, _cache.HlsGenerationRegistrationCount);
+
+        await _cache.EvictIfNeeded();
+
+        Assert.False(Directory.Exists(oldDir), "the old generation's directory is the eviction victim");
+        Assert.True(Directory.Exists(newDir), "the fresh generation survives");
+        Assert.Equal(1, _cache.HlsGenerationRegistrationCount);
+        Assert.Equal(newDir, _cache.TryGetRegisteredGenerationHlsDirectory(itemId, 2));
+        Assert.Null(_cache.TryGetRegisteredGenerationHlsDirectory(itemId, 1));
+    }
+
+    /// <summary>
+    /// JF-783 pin (the scoped-delete arm): <see cref="VideoAudioCache.CleanupHlsGenerationAt"/>,
+    /// the debris verdicts' and the transient reaper's delete owner (and the
+    /// transient root's ONLY one: the cap sweep skips that subtree), must
+    /// likewise drop the deleted directory's generation registration, or every
+    /// oversize transcode generation would keep its entry for the process
+    /// lifetime.
+    /// </summary>
+    [Fact]
+    public void CleanupHlsGenerationAt_DeletedDir_ItsRegistrationIsRemoved()
+    {
+        string itemId = "cbcbcbcb-cbcb-cbcb-cbcb-cbcbcbcbcbcb";
+        string transientDir = SeedTransientGeneration(itemId, 7, agePastTtl: false);
+        _cache.RegisterHlsDirectoryPath(itemId, 7, transientDir);
+        Assert.Equal(1, _cache.HlsGenerationRegistrationCount);
+
+        _cache.CleanupHlsGenerationAt(transientDir);
+
+        Assert.False(Directory.Exists(transientDir), "the named transient dir is deleted");
+        Assert.Equal(0, _cache.HlsGenerationRegistrationCount);
+    }
+
+    /// <summary>
+    /// JF-783 pin (the removal contract's live half): a delete that FAILS
+    /// (undeletable directory) keeps the registration. The directory still
+    /// exists and can still serve, so pruning its entry would remove a LIVE
+    /// generation's registration (the zero-slot window would read it). Mirrors
+    /// the undeletable-entry fixture: read-only permission bits deny the
+    /// recursive delete to a non-root process.
+    /// </summary>
+    [Fact]
+    public async Task EvictIfNeeded_UndeletableGenerationDir_RegistrationRetained()
+    {
+        Plugin.Instance!.Configuration.VideoAudioCacheSizeMB = 1;
+
+        if (!PermissionBitsDenyDelete())
+        {
+            return; // privileges bypass permission bits (root): no denial to simulate
+        }
+
+        string itemId = "cdcdcdcd-cdcd-cdcd-cdcd-cdcdcdcdcdcd";
+        string stuckDir = SeedCacheGenerationDir(itemId, 1, 1200 * 1024, DateTime.UtcNow.AddHours(-2));
+        string freshDir = SeedCacheGenerationDir(itemId, 2, 100 * 1024, DateTime.UtcNow);
+
+        _cache.RegisterHlsDirectoryPath(itemId, 1, stuckDir);
+        _cache.RegisterHlsDirectoryPath(itemId, 2, freshDir);
+
+        File.SetAttributes(stuckDir, FileAttributes.ReadOnly);
+        try
+        {
+            await _cache.EvictIfNeeded();
+
+            Assert.True(Directory.Exists(stuckDir), "the undeletable entry is skipped, not crashed");
+            Assert.False(Directory.Exists(freshDir), "the deletable generation still evicts");
+            Assert.Equal(1, _cache.HlsGenerationRegistrationCount);
+            Assert.Equal(stuckDir, _cache.TryGetRegisteredGenerationHlsDirectory(itemId, 1));
+        }
+        finally
+        {
+            File.SetAttributes(stuckDir, FileAttributes.Normal);
+        }
+    }
+
+    /// <summary>
+    /// JF-783 pin (the stub arm, code-review F2): CleanupHlsStub's deletion of
+    /// a stub directory (empty playlist) drops that generation's registration
+    /// too. The in-lock early-return serve branch (a valid playlist in the
+    /// OTHER root returns without ever re-registering) would otherwise strand
+    /// the dead entry for the process lifetime.
+    /// </summary>
+    [Fact]
+    public void CleanupHlsStub_RemovedStubDir_ItsRegistrationIsRemoved()
+    {
+        string itemId = "cfcfcfcf-cfcf-cfcf-cfcf-cfcfcfcfcfcf";
+        string stubDir = _cache.GetHlsDirectoryPath(itemId, 9);
+        Directory.CreateDirectory(stubDir);
+        // A 0-byte playlist is the stub signature CleanupHlsStub deletes on.
+        File.WriteAllText(Path.Combine(stubDir, "stream.m3u8"), string.Empty);
+        _cache.RegisterHlsDirectoryPath(itemId, 9, stubDir);
+        Assert.Equal(1, _cache.HlsGenerationRegistrationCount);
+
+        _cache.CleanupHlsStub(itemId, 9);
+
+        Assert.False(Directory.Exists(stubDir), "the empty-playlist stub directory is deleted");
+        Assert.Equal(0, _cache.HlsGenerationRegistrationCount);
+    }
+
+    /// <summary>
+    /// JF-783 pin (the manual-wipe arm, code-review F3): the key-wide Cleanup
+    /// wipe is the third deterministic delete owner; its directory arm must
+    /// drop every deleted generation's registration (all ticks of the key),
+    /// or a manual invalidation would leave the map holding the wiped key's
+    /// dead entries.
+    /// </summary>
+    [Fact]
+    public void Cleanup_KeyWideWipe_RemovesAllGenerationRegistrations()
+    {
+        string itemId = "cececece-cece-cece-cece-cececececece";
+        string dir1 = SeedCacheGenerationDir(itemId, 1, 16 * 1024, DateTime.UtcNow);
+        string dir2 = SeedCacheGenerationDir(itemId, 2, 16 * 1024, DateTime.UtcNow);
+        _cache.RegisterHlsDirectoryPath(itemId, 1, dir1);
+        _cache.RegisterHlsDirectoryPath(itemId, 2, dir2);
+        Assert.Equal(2, _cache.HlsGenerationRegistrationCount);
+
+        _cache.Cleanup(itemId);
+
+        Assert.False(Directory.Exists(dir1), "the key-wide wipe deletes both generations' directories");
+        Assert.False(Directory.Exists(dir2), "the key-wide wipe deletes both generations' directories");
+        Assert.Equal(0, _cache.HlsGenerationRegistrationCount);
     }
 }
