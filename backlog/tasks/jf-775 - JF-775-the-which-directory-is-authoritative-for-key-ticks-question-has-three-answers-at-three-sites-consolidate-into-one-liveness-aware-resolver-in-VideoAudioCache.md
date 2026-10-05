@@ -7,6 +7,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-10-05'
+updated_date: '2026-10-05 17:21'
 labels:
   - streaming
   - cache
@@ -18,6 +19,7 @@ priority: low
 
 ## Description
 
+<!-- SECTION:DESCRIPTION:BEGIN -->
 Filed 2026-10-05 from the JF-774 high code-review round (its finding 4, altitude
 class; dispositioned SKIP-with-reasons in that task, filed here per the
 same-turn landing rule).
@@ -65,9 +67,9 @@ defers consolidation until a second qualifying instance appears (a third root
 or a second path gaining transient mode is that trigger). Do it as its own
 task with the pin battery re-baselined deliberately, not as a rider on an
 edge-fix task.
+<!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done
-
 <!-- DOD:BEGIN -->
 - [x] #1 dotnet build passes with 0 errors
 - [x] #2 dotnet test passes
@@ -80,28 +82,6 @@ edge-fix task.
 - [x] #9 /simplify passed (no blocking cleanups remaining)
 - [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
-
-DoD evidence: #1/#3 the Release --no-restore -warnaserror build succeeded
-with zero warnings (CI parity); #2 the FULL suite on the final state,
-5289/5289 BOTH TFMs (the ~5283 baseline + 6 new test cases: 2 controller
-pins, 3 resolver unit pins with the rule-1 Theory counting 2); #4-#8 N/A (no
-session-attribute, HttpClient, interaction-model, handler, or locale surface
-touched); #9/#10 the gate record in the Notes section (4 simplify angles: 4
-applied, 3 reasoned skips; code-review high: 4 findings, 2 applied, 2
-confirmed-filed as JF-782).
-
-GATE-MARKER ADDENDUM (2026-10-05, from the JF-774 orchestrator review): the
-mid-registration window is NARROWED, not closed; a lock-free fast-path replay
-landing between the registry store and the first slot write inside
-MarkEncodeActive reads a registering verdict that accepts the cache-root
-shadow without reading (OwnTicksGenerationLiveOrRegistering), while the
-prewrite override and the registered-dir fallback both sit in the strict
-OwnTicksGenerationLive gate, so the fall-through serve at the ordered probe's
-first hit serves the stale listing unredirected. The 'runtime windows were
-all CLOSED' sentence above is corrected by this addendum. The window is
-sub-second and requires the undeletable same-key shadow plus an oversize
-encode plus a replay in the gap; the liveness-aware resolver this task tracks
-is the shape that closes it.
 
 ## Notes
 
@@ -211,6 +191,8 @@ JF-782 leg 3 (the full-slot foreign-registration overwrite, PRE-EXISTING
 JF-774 containment design, not a JF-775 regression), F3/F4 confirmed as the
 JF-782 legs 1/2 this task filed from the simplify round (no double-file).
 <!-- SECTION:NOTES:END -->
+FLAKE ATTRIBUTION (the JF-775 gate-marker's F3, for future bisect/triage): two class-level reruns during development showed one-off MonitorHls-family Dispose-backstop flakes (a DIFFERENT test each run, all passing in isolation on both TFMs, the full suites eventually green with zero assertion failures of this change's own). This is the tracked JF-772/JF-731 load-dependent teardown family on this shared machine, NOT a JF-775 regression; committed here so a bisect hitting the range does not re-diagnose it.
+
 ## Final Summary
 
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
@@ -251,6 +233,6 @@ TFMs, full run on the final state; Release --no-restore -warnaserror clean.
 RESIDUALS FILED: JF-782 (the probe-vs-verdict straddle, the foreign-ticks
 mid-registration sub-window, the full-slot foreign-registration overwrite).
 NOT DEPLOYED (worker branch only; no merge into main).
-<!-- SECTION:FINAL_SUMMARY:END -->
 
-FLAKE ATTRIBUTION (the JF-775 gate-marker's F3, for future bisect/triage): two class-level reruns during development showed one-off MonitorHls-family Dispose-backstop flakes (a DIFFERENT test each run, all passing in isolation on both TFMs, the full suites eventually green with zero assertion failures of this change's own). This is the tracked JF-772/JF-731 load-dependent teardown family on this shared machine, NOT a JF-775 regression; committed here so a bisect hitting the range does not re-diagnose it.
+CLOSED 2026-10-05 by the orchestrator after the full cycle: merged into main (worker d9038667 + orchestrator tail 6560c2cd, --no-ff; the gate-marker's six axes PASS with the collapse grep-verified and the F1 caller-gated pin read at source; its four findings dispositioned in the tail), suites 5289/5289 both TFMs. Deploys batched with JF-777. JF-782 filed by this task.
+<!-- SECTION:FINAL_SUMMARY:END -->
