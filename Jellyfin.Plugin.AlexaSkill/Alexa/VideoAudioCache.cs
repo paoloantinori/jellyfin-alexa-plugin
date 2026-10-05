@@ -1154,7 +1154,13 @@ public class VideoAudioCache
     /// verdict used to accept the ordered first hit, which under the two-root
     /// split could be the other root's undeletable stale shadow, unread);
     /// otherwise the static order (cache root first, then the transient root,
-    /// an oversize encode's target). One probe covers the episode fast path,
+    /// an oversize encode's target).
+    /// STRADDLE CAVEAT (JF-782 leg 1): this holds only when the probe's
+    /// liveness read agrees with the caller's verdict read; a monitor CLEAR
+    /// landing between the two reads serves the static order's first hit,
+    /// which can be the other root's stale shadow. The controller-side
+    /// wrapper doc carries the same caveat; do not treat the absolute claim
+    /// as the invariant across that window. One probe covers the episode fast path,
     /// the in-lock double-check, and the concurrent-encode dedup at once; keys
     /// that never go transient (variants, audiobook, album) simply miss the
     /// transient probe.

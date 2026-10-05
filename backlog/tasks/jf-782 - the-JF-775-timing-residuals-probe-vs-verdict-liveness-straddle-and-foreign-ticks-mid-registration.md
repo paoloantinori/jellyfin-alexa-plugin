@@ -125,3 +125,5 @@ asserting the shadow's marker is absent from the served bytes.
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+LEG-0 GUARD NOTE (the JF-775 gate-marker's F1): the prewrite probe's caller-gated literal `ownGenerationLiveOrRegistering: true` (VideoAudioController ~:1668) is enforced only by its comment; a future cleanup replacing it with a fresh liveness read (the locally more obvious shape) re-opens the shadow window without any pin failing. The discriminating pin this filing demands for legs 1/2 ALSO covers this shape (it pins the probe-vs-verdict straddle); until it lands, treat the literal as load-bearing and any change there as needing the pin first.

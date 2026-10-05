@@ -5012,7 +5012,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// fall-through serves the shadow's stale bytes (seg_7777 present).
     /// </summary>
     [Fact]
-    public async Task StreamHlsEpisode_MidRegistrationWindow_CacheRootShadowRedirectsToRegisteredDir()
+    public async Task StreamHlsEpisode_MidRegistrationWindow_CacheRootShadowNeverProbed_ProbeFeedsRegisteredDir()
     {
         var (itemId, controller, reads) = PlantTwoRootShadowFixture(
             "JF-775 Mid-Registration Shadow S01E01",

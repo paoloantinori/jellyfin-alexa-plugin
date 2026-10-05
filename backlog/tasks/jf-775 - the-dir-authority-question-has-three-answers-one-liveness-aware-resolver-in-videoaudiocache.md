@@ -253,3 +253,4 @@ mid-registration sub-window, the full-slot foreign-registration overwrite).
 NOT DEPLOYED (worker branch only; no merge into main).
 <!-- SECTION:FINAL_SUMMARY:END -->
 
+FLAKE ATTRIBUTION (the JF-775 gate-marker's F3, for future bisect/triage): two class-level reruns during development showed one-off MonitorHls-family Dispose-backstop flakes (a DIFFERENT test each run, all passing in isolation on both TFMs, the full suites eventually green with zero assertion failures of this change's own). This is the tracked JF-772/JF-731 load-dependent teardown family on this shared machine, NOT a JF-775 regression; committed here so a bisect hitting the range does not re-diagnose it.
