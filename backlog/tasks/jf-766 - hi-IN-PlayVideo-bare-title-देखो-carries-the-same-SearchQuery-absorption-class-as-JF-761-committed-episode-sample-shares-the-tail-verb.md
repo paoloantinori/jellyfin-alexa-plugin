@@ -3,10 +3,10 @@ id: JF-766
 title: >-
   hi-IN PlayVideo bare "{title} देखो" carries the same SearchQuery absorption
   class as JF-761 (committed episode sample shares the tail verb)
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-05 00:00'
-updated_date: '2026-10-05 02:00'
+updated_date: '2026-10-05 02:27'
 labels:
   - interaction-model
   - nlu
@@ -82,3 +82,9 @@ Run each utterance through `ask smapi profile-nlu --locale hi-IN`, 4 repeats, se
 - [x] #4 NLU fixture pin added per the JF-761 ja convention (red until deploy, exact-value series_name) (fixtures/hi-IN.yaml; raw-value pin 'game of thrones' with the ja raw-vs-canonical deviation documented inline and filed as JF-769)
 - [x] #5 Validators pass with no new warnings (validate_interaction_models PASS 294 warnings = main baseline; validate_locales PASS no new gaps; NLU dry-run clean: all fixture files collect, the 9 hi-IN rows incl. the new pin are schema-valid and skipped pending SMAPI. The dry-run's "8 passed" line is the unrelated simulator smoke rows, not pin evidence.)
 <!-- DOD:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+CLOSED 2026-10-05 by the orchestrator after the full cycle: merged into main (worker commit 152fb11f, --no-ff; direct verification: the removal, the regenerated model, the fixture pin, the mirrors); the hi-IN model rebuild + the 6-step probe matrix ride the NEXT DLL deploy (the wave deploy in flight predates the merge). JF-769 filed by this task.
+<!-- SECTION:FINAL_SUMMARY:END -->
