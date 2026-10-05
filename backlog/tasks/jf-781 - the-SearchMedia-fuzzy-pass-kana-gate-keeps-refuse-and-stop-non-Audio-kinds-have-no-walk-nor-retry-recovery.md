@@ -3,7 +3,7 @@ id: JF-781
 title: >-
   JF-781 - the SearchMedia fuzzy-pass kana gate (PassesKanaSongGate) keeps
   refuse-and-stop: non-Audio kinds have no walk and no song-title-retry recovery
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-05'
 labels:
@@ -124,3 +124,5 @@ one line per refusal.
   JF-777, the SearchMedia pre-check JF-777, this fuzzy-pass gate JF-781), so
   no uncovered behavior exists and no task was cut for it.
 <!-- NOTES:END -->
+
+CLOSED 2026-10-05 by the orchestrator: merged into main at 6a2338d5, gate-marker six axes CLEAN, production deploys with the next batch.
