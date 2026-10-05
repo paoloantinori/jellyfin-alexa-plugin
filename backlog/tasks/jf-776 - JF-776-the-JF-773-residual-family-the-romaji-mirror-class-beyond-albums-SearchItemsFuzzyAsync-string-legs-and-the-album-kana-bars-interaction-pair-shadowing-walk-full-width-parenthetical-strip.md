@@ -4,9 +4,10 @@ title: >-
   JF-776 - the JF-773 residual family: the romaji-mirror class beyond albums
   (SearchItemsFuzzyAsync string legs) and the album kana bars' interaction pair
   (shadowing walk, full-width parenthetical strip)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-05'
+updated_date: '2026-10-05 12:29'
 labels:
   - search
   - i18n
@@ -16,12 +17,14 @@ dependencies:
   - JF-773
 references:
   - >-
-    backlog/tasks/jf-773 - album-candidate-legs-have-no-romaji-counterpart-the-item-4-mirror-for-kana-tagged-album-libraries.md
+    backlog/tasks/jf-773 -
+    album-candidate-legs-have-no-romaji-counterpart-the-item-4-mirror-for-kana-tagged-album-libraries.md
 priority: low
 ---
 
 ## Description
 
+<!-- SECTION:DESCRIPTION:BEGIN -->
 Filed 2026-10-05 from the JF-773 implementation's review rounds (out of that
 task's declared scope, per the file-same-turn rule). Two independent residual
 classes surfaced; they share only their parent (JF-773's reachability change),
@@ -112,45 +115,63 @@ Fix shape: teach the strip helper the full-width pair (and keep one
 definition; the JF-654 "one title-collision semantics, one band" note).
 Verification bar: the full-width form plays through the bar, the ASCII Latin
 matrix unchanged.
+<!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [x] dotnet build passes with 0 errors (Release --no-restore -warnaserror: 0
+- [x] #1 dotnet build passes with 0 errors (Release --no-restore -warnaserror: 0
       warnings, 0 errors, both TFMs)
-- [x] dotnet test passes (5275/5275 net9.0 AND net10.0; the main baseline
+- [x] #2 dotnet test passes (5275/5275 net9.0 AND net10.0; the main baseline
       5257 + 18 new proofs)
-- [x] No new compiler warnings introduced (Release -warnaserror clean)
-- [x] Section A: kana-tagged candidate reachable by a romaji query at the
+- [x] #3 No new compiler warnings introduced (Release -warnaserror clean)
+- [x] #4 Section A: kana-tagged candidate reachable by a romaji query at the
       SearchItemsFuzzyAsync layer (red proof on the pre-change tree first,
       both TFMs), plus one playlist-surface and one audiobook-surface handler
       red proof (RED on the unmodified tree: 11 failed / 7 controls-green per
       TFM; the SearchService romaji+kana legs, the playlist kana+romaji legs,
       the book kana+romaji legs, the playlist bar coupling unit pin, both B1
       arms, both B2 legs; all green post-fix, 18/18 both TFMs)
-- [x] Section A: Latin behavior byte-identical (control pin:
+- [x] #5 Section A: Latin behavior byte-identical (control pin:
       SearchItemsFuzzyAsync_LatinCandidate / PlayPlaylist_LatinPlaylist /
       PlayBook_LatinBook, all green on the unmodified tree AND post-fix; the
       5257 pre-existing tests stay green)
-- [x] Section A: the JF-663 playlist bar's collision input moves in the same
+- [x] #6 Section A: the JF-663 playlist bar's collision input moves in the same
       change as the playlist candidate legs (the coupling above)
       (PassesKanaOriginPlaylistAcceptance resolves through ScoringName; the
       kana-query playlist proof needs BOTH halves and was red with either
       alone)
-- [x] Section A: HandleFuzzyMiss callers that adopt ScoringName use the
+- [x] #7 Section A: HandleFuzzyMiss callers that adopt ScoringName use the
       speechSelector seam (speech keeps the display name) (all 8 adopting
       sites pass speechSelector: x => x.Name; the FuzzyMissHandler delegate
       threads the seam; the JF-773 review's speech assertions hold)
-- [x] Section B1: the shadowing red proof (suffixed sibling listed first)
+- [x] #8 Section B1: the shadowing red proof (suffixed sibling listed first)
       plays the exact album; the JF-661/JF-662 bait pins stay green (both
       arms pinned; KanaOriginAlbumCascadeTests / KanaOriginAlbumFuzzyArmTests
       green in the 5275)
-- [x] Section B2: the full-width parenthetical form plays through the album
+- [x] #9 Section B2: the full-width parenthetical form plays through the album
       bar; the ASCII strip matrix is unchanged (unit + handler proofs; the
       ASCII matrix pin covers strip / stacked / non-parenthetical-widening)
 <!-- DOD:END -->
 
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+- Do NOT build any index for these surfaces; the score-time ScoringName shape
+  is the fix (the JF-773 precedent, one resolver already in place at
+  KeywordMatcher.ScoringName).
+- Red proofs mirror KanaTaggedAlbumReachabilityTests (Tests/Handler): the
+  kana-tagged item played from the romaji and the kana query, the Latin
+  control, and a suffix-widening refusal pin surviving the romaji reading
+  where a bar exists (playlist).
+- The KatakanaRomanizer class doc names both residual classes as tracked
+  here; update that paragraph when this lands.
+- The two sections are independent; splitting this task at triage is fine
+  (keep each section's verification bar with its half).
+<!-- SECTION:NOTES:END -->
+
 ## Final Summary
 
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
 Landed 2026-10-05 as ONE task (both sections coherent: they share the
 JF-773 parent, the same ScoringName resolver, and the same red-proof
 machinery; no bar demanded a split).
@@ -208,18 +229,5 @@ Red proofs ran base-compilable on the UNMODIFIED tree first (11 failed / 7
 controls per TFM, both TFMs), all green post-fix. Suites: 5275/5275 both
 TFMs (5257 baseline + 18); Release -warnaserror clean.
 
-## Implementation Notes
-
-<!-- SECTION:NOTES:BEGIN -->
-- Do NOT build any index for these surfaces; the score-time ScoringName shape
-  is the fix (the JF-773 precedent, one resolver already in place at
-  KeywordMatcher.ScoringName).
-- Red proofs mirror KanaTaggedAlbumReachabilityTests (Tests/Handler): the
-  kana-tagged item played from the romaji and the kana query, the Latin
-  control, and a suffix-widening refusal pin surviving the romaji reading
-  where a bar exists (playlist).
-- The KatakanaRomanizer class doc names both residual classes as tracked
-  here; update that paragraph when this lands.
-- The two sections are independent; splitting this task at triage is fine
-  (keep each section's verification bar with its half).
-<!-- SECTION:NOTES:END -->
+CLOSED 2026-10-05 by the orchestrator after the full cycle: merged into main (worker commit cf37a2bd + orchestrator tail bf9c472c, --no-ff; the gate-marker's seven axes PASS with the new suites re-run in the review tree; its five findings dispositioned: the hyphen forms and the walk comment applied, the playlist head-check/mixed-form pin/verification-debt filed as the JF-777 addendum), suites 5275/5275 both TFMs. Deploys batched with JF-778. JF-777 filed by this task.
+<!-- SECTION:FINAL_SUMMARY:END -->
