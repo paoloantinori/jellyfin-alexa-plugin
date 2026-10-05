@@ -1056,8 +1056,10 @@ public class VideoAudioCache
     /// resolver that walks per-key directories consumes this order
     /// (<see cref="GetCachedHlsPlaylist"/>, the controller's prewrite probe,
     /// <see cref="CleanupHlsStub"/>); the scan fallback
-    /// (<see cref="FindHlsDirectoryByScan"/>) enumerates the same roots in the
-    /// same order at the generation level.
+    /// (<see cref="FindHlsDirectoryByScan"/>) covers the same two roots at the
+    /// generation level but orders by generation RECENCY across them (the cache
+    /// root winning ties; JF-774), because a scan has no caller ticks to prefer
+    /// and a stale orphan must not outrank the current generation.
     /// </summary>
     /// <param name="itemId">The cache key (Jellyfin item or variant key).</param>
     /// <param name="artModifiedTicks">Ticks of the generation.</param>
@@ -1127,6 +1129,39 @@ public class VideoAudioCache
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Probe ONLY the transient root's generation directory for a non-empty
+    /// <c>stream.m3u8</c> (JF-774 finding 3): the controller's fall-through when
+    /// a cache-root playlist hit fails its debris verdict, so an undeletable
+    /// cache-root playlist cannot mask the same-key VALID transient entry into a
+    /// from-zero re-encode. Records a serve of the directory on a hit, exactly
+    /// like <see cref="GetCachedHlsPlaylist"/>'s per-root probe.
+    /// </summary>
+    /// <param name="itemId">The cache key (Jellyfin item or variant key).</param>
+    /// <param name="artModifiedTicks">Ticks of the generation.</param>
+    /// <returns>The transient playlist FileInfo on a hit, null on a miss.</returns>
+    internal FileInfo? ProbeTransientHlsPlaylist(string itemId, long artModifiedTicks)
+        => ProbeHlsPlaylist(GetTransientHlsDirectoryPath(itemId, artModifiedTicks));
+
+    /// <summary>
+    /// The in-memory registration half of <see cref="FindHlsDirectory"/> WITHOUT
+    /// the scan fallback: the directory a live or recently finished encode
+    /// registered for the item, or null when no registration exists (e.g. after
+    /// a restart). JF-774 finding 2: the episode prewrite probe prefers this
+    /// directory while its encode is live, so a stale prewrite that survived in
+    /// the OTHER root cannot shadow the live encode's fresh listing.
+    /// </summary>
+    /// <param name="itemId">The cache key (Jellyfin item or variant key).</param>
+    /// <returns>The registered directory when it still exists, else null.</returns>
+    internal string? TryGetRegisteredHlsDirectory(string itemId)
+    {
+#pragma warning disable CA3003 // registered paths come from GUID-derived cache keys
+        return _hlsDirLookup.TryGetValue(itemId, out string? registered) && Directory.Exists(registered)
+            ? registered
+            : null;
+#pragma warning restore CA3003
     }
 
     /// <summary>
@@ -1206,29 +1241,44 @@ public class VideoAudioCache
     /// Finds the HLS directory for an item by scanning the cache directory for subdirectories
     /// matching the pattern {itemId}_*. Returns the most recently created one, or null if
     /// no matching directory exists. Used as a fallback when the in-memory lookup misses.
-    /// Root-agnostic since JF-537.1: the cache root is scanned first, then the
-    /// transient root (the restart fallback for a transient encode whose
-    /// in-memory registration is gone; each root picks its own most-recent
-    /// generation, and the cache root wins a tie because it is the preferred
-    /// permanent home).
+    /// Root-agnostic since JF-537.1: BOTH roots are scanned and the NEWEST generation
+    /// across them wins (JF-774 finding 1: the former cache-root-first preference
+    /// outranked generation recency across roots, so an old orphaned cache-root
+    /// generation, the documented JF-676 orphan, shadowed the CURRENT transient
+    /// generation's segments after a restart, serving wrong content that then
+    /// pinned for the process lifetime); each root picks its own most-recent
+    /// generation, and the cache root still wins a tie because it is the
+    /// preferred permanent home.
     /// </summary>
     /// <param name="itemId">The Jellyfin item ID.</param>
     /// <returns>Full path to the HLS directory, or null if not found.</returns>
     internal string? FindHlsDirectoryByScan(string itemId)
     {
-        string? cacheHit = ScanRootForNewestGeneration(_cacheDir, itemId);
-        return cacheHit ?? ScanRootForNewestGeneration(_transientDir, itemId);
+        DirectoryInfo? cacheHit = ScanRootForNewestGeneration(_cacheDir, itemId);
+        DirectoryInfo? transientHit = ScanRootForNewestGeneration(_transientDir, itemId);
+
+        if (cacheHit == null || transientHit == null)
+        {
+            return (cacheHit ?? transientHit)?.FullName;
+        }
+
+        return cacheHit.CreationTimeUtc >= transientHit.CreationTimeUtc
+            ? cacheHit.FullName
+            : transientHit.FullName;
     }
 
     /// <summary>
     /// One root-scan of <see cref="FindHlsDirectoryByScan"/>: the most recently
     /// created <c>{itemId}_*</c> generation directory under <paramref name="root"/>,
-    /// or null when the root or the generation is absent or unreadable.
+    /// or null when the root or the generation is absent or unreadable. Returns the
+    /// <see cref="DirectoryInfo"/> (not just the path) so the cross-root recency
+    /// comparison in <see cref="FindHlsDirectoryByScan"/> reads CreationTimeUtc
+    /// without a second stat.
     /// </summary>
     /// <param name="root">The root directory to scan (cache or transient).</param>
     /// <param name="itemId">The Jellyfin item ID.</param>
-    /// <returns>Full path to the newest matching directory, or null.</returns>
-    private string? ScanRootForNewestGeneration(string root, string itemId)
+    /// <returns>The newest matching directory, or null.</returns>
+    private DirectoryInfo? ScanRootForNewestGeneration(string root, string itemId)
     {
         if (!Directory.Exists(root))
         {
@@ -1247,7 +1297,7 @@ public class VideoAudioCache
                 return null;
             }
 
-            return dirs.OrderByDescending(d => d.CreationTimeUtc).First().FullName;
+            return dirs.OrderByDescending(d => d.CreationTimeUtc).First();
         }
         catch (DirectoryNotFoundException)
         {
@@ -1276,12 +1326,14 @@ public class VideoAudioCache
     /// <returns>The HLS directory path, or null when none exists.</returns>
     internal string? FindHlsDirectory(string itemId)
     {
-#pragma warning disable CA3003 // cachedDir is populated from GUID-validated itemId paths (same shape as FindSegmentPath)
-        if (_hlsDirLookup.TryGetValue(itemId, out string? cachedDir) && Directory.Exists(cachedDir))
+        // The in-memory half is <see cref="TryGetRegisteredHlsDirectory"/>'s ONE
+        // predicate (JF-774): the lookup+exists condition must not drift from the
+        // registration read the prewrite probe consumes.
+        string? registered = TryGetRegisteredHlsDirectory(itemId);
+        if (registered != null)
         {
-            return cachedDir;
+            return registered;
         }
-#pragma warning restore CA3003
 
         string? hlsDir = FindHlsDirectoryByScan(itemId);
         if (hlsDir != null)
