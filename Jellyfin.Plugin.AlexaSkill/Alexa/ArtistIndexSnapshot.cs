@@ -33,6 +33,16 @@ public sealed record ArtistIndexSnapshot
     public IReadOnlyDictionary<Guid, (string Primary, string? Alternate)> PhoneticCodes { get; }
 
     /// <summary>
+    /// Artist ID to the romanized (kana-to-romaji) form of the name, present ONLY
+    /// for kana-containing names (JF-755 symmetric index-side normalization). The
+    /// ORIGINAL name is never replaced or transliterated in place: it keeps flowing
+    /// to every raw-name consumer (JF-690 exact-name resolution, speech, the
+    /// JF-377/JF-420 string gates) while the always-romanized query side reaches
+    /// the kana-named artist through this parallel key.
+    /// </summary>
+    public IReadOnlyDictionary<Guid, string> RomajiNames { get; }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="ArtistIndexSnapshot"/> class, freezing the
     /// loader's build locals into the published state. The inputs stay owned
     /// by the loader; every collection reachable from the snapshot is a copy.
@@ -40,16 +50,19 @@ public sealed record ArtistIndexSnapshot
     /// <param name="artists">All indexed artists, as loaded.</param>
     /// <param name="topParentMap">Artist ID to top-level library folder ID, as built.</param>
     /// <param name="phoneticCodes">Artist ID to Double Metaphone codes, as built.</param>
+    /// <param name="romajiNames">Artist ID to the romanized name, kana-containing names only, as built.</param>
     internal ArtistIndexSnapshot(
         IEnumerable<BaseItem> artists,
         IEnumerable<KeyValuePair<Guid, Guid>> topParentMap,
-        IEnumerable<KeyValuePair<Guid, (string Primary, string? Alternate)>> phoneticCodes)
+        IEnumerable<KeyValuePair<Guid, (string Primary, string? Alternate)>> phoneticCodes,
+        IEnumerable<KeyValuePair<Guid, string>> romajiNames)
     {
         Artists = artists.ToArray();
         TopParentMap = topParentMap.ToFrozenDictionary();
         PhoneticCodes = phoneticCodes.ToFrozenDictionary();
+        RomajiNames = romajiNames.ToFrozenDictionary();
     }
 
     /// <summary>The pre-load state: read paths see empty data until the first publish.</summary>
-    public static ArtistIndexSnapshot Empty { get; } = new([], [], []);
+    public static ArtistIndexSnapshot Empty { get; } = new([], [], [], []);
 }

@@ -255,6 +255,52 @@ public class SongNgramIndexServiceTests : PluginTestBase
         Assert.Single(results);
     }
 
+    // --- JF-755: symmetric index-side kana normalization (romaji tokens) ---
+
+    [Fact]
+    public async Task Search_RomajiKeywords_FindKanaTitledSong_JF755()
+    {
+        // The song-side JF-643 narrowing closed: a kana-titled song is indexed
+        // under its romanized tokens alongside the kana ones, and the query tokens
+        // (always romanized by the callers) reach it through the O(1) lookup with
+        // full keyword coverage in the scorer (TitleTokens, the one shared union).
+        var song = MakeSong("ヨルニカケル");
+        var service = CreateService(new List<BaseItem> { song });
+        await service.StartAsync(CancellationToken.None);
+
+        var results = service.Search(new[] { "yorunikakeru" }, "ja-JP");
+
+        var match = Assert.Single(results);
+        Assert.Equal(song.Id, match.Item.Id);
+        Assert.True(match.Score > 0);
+    }
+
+    [Fact]
+    public async Task Search_KanaTitle_UnrelatedRomajiKeywords_ReturnsEmpty_JF755()
+    {
+        // The romaji keys only widen lookup toward the romanized reading of the
+        // SAME title; an unrelated romaji query still misses (no false positives).
+        var song = MakeSong("ヨルニカケル");
+        var service = CreateService(new List<BaseItem> { song });
+        await service.StartAsync(CancellationToken.None);
+
+        Assert.Empty(service.Search(new[] { "bohemian" }, "ja-JP"));
+    }
+
+    [Fact]
+    public async Task StartAsync_LatinLibrary_IndexShapeUnchanged_JF755()
+    {
+        // Control: kana-free titles keep the identical single token stream, so the
+        // index shape (and the NgramCount surface the load log prints) is unchanged
+        // for Latin libraries.
+        var song = MakeSong("Hotel California");
+        var service = CreateService(new List<BaseItem> { song });
+        await service.StartAsync(CancellationToken.None);
+
+        Assert.Equal(1, service.SongCount);
+        Assert.Equal(1, service.NgramCount);
+    }
+
     [Fact]
     public async Task Search_SingleKeyword_UsesFallback()
     {

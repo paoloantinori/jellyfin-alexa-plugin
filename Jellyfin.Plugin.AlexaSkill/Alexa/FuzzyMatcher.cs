@@ -14,8 +14,12 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa;
 /// JF-643: the QUERY argument of every public entry is romanized (kana to
 /// romaji, <see cref="KatakanaRomanizer"/>) before scoring, so a Japanese-ASR
 /// katakana query competes on the same footing as a Latin one. Candidate text
-/// is never transliterated; every caller's first argument is the user query
-/// (verified across all call sites when this was added).
+/// is never transliterated IN PLACE; every caller's first argument is the user
+/// query (verified across all call sites when this was added). JF-755: callers
+/// with access to the artist index pass the kana-named candidate's parallel
+/// ROMAJI key as the selector text (ArtistSearch.QueryNameFor, the ONE
+/// resolver), which is not a transliteration of the stored value but the
+/// index's second key for it; the raw name keeps flowing to raw-name consumers.
 /// </summary>
 internal static class FuzzyMatcher
 {

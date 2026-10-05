@@ -1203,11 +1203,23 @@ public abstract class BaseHandler
     /// <typeparam name="T">The item type.</typeparam>
     /// <param name="query">The original search query.</param>
     /// <param name="candidates">The full list of candidate items.</param>
-    /// <param name="selector">Function to extract the display name from an item.</param>
+    /// <param name="selector">Function to extract the comparable text from an
+    /// item: scoring, the coverage gate, and logs read this. Since JF-755 a caller
+    /// whose candidates carry an index-side alternate key (the artist romaji key,
+    /// ArtistSearch.QueryNameFor) passes it HERE while passing the display name as
+    /// <paramref name="speechSelector"/>; before that seam the one selector served
+    /// both roles, so scoring through the romaji key would have SPOKEN 'kuin' for
+    /// クイーン.</param>
     /// <param name="matchExtractor">Function to create disambiguation match list from the best candidate.</param>
     /// <param name="mediaType">The media type for disambiguation state.</param>
     /// <param name="locale">The locale for localized responses.</param>
     /// <param name="autoPlayFunc">Optional async function to play the suggested item in AutoPlay mode; a null result (the pre-JF-538 null sentinel, now the Task's value) means the delegate only recorded a side effect.</param>
+    /// <param name="user">The plugin user (thresholds, behavior).</param>
+    /// <param name="context">The request context for the progressive qualifier vehicle.</param>
+    /// <param name="request">The request for the progressive qualifier vehicle.</param>
+    /// <param name="speechSelector">Optional display-name selector for SPOKEN
+    /// surfaces (the auto-play qualifier and the "did you mean" ask); defaults to
+    /// <paramref name="selector"/> (the pre-JF-755 dual-use behavior).</param>
     /// <returns>A tuple indicating the outcome and optional response.</returns>
     protected async Task<(FuzzyMissOutcome Outcome, SkillResponse? Response)> HandleFuzzyMiss<T>(
         string query,
@@ -1219,7 +1231,8 @@ public abstract class BaseHandler
         Func<T, Task<SkillResponse>>? autoPlayFunc = null,
         Entities.User? user = null,
         Context? context = null,
-        Request? request = null)
+        Request? request = null,
+        Func<T, string>? speechSelector = null)
         where T : class
     {
         if (candidates == null || candidates.Count == 0)
@@ -1233,6 +1246,11 @@ public abstract class BaseHandler
         // the matcher call and the full-keyword-coverage gate (which tokenizes the
         // query below) on the same Latin-script footing.
         query = Util.KatakanaRomanizer.Romanize(query);
+
+        // JF-755: spoken surfaces read the display name even when scoring reads an
+        // alternate key (the speechSelector seam above); the default keeps the
+        // historical dual-use behavior for every other caller.
+        Func<T, string> speak = speechSelector ?? selector;
 
         var bestWithScore = FuzzyMatcher.FindBestMatchWithScore(query, candidates, selector);
 
@@ -1300,7 +1318,7 @@ public abstract class BaseHandler
             }
 
             IOutputSpeech qualifier = SpeechBuilder.BuildOutputSpeech(
-                "FuzzyAutoPlayAnnouncementSsml", "FuzzyAutoPlayAnnouncement", locale, selector(best), query);
+                "FuzzyAutoPlayAnnouncementSsml", "FuzzyAutoPlayAnnouncement", locale, speak(best), query);
 
             // JF-538 review finding: when the delegate's launch announce already rode the
             // progressive vehicle (directive-only play response, null OutputSpeech), the old
@@ -1341,7 +1359,7 @@ public abstract class BaseHandler
             query, selector(best), score, candidates.Count);
         var matches = matchExtractor(best) ?? new List<(Guid, string)>();
         SkillResponse response = SpeechBuilder.AskLocalized(
-            "FuzzySuggestionPromptSsml", "FuzzySuggestionPrompt", "FuzzySuggestionReprompt", locale, query, selector(best));
+            "FuzzySuggestionPromptSsml", "FuzzySuggestionPrompt", "FuzzySuggestionReprompt", locale, query, speak(best));
 
         var matchInfos = matches.Select(m => new DisambiguationHelper.MatchInfo { Id = m.Id.ToString(), Name = m.Name }).ToList();
         response.SessionAttributes = DisambiguationHelper.BuildAttributes(matchInfos, 0, mediaType);

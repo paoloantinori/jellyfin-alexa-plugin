@@ -315,6 +315,18 @@ public class PlayArtistSongsIntentHandler : BaseHandler
             return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundArtist", locale, musician));
         }
 
+        // JF-755 (code review): the post-search string gates judge the SAME reading
+        // pair the chain matched on. SearchAsync romanized the query and matched the
+        // candidate through its query-side name (the romaji key for a kana-named
+        // artist), so the JF-377/JF-420 containment gates must compare like-for-like
+        // (romanized query vs the resolver's name): against the raw kana name both
+        // gates are structurally inert for exactly the newly reachable class (no
+        // script overlap), silently bypassing the yes/no downgrade a Latin
+        // containment gets. Speech keeps the raw value in every prompt below. The
+        // candidate operand is resolved FRESH at each gate: the JF-420 auto-select
+        // and the disambiguation collapse paths REPLACE artists[0] between them.
+        string matchedQuery = Util.KatakanaRomanizer.Romanize(musicianQuery);
+
         // JF-377: when a single artist matched with the "coincidental containment" shape (a short
         // name sitting as one content word inside a longer query, detected by
         // ArtistSearch.IsCoincidentalContainmentMatch), do NOT auto-play it silently. The shape is
@@ -330,7 +342,7 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         // >= half the query content words (a real multi-word near-match), and boundary-touching
         // containments (whole-word or affixed forms like "outkasts" -> "outkast", JF-408).
         if (artists.Count == 1
-            && ArtistSearch.IsCoincidentalContainmentMatch(musicianQuery, artists[0].Name, locale))
+            && ArtistSearch.IsCoincidentalContainmentMatch(matchedQuery, Util.ArtistSearch.QueryNameFor(pinnedIndex, artists[0]), locale))
         {
             return AskCoincidentalContainment(artists[0], musicianQuery, locale, context, user);
         }
@@ -343,10 +355,11 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         // the containment exemption, which is the exact bug we are fixing). The high
         // threshold (80) ensures "nirvana unplugged" with only "Nirvana Tribute Band"
         // as an alternative (scoring ~65) does NOT trigger: Nirvana auto-plays.
+        // JF-755: containment operands are the matched reading pair (see matchedQuery).
         if (artists.Count == 1
-            && musicianQuery.Contains(' ')
-            && musicianQuery.Contains(artists[0].Name, StringComparison.OrdinalIgnoreCase)
-            && !ArtistSearch.IsExactNameMatch(musicianQuery, artists[0].Name)
+            && matchedQuery.Contains(' ')
+            && matchedQuery.Contains(Util.ArtistSearch.QueryNameFor(pinnedIndex, artists[0]), StringComparison.OrdinalIgnoreCase)
+            && !ArtistSearch.IsExactNameMatch(matchedQuery, Util.ArtistSearch.QueryNameFor(pinnedIndex, artists[0]))
             && pinnedIndex != null)
         {
             // Same pinned view the chain above used (JF-448): the alternative pool and
@@ -365,13 +378,17 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                 double bestAlternativeFair = 0;
                 foreach (BaseItem candidate in alternatives)
                 {
-                    int raw = FuzzyMatcher.Score(musicianQuery, candidate.Name);
+                    // JF-755: the alternative scoring reads the matched reading pair
+                    // too (a kana-named alternative scores 0 on its raw name against
+                    // the romanized query).
+                    string candidateName = Util.ArtistSearch.QueryNameFor(pinnedIndex, candidate);
+                    int raw = FuzzyMatcher.Score(matchedQuery, candidateName);
                     if (raw < AlternativeFullNameThreshold)
                     {
                         continue;
                     }
 
-                    double fair = FairComparisonScore(candidate.Name, musicianQuery, raw);
+                    double fair = FairComparisonScore(candidateName, matchedQuery, raw);
                     if (fair > bestAlternativeFair)
                     {
                         bestAlternativeFair = fair;
@@ -380,7 +397,10 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                 }
 
                 if (bestAlternative != null
-                    && !IsRedundantShorterForm(artists[0].Name, bestAlternative.Name, musicianQuery))
+                    && !IsRedundantShorterForm(
+                        Util.ArtistSearch.QueryNameFor(pinnedIndex, artists[0]),
+                        Util.ArtistSearch.QueryNameFor(pinnedIndex, bestAlternative),
+                        matchedQuery))
                 {
                     // JF-420/JF-420.3 SYMMETRIC fair comparison (FairComparisonScore:
                     // bidirectional length fraction, no matcher recall floor). The
@@ -389,7 +409,8 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                     // like "Miles" inside "miles davis live") cannot outrank a better
                     // full match. If the alternative wins by a clear margin, auto-select
                     // it ("P!nk floyd" means Pink Floyd, not P!nk); otherwise offer both.
-                    double containmentFair = FairComparisonScore(artists[0].Name, musicianQuery, FuzzyMatcher.ContainmentScore);
+                    double containmentFair = FairComparisonScore(
+                        Util.ArtistSearch.QueryNameFor(pinnedIndex, artists[0]), matchedQuery, FuzzyMatcher.ContainmentScore);
 
                     if (bestAlternativeFair >= AlternativeFullNameThreshold && bestAlternativeFair - containmentFair > ContainmentVsFullNameMargin)
                     {
@@ -424,10 +445,14 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         if (artists.Count > 1 && !fastAutoPlay)
         {
             Logger.LogDebug("PlayArtistSongs: {Count} artists matched, running disambiguation", artists.Count);
+            // JF-755 (code review): scoring reads the query-side name (the romaji key
+            // for a kana-named artist; a raw-name selector scored the exact kana
+            // match 0 and let a Latin containment rival win the auto-accept), while
+            // the spoken surfaces keep the display name (the speechSelector seam).
             var (missOutcome, missResponse) = await HandleFuzzyMiss(
                 musicianQuery,
                 artists,
-                a => a.Name,
+                a => Util.ArtistSearch.QueryNameFor(pinnedIndex, a),
                 best => new List<(Guid, string)> { (best.Id, best.Name) },
                 DisambiguationHelper.MediaTypeArtist,
                 locale,
@@ -436,7 +461,8 @@ public class PlayArtistSongsIntentHandler : BaseHandler
                     artists = new List<BaseItem> { best };
                     return Task.FromResult<SkillResponse>(null!);
                 },
-                user: user).ConfigureAwait(false);
+                user: user,
+                speechSelector: a => a.Name).ConfigureAwait(false);
 
             if (missOutcome == FuzzyMissOutcome.NotFound)
             {
@@ -453,8 +479,14 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         }
         else if (fastAutoPlay)
         {
-            // Fast mode: pick the best fuzzy match and auto-play
-            var best = Search.FuzzyMatchPhonetic(musicianQuery, artists, a => a.Name, a => a.Id, pinnedIndex, user);
+            // Fast mode: pick the best fuzzy match and auto-play. JF-755: the
+            // selector resolves through the romaji key (QueryNameFor) like every
+            // other warm scoring leg, so a kana-named artist in a tier-1 multi-hit
+            // set scores its exact romaji (100) instead of riding the 91 phonetic
+            // floor into the Queen/Keane iteration-order coin flip; a no-op for
+            // Latin candidates and for the null/not-ready view.
+            var best = Search.FuzzyMatchPhonetic(
+                musicianQuery, artists, a => Util.ArtistSearch.QueryNameFor(pinnedIndex, a), a => a.Id, pinnedIndex, user);
             if (best != null)
             {
                 artists = new List<BaseItem> { best };
@@ -473,8 +505,10 @@ public class PlayArtistSongsIntentHandler : BaseHandler
         // (score >= ContainmentScore). Same downgrade as JF-377 (AskFirstMatch, never
         // reject): the shape is string-indistinguishable from a real artist inside a
         // carrier phrase, so the yes/no prompt is the only no-regression behavior.
+        // JF-755: the FINAL pick's matched reading (the collapse paths above may have
+        // replaced artists[0] since the entry gate).
         if (artists.Count == 1
-            && ArtistSearch.IsCoincidentalContainmentMatch(musicianQuery, artists[0].Name, locale))
+            && ArtistSearch.IsCoincidentalContainmentMatch(matchedQuery, Util.ArtistSearch.QueryNameFor(pinnedIndex, artists[0]), locale))
         {
             return AskCoincidentalContainment(artists[0], musicianQuery, locale, context, user);
         }

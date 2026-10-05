@@ -1084,7 +1084,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase, IDisposable
         var artist = new MusicArtist { Name = "Dark Dark Dark", Id = Guid.NewGuid() };
 
         List<BaseItem> coverage = ArtistSearch.WordCoverageCandidates(
-            "dark side of the moon", new[] { artist }, "it-IT");
+            "dark side of the moon", new[] { artist }, "it-IT", null);
 
         Assert.Single(coverage);
         Assert.Equal("Dark Dark Dark", coverage[0].Name);

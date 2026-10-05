@@ -226,6 +226,74 @@ public class KeywordMatcherTests
         Assert.Empty(result);
     }
 
+    // ─── JF-755: symmetric title-side kana normalization (TitleTokens) ───
+
+    private static List<BaseItem> YoruNiKakeruSong()
+        => new List<Audio> { new() { Name = "ヨルニカケル", Id = Guid.NewGuid() } }.Cast<BaseItem>().ToList();
+
+    [Fact]
+    public void TitleTokens_LatinTitle_IdenticalToTokenize_JF755()
+    {
+        // Control: kana-free titles keep the plain token stream (the union helper
+        // early-returns), so every Latin surface is byte-identical to pre-JF-755.
+        Assert.Equal(
+            KeywordMatcher.Tokenize("Hotel California", "en-US"),
+            KeywordMatcher.TitleTokens("Hotel California", "en-US"));
+    }
+
+    [Fact]
+    public void TitleTokens_KanaTitle_UnionsTheRomajiStream_JF755()
+    {
+        // 'ウミユリ海底譚' keeps its raw kana+kanji token AND gains the romanized
+        // form's token. The kanji run is not romanizable (the JF-643 documented
+        // limit) and the tokenizer splits only on NON-letters, so the romaji token
+        // BLENDS with the kanji run ('umiyuri海底譚'); that blended token is exactly
+        // what a kanji-carrying ja ASR query romanizes to, which is the shape it
+        // serves. Pure-kana titles gain clean romaji tokens (the next pin).
+        var result = KeywordMatcher.TitleTokens("ウミユリ海底譚", "ja-JP");
+        Assert.Equal(new[] { "ウミユリ海底譚", "umiyuri海底譚" }, result);
+    }
+
+    [Fact]
+    public void TitleTokens_PureKanaTitle_GainsCleanRomajiToken_JF755()
+    {
+        var result = KeywordMatcher.TitleTokens("ヨルニカケル", "ja-JP");
+        Assert.Equal(new[] { "ヨルニカケル", "yorunikakeru" }, result);
+    }
+
+    [Fact]
+    public void Score_RomajiKeywords_FindKanaTitledSong_JF755()
+    {
+        // The coverage leg: the (always-romanized) query keywords must count as
+        // covering a kana-titled song through the unioned title stream.
+        var songs = YoruNiKakeruSong();
+
+        var result = KeywordMatcher.Score(songs, new[] { "yorunikakeru" }, "ja-JP");
+
+        var match = Assert.Single(result);
+        Assert.Equal("ヨルニカケル", match.Item.Name);
+    }
+
+    [Fact]
+    public void Score_KanaTitle_UnrelatedKeywords_StillEmpty_JF755()
+    {
+        var songs = YoruNiKakeruSong();
+
+        Assert.Empty(KeywordMatcher.Score(songs, new[] { "bohemian" }, "ja-JP"));
+    }
+
+    [Fact]
+    public void ScoreWithPhoneticFallback_RomajiKeywords_KanaTitle_PhoneticStageAdmits_JF755()
+    {
+        // The phonetic stage scores the same unioned title stream, so a partially
+        // drifted romaji keyword still reaches the kana-titled song there.
+        var songs = YoruNiKakeruSong();
+
+        var result = KeywordMatcher.ScoreWithPhoneticFallback(songs, new[] { "yorunikakelu" }, "ja-JP", phoneticEnabled: true);
+
+        Assert.NotEmpty(result);
+    }
+
     // ─── Score: Keyword Coverage (all must match) ───────────────────────
 
     [Fact]
@@ -738,6 +806,16 @@ public class KeywordMatcherTests
     {
         var queryTokens = KeywordMatcher.Tokenize("coffee tv", "en-US");
         Assert.True(KeywordMatcher.HasFullKeywordCoverage(queryTokens, "Coffee & TV", "en-US"));
+    }
+
+    [Fact]
+    public void HasFullKeywordCoverage_RomajiQuery_KanaTitle_Passes_JF755()
+    {
+        // JF-755: the auto-play gate resolves the candidate title through the same
+        // union as the scorer, so a kana-titled song found by romaji keywords is
+        // not demoted to a prompt by an unaccounted-token reading.
+        var queryTokens = KeywordMatcher.Tokenize("yorunikakeru", "ja-JP");
+        Assert.True(KeywordMatcher.HasFullKeywordCoverage(queryTokens, "ヨルニカケル", "ja-JP"));
     }
 
     [Fact]
