@@ -416,6 +416,59 @@ internal static class TestHelpers
             d => d is AudioPlayerPlayDirective);
 
     /// <summary>
+    /// The kana album suites' ONE album fixture (hoisted on the third identical
+    /// private copy, JF-776): a MusicAlbum plus its single track, for pairing
+    /// with <see cref="HandlerTestFixture.SetupExactMissWithFuzzyAlbums"/> and
+    /// <see cref="HandlerTestFixture.SetupAlbumTracks"/>.
+    /// </summary>
+    internal static (MediaBrowser.Controller.Entities.Audio.MusicAlbum Album, List<BaseItem> Tracks) MakeAlbum(string name)
+    {
+        var album = new MediaBrowser.Controller.Entities.Audio.MusicAlbum { Name = name, Id = Guid.NewGuid() };
+        var tracks = new List<BaseItem> { new MediaBrowser.Controller.Entities.Audio.Audio { Name = $"{name} track 1", Id = Guid.NewGuid(), ParentId = album.Id } };
+        return (album, tracks);
+    }
+
+    /// <summary>
+    /// The playlist-surface suites' acceptance assertion (hoisted on the second
+    /// copy, JF-776, because it is the load-bearing convention): the Folder
+    /// stand-ins resolve no tracks (GetManageableItems is DB-coupled in the unit
+    /// host), so an ACCEPTED match surfaces the session-ending PlaylistEmpty
+    /// Tell, reachable only past every acceptance point.
+    /// </summary>
+    internal static void AssertPlaylistAccepted(SkillResponse response, string locale, string romanizedQuery)
+    {
+        AssertNoAudioPlayDirective(response);
+        Assert.True(response.Response.ShouldEndSession == true, "an accepted match with unresolvable tracks ends in the PlaylistEmpty Tell");
+        string speech = GetSpeechText(response);
+        Assert.Contains(ResponseStrings.Get("PlaylistEmpty", locale), speech, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(ResponseStrings.Get("NotFoundPlaylist", locale, romanizedQuery), speech, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The playlist-surface suites' refusal assertion (hoisted with
+    /// <see cref="AssertPlaylistAccepted"/>, JF-776): the honest outcome is the
+    /// session-ending NotFoundPlaylist Tell and the bait's name is never spoken.
+    /// </summary>
+    internal static void AssertPlaylistRefusedAsNotFound(SkillResponse response, string locale, string romanizedQuery, string baitName)
+    {
+        AssertNoAudioPlayDirective(response);
+        Assert.True(response.Response.ShouldEndSession == true, "the honest outcome is the playlist not-found Tell");
+        string speech = GetSpeechText(response);
+        Assert.Contains(ResponseStrings.Get("NotFoundPlaylist", locale, romanizedQuery), speech, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(baitName, speech, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The always-NotFound <see cref="AlbumPlayService.FuzzyMissHandler"/> stub
+    /// the AlbumPlayService unit suites inject (JF-776: was the same discard
+    /// lambda in three files, re-edited once already for the delegate's
+    /// speechSelector parameter; one shared definition stops the next
+    /// signature change costing another N-file sweep).
+    /// </summary>
+    internal static AlbumPlayService.FuzzyMissHandler FuzzyMissNotFound { get; } =
+        (_, _, _, _, _, _, _, _, _) => Task.FromResult((BaseHandler.FuzzyMissOutcome.NotFound, (SkillResponse?)null));
+
+    /// <summary>
     /// JF-420.2/JF-707: the stored-state contract of a multi-artist ask: the
     /// FULL resolved list (ids and names in rank order, winner first, the
     /// entry a plain "yes" plays), type artist, cursor 0. The ask's SPOKEN
@@ -1352,6 +1405,56 @@ internal sealed class HandlerTestFixture
     internal Context CreateContext() => TestHelpers.CreateTestContext();
 
     internal Entities.User CreateUser() => TestHelpers.CreateTestUser();
+
+    /// <summary>
+    /// Mocks the library so every album SearchTerm tier misses (PlayAlbum's exact
+    /// tier and the cascade's tier 1) while the no-SearchTerm full-catalog scans
+    /// (PlayAlbum's JF-336 arm and the cascade's tier 2) return
+    /// <paramref name="fuzzyAlbums"/> IN ORDER (the JF-427 order-dependence
+    /// pins ride the mock's list order). Hoisted on the THIRD identical private
+    /// copy (JF-776; was private to KanaOriginAlbumFuzzyArmTests, then copied
+    /// into KanaTaggedAlbumReachabilityTests and AlbumKanaBarRefuseAndContinueTests).
+    /// </summary>
+    internal void SetupExactMissWithFuzzyAlbums(List<BaseItem> fuzzyAlbums)
+    {
+        LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                // The exact tiers (MusicAlbum + SearchTerm): miss.
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum) && q.SearchTerm != null)
+                {
+                    return new List<BaseItem>();
+                }
+
+                // The full-catalog scans (MusicAlbum, no SearchTerm).
+                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum))
+                {
+                    return fuzzyAlbums;
+                }
+
+                // Everything else (artist fallback queries): empty.
+                return new List<BaseItem>();
+            });
+    }
+
+    /// <summary>
+    /// Serves one album's track page for the ParentId (and JF-338 AlbumIds retry)
+    /// chapter queries and an empty page for every other key. Hoisted with
+    /// <see cref="SetupExactMissWithFuzzyAlbums"/> (the third-copy rule).
+    /// </summary>
+    internal void SetupAlbumTracks(MediaBrowser.Controller.Entities.Audio.MusicAlbum album, List<BaseItem> tracks)
+    {
+        LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q =>
+            {
+                Guid playKey = q.ParentId != Guid.Empty
+                    ? q.ParentId
+                    : q.AlbumIds is { Length: > 0 } ? q.AlbumIds[0] : Guid.Empty;
+                return playKey == album.Id
+                    ? new QueryResult<BaseItem> { Items = tracks, TotalRecordCount = tracks.Count }
+                    : new QueryResult<BaseItem> { Items = new List<BaseItem>(), TotalRecordCount = 0 };
+            });
+    }
 }
 
 /// <summary>

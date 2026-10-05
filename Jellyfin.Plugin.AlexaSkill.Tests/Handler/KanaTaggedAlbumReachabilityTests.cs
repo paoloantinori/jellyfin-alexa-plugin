@@ -67,57 +67,11 @@ public class KanaTaggedAlbumReachabilityTests : PluginTestBase, IDisposable
         _fx.SetupUserMock();
     }
 
-    /// <summary>
-    /// Mocks the library so every album SearchTerm tier misses (PlayAlbum's exact
-    /// tier and the cascade's tier 1) while the no-SearchTerm full-catalog scans
-    /// (PlayAlbum's JF-336 arm and the cascade's tier 2) return
-    /// <paramref name="fuzzyAlbums"/> (the KanaOriginAlbumFuzzyArmTests shape: the
-    /// production shape for a kana-tagged library, whose kana names Jellyfin's own
-    /// index cannot match to a Latin SearchTerm). Serves both the handler tests and
-    /// the cascade probe below.
-    /// </summary>
-    private void SetupExactMissWithFuzzyAlbums(List<BaseItem> fuzzyAlbums)
-    {
-        _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns<InternalItemsQuery>(q =>
-            {
-                // The exact tiers (MusicAlbum + SearchTerm): miss.
-                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum) && q.SearchTerm != null)
-                {
-                    return new List<BaseItem>();
-                }
-
-                // The full-catalog scans (MusicAlbum, no SearchTerm).
-                if (q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum))
-                {
-                    return fuzzyAlbums;
-                }
-
-                // Everything else (artist fallback queries): empty.
-                return new List<BaseItem>();
-            });
-    }
-
-    private void SetupAlbumTracks(MusicAlbum album, List<BaseItem> tracks)
-    {
-        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
-            .Returns<InternalItemsQuery>(q =>
-            {
-                Guid playKey = q.ParentId != Guid.Empty
-                    ? q.ParentId
-                    : q.AlbumIds is { Length: > 0 } ? q.AlbumIds[0] : Guid.Empty;
-                return playKey == album.Id
-                    ? new QueryResult<BaseItem> { Items = tracks, TotalRecordCount = tracks.Count }
-                    : new QueryResult<BaseItem> { Items = new List<BaseItem>(), TotalRecordCount = 0 };
-            });
-    }
-
-    private static (MusicAlbum Album, List<BaseItem> Tracks) MakeAlbum(string name)
-    {
-        var album = new MusicAlbum { Name = name, Id = Guid.NewGuid() };
-        var tracks = new List<BaseItem> { new Audio { Name = $"{name} track 1", Id = Guid.NewGuid(), ParentId = album.Id } };
-        return (album, tracks);
-    }
+    // The album mock shape is hoisted into the fixture/TestHelpers (JF-776,
+    // the third-copy rule; the KanaOriginAlbumFuzzyArmTests shape: the
+    // production shape for a kana-tagged library, whose kana names Jellyfin's
+    // own index cannot match to a Latin SearchTerm). Serves both the handler
+    // tests and the cascade probe below.
 
     // ---------------------------------------------------------------
     // PlayAlbum's own fuzzy arm (the JF-336 arm, JF-662's surface)
@@ -131,9 +85,9 @@ public class KanaTaggedAlbumReachabilityTests : PluginTestBase, IDisposable
         // Latin-script Levenshtein loop scores ~0, so the album was not-found
         // despite being the only candidate; the score-time reading resolves it.
         SetupPlugin();
-        var (album, tracks) = MakeAlbum(KanaAlbumName);
-        SetupExactMissWithFuzzyAlbums(new List<BaseItem> { album });
-        SetupAlbumTracks(album, tracks);
+        var (album, tracks) = TestHelpers.MakeAlbum(KanaAlbumName);
+        _fx.SetupExactMissWithFuzzyAlbums(new List<BaseItem> { album });
+        _fx.SetupAlbumTracks(album, tracks);
 
         var handler = CreateAlbumHandler();
 
@@ -156,9 +110,9 @@ public class KanaTaggedAlbumReachabilityTests : PluginTestBase, IDisposable
         // codes and a kana-vs-romaji length band, so the album the arm had just
         // matched would have been refused as a plain-fuzzy bait).
         SetupPlugin();
-        var (album, tracks) = MakeAlbum(KanaAlbumName);
-        SetupExactMissWithFuzzyAlbums(new List<BaseItem> { album });
-        SetupAlbumTracks(album, tracks);
+        var (album, tracks) = TestHelpers.MakeAlbum(KanaAlbumName);
+        _fx.SetupExactMissWithFuzzyAlbums(new List<BaseItem> { album });
+        _fx.SetupAlbumTracks(album, tracks);
 
         var handler = CreateAlbumHandler();
 
@@ -175,9 +129,9 @@ public class KanaTaggedAlbumReachabilityTests : PluginTestBase, IDisposable
         // pre-fix behavior byte-for-byte (the resolver is the identity for
         // kana-free names, the JF-755 TitleTokens control's string sibling).
         SetupPlugin();
-        var (album, tracks) = MakeAlbum("Abbey Road");
-        SetupExactMissWithFuzzyAlbums(new List<BaseItem> { album });
-        SetupAlbumTracks(album, tracks);
+        var (album, tracks) = TestHelpers.MakeAlbum("Abbey Road");
+        _fx.SetupExactMissWithFuzzyAlbums(new List<BaseItem> { album });
+        _fx.SetupAlbumTracks(album, tracks);
 
         var handler = CreateAlbumHandler();
 
@@ -194,7 +148,7 @@ public class KanaTaggedAlbumReachabilityTests : PluginTestBase, IDisposable
     private Task<SkillResponse?> CallAlbumCascade(string slotText, MusicAlbum album)
     {
         var probe = new SharedGateProbeHandler(_fx.SessionManager.Object, _fx.Config, _fx.LoggerFactory);
-        SetupExactMissWithFuzzyAlbums(new List<BaseItem> { album });
+        _fx.SetupExactMissWithFuzzyAlbums(new List<BaseItem> { album });
         return probe.CallTryAlbumFallbackAsync(
             slotText, TestHelpers.CreateJellyfinUser(), _fx.CreateUser(), _fx.CreateSession(), _fx.CreateContext(), "ja-JP",
             _fx.LibraryManager.Object, _fx.UserDataManager.Object, "jf773 album cascade probe", CancellationToken.None, kanaOrigin: null);
@@ -204,8 +158,8 @@ public class KanaTaggedAlbumReachabilityTests : PluginTestBase, IDisposable
     public async Task AlbumCascade_KanaTaggedAlbum_RomajiQuery_Plays_JF773()
     {
         SetupPlugin();
-        var (album, tracks) = MakeAlbum(KanaAlbumName);
-        SetupAlbumTracks(album, tracks);
+        var (album, tracks) = TestHelpers.MakeAlbum(KanaAlbumName);
+        _fx.SetupAlbumTracks(album, tracks);
 
         SkillResponse? result = await CallAlbumCascade(RomajiReading, album);
 
@@ -220,8 +174,8 @@ public class KanaTaggedAlbumReachabilityTests : PluginTestBase, IDisposable
         // kana slot) with the JF-661 bar armed: the same two halves as the
         // PlayAlbum kana leg, at the cascade's 90 containment-grade bar.
         SetupPlugin();
-        var (album, tracks) = MakeAlbum(KanaAlbumName);
-        SetupAlbumTracks(album, tracks);
+        var (album, tracks) = TestHelpers.MakeAlbum(KanaAlbumName);
+        _fx.SetupAlbumTracks(album, tracks);
 
         SkillResponse? result = await CallAlbumCascade(KanaAlbumName, album);
 

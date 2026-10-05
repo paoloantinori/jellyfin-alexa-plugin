@@ -50,13 +50,18 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// input resolve through KeywordMatcher.ScoringName, the string-shaped sibling
 /// of the song side's ScoringTokens replacement, so a kana-tagged album's
 /// romanized reading is what the always-romanized album query scores and
-/// collides against. The same narrowing class REMAINS on the other
-/// string-level fuzzy surfaces fed by a romanized query (SearchItemsFuzzyAsync's
-/// raw-name selector and its consumers: playlists, audiobooks, videos,
-/// podcasts, channels, series, SearchMedia/BrowseLibrary, plus their
-/// site-level FuzzyMatch legs), and the album kana bars' head-check judgment
-/// leaves an order-dependent reachability residual on suffixed kana pairs;
-/// both are tracked as JF-776.
+/// collides against. JF-776 closed that class's remaining members the same
+/// way: SearchItemsFuzzyAsync's scan selector and the site-level fuzzy legs
+/// fed by an always-romanized query (SearchMedia's pre-check, the playlist
+/// surface's FuzzyMatch / HandleFuzzyMiss / bar collision input moving
+/// together per the coupling rule, and the HandleFuzzyMiss scoring selectors
+/// with speech kept on the display name through the JF-755 speechSelector
+/// seam), the album bars' head-check refusal converted to the JF-412
+/// refuse-and-continue walk (a refused suffixed sibling no longer shadows an
+/// exact match listed after it), and the band's strip helper taught the
+/// full-width parenthetical pair. The song-side single-point kana bars keep
+/// their refuse-and-stop shape for now (tracked as JF-777); the cold-window
+/// database divergence above stands unchanged.
 /// </summary>
 internal static class KatakanaRomanizer
 {

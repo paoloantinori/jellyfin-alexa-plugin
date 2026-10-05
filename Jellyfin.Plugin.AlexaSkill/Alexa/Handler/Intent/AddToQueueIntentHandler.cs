@@ -185,10 +185,12 @@ public class AddToQueueIntentHandler : BaseHandler
         if (songs.Count > 1)
         {
             BaseItem? songMatch = null;
+            // JF-776: scoring through the romaji reading (ScoringName), speech
+            // keeps the display name (the JF-755 speechSelector seam).
             var (missOutcome, missResponse) = await HandleFuzzyMiss(
                 songQuery,
                 songs,
-                s => s.Name,
+                s => Util.KeywordMatcher.ScoringName(s.Name),
                 best => new List<(Guid, string)> { (best.Id, best.Name) },
                 DisambiguationHelper.MediaTypeSong,
                 locale,
@@ -197,7 +199,8 @@ public class AddToQueueIntentHandler : BaseHandler
                     songMatch = best;
                     return Task.FromResult<SkillResponse>(null!);
                 },
-                user: user).ConfigureAwait(false);
+                user: user,
+                speechSelector: s => s.Name).ConfigureAwait(false);
 
             if (missOutcome != FuzzyMissOutcome.NotFound)
             {

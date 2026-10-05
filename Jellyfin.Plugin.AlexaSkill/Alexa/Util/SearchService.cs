@@ -356,7 +356,16 @@ public sealed class SearchService
             return null;
         }
 
-        var match = FuzzyMatcher.FindBestMatchWithScore(query, allItems, item => item.Name);
+        // JF-776: the selector resolves through the score-time romaji reading
+        // (KeywordMatcher.ScoringName, the JF-773 album arms' resolver): the query
+        // reaching this scan is ALWAYS romanized (the JF-643 entry wiring above),
+        // so a kana-tagged candidate's raw name was unreachable content scoring
+        // ~0 on the Latin-script Levenshtein scale: permanently, on every
+        // consumer this method's own comment lists (none of them has an
+        // in-memory index). Identity for kana-free names, so Latin libraries are
+        // byte-identical; the coverage gate below reads the candidate through
+        // TitleTokens (the JF-755 union), already reading-side aware.
+        var match = FuzzyMatcher.FindBestMatchWithScore(query, allItems, item => KeywordMatcher.ScoringName(item.Name));
         // JF-526 (JF-508 sibling): this zero-result fallback feeds callers that
         // auto-play the returned item (PlayBook/PlayPodcast/PlayVideo/PlayPlaylist/
         // SearchMedia/SeriesFuzzyFallback), so the short-query full-coverage gate

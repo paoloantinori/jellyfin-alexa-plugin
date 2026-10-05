@@ -74,7 +74,7 @@ public class AlbumAnnounceVehicleTests : PluginTestBase
         var crossMedia = new CrossMediaFallback(config, logger, launch, requestTimeoutMs: 6000);
         return new AlbumPlayService(
             config, logger, launch, search, crossMedia, requestTimeoutMs: 6000,
-            (_, _, _, _, _, _, _, _) => Task.FromResult((BaseHandler.FuzzyMissOutcome.NotFound, (global::Alexa.NET.Response.SkillResponse?)null)));
+            TestHelpers.FuzzyMissNotFound);
     }
 
     private static void SetupLibrary(Mock<ILibraryManager> library, MusicAlbum album, List<Audio> tracks)

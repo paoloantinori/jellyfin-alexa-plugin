@@ -610,8 +610,6 @@ public class PlayAlbumIntentHandler : BaseHandler
             // reading the always-romanized query is in (the JF-755 matched-reading
             // pair, shared with the cascade's arm in AlbumPlayService); the
             // announcement below still speaks the DISPLAY name.
-            var fuzzyMatch = CrossMedia.FindBestNonEmbeddedMatch(album, allAlbums, a => Util.KeywordMatcher.ScoringName(a.Name), FuzzyMatcher.GetDefaultThreshold(user));
-
             // JF-662: the kana-origin album bar on this arm, the FIRST fuzzy
             // acceptance point a kana album miss flows through and one gate before
             // the JF-660-fixed entity fallback below (with both gated, every
@@ -622,22 +620,27 @@ public class PlayAlbumIntentHandler : BaseHandler
             // a romaji query false-accepts ('bitoruzu' plain-matched 'Bitorudzu'
             // at 75 with no code collision), so a kana-origin query demands the
             // real length-banded Double Metaphone collision (one shared
-            // definition with the JF-345 cascade's JF-661 bar) or falls through
-            // to the honest album not-found; the bar judges the single best only
-            // (the JF-654 head-check rule, not a JF-412 walk). `album` is the
-            // ROMANIZED local (JF-643); the flag was captured on the raw slot at
-            // entry, and the capture stays exact here: every later reassignment
-            // of `album` (JF-489/JF-492 retries, JF-411 resolution) guarantees a
-            // non-empty album result, so this arm never runs with their values.
-            if (fuzzyMatch.HasValue
-                && albumKanaOrigin
-                && !AlbumPlayService.PassesKanaOriginAlbumAcceptance(album, fuzzyMatch.Value.Item))
+            // definition with the JF-345 cascade's JF-661 bar). JF-776 (B1): the
+            // bar rides the JF-412 walk as the acceptance predicate instead of a
+            // refuse-and-stop head-check, so a refused suffixed sibling listed
+            // before the exact album no longer shadows it; a refused library with
+            // no alternate above threshold still falls through to the honest
+            // album not-found (the JF-662 bait pins). `album` is the ROMANIZED
+            // local (JF-643); the flag was captured on the raw slot at entry, and
+            // the capture stays exact here: every later reassignment of `album`
+            // (JF-489/JF-492 retries, JF-411 resolution) guarantees a non-empty
+            // album result, so this arm never runs with their values.
+            // The bar's query codes encode once and only when armed (the
+            // codes-carried encode-once idiom; disarmed requests pay no encode).
+            Func<BaseItem, bool>? albumBar = null;
+            if (albumKanaOrigin)
             {
-                Logger.LogInformation(
-                    "PlayAlbum: kana-origin query '{Query}' matched album '{Name}' score={Score} without a length-banded Double Metaphone collision, treating as a miss (JF-662)",
-                    album, fuzzyMatch.Value.Item.Name, fuzzyMatch.Value.Score);
-                fuzzyMatch = null;
+                var albumQueryCodes = DoubleMetaphone.Encode(album);
+                albumBar = a => AlbumPlayService.PassesKanaOriginAlbumAcceptance(albumQueryCodes, album.Length, a);
             }
+
+            var fuzzyMatch = CrossMedia.FindBestNonEmbeddedMatch(
+                album, allAlbums, a => Util.KeywordMatcher.ScoringName(a.Name), FuzzyMatcher.GetDefaultThreshold(user), albumBar);
 
             if (fuzzyMatch.HasValue)
             {

@@ -227,7 +227,11 @@ public class SearchMediaIntentHandler : BaseHandler
 
         // Disambiguation uses MediaTypeSong; YesIntentHandler will play matches as audio.
         // Mixed-type results (audio + video) are rare for search disambiguation.
-        BaseItem? topMatch = Search.FuzzyMatch(query, deduped, i => i.Name, user);
+        // JF-776: the string FuzzyMatch leg scores through the romaji reading
+        // (ScoringName): the coverage pre-check below and the kana bar's plain
+        // score are already reading-side aware (the JF-755 TitleTokens union /
+        // ScoringTokens), so only this leg was raw.
+        BaseItem? topMatch = Search.FuzzyMatch(query, deduped, i => Util.KeywordMatcher.ScoringName(i.Name), user);
         // JF-526 (JF-508 sibling): this site-level pre-check returns before
         // HandleFuzzyMiss, so the short-query full-coverage gate must be applied here
         // too; a gated miss falls into HandleFuzzyMiss below, whose Confirm mode asks
@@ -257,14 +261,15 @@ public class SearchMediaIntentHandler : BaseHandler
         var (missOutcome, missResponse) = await HandleFuzzyMiss(
             query,
             deduped,
-            i => i.Name,
+            i => Util.KeywordMatcher.ScoringName(i.Name),
             best => new List<(Guid, string)> { (best.Id, FormatWithTypeLabel(best)) },
             DisambiguationHelper.MediaTypeSong,
             locale,
             best => PlayItem(best, user, session, context, request, locale, jellyfinUser),
             user: user,
             context: context,
-            request: request).ConfigureAwait(false);
+            request: request,
+            speechSelector: i => i.Name).ConfigureAwait(false);
 
         if (missOutcome != FuzzyMissOutcome.NotFound)
         {
