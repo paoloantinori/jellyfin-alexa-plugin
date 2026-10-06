@@ -290,7 +290,7 @@ public class LaunchRequestHandler : BaseHandler
         if (AudiobookItems.IsAudioBook(item)
             && Plugin.Instance?.Configuration?.NativeControlsForBooks == true)
         {
-            string bookKey = ResumeMath.GetAudiobookBookKey(item);
+            string bookKey = AudiobookItems.ResolveTrackedBookKey(item, _libraryManager);
             long trackedTicks = ResumeMath.GetAudiobookStartTicks(bookKey, 0);
             Logger.LogDebug(
                 "LaunchResume: audiobook resume check bookKey={BookKey}, trackedTicks={Ticks}, userDataTicks={UserData}",

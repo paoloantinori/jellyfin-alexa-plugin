@@ -239,7 +239,7 @@ public class YesIntentHandler : BaseHandler
         if (resumeState.UseResumePlaylist)
         {
             long offeredTicks = TimeSpan.FromMilliseconds(Math.Min(resumeState.OffsetMs, int.MaxValue)).Ticks;
-            string bookKey = ResumeMath.GetAudiobookBookKey(item);
+            string bookKey = AudiobookItems.ResolveTrackedBookKey(item, _libraryManager);
             // Tracker cleared between offer and confirm: fall back to the offered offset.
             long startTicks = ResumeMath.GetAudiobookStartTicks(bookKey, offeredTicks);
 
@@ -497,7 +497,7 @@ public class YesIntentHandler : BaseHandler
 
         // JF-699 item 5: launch build BEFORE the now-playing writes (the ordering
         // policy lives on EnsureStreamTokenDeliverable).
-        SkillResponse response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, artistItems[0], user, context);
+        SkillResponse response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, artistItems[0], user, context, libraryManager: _libraryManager);
         session.NowPlayingQueue = queueItems;
         session.FullNowPlayingItem = artistItems[0];
         return response;
@@ -547,7 +547,7 @@ public class YesIntentHandler : BaseHandler
 
         // JF-699 item 5: launch build BEFORE the now-playing writes (the ordering
         // policy lives on EnsureStreamTokenDeliverable).
-        SkillResponse response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, playlistItems[0], user, context);
+        SkillResponse response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, playlistItems[0], user, context, libraryManager: _libraryManager);
         session.NowPlayingQueue = queueItems;
         session.FullNowPlayingItem = playlistItems[0];
         return response;

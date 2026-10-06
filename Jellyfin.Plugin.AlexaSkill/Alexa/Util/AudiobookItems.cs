@@ -72,6 +72,49 @@ internal static class AudiobookItems
     }
 
     /// <summary>
+    /// The ONE verdict-aware audiobook tracker key (JF-794 gate-marker blocker 2):
+    /// the key the position tracker's WRITE gate and every resume READ/CLEAR site
+    /// resolve through, so both sides apply the SAME discriminator verdict and a
+    /// shared container can no longer blend sibling books into one key. Three
+    /// outcomes, mirroring the climb: (1) the verified climb ACCEPTS, so the key is
+    /// the book folder's id (identical to <see cref="ResumeMath.GetAudiobookBookKey"/>
+    /// for a chapter leaf, kept as its own branch so the type-agnostic remap rows
+    /// resolve the same folder the resume builder concats); (2) the leaf is an
+    /// AudioBook whose ParentId RESOLVES to a Folder it does not sit directly
+    /// inside (the census shared container, or a part subfolder), so the raw
+    /// ParentId names a container of sibling books, not this book: the key is the
+    /// leaf's OWN id, making each collapsed book's position independent; (3) every
+    /// other shape (an empty ParentId, a dangling id, no manager): the raw
+    /// <see cref="ResumeMath.GetAudiobookBookKey"/> value, which the write gate
+    /// never arms (the root-book cold-key contract) so reads stay cold.
+    /// COST NOTE (the per-segment question): the write gate runs on every segment
+    /// fetch, and this helper adds one GetItemById(ParentId) (an in-memory platform
+    /// LRU hit, the same lookup the gate already does for the leaf itself) plus the
+    /// path compare; a plugin-side memo would only duplicate the platform cache and
+    /// could serve a stale verdict across a library rescan, so it stays unmemoized
+    /// like the gate's existing leaf lookup.
+    /// </summary>
+    /// <param name="item">The audiobook item (chapter leaf or single-file book; non-null).</param>
+    /// <param name="libraryManager">The library manager resolving the ParentId; null falls to the raw-key outcome.</param>
+    /// <returns>The tracker key the write gate and the reads must agree on.</returns>
+    internal static string ResolveTrackedBookKey(BaseItem item, ILibraryManager? libraryManager)
+    {
+        if (TryResolveVerifiedParentFolder(item, libraryManager) is { } bookFolder)
+        {
+            return bookFolder.Id.ToString("N");
+        }
+
+        if (item is AudioBook
+            && item.ParentId != Guid.Empty
+            && libraryManager?.GetItemById(item.ParentId) is Folder)
+        {
+            return item.Id.ToString("N");
+        }
+
+        return ResumeMath.GetAudiobookBookKey(item);
+    }
+
+    /// <summary>
     /// The JF-793 shared-container discriminator: whether the audio file sits directly
     /// inside the candidate book folder. A multi-chapter book's chapter files and an
     /// uncollapsed own-folder book's file both do; a COLLAPSED single-file book's file

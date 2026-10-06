@@ -555,7 +555,7 @@ public class ResumeIntentHandler : BaseHandler
             return null;
         }
 
-        string bookKey = ResumeMath.GetAudiobookBookKey(item);
+        string bookKey = AudiobookItems.ResolveTrackedBookKey(item, _libraryManager);
         // Review major (JF-567): the fallback ticks are CHAPTER-relative (server
         // progress of the chapter leaf), while the sliced playlist runs the WHOLE-BOOK
         // concat timeline; slicing with a chapter-relative value lands mid-chapter-1.

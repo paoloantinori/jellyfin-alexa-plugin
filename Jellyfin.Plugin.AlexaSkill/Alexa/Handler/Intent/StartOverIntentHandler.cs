@@ -155,7 +155,7 @@ public class StartOverIntentHandler : BaseHandler
             // restarted from. Cleared for every successful restart (the tracker is only
             // READ under the books flag), so a flag-off restart cannot leave a stale mark
             // behind either.
-            Plugin.Instance?.AudiobookPositionTracker?.Clear(ResumeMath.GetAudiobookBookKey(item));
+            Plugin.Instance?.AudiobookPositionTracker?.Clear(AudiobookItems.ResolveTrackedBookKey(item, _libraryManager));
         }
 
         async Task<SkillResponse> BuildRestartLaunchAsync()

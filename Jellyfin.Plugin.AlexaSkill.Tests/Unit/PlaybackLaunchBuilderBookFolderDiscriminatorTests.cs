@@ -201,35 +201,61 @@ public class PlaybackLaunchBuilderBookFolderDiscriminatorTests
     [Fact]
     public void TrackedResume_CollapsedBookUnderContainer_StaleBeyondRuntimeTicks_RestartsFromZeroAndClearsKey()
     {
-        // Code-review F2: a pre-JF-794 merged-container play left a
-        // CONTAINER-timeline high-water mark under the census book's key
-        // (GetAudiobookBookKey = the container id), which the monotonic tracker
-        // never lowers and the new single-item serves cannot displace (their
-        // scaled leaf-relative values are smaller and discarded). Saturating that
-        // stale value at the leaf runtime mints an offset == EOF: a dead resume
-        // that never heals. The JF-565 doctrine applies instead (a position at or
-        // beyond the runtime is stale state): restart from 0 and CLEAR the key so
-        // the book's next listen re-arms it.
+        // Code-review F2 + gate-marker finding 5: a pre-JF-794 merged-container play
+        // left a CONTAINER-timeline high-water mark under the census book's read key,
+        // which the monotonic tracker never lowers and the single-item serves cannot
+        // displace. Saturating it at the leaf runtime minted an offset == EOF: a dead
+        // resume that never heals. The JF-565 doctrine applies (beyond-runtime is
+        // stale): restart from 0 and CLEAR the verdict-aware key. PRODUCTION CONFIG
+        // (gate-marker finding 5): the books flag is ON and the device capable - the
+        // clamped-to-0 flat build then DELEGATES through the chokepoint to the
+        // single-item VideoApp launch, which is the shape this pin asserts.
         var (book, _, library) = CollapsedBookShape();
-        // The flag is forced OFF for hermeticity against the class-order leak (the
-        // chokepoint tests leave it ON on the shared instance, and a clamped-to-0
-        // offset would then delegate to the VideoApp single-item launch).
-        TestHelpers.EnsurePluginInstance(new PluginConfiguration { ServerAddress = "http://localhost:8096/" }, LoggerFactory.Create(b => { }), c => c.NativeControlsForBooks = false, "jf794-builder-tests");
+        var builder = CreateNativeControlsBuilder();
         var tracker = TestHelpers.CreatePositionTracker("jf794-stale-container-mark");
         using var trackerSwap = TestHelpers.SwapPluginPositionTracker(tracker);
-        tracker.RecordSegment(ResumeMath.GetAudiobookBookKey(book), 90_000); // a huge merged-timeline mark
-        long staleTicks = tracker.GetPositionTicks(ResumeMath.GetAudiobookBookKey(book));
+        // The mark sits under the book's READ key (post-blocker-2 the verdict-aware
+        // key for a census book is its OWN leaf id) at a beyond-runtime value.
+        tracker.RecordSegment(book.Id.ToString(), 90_000);
+        long staleTicks = tracker.GetPositionTicks(book.Id.ToString());
         Assert.True(staleTicks > book.RunTimeTicks!.Value, "fixture setup: the stale mark is beyond the leaf runtime");
-        var builder = CreatePlainBuilder();
 
         SkillResponse response = builder.BuildAudiobookResumeResponse(
             book, staleTicks, TestHelpers.CreateTestUser(jellyfinToken: "tok"), TestHelpers.CreateContextWithVideoApp(), library.Object);
 
-        var directive = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
-        Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
+        // The flag-on capable-device shape: the flat resume's 0 offset delegates to
+        // the VideoApp single-item launch (the same surface a fresh single-file
+        // book ask takes), never the container concat.
+        var directive = Assert.Single(response.Response.Directives.OfType<VideoAppLaunchDirective>());
+        Assert.Contains($"alexaskill/api/video-audio/{book.Id}/stream.m3u8", directive.VideoItem.Source, StringComparison.Ordinal);
+        Assert.DoesNotContain("start=", directive.VideoItem.Source, StringComparison.Ordinal);
 
-        // The poison mark is cleared, so the book's fresh listening re-arms the key.
-        Assert.Equal(0, tracker.GetPositionTicks(ResumeMath.GetAudiobookBookKey(book)));
+        // The poison mark is cleared under the verdict-aware key (the book's OWN
+        // leaf key), so the book's fresh listening re-arms it.
+        Assert.Equal(0, tracker.GetPositionTicks(book.Id.ToString()));
+    }
+
+    [Fact]
+    public void FreshLaunch_AudioBookWithEmptyParentId_RidingAlbumCollection_KeepsAlbumConcat()
+    {
+        // Gate-marker finding 6: an AudioBook with an EMPTY ParentId riding an album
+        // collection kept the album-concat arm pre-JF-794, and the restore keeps it
+        // (the reroute is reserved for the rejected NON-EMPTY-ParentId climb).
+        var config = new PluginConfiguration { ServerAddress = "http://localhost:8096/" };
+        var builder = TestHelpers.CreateLaunchBuilder(config);
+        Guid albumId = Guid.NewGuid();
+        var bookTrack = new AudioBook { Name = "Book Track", Id = Guid.NewGuid() };
+
+        SkillResponse response = builder.BuildVideoAppAudioResponse(
+            bookTrack.Id.ToString(),
+            bookTrack,
+            TestHelpers.CreateTestUser(jellyfinToken: "tok"),
+            context: TestHelpers.CreateContextWithVideoApp(),
+            collectionParentId: albumId);
+
+        var directive = Assert.Single(response.Response.Directives.OfType<VideoAppLaunchDirective>());
+        Assert.Contains($"alexaskill/api/video-audio/audiobook/{albumId}/stream.m3u8", directive.VideoItem.Source, StringComparison.Ordinal);
+        Assert.DoesNotContain($"video-audio/{bookTrack.Id}/", directive.VideoItem.Source, StringComparison.Ordinal);
     }
 
     [Fact]

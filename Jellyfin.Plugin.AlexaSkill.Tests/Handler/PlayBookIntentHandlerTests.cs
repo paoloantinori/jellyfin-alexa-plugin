@@ -1563,6 +1563,65 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
         Assert.Equal(DeviceQueueManager.LaunchRoute.VideoApp, route);
     }
 
+    // JF-794 gate-marker BLOCKER 2 (the read side of the cross-book bleed): the
+    // tracked-resume read resolves the ONE verdict-aware key, so a collapsed census
+    // book reads its OWN leaf key - not the shared container key a sibling book's
+    // listening wrote. RED on the pre-blocker tree: the read used the raw
+    // GetAudiobookBookKey (the container), so this pin saw the sibling's 5-minute
+    // mark instead of the book's own 50-second position.
+    [Fact]
+    public async Task PlayBook_CollapsedBook_TrackedResume_ReadsOwnLeafKeyNotTheSharedContainerKey()
+    {
+        _fx.Config.NativeControlsForBooks = true;
+        var tracker = TestHelpers.CreatePositionTracker("playbook-crossbook-jf794");
+        using var trackerSwap = TestHelpers.SwapPluginPositionTracker(tracker);
+
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(bookName: "Radical Candor");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+
+        Guid containerId = Guid.NewGuid();
+        var book = new AudioBook
+        {
+            Name = "Radical Candor",
+            Id = Guid.NewGuid(),
+            ParentId = containerId,
+            RunTimeTicks = TimeSpan.FromMinutes(20).Ticks,
+            Path = "/audiobooks/Radical Candor/Radical Candor.m4b"
+        };
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
+            .Returns(new List<BaseItem> { book });
+
+        _fx.SetupBookFolder(containerId, "Audiobooks", "/audiobooks");
+
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+            {
+                Items = Array.Empty<BaseItem>(),
+                TotalRecordCount = 0
+            });
+
+        // The sibling book listened 5 minutes (its mark under the SHARED container
+        // key, the pre-blocker blend); THIS book listened 50 seconds (its own leaf
+        // key, the verdict-aware shape the record gate now writes).
+        tracker.RecordSegment(containerId.ToString(), 31);
+        tracker.RecordSegment(book.Id.ToString(), 6);
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // The tracked arm fired (the leaf key is warm) and the flat chapter resume
+        // carries THIS book's 50-second position - not the sibling's 5 minutes.
+        var audioDirective = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+        Assert.Equal((int)TimeSpan.FromSeconds(50).TotalMilliseconds, audioDirective.AudioItem.Stream.OffsetInMilliseconds);
+        Assert.Equal(book.Id.ToString(), audioDirective.AudioItem.Stream.Token);
+    }
+
     // Code-review F4 (the JF-794 round): the METADATA-REMAPPED book shape - the
     // chapters query returns Audio-typed rows (the JF-784 leg-3 row set) - has a
     // deliberately ASYMMETRIC behavior this pin holds in place while JF-799 decides

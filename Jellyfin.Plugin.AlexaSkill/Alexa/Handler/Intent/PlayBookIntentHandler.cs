@@ -431,7 +431,10 @@ public class PlayBookIntentHandler : BaseHandler
         // chapter resume (a chapter-relative position cannot slice the book timeline).
         if (Plugin.Instance?.Configuration?.NativeControlsForBooks == true)
         {
-            string bookKey = ResumeMath.GetAudiobookBookKey(trackItems[startIndex]);
+            // JF-794 blocker 2: the ONE verdict-aware key (a collapsed book under a
+            // shared container reads its OWN leaf key, not the container key every
+            // sibling book writes).
+            string bookKey = AudiobookItems.ResolveTrackedBookKey(trackItems[startIndex], _libraryManager);
             // Review major (JF-567): only the TRACKER's book-timeline position may
             // slice the concat playlist; the FindResumeTrackIndex fallback is
             // CHAPTER-relative and would land mid-chapter-1 on the book timeline.

@@ -47,19 +47,27 @@ WHY NOT UNIFY NOW (the review's both-directions analysis):
 - Unifying the RESUME arm to AudioBook-gated deletes the seek-bar resume for exactly
   the JF-784 leg-3 row set the concat endpoint explicitly serves.
 
-THE SHARPEST CONCRETE HAZARD TO PROBE (the review's finding, restated as the
-acceptance evidence): for a remapped book the fresh arm only ever serves single-item
-4s-segment streams, whose `RecordPositionProgress` writes are LEAF-RELATIVE (scaled)
-under the folder key; the tracked resume then slices the BOOK concat timeline at that
-leaf-relative value - the exact JF-567 "chapter-relative value slicing the book
-timeline lands mid-chapter-1" class the tracked arm's tracker-first gate was built to
-keep out. Whether this mis-slices in practice needs a device probe.
+THE SHARPEST CONCRETE HAZARD TO PROBE (the review's finding, RESTATED at the JF-794
+gate-marker round after correcting its reachability): the original phrasing claimed
+the remap fresh arm's single-item serves write LEAF-RELATIVE marks under the folder
+key - that was WRONG, and a probe built on it returns a vacuous negative. The write
+gate (`VideoAudioController.RecordPositionProgress`, JF-694) requires an
+`is AudioBook` leaf, so an Audio-typed remap chapter's single-item serves record
+NOTHING: listening through the fresh arm leaves the tracker cold and the tracked
+resume never fires from that listening at all. The mis-slice the JF-567 class
+describes is reachable only through a MIXED row set: the same folder also carrying
+AudioBook-typed rows, whose folder-keyed (concat or leaf-single-item) serves write
+BOOK-timeline marks that the type-agnostic resume then slices at. A device probe
+must therefore build a MIXED-row-set fixture (AudioBook-typed rows plus Audio-typed
+rows under one verified folder), listen across row types, and observe where the
+sliced concat lands; a pure-remap fixture proves nothing.
 
 ACCEPTANCE CRITERIA (when picked up):
-- Device probe first: build a remapped-book fixture in the test library (Audio-typed
-  chapter rows under a book folder), listen flat to chapter N via a fresh ask, then
-  "resume", and observe where the sliced concat lands (mid-chapter-1 vs the correct
-  book position).
+- Device probe first, with a MIXED row set (see the corrected hazard above: a pure
+  Audio-typed remap fixture records nothing and proves nothing): AudioBook-typed
+  rows PLUS Audio-typed rows under one verified book folder, listen across row
+  types via fresh asks, then "resume", and observe where the sliced concat lands
+  (mid-chapter-1 vs the correct book position).
 - Decide the unification direction WITH the music-safe discriminator prerequisite
   (fresh-arm type-agnostic requires rejecting MusicAlbum/Playlist parents or gating
   on the books library; resume-arm gating requires accepting the remap seek-bar loss).

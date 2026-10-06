@@ -1718,7 +1718,22 @@ public sealed class PlaybackLaunchBuilder
             _logger.LogInformation(
                 "BuildAudiobookResumeResponse: book item {ItemId} ('{Title}') has no verified book folder (shared container, unresolvable ParentId, or no library manager threaded); resuming as its own single track (JF-794)",
                 item.Id, item.Name);
-            return BuildFlatChapterResume(item, startTicks, user, context);
+            long safeTicks = ClampResumeTicksToRuntime(item, Math.Max(startTicks, 0), "Audiobook rejected-climb resume");
+            if (startTicks > 0 && safeTicks == 0)
+            {
+                // Gate-marker F2 + blocker coherence: the mark under this book's read
+                // key names a foreign timeline (a pre-JF-794 merged-container value,
+                // or another book's segments under the shared container key), and the
+                // monotonic high-water mark can never be displaced by this book's own
+                // smaller records - a stale beyond-runtime value is poison, so clear
+                // the key the reads resolve through and let the fresh listen re-arm
+                // it. The SCREENLESS arm deliberately does NOT clear (a valid
+                // whole-book position under a verified folder key must survive).
+                Plugin.Instance?.AudiobookPositionTracker?.Clear(
+                    AudiobookItems.ResolveTrackedBookKey(item, libraryManager));
+            }
+
+            return BuildFlatChapterResume(item, safeTicks, user, context);
         }
 
         // JF-567: this GUID feeds a URL path segment, so it keeps the default dashed
@@ -1785,21 +1800,21 @@ public sealed class PlaybackLaunchBuilder
     /// JF-505 branch) and the JF-794 rejected-climb degrade (the chapter's ParentId
     /// is a shared container or an unverified/unresolvable folder, so no book
     /// timeline exists to slice). The single chapter plays flat, but startTicks may
-    /// count a foreign timeline (the whole-book concat timeline of a tracker-first
-    /// resolution, or a PRE-JF-794 merged-container timeline value persisted under
-    /// the same key), so the JF-565 clamp applies (code-review F2): a position at or
-    /// beyond the chapter's runtime cannot be a legitimate mid-chapter resume, only
-    /// stale state - saturating it at the runtime (this helper's pre-F2 shape) mints
-    /// an offset == end-of-stream, a dead resume the monotonic tracker mark can
-    /// never heal (the stale container-timeline value dwarfs every new
-    /// leaf-relative record, which RecordSegment discards below the high-water
-    /// mark). A stale value therefore restarts from 0 AND clears the tracker key:
-    /// the mark is provably poison for this book, and clearing re-arms it for the
-    /// fresh listen. An UNKNOWN runtime fails closed to a fresh start too (the same
-    /// JF-565 rule the episode and audio-route launches apply).
+    /// count a timeline the chapter-flat stream cannot express (the whole-book
+    /// concat timeline of a tracker-first resolution): the JF-565 clamp applies
+    /// (code-review F2), so a position at or beyond the chapter's runtime restarts
+    /// the chapter from 0 instead of saturating at an end-of-stream offset, and an
+    /// UNKNOWN runtime fails closed to a fresh start too (the same JF-565 rule the
+    /// episode and audio-route launches apply).
+    /// MARK POLICY (gate-marker blocker 1, the load-bearing split): the tracker
+    /// mark is PRESERVED. On the SCREENLESS branch a beyond-runtime position is a
+    /// VALID whole-book position (the user is hours into a verified book; the mark
+    /// lives under the folder key the capable-device resume still reads), so
+    /// clearing it there was data loss; the rejected-climb arm performs its own
+    /// narrower clear beside its call site (the container-timeline poison case).
     /// </summary>
     /// <param name="item">The audiobook chapter to resume flat.</param>
-    /// <param name="startTicks">The resume position in .NET ticks (the JF-565 clamp applies).</param>
+    /// <param name="startTicks">The resume position in .NET ticks (the JF-565 clamp applies; an already-clamped value passes through idempotently).</param>
     /// <param name="user">The plugin user (static stream URL).</param>
     /// <param name="context">The Alexa context.</param>
     /// <returns>The AudioPlayer.Play resume response.</returns>
@@ -1810,13 +1825,6 @@ public sealed class PlaybackLaunchBuilder
         Context? context)
     {
         long clampedTicks = ClampResumeTicksToRuntime(item, Math.Max(startTicks, 0), "Audiobook flat resume");
-        if (startTicks > 0 && clampedTicks == 0)
-        {
-            // Code-review F2: the stale beyond-runtime mark is poison (see the doc);
-            // clear it so the book's fresh listening re-arms the key instead of every
-            // future resume re-reading the same dead value.
-            Plugin.Instance?.AudiobookPositionTracker?.Clear(ResumeMath.GetAudiobookBookKey(item));
-        }
 
         return BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll,
@@ -2560,15 +2568,20 @@ public sealed class PlaybackLaunchBuilder
             // JF-580: the URL carries the signed JF-309 stream token; log it masked.
             _logger.LogDebug("BuildVideoAppAudioResponse: itemId={ItemId}, parentId={ParentId}, title={Title}, url={Url} (audiobook concat)", itemId, bookFolder.Id, item!.Name, RequestLogRedactor.RedactUrl(videoAudioUrl));
         }
-        else if (!isAudioBook && collectionParentId is Guid concatParent)
+        else if ((!isAudioBook || item!.ParentId == Guid.Empty) && collectionParentId is Guid concatParent)
         {
             // JF-625 queue-as-concat: a music-album play in seek mode launches the
             // WHOLE album as one continuous video-audio stream (the audiobook chapter
             // shape with tracks), keyed by the album GUID. The seek bar spans the full
             // album; collectionStartTicks is the album-level resume offset (the summed
             // runtime of the tracks before the resume track) threaded by the album play
-            // service. The !isAudioBook guard keeps a book whose climb was rejected on
-            // the single-item arm (the pre-JF-794 branch order books always took).
+            // service. The guard keeps the pre-JF-794 routing byte-identical for every
+            // shape EXCEPT one deliberate reroute: an AudioBook with a NON-EMPTY
+            // ParentId whose climb was rejected (the shared-container census shape)
+            // now takes the single-item arm instead of this album concat, because the
+            // album key and the book tracker machinery must not mix; an AudioBook
+            // with an EMPTY ParentId riding an album collection keeps the album
+            // concat exactly as before (gate-marker finding 6).
             videoAudioUrl = GetAudiobookResumeUrl(concatParent.ToString(), collectionStartTicks, user);
             _logger.LogDebug("BuildVideoAppAudioResponse: itemId={ItemId}, collectionParent={ParentId}, startTicks={StartTicks}, title={Title}, url={Url} (album concat)", itemId, concatParent, collectionStartTicks, item?.Name, RequestLogRedactor.RedactUrl(videoAudioUrl));
         }
