@@ -79,7 +79,9 @@ public class KeyedOneShotDebounceTests : IDisposable
         int ran = 0;
         var started = new ManualResetEventSlim(false);
         var release = new ManualResetEventSlim(false);
-        _debounce.BeforeCallbackGate = () => { started.Set(); release.Wait(TimeSpan.FromSeconds(5)); };
+        // The park bound is 60s, not 5s: the assembly parallel phase (JF-792) can starve
+        // the test thread past 5s, and an expired park corrupts the ordering witness.
+        _debounce.BeforeCallbackGate = () => { started.Set(); release.Wait(TimeSpan.FromSeconds(60)); };
         _debounce.Arm("k", () => Interlocked.Increment(ref ran));
 
         // Park a callback inside the gate: it has started and holds the gate.
@@ -105,7 +107,9 @@ public class KeyedOneShotDebounceTests : IDisposable
         int ran = 0;
         var started = new ManualResetEventSlim(false);
         var release = new ManualResetEventSlim(false);
-        _debounce.BeforeCallbackGate = () => { started.Set(); release.Wait(TimeSpan.FromSeconds(5)); };
+        // The park bound is 60s, not 5s: the assembly parallel phase (JF-792) can starve
+        // the test thread past 5s, and an expired park corrupts the ordering witness.
+        _debounce.BeforeCallbackGate = () => { started.Set(); release.Wait(TimeSpan.FromSeconds(60)); };
         _debounce.Arm("k", () => Interlocked.Increment(ref ran));
 
         Task callback = Task.Run(() => _debounce.FireNow("k"));

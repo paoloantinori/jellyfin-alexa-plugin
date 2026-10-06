@@ -442,7 +442,9 @@ public class DeviceQueueManagerTests : IDisposable
 
         var started = new ManualResetEventSlim(false);
         var release = new ManualResetEventSlim(false);
-        _manager.TestDebounce.BeforeCallbackGate = () => { started.Set(); release.Wait(TimeSpan.FromSeconds(5)); };
+        // The park bound is 60s, not 5s: the assembly parallel phase (JF-792) can starve
+        // the test thread past 5s, and an expired park corrupts the ordering witness.
+        _manager.TestDebounce.BeforeCallbackGate = () => { started.Set(); release.Wait(TimeSpan.FromSeconds(60)); };
 
         Task callback = Task.Run(() => _manager.FirePersistForTest("device-1"));
         Assert.True(started.Wait(TimeSpan.FromSeconds(2))); // callback in flight, parked before its write
@@ -494,7 +496,9 @@ public class DeviceQueueManagerTests : IDisposable
 
         var started = new ManualResetEventSlim(false);
         var release = new ManualResetEventSlim(false);
-        _manager.TestDebounce.BeforeCallbackGate = () => { started.Set(); release.Wait(TimeSpan.FromSeconds(5)); };
+        // The park bound is 60s, not 5s: the assembly parallel phase (JF-792) can starve
+        // the test thread past 5s, and an expired park corrupts the ordering witness.
+        _manager.TestDebounce.BeforeCallbackGate = () => { started.Set(); release.Wait(TimeSpan.FromSeconds(60)); };
 
         Task callback = Task.Run(() => _manager.FirePersistForTest("device-1"));
         Assert.True(started.Wait(TimeSpan.FromSeconds(2)));
