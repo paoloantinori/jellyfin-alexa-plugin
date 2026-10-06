@@ -10,9 +10,11 @@ using RadioModeState = Jellyfin.Plugin.AlexaSkill.Alexa.RadioModeState;
 // Parallel execution model (JF-792; the assembly-level DisableTestParallelization that
 // used to live here is removed). xUnit v2 runs collections concurrently (up to
 // ProcessorCount) and runs DisableParallelization collections only AFTER every parallel
-// collection finished, one at a time (verified at source, XunitTestAssemblyRunner
-// RunTestClassesAsync at v2-2.7.0). The "Plugin" collection below is such an exclusive
-// collection: every class touching Plugin.Instance (static singleton), QueueContinuationStore,
+// collection finished, one at a time (verified at source, tag v2-2.7.0: the
+// parallel/non-parallel partition is XunitTestAssemblyRunner.RunTestCollectionsAsync;
+// the sequential classes-within-collection foreach is
+// TestCollectionRunner.RunTestClassesAsync). The "Plugin" collection below is such an
+// exclusive collection: every class touching Plugin.Instance (static singleton), QueueContinuationStore,
 // RadioModeState, PlaybackReportOrdering, or the VideoAudioController encode-gate/registry
 // statics MUST carry [Collection("Plugin")] and is thereby serialized against all of them
 // and never overlaps the parallel phase. Classes WITHOUT a collection attribute must touch
