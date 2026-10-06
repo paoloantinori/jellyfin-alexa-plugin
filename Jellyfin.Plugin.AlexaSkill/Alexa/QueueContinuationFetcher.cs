@@ -571,13 +571,17 @@ internal static class QueueContinuationFetcher
     /// <see cref="BuildScopedAudiobookChaptersQuery"/> (JF-672 code-review F1),
     /// mirroring <see cref="BuildScopedAlbumTracksQueryUnpaged"/>: builds the
     /// unpaged chapters form then applies <c>Util.LibraryFilter.ApplyLibraryFilter</c>
-    /// in the same call, so the YesIntent NON-MusicAlbum confirm leg (the JF-361
-    /// shape: a plain folder parent of chapter children confirmed under the
-    /// MediaTypeAlbum label) enumerates chapters through the ONE core's field set
-    /// AND order instead of a hand-kept initializer (the pre-JF-672 local leg
-    /// carried AlbumTrackOrder, the disc/track composite the chapters probe
-    /// refuted: ASC NULLS FIRST front-loads untagged rows, and the confirm answered
-    /// a differently-ordered book than the direct PlayBook ask).
+    /// in the same call, so the YesIntent NON-MusicAlbum confirm leg enumerates
+    /// chapters through the ONE core's field set AND order instead of a
+    /// hand-kept initializer (the pre-JF-672 local leg carried AlbumTrackOrder,
+    /// the disc/track composite the chapters probe refuted: ASC NULLS FIRST
+    /// front-loads untagged rows). DEFENSIVE-ONLY today (JF-672 gate-marker
+    /// correction): the leg has no live producer, because YesIntentHandler routes
+    /// every <c>item is AudioBook</c> confirm to PlayBook before PlayAlbum, and
+    /// PlayAlbum's own disambiguation matches are MusicAlbum-only. The sibling
+    /// exists so that IF a non-album parent ever reaches the leg (a future
+    /// producer, or the JF-791 folder resolution changing the shapes), its
+    /// chapters still come from the ONE core rather than a private initializer.
     /// </summary>
     internal static InternalItemsQuery BuildScopedAudiobookChaptersQueryUnpaged(
         Jellyfin.Database.Implementations.Entities.User? jellyfinUser,

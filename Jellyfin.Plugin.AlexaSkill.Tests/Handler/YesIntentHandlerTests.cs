@@ -664,7 +664,7 @@ public class YesIntentHandlerTests : PluginTestBase
     /// chapter order.
     /// </summary>
     [Fact]
-    public async Task HandleAsync_AlbumType_NonMusicAlbumParent_KeepsLocalMediaTypesChapterLeg()
+    public async Task HandleAsync_AlbumType_NonMusicAlbumParent_RoutesThroughChaptersCore()
     {
         var folderId = Guid.NewGuid();
         var folder = new Folder { Name = "Chapter Folder", Id = folderId };
