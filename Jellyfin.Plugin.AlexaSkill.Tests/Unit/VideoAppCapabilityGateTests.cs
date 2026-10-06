@@ -380,7 +380,9 @@ public class VideoAppCapabilityGateTests : PluginTestBase
         var config = new PluginConfiguration { ServerAddress = "http://localhost:8096/" };
         var handler = CreateBuilderProbe(config, LoggerFactory.Create(b => { }));
         var user = new Entities.User { Id = Guid.NewGuid(), JellyfinToken = "tok" };
-        var chapter = new Audio { Name = "Chapter 3", Id = Guid.NewGuid() };
+        // A runtime the 12-minute position sits within (the JF-794 F2 clamp fails
+        // closed to a fresh start on unknown or beyond-runtime positions).
+        var chapter = new Audio { Name = "Chapter 3", Id = Guid.NewGuid(), RunTimeTicks = TimeSpan.FromHours(2).Ticks };
         long startTicks = TimeSpan.FromMinutes(12).Ticks;
 
         SkillResponse response = handler.Launch.BuildAudiobookResumeResponse(chapter, startTicks, user, TestHelpers.CreateScreenlessContext());
@@ -394,16 +396,42 @@ public class VideoAppCapabilityGateTests : PluginTestBase
     [Fact]
     public void BuildAudiobookResumeResponse_VideoAppDevice_UsesResumePlaylist()
     {
+        // JF-794: the sliced playlist mints only under a VERIFIED book folder (the
+        // pre-fix bare-item shape minted audiobook/{ownId}, a URL the concat
+        // endpoint 404s on because a leaf has no audio children; the unverified
+        // shape is now pinned to the flat AudioPlayer resume below).
         var config = new PluginConfiguration { ServerAddress = "http://localhost:8096/" };
         var handler = CreateBuilderProbe(config, LoggerFactory.Create(b => { }));
         var user = new Entities.User { Id = Guid.NewGuid(), JellyfinToken = "tok" };
-        var chapter = new Audio { Name = "Chapter 3", Id = Guid.NewGuid() };
+        var (chapter, _, library) = TestHelpers.CreateVerifiedBookChapter("Chapter 3");
+        long startTicks = TimeSpan.FromMinutes(12).Ticks;
+
+        SkillResponse response = handler.Launch.BuildAudiobookResumeResponse(chapter, startTicks, user, TestHelpers.CreateContextWithVideoApp(), library.Object);
+
+        var directive = Assert.Single(response.Response.Directives.OfType<VideoAppLaunchDirective>());
+        Assert.Contains($"start={startTicks}", directive.VideoItem.Source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BuildAudiobookResumeResponse_VideoAppDevice_UnverifiedParent_DegradesToFlatResume()
+    {
+        // JF-794 superseded shape: an item whose ParentId cannot be verified (here:
+        // no manager threaded) no longer mints the dead audiobook/{ownId} URL; the
+        // flat AudioPlayer chapter resume answers instead (the screenless branch's
+        // shape, on a capable device).
+        var config = new PluginConfiguration { ServerAddress = "http://localhost:8096/" };
+        var handler = CreateBuilderProbe(config, LoggerFactory.Create(b => { }));
+        var user = new Entities.User { Id = Guid.NewGuid(), JellyfinToken = "tok" };
+        var (chapter, _, _) = TestHelpers.CreateVerifiedBookChapter("Chapter 3");
+        chapter.RunTimeTicks = TimeSpan.FromHours(2).Ticks;
         long startTicks = TimeSpan.FromMinutes(12).Ticks;
 
         SkillResponse response = handler.Launch.BuildAudiobookResumeResponse(chapter, startTicks, user, TestHelpers.CreateContextWithVideoApp());
 
-        var directive = Assert.Single(response.Response.Directives.OfType<VideoAppLaunchDirective>());
-        Assert.Contains($"start={startTicks}", directive.VideoItem.Source, StringComparison.Ordinal);
+        var directive = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+        Assert.Empty(response.Response.Directives.OfType<VideoAppLaunchDirective>());
+        Assert.Equal(chapter.Id.ToString(), directive.AudioItem.Stream.Token);
+        Assert.Equal((int)TimeSpan.FromMinutes(12).TotalMilliseconds, directive.AudioItem.Stream.OffsetInMilliseconds);
     }
 
     [Fact]

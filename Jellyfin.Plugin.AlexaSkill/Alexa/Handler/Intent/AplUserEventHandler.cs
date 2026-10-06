@@ -303,7 +303,7 @@ public class AplUserEventHandler : BaseHandler
         // The NowPlaying screen rides the BuildAudioPlayerResponse chokepoint since
         // JF-623 (every ReplaceAll play auto-attaches); the manual attach here was the
         // carousel-only leftover and would double-render.
-        SkillResponse response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source, itemIdStr, item, user, context, collectionParentId: albumFolderId);
+        SkillResponse response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source, itemIdStr, item, user, context, collectionParentId: albumFolderId, libraryManager: _libraryManager);
 
         // JF-718: the writes follow the launch build and ride the delivered-launch
         // gate; the rationale lives on AttachNowPlayingIfLaunched

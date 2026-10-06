@@ -587,6 +587,10 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
                 Path = "/audiobooks/book/chapter7.mp3"
             };
 
+            // JF-794: the builders' verified climb resolves the ParentId to the book
+            // FOLDER (the chapter file sits directly inside it).
+            _fx.SetupBookFolder(bookFolderId, "The Book", "/audiobooks/book");
+
             _fx.LibraryManager.Setup(x => x.GetItemList(It.IsAny<InternalItemsQuery>()))
                 .Returns(new List<BaseItem> { chapter });
 
@@ -674,6 +678,10 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
                 ParentId = bookFolderId,
                 Path = "/audiobooks/one-chapter-book/the-only-chapter.mp3"
             };
+
+            // JF-794: the builders' verified climb resolves the ParentId to the book
+            // FOLDER (the chapter file sits directly inside it).
+            _fx.SetupBookFolder(bookFolderId, "One Chapter Book", "/audiobooks/one-chapter-book");
 
             _fx.LibraryManager.Setup(x => x.GetItemList(It.IsAny<InternalItemsQuery>()))
                 .Returns(new List<BaseItem> { chapter });
@@ -855,6 +863,10 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
                 Path = "/audiobooks/book/chapter3.mp3"
             };
 
+            // JF-794: the builders' verified climb resolves the ParentId to the book
+            // FOLDER (the chapter file sits directly inside it).
+            _fx.SetupBookFolder(bookFolderId, "The Book", "/audiobooks/book");
+
             var session = CreateEmptySession();
             session.FullNowPlayingItem = chapter;
 
@@ -915,6 +927,10 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
                 ParentId = bookFolderId,
                 Path = "/audiobooks/book/chapter3.mp3"
             };
+
+            // JF-794: the builders' verified climb resolves the ParentId to the book
+            // FOLDER (the chapter file sits directly inside it).
+            _fx.SetupBookFolder(bookFolderId, "The Book", "/audiobooks/book");
 
             var session = CreateEmptySession();
             session.FullNowPlayingItem = chapter;
@@ -1175,12 +1191,18 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
     }
 
     /// <summary>
-    /// JF-563 review: on a screenless device the book resume degrades to the flat
-    /// AudioPlayer path, and the book-absolute tracker position is CLAMPED to the
-    /// chapter runtime so the directive never carries an offset past the stream it plays.
+    /// JF-563 review (reshaped by the JF-794 code-review F2 clamp doctrine, then
+    /// INVERTED by the gate-marker blocker 1): on a screenless device the book
+    /// resume degrades to the flat AudioPlayer path, and a book-absolute tracker
+    /// position beyond the position-holding chapter's runtime cannot be expressed
+    /// on the chapter-flat stream, so the chapter restarts from 0 - but the mark
+    /// is a VALID whole-book position (the user is 3h into an 8h book; the mark
+    /// lives under the VERIFIED folder key) and MUST SURVIVE: the next resume on
+    /// the Show (where the concat can express it) keeps working. Clearing it here
+    /// was data loss.
     /// </summary>
     [Fact]
-    public async Task SessionHeldBook_NativeControlsOn_ScreenlessDevice_DegradesToClampedFlatResume()
+    public async Task SessionHeldBook_NativeControlsOn_ScreenlessDevice_BeyondChapterRuntime_RestartsChapterButPreservesBookMark()
     {
         Plugin.Instance!.Configuration.NativeControlsForBooks = true;
         var tracker = TestHelpers.CreatePositionTracker("resume-ab-screenless");
@@ -1208,10 +1230,15 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
                 RunTimeTicks = TimeSpan.FromMinutes(5).Ticks
             };
 
+            _fx.SetupBookFolder(bookFolderId, "The Book", "/audiobooks/book");
+
             var session = CreateEmptySession();
             session.FullNowPlayingItem = chapter;
 
-            // Tracker says 10 min on the book timeline; the chapter is only 5 min long.
+            // Tracker says 10 min on the BOOK timeline; the position-holding chapter
+            // is only 5 min long. The chapter-flat stream cannot express the 10 min
+            // (the JF-565 clamp restarts the chapter at 0), but the book-absolute
+            // mark itself is valid and must survive for the capable-device resume.
             tracker.RecordSegment(bookFolderId.ToString(), 61);
 
             var response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -1220,8 +1247,13 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
 
             var audioDirective = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
             Assert.Empty(response.Response.Directives.OfType<global::Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>());
-            Assert.Equal((int)TimeSpan.FromMinutes(5).TotalMilliseconds, audioDirective.AudioItem.Stream.OffsetInMilliseconds);
+            Assert.Equal(0, audioDirective.AudioItem.Stream.OffsetInMilliseconds);
             Assert.Contains($"/Audio/{chapter.Id}/stream?static=true", audioDirective.AudioItem.Stream.Url, StringComparison.Ordinal);
+
+            // GATE-MARKER BLOCKER 1: the whole-book mark SURVIVES the screenless
+            // flat resume (it is valid book-absolute data under the verified folder
+            // key; the Show resume keeps reading it).
+            Assert.Equal(TimeSpan.FromMinutes(10).Ticks, tracker.GetPositionTicks(bookFolderId.ToString()));
         }
         finally
         {

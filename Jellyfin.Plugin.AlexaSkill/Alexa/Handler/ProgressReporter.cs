@@ -438,7 +438,7 @@ public sealed class ProgressReporter
         // policy lives on EnsureStreamTokenDeliverable; the transcode-routed
         // source is token-gated).
         AudioLaunchSource source = _launch.ResolveAudioLaunchSource(adjacentItem, itemId, user, 0);
-        SkillResponse response = _launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source, itemId, adjacentItem, user, context, queueManager: queueManager);
+        SkillResponse response = _launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source, itemId, adjacentItem, user, context, queueManager: queueManager, libraryManager: libraryManager);
         session.FullNowPlayingItem = adjacentItem;
         return response;
     }

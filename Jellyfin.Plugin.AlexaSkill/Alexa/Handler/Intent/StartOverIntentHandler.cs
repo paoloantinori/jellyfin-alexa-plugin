@@ -155,7 +155,7 @@ public class StartOverIntentHandler : BaseHandler
             // restarted from. Cleared for every successful restart (the tracker is only
             // READ under the books flag), so a flag-off restart cannot leave a stale mark
             // behind either.
-            Plugin.Instance?.AudiobookPositionTracker?.Clear(ResumeMath.GetAudiobookBookKey(item));
+            Plugin.Instance?.AudiobookPositionTracker?.Clear(AudiobookItems.ResolveTrackedBookKey(item, _libraryManager));
         }
 
         async Task<SkillResponse> BuildRestartLaunchAsync()
@@ -176,7 +176,8 @@ public class StartOverIntentHandler : BaseHandler
                     new PlainTextOutputSpeech(ResponseStrings.Get("RestartingContent", locale, item.Name)),
                     user,
                     context,
-                    request).ConfigureAwait(false);
+                    request,
+                    _libraryManager).ConfigureAwait(false);
             }
 
             // Use VideoApp for movies/episodes, AudioPlayer for audio/audiobooks
@@ -205,7 +206,7 @@ public class StartOverIntentHandler : BaseHandler
             // endpoint inside the chokepoint).
             return Launch.BuildAudioPlayerResponse(
                 PlayBehavior.ReplaceAll, Launch.GetStreamUrl(item.Id.ToString(), user), item.Id.ToString(), item, user, context,
-                queueManager: _queueManager);
+                queueManager: _queueManager, libraryManager: _libraryManager);
         }
 
         SkillResponse restartResponse = await BuildRestartLaunchAsync().ConfigureAwait(false);

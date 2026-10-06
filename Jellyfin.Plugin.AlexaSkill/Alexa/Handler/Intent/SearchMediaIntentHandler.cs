@@ -670,7 +670,8 @@ public class SearchMediaIntentHandler : BaseHandler
                 itemId,
                 item,
                 user,
-                context);
+                context,
+                libraryManager: _libraryManager);
         }
 
         // JF-714/JF-718: the now-playing writes ride a DELIVERED launch; the

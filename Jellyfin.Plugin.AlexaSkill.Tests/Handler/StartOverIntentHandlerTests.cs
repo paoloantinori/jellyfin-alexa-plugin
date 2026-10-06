@@ -522,6 +522,10 @@ public class StartOverIntentHandlerTests : PluginTestBase, IDisposable
                 Path = "/audiobooks/book/chapter7.mp3"
             };
 
+            // JF-794: the builders' verified climb resolves the ParentId to the book
+            // FOLDER (the chapter file sits directly inside it).
+            _fx.SetupBookFolder(bookFolderId, "The Book", "/audiobooks/book");
+
             var session = CreateSessionWithNowPlaying(chapter);
 
             var userData = new UserItemData

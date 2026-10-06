@@ -8573,7 +8573,12 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         var parentFolder = new MediaBrowser.Controller.Entities.Folder
         {
             Name = "One-Chapter Book",
-            Id = parentId
+            Id = parentId,
+            // JF-794 blocker 2: the verdict-aware key needs the folder's Path to
+            // verify the chapter sits directly inside (the live server always
+            // carries one; the pre-blocker fixture's Path-less folder now routes to
+            // the leaf-own key branch).
+            Path = "/audiobooks/one-chapter-book"
         };
         Guid chapterId = Guid.NewGuid();
         string chapterIdStr = chapterId.ToString("D");
@@ -8660,6 +8665,80 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         // Neither the leaf key nor the canonicalized album key may grow.
         Assert.Equal(0, tracker.GetPositionTicks(trackIdStr));
         Assert.Equal(0, tracker.GetPositionTicks(albumIdStr));
+    }
+
+    /// <summary>
+    /// JF-794 gate-marker BLOCKER 2 (the cross-book bleed): the six collapsed census
+    /// books share ONE ParentId (the "Audiobooks" container), so the raw
+    /// GetAudiobookBookKey record gate keyed every book's segments under the SAME
+    /// container key: book B's records were discarded below book A's high-water mark
+    /// (RecordSegment drops segmentNumber <= previous), B could never accumulate a
+    /// position, and B's resume read A's mark. The verdict-aware gate keys each
+    /// book under its OWN leaf id, and the container key stays cold.
+    /// RED (the raw-key gate restored): book A's fetch records under the container
+    /// key, book B's fetch is discarded below A's mark, both leaf keys read 0, and
+    /// B's read returns A's position.
+    /// </summary>
+    [Fact]
+    public async Task GetSegment_TwoCollapsedBooksUnderSharedContainer_EachRecordsUnderOwnLeafKey()
+    {
+        Guid containerId = Guid.NewGuid();
+        string containerIdStr = containerId.ToString("D");
+        var container = new MediaBrowser.Controller.Entities.Folder
+        {
+            Name = "Audiobooks",
+            Id = containerId,
+            Path = "/audiobooks"
+        };
+        _libraryManagerMock.Setup(m => m.GetItemById(containerId)).Returns(container);
+
+        Guid bookAId = Guid.NewGuid();
+        string bookAIdStr = bookAId.ToString("D");
+        var bookA = new MediaBrowser.Controller.Entities.AudioBook
+        {
+            Name = "Managing Humans",
+            Id = bookAId,
+            ParentId = containerId,
+            Path = "/audiobooks/Managing Humans/Managing Humans.m4b"
+        };
+        Guid bookBId = Guid.NewGuid();
+        string bookBIdStr = bookBId.ToString("D");
+        var bookB = new MediaBrowser.Controller.Entities.AudioBook
+        {
+            Name = "Radical Candor",
+            Id = bookBId,
+            ParentId = containerId,
+            Path = "/audiobooks/Radical Candor/Radical Candor.m4b"
+        };
+        _libraryManagerMock.Setup(m => m.GetItemById(bookAId)).Returns(bookA);
+        _libraryManagerMock.Setup(m => m.GetItemById(bookBId)).Returns(bookB);
+
+        string dirA = _cache.GetHlsDirectoryPath(bookAIdStr, 0);
+        Directory.CreateDirectory(dirA);
+        await File.WriteAllTextAsync(Path.Combine(dirA, "seg_0300.ts"), new string('x', 512));
+        _cache.RegisterHlsDirectory(bookAIdStr, 0);
+        string dirB = _cache.GetHlsDirectoryPath(bookBIdStr, 0);
+        Directory.CreateDirectory(dirB);
+        await File.WriteAllTextAsync(Path.Combine(dirB, "seg_0005.ts"), new string('x', 512));
+        _cache.RegisterHlsDirectory(bookBIdStr, 0);
+
+        var tracker = CreatePositionTracker("jf794-tracker-crossbook");
+        using var trackerSwap = SwapPluginPositionTracker(tracker);
+
+        // One controller per book (each request's token is item-scoped).
+        var controllerA = CreateController(bookAIdStr);
+        var controllerB = CreateController(bookBIdStr);
+
+        // Book A listens 20 minutes (seg_0300 at 4s); book B listens 20 seconds.
+        Assert.IsType<PhysicalFileResult>(await controllerA.GetSegment(bookAIdStr, "seg_0300.ts"));
+        Assert.IsType<PhysicalFileResult>(await controllerB.GetSegment(bookBIdStr, "seg_0005.ts"));
+
+        // Each book accumulates under its OWN leaf key (B's conservative position
+        // (2-1)*10s; A's (120-1)*10s), and the shared container key stays cold: no
+        // book's resume can read a sibling's position.
+        Assert.Equal(10 * TimeSpan.TicksPerSecond, tracker.GetPositionTicks(bookBIdStr));
+        Assert.Equal(119 * 10 * TimeSpan.TicksPerSecond, tracker.GetPositionTicks(bookAIdStr));
+        Assert.Equal(0, tracker.GetPositionTicks(containerIdStr));
     }
 
     /// <summary>

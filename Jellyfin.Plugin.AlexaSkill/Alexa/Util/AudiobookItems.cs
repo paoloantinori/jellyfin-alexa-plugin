@@ -17,51 +17,101 @@ internal static class AudiobookItems
     internal static bool IsAudioBook(BaseItem? item) => item is AudioBook;
 
     /// <summary>
-    /// Resolve the BOOK FOLDER a matched audiobook search item belongs to (JF-791).
+    /// Resolve the BOOK FOLDER a matched audiobook SEARCH item belongs to (JF-791):
+    /// the AudioBook-gated form of the ONE verified climb
+    /// (<see cref="TryResolveVerifiedParentFolder"/>, whose doc owns the climb
+    /// contract, the JF-793 shared-container story, and the JF-794 builder sync).
     /// Jellyfin never types a multi-file book folder as AudioBook (the AudioResolver
     /// skips multi-file directory collapsing, verified byte-identical at v10.11.8 and
     /// v12.2; AudioBook : Audio.Audio is a leaf class), so an AudioBook match for a
-    /// multi-chapter book is a CHAPTER leaf whose ParentId is the plain Folder. This
-    /// is the default AudioPlayer path's twin of the VideoApp builders' ParentId climb
-    /// (<c>BuildVideoAppAudioResponse</c>/<c>BuildAudiobookResumeResponse</c>): the
+    /// multi-chapter book is a CHAPTER leaf whose ParentId is the plain Folder: the
     /// paged chapters machinery needs the folder's Id and Name, which a bare Guid
-    /// cannot supply. Three deliberate divergences from that twin: this path VERIFIES
-    /// the ParentId resolves to a Folder before adopting it (the builders concat the
-    /// raw Guid, so a dangling ParentId degrades to the leaf play here but a dead URL
-    /// there); the climb is ONE level, matching the builders' raw-ParentId semantics
-    /// (a chapter under a subfolder resolves the subfolder on BOTH paths); and since
-    /// JF-793 the climb is SHARED-CONTAINER-AWARE (the live minix census, 2026-10-06:
-    /// the "Audiobooks" library container directly holds 6 collapsed single-file
-    /// books, each an AudioBook leaf whose file sits one directory DEEPER than the
-    /// container, because the resolver collapses single-file directories and hoists
-    /// the book above its own folder): a leaf that does not sit DIRECTLY inside the
-    /// resolved parent means the parent is a container of sibling books (or a part
-    /// subfolder), not a book folder, and the climb is REJECTED so the leaf plays as
-    /// its own track instead of merging the container into one queue. The builders'
-    /// raw-ParentId concat does NOT share this discriminator (their sync is filed).
-    /// A missing Path on either side cannot discriminate and defaults to the climb
-    /// (the JF-791 shape; server-side folders always carry a Path). The single-file
-    /// shapes (an AudioBook with an empty ParentId, or any non-AudioBook match), a
-    /// failed folder resolution, and the shared-container rejection return null:
-    /// callers keep the leaf shape and play it as its own track (the JF-361 duality),
-    /// never a failed request.
+    /// cannot supply. The gate exists because the callers feed AUDIOBOOK SEARCH
+    /// RESULTS (PlayBook's candidate normalization, the head climb, the YesIntent
+    /// confirm climb); the builders use the ungated seam directly because their item
+    /// argument can be an Audio-typed chapter. Null keeps the leaf shape so callers
+    /// play it as its own track (the JF-361 duality), never a failed request.
     /// </summary>
     /// <param name="item">The audiobook search match (a chapter leaf or a single-file book).</param>
-    /// <param name="libraryManager">The library manager resolving the ParentId.</param>
-    /// <returns>The book folder, or null when the item is not a chapter leaf, the parent does not resolve to a Folder, or the parent is a shared container the leaf does not sit directly inside.</returns>
-    internal static Folder? TryResolveBookFolder(BaseItem? item, ILibraryManager libraryManager)
+    /// <param name="libraryManager">The library manager resolving the ParentId; null fails closed (the seam's contract).</param>
+    /// <returns>The book folder, or null when the item is not an AudioBook chapter leaf or the climb is rejected (see the seam's contract).</returns>
+    internal static Folder? TryResolveBookFolder(BaseItem? item, ILibraryManager? libraryManager)
+        => item is AudioBook ? TryResolveVerifiedParentFolder(item, libraryManager) : null;
+
+    /// <summary>
+    /// The ONE verified ParentId climb (JF-794), shared by the search-path twin
+    /// (<see cref="TryResolveBookFolder"/>, which adds the AudioBook gate its search
+    /// results carry) and the VideoApp builders' concat decision: resolve the leaf's
+    /// ParentId to a Folder, then apply the JF-793 shared-container discriminator.
+    /// Type-agnostic BY DESIGN on this seam: the builders' item argument can be an
+    /// Audio-typed chapter of a metadata-remapped book (the JF-784 leg-3 row set),
+    /// which the AudioBook gate of the search twin would drop. FAILS CLOSED on every
+    /// unverifiable shape (a null library manager, an empty ParentId, a ParentId that
+    /// resolves to no Folder, a leaf that does not sit directly inside the resolved
+    /// folder): null, so every consumer degrades to the leaf playing as its own
+    /// track, never a merged-container or dead-ParentId concat. When it ACCEPTS, the
+    /// returned folder's Id is exactly the leaf's ParentId, so the discriminated
+    /// concat URL is byte-identical to the pre-JF-794 raw climb.
+    /// </summary>
+    /// <param name="item">The audio leaf whose ParentId names the candidate book folder.</param>
+    /// <param name="libraryManager">The library manager resolving the ParentId; null fails closed.</param>
+    /// <returns>The verified book folder, or null when the climb cannot be verified or is rejected.</returns>
+    internal static Folder? TryResolveVerifiedParentFolder(BaseItem? item, ILibraryManager? libraryManager)
     {
-        if (item is not AudioBook chapter || chapter.ParentId == Guid.Empty)
+        if (item is null || item.ParentId == Guid.Empty || libraryManager is null)
         {
             return null;
         }
 
-        if (libraryManager.GetItemById(chapter.ParentId) is not Folder folder)
+        if (libraryManager.GetItemById(item.ParentId) is not Folder folder)
         {
             return null;
         }
 
-        return SitsDirectlyInside(chapter, folder) ? folder : null;
+        return SitsDirectlyInside(item, folder) ? folder : null;
+    }
+
+    /// <summary>
+    /// The ONE verdict-aware audiobook tracker key (JF-794 gate-marker blocker 2):
+    /// the key the position tracker's WRITE gate and every resume READ/CLEAR site
+    /// resolve through, so both sides apply the SAME discriminator verdict and a
+    /// shared container can no longer blend sibling books into one key. Three
+    /// outcomes, mirroring the climb: (1) the verified climb ACCEPTS, so the key is
+    /// the book folder's id (identical to <see cref="ResumeMath.GetAudiobookBookKey"/>
+    /// for a chapter leaf, kept as its own branch so the type-agnostic remap rows
+    /// resolve the same folder the resume builder concats); (2) the leaf is an
+    /// AudioBook whose ParentId RESOLVES to a Folder it does not sit directly
+    /// inside (the census shared container, or a part subfolder), so the raw
+    /// ParentId names a container of sibling books, not this book: the key is the
+    /// leaf's OWN id, making each collapsed book's position independent; (3) every
+    /// other shape (an empty ParentId, a dangling id, no manager): the raw
+    /// <see cref="ResumeMath.GetAudiobookBookKey"/> value, which the write gate
+    /// never arms (the root-book cold-key contract) so reads stay cold.
+    /// COST NOTE (the per-segment question): the write gate runs on every segment
+    /// fetch, and this helper adds one GetItemById(ParentId) (an in-memory platform
+    /// LRU hit, the same lookup the gate already does for the leaf itself) plus the
+    /// path compare; a plugin-side memo would only duplicate the platform cache and
+    /// could serve a stale verdict across a library rescan, so it stays unmemoized
+    /// like the gate's existing leaf lookup.
+    /// </summary>
+    /// <param name="item">The audiobook item (chapter leaf or single-file book; non-null).</param>
+    /// <param name="libraryManager">The library manager resolving the ParentId; null falls to the raw-key outcome.</param>
+    /// <returns>The tracker key the write gate and the reads must agree on.</returns>
+    internal static string ResolveTrackedBookKey(BaseItem item, ILibraryManager? libraryManager)
+    {
+        if (TryResolveVerifiedParentFolder(item, libraryManager) is { } bookFolder)
+        {
+            return bookFolder.Id.ToString("N");
+        }
+
+        if (item is AudioBook
+            && item.ParentId != Guid.Empty
+            && libraryManager?.GetItemById(item.ParentId) is Folder)
+        {
+            return item.Id.ToString("N");
+        }
+
+        return ResumeMath.GetAudiobookBookKey(item);
     }
 
     /// <summary>
@@ -77,9 +127,11 @@ internal static class AudiobookItems
     /// not the earlier fail-open climb - a Path-less or bare-name leaf under a
     /// shared ParentId container is exactly the library-merge hazard finding 2
     /// closed, and an unverifiable layout plays the leaf alone, the pre-JF-791
-    /// behavior, never the merged container).
+    /// behavior, never the merged container). Widened from AudioBook to BaseItem at
+    /// JF-794 when the builders joined this seam (see
+    /// <see cref="TryResolveVerifiedParentFolder"/>); the body reads only the Path.
     /// </summary>
-    private static bool SitsDirectlyInside(AudioBook chapter, Folder folder)
+    private static bool SitsDirectlyInside(BaseItem chapter, Folder folder)
     {
         if (string.IsNullOrEmpty(chapter.Path) || string.IsNullOrEmpty(folder.Path))
         {

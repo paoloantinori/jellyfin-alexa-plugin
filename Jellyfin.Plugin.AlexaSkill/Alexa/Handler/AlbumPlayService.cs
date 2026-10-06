@@ -740,7 +740,7 @@ public sealed class AlbumPlayService
         // track): added so a warm-cache slice lands mid-track where listening stopped.
         albumStartTicks += trackedInTrackTicks;
 
-        SkillResponse albumResponse = _launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, _launch.GetStreamUrl(item_id, user), item_id, albumItems[startIndex], user, context, announceLocale: locale, collectionParentId: album.Id, collectionStartTicks: albumStartTicks);
+        SkillResponse albumResponse = _launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, _launch.GetStreamUrl(item_id, user), item_id, albumItems[startIndex], user, context, announceLocale: locale, collectionParentId: album.Id, collectionStartTicks: albumStartTicks, libraryManager: libraryManager);
 
         session.NowPlayingQueue = queueItems;
         session.FullNowPlayingItem = albumItems[startIndex];

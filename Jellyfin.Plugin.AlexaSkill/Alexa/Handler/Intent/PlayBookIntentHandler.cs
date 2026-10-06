@@ -431,7 +431,10 @@ public class PlayBookIntentHandler : BaseHandler
         // chapter resume (a chapter-relative position cannot slice the book timeline).
         if (Plugin.Instance?.Configuration?.NativeControlsForBooks == true)
         {
-            string bookKey = ResumeMath.GetAudiobookBookKey(trackItems[startIndex]);
+            // JF-794 blocker 2: the ONE verdict-aware key (a collapsed book under a
+            // shared container reads its OWN leaf key, not the container key every
+            // sibling book writes).
+            string bookKey = AudiobookItems.ResolveTrackedBookKey(trackItems[startIndex], _libraryManager);
             // Review major (JF-567): only the TRACKER's book-timeline position may
             // slice the concat playlist; the FindResumeTrackIndex fallback is
             // CHAPTER-relative and would land mid-chapter-1 on the book timeline.
@@ -445,7 +448,7 @@ public class PlayBookIntentHandler : BaseHandler
                 // refusal (RequestPipeline answers it; nothing below runs) or delivered
                 // the launch, so the JF-693 verdict wrapper is gone and the state/announce
                 // writes simply follow the launch.
-                SkillResponse trackedResponse = Launch.BuildAudiobookResumeResponse(trackItems[startIndex], trackedTicks, user, context);
+                SkillResponse trackedResponse = Launch.BuildAudiobookResumeResponse(trackItems[startIndex], trackedTicks, user, context, _libraryManager);
 
                 ApplyBookPlaybackState();
                 PlaybackLaunchBuilder.AttachAnnounceIfLaunched(
@@ -472,7 +475,8 @@ public class PlayBookIntentHandler : BaseHandler
                     SpeechBuilder.BuildNowPlayingSpeech(books[0].Name, locale, Launch.GetAnnounceNowPlaying(user)),
                     user,
                     context,
-                    request).ConfigureAwait(false);
+                    request,
+                    _libraryManager).ConfigureAwait(false);
 
                 // JF-699 item 1: throw-or-launch (see the tracked arm above).
                 ApplyBookPlaybackState();
@@ -481,7 +485,7 @@ public class PlayBookIntentHandler : BaseHandler
         }
 
         SkillResponse standardResponse = Launch.BuildAudioPlayerResponse(
-            PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, trackItems[startIndex], user, context, offsetMs);
+            PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, trackItems[startIndex], user, context, offsetMs, libraryManager: _libraryManager);
 
         // JF-699 item 1: throw-or-launch (see the tracked arm above); the state
         // writes and the resume announce simply follow the launch.

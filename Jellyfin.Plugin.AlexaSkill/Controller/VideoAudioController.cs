@@ -4218,17 +4218,21 @@ public class VideoAudioController : ControllerBase
     /// timeline is exactly the tracker's read arithmetic. Album entries are
     /// LOAD-BEARING: in seek mode AlbumPlayService reads the album key as the resume
     /// truth (JF-625 criterion 3), so this arm must stay untouched.</item>
-    /// <item>An AudioBook LEAF with a ParentId records under its BOOK key
-    /// (<see cref="ResumeMath.GetAudiobookBookKey"/>: the ParentId), the same
-    /// expression every mint site reads. This is the one-chapter redirect's shape: the
-    /// chapters query selects AudioBook items, so the single chapter IS the book and
-    /// the leaf's own timeline is the book timeline. The leaf's 4s song-core index is
-    /// translated onto the tracker's 10s concat timeline by
+    /// <item>An AudioBook LEAF with a ParentId that resolves to a Folder records
+    /// under the ONE verdict-aware key (<see cref="AudiobookItems.ResolveTrackedBookKey"/>):
+    /// the book FOLDER's id when the leaf sits directly inside it (the multi-chapter
+    /// book and the one-chapter redirect shape, where the leaf's own timeline IS the
+    /// book timeline), or the leaf's OWN id when the ParentId is a shared container
+    /// of sibling books (JF-794 gate-marker blocker 2: the raw ParentId key blended
+    /// the container's books, discarding one book's records below another's
+    /// high-water mark). The leaf's 4s song-core index is translated onto the
+    /// tracker's 10s concat timeline by
     /// <see cref="Alexa.Playback.AudiobookPositionTracker.RecordScaledSegment"/>.
-    /// A root-level single-file book (EMPTY ParentId) is deliberately NOT recorded:
-    /// its mint would build <c>audiobook/{ownId}</c>, and the concat endpoint's
-    /// children query under a leaf returns zero chapters (404), so that key must stay
-    /// cold for resume to keep the working plain single-item launch.</item>
+    /// A root-level single-file book (EMPTY ParentId) and a leaf with a DANGLING
+    /// ParentId are deliberately NOT recorded: their raw keys are write-only dead
+    /// weight (the root key especially: the concat endpoint's children query under
+    /// a leaf returns zero chapters, so that key must stay cold for resume to keep
+    /// the working plain single-item launch).</item>
     /// <item>Every other leaf (episodes, songs) is skipped: its key is write-only dead
     /// weight in the persisted positions file. Deliberately NOT
     /// <c>AudiobookItems.IsAudioBookOrChapter</c>: that helper's plain-Audio arm would
@@ -4262,10 +4266,20 @@ public class VideoAudioController : ControllerBase
             }
             else if (item != null
                 && AudiobookItems.IsAudioBook(item)
-                && item.ParentId != Guid.Empty)
+                && item.ParentId != Guid.Empty
+                && _libraryManager.GetItemById(item.ParentId) is Folder)
             {
+                // JF-794 gate-marker blocker 2: the key is the ONE verdict-aware key
+                // (AudiobookItems.ResolveTrackedBookKey), so a leaf under a SHARED
+                // container records under its OWN id instead of the container key the
+                // sibling books also write (the raw GetAudiobookBookKey blend: book
+                // B's records were discarded below book A's high-water mark and B's
+                // resume read A's position). The added Folder resolution is one
+                // in-memory platform-cache lookup per segment fetch (the cost note on
+                // the helper). A leaf whose ParentId resolves to NO Folder (dangling)
+                // records nothing: the key would be write-only dead weight.
                 Plugin.Instance?.AudiobookPositionTracker?.RecordScaledSegment(
-                    ResumeMath.GetAudiobookBookKey(item),
+                    AudiobookItems.ResolveTrackedBookKey(item, _libraryManager),
                     segmentNumber,
                     SongHlsSegmentSeconds);
             }

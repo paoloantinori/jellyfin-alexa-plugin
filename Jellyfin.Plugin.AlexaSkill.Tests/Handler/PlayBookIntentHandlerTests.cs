@@ -625,6 +625,82 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
         }
     }
 
+    // JF-794 RED PROOF (the flag-on twin of the test above, the defect this task
+    // closes): with NativeControlsForBooks ON, the fresh launch routed through
+    // BuildAudiobookVideoAppLaunchResponseAsync, whose BuildVideoAppAudioResponse
+    // climbed the RAW ParentId, so the census shape minted
+    // audiobook/{containerId} and the VideoApp player would have served every
+    // sibling book as one seek-bar timeline. The builders now share the ONE
+    // JF-793 discriminator, so the collapsed book launches through the
+    // SINGLE-ITEM video-audio endpoint keyed by its own leaf id (the same shape a
+    // root-level single-file book gets), never the container concat.
+    [Fact]
+    public async Task PlayBook_CollapsedSingleFileBook_UnderSharedContainer_NativeControls_PlaysSingleItemLaunch()
+    {
+        _fx.Config.NativeControlsForBooks = true;
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(bookName: "Managing Humans");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+
+        Guid containerId = Guid.NewGuid();
+        var book = new AudioBook
+        {
+            Name = "Managing Humans: Biting and Humorous Tales of a Software Engineering Manager",
+            Id = Guid.NewGuid(),
+            ParentId = containerId,
+            // The collapsed shape: the file sits in its OWN subfolder below the shared
+            // container (the live path shape from the census).
+            Path = "/audiobooks/Managing Humans/Audiobook - Managing_Humans.m4b"
+        };
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
+            .Returns(new List<BaseItem> { book });
+
+        _fx.LibraryManager.Setup(l => l.GetItemById(containerId))
+            .Returns(new Folder { Name = "Audiobooks", Id = containerId, Path = "/audiobooks" });
+
+        // The chapters query under the CONTAINER would enumerate the sibling
+        // single-file books (and, on the real server, every chapter of every book
+        // in the library): the merge the discriminator must prevent. Under the
+        // leaf's own id the real server enumerates nothing (the no-climb shape),
+        // which the else branch models.
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q => q.ParentId == containerId
+                ? new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+                {
+                    Items = new[]
+                    {
+                        book,
+                        new AudioBook
+                        {
+                            Name = "Radical Candor",
+                            Id = Guid.NewGuid(),
+                            ParentId = containerId,
+                            Path = "/audiobooks/Radical Candor/Radical Candor.m4b"
+                        }
+                    },
+                    TotalRecordCount = 2
+                }
+                : new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+                {
+                    Items = Array.Empty<BaseItem>(),
+                    TotalRecordCount = 0
+                });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        var videoDirective = Assert.IsType<global::Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>(
+            Assert.Single(response.Response.Directives));
+        Assert.NotNull(videoDirective.VideoItem?.Source);
+        Assert.Contains($"alexaskill/api/video-audio/{book.Id}/stream.m3u8", videoDirective.VideoItem.Source, StringComparison.Ordinal);
+        Assert.DoesNotContain($"audiobook/{containerId}", videoDirective.VideoItem.Source, StringComparison.Ordinal);
+    }
+
     // Gate-marker tail F1 pins: the discriminator FAILS CLOSED. The earlier
     // fail-open returned true (the climb) for every shape it could not verify,
     // so a Path-less or bare-filename leaf under a shared ParentId container
@@ -1182,6 +1258,56 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
         }
     }
 
+
+    /// <summary>
+    /// JF-794: the VERIFIED multi-chapter book fixture the flag-on concat arms demand
+    /// (the chapter files sit DIRECTLY inside the resolved folder, so the builders'
+    /// shared discriminator accepts the climb and the concat mints under the folder
+    /// id). Wires the AudioBook search, the folder resolution, and the chapters page;
+    /// the caller warms the tracker under the FOLDER key (GetAudiobookBookKey of any
+    /// chapter = the folder id).
+    /// </summary>
+    private (Folder BookFolder, AudioBook Chapter) SetupVerifiedHobbitBook()
+    {
+        Guid folderId = Guid.NewGuid();
+        var searchLeaf = new AudioBook
+        {
+            Name = "The Hobbit",
+            Id = Guid.NewGuid(),
+            ParentId = folderId,
+            Path = "/audiobooks/the-hobbit/ch00.mp3"
+        };
+        var chapter = new AudioBook
+        {
+            Name = "Chapter 1",
+            Id = Guid.NewGuid(),
+            ParentId = folderId,
+            Path = "/audiobooks/the-hobbit/ch01.mp3"
+        };
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
+            .Returns(new List<BaseItem> { searchLeaf });
+
+        _fx.LibraryManager.Setup(l => l.GetItemById(folderId))
+            .Returns(new Folder { Name = "The Hobbit", Id = folderId, Path = "/audiobooks/the-hobbit" });
+
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q => q.ParentId == folderId
+                ? new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+                {
+                    Items = new[] { chapter },
+                    TotalRecordCount = 1
+                }
+                : new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+                {
+                    Items = Array.Empty<BaseItem>(),
+                    TotalRecordCount = 0
+                });
+
+        return (new Folder { Name = "The Hobbit", Id = folderId, Path = "/audiobooks/the-hobbit" }, chapter);
+    }
+
     [Fact]
     public async Task HandleAsync_SingleBookFound_NativeControls_FreshStart_AnnouncesTitle()
     {
@@ -1319,24 +1445,13 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
 
         _fx.SetupUserMock();
 
-        var bookItem = new Audio { Name = "The Hobbit", Id = Guid.NewGuid() };
-        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
-                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
-            .Returns(new List<BaseItem> { bookItem });
-
-        var trackItem = new Audio { Name = "Chapter 1", Id = Guid.NewGuid() };
-        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q =>
-                q.ParentId == bookItem.Id)))
-            .Returns(new MediaBrowser.Model.Querying.QueryResult<BaseItem>
-            {
-                Items = new[] { trackItem },
-                TotalRecordCount = 1
-            });
+        // JF-794: the verified book-folder fixture (the pre-fix bare-Audio shape no
+        // longer concats: its unverified climb degrades to the flat resume).
+        var (bookFolder, trackItem) = SetupVerifiedHobbitBook();
 
         // Tracker holds segment 31 (conservative resume position 30 * 10s = 5 min),
-        // keyed by the chapter's ParentId fallback (the chapter has no parent here,
-        // so the book key is the chapter id itself).
-        tracker.RecordSegment(trackItem.Id.ToString(), 31);
+        // keyed by the book FOLDER id (GetAudiobookBookKey of the chapter).
+        tracker.RecordSegment(bookFolder.Id.ToString(), 31);
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -1392,21 +1507,11 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
 
         _fx.SetupUserMock();
 
-        var bookItem = new Audio { Name = "The Hobbit", Id = Guid.NewGuid() };
-        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
-                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
-            .Returns(new List<BaseItem> { bookItem });
+        // JF-794: the verified book-folder fixture (the pre-fix bare-Audio shape no
+        // longer concats: its unverified climb degrades to the flat resume).
+        var (bookFolder, trackItem) = SetupVerifiedHobbitBook();
 
-        var trackItem = new Audio { Name = "Chapter 1", Id = Guid.NewGuid() };
-        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q =>
-                q.ParentId == bookItem.Id)))
-            .Returns(new MediaBrowser.Model.Querying.QueryResult<BaseItem>
-            {
-                Items = new[] { trackItem },
-                TotalRecordCount = 1
-            });
-
-        tracker.RecordSegment(trackItem.Id.ToString(), 31);
+        tracker.RecordSegment(bookFolder.Id.ToString(), 31);
 
         // JF-699 item 1: the refusal is the typed exception; RequestPipeline
         // translates it into the localized Tell (pinned at the pipeline level). The
@@ -1444,21 +1549,11 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
 
         _fx.SetupUserMock();
 
-        var bookItem = new Audio { Name = "The Hobbit", Id = Guid.NewGuid() };
-        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
-                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
-            .Returns(new List<BaseItem> { bookItem });
+        // JF-794: the verified book-folder fixture (the pre-fix bare-Audio shape no
+        // longer concats: its unverified climb degrades to the flat resume).
+        var (bookFolder, trackItem) = SetupVerifiedHobbitBook();
 
-        var trackItem = new Audio { Name = "Chapter 1", Id = Guid.NewGuid() };
-        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q =>
-                q.ParentId == bookItem.Id)))
-            .Returns(new MediaBrowser.Model.Querying.QueryResult<BaseItem>
-            {
-                Items = new[] { trackItem },
-                TotalRecordCount = 1
-            });
-
-        tracker.RecordSegment(trackItem.Id.ToString(), 31);
+        tracker.RecordSegment(bookFolder.Id.ToString(), 31);
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -1466,5 +1561,141 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
         (string? itemId, DeviceQueueManager.LaunchRoute? route) = _queueManager.GetLastPlayedSnapshot(session.DeviceId);
         Assert.Equal(trackItem.Id.ToString(), itemId);
         Assert.Equal(DeviceQueueManager.LaunchRoute.VideoApp, route);
+    }
+
+    // JF-794 gate-marker BLOCKER 2 (the read side of the cross-book bleed): the
+    // tracked-resume read resolves the ONE verdict-aware key, so a collapsed census
+    // book reads its OWN leaf key - not the shared container key a sibling book's
+    // listening wrote. RED on the pre-blocker tree: the read used the raw
+    // GetAudiobookBookKey (the container), so this pin saw the sibling's 5-minute
+    // mark instead of the book's own 50-second position.
+    [Fact]
+    public async Task PlayBook_CollapsedBook_TrackedResume_ReadsOwnLeafKeyNotTheSharedContainerKey()
+    {
+        _fx.Config.NativeControlsForBooks = true;
+        var tracker = TestHelpers.CreatePositionTracker("playbook-crossbook-jf794");
+        using var trackerSwap = TestHelpers.SwapPluginPositionTracker(tracker);
+
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(bookName: "Radical Candor");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+
+        Guid containerId = Guid.NewGuid();
+        var book = new AudioBook
+        {
+            Name = "Radical Candor",
+            Id = Guid.NewGuid(),
+            ParentId = containerId,
+            RunTimeTicks = TimeSpan.FromMinutes(20).Ticks,
+            Path = "/audiobooks/Radical Candor/Radical Candor.m4b"
+        };
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
+            .Returns(new List<BaseItem> { book });
+
+        _fx.SetupBookFolder(containerId, "Audiobooks", "/audiobooks");
+
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+            {
+                Items = Array.Empty<BaseItem>(),
+                TotalRecordCount = 0
+            });
+
+        // The sibling book listened 5 minutes (its mark under the SHARED container
+        // key, the pre-blocker blend); THIS book listened 50 seconds (its own leaf
+        // key, the verdict-aware shape the record gate now writes).
+        tracker.RecordSegment(containerId.ToString(), 31);
+        tracker.RecordSegment(book.Id.ToString(), 6);
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // The tracked arm fired (the leaf key is warm) and the flat chapter resume
+        // carries THIS book's 50-second position - not the sibling's 5 minutes.
+        var audioDirective = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+        Assert.Equal((int)TimeSpan.FromSeconds(50).TotalMilliseconds, audioDirective.AudioItem.Stream.OffsetInMilliseconds);
+        Assert.Equal(book.Id.ToString(), audioDirective.AudioItem.Stream.Token);
+    }
+
+    // Code-review F4 (the JF-794 round): the METADATA-REMAPPED book shape - the
+    // chapters query returns Audio-typed rows (the JF-784 leg-3 row set) - has a
+    // deliberately ASYMMETRIC behavior this pin holds in place while JF-799 decides
+    // the unification: the fresh arm's isAudioBook gate serves such chapters as
+    // single items, but the tracked-resume builder's climb is TYPE-AGNOSTIC, so a
+    // warm folder key resumes the WHOLE-BOOK concat. Without this pin a future
+    // AudioBook gate on BuildAudiobookResumeResponse compiles green while silently
+    // deleting the remapped book's seek-bar resume.
+    [Fact]
+    public async Task PlayBook_TrackedResume_AudioTypedRemapChapter_ResumesViaFolderConcat()
+    {
+        _fx.Config.NativeControlsForBooks = true;
+        var tracker = TestHelpers.CreatePositionTracker("playbook-remap-jf794");
+        using var trackerSwap = TestHelpers.SwapPluginPositionTracker(tracker);
+
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(bookName: "The Hobbit");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+
+        // The remap shape: the search still returns an AudioBook leaf (so the head
+        // climb resolves the folder), but the chapters page under the folder yields
+        // an Audio-TYPED row (the metadata-remap the concat endpoint's
+        // MediaTypes=Audio row set exists for).
+        Guid folderId = Guid.NewGuid();
+        var searchLeaf = new AudioBook
+        {
+            Name = "The Hobbit",
+            Id = Guid.NewGuid(),
+            ParentId = folderId,
+            Path = "/audiobooks/the-hobbit/ch00.mp3"
+        };
+        var remapChapter = new Audio
+        {
+            Name = "Chapter 1",
+            Id = Guid.NewGuid(),
+            ParentId = folderId,
+            Path = "/audiobooks/the-hobbit/ch01.mp3"
+        };
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
+            .Returns(new List<BaseItem> { searchLeaf });
+
+        _fx.SetupBookFolder(folderId, "The Hobbit", "/audiobooks/the-hobbit");
+
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q => q.ParentId == folderId
+                ? new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+                {
+                    Items = new[] { remapChapter },
+                    TotalRecordCount = 1
+                }
+                : new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+                {
+                    Items = Array.Empty<BaseItem>(),
+                    TotalRecordCount = 0
+                });
+
+        // The tracker is warm under the FOLDER key (GetAudiobookBookKey of the
+        // Audio-typed chapter is still its ParentId): segment 31 = a conservative
+        // 5-minute book-timeline position.
+        tracker.RecordSegment(folderId.ToString(), 31);
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        var videoDirective = Assert.IsType<global::Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>(
+            Assert.Single(response.Response.Directives));
+        Assert.Contains(
+            $"alexaskill/api/video-audio/audiobook/{folderId}/stream.m3u8?start={TimeSpan.FromMinutes(5).Ticks}&token=",
+            videoDirective.VideoItem!.Source,
+            StringComparison.Ordinal);
     }
 }

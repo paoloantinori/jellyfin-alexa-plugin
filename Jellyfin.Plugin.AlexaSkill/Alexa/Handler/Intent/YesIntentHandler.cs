@@ -239,7 +239,7 @@ public class YesIntentHandler : BaseHandler
         if (resumeState.UseResumePlaylist)
         {
             long offeredTicks = TimeSpan.FromMilliseconds(Math.Min(resumeState.OffsetMs, int.MaxValue)).Ticks;
-            string bookKey = ResumeMath.GetAudiobookBookKey(item);
+            string bookKey = AudiobookItems.ResolveTrackedBookKey(item, _libraryManager);
             // Tracker cleared between offer and confirm: fall back to the offered offset.
             long startTicks = ResumeMath.GetAudiobookStartTicks(bookKey, offeredTicks);
 
@@ -247,7 +247,7 @@ public class YesIntentHandler : BaseHandler
             // refusal (RequestPipeline answers it; nothing below runs) or delivered
             // the launch, so the JF-693 verdict wrapper is gone and the state/announce
             // writes simply follow the launch.
-            SkillResponse response = Launch.BuildAudiobookResumeResponse(item, startTicks, user, context);
+            SkillResponse response = Launch.BuildAudiobookResumeResponse(item, startTicks, user, context, _libraryManager);
 
             session.FullNowPlayingItem = item;
             PlaybackLaunchBuilder.AttachAnnounceIfLaunched(
@@ -287,7 +287,8 @@ public class YesIntentHandler : BaseHandler
             item,
             user,
             context,
-            queueManager: _queueManager);
+            queueManager: _queueManager,
+            libraryManager: _libraryManager);
 
         // JF-699 item 1: throw-or-launch (the JF-507 transcode-routed source can be
         // token-gated; a refusal throws and RequestPipeline answers it, so nothing
@@ -453,7 +454,8 @@ public class YesIntentHandler : BaseHandler
                 SpeechBuilder.BuildNowPlayingSpeech(book.Name, locale, Launch.GetAnnounceNowPlaying(user)),
                 user,
                 context,
-                request).ConfigureAwait(false)
+                request,
+                _libraryManager).ConfigureAwait(false)
             : Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, trackItems[0], user, context);
 
         session.NowPlayingQueue = trackItems.Select(t => new QueueItem { Id = t.Id }).ToList();
@@ -495,7 +497,7 @@ public class YesIntentHandler : BaseHandler
 
         // JF-699 item 5: launch build BEFORE the now-playing writes (the ordering
         // policy lives on EnsureStreamTokenDeliverable).
-        SkillResponse response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, artistItems[0], user, context);
+        SkillResponse response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, artistItems[0], user, context, libraryManager: _libraryManager);
         session.NowPlayingQueue = queueItems;
         session.FullNowPlayingItem = artistItems[0];
         return response;
@@ -545,7 +547,7 @@ public class YesIntentHandler : BaseHandler
 
         // JF-699 item 5: launch build BEFORE the now-playing writes (the ordering
         // policy lives on EnsureStreamTokenDeliverable).
-        SkillResponse response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, playlistItems[0], user, context);
+        SkillResponse response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, playlistItems[0], user, context, libraryManager: _libraryManager);
         session.NowPlayingQueue = queueItems;
         session.FullNowPlayingItem = playlistItems[0];
         return response;

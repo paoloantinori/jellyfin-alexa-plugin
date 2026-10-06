@@ -365,7 +365,8 @@ public class ResumeIntentHandler : BaseHandler
                     resumeItem,
                     user,
                     context,
-                    offset);
+                    offset,
+                    libraryManager: _libraryManager);
 
                 // Announce resume position if enabled. JF-693: the announce rides a
                 // delivered launch only (the static URL never refuses today; the gate
@@ -492,7 +493,8 @@ public class ResumeIntentHandler : BaseHandler
             tailItem,
             user,
             context,
-            queueManager: _queueManager);
+            queueManager: _queueManager,
+            libraryManager: _libraryManager);
 
         Logger.LogDebug(
             "ResumeIntent: final response itemId={ItemId}, offset={OffsetMs}ms",
@@ -553,7 +555,7 @@ public class ResumeIntentHandler : BaseHandler
             return null;
         }
 
-        string bookKey = ResumeMath.GetAudiobookBookKey(item);
+        string bookKey = AudiobookItems.ResolveTrackedBookKey(item, _libraryManager);
         // Review major (JF-567): the fallback ticks are CHAPTER-relative (server
         // progress of the chapter leaf), while the sliced playlist runs the WHOLE-BOOK
         // concat timeline; slicing with a chapter-relative value lands mid-chapter-1.
@@ -573,7 +575,7 @@ public class ResumeIntentHandler : BaseHandler
                 // No position in either source: the same fresh VideoApp launch
                 // PlayBook's no-progress path uses (no start slice), kept silent
                 // (JF-699 item 1: a refusal throws; RequestPipeline answers it).
-                return Launch.BuildVideoAppAudioResponse(item.Id.ToString(), item, user, context: context);
+                return Launch.BuildVideoAppAudioResponse(item.Id.ToString(), item, user, context: context, libraryManager: _libraryManager);
             }
 
             // Chapter progress only: return null so the caller flat-resumes the
@@ -583,7 +585,7 @@ public class ResumeIntentHandler : BaseHandler
 
         long startTicks = trackedTicks;
 
-        SkillResponse bookResponse = Launch.BuildAudiobookResumeResponse(item, startTicks, user, context);
+        SkillResponse bookResponse = Launch.BuildAudiobookResumeResponse(item, startTicks, user, context, _libraryManager);
 
         // JF-501: the announce rides the progressive vehicle on a VideoApp launch (a
         // directive-only final response can have its speech cut); non-intent requests
