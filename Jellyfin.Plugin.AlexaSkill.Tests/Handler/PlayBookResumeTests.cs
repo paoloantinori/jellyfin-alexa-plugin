@@ -279,28 +279,12 @@ public class PlayBookResumeTests : PluginTestBase, IDisposable
         Assert.Contains(tracks[0].Id.ToString(), audioDirective.AudioItem.Stream.Url);
     }
 
-    // JF-793 Finding 4 RED PROOF: the page-1-bounded resume. FindResumeTrackIndex
-    // scans only the 5-item initial page, so UserData progress on chapter 22 of 26
-    // is invisible and the fresh ask relaunched from chapter 1 at 0:00 (pre-JF-791
-    // the same ask played the matched chapter at its position, then silence; the
-    // album precedent is not liftable, JF-625 criterion 3 is the video-route tracker
-    // override). The bounded resolution: when page 1 yields no position and the book
-    // extends beyond the page, the full chapter list is fetched once and the ONE
-    // resume decision re-run on it; the page re-slices at the position-holding
-    // chapter, so the launch, the queue, and the continuation all start there.
-    [Fact]
-    public async Task HandleAsync_DeepProgressBeyondInitialPage_ResumesAtPositionHoldingChapter()
+    // The shared deep-resume fixture (the JF-793 Finding 4 pair): the JF-791 live
+    // entry shape (a chapter leaf that climbs to its pathed book folder), a
+    // paging-honoring chapters mock (initial page 5, the deep unpaged fetch all),
+    // and deep in-progress UserData on chapter 22 (index 21) at the given position.
+    private (List<BaseItem> Chapters, Guid BookFolderId) SetupDeepResumeBook(int chapterCount, long positionTicks)
     {
-        var handler = CreateHandler();
-        var request = CreateIntentRequest("Measure What Matters");
-        var context = _fx.CreateContext();
-        var user = _fx.CreateUser();
-        var session = CreateSession();
-
-        _fx.SetupUserMock();
-
-        // The JF-791 live entry shape: the search returns a chapter leaf that climbs
-        // to the book folder (the file sits directly inside it).
         Guid bookFolderId = Guid.NewGuid();
         var chapterLeaf = new AudioBook
         {
@@ -320,7 +304,7 @@ public class PlayBookResumeTests : PluginTestBase, IDisposable
                 Path = "/audiobooks/measure-what-matters"
             });
 
-        List<BaseItem> chapters = Enumerable.Range(1, 26)
+        List<BaseItem> chapters = Enumerable.Range(1, chapterCount)
             .Select(i => (BaseItem)new Audio
             {
                 Name = $"Measure What Matters - Chapter {i:00}",
@@ -328,9 +312,9 @@ public class PlayBookResumeTests : PluginTestBase, IDisposable
             })
             .ToList();
 
-        // The chapters query honors paging: the initial page serves 5 of 26 (the
+        // The chapters query honors paging: the initial page serves 5 (the
         // zero-padded Names keep mock insertion order equal to the server's SortName
-        // order), the deep unpaged fetch serves all 26.
+        // order), the deep unpaged fetch serves the whole book.
         _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q => new QueryResult<BaseItem>
             {
@@ -341,17 +325,39 @@ public class PlayBookResumeTests : PluginTestBase, IDisposable
                 TotalRecordCount = chapters.Count
             });
 
-        // Deep progress: chapter 22 (index 21) is in progress at 10 minutes; every
-        // chapter of the initial page is untouched.
         var inProgress = new UserItemData
         {
             Key = "test",
             Played = false,
-            PlaybackPositionTicks = TimeSpan.FromMinutes(10).Ticks
+            PlaybackPositionTicks = positionTicks
         };
         _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
             .Returns((Jellyfin.Database.Implementations.Entities.User _, BaseItem item) =>
                 item.Id == chapters[21].Id ? inProgress : null);
+
+        return (chapters, bookFolderId);
+    }
+
+    // JF-793 Finding 4 RED PROOF: the page-1-bounded resume. FindResumeTrackIndex
+    // scans only the 5-item initial page, so UserData progress on chapter 22 of 26
+    // is invisible and the fresh ask relaunched from chapter 1 at 0:00 (pre-JF-791
+    // the same ask played the matched chapter at its position, then silence; the
+    // album precedent is not liftable, JF-625 criterion 3 is the video-route tracker
+    // override). The bounded resolution: when page 1 yields no position and the book
+    // extends beyond the page, the full chapter list is fetched once and the ONE
+    // resume decision re-run on it; the page re-slices at the position-holding
+    // chapter, so the launch, the queue, and the continuation all start there.
+    [Fact]
+    public async Task HandleAsync_DeepProgressBeyondInitialPage_ResumesAtPositionHoldingChapter()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest("Measure What Matters");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+        (List<BaseItem> chapters, Guid _) = SetupDeepResumeBook(26, TimeSpan.FromMinutes(10).Ticks);
 
         try
         {
@@ -396,53 +402,7 @@ public class PlayBookResumeTests : PluginTestBase, IDisposable
         var session = CreateSession();
 
         _fx.SetupUserMock();
-
-        Guid bookFolderId = Guid.NewGuid();
-        var chapterLeaf = new AudioBook
-        {
-            Name = "Measure What Matters",
-            Id = Guid.NewGuid(),
-            ParentId = bookFolderId,
-            Path = "/audiobooks/measure-what-matters/ch01.mp3"
-        };
-        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
-                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
-            .Returns(new List<BaseItem> { chapterLeaf });
-        _fx.LibraryManager.Setup(l => l.GetItemById(bookFolderId))
-            .Returns(new Folder
-            {
-                Name = "Measure What Matters",
-                Id = bookFolderId,
-                Path = "/audiobooks/measure-what-matters"
-            });
-
-        List<BaseItem> chapters = Enumerable.Range(1, 40)
-            .Select(i => (BaseItem)new Audio
-            {
-                Name = $"Measure What Matters - Chapter {i:00}",
-                Id = Guid.NewGuid()
-            })
-            .ToList();
-
-        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
-            .Returns<InternalItemsQuery>(q => new QueryResult<BaseItem>
-            {
-                Items = chapters
-                    .Skip(q.StartIndex ?? 0)
-                    .Take(q.Limit ?? chapters.Count)
-                    .ToList(),
-                TotalRecordCount = chapters.Count
-            });
-
-        var inProgress = new UserItemData
-        {
-            Key = "test",
-            Played = false,
-            PlaybackPositionTicks = TimeSpan.FromMinutes(3).Ticks
-        };
-        _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
-            .Returns((Jellyfin.Database.Implementations.Entities.User _, BaseItem item) =>
-                item.Id == chapters[21].Id ? inProgress : null);
+        (List<BaseItem> _, Guid bookFolderId) = SetupDeepResumeBook(40, TimeSpan.FromMinutes(3).Ticks);
 
         try
         {

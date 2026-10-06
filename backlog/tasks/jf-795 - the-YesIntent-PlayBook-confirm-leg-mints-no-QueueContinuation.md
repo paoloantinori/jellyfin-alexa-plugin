@@ -37,8 +37,20 @@ confirm leg (threading DeviceQueueManager into YesIntentHandler and replicating 
 JF-673/JF-693/JF-674 minting invariants: StartIndex bookkeeping, unknown-total
 regime, MintedQueueItemIds binding, refusal-before-state ordering), or route the
 confirm through the head path's shared page-and-mint machinery so the two cannot
-drift (the AlbumPlayService precedent). Red pin: confirm a 26-chapter book, expect
-the continuation minted with TotalCount 26 (pre-fix: null).
+drift (the AlbumPlayService precedent). PREFER the routing branch (the JF-793
+/simplify altitude round, 2026-10-06): the head's minting state grew again in JF-793
+(the deep-resume continuation triplet: continuationStartIndex/TotalCount/HasMore
+rebased at the position-holding chapter's page), so a replication branch would now
+copy the whole page+resume+mint flow; routing comes with it for free.
+
+The same round widened the task's scope by one axis: the confirm leg also never
+resumes (it launches trackItems[0] with no FindResumeTrackIndex at all, and
+YesIntentHandler holds no IUserDataManager), so an ask that resumes a book at its
+position answers a confirm by restarting the book at chapter 1 at 0:00 - the same
+confirm-must-match-ask divergence JF-793 Finding 4 just closed on the head's
+deep-progress axis. The routing branch covers the resume axis for free; a
+replication branch would have to thread the resume decision too. Red pin: confirm a
+26-chapter book, expect the continuation minted with TotalCount 26 (pre-fix: null).
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done

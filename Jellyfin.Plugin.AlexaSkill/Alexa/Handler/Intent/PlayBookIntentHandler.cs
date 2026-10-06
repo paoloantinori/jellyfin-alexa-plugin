@@ -157,14 +157,10 @@ public class PlayBookIntentHandler : BaseHandler
             }
         }
 
-        // JF-793 Finding 3: normalize the candidate set onto BOOK granularity BEFORE
-        // the candidate-set consumers (the HandleFuzzyMiss scoring and the
-        // AskFirstMatch list below): a multi-chapter book's candidates are N chapter
-        // leaves, and presenting them chapter-granularly offered an illusory choice
-        // (whichever entry won, the climb played the whole book from chapter 1) while
-        // the "- Chapter N" name tails dragged the fuzzy scores below the >= 90
-        // auto-play bar the folder name clears exactly. Single-file books, failed
-        // climbs, and the shared-container rejection keep their own entry.
+        // JF-793 Finding 3: BOOK-granular candidates before the disambiguation
+        // consumers (the illusory chapter-granular choice, and the "- Chapter N"
+        // name tails dragging the fuzzy scores below the auto-play bar). The shape
+        // rationale and the pass-through list live on NormalizeBookCandidates.
         books = NormalizeBookCandidates(books);
 
         if (books.Count > 1)
@@ -311,30 +307,31 @@ public class PlayBookIntentHandler : BaseHandler
                 "GetBookTracksDeepResume",
                 cancellationToken).ConfigureAwait(false);
 
-            if (fullBook.Items.Count > 0)
+            (int deepIndex, long deepTicks) = ResumeMath.FindResumeTrackIndex(
+                fullBook.Items, jellyfinUser!, _userDataManager, _queueManager, session.DeviceId, resumePosition: true, Logger);
+            if (deepIndex > 0)
             {
-                (int deepIndex, _) = ResumeMath.FindResumeTrackIndex(
-                    fullBook.Items, jellyfinUser!, _userDataManager, _queueManager, session.DeviceId, resumePosition: true, Logger);
-                if (deepIndex > 0)
-                {
-                    trackItems = fullBook.Items
-                        .Skip(deepIndex)
-                        .Take(ProgressiveQueueConstants.GetInitialFetchSize())
-                        .ToList();
-                    (startIndex, resumeTicks) = ResumeMath.FindResumeTrackIndex(
-                        trackItems, jellyfinUser!, _userDataManager, _queueManager, session.DeviceId, resumePosition: true, Logger);
+                // The re-sliced page starts exactly at the position-holding chapter,
+                // so the page-relative answer is (0, deepTicks) by construction in
+                // every return shape of FindResumeTrackIndex (in-progress hit, cached
+                // position, after-last-played): no re-scan of the slice.
+                trackItems = fullBook.Items
+                    .Skip(deepIndex)
+                    .Take(ProgressiveQueueConstants.GetInitialFetchSize())
+                    .ToList();
+                startIndex = 0;
+                resumeTicks = deepTicks;
 
-                    Logger.LogInformation(
-                        "PlayBook: deep resume found chapter {DeepIndex} ('{TrackName}') beyond the initial page; re-paging the book at it",
-                        deepIndex, fullBook.Items[deepIndex].Name);
+                Logger.LogInformation(
+                    "PlayBook: deep resume found chapter {DeepIndex} ('{TrackName}') beyond the initial page; re-paging the book at it",
+                    deepIndex, fullBook.Items[deepIndex].Name);
 
-                    // The fetch-all list is itself the honest total in both regimes
-                    // (known-total pages and the JF-673 end-unknown fallback), so the
-                    // continuation carries a real count.
-                    continuationStartIndex = deepIndex + trackItems.Count;
-                    continuationTotalCount = fullBook.Items.Count;
-                    continuationHasMore = continuationStartIndex < continuationTotalCount;
-                }
+                // The fetch-all list is itself the honest total in both regimes
+                // (known-total pages and the JF-673 end-unknown fallback), so the
+                // continuation carries a real count.
+                continuationStartIndex = deepIndex + trackItems.Count;
+                continuationTotalCount = fullBook.Items.Count;
+                continuationHasMore = continuationStartIndex < continuationTotalCount;
             }
         }
 
