@@ -186,8 +186,17 @@ public class SkillResponseLoggingTests : PluginTestBase
         ContentResult content = Assert.IsType<ContentResult>(result);
         Assert.Equal("application/json", content.ContentType);
         // The served body must carry the serialized response: a regression that
-        // logs and counts but serves an empty body would otherwise stay green.
-        Assert.False(string.IsNullOrEmpty(content.Content), "the served body must be non-empty");
+        // logs and counts but serves an empty (or whitespace-only) body would
+        // otherwise stay green. IsNullOrWhiteSpace per the repo convention.
+        Assert.False(string.IsNullOrWhiteSpace(content.Content), "the served body must be non-empty");
+
+        // Pin the exercised route, not just its output shape: the controller's
+        // catch paths also answer via SkillResponseContent with the same single
+        // Debug line, so the asserts above alone stay green if the empty-body
+        // branch ever reroutes to an error path. The early return's unique
+        // Warning line is the discriminator.
+        Assert.Contains(TestCaptureLogger.Snapshot(logRecords),
+            r => r.Level == LogLevel.Warning && r.Message.Contains("Received empty request body", StringComparison.Ordinal));
 
         // The named contract: exactly one response-size line and it is Debug, so
         // none can be Information (Single plus the level assert enforce both
