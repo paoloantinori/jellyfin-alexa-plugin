@@ -160,7 +160,11 @@ public abstract class PlaylistEditHandlerBase : BaseHandler
     /// the ONE predicate) because this family's write is stateful on "this is
     /// playing now": the resolver's unbounded ledger tail must not add the idle
     /// device's days-old last-played item where the pre-JF-627 code answered
-    /// NoMediaPlaying.
+    /// NoMediaPlaying. JF-785 Leg A tightened the same door from the resolver
+    /// side: the tail is refused (allowLedgerTailAnswers false), so an
+    /// UNRESOLVABLE evidence shape (a now-playing DTO whose item was deleted
+    /// mid-play or whose id is empty) also answers NoMediaPlaying instead of the
+    /// tail adding a days-old unrelated item.
     /// </summary>
     /// <param name="context">The Alexa request context.</param>
     /// <param name="session">The Jellyfin session.</param>
@@ -173,7 +177,7 @@ public abstract class PlaylistEditHandlerBase : BaseHandler
             return null;
         }
 
-        return Launch.ResolveCurrentPlayingItem(context, session, _libraryManager, _queueManager);
+        return Launch.ResolveCurrentPlayingItem(context, session, _libraryManager, _queueManager, allowLedgerTailAnswers: false);
     }
 
     /// <summary>

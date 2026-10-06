@@ -279,6 +279,73 @@ public class MediaInfoIntentHandlerTests : PluginTestBase
         Assert.DoesNotContain("Last Week Movie", text);
     }
 
+    /// <summary>
+    /// JF-785 red proof (the migration leg): the session holds the FULL item a
+    /// delivered launch wrote while the now-playing DTO is still null and no
+    /// AudioPlayer token exists (the video-first movie shape; the launch's
+    /// AttachNowPlayingIfLaunched write is the only evidence). The pre-JF-785
+    /// DTO-only guard refused this shape with NoMediaPlaying even though the
+    /// resolver's held-item leg resolves it; the ONE evidence predicate (JF-627)
+    /// admits the held item and the answer reports the movie.
+    /// </summary>
+    [Fact]
+    public async Task Handle_FullItemHeldWithoutDto_ReportsHeldItem_JF785()
+    {
+        TestHelpers.SetServerAddress(_config, "https://test.example.com");
+        var movie = new MediaBrowser.Controller.Entities.Movies.Movie
+        {
+            Name = "Held Movie",
+            Id = Guid.NewGuid(),
+            Path = "/movies/held.mkv",
+            ProductionYear = 2019,
+        };
+        var queueManager = TestHelpers.CreateDeviceQueueManager("mediainfo-held-jf785");
+        queueManager.RecordLastPlayed("mediainfo-held-jf785-device", movie.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        _libraryManagerMock.Setup(l => l.GetItemById(movie.Id)).Returns(movie);
+        var handler = CreateHandler(queueManager);
+        var session = CreateSession();
+        session.FullNowPlayingItem = movie;
+        Assert.Null(session.NowPlayingItem); // the full-item-WITHOUT-DTO shape
+
+        var text = GetSpeechText(await handler.HandleAsync(
+            CreateMediaInfoRequest(),
+            TestHelpers.CreateTestContext("mediainfo-held-jf785-device"),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
+
+        Assert.Contains("Held Movie", text);
+    }
+
+    /// <summary>
+    /// JF-785 Leg A (the unresolvable-evidence door): the session reports a
+    /// now-playing DTO whose id does not resolve (Guid.Empty stands for the
+    /// deleted-mid-play shape). Live evidence exists but resolves nothing, so
+    /// the resolver's unbounded ledger tail must not substitute the idle
+    /// device's days-old last-played item as the current answer; the family
+    /// keeps its informational DTO answer (the pre-JF-629 behavior for a
+    /// session that still reports an item). Pre-JF-785 the tail flowed through
+    /// and the answer spoke the unrelated item.
+    /// </summary>
+    [Fact]
+    public async Task Handle_UnresolvableDtoStaleLedger_SpeaksDtoNotLedgerItem_JF785()
+    {
+        TestHelpers.SetServerAddress(_config, "https://test.example.com");
+        var oldSong = new Audio { Name = "Days Old Song", Id = Guid.NewGuid(), Path = "/music/old.mp3" };
+        _libraryManagerMock.Setup(l => l.GetItemById(oldSong.Id)).Returns(oldSong);
+        var queueManager = TestHelpers.CreateDeviceQueueManager("mediainfo-door-jf785");
+        queueManager.RecordLastPlayed("mediainfo-door-jf785-device", oldSong.Id.ToString(), DeviceQueueManager.LaunchRoute.Audio);
+        var handler = CreateHandler(queueManager);
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto { Id = Guid.Empty, Name = "Ghost Track" };
+
+        var text = GetSpeechText(await handler.HandleAsync(
+            CreateMediaInfoRequest(),
+            TestHelpers.CreateTestContext("mediainfo-door-jf785-device"),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
+
+        Assert.Contains("Ghost Track", text);
+        Assert.DoesNotContain("Days Old Song", text);
+    }
+
 
     /// <summary>
     /// Ensure APL visuals are enabled so "WithApl" tests pass regardless of

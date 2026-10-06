@@ -979,24 +979,32 @@ public sealed class PlaybackLaunchBuilder
     /// The ledger tail is UNBOUNDED with respect to recency: on a device whose
     /// last playback was days ago it still answers that item (RateItem's
     /// deliberate stance, JF-626). A caller whose WRITE is stateful on "this is
-    /// playing now" (favorite, media info, the loop toggle) must guard current
-    /// evidence itself first (the JF-629 idle guard: no AudioPlayer token AND no
-    /// session now-playing item means answer not-found); see
-    /// FavoriteToggleIntentHandler/MediaInfoIntentHandler/ProgressReporter.ApplyRepeatModeAsync
-    /// for the guard and its rationale.
+    /// playing now" (favorite, media info, the loop toggle, playlist-edit) must
+    /// do TWO things: guard current evidence first
+    /// (<see cref="HasCurrentPlaybackEvidence"/>, the JF-629 idle guard; all
+    /// four families were migrated onto the ONE predicate in JF-785) AND pass
+    /// <paramref name="allowLedgerTailAnswers"/> false, so an UNRESOLVABLE
+    /// evidence shape (a now-playing DTO whose item was deleted mid-play or
+    /// whose id is empty) falls to the family's no-media tell instead of the
+    /// tail substituting a days-old unrelated item (the JF-785 Leg A door);
+    /// see FavoriteToggleIntentHandler/MediaInfoIntentHandler/
+    /// ProgressReporter.ApplyRepeatModeAsync/PlaylistEditHandlerBase for the
+    /// guard and its rationale.
     /// </summary>
     /// <param name="context">The Alexa context (device id for the ledger read, AudioPlayer token).</param>
     /// <param name="session">The Jellyfin session (full now-playing item first, DTO second).</param>
     /// <param name="libraryManager">The library manager, to resolve item ids.</param>
     /// <param name="queueManager">The caller's device queue manager (Repeat, RateItem pass theirs); the parameter has NO default so every caller states its choice: null falls back to <c>Plugin.Instance</c>'s (the classifier-half idiom, JF-627); tests pass theirs to stay hermetic.</param>
     /// <param name="logLabel">Caller identity for the displacement log line.</param>
+    /// <param name="allowLedgerTailAnswers">Whether the final ledger fallback (the non-displacement tail) may answer; the guarded families pass false (JF-785 Leg A) so only evidence-backed arms (token, session items, the displacement arm, which itself requires a live token) answer, while the default true keeps the deliberate unbounded stance of RateItem (JF-626), Repeat and SetPlaybackSpeed.</param>
     /// <returns>The currently playing item, or null when nothing is resolvable.</returns>
     internal BaseItem? ResolveCurrentPlayingItem(
         Context? context,
         SessionInfo? session,
         ILibraryManager libraryManager,
         DeviceQueueManager? queueManager,
-        string logLabel = "CurrentItem")
+        string logLabel = "CurrentItem",
+        bool allowLedgerTailAnswers = true)
     {
         // The ONE ledger read (its helper owns the unified null contract; the
         // former "null disables the ledger arms" divergence was the playlist-edit
@@ -1080,8 +1088,12 @@ public sealed class PlaybackLaunchBuilder
         // The displacement-path resolve already missed this id (deleted/stale ledger
         // item); re-resolving the same known-absent GUID is a second DB miss for
         // nothing. Only the non-displacement tail (audio-routed ledger, no token,
-        // no session item) resolves here.
-        BaseItem? resolved = ledgerItem ?? (displacementPossible ? null : ResolveId(lastPlayedId));
+        // no session item) resolves here. JF-785 Leg A: the guarded families
+        // (favorite, media info, the loop toggle, playlist-edit) refuse this tail
+        // so an unresolvable-evidence shape falls to their no-media tell instead
+        // of the tail substituting a days-old unrelated item; every arm above
+        // (token, session items, the displacement arm) stays live evidence-backed.
+        BaseItem? resolved = ledgerItem ?? (displacementPossible || !allowLedgerTailAnswers ? null : ResolveId(lastPlayedId));
         if (resolved is null)
         {
             _logger.LogDebug(
@@ -1101,10 +1113,24 @@ public sealed class PlaybackLaunchBuilder
     /// with nothing live is answered by the resolver's deliberately unbounded
     /// ledger tail (RateItem's JF-626 stance), so those callers refuse first and
     /// keep their own idle REACTION strings. The three pre-JF-627 inline guards
-    /// (FavoriteToggle, MediaInfo, ProgressReporter.ApplyRepeatModeAsync) check
-    /// the token and the DTO only; migrating them onto this wider evidence set
-    /// changes behavior on the full-item-without-DTO shape and is tracked as
-    /// JF-785 with its own red proof.
+    /// (FavoriteToggle, MediaInfo, ProgressReporter.ApplyRepeatModeAsync)
+    /// migrated onto this predicate in JF-785, each with its own red proof on
+    /// the full-item-without-DTO shape, and all four guarded families pass
+    /// <c>allowLedgerTailAnswers: false</c> at their resolver call (the Leg A
+    /// door: unresolvable evidence must fall to the no-media tell, never let
+    /// the tail substitute a days-old item).
+    /// VIDEOAPP PARITY (JF-785 Leg B, deliberate boundary, pinned, no new
+    /// leg): every delivered VideoApp launch writes the launched item into the
+    /// session's FullNowPlayingItem (AttachNowPlayingIfLaunched; the directive
+    /// gate admits the VideoApp directive), and the next request from the same
+    /// device resolves the SAME session, so during a movie the held-item leg IS
+    /// the VideoApp evidence leg and the guarded families act on the movie
+    /// exactly as RateItem does. The device ledger is deliberately NOT an
+    /// evidence source: it is unbounded in recency (the JF-629 hazard), so a
+    /// video-first device whose session has LOST the held item (a server
+    /// restart mid-movie, the movie ended and the server cleared the entry)
+    /// keeps the no-media answer; the boundary pins live in
+    /// PlaylistEditIntentHandlerTests.
     /// </summary>
     /// <param name="context">The Alexa context (the AudioPlayer token leg).</param>
     /// <param name="session">The Jellyfin session (the held-item and DTO legs).</param>

@@ -12,6 +12,7 @@ using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Entities.Movies;
+using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using Moq;
 using Xunit;
@@ -166,6 +167,76 @@ public class FavoriteToggleIntentHandlerTests : PluginTestBase
             TestHelpers.CreateTestUser(), _fx.CreateSession(), CancellationToken.None);
 
         Assert.Contains("could not find the media", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        _fx.UserDataManager.Verify(u => u.SaveUserData(
+            It.IsAny<Jellyfin.Database.Implementations.Entities.User>(),
+            It.IsAny<BaseItem>(),
+            It.IsAny<UserItemData>(),
+            It.IsAny<UserDataSaveReason>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    /// <summary>
+    /// JF-785 red proof (the migration leg): the session holds the FULL item a
+    /// delivered launch wrote (AttachNowPlayingIfLaunched) while the now-playing
+    /// DTO is still null (the pre-PlaybackStarted window, or a VideoApp launch,
+    /// which reports nothing) and no AudioPlayer token exists (the video-first
+    /// device shape). The pre-JF-785 DTO-only guard refused this shape with
+    /// MediaNotFound even though the resolver's held-item leg resolves it and the
+    /// playlist-edit sibling already acts on it; the ONE evidence predicate
+    /// (JF-627) admits the held item and the toggle lands on the movie.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_FullItemHeldWithoutDto_TogglesHeldItem_JF785()
+    {
+        var movie = new Movie { Name = "Held Movie", Id = Guid.NewGuid(), Path = "/movies/held.mkv" };
+        var data = SetupHappyPath(movie);
+        var queues = TestHelpers.CreateDeviceQueueManager("fav-held-jf785");
+        queues.RecordLastPlayed("fav-held-jf785-device", movie.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        var handler = CreateHandler(queues);
+        var session = _fx.CreateSession();
+        session.FullNowPlayingItem = movie;
+        Assert.Null(session.NowPlayingItem); // the full-item-WITHOUT-DTO shape
+
+        var response = await handler.HandleAsync(
+            Request(), TestHelpers.CreateTestContext("fav-held-jf785-device"),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.True(data.IsFavorite, "the held full item is the toggle target");
+        _fx.UserDataManager.Verify(u => u.SaveUserData(
+            It.IsAny<Jellyfin.Database.Implementations.Entities.User>(),
+            It.Is<BaseItem>(i => i.Id == movie.Id),
+            data,
+            UserDataSaveReason.UpdateUserRating,
+            It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Contains("added to favorites", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-785 Leg A (the unresolvable-evidence door): the session reports a
+    /// now-playing DTO whose id does not resolve (Guid.Empty stands for the
+    /// deleted-mid-play shape), so live evidence EXISTS but resolves nothing;
+    /// the resolver's unbounded ledger tail must not substitute the idle
+    /// device's days-old last-played item for the write. Pre-JF-785 the tail
+    /// flowed through (the guard passes on DTO presence alone) and the toggle
+    /// landed on the unrelated item.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_UnresolvableDtoStaleLedger_NoWrite_JF785()
+    {
+        var oldSong = new Audio { Name = "Days Old Song", Id = Guid.NewGuid(), Path = "/music/old.mp3" };
+        var data = SetupHappyPath(oldSong); // user-data write must be REACHABLE, or the pin is vacuous
+        var queues = TestHelpers.CreateDeviceQueueManager("fav-door-jf785");
+        queues.RecordLastPlayed("fav-door-jf785-device", oldSong.Id.ToString(), DeviceQueueManager.LaunchRoute.Audio);
+        var handler = CreateHandler(queues);
+        var session = _fx.CreateSession();
+        session.NowPlayingItem = new BaseItemDto { Id = Guid.Empty, Name = "Ghost Track" };
+
+        var response = await handler.HandleAsync(
+            Request(), TestHelpers.CreateTestContext("fav-door-jf785-device"),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.Contains("could not find the media", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        Assert.False(data.IsFavorite, "the days-old ledger item must not become the toggle target");
         _fx.UserDataManager.Verify(u => u.SaveUserData(
             It.IsAny<Jellyfin.Database.Implementations.Entities.User>(),
             It.IsAny<BaseItem>(),

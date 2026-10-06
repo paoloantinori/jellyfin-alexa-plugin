@@ -88,19 +88,29 @@ public class MediaInfoIntentHandler : BaseHandler
     {
         string locale = GetLocale(request);
 
-        // JF-629 review: "what is playing" is PRESENT TENSE. With neither an AudioPlayer
-        // token nor a session now-playing item, nothing is playing NOW, and the resolver's
-        // unbounded ledger tail (days-old persisted last-played) must not answer it; the
-        // ledger arms only arbitrate when current evidence exists (the token leg, or the
-        // session item the seek-mode VideoApp route sets before launching).
-        if (string.IsNullOrEmpty(context.AudioPlayer?.Token) && session.NowPlayingItem == null)
+        // JF-629 review + JF-785: "what is playing" is PRESENT TENSE, and the ONE
+        // predicate's three legs (an AudioPlayer token, the held full item, or
+        // the now-playing DTO) are the live evidence. With none, nothing is
+        // playing NOW, and the resolver's unbounded ledger tail (days-old
+        // persisted last-played) must not answer it; the ledger arms only
+        // arbitrate when current evidence exists. The pre-JF-785 inline guard
+        // checked the token and the DTO only, so the held-item-without-DTO
+        // shape (a launch's now-playing write before any PlaybackStarted
+        // report, or a VideoApp launch, which reports nothing) was refused;
+        // the migration onto the predicate is behavioral there.
+        if (!PlaybackLaunchBuilder.HasCurrentPlaybackEvidence(context, session))
         {
             Logger.LogInformation("MediaInfoIntent: no media currently playing");
             return ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale));
         }
 
         // The ONE current-item resolver; the arbitration rationale lives on it.
-        BaseItem? current = Launch.ResolveCurrentPlayingItem(context, session, _libraryManager, _queueManager, "MediaInfo");
+        // The tail is refused (JF-785 Leg A): when the evidence itself does not
+        // resolve (a DTO whose item was deleted mid-play or whose id is empty),
+        // the resolver answers null and ResolveDisplayItem keeps the session's
+        // raw informational DTO instead of the tail substituting a days-old
+        // unrelated item as "what is playing".
+        BaseItem? current = Launch.ResolveCurrentPlayingItem(context, session, _libraryManager, _queueManager, "MediaInfo", allowLedgerTailAnswers: false);
         BaseItemDto? item = ResolveDisplayItem(current, session.NowPlayingItem);
         if (item == null)
         {

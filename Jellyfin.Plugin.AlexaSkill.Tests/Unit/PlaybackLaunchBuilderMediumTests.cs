@@ -435,6 +435,46 @@ public class PlaybackLaunchBuilderMediumTests : PluginTestBase
     }
 
     /// <summary>
+    /// JF-785 Leg A at the resolver level: the guarded families pass
+    /// allowLedgerTailAnswers false, so the non-displacement tail (no token, no
+    /// session item: the idle device whose only record is the unbounded ledger)
+    /// answers null for them while the default keeps the deliberate unbounded
+    /// stance (RateItem's JF-626 shape) and resolves the same entry.
+    /// </summary>
+    [Fact]
+    public void CurrentItem_GuardedCaller_TailRefused_DefaultKeepsTail_JF785()
+    {
+        var oldSong = new Audio { Name = "Days Old Song", Id = Guid.NewGuid() };
+        var (library, queue) = LedgerWith(oldSong, "ci-tail-jf785", route: DeviceQueueManager.LaunchRoute.Audio);
+
+        // Default (RateItem/Repeat/SetPlaybackSpeed): the tail answers.
+        Assert.Same(oldSong, _builder.ResolveCurrentPlayingItem(
+            TestHelpers.CreateTestContext("ci-tail-jf785"), null, library.Object, queue));
+
+        // The guarded caller (favorite/media/loop/playlist-edit): refused.
+        Assert.Null(_builder.ResolveCurrentPlayingItem(
+            TestHelpers.CreateTestContext("ci-tail-jf785"), null, library.Object, queue, allowLedgerTailAnswers: false));
+    }
+
+    /// <summary>
+    /// JF-785 Leg A, the preserved half: refusing the tail must NOT narrow the
+    /// displacement arm, which is itself evidence-backed (it requires a live
+    /// AudioPlayer token mismatched against a non-Audio-routed ledger entry).
+    /// A guarded caller during a VideoApp launch still resolves the displaced
+    /// movie, byte-identically to the default.
+    /// </summary>
+    [Fact]
+    public void CurrentItem_GuardedCaller_DisplacementArmStillAnswers_JF785()
+    {
+        var movie = new Movie { Name = "Displacing Movie", Id = Guid.NewGuid() };
+        var (library, queue) = LedgerWith(movie, "ci-displace-jf785");
+        Context staleToken = TestHelpers.CreateContextWithToken(Guid.NewGuid().ToString(), "ci-displace-jf785");
+
+        Assert.Same(movie, _builder.ResolveCurrentPlayingItem(
+            staleToken, null, library.Object, queue, allowLedgerTailAnswers: false));
+    }
+
+    /// <summary>
     /// The JF-627 lockstep guard (the JF-625 miss-class class): for EVERY ledger
     /// item-kind x route shape (the full 5 x 3 matrix: Movie, Episode,
     /// LiveTvChannel, AudioBook, Audio across VideoApp, Audio, and the legacy
