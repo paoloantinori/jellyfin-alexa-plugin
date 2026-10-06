@@ -64,8 +64,8 @@ public class PlaylistEditIntentHandlerTests : PluginTestBase
             .Returns(new[] { new Playlist { Name = "Road Trip", Id = PlaylistId } });
     }
 
-    private AddCurrentToPlaylistIntentHandler CreateAddCurrent() =>
-        new(_playlistManagerMock.Object, _sessionManagerMock.Object, _config, _userManagerMock.Object, _libraryManagerMock.Object, _loggerFactory);
+    private AddCurrentToPlaylistIntentHandler CreateAddCurrent(DeviceQueueManager? ledger = null) =>
+        new(_playlistManagerMock.Object, _sessionManagerMock.Object, _config, _userManagerMock.Object, _libraryManagerMock.Object, _loggerFactory, ledger);
 
     private AddSongToPlaylistIntentHandler CreateAddSong() =>
         new(_playlistManagerMock.Object, _sessionManagerMock.Object, _config, _userManagerMock.Object, _libraryManagerMock.Object, _loggerFactory);
@@ -248,22 +248,17 @@ public class PlaylistEditIntentHandlerTests : PluginTestBase
 
     /// <summary>
     /// JF-785 Leg A red proof (the unresolvable-evidence door, the JF-627
-    /// gate-marker finding 1): the session reports a now-playing DTO whose id
-    /// does not resolve (Guid.Empty stands for the deleted-mid-play shape), so
-    /// live evidence EXISTS but resolves nothing; the resolver's unbounded
-    /// ledger tail must not substitute the idle device's days-old last-played
-    /// item for the add. Pre-JF-785 the tail flowed through (the guard passes
-    /// on DTO presence alone) and the add carried the unrelated item, where
-    /// pre-JF-627 this family answered NoMediaPlaying (its ledger was off).
+    /// gate-marker finding 1; the resolver doc owns the contract): a
+    /// now-playing DTO whose id does not resolve plus a days-old ledger entry;
+    /// NoMediaPlaying answers, no add. RED on the pre-JF-785 tree: the add
+    /// carried the days-old item.
     /// </summary>
     [Fact]
     public async void AddCurrent_UnresolvableDtoStaleLedger_NotAdded_JF785()
     {
         var ledger = TestHelpers.CreateDeviceQueueManager("playlist-edit-door-jf785");
         ledger.RecordLastPlayed("playlist-edit-door-jf785", SongId.ToString(), DeviceQueueManager.LaunchRoute.Audio);
-        var handler = new AddCurrentToPlaylistIntentHandler(
-            _playlistManagerMock.Object, _sessionManagerMock.Object, _config, _userManagerMock.Object,
-            _libraryManagerMock.Object, _loggerFactory, ledger);
+        var handler = CreateAddCurrent(ledger);
 
         SkillResponse response = await handler.HandleAsync(
             CreateRequest(IntentNames.AddCurrentToPlaylist, new() { ["playlist"] = "road trip" }),
@@ -276,28 +271,23 @@ public class PlaylistEditIntentHandlerTests : PluginTestBase
 
     /// <summary>
     /// JF-785 Leg B, the PARITY pin (the boundary is deliberate, so this pins
-    /// the semantics it stands on): a video-first device (no AudioPlayer token
-    /// ever) during a skill-launched movie. Every delivered VideoApp launch
-    /// writes the movie into the session's FullNowPlayingItem
-    /// (AttachNowPlayingIfLaunched; the directive gate admits VideoApp), and
-    /// the next request from the device resolves the SAME session, so the
-    /// evidence predicate's held-item leg IS the VideoApp evidence leg: "add
-    /// this" adds the movie exactly as "rate this" resolves it. A drift that
-    /// drops the held-item leg, or reroutes VideoApp launches away from the
-    /// now-playing write, fails here.
+    /// the semantics it stands on; the full VideoApp parity story lives on
+    /// HasCurrentPlaybackEvidence): a video-first device (no AudioPlayer token
+    /// ever) during a skill-launched movie, where the launch's now-playing
+    /// write is the session's held item: "add this" adds the movie exactly as
+    /// "rate this" resolves it. A drift that drops the held-item leg, or
+    /// reroutes VideoApp launches away from the now-playing write, fails here.
     /// </summary>
     [Fact]
     public async void AddCurrent_VideoFirstMovieLaunch_SessionHoldsMovie_AddsMovie_JF785()
     {
         var movieId = Guid.NewGuid();
-        var movie = new MediaBrowser.Controller.Entities.Movies.Movie { Name = "Video First Movie", Id = movieId };
+        var movie = TestHelpers.CreateMovie("Video First Movie", movieId);
         _libraryManagerMock.Setup(l => l.GetItemById(movieId)).Returns(movie);
 
         var ledger = TestHelpers.CreateDeviceQueueManager("playlist-edit-videofirst-jf785");
         ledger.RecordLastPlayed("playlist-edit-videofirst-jf785", movieId.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
-        var handler = new AddCurrentToPlaylistIntentHandler(
-            _playlistManagerMock.Object, _sessionManagerMock.Object, _config, _userManagerMock.Object,
-            _libraryManagerMock.Object, _loggerFactory, ledger);
+        var handler = CreateAddCurrent(ledger);
         SessionInfo session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
         session.FullNowPlayingItem = movie; // what the launch's AttachNowPlayingIfLaunched wrote
 
@@ -311,28 +301,22 @@ public class PlaylistEditIntentHandlerTests : PluginTestBase
 
     /// <summary>
     /// JF-785 Leg B, the BOUNDARY pin: the same video-first device whose session
-    /// has LOST the held movie (a server restart mid-movie, the movie ended and
-    /// the server cleared the entry, a session-lookup miss). The only remaining
-    /// VideoApp-shaped signal is the device ledger, which is unbounded in
-    /// recency: admitting it as evidence would reopen the JF-629 idle hazard
-    /// (an idle device's days-old launch passing the guard), so the family
-    /// deliberately answers NoMediaPlaying here while unguarded RateItem still
-    /// acts on the same ledger entry (its documented JF-626 stance). A drift
-    /// that adds a VideoApp-ledger evidence leg to HasCurrentPlaybackEvidence
-    /// fails here.
+    /// has LOST the held movie (a server restart mid-movie, the movie ended);
+    /// the ledger is deliberately NOT evidence (the rationale lives on
+    /// HasCurrentPlaybackEvidence), so NoMediaPlaying answers while unguarded
+    /// RateItem still acts on the same ledger entry. A drift that adds a
+    /// VideoApp-ledger evidence leg to the predicate fails here.
     /// </summary>
     [Fact]
     public async void AddCurrent_VideoFirstSessionLostMovie_RefusesWithoutLedgerLeg_JF785()
     {
         var movieId = Guid.NewGuid();
         _libraryManagerMock.Setup(l => l.GetItemById(movieId))
-            .Returns(new MediaBrowser.Controller.Entities.Movies.Movie { Name = "Lost Hold Movie", Id = movieId });
+            .Returns(TestHelpers.CreateMovie("Lost Hold Movie", movieId));
 
         var ledger = TestHelpers.CreateDeviceQueueManager("playlist-edit-boundary-jf785");
         ledger.RecordLastPlayed("playlist-edit-boundary-jf785", movieId.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
-        var handler = new AddCurrentToPlaylistIntentHandler(
-            _playlistManagerMock.Object, _sessionManagerMock.Object, _config, _userManagerMock.Object,
-            _libraryManagerMock.Object, _loggerFactory, ledger);
+        var handler = CreateAddCurrent(ledger);
         SessionInfo session = TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
 
         SkillResponse response = await handler.HandleAsync(

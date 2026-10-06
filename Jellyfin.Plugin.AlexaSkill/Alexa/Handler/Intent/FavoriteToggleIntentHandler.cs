@@ -84,28 +84,19 @@ public abstract class FavoriteToggleIntentHandler : BaseHandler
     {
         string locale = GetLocale(request);
 
-        // JF-629 review + JF-785: "this" (the favorite target) needs CURRENT
-        // evidence, the ONE predicate's three legs (an AudioPlayer token, the
-        // held full item, or the now-playing DTO). With none, the resolver's
-        // unbounded ledger tail would silently favorite the idle device's
-        // days-old persisted last-played item where the pre-migration code
-        // answered MediaNotFound; the ledger arms only arbitrate displacement
-        // while something is actually active. The pre-JF-785 inline guard
-        // checked the token and the DTO only, so the held-item-without-DTO
-        // shape (a launch's AttachNowPlayingIfLaunched write before any
-        // PlaybackStarted report, or a VideoApp launch, which reports nothing)
-        // was refused; the migration onto the predicate is behavioral there.
+        // JF-629 idle guard, the ONE predicate (JF-785 migrated this family's
+        // DTO-only guard onto it): without current evidence the resolver's
+        // unbounded ledger tail must not favorite the idle device's days-old
+        // last-played item; the predicate's doc owns the evidence legs.
         if (!PlaybackLaunchBuilder.HasCurrentPlaybackEvidence(context, session))
         {
             Logger.LogDebug("FavoriteToggle ({IntentName}): idle device (no token, no session item), returning MediaNotFound", IntentName);
             return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale)));
         }
 
-        // The ONE current-item resolver; the arbitration rationale lives on it.
-        // The tail is refused (JF-785 Leg A): unresolvable evidence (a DTO whose
-        // item was deleted mid-play or whose id is empty) falls to the
-        // MediaNotFound tell below instead of the tail substituting a days-old
-        // unrelated item for the favorite write.
+        // The ONE current-item resolver; the tail is refused (JF-785 Leg A, the
+        // resolver doc owns the contract) so unresolvable evidence falls to the
+        // MediaNotFound tell below.
         BaseItem? item = Launch.ResolveCurrentPlayingItem(context, session, _libraryManager, _queueManager, IntentName, allowLedgerTailAnswers: false);
         if (item == null)
         {

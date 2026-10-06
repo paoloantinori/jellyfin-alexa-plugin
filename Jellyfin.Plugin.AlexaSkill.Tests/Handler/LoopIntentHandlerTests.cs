@@ -323,15 +323,12 @@ public class LoopIntentHandlerTests : PluginTestBase
     }
 
     /// <summary>
-    /// JF-785 red proof (the migration leg): the session holds the FULL item a
-    /// delivered audio launch wrote (the launch's AttachNowPlayingIfLaunched
-    /// write) while the now-playing DTO is still null (the pre-PlaybackStarted
-    /// window) and no AudioPlayer token exists (a one-shot in that window). The
-    /// pre-JF-785 DTO-only guard refused this shape with the no-media tell even
-    /// though the resolver's held-item leg resolves it; the ONE evidence
-    /// predicate (JF-627) admits the held item and the mode applies to it.
-    /// The ledger is Audio-routed to the SAME track, the production shape of
-    /// this window (the launch chokepoint records before PlaybackStarted lands).
+    /// JF-785 red proof (the migration leg): the full-item-without-DTO shape
+    /// (held FullNowPlayingItem, no DTO, no token; the evidence legs are
+    /// documented on HasCurrentPlaybackEvidence; the ledger is Audio-routed to
+    /// the SAME track, the production shape of the pre-PlaybackStarted window)
+    /// resolves the held item and the mode applies to it. RED on the pre-JF-785
+    /// tree: the DTO-only guard answered the no-media tell here.
     /// </summary>
     [Fact]
     public async Task HandleAsync_FullItemHeldWithoutDto_AppliesModeToHeldItem_JF785()
@@ -359,14 +356,12 @@ public class LoopIntentHandlerTests : PluginTestBase
     }
 
     /// <summary>
-    /// JF-785 Leg A (the unresolvable-evidence door): the session reports a
-    /// now-playing DTO whose id does not resolve (Guid.Empty stands for the
-    /// deleted-mid-play shape). Live evidence exists but resolves nothing, so
-    /// the resolver's unbounded ledger tail must not substitute the idle
-    /// device's days-old AUDIO-routed last-played item for the mode write; the
-    /// no-media tell answers instead. Pre-JF-785 the tail flowed through (the
-    /// guard passes on DTO presence alone) and the write landed on the
-    /// unrelated item.
+    /// JF-785 Leg A (the unresolvable-evidence door; the resolver doc owns the
+    /// contract): a now-playing DTO whose id does not resolve (Guid.Empty
+    /// stands for the deleted-mid-play shape) plus a days-old AUDIO-routed
+    /// ledger entry; the mode write must not land on the ledger item, the
+    /// no-media tell answers. RED on the pre-JF-785 tree: the tail flowed
+    /// through and the mode landed on the days-old item.
     /// </summary>
     [Fact]
     public async Task HandleAsync_UnresolvableDtoStaleLedger_NoModeWrite_JF785()

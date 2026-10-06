@@ -176,14 +176,11 @@ public class FavoriteToggleIntentHandlerTests : PluginTestBase
     }
 
     /// <summary>
-    /// JF-785 red proof (the migration leg): the session holds the FULL item a
-    /// delivered launch wrote (AttachNowPlayingIfLaunched) while the now-playing
-    /// DTO is still null (the pre-PlaybackStarted window, or a VideoApp launch,
-    /// which reports nothing) and no AudioPlayer token exists (the video-first
-    /// device shape). The pre-JF-785 DTO-only guard refused this shape with
-    /// MediaNotFound even though the resolver's held-item leg resolves it and the
-    /// playlist-edit sibling already acts on it; the ONE evidence predicate
-    /// (JF-627) admits the held item and the toggle lands on the movie.
+    /// JF-785 red proof (the migration leg): the full-item-without-DTO shape
+    /// (held FullNowPlayingItem, no DTO, no token; the evidence legs are
+    /// documented on HasCurrentPlaybackEvidence) resolves the held item and the
+    /// toggle lands on it. RED on the pre-JF-785 tree: the DTO-only guard
+    /// answered MediaNotFound here.
     /// </summary>
     [Fact]
     public async Task HandleAsync_FullItemHeldWithoutDto_TogglesHeldItem_JF785()
@@ -212,13 +209,11 @@ public class FavoriteToggleIntentHandlerTests : PluginTestBase
     }
 
     /// <summary>
-    /// JF-785 Leg A (the unresolvable-evidence door): the session reports a
-    /// now-playing DTO whose id does not resolve (Guid.Empty stands for the
-    /// deleted-mid-play shape), so live evidence EXISTS but resolves nothing;
-    /// the resolver's unbounded ledger tail must not substitute the idle
-    /// device's days-old last-played item for the write. Pre-JF-785 the tail
-    /// flowed through (the guard passes on DTO presence alone) and the toggle
-    /// landed on the unrelated item.
+    /// JF-785 Leg A (the unresolvable-evidence door; the resolver doc owns the
+    /// contract): a now-playing DTO whose id does not resolve (Guid.Empty
+    /// stands for the deleted-mid-play shape) plus a days-old ledger entry; the
+    /// write must not land on the ledger item. RED on the pre-JF-785 tree: the
+    /// tail flowed through and the days-old item was favorited.
     /// </summary>
     [Fact]
     public async Task HandleAsync_UnresolvableDtoStaleLedger_NoWrite_JF785()

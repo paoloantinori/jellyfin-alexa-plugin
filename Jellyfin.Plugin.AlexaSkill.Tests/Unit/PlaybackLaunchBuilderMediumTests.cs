@@ -435,11 +435,10 @@ public class PlaybackLaunchBuilderMediumTests : PluginTestBase
     }
 
     /// <summary>
-    /// JF-785 Leg A at the resolver level: the guarded families pass
-    /// allowLedgerTailAnswers false, so the non-displacement tail (no token, no
-    /// session item: the idle device whose only record is the unbounded ledger)
-    /// answers null for them while the default keeps the deliberate unbounded
-    /// stance (RateItem's JF-626 shape) and resolves the same entry.
+    /// JF-785 Leg A at the resolver level: the guarded callers' flag refuses the
+    /// non-displacement tail (no token, no session item), while the default
+    /// keeps the deliberate unbounded stance (RateItem's JF-626 shape) and
+    /// resolves the same entry.
     /// </summary>
     [Fact]
     public void CurrentItem_GuardedCaller_TailRefused_DefaultKeepsTail_JF785()
@@ -457,16 +456,15 @@ public class PlaybackLaunchBuilderMediumTests : PluginTestBase
     }
 
     /// <summary>
-    /// JF-785 Leg A, the preserved half: refusing the tail must NOT narrow the
-    /// displacement arm, which is itself evidence-backed (it requires a live
-    /// AudioPlayer token mismatched against a non-Audio-routed ledger entry).
-    /// A guarded caller during a VideoApp launch still resolves the displaced
-    /// movie, byte-identically to the default.
+    /// JF-785 Leg A, the preserved half: the flag does NOT narrow the
+    /// displacement arm (it requires a live mismatched token, so it is
+    /// evidence-backed); a guarded caller during a VideoApp launch still
+    /// resolves the displaced movie, identically to the default.
     /// </summary>
     [Fact]
     public void CurrentItem_GuardedCaller_DisplacementArmStillAnswers_JF785()
     {
-        var movie = new Movie { Name = "Displacing Movie", Id = Guid.NewGuid() };
+        var movie = TestHelpers.CreateMovie("Displacing Movie");
         var (library, queue) = LedgerWith(movie, "ci-displace-jf785");
         Context staleToken = TestHelpers.CreateContextWithToken(Guid.NewGuid().ToString(), "ci-displace-jf785");
 

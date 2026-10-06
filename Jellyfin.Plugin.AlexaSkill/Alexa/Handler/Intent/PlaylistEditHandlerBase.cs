@@ -161,10 +161,9 @@ public abstract class PlaylistEditHandlerBase : BaseHandler
     /// playing now": the resolver's unbounded ledger tail must not add the idle
     /// device's days-old last-played item where the pre-JF-627 code answered
     /// NoMediaPlaying. JF-785 Leg A tightened the same door from the resolver
-    /// side: the tail is refused (allowLedgerTailAnswers false), so an
-    /// UNRESOLVABLE evidence shape (a now-playing DTO whose item was deleted
-    /// mid-play or whose id is empty) also answers NoMediaPlaying instead of the
-    /// tail adding a days-old unrelated item.
+    /// side: the tail is refused (allowLedgerTailAnswers false; the resolver's
+    /// doc owns the contract), so an UNRESOLVABLE evidence shape also answers
+    /// NoMediaPlaying.
     /// </summary>
     /// <param name="context">The Alexa request context.</param>
     /// <param name="session">The Jellyfin session.</param>

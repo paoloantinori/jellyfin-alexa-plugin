@@ -979,24 +979,21 @@ public sealed class PlaybackLaunchBuilder
     /// The ledger tail is UNBOUNDED with respect to recency: on a device whose
     /// last playback was days ago it still answers that item (RateItem's
     /// deliberate stance, JF-626). A caller whose WRITE is stateful on "this is
-    /// playing now" (favorite, media info, the loop toggle, playlist-edit) must
-    /// do TWO things: guard current evidence first
+    /// playing now" (the guarded families: favorite, media info, the loop
+    /// toggle, playlist-edit) must guard current evidence first
     /// (<see cref="HasCurrentPlaybackEvidence"/>, the JF-629 idle guard; all
     /// four families were migrated onto the ONE predicate in JF-785) AND pass
     /// <paramref name="allowLedgerTailAnswers"/> false, so an UNRESOLVABLE
     /// evidence shape (a now-playing DTO whose item was deleted mid-play or
     /// whose id is empty) falls to the family's no-media tell instead of the
-    /// tail substituting a days-old unrelated item (the JF-785 Leg A door);
-    /// see FavoriteToggleIntentHandler/MediaInfoIntentHandler/
-    /// ProgressReporter.ApplyRepeatModeAsync/PlaylistEditHandlerBase for the
-    /// guard and its rationale.
+    /// tail substituting a days-old unrelated item (the JF-785 Leg A door).
     /// </summary>
     /// <param name="context">The Alexa context (device id for the ledger read, AudioPlayer token).</param>
     /// <param name="session">The Jellyfin session (full now-playing item first, DTO second).</param>
     /// <param name="libraryManager">The library manager, to resolve item ids.</param>
     /// <param name="queueManager">The caller's device queue manager (Repeat, RateItem pass theirs); the parameter has NO default so every caller states its choice: null falls back to <c>Plugin.Instance</c>'s (the classifier-half idiom, JF-627); tests pass theirs to stay hermetic.</param>
     /// <param name="logLabel">Caller identity for the displacement log line.</param>
-    /// <param name="allowLedgerTailAnswers">Whether the final ledger fallback (the non-displacement tail) may answer; the guarded families pass false (JF-785 Leg A) so only evidence-backed arms (token, session items, the displacement arm, which itself requires a live token) answer, while the default true keeps the deliberate unbounded stance of RateItem (JF-626), Repeat and SetPlaybackSpeed.</param>
+    /// <param name="allowLedgerTailAnswers">Whether the non-displacement tail may answer; false for the guarded families (JF-785 Leg A), true (default) for RateItem's JF-626 stance plus Repeat and SetPlaybackSpeed.</param>
     /// <returns>The currently playing item, or null when nothing is resolvable.</returns>
     internal BaseItem? ResolveCurrentPlayingItem(
         Context? context,
@@ -1088,11 +1085,9 @@ public sealed class PlaybackLaunchBuilder
         // The displacement-path resolve already missed this id (deleted/stale ledger
         // item); re-resolving the same known-absent GUID is a second DB miss for
         // nothing. Only the non-displacement tail (audio-routed ledger, no token,
-        // no session item) resolves here. JF-785 Leg A: the guarded families
-        // (favorite, media info, the loop toggle, playlist-edit) refuse this tail
-        // so an unresolvable-evidence shape falls to their no-media tell instead
-        // of the tail substituting a days-old unrelated item; every arm above
-        // (token, session items, the displacement arm) stays live evidence-backed.
+        // no session item) resolves here, and only when the caller allows it
+        // (JF-785 Leg A: this flag gates exactly this tail; every arm above is
+        // live-evidence-backed and unaffected).
         BaseItem? resolved = ledgerItem ?? (displacementPossible || !allowLedgerTailAnswers ? null : ResolveId(lastPlayedId));
         if (resolved is null)
         {
@@ -1115,10 +1110,15 @@ public sealed class PlaybackLaunchBuilder
     /// keep their own idle REACTION strings. The three pre-JF-627 inline guards
     /// (FavoriteToggle, MediaInfo, ProgressReporter.ApplyRepeatModeAsync)
     /// migrated onto this predicate in JF-785, each with its own red proof on
-    /// the full-item-without-DTO shape, and all four guarded families pass
-    /// <c>allowLedgerTailAnswers: false</c> at their resolver call (the Leg A
-    /// door: unresolvable evidence must fall to the no-media tell, never let
-    /// the tail substitute a days-old item).
+    /// the full-item-without-DTO shape. All four guarded families additionally
+    /// pass <c>allowLedgerTailAnswers: false</c> at their resolver call (the
+    /// JF-785 Leg A door; the resolver's doc owns that contract), which makes
+    /// this guard BELT over the flag: with the tail refused, the resolver's
+    /// remaining answering arms are exactly this predicate's legs, so the two
+    /// mechanisms encode one policy. The fold (guard layer dissolved into the
+    /// resolver's own recency-bound answer) is JF-787 step 5; until then the
+    /// explicit guard keeps the idle refusal ahead of any ledger read and
+    /// carries the JF-627 red-proof ladder.
     /// VIDEOAPP PARITY (JF-785 Leg B, deliberate boundary, pinned, no new
     /// leg): every delivered VideoApp launch writes the launched item into the
     /// session's FullNowPlayingItem (AttachNowPlayingIfLaunched; the directive

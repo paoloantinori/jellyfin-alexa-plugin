@@ -280,13 +280,11 @@ public class MediaInfoIntentHandlerTests : PluginTestBase
     }
 
     /// <summary>
-    /// JF-785 red proof (the migration leg): the session holds the FULL item a
-    /// delivered launch wrote while the now-playing DTO is still null and no
-    /// AudioPlayer token exists (the video-first movie shape; the launch's
-    /// AttachNowPlayingIfLaunched write is the only evidence). The pre-JF-785
-    /// DTO-only guard refused this shape with NoMediaPlaying even though the
-    /// resolver's held-item leg resolves it; the ONE evidence predicate (JF-627)
-    /// admits the held item and the answer reports the movie.
+    /// JF-785 red proof (the migration leg): the full-item-without-DTO shape
+    /// (held FullNowPlayingItem, no DTO, no token; the evidence legs are
+    /// documented on HasCurrentPlaybackEvidence) resolves the held item and the
+    /// answer reports it. RED on the pre-JF-785 tree: the DTO-only guard
+    /// answered NoMediaPlaying here.
     /// </summary>
     [Fact]
     public async Task Handle_FullItemHeldWithoutDto_ReportsHeldItem_JF785()
@@ -316,14 +314,11 @@ public class MediaInfoIntentHandlerTests : PluginTestBase
     }
 
     /// <summary>
-    /// JF-785 Leg A (the unresolvable-evidence door): the session reports a
-    /// now-playing DTO whose id does not resolve (Guid.Empty stands for the
-    /// deleted-mid-play shape). Live evidence exists but resolves nothing, so
-    /// the resolver's unbounded ledger tail must not substitute the idle
-    /// device's days-old last-played item as the current answer; the family
-    /// keeps its informational DTO answer (the pre-JF-629 behavior for a
-    /// session that still reports an item). Pre-JF-785 the tail flowed through
-    /// and the answer spoke the unrelated item.
+    /// JF-785 Leg A (the unresolvable-evidence door; the resolver doc owns the
+    /// contract), the MediaInfo-specific outcome: a now-playing DTO whose id
+    /// does not resolve keeps its INFORMATIONAL answer (the pre-JF-629
+    /// behavior); the days-old ledger item must not be spoken as current. RED
+    /// on the pre-JF-785 tree: the answer spoke the ledger item.
     /// </summary>
     [Fact]
     public async Task Handle_UnresolvableDtoStaleLedger_SpeaksDtoNotLedgerItem_JF785()
