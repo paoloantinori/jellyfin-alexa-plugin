@@ -266,4 +266,63 @@ public class AlbumAnnounceVehicleTests : PluginTestBase
         Assert.Equal(tracks[1].Id, session.FullNowPlayingItem!.Id);
         Assert.Equal(tracks[1].Id, session.NowPlayingQueue[0].Id);
     }
+
+    // JF-796 companion pin (the code-review F3 gap): the COLD-tracker seek route is
+    // the leg deepResumePrefixTicks exists for. A VideoApp device with no tracked
+    // position and UserData progress beyond the initial page takes the deep resume
+    // on the video route too: the concat must slice at the ABSOLUTE album prefix
+    // (the runtimes of the 21 tracks before the position-holding one), not at 0.
+    [Fact]
+    public async Task SeekModeAlbumResume_ColdTracker_DeepResumeSlicesTheConcatAtTheAbsolutePrefix()
+    {
+        var config = new PluginConfiguration { ServerAddress = "http://localhost:8096/", NativeControlsForAudio = true, AnnounceAudioPlays = true };
+        var captured = new List<string>();
+        var svc = CreateService(config, captured, vehicleResult: () => true);
+        var album = Album();
+
+        // 26 tracks x 4 min, paging-honoring tracks mock (page 5, deep fetch all).
+        List<Audio> tracks = Enumerable.Range(1, 26).Select(i => new Audio
+        {
+            Name = $"Track {i:00}",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromMinutes(4).Ticks,
+        }).ToList();
+        var library = new Mock<ILibraryManager>();
+        library.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) => new QueryResult<BaseItem>
+            {
+                Items = tracks.Skip(q.StartIndex ?? 0).Take(q.Limit ?? tracks.Count).ToList(),
+                TotalRecordCount = tracks.Count
+            });
+        library.Setup(l => l.GetItemById(album.Id)).Returns(album);
+
+        // Deep UserData progress on track 22 (index 21); NO tracker swap, so the
+        // plugin instance's tracker stays cold (unassigned in the test host).
+        var inProgress = new UserItemData
+        {
+            Key = "test",
+            Played = false,
+            PlaybackPositionTicks = TimeSpan.FromMinutes(1).Ticks
+        };
+        var userData = new Mock<IUserDataManager>();
+        userData.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
+            .Returns((Jellyfin.Database.Implementations.Entities.User _, BaseItem item) =>
+                item.Id == tracks[21].Id ? inProgress : null);
+
+        SessionInfo session = Session();
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
+        var response = await svc.BuildAlbumPlayResponseAsync(
+            album, jellyfinUser, TestHelpers.CreateTestUser(), session,
+            TestHelpers.CreateContextWithVideoApp(), "it-IT",
+            library.Object, userData.Object, null, "AlbumAnnounceVehicle",
+            request: new IntentRequest());
+
+        var launch = Assert.Single(response.Response.Directives.OfType<VideoAppLaunchDirective>());
+        // The absolute prefix of the 21 tracks before track 22 (21 x 4 min): the
+        // album-absolute slice the concat timeline needs, not the page-relative 0.
+        Assert.Contains($"start={TimeSpan.FromMinutes(84).Ticks}", launch.VideoItem.Source, StringComparison.Ordinal);
+        Assert.Equal("Track 22", launch.VideoItem.Metadata?.Title);
+        Assert.Equal(tracks[21].Id, session.FullNowPlayingItem!.Id);
+        Assert.Equal(tracks[21].Id, session.NowPlayingQueue[0].Id);
+    }
 }

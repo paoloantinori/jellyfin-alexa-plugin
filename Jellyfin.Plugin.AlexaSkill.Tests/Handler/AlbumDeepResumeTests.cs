@@ -7,6 +7,7 @@ using global::Alexa.NET.Request;
 using global::Alexa.NET.Request.Type;
 using global::Alexa.NET.Response;
 using global::Alexa.NET.Response.Directive;
+using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
@@ -85,12 +86,17 @@ public class AlbumDeepResumeTests : PluginTestBase, IDisposable
     /// mock insertion order equal to the server's SortName order) and optional
     /// in-progress UserData on the track at <paramref name="progressTrackIndex"/>.
     /// Recorded track queries land in <paramref name="queries"/> when given.
+    /// <paramref name="endUnknownPage"/> simulates the JF-673/JF-753 NRE-class
+    /// server: the paged tracks queries NRE on GetItemsResult (the head's
+    /// SafeGetItemsResult then serves the page through the GetItemList fallback
+    /// with the SENTINEL total), while the unpaged deep query answers normally.
     /// </summary>
     private (MusicAlbum Album, List<BaseItem> Tracks) SetupDeepResumeAlbum(
         int trackCount,
         int? progressTrackIndex = null,
         long positionTicks = 0,
-        List<InternalItemsQuery>? queries = null)
+        List<InternalItemsQuery>? queries = null,
+        bool endUnknownPage = false)
     {
         var album = new MusicAlbum { Name = "Deep Resume Album", Id = Guid.NewGuid(), ProductionYear = 2020 };
         List<BaseItem> tracks = Enumerable.Range(1, trackCount)
@@ -131,6 +137,21 @@ public class AlbumDeepResumeTests : PluginTestBase, IDisposable
             _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
                 .Returns((Jellyfin.Database.Implementations.Entities.User _, BaseItem item) =>
                     item.Id == tracks[progressIdx].Id ? inProgress : null);
+        }
+
+        if (endUnknownPage)
+        {
+            // Registered AFTER the generic setups so Moq's last-match-wins order
+            // routes the paged tracks queries here: they NRE on GetItemsResult and
+            // the head's SafeGetItemsResult serves them through the GetItemList
+            // fallback (which, under the head's unknownTotalOnFallback, reports
+            // the SENTINEL total). The unpaged deep query (Limit == null) keeps
+            // the generic paging mock and its honest count.
+            _fx.LibraryManager.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q => q.Limit != null)))
+                .Throws(new NullReferenceException());
+            _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                    q.Limit != null && q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.Audio))))
+                .Returns((InternalItemsQuery q) => tracks.Skip(q.StartIndex ?? 0).Take(q.Limit ?? tracks.Count).ToList());
         }
 
         return (album, tracks);
@@ -222,6 +243,46 @@ public class AlbumDeepResumeTests : PluginTestBase, IDisposable
         }
     }
 
+    // JF-796 companion pin (the code-review F4 gap): the end-unknown regime
+    // transition. On an NRE-class server the page arrives through the GetItemList
+    // fallback carrying the SENTINEL total (unknownTotalOnFallback), so the
+    // continuation the deep re-slice mints must carry the fetch-all list's HONEST
+    // count, not the sentinel: an end-unknown continuation after a re-slice would
+    // flip the tail's exhaustion semantics (AdvanceOrMarkExhausted marks on short
+    // pages) and double-fetch or truncate the album tail on exactly those servers.
+    [Fact]
+    public async Task HandleAsync_DeepProgressBeyondInitialPage_EndUnknownPageRegime_RebasesToTheHonestTotal()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest("deep resume album");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+        (MusicAlbum _, List<BaseItem> tracks) = SetupDeepResumeAlbum(
+            40, progressTrackIndex: 21, positionTicks: TimeSpan.FromMinutes(1).Ticks, endUnknownPage: true);
+
+        try
+        {
+            SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+            AudioPlayerPlayDirective playDirective = GetPlayDirective(response);
+            Assert.Equal(tracks[21].Id.ToString(), playDirective.AudioItem.Stream.Token);
+
+            QueueContinuation? continuation = QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID!);
+            Assert.NotNull(continuation);
+            Assert.Equal(26, continuation!.StartIndex);
+            // The honest fetch-all count, not the int.MaxValue sentinel the page
+            // carried (Equal pins the value, so the sentinel shape reds here).
+            Assert.Equal(40, continuation.TotalCount);
+        }
+        finally
+        {
+            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
+        }
+    }
+
     // JF-796 companion pin: in-page progress stays on the page scan alone. Progress
     // on page 1 (track 3 of 26) must resume there WITHOUT the unpaged deep fetch
     // (the guard keys on the page scan's no-position answer).
@@ -296,6 +357,34 @@ public class AlbumDeepResumeTests : PluginTestBase, IDisposable
             // The trade, pinned: exactly one unpaged tracks query ran and found no
             // position (the re-slice guard stayed cold).
             Assert.Single(queries, q => q.Limit is null);
+        }
+        finally
+        {
+            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
+        }
+    }
+
+    // JF-796 companion pin (the F4 pin's premise, verified empirically): the
+    // endUnknownPage knob genuinely routes the page through the NRE fallback, so
+    // with no deep progress the head stores the SENTINEL total (the JF-753
+    // behavior). If the knob's mock order ever breaks, the F4 regime pin above
+    // would silently degrade to the known-total regime and stay green; this pin
+    // reds instead.
+    [Fact]
+    public async Task HandleAsync_EndUnknownPageRegime_NoDeepProgress_StoresTheSentinelTotal()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest("deep resume album");
+        var context = _fx.CreateContext();
+        var session = CreateSession();
+        _fx.SetupUserMock();
+        SetupDeepResumeAlbum(40, endUnknownPage: true);
+        try
+        {
+            await handler.HandleAsync(request, context, _fx.CreateUser(), session, CancellationToken.None);
+            QueueContinuation? probeContinuation = QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID!);
+            Assert.NotNull(probeContinuation);
+            Assert.Equal(Jellyfin.Plugin.AlexaSkill.Alexa.Util.SearchService.UnknownTotal, probeContinuation!.TotalCount);
         }
         finally
         {
