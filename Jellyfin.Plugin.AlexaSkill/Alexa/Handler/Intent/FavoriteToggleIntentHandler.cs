@@ -84,19 +84,20 @@ public abstract class FavoriteToggleIntentHandler : BaseHandler
     {
         string locale = GetLocale(request);
 
-        // JF-629 review: "this" (the favorite target) needs CURRENT evidence - an
-        // AudioPlayer token or a session now-playing item. With neither, the resolver's
-        // unbounded ledger tail would silently favorite the idle device's days-old
-        // persisted last-played item where the pre-migration code answered MediaNotFound;
-        // the ledger arms only arbitrate displacement while something is actually active.
-        if (string.IsNullOrEmpty(context.AudioPlayer?.Token) && session.NowPlayingItem == null)
+        // JF-629 idle guard, the ONE predicate (JF-785 migrated this family's
+        // DTO-only guard onto it): without current evidence the resolver's
+        // unbounded ledger tail must not favorite the idle device's days-old
+        // last-played item; the predicate's doc owns the evidence legs.
+        if (!PlaybackLaunchBuilder.HasCurrentPlaybackEvidence(context, session))
         {
             Logger.LogDebug("FavoriteToggle ({IntentName}): idle device (no token, no session item), returning MediaNotFound", IntentName);
             return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale)));
         }
 
-        // The ONE current-item resolver; the arbitration rationale lives on it.
-        BaseItem? item = Launch.ResolveCurrentPlayingItem(context, session, _libraryManager, _queueManager, IntentName);
+        // The ONE current-item resolver; the tail is refused (JF-785 Leg A, the
+        // resolver doc owns the contract) so unresolvable evidence falls to the
+        // MediaNotFound tell below.
+        BaseItem? item = Launch.ResolveCurrentPlayingItem(context, session, _libraryManager, _queueManager, IntentName, allowLedgerTailAnswers: false);
         if (item == null)
         {
             Logger.LogDebug("FavoriteToggle ({IntentName}): no resolvable current item, returning MediaNotFound", IntentName);

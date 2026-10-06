@@ -88,19 +88,21 @@ public class MediaInfoIntentHandler : BaseHandler
     {
         string locale = GetLocale(request);
 
-        // JF-629 review: "what is playing" is PRESENT TENSE. With neither an AudioPlayer
-        // token nor a session now-playing item, nothing is playing NOW, and the resolver's
-        // unbounded ledger tail (days-old persisted last-played) must not answer it; the
-        // ledger arms only arbitrate when current evidence exists (the token leg, or the
-        // session item the seek-mode VideoApp route sets before launching).
-        if (string.IsNullOrEmpty(context.AudioPlayer?.Token) && session.NowPlayingItem == null)
+        // JF-629 idle guard, the ONE predicate (JF-785 migrated this family's
+        // DTO-only guard onto it): "what is playing" is PRESENT TENSE, and
+        // without current evidence nothing is playing NOW, so the resolver's
+        // unbounded ledger tail (days-old persisted last-played) must not
+        // answer it; the predicate's doc owns the evidence legs.
+        if (!PlaybackLaunchBuilder.HasCurrentPlaybackEvidence(context, session))
         {
             Logger.LogInformation("MediaInfoIntent: no media currently playing");
             return ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale));
         }
 
-        // The ONE current-item resolver; the arbitration rationale lives on it.
-        BaseItem? current = Launch.ResolveCurrentPlayingItem(context, session, _libraryManager, _queueManager, "MediaInfo");
+        // The ONE current-item resolver; the tail is refused (JF-785 Leg A, the
+        // resolver doc owns the contract) so unresolvable evidence answers null
+        // and ResolveDisplayItem keeps the session's raw informational DTO.
+        BaseItem? current = Launch.ResolveCurrentPlayingItem(context, session, _libraryManager, _queueManager, "MediaInfo", allowLedgerTailAnswers: false);
         BaseItemDto? item = ResolveDisplayItem(current, session.NowPlayingItem);
         if (item == null)
         {

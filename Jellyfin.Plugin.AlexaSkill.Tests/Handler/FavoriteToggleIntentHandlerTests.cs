@@ -12,6 +12,7 @@ using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Entities.Movies;
+using MediaBrowser.Model.Dto;
 using MediaBrowser.Model.Entities;
 using Moq;
 using Xunit;
@@ -166,6 +167,104 @@ public class FavoriteToggleIntentHandlerTests : PluginTestBase
             TestHelpers.CreateTestUser(), _fx.CreateSession(), CancellationToken.None);
 
         Assert.Contains("could not find the media", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        _fx.UserDataManager.Verify(u => u.SaveUserData(
+            It.IsAny<Jellyfin.Database.Implementations.Entities.User>(),
+            It.IsAny<BaseItem>(),
+            It.IsAny<UserItemData>(),
+            It.IsAny<UserDataSaveReason>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    /// <summary>
+    /// JF-785 red proof (the migration leg): the full-item-without-DTO shape
+    /// (held FullNowPlayingItem, no DTO, no token; the evidence legs are
+    /// documented on HasCurrentPlaybackEvidence) resolves the held item and the
+    /// toggle lands on it. RED on the pre-JF-785 tree: the DTO-only guard
+    /// answered MediaNotFound here.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_FullItemHeldWithoutDto_TogglesHeldItem_JF785()
+    {
+        var movie = new Movie { Name = "Held Movie", Id = Guid.NewGuid(), Path = "/movies/held.mkv" };
+        var data = SetupHappyPath(movie);
+        var queues = TestHelpers.CreateDeviceQueueManager("fav-held-jf785");
+        queues.RecordLastPlayed("fav-held-jf785-device", movie.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        var handler = CreateHandler(queues);
+        var session = _fx.CreateSession();
+        session.FullNowPlayingItem = movie;
+        Assert.Null(session.NowPlayingItem); // the full-item-WITHOUT-DTO shape
+
+        var response = await handler.HandleAsync(
+            Request(), TestHelpers.CreateTestContext("fav-held-jf785-device"),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.True(data.IsFavorite, "the held full item is the toggle target");
+        _fx.UserDataManager.Verify(u => u.SaveUserData(
+            It.IsAny<Jellyfin.Database.Implementations.Entities.User>(),
+            It.Is<BaseItem>(i => i.Id == movie.Id),
+            data,
+            UserDataSaveReason.UpdateUserRating,
+            It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Contains("added to favorites", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-785 Leg A (the unresolvable-evidence door; the resolver doc owns the
+    /// contract): a now-playing DTO whose id does not resolve (Guid.Empty
+    /// stands for the deleted-mid-play shape) plus a days-old ledger entry; the
+    /// write must not land on the ledger item. RED on the pre-JF-785 tree: the
+    /// tail flowed through and the days-old item was favorited.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_UnresolvableDtoStaleLedger_NoWrite_JF785()
+    {
+        var oldSong = new Audio { Name = "Days Old Song", Id = Guid.NewGuid(), Path = "/music/old.mp3" };
+        var data = SetupHappyPath(oldSong); // user-data write must be REACHABLE, or the pin is vacuous
+        var queues = TestHelpers.CreateDeviceQueueManager("fav-door-jf785");
+        queues.RecordLastPlayed("fav-door-jf785-device", oldSong.Id.ToString(), DeviceQueueManager.LaunchRoute.Audio);
+        var handler = CreateHandler(queues);
+        var session = _fx.CreateSession();
+        session.NowPlayingItem = new BaseItemDto { Id = Guid.Empty, Name = "Ghost Track" };
+
+        var response = await handler.HandleAsync(
+            Request(), TestHelpers.CreateTestContext("fav-door-jf785-device"),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.Contains("could not find the media", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        Assert.False(data.IsFavorite, "the days-old ledger item must not become the toggle target");
+        _fx.UserDataManager.Verify(u => u.SaveUserData(
+            It.IsAny<Jellyfin.Database.Implementations.Entities.User>(),
+            It.IsAny<BaseItem>(),
+            It.IsAny<UserItemData>(),
+            It.IsAny<UserDataSaveReason>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    /// <summary>
+    /// Gate-marker tail F4, the deleted-mid-play shape the Guid.Empty twin
+    /// cannot reach: a now-playing DTO carrying a REAL id that no longer
+    /// resolves (GetItemById returns null; the fixture's loose mock answers
+    /// null for the unsetup ghost id) flows through the resolver's DTO arm -
+    /// the production path for a track deleted mid-play - and must not fall
+    /// through to the days-old ledger tail.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DeletedMidPlayDtoStaleLedger_NoWrite_JF785()
+    {
+        var oldSong = new Audio { Name = "Days Old Song", Id = Guid.NewGuid(), Path = "/music/old.mp3" };
+        var data = SetupHappyPath(oldSong); // user-data write must be REACHABLE, or the pin is vacuous
+        var queues = TestHelpers.CreateDeviceQueueManager("fav-ghost-jf785");
+        queues.RecordLastPlayed("fav-ghost-jf785-device", oldSong.Id.ToString(), DeviceQueueManager.LaunchRoute.Audio);
+        var handler = CreateHandler(queues);
+        var session = _fx.CreateSession();
+        session.NowPlayingItem = new BaseItemDto { Id = Guid.NewGuid(), Name = "Deleted Mid-Play Track" };
+
+        var response = await handler.HandleAsync(
+            Request(), TestHelpers.CreateTestContext("fav-ghost-jf785-device"),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.Contains("could not find the media", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        Assert.False(data.IsFavorite, "the days-old ledger item must not become the toggle target");
         _fx.UserDataManager.Verify(u => u.SaveUserData(
             It.IsAny<Jellyfin.Database.Implementations.Entities.User>(),
             It.IsAny<BaseItem>(),

@@ -323,6 +323,70 @@ public class LoopIntentHandlerTests : PluginTestBase
     }
 
     /// <summary>
+    /// JF-785 red proof (the migration leg): the full-item-without-DTO shape
+    /// (held FullNowPlayingItem, no DTO, no token; the evidence legs are
+    /// documented on HasCurrentPlaybackEvidence; the ledger is Audio-routed to
+    /// the SAME track, the production shape of the pre-PlaybackStarted window)
+    /// resolves the held item and the mode applies to it. RED on the pre-JF-785
+    /// tree: the DTO-only guard answered the no-media tell here.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_FullItemHeldWithoutDto_AppliesModeToHeldItem_JF785()
+    {
+        DeviceQueueManager queues = TestHelpers.CreateDeviceQueueManager("loop-held-jf785");
+        Audio song = Song("Held Song");
+        SetupLibraryResolves(song);
+        queues.RecordLastPlayed("loop-held-jf785-device", song.Id.ToString(), DeviceQueueManager.LaunchRoute.Audio);
+        BaseHandler handler = CreateOwner(IntentNames.RepeatSingleOn, queues);
+        SessionInfo session = CreateSession();
+        session.FullNowPlayingItem = song;
+        Assert.Null(session.NowPlayingItem); // the full-item-WITHOUT-DTO shape
+
+        SkillResponse response = await handler.HandleAsync(
+            IntentRequestFor(IntentNames.RepeatSingleOn), TestHelpers.CreateTestContext("loop-held-jf785-device"),
+            CreateUser(), session, CancellationToken.None);
+
+        PlaybackProgressInfo? info = AppliedProgressInfo();
+        Assert.NotNull(info);
+        Assert.Equal(song.Id, info!.ItemId);
+        Assert.Equal(RepeatMode.RepeatOne, info.RepeatMode);
+        Assert.Contains(
+            ResponseStrings.Get("RepeatSongEnabled", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// JF-785 Leg A (the unresolvable-evidence door; the resolver doc owns the
+    /// contract): a now-playing DTO whose id does not resolve (Guid.Empty
+    /// stands for the deleted-mid-play shape) plus a days-old AUDIO-routed
+    /// ledger entry; the mode write must not land on the ledger item, the
+    /// no-media tell answers. RED on the pre-JF-785 tree: the tail flowed
+    /// through and the mode landed on the days-old item.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_UnresolvableDtoStaleLedger_NoModeWrite_JF785()
+    {
+        DeviceQueueManager queues = TestHelpers.CreateDeviceQueueManager("loop-door-jf785");
+        Audio oldSong = Song("Days Old Song");
+        SetupLibraryResolves(oldSong);
+        queues.RecordLastPlayed("loop-door-jf785-device", oldSong.Id.ToString(), DeviceQueueManager.LaunchRoute.Audio);
+        BaseHandler handler = CreateOwner(IntentNames.LoopAllOn, queues);
+        SessionInfo session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto { Id = Guid.Empty, Name = "Ghost Track" };
+
+        SkillResponse response = await handler.HandleAsync(
+            IntentRequestFor(IntentNames.LoopAllOn), TestHelpers.CreateTestContext("loop-door-jf785-device"),
+            CreateUser(), session, CancellationToken.None);
+
+        Assert.Contains(
+            ResponseStrings.Get("NoMediaPlaying", "en-US"),
+            TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+        _sessionManagerMock.Verify(
+            s => s.OnPlaybackProgress(It.IsAny<PlaybackProgressInfo>(), It.IsAny<bool>()), Times.Never);
+        Assert.Equal(RepeatMode.RepeatNone, session.PlayState!.RepeatMode);
+    }
+
+    /// <summary>
     /// The belt's SAME-ITEM shape (the arm only ResolveScreenOwningMedium closes,
     /// pinned here because no classifier-only arm fires): the native-controls
     /// delegation re-records the SAME track on the VideoApp route while the

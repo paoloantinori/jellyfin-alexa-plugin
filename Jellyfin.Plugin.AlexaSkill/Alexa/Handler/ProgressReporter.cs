@@ -813,12 +813,12 @@ public sealed class ProgressReporter
 
         string? deviceId = context.System?.Device?.DeviceID;
 
-        // JF-629 idle guard: with neither an AudioPlayer token nor a session
-        // now-playing item, nothing is playing NOW, and the resolver's unbounded
-        // ledger tail (a days-old audio-routed last-played) must not take the mode
-        // write where the pre-migration code answered no-media; the ledger arms
-        // only arbitrate while current evidence exists.
-        if (string.IsNullOrEmpty(context.AudioPlayer?.Token) && session.NowPlayingItem == null)
+        // JF-629 idle guard, the ONE predicate (JF-785 migrated this family's
+        // DTO-only guard onto it): with no current evidence, nothing is playing
+        // NOW, and the resolver's unbounded ledger tail (a days-old
+        // audio-routed last-played) must not take the mode write; the
+        // predicate's doc owns the evidence legs.
+        if (!PlaybackLaunchBuilder.HasCurrentPlaybackEvidence(context, session))
         {
             _logger.LogDebug("{Label}: idle device (no token, no session item), returning the no-media tell", label);
             return ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale));
@@ -830,8 +830,10 @@ public sealed class ProgressReporter
         // PlaybackLaunchBuilder.ResolveCurrentPlayingItem. The intent can still
         // arrive with nothing resolvable (an open session, a deleted item): there
         // is no item to attach the repeat mode to, so the localized no-media tell
-        // is returned instead of throwing.
-        BaseItem? item = _launch.ResolveCurrentPlayingItem(context, session, libraryManager, queueManager, label);
+        // is returned instead of throwing. The tail is refused (JF-785 Leg A, the
+        // resolver doc owns the contract) so unresolvable evidence falls to that
+        // same no-media tell.
+        BaseItem? item = _launch.ResolveCurrentPlayingItem(context, session, libraryManager, queueManager, label, allowLedgerTailAnswers: false);
         if (item == null)
         {
             return ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale));

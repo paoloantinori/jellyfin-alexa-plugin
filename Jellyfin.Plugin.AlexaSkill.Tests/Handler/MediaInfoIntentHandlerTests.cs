@@ -279,6 +279,68 @@ public class MediaInfoIntentHandlerTests : PluginTestBase
         Assert.DoesNotContain("Last Week Movie", text);
     }
 
+    /// <summary>
+    /// JF-785 red proof (the migration leg): the full-item-without-DTO shape
+    /// (held FullNowPlayingItem, no DTO, no token; the evidence legs are
+    /// documented on HasCurrentPlaybackEvidence) resolves the held item and the
+    /// answer reports it. RED on the pre-JF-785 tree: the DTO-only guard
+    /// answered NoMediaPlaying here.
+    /// </summary>
+    [Fact]
+    public async Task Handle_FullItemHeldWithoutDto_ReportsHeldItem_JF785()
+    {
+        TestHelpers.SetServerAddress(_config, "https://test.example.com");
+        var movie = new MediaBrowser.Controller.Entities.Movies.Movie
+        {
+            Name = "Held Movie",
+            Id = Guid.NewGuid(),
+            Path = "/movies/held.mkv",
+            ProductionYear = 2019,
+        };
+        var queueManager = TestHelpers.CreateDeviceQueueManager("mediainfo-held-jf785");
+        queueManager.RecordLastPlayed("mediainfo-held-jf785-device", movie.Id.ToString(), DeviceQueueManager.LaunchRoute.VideoApp);
+        _libraryManagerMock.Setup(l => l.GetItemById(movie.Id)).Returns(movie);
+        var handler = CreateHandler(queueManager);
+        var session = CreateSession();
+        session.FullNowPlayingItem = movie;
+        Assert.Null(session.NowPlayingItem); // the full-item-WITHOUT-DTO shape
+
+        var text = GetSpeechText(await handler.HandleAsync(
+            CreateMediaInfoRequest(),
+            TestHelpers.CreateTestContext("mediainfo-held-jf785-device"),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
+
+        Assert.Contains("Held Movie", text);
+    }
+
+    /// <summary>
+    /// JF-785 Leg A (the unresolvable-evidence door; the resolver doc owns the
+    /// contract), the MediaInfo-specific outcome: a now-playing DTO whose id
+    /// does not resolve keeps its INFORMATIONAL answer (the pre-JF-629
+    /// behavior); the days-old ledger item must not be spoken as current. RED
+    /// on the pre-JF-785 tree: the answer spoke the ledger item.
+    /// </summary>
+    [Fact]
+    public async Task Handle_UnresolvableDtoStaleLedger_SpeaksDtoNotLedgerItem_JF785()
+    {
+        TestHelpers.SetServerAddress(_config, "https://test.example.com");
+        var oldSong = new Audio { Name = "Days Old Song", Id = Guid.NewGuid(), Path = "/music/old.mp3" };
+        _libraryManagerMock.Setup(l => l.GetItemById(oldSong.Id)).Returns(oldSong);
+        var queueManager = TestHelpers.CreateDeviceQueueManager("mediainfo-door-jf785");
+        queueManager.RecordLastPlayed("mediainfo-door-jf785-device", oldSong.Id.ToString(), DeviceQueueManager.LaunchRoute.Audio);
+        var handler = CreateHandler(queueManager);
+        var session = CreateSession();
+        session.NowPlayingItem = new BaseItemDto { Id = Guid.Empty, Name = "Ghost Track" };
+
+        var text = GetSpeechText(await handler.HandleAsync(
+            CreateMediaInfoRequest(),
+            TestHelpers.CreateTestContext("mediainfo-door-jf785-device"),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None));
+
+        Assert.Contains("Ghost Track", text);
+        Assert.DoesNotContain("Days Old Song", text);
+    }
+
 
     /// <summary>
     /// Ensure APL visuals are enabled so "WithApl" tests pass regardless of
