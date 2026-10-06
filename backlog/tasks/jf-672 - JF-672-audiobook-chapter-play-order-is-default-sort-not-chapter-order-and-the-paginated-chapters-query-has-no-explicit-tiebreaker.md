@@ -60,7 +60,7 @@ AUDIT UPDATE (2026-10-02): BuildAudiobookChaptersQuery now carries a doc comment
 
 **Suites**: 5373/5373 both TFMs on the final state (5372 baseline + 1); Release --no-restore -warnaserror 0 warnings 0 errors, re-verified after the simplify pass and after the review tail.
 
-**Gates**: /simplify (4 parallel angles: reuse/simplification concordant findings applied - the pin family reshaped onto the album-arm convention, one literal honesty pin + constant-equality consumer pins, the 3x probe rationale deduped to the constant's doc; efficiency and altitude returned nothing actionable, their overlapping no-action observations adjudicated; commit 8274fe93). /code-review high (4 findings, ALL applied, each verified in code before the fix, one with its own red proof; the review's two dropped candidates agreed; commit b9e45fc9).
+**Gates**: /simplify (4 parallel angles: the concordant reuse/simplification findings applied, reshaping the pin family onto the album-arm convention with one literal honesty pin plus constant-equality consumer pins, and deduping the 3x probe rationale onto the constant's doc; efficiency and altitude returned nothing actionable, their overlapping no-action observations adjudicated; commit 8274fe93). /code-review high (4 findings, ALL applied, each verified in code before the fix, one with its own red proof; the review's two dropped candidates agreed; commit b9e45fc9).
 
 **Not deployed** (worker branch only; the orchestrator merges and batches deploys). No locale, model, or speech surface touched. One filing: JF-790.
 
