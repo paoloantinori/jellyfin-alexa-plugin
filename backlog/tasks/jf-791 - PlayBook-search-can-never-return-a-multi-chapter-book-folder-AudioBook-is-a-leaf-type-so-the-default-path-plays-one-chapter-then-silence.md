@@ -63,7 +63,7 @@ AudiobookChapterOrder already lands correct for the tagged class; the untagged c
 needs JF-790's filename-sort adoption at the queue side.
 
 VERIFICATION BAR: simulator PlayBook against a multi-chapter book on the deployed box
-must log the full chapter count (not "with 1 tracks") and mint the continuation; a
+must log "checking resume ... with 5 tracks" (trackItems.Count, the initial page, NOT the book total; the gate-marker corrected this observable) and mint the continuation; a
 red-proof pin first (the current shape's 1-track log is the failure signature); the
 single-file leaf book keeps playing as its own track.
 <!-- SECTION:DESCRIPTION:END -->
@@ -85,7 +85,7 @@ single-file leaf book keeps playing as its own track.
 - [x] #7 E2E test added for new intent or handler logic
       (DONE at unit level with the RED-proof pin family; the LIVE simulator leg is the
       orchestrator's post-deploy round, see the Final Summary's close-out bar: the
-      deployed DLL must log the full chapter count, not "with 1 tracks", for PlayBook
+      deployed DLL must log "with 5 tracks" (the initial page, not "with 1 tracks"; the log prints trackItems.Count, never the book total) for PlayBook
       on "measure what matters". The simulator runs the deployed build, so it cannot
       run from this worker branch)
 - [x] #8 Locale response strings added to all 17 locales
@@ -149,7 +149,7 @@ pre-normalization of the candidate set).
 CLOSE-OUT BAR (the orchestrator's post-deploy leg, NOT runnable from this worker
 branch: the simulator executes the DEPLOYED DLL): after this merge deploys, run the
 simulator PlayBook on "measure what matters" (26 tagged chapters) and verify the log
-reads the full chapter count, not "with 1 tracks", that the launch is chapter 1 of the
+reads "with 5 tracks" (the initial page, not "with 1 tracks"; trackItems.Count, never the book total), that the launch is chapter 1 of the
 book (not chapter 22 alone), and that a continuation is minted; the single-file book
 ("the hobbit" class) must keep playing as its own track. The JF-790 untagged-order
 concern becomes real on this path the moment the folder resolves (it was unreachable

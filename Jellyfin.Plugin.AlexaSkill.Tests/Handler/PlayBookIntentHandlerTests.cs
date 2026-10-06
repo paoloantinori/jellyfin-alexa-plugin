@@ -335,11 +335,14 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
 
         // 26 chapters with one initial page of 5 (GetInitialFetchSize): the head
         // query must run on the FOLDER id and see the full count; any other parent
-        // (the pre-fix leaf id) enumerates nothing.
+        // (the pre-fix leaf id) enumerates nothing. The Names are zero-padded so
+        // the mock's insertion order equals the real server's SortName order
+        // (unpadded 'Chapter 10' would sort inside the first page on a real
+        // server; the gate-marker's test-realism fix).
         List<BaseItem> chapters = Enumerable.Range(1, 26)
             .Select(i => (BaseItem)new AudioBook
             {
-                Name = $"Measure What Matters - Chapter {i}",
+                Name = $"Measure What Matters - Chapter {i:00}",
                 Id = Guid.NewGuid(),
                 ParentId = bookFolderId,
                 Path = $"/audiobooks/measure-what-matters/ch{i:00}.mp3"
