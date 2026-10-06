@@ -211,6 +211,30 @@ public class StreamTokenHelperTests
         Assert.Equal(2, token.Split('.').Length - 1);
     }
 
+    /// <summary>
+    /// JF-784 leg 2 pin: the scope renders one base64url field of EXACTLY 22
+    /// chars per library (the 16 GUID bytes unpadded), the compact form that
+    /// bounds the token's per-library cost at 23 chars (field + separator) vs
+    /// the superseded 33-char "N"-hex rendering. The token rides every playlist
+    /// segment line and every segment request URL, so the per-library width is
+    /// the multiplier on both the playlist bytes and the request-line length
+    /// (Kestrel's 8192-byte default MaxRequestLineSize). RED on the pre-JF-784
+    /// tree: the fields render 32 chars of hex.
+    /// </summary>
+    [Fact]
+    public void MintScoped_RendersCompactBase64UrlPerLibraryScope()
+    {
+        string token = StreamTokenHelper.MintScoped(ItemId, Secret, Scope);
+        string scopeField = token.Split('.')[1];
+        string[] fields = scopeField.Split(',');
+
+        Assert.Equal(Scope.Length, fields.Length);
+        // 22 chars per field is the complete discriminator: a 32-char "N"-hex
+        // field (the superseded rendering) cannot fit, so no separate
+        // DoesNotContain assert is needed.
+        Assert.All(fields, field => Assert.Equal(22, field.Length));
+    }
+
     [Fact]
     public void MintScoped_EmptyScopeField_Rejected()
     {
@@ -233,7 +257,14 @@ public class StreamTokenHelperTests
         Assert.False(StreamTokenHelper.TryValidate(WithScopeField(token, "not-a-guid"), ItemId, Secret));
         Assert.False(StreamTokenHelper.TryValidate(WithScopeField(token, "not-a-guid"), ItemId, Secret, out _));
 
+        // JF-784: the canonical rendering is the mint's own (compact base64url
+        // fields since this task). Derived from a SHUFFLED, DUPLICATED input
+        // so the assert is not tautological: if the mint stopped canonicalizing
+        // (a dropped OrderBy/Distinct), the shuffled mint's field would differ
+        // from the original token's, the substitution would change the signed
+        // payload, and the True below would fail (independent coverage the
+        // same-input derivation could not give).
         string RenderedScope()
-            => string.Join(",", Scope.Select(g => g.ToString("N")).OrderBy(s => s, StringComparer.Ordinal));
+            => StreamTokenHelper.MintScoped(ItemId, Secret, new[] { Scope[1], Scope[0], Scope[1] }).Split('.')[1];
     }
 }

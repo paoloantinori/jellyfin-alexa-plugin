@@ -18,8 +18,9 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// <item>legacy / unrestricted: <c>{expiresUnix}.{hmacBase64Url}</c>, two dot-separated fields,
 /// both URL-safe (base64url without padding for the HMAC, decimal seconds for the expiry);</item>
 /// <item>library-scoped (JF-767): <c>{expiresUnix}.{scope}.{hmacBase64Url}</c>, where the scope
-/// is the launching user's allowed library GUIDs in "N" form, comma-joined in canonical
-/// (sorted, deduplicated) order. The HMAC covers the scope, so an edited or stripped scope
+/// is the launching user's allowed library GUIDs, each as the unpadded base64url of its 16
+/// bytes (22 chars, the JF-784 compact rendering), comma-joined in canonical (sorted,
+/// deduplicated) order. The HMAC covers the scope, so an edited or stripped scope
 /// field invalidates the signature (fail-closed, including the widening attack of deleting
 /// the field to fall back to the unrestricted shape).</item>
 /// </list>
@@ -185,28 +186,45 @@ public static class StreamTokenHelper
     }
 
     /// <summary>
-    /// The canonical scope rendering: "N"-form GUIDs, deduplicated and sorted, comma-joined;
-    /// null when the scope is empty or absent (the unrestricted user, whose mint is the
-    /// legacy two-field form). Canonical so the same scope set always mints the same token
-    /// bytes regardless of config order (only a real membership change invalidates
-    /// outstanding tokens). "N" hex and the comma are URL-safe and contain no token
-    /// separator. BOUND (filed as JF-784): the rendering is one ~33-char field per
-    /// library with no cap; the token rides every playlist segment line and request
-    /// URL, so a pathological library count (hundreds) bloats playlists toward
-    /// player/parser and request-line limits. Household scale (single-digit libraries)
-    /// is far inside every limit; a compact or digest encoding is the tracked fix shape.
+    /// The canonical scope rendering: one base64url field per library (the 16
+    /// GUID bytes unpadded, 22 chars; the JF-784 compact rendering; the
+    /// encoding is bijective with the GUID, so Distinct on the encoded form
+    /// equals distinct on the ids), deduplicated and
+    /// sorted, comma-joined; null when the scope is empty or absent (the
+    /// unrestricted user, whose mint is the legacy two-field form). Canonical so
+    /// the same scope set always mints the same token bytes regardless of config
+    /// order (only a real membership change invalidates outstanding tokens). The
+    /// base64url alphabet and the comma are URL-safe and contain no token
+    /// separator. BOUND (JF-784, the compact form is the implemented half): the
+    /// rendering is still one uncapped field per library, now 23 chars with the
+    /// separator (down from 33 with the superseded "N" hex); the token rides
+    /// every playlist segment line and request URL, so a pathological library
+    /// count (hundreds) still bloats playlists toward player/parser and
+    /// request-line limits (the 8192-byte default Kestrel MaxRequestLineSize
+    /// is reached around 350 libraries at ~120 bytes of surrounding URL).
+    /// Household scale (single-digit libraries) is far inside every limit; a
+    /// server-side scope digest table (bounded token, new state + eviction)
+    /// remains the tracked fix shape beyond that. No dual-form parse: the
+    /// pre-compact "N"-hex scoped form never shipped (JF-767 was not deployed
+    /// before this change), and a presented one fails the scope parse
+    /// fail-closed everywhere validation reads the scope (the endpoint's
+    /// playlist gate AND every per-segment validation: ValidateStreamToken
+    /// uses the scope-reading 4-arg form since JF-767, so mid-playback
+    /// segment fetches 401 too; only the absence of outstanding old-form
+    /// tokens keeps in-flight playback whole across the cutover).
     /// </summary>
     private static string? RenderScope(Guid[]? allowedLibraryIds)
         => allowedLibraryIds is not { Length: > 0 }
             ? null
             : string.Join(ScopeSeparator, allowedLibraryIds
-                .Select(g => g.ToString("N", CultureInfo.InvariantCulture))
+                .Select(g => Base64Url(g.ToByteArray()))
                 .Distinct()
                 .OrderBy(s => s, StringComparer.Ordinal));
 
     /// <summary>
-    /// Parse a scope field back to its GUIDs; null when any element fails to parse (the
-    /// mint never produces such a field, so the caller treats it as invalid).
+    /// Parse a scope field back to its GUIDs; null when any element fails to
+    /// decode (not 16 base64url-decodable bytes; the mint never produces such
+    /// a field, so the caller treats it as invalid).
     /// </summary>
     private static Guid[]? ParseScope(string scopePart)
     {
@@ -214,13 +232,26 @@ public static class StreamTokenHelper
         var ids = new Guid[parts.Length];
         for (int i = 0; i < parts.Length; i++)
         {
-            if (!Guid.TryParse(parts[i], out ids[i]))
+            if (!TryDecodeScopeId(parts[i], out ids[i]))
             {
                 return null;
             }
         }
 
         return ids;
+    }
+
+    private static bool TryDecodeScopeId(string field, out Guid id)
+    {
+        id = default;
+        byte[]? bytes = TryDecodeBase64Url(field);
+        if (bytes is null || bytes.Length != 16)
+        {
+            return false;
+        }
+
+        id = new Guid(bytes);
+        return true;
     }
 
     private static string Payload(string itemId, long expiresUnix, string? scopePart)

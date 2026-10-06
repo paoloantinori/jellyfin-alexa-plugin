@@ -449,6 +449,13 @@ internal static class QueueContinuationFetcher
     /// Deliberately NO OrderBy: the DB order for this shape IS the book's chapter
     /// order; an album-style disc/track sort here would order the tail differently
     /// from the head.
+    /// JF-784 leg 3 closed the kind-axis divergence this shape's consumers had:
+    /// the concat endpoint's audiobook arm now routes through the unpaged form
+    /// (<see cref="BuildAudiobookChaptersQueryUnpaged"/>) instead of its local
+    /// IncludeItemTypes=AudioBook initializer, so the endpoint enumerates the
+    /// SAME rows the head/confirm/tail queue (MediaTypes=Audio also matches
+    /// Audio-typed chapters, the metadata-remap shape the AudioBook-kind filter
+    /// 404ed).
     /// </summary>
     /// <param name="jellyfinUser">The query user (session scope).</param>
     /// <param name="bookId">The book folder ID (ParentId scope).</param>
@@ -461,6 +468,36 @@ internal static class QueueContinuationFetcher
         Guid bookId,
         int startIndex,
         int limit)
+        => BuildAudiobookChaptersQueryCore(jellyfinUser, bookId, startIndex, limit);
+
+    /// <summary>
+    /// The unpaged form of <see cref="BuildAudiobookChaptersQuery"/> (JF-784 leg 3):
+    /// the concat endpoint (VideoAudioController) passes <c>jellyfinUser: null</c>
+    /// (that HTTP path is token-gated with no session user; its library scope arrives
+    /// on the token, JF-767), the same unpaged/user-less pattern
+    /// <see cref="BuildAlbumTracksQueryUnpaged"/> set for the album arm (JF-763).
+    /// Enumerates the whole book in one GetItemList call (paging stays null:
+    /// fetch-all; null is the SDK's no-paging value, NOT 0, which is Take(0) per
+    /// JF-443). The row-set rationale and the field set live on the ONE core.
+    /// </summary>
+    /// <param name="jellyfinUser">The query user (session scope), or null on the
+    /// token-gated endpoint path.</param>
+    /// <param name="bookId">The book folder ID (ParentId scope).</param>
+    /// <returns>The unpaged query.</returns>
+    internal static InternalItemsQuery BuildAudiobookChaptersQueryUnpaged(
+        Jellyfin.Database.Implementations.Entities.User? jellyfinUser,
+        Guid bookId)
+        => BuildAudiobookChaptersQueryCore(jellyfinUser, bookId, startIndex: null, limit: null);
+
+    /// <summary>
+    /// The ONE field-set owner both chapters entry points share (paged and
+    /// unpaged); a field added here reaches every consumer of the shape.
+    /// </summary>
+    private static InternalItemsQuery BuildAudiobookChaptersQueryCore(
+        Jellyfin.Database.Implementations.Entities.User? jellyfinUser,
+        Guid bookId,
+        int? startIndex,
+        int? limit)
         => new InternalItemsQuery
         {
             User = jellyfinUser,
@@ -468,6 +505,8 @@ internal static class QueueContinuationFetcher
             ParentId = bookId,
             MediaTypes = new[] { MediaType.Audio },
             DtoOptions = new DtoOptions(true),
+            // Nullable in the SDK: null = no paging (the unpaged form), 0 = Take(0)
+            // (JF-443), so the int? params pass through untouched.
             StartIndex = startIndex,
             Limit = limit
         };
