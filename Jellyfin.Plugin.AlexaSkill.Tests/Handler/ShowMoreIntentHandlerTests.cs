@@ -57,6 +57,7 @@ public class ShowMoreIntentHandlerTests : PluginTestBase
             _config,
             _libraryManagerMock.Object,
             _userManagerMock.Object,
+            Mock.Of<IUserDataManager>(),
             _loggerFactory);
     }
 

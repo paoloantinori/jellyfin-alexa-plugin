@@ -19,6 +19,7 @@ using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
+using MediaBrowser.Model.Querying;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Newtonsoft.Json;
@@ -32,6 +33,7 @@ public class YesIntentHandlerTests : PluginTestBase
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly Mock<ILibraryManager> _libraryManagerMock;
     private readonly Mock<IUserManager> _userManagerMock;
+    private readonly Mock<IUserDataManager> _userDataManagerMock;
     private readonly PluginConfiguration _config;
     private readonly ILoggerFactory _loggerFactory;
 
@@ -40,6 +42,7 @@ public class YesIntentHandlerTests : PluginTestBase
         _sessionManagerMock = new Mock<ISessionManager>();
         _libraryManagerMock = new Mock<ILibraryManager>();
         _userManagerMock = new Mock<IUserManager>();
+        _userDataManagerMock = new Mock<IUserDataManager>();
         _userManagerMock
             .Setup(um => um.GetUserById(It.IsAny<Guid>()))
             .Returns(TestHelpers.CreateJellyfinUser());
@@ -55,8 +58,9 @@ public class YesIntentHandlerTests : PluginTestBase
         PluginConfiguration config,
         ILibraryManager libraryManager,
         IUserManager userManager,
+        IUserDataManager userDataManager,
         ILoggerFactory loggerFactory)
-        : YesIntentHandler(sessionManager, config, libraryManager, userManager, loggerFactory)
+        : YesIntentHandler(sessionManager, config, libraryManager, userManager, userDataManager, loggerFactory)
     {
         public ProgressiveSpeechCapture Progressive { get; } = new();
 
@@ -71,6 +75,7 @@ public class YesIntentHandlerTests : PluginTestBase
             _config,
             _libraryManagerMock.Object,
             _userManagerMock.Object,
+            _userDataManagerMock.Object,
             _loggerFactory);
     }
 
@@ -328,10 +333,12 @@ public class YesIntentHandlerTests : PluginTestBase
         _libraryManagerMock
             .Setup(lm => lm.GetItemById(bookId))
             .Returns(book);
-        // Single-file audiobook: no child tracks, item itself is the audio.
+        // Single-file audiobook: no child tracks, item itself is the audio. The
+        // confirm rides the head's page executor since JF-795, so the empty page
+        // must come back through GetItemsResult.
         _libraryManagerMock
-            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns(new List<BaseItem>());
+            .Setup(lm => lm.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem> { Items = new List<BaseItem>(), TotalRecordCount = 0 });
 
         var matchInfo = new DisambiguationHelper.MatchInfo { Id = bookId.ToString(), Name = "Test Book" };
         var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
@@ -363,32 +370,41 @@ public class YesIntentHandlerTests : PluginTestBase
             .Setup(lm => lm.GetItemById(bookId))
             .Returns(book);
         _libraryManagerMock
-            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns(new List<BaseItem> { book });
+            .Setup(lm => lm.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem> { Items = new List<BaseItem> { book }, TotalRecordCount = 1 });
 
-        // Enable NativeControlsForBooks (Plugin.Instance is set by EnsurePluginInstance in ctor)
+        // Enable NativeControlsForBooks (Plugin.Instance is set by EnsurePluginInstance in ctor).
+        // JF-795 code-review F2: restore in a finally, so an assertion failure cannot
+        // leak the flag into the [Collection("Plugin")] siblings.
+        bool originalNativeControlsForBooks = Plugin.Instance!.Configuration.NativeControlsForBooks;
         Plugin.Instance!.Configuration.NativeControlsForBooks = true;
         Plugin.Instance.Configuration.ServerAddress = "http://localhost:8096";
+        try
+        {
+            var matchInfo = new DisambiguationHelper.MatchInfo { Id = bookId.ToString(), Name = "Test Book" };
+            var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
 
-        var matchInfo = new DisambiguationHelper.MatchInfo { Id = bookId.ToString(), Name = "Test Book" };
-        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
+            var handler = CreateHandler();
+            var response = await handler.HandleAsync(
+                CreateYesIntentRequest(),
+                CreateContext(),
+                TestHelpers.CreateTestUser(),
+                CreateSession(),
+                attrs,
+                CancellationToken.None);
 
-        var handler = CreateHandler();
-        var response = await handler.HandleAsync(
-            CreateYesIntentRequest(),
-            CreateContext(),
-            TestHelpers.CreateTestUser(),
-            CreateSession(),
-            attrs,
-            CancellationToken.None);
-
-        // Restore defaults
-        Plugin.Instance.Configuration.NativeControlsForBooks = false;
-
-        Assert.NotNull(response.Response?.Directives);
-        Assert.True(response.Response.Directives.Count > 0, $"Expected directives, got {response.Response.Directives?.Count ?? -1}. OutputSpeech: {response.Response.OutputSpeech}");
-        Assert.IsType<Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>(
-            response.Response.Directives[0]);
+            Assert.NotNull(response.Response?.Directives);
+            Assert.True(response.Response.Directives.Count > 0, $"Expected directives, got {response.Response.Directives?.Count ?? -1}. OutputSpeech: {response.Response.OutputSpeech}");
+            Assert.IsType<Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>(
+                response.Response.Directives[0]);
+        }
+        finally
+        {
+            // Restore the CAPTURED pre-test value (gate-marker tail F3): a literal
+            // false here would silently disable the flag for a Plugin-collection
+            // sibling that legitimately enabled it at fixture setup.
+            Plugin.Instance.Configuration.NativeControlsForBooks = originalNativeControlsForBooks;
+        }
     }
 
     [Fact]
@@ -559,9 +575,9 @@ public class YesIntentHandlerTests : PluginTestBase
 
         InternalItemsQuery? captured = null;
         _libraryManagerMock
-            .Setup(lm => lm.GetItemList(It.Is<InternalItemsQuery>(q => q.MediaTypes != null)))
+            .Setup(lm => lm.GetItemsResult(It.Is<InternalItemsQuery>(q => q.MediaTypes != null)))
             .Callback<InternalItemsQuery>(q => captured = q)
-            .Returns(new List<BaseItem> { chapter });
+            .Returns(new QueryResult<BaseItem> { Items = new List<BaseItem> { chapter }, TotalRecordCount = 1 });
 
         var matchInfo = new DisambiguationHelper.MatchInfo { Id = bookId.ToString(), Name = "Test Audiobook" };
         var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
@@ -674,9 +690,9 @@ public class YesIntentHandlerTests : PluginTestBase
 
         InternalItemsQuery? captured = null;
         _libraryManagerMock
-            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Setup(lm => lm.GetItemsResult(It.IsAny<InternalItemsQuery>()))
             .Callback<InternalItemsQuery>(q => captured = q)
-            .Returns(new List<BaseItem> { chapter });
+            .Returns(new QueryResult<BaseItem> { Items = new List<BaseItem> { chapter }, TotalRecordCount = 1 });
 
         var matchInfo = new DisambiguationHelper.MatchInfo { Id = folderId.ToString(), Name = "Chapter Folder" };
         var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
@@ -720,9 +736,9 @@ public class YesIntentHandlerTests : PluginTestBase
 
         InternalItemsQuery? captured = null;
         _libraryManagerMock
-            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Setup(lm => lm.GetItemsResult(It.IsAny<InternalItemsQuery>()))
             .Callback<InternalItemsQuery>(q => captured = q)
-            .Returns(new List<BaseItem> { chapter });
+            .Returns(new QueryResult<BaseItem> { Items = new List<BaseItem> { chapter }, TotalRecordCount = 1 });
 
         var user = TestHelpers.CreateTestUser(allowedLibraryIds: new[] { bookLib.ToString() });
 
@@ -751,6 +767,62 @@ public class YesIntentHandlerTests : PluginTestBase
     }
 
     /// <summary>
+    /// The shared confirmed-book fixture (the JF-793/JF-795 book-confirm tests):
+    /// a "Measure What Matters" book folder served by GetItemById, an optional
+    /// chapter-LEAF payload served the same way (the JF-791 shape), and the
+    /// paging-honoring chapters executor the confirm rides since JF-795 (the
+    /// GetItemsResult page plus the deep unpaged re-scan; any OTHER parent
+    /// enumerates nothing, the real server's answer for a leaf, so a broken climb
+    /// still fails the queue-count assertions).
+    /// </summary>
+    private (List<BaseItem> Chapters, Guid BookFolderId, AudioBook? LeafPayload) SetupConfirmedBook(int chapterCount = 26, bool leafPayload = false)
+    {
+        Guid bookFolderId = Guid.NewGuid();
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemById(bookFolderId))
+            .Returns(new Folder { Name = "Measure What Matters", Id = bookFolderId, Path = "/audiobooks/measure-what-matters" });
+
+        AudioBook? leaf = null;
+        if (leafPayload)
+        {
+            leaf = new AudioBook
+            {
+                Name = "Measure What Matters - Chapter 22",
+                Id = Guid.NewGuid(),
+                ParentId = bookFolderId,
+                Path = "/audiobooks/measure-what-matters/ch22.mp3"
+            };
+            _libraryManagerMock
+                .Setup(lm => lm.GetItemById(leaf.Id))
+                .Returns(leaf);
+        }
+
+        List<BaseItem> chapters = Enumerable.Range(1, chapterCount)
+            .Select(i => (BaseItem)new Audio
+            {
+                Name = $"Measure What Matters - Chapter {i:00}",
+                Id = Guid.NewGuid(),
+                ParentId = bookFolderId
+            })
+            .ToList();
+
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q => q.ParentId == bookFolderId
+                ? new QueryResult<BaseItem>
+                {
+                    Items = chapters
+                        .Skip(q.StartIndex ?? 0)
+                        .Take(q.Limit ?? chapters.Count)
+                        .ToList(),
+                    TotalRecordCount = chapters.Count
+                }
+                : new QueryResult<BaseItem> { Items = new List<BaseItem>(), TotalRecordCount = 0 });
+
+        return (chapters, bookFolderId, leaf);
+    }
+
+    /// <summary>
     /// JF-793 Finding 1 RED PROOF: PlayBook's disambiguation stores CHAPTER leaves
     /// (the JF-791 shape: Jellyfin never types a multi-file book folder as AudioBook,
     /// so the book search returns chapter leaves), so the confirmed item reaching the
@@ -764,59 +836,39 @@ public class YesIntentHandlerTests : PluginTestBase
     [Fact]
     public async Task HandleAsync_DisambiguationAlbumType_AudioBookChapterLeaf_ConfirmClimbsToBookFolder()
     {
-        var bookFolderId = Guid.NewGuid();
-        var chapterLeaf = new AudioBook
-        {
-            Name = "Measure What Matters - Chapter 22",
-            Id = Guid.NewGuid(),
-            ParentId = bookFolderId,
-            Path = "/audiobooks/measure-what-matters/ch22.mp3"
-        };
+        (List<BaseItem> chapters, Guid _, AudioBook? leaf) = SetupConfirmedBook(leafPayload: true);
 
-        _libraryManagerMock
-            .Setup(lm => lm.GetItemById(chapterLeaf.Id))
-            .Returns(chapterLeaf);
-        _libraryManagerMock
-            .Setup(lm => lm.GetItemById(bookFolderId))
-            .Returns(new Folder { Name = "Measure What Matters", Id = bookFolderId, Path = "/audiobooks/measure-what-matters" });
-
-        // 26 chapters with the initial page of 5: the confirm's chapters query must
-        // run on the FOLDER id and see the page; any other parent (the pre-fix leaf
-        // id) enumerates nothing, the real server's answer for a leaf.
-        List<BaseItem> chapters = Enumerable.Range(1, 26)
-            .Select(i => (BaseItem)new Audio
-            {
-                Name = $"Measure What Matters - Chapter {i:00}",
-                Id = Guid.NewGuid(),
-                ParentId = bookFolderId
-            })
-            .ToList();
-        _libraryManagerMock
-            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns<InternalItemsQuery>(q => q.ParentId == bookFolderId
-                ? chapters.Take(ProgressiveQueueConstants.GetInitialFetchSize()).ToList()
-                : new List<BaseItem>());
-
-        var matchInfo = new DisambiguationHelper.MatchInfo { Id = chapterLeaf.Id.ToString(), Name = chapterLeaf.Name };
+        var matchInfo = new DisambiguationHelper.MatchInfo { Id = leaf!.Id.ToString(), Name = leaf.Name };
         var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
 
         var handler = CreateHandler();
         var session = CreateSession();
-        var response = await handler.HandleAsync(
-            CreateYesIntentRequest(),
-            CreateContext(),
-            TestHelpers.CreateTestUser(),
-            session,
-            attrs,
-            CancellationToken.None);
+        var context = CreateContext();
+        try
+        {
+            var response = await handler.HandleAsync(
+                CreateYesIntentRequest(),
+                context,
+                TestHelpers.CreateTestUser(),
+                session,
+                attrs,
+                CancellationToken.None);
 
-        // The confirm plays the BOOK's first chapter, not the confirmed leaf alone:
-        // the queue carries the page and the directive launches chapter 1.
-        var audioDirective = Assert.IsType<AudioPlayerPlayDirective>(
-            Assert.Single(response.Response.Directives!));
-        Assert.Equal(chapters[0].Id.ToString(), audioDirective.AudioItem.Stream.Token);
-        Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), session.NowPlayingQueue.Count);
-        Assert.Equal(chapters[0].Id, session.FullNowPlayingItem!.Id);
+            // The confirm plays the BOOK's first chapter, not the confirmed leaf alone:
+            // the queue carries the page and the directive launches chapter 1.
+            var audioDirective = Assert.IsType<AudioPlayerPlayDirective>(
+                Assert.Single(response.Response.Directives!));
+            Assert.Equal(chapters[0].Id.ToString(), audioDirective.AudioItem.Stream.Token);
+            Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), session.NowPlayingQueue.Count);
+            Assert.Equal(chapters[0].Id, session.FullNowPlayingItem!.Id);
+        }
+        finally
+        {
+            // JF-795: the confirm now mints the book's continuation like the ask;
+            // clean the static store so the [Collection("Plugin")] siblings stay
+            // isolated.
+            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
+        }
     }
 
     /// <summary>
@@ -847,7 +899,8 @@ public class YesIntentHandlerTests : PluginTestBase
             .Returns(new Folder { Name = "Audiobooks", Id = containerId, Path = "/audiobooks" });
 
         // The merge the discriminator must prevent: the container's enumeration
-        // returns the sibling single-file books.
+        // returns the sibling single-file books. JF-795: the confirm rides the
+        // head's page executor (GetItemsResult).
         List<BaseItem> siblings = new()
         {
             book,
@@ -860,10 +913,10 @@ public class YesIntentHandlerTests : PluginTestBase
             }
         };
         _libraryManagerMock
-            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Setup(lm => lm.GetItemsResult(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q => q.ParentId == containerId
-                ? siblings
-                : new List<BaseItem>());
+                ? new QueryResult<BaseItem> { Items = siblings, TotalRecordCount = siblings.Count }
+                : new QueryResult<BaseItem> { Items = new List<BaseItem>(), TotalRecordCount = 0 });
 
         var matchInfo = new DisambiguationHelper.MatchInfo { Id = book.Id.ToString(), Name = book.Name };
         var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
@@ -901,46 +954,198 @@ public class YesIntentHandlerTests : PluginTestBase
     [Fact]
     public async Task HandleAsync_DisambiguationAlbumType_BookFolderIdPayload_RoutesToPlayBookLeg()
     {
-        var bookFolderId = Guid.NewGuid();
-        _libraryManagerMock
-            .Setup(lm => lm.GetItemById(bookFolderId))
-            .Returns(new Folder { Name = "Measure What Matters", Id = bookFolderId, Path = "/audiobooks/measure-what-matters" });
-
-        List<BaseItem> chapters = Enumerable.Range(1, 26)
-            .Select(i => (BaseItem)new Audio
-            {
-                Name = $"Measure What Matters - Chapter {i:00}",
-                Id = Guid.NewGuid(),
-                ParentId = bookFolderId
-            })
-            .ToList();
-        _libraryManagerMock
-            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns<InternalItemsQuery>(q => chapters
-                .Skip(q.StartIndex ?? 0)
-                .Take(q.Limit ?? chapters.Count)
-                .ToList());
+        (List<BaseItem> chapters, Guid bookFolderId, _) = SetupConfirmedBook();
 
         var matchInfo = new DisambiguationHelper.MatchInfo { Id = bookFolderId.ToString(), Name = "Measure What Matters" };
         var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
 
         var handler = CreateHandler();
         var session = CreateSession();
-        var response = await handler.HandleAsync(
-            CreateYesIntentRequest(),
-            CreateContext(),
-            TestHelpers.CreateTestUser(),
-            session,
-            attrs,
-            CancellationToken.None);
+        var context = CreateContext();
+        try
+        {
+            var response = await handler.HandleAsync(
+                CreateYesIntentRequest(),
+                context,
+                TestHelpers.CreateTestUser(),
+                session,
+                attrs,
+                CancellationToken.None);
 
-        // The PlayBook leg answers: the paged initial queue (5), chapter 1 first.
-        // The pre-fix PlayAlbum arm enumerated the whole book unpaged (26).
-        var audioDirective = Assert.IsType<AudioPlayerPlayDirective>(
-            Assert.Single(response.Response.Directives!));
-        Assert.Equal(chapters[0].Id.ToString(), audioDirective.AudioItem.Stream.Token);
-        Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), session.NowPlayingQueue.Count);
-        Assert.Equal(chapters[0].Id, session.FullNowPlayingItem!.Id);
+            // The PlayBook leg answers: the paged initial queue (5), chapter 1 first.
+            // The pre-fix PlayAlbum arm enumerated the whole book unpaged (26).
+            var audioDirective = Assert.IsType<AudioPlayerPlayDirective>(
+                Assert.Single(response.Response.Directives!));
+            Assert.Equal(chapters[0].Id.ToString(), audioDirective.AudioItem.Stream.Token);
+            Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), session.NowPlayingQueue.Count);
+            Assert.Equal(chapters[0].Id, session.FullNowPlayingItem!.Id);
+        }
+        finally
+        {
+            // JF-795: the confirm now mints the book's continuation like the ask.
+            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
+        }
+    }
+
+    // ========== JF-795: the confirm-must-match-ask axes (continuation + resume) ==========
+
+    /// <summary>
+    /// JF-795 RED PROOF (continuation axis): a confirmed multi-chapter book must
+    /// mint the progressive QueueContinuation exactly like the direct ask. The
+    /// pre-fix confirm leg queued ONLY the initial page (5) and never touched
+    /// QueueContinuationStore, so a "yes" on a 26-chapter book truncated the book
+    /// at 5 chapters while the direct ask played the whole book through the tail
+    /// fetcher (the confirm-must-match-ask rule on the queue-completeness axis).
+    /// Pin: continuation minted with SourceType Audiobook, ParentId the book
+    /// folder, StartIndex 5 (page start 0 + page count 5), TotalCount 26.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DisambiguationAlbumType_BookFolderConfirm_MintsQueueContinuation()
+    {
+        (List<BaseItem> chapters, Guid bookFolderId, _) = SetupConfirmedBook();
+
+        var matchInfo = new DisambiguationHelper.MatchInfo { Id = bookFolderId.ToString(), Name = "Measure What Matters" };
+        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
+
+        var handler = CreateHandler();
+        var session = CreateSession();
+        var context = CreateContext();
+        try
+        {
+            var response = await handler.HandleAsync(
+                CreateYesIntentRequest(),
+                context,
+                TestHelpers.CreateTestUser(),
+                session,
+                attrs,
+                CancellationToken.None);
+
+            // The play itself launches chapter 1 fresh (no progress on the book).
+            var audioDirective = Assert.IsType<AudioPlayerPlayDirective>(
+                Assert.Single(response.Response.Directives!));
+            Assert.Equal(chapters[0].Id.ToString(), audioDirective.AudioItem.Stream.Token);
+            Assert.Equal(0, audioDirective.AudioItem.Stream.OffsetInMilliseconds);
+            Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), session.NowPlayingQueue.Count);
+
+            // THE AXIS: the continuation is minted (pre-fix: null, the book
+            // truncated at the initial page).
+            QueueContinuation? continuation = QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID!);
+            Assert.NotNull(continuation);
+            Assert.Equal("Audiobook", continuation!.SourceType);
+            Assert.Equal(bookFolderId, continuation.ParentId);
+            Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), continuation.StartIndex);
+            Assert.Equal(26, continuation.TotalCount);
+        }
+        finally
+        {
+            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
+        }
+    }
+
+    /// <summary>
+    /// JF-795 RED PROOF (resume axis): a confirmed book with deep progress
+    /// (chapter 22 of 26, beyond the initial page) must resume at the
+    /// position-holding chapter exactly like the direct ask (the JF-793
+    /// finding-4 shape). The pre-fix confirm leg never ran FindResumeTrackIndex
+    /// at all, so the confirm answered a deep-progress book by restarting at
+    /// chapter 1 at 0:00 (the confirm-must-match-ask rule on the resume axis).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DisambiguationAlbumType_BookConfirm_DeepProgress_ResumesAtPositionHoldingChapter()
+    {
+        (List<BaseItem> chapters, Guid bookFolderId, _) = SetupConfirmedBook();
+
+        // Deep progress: chapter 22 (index 21) in progress at 10 minutes.
+        var inProgress = new UserItemData
+        {
+            Key = "test",
+            Played = false,
+            PlaybackPositionTicks = TimeSpan.FromMinutes(10).Ticks
+        };
+        _userDataManagerMock
+            .Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
+            .Returns((Jellyfin.Database.Implementations.Entities.User _, BaseItem item) =>
+                item.Id == chapters[21].Id ? inProgress : null);
+
+        var matchInfo = new DisambiguationHelper.MatchInfo { Id = bookFolderId.ToString(), Name = "Measure What Matters" };
+        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
+
+        var handler = CreateHandler();
+        var session = CreateSession();
+        var context = CreateContext();
+        try
+        {
+            var response = await handler.HandleAsync(
+                CreateYesIntentRequest(),
+                context,
+                TestHelpers.CreateTestUser(),
+                session,
+                attrs,
+                CancellationToken.None);
+
+            // THE AXIS: the position-holding chapter launches at its position,
+            // not chapter 1 at 0:00.
+            var audioDirective = Assert.IsType<AudioPlayerPlayDirective>(
+                Assert.Single(response.Response.Directives!));
+            Assert.Equal(chapters[21].Id.ToString(), audioDirective.AudioItem.Stream.Token);
+            Assert.Equal((int)TimeSpan.FromMinutes(10).TotalMilliseconds, audioDirective.AudioItem.Stream.OffsetInMilliseconds);
+
+            // The queue re-slices at the position-holding chapter (chapters 22-26);
+            // nothing remains beyond it, so no continuation is minted.
+            Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), session.NowPlayingQueue.Count);
+            Assert.Equal(chapters[21].Id, session.FullNowPlayingItem!.Id);
+            Assert.Equal(chapters[21].Id, session.NowPlayingQueue[0].Id);
+            Assert.Equal(chapters[25].Id, session.NowPlayingQueue[4].Id);
+            Assert.Null(QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID!));
+        }
+        finally
+        {
+            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
+        }
+    }
+
+    /// <summary>
+    /// JF-795 /simplify gate pin (the JF-611 podcast-confirm shape): a book
+    /// disambiguation prompt confirmed after an admin disabled books must answer
+    /// the feature-disabled Tell, not launch the book through the confirm (the
+    /// confirm-must-match-ask rule extends to the disabled answer the direct
+    /// ask gives). The pre-JF-795 leg never gated either; the routing round
+    /// adopted the podcast leg's gate.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DisambiguationAlbumType_BookConfirm_BooksDisabled_AnswersFeatureDisabled()
+    {
+        (List<BaseItem> _, Guid bookFolderId, _) = SetupConfirmedBook();
+
+        var matchInfo = new DisambiguationHelper.MatchInfo { Id = bookFolderId.ToString(), Name = "Measure What Matters" };
+        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
+
+        Plugin.Instance!.Configuration.BooksEnabled = false;
+        try
+        {
+            var handler = CreateHandler();
+            var session = CreateSession();
+            var response = await handler.HandleAsync(
+                CreateYesIntentRequest(),
+                CreateContext(),
+                TestHelpers.CreateTestUser(),
+                session,
+                attrs,
+                CancellationToken.None);
+
+            // The disabled Tell answers; no play directive, no queue state.
+            Assert.True(response.Response.Directives == null || response.Response.Directives.Count == 0,
+                "the disabled Tell must carry no directives");
+            var speech = response.Tells<PlainTextOutputSpeech>();
+            Assert.Contains("disabled", speech.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.True(session.NowPlayingQueue == null || session.NowPlayingQueue.Count == 0,
+                "the disabled Tell must leave no queue");
+            Assert.Null(session.FullNowPlayingItem);
+        }
+        finally
+        {
+            Plugin.Instance!.Configuration.BooksEnabled = true;
+        }
     }
 
     [Fact]

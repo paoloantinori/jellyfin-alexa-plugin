@@ -32,6 +32,7 @@ public class YesIntentHandler : BaseHandler
 {
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
+    private readonly IUserDataManager _userDataManager;
     private readonly DeviceQueueManager? _queueManager;
 
     /// <summary>
@@ -41,18 +42,21 @@ public class YesIntentHandler : BaseHandler
     /// <param name="config">The plugin configuration.</param>
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
+    /// <param name="userDataManager">Instance of the <see cref="IUserDataManager"/> interface (JF-795: the book confirm leg's resume axis, consumed by the shared resolved-book play flow).</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
-    /// <param name="queueManager">Optional per-device queue manager (JF-514/JF-522: the launch-scope store behind the resume offset rebase and the directive-time base recording).</param>
+    /// <param name="queueManager">Optional per-device queue manager (JF-514/JF-522: the launch-scope store behind the resume offset rebase and the directive-time base recording; JF-795: also the confirmed book's device-queue write and ItemPositionState resume tier).</param>
     public YesIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILibraryManager libraryManager,
         IUserManager userManager,
+        IUserDataManager userDataManager,
         ILoggerFactory loggerFactory,
         DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
+        _userDataManager = userDataManager;
         _queueManager = queueManager;
     }
 
@@ -150,13 +154,29 @@ public class YesIntentHandler : BaseHandler
         // IsAudioBook gate misrouted those confirms into the PlayAlbum arm (unpaged whole-book
         // queue, no resume, no device queue, plain AudioPlayer under NativeControlsForBooks);
         // IsBookDisambiguationPayload covers both payload shapes while MusicAlbums stay on the
-        // album leg. The two JF-501 progressive-announce paths return their tasks directly (the
-        // announcing launch builders are async); the sync play paths keep the Task.FromResult
-        // shape.
+        // album leg. JF-795: the confirm rides the head's ONE resolved-book play flow (the
+        // PodcastEpisodeResolver precedent), so the queue completeness (the JF-673/JF-674
+        // continuation mint and the device queue) and the resume decision (page scan plus the
+        // JF-793 finding-4 deep-resume re-slice) cannot drift from the direct ask; this
+        // delegation returns the shared flow's task directly (the announcing launch builders
+        // inside it are async), the sync play paths keep the Task.FromResult shape.
         if (mediaType == DisambiguationHelper.MediaTypeAlbum && AudiobookItems.IsBookDisambiguationPayload(item))
         {
+            // JF-611 podcast-leg shape (adopted by the JF-795 /simplify round): the
+            // feature flag gates here too, so a book prompt opened before an admin
+            // disabled books cannot launch through the confirm (the confirm-must-
+            // match-ask rule extends to the disabled answer the direct ask gives).
+            SkillResponse? booksDisabled = IfFeatureDisabled(c => c.BooksEnabled, request);
+            if (booksDisabled != null)
+            {
+                return Task.FromResult(booksDisabled);
+            }
+
             Logger.LogDebug("Yes: routing AudioBook item {ItemId} to audiobook playback", itemId);
-            return PlayBook(item, jellyfinUser!, user, session, locale, context, request);
+            return AudiobookPlayResolver.PlayBookAsync(
+                _libraryManager, Launch, Logger, "Yes",
+                item, spokenBookName: null, jellyfinUser!, user, session, context, request, locale,
+                _userDataManager, _queueManager, cancellationToken);
         }
 
         if (mediaType == DisambiguationHelper.MediaTypeVideo)
@@ -383,84 +403,6 @@ public class YesIntentHandler : BaseHandler
         SkillResponse response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, albumItems[0], user, context, collectionParentId: collectionParent);
         session.NowPlayingQueue = queueItems;
         session.FullNowPlayingItem = albumItems[0];
-        return response;
-    }
-
-    /// <summary>
-    /// Play an AudioBook item after disambiguation confirmation. Mirrors PlayBookIntentHandler's
-    /// single-match logic: resolve tracks, check resume, route to VideoApp (NativeControlsForBooks)
-    /// or AudioPlayer.
-    /// </summary>
-    private async Task<SkillResponse> PlayBook(BaseItem book, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Entities.User user, SessionInfo session, string locale, Context context, Request request)
-    {
-        // JF-793 Finding 1: the confirmed disambiguation match arrives in TWO
-        // payload shapes: a CHAPTER leaf (the JF-791 shape, Jellyfin never types a
-        // multi-file book folder as AudioBook; prompts minted before the finding-3
-        // normalization, and any leaf-payload producer) or the book FOLDER itself
-        // (the shape the PlayBook candidate normalization emits for multi-chapter
-        // books, routed here by IsBookDisambiguationPayload). Running the chapters
-        // query on a leaf's OWN Id enumerated zero children and the single-file
-        // fallback below played the ONE confirmed chapter then silence. Climb to the
-        // book folder the same way the head path does (the confirm-must-match-ask
-        // rule; on a Folder payload the climb harmlessly no-ops); the null shapes
-        // (single-file books, failed resolution) keep the leaf and degrade to the
-        // existing fallback, never a failed request.
-        if (AudiobookItems.TryResolveBookFolder(book, _libraryManager) is { } confirmedBookFolder)
-        {
-            Logger.LogDebug(
-                "Yes: confirmed audiobook '{LeafName}' is a chapter leaf, climbing to book folder '{BookName}' ({BookId})",
-                book.Name, confirmedBookFolder.Name, confirmedBookFolder.Id);
-            book = confirmedBookFolder;
-        }
-
-        // Resolve tracks through the ONE audiobook chapters query's scoped sibling
-        // (JF-767 Finding A fold: identical field set to the former hand-kept initializer,
-        // modulo the now-explicit StartIndex=0, plus the JF-666 scope the tail's
-        // FetchAudiobookChapters runs under). Use GetItemList (not GetItemsResult) to
-        // avoid the EF Core Count() NRE on certain query combinations.
-        InternalItemsQuery chaptersQuery = QueueContinuationFetcher.BuildScopedAudiobookChaptersQuery(
-            jellyfinUser, user, _libraryManager, Logger, book.Id,
-            startIndex: 0, limit: ProgressiveQueueConstants.GetInitialFetchSize());
-        IReadOnlyList<BaseItem> bookTrackList = _libraryManager.GetItemList(chaptersQuery);
-
-        List<BaseItem> trackItems;
-        if (bookTrackList.Count == 0)
-        {
-            if (book.MediaType == MediaType.Audio)
-            {
-                trackItems = new List<BaseItem> { book };
-            }
-            else
-            {
-                return ResponseBuilder.Tell(ResponseStrings.Get("NoContentInBook", locale, book.Name));
-            }
-        }
-        else
-        {
-            trackItems = bookTrackList.ToList();
-        }
-
-        string itemId = trackItems[0].Id.ToString();
-
-        // NativeControlsForBooks → VideoApp HLS concat (seek bar)
-        // JF-699 item 1: both builder arms throw-or-launch (the concat URL is
-        // token-gated; a refusal throws and RequestPipeline answers it, so the state
-        // writes below never run on a refused launch) - the JF-693 verdict gate is
-        // gone and the writes simply follow the delivered launch.
-        SkillResponse response = Plugin.Instance?.Configuration?.NativeControlsForBooks == true
-            ? await Launch.BuildAudiobookVideoAppLaunchResponseAsync(
-                itemId,
-                trackItems[0],
-                SpeechBuilder.BuildNowPlayingSpeech(book.Name, locale, Launch.GetAnnounceNowPlaying(user)),
-                user,
-                context,
-                request,
-                _libraryManager).ConfigureAwait(false)
-            : Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, trackItems[0], user, context);
-
-        session.NowPlayingQueue = trackItems.Select(t => new QueueItem { Id = t.Id }).ToList();
-        session.FullNowPlayingItem = trackItems[0];
-
         return response;
     }
 

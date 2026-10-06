@@ -1440,6 +1440,7 @@ public class PlayAlbumIntentHandlerTests : PluginTestBase, IDisposable
             _fx.Config,
             _fx.LibraryManager.Object,
             _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
             _fx.LoggerFactory);
         var yesRequest = new IntentRequest
         {
