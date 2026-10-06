@@ -1,18 +1,25 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET;
-using Alexa.NET.Response;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Pipeline;
+using Jellyfin.Plugin.AlexaSkill.Controller;
 using Jellyfin.Plugin.AlexaSkill.Diagnostics;
+using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Session;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Moq;
 using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 
-public class SkillResponseLoggingTests
+[Collection("Plugin")]
+public class SkillResponseLoggingTests : PluginTestBase
 {
     // --- RecordResponseSize bucket tests ---
 
@@ -136,37 +143,74 @@ public class SkillResponseLoggingTests
     // --- Log level verification ---
 
     /// <summary>
-    /// Verify that SkillResponseContent logs at Debug level, not Information.
-    /// This ensures the response-size log message is suppressed in production
-    /// (Jellyfin default log level is Information).
+    /// The production response-size line (AlexaSkillController.SkillResponseContent)
+    /// must log at Debug, never Information: Jellyfin's default log level is
+    /// Information, so an Information-level response line would land in every
+    /// server's log on every skill response. Drives the REAL controller path (the
+    /// empty-body early return is the cheapest route through SkillResponseContent,
+    /// needing no signature, session, or user setup) and asserts the captured
+    /// record's level. Until JF-786 this test built the capture but never asserted
+    /// it (the vacuity predates JF-760's migration).
     /// </summary>
     [Fact]
-    public void SkillResponseContent_LogsAtDebugLevel_NotInformation()
+    public async Task SkillResponseContent_LogsAtDebugLevel_NotInformation()
     {
-        // Arrange: the factory feeds the pipeline logger below; logRecords is
-        // deliberately not asserted here (this test pins only the counter
-        // buckets), so it is the one migrated site that stays green under a
-        // capture-provider sabotage. The Debug-level intent in the test name is
-        // unasserted; tracked as a JF-760 residual (JF-785).
+        TestHelpers.EnsureRealPlugin();
+
         var logRecords = new List<(LogLevel Level, string Message)>();
-        var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
-
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
         var counters = new RequestCounters();
-        var pipeline = new RequestPipeline(
-            Enumerable.Empty<IRequestInterceptor>(),
-            Enumerable.Empty<IResponseInterceptor>(),
-            loggerFactory.CreateLogger<RequestPipeline>());
 
-        // We can't call SkillResponseContent directly (it's private), so we verify
-        // the contract: RecordResponseSize is called and the log level is Debug.
-        // Test the counter path:
-        var response = ResponseBuilder.Empty();
-        string json = Newtonsoft.Json.JsonConvert.SerializeObject(response);
-        counters.RecordResponseSize(json.Length);
+        var controller = new AlexaSkillController(
+            new Mock<IUserManager>().Object,
+            new Mock<ISessionManager>().Object,
+            loggerFactory,
+            counters,
+            // The pipeline argument is constructor-required plumbing only: this
+            // route returns before ExecuteAsync is ever consulted.
+            new RequestPipeline(
+                Enumerable.Empty<IRequestInterceptor>(),
+                Enumerable.Empty<IResponseInterceptor>(),
+                loggerFactory.CreateLogger<RequestPipeline>()),
+            Enumerable.Empty<BaseHandler>());
 
-        // The counter must have recorded a size
+        // An empty request body takes the controller's early return, whose answer
+        // still goes through SkillResponseContent; DefaultHttpContext supplies the
+        // Request the endpoint reads directly.
+        var httpContext = new DefaultHttpContext();
+        httpContext.Request.Body = new MemoryStream();
+        controller.ControllerContext = new ControllerContext { HttpContext = httpContext };
+
+        ActionResult result = await controller.HandleIntentRequest();
+
+        ContentResult content = Assert.IsType<ContentResult>(result);
+        Assert.Equal("application/json", content.ContentType);
+        // The served body must carry the serialized response: a regression that
+        // logs and counts but serves an empty (or whitespace-only) body would
+        // otherwise stay green. IsNullOrWhiteSpace per the repo convention.
+        Assert.False(string.IsNullOrWhiteSpace(content.Content), "the served body must be non-empty");
+
+        // Pin the exercised route, not just its output shape: the controller's
+        // catch paths also answer via SkillResponseContent with the same single
+        // Debug line, so the asserts above alone stay green if the empty-body
+        // branch ever reroutes to an error path. The early return's unique
+        // Warning line is the discriminator.
+        Assert.Contains(TestCaptureLogger.Snapshot(logRecords),
+            r => r.Level == LogLevel.Warning && r.Message.Contains("Received empty request body", StringComparison.Ordinal));
+
+        // The named contract: exactly one response-size line and it is Debug, so
+        // none can be Information (Single plus the level assert enforce both
+        // halves of the name; a second line at any level fails Single first).
+        var responseLine = Assert.Single(
+            TestCaptureLogger.Snapshot(logRecords),
+            r => r.Message.Contains("Skill response:", StringComparison.Ordinal));
+        Assert.Equal(LogLevel.Debug, responseLine.Level);
+
+        // The same production site records the serialized size through the real
+        // path (this was the test's only assert before JF-786, previously on a
+        // hand-driven counter call instead of the controller).
         Assert.True(counters.ResponseSizeSmall + counters.ResponseSizeMedium + counters.ResponseSizeLarge >= 1,
-            "RecordResponseSize should increment one of the size buckets");
+            "SkillResponseContent should have recorded the serialized response size");
     }
 
     /// <summary>
