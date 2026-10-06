@@ -576,12 +576,14 @@ internal static class QueueContinuationFetcher
     /// hand-kept initializer (the pre-JF-672 local leg carried AlbumTrackOrder,
     /// the disc/track composite the chapters probe refuted: ASC NULLS FIRST
     /// front-loads untagged rows). DEFENSIVE-ONLY today (JF-672 gate-marker
-    /// correction): the leg has no live producer, because YesIntentHandler routes
-    /// every <c>item is AudioBook</c> confirm to PlayBook before PlayAlbum, and
-    /// PlayAlbum's own disambiguation matches are MusicAlbum-only. The sibling
-    /// exists so that IF a non-album parent ever reaches the leg (a future
-    /// producer, or the JF-791 folder resolution changing the shapes), its
-    /// chapters still come from the ONE core rather than a private initializer.
+    /// correction, re-confirmed by the JF-793 code-review routing fix): the leg
+    /// has no live producer, because YesIntentHandler routes every book-shaped
+    /// confirm (AudioBook leaves AND the book folders the PlayBook candidate
+    /// normalization emits, via AudiobookItems.IsBookDisambiguationPayload) to
+    /// PlayBook before PlayAlbum, and PlayAlbum's own disambiguation matches are
+    /// MusicAlbum-only. The sibling exists so that IF a non-album parent ever
+    /// reaches the leg (a future producer), its chapters still come from the ONE
+    /// core rather than a private initializer.
     /// </summary>
     internal static InternalItemsQuery BuildScopedAudiobookChaptersQueryUnpaged(
         Jellyfin.Database.Implementations.Entities.User? jellyfinUser,

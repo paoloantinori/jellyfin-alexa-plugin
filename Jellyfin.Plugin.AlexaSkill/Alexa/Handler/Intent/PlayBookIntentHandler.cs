@@ -58,7 +58,9 @@ public class PlayBookIntentHandler : BaseHandler
     /// id, and whose name clears the auto-play bar the "- Chapter N" tails dragged
     /// below) instead of N chapter-granular choices. Single-file books, failed
     /// climbs, and the shared-container rejection (the collapsed book under a
-    /// container) keep their own entry: they ARE distinct books. The
+    /// container) keep their own entry: they ARE distinct books. The replaced list
+    /// is returned even when no dedup collapsed anything (code-review F2: distinct
+    /// books' leaves must also present as folders, not only same-book leaves). The
     /// post-disambiguation climb in <see cref="HandleAsync"/> stays as the tolerant
     /// safety net (on a Folder the helper harmlessly returns null).
     /// </summary>
@@ -76,7 +78,7 @@ public class PlayBookIntentHandler : BaseHandler
             byBook.TryAdd(book.Id, book);
         }
 
-        return byBook.Count == candidates.Count ? candidates : byBook.Values.ToList();
+        return byBook.Values.ToList();
     }
 
     /// <inheritdoc/>

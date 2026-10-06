@@ -886,6 +886,63 @@ public class YesIntentHandlerTests : PluginTestBase
         Assert.Equal(book.Id, session.FullNowPlayingItem!.Id);
     }
 
+    /// <summary>
+    /// JF-793 code-review F1 RED PROOF: the finding-3 normalization emits the book
+    /// FOLDER id as the confirm payload (pinned by
+    /// PlayBook_MultiMatchDisambiguation_PresentsBookGranularChoices), but a plain
+    /// Folder is not an AudioBook, so the pre-fix routing gate
+    /// (<c>IsAudioBook(item)</c>) dropped these confirms into the PlayAlbum arm:
+    /// the unpaged whole-book queue (26, not the PlayBook leg's paged 5), no
+    /// resume, no device queue, and under NativeControlsForBooks a plain
+    /// AudioPlayer chapter-1 launch where the direct ask gives the VideoApp concat.
+    /// A "yes" on a multi-chapter book must reach the PlayBook leg, whatever
+    /// payload shape the prompt minted (leaf id or folder id).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DisambiguationAlbumType_BookFolderIdPayload_RoutesToPlayBookLeg()
+    {
+        var bookFolderId = Guid.NewGuid();
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemById(bookFolderId))
+            .Returns(new Folder { Name = "Measure What Matters", Id = bookFolderId, Path = "/audiobooks/measure-what-matters" });
+
+        List<BaseItem> chapters = Enumerable.Range(1, 26)
+            .Select(i => (BaseItem)new Audio
+            {
+                Name = $"Measure What Matters - Chapter {i:00}",
+                Id = Guid.NewGuid(),
+                ParentId = bookFolderId
+            })
+            .ToList();
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q => chapters
+                .Skip(q.StartIndex ?? 0)
+                .Take(q.Limit ?? chapters.Count)
+                .ToList());
+
+        var matchInfo = new DisambiguationHelper.MatchInfo { Id = bookFolderId.ToString(), Name = "Measure What Matters" };
+        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
+
+        var handler = CreateHandler();
+        var session = CreateSession();
+        var response = await handler.HandleAsync(
+            CreateYesIntentRequest(),
+            CreateContext(),
+            TestHelpers.CreateTestUser(),
+            session,
+            attrs,
+            CancellationToken.None);
+
+        // The PlayBook leg answers: the paged initial queue (5), chapter 1 first.
+        // The pre-fix PlayAlbum arm enumerated the whole book unpaged (26).
+        var audioDirective = Assert.IsType<AudioPlayerPlayDirective>(
+            Assert.Single(response.Response.Directives!));
+        Assert.Equal(chapters[0].Id.ToString(), audioDirective.AudioItem.Stream.Token);
+        Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), session.NowPlayingQueue.Count);
+        Assert.Equal(chapters[0].Id, session.FullNowPlayingItem!.Id);
+    }
+
     [Fact]
     public async Task HandleAsync_ArtistType_SongQuery_UsesIncludeItemTypesNotMediaTypes()
     {

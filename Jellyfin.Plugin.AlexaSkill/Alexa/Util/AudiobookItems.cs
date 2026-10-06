@@ -82,13 +82,31 @@ internal static class AudiobookItems
             return true;
         }
 
+        // GetDirectoryName returns EMPTY (not null) for a bare filename, so the
+        // null check alone would silently reject instead of defaulting to the
+        // climb the way the doc promises for shapes that cannot discriminate
+        // (code-review F3).
         string? chapterDirectory = System.IO.Path.GetDirectoryName(chapter.Path.TrimEnd('/', '\\'));
-        return chapterDirectory != null
-            && string.Equals(
+        return string.IsNullOrEmpty(chapterDirectory)
+            || string.Equals(
                 chapterDirectory.TrimEnd('/', '\\'),
                 folder.Path.TrimEnd('/', '\\'),
                 StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// Whether a confirmed "album"-labelled disambiguation payload is a BOOK
+    /// (JF-793 code-review F1): an AudioBook item (the chapter-leaf and
+    /// single-file payloads) or a plain book FOLDER (the payload shape the
+    /// PlayBook candidate normalization emits for multi-chapter books; a Folder is
+    /// not an AudioBook, so the bare <see cref="IsAudioBook"/> gate misrouted
+    /// those confirms into the album leg). MusicAlbum stays excluded: PlayAlbum's
+    /// own disambiguation matches are MusicAlbums and must keep routing to the
+    /// album leg.
+    /// </summary>
+    internal static bool IsBookDisambiguationPayload(BaseItem? item)
+        => item is AudioBook
+           || (item is Folder && item is not MediaBrowser.Controller.Entities.Audio.MusicAlbum);
 
     /// <summary>
     /// Whether the finished item is BOOK-shaped for the end-of-book decision (JF-670):
