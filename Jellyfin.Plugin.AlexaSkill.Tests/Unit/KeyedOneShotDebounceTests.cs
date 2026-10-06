@@ -13,6 +13,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 /// that closes the callback-vs-teardown interleavings for both playback
 /// persistence owners.
 /// </summary>
+[Collection("TimingSolo")]
 public class KeyedOneShotDebounceTests : IDisposable
 {
     // Constructed with a long interval so no timer fires naturally; tests that

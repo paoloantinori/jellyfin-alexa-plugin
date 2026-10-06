@@ -17,6 +17,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Playback;
 /// Tests for DeviceQueueManager: per-device queue management with persistence.
 /// Covers creation, advancement, multi-device isolation, persistence, and cleanup.
 /// </summary>
+[Collection("TimingSolo")]
 public class DeviceQueueManagerTests : IDisposable
 {
     private readonly string _tempDir;

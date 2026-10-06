@@ -9728,4 +9728,18 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
 #pragma warning restore CA1416, CA3003
     }
 
+    // Returned to the serialized Plugin collection (JF-792 gate-marker tail F2): the
+    // 2-second liveness margin is a wall-clock assertion and the parallel phase can
+    // preempt the test thread past the shell's exit on a contended runner.
+    [Fact]
+    public void SafeExitCode_LiveProcess_ReturnsMinusOne()
+    {
+        // 2s sleep: the process is deterministically alive at the check right after Start.
+        using var process = Process.Start(new ProcessStartInfo("/bin/sh", "-c \"sleep 2\""))!;
+        Assert.Equal(-1, VideoAudioController.SafeExitCode(process));
+        process.Kill();
+        process.WaitForExit();
+    }
+
+
 }

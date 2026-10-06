@@ -7,6 +7,7 @@ using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 
+[Collection("TimingSolo")]
 public class DoubleMetaphoneTests
 {
     // --- Basic encoding tests with known values ---

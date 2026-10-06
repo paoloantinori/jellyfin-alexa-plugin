@@ -14,6 +14,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 /// Tests for AudiobookPositionTracker: high-water-mark Math.Max, conservative (−1 segment)
 /// read, zero-when-empty, and Clear. Pure unit test — no Plugin.Instance.
 /// </summary>
+[Collection("TimingSolo")]
 public class AudiobookPositionTrackerTests : IDisposable
 {
     private readonly string _tempDir;

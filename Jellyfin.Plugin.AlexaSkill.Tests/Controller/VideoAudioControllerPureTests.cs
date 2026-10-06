@@ -1404,16 +1404,6 @@ public class VideoAudioControllerPureTests : VideoAudioControllerTestHarness
     }
 
     [Fact]
-    public void SafeExitCode_LiveProcess_ReturnsMinusOne()
-    {
-        // 2s sleep: the process is deterministically alive at the check right after Start.
-        using var process = Process.Start(new ProcessStartInfo("/bin/sh", "-c \"sleep 2\""))!;
-        Assert.Equal(-1, VideoAudioController.SafeExitCode(process));
-        process.Kill();
-        process.WaitForExit();
-    }
-
-    [Fact]
     public void SafeExitCode_NeverStartedProcess_Throws()
     {
         using var process = new Process();

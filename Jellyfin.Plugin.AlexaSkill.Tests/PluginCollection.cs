@@ -75,6 +75,22 @@ public abstract class PluginTestBase
 public class PluginCollection;
 
 /// <summary>
+/// The JF-792 gate-marker tail exemption for wall-clock-sensitive tests: classes whose
+/// assertions carry real-time margins sized for a quiet machine (the RetryHelper
+/// timeout-budget pin, DoubleMetaphone's encode-throughput margin, the JF-449
+/// park-family's positive 2s waits). The parallel phase can starve a test continuation
+/// for seconds (demonstrated 2026-10-06: a parked callback outlived its 5s bound), and
+/// CI runners have 2-4 vCPU, so these classes run in a DisableParallelization
+/// collection: exclusively after every parallel collection, one at a time, beside the
+/// Plugin collection (a main-push red from a false-starved timing assert costs a
+/// triage round; the exemption costs seconds of suite time). A test that needs the
+/// Plugin collection's resets AND this exemption belongs in the Plugin collection
+/// (it is already exclusive); this collection is for the static-free timing classes.
+/// </summary>
+[CollectionDefinition("TimingSolo", DisableParallelization = true)]
+public class TimingSoloCollection;
+
+/// <summary>
 /// JF-432 structural assertion shared by every index service (extracted from the
 /// near-verbatim per-service copies, JF-448 review F7): the published state must live
 /// in ONE field typed as the immutable snapshot record, never in a group of separate
