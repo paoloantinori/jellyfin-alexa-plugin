@@ -3,7 +3,7 @@ id: JF-795
 title: >-
   JF-795 - the YesIntent PlayBook confirm leg mints no QueueContinuation (long
   confirm-queued books truncate at the initial fetch size)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-06'
 updated_date: '2026-10-06'
