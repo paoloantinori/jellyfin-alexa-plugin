@@ -220,6 +220,7 @@ public class MusicianMultiValueErDisambiguationTests : PluginTestBase, IDisposab
             _fx.Config,
             _fx.LibraryManager.Object,
             _fx.UserManager.Object,
+            _fx.UserDataManager.Object,
             _fx.LoggerFactory);
         var session = _fx.CreateSession();
         SkillResponse confirmed = await yesHandler.HandleAsync(

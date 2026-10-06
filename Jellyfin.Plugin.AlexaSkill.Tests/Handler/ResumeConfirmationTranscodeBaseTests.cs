@@ -115,7 +115,7 @@ public class ResumeConfirmationTranscodeBaseTests : PluginTestBase, IDisposable
 
     private YesIntentHandler CreateHandler() => new(
         _fx.SessionManager.Object, _fx.Config,
-        _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.LoggerFactory,
+        _fx.LibraryManager.Object, _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory,
         _queueManager);
 
     private LaunchRequestHandler CreateLaunchHandler() => new(

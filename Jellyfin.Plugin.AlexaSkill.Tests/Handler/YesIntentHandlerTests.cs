@@ -58,8 +58,9 @@ public class YesIntentHandlerTests : PluginTestBase
         PluginConfiguration config,
         ILibraryManager libraryManager,
         IUserManager userManager,
+        IUserDataManager userDataManager,
         ILoggerFactory loggerFactory)
-        : YesIntentHandler(sessionManager, config, libraryManager, userManager, loggerFactory)
+        : YesIntentHandler(sessionManager, config, libraryManager, userManager, userDataManager, loggerFactory)
     {
         public ProgressiveSpeechCapture Progressive { get; } = new();
 
@@ -74,6 +75,7 @@ public class YesIntentHandlerTests : PluginTestBase
             _config,
             _libraryManagerMock.Object,
             _userManagerMock.Object,
+            _userDataManagerMock.Object,
             _loggerFactory);
     }
 
@@ -331,10 +333,15 @@ public class YesIntentHandlerTests : PluginTestBase
         _libraryManagerMock
             .Setup(lm => lm.GetItemById(bookId))
             .Returns(book);
-        // Single-file audiobook: no child tracks, item itself is the audio.
+        // Single-file audiobook: no child tracks, item itself is the audio. The
+        // confirm rides the head's page executor since JF-795, so the empty page
+        // must come back through GetItemsResult.
         _libraryManagerMock
             .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem>());
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem> { Items = new List<BaseItem>(), TotalRecordCount = 0 });
 
         var matchInfo = new DisambiguationHelper.MatchInfo { Id = bookId.ToString(), Name = "Test Book" };
         var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
@@ -368,6 +375,9 @@ public class YesIntentHandlerTests : PluginTestBase
         _libraryManagerMock
             .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { book });
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem> { Items = new List<BaseItem> { book }, TotalRecordCount = 1 });
 
         // Enable NativeControlsForBooks (Plugin.Instance is set by EnsurePluginInstance in ctor)
         Plugin.Instance!.Configuration.NativeControlsForBooks = true;
@@ -562,9 +572,9 @@ public class YesIntentHandlerTests : PluginTestBase
 
         InternalItemsQuery? captured = null;
         _libraryManagerMock
-            .Setup(lm => lm.GetItemList(It.Is<InternalItemsQuery>(q => q.MediaTypes != null)))
+            .Setup(lm => lm.GetItemsResult(It.Is<InternalItemsQuery>(q => q.MediaTypes != null)))
             .Callback<InternalItemsQuery>(q => captured = q)
-            .Returns(new List<BaseItem> { chapter });
+            .Returns(new QueryResult<BaseItem> { Items = new List<BaseItem> { chapter }, TotalRecordCount = 1 });
 
         var matchInfo = new DisambiguationHelper.MatchInfo { Id = bookId.ToString(), Name = "Test Audiobook" };
         var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
@@ -677,9 +687,9 @@ public class YesIntentHandlerTests : PluginTestBase
 
         InternalItemsQuery? captured = null;
         _libraryManagerMock
-            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Setup(lm => lm.GetItemsResult(It.IsAny<InternalItemsQuery>()))
             .Callback<InternalItemsQuery>(q => captured = q)
-            .Returns(new List<BaseItem> { chapter });
+            .Returns(new QueryResult<BaseItem> { Items = new List<BaseItem> { chapter }, TotalRecordCount = 1 });
 
         var matchInfo = new DisambiguationHelper.MatchInfo { Id = folderId.ToString(), Name = "Chapter Folder" };
         var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
@@ -723,9 +733,9 @@ public class YesIntentHandlerTests : PluginTestBase
 
         InternalItemsQuery? captured = null;
         _libraryManagerMock
-            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Setup(lm => lm.GetItemsResult(It.IsAny<InternalItemsQuery>()))
             .Callback<InternalItemsQuery>(q => captured = q)
-            .Returns(new List<BaseItem> { chapter });
+            .Returns(new QueryResult<BaseItem> { Items = new List<BaseItem> { chapter }, TotalRecordCount = 1 });
 
         var user = TestHelpers.CreateTestUser(allowedLibraryIds: new[] { bookLib.ToString() });
 
@@ -785,7 +795,9 @@ public class YesIntentHandlerTests : PluginTestBase
 
         // 26 chapters with the initial page of 5: the confirm's chapters query must
         // run on the FOLDER id and see the page; any other parent (the pre-fix leaf
-        // id) enumerates nothing, the real server's answer for a leaf.
+        // id) enumerates nothing, the real server's answer for a leaf. JF-795: the
+        // confirm rides the head's page executor (GetItemsResult), so the mock
+        // serves it paging-honoring (the deep unpaged re-scan included).
         List<BaseItem> chapters = Enumerable.Range(1, 26)
             .Select(i => (BaseItem)new Audio
             {
@@ -799,19 +811,34 @@ public class YesIntentHandlerTests : PluginTestBase
             .Returns<InternalItemsQuery>(q => q.ParentId == bookFolderId
                 ? chapters.Take(ProgressiveQueueConstants.GetInitialFetchSize()).ToList()
                 : new List<BaseItem>());
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q => q.ParentId == bookFolderId
+                ? new QueryResult<BaseItem>
+                {
+                    Items = chapters
+                        .Skip(q.StartIndex ?? 0)
+                        .Take(q.Limit ?? chapters.Count)
+                        .ToList(),
+                    TotalRecordCount = chapters.Count
+                }
+                : new QueryResult<BaseItem> { Items = new List<BaseItem>(), TotalRecordCount = 0 });
 
         var matchInfo = new DisambiguationHelper.MatchInfo { Id = chapterLeaf.Id.ToString(), Name = chapterLeaf.Name };
         var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
 
         var handler = CreateHandler();
         var session = CreateSession();
-        var response = await handler.HandleAsync(
-            CreateYesIntentRequest(),
-            CreateContext(),
-            TestHelpers.CreateTestUser(),
-            session,
-            attrs,
-            CancellationToken.None);
+        var context = CreateContext();
+        try
+        {
+            var response = await handler.HandleAsync(
+                CreateYesIntentRequest(),
+                context,
+                TestHelpers.CreateTestUser(),
+                session,
+                attrs,
+                CancellationToken.None);
 
         // The confirm plays the BOOK's first chapter, not the confirmed leaf alone:
         // the queue carries the page and the directive launches chapter 1.
@@ -820,6 +847,14 @@ public class YesIntentHandlerTests : PluginTestBase
         Assert.Equal(chapters[0].Id.ToString(), audioDirective.AudioItem.Stream.Token);
         Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), session.NowPlayingQueue.Count);
         Assert.Equal(chapters[0].Id, session.FullNowPlayingItem!.Id);
+        }
+        finally
+        {
+            // JF-795: the confirm now mints the book's continuation like the ask;
+            // clean the static store so the [Collection("Plugin")] siblings stay
+            // isolated.
+            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
+        }
     }
 
     /// <summary>
@@ -850,7 +885,8 @@ public class YesIntentHandlerTests : PluginTestBase
             .Returns(new Folder { Name = "Audiobooks", Id = containerId, Path = "/audiobooks" });
 
         // The merge the discriminator must prevent: the container's enumeration
-        // returns the sibling single-file books.
+        // returns the sibling single-file books. JF-795: the confirm rides the
+        // head's page executor (GetItemsResult), so the same shape serves it.
         List<BaseItem> siblings = new()
         {
             book,
@@ -867,6 +903,11 @@ public class YesIntentHandlerTests : PluginTestBase
             .Returns<InternalItemsQuery>(q => q.ParentId == containerId
                 ? siblings
                 : new List<BaseItem>());
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q => q.ParentId == containerId
+                ? new QueryResult<BaseItem> { Items = siblings, TotalRecordCount = siblings.Count }
+                : new QueryResult<BaseItem> { Items = new List<BaseItem>(), TotalRecordCount = 0 });
 
         var matchInfo = new DisambiguationHelper.MatchInfo { Id = book.Id.ToString(), Name = book.Name };
         var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
@@ -923,27 +964,46 @@ public class YesIntentHandlerTests : PluginTestBase
                 .Skip(q.StartIndex ?? 0)
                 .Take(q.Limit ?? chapters.Count)
                 .ToList());
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q => new QueryResult<BaseItem>
+            {
+                Items = chapters
+                    .Skip(q.StartIndex ?? 0)
+                    .Take(q.Limit ?? chapters.Count)
+                    .ToList(),
+                TotalRecordCount = chapters.Count
+            });
 
         var matchInfo = new DisambiguationHelper.MatchInfo { Id = bookFolderId.ToString(), Name = "Measure What Matters" };
         var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
 
         var handler = CreateHandler();
         var session = CreateSession();
-        var response = await handler.HandleAsync(
-            CreateYesIntentRequest(),
-            CreateContext(),
-            TestHelpers.CreateTestUser(),
-            session,
-            attrs,
-            CancellationToken.None);
+        var context = CreateContext();
+        try
+        {
+            var response = await handler.HandleAsync(
+                CreateYesIntentRequest(),
+                context,
+                TestHelpers.CreateTestUser(),
+                session,
+                attrs,
+                CancellationToken.None);
 
-        // The PlayBook leg answers: the paged initial queue (5), chapter 1 first.
-        // The pre-fix PlayAlbum arm enumerated the whole book unpaged (26).
-        var audioDirective = Assert.IsType<AudioPlayerPlayDirective>(
-            Assert.Single(response.Response.Directives!));
-        Assert.Equal(chapters[0].Id.ToString(), audioDirective.AudioItem.Stream.Token);
-        Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), session.NowPlayingQueue.Count);
-        Assert.Equal(chapters[0].Id, session.FullNowPlayingItem!.Id);
+            // The PlayBook leg answers: the paged initial queue (5), chapter 1 first.
+            // The pre-fix PlayAlbum arm enumerated the whole book unpaged (26).
+            var audioDirective = Assert.IsType<AudioPlayerPlayDirective>(
+                Assert.Single(response.Response.Directives!));
+            Assert.Equal(chapters[0].Id.ToString(), audioDirective.AudioItem.Stream.Token);
+            Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), session.NowPlayingQueue.Count);
+            Assert.Equal(chapters[0].Id, session.FullNowPlayingItem!.Id);
+        }
+        finally
+        {
+            // JF-795: the confirm now mints the book's continuation like the ask.
+            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
+        }
     }
 
     // ========== JF-795: the confirm-must-match-ask axes (continuation + resume) ==========
