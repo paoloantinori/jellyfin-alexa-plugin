@@ -819,6 +819,73 @@ public class YesIntentHandlerTests : PluginTestBase
         Assert.Equal(chapters[0].Id, session.FullNowPlayingItem!.Id);
     }
 
+    /// <summary>
+    /// JF-793 Finding 2 twin pin (the confirm leg of the live shared-container shape):
+    /// a confirmed COLLAPSED single-file book under the shared container (the minix
+    /// census shape: the leaf's file sits one directory deeper than its ParentId
+    /// container) must NOT climb: the container is not a book folder, and the
+    /// confirmed book plays as its own single track (the JF-361 duality), never a
+    /// container merge.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DisambiguationAlbumType_CollapsedSingleFileBook_UnderSharedContainer_PlaysAsOwnTrack()
+    {
+        Guid containerId = Guid.NewGuid();
+        var book = new AudioBook
+        {
+            Name = "Radical Candor",
+            Id = Guid.NewGuid(),
+            ParentId = containerId,
+            Path = "/audiobooks/Radical Candor/Radical Candor.m4b"
+        };
+
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemById(book.Id))
+            .Returns(book);
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemById(containerId))
+            .Returns(new Folder { Name = "Audiobooks", Id = containerId, Path = "/audiobooks" });
+
+        // The merge the discriminator must prevent: the container's enumeration
+        // returns the sibling single-file books.
+        List<BaseItem> siblings = new()
+        {
+            book,
+            new AudioBook
+            {
+                Name = "Managing Humans",
+                Id = Guid.NewGuid(),
+                ParentId = containerId,
+                Path = "/audiobooks/Managing Humans/Managing Humans.m4b"
+            }
+        };
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q => q.ParentId == containerId
+                ? siblings
+                : new List<BaseItem>());
+
+        var matchInfo = new DisambiguationHelper.MatchInfo { Id = book.Id.ToString(), Name = book.Name };
+        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
+
+        var handler = CreateHandler();
+        var session = CreateSession();
+        var response = await handler.HandleAsync(
+            CreateYesIntentRequest(),
+            CreateContext(),
+            TestHelpers.CreateTestUser(),
+            session,
+            attrs,
+            CancellationToken.None);
+
+        // The ONE confirmed book plays as its own track, not the container merge.
+        var audioDirective = Assert.IsType<AudioPlayerPlayDirective>(
+            Assert.Single(response.Response.Directives!));
+        Assert.Equal(book.Id.ToString(), audioDirective.AudioItem.Stream.Token);
+        Assert.Single(session.NowPlayingQueue);
+        Assert.Equal(book.Id, session.FullNowPlayingItem!.Id);
+    }
+
     [Fact]
     public async Task HandleAsync_ArtistType_SongQuery_UsesIncludeItemTypesNotMediaTypes()
     {
