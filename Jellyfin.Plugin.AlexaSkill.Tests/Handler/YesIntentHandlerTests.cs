@@ -373,29 +373,35 @@ public class YesIntentHandlerTests : PluginTestBase
             .Setup(lm => lm.GetItemsResult(It.IsAny<InternalItemsQuery>()))
             .Returns(new QueryResult<BaseItem> { Items = new List<BaseItem> { book }, TotalRecordCount = 1 });
 
-        // Enable NativeControlsForBooks (Plugin.Instance is set by EnsurePluginInstance in ctor)
+        // Enable NativeControlsForBooks (Plugin.Instance is set by EnsurePluginInstance in ctor).
+        // JF-795 code-review F2: restore in a finally, so an assertion failure cannot
+        // leak the flag into the [Collection("Plugin")] siblings.
         Plugin.Instance!.Configuration.NativeControlsForBooks = true;
         Plugin.Instance.Configuration.ServerAddress = "http://localhost:8096";
+        try
+        {
+            var matchInfo = new DisambiguationHelper.MatchInfo { Id = bookId.ToString(), Name = "Test Book" };
+            var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
 
-        var matchInfo = new DisambiguationHelper.MatchInfo { Id = bookId.ToString(), Name = "Test Book" };
-        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
+            var handler = CreateHandler();
+            var response = await handler.HandleAsync(
+                CreateYesIntentRequest(),
+                CreateContext(),
+                TestHelpers.CreateTestUser(),
+                CreateSession(),
+                attrs,
+                CancellationToken.None);
 
-        var handler = CreateHandler();
-        var response = await handler.HandleAsync(
-            CreateYesIntentRequest(),
-            CreateContext(),
-            TestHelpers.CreateTestUser(),
-            CreateSession(),
-            attrs,
-            CancellationToken.None);
-
-        // Restore defaults
-        Plugin.Instance.Configuration.NativeControlsForBooks = false;
-
-        Assert.NotNull(response.Response?.Directives);
-        Assert.True(response.Response.Directives.Count > 0, $"Expected directives, got {response.Response.Directives?.Count ?? -1}. OutputSpeech: {response.Response.OutputSpeech}");
-        Assert.IsType<Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>(
-            response.Response.Directives[0]);
+            Assert.NotNull(response.Response?.Directives);
+            Assert.True(response.Response.Directives.Count > 0, $"Expected directives, got {response.Response.Directives?.Count ?? -1}. OutputSpeech: {response.Response.OutputSpeech}");
+            Assert.IsType<Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>(
+                response.Response.Directives[0]);
+        }
+        finally
+        {
+            // Restore defaults
+            Plugin.Instance.Configuration.NativeControlsForBooks = false;
+        }
     }
 
     [Fact]
