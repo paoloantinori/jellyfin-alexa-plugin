@@ -3,10 +3,10 @@ id: JF-672
 title: >-
   JF-672 - audiobook chapter play order is default-sort, not chapter order, and
   the paginated chapters query has no explicit tiebreaker
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-29 13:43'
-updated_date: '2026-10-06 05:20'
+updated_date: '2026-10-06 06:55'
 labels: []
 dependencies: []
 references:
@@ -34,17 +34,35 @@ AUDIT UPDATE (2026-10-02): BuildAudiobookChaptersQuery now carries a doc comment
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #1 dotnet build passes with 0 errors (Release --no-restore -warnaserror: 0 warnings 0 errors, both TFMs, re-verified after every gate)
+- [x] #2 dotnet test passes (5373/5373 BOTH TFMs on the final state: the 5372 baseline + 1 new builder Fact)
+- [x] #3 No new compiler warnings introduced (the Release -warnaserror builds stayed clean at every stage; the one dead using alias the review tail orphaned was removed)
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization (N/A: no session attribute surface touched; the diff is query construction + tests)
+- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress (N/A: no HttpClient changes)
+- [x] #6 NLU test fixtures updated if interaction model changed (N/A: no model, locale, or speech change; the hard constraint held)
+- [x] #7 E2E test added for new intent or handler logic (N/A: no new intent and no new handler behavior surface; the one handler reroute (the YesIntent confirm leg) is pinned at the query-contract level by the superseded leg pin, which was proven RED on the pre-fix tree; a live E2E cannot express the DB-order dimension the change lives on)
+- [x] #8 Locale response strings added to all 17 locales (N/A: no new strings)
+- [x] #9 /simplify passed (4 parallel angles; the concordant findings applied and the skips reasoned, commit 8274fe93)
+- [x] #10 /code-review high passed (4 findings, ALL applied with per-finding code verification and a red proof for the runtime one, commit b9e45fc9; the review's own dropped candidates recorded)
 <!-- DOD:END -->
+
+## Final Summary
+
+**The fix**: the ONE chapters core (BuildAudiobookChaptersQueryCore) now sets `OrderBy = AudiobookChapterOrder` (a named constant beside AlbumTrackOrder: `[(ItemSortBy.SortName, Ascending)]`), so the head (PlayBook), the PlayBook confirm (YesIntent PlayBook), the tail (FetchAudiobookChapters), the unpaged concat-endpoint form, and (review F1) the YesIntent NON-MusicAlbum confirm leg all carry one pinned order instead of each server branch's empty-OrderBy default. On every support-envelope tag (v10.11.8, v12.0, v12.1, v12.2; all four read at source) the explicit SortName-first axis additionally pulls the server's ThenBy(Name) special case: a strict determinism gain over the old SortName-only default, with zero reordering on real rows (the census verified no SortName-tied row set carries distinct Names).
+
+**The probe** (STEP 1, mandatory, on the live 12.2.0 box): 383 AudioBook leaves over 15 book folders, grouped by ParentId, with SortName/IndexNumber/ParentIndexNumber plus the returned order compared against file order and DateCreated per book. Findings: the tagged class is ordered correctly today (zero-padded SortName derives from the tags); "Thinking Better" plays 1, 10-14, 2-9 (lexicographic death); "The Upside of Irrationality" (100 identical SortName+Name rows) plays fully scrambled; "The Art of Deception" scrambles within its two tagged parts; exactly one book mixes tagged and untagged rows. Source-level: empty OrderBy means OrderBy(SortName) with NO tiebreaker on every tag (an early return ahead of the tiebreaker block); ItemSortBy (reflection-dumped from the plugin's own packages, both TFMs) has NO Path/Id axis.
+
+**The decisions** (STEP 2): explicit SortName (preserves observed behavior on every real book); the album-style (ParentIndexNumber, IndexNumber) composite REFUTED (fixes nothing: the mis-ordered books are untagged; regresses the mixed book via ASC NULLS FIRST); DateCreated REFUTED (99-way tie on the 100-chapter book, wrong order on the parts book). The untagged class is documented as unfixable at the query layer and FILED as JF-790 (with the discovered in-repo precedent: the concat endpoint's filename-number sort). The builder doc's "the DB order IS the book's chapter order" claim was REFUTED for the untagged class and replaced with the probe-backed truth.
+
+**STEP 3** (head/tail asymmetry): CLOSED by JF-767 at this branch point, evidence recorded above (all three paged sites route through BuildScopedAudiobookChaptersQuery). CORRECTION from the review round: the "grep ALL references" sweep initially missed the YesIntent NON-MusicAlbum confirm leg's hand-kept initializer (it carried AlbumTrackOrder); the review's F1 caught it, the new BuildScopedAudiobookChaptersQueryUnpaged sibling (the album arm's JF-767 pattern) routed it through the core, and the leg pin was proven red on the pre-fix tree first (AlbumTrackOrder captured).
+
+**Red proofs** (both TFMs): the four order pins (head, tail, unpaged endpoint, builder flip-together) failed 4/4 on the unmodified tree ("Expected: [Tuple (SortName, Ascending)] / Actual: []"), green post-fix; the confirm-leg pin failed on the pre-F1 tree ("Expected: [Tuple (SortName, Ascending)] / Actual: [Tuple (ParentIndexNumber, Ascending), Tuple (IndexNumber, Ascending)]"), green post-fix.
+
+**Suites**: 5373/5373 both TFMs on the final state (5372 baseline + 1); Release --no-restore -warnaserror 0 warnings 0 errors, re-verified after the simplify pass and after the review tail.
+
+**Gates**: /simplify (4 parallel angles: reuse/simplification concordant findings applied - the pin family reshaped onto the album-arm convention, one literal honesty pin + constant-equality consumer pins, the 3x probe rationale deduped to the constant's doc; efficiency and altitude returned nothing actionable, their overlapping no-action observations adjudicated; commit 8274fe93). /code-review high (4 findings, ALL applied, each verified in code before the fix, one with its own red proof; the review's two dropped candidates agreed; commit b9e45fc9).
+
+**Not deployed** (worker branch only; the orchestrator merges and batches deploys). No locale, model, or speech surface touched. One filing: JF-790.
 
 ORCHESTRATOR GATE-REVIEW ADDENDUM (2026-09-29, same-turn): the shared-shape premise needs one correction - the head (PlayBookIntentHandler initial page) and tail (FetchAudiobookChapters) run DIFFERENT queries today: the tail applies Util.LibraryFilter.ApplyLibraryFilter (TopParentIds) after BuildAudiobookChaptersQuery, the head does not. With no explicit OrderBy the extra constraint can change the engine's natural row order across the page boundary, repeating or dropping a chapter at the boundary. The JF-672 fix (explicit chapter order/tiebreaker) must decide the head-side filter parity in the same change; the two LIMIT/OFFSET executions must be one shape PLUS one filter treatment.
 
