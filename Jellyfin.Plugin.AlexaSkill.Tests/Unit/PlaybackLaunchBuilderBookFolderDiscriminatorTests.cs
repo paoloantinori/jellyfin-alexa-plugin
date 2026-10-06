@@ -195,6 +195,40 @@ public class PlaybackLaunchBuilderBookFolderDiscriminatorTests
     }
 
     [Fact]
+    public void TrackedResume_CollapsedBookUnderContainer_StaleBeyondRuntimeTicks_RestartsFromZeroAndClearsKey()
+    {
+        // Code-review F2: a pre-JF-794 merged-container play left a
+        // CONTAINER-timeline high-water mark under the census book's key
+        // (GetAudiobookBookKey = the container id), which the monotonic tracker
+        // never lowers and the new single-item serves cannot displace (their
+        // scaled leaf-relative values are smaller and discarded). Saturating that
+        // stale value at the leaf runtime mints an offset == EOF: a dead resume
+        // that never heals. The JF-565 doctrine applies instead (a position at or
+        // beyond the runtime is stale state): restart from 0 and CLEAR the key so
+        // the book's next listen re-arms it.
+        var (book, _, library) = CollapsedBookShape();
+        // The flag is forced OFF for hermeticity against the class-order leak (the
+        // chokepoint tests leave it ON on the shared instance, and a clamped-to-0
+        // offset would then delegate to the VideoApp single-item launch).
+        TestHelpers.EnsurePluginInstance(new PluginConfiguration { ServerAddress = "http://localhost:8096/" }, LoggerFactory.Create(b => { }), c => c.NativeControlsForBooks = false, "jf794-builder-tests");
+        var tracker = TestHelpers.CreatePositionTracker("jf794-stale-container-mark");
+        using var trackerSwap = TestHelpers.SwapPluginPositionTracker(tracker);
+        tracker.RecordSegment(ResumeMath.GetAudiobookBookKey(book), 90_000); // a huge merged-timeline mark
+        long staleTicks = tracker.GetPositionTicks(ResumeMath.GetAudiobookBookKey(book));
+        Assert.True(staleTicks > book.RunTimeTicks!.Value, "fixture setup: the stale mark is beyond the leaf runtime");
+        var builder = CreatePlainBuilder();
+
+        SkillResponse response = builder.BuildAudiobookResumeResponse(
+            book, staleTicks, TestHelpers.CreateTestUser(jellyfinToken: "tok"), TestHelpers.CreateContextWithVideoApp(), library.Object);
+
+        var directive = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
+        Assert.Equal(0, directive.AudioItem.Stream.OffsetInMilliseconds);
+
+        // The poison mark is cleared, so the book's fresh listening re-arms the key.
+        Assert.Equal(0, tracker.GetPositionTicks(ResumeMath.GetAudiobookBookKey(book)));
+    }
+
+    [Fact]
     public void ChokepointDelegation_VerifiedChapterFolder_StillConcats()
     {
         // The no-regression pin for the AudioPlayer chokepoint's native-controls

@@ -206,7 +206,7 @@ public class RecommendIntentHandler : BaseHandler
         }
         else
         {
-            response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, item, user, context);
+            response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, item, user, context, libraryManager: _libraryManager);
         }
 
         // JF-699 item 5 / JF-714 / JF-718: the session writes follow the launch build

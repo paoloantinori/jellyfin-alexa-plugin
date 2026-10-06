@@ -33,9 +33,9 @@ internal static class AudiobookItems
     /// play it as its own track (the JF-361 duality), never a failed request.
     /// </summary>
     /// <param name="item">The audiobook search match (a chapter leaf or a single-file book).</param>
-    /// <param name="libraryManager">The library manager resolving the ParentId.</param>
+    /// <param name="libraryManager">The library manager resolving the ParentId; null fails closed (the seam's contract).</param>
     /// <returns>The book folder, or null when the item is not an AudioBook chapter leaf or the climb is rejected (see the seam's contract).</returns>
-    internal static Folder? TryResolveBookFolder(BaseItem? item, ILibraryManager libraryManager)
+    internal static Folder? TryResolveBookFolder(BaseItem? item, ILibraryManager? libraryManager)
         => item is AudioBook ? TryResolveVerifiedParentFolder(item, libraryManager) : null;
 
     /// <summary>

@@ -169,7 +169,8 @@ public class FollowMeIntentHandler : BaseHandler
             item,
             user,
             context,
-            offsetInMilliseconds: offsetMs);
+            offsetInMilliseconds: offsetMs,
+            libraryManager: _libraryManager);
 
         // Transfer the queue to the current device
         _queueManager.SetQueue(

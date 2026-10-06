@@ -1191,12 +1191,15 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
     }
 
     /// <summary>
-    /// JF-563 review: on a screenless device the book resume degrades to the flat
-    /// AudioPlayer path, and the book-absolute tracker position is CLAMPED to the
-    /// chapter runtime so the directive never carries an offset past the stream it plays.
+    /// JF-563 review (reshaped by the JF-794 code-review F2 clamp doctrine): on a
+    /// screenless device the book resume degrades to the flat AudioPlayer path, and a
+    /// book-absolute tracker position BEYOND the chapter runtime is STALE state, not
+    /// a clampable offset: the JF-565 rule restarts the chapter from 0 (the old
+    /// saturation-at-runtime minted an end-of-stream offset, a dead resume) and
+    /// clears the poison mark so the fresh listen re-arms the key.
     /// </summary>
     [Fact]
-    public async Task SessionHeldBook_NativeControlsOn_ScreenlessDevice_DegradesToClampedFlatResume()
+    public async Task SessionHeldBook_NativeControlsOn_ScreenlessDevice_BeyondRuntimeTicks_RestartFromZero()
     {
         Plugin.Instance!.Configuration.NativeControlsForBooks = true;
         var tracker = TestHelpers.CreatePositionTracker("resume-ab-screenless");
@@ -1227,7 +1230,8 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
             var session = CreateEmptySession();
             session.FullNowPlayingItem = chapter;
 
-            // Tracker says 10 min on the book timeline; the chapter is only 5 min long.
+            // Tracker says 10 min on the book timeline; the chapter is only 5 min long
+            // (the JF-794 F2 doctrine: beyond-runtime is stale, restart at 0).
             tracker.RecordSegment(bookFolderId.ToString(), 61);
 
             var response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
@@ -1236,8 +1240,11 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
 
             var audioDirective = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
             Assert.Empty(response.Response.Directives.OfType<global::Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>());
-            Assert.Equal((int)TimeSpan.FromMinutes(5).TotalMilliseconds, audioDirective.AudioItem.Stream.OffsetInMilliseconds);
+            Assert.Equal(0, audioDirective.AudioItem.Stream.OffsetInMilliseconds);
             Assert.Contains($"/Audio/{chapter.Id}/stream?static=true", audioDirective.AudioItem.Stream.Url, StringComparison.Ordinal);
+
+            // The stale mark is cleared: the fresh listen re-arms the key.
+            Assert.Equal(0, tracker.GetPositionTicks(bookFolderId.ToString()));
         }
         finally
         {

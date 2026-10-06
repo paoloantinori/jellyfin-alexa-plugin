@@ -380,7 +380,9 @@ public class VideoAppCapabilityGateTests : PluginTestBase
         var config = new PluginConfiguration { ServerAddress = "http://localhost:8096/" };
         var handler = CreateBuilderProbe(config, LoggerFactory.Create(b => { }));
         var user = new Entities.User { Id = Guid.NewGuid(), JellyfinToken = "tok" };
-        var chapter = new Audio { Name = "Chapter 3", Id = Guid.NewGuid() };
+        // A runtime the 12-minute position sits within (the JF-794 F2 clamp fails
+        // closed to a fresh start on unknown or beyond-runtime positions).
+        var chapter = new Audio { Name = "Chapter 3", Id = Guid.NewGuid(), RunTimeTicks = TimeSpan.FromHours(2).Ticks };
         long startTicks = TimeSpan.FromMinutes(12).Ticks;
 
         SkillResponse response = handler.Launch.BuildAudiobookResumeResponse(chapter, startTicks, user, TestHelpers.CreateScreenlessContext());
@@ -421,6 +423,7 @@ public class VideoAppCapabilityGateTests : PluginTestBase
         var handler = CreateBuilderProbe(config, LoggerFactory.Create(b => { }));
         var user = new Entities.User { Id = Guid.NewGuid(), JellyfinToken = "tok" };
         var (chapter, _, _) = TestHelpers.CreateVerifiedBookChapter("Chapter 3");
+        chapter.RunTimeTicks = TimeSpan.FromHours(2).Ticks;
         long startTicks = TimeSpan.FromMinutes(12).Ticks;
 
         SkillResponse response = handler.Launch.BuildAudiobookResumeResponse(chapter, startTicks, user, TestHelpers.CreateContextWithVideoApp());

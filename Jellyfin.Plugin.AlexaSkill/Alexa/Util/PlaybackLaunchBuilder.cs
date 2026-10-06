@@ -1716,7 +1716,7 @@ public sealed class PlaybackLaunchBuilder
         if (AudiobookItems.TryResolveVerifiedParentFolder(item, libraryManager) is not { } resumeBookFolder)
         {
             _logger.LogInformation(
-                "BuildAudiobookResumeResponse: book item {ItemId} ('{Title}') has no verified book folder (shared container or unresolvable ParentId); resuming as its own single track (JF-794)",
+                "BuildAudiobookResumeResponse: book item {ItemId} ('{Title}') has no verified book folder (shared container, unresolvable ParentId, or no library manager threaded); resuming as its own single track (JF-794)",
                 item.Id, item.Name);
             return BuildFlatChapterResume(item, startTicks, user, context);
         }
@@ -1786,15 +1786,20 @@ public sealed class PlaybackLaunchBuilder
     /// is a shared container or an unverified/unresolvable folder, so no book
     /// timeline exists to slice). The single chapter plays flat, but startTicks may
     /// count a foreign timeline (the whole-book concat timeline of a tracker-first
-    /// resolution, or a pre-JF-794 container-timeline value): clamp to the chapter's
-    /// runtime (when known) so the directive never carries an offset past the end of
-    /// the stream it plays. This is the saturation clamp the screenless degrade has
-    /// always applied, NOT the JF-565 fail-closed-to-zero clamp (a chapter's
-    /// runtime is its own whole timeline, so an at-runtime position is its end, not
-    /// a stale-state signal).
+    /// resolution, or a PRE-JF-794 merged-container timeline value persisted under
+    /// the same key), so the JF-565 clamp applies (code-review F2): a position at or
+    /// beyond the chapter's runtime cannot be a legitimate mid-chapter resume, only
+    /// stale state - saturating it at the runtime (this helper's pre-F2 shape) mints
+    /// an offset == end-of-stream, a dead resume the monotonic tracker mark can
+    /// never heal (the stale container-timeline value dwarfs every new
+    /// leaf-relative record, which RecordSegment discards below the high-water
+    /// mark). A stale value therefore restarts from 0 AND clears the tracker key:
+    /// the mark is provably poison for this book, and clearing re-arms it for the
+    /// fresh listen. An UNKNOWN runtime fails closed to a fresh start too (the same
+    /// JF-565 rule the episode and audio-route launches apply).
     /// </summary>
     /// <param name="item">The audiobook chapter to resume flat.</param>
-    /// <param name="startTicks">The resume position in .NET ticks (clamped to the chapter runtime).</param>
+    /// <param name="startTicks">The resume position in .NET ticks (the JF-565 clamp applies).</param>
     /// <param name="user">The plugin user (static stream URL).</param>
     /// <param name="context">The Alexa context.</param>
     /// <returns>The AudioPlayer.Play resume response.</returns>
@@ -1804,11 +1809,13 @@ public sealed class PlaybackLaunchBuilder
         Entities.User user,
         Context? context)
     {
-        long clampedTicks = Math.Max(startTicks, 0);
-        long runTimeTicks = item.RunTimeTicks ?? 0;
-        if (runTimeTicks > 0)
+        long clampedTicks = ClampResumeTicksToRuntime(item, Math.Max(startTicks, 0), "Audiobook flat resume");
+        if (startTicks > 0 && clampedTicks == 0)
         {
-            clampedTicks = Math.Min(clampedTicks, runTimeTicks);
+            // Code-review F2: the stale beyond-runtime mark is poison (see the doc);
+            // clear it so the book's fresh listening re-arms the key instead of every
+            // future resume re-reading the same dead value.
+            Plugin.Instance?.AudiobookPositionTracker?.Clear(ResumeMath.GetAudiobookBookKey(item));
         }
 
         return BuildAudioPlayerResponse(
@@ -2527,17 +2534,19 @@ public sealed class PlaybackLaunchBuilder
         bool isAudioBook = AudiobookItems.IsAudioBook(item);
 
         // JF-794: the audiobook concat's ParentId climbs through the ONE shared
-        // verified climb (see AudiobookItems.TryResolveVerifiedParentFolder). When
-        // the climb ACCEPTS, bookFolder.Id IS the raw ParentId, so the URL is
-        // byte-identical to the pre-JF-794 raw climb; when it is REJECTED or
-        // unverifiable (the shared-container census shape, a dangling ParentId, or
-        // no manager threaded) the leaf falls through to the single-item stream
-        // below, never a potentially-merged container concat.
-        Folder? bookFolder = isAudioBook ? AudiobookItems.TryResolveVerifiedParentFolder(item, libraryManager) : null;
+        // gated climb (AudiobookItems.TryResolveBookFolder: the AudioBook gate plus
+        // the verified parent resolution whose contract lives on
+        // TryResolveVerifiedParentFolder). When the climb ACCEPTS, bookFolder.Id IS
+        // the raw ParentId, so the URL is byte-identical to the pre-JF-794 raw
+        // climb; when it is REJECTED or unverifiable (the shared-container census
+        // shape, a dangling ParentId, or no manager threaded) the leaf falls through
+        // to the single-item stream below, never a potentially-merged container
+        // concat.
+        Folder? bookFolder = AudiobookItems.TryResolveBookFolder(item, libraryManager);
         if (isAudioBook && bookFolder is null)
         {
             _logger.LogInformation(
-                "BuildVideoAppAudioResponse: audiobook item {ItemId} ('{Title}') has no verified book folder (shared container or unresolvable ParentId); playing as its own single-item stream (JF-794)",
+                "BuildVideoAppAudioResponse: audiobook item {ItemId} ('{Title}') has no verified book folder (shared container, unresolvable ParentId, or no library manager threaded); playing as its own single-item stream (JF-794)",
                 itemId, item!.Name);
         }
 

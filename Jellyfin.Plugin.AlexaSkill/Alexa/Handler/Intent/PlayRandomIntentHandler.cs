@@ -212,7 +212,7 @@ public class PlayRandomIntentHandler : BaseHandler
         }
         else
         {
-            response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, firstItem, user, context);
+            response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, firstItem, user, context, libraryManager: _libraryManager);
         }
 
         // JF-714/JF-718: the now-playing writes ride a DELIVERED launch (a random

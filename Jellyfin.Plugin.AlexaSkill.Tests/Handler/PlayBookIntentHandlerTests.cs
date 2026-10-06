@@ -1562,4 +1562,81 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
         Assert.Equal(trackItem.Id.ToString(), itemId);
         Assert.Equal(DeviceQueueManager.LaunchRoute.VideoApp, route);
     }
+
+    // Code-review F4 (the JF-794 round): the METADATA-REMAPPED book shape - the
+    // chapters query returns Audio-typed rows (the JF-784 leg-3 row set) - has a
+    // deliberately ASYMMETRIC behavior this pin holds in place while JF-799 decides
+    // the unification: the fresh arm's isAudioBook gate serves such chapters as
+    // single items, but the tracked-resume builder's climb is TYPE-AGNOSTIC, so a
+    // warm folder key resumes the WHOLE-BOOK concat. Without this pin a future
+    // AudioBook gate on BuildAudiobookResumeResponse compiles green while silently
+    // deleting the remapped book's seek-bar resume.
+    [Fact]
+    public async Task PlayBook_TrackedResume_AudioTypedRemapChapter_ResumesViaFolderConcat()
+    {
+        _fx.Config.NativeControlsForBooks = true;
+        var tracker = TestHelpers.CreatePositionTracker("playbook-remap-jf794");
+        using var trackerSwap = TestHelpers.SwapPluginPositionTracker(tracker);
+
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(bookName: "The Hobbit");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+
+        // The remap shape: the search still returns an AudioBook leaf (so the head
+        // climb resolves the folder), but the chapters page under the folder yields
+        // an Audio-TYPED row (the metadata-remap the concat endpoint's
+        // MediaTypes=Audio row set exists for).
+        Guid folderId = Guid.NewGuid();
+        var searchLeaf = new AudioBook
+        {
+            Name = "The Hobbit",
+            Id = Guid.NewGuid(),
+            ParentId = folderId,
+            Path = "/audiobooks/the-hobbit/ch00.mp3"
+        };
+        var remapChapter = new Audio
+        {
+            Name = "Chapter 1",
+            Id = Guid.NewGuid(),
+            ParentId = folderId,
+            Path = "/audiobooks/the-hobbit/ch01.mp3"
+        };
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
+            .Returns(new List<BaseItem> { searchLeaf });
+
+        _fx.SetupBookFolder(folderId, "The Hobbit", "/audiobooks/the-hobbit");
+
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q => q.ParentId == folderId
+                ? new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+                {
+                    Items = new[] { remapChapter },
+                    TotalRecordCount = 1
+                }
+                : new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+                {
+                    Items = Array.Empty<BaseItem>(),
+                    TotalRecordCount = 0
+                });
+
+        // The tracker is warm under the FOLDER key (GetAudiobookBookKey of the
+        // Audio-typed chapter is still its ParentId): segment 31 = a conservative
+        // 5-minute book-timeline position.
+        tracker.RecordSegment(folderId.ToString(), 31);
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        var videoDirective = Assert.IsType<global::Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>(
+            Assert.Single(response.Response.Directives));
+        Assert.Contains(
+            $"alexaskill/api/video-audio/audiobook/{folderId}/stream.m3u8?start={TimeSpan.FromMinutes(5).Ticks}&token=",
+            videoDirective.VideoItem!.Source,
+            StringComparison.Ordinal);
+    }
 }
