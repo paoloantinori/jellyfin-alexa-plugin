@@ -3,7 +3,7 @@ id: JF-791
 title: >-
   JF-791 - PlayBook search can never return a multi-chapter book folder (AudioBook is a
   leaf type), so the default path plays ONE chapter then silence
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-06'
 labels:

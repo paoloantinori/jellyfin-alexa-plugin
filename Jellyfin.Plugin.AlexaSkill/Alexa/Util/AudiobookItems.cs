@@ -17,6 +17,33 @@ internal static class AudiobookItems
     internal static bool IsAudioBook(BaseItem? item) => item is AudioBook;
 
     /// <summary>
+    /// Resolve the BOOK FOLDER a matched audiobook search item belongs to (JF-791).
+    /// Jellyfin never types a multi-file book folder as AudioBook (the AudioResolver
+    /// skips multi-file directory collapsing, verified byte-identical at v10.11.8 and
+    /// v12.2; AudioBook : Audio.Audio is a leaf class), so an AudioBook match for a
+    /// multi-chapter book is a CHAPTER leaf whose ParentId is the plain Folder. This
+    /// is the default AudioPlayer path's twin of the VideoApp builders' ParentId climb
+    /// (<c>BuildVideoAppAudioResponse</c>/<c>BuildAudiobookResumeResponse</c>): the
+    /// paged chapters machinery needs the folder's Id and Name, which a bare Guid
+    /// cannot supply. The single-file shapes (an AudioBook with an empty ParentId, or
+    /// any non-AudioBook match) and a failed folder resolution return null: callers
+    /// keep the leaf shape and play it as its own track (the JF-361 duality), never
+    /// a failed request.
+    /// </summary>
+    /// <param name="item">The audiobook search match (a chapter leaf or a single-file book).</param>
+    /// <param name="libraryManager">The library manager resolving the ParentId.</param>
+    /// <returns>The book folder, or null when the item is not a chapter leaf or the parent does not resolve to a Folder.</returns>
+    internal static Folder? TryResolveBookFolder(BaseItem? item, ILibraryManager libraryManager)
+    {
+        if (item is not AudioBook chapter || chapter.ParentId == Guid.Empty)
+        {
+            return null;
+        }
+
+        return libraryManager.GetItemById(chapter.ParentId) as Folder;
+    }
+
+    /// <summary>
     /// Whether the finished item is BOOK-shaped for the end-of-book decision (JF-670):
     /// an AudioBook itself, or an Audio item whose ancestry contains an AudioBook (the
     /// chapter and chapter-under-subfolder shapes). Two live-verified facts drive the
