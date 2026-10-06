@@ -12,6 +12,7 @@ using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 
+[Collection("TimingSolo")]
 public class RetryHelperTests
 {
     private readonly ILogger _logger;

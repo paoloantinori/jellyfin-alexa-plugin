@@ -14,6 +14,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 /// Tests for AudiobookPositionTracker: high-water-mark Math.Max, conservative (−1 segment)
 /// read, zero-when-empty, and Clear. Pure unit test — no Plugin.Instance.
 /// </summary>
+[Collection("TimingSolo")]
 public class AudiobookPositionTrackerTests : IDisposable
 {
     private readonly string _tempDir;
@@ -242,7 +243,9 @@ public class AudiobookPositionTrackerTests : IDisposable
 
         var started = new ManualResetEventSlim(false);
         var release = new ManualResetEventSlim(false);
-        _tracker.TestDebounce.BeforeCallbackGate = () => { started.Set(); release.Wait(TimeSpan.FromSeconds(5)); };
+        // The park bound is 60s, not 5s: the assembly parallel phase (JF-792) can starve
+        // the test thread past 5s, and an expired park corrupts the ordering witness.
+        _tracker.TestDebounce.BeforeCallbackGate = () => { started.Set(); release.Wait(TimeSpan.FromSeconds(60)); };
 
         Task callback = Task.Run(() => _tracker.FirePersistForTest());
         Assert.True(started.Wait(TimeSpan.FromSeconds(2))); // callback in flight

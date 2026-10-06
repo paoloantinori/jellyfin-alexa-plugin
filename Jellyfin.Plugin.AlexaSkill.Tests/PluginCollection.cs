@@ -7,11 +7,20 @@ using Xunit;
 using QueueContinuationStore = Jellyfin.Plugin.AlexaSkill.Alexa.QueueContinuationStore;
 using RadioModeState = Jellyfin.Plugin.AlexaSkill.Alexa.RadioModeState;
 
-// Prevent parallel test execution: handler tests share Plugin.Instance (static singleton),
-// and BaseHandler static methods (FilterByContentAccess, IfFeatureDisabled, ApplyLibraryFilter)
-// read Plugin.Instance?.Configuration. Parallel execution causes intermittent failures when
-// one class toggles a feature flag and another class reads stale state concurrently.
-[assembly: CollectionBehavior(DisableTestParallelization = true)]
+// Parallel execution model (JF-792; the assembly-level DisableTestParallelization that
+// used to live here is removed). xUnit v2 runs collections concurrently (up to
+// ProcessorCount) and runs DisableParallelization collections only AFTER every parallel
+// collection finished, one at a time (verified at source, tag v2-2.7.0: the
+// parallel/non-parallel partition is XunitTestAssemblyRunner.RunTestCollectionsAsync;
+// the sequential classes-within-collection foreach is
+// TestCollectionRunner.RunTestClassesAsync). The "Plugin" collection below is such an
+// exclusive collection: every class touching Plugin.Instance (static singleton), QueueContinuationStore,
+// RadioModeState, PlaybackReportOrdering, or the VideoAudioController encode-gate/registry
+// statics MUST carry [Collection("Plugin")] and is thereby serialized against all of them
+// and never overlaps the parallel phase. Classes WITHOUT a collection attribute must touch
+// none of those statics (the JF-792 audit of all previously-uncollected classes; benign
+// exceptions: PluginTempDirSweeper's ConcurrentBag registration, read-only IL/locale-file
+// scans, self-contained per-class statics).
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests;
 
@@ -20,14 +29,26 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests;
 /// Inherit from this class in every test class that references Plugin.Instance,
 /// QueueContinuationStore, RadioModeState, or other static singletons, whether directly
 /// or indirectly through BaseHandler methods (FilterByContentAccess, IfFeatureDisabled,
-/// ApplyLibraryFilter).
+/// ApplyLibraryFilter). Since JF-792 (assembly parallelism ON) inheriting this class
+/// ALSO requires carrying <c>[Collection("Plugin")]</c>: the per-test resets write the
+/// shared statics, so an inheriting class outside the collection would race the
+/// parallel phase.
 ///
-/// This ensures each test class starts from a clean known-good state even though
-/// tests run sequentially (not in parallel).
+/// This ensures each test class starts from a clean known-good state.
 /// </summary>
 public abstract class PluginTestBase
 {
     protected PluginTestBase()
+    {
+        ResetSharedStatics();
+    }
+
+    /// <summary>
+    /// The ONE reset sequence (JF-792 hoist: the second owner, VideoAudioControllerTests,
+    /// takes the harness base instead of this class and must not carry a verbatim copy).
+    /// Any future static that joins the per-test cleanup lands HERE only.
+    /// </summary>
+    internal static void ResetSharedStatics()
     {
         Plugin.ResetInstance();
         QueueContinuationStore.Clear();
@@ -43,14 +64,31 @@ public abstract class PluginTestBase
 
 /// <summary>
 /// Test collection for all tests that create or depend on shared static state.
-/// DisableParallelization ensures classes in this collection run sequentially,
-/// complementing the assembly-level DisableTestParallelization.
+/// DisableParallelization (see the execution model at the top of this file) makes
+/// this collection run exclusively AFTER every parallel collection, one class at
+/// a time.
 ///
 /// ALL test classes that reference Plugin.Instance, QueueContinuationStore,
 /// RadioModeState, or other static singletons MUST be in this collection.
 /// </summary>
 [CollectionDefinition("Plugin", DisableParallelization = true)]
 public class PluginCollection;
+
+/// <summary>
+/// The JF-792 gate-marker tail exemption for wall-clock-sensitive tests: classes whose
+/// assertions carry real-time margins sized for a quiet machine (the RetryHelper
+/// timeout-budget pin, DoubleMetaphone's encode-throughput margin, the JF-449
+/// park-family's positive 2s waits). The parallel phase can starve a test continuation
+/// for seconds (demonstrated 2026-10-06: a parked callback outlived its 5s bound), and
+/// CI runners have 2-4 vCPU, so these classes run in a DisableParallelization
+/// collection: exclusively after every parallel collection, one at a time, beside the
+/// Plugin collection (a main-push red from a false-starved timing assert costs a
+/// triage round; the exemption costs seconds of suite time). A test that needs the
+/// Plugin collection's resets AND this exemption belongs in the Plugin collection
+/// (it is already exclusive); this collection is for the static-free timing classes.
+/// </summary>
+[CollectionDefinition("TimingSolo", DisableParallelization = true)]
+public class TimingSoloCollection;
 
 /// <summary>
 /// JF-432 structural assertion shared by every index service (extracted from the
