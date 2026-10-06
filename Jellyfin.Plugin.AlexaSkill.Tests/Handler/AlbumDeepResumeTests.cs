@@ -209,6 +209,51 @@ public class AlbumDeepResumeTests : PluginTestBase, IDisposable
         }
     }
 
+    // Gate-marker tail F2: the ParentId arm's DEEP query field pin. The JF-757
+    // lockstep fixture's ParentId page is empty by design, so its
+    // AssertSharedQueryShape only ever sees the AlbumIds arm's deep fetch, and this
+    // suite's generic mock returns identical rows for any query shape - the
+    // DOMINANT production arm (a normal album serving page 1 by ParentId, then
+    // deep-fetching) had no field-level pin: a pageUsedAlbumIds inversion or a
+    // ParentId deep-query drift stayed green. This pin captures the unpaged deep
+    // fetch (Limit == null) and asserts it mirrors the serving arm (ParentId
+    // scope, no AlbumIds) with the shared core's order.
+    [Fact]
+    public async Task HandleAsync_DeepFetchOnParentIdArm_UsesScopedParentIdQueryFields()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest("deep resume album");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+        var queries = new List<InternalItemsQuery>();
+
+        _fx.SetupUserMock();
+        (MusicAlbum album, List<BaseItem> tracks) = SetupDeepResumeAlbum(26, progressTrackIndex: 21, positionTicks: TimeSpan.FromMinutes(1).Ticks, queries: queries);
+
+        try
+        {
+            SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+            Assert.NotNull(response);
+            GetPlayDirective(response);
+
+            InternalItemsQuery deepQuery = Assert.Single(queries, q => q.Limit == null);
+            Assert.Equal(album.Id, deepQuery.ParentId);
+            // The shared core initializes AlbumIds to the empty array on the ParentId
+            // arm (its constant field set); the semantic pinned is "does not FILTER
+            // by AlbumIds".
+            Assert.True(deepQuery.AlbumIds is null || deepQuery.AlbumIds.Length == 0,
+                $"the ParentId-arm deep query must not filter by AlbumIds, got [{string.Join(",", deepQuery.AlbumIds ?? Array.Empty<Guid>())}]");
+            Assert.NotNull(deepQuery.OrderBy);
+            Assert.Contains(deepQuery.OrderBy, o => o.Item1 == ItemSortBy.ParentIndexNumber);
+        }
+        finally
+        {
+            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
+        }
+    }
+
     // JF-796 companion pin: the continuation offset after a deep resume. A 40-track
     // album resumed at track 22 (index 21) re-slices the page at tracks 22 to 26, so
     // the continuation must fetch from index 26 (page start 21 + page count 5)

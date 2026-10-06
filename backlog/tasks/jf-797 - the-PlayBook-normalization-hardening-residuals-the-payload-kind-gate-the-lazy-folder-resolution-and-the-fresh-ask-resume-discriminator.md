@@ -78,3 +78,5 @@ bound or an IsPlayed/position-prefiltered variant (the server-side filter the al
 shape could carry), not just the any-Played flag check the book head needs. The lift of
 the algorithm itself is filed separately as JF-803; implement the discriminator once
 inside the lifted helper.
+
+JF-796 GATE-MARKER ADDENDUM (2026-10-07): item 3 gains the MASKING SHAPE - the deep-resolution gate keys on startIndex == 0, so a PLAYED PREFIX on page 1 (after-last-played at index > 0, ticks 0) suppresses the deep scan even when a deeper in-progress track exists beyond the page; resume lands at the shallow prefix position instead of the full-list answer. The JF-793 book twin's guard in AudiobookPlayResolver shares the shape, so the fix (deep-scan whenever the page yields ticks == 0 AND more pages remain, regardless of the prefix index) must land mirrored on both paths with pins on both. The JF-796 block comment documents only the unstarted-album trade; extend it when fixing.
