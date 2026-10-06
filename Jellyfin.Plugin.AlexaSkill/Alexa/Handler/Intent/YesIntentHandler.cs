@@ -315,31 +315,21 @@ public class YesIntentHandler : BaseHandler
         // (AlbumPlayService.BuildAlbumPlayResponseAsync) runs, so a confirm answers exactly
         // what the direct ask plays (split albums included) and the queue rows feed the
         // JF-625 concat timeline the same field set the endpoint encodes. The NON-MusicAlbum
-        // leg keeps the local MediaTypes=Audio initializer: PlayBook disambiguation reuses
-        // the MediaTypeAlbum label, so this path also receives non-album parents whose
-        // chapter children are BaseItemKind.AudioBook, and IncludeItemTypes=Audio would drop
-        // them (the endpoint's ternary keeps its AudioBook leg local for the same reason).
+        // leg routes through the ONE chapters builder's scoped unpaged sibling (JF-672
+        // code-review F1) and the chapters core's MediaTypes=Audio axis keeps the JF-361
+        // kind discipline (IncludeItemTypes=Audio, the ALBUM builder's axis, would drop
+        // AudioBook chapters). DEFENSIVE-ONLY today (JF-672 gate-marker correction): no
+        // live producer reaches this leg, because every `item is AudioBook` confirm
+        // routes to PlayBook() above, and PlayAlbum's own disambiguation matches are
+        // MusicAlbum-only; the sibling exists so a future non-album parent (or the
+        // JF-791 folder resolution) enumerates through the ONE core, never a private
+        // initializer with the refuted AlbumTrackOrder composite.
         bool isMusicAlbum = album is MediaBrowser.Controller.Entities.Audio.MusicAlbum;
         var tracksQuery = isMusicAlbum
             ? QueueContinuationFetcher.BuildScopedAlbumTracksQueryUnpaged(
                 jellyfinUser, user, _libraryManager, Logger, album.Id, byAlbumIds: false)
-            : new InternalItemsQuery()
-            {
-                User = jellyfinUser,
-                Recursive = true,
-                ParentId = album.Id,
-                MediaTypes = new[] { MediaType.Audio },
-                DtoOptions = new DtoOptions(true),
-                OrderBy = QueueContinuationFetcher.AlbumTrackOrder,
-            };
-        if (!isMusicAlbum)
-        {
-            // The local leg keeps the JF-361 kind discipline but not at the cost of the
-            // JF-666 scope every sibling leg runs under (the album leg gets it inside the
-            // scoped builder above). Row-neutral for the children of a parent the scoped
-            // surfaces just found; consistent for restricted-library accounts.
-            ApplyLibraryFilter(tracksQuery, user, _libraryManager);
-        }
+            : QueueContinuationFetcher.BuildScopedAudiobookChaptersQueryUnpaged(
+                jellyfinUser, user, _libraryManager, Logger, album.Id);
 
         IReadOnlyList<BaseItem> albumItems = _libraryManager.GetItemList(tracksQuery);
 
@@ -356,10 +346,12 @@ public class YesIntentHandler : BaseHandler
         }
 
         // JF-361: single-file audiobooks (AudioBook items that ARE the audio track, with no
-        // child chapters) arrive here via PlayBook disambiguation's MediaTypeAlbum label.
-        // PlayAlbum finds no children and would say "NoSongsInAlbum" — but the item itself is
-        // playable audio. Fall back to treating the item as its own single track, matching
-        // PlayBookIntentHandler's single-file logic.
+        // child chapters) would answer "NoSongsInAlbum" here, so fall back to treating the
+        // item as its own single track, matching PlayBookIntentHandler's single-file logic.
+        // DEFENSIVE-ONLY today (JF-672 gate-marker correction): an AudioBook confirm routes
+        // to PlayBook() above before PlayAlbum, so nothing reaches this fallback with a
+        // book; it guards a future producer (or the JF-791 folder resolution) that hands
+        // this path a single-file book.
         if (albumItems.Count == 0 && album is MediaBrowser.Controller.Entities.IHasMediaSources)
         {
             albumItems = new List<BaseItem> { album };

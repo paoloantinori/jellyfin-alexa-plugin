@@ -652,14 +652,19 @@ public class YesIntentHandlerTests : PluginTestBase
     }
 
     /// <summary>
-    /// The ternary's other leg (JF-767 Finding A): a NON-MusicAlbum parent confirmed
-    /// under the "album" label keeps the LOCAL MediaTypes=Audio initializer, the JF-361
-    /// kind discipline (AudioBook chapter children are BaseItemKind.AudioBook, which
-    /// the builder's IncludeItemTypes=Audio would drop). The fold must not collapse
-    /// this leg into the builder.
+    /// The ternary's other leg (JF-767 Finding A, superseded by JF-672 code-review
+    /// F1): a NON-MusicAlbum parent confirmed under the "album" label routes through
+    /// the ONE chapters builder's scoped unpaged sibling. The JF-361 kind discipline
+    /// is the chapters core's MediaTypes=Audio axis (AudioBook chapter children are
+    /// BaseItemKind.AudioBook, which the ALBUM builder's IncludeItemTypes=Audio
+    /// would drop). The pre-JF-672 local initializer carried AlbumTrackOrder (the
+    /// disc/track composite the chapters probe refuted), so the confirm leg answered
+    /// a differently-ordered book than the direct PlayBook ask: RED on that tree
+    /// (captured OrderBy was AlbumTrackOrder), and the pin now asserts the shared
+    /// chapter order.
     /// </summary>
     [Fact]
-    public async Task HandleAsync_AlbumType_NonMusicAlbumParent_KeepsLocalMediaTypesChapterLeg()
+    public async Task HandleAsync_AlbumType_NonMusicAlbumParent_RoutesThroughChaptersCore()
     {
         var folderId = Guid.NewGuid();
         var folder = new Folder { Name = "Chapter Folder", Id = folderId };
@@ -689,6 +694,8 @@ public class YesIntentHandlerTests : PluginTestBase
         Assert.Equal(new[] { Jellyfin.Data.Enums.MediaType.Audio }, captured!.MediaTypes);
         Assert.True(captured.IncludeItemTypes == null || captured.IncludeItemTypes.Length == 0,
             "the non-MusicAlbum leg must keep MediaTypes=Audio (JF-361: AudioBook chapters are BaseItemKind.AudioBook)");
+        // The shared chapter order, NOT AlbumTrackOrder (JF-672).
+        Assert.Equal(QueueContinuationFetcher.AudiobookChapterOrder, captured.OrderBy);
         response.HasDirective<AudioPlayerPlayDirective>();
     }
 

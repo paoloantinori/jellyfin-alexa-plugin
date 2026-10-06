@@ -3591,8 +3591,11 @@ public class VideoAudioController : ControllerBase
         // head/confirm/tail queue (an Audio-typed chapter set, the metadata-remap
         // shape, launches instead of 404ing; a mixed folder concats all audio
         // children instead of the AudioBook subset). Still NO AlbumTrackOrder
-        // here: the DB order IS the chapter order, and this path applies its own
-        // filename-number chapter sort below.
+        // here: the chapters leg carries the shared AudiobookChapterOrder
+        // (JF-672; the probe-refuted successor of the old "DB order IS the
+        // chapter order" claim, which held only for the tagged class), and this
+        // path additionally applies its own filename-number chapter sort below
+        // (the in-repo remedy for the untagged class, JF-790's precedent).
         var childrenQuery = isMusicAlbum
             ? Alexa.QueueContinuationFetcher.BuildAlbumTracksQueryUnpaged(jellyfinUser: null, parentGuid, byAlbumIds: false)
             : Alexa.QueueContinuationFetcher.BuildAudiobookChaptersQueryUnpaged(jellyfinUser: null, parentGuid);

@@ -1811,8 +1811,10 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
     // folder, MediaTypes=Audio (the JF-358 IncludeItemTypes discipline governs
     // ArtistIds queries, which MediaTypes silently ignores; the initial page returns
     // its chapters through MediaTypes + ParentId, and the pages must share one query
-    // shape so they concatenate in one order), and NO explicit order (the initial page
-    // sets none, so its DB order is the book's chapter order).
+    // shape so they concatenate in one order), and the JF-672 explicit chapter order
+    // (the tail pin of the shared AudiobookChapterOrder: the old no-order shape rode
+    // each server branch's empty-OrderBy default, SortName with no tiebreaker, read
+    // at v10.11.8/v12.2 source; the pinned probe evidence lives in the JF-672 task).
     [Fact]
     public void QueueContinuation_AudiobookFetch_QueriesBookParentBeyondInitialPage()
     {
@@ -1852,21 +1854,45 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
         Assert.True(captured.Recursive);
         Assert.NotNull(captured.MediaTypes);
         Assert.Contains(MediaType.Audio, captured.MediaTypes);
-        // The mirror contract: the initial book page carries NO kind filter and NO
-        // explicit order. Jellyfin initializes both fields to empty arrays, so the
-        // contract is "no filter", not the field's exact null/empty shape.
+        // The mirror contract: the initial book page carries NO kind filter (Jellyfin
+        // initializes the field to an empty array, so the contract is "no filter",
+        // not the field's exact null/empty shape) and the JF-672 explicit chapter
+        // order: constant equality, the album-arm pin form (the ONE literal honesty
+        // pin for the constant's value is the builder Fact below; consumer drift
+        // away from the shared order reds HERE).
         Assert.True(
             captured.IncludeItemTypes == null || captured.IncludeItemTypes.Length == 0,
             "audiobook query must mirror the initial page: no IncludeItemTypes filter");
-        Assert.True(
-            captured.OrderBy == null || captured.OrderBy.Count == 0,
-            "audiobook query must mirror the initial page: no explicit order");
+        Assert.Equal(QueueContinuationFetcher.AudiobookChapterOrder, captured.OrderBy);
         Assert.Equal(5, captured.StartIndex);
         Assert.Equal(10, captured.Limit);
 
         // The batch feeds the queue and the offset advances past it.
         Assert.Equal(2, batch.Count);
         Assert.Equal(7, continuation.StartIndex);
+    }
+
+    // JF-672: the ONE literal honesty pin for AudiobookChapterOrder's value (the
+    // structural twin of the AlbumTrackOrder literal pin above): a corrupted
+    // constant fails HERE, while the consumer pins (head, this file's tail, the
+    // unpaged endpoint) assert constant equality and red on drift away from the
+    // shared order. Both builder forms carry it so the paged queue and the unpaged
+    // endpoint flip together; the probe-backed choice and the refuted alternatives
+    // (the album-style composite, DateCreated) live on the constant's doc and in
+    // the JF-672 task record. RED on the pre-JF-672 tree (OrderBy empty on both
+    // forms).
+    [Fact]
+    public void QueueContinuation_AudiobookChapterOrder_PagedAndUnpagedFormsCarryTheOneExplicitOrder()
+    {
+        Guid bookId = Guid.NewGuid();
+        InternalItemsQuery paged = QueueContinuationFetcher.BuildAudiobookChaptersQuery(null, bookId, 0, 10);
+        InternalItemsQuery unpaged = QueueContinuationFetcher.BuildAudiobookChaptersQueryUnpaged(null, bookId);
+
+        // Literal (not the constant) pins the value; NOT the album-style
+        // (ParentIndexNumber, IndexNumber) pair.
+        var expected = new[] { (ItemSortBy.SortName, SortOrder.Ascending) };
+        Assert.Equal(expected, paged.OrderBy);
+        Assert.Equal(expected, unpaged.OrderBy);
     }
 
     // JF-666 parity extended to the Audiobook arm (JF-670): a restricted user's book

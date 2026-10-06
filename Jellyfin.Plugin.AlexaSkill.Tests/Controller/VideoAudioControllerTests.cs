@@ -10316,9 +10316,10 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// shape kept a LOCAL IncludeItemTypes=AudioBook initializer: a book parent
     /// with Audio-typed children (a metadata remap, or a fully Audio-typed
     /// folder) was queued by MediaTypes=Audio but enumerated 0-or-subset rows at
-    /// the endpoint (404 for a book the confirm just launched). Still NO
-    /// AlbumTrackOrder (the DB order IS the chapter order) and no explicit
-    /// IncludeItemTypes. The chapters query is captured field-for-field.
+    /// the endpoint (404 for a book the confirm just launched). NO AlbumTrackOrder
+    /// and no explicit IncludeItemTypes; the JF-672 explicit chapter order is the
+    /// shared AudiobookChapterOrder (asserted below). The chapters query is
+    /// captured field-for-field.
     /// </summary>
     [Fact]
     public async Task StreamHlsAudiobook_AudiobookParent_RoutesThroughTheChaptersBuilderUnpaged()
@@ -10366,11 +10367,15 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             chaptersQuery.IncludeItemTypes == null || chaptersQuery.IncludeItemTypes.Length == 0,
             "the chapters builder must not grow an IncludeItemTypes filter");
         Assert.True(chaptersQuery.Recursive);
-        // NO AlbumTrackOrder on the audiobook leg: the DB order IS the chapter
-        // order (an album-style disc/track sort here would reorder the book).
-        Assert.True(
-            chaptersQuery.OrderBy == null || chaptersQuery.OrderBy.Count == 0,
-            "audiobook chapters query must carry no explicit order");
+        // JF-672 supersedes the old no-order assert: the endpoint carries the SAME
+        // explicit chapter order the paged queue runs (constant equality, the exact
+        // form of the MusicAlbum arm's AlbumTrackOrder assert above), NOT
+        // AlbumTrackOrder itself (an album-style disc/track sort would reorder the
+        // book; the probe-backed rationale lives on the constant's doc and in the
+        // JF-672 task record).
+        Assert.Equal(
+            QueueContinuationFetcher.AudiobookChapterOrder,
+            chaptersQuery.OrderBy);
         Assert.NotNull(chaptersQuery.DtoOptions);
         // The unpaged invariants (the endpoint twin of the album-arm asserts):
         // no session user on the token-gated HTTP path, no paging (null is the
