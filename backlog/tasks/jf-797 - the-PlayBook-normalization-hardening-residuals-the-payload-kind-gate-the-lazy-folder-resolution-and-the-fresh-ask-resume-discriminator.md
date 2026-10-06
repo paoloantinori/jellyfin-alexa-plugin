@@ -65,3 +65,18 @@ none a live defect today:
 <!-- DOD:END -->
 
 JF-795 GATE-MARKER ADDENDA (2026-10-06, same-turn): (a) item 3's exposure DOUBLED - the deep-resume unpaged fetch on every first-ever multi-page ask now fires on BOTH the direct ask and the YesIntent confirm (the shared AudiobookPlayResolver.PlayBookAsync), making the cheap discriminator more valuable; (b) item 1's payload-kind breadth now has a wider observable effect - the JF-795 BooksEnabled confirm gate sits inside the same over-broad IsBookDisambiguationPayload, so with books disabled a MediaTypeAlbum-labeled confirm carrying an arbitrary non-album Folder answers the FeatureDisabled Tell instead of reaching the album leg (the gate is right for real books; the breadth is the root, unchanged).
+
+JF-796 ADDENDUM (2026-10-07, same-turn): item 3 now has a THIRD caller surface and a
+sharpened scope. The album head's deep-resume block (AlbumPlayService) adopted the same
+(0,0)-keyed guard, so the unpaged first-ever-ask fetch fires on multi-page ALBUMS too.
+Albums are not books on volume: compilations and box sets with hundreds of tracks are
+normal music-library shapes (books carry bounded chapter counts), the deep query
+materializes every row with full-field DtoOptions(true), and FindResumeTrackIndex then
+issues one GetUserData per track, all inside the Alexa ~8s window; only the query COUNT
+is bounded, not the row count. The discriminator design should therefore evaluate a row
+bound or an IsPlayed/position-prefiltered variant (the server-side filter the album
+shape could carry), not just the any-Played flag check the book head needs. The lift of
+the algorithm itself is filed separately as JF-803; implement the discriminator once
+inside the lifted helper.
+
+JF-796 GATE-MARKER ADDENDUM (2026-10-07): item 3 gains the MASKING SHAPE - the deep-resolution gate keys on startIndex == 0, so a PLAYED PREFIX on page 1 (after-last-played at index > 0, ticks 0) suppresses the deep scan even when a deeper in-progress track exists beyond the page; resume lands at the shallow prefix position instead of the full-list answer. The JF-793 book twin's guard in AudiobookPlayResolver shares the shape, so the fix (deep-scan whenever the page yields ticks == 0 AND more pages remain, regardless of the prefix index) must land mirrored on both paths with pins on both. The JF-796 block comment documents only the unstarted-album trade; extend it when fixing.
