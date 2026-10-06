@@ -695,6 +695,80 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
         }
     }
 
+    // JF-793 Finding 3 RED PROOF: the disambiguation must present BOOK-granular
+    // choices. A multi-chapter book's search candidates are N chapter leaves (the
+    // JF-791 shape), so the multi-match prompt presented chapter-granular entries
+    // ("... - Chapter 01" vs "... - Chapter 02" of the SAME book) whose confirm
+    // payload was a chapter leaf id: an illusory choice, since the climb then plays
+    // the whole book from chapter 1 whichever entry wins (and the "- Chapter N"
+    // name tails drag the fuzzy scores below the >= 90 auto-play bar the folder
+    // name clears exactly). The candidate set must be normalized through
+    // TryResolveBookFolder and deduped by folder id BEFORE the disambiguation
+    // consumers; single-file books pass through unchanged.
+    [Fact]
+    public async Task PlayBook_MultiMatchDisambiguation_PresentsBookGranularChoices()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(bookName: "zzzqqq");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+
+        Guid bookFolderId = Guid.NewGuid();
+        var chapter1 = new AudioBook
+        {
+            Name = "Measure What Matters - Chapter 01",
+            Id = Guid.NewGuid(),
+            ParentId = bookFolderId,
+            Path = "/audiobooks/measure-what-matters/ch01.mp3"
+        };
+        var chapter2 = new AudioBook
+        {
+            Name = "Measure What Matters - Chapter 02",
+            Id = Guid.NewGuid(),
+            ParentId = bookFolderId,
+            Path = "/audiobooks/measure-what-matters/ch02.mp3"
+        };
+        var singleFileBook = new AudioBook
+        {
+            Name = "The Manager's Path",
+            Id = Guid.NewGuid(),
+            Path = "/audiobooks/managers-path.m4b"
+        };
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
+            .Returns(new List<BaseItem> { chapter1, chapter2, singleFileBook });
+
+        _fx.LibraryManager.Setup(l => l.GetItemById(bookFolderId))
+            .Returns(new Folder { Name = "Measure What Matters", Id = bookFolderId, Path = "/audiobooks/measure-what-matters" });
+
+        // The ask path returns before the head chapters query.
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+            {
+                Items = Array.Empty<BaseItem>(),
+                TotalRecordCount = 0
+            });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // The disambiguation state carries ONE entry per BOOK, named for the book,
+        // with the FOLDER id as the confirm payload: no chapter-granular entries.
+        Assert.NotNull(response.SessionAttributes);
+        Assert.True(response.SessionAttributes.TryGetValue("disambig_matches", out object? matchesObj));
+        var matches = Newtonsoft.Json.JsonConvert.DeserializeObject<List<DisambiguationHelper.MatchInfo>>(
+            (string)matchesObj!);
+        Assert.NotNull(matches);
+        Assert.Equal(2, matches!.Count);
+        Assert.Equal("Measure What Matters", matches[0].Name);
+        Assert.Equal(bookFolderId.ToString(), matches[0].Id);
+        Assert.Equal("The Manager's Path", matches[1].Name);
+        Assert.DoesNotContain("Chapter", string.Join("|", matches.Select(m => m.Name)), StringComparison.Ordinal);
+    }
+
     // JF-673 RED PROOF: on NRE-class servers the chapters page arrives through the
     // SafeGetItemsResult fallback (GetItemList), which cannot know the library
     // total. The pre-fix fallback wrapped the PAGE SIZE as TotalRecordCount, so a

@@ -49,6 +49,36 @@ public class PlayBookIntentHandler : BaseHandler
         _queueManager = queueManager;
     }
 
+    /// <summary>
+    /// Map the audiobook search candidates onto BOOK granularity (JF-793 Finding 3):
+    /// each candidate through <see cref="AudiobookItems.TryResolveBookFolder"/>,
+    /// deduped by resolved id, preserving first-occurrence order. Chapter leaves
+    /// collapse onto their book folder, so the multi-match disambiguation presents
+    /// ONE entry per book (named for the book, whose confirm payload is the folder
+    /// id, and whose name clears the auto-play bar the "- Chapter N" tails dragged
+    /// below) instead of N chapter-granular choices. Single-file books, failed
+    /// climbs, and the shared-container rejection (the collapsed book under a
+    /// container) keep their own entry: they ARE distinct books. The
+    /// post-disambiguation climb in <see cref="HandleAsync"/> stays as the tolerant
+    /// safety net (on a Folder the helper harmlessly returns null).
+    /// </summary>
+    private IReadOnlyList<BaseItem> NormalizeBookCandidates(IReadOnlyList<BaseItem> candidates)
+    {
+        if (candidates.Count <= 1)
+        {
+            return candidates;
+        }
+
+        Dictionary<Guid, BaseItem> byBook = new();
+        foreach (BaseItem candidate in candidates)
+        {
+            BaseItem book = AudiobookItems.TryResolveBookFolder(candidate, _libraryManager) ?? candidate;
+            byBook.TryAdd(book.Id, book);
+        }
+
+        return byBook.Count == candidates.Count ? candidates : byBook.Values.ToList();
+    }
+
     /// <inheritdoc/>
     public override bool CanHandle(Request request)
     {
@@ -126,6 +156,16 @@ public class PlayBookIntentHandler : BaseHandler
                 return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundBook", locale, book));
             }
         }
+
+        // JF-793 Finding 3: normalize the candidate set onto BOOK granularity BEFORE
+        // the candidate-set consumers (the HandleFuzzyMiss scoring and the
+        // AskFirstMatch list below): a multi-chapter book's candidates are N chapter
+        // leaves, and presenting them chapter-granularly offered an illusory choice
+        // (whichever entry won, the climb played the whole book from chapter 1) while
+        // the "- Chapter N" name tails dragged the fuzzy scores below the >= 90
+        // auto-play bar the folder name clears exactly. Single-file books, failed
+        // climbs, and the shared-container rejection keep their own entry.
+        books = NormalizeBookCandidates(books);
 
         if (books.Count > 1)
         {
