@@ -639,52 +639,33 @@ public class YesIntentHandlerTests : PluginTestBase
 
         var user = TestHelpers.CreateTestUser(allowedLibraryIds: new[] { musicLib.ToString() });
 
-        var matchInfo = new DisambiguationHelper.MatchInfo { Id = albumId.ToString(), Name = "Split Album" };
-        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
+        var (response, _, _, _) = await ConfirmAlbumAsync(album, user);
 
-        var handler = CreateHandler();
-        var session = CreateSession();
-        var context = CreateContext();
-        try
-        {
-            var response = await handler.HandleAsync(
-                CreateYesIntentRequest(),
-                context,
-                user,
-                session,
-                attrs,
-                CancellationToken.None);
+        // The JF-338 retry issued: folder arm (empty) then the AlbumIds arm
+        // (populated); the 1-track page is the whole album, so no deep
+        // fetch follows.
+        Assert.Equal(2, captured.Count);
 
-            // The JF-338 retry issued: folder arm (empty) then the AlbumIds arm
-            // (populated); the 1-track page is the whole album, so no deep
-            // fetch follows.
-            Assert.Equal(2, captured.Count);
+        // Folder arm: the builder's field set (kind, order, page, scope).
+        var folderArm = captured[0];
+        Assert.True(folderArm.Recursive);
+        Assert.Equal(new[] { Jellyfin.Data.Enums.BaseItemKind.Audio }, folderArm.IncludeItemTypes);
+        Assert.Equal(QueueContinuationFetcher.AlbumTrackOrder, folderArm.OrderBy);
+        Assert.Equal(albumId, folderArm.ParentId);
+        Assert.Equal(0, folderArm.StartIndex);
+        Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), folderArm.Limit);
+        Assert.NotNull(folderArm.User);
+        Assert.Contains(musicLib, folderArm.TopParentIds);
 
-            // Folder arm: the builder's field set (kind, order, page, scope).
-            var folderArm = captured[0];
-            Assert.True(folderArm.Recursive);
-            Assert.Equal(new[] { Jellyfin.Data.Enums.BaseItemKind.Audio }, folderArm.IncludeItemTypes);
-            Assert.Equal(QueueContinuationFetcher.AlbumTrackOrder, folderArm.OrderBy);
-            Assert.Equal(albumId, folderArm.ParentId);
-            Assert.Equal(0, folderArm.StartIndex);
-            Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), folderArm.Limit);
-            Assert.NotNull(folderArm.User);
-            Assert.Contains(musicLib, folderArm.TopParentIds);
+        // AlbumIds arm (the retry): same scope and page, membership scoping field.
+        var membershipArm = captured[1];
+        Assert.Equal(new[] { albumId }, membershipArm.AlbumIds);
+        Assert.Equal(new[] { Jellyfin.Data.Enums.BaseItemKind.Audio }, membershipArm.IncludeItemTypes);
+        Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), membershipArm.Limit);
+        Assert.Contains(musicLib, membershipArm.TopParentIds);
 
-            // AlbumIds arm (the retry): same scope and page, membership scoping field.
-            var membershipArm = captured[1];
-            Assert.Equal(new[] { albumId }, membershipArm.AlbumIds);
-            Assert.Equal(new[] { Jellyfin.Data.Enums.BaseItemKind.Audio }, membershipArm.IncludeItemTypes);
-            Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), membershipArm.Limit);
-            Assert.Contains(musicLib, membershipArm.TopParentIds);
-
-            // The split album PLAYS on confirm (the direct ask already did, JF-338).
-            response.HasDirective<AudioPlayerPlayDirective>();
-        }
-        finally
-        {
-            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
-        }
+        // The split album PLAYS on confirm (the direct ask already did, JF-338).
+        response.HasDirective<AudioPlayerPlayDirective>();
     }
 
     /// <summary>
@@ -1230,6 +1211,46 @@ public class YesIntentHandlerTests : PluginTestBase
     }
 
     /// <summary>
+    /// The shared confirm driver for the JF-805 MusicAlbum pins: builds the
+    /// album disambiguation attrs (the payload names the ALBUM, PlayAlbum's
+    /// matches are MusicAlbums), runs the yes confirm, snapshots the
+    /// continuation the routed composition minted, and clears the store (the
+    /// [Collection("Plugin")] isolation the JF-795 book twins keep by hand;
+    /// callers assert on the snapshot because the store is already empty by
+    /// the time they run).
+    /// </summary>
+    private async Task<(SkillResponse Response, SessionInfo Session, Context Context, QueueContinuation? Continuation)> ConfirmAlbumAsync(
+        MusicAlbum album,
+        Entities.User? user = null,
+        Context? context = null)
+    {
+        var attrs = CreateDisambiguationAttrs(
+            new List<DisambiguationHelper.MatchInfo> { new() { Id = album.Id.ToString(), Name = album.Name } },
+            0,
+            "album");
+
+        var handler = CreateHandler();
+        var session = CreateSession();
+        var effectiveContext = context ?? CreateContext();
+        try
+        {
+            SkillResponse response = await handler.HandleAsync(
+                CreateYesIntentRequest(),
+                effectiveContext,
+                user ?? TestHelpers.CreateTestUser(),
+                session,
+                attrs,
+                CancellationToken.None);
+            QueueContinuation? continuation = QueueContinuationStore.Get(session.UserId, effectiveContext.System.Device.DeviceID!);
+            return (response, session, effectiveContext, continuation);
+        }
+        finally
+        {
+            QueueContinuationStore.Remove(session.UserId, effectiveContext.System.Device.DeviceID!);
+        }
+    }
+
+    /// <summary>
     /// JF-805 RED PROOF (resume axis, the album twin of the JF-795 book pin):
     /// a confirmed album with deep progress (track 22 of 26, beyond the initial
     /// page) must resume at the position-holding track exactly like the direct
@@ -1245,42 +1266,21 @@ public class YesIntentHandlerTests : PluginTestBase
     {
         (MusicAlbum album, List<BaseItem> tracks) = SetupConfirmedAlbum(26, progressTrackIndex: 21);
 
-        // The disambiguation payload names the ALBUM (PlayAlbum's matches are
-        // MusicAlbums), not a track.
-        var matchInfo = new DisambiguationHelper.MatchInfo { Id = album.Id.ToString(), Name = "Kind of Blue" };
-        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
+        var (response, session, _, continuation) = await ConfirmAlbumAsync(album);
 
-        var handler = CreateHandler();
-        var session = CreateSession();
-        var context = CreateContext();
-        try
-        {
-            var response = await handler.HandleAsync(
-                CreateYesIntentRequest(),
-                context,
-                TestHelpers.CreateTestUser(),
-                session,
-                attrs,
-                CancellationToken.None);
+        // THE AXIS: the position-holding track launches, not track 1.
+        var audioDirective = Assert.IsType<AudioPlayerPlayDirective>(
+            Assert.Single(response.Response.Directives!));
+        Assert.Equal(tracks[21].Id.ToString(), audioDirective.AudioItem.Stream.Token);
+        Assert.Equal(0, audioDirective.AudioItem.Stream.OffsetInMilliseconds);
 
-            // THE AXIS: the position-holding track launches, not track 1.
-            var audioDirective = Assert.IsType<AudioPlayerPlayDirective>(
-                Assert.Single(response.Response.Directives!));
-            Assert.Equal(tracks[21].Id.ToString(), audioDirective.AudioItem.Stream.Token);
-            Assert.Equal(0, audioDirective.AudioItem.Stream.OffsetInMilliseconds);
-
-            // The queue re-slices at the position-holding track (tracks 22 to 26);
-            // nothing remains beyond it, so no continuation is minted.
-            Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), session.NowPlayingQueue.Count);
-            Assert.Equal(tracks[21].Id, session.FullNowPlayingItem!.Id);
-            Assert.Equal(tracks[21].Id, session.NowPlayingQueue[0].Id);
-            Assert.Equal(tracks[25].Id, session.NowPlayingQueue[4].Id);
-            Assert.Null(QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID!));
-        }
-        finally
-        {
-            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
-        }
+        // The queue re-slices at the position-holding track (tracks 22 to 26);
+        // nothing remains beyond it, so no continuation is minted.
+        Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), session.NowPlayingQueue.Count);
+        Assert.Equal(tracks[21].Id, session.FullNowPlayingItem!.Id);
+        Assert.Equal(tracks[21].Id, session.NowPlayingQueue[0].Id);
+        Assert.Equal(tracks[25].Id, session.NowPlayingQueue[4].Id);
+        Assert.Null(continuation);
     }
 
     /// <summary>
@@ -1298,40 +1298,20 @@ public class YesIntentHandlerTests : PluginTestBase
     {
         (MusicAlbum album, List<BaseItem> tracks) = SetupConfirmedAlbum(40);
 
-        var matchInfo = new DisambiguationHelper.MatchInfo { Id = album.Id.ToString(), Name = "Kind of Blue" };
-        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
+        var (response, session, _, continuation) = await ConfirmAlbumAsync(album);
 
-        var handler = CreateHandler();
-        var session = CreateSession();
-        var context = CreateContext();
-        try
-        {
-            var response = await handler.HandleAsync(
-                CreateYesIntentRequest(),
-                context,
-                TestHelpers.CreateTestUser(),
-                session,
-                attrs,
-                CancellationToken.None);
+        // The play itself launches track 1 fresh (no progress on the album).
+        var audioDirective = Assert.IsType<AudioPlayerPlayDirective>(
+            Assert.Single(response.Response.Directives!));
+        Assert.Equal(tracks[0].Id.ToString(), audioDirective.AudioItem.Stream.Token);
+        Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), session.NowPlayingQueue.Count);
 
-            // The play itself launches track 1 fresh (no progress on the album).
-            var audioDirective = Assert.IsType<AudioPlayerPlayDirective>(
-                Assert.Single(response.Response.Directives!));
-            Assert.Equal(tracks[0].Id.ToString(), audioDirective.AudioItem.Stream.Token);
-            Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), session.NowPlayingQueue.Count);
-
-            // THE AXIS: the continuation is minted (pre-fix: null).
-            QueueContinuation? continuation = QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID!);
-            Assert.NotNull(continuation);
-            Assert.Equal("Album", continuation!.SourceType);
-            Assert.Equal(album.Id, continuation.ParentId);
-            Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), continuation.StartIndex);
-            Assert.Equal(40, continuation.TotalCount);
-        }
-        finally
-        {
-            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
-        }
+        // THE AXIS: the continuation is minted (pre-fix: null).
+        Assert.NotNull(continuation);
+        Assert.Equal("Album", continuation!.SourceType);
+        Assert.Equal(album.Id, continuation.ParentId);
+        Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), continuation.StartIndex);
+        Assert.Equal(40, continuation.TotalCount);
     }
 
     /// <summary>
@@ -1346,31 +1326,11 @@ public class YesIntentHandlerTests : PluginTestBase
     {
         (MusicAlbum album, List<BaseItem> _) = SetupConfirmedAlbum(40, progressTrackIndex: 21);
 
-        var matchInfo = new DisambiguationHelper.MatchInfo { Id = album.Id.ToString(), Name = "Kind of Blue" };
-        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
+        var (_, _, _, continuation) = await ConfirmAlbumAsync(album);
 
-        var handler = CreateHandler();
-        var session = CreateSession();
-        var context = CreateContext();
-        try
-        {
-            await handler.HandleAsync(
-                CreateYesIntentRequest(),
-                context,
-                TestHelpers.CreateTestUser(),
-                session,
-                attrs,
-                CancellationToken.None);
-
-            QueueContinuation? continuation = QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID!);
-            Assert.NotNull(continuation);
-            Assert.Equal(26, continuation!.StartIndex);
-            Assert.Equal(40, continuation.TotalCount);
-        }
-        finally
-        {
-            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
-        }
+        Assert.NotNull(continuation);
+        Assert.Equal(26, continuation!.StartIndex);
+        Assert.Equal(40, continuation.TotalCount);
     }
 
     /// <summary>
@@ -1383,33 +1343,14 @@ public class YesIntentHandlerTests : PluginTestBase
     {
         (MusicAlbum album, List<BaseItem> tracks) = SetupConfirmedAlbum(3);
 
-        var matchInfo = new DisambiguationHelper.MatchInfo { Id = album.Id.ToString(), Name = "Kind of Blue" };
-        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
+        var (response, session, _, continuation) = await ConfirmAlbumAsync(album);
 
-        var handler = CreateHandler();
-        var session = CreateSession();
-        var context = CreateContext();
-        try
-        {
-            var response = await handler.HandleAsync(
-                CreateYesIntentRequest(),
-                context,
-                TestHelpers.CreateTestUser(),
-                session,
-                attrs,
-                CancellationToken.None);
-
-            var audioDirective = Assert.IsType<AudioPlayerPlayDirective>(
-                Assert.Single(response.Response.Directives!));
-            Assert.Equal(tracks[0].Id.ToString(), audioDirective.AudioItem.Stream.Token);
-            Assert.Equal(3, session.NowPlayingQueue.Count);
-            Assert.Equal(tracks[2].Id, session.NowPlayingQueue[2].Id);
-            Assert.Null(QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID!));
-        }
-        finally
-        {
-            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
-        }
+        var audioDirective = Assert.IsType<AudioPlayerPlayDirective>(
+            Assert.Single(response.Response.Directives!));
+        Assert.Equal(tracks[0].Id.ToString(), audioDirective.AudioItem.Stream.Token);
+        Assert.Equal(3, session.NowPlayingQueue.Count);
+        Assert.Equal(tracks[2].Id, session.NowPlayingQueue[2].Id);
+        Assert.Null(continuation);
     }
 
     /// <summary>
@@ -1424,17 +1365,7 @@ public class YesIntentHandlerTests : PluginTestBase
     {
         (MusicAlbum album, List<BaseItem> _) = SetupConfirmedAlbum(3);
 
-        var matchInfo = new DisambiguationHelper.MatchInfo { Id = album.Id.ToString(), Name = "Kind of Blue" };
-        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
-
-        var handler = CreateHandler();
-        var response = await handler.HandleAsync(
-            CreateYesIntentRequest(),
-            CreateContext(),
-            TestHelpers.CreateTestUser(),
-            CreateSession(),
-            attrs,
-            CancellationToken.None);
+        var (response, _, _, _) = await ConfirmAlbumAsync(album);
 
         Assert.NotNull(Assert.IsType<AudioPlayerPlayDirective>(Assert.Single(response.Response.Directives!)));
         Assert.Null(response.Response.OutputSpeech);
@@ -1452,22 +1383,10 @@ public class YesIntentHandlerTests : PluginTestBase
     {
         (MusicAlbum album, List<BaseItem> _) = SetupConfirmedAlbum(3);
 
-        var matchInfo = new DisambiguationHelper.MatchInfo { Id = album.Id.ToString(), Name = "Kind of Blue" };
-        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
-
-        _config.MusicEnabled = false;
         Plugin.Instance!.Configuration.MusicEnabled = false;
         try
         {
-            var handler = CreateHandler();
-            var session = CreateSession();
-            var response = await handler.HandleAsync(
-                CreateYesIntentRequest(),
-                CreateContext(),
-                TestHelpers.CreateTestUser(),
-                session,
-                attrs,
-                CancellationToken.None);
+            var (response, session, _, _) = await ConfirmAlbumAsync(album);
 
             Assert.True(response.Response.Directives == null || response.Response.Directives.Count == 0,
                 "the disabled Tell must carry no directives");
@@ -1479,7 +1398,6 @@ public class YesIntentHandlerTests : PluginTestBase
         }
         finally
         {
-            _config.MusicEnabled = true;
             Plugin.Instance!.Configuration.MusicEnabled = true;
         }
     }
@@ -1498,47 +1416,22 @@ public class YesIntentHandlerTests : PluginTestBase
     {
         (MusicAlbum album, List<BaseItem> tracks) = SetupConfirmedAlbum(26, progressTrackIndex: 21);
 
-        var tracker = TestHelpers.CreatePositionTracker("yes-album-confirm-tracker");
-        for (int seg = 1; seg <= 31; seg++)
-        {
-            tracker.RecordSegment(album.Id.ToString(), seg);
-        }
-
         var user = TestHelpers.CreateTestUser();
         user.VideoAppForAudio = true;
 
-        var matchInfo = new DisambiguationHelper.MatchInfo { Id = album.Id.ToString(), Name = "Kind of Blue" };
-        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
+        using var trackerSwap = TestHelpers.WarmTrackerFiveMinutesIn(album.Id, "yes-album-confirm-tracker");
+        var (response, session, _, _) = await ConfirmAlbumAsync(album, user, TestHelpers.CreateContextWithVideoApp());
 
-        var handler = CreateHandler();
-        var session = CreateSession();
-        var context = TestHelpers.CreateContextWithVideoApp();
-        try
-        {
-            using var trackerSwap = TestHelpers.SwapPluginPositionTracker(tracker);
-            var response = await handler.HandleAsync(
-                CreateYesIntentRequest(),
-                context,
-                user,
-                session,
-                attrs,
-                CancellationToken.None);
+        var launch = Assert.IsType<VideoAppDirective.VideoAppLaunchDirective>(
+            Assert.Single(response.Response.Directives.OfType<VideoAppDirective.VideoAppLaunchDirective>()));
+        // The tracker's mapping: track 1 runtime (4 min) + the 60s in-track partial.
+        Assert.Contains($"start={TimeSpan.FromMinutes(4).Ticks + TimeSpan.FromSeconds(60).Ticks}", launch.VideoItem.Source, StringComparison.Ordinal);
+        Assert.Equal(tracks[1].Name, launch.VideoItem.Metadata?.Title);
 
-            var launch = Assert.IsType<VideoAppDirective.VideoAppLaunchDirective>(
-                Assert.Single(response.Response.Directives.OfType<VideoAppDirective.VideoAppLaunchDirective>()));
-            // The tracker's mapping: track 1 runtime (4 min) + the 60s in-track partial.
-            Assert.Contains($"start={TimeSpan.FromMinutes(4).Ticks + TimeSpan.FromSeconds(60).Ticks}", launch.VideoItem.Source, StringComparison.Ordinal);
-            Assert.Equal(tracks[1].Name, launch.VideoItem.Metadata?.Title);
-
-            // No re-slice at the deep UserData track: the queue keeps the page
-            // window starting at the tracker's track (index 1).
-            Assert.Equal(tracks[1].Id, session.FullNowPlayingItem!.Id);
-            Assert.Equal(tracks[1].Id, session.NowPlayingQueue[0].Id);
-        }
-        finally
-        {
-            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
-        }
+        // No re-slice at the deep UserData track: the queue keeps the page
+        // window starting at the tracker's track (index 1).
+        Assert.Equal(tracks[1].Id, session.FullNowPlayingItem!.Id);
+        Assert.Equal(tracks[1].Id, session.NowPlayingQueue[0].Id);
     }
 
     [Fact]

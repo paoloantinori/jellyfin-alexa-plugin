@@ -376,17 +376,20 @@ public class YesIntentHandler : BaseHandler
     {
         // JF-805: the MusicAlbum confirm routes through the ONE album play flow
         // (AlbumPlayService.BuildAlbumPlayResponseAsync) ABOVE, so this method now
-        // serves the DEFENSIVE non-MusicAlbum payloads only (the JF-767 Finding A
-        // MusicAlbum enumeration and the JF-672 chapters sibling both survive
-        // verbatim below): no live producer reaches it, because book payloads
-        // (AudioBook items and non-MusicAlbum FOLDERS, IsBookDisambiguationPayload)
-        // route to PlayBookAsync, MusicAlbums route to the shared composition, and
-        // PlayAlbum's own disambiguation matches are MusicAlbum-only. The legs
-        // exist so a future leaf-shaped producer enumerates through the ONE
-        // cores (the album builder's JF-338 retry triple; the chapters core's
-        // MediaTypes=Audio axis, which keeps the JF-361 kind discipline
-        // IncludeItemTypes=Audio would drop), never a private initializer with
-        // the refuted AlbumTrackOrder composite.
+        // serves the DEFENSIVE payloads only, and no live producer reaches it:
+        // book payloads (AudioBook items and non-MusicAlbum FOLDERS,
+        // IsBookDisambiguationPayload) route to PlayBookAsync, MusicAlbums route
+        // to the shared composition, and PlayAlbum's own disambiguation matches
+        // are MusicAlbum-only. What remains below is kept verbatim as the
+        // belt-and-braces enumeration for a FUTURE DIRECT CALLER (a new call
+        // site handing this method a MusicAlbum, or the routing intercept
+        // above being removed; the JF-361/JF-672 defensive-leg convention):
+        // the JF-767 Finding A MusicAlbum enumeration through the album
+        // builder's JF-338 retry triple, the chapters sibling with its
+        // MediaTypes=Audio axis (the JF-361 kind discipline
+        // IncludeItemTypes=Audio would drop), and the single-file fallback;
+        // never a private initializer with the refuted AlbumTrackOrder
+        // composite.
         bool isMusicAlbum = album is MediaBrowser.Controller.Entities.Audio.MusicAlbum;
         var tracksQuery = isMusicAlbum
             ? QueueContinuationFetcher.BuildScopedAlbumTracksQueryUnpaged(
