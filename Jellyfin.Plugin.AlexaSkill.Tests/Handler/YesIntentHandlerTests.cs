@@ -19,6 +19,7 @@ using MediaBrowser.Controller.Entities.Movies;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
+using MediaBrowser.Model.Querying;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Newtonsoft.Json;
@@ -32,6 +33,7 @@ public class YesIntentHandlerTests : PluginTestBase
     private readonly Mock<ISessionManager> _sessionManagerMock;
     private readonly Mock<ILibraryManager> _libraryManagerMock;
     private readonly Mock<IUserManager> _userManagerMock;
+    private readonly Mock<IUserDataManager> _userDataManagerMock;
     private readonly PluginConfiguration _config;
     private readonly ILoggerFactory _loggerFactory;
 
@@ -40,6 +42,7 @@ public class YesIntentHandlerTests : PluginTestBase
         _sessionManagerMock = new Mock<ISessionManager>();
         _libraryManagerMock = new Mock<ILibraryManager>();
         _userManagerMock = new Mock<IUserManager>();
+        _userDataManagerMock = new Mock<IUserDataManager>();
         _userManagerMock
             .Setup(um => um.GetUserById(It.IsAny<Guid>()))
             .Returns(TestHelpers.CreateJellyfinUser());
@@ -941,6 +944,183 @@ public class YesIntentHandlerTests : PluginTestBase
         Assert.Equal(chapters[0].Id.ToString(), audioDirective.AudioItem.Stream.Token);
         Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), session.NowPlayingQueue.Count);
         Assert.Equal(chapters[0].Id, session.FullNowPlayingItem!.Id);
+    }
+
+    // ========== JF-795: the confirm-must-match-ask axes (continuation + resume) ==========
+
+    /// <summary>
+    /// JF-795 RED PROOF (continuation axis): a confirmed multi-chapter book must
+    /// mint the progressive QueueContinuation exactly like the direct ask. The
+    /// pre-fix confirm leg queued ONLY the initial page (5) and never touched
+    /// QueueContinuationStore, so a "yes" on a 26-chapter book truncated the book
+    /// at 5 chapters while the direct ask played the whole book through the tail
+    /// fetcher (the confirm-must-match-ask rule on the queue-completeness axis).
+    /// Pin: continuation minted with SourceType Audiobook, ParentId the book
+    /// folder, StartIndex 5 (page start 0 + page count 5), TotalCount 26.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DisambiguationAlbumType_BookFolderConfirm_MintsQueueContinuation()
+    {
+        var bookFolderId = Guid.NewGuid();
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemById(bookFolderId))
+            .Returns(new Folder { Name = "Measure What Matters", Id = bookFolderId, Path = "/audiobooks/measure-what-matters" });
+
+        List<BaseItem> chapters = Enumerable.Range(1, 26)
+            .Select(i => (BaseItem)new Audio
+            {
+                Name = $"Measure What Matters - Chapter {i:00}",
+                Id = Guid.NewGuid(),
+                ParentId = bookFolderId
+            })
+            .ToList();
+
+        // Paging-honoring answers on BOTH executors: the pre-fix confirm leg reads
+        // GetItemList, the head-shaped page path reads GetItemsResult.
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q => chapters
+                .Skip(q.StartIndex ?? 0)
+                .Take(q.Limit ?? chapters.Count)
+                .ToList());
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q => new QueryResult<BaseItem>
+            {
+                Items = chapters
+                    .Skip(q.StartIndex ?? 0)
+                    .Take(q.Limit ?? chapters.Count)
+                    .ToList(),
+                TotalRecordCount = chapters.Count
+            });
+
+        var matchInfo = new DisambiguationHelper.MatchInfo { Id = bookFolderId.ToString(), Name = "Measure What Matters" };
+        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
+
+        var handler = CreateHandler();
+        var session = CreateSession();
+        var context = CreateContext();
+        try
+        {
+            var response = await handler.HandleAsync(
+                CreateYesIntentRequest(),
+                context,
+                TestHelpers.CreateTestUser(),
+                session,
+                attrs,
+                CancellationToken.None);
+
+            // The play itself launches chapter 1 fresh (no progress on the book).
+            var audioDirective = Assert.IsType<AudioPlayerPlayDirective>(
+                Assert.Single(response.Response.Directives!));
+            Assert.Equal(chapters[0].Id.ToString(), audioDirective.AudioItem.Stream.Token);
+            Assert.Equal(0, audioDirective.AudioItem.Stream.OffsetInMilliseconds);
+            Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), session.NowPlayingQueue.Count);
+
+            // THE AXIS: the continuation is minted (pre-fix: null, the book
+            // truncated at the initial page).
+            QueueContinuation? continuation = QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID!);
+            Assert.NotNull(continuation);
+            Assert.Equal("Audiobook", continuation!.SourceType);
+            Assert.Equal(bookFolderId, continuation.ParentId);
+            Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), continuation.StartIndex);
+            Assert.Equal(26, continuation.TotalCount);
+        }
+        finally
+        {
+            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
+        }
+    }
+
+    /// <summary>
+    /// JF-795 RED PROOF (resume axis): a confirmed book with deep progress
+    /// (chapter 22 of 26, beyond the initial page) must resume at the
+    /// position-holding chapter exactly like the direct ask (the JF-793
+    /// finding-4 shape). The pre-fix confirm leg never ran FindResumeTrackIndex
+    /// at all, so the confirm answered a deep-progress book by restarting at
+    /// chapter 1 at 0:00 (the confirm-must-match-ask rule on the resume axis).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DisambiguationAlbumType_BookConfirm_DeepProgress_ResumesAtPositionHoldingChapter()
+    {
+        var bookFolderId = Guid.NewGuid();
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemById(bookFolderId))
+            .Returns(new Folder { Name = "Measure What Matters", Id = bookFolderId, Path = "/audiobooks/measure-what-matters" });
+
+        List<BaseItem> chapters = Enumerable.Range(1, 26)
+            .Select(i => (BaseItem)new Audio
+            {
+                Name = $"Measure What Matters - Chapter {i:00}",
+                Id = Guid.NewGuid(),
+                ParentId = bookFolderId
+            })
+            .ToList();
+
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q => chapters
+                .Skip(q.StartIndex ?? 0)
+                .Take(q.Limit ?? chapters.Count)
+                .ToList());
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q => new QueryResult<BaseItem>
+            {
+                Items = chapters
+                    .Skip(q.StartIndex ?? 0)
+                    .Take(q.Limit ?? chapters.Count)
+                    .ToList(),
+                TotalRecordCount = chapters.Count
+            });
+
+        // Deep progress: chapter 22 (index 21) in progress at 10 minutes.
+        var inProgress = new UserItemData
+        {
+            Key = "test",
+            Played = false,
+            PlaybackPositionTicks = TimeSpan.FromMinutes(10).Ticks
+        };
+        _userDataManagerMock
+            .Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
+            .Returns((Jellyfin.Database.Implementations.Entities.User _, BaseItem item) =>
+                item.Id == chapters[21].Id ? inProgress : null);
+
+        var matchInfo = new DisambiguationHelper.MatchInfo { Id = bookFolderId.ToString(), Name = "Measure What Matters" };
+        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
+
+        var handler = CreateHandler();
+        var session = CreateSession();
+        var context = CreateContext();
+        try
+        {
+            var response = await handler.HandleAsync(
+                CreateYesIntentRequest(),
+                context,
+                TestHelpers.CreateTestUser(),
+                session,
+                attrs,
+                CancellationToken.None);
+
+            // THE AXIS: the position-holding chapter launches at its position,
+            // not chapter 1 at 0:00.
+            var audioDirective = Assert.IsType<AudioPlayerPlayDirective>(
+                Assert.Single(response.Response.Directives!));
+            Assert.Equal(chapters[21].Id.ToString(), audioDirective.AudioItem.Stream.Token);
+            Assert.Equal((int)TimeSpan.FromMinutes(10).TotalMilliseconds, audioDirective.AudioItem.Stream.OffsetInMilliseconds);
+
+            // The queue re-slices at the position-holding chapter (chapters 22-26);
+            // nothing remains beyond it, so no continuation is minted.
+            Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), session.NowPlayingQueue.Count);
+            Assert.Equal(chapters[21].Id, session.FullNowPlayingItem!.Id);
+            Assert.Equal(chapters[21].Id, session.NowPlayingQueue[0].Id);
+            Assert.Equal(chapters[25].Id, session.NowPlayingQueue[4].Id);
+            Assert.Null(QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID!));
+        }
+        finally
+        {
+            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
+        }
     }
 
     [Fact]
