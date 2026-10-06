@@ -162,10 +162,20 @@ public class YesIntentHandler : BaseHandler
         // inside it are async), the sync play paths keep the Task.FromResult shape.
         if (mediaType == DisambiguationHelper.MediaTypeAlbum && AudiobookItems.IsBookDisambiguationPayload(item))
         {
+            // JF-611 podcast-leg shape (adopted by the JF-795 /simplify round): the
+            // feature flag gates here too, so a book prompt opened before an admin
+            // disabled books cannot launch through the confirm (the confirm-must-
+            // match-ask rule extends to the disabled answer the direct ask gives).
+            SkillResponse? booksDisabled = IfFeatureDisabled(c => c.BooksEnabled, request);
+            if (booksDisabled != null)
+            {
+                return Task.FromResult(booksDisabled);
+            }
+
             Logger.LogDebug("Yes: routing AudioBook item {ItemId} to audiobook playback", itemId);
             return AudiobookPlayResolver.PlayBookAsync(
                 _libraryManager, Launch, Logger, "Yes",
-                item, item.Name, jellyfinUser!, user, session, context, request, locale,
+                item, spokenBookName: null, jellyfinUser!, user, session, context, request, locale,
                 _userDataManager, _queueManager, cancellationToken);
         }
 

@@ -11,7 +11,6 @@ using Alexa.NET.Response.Directive;
 using Jellyfin.Data.Enums;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Locale;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
-using Jellyfin.Plugin.AlexaSkill.Configuration;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
@@ -61,7 +60,7 @@ public static class AudiobookPlayResolver
     /// <param name="logger">The caller's logger (page/resume triage lines).</param>
     /// <param name="logLabel">The caller-scoped log prefix ("PlayBook" for the direct ask, "Yes" for the confirm).</param>
     /// <param name="book">The matched or confirmed book item: a book folder, a chapter leaf (climbed here), or a single-file AudioBook.</param>
-    /// <param name="spokenBookName">The name to speak in the no-content Tell: the raw spoken slot on the direct ask, the item's name on the confirm.</param>
+    /// <param name="spokenBookName">The name to speak in the no-content Tell: the raw spoken slot on the direct ask. Null (the confirm's shape) speaks the resolved book's own name AFTER the climb, the pre-JF-795 confirm leg's speech.</param>
     /// <param name="jellyfinUser">The Jellyfin user for the queries and the resume data.</param>
     /// <param name="user">The plugin user (stream URL token, announce toggles).</param>
     /// <param name="session">The Jellyfin session receiving the queue (device id, now-playing writes).</param>
@@ -78,7 +77,7 @@ public static class AudiobookPlayResolver
         ILogger logger,
         string logLabel,
         BaseItem book,
-        string spokenBookName,
+        string? spokenBookName,
         JellyfinUser jellyfinUser,
         Entities.User user,
         SessionInfo session,
@@ -138,7 +137,7 @@ public static class AudiobookPlayResolver
             }
             else
             {
-                return ResponseBuilder.Tell(ResponseStrings.Get("NoContentInBook", locale, spokenBookName));
+                return ResponseBuilder.Tell(ResponseStrings.Get("NoContentInBook", locale, spokenBookName ?? book.Name));
             }
         }
         else
