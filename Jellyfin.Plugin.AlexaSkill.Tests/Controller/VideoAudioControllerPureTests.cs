@@ -9,9 +9,7 @@ using Jellyfin.Plugin.AlexaSkill.Alexa;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Controller;
 using MediaBrowser.Controller.Library;
-using MediaBrowser.Controller.MediaEncoding;
 using MediaBrowser.Model.Entities;
-using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit;
 
@@ -1394,6 +1392,15 @@ public class VideoAudioControllerPureTests : VideoAudioControllerTestHarness
         using var process = Process.Start(new ProcessStartInfo("/bin/sh", "-c \"exit 3\""))!;
         process.WaitForExit();
         Assert.Equal(3, VideoAudioController.SafeExitCode(process));
+    }
+
+    [Fact]
+    public void SafeExitCode_DisposedAfterExit_Throws()
+    {
+        var process = Process.Start(new ProcessStartInfo("/bin/sh", "-c \"exit 3\""))!;
+        process.WaitForExit();
+        process.Dispose();
+        Assert.Throws<InvalidOperationException>(() => VideoAudioController.SafeExitCode(process));
     }
 
     [Fact]

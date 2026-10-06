@@ -27,14 +27,26 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests;
 /// Inherit from this class in every test class that references Plugin.Instance,
 /// QueueContinuationStore, RadioModeState, or other static singletons, whether directly
 /// or indirectly through BaseHandler methods (FilterByContentAccess, IfFeatureDisabled,
-/// ApplyLibraryFilter).
+/// ApplyLibraryFilter). Since JF-792 (assembly parallelism ON) inheriting this class
+/// ALSO requires carrying <c>[Collection("Plugin")]</c>: the per-test resets write the
+/// shared statics, so an inheriting class outside the collection would race the
+/// parallel phase.
 ///
-/// This ensures each test class starts from a clean known-good state even though
-/// tests run sequentially (not in parallel).
+/// This ensures each test class starts from a clean known-good state.
 /// </summary>
 public abstract class PluginTestBase
 {
     protected PluginTestBase()
+    {
+        ResetSharedStatics();
+    }
+
+    /// <summary>
+    /// The ONE reset sequence (JF-792 hoist: the second owner, VideoAudioControllerTests,
+    /// takes the harness base instead of this class and must not carry a verbatim copy).
+    /// Any future static that joins the per-test cleanup lands HERE only.
+    /// </summary>
+    internal static void ResetSharedStatics()
     {
         Plugin.ResetInstance();
         QueueContinuationStore.Clear();
@@ -50,8 +62,9 @@ public abstract class PluginTestBase
 
 /// <summary>
 /// Test collection for all tests that create or depend on shared static state.
-/// DisableParallelization ensures classes in this collection run sequentially,
-/// complementing the assembly-level DisableTestParallelization.
+/// DisableParallelization (see the execution model at the top of this file) makes
+/// this collection run exclusively AFTER every parallel collection, one class at
+/// a time.
 ///
 /// ALL test classes that reference Plugin.Instance, QueueContinuationStore,
 /// RadioModeState, or other static singletons MUST be in this collection.

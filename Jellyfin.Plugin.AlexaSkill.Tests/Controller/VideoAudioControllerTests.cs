@@ -14,7 +14,6 @@ using Jellyfin.Plugin.AlexaSkill.Controller;
 using Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller.Library;
-using MediaBrowser.Controller.MediaEncoding;
 using MediaBrowser.Model.Entities;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -36,7 +35,9 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Controller;
 /// the live-encode registries, the JF-731 teardown backstop, the ServeInLock IL
 /// pins) and therefore stays a Plugin-collection member, serialized against all
 /// other static-touching classes and never overlapped by the parallel phase.
-/// The static-free families moved to <see cref="VideoAudioControllerPureTests"/>.
+/// The static-free families moved to <see cref="VideoAudioControllerPureTests"/>:
+/// a NEW test that touches none of that shared static surface (transitively,
+/// helpers included) belongs THERE, in the parallel phase.
 /// </summary>
 [Collection("Plugin")]
 public class VideoAudioControllerTests : VideoAudioControllerTestHarness
@@ -45,18 +46,9 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
 
     public VideoAudioControllerTests()
     {
-        // The former PluginTestBase inheritance, folded here verbatim when the
-        // base slot was taken by the harness (JF-792): every test starts from
-        // the null-instance baseline plus clean statics.
-        Plugin.ResetInstance();
-        QueueContinuationStore.Clear();
-        RadioModeState.Clear();
-        // JF-447: the report-ordering guard keys its displacement classification on
-        // static per-device state (the latest started item); without the reset, a
-        // Started fired by one test would make a Stopped for a different item in a
-        // LATER test classify as a displacement and skip the registration that later
-        // test exercises.
-        Jellyfin.Plugin.AlexaSkill.Alexa.Playback.PlaybackReportOrdering.Clear();
+        // The former PluginTestBase inheritance, whose base slot the harness took
+        // (JF-792): the ONE reset sequence keeps its single owner, called from here.
+        PluginTestBase.ResetSharedStatics();
 
         EnsurePluginInstance(
             new PluginConfiguration(),
@@ -497,14 +489,6 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
         Assert.NotNull(notFound.Value);
     }
 
-
-
-
-
-
-
-
-
     /// <summary>
     /// Verify that the endpoint returns 400 when the item is a Folder
     /// (not a streamable media type). Folders don't implement IHasMediaSources
@@ -828,18 +812,6 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
         var badRequest = Assert.IsType<BadRequestObjectResult>(result);
         Assert.NotNull(badRequest.Value);
     }
-
-
-
-    // ========== Codec-Aware Audio Copy Tests (JF-293) ==========
-
-
-
-
-
-
-
-
 
     /// <summary>
     /// Verify that the HLS cache hit path serves the playlist with the correct
@@ -2649,19 +2621,7 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
     /// SkillResponseLoggingTests' CaptureLoggerProvider).
     /// </summary>
 
-    // ========== VideoAudioCache HLS Tests ==========
-
-
-
-
-
-
-
-
-
     // ========== Audiobook HLS Tests ==========
-
-
 
     /// <summary>
     /// Verify that StreamHlsAudiobook returns 400 for an invalid parentId.
@@ -3052,12 +3012,7 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
         }
     }
 
-
     // ========== JF-498: episode HLS remux (static-vs-HLS routing for video items) ==========
-
-
-
-
 
     /// <summary>A bare-GUID episode playlist request with no token must be rejected (401), like every other stream endpoint.</summary>
     [Fact]
@@ -3385,7 +3340,6 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
             "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0000.ts\" 2>/dev/null\n" +
             "exit 0\n");
 
-
     /// <summary>
     /// C1b (folded into the combined probe, JF-539): the bitrate side returns null
     /// (flat-estimate fallback) when no stream carries a BitRate and when the media
@@ -3418,14 +3372,7 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
         Assert.Null(withoutManager.ResolveSourceCodecs(episode).TotalBitrateBps);
     }
 
-
-
     // ========== JF-500: episode HLS video transcode tier (hevc/av1 sources) ==========
-
-
-
-
-
 
     /// <summary>
     /// JF-537.1 RED PROOF (ran red on the unmodified base, both TFMs, before the
@@ -4379,7 +4326,6 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
         Assert.Null(CreateController().ResolveSourceCodecs(episode).Video);
     }
 
-
     /// <summary>
     /// JF-500 review F2: two concurrent HEVC transcodes run ONE ffmpeg at a time.
     /// The second request waits on the dedicated transcode slot while holding NO
@@ -4587,11 +4533,6 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
 
     // ========== JF-507: the audio-only episode HLS variant ==========
 
-
-
-
-
-
     /// <summary>A bare-GUID audio-variant playlist request with no token must be rejected (401).</summary>
     [Fact]
     public async Task StreamHlsEpisodeAudio_NoToken_Returns401()
@@ -4705,10 +4646,6 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
 
         Assert.IsType<BadRequestObjectResult>(result);
     }
-
-
-
-
 
     /// <summary>A bare-GUID speed playlist request with no token must be rejected (401).</summary>
     [Fact]
@@ -6248,7 +6185,6 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
         return (episode, mediaSourceManager);
     }
 
-
     /// <summary>
     /// JF-531 endpoint level, re-shaped by JF-778: on a cache miss the FIRST
     /// serve returns the pre-write listing WINDOWED to the encoded region (the
@@ -6514,7 +6450,6 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
         return (itemIdStr, hlsDir, prewritePath);
     }
 
-
     /// <summary>
     /// JF-778 core pin (the device failure, red on the unmodified tree): while the
     /// episode encode is LIVE with its head at seg_0007, the prewrite serve must
@@ -6768,8 +6703,6 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
 
     // ========== JF-536: shared prewritten-playlist writer core + pin-window prewrite ==========
 
-
-
     /// <summary>
     /// JF-536 (carrying JF-531's invariant-culture review nit to the audiobook twin
     /// through the shared core): EXTINF durations must format INVARIANT even under a
@@ -6810,8 +6743,6 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
             System.Globalization.CultureInfo.CurrentCulture = originalCulture;
         }
     }
-
-
 
     /// <summary>
     /// JF-536 scope (c) endpoint level: on a cache miss the single-item path's FIRST
@@ -7134,22 +7065,6 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
             hlsDir,
             Path.Combine(hlsDir, "playlist-full.m3u8"));
     }
-
-    // ========== JF-515: ffmpeg stderr aggregating drain ==========
-
-
-
-
-    [Fact]
-    public void SafeExitCode_DisposedAfterExit_Throws()
-    {
-        var process = Process.Start(new ProcessStartInfo("/bin/sh", "-c \"exit 3\""))!;
-        process.WaitForExit();
-        process.Dispose();
-        Assert.Throws<InvalidOperationException>(() => VideoAudioController.SafeExitCode(process));
-    }
-
-
 
     // ========== JF-499: episode HLS lifecycle watch items ==========
 
@@ -9781,9 +9696,6 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
 
     // ---- W4: permission-denied deletes must not surface as 500s ----
 
-
-
-
     /// <summary>
     /// The async, result-passing sibling of <see cref="AssertSurvivesDeniedDirectory"/>
     /// (JF-774): await the act inside the write-denied directory, always restoring
@@ -9815,8 +9727,5 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
         }
 #pragma warning restore CA1416, CA3003
     }
-
-
-
 
 }
