@@ -43,12 +43,20 @@ public class GuardedResolverTailRosterTests
     [Fact]
     public void EvidenceGuardCallers_RefuseTheLedgerTail()
     {
+        // Gate-marker tail F3: a guard caller is compliant exactly when it has
+        // NO unflagged resolver call site. The first cut required a flagged
+        // site to EXIST, which failed spuriously for a future family that
+        // guards but never calls the item resolver (raw session reads cannot
+        // reach the ledger tail), with a message demanding a call site that
+        // does not exist. Dropping a flag at a guarded site still reddens:
+        // the caller lands in UnflaggedCallerTypes here AND drifts the roster
+        // test below.
         foreach (string guardCaller in GuardCallerTypes())
         {
             Assert.True(
-                FlaggedCallerTypes().Contains(guardCaller),
-                $"{guardCaller} calls HasCurrentPlaybackEvidence but none of its ResolveCurrentPlayingItem call sites " +
-                "pass allowLedgerTailAnswers: false (the JF-785 Leg A belt; the guard alone leaves the unresolvable-evidence door open).");
+                !UnflaggedCallerTypes().Contains(guardCaller),
+                $"{guardCaller} calls HasCurrentPlaybackEvidence but also calls ResolveCurrentPlayingItem WITHOUT " +
+                "allowLedgerTailAnswers: false (the JF-785 Leg A belt; the guard alone leaves the unresolvable-evidence door open).");
         }
     }
 
@@ -74,17 +82,6 @@ public class GuardedResolverTailRosterTests
     private static HashSet<string> GuardCallerTypes()
         => TypesCalling(IlCallScanner.MethodTokens(
             typeof(PlaybackLaunchBuilder), nameof(PlaybackLaunchBuilder.HasCurrentPlaybackEvidence)).ToList());
-
-    /// <summary>The top-level types with at least one FLAGGED resolver call site.</summary>
-    private static HashSet<string> FlaggedCallerTypes()
-    {
-        IReadOnlyCollection<int> resolverTokens = IlCallScanner.MethodTokens(
-            typeof(PlaybackLaunchBuilder), nameof(PlaybackLaunchBuilder.ResolveCurrentPlayingItem)).ToList();
-        return ResolverCallSites(resolverTokens)
-            .Where(site => site.Flagged)
-            .Select(site => site.CallerType)
-            .ToHashSet();
-    }
 
     /// <summary>The top-level types with at least one UNFLAGGED resolver call site.</summary>
     private static SortedSet<string> UnflaggedCallerTypes()

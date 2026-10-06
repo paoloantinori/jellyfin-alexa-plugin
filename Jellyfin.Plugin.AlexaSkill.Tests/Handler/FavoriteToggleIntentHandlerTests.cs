@@ -239,4 +239,37 @@ public class FavoriteToggleIntentHandlerTests : PluginTestBase
             It.IsAny<UserDataSaveReason>(),
             It.IsAny<CancellationToken>()), Times.Never);
     }
+
+    /// <summary>
+    /// Gate-marker tail F4, the deleted-mid-play shape the Guid.Empty twin
+    /// cannot reach: a now-playing DTO carrying a REAL id that no longer
+    /// resolves (GetItemById returns null; the fixture's loose mock answers
+    /// null for the unsetup ghost id) flows through the resolver's DTO arm -
+    /// the production path for a track deleted mid-play - and must not fall
+    /// through to the days-old ledger tail.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DeletedMidPlayDtoStaleLedger_NoWrite_JF785()
+    {
+        var oldSong = new Audio { Name = "Days Old Song", Id = Guid.NewGuid(), Path = "/music/old.mp3" };
+        var data = SetupHappyPath(oldSong); // user-data write must be REACHABLE, or the pin is vacuous
+        var queues = TestHelpers.CreateDeviceQueueManager("fav-ghost-jf785");
+        queues.RecordLastPlayed("fav-ghost-jf785-device", oldSong.Id.ToString(), DeviceQueueManager.LaunchRoute.Audio);
+        var handler = CreateHandler(queues);
+        var session = _fx.CreateSession();
+        session.NowPlayingItem = new BaseItemDto { Id = Guid.NewGuid(), Name = "Deleted Mid-Play Track" };
+
+        var response = await handler.HandleAsync(
+            Request(), TestHelpers.CreateTestContext("fav-ghost-jf785-device"),
+            TestHelpers.CreateTestUser(), session, CancellationToken.None);
+
+        Assert.Contains("could not find the media", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        Assert.False(data.IsFavorite, "the days-old ledger item must not become the toggle target");
+        _fx.UserDataManager.Verify(u => u.SaveUserData(
+            It.IsAny<Jellyfin.Database.Implementations.Entities.User>(),
+            It.IsAny<BaseItem>(),
+            It.IsAny<UserItemData>(),
+            It.IsAny<UserDataSaveReason>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
 }

@@ -1120,12 +1120,18 @@ public sealed class PlaybackLaunchBuilder
     /// explicit guard keeps the idle refusal ahead of any ledger read and
     /// carries the JF-627 red-proof ladder.
     /// VIDEOAPP PARITY (JF-785 Leg B, deliberate boundary, pinned, no new
-    /// leg): every delivered VideoApp launch writes the launched item into the
-    /// session's FullNowPlayingItem (AttachNowPlayingIfLaunched; the directive
-    /// gate admits the VideoApp directive), and the next request from the same
-    /// device resolves the SAME session, so during a movie the held-item leg IS
-    /// the VideoApp evidence leg and the guarded families act on the movie
-    /// exactly as RateItem does. Two boundary facts, both deliberate:
+    /// leg): every FRESH VideoApp launch writes the launched item into the
+    /// session's FullNowPlayingItem (AttachNowPlayingIfLaunched at the launch
+    /// builders; the directive gate admits the VideoApp directive), and the
+    /// next request from the same device resolves the SAME session, so during
+    /// a movie the held-item leg IS the VideoApp evidence leg and the guarded
+    /// families act on the movie exactly as RateItem does. Gate-marker
+    /// correction (the first cut overclaimed "every delivered launch"): the
+    /// RELAUNCH paths (ResumeIntentHandler's movie/episode/audiobook resumes,
+    /// StartOverIntentHandler's restarts) deliver VideoApp launches with NO
+    /// session write of their own; they rely on the ORIGINAL launch's write
+    /// still being held, and a session that lost it answers per boundary (b)
+    /// below. Two boundary facts, both deliberate:
     /// (a) an ENDED movie is indistinguishable from a playing one: the plugin
     /// never clears FullNowPlayingItem and a VideoApp launch reports nothing to
     /// the server, so the held item stays evidence until the session object is

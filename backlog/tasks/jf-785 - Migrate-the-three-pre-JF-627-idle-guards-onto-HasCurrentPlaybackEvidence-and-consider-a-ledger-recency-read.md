@@ -90,7 +90,13 @@ the held-item leg IS the VideoApp evidence leg: 'add this' adds the movie and
 this parity from Leg 1 alone, since their DTO-only guards were what refused
 the held item). The residual boundary: a session that has LOST the held item
 (a server restart mid-movie, the movie ended and the server cleared the
-entry, a session-lookup miss). The only remaining VideoApp-shaped signal there
+entry, a session-lookup miss). GATE-MARKER CORRECTION (the code-review F1
+round refuted the second loss shape's mechanism, keep this corrected when
+reading this record alone): the server NEVER clears the entry on movie end;
+an ended movie is indistinguishable from a playing one and KEEPS acting until
+the session object is dropped or a later playback report replaces the item
+(the predicate doc's boundary (a) is the corrected taxonomy; this paragraph's
+original wording predates it). The only remaining VideoApp-shaped signal there
 is the device ledger, which is unbounded in recency: admitting it as evidence
 would reopen the exact JF-629 idle hazard the guard exists to block (an idle
 device's days-old launch passing the guard). So the boundary is deliberate:
