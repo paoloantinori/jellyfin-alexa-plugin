@@ -35,7 +35,11 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 /// stream / the flat AudioPlayer resume, never the container concat), and an
 /// UNRESOLVABLE parent (a dangling ParentId: the leaf plays alone instead of the
 /// dead <c>audiobook/{dangling}</c> URL the raw climb minted).
+/// In the Plugin collection (like its StreamTokenSecret/CapabilityGate siblings):
+/// the chokepoint pins install a Plugin.Instance config and the stale-mark pin
+/// swaps the position tracker, both shared process state no parallel class may race.
 /// </summary>
+[Collection("Plugin")]
 public class PlaybackLaunchBuilderBookFolderDiscriminatorTests
 {
     private static PlaybackLaunchBuilder CreatePlainBuilder()
