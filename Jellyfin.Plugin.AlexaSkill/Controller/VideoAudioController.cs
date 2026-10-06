@@ -3898,8 +3898,10 @@ public class VideoAudioController : ControllerBase
             // concat of MIXED codecs declares the first input's codec in the PMT and
             // silently truncates the whole output at the first non-matching track (exit 0,
             // no error - a single iTunes M4A among MP3s ends the album early). Copy ONLY
-            // when every child's codec is copy-compatible; any mixed or unknown codec
-            // transcodes the whole concat to AAC (slower but complete).
+            // when every child's codec is copy-compatible or NONE is resolvable (the
+            // all-unknown row keeps the pre-gate copy per the JF-784 tail F2); any
+            // resolved non-copy codec, or an unknown among resolved ones, transcodes
+            // the whole concat to AAC (slower but complete).
             // JF-784 review F1: the gate covers BOTH arms. The audiobook arm
             // used to hardcode copy on the assumption its AudioBook-kind
             // chapters were codec-uniform; since JF-784 leg 3 the arm
@@ -3908,12 +3910,27 @@ public class VideoAudioController : ControllerBase
             // copy over mixed codecs is the silent-truncation shape (exit 0,
             // partial audio, then the undercount verdict re-encodes into the
             // same truncation forever).
+            bool allCodecsUnresolvable = sortedChapters.Count > 0
+                && sortedChapters.All(c => ResolveSourceAudioCodec(c) is null);
             bool albumAudioCopy = sortedChapters.Count > 0
-                && sortedChapters.All(c => ResolveSourceAudioCodec(c) is { } codec && CopyCompatibleAudioCodecs.Contains(codec));
+                && (allCodecsUnresolvable
+                    || sortedChapters.All(c => ResolveSourceAudioCodec(c) is { } codec && CopyCompatibleAudioCodecs.Contains(codec)));
             if (!albumAudioCopy)
             {
                 _logger.LogInformation(
                     "VideoAudio concat HLS: mixed or non-copy audio codecs in '{ItemName}', transcoding the concat to AAC ({TrackCount} tracks)",
+                    parent.Name, sortedChapters.Count);
+            }
+            else if (allCodecsUnresolvable)
+            {
+                // JF-784 gate-marker tail F2: unknown is missing information,
+                // not confirmed incompatibility. Fail-closing here burned a
+                // full-book AAC transcode (tens of minutes for an 8-10h book)
+                // on a transient codec-resolution failure; the pre-gate copy
+                // behavior is kept, and a genuinely foreign codec still
+                // transcodes through the resolved arm above.
+                _logger.LogDebug(
+                    "VideoAudio concat HLS: no chapter audio codec resolvable for '{ItemName}' ({TrackCount} tracks), keeping -c:a copy",
                     parent.Name, sortedChapters.Count);
             }
 
@@ -6342,9 +6359,11 @@ public class VideoAudioController : ControllerBase
     /// AUDIOBOOK registry's pairing over the ticks-scoped debris verdict core
     /// (<see cref="ValidateHlsCacheAsync"/>, whose doc holds the decision
     /// table), carrying this path's ENDLIST-content hook with two verdicts: a
-    /// completed concat encode lists at least one segment per chapter (10s
-    /// segments, chapters of minutes), so an ENDLIST playlist with FEWER
-    /// segments than chapters is an incomplete encode's debris; and, since
+    /// completed concat encode lists one segment per 10s of chapter audio, so
+    /// an ENDLIST playlist below the duration-derived floor (see
+    /// <see cref="ExpectedMinimumConcatSegments"/>; the JF-784 tail raised it
+    /// from the bare chapter count, which an encode truncated at exit 0 still
+    /// clears) is an incomplete encode's debris; and, since
     /// JF-784 leg 1, the TIMELINE verdict: the encode-metadata sidecar the
     /// encode wrote at start (<see cref="EncodeMetadataFileName"/>) must match
     /// the CURRENT request's live (token-scoped) enumeration in chapter count
@@ -6382,9 +6401,10 @@ public class VideoAudioController : ControllerBase
             content =>
             {
                 int cachedSegments = CountSegmentsInPlaylist(content);
-                if (cachedSegments < chapterCount)
+                int minimumSegments = ExpectedMinimumConcatSegments(chapterCount, chapterDurationTicks);
+                if (cachedSegments < minimumSegments)
                 {
-                    return $"expected >= {chapterCount} segments, found only {cachedSegments}";
+                    return $"expected >= {minimumSegments} segments ({chapterCount} chapters / {chapterDurationTicks} ticks), found only {cachedSegments}";
                 }
 
                 return TimelineMismatchReason(cached, chapterCount, chapterDurationTicks);
@@ -6414,18 +6434,34 @@ public class VideoAudioController : ControllerBase
     /// timelines match.</returns>
     private string? TimelineMismatchReason(FileInfo cached, int chapterCount, long chapterDurationTicks)
     {
-        string live = $"request enumerates {chapterCount} chapters / {chapterDurationTicks} ticks";
         if (!TryReadEncodeTimelineMetadata(cached.DirectoryName!, out int encodedChapterCount, out long encodedDurationTicks))
         {
-            return $"no encode metadata beside the cached playlist; cannot verify the timeline identity, {live}";
+            return $"no encode metadata beside the cached playlist; cannot verify the timeline identity, request enumerates {chapterCount} chapters / {chapterDurationTicks} ticks";
         }
 
         if (encodedChapterCount != chapterCount || encodedDurationTicks != chapterDurationTicks)
         {
-            return $"cache encoded a different timeline (library scope or membership changed since the encode): {live}, cache encoded {encodedChapterCount} / {encodedDurationTicks}";
+            return $"cache encoded a different timeline (library scope or membership changed since the encode): request enumerates {chapterCount} chapters / {chapterDurationTicks} ticks, cache encoded {encodedChapterCount} / {encodedDurationTicks}";
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The minimum playlist segment count a COMPLETE concat encode lists for a
+    /// chapter set (the JF-784 gate-marker tail): the concat cuts one segment
+    /// per <see cref="AudiobookHlsSegmentSeconds"/> of chapter audio, so the
+    /// runtime sum demands roughly duration/10s segments and the bare chapter
+    /// count is only the floor for near-total failures (an encode truncated at
+    /// exit 0 keeps listing far more segments than it has chapters). The 2% +
+    /// 2-segment tolerance absorbs RunTimeTicks-metadata vs actual-stream
+    /// duration drift so a healthy completed cache never re-encodes on this
+    /// bar; a real truncation loses multiples of the tolerance and fails.
+    /// </summary>
+    private static int ExpectedMinimumConcatSegments(int chapterCount, long durationTicks)
+    {
+        long byDuration = (durationTicks / (AudiobookHlsSegmentSeconds * TimeSpan.TicksPerSecond) * 98 / 100) - 2;
+        return (int)Math.Max(chapterCount, Math.Max(0, byDuration));
     }
 
     /// <summary>
@@ -7099,9 +7135,11 @@ public class VideoAudioController : ControllerBase
             // Read expected chapter count from metadata written at encode time
             // (the ONE sidecar reader, shared with the serve-time timeline
             // verdict since JF-784 review F6).
-            if (TryReadEncodeTimelineMetadata(hlsDir, out int encodedChapterCount, out _))
+            long expectedDurationTicks = 0;
+            if (TryReadEncodeTimelineMetadata(hlsDir, out int encodedChapterCount, out long encodedDurationTicks))
             {
                 expectedChapterCount = encodedChapterCount;
+                expectedDurationTicks = encodedDurationTicks;
             }
 #pragma warning restore CA3003
 
@@ -7113,16 +7151,21 @@ public class VideoAudioController : ControllerBase
                     label, itemId, process.ExitCode, segmentFileCount, playlistSegmentCount,
                     expectedChapterCount > 0 ? $" (expected {expectedChapterCount})" : string.Empty);
             }
-            else if (expectedChapterCount > 0 && playlistSegmentCount < expectedChapterCount)
+            else if (expectedChapterCount > 0 && playlistSegmentCount < ExpectedMinimumConcatSegments(expectedChapterCount, expectedDurationTicks))
             {
-                // JF-784 review F3: FEWER segments than chapters is incomplete;
-                // the concat encodes cut ~one 10s segment per 10s of chapter, so
-                // a healthy encode lists MANY segments per chapter and the old
-                // != equality warned INCOMPLETE on every healthy book/album
-                // encode (the serve-time verdict's own bar is >=, never ==).
+                // JF-784 review F3 + gate-marker tail F1: the floor is
+                // DURATION-derived (one segment per AudiobookHlsSegmentSeconds
+                // of chapter audio; see ExpectedMinimumConcatSegments), not the
+                // bare chapter count. The old != equality warned INCOMPLETE on
+                // every healthy book/album encode (many segments per chapter),
+                // and the first fix's bare chapter-count floor saw only
+                // near-total failures: an encode truncated at exit 0 keeps far
+                // more segments than it has chapters and read "complete".
                 _logger.LogWarning(
-                    "{Label} HLS encoding INCOMPLETE for {ParentId}: ffmpeg exited 0 but produced only {PlaylistSegmentCount} playlist segments for {ExpectedCount} chapters, {SegmentFileCount} segment files on disk",
-                    label, itemId, playlistSegmentCount, expectedChapterCount, segmentFileCount);
+                    "{Label} HLS encoding INCOMPLETE for {ParentId}: ffmpeg exited 0 but produced only {PlaylistSegmentCount} playlist segments, expected >= {MinimumSegments} ({ExpectedCount} chapters / {ExpectedDurationTicks} ticks), {SegmentFileCount} segment files on disk",
+                    label, itemId, playlistSegmentCount,
+                    ExpectedMinimumConcatSegments(expectedChapterCount, expectedDurationTicks),
+                    expectedChapterCount, expectedDurationTicks, segmentFileCount);
             }
             else
             {

@@ -147,3 +147,5 @@ branch; rides the wave deploy).
 <!-- SECTION:FINAL_SUMMARY:END -->
 
 CLOSED 2026-10-06 by the orchestrator: merged at 85792dcb, gate-marker six axes PASS, F3/F4 applied, F1 filed into JF-784. Production deploys with JF-627.
+
+CORRECTION 2026-10-06 (JF-784 gate-marker, axis 2, evidence: the active DLL pulled from the box carries JF-778/JF-783 symbols and ZERO JF-767 symbols - MintScoped, BuildScopedAlbumTracksQueryUnpaged - and no cached playlist carries a scoped token): the CLOSED line above overstates. The gate-marker tail was merged into the JF-784 worker branch (85792dcb is an ancestor of worktree-agent-aeea212079a607c8d, NOT of main), and the wave deploy of 3aa03fce shipped the JF-627/JF-783 lines WITHOUT JF-767 code: "Production deploys with JF-627" was true of the deployed build only in the sense that JF-627 itself deployed. JF-767 code reaches main and production WITH the JF-784 merge and its deploy.

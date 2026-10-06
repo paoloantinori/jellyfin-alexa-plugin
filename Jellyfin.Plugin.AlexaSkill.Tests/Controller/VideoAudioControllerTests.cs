@@ -10577,12 +10577,15 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
     /// <summary>
     /// JF-784 review F3 pin: a HEALTHY concat encode (3 playlist segments for
-    /// 2 chapters; the concat cuts ~one 10s segment per 10s of chapter) must
-    /// log the monitor's complete row, never INCOMPLETE. The pre-fix monitor
-    /// compared segment count to chapter count with EQUALITY, so every
+    /// 2 short chapters; the concat cuts ~one 10s segment per 10s of chapter)
+    /// must log the monitor's complete row, never INCOMPLETE. The pre-fix
+    /// monitor compared segment count to chapter count with EQUALITY, so every
     /// healthy book/album encode warned INCOMPLETE (3000 segments vs 92
     /// chapters), drowning the real incomplete signal the sidecar exists for.
     /// RED on the pre-fix tree: the INCOMPLETE warning fires for 3 != 2.
+    /// The chapters are 12s each so the JF-784 tail's duration-derived floor
+    /// (2 chapters / 24s of audio) also passes: the healthy row must hold on
+    /// BOTH floors.
     /// </summary>
     [Fact]
     public async Task MonitorHls_HealthyConcatEncode_SegmentsAboveChapterCount_LogsCompleteNotIncomplete()
@@ -10598,14 +10601,14 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             Name = "Chapter 1",
             Id = Guid.NewGuid(),
             Path = "/book/jf784-monitor-001.mp3",
-            RunTimeTicks = TimeSpan.FromMinutes(10).Ticks
+            RunTimeTicks = TimeSpan.FromSeconds(12).Ticks
         };
         var chapter2 = new MediaBrowser.Controller.Entities.Audio.Audio
         {
             Name = "Chapter 2",
             Id = Guid.NewGuid(),
             Path = "/book/jf784-monitor-002.mp3",
-            RunTimeTicks = TimeSpan.FromMinutes(10).Ticks
+            RunTimeTicks = TimeSpan.FromSeconds(12).Ticks
         };
 
         _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
@@ -10614,8 +10617,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             .Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
             .Returns(new List<MediaBrowser.Controller.Entities.BaseItem> { chapter1, chapter2 });
 
-        // Healthy encode: two chapters' worth of segments (3 > 2), ENDLIST,
-        // exit 0.
+        // Healthy encode: three segments cover both 12s chapters (floor 2),
+        // ENDLIST, exit 0.
         string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-jf784-monitor-healthy",
             "for last_arg in \"$@\"; do :; done\n" +
             "dir=$(dirname \"$last_arg\")\n" +
@@ -10640,6 +10643,162 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         Assert.DoesNotContain(
             TestCaptureLogger.Snapshot(logRecords),
             r => r.Message.Contains("HLS encoding INCOMPLETE", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// JF-784 gate-marker tail F1 pin, the true-positive direction the worker's
+    /// F3 fix unguarded: a concat encode that truncates at exit 0 keeps listing
+    /// FAR more segments than it has chapters (two 10-minute chapters = 120
+    /// segment-seconds of expected audio; the encode delivered 3), so the bare
+    /// chapter-count floor sees only near-total failures and logs "complete".
+    /// The duration-derived floor must fire INCOMPLETE here. RED on the
+    /// pre-tail tree: the monitor logs the complete Debug row (3 >= 2
+    /// chapters).
+    /// </summary>
+    [Fact]
+    public async Task MonitorHls_TruncatedConcatEncode_SegmentsAboveChapterCountButBelowDuration_LogsIncomplete()
+    {
+        Guid parentId = Guid.NewGuid();
+        var book = new MediaBrowser.Controller.Entities.Folder
+        {
+            Name = "JF-784 Truncated Book",
+            Id = parentId
+        };
+        var chapter1 = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Chapter 1",
+            Id = Guid.NewGuid(),
+            Path = "/book/jf784-monitor-trunc-001.mp3",
+            RunTimeTicks = TimeSpan.FromMinutes(10).Ticks
+        };
+        var chapter2 = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Chapter 2",
+            Id = Guid.NewGuid(),
+            Path = "/book/jf784-monitor-trunc-002.mp3",
+            RunTimeTicks = TimeSpan.FromMinutes(10).Ticks
+        };
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns(book);
+        _libraryManagerMock
+            .Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Returns(new List<MediaBrowser.Controller.Entities.BaseItem> { chapter1, chapter2 });
+
+        // Truncated encode: 3 segments cover only 30s of the 20min the sidecar
+        // demands (floor 115), but 3 >= 2 chapters passes the old bar.
+        string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-jf784-monitor-truncated",
+            "for last_arg in \"$@\"; do :; done\n" +
+            "dir=$(dirname \"$last_arg\")\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0000.ts\" 2>/dev/null\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0001.ts\" 2>/dev/null\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0002.ts\" 2>/dev/null\n" +
+            "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:10.000,\\nseg_0000.ts\\n#EXTINF:10.000,\\nseg_0001.ts\\n#EXTINF:10.000,\\nseg_0002.ts\\n#EXT-X-ENDLIST\\n' > \"$last_arg\"\n" +
+            "exit 0\n");
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
+        var controller = CreateController(parentId.ToString(), loggerFactory, ffmpegPath: fakeFfmpegPath);
+
+        ActionResult result = await controller.StreamHlsAudiobook(parentId.ToString());
+        Assert.IsType<ContentResult>(result);
+
+        Assert.True(
+            await WaitUntilAsync(
+                () => TestCaptureLogger.Snapshot(logRecords).Any(r => r.Message.Contains("HLS encoding INCOMPLETE", StringComparison.Ordinal)),
+                TimeSpan.FromSeconds(10)),
+            "the monitor must flag the truncated-at-exit-0 encode as incomplete");
+        Assert.DoesNotContain(
+            TestCaptureLogger.Snapshot(logRecords),
+            r => r.Message.Contains("Audiobook HLS encoding complete", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// JF-784 gate-marker tail F2 pin: when NO chapter's audio codec can be
+    /// resolved (a transient media-streams failure, or a fresh scan with no
+    /// stream rows), the copy-compatibility gate must keep <c>-c:a copy</c>
+    /// (the pre-gate behavior) instead of fail-closing into a full-book AAC
+    /// transcode: unknown is missing information, not confirmed incompatibility,
+    /// and the transcode cost lands on the longest content the plugin serves.
+    /// A RESOLVED non-copy codec still transcodes (the sibling pin above). RED
+    /// on the pre-tail tree: the all-null shape transcodes (aac/192k args).
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_AllCodecsUnresolvable_KeepsCopyInsteadOfTranscode()
+    {
+        Guid parentId = Guid.NewGuid();
+        var book = new MediaBrowser.Controller.Entities.Folder
+        {
+            Name = "JF-784 Unresolvable-Codec Book",
+            Id = parentId
+        };
+        var chapter1 = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Chapter 1",
+            Id = Guid.NewGuid(),
+            Path = "/book/jf784-nullcodec-001.mp3",
+            RunTimeTicks = TimeSpan.FromMinutes(10).Ticks
+        };
+        var chapter2 = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Chapter 2",
+            Id = Guid.NewGuid(),
+            Path = "/book/jf784-nullcodec-002.mp3",
+            RunTimeTicks = TimeSpan.FromMinutes(10).Ticks
+        };
+
+        var mediaSourceManager = new Mock<IMediaSourceManager>();
+        mediaSourceManager
+            .Setup(m => m.GetMediaStreams(It.IsAny<Guid>()))
+            .Returns(new List<MediaStream>());
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns(book);
+        _libraryManagerMock
+            .Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Returns(new List<MediaBrowser.Controller.Entities.BaseItem> { chapter1, chapter2 });
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
+        var controller = CreateController(
+            parentId.ToString(), loggerFactory, mediaSourceManager, WriteRecordingFakeFfmpeg("fake-ffmpeg-jf784-nullcodec"));
+
+        await controller.StreamHlsAudiobook(parentId.ToString());
+
+        string hlsDir = _cache.GetHlsDirectoryPath(parentId.ToString(), 0);
+        string[] argLines = await File.ReadAllLinesAsync(Path.Combine(hlsDir, "episode-args.txt"));
+        Assert.Contains("copy", argLines);
+        Assert.DoesNotContain("192k", argLines);
+        Assert.DoesNotContain(
+            TestCaptureLogger.Snapshot(logRecords),
+            r => r.Message.Contains("mixed or non-copy audio codecs", StringComparison.Ordinal));
+        Assert.Contains(
+            TestCaptureLogger.Snapshot(logRecords),
+            r => r.Message.Contains("no chapter audio codec resolvable", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// JF-784 gate-marker tail F1 pin, the SERVE-TIME twin: a completed cache
+    /// entry whose playlist carries far fewer segments than the live
+    /// enumeration's runtime sum demands (the monitor's truncated-at-exit-0
+    /// shape persisted to disk: 30 segments for 36 minutes of chapters) is
+    /// debris and must invalidate to a scoped re-encode, not serve the
+    /// truncated timeline. The bare chapter-count floor passed it (30 >= 12).
+    /// RED on the pre-tail tree: the cache-hit verdict validates and serves.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_CacheHit_SegmentsBelowDurationFloor_IsInvalidatedAsDebris()
+    {
+        Guid parentId = Guid.NewGuid();
+        long threeMinutes = TimeSpan.FromMinutes(3).Ticks;
+        await SeedCompletedConcatCacheAsync(
+            _cache, parentId, segmentCount: 30, encodedChapterCount: 12, encodedDurationTicks: 12 * threeMinutes);
+
+        var (captured, logRecords, result) = await ServeAlbumOverSeededConcatCacheAsync(
+            parentId, trackCount: 12, tokenScope: new[] { Guid.NewGuid() }, "jf784-duration-floor");
+
+        AssertCacheInvalidatedAndReencoded(logRecords, result, "segments");
+        Assert.Single(captured);
     }
 
     /// <summary>
@@ -10738,7 +10897,7 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     /// JF-784 leg 1 RED pin, the filed shape: a cache entry encoded under a
     /// DIFFERENT timeline (an unrestricted user's 15-track enumeration) serves
     /// unchanged to a scoped request enumerating 12 tracks. Pre-fix the
-    /// cache-hit verdict validated (15 segments >= 12 chapters passes the
+    /// cache-hit verdict validated (the seeded 270 segments clear every
     /// undercount bar) and served the foreign timeline's ContentResult; post-fix
     /// the verdict compares the encode-metadata sidecar against the CURRENT
     /// scoped enumeration and invalidates (re-encode, the flush-lag degrade
@@ -10751,8 +10910,11 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     {
         Guid parentId = Guid.NewGuid();
         long threeMinutes = TimeSpan.FromMinutes(3).Ticks;
+        // 270 segments = the 45-minute sidecar timeline's own segment count (one
+        // per 10s), so the duration floor passes and the TIMELINE verdict is the
+        // row under test, not the undercount bar.
         await SeedCompletedConcatCacheAsync(
-            _cache, parentId, segmentCount: 15, encodedChapterCount: 15, encodedDurationTicks: 15 * threeMinutes);
+            _cache, parentId, segmentCount: 270, encodedChapterCount: 15, encodedDurationTicks: 15 * threeMinutes);
 
         var (captured, logRecords, result) = await ServeAlbumOverSeededConcatCacheAsync(
             parentId, trackCount: 12, tokenScope: new[] { Guid.NewGuid() }, "jf784-foreign-timeline");
@@ -10791,14 +10953,16 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     {
         Guid parentId = Guid.NewGuid();
         long threeMinutes = TimeSpan.FromMinutes(3).Ticks;
+        // 216 segments = the 36-minute timeline's own segment count (one per
+        // 10s): coherent with the duration floor, so the verdict validates.
         await SeedCompletedConcatCacheAsync(
-            _cache, parentId, segmentCount: 12, encodedChapterCount: 12, encodedDurationTicks: 12 * threeMinutes);
+            _cache, parentId, segmentCount: 216, encodedChapterCount: 12, encodedDurationTicks: 12 * threeMinutes);
 
         var (captured, logRecords, result) = await ServeAlbumOverSeededConcatCacheAsync(
             parentId, trackCount: 12, tokenScope: new[] { Guid.NewGuid() }, "jf784-same-timeline");
 
         var content = Assert.IsType<ContentResult>(result);
-        Assert.Contains("seg_0011.ts?token=", content.Content, StringComparison.Ordinal);
+        Assert.Contains("seg_0215.ts?token=", content.Content, StringComparison.Ordinal);
         Assert.Single(captured);
         // The cache-hit serve row fired ("generating concat stream" logs on every
         // multi-chapter request, cache hit included; "Audiobook chapter sort" is
@@ -10826,8 +10990,11 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     {
         Guid parentId = Guid.NewGuid();
         long threeMinutes = TimeSpan.FromMinutes(3).Ticks;
+        // 270 segments = the SIDEcar's 45-minute timeline's own count, so the
+        // undercount bar (floored on the live 36-minute enumeration) passes and
+        // the duration-axis comparison is the row under test.
         await SeedCompletedConcatCacheAsync(
-            _cache, parentId, segmentCount: 12, encodedChapterCount: 12, encodedDurationTicks: 15 * threeMinutes);
+            _cache, parentId, segmentCount: 270, encodedChapterCount: 12, encodedDurationTicks: 15 * threeMinutes);
 
         var (_, logRecords, result) = await ServeAlbumOverSeededConcatCacheAsync(
             parentId, trackCount: 12, tokenScope: new[] { Guid.NewGuid() }, "jf784-duration-axis");
@@ -10845,8 +11012,11 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     public async Task StreamHlsAudiobook_CacheHit_NoEncodeMetadata_IsInvalidatedFailClosed()
     {
         Guid parentId = Guid.NewGuid();
+        // 216 segments = the live 36-minute enumeration's own segment count, so
+        // the undercount bar passes and the MISSING SIDECAR is the row under
+        // test.
         await SeedCompletedConcatCacheAsync(
-            _cache, parentId, segmentCount: 12, encodedChapterCount: null, encodedDurationTicks: 0);
+            _cache, parentId, segmentCount: 216, encodedChapterCount: null, encodedDurationTicks: 0);
 
         var (_, logRecords, result) = await ServeAlbumOverSeededConcatCacheAsync(
             parentId, trackCount: 12, tokenScope: new[] { Guid.NewGuid() }, "jf784-no-metadata");
