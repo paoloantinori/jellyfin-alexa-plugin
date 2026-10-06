@@ -331,7 +331,7 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
             .Returns(new List<BaseItem> { chapterLeaf, looseLeaf });
 
         _fx.LibraryManager.Setup(l => l.GetItemById(bookFolderId))
-            .Returns(new Folder { Name = "Measure What Matters", Id = bookFolderId });
+            .Returns(new Folder { Name = "Measure What Matters", Id = bookFolderId, Path = "/audiobooks/measure-what-matters" });
 
         // 26 chapters with one initial page of 5 (GetInitialFetchSize): the head
         // query must run on the FOLDER id and see the full count; any other parent
@@ -613,6 +613,144 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
             SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
             // The ONE book plays as its own track: no container merge, no continuation.
+            var audioDirective = response.Response.Directives?[0] as AudioPlayerPlayDirective;
+            Assert.NotNull(audioDirective);
+            Assert.Equal(book.Id.ToString(), audioDirective.AudioItem.Stream.Token);
+            Assert.Single(session.NowPlayingQueue);
+            Assert.Null(QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID!));
+        }
+        finally
+        {
+            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
+        }
+    }
+
+    // Gate-marker tail F1 pins: the discriminator FAILS CLOSED. The earlier
+    // fail-open returned true (the climb) for every shape it could not verify,
+    // so a Path-less or bare-filename leaf under a shared ParentId container
+    // reproduced the exact library-merge hazard finding 2 closed through the
+    // unverifiable shapes. The unverifiable layout plays the leaf alone (the
+    // pre-JF-791 behavior), never the merged container. RED on the pre-tail
+    // tree: the climb fires and the queue swallows the siblings.
+    [Fact]
+    public async Task PlayBook_PathlessLeaf_UnderSharedContainer_FailsClosedToOwnTrack()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(bookName: "Managing Humans");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+
+        Guid containerId = Guid.NewGuid();
+        var book = new AudioBook
+        {
+            Name = "Managing Humans: Biting and Humorous Tales of a Software Engineering Manager",
+            Id = Guid.NewGuid(),
+            ParentId = containerId,
+            Path = null
+        };
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
+            .Returns(new List<BaseItem> { book });
+
+        _fx.LibraryManager.Setup(l => l.GetItemById(containerId))
+            .Returns(new Folder { Name = "Audiobooks", Id = containerId, Path = "/audiobooks" });
+        List<BaseItem> siblings = new()
+        {
+            book,
+            new AudioBook
+            {
+                Name = "Radical Candor",
+                Id = Guid.NewGuid(),
+                ParentId = containerId,
+                Path = "/audiobooks/Radical Candor/Radical Candor.m4b"
+            }
+        };
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q => q.ParentId == containerId
+                ? new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+                {
+                    Items = siblings.ToArray(),
+                    TotalRecordCount = siblings.Count
+                }
+                : new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+                {
+                    Items = Array.Empty<BaseItem>(),
+                    TotalRecordCount = 0
+                });
+
+        try
+        {
+            SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+            var audioDirective = response.Response.Directives?[0] as AudioPlayerPlayDirective;
+            Assert.NotNull(audioDirective);
+            Assert.Equal(book.Id.ToString(), audioDirective.AudioItem.Stream.Token);
+            Assert.Single(session.NowPlayingQueue);
+            Assert.Null(QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID!));
+        }
+        finally
+        {
+            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
+        }
+    }
+
+    [Fact]
+    public async Task PlayBook_BareFilenameLeaf_UnderSharedContainer_FailsClosedToOwnTrack()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(bookName: "Managing Humans");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+
+        Guid containerId = Guid.NewGuid();
+        var book = new AudioBook
+        {
+            Name = "Managing Humans: Biting and Humorous Tales of a Software Engineering Manager",
+            Id = Guid.NewGuid(),
+            ParentId = containerId,
+            Path = "Audiobook - Managing_Humans.m4b"
+        };
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
+            .Returns(new List<BaseItem> { book });
+
+        _fx.LibraryManager.Setup(l => l.GetItemById(containerId))
+            .Returns(new Folder { Name = "Audiobooks", Id = containerId, Path = "/audiobooks" });
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q => q.ParentId == containerId
+                ? new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+                {
+                    Items = new List<BaseItem>
+                    {
+                        book,
+                        new AudioBook
+                        {
+                            Name = "Radical Candor",
+                            Id = Guid.NewGuid(),
+                            ParentId = containerId,
+                            Path = "/audiobooks/Radical Candor/Radical Candor.m4b"
+                        }
+                    }.ToArray(),
+                    TotalRecordCount = 2
+                }
+                : new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+                {
+                    Items = Array.Empty<BaseItem>(),
+                    TotalRecordCount = 0
+                });
+
+        try
+        {
+            SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
             var audioDirective = response.Response.Directives?[0] as AudioPlayerPlayDirective;
             Assert.NotNull(audioDirective);
             Assert.Equal(book.Id.ToString(), audioDirective.AudioItem.Stream.Token);

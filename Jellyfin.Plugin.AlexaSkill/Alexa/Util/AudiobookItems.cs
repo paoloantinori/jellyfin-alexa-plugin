@@ -72,23 +72,26 @@ internal static class AudiobookItems
     /// live census shape), and a chapter under a part subfolder likewise sits below
     /// the subfolder the one-level climb would resolve. Trailing separators are
     /// trimmed on both sides; the comparison is case-insensitive (Windows-hosted
-    /// servers). Null or empty paths on either side cannot discriminate and return
-    /// true (the pre-JF-793 unconditional climb, the documented default).
+    /// servers). Null or empty paths on either side, and bare-filename leaf paths,
+    /// cannot discriminate and return FALSE (the gate-marker tail F1: fail-CLOSED,
+    /// not the earlier fail-open climb - a Path-less or bare-name leaf under a
+    /// shared ParentId container is exactly the library-merge hazard finding 2
+    /// closed, and an unverifiable layout plays the leaf alone, the pre-JF-791
+    /// behavior, never the merged container).
     /// </summary>
     private static bool SitsDirectlyInside(AudioBook chapter, Folder folder)
     {
         if (string.IsNullOrEmpty(chapter.Path) || string.IsNullOrEmpty(folder.Path))
         {
-            return true;
+            return false;
         }
 
-        // GetDirectoryName returns EMPTY (not null) for a bare filename, so the
-        // null check alone would silently reject instead of defaulting to the
-        // climb the way the doc promises for shapes that cannot discriminate
-        // (code-review F3).
+        // GetDirectoryName returns EMPTY (not null) for a bare filename; a bare
+        // name cannot prove the file sits inside the folder, so it fails closed
+        // with the other unverifiable shapes (gate-marker tail F1).
         string? chapterDirectory = System.IO.Path.GetDirectoryName(chapter.Path.TrimEnd('/', '\\'));
-        return string.IsNullOrEmpty(chapterDirectory)
-            || string.Equals(
+        return !string.IsNullOrEmpty(chapterDirectory)
+            && string.Equals(
                 chapterDirectory.TrimEnd('/', '\\'),
                 folder.Path.TrimEnd('/', '\\'),
                 StringComparison.OrdinalIgnoreCase);

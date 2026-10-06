@@ -64,3 +64,5 @@ id in the concat URL, not the container's.
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+GATE-MARKER ADDENDUM (2026-10-06, marker F3, same-turn): the ONE-LEVEL climb resolution means a multi-part book (chapters under Part1/, Part2/ subfolders) presents the PART folders as separate disambiguation entries, and head, confirm, and continuation all stop at the part boundary. The altitude fix (resolving to the outermost non-container BOOK ancestor instead of the one-level parent) belongs WITH this task's builders sync so both paths flip together; the JF-791 divergence note already flags subfolder under-resolution on the builders side.

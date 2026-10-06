@@ -71,14 +71,22 @@ public class PlayBookIntentHandler : BaseHandler
             return candidates;
         }
 
-        Dictionary<Guid, BaseItem> byBook = new();
+        // First-occurrence order BY CONSTRUCTION (gate-marker F4): a dictionary's
+        // Values enumeration is an implementation detail, so the dedup walks the
+        // source list with a seen-set instead and the doc's order promise is the
+        // code's actual guarantee.
+        List<BaseItem> byBook = new();
+        HashSet<Guid> seen = new();
         foreach (BaseItem candidate in candidates)
         {
             BaseItem book = AudiobookItems.TryResolveBookFolder(candidate, _libraryManager) ?? candidate;
-            byBook.TryAdd(book.Id, book);
+            if (seen.Add(book.Id))
+            {
+                byBook.Add(book);
+            }
         }
 
-        return byBook.Values.ToList();
+        return byBook;
     }
 
     /// <inheritdoc/>
@@ -298,7 +306,13 @@ public class PlayBookIntentHandler : BaseHandler
         // queue, and the continuation all start at the position-holding chapter.
         // Fresh books and books the page already covers pay nothing (the guard skips
         // the fetch when the page holds the whole book); a multi-page fresh ask pays
-        // one extra query. The single-file shapes never reach here (their page is
+        // one extra query. TRADE, stated (the gate-marker tail): the guard keys on
+        // the page-1 scan's (0,0) answer, which an UNSTARTED multi-page book also
+        // produces, so every first-ever ask of a long book runs the unpaged fetch
+        // and finds nothing - one bounded recursive query added to the hot fresh-play
+        // path inside the Alexa window. A cheaper discriminator (any Played/position
+        // flag check ahead of the fetch) is the filed follow-up, JF-797 item 3.
+        // The single-file shapes never reach here (their page is
         // the whole book by construction).
         if (startIndex == 0 && resumeTicks == 0 && continuationHasMore)
         {

@@ -778,7 +778,7 @@ public class YesIntentHandlerTests : PluginTestBase
             .Returns(chapterLeaf);
         _libraryManagerMock
             .Setup(lm => lm.GetItemById(bookFolderId))
-            .Returns(new Folder { Name = "Measure What Matters", Id = bookFolderId });
+            .Returns(new Folder { Name = "Measure What Matters", Id = bookFolderId, Path = "/audiobooks/measure-what-matters" });
 
         // 26 chapters with the initial page of 5: the confirm's chapters query must
         // run on the FOLDER id and see the page; any other parent (the pre-fix leaf
