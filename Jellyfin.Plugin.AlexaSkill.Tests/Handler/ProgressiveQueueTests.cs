@@ -1538,8 +1538,10 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
     // (BuildAlbumPlayResponseAsync first page: the ParentId arm plus the JF-338
     // AlbumIds retry) and the tail (FetchAlbumTracks, the same two arms). This pin
     // drives BOTH ends against a split-album server (empty ParentId pages,
-    // populated AlbumIds pages) and captures all four issued queries in call
-    // order, then asserts each arm's head and tail shapes are IDENTICAL except
+    // populated AlbumIds pages) and captures all five issued queries in call
+    // order (head primary, head retry, the JF-796 deep-resume fetch the fresh
+    // multi-page ask pays, tail primary, tail retry), then asserts each arm's
+    // head and tail shapes are IDENTICAL except
     // the paging fields. JF-763 joined the library-scope dimension to the
     // lockstep: the plugin user is RESTRICTED and both ends' queries must carry
     // the resolved allowed library as TopParentIds (head/tail parity, the JF-666
@@ -1619,38 +1621,47 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
 
         QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID);
 
-        Assert.Equal(4, captured.Count);
+        Assert.Equal(5, captured.Count);
         InternalItemsQuery headPrimary = captured[0];
         InternalItemsQuery headRetry = captured[1];
-        InternalItemsQuery tailPrimary = captured[2];
-        InternalItemsQuery tailRetry = captured[3];
+        InternalItemsQuery headDeep = captured[2];
+        InternalItemsQuery tailPrimary = captured[3];
+        InternalItemsQuery tailRetry = captured[4];
 
-        void AssertArmLockstep(InternalItemsQuery head, InternalItemsQuery tail)
+        // The field-set half of the lockstep (everything except paging), shared by
+        // the head/tail arm pairs and the JF-796 deep fetch so a field added to the
+        // ONE shape reaches every consumer in a single edit.
+        void AssertSharedQueryShape(InternalItemsQuery a, InternalItemsQuery b)
         {
             // The shared shape: same user, same recursion, same kind filter, same
             // disc/track order, same full-field DTO options.
-            Assert.Same(head.User, tail.User);
-            Assert.True(head.Recursive);
-            Assert.Equal(head.Recursive, tail.Recursive);
-            Assert.Equal(new[] { BaseItemKind.Audio }, head.IncludeItemTypes);
-            Assert.Equal(head.IncludeItemTypes, tail.IncludeItemTypes);
-            Assert.Equal(QueueContinuationFetcher.AlbumTrackOrder, head.OrderBy);
-            Assert.Equal(head.OrderBy, tail.OrderBy);
-            Assert.NotNull(head.DtoOptions);
-            Assert.NotNull(tail.DtoOptions);
+            Assert.Same(a.User, b.User);
+            Assert.True(a.Recursive);
+            Assert.Equal(a.Recursive, b.Recursive);
+            Assert.Equal(new[] { BaseItemKind.Audio }, a.IncludeItemTypes);
+            Assert.Equal(a.IncludeItemTypes, b.IncludeItemTypes);
+            Assert.Equal(QueueContinuationFetcher.AlbumTrackOrder, a.OrderBy);
+            Assert.Equal(a.OrderBy, b.OrderBy);
+            Assert.NotNull(a.DtoOptions);
+            Assert.NotNull(b.DtoOptions);
             // new DtoOptions(true) populates Fields with every ItemFields value; an
             // end drifting to a minimal DtoOptions (e.g. AlbumPlay's CheapDtoOptions
             // shape) reds here.
-            Assert.Equal(head.DtoOptions!.Fields, tail.DtoOptions!.Fields);
+            Assert.Equal(a.DtoOptions!.Fields, b.DtoOptions!.Fields);
 
-            // JF-763: the library-scope dimension joined the lockstep. Both ends
+            // JF-763: the library-scope dimension joined the lockstep. Both sides
             // carry the plugin user's resolved allowed library (the absolute id,
             // so a consistently-wrong scope reds too, not only head-vs-tail
             // drift); removing either end's ApplyLibraryFilter reds here (a
             // restricted user's head page and tail batches must enumerate ONE
             // row set or the pages switch sets mid-album).
-            Assert.Contains(musicLibId, head.TopParentIds);
-            Assert.Equal(head.TopParentIds, tail.TopParentIds);
+            Assert.Contains(musicLibId, a.TopParentIds);
+            Assert.Equal(a.TopParentIds, b.TopParentIds);
+        }
+
+        void AssertArmLockstep(InternalItemsQuery head, InternalItemsQuery tail)
+        {
+            AssertSharedQueryShape(head, tail);
 
             // Paging is the ONE intended head/tail difference: the head pages with
             // 0 + the initial fetch size, the tail with its continuation offset
@@ -1676,6 +1687,16 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
         Assert.Equal(new[] { albumId }, tailRetry.AlbumIds);
         Assert.Equal(Guid.Empty, headRetry.ParentId);
         Assert.Equal(Guid.Empty, tailRetry.ParentId);
+
+        // JF-796: the deep-resume fetch is the UNPAGED member of the working arm
+        // (the fresh multi-page ask's one-fetch trade): the ONE shared field set
+        // beside the paged head retry, paging null (fetch-all, not Take(0)), so a
+        // hand-kept initializer reintroduced for the deep fetch reds here too.
+        AssertSharedQueryShape(headRetry, headDeep);
+        Assert.Equal(new[] { albumId }, headDeep.AlbumIds);
+        Assert.Equal(Guid.Empty, headDeep.ParentId);
+        Assert.Null(headDeep.StartIndex);
+        Assert.Null(headDeep.Limit);
     }
 
     // JF-666: the artist continuation fetch must filter via IncludeItemTypes=Audio,

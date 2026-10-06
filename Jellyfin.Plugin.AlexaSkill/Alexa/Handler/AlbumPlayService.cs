@@ -625,6 +625,11 @@ public sealed class AlbumPlayService
         var tracksQuery = QueueContinuationFetcher.BuildScopedAlbumTracksQuery(
             jellyfinUser, user, libraryManager, _logger, album.Id, 0,
             ProgressiveQueueConstants.GetInitialFetchSize(), byAlbumIds: false);
+        // Which arm served the page (folder ParentId vs the JF-338 AlbumIds retry
+        // below): the JF-796 deep-resume fetch must reuse the arm that WORKED, or a
+        // malformed-folder album's unpaged folder query would come back empty and
+        // silently skip the deep scan.
+        bool pageUsedAlbumIds = false;
         // JF-753: this page and the AlbumIds retry below drive the continuation
         // store gate, so the fallback total must be the sentinel
         // (unknownTotalOnFallback): a page-size total would read as "complete"
@@ -643,6 +648,7 @@ public sealed class AlbumPlayService
             // ignores folder structure. Verified on the malformed "Jazz Cafe" album:
             // ParentId+Recursive returns 0, AlbumIds returns all tracks. JF-338.
             _logger.LogDebug("{Label}: folder-based track query returned 0, retrying by AlbumIds for '{Name}'", logLabel, album.Name);
+            pageUsedAlbumIds = true;
             var albumIdsQuery = QueueContinuationFetcher.BuildScopedAlbumTracksQuery(
                 jellyfinUser, user, libraryManager, _logger, album.Id, 0,
                 ProgressiveQueueConstants.GetInitialFetchSize(), byAlbumIds: true);
@@ -664,6 +670,15 @@ public sealed class AlbumPlayService
         (int startIndex, _) = ResumeMath.FindResumeTrackIndex(
             albumItems, jellyfinUser, userDataManager, resumePosition: false);
 
+        // The continuation bookkeeping, computed here so the deep-resume block below
+        // can rebase it: how many tracks the page has consumed (the database offset
+        // is independent of the resume slice) and whether more remain. JF-753: the
+        // gate is regime-aware (the ONE decision shared with the audiobook head, see
+        // QueueContinuationFetcher.InitialPageHasMore).
+        int continuationStartIndex = albumResult.Items.Count;
+        int continuationTotalCount = albumResult.TotalRecordCount;
+        bool continuationHasMore = QueueContinuationFetcher.InitialPageHasMore(albumResult);
+
         // JF-625 (criterion 3): in seek mode the album's whole-album stream records
         // progress in the AudiobookPositionTracker under the album GUID (segment
         // fetches; VideoApp emits no playback events, so UserData never moves on
@@ -673,10 +688,12 @@ public sealed class AlbumPlayService
         // prefix. The in-track partial rides collectionStartTicks below (exact on a
         // warm cache; the cold-serve guard drops it to the track start).
         long trackedInTrackTicks = 0;
+        bool trackerOverrideEngaged = false;
         if (_launch.GetVideoAppForAudio(user)
             && Interface.VideoAppCapabilities.DeviceSupportsVideoApp(context)
             && Plugin.Instance?.AudiobookPositionTracker?.GetPositionTicks(album.Id.ToString()) is long tracked and > 0)
         {
+            trackerOverrideEngaged = true;
             long prefix = 0;
             int trackedIndex = 0;
             for (int i = 0; i < albumItems.Count; i++)
@@ -699,6 +716,73 @@ public sealed class AlbumPlayService
                 _logger.LogInformation(
                     "{Label}: seek-mode album resume from tracker: track {Index} ({Name}), album position {Position}s (in-track {Partial}s)",
                     logLabel, startIndex, albumItems[startIndex].Name, tracked / TimeSpan.TicksPerSecond, trackedInTrackTicks / TimeSpan.TicksPerSecond);
+            }
+        }
+
+        // JF-796: the audio route's page-1-bounded resume (the JF-793 Finding 4
+        // audiobook twin). FindResumeTrackIndex above scanned only the initial page,
+        // so UserData progress on a track BEYOND the page (track 22 of 26) was
+        // invisible and the fresh ask relaunched from track 1. The bounded
+        // resolution mirrors the audiobook head's: when the page yields no position
+        // and the album extends beyond it, fetch the album once unpaged (the same
+        // scoped unpaged query shape the YesIntent album confirm uses, reusing the
+        // page's working ParentId/AlbumIds arm) and re-run the ONE resume decision
+        // on the full track list; a position found beyond the page re-slices the
+        // page at that track, so the launch, the queue, and the continuation all
+        // start there. THE TRACKER VETO is this site's own axis (the reason the
+        // block is NOT folded into AudiobookPlayResolver's deep-resume helper
+        // shape): a warm tracker on the seek route is the resume truth (JF-625
+        // criterion 3, above), so the deep fetch is skipped entirely whenever the
+        // tracker engaged, mapped or not, and UserData can never overtake it; the
+        // remaining divergences (resumePosition false with no device-queue tier,
+        // the AlbumIds arm, and the absolute concat prefix below, which the
+        // chapter-relative book offset does not need) are the same verdict.
+        // KNOWN TRADE, stated as the books do (JF-793): the guard keys on the
+        // page-1 scan's no-position answer, which an UNSTARTED multi-page album
+        // also produces, so every first-ever ask of a long album runs the unpaged
+        // fetch and finds nothing (one bounded query added to the hot fresh-play
+        // path inside the Alexa window). The JF-797 item 3 discriminator (any
+        // Played/position flag check ahead of the fetch) applies here too once it
+        // lands.
+        long deepResumePrefixTicks = 0;
+        if (!trackerOverrideEngaged && startIndex == 0 && continuationHasMore)
+        {
+            QueryResult<BaseItem> fullAlbum = await RetryAsync(
+                () => _search.SafeGetItemsResult(libraryManager,
+                    QueueContinuationFetcher.BuildScopedAlbumTracksQueryUnpaged(
+                        jellyfinUser, user, libraryManager, _logger, album.Id, pageUsedAlbumIds)),
+                logLabel + ":GetAlbumTracksDeepResume",
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            (int deepIndex, _) = ResumeMath.FindResumeTrackIndex(
+                fullAlbum.Items, jellyfinUser, userDataManager, resumePosition: false);
+            if (deepIndex > 0)
+            {
+                // The re-sliced page starts exactly at the position-holding track,
+                // so the page-relative answer is index 0 by construction in every
+                // return shape of FindResumeTrackIndex (in-progress hit or
+                // after-last-played): no re-scan of the slice. The audio route
+                // starts the resume track at its beginning (resumePosition false,
+                // the queue-starting semantic); a cold tracker on the seek route
+                // still gets the RIGHT absolute concat position through the prefix.
+                albumItems = fullAlbum.Items
+                    .Skip(deepIndex)
+                    .Take(ProgressiveQueueConstants.GetInitialFetchSize())
+                    .ToList();
+                startIndex = 0;
+                deepResumePrefixTicks = fullAlbum.Items.Take(deepIndex).Sum(i => i.RunTimeTicks ?? 0);
+
+                _logger.LogInformation(
+                    "{Label}: deep resume found track {DeepIndex} ('{TrackName}') beyond the initial page; re-paging the album at it",
+                    logLabel, deepIndex, fullAlbum.Items[deepIndex].Name);
+
+                // The fetch-all list is itself the honest total in both regimes
+                // (known-total pages and the JF-753 end-unknown fallback), so the
+                // continuation carries a real count, judged by the ONE named
+                // maybe-more bar (the two-int form the playlist head uses).
+                continuationStartIndex = deepIndex + albumItems.Count;
+                continuationTotalCount = fullAlbum.Items.Count;
+                continuationHasMore = QueueContinuationFetcher.InitialPageHasMore(continuationStartIndex, continuationTotalCount);
             }
         }
 
@@ -735,7 +819,11 @@ public sealed class AlbumPlayService
         // head scope), and the launch below mints the concat URL whose token carries
         // this user's library scope, so the endpoint encodes the SAME scoped timeline
         // this offset counts on (the former unscoped-superset residual, closed).
-        long albumStartTicks = albumItems.Take(startIndex).Sum(i => i.RunTimeTicks ?? 0);
+        // JF-796: a deep re-slice shifted the page window, so the absolute prefix of
+        // the tracks BEFORE the window must lead the sum (the seek-mode concat
+        // timeline is album-absolute; zero on every non-deep shape). Like the prefix
+        // beside it, this sums over the SCOPED row set the deep fetch returned.
+        long albumStartTicks = deepResumePrefixTicks + albumItems.Take(startIndex).Sum(i => i.RunTimeTicks ?? 0);
         // The seek-mode tracker path's in-track partial (tracked - prefix at the resume
         // track): added so a warm-cache slice lands mid-track where listening stopped.
         albumStartTicks += trackedInTrackTicks;
@@ -752,11 +840,12 @@ public sealed class AlbumPlayService
             0);
 
         // Store continuation info so PlaybackNearlyFinished can fetch the rest.
-        // StartIndex uses the original page size because the database offset is
-        // independent of the resume slice.
+        // StartIndex counts the tracks the queue has consumed (page start + page
+        // count; the database offset is independent of the resume slice, and the
+        // JF-796 deep resume rebases it to the position-holding track's page).
         // JF-753: the gate is regime-aware (the ONE decision shared with the
         // audiobook head, see QueueContinuationFetcher.InitialPageHasMore).
-        if (QueueContinuationFetcher.InitialPageHasMore(albumResult))
+        if (continuationHasMore)
         {
             QueueContinuationStore.Set(
                 session.UserId,
@@ -765,8 +854,8 @@ public sealed class AlbumPlayService
                 {
                     SourceType = "Album",
                     ParentId = album.Id,
-                    StartIndex = albumResult.Items.Count,
-                    TotalCount = albumResult.TotalRecordCount,
+                    StartIndex = continuationStartIndex,
+                    TotalCount = continuationTotalCount,
                     UserId = jellyfinUser.Id,
                     // JF-674: identity = the queue page just installed (see MintedQueueItemIds).
                     MintedQueueItemIds = QueueContinuation.QueueIdsOf(queueItems)
