@@ -179,6 +179,44 @@ public class YesIntentHandler : BaseHandler
                 _userDataManager, _queueManager, cancellationToken);
         }
 
+        // JF-805: the MusicAlbum confirm rides the head's ONE album play flow
+        // (AlbumPlayService.BuildAlbumPlayResponseAsync, the JF-795 book pattern /
+        // PodcastEpisodeResolver precedent chain), so the confirm inherits the
+        // initial page, the resume scan (in-page and the JF-796 deep resume),
+        // the JF-625 tracker override, the continuation mint, and the
+        // device-queue write from the ONE composition and cannot drift from the
+        // direct ask. The composition re-fetches the track page (the books'
+        // JF-795 answer: the routing branch rides the head's own fetch flow; the
+        // disambiguation state carries only id/name pairs, so nothing
+        // prefetched is wasted). The music gate keeps the disabled answer
+        // identical to the direct ask's (the JF-611/JF-795 shape). The JF-803
+        // divergence axes live INSIDE the composition and ride along.
+        if (mediaType == DisambiguationHelper.MediaTypeAlbum
+            && item is MediaBrowser.Controller.Entities.Audio.MusicAlbum)
+        {
+            SkillResponse? musicDisabled = IfMediaTypeDisabled(c => c.MusicEnabled, request);
+            if (musicDisabled != null)
+            {
+                return Task.FromResult(musicDisabled);
+            }
+
+            Logger.LogDebug("Yes: routing MusicAlbum item {ItemId} to the shared album play flow", itemId);
+            return AlbumPlay.BuildAlbumPlayResponseAsync(
+                item,
+                jellyfinUser!,
+                user,
+                session,
+                context,
+                locale,
+                _libraryManager,
+                _userDataManager,
+                _queueManager,
+                "Yes",
+                announcement: null,
+                request: request,
+                cancellationToken);
+        }
+
         if (mediaType == DisambiguationHelper.MediaTypeVideo)
         {
             return PlayVideo(item, user, session, locale, context, request);
@@ -336,21 +374,19 @@ public class YesIntentHandler : BaseHandler
 
     private SkillResponse PlayAlbum(BaseItem album, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Entities.User user, SessionInfo session, string locale, Context? context)
     {
-        // JF-767 Finding A: the confirmed-MusicAlbum enumeration routes through the ONE
-        // album-tracks builder (unpaged, session-user form) under the JF-666 library scope,
-        // with the JF-338 AlbumIds retry: the same triple the paged head
-        // (AlbumPlayService.BuildAlbumPlayResponseAsync) runs, so a confirm answers exactly
-        // what the direct ask plays (split albums included) and the queue rows feed the
-        // JF-625 concat timeline the same field set the endpoint encodes. The NON-MusicAlbum
-        // leg routes through the ONE chapters builder's scoped unpaged sibling (JF-672
-        // code-review F1) and the chapters core's MediaTypes=Audio axis keeps the JF-361
-        // kind discipline (IncludeItemTypes=Audio, the ALBUM builder's axis, would drop
-        // AudioBook chapters). DEFENSIVE-ONLY today (JF-672 gate-marker correction): no
-        // live producer reaches this leg, because every `item is AudioBook` confirm
-        // routes to PlayBook() above, and PlayAlbum's own disambiguation matches are
-        // MusicAlbum-only; the sibling exists so a future non-album parent (or the
-        // JF-791 folder resolution) enumerates through the ONE core, never a private
-        // initializer with the refuted AlbumTrackOrder composite.
+        // JF-805: the MusicAlbum confirm routes through the ONE album play flow
+        // (AlbumPlayService.BuildAlbumPlayResponseAsync) ABOVE, so this method now
+        // serves the DEFENSIVE non-MusicAlbum payloads only (the JF-767 Finding A
+        // MusicAlbum enumeration and the JF-672 chapters sibling both survive
+        // verbatim below): no live producer reaches it, because book payloads
+        // (AudioBook items and non-MusicAlbum FOLDERS, IsBookDisambiguationPayload)
+        // route to PlayBookAsync, MusicAlbums route to the shared composition, and
+        // PlayAlbum's own disambiguation matches are MusicAlbum-only. The legs
+        // exist so a future leaf-shaped producer enumerates through the ONE
+        // cores (the album builder's JF-338 retry triple; the chapters core's
+        // MediaTypes=Audio axis, which keeps the JF-361 kind discipline
+        // IncludeItemTypes=Audio would drop), never a private initializer with
+        // the refuted AlbumTrackOrder composite.
         bool isMusicAlbum = album is MediaBrowser.Controller.Entities.Audio.MusicAlbum;
         var tracksQuery = isMusicAlbum
             ? QueueContinuationFetcher.BuildScopedAlbumTracksQueryUnpaged(
