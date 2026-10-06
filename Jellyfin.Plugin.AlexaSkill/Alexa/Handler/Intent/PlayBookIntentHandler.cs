@@ -164,6 +164,20 @@ public class PlayBookIntentHandler : BaseHandler
             }
         }
 
+        // JF-791: the match above for a multi-chapter book is a CHAPTER leaf (the
+        // shape rationale and the null contract live on
+        // AudiobookItems.TryResolveBookFolder); re-point it at the book folder so
+        // every head-query/continuation/name read below runs on the BOOK. Null keeps
+        // the match itself: its own track (the JF-361 duality in the zero-children
+        // branch below).
+        if (AudiobookItems.TryResolveBookFolder(books[0], _libraryManager) is { } bookFolder)
+        {
+            Logger.LogDebug(
+                "PlayBook: match '{MatchName}' is an audiobook chapter leaf, climbing to book folder '{BookName}' ({BookId})",
+                books[0].Name, bookFolder.Name, bookFolder.Id);
+            books = new List<BaseItem> { bookFolder };
+        }
+
         // Initial page through the ONE shared chapters-page query's scoped sibling
         // (JF-670; JF-767 joined the scope axis so head, confirm, and tail all run
         // the same JF-666 pairing and cannot drift apart): the continuation fetcher
