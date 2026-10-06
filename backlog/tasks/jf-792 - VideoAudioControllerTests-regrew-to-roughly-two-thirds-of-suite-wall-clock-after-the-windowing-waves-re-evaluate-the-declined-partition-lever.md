@@ -3,7 +3,7 @@ id: JF-792
 title: >-
   JF-792 - VideoAudioControllerTests regrew to roughly two thirds of suite wall
   clock after the windowing waves; re-evaluate the declined partition lever
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-06'
 labels:
