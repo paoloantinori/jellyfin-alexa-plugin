@@ -1,5 +1,5 @@
 ---
-id: JF-787
+id: JF-789
 title: >-
   The ledger recency read: expose LastPlayedWrittenAt on the snapshot, bound
   the resolver tail and the JF-632 gate, and dissolve the per-family idle

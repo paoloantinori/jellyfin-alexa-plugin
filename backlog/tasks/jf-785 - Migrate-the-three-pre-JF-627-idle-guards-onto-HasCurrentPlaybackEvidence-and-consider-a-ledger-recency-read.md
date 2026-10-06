@@ -100,7 +100,7 @@ target). Pinned both ways (below); the predicate's doc carries the parity
 story.
 
 LEG 4 (the root-fix consideration), DECISION: REJECTED for this task, filed
-as JF-787. The finding's premise needs one correction first: the timestamp
+as JF-789. The finding's premise needs one correction first: the timestamp
 primitive ALREADY EXISTS. DeviceQueue.LastPlayedWrittenAt (JF-619) is stamped
 by RecordLastPlayed on every write (including the short-circuit relaunch
 path), persists with the queue (null on pre-JF-619 files), so there is no
@@ -118,7 +118,7 @@ device round), the window value itself has no device evidence behind any
 number, and the pre-JF-619 null stamps need their own policy decision
 (legacy-tie keeps the days-old answer for old files; stale-as-refused changes
 upgrade behavior). That is the task's "expands scope, risky blast radius"
-branch verbatim. JF-787 carries the implementable shape now that the
+branch verbatim. JF-789 carries the implementable shape now that the
 primitive's existence is on record.
 
 ### Red proofs (both TFMs, run on the UNMODIFIED tree before any production change)
@@ -176,7 +176,7 @@ predicate doc links instead of restating; the four call sites keep
 family-specific one-liners, the verbatim migration-history paragraphs dropped);
 the belt/supersession note on the predicate doc (with the tail refused, the
 resolver's answering arms are exactly the predicate's legs, so guard + flag
-encode one policy; the fold is JF-787 step 5); CreateAddCurrent gained the
+encode one policy; the fold is JF-789 step 5); CreateAddCurrent gained the
 optional ledger param with the three new inline constructions repointed (the
 file's factory convention); the two new Movie constructions repoint to
 TestHelpers.CreateMovie (the JF-781 as-touched rule); the pin docs cut to a
@@ -184,7 +184,7 @@ few lines with pointers. SKIPPED with reasons: the structural fold (delete
 the four guards, keep the flag, delete the zero-caller predicate; it
 contradicts the filed task shape whose core mandate is the migration ONTO the
 predicate, rewrites the JF-627/JF-629 contracts the task declares load-bearing,
-and is deliberately JF-787 step 5); the ghost-DTO TestHelpers factory (three
+and is deliberately JF-789 step 5); the ghost-DTO TestHelpers factory (three
 one-line initializers with per-test Name flavor, below the ceremony threshold;
 noted as the 4th-copy trigger); the two pre-existing JF-627 inline
 constructions left alone (no-drive-by).
@@ -263,7 +263,7 @@ lookup miss) deliberately refuses because the only remaining signal is the
 unbounded ledger; pinned both ways, with the code-review-corrected boundary
 facts (the ended movie is indistinguishable from playing and keeps acting,
 matching RateItem's stance). LEG 4 (root fix): REJECTED with the reason
-recorded and FILED as JF-787 (the LastPlayedWrittenAt stamp already exists,
+recorded and FILED as JF-789 (the LastPlayedWrittenAt stamp already exists,
 but dissolving the guard layer requires globally bounding the tail, flipping
 documented deliberate stances of RateItem, the JF-632 gate family
 (loop/sleep/speed), and the unguarded Repeat/SetPlaybackSpeed riders, plus

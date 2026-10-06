@@ -1116,7 +1116,7 @@ public sealed class PlaybackLaunchBuilder
     /// this guard BELT over the flag: with the tail refused, the resolver's
     /// remaining answering arms are exactly this predicate's legs, so the two
     /// mechanisms encode one policy. The fold (guard layer dissolved into the
-    /// resolver's own recency-bound answer) is JF-787 step 5; until then the
+    /// resolver's own recency-bound answer) is JF-789 step 5; until then the
     /// explicit guard keeps the idle refusal ahead of any ledger read and
     /// carries the JF-627 red-proof ladder.
     /// VIDEOAPP PARITY (JF-785 Leg B, deliberate boundary, pinned, no new
