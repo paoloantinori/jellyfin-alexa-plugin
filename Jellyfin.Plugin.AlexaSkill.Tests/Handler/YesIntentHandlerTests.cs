@@ -750,6 +750,199 @@ public class YesIntentHandlerTests : PluginTestBase
         response.HasDirective<AudioPlayerPlayDirective>();
     }
 
+    /// <summary>
+    /// JF-793 Finding 1 RED PROOF: PlayBook's disambiguation stores CHAPTER leaves
+    /// (the JF-791 shape: Jellyfin never types a multi-file book folder as AudioBook,
+    /// so the book search returns chapter leaves), so the confirmed item reaching the
+    /// YesIntent PlayBook leg is a leaf. The pre-fix leg ran the chapters query on the
+    /// leaf's OWN Id, enumerated zero children, and the single-file fallback played the
+    /// ONE confirmed chapter then silence: the exact one-chapter-then-silence defect
+    /// the direct ask lost in JF-791, on the confirm path, violating the
+    /// confirm-must-match-ask rule (the parallel-dispatch invariant). The leg must
+    /// climb the confirmed leaf to the book folder the same way the head path does.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DisambiguationAlbumType_AudioBookChapterLeaf_ConfirmClimbsToBookFolder()
+    {
+        var bookFolderId = Guid.NewGuid();
+        var chapterLeaf = new AudioBook
+        {
+            Name = "Measure What Matters - Chapter 22",
+            Id = Guid.NewGuid(),
+            ParentId = bookFolderId,
+            Path = "/audiobooks/measure-what-matters/ch22.mp3"
+        };
+
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemById(chapterLeaf.Id))
+            .Returns(chapterLeaf);
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemById(bookFolderId))
+            .Returns(new Folder { Name = "Measure What Matters", Id = bookFolderId, Path = "/audiobooks/measure-what-matters" });
+
+        // 26 chapters with the initial page of 5: the confirm's chapters query must
+        // run on the FOLDER id and see the page; any other parent (the pre-fix leaf
+        // id) enumerates nothing, the real server's answer for a leaf.
+        List<BaseItem> chapters = Enumerable.Range(1, 26)
+            .Select(i => (BaseItem)new Audio
+            {
+                Name = $"Measure What Matters - Chapter {i:00}",
+                Id = Guid.NewGuid(),
+                ParentId = bookFolderId
+            })
+            .ToList();
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q => q.ParentId == bookFolderId
+                ? chapters.Take(ProgressiveQueueConstants.GetInitialFetchSize()).ToList()
+                : new List<BaseItem>());
+
+        var matchInfo = new DisambiguationHelper.MatchInfo { Id = chapterLeaf.Id.ToString(), Name = chapterLeaf.Name };
+        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
+
+        var handler = CreateHandler();
+        var session = CreateSession();
+        var response = await handler.HandleAsync(
+            CreateYesIntentRequest(),
+            CreateContext(),
+            TestHelpers.CreateTestUser(),
+            session,
+            attrs,
+            CancellationToken.None);
+
+        // The confirm plays the BOOK's first chapter, not the confirmed leaf alone:
+        // the queue carries the page and the directive launches chapter 1.
+        var audioDirective = Assert.IsType<AudioPlayerPlayDirective>(
+            Assert.Single(response.Response.Directives!));
+        Assert.Equal(chapters[0].Id.ToString(), audioDirective.AudioItem.Stream.Token);
+        Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), session.NowPlayingQueue.Count);
+        Assert.Equal(chapters[0].Id, session.FullNowPlayingItem!.Id);
+    }
+
+    /// <summary>
+    /// JF-793 Finding 2 twin pin (the confirm leg of the live shared-container shape):
+    /// a confirmed COLLAPSED single-file book under the shared container (the minix
+    /// census shape: the leaf's file sits one directory deeper than its ParentId
+    /// container) must NOT climb: the container is not a book folder, and the
+    /// confirmed book plays as its own single track (the JF-361 duality), never a
+    /// container merge.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DisambiguationAlbumType_CollapsedSingleFileBook_UnderSharedContainer_PlaysAsOwnTrack()
+    {
+        Guid containerId = Guid.NewGuid();
+        var book = new AudioBook
+        {
+            Name = "Radical Candor",
+            Id = Guid.NewGuid(),
+            ParentId = containerId,
+            Path = "/audiobooks/Radical Candor/Radical Candor.m4b"
+        };
+
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemById(book.Id))
+            .Returns(book);
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemById(containerId))
+            .Returns(new Folder { Name = "Audiobooks", Id = containerId, Path = "/audiobooks" });
+
+        // The merge the discriminator must prevent: the container's enumeration
+        // returns the sibling single-file books.
+        List<BaseItem> siblings = new()
+        {
+            book,
+            new AudioBook
+            {
+                Name = "Managing Humans",
+                Id = Guid.NewGuid(),
+                ParentId = containerId,
+                Path = "/audiobooks/Managing Humans/Managing Humans.m4b"
+            }
+        };
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q => q.ParentId == containerId
+                ? siblings
+                : new List<BaseItem>());
+
+        var matchInfo = new DisambiguationHelper.MatchInfo { Id = book.Id.ToString(), Name = book.Name };
+        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
+
+        var handler = CreateHandler();
+        var session = CreateSession();
+        var response = await handler.HandleAsync(
+            CreateYesIntentRequest(),
+            CreateContext(),
+            TestHelpers.CreateTestUser(),
+            session,
+            attrs,
+            CancellationToken.None);
+
+        // The ONE confirmed book plays as its own track, not the container merge.
+        var audioDirective = Assert.IsType<AudioPlayerPlayDirective>(
+            Assert.Single(response.Response.Directives!));
+        Assert.Equal(book.Id.ToString(), audioDirective.AudioItem.Stream.Token);
+        Assert.Single(session.NowPlayingQueue);
+        Assert.Equal(book.Id, session.FullNowPlayingItem!.Id);
+    }
+
+    /// <summary>
+    /// JF-793 code-review F1 RED PROOF: the finding-3 normalization emits the book
+    /// FOLDER id as the confirm payload (pinned by
+    /// PlayBook_MultiMatchDisambiguation_PresentsBookGranularChoices), but a plain
+    /// Folder is not an AudioBook, so the pre-fix routing gate
+    /// (<c>IsAudioBook(item)</c>) dropped these confirms into the PlayAlbum arm:
+    /// the unpaged whole-book queue (26, not the PlayBook leg's paged 5), no
+    /// resume, no device queue, and under NativeControlsForBooks a plain
+    /// AudioPlayer chapter-1 launch where the direct ask gives the VideoApp concat.
+    /// A "yes" on a multi-chapter book must reach the PlayBook leg, whatever
+    /// payload shape the prompt minted (leaf id or folder id).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DisambiguationAlbumType_BookFolderIdPayload_RoutesToPlayBookLeg()
+    {
+        var bookFolderId = Guid.NewGuid();
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemById(bookFolderId))
+            .Returns(new Folder { Name = "Measure What Matters", Id = bookFolderId, Path = "/audiobooks/measure-what-matters" });
+
+        List<BaseItem> chapters = Enumerable.Range(1, 26)
+            .Select(i => (BaseItem)new Audio
+            {
+                Name = $"Measure What Matters - Chapter {i:00}",
+                Id = Guid.NewGuid(),
+                ParentId = bookFolderId
+            })
+            .ToList();
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q => chapters
+                .Skip(q.StartIndex ?? 0)
+                .Take(q.Limit ?? chapters.Count)
+                .ToList());
+
+        var matchInfo = new DisambiguationHelper.MatchInfo { Id = bookFolderId.ToString(), Name = "Measure What Matters" };
+        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
+
+        var handler = CreateHandler();
+        var session = CreateSession();
+        var response = await handler.HandleAsync(
+            CreateYesIntentRequest(),
+            CreateContext(),
+            TestHelpers.CreateTestUser(),
+            session,
+            attrs,
+            CancellationToken.None);
+
+        // The PlayBook leg answers: the paged initial queue (5), chapter 1 first.
+        // The pre-fix PlayAlbum arm enumerated the whole book unpaged (26).
+        var audioDirective = Assert.IsType<AudioPlayerPlayDirective>(
+            Assert.Single(response.Response.Directives!));
+        Assert.Equal(chapters[0].Id.ToString(), audioDirective.AudioItem.Stream.Token);
+        Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), session.NowPlayingQueue.Count);
+        Assert.Equal(chapters[0].Id, session.FullNowPlayingItem!.Id);
+    }
+
     [Fact]
     public async Task HandleAsync_ArtistType_SongQuery_UsesIncludeItemTypesNotMediaTypes()
     {

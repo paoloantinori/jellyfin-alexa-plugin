@@ -25,19 +25,30 @@ internal static class AudiobookItems
     /// is the default AudioPlayer path's twin of the VideoApp builders' ParentId climb
     /// (<c>BuildVideoAppAudioResponse</c>/<c>BuildAudiobookResumeResponse</c>): the
     /// paged chapters machinery needs the folder's Id and Name, which a bare Guid
-    /// cannot supply. Two deliberate divergences from that twin: this path VERIFIES
+    /// cannot supply. Three deliberate divergences from that twin: this path VERIFIES
     /// the ParentId resolves to a Folder before adopting it (the builders concat the
     /// raw Guid, so a dangling ParentId degrades to the leaf play here but a dead URL
-    /// there), and the climb is ONE level, matching the builders' raw-ParentId
-    /// semantics (a chapter under a subfolder resolves the subfolder on BOTH paths;
-    /// see JF-793). The single-file shapes (an AudioBook with an empty ParentId, or
-    /// any non-AudioBook match) and a failed folder resolution return null: callers
-    /// keep the leaf shape and play it as its own track (the JF-361 duality), never
-    /// a failed request.
+    /// there); the climb is ONE level, matching the builders' raw-ParentId semantics
+    /// (a chapter under a subfolder resolves the subfolder on BOTH paths); and since
+    /// JF-793 the climb is SHARED-CONTAINER-AWARE (the live minix census, 2026-10-06:
+    /// the "Audiobooks" library container directly holds 6 collapsed single-file
+    /// books, each an AudioBook leaf whose file sits one directory DEEPER than the
+    /// container, because the resolver collapses single-file directories and hoists
+    /// the book above its own folder): a leaf that does not sit DIRECTLY inside the
+    /// resolved parent means the parent is a container of sibling books (or a part
+    /// subfolder), not a book folder, and the climb is REJECTED so the leaf plays as
+    /// its own track instead of merging the container into one queue. The builders'
+    /// raw-ParentId concat does NOT share this discriminator (their sync is filed).
+    /// A missing Path on either side cannot discriminate and defaults to the climb
+    /// (the JF-791 shape; server-side folders always carry a Path). The single-file
+    /// shapes (an AudioBook with an empty ParentId, or any non-AudioBook match), a
+    /// failed folder resolution, and the shared-container rejection return null:
+    /// callers keep the leaf shape and play it as its own track (the JF-361 duality),
+    /// never a failed request.
     /// </summary>
     /// <param name="item">The audiobook search match (a chapter leaf or a single-file book).</param>
     /// <param name="libraryManager">The library manager resolving the ParentId.</param>
-    /// <returns>The book folder, or null when the item is not a chapter leaf or the parent does not resolve to a Folder.</returns>
+    /// <returns>The book folder, or null when the item is not a chapter leaf, the parent does not resolve to a Folder, or the parent is a shared container the leaf does not sit directly inside.</returns>
     internal static Folder? TryResolveBookFolder(BaseItem? item, ILibraryManager libraryManager)
     {
         if (item is not AudioBook chapter || chapter.ParentId == Guid.Empty)
@@ -45,8 +56,60 @@ internal static class AudiobookItems
             return null;
         }
 
-        return libraryManager.GetItemById(chapter.ParentId) as Folder;
+        if (libraryManager.GetItemById(chapter.ParentId) is not Folder folder)
+        {
+            return null;
+        }
+
+        return SitsDirectlyInside(chapter, folder) ? folder : null;
     }
+
+    /// <summary>
+    /// The JF-793 shared-container discriminator: whether the audio file sits directly
+    /// inside the candidate book folder. A multi-chapter book's chapter files and an
+    /// uncollapsed own-folder book's file both do; a COLLAPSED single-file book's file
+    /// sits in its own subfolder below the shared container its ParentId names (the
+    /// live census shape), and a chapter under a part subfolder likewise sits below
+    /// the subfolder the one-level climb would resolve. Trailing separators are
+    /// trimmed on both sides; the comparison is case-insensitive (Windows-hosted
+    /// servers). Null or empty paths on either side, and bare-filename leaf paths,
+    /// cannot discriminate and return FALSE (the gate-marker tail F1: fail-CLOSED,
+    /// not the earlier fail-open climb - a Path-less or bare-name leaf under a
+    /// shared ParentId container is exactly the library-merge hazard finding 2
+    /// closed, and an unverifiable layout plays the leaf alone, the pre-JF-791
+    /// behavior, never the merged container).
+    /// </summary>
+    private static bool SitsDirectlyInside(AudioBook chapter, Folder folder)
+    {
+        if (string.IsNullOrEmpty(chapter.Path) || string.IsNullOrEmpty(folder.Path))
+        {
+            return false;
+        }
+
+        // GetDirectoryName returns EMPTY (not null) for a bare filename; a bare
+        // name cannot prove the file sits inside the folder, so it fails closed
+        // with the other unverifiable shapes (gate-marker tail F1).
+        string? chapterDirectory = System.IO.Path.GetDirectoryName(chapter.Path.TrimEnd('/', '\\'));
+        return !string.IsNullOrEmpty(chapterDirectory)
+            && string.Equals(
+                chapterDirectory.TrimEnd('/', '\\'),
+                folder.Path.TrimEnd('/', '\\'),
+                StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Whether a confirmed "album"-labelled disambiguation payload is a BOOK
+    /// (JF-793 code-review F1): an AudioBook item (the chapter-leaf and
+    /// single-file payloads) or a plain book FOLDER (the payload shape the
+    /// PlayBook candidate normalization emits for multi-chapter books; a Folder is
+    /// not an AudioBook, so the bare <see cref="IsAudioBook"/> gate misrouted
+    /// those confirms into the album leg). MusicAlbum stays excluded: PlayAlbum's
+    /// own disambiguation matches are MusicAlbums and must keep routing to the
+    /// album leg.
+    /// </summary>
+    internal static bool IsBookDisambiguationPayload(BaseItem? item)
+        => item is AudioBook
+           || (item is Folder && item is not MediaBrowser.Controller.Entities.Audio.MusicAlbum);
 
     /// <summary>
     /// Whether the finished item is BOOK-shaped for the end-of-book decision (JF-670):

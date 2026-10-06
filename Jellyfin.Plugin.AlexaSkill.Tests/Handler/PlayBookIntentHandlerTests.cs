@@ -331,7 +331,7 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
             .Returns(new List<BaseItem> { chapterLeaf, looseLeaf });
 
         _fx.LibraryManager.Setup(l => l.GetItemById(bookFolderId))
-            .Returns(new Folder { Name = "Measure What Matters", Id = bookFolderId });
+            .Returns(new Folder { Name = "Measure What Matters", Id = bookFolderId, Path = "/audiobooks/measure-what-matters" });
 
         // 26 chapters with one initial page of 5 (GetInitialFetchSize): the head
         // query must run on the FOLDER id and see the full count; any other parent
@@ -433,7 +433,9 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
     // the folder's only audio child, the book itself, so the climb is a behavioral
     // no-op for the per-book-folder layout (the pin is change-invariant by design).
     // The shared-container merge shape (sibling single-file books under one parent)
-    // is the JF-793 hazard and is deliberately NOT pinned as expected behavior.
+    // is the JF-793 hazard and now HAS its own pin (the discriminator's reject arm);
+    // this pin's folder carries its Path since JF-793 so it also exercises the
+    // discriminator's ACCEPT arm (the file sits directly inside the folder).
     [Fact]
     public async Task PlayBook_SingleFileAudioBook_InOwnFolder_StillPlaysAsOwnTrack()
     {
@@ -459,7 +461,7 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
             .Returns(new List<BaseItem> { bookItem });
 
         _fx.LibraryManager.Setup(l => l.GetItemById(ownFolderId))
-            .Returns(new Folder { Name = "The Hobbit", Id = ownFolderId });
+            .Returns(new Folder { Name = "The Hobbit", Id = ownFolderId, Path = "/audiobooks/the-hobbit" });
 
         // The folder's only audio child is the book itself; any other parent (the
         // leaf's own Id, the no-climb shape) enumerates nothing, the real server's
@@ -527,6 +529,522 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
         Assert.Equal(chapterLeaf.Id.ToString(), audioDirective.AudioItem.Stream.Token);
         Assert.Single(session.NowPlayingQueue);
         Assert.Null(QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID!));
+    }
+
+    // JF-793 Finding 2 RED PROOF (the live probe found the shape): the minix census
+    // (2026-10-06, 383 AudioBook leaves grouped by ParentId) found 14 parents; 13 are
+    // BOOK folders whose every child file sits DIRECTLY inside the parent path, and
+    // ONE is the "Audiobooks" library container (/data/media/audiobook/Audiobooks,
+    // parentId=None) directly holding 6 COLLAPSED single-file books (The Honest Truth
+    // About Dishonesty, two HBR 10 Must Reads volumes, Managing Humans, Power Moves,
+    // Radical Candor), each an AudioBook leaf whose file sits one directory DEEPER
+    // than the container (the resolver collapsed each single-file directory, so the
+    // leaf's ParentId is the folder ABOVE its own book folder). The unconditional
+    // JF-791 climb merges all of them (worse: the recursive chapters query
+    // enumerates the WHOLE library) into one queue. The discriminator: a leaf whose
+    // file does not sit directly inside the resolved parent means the parent is a
+    // shared container, not a book folder: keep the leaf (the JF-361 duality, the
+    // collapsed single-file book IS the book and plays as its own track).
+    [Fact]
+    public async Task PlayBook_CollapsedSingleFileBook_UnderSharedContainer_PlaysAsOwnTrack()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(bookName: "Managing Humans");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+
+        Guid containerId = Guid.NewGuid();
+        var book = new AudioBook
+        {
+            Name = "Managing Humans: Biting and Humorous Tales of a Software Engineering Manager",
+            Id = Guid.NewGuid(),
+            ParentId = containerId,
+            // The collapsed shape: the file sits in its OWN subfolder below the shared
+            // container (the live path shape from the census).
+            Path = "/audiobooks/Managing Humans/Audiobook - Managing_Humans.m4b"
+        };
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
+            .Returns(new List<BaseItem> { book });
+
+        // The container resolves (a plain Folder with its live path); its recursive
+        // enumeration would return the sibling single-file books (and, on the real
+        // server, every chapter of every book in the library): the merge the
+        // discriminator must prevent.
+        _fx.LibraryManager.Setup(l => l.GetItemById(containerId))
+            .Returns(new Folder { Name = "Audiobooks", Id = containerId, Path = "/audiobooks" });
+        List<BaseItem> siblings = new()
+        {
+            book,
+            new AudioBook
+            {
+                Name = "Radical Candor",
+                Id = Guid.NewGuid(),
+                ParentId = containerId,
+                Path = "/audiobooks/Radical Candor/Radical Candor.m4b"
+            },
+            new AudioBook
+            {
+                Name = "Power Moves: Lessons from Davos",
+                Id = Guid.NewGuid(),
+                ParentId = containerId,
+                Path = "/audiobooks/Adam Grant - Power Moves/Power Moves.mp3"
+            }
+        };
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q => q.ParentId == containerId
+                ? new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+                {
+                    Items = siblings.ToArray(),
+                    TotalRecordCount = siblings.Count
+                }
+                : new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+                {
+                    Items = Array.Empty<BaseItem>(),
+                    TotalRecordCount = 0
+                });
+
+        try
+        {
+            SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+            // The ONE book plays as its own track: no container merge, no continuation.
+            var audioDirective = response.Response.Directives?[0] as AudioPlayerPlayDirective;
+            Assert.NotNull(audioDirective);
+            Assert.Equal(book.Id.ToString(), audioDirective.AudioItem.Stream.Token);
+            Assert.Single(session.NowPlayingQueue);
+            Assert.Null(QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID!));
+        }
+        finally
+        {
+            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
+        }
+    }
+
+    // Gate-marker tail F1 pins: the discriminator FAILS CLOSED. The earlier
+    // fail-open returned true (the climb) for every shape it could not verify,
+    // so a Path-less or bare-filename leaf under a shared ParentId container
+    // reproduced the exact library-merge hazard finding 2 closed through the
+    // unverifiable shapes. The unverifiable layout plays the leaf alone (the
+    // pre-JF-791 behavior), never the merged container. RED on the pre-tail
+    // tree: the climb fires and the queue swallows the siblings.
+    [Fact]
+    public async Task PlayBook_PathlessLeaf_UnderSharedContainer_FailsClosedToOwnTrack()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(bookName: "Managing Humans");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+
+        Guid containerId = Guid.NewGuid();
+        var book = new AudioBook
+        {
+            Name = "Managing Humans: Biting and Humorous Tales of a Software Engineering Manager",
+            Id = Guid.NewGuid(),
+            ParentId = containerId,
+            Path = null
+        };
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
+            .Returns(new List<BaseItem> { book });
+
+        _fx.LibraryManager.Setup(l => l.GetItemById(containerId))
+            .Returns(new Folder { Name = "Audiobooks", Id = containerId, Path = "/audiobooks" });
+        List<BaseItem> siblings = new()
+        {
+            book,
+            new AudioBook
+            {
+                Name = "Radical Candor",
+                Id = Guid.NewGuid(),
+                ParentId = containerId,
+                Path = "/audiobooks/Radical Candor/Radical Candor.m4b"
+            }
+        };
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q => q.ParentId == containerId
+                ? new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+                {
+                    Items = siblings.ToArray(),
+                    TotalRecordCount = siblings.Count
+                }
+                : new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+                {
+                    Items = Array.Empty<BaseItem>(),
+                    TotalRecordCount = 0
+                });
+
+        try
+        {
+            SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+            var audioDirective = response.Response.Directives?[0] as AudioPlayerPlayDirective;
+            Assert.NotNull(audioDirective);
+            Assert.Equal(book.Id.ToString(), audioDirective.AudioItem.Stream.Token);
+            Assert.Single(session.NowPlayingQueue);
+            Assert.Null(QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID!));
+        }
+        finally
+        {
+            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
+        }
+    }
+
+    [Fact]
+    public async Task PlayBook_BareFilenameLeaf_UnderSharedContainer_FailsClosedToOwnTrack()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(bookName: "Managing Humans");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+
+        Guid containerId = Guid.NewGuid();
+        var book = new AudioBook
+        {
+            Name = "Managing Humans: Biting and Humorous Tales of a Software Engineering Manager",
+            Id = Guid.NewGuid(),
+            ParentId = containerId,
+            Path = "Audiobook - Managing_Humans.m4b"
+        };
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
+            .Returns(new List<BaseItem> { book });
+
+        _fx.LibraryManager.Setup(l => l.GetItemById(containerId))
+            .Returns(new Folder { Name = "Audiobooks", Id = containerId, Path = "/audiobooks" });
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q => q.ParentId == containerId
+                ? new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+                {
+                    Items = new List<BaseItem>
+                    {
+                        book,
+                        new AudioBook
+                        {
+                            Name = "Radical Candor",
+                            Id = Guid.NewGuid(),
+                            ParentId = containerId,
+                            Path = "/audiobooks/Radical Candor/Radical Candor.m4b"
+                        }
+                    }.ToArray(),
+                    TotalRecordCount = 2
+                }
+                : new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+                {
+                    Items = Array.Empty<BaseItem>(),
+                    TotalRecordCount = 0
+                });
+
+        try
+        {
+            SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+            var audioDirective = response.Response.Directives?[0] as AudioPlayerPlayDirective;
+            Assert.NotNull(audioDirective);
+            Assert.Equal(book.Id.ToString(), audioDirective.AudioItem.Stream.Token);
+            Assert.Single(session.NowPlayingQueue);
+            Assert.Null(QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID!));
+        }
+        finally
+        {
+            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
+        }
+    }
+
+    // JF-793 Finding 2 companion pin (the accept arm): a multi-chapter book whose
+    // folder carries its path (the live 13-of-14 census shape) still climbs: the
+    // chapter file sits DIRECTLY inside the book folder. Locks the discriminator's
+    // true-negative so the shared-container rejection cannot overfire onto the
+    // JF-791 fix itself.
+    [Fact]
+    public async Task PlayBook_ChapterLeaf_InPathedBookFolder_StillClimbsToBookFolder()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(bookName: "Measure What Matters");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+
+        Guid bookFolderId = Guid.NewGuid();
+        var chapterLeaf = new AudioBook
+        {
+            Name = "Measure What Matters",
+            Id = Guid.NewGuid(),
+            ParentId = bookFolderId,
+            Path = "/audiobooks/measure-what-matters/ch01.mp3"
+        };
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
+            .Returns(new List<BaseItem> { chapterLeaf });
+
+        // The book folder with its live path; the chapter file sits directly inside it.
+        _fx.LibraryManager.Setup(l => l.GetItemById(bookFolderId))
+            .Returns(new Folder { Name = "Measure What Matters", Id = bookFolderId, Path = "/audiobooks/measure-what-matters" });
+
+        List<BaseItem> chapters = Enumerable.Range(1, 26)
+            .Select(i => (BaseItem)new AudioBook
+            {
+                Name = $"Measure What Matters - Chapter {i:00}",
+                Id = Guid.NewGuid(),
+                ParentId = bookFolderId,
+                Path = $"/audiobooks/measure-what-matters/ch{i:00}.mp3"
+            })
+            .ToList();
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q => q.ParentId == bookFolderId
+                ? new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+                {
+                    Items = chapters.Take(ProgressiveQueueConstants.GetInitialFetchSize()).ToArray(),
+                    TotalRecordCount = chapters.Count
+                }
+                : new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+                {
+                    Items = Array.Empty<BaseItem>(),
+                    TotalRecordCount = 0
+                });
+
+        try
+        {
+            SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+            var audioDirective = response.Response.Directives?[0] as AudioPlayerPlayDirective;
+            Assert.NotNull(audioDirective);
+            Assert.Equal(chapters[0].Id.ToString(), audioDirective.AudioItem.Stream.Token);
+            Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), session.NowPlayingQueue.Count);
+        }
+        finally
+        {
+            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
+        }
+    }
+
+    // JF-793 Finding 3 RED PROOF: the disambiguation must present BOOK-granular
+    // choices. A multi-chapter book's search candidates are N chapter leaves (the
+    // JF-791 shape), so the multi-match prompt presented chapter-granular entries
+    // ("... - Chapter 01" vs "... - Chapter 02" of the SAME book) whose confirm
+    // payload was a chapter leaf id: an illusory choice, since the climb then plays
+    // the whole book from chapter 1 whichever entry wins (and the "- Chapter N"
+    // name tails drag the fuzzy scores below the >= 90 auto-play bar the folder
+    // name clears exactly). The candidate set must be normalized through
+    // TryResolveBookFolder and deduped by folder id BEFORE the disambiguation
+    // consumers; single-file books pass through unchanged.
+    [Fact]
+    public async Task PlayBook_MultiMatchDisambiguation_PresentsBookGranularChoices()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(bookName: "zzzqqq");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+
+        Guid bookFolderId = Guid.NewGuid();
+        var chapter1 = new AudioBook
+        {
+            Name = "Measure What Matters - Chapter 01",
+            Id = Guid.NewGuid(),
+            ParentId = bookFolderId,
+            Path = "/audiobooks/measure-what-matters/ch01.mp3"
+        };
+        var chapter2 = new AudioBook
+        {
+            Name = "Measure What Matters - Chapter 02",
+            Id = Guid.NewGuid(),
+            ParentId = bookFolderId,
+            Path = "/audiobooks/measure-what-matters/ch02.mp3"
+        };
+        var singleFileBook = new AudioBook
+        {
+            Name = "The Manager's Path",
+            Id = Guid.NewGuid(),
+            Path = "/audiobooks/managers-path.m4b"
+        };
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
+            .Returns(new List<BaseItem> { chapter1, chapter2, singleFileBook });
+
+        _fx.LibraryManager.Setup(l => l.GetItemById(bookFolderId))
+            .Returns(new Folder { Name = "Measure What Matters", Id = bookFolderId, Path = "/audiobooks/measure-what-matters" });
+
+        // The ask path returns before the head chapters query.
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+            {
+                Items = Array.Empty<BaseItem>(),
+                TotalRecordCount = 0
+            });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        // The disambiguation state carries ONE entry per BOOK, named for the book,
+        // with the FOLDER id as the confirm payload: no chapter-granular entries.
+        Assert.NotNull(response.SessionAttributes);
+        Assert.True(response.SessionAttributes.TryGetValue("disambig_matches", out object? matchesObj));
+        var matches = Newtonsoft.Json.JsonConvert.DeserializeObject<List<DisambiguationHelper.MatchInfo>>(
+            (string)matchesObj!);
+        Assert.NotNull(matches);
+        Assert.Equal(2, matches!.Count);
+        Assert.Equal("Measure What Matters", matches[0].Name);
+        Assert.Equal(bookFolderId.ToString(), matches[0].Id);
+        Assert.Equal("The Manager's Path", matches[1].Name);
+        Assert.DoesNotContain("Chapter", string.Join("|", matches.Select(m => m.Name)), StringComparison.Ordinal);
+    }
+
+    // JF-793 code-review F2 RED PROOF: the no-collapse shape. Chapter leaves of TWO
+    // DISTINCT books normalize onto two distinct folders, the count is preserved,
+    // and the pre-fix pass-through returned the ORIGINAL leaves: the prompt stayed
+    // chapter-granular ('Book Alpha - Chapter 03'), the confirm payload stayed a
+    // leaf id, and the '- Chapter N' tails kept dragging the fuzzy scores below the
+    // >= 90 auto-play bar - both finding-3 defects surviving exactly when no dedup
+    // collapsed anything. Normalization must replace, not only dedup.
+    [Fact]
+    public async Task PlayBook_MultiMatchDisambiguation_DistinctBooks_PresentFolderGranularChoices()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(bookName: "zzzqqq");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+
+        Guid alphaFolderId = Guid.NewGuid();
+        Guid betaFolderId = Guid.NewGuid();
+        var alphaLeaf = new AudioBook
+        {
+            Name = "Book Alpha - Chapter 03",
+            Id = Guid.NewGuid(),
+            ParentId = alphaFolderId,
+            Path = "/audiobooks/book-alpha/ch03.mp3"
+        };
+        var betaLeaf = new AudioBook
+        {
+            Name = "Book Beta - Chapter 09",
+            Id = Guid.NewGuid(),
+            ParentId = betaFolderId,
+            Path = "/audiobooks/book-beta/ch09.mp3"
+        };
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
+            .Returns(new List<BaseItem> { alphaLeaf, betaLeaf });
+
+        _fx.LibraryManager.Setup(l => l.GetItemById(alphaFolderId))
+            .Returns(new Folder { Name = "Book Alpha", Id = alphaFolderId, Path = "/audiobooks/book-alpha" });
+        _fx.LibraryManager.Setup(l => l.GetItemById(betaFolderId))
+            .Returns(new Folder { Name = "Book Beta", Id = betaFolderId, Path = "/audiobooks/book-beta" });
+
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+            {
+                Items = Array.Empty<BaseItem>(),
+                TotalRecordCount = 0
+            });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response.SessionAttributes);
+        Assert.True(response.SessionAttributes.TryGetValue("disambig_matches", out object? matchesObj));
+        var matches = Newtonsoft.Json.JsonConvert.DeserializeObject<List<DisambiguationHelper.MatchInfo>>(
+            (string)matchesObj!);
+        Assert.NotNull(matches);
+        Assert.Equal(2, matches!.Count);
+        Assert.Equal("Book Alpha", matches[0].Name);
+        Assert.Equal(alphaFolderId.ToString(), matches[0].Id);
+        Assert.Equal("Book Beta", matches[1].Name);
+        Assert.Equal(betaFolderId.ToString(), matches[1].Id);
+        Assert.DoesNotContain("Chapter", string.Join("|", matches.Select(m => m.Name)), StringComparison.Ordinal);
+    }
+
+    // JF-793 code-review F4 companion pin: the same-book collapse. Chapter leaves
+    // of ONE book normalize to a single folder entry, the count drops to 1, and the
+    // disambiguation block is skipped entirely in favor of a direct play: the book
+    // auto-plays from its first chapter with the paged queue and continuation, no
+    // spurious choice prompt (and no disambiguation state left behind).
+    [Fact]
+    public async Task PlayBook_SameBookChapterLeaves_CollapseToDirectPlay_NoDisambiguationPrompt()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(bookName: "Measure What Matters");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+
+        Guid bookFolderId = Guid.NewGuid();
+        List<BaseItem> chapterLeaves = Enumerable.Range(1, 2)
+            .Select(i => (BaseItem)new AudioBook
+            {
+                Name = $"Measure What Matters - Chapter {i:00}",
+                Id = Guid.NewGuid(),
+                ParentId = bookFolderId,
+                Path = $"/audiobooks/measure-what-matters/ch{i:00}.mp3"
+            })
+            .ToList();
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
+            .Returns(chapterLeaves);
+
+        _fx.LibraryManager.Setup(l => l.GetItemById(bookFolderId))
+            .Returns(new Folder { Name = "Measure What Matters", Id = bookFolderId, Path = "/audiobooks/measure-what-matters" });
+
+        List<BaseItem> chapters = Enumerable.Range(1, 26)
+            .Select(i => (BaseItem)new AudioBook
+            {
+                Name = $"Measure What Matters - Chapter {i:00}",
+                Id = Guid.NewGuid(),
+                ParentId = bookFolderId,
+                Path = $"/audiobooks/measure-what-matters/ch{i:00}.mp3"
+            })
+            .ToList();
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q => q.ParentId == bookFolderId
+                ? new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+                {
+                    Items = chapters.Take(ProgressiveQueueConstants.GetInitialFetchSize()).ToArray(),
+                    TotalRecordCount = chapters.Count
+                }
+                : new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+                {
+                    Items = Array.Empty<BaseItem>(),
+                    TotalRecordCount = 0
+                });
+
+        try
+        {
+            SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+            var audioDirective = response.Response.Directives?[0] as AudioPlayerPlayDirective;
+            Assert.NotNull(audioDirective);
+            Assert.Equal(chapters[0].Id.ToString(), audioDirective.AudioItem.Stream.Token);
+            Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), session.NowPlayingQueue.Count);
+            QueueContinuation? continuation = QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID!);
+            Assert.NotNull(continuation);
+            Assert.Equal(bookFolderId, continuation!.ParentId);
+        }
+        finally
+        {
+            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
+        }
     }
 
     // JF-673 RED PROOF: on NRE-class servers the chapters page arrives through the

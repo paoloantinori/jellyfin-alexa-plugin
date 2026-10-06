@@ -279,6 +279,148 @@ public class PlayBookResumeTests : PluginTestBase, IDisposable
         Assert.Contains(tracks[0].Id.ToString(), audioDirective.AudioItem.Stream.Url);
     }
 
+    // The shared deep-resume fixture (the JF-793 Finding 4 pair): the JF-791 live
+    // entry shape (a chapter leaf that climbs to its pathed book folder), a
+    // paging-honoring chapters mock (initial page 5, the deep unpaged fetch all),
+    // and deep in-progress UserData on chapter 22 (index 21) at the given position.
+    private (List<BaseItem> Chapters, Guid BookFolderId) SetupDeepResumeBook(int chapterCount, long positionTicks)
+    {
+        Guid bookFolderId = Guid.NewGuid();
+        var chapterLeaf = new AudioBook
+        {
+            Name = "Measure What Matters",
+            Id = Guid.NewGuid(),
+            ParentId = bookFolderId,
+            Path = "/audiobooks/measure-what-matters/ch01.mp3"
+        };
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
+            .Returns(new List<BaseItem> { chapterLeaf });
+        _fx.LibraryManager.Setup(l => l.GetItemById(bookFolderId))
+            .Returns(new Folder
+            {
+                Name = "Measure What Matters",
+                Id = bookFolderId,
+                Path = "/audiobooks/measure-what-matters"
+            });
+
+        List<BaseItem> chapters = Enumerable.Range(1, chapterCount)
+            .Select(i => (BaseItem)new Audio
+            {
+                Name = $"Measure What Matters - Chapter {i:00}",
+                Id = Guid.NewGuid()
+            })
+            .ToList();
+
+        // The chapters query honors paging: the initial page serves 5 (the
+        // zero-padded Names keep mock insertion order equal to the server's SortName
+        // order), the deep unpaged fetch serves the whole book.
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q => new QueryResult<BaseItem>
+            {
+                Items = chapters
+                    .Skip(q.StartIndex ?? 0)
+                    .Take(q.Limit ?? chapters.Count)
+                    .ToList(),
+                TotalRecordCount = chapters.Count
+            });
+
+        var inProgress = new UserItemData
+        {
+            Key = "test",
+            Played = false,
+            PlaybackPositionTicks = positionTicks
+        };
+        _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
+            .Returns((Jellyfin.Database.Implementations.Entities.User _, BaseItem item) =>
+                item.Id == chapters[21].Id ? inProgress : null);
+
+        return (chapters, bookFolderId);
+    }
+
+    // JF-793 Finding 4 RED PROOF: the page-1-bounded resume. FindResumeTrackIndex
+    // scans only the 5-item initial page, so UserData progress on chapter 22 of 26
+    // is invisible and the fresh ask relaunched from chapter 1 at 0:00 (pre-JF-791
+    // the same ask played the matched chapter at its position, then silence; the
+    // album precedent is not liftable, JF-625 criterion 3 is the video-route tracker
+    // override). The bounded resolution: when page 1 yields no position and the book
+    // extends beyond the page, the full chapter list is fetched once and the ONE
+    // resume decision re-run on it; the page re-slices at the position-holding
+    // chapter, so the launch, the queue, and the continuation all start there.
+    [Fact]
+    public async Task HandleAsync_DeepProgressBeyondInitialPage_ResumesAtPositionHoldingChapter()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest("Measure What Matters");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+        (List<BaseItem> chapters, Guid _) = SetupDeepResumeBook(26, TimeSpan.FromMinutes(10).Ticks);
+
+        try
+        {
+            SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+            Assert.NotNull(response);
+            var audioDirective = response.Response.Directives?.OfType<AudioPlayerPlayDirective>().FirstOrDefault();
+            Assert.NotNull(audioDirective);
+
+            // The position-holding chapter launches at its position, not chapter 1
+            // at 0:00.
+            Assert.Equal(chapters[21].Id.ToString(), audioDirective.AudioItem.Stream.Token);
+            Assert.Equal((int)TimeSpan.FromMinutes(10).TotalMilliseconds, audioDirective.AudioItem.Stream.OffsetInMilliseconds);
+
+            // The queue starts at the position-holding chapter and carries the rest
+            // of the re-sliced page (chapters 22-26); nothing remains beyond it, so
+            // no continuation is minted.
+            Assert.Equal(5, session.NowPlayingQueue.Count);
+            Assert.Equal(chapters[21].Id, session.FullNowPlayingItem!.Id);
+            Assert.Equal(chapters[21].Id, session.NowPlayingQueue[0].Id);
+            Assert.Equal(chapters[25].Id, session.NowPlayingQueue[4].Id);
+            Assert.Null(QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID!));
+        }
+        finally
+        {
+            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
+        }
+    }
+
+    // JF-793 Finding 4 companion pin: the continuation offset after a deep resume.
+    // A 40-chapter book resumed at chapter 22 (index 21) re-slices the page at
+    // chapters 22-26, so the continuation must fetch from index 26 (page start 21 +
+    // page count 5) against the real total 40: the pre-fix shape stored StartIndex 5
+    // (page 1 only) regardless of the resume point.
+    [Fact]
+    public async Task HandleAsync_DeepProgressBeyondInitialPage_ContinuationOffsetAtResumePoint()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest("Measure What Matters");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+        (List<BaseItem> _, Guid bookFolderId) = SetupDeepResumeBook(40, TimeSpan.FromMinutes(3).Ticks);
+
+        try
+        {
+            await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+            QueueContinuation? continuation = QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID!);
+            Assert.NotNull(continuation);
+            Assert.Equal("Audiobook", continuation!.SourceType);
+            Assert.Equal(bookFolderId, continuation.ParentId);
+            Assert.Equal(26, continuation.StartIndex);
+            Assert.Equal(40, continuation.TotalCount);
+        }
+        finally
+        {
+            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
+        }
+    }
+
     [Fact]
     public async Task HandleAsync_BookWithProgress_StartsFromCorrectOffset()
     {

@@ -144,10 +144,16 @@ public class YesIntentHandler : BaseHandler
         }
 
         // JF-361: AudioBook items arrive with MediaTypeAlbum label (PlayBook disambiguation reuses
-        // it). Route to the audiobook playback path instead of PlayAlbum. The two JF-501
-        // progressive-announce paths return their tasks directly (the announcing launch
-        // builders are async); the sync play paths keep the Task.FromResult shape.
-        if (mediaType == DisambiguationHelper.MediaTypeAlbum && AudiobookItems.IsAudioBook(item))
+        // it). Route to the audiobook playback path instead of PlayAlbum. JF-793 code-review F1:
+        // the payload can also be the book FOLDER itself (the candidate normalization emits
+        // folder ids for multi-chapter books), and a Folder is not an AudioBook, so the bare
+        // IsAudioBook gate misrouted those confirms into the PlayAlbum arm (unpaged whole-book
+        // queue, no resume, no device queue, plain AudioPlayer under NativeControlsForBooks);
+        // IsBookDisambiguationPayload covers both payload shapes while MusicAlbums stay on the
+        // album leg. The two JF-501 progressive-announce paths return their tasks directly (the
+        // announcing launch builders are async); the sync play paths keep the Task.FromResult
+        // shape.
+        if (mediaType == DisambiguationHelper.MediaTypeAlbum && AudiobookItems.IsBookDisambiguationPayload(item))
         {
             Logger.LogDebug("Yes: routing AudioBook item {ItemId} to audiobook playback", itemId);
             return PlayBook(item, jellyfinUser!, user, session, locale, context, request);
@@ -386,6 +392,26 @@ public class YesIntentHandler : BaseHandler
     /// </summary>
     private async Task<SkillResponse> PlayBook(BaseItem book, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Entities.User user, SessionInfo session, string locale, Context context, Request request)
     {
+        // JF-793 Finding 1: the confirmed disambiguation match arrives in TWO
+        // payload shapes: a CHAPTER leaf (the JF-791 shape, Jellyfin never types a
+        // multi-file book folder as AudioBook; prompts minted before the finding-3
+        // normalization, and any leaf-payload producer) or the book FOLDER itself
+        // (the shape the PlayBook candidate normalization emits for multi-chapter
+        // books, routed here by IsBookDisambiguationPayload). Running the chapters
+        // query on a leaf's OWN Id enumerated zero children and the single-file
+        // fallback below played the ONE confirmed chapter then silence. Climb to the
+        // book folder the same way the head path does (the confirm-must-match-ask
+        // rule; on a Folder payload the climb harmlessly no-ops); the null shapes
+        // (single-file books, failed resolution) keep the leaf and degrade to the
+        // existing fallback, never a failed request.
+        if (AudiobookItems.TryResolveBookFolder(book, _libraryManager) is { } confirmedBookFolder)
+        {
+            Logger.LogDebug(
+                "Yes: confirmed audiobook '{LeafName}' is a chapter leaf, climbing to book folder '{BookName}' ({BookId})",
+                book.Name, confirmedBookFolder.Name, confirmedBookFolder.Id);
+            book = confirmedBookFolder;
+        }
+
         // Resolve tracks through the ONE audiobook chapters query's scoped sibling
         // (JF-767 Finding A fold: identical field set to the former hand-kept initializer,
         // modulo the now-explicit StartIndex=0, plus the JF-666 scope the tail's

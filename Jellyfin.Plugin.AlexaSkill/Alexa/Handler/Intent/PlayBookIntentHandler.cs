@@ -49,6 +49,46 @@ public class PlayBookIntentHandler : BaseHandler
         _queueManager = queueManager;
     }
 
+    /// <summary>
+    /// Map the audiobook search candidates onto BOOK granularity (JF-793 Finding 3):
+    /// each candidate through <see cref="AudiobookItems.TryResolveBookFolder"/>,
+    /// deduped by resolved id, preserving first-occurrence order. Chapter leaves
+    /// collapse onto their book folder, so the multi-match disambiguation presents
+    /// ONE entry per book (named for the book, whose confirm payload is the folder
+    /// id, and whose name clears the auto-play bar the "- Chapter N" tails dragged
+    /// below) instead of N chapter-granular choices. Single-file books, failed
+    /// climbs, and the shared-container rejection (the collapsed book under a
+    /// container) keep their own entry: they ARE distinct books. The replaced list
+    /// is returned even when no dedup collapsed anything (code-review F2: distinct
+    /// books' leaves must also present as folders, not only same-book leaves). The
+    /// post-disambiguation climb in <see cref="HandleAsync"/> stays as the tolerant
+    /// safety net (on a Folder the helper harmlessly returns null).
+    /// </summary>
+    private IReadOnlyList<BaseItem> NormalizeBookCandidates(IReadOnlyList<BaseItem> candidates)
+    {
+        if (candidates.Count <= 1)
+        {
+            return candidates;
+        }
+
+        // First-occurrence order BY CONSTRUCTION (gate-marker F4): a dictionary's
+        // Values enumeration is an implementation detail, so the dedup walks the
+        // source list with a seen-set instead and the doc's order promise is the
+        // code's actual guarantee.
+        List<BaseItem> byBook = new();
+        HashSet<Guid> seen = new();
+        foreach (BaseItem candidate in candidates)
+        {
+            BaseItem book = AudiobookItems.TryResolveBookFolder(candidate, _libraryManager) ?? candidate;
+            if (seen.Add(book.Id))
+            {
+                byBook.Add(book);
+            }
+        }
+
+        return byBook;
+    }
+
     /// <inheritdoc/>
     public override bool CanHandle(Request request)
     {
@@ -126,6 +166,12 @@ public class PlayBookIntentHandler : BaseHandler
                 return ResponseBuilder.Tell(ResponseStrings.Get("NotFoundBook", locale, book));
             }
         }
+
+        // JF-793 Finding 3: BOOK-granular candidates before the disambiguation
+        // consumers (the illusory chapter-granular choice, and the "- Chapter N"
+        // name tails dragging the fuzzy scores below the auto-play bar). The shape
+        // rationale and the pass-through list live on NormalizeBookCandidates.
+        books = NormalizeBookCandidates(books);
 
         if (books.Count > 1)
         {
@@ -238,6 +284,73 @@ public class PlayBookIntentHandler : BaseHandler
             "PlayBook: FindResumeTrackIndex returned startIndex={StartIndex}, resumeTicks={Ticks} for '{BookName}'",
             startIndex, resumeTicks, books[0].Name);
 
+        // The continuation bookkeeping, computed here so the deep-resume block below
+        // can rebase it: how many chapters the queue has consumed (page start +
+        // page count; the database offset is independent of the resume slice) and
+        // whether more remain. JF-673: the gate is regime-aware (the ONE decision
+        // shared with the album head, see QueueContinuationFetcher.InitialPageHasMore).
+        int continuationStartIndex = bookTracks.Items.Count;
+        int continuationTotalCount = bookTracks.TotalRecordCount;
+        bool continuationHasMore = QueueContinuationFetcher.InitialPageHasMore(bookTracks);
+
+        // JF-793 Finding 4: the page-1-bounded resume. FindResumeTrackIndex scanned
+        // only the initial page, so UserData progress on a chapter BEYOND the page
+        // (chapter 22 of 26) was invisible and the fresh ask relaunched from chapter
+        // 1 at 0:00 (pre-JF-791 the same ask played the matched chapter at its
+        // position, then silence; the album precedent is not liftable, JF-625
+        // criterion 3 is the video-route tracker override). The bounded resolution:
+        // when page 1 yields no position AND the book extends beyond the page, fetch
+        // the book once unpaged (the concat endpoint's fetch-all shape, JF-784) and
+        // re-run the ONE resume decision on the full chapter list; a position found
+        // beyond the page re-slices the page at that chapter, so the launch, the
+        // queue, and the continuation all start at the position-holding chapter.
+        // Fresh books and books the page already covers pay nothing (the guard skips
+        // the fetch when the page holds the whole book); a multi-page fresh ask pays
+        // one extra query. TRADE, stated (the gate-marker tail): the guard keys on
+        // the page-1 scan's (0,0) answer, which an UNSTARTED multi-page book also
+        // produces, so every first-ever ask of a long book runs the unpaged fetch
+        // and finds nothing - one bounded recursive query added to the hot fresh-play
+        // path inside the Alexa window. A cheaper discriminator (any Played/position
+        // flag check ahead of the fetch) is the filed follow-up, JF-797 item 3.
+        // The single-file shapes never reach here (their page is
+        // the whole book by construction).
+        if (startIndex == 0 && resumeTicks == 0 && continuationHasMore)
+        {
+            QueryResult<BaseItem> fullBook = await RetryAsync(
+                () => Search.SafeGetItemsResult(_libraryManager,
+                    QueueContinuationFetcher.BuildScopedAudiobookChaptersQueryUnpaged(
+                        jellyfinUser, user, _libraryManager, Logger, books[0].Id)),
+                "GetBookTracksDeepResume",
+                cancellationToken).ConfigureAwait(false);
+
+            (int deepIndex, long deepTicks) = ResumeMath.FindResumeTrackIndex(
+                fullBook.Items, jellyfinUser!, _userDataManager, _queueManager, session.DeviceId, resumePosition: true, Logger);
+            if (deepIndex > 0)
+            {
+                // The re-sliced page starts exactly at the position-holding chapter,
+                // so the page-relative answer is (0, deepTicks) by construction in
+                // every return shape of FindResumeTrackIndex (in-progress hit, cached
+                // position, after-last-played): no re-scan of the slice.
+                trackItems = fullBook.Items
+                    .Skip(deepIndex)
+                    .Take(ProgressiveQueueConstants.GetInitialFetchSize())
+                    .ToList();
+                startIndex = 0;
+                resumeTicks = deepTicks;
+
+                Logger.LogInformation(
+                    "PlayBook: deep resume found chapter {DeepIndex} ('{TrackName}') beyond the initial page; re-paging the book at it",
+                    deepIndex, fullBook.Items[deepIndex].Name);
+
+                // The fetch-all list is itself the honest total in both regimes
+                // (known-total pages and the JF-673 end-unknown fallback), so the
+                // continuation carries a real count.
+                continuationStartIndex = deepIndex + trackItems.Count;
+                continuationTotalCount = fullBook.Items.Count;
+                continuationHasMore = continuationStartIndex < continuationTotalCount;
+            }
+        }
+
         int offsetMs = 0;
 
         if (startIndex > 0 || resumeTicks > 0)
@@ -280,11 +393,11 @@ public class PlayBookIntentHandler : BaseHandler
                 0);
 
             // Store continuation info so PlaybackNearlyFinished can fetch the rest.
-            // StartIndex uses the original page size because the database offset is
-            // independent of the resume slice.
-            // JF-673: the gate is regime-aware (the ONE decision shared with the
-            // album head, see QueueContinuationFetcher.InitialPageHasMore).
-            if (QueueContinuationFetcher.InitialPageHasMore(bookTracks))
+            // StartIndex counts the chapters the queue has consumed (page start +
+            // page count; the database offset is independent of the resume slice,
+            // and the JF-793 deep resume rebases it to the position-holding chapter's
+            // page).
+            if (continuationHasMore)
             {
                 QueueContinuationStore.Set(
                     session.UserId,
@@ -293,8 +406,8 @@ public class PlayBookIntentHandler : BaseHandler
                     {
                         SourceType = "Audiobook",
                         ParentId = books[0].Id,
-                        StartIndex = bookTracks.Items.Count,
-                        TotalCount = bookTracks.TotalRecordCount,
+                        StartIndex = continuationStartIndex,
+                        TotalCount = continuationTotalCount,
                         UserId = jellyfinUser!.Id,
                         // JF-674: bind the entry to THIS queue page (the ids just
                         // installed into session.NowPlayingQueue) so a later

@@ -3,7 +3,7 @@ id: JF-793
 title: >-
   JF-793 - the JF-791 residuals: the YesIntent confirm leg, the shared-container merge
   hazard, and the chapter-granular disambiguation
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-06'
 updated_date: '2026-10-06'
@@ -102,16 +102,32 @@ carry (2026-10-06):
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #1 dotnet build passes with 0 errors (Release -warnaserror: 0 warnings, 0 errors, both TFMs)
+- [x] #2 dotnet test passes (5401/5401 both TFMs, baseline 5391 + 10 pins)
+- [x] #3 No new compiler warnings introduced (-warnaserror clean)
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization (N/A: no session-attribute shape change; disambiguation state still rides the existing DisambiguationHelper.MatchInfo DTO)
+- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress (N/A: no HttpClient touched)
+- [x] #6 NLU test fixtures updated if interaction model changed (N/A: no model/locale/utterance change, the standing constraint was honored)
+- [x] #7 E2E test added for new intent or handler logic (N/A as E2E: handler-level behavior pinned by 10 unit pins across YesIntentHandlerTests/PlayBookIntentHandlerTests/PlayBookResumeTests with red proofs; the worker does not deploy, so the live simulator/device leg belongs to the orchestrator's deploy round)
+- [x] #8 Locale response strings added to all 17 locales (N/A: no new speech; the constraint forbade locale changes)
+- [x] #9 /simplify passed (4 parallel angles, 4 applied + 4 reasoned skips, recorded in the e9c64508 gate commit)
+- [x] #10 /code-review high passed (4 findings, all applied with red proofs, in the 191b7878 gate commit)
 <!-- DOD:END -->
 
 FINDING 4 (added by the JF-791 gate-marker, same-turn): the head-page-bounded resume on the flat book path. With the folder resolved, FindResumeTrackIndex scans only the 5-item initial page (ResumeMath iterates the argument list), so UserData/ItemPositionState progress on chapter 22 of 26 is invisible and a fresh ask relaunches from chapter 1 at 0:00 (pre-fix, the same ask played the matched chapter at its position, then silence; the net outcome still improves, and mid-book resume keeps working through the resume intent ledger, but the fresh-ask deep-progress corner regressed). The album precedent is NOT liftable (JF-625 criterion 3 is the video-route tracker override under the album GUID); the flat path needs its own shape: a bounded position-holding-chapter resolution before paging (e.g. query the folder children for the max UserData last-played timestamp when page 1 yields no position, map it onto the queue by chapter id, and offset the continuation accordingly), with its own red pin (deep progress, fresh ask, expect the position-holding chapter to launch at its position). Sequencing note: land AFTER findings 1-3 (the confirm-leg climb and the container probe change which queries exist).
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+JF-793 complete (worker branch, 7 commits on top of b6b50278; not merged, not deployed). Per-finding dispositions:
+
+FINDING 1 (YesIntent PlayBook confirm leg, landed): TryResolveBookFolder adopted at the leg's entry, null shapes degrading to the single-file fallback. Red pin first on the unmodified tree both TFMs (26-chapter book, confirm the leaf: expected chapters[0].Id, got the leaf's id), mirroring the JF-791 head pin. In-task decision: the adoption does NOT cover the leg's missing QueueContinuation minting, and the /simplify altitude round added the missing RESUME axis (the leg launches chapter 1 with no FindResumeTrackIndex at all); both filed as JF-795, amended with the routing-branch preference (the head's minting state grew with the JF-793 continuation triplet, so replication would copy the whole flow).
+
+FINDING 2 (shared-container merge hazard, PROBE FIRST, instance found): the live minix census (read-only; 383 AudioBook leaves grouped by ParentId; 14 parents fetched individually) found 13 book folders whose every child file sits DIRECTLY inside the parent path and ONE real shared container: the 'Audiobooks' library folder (/data/media/audiobook/Audiobooks, parentId=None) directly holding 6 COLLAPSED single-file books (The Honest Truth About Dishonesty, both HBR 10 Must Reads volumes, Managing Humans, Power Moves, Radical Candor), each an AudioBook leaf whose file sits one directory DEEPER than the container (the resolver hoists collapsed single-file directories above their own folder). The unconditional climb would have enumerated the container recursively, the WHOLE library as one queue. Discriminator: AudiobookItems.SitsDirectlyInside (dirname(leaf.Path) == folder.Path, trailing separators trimmed, case-insensitive; null/empty paths and bare filenames default to the climb, the doc-contract the code-review F3 guard restored). Red pins RED pre-fix with the exact merge signature (Assert.Single failure: the collection contained 3 items) on the head path AND the YesIntent confirm twin; companion accept-arm pin plus the JF-791 own-folder pin upgraded to carry its folder Path lock the non-overfire direction. The VideoApp builders' raw-ParentId concat twin FILED as JF-794 (tracker-key/token-mint coherence called out as the design risk).
+
+FINDING 3 (chapter-granular disambiguation, landed AFTER finding 1 per the filing's caveat): NormalizeBookCandidates maps the candidate set through TryResolveBookFolder and dedups by folder id BEFORE the disambiguation consumers, always returning the replaced list (the code-review F2 probe-verified correction: the count-preserved pass-through left distinct books' leaves chapter-granular). Red pin RED pre-fix ('Expected: 2 / Actual: 3'). The climb stays as the tolerant safety net. The code-review F1 probe-verified routing bug (the folder-id payloads failed IsAudioBook and fell into the PlayAlbum arm: unpaged queue 26, no resume, plain AudioPlayer under NativeControlsForBooks) fixed with AudiobookItems.IsBookDisambiguationPayload (AudioBook leaves OR plain Folders; MusicAlbums stay on the album leg); red pin RED ('Expected: 5 / Actual: 26') then green. The finding-3 commit's 'Folder-id payloads now no-op the leg's climb' claim was false and is corrected in the gate commit (report-faithfully rule).
+
+FINDING 4 (head-page-bounded resume, landed, bounded shape held): when page 1 yields no position and InitialPageHasMore says the book extends beyond the page, one unpaged fetch (the JF-784 concat-endpoint shape) re-runs the ONE resume decision (FindResumeTrackIndex) on the full list; deepIndex > 0 re-slices the page at the position-holding chapter (launch token, offset, queue) and rebases the continuation triplet (StartIndex = deepIndex + page count, TotalCount = the fetch-all list's count). Red pins: primary RED pre-fix (chapters[0] at 0:00 vs chapters[21] at its 10-minute offset), companion continuation-offset pin verified RED against the pre-fix handler after the fact (Expected 26 / Actual 5). Fully-played-deep and fresh books are covered by the same semantics; the /simplify round replaced the page re-scan with the by-construction (0, deepTicks) and dropped the dead count guard. Not covered and noted: the confirm leg has no resume at all (JF-795); the album head's AUDIO route has the same page-1-bounded scan, FILED as JF-796 after verification (AlbumPlayService ~664).
+
+Gates and evidence: /simplify (4 angles: reuse clean; 4 applied, 4 reasoned skips) and code-review high (4 findings, 4 applied, 2 of them empirically probe-verified by the reviewer on this tree, probes reverted clean) both as literal Skill calls in the transcript, with apply commits. Suites: intermediate per-class runs on both TFMs after every leg (final touched-class state 60/60); ONE full-suite run at the final state 5401/5401 both TFMs (5391 baseline + 10 pins); Release -warnaserror 0 warnings 0 errors both TFMs. Files: Alexa/Handler/Intent/YesIntentHandler.cs, Alexa/Handler/Intent/PlayBookIntentHandler.cs, Alexa/Util/AudiobookItems.cs, Alexa/QueueContinuationFetcher.cs (doc only), and the three touched test classes. The task number reservation for follow-ups holds at JF-794/795/796.
+<!-- SECTION:FINAL_SUMMARY:END -->
