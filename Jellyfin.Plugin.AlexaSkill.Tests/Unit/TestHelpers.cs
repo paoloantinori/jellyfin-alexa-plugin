@@ -117,6 +117,31 @@ internal static class TestHelpers
         => new(config, LoggerFactory.Create(b => { }).CreateLogger<PlaybackLaunchBuilder>(), (_, _, _) => Task.FromResult(true));
 
     /// <summary>
+    /// JF-794: the VERIFIED book-folder fixture the VideoApp builders' shared
+    /// discriminator demands (the chapter file sits DIRECTLY inside the resolved
+    /// folder, so the climb is accepted and the concat URL mints under the folder
+    /// id). Pins that drive a builder's audiobook concat arm hand the mock manager
+    /// to the builder's <c>libraryManager</c> parameter; without it the climb fails
+    /// closed and the leaf launches as its own single-item stream (pinned separately
+    /// in PlaybackLaunchBuilderBookFolderDiscriminatorTests).
+    /// </summary>
+    internal static (MediaBrowser.Controller.Entities.AudioBook Chapter, Folder BookFolder, Mock<ILibraryManager> Library) CreateVerifiedBookChapter(string name = "Chapter 1")
+    {
+        Guid folderId = Guid.NewGuid();
+        var chapter = new MediaBrowser.Controller.Entities.AudioBook
+        {
+            Name = name,
+            Id = Guid.NewGuid(),
+            ParentId = folderId,
+            Path = "/audiobooks/the-book/ch01.mp3"
+        };
+        var folder = new Folder { Name = "The Book", Id = folderId, Path = "/audiobooks/the-book" };
+        var library = new Mock<ILibraryManager>();
+        library.Setup(l => l.GetItemById(folderId)).Returns(folder);
+        return (chapter, folder, library);
+    }
+
+    /// <summary>
     /// The ONE interaction-model type-node extractor for the catalog suites'
     /// PUT-body assertions (JF-717 hoist of LegIsolationTests' GetTypeNode,
     /// the CreateSyncUser convention on the third private copy): parses a raw

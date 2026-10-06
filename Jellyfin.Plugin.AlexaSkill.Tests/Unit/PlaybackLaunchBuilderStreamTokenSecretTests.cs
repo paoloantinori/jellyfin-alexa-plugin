@@ -160,11 +160,15 @@ public class PlaybackLaunchBuilderStreamTokenSecretTests : PluginTestBase
     [Fact]
     public void AudiobookResume_EmptySecret_Throws()
     {
-        var chapter = new MediaBrowser.Controller.Entities.AudioBook { Name = "Chapter 1", Id = Guid.NewGuid() };
+        // JF-794: the concat URL exists only for a VERIFIED book folder, so the
+        // refusal pin rides the verified fixture (an unverified climb degrades to
+        // the flat chapter resume on the ungated static URL, which no token gates
+        // and is never refused; that arm is the no-overblock row below).
+        var (chapter, _, library) = TestHelpers.CreateVerifiedBookChapter();
         var user = CreateUser();
 
         AssertRefused(() => _launch.BuildAudiobookResumeResponse(
-            chapter, TimeSpan.FromMinutes(5).Ticks, user, TestHelpers.CreateContextWithVideoApp()));
+            chapter, TimeSpan.FromMinutes(5).Ticks, user, TestHelpers.CreateContextWithVideoApp(), library.Object));
     }
 
     [Fact]

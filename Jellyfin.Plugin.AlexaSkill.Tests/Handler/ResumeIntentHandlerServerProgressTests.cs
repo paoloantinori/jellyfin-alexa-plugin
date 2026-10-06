@@ -587,6 +587,11 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
                 Path = "/audiobooks/book/chapter7.mp3"
             };
 
+            // JF-794: the builders' verified climb resolves the ParentId to the book
+            // FOLDER (the chapter file sits directly inside it).
+            _fx.LibraryManager.Setup(x => x.GetItemById(bookFolderId))
+                .Returns(new Folder { Name = "The Book", Id = bookFolderId, Path = "/audiobooks/book" });
+
             _fx.LibraryManager.Setup(x => x.GetItemList(It.IsAny<InternalItemsQuery>()))
                 .Returns(new List<BaseItem> { chapter });
 
@@ -674,6 +679,11 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
                 ParentId = bookFolderId,
                 Path = "/audiobooks/one-chapter-book/the-only-chapter.mp3"
             };
+
+            // JF-794: the builders' verified climb resolves the ParentId to the book
+            // FOLDER (the chapter file sits directly inside it).
+            _fx.LibraryManager.Setup(x => x.GetItemById(bookFolderId))
+                .Returns(new Folder { Name = "One Chapter Book", Id = bookFolderId, Path = "/audiobooks/one-chapter-book" });
 
             _fx.LibraryManager.Setup(x => x.GetItemList(It.IsAny<InternalItemsQuery>()))
                 .Returns(new List<BaseItem> { chapter });
@@ -855,6 +865,11 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
                 Path = "/audiobooks/book/chapter3.mp3"
             };
 
+            // JF-794: the builders' verified climb resolves the ParentId to the book
+            // FOLDER (the chapter file sits directly inside it).
+            _fx.LibraryManager.Setup(x => x.GetItemById(bookFolderId))
+                .Returns(new Folder { Name = "The Book", Id = bookFolderId, Path = "/audiobooks/book" });
+
             var session = CreateEmptySession();
             session.FullNowPlayingItem = chapter;
 
@@ -915,6 +930,11 @@ public class ResumeIntentHandlerServerProgressTests : PluginTestBase, IDisposabl
                 ParentId = bookFolderId,
                 Path = "/audiobooks/book/chapter3.mp3"
             };
+
+            // JF-794: the builders' verified climb resolves the ParentId to the book
+            // FOLDER (the chapter file sits directly inside it).
+            _fx.LibraryManager.Setup(x => x.GetItemById(bookFolderId))
+                .Returns(new Folder { Name = "The Book", Id = bookFolderId, Path = "/audiobooks/book" });
 
             var session = CreateEmptySession();
             session.FullNowPlayingItem = chapter;

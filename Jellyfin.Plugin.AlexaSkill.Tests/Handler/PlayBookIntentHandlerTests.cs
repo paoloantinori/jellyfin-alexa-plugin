@@ -1258,6 +1258,56 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
         }
     }
 
+
+    /// <summary>
+    /// JF-794: the VERIFIED multi-chapter book fixture the flag-on concat arms demand
+    /// (the chapter files sit DIRECTLY inside the resolved folder, so the builders'
+    /// shared discriminator accepts the climb and the concat mints under the folder
+    /// id). Wires the AudioBook search, the folder resolution, and the chapters page;
+    /// the caller warms the tracker under the FOLDER key (GetAudiobookBookKey of any
+    /// chapter = the folder id).
+    /// </summary>
+    private (Folder BookFolder, AudioBook Chapter) SetupVerifiedHobbitBook()
+    {
+        Guid folderId = Guid.NewGuid();
+        var searchLeaf = new AudioBook
+        {
+            Name = "The Hobbit",
+            Id = Guid.NewGuid(),
+            ParentId = folderId,
+            Path = "/audiobooks/the-hobbit/ch00.mp3"
+        };
+        var chapter = new AudioBook
+        {
+            Name = "Chapter 1",
+            Id = Guid.NewGuid(),
+            ParentId = folderId,
+            Path = "/audiobooks/the-hobbit/ch01.mp3"
+        };
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
+            .Returns(new List<BaseItem> { searchLeaf });
+
+        _fx.LibraryManager.Setup(l => l.GetItemById(folderId))
+            .Returns(new Folder { Name = "The Hobbit", Id = folderId, Path = "/audiobooks/the-hobbit" });
+
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q => q.ParentId == folderId
+                ? new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+                {
+                    Items = new[] { chapter },
+                    TotalRecordCount = 1
+                }
+                : new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+                {
+                    Items = Array.Empty<BaseItem>(),
+                    TotalRecordCount = 0
+                });
+
+        return (new Folder { Name = "The Hobbit", Id = folderId, Path = "/audiobooks/the-hobbit" }, chapter);
+    }
+
     [Fact]
     public async Task HandleAsync_SingleBookFound_NativeControls_FreshStart_AnnouncesTitle()
     {
@@ -1395,24 +1445,13 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
 
         _fx.SetupUserMock();
 
-        var bookItem = new Audio { Name = "The Hobbit", Id = Guid.NewGuid() };
-        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
-                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
-            .Returns(new List<BaseItem> { bookItem });
-
-        var trackItem = new Audio { Name = "Chapter 1", Id = Guid.NewGuid() };
-        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q =>
-                q.ParentId == bookItem.Id)))
-            .Returns(new MediaBrowser.Model.Querying.QueryResult<BaseItem>
-            {
-                Items = new[] { trackItem },
-                TotalRecordCount = 1
-            });
+        // JF-794: the verified book-folder fixture (the pre-fix bare-Audio shape no
+        // longer concats: its unverified climb degrades to the flat resume).
+        var (bookFolder, trackItem) = SetupVerifiedHobbitBook();
 
         // Tracker holds segment 31 (conservative resume position 30 * 10s = 5 min),
-        // keyed by the chapter's ParentId fallback (the chapter has no parent here,
-        // so the book key is the chapter id itself).
-        tracker.RecordSegment(trackItem.Id.ToString(), 31);
+        // keyed by the book FOLDER id (GetAudiobookBookKey of the chapter).
+        tracker.RecordSegment(bookFolder.Id.ToString(), 31);
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -1468,21 +1507,11 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
 
         _fx.SetupUserMock();
 
-        var bookItem = new Audio { Name = "The Hobbit", Id = Guid.NewGuid() };
-        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
-                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
-            .Returns(new List<BaseItem> { bookItem });
+        // JF-794: the verified book-folder fixture (the pre-fix bare-Audio shape no
+        // longer concats: its unverified climb degrades to the flat resume).
+        var (bookFolder, trackItem) = SetupVerifiedHobbitBook();
 
-        var trackItem = new Audio { Name = "Chapter 1", Id = Guid.NewGuid() };
-        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q =>
-                q.ParentId == bookItem.Id)))
-            .Returns(new MediaBrowser.Model.Querying.QueryResult<BaseItem>
-            {
-                Items = new[] { trackItem },
-                TotalRecordCount = 1
-            });
-
-        tracker.RecordSegment(trackItem.Id.ToString(), 31);
+        tracker.RecordSegment(bookFolder.Id.ToString(), 31);
 
         // JF-699 item 1: the refusal is the typed exception; RequestPipeline
         // translates it into the localized Tell (pinned at the pipeline level). The
@@ -1520,21 +1549,11 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
 
         _fx.SetupUserMock();
 
-        var bookItem = new Audio { Name = "The Hobbit", Id = Guid.NewGuid() };
-        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
-                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
-            .Returns(new List<BaseItem> { bookItem });
+        // JF-794: the verified book-folder fixture (the pre-fix bare-Audio shape no
+        // longer concats: its unverified climb degrades to the flat resume).
+        var (bookFolder, trackItem) = SetupVerifiedHobbitBook();
 
-        var trackItem = new Audio { Name = "Chapter 1", Id = Guid.NewGuid() };
-        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q =>
-                q.ParentId == bookItem.Id)))
-            .Returns(new MediaBrowser.Model.Querying.QueryResult<BaseItem>
-            {
-                Items = new[] { trackItem },
-                TotalRecordCount = 1
-            });
-
-        tracker.RecordSegment(trackItem.Id.ToString(), 31);
+        tracker.RecordSegment(bookFolder.Id.ToString(), 31);
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 

@@ -86,41 +86,31 @@ public class PlaybackLaunchBuilderStreamTokenScopeTests
     [Fact]
     public void AudiobookConcatUrl_RestrictedUser_TokenCarriesLibraryScope()
     {
-        Guid bookParent = Guid.NewGuid();
+        // JF-794: the concat mints only under a VERIFIED book folder, so the scope
+        // round trip rides the verified fixture and its mock manager.
+        var (chapter, bookFolder, library) = TestHelpers.CreateVerifiedBookChapter();
         Guid bookLib = Guid.NewGuid();
-        var chapter = new MediaBrowser.Controller.Entities.AudioBook
-        {
-            Name = "Chapter 1",
-            Id = Guid.NewGuid(),
-            ParentId = bookParent
-        };
         var (launch, _) = CreateLaunch();
 
         SkillResponse response = launch.BuildVideoAppAudioResponse(
             chapter.Id.ToString(), chapter, TestHelpers.CreateTestUser(allowedLibraryIds: new[] { bookLib.ToString() }),
-            context: TestHelpers.CreateContextWithVideoApp());
+            context: TestHelpers.CreateContextWithVideoApp(), libraryManager: library.Object);
 
-        Assert.Equal(new[] { bookLib }, ValidatedScopeFromLaunch(response, bookParent.ToString()));
+        Assert.Equal(new[] { bookLib }, ValidatedScopeFromLaunch(response, bookFolder.Id.ToString()));
     }
 
     [Fact]
     public void AudiobookResumeUrl_RestrictedUser_TokenCarriesLibraryScope()
     {
-        Guid bookParent = Guid.NewGuid();
+        var (chapter, bookFolder, library) = TestHelpers.CreateVerifiedBookChapter();
         Guid bookLib = Guid.NewGuid();
-        var chapter = new MediaBrowser.Controller.Entities.AudioBook
-        {
-            Name = "Chapter 1",
-            Id = Guid.NewGuid(),
-            ParentId = bookParent
-        };
         var (launch, _) = CreateLaunch();
 
         SkillResponse response = launch.BuildAudiobookResumeResponse(
             chapter, TimeSpan.FromMinutes(5).Ticks, TestHelpers.CreateTestUser(allowedLibraryIds: new[] { bookLib.ToString() }),
-            TestHelpers.CreateContextWithVideoApp());
+            TestHelpers.CreateContextWithVideoApp(), library.Object);
 
-        Assert.Equal(new[] { bookLib }, ValidatedScopeFromLaunch(response, bookParent.ToString()));
+        Assert.Equal(new[] { bookLib }, ValidatedScopeFromLaunch(response, bookFolder.Id.ToString()));
         // The resume slice rides alongside the token, unchanged.
         var directive = Assert.Single(response.Response.Directives) as VideoAppLaunchDirective;
         Assert.Contains($"?start={TimeSpan.FromMinutes(5).Ticks}&token=", directive!.VideoItem.Source, StringComparison.Ordinal);

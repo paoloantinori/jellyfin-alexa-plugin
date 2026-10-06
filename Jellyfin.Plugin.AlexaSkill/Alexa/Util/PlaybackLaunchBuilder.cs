@@ -1705,12 +1705,30 @@ public sealed class PlaybackLaunchBuilder
             return BuildFlatChapterResume(item, startTicks, user, context);
         }
 
+        // JF-794: the climb is the ONE shared verified climb (SitsDirectlyInside).
+        // The pre-JF-794 raw climb had a fallback to the item's OWN id (an empty or
+        // rejected ParentId minted audiobook/{ownId}, a URL the concat endpoint 404s
+        // on because a leaf has no audio children); every production caller reaches
+        // the sliced arm only with a WARM tracker, which a real folder-keyed concat
+        // serve wrote, so the fallback served only dead URLs. The rejected/unverifiable
+        // shapes now degrade to the flat AudioPlayer chapter resume (the screenless
+        // branch's shape), which always plays.
+        if (AudiobookItems.TryResolveVerifiedParentFolder(item, libraryManager) is not { } resumeBookFolder)
+        {
+            _logger.LogInformation(
+                "BuildAudiobookResumeResponse: book item {ItemId} ('{Title}') has no verified book folder (shared container or unresolvable ParentId); resuming as its own single track (JF-794)",
+                item.Id, item.Name);
+            return BuildFlatChapterResume(item, startTicks, user, context);
+        }
+
         // JF-567: this GUID feeds a URL path segment, so it keeps the default dashed
         // Guid format. It is NOT the tracker bookKey (ResumeMath.GetAudiobookBookKey's
         // "N" string); AudiobookPositionTracker.NormalizeKey canonicalizes both shapes,
         // so the segment-record path (URL dashed) and the resume-read path ("N") agree
-        // in the tracker dictionary.
-        Guid parentId = item.ParentId != Guid.Empty ? item.ParentId : item.Id;
+        // in the tracker dictionary. The verified climb guarantees the id IS the
+        // item's ParentId, so the JF-694 read key (GetAudiobookBookKey) and this URL
+        // segment name the same folder.
+        Guid parentId = resumeBookFolder.Id;
         string videoAudioUrl = GetAudiobookResumeUrl(parentId.ToString(), startTicks, user);
 
         _logger.LogDebug(
@@ -2508,14 +2526,31 @@ public sealed class PlaybackLaunchBuilder
         bool isAudioBook = AudiobookItems.IsAudioBook(item);
 
         string videoAudioUrl;
-        if (isAudioBook && item!.ParentId != Guid.Empty)
+        if (isAudioBook && AudiobookItems.TryResolveVerifiedParentFolder(item, libraryManager) is { } bookFolder)
         {
             // Multi-chapter audiobook: use concat HLS endpoint keyed by parent book ID.
             // The endpoint concatenates all chapters into one continuous HLS stream,
-            // giving the full book duration in the Echo Show seek bar.
-            videoAudioUrl = GetAudiobookVideoAudioUrl(item.ParentId.ToString(), user);
+            // giving the full book duration in the Echo Show seek bar. JF-794: the
+            // climb is the ONE shared verified climb (SitsDirectlyInside), so a
+            // shared container (the live census's 6 collapsed single-file books under
+            // the "Audiobooks" library folder) can no longer be concat'd as if it
+            // were one book; when the climb ACCEPTS, bookFolder.Id IS the raw
+            // ParentId, so the URL is byte-identical to the pre-JF-794 mint.
+            videoAudioUrl = GetAudiobookVideoAudioUrl(bookFolder.Id.ToString(), user);
             // JF-580: the URL carries the signed JF-309 stream token; log it masked.
-            _logger.LogDebug("BuildVideoAppAudioResponse: itemId={ItemId}, parentId={ParentId}, title={Title}, url={Url} (audiobook concat)", itemId, item.ParentId, item.Name, RequestLogRedactor.RedactUrl(videoAudioUrl));
+            _logger.LogDebug("BuildVideoAppAudioResponse: itemId={ItemId}, parentId={ParentId}, title={Title}, url={Url} (audiobook concat)", itemId, bookFolder.Id, item!.Name, RequestLogRedactor.RedactUrl(videoAudioUrl));
+        }
+        else if (isAudioBook)
+        {
+            // JF-794 rejected-climb arm: the leaf's ParentId is a shared container,
+            // an unresolvable id, or unverifiable (no manager threaded), so there is
+            // no book folder to concat. The leaf plays as its own single-item
+            // video-audio stream (the same shape an empty-ParentId single-file book
+            // takes), never the potentially-merged container concat.
+            videoAudioUrl = GetVideoAudioUrl(itemId);
+            _logger.LogInformation(
+                "BuildVideoAppAudioResponse: audiobook item {ItemId} ('{Title}') has no verified book folder (shared container or unresolvable ParentId); playing as its own single-item stream (JF-794)",
+                itemId, item?.Name);
         }
         else if (collectionParentId is Guid concatParent)
         {
