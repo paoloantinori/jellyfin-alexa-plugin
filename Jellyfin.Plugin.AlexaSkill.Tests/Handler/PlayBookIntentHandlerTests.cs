@@ -229,13 +229,19 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
     // and misorder class; the fetcher-side pins lock the builder itself, this one
     // locks the handler to the builder. User identity rides the same resolution on
     // both sides of the builder and is out of the pin's scope.
+    // JF-767 (code-review F3): the head runs the SCOPED sibling (restricted user
+    // below), the same JF-666 pairing the tail's FetchAudiobookChapters and the
+    // YesIntent PlayBook confirm run, so the direct ask and the confirm cannot
+    // diverge on the scope axis. RED on the pre-JF-767 shape: the unscoped builder
+    // leaves TopParentIds empty.
     [Fact]
     public async Task PlayBook_InitialPage_UsesSharedChaptersQueryBuilder()
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest(bookName: "The Hobbit");
         var context = _fx.CreateContext();
-        var user = _fx.CreateUser();
+        Guid bookLib = Guid.NewGuid();
+        var user = TestHelpers.CreateTestUser(allowedLibraryIds: new[] { bookLib.ToString() });
         var session = CreateSession();
 
         _fx.SetupUserMock();
@@ -271,6 +277,8 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
         Assert.True(
             captured.OrderBy == null || captured.OrderBy.Count == 0,
             "head query must not grow an explicit order the tail does not run");
+        // The JF-666 scope the tail and the confirm run under (JF-767).
+        Assert.Contains(bookLib, captured.TopParentIds);
     }
 
     // JF-673 RED PROOF: on NRE-class servers the chapters page arrives through the

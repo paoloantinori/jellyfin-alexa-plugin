@@ -383,15 +383,27 @@ public sealed class PlaybackLaunchBuilder
     /// Moved here from BaseHandler (JF-315 batch 5) next to the audiobook concat URL it
     /// siblings (<see cref="GetAudiobookVideoAudioUrl"/>): both read the same
     /// config-derived server address and token secret.
+    /// JF-767 Finding B: the minted token carries the launching user's library scope
+    /// (the raw <c>AllowedLibraryIds</c> config ids; the endpoint resolves them to
+    /// TopParentIds with the same resolver the paged path uses, one cache), so the concat
+    /// endpoint enumerates under the SAME scope the paged head summed the seek-mode resume
+    /// offset over. Unrestricted users mint the legacy two-field token byte-identically.
+    /// The mint is deliberately raw ids with serve-time resolution (not resolved-at-mint):
+    /// a library remap mid-token-life would otherwise pin a stale resolution into the
+    /// token for its whole 10h TTL while every fresh query resolves anew; the cost is the
+    /// seconds-wide launch-to-fetch window the PAGED path already shares (the head
+    /// resolves at ask, the tail at each continuation batch).
     /// </summary>
     /// <param name="parentId">Id of the audiobook parent folder.</param>
     /// <param name="startTicks">Resume position in .NET ticks.</param>
+    /// <param name="user">The launching plugin user (whose library scope the token carries).</param>
     /// <returns>URL to the resume-aware audiobook HLS endpoint.</returns>
-    internal string GetAudiobookResumeUrl(string parentId, long startTicks)
+    internal string GetAudiobookResumeUrl(string parentId, long startTicks, Entities.User? user)
     {
         // JF-584: the ONE audiobook concat URL builder (the fresh-launch sibling
         // delegates here with startTicks 0); a route/token-shape change lands once.
-        string token = StreamTokenHelper.Mint(parentId, _config.StreamTokenSecret);
+        string token = StreamTokenHelper.MintScoped(
+            parentId, _config.StreamTokenSecret, Util.LibraryFilter.GetAllowedLibraryIds(user));
         string query = startTicks > 0 ? $"?start={startTicks}&token={token}" : $"?token={token}";
         return new Uri(new Uri(_config.ServerAddress), $"alexaskill/api/video-audio/audiobook/{parentId}/stream.m3u8{query}").ToString();
     }
@@ -1679,7 +1691,7 @@ public sealed class PlaybackLaunchBuilder
         // so the segment-record path (URL dashed) and the resume-read path ("N") agree
         // in the tracker dictionary.
         Guid parentId = item.ParentId != Guid.Empty ? item.ParentId : item.Id;
-        string videoAudioUrl = GetAudiobookResumeUrl(parentId.ToString(), startTicks);
+        string videoAudioUrl = GetAudiobookResumeUrl(parentId.ToString(), startTicks, user);
 
         _logger.LogDebug(
             "BuildAudiobookResumeResponse: itemId={ItemId}, parentId={ParentId}, startTicks={Ticks}, url={Url}",
@@ -1796,11 +1808,14 @@ public sealed class PlaybackLaunchBuilder
     /// one continuous HLS stream. The parent ID is the book folder containing all
     /// AudioBook chapter items. Segments are served by the existing segment endpoint
     /// using the parent GUID as the cache key (no collision with single-item entries).
+    /// The token carries the launching user's library scope (JF-767, see
+    /// <see cref="GetAudiobookResumeUrl"/>).
     /// </summary>
     /// <param name="parentId">Id of the audiobook parent folder.</param>
+    /// <param name="user">The launching plugin user (whose library scope the token carries).</param>
     /// <returns>URL to the audiobook HLS concat endpoint.</returns>
-    private string GetAudiobookVideoAudioUrl(string parentId)
-        => GetAudiobookResumeUrl(parentId, startTicks: 0);
+    private string GetAudiobookVideoAudioUrl(string parentId, Entities.User? user)
+        => GetAudiobookResumeUrl(parentId, startTicks: 0, user);
 
     /// <summary>
     /// Get the video-audio URL for the AUDIO-ONLY episode transcode (JF-507): the item's
@@ -2430,7 +2445,7 @@ public sealed class PlaybackLaunchBuilder
             // Multi-chapter audiobook: use concat HLS endpoint keyed by parent book ID.
             // The endpoint concatenates all chapters into one continuous HLS stream,
             // giving the full book duration in the Echo Show seek bar.
-            videoAudioUrl = GetAudiobookVideoAudioUrl(item.ParentId.ToString());
+            videoAudioUrl = GetAudiobookVideoAudioUrl(item.ParentId.ToString(), user);
             // JF-580: the URL carries the signed JF-309 stream token; log it masked.
             _logger.LogDebug("BuildVideoAppAudioResponse: itemId={ItemId}, parentId={ParentId}, title={Title}, url={Url} (audiobook concat)", itemId, item.ParentId, item.Name, RequestLogRedactor.RedactUrl(videoAudioUrl));
         }
@@ -2442,7 +2457,7 @@ public sealed class PlaybackLaunchBuilder
             // album; collectionStartTicks is the album-level resume offset (the summed
             // runtime of the tracks before the resume track) threaded by the album play
             // service.
-            videoAudioUrl = GetAudiobookResumeUrl(concatParent.ToString(), collectionStartTicks);
+            videoAudioUrl = GetAudiobookResumeUrl(concatParent.ToString(), collectionStartTicks, user);
             _logger.LogDebug("BuildVideoAppAudioResponse: itemId={ItemId}, collectionParent={ParentId}, startTicks={StartTicks}, title={Title}, url={Url} (album concat)", itemId, concatParent, collectionStartTicks, item?.Name, RequestLogRedactor.RedactUrl(videoAudioUrl));
         }
         else

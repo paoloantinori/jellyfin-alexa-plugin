@@ -309,18 +309,51 @@ public class YesIntentHandler : BaseHandler
 
     private SkillResponse PlayAlbum(BaseItem album, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Entities.User user, SessionInfo session, string locale, Context? context)
     {
-        IReadOnlyList<BaseItem> albumItems = _libraryManager.GetItemList(new InternalItemsQuery()
+        // JF-767 Finding A: the confirmed-MusicAlbum enumeration routes through the ONE
+        // album-tracks builder (unpaged, session-user form) under the JF-666 library scope,
+        // with the JF-338 AlbumIds retry: the same triple the paged head
+        // (AlbumPlayService.BuildAlbumPlayResponseAsync) runs, so a confirm answers exactly
+        // what the direct ask plays (split albums included) and the queue rows feed the
+        // JF-625 concat timeline the same field set the endpoint encodes. The NON-MusicAlbum
+        // leg keeps the local MediaTypes=Audio initializer: PlayBook disambiguation reuses
+        // the MediaTypeAlbum label, so this path also receives non-album parents whose
+        // chapter children are BaseItemKind.AudioBook, and IncludeItemTypes=Audio would drop
+        // them (the endpoint's ternary keeps its AudioBook leg local for the same reason).
+        bool isMusicAlbum = album is MediaBrowser.Controller.Entities.Audio.MusicAlbum;
+        var tracksQuery = isMusicAlbum
+            ? QueueContinuationFetcher.BuildScopedAlbumTracksQueryUnpaged(
+                jellyfinUser, user, _libraryManager, Logger, album.Id, byAlbumIds: false)
+            : new InternalItemsQuery()
+            {
+                User = jellyfinUser,
+                Recursive = true,
+                ParentId = album.Id,
+                MediaTypes = new[] { MediaType.Audio },
+                DtoOptions = new DtoOptions(true),
+                OrderBy = QueueContinuationFetcher.AlbumTrackOrder,
+            };
+        if (!isMusicAlbum)
         {
-            User = jellyfinUser,
-            Recursive = true,
-            ParentId = album.Id,
-            // MediaTypes (not IncludeItemTypes=Audio): PlayBook disambiguation reuses the
-            // MediaTypeAlbum label, so this path also receives AudioBook items whose chapter
-            // children are BaseItemKind.AudioBook — IncludeItemTypes=Audio would drop them.
-            MediaTypes = new[] { MediaType.Audio },
-            DtoOptions = new DtoOptions(true),
-            OrderBy = QueueContinuationFetcher.AlbumTrackOrder,
-        });
+            // The local leg keeps the JF-361 kind discipline but not at the cost of the
+            // JF-666 scope every sibling leg runs under (the album leg gets it inside the
+            // scoped builder above). Row-neutral for the children of a parent the scoped
+            // surfaces just found; consistent for restricted-library accounts.
+            ApplyLibraryFilter(tracksQuery, user, _libraryManager);
+        }
+
+        IReadOnlyList<BaseItem> albumItems = _libraryManager.GetItemList(tracksQuery);
+
+        // JF-338 retry, MusicAlbum only (mirrors AlbumPlayService's head fallback): for
+        // split / multi-disc / malformed-folder albums the folder-based ParentId query
+        // returns 0 even when the tracks exist (the track's Album metadata still links
+        // them), so a confirmed disambiguation would answer NoSongsInAlbum while the direct
+        // ask plays. Query by album membership instead.
+        if (albumItems.Count == 0 && isMusicAlbum)
+        {
+            albumItems = _libraryManager.GetItemList(
+                QueueContinuationFetcher.BuildScopedAlbumTracksQueryUnpaged(
+                    jellyfinUser, user, _libraryManager, Logger, album.Id, byAlbumIds: true));
+        }
 
         // JF-361: single-file audiobooks (AudioBook items that ARE the audio track, with no
         // child chapters) arrive here via PlayBook disambiguation's MediaTypeAlbum label.
@@ -338,8 +371,6 @@ public class YesIntentHandler : BaseHandler
         }
 
         List<QueueItem> queueItems = albumItems.Select(i => new QueueItem { Id = i.Id }).ToList();
-        session.NowPlayingQueue = queueItems;
-        session.FullNowPlayingItem = albumItems[0];
         string itemId = albumItems[0].Id.ToString();
         // JF-625: a confirmed MUSIC album plays the whole-album concat stream in seek
         // mode, same as a direct PlayAlbum request (the parallel-dispatch rule; a
@@ -347,7 +378,13 @@ public class YesIntentHandler : BaseHandler
         // MusicAlbum only: the JF-361 single-file audiobooks that also arrive here
         // have a non-album ParentId and must not build a collection URL.
         Guid? collectionParent = album is MediaBrowser.Controller.Entities.Audio.MusicAlbum ? album.Id : null;
-        return Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, albumItems[0], user, context, collectionParentId: collectionParent);
+        // JF-699 item 5 (code-review F2): launch build BEFORE the session writes; the
+        // MusicAlbum leg mints the token-gated concat URL, so a JF-687 refusal must
+        // not leave a phantom queue/now-playing behind (AlbumPlayService's ordering).
+        SkillResponse response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, albumItems[0], user, context, collectionParentId: collectionParent);
+        session.NowPlayingQueue = queueItems;
+        session.FullNowPlayingItem = albumItems[0];
+        return response;
     }
 
     /// <summary>
@@ -357,18 +394,15 @@ public class YesIntentHandler : BaseHandler
     /// </summary>
     private async Task<SkillResponse> PlayBook(BaseItem book, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Entities.User user, SessionInfo session, string locale, Context context, Request request)
     {
-        // Resolve tracks (same logic as PlayBookIntentHandler)
-        // Resolve tracks (same logic as PlayBookIntentHandler). Use GetItemList (not GetItemsResult)
-        // to avoid the EF Core Count() NRE on certain query combinations.
-        IReadOnlyList<BaseItem> bookTrackList = _libraryManager.GetItemList(new InternalItemsQuery
-        {
-            User = jellyfinUser,
-            Recursive = true,
-            ParentId = book.Id,
-            MediaTypes = new[] { MediaType.Audio },
-            DtoOptions = new DtoOptions(true),
-            Limit = ProgressiveQueueConstants.GetInitialFetchSize()
-        });
+        // Resolve tracks through the ONE audiobook chapters query's scoped sibling
+        // (JF-767 Finding A fold: identical field set to the former hand-kept initializer,
+        // modulo the now-explicit StartIndex=0, plus the JF-666 scope the tail's
+        // FetchAudiobookChapters runs under). Use GetItemList (not GetItemsResult) to
+        // avoid the EF Core Count() NRE on certain query combinations.
+        InternalItemsQuery chaptersQuery = QueueContinuationFetcher.BuildScopedAudiobookChaptersQuery(
+            jellyfinUser, user, _libraryManager, Logger, book.Id,
+            startIndex: 0, limit: ProgressiveQueueConstants.GetInitialFetchSize());
+        IReadOnlyList<BaseItem> bookTrackList = _libraryManager.GetItemList(chaptersQuery);
 
         List<BaseItem> trackItems;
         if (bookTrackList.Count == 0)

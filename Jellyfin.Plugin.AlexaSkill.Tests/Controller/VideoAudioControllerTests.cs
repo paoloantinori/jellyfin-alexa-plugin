@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -854,7 +855,8 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         ILoggerFactory? loggerFactory = null,
         Mock<IMediaSourceManager>? mediaSourceManager = null,
         string? ffmpegPath = null,
-        VideoAudioCache? cache = null)
+        VideoAudioCache? cache = null,
+        Guid[]? tokenScope = null)
     {
         // cache: a FRESH cache instance over the same cache path simulates the
         // post-restart state (no in-memory directory registration) for the
@@ -880,10 +882,12 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
         // Attach an HttpContext so ValidateStreamToken can read the query string.
         // When itemIdForToken is provided, mint a valid token for that item so the request passes
         // the token check. When null, no token is set (simulates a bare-GUID attack).
+        // tokenScope (JF-767): mint the library-scoped form a restricted user's launch
+        // would present instead of the legacy two-field one.
         var query = new Dictionary<string, Microsoft.Extensions.Primitives.StringValues>();
         if (itemIdForToken != null && !string.IsNullOrEmpty(_config.StreamTokenSecret))
         {
-            string token = StreamTokenHelper.Mint(itemIdForToken, _config.StreamTokenSecret);
+            string token = StreamTokenHelper.MintScoped(itemIdForToken, _config.StreamTokenSecret, tokenScope);
             query["token"] = token;
         }
 
@@ -1370,12 +1374,11 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
         // COMPLETED concat cache: ENDLIST with at least one segment per chapter
         // (the undercount hook's bar), so the verdict validates on its read row.
-        string hlsDir = _cache.GetHlsDirectoryPath(parentId.ToString(), 0);
-        Directory.CreateDirectory(hlsDir);
-        string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
-        await File.WriteAllTextAsync(
-            playlistPath,
-            "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:10.000,\nseg_0000.ts\n#EXTINF:10.000,\nseg_0001.ts\n#EXT-X-ENDLIST\n");
+        // JF-784: the timeline verdict also reads the encode-metadata sidecar;
+        // seeded to the matching (2 chapters, RunTimeTicks unset => 0) timeline
+        // so the read-count contract under test stays the discriminator.
+        string playlistPath = await SeedCompletedConcatCacheAsync(
+            _cache, parentId, segmentCount: 2, encodedChapterCount: 2, encodedDurationTicks: 0);
 
         var controller = CreateController(parentId.ToString());
         controller.FfmpegPath = WriteRecordingFakeFfmpeg("fake-ffmpeg-jf677-readcount-book");
@@ -2273,8 +2276,12 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             () =>
             {
                 Directory.CreateDirectory(hlsDir);
-                // 2 segments >= 2 chapters: the undercount hook's bar.
+                // 2 segments >= 2 chapters: the undercount hook's bar. JF-784:
+                // the matching encode-metadata sidecar (2 chapters, RunTimeTicks
+                // unset => 0), or the timeline verdict would invalidate the
+                // plant and re-encode instead of serving it.
                 File.WriteAllText(playlistPath, "#EXTM3U\n#EXT-X-VERSION:3\n#EXTINF:10.000,\nseg_0000.ts\n#EXTINF:10.000,\nseg_0001.ts\n#EXT-X-ENDLIST\n");
+                WriteEncodeMetadata(hlsDir, chapterCount: 2, durationTicks: 0);
             }, controller);
 
         var content = Assert.IsType<ContentResult>(result);
@@ -10208,13 +10215,113 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
-    /// The ternary's other leg (JF-763): a NON-MusicAlbum parent (an audiobook
-    /// folder) keeps its LOCAL AudioBook-kind initializer with NO AlbumTrackOrder
-    /// (the DB order IS the chapter order), so the fold-in must not collapse the
-    /// kind switch. The chapters query is captured field-for-field.
+    /// JF-767 Finding B pin: the concat endpoint applies the library scope the JF-309
+    /// token carries. A restricted user's launch mints the scoped token (raw
+    /// AllowedLibraryIds ids, see PlaybackLaunchBuilder.GetAudiobookResumeUrl); the
+    /// endpoint resolves them to TopParentIds with the SAME resolver the paged path
+    /// uses and filters BOTH isMusicAlbum arms (folder primary + JF-338 AlbumIds
+    /// retry), so the encoded concat timeline IS the scoped timeline
+    /// AlbumPlayService.BuildAlbumPlayResponseAsync summed the seek-mode resume
+    /// offset over (the JF-763 residual closed). SABOTAGE (verified red): removing
+    /// the scope application at the endpoint reddens this pin (both arms enumerate
+    /// with empty TopParentIds).
     /// </summary>
     [Fact]
-    public async Task StreamHlsAudiobook_AudiobookParent_KeepsLocalAudioBookQuery()
+    public async Task StreamHlsAudiobook_AlbumParent_ScopedToken_EnumeratesUnderTokenLibraryScope()
+    {
+        Guid musicLib = Guid.NewGuid();
+        var (captured, result) = await ServeSplitAlbumConcatWithTokenScope(new[] { musicLib }, "jf767-scoped");
+
+        // Both album arms issued (split shape) and BOTH carry the token's scope.
+        Assert.Equal(2, captured.Count);
+        Assert.Equal(new[] { musicLib }, captured[0].TopParentIds);
+        Assert.Equal(new[] { musicLib }, captured[1].TopParentIds);
+        Assert.IsType<PhysicalFileResult>(result);
+    }
+
+    /// <summary>
+    /// The backward-compat row (JF-767 Finding B): a legacy two-field token (an
+    /// unrestricted user, or any URL minted before the change within its 10h TTL)
+    /// carries no scope, and the endpoint enumerates UNSCOPED exactly as before.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_AlbumParent_LegacyToken_StaysUnscoped()
+    {
+        var (captured, result) = await ServeSplitAlbumConcatWithTokenScope(tokenScope: null, "jf767-legacy");
+
+        // Both arms issued (the split shape resolves via the retry) and NEITHER
+        // carries a scope.
+        Assert.Equal(2, captured.Count);
+        Assert.Empty(captured[0].TopParentIds);
+        Assert.Empty(captured[1].TopParentIds);
+        Assert.IsType<PhysicalFileResult>(result);
+    }
+
+    /// <summary>
+    /// Shared fixture for the two JF-767 endpoint rows: a split-shape MusicAlbum
+    /// concat request (empty folder pages, populated AlbumIds pages) under the given
+    /// token scope, capturing every query the endpoint issues.
+    /// </summary>
+    private async Task<(List<MediaBrowser.Controller.Entities.InternalItemsQuery> Captured, ActionResult Result)> ServeSplitAlbumConcatWithTokenScope(
+        Guid[]? tokenScope,
+        string fakeFfmpegTag)
+    {
+        Guid parentId = Guid.NewGuid();
+        var album = new MediaBrowser.Controller.Entities.Audio.MusicAlbum
+        {
+            Name = $"Concat Album ({fakeFfmpegTag})",
+            Id = parentId
+        };
+        var track1 = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Track 1",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromMinutes(3).Ticks
+        };
+        var track2 = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Track 2",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromMinutes(3).Ticks
+        };
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns(album);
+        // Scope resolution: GetItemById of any library id is unstubbed (returns null),
+        // so ResolveTopParentIds unions nothing and TopParentIds == the token's ids.
+
+        var captured = new List<MediaBrowser.Controller.Entities.InternalItemsQuery>();
+        _libraryManagerMock
+            .Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Callback<MediaBrowser.Controller.Entities.InternalItemsQuery>(q => captured.Add(q))
+            .Returns((MediaBrowser.Controller.Entities.InternalItemsQuery q) =>
+                q.AlbumIds != null && q.AlbumIds.Contains(parentId)
+                    ? new List<MediaBrowser.Controller.Entities.BaseItem> { track1, track2 }
+                    : new List<MediaBrowser.Controller.Entities.BaseItem>());
+
+        string fakeFfmpegPath = WriteFlushLagFakeFfmpeg($"fake-ffmpeg-{fakeFfmpegTag}");
+
+        var controller = CreateController(parentId.ToString(), ffmpegPath: fakeFfmpegPath, tokenScope: tokenScope);
+        ActionResult result = await controller.StreamHlsAudiobook(parentId.ToString());
+        return (captured, result);
+    }
+
+    /// <summary>
+    /// The ternary's other leg, SUPERSEDED by JF-784 leg 3 (the JF-767
+    /// gate-marker's kind-axis divergence): a NON-MusicAlbum parent (an
+    /// audiobook folder) now routes through the ONE chapters builder's unpaged
+    /// form (<see cref="QueueContinuationFetcher.BuildAudiobookChaptersQueryUnpaged"/>),
+    /// the SAME MediaTypes=Audio axis the PlayBook head/confirm/tail queue
+    /// enumerates, so the concat encodes the rows the queue queued. The JF-763
+    /// shape kept a LOCAL IncludeItemTypes=AudioBook initializer: a book parent
+    /// with Audio-typed children (a metadata remap, or a fully Audio-typed
+    /// folder) was queued by MediaTypes=Audio but enumerated 0-or-subset rows at
+    /// the endpoint (404 for a book the confirm just launched). Still NO
+    /// AlbumTrackOrder (the DB order IS the chapter order) and no explicit
+    /// IncludeItemTypes. The chapters query is captured field-for-field.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_AudiobookParent_RoutesThroughTheChaptersBuilderUnpaged()
     {
         Guid parentId = Guid.NewGuid();
         var book = new MediaBrowser.Controller.Entities.Folder
@@ -10252,7 +10359,12 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
 
         MediaBrowser.Controller.Entities.InternalItemsQuery chaptersQuery = Assert.Single(captured);
         Assert.Equal(parentId, chaptersQuery.ParentId);
-        Assert.Equal(new[] { Jellyfin.Data.Enums.BaseItemKind.AudioBook }, chaptersQuery.IncludeItemTypes);
+        // The builder's kind axis (the queue's axis), NOT the local AudioBook
+        // kind filter the JF-763 shape kept.
+        Assert.Equal(new[] { Jellyfin.Data.Enums.MediaType.Audio }, chaptersQuery.MediaTypes);
+        Assert.True(
+            chaptersQuery.IncludeItemTypes == null || chaptersQuery.IncludeItemTypes.Length == 0,
+            "the chapters builder must not grow an IncludeItemTypes filter");
         Assert.True(chaptersQuery.Recursive);
         // NO AlbumTrackOrder on the audiobook leg: the DB order IS the chapter
         // order (an album-style disc/track sort here would reorder the book).
@@ -10260,6 +10372,656 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             chaptersQuery.OrderBy == null || chaptersQuery.OrderBy.Count == 0,
             "audiobook chapters query must carry no explicit order");
         Assert.NotNull(chaptersQuery.DtoOptions);
+        // The unpaged invariants (the endpoint twin of the album-arm asserts):
+        // no session user on the token-gated HTTP path, no paging (null is the
+        // SDK's fetch-all, NOT 0 which is Take(0), JF-443).
+        Assert.Null(chaptersQuery.User);
+        Assert.Null(chaptersQuery.StartIndex);
+        Assert.Null(chaptersQuery.Limit);
+    }
+
+    /// <summary>
+    /// JF-784 leg 3 RED pin, the filed 404 shape: a fully Audio-typed book
+    /// folder (every chapter BaseItemKind.Audio, the metadata-remap shape) is
+    /// queued and launched by the PlayBook path (MediaTypes=Audio), but the
+    /// pre-fix endpoint's IncludeItemTypes=AudioBook query enumerated 0 rows and
+    /// 404ed the very URL the launch minted. The mock answers CONDITIONED on the
+    /// query's kind axis (rows only when MediaTypes constrains to Audio, the
+    /// server's actual behavior for the two axes), so the pre-fix endpoint
+    /// reproduces the 404 and the post-fix one concatenates. SABOTAGE (red on
+    /// the unmodified tree): reverting the arm to the local AudioBook
+    /// initializer flips this pin to NotFoundObjectResult.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_AudioTypedBookFolder_EnumeratesViaMediaTypesNotAudioBookKind()
+    {
+        Guid parentId = Guid.NewGuid();
+        var book = new MediaBrowser.Controller.Entities.Folder
+        {
+            Name = "JF-784 Audio-Typed Book",
+            Id = parentId
+        };
+        var chapters = new List<MediaBrowser.Controller.Entities.BaseItem>();
+        for (int i = 1; i <= 3; i++)
+        {
+            chapters.Add(new MediaBrowser.Controller.Entities.Audio.Audio
+            {
+                Name = $"JF-784 Chapter {i}",
+                Id = Guid.NewGuid(),
+                Path = $"/book/jf784-{i:000}.mp3",
+                RunTimeTicks = TimeSpan.FromMinutes(10).Ticks
+            });
+        }
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns(book);
+
+        var captured = new List<MediaBrowser.Controller.Entities.InternalItemsQuery>();
+        _libraryManagerMock
+            .Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Callback<MediaBrowser.Controller.Entities.InternalItemsQuery>(q => captured.Add(q))
+            .Returns((MediaBrowser.Controller.Entities.InternalItemsQuery q) =>
+                q.MediaTypes != null && q.MediaTypes.Contains(Jellyfin.Data.Enums.MediaType.Audio)
+                    ? chapters
+                    : new List<MediaBrowser.Controller.Entities.BaseItem>());
+
+        string fakeFfmpegPath = WriteFlushLagFakeFfmpeg("fake-ffmpeg-jf784-audiotyped");
+
+        var controller = CreateController(parentId.ToString(), ffmpegPath: fakeFfmpegPath);
+
+        ActionResult result = await controller.StreamHlsAudiobook(parentId.ToString());
+
+        // Post-fix: the MediaTypes=Audio query found the chapters and the
+        // endpoint proceeded to the concat encode and served its pre-written
+        // listing (the audiobook first-fetch row), never the 404 the
+        // AudioBook-kind query produced.
+        var content = Assert.IsType<ContentResult>(result);
+        Assert.Contains("seg_0000.ts?token=", content.Content, StringComparison.Ordinal);
+        MediaBrowser.Controller.Entities.InternalItemsQuery chaptersQuery = Assert.Single(captured);
+        Assert.Equal(new[] { Jellyfin.Data.Enums.MediaType.Audio }, chaptersQuery.MediaTypes);
+    }
+
+    /// <summary>
+    /// JF-784 leg 3, the MIXED-children shape the filing names: a book parent
+    /// with AudioBook chapters PLUS an Audio-typed sibling (a metadata remap)
+    /// is queued in full by the PlayBook path (MediaTypes=Audio), so the concat
+    /// input must list ALL of them; the pre-fix AudioBook-kind arm enumerated
+    /// only the AudioBook subset and encoded a shorter timeline than the queue
+    /// plays. The mock answers conditioned on the query's kind axis (the
+    /// IncludeItemTypes=AudioBook arm sees only the AudioBook subset, the
+    /// MediaTypes=Audio arm sees every child), so the pre-fix tree reproduces
+    /// the subset concat. RED on the unmodified tree: the Audio sibling's
+    /// stream URL is missing from chapters.txt.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_MixedKindChildren_ConcatListsAudioTypedSiblings()
+    {
+        Guid parentId = Guid.NewGuid();
+        var book = new MediaBrowser.Controller.Entities.Folder
+        {
+            Name = "JF-784 Mixed-Kind Book",
+            Id = parentId
+        };
+        var audioBookChapter1 = new MediaBrowser.Controller.Entities.AudioBook
+        {
+            Name = "Chapter 1",
+            Id = Guid.NewGuid(),
+            Path = "/book/jf784-mixed-001.mp3",
+            RunTimeTicks = TimeSpan.FromMinutes(10).Ticks
+        };
+        var audioBookChapter2 = new MediaBrowser.Controller.Entities.AudioBook
+        {
+            Name = "Chapter 2",
+            Id = Guid.NewGuid(),
+            Path = "/book/jf784-mixed-002.mp3",
+            RunTimeTicks = TimeSpan.FromMinutes(10).Ticks
+        };
+        var audioSibling = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Remapped Chapter 3",
+            Id = Guid.NewGuid(),
+            Path = "/book/jf784-mixed-003.mp3",
+            RunTimeTicks = TimeSpan.FromMinutes(10).Ticks
+        };
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns(book);
+
+        _libraryManagerMock
+            .Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Returns((MediaBrowser.Controller.Entities.InternalItemsQuery q) =>
+                q.MediaTypes != null && q.MediaTypes.Contains(Jellyfin.Data.Enums.MediaType.Audio)
+                    ? new List<MediaBrowser.Controller.Entities.BaseItem> { audioBookChapter1, audioBookChapter2, audioSibling }
+                    : new List<MediaBrowser.Controller.Entities.BaseItem> { audioBookChapter1, audioBookChapter2 });
+
+        string fakeFfmpegPath = WriteFlushLagFakeFfmpeg("fake-ffmpeg-jf784-mixed");
+
+        var controller = CreateController(parentId.ToString(), ffmpegPath: fakeFfmpegPath);
+
+        await controller.StreamHlsAudiobook(parentId.ToString());
+
+        string hlsDir = _cache.GetHlsDirectoryPath(parentId.ToString(), 0);
+        string concatList = await File.ReadAllTextAsync(Path.Combine(hlsDir, "chapters.txt"));
+        Assert.Contains(audioBookChapter1.Id.ToString(), concatList, StringComparison.Ordinal);
+        Assert.Contains(audioBookChapter2.Id.ToString(), concatList, StringComparison.Ordinal);
+        // The discriminating row: the Audio-typed sibling the AudioBook-kind
+        // arm dropped.
+        Assert.Contains(audioSibling.Id.ToString(), concatList, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-784 review F1 pin: the copy-compatibility gate covers the AUDIOBOOK
+    /// arm too. The arm used to hardcode <c>-c:a copy</c> on the assumption its
+    /// AudioBook-kind chapters were codec-uniform; since leg 3 the arm
+    /// enumerates the queue's MediaTypes=Audio rows, where a non-copy codec
+    /// (an ALAC remap among MP3 chapters) must transcode the concat to AAC the
+    /// way the album arm does, or the copy silently truncates the output at the
+    /// first non-matching track (exit 0) and the undercount verdict re-encodes
+    /// into the same truncation forever. RED on the pre-fix tree (the arm
+    /// hardcodes copy): the recorded args carry <c>-c:a copy</c>.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_MixedCodecs_TranscodesInsteadOfCopy()
+    {
+        Guid parentId = Guid.NewGuid();
+        var book = new MediaBrowser.Controller.Entities.Folder
+        {
+            Name = "JF-784 Mixed-Codec Book",
+            Id = parentId
+        };
+        var mp3Chapter = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "MP3 Chapter",
+            Id = Guid.NewGuid(),
+            Path = "/book/jf784-codec-001.mp3",
+            RunTimeTicks = TimeSpan.FromMinutes(10).Ticks
+        };
+        var alacChapter = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "ALAC Remap Chapter",
+            Id = Guid.NewGuid(),
+            Path = "/book/jf784-codec-002.m4a",
+            RunTimeTicks = TimeSpan.FromMinutes(10).Ticks
+        };
+
+        var mediaSourceManager = new Mock<IMediaSourceManager>();
+        mediaSourceManager
+            .Setup(m => m.GetMediaStreams(mp3Chapter.Id))
+            .Returns(new List<MediaStream> { new() { Type = MediaStreamType.Audio, Codec = "mp3" } });
+        mediaSourceManager
+            .Setup(m => m.GetMediaStreams(alacChapter.Id))
+            .Returns(new List<MediaStream> { new() { Type = MediaStreamType.Audio, Codec = "alac" } });
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns(book);
+        _libraryManagerMock
+            .Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Returns(new List<MediaBrowser.Controller.Entities.BaseItem> { mp3Chapter, alacChapter });
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
+        var controller = CreateController(
+            parentId.ToString(), loggerFactory, mediaSourceManager, WriteRecordingFakeFfmpeg("fake-ffmpeg-jf784-mixedcodec"));
+
+        await controller.StreamHlsAudiobook(parentId.ToString());
+
+        string hlsDir = _cache.GetHlsDirectoryPath(parentId.ToString(), 0);
+        string[] argLines = await File.ReadAllLinesAsync(Path.Combine(hlsDir, "episode-args.txt"));
+        Assert.Contains("aac", argLines);
+        Assert.Contains("192k", argLines);
+        Assert.DoesNotContain("copy", argLines);
+        Assert.Contains(
+            TestCaptureLogger.Snapshot(logRecords),
+            r => r.Message.Contains("mixed or non-copy audio codecs", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// JF-784 review F3 pin: a HEALTHY concat encode (3 playlist segments for
+    /// 2 short chapters; the concat cuts ~one 10s segment per 10s of chapter)
+    /// must log the monitor's complete row, never INCOMPLETE. The pre-fix
+    /// monitor compared segment count to chapter count with EQUALITY, so every
+    /// healthy book/album encode warned INCOMPLETE (3000 segments vs 92
+    /// chapters), drowning the real incomplete signal the sidecar exists for.
+    /// RED on the pre-fix tree: the INCOMPLETE warning fires for 3 != 2.
+    /// The chapters are 12s each so the JF-784 tail's duration-derived floor
+    /// (2 chapters / 24s of audio) also passes: the healthy row must hold on
+    /// BOTH floors.
+    /// </summary>
+    [Fact]
+    public async Task MonitorHls_HealthyConcatEncode_SegmentsAboveChapterCount_LogsCompleteNotIncomplete()
+    {
+        Guid parentId = Guid.NewGuid();
+        var book = new MediaBrowser.Controller.Entities.Folder
+        {
+            Name = "JF-784 Monitor Book",
+            Id = parentId
+        };
+        var chapter1 = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Chapter 1",
+            Id = Guid.NewGuid(),
+            Path = "/book/jf784-monitor-001.mp3",
+            RunTimeTicks = TimeSpan.FromSeconds(12).Ticks
+        };
+        var chapter2 = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Chapter 2",
+            Id = Guid.NewGuid(),
+            Path = "/book/jf784-monitor-002.mp3",
+            RunTimeTicks = TimeSpan.FromSeconds(12).Ticks
+        };
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns(book);
+        _libraryManagerMock
+            .Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Returns(new List<MediaBrowser.Controller.Entities.BaseItem> { chapter1, chapter2 });
+
+        // Healthy encode: three segments cover both 12s chapters (floor 2),
+        // ENDLIST, exit 0.
+        string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-jf784-monitor-healthy",
+            "for last_arg in \"$@\"; do :; done\n" +
+            "dir=$(dirname \"$last_arg\")\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0000.ts\" 2>/dev/null\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0001.ts\" 2>/dev/null\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0002.ts\" 2>/dev/null\n" +
+            "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:10.000,\\nseg_0000.ts\\n#EXTINF:10.000,\\nseg_0001.ts\\n#EXTINF:10.000,\\nseg_0002.ts\\n#EXT-X-ENDLIST\\n' > \"$last_arg\"\n" +
+            "exit 0\n");
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
+        var controller = CreateController(parentId.ToString(), loggerFactory, ffmpegPath: fakeFfmpegPath);
+
+        ActionResult result = await controller.StreamHlsAudiobook(parentId.ToString());
+        Assert.IsType<ContentResult>(result);
+
+        Assert.True(
+            await WaitUntilAsync(
+                () => TestCaptureLogger.Snapshot(logRecords).Any(r => r.Message.Contains("Audiobook HLS encoding complete", StringComparison.Ordinal)),
+                TimeSpan.FromSeconds(10)),
+            "the monitor must report the healthy encode as complete");
+        Assert.DoesNotContain(
+            TestCaptureLogger.Snapshot(logRecords),
+            r => r.Message.Contains("HLS encoding INCOMPLETE", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// JF-784 gate-marker tail F1 pin, the true-positive direction the worker's
+    /// F3 fix unguarded: a concat encode that truncates at exit 0 keeps listing
+    /// FAR more segments than it has chapters (two 10-minute chapters = 120
+    /// segment-seconds of expected audio; the encode delivered 3), so the bare
+    /// chapter-count floor sees only near-total failures and logs "complete".
+    /// The duration-derived floor must fire INCOMPLETE here. RED on the
+    /// pre-tail tree: the monitor logs the complete Debug row (3 >= 2
+    /// chapters).
+    /// </summary>
+    [Fact]
+    public async Task MonitorHls_TruncatedConcatEncode_SegmentsAboveChapterCountButBelowDuration_LogsIncomplete()
+    {
+        Guid parentId = Guid.NewGuid();
+        var book = new MediaBrowser.Controller.Entities.Folder
+        {
+            Name = "JF-784 Truncated Book",
+            Id = parentId
+        };
+        var chapter1 = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Chapter 1",
+            Id = Guid.NewGuid(),
+            Path = "/book/jf784-monitor-trunc-001.mp3",
+            RunTimeTicks = TimeSpan.FromMinutes(10).Ticks
+        };
+        var chapter2 = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Chapter 2",
+            Id = Guid.NewGuid(),
+            Path = "/book/jf784-monitor-trunc-002.mp3",
+            RunTimeTicks = TimeSpan.FromMinutes(10).Ticks
+        };
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns(book);
+        _libraryManagerMock
+            .Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Returns(new List<MediaBrowser.Controller.Entities.BaseItem> { chapter1, chapter2 });
+
+        // Truncated encode: 3 segments cover only 30s of the 20min the sidecar
+        // demands (floor 115), but 3 >= 2 chapters passes the old bar.
+        string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-jf784-monitor-truncated",
+            "for last_arg in \"$@\"; do :; done\n" +
+            "dir=$(dirname \"$last_arg\")\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0000.ts\" 2>/dev/null\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0001.ts\" 2>/dev/null\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$dir/seg_0002.ts\" 2>/dev/null\n" +
+            "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:10.000,\\nseg_0000.ts\\n#EXTINF:10.000,\\nseg_0001.ts\\n#EXTINF:10.000,\\nseg_0002.ts\\n#EXT-X-ENDLIST\\n' > \"$last_arg\"\n" +
+            "exit 0\n");
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
+        var controller = CreateController(parentId.ToString(), loggerFactory, ffmpegPath: fakeFfmpegPath);
+
+        ActionResult result = await controller.StreamHlsAudiobook(parentId.ToString());
+        Assert.IsType<ContentResult>(result);
+
+        Assert.True(
+            await WaitUntilAsync(
+                () => TestCaptureLogger.Snapshot(logRecords).Any(r => r.Message.Contains("HLS encoding INCOMPLETE", StringComparison.Ordinal)),
+                TimeSpan.FromSeconds(10)),
+            "the monitor must flag the truncated-at-exit-0 encode as incomplete");
+        Assert.DoesNotContain(
+            TestCaptureLogger.Snapshot(logRecords),
+            r => r.Message.Contains("Audiobook HLS encoding complete", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// JF-784 gate-marker tail F2 pin: when NO chapter's audio codec can be
+    /// resolved (a transient media-streams failure, or a fresh scan with no
+    /// stream rows), the copy-compatibility gate must keep <c>-c:a copy</c>
+    /// (the pre-gate behavior) instead of fail-closing into a full-book AAC
+    /// transcode: unknown is missing information, not confirmed incompatibility,
+    /// and the transcode cost lands on the longest content the plugin serves.
+    /// A RESOLVED non-copy codec still transcodes (the sibling pin above). RED
+    /// on the pre-tail tree: the all-null shape transcodes (aac/192k args).
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_AllCodecsUnresolvable_KeepsCopyInsteadOfTranscode()
+    {
+        Guid parentId = Guid.NewGuid();
+        var book = new MediaBrowser.Controller.Entities.Folder
+        {
+            Name = "JF-784 Unresolvable-Codec Book",
+            Id = parentId
+        };
+        var chapter1 = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Chapter 1",
+            Id = Guid.NewGuid(),
+            Path = "/book/jf784-nullcodec-001.mp3",
+            RunTimeTicks = TimeSpan.FromMinutes(10).Ticks
+        };
+        var chapter2 = new MediaBrowser.Controller.Entities.Audio.Audio
+        {
+            Name = "Chapter 2",
+            Id = Guid.NewGuid(),
+            Path = "/book/jf784-nullcodec-002.mp3",
+            RunTimeTicks = TimeSpan.FromMinutes(10).Ticks
+        };
+
+        var mediaSourceManager = new Mock<IMediaSourceManager>();
+        mediaSourceManager
+            .Setup(m => m.GetMediaStreams(It.IsAny<Guid>()))
+            .Returns(new List<MediaStream>());
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns(book);
+        _libraryManagerMock
+            .Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Returns(new List<MediaBrowser.Controller.Entities.BaseItem> { chapter1, chapter2 });
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
+        var controller = CreateController(
+            parentId.ToString(), loggerFactory, mediaSourceManager, WriteRecordingFakeFfmpeg("fake-ffmpeg-jf784-nullcodec"));
+
+        await controller.StreamHlsAudiobook(parentId.ToString());
+
+        string hlsDir = _cache.GetHlsDirectoryPath(parentId.ToString(), 0);
+        string[] argLines = await File.ReadAllLinesAsync(Path.Combine(hlsDir, "episode-args.txt"));
+        Assert.Contains("copy", argLines);
+        Assert.DoesNotContain("192k", argLines);
+        Assert.DoesNotContain(
+            TestCaptureLogger.Snapshot(logRecords),
+            r => r.Message.Contains("mixed or non-copy audio codecs", StringComparison.Ordinal));
+        Assert.Contains(
+            TestCaptureLogger.Snapshot(logRecords),
+            r => r.Message.Contains("no chapter audio codec resolvable", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// JF-784 gate-marker tail F1 pin, the SERVE-TIME twin: a completed cache
+    /// entry whose playlist carries far fewer segments than the live
+    /// enumeration's runtime sum demands (the monitor's truncated-at-exit-0
+    /// shape persisted to disk: 30 segments for 36 minutes of chapters) is
+    /// debris and must invalidate to a scoped re-encode, not serve the
+    /// truncated timeline. The bare chapter-count floor passed it (30 >= 12).
+    /// RED on the pre-tail tree: the cache-hit verdict validates and serves.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_CacheHit_SegmentsBelowDurationFloor_IsInvalidatedAsDebris()
+    {
+        Guid parentId = Guid.NewGuid();
+        long threeMinutes = TimeSpan.FromMinutes(3).Ticks;
+        await SeedCompletedConcatCacheAsync(
+            _cache, parentId, segmentCount: 30, encodedChapterCount: 12, encodedDurationTicks: 12 * threeMinutes);
+
+        var (captured, logRecords, result) = await ServeAlbumOverSeededConcatCacheAsync(
+            parentId, trackCount: 12, tokenScope: new[] { Guid.NewGuid() }, "jf784-duration-floor");
+
+        AssertCacheInvalidatedAndReencoded(logRecords, result, "segments");
+        Assert.Single(captured);
+    }
+
+    /// <summary>
+    /// Write the JF-292 encode-metadata sidecar into a concat cache generation
+    /// directory (the JF-784 timeline verdict's comparison input), synchronously
+    /// for the plant lambdas that seed inside a lock callback.
+    /// </summary>
+    private static void WriteEncodeMetadata(string hlsDir, int chapterCount, long durationTicks)
+        => File.WriteAllText(
+            Path.Combine(hlsDir, "encode-metadata.json"),
+            $$"""{"ExpectedChapterCount":{{chapterCount}},"ExpectedDurationTicks":{{durationTicks}}}""");
+
+    /// <summary>
+    /// Seed a COMPLETED concat cache generation (ENDLIST playlist with
+    /// <paramref name="segmentCount"/> segments) plus the JF-292
+    /// encode-metadata sidecar the JF-784 timeline verdict reads. A null
+    /// <paramref name="encodedChapterCount"/> omits the sidecar entirely (the
+    /// pre-sidecar / wiped-sidecar shape; <paramref name="encodedDurationTicks"/>
+    /// is then ignored). Returns the playlist path.
+    /// </summary>
+    private static async Task<string> SeedCompletedConcatCacheAsync(
+        VideoAudioCache cache,
+        Guid parentId,
+        int segmentCount,
+        int? encodedChapterCount,
+        long encodedDurationTicks)
+    {
+        string hlsDir = cache.GetHlsDirectoryPath(parentId.ToString(), 0);
+        Directory.CreateDirectory(hlsDir);
+        var playlist = new System.Text.StringBuilder("#EXTM3U\n#EXT-X-VERSION:3\n");
+        for (int i = 0; i < segmentCount; i++)
+        {
+            playlist.Append(CultureInfo.InvariantCulture, $"#EXTINF:10.000,\nseg_{i:0000}.ts\n");
+        }
+
+        playlist.Append("#EXT-X-ENDLIST\n");
+        string playlistPath = Path.Combine(hlsDir, "stream.m3u8");
+        await File.WriteAllTextAsync(playlistPath, playlist.ToString());
+        if (encodedChapterCount is { } chapterCount)
+        {
+            WriteEncodeMetadata(hlsDir, chapterCount, encodedDurationTicks);
+        }
+
+        return playlistPath;
+    }
+
+    /// <summary>
+    /// The shared arrangement of the JF-784 leg 1 timeline pins: a MusicAlbum
+    /// whose (scoped) enumeration is <paramref name="trackCount"/> Audio tracks
+    /// of 3 minutes each, over a seeded completed concat cache. Captures every
+    /// query; the request presents the given token scope.
+    /// </summary>
+    private async Task<(List<MediaBrowser.Controller.Entities.InternalItemsQuery> Captured, List<(LogLevel Level, string Message)> LogRecords, ActionResult Result)> ServeAlbumOverSeededConcatCacheAsync(
+        Guid parentId,
+        int trackCount,
+        Guid[]? tokenScope,
+        string fakeFfmpegTag)
+    {
+        var album = new MediaBrowser.Controller.Entities.Audio.MusicAlbum
+        {
+            Name = $"JF-784 Timeline Album ({fakeFfmpegTag})",
+            Id = parentId
+        };
+        var tracks = new List<MediaBrowser.Controller.Entities.BaseItem>();
+        for (int i = 1; i <= trackCount; i++)
+        {
+            tracks.Add(new MediaBrowser.Controller.Entities.Audio.Audio
+            {
+                Name = $"Track {i}",
+                Id = Guid.NewGuid(),
+                RunTimeTicks = TimeSpan.FromMinutes(3).Ticks
+            });
+        }
+
+        _mediaEncoderMock.Setup(m => m.EncoderPath).Returns("/usr/bin/ffmpeg");
+        _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns(album);
+
+        var captured = new List<MediaBrowser.Controller.Entities.InternalItemsQuery>();
+        _libraryManagerMock
+            .Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Callback<MediaBrowser.Controller.Entities.InternalItemsQuery>(q => captured.Add(q))
+            .Returns(tracks);
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
+        var controller = CreateController(
+            parentId.ToString(),
+            loggerFactory,
+            ffmpegPath: WriteFlushLagFakeFfmpeg($"fake-ffmpeg-{fakeFfmpegTag}"),
+            tokenScope: tokenScope);
+        ActionResult result = await controller.StreamHlsAudiobook(parentId.ToString());
+        return (captured, logRecords, result);
+    }
+
+    /// <summary>
+    /// JF-784 leg 1 RED pin, the filed shape: a cache entry encoded under a
+    /// DIFFERENT timeline (an unrestricted user's 15-track enumeration) serves
+    /// unchanged to a scoped request enumerating 12 tracks. Pre-fix the
+    /// cache-hit verdict validated (the seeded 270 segments clear every
+    /// undercount bar) and served the foreign timeline's ContentResult; post-fix
+    /// the verdict compares the encode-metadata sidecar against the CURRENT
+    /// scoped enumeration and invalidates (re-encode, the flush-lag degrade
+    /// row). SABOTAGE (red on the unmodified tree): the pin asserts the
+    /// invalidation log and the re-encode result; the pre-fix tree serves the
+    /// cached ContentResult with neither.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_CacheHit_EncodedUnderDifferentTimeline_IsInvalidatedAndReencoded()
+    {
+        Guid parentId = Guid.NewGuid();
+        long threeMinutes = TimeSpan.FromMinutes(3).Ticks;
+        // 270 segments = the 45-minute sidecar timeline's own segment count (one
+        // per 10s), so the duration floor passes and the TIMELINE verdict is the
+        // row under test, not the undercount bar.
+        await SeedCompletedConcatCacheAsync(
+            _cache, parentId, segmentCount: 270, encodedChapterCount: 15, encodedDurationTicks: 15 * threeMinutes);
+
+        var (captured, logRecords, result) = await ServeAlbumOverSeededConcatCacheAsync(
+            parentId, trackCount: 12, tokenScope: new[] { Guid.NewGuid() }, "jf784-foreign-timeline");
+
+        // The scoped enumeration issued (the album arm found the 12 tracks, no retry).
+        Assert.Single(captured);
+        AssertCacheInvalidatedAndReencoded(logRecords, result, "different timeline");
+    }
+
+    /// <summary>
+    /// The three invalidation rows' shared terminal assert: the verdict fired
+    /// with the discriminating reason fragment, and the request re-encoded
+    /// (the flush-lag degrade row) instead of serving the cached entry.
+    /// </summary>
+    private static void AssertCacheInvalidatedAndReencoded(
+        List<(LogLevel Level, string Message)> logRecords,
+        ActionResult result,
+        string reasonFragment)
+    {
+        Assert.IsType<PhysicalFileResult>(result);
+        Assert.Contains(
+            TestCaptureLogger.Snapshot(logRecords),
+            r => r.Message.Contains("Audiobook HLS cache invalidated", StringComparison.Ordinal)
+                && r.Message.Contains(reasonFragment, StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// JF-784 leg 1, the SAME-timeline row: when the sidecar matches the
+    /// current scoped enumeration exactly (count and duration), the completed
+    /// entry serves unchanged (no re-encode, no invalidation). This is the
+    /// no-thrash guarantee for the common single-scope household and for two
+    /// scopes that select the SAME membership.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_CacheHit_SameTimeline_ServesCachedEntry()
+    {
+        Guid parentId = Guid.NewGuid();
+        long threeMinutes = TimeSpan.FromMinutes(3).Ticks;
+        // 216 segments = the 36-minute timeline's own segment count (one per
+        // 10s): coherent with the duration floor, so the verdict validates.
+        await SeedCompletedConcatCacheAsync(
+            _cache, parentId, segmentCount: 216, encodedChapterCount: 12, encodedDurationTicks: 12 * threeMinutes);
+
+        var (captured, logRecords, result) = await ServeAlbumOverSeededConcatCacheAsync(
+            parentId, trackCount: 12, tokenScope: new[] { Guid.NewGuid() }, "jf784-same-timeline");
+
+        var content = Assert.IsType<ContentResult>(result);
+        Assert.Contains("seg_0215.ts?token=", content.Content, StringComparison.Ordinal);
+        Assert.Single(captured);
+        // The cache-hit serve row fired ("generating concat stream" logs on every
+        // multi-chapter request, cache hit included; "Audiobook chapter sort" is
+        // the encode branch's first log and the honest no-re-encode signal).
+        Assert.Contains(
+            TestCaptureLogger.Snapshot(logRecords),
+            r => r.Message.Contains("serving cached playlist for parent", StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            TestCaptureLogger.Snapshot(logRecords),
+            r => r.Message.Contains("HLS cache invalidated", StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            TestCaptureLogger.Snapshot(logRecords),
+            r => r.Message.Contains("Audiobook chapter sort", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// JF-784 leg 1, the duration axis: an equal chapter COUNT with a different
+    /// duration sum (two scopes selecting different memberships of equal size,
+    /// or an in-place runtime edit between encode and serve) is still a
+    /// different timeline and invalidates. Both compared numbers are DB
+    /// RunTimeTicks sums, so the comparison needs no tolerance.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_CacheHit_CountEqualDurationDifferent_IsInvalidated()
+    {
+        Guid parentId = Guid.NewGuid();
+        long threeMinutes = TimeSpan.FromMinutes(3).Ticks;
+        // 270 segments = the SIDEcar's 45-minute timeline's own count, so the
+        // undercount bar (floored on the live 36-minute enumeration) passes and
+        // the duration-axis comparison is the row under test.
+        await SeedCompletedConcatCacheAsync(
+            _cache, parentId, segmentCount: 270, encodedChapterCount: 12, encodedDurationTicks: 15 * threeMinutes);
+
+        var (_, logRecords, result) = await ServeAlbumOverSeededConcatCacheAsync(
+            parentId, trackCount: 12, tokenScope: new[] { Guid.NewGuid() }, "jf784-duration-axis");
+
+        AssertCacheInvalidatedAndReencoded(logRecords, result, "different timeline");
+    }
+
+    /// <summary>
+    /// JF-784 leg 1, the fail-closed row: a completed entry with NO
+    /// encode-metadata sidecar (a pre-sidecar cache, or a wiped sidecar) cannot
+    /// prove its timeline identity and is stale: one re-encode re-establishes
+    /// the sidecar. Never a silent serve of an unverifiable timeline.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_CacheHit_NoEncodeMetadata_IsInvalidatedFailClosed()
+    {
+        Guid parentId = Guid.NewGuid();
+        // 216 segments = the live 36-minute enumeration's own segment count, so
+        // the undercount bar passes and the MISSING SIDECAR is the row under
+        // test.
+        await SeedCompletedConcatCacheAsync(
+            _cache, parentId, segmentCount: 216, encodedChapterCount: null, encodedDurationTicks: 0);
+
+        var (_, logRecords, result) = await ServeAlbumOverSeededConcatCacheAsync(
+            parentId, trackCount: 12, tokenScope: new[] { Guid.NewGuid() }, "jf784-no-metadata");
+
+        AssertCacheInvalidatedAndReencoded(logRecords, result, "no encode metadata");
     }
 
     // ---- W4: permission-denied deletes must not surface as 500s ----

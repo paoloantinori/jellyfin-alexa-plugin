@@ -395,7 +395,7 @@ ffmpeg -f concat -safe 0 -i chapters.txt \
 
 **Cache size**: ~472MB for an 8.3h audiobook (vs ~3.6GB for 25fps video approach).
 
-**Cache validation**: segment count must be **>= chapter count** (not exactly equal), because 10-second segments produce far more entries than chapters. Only invalidate if segment count is clearly incomplete (< chapters).
+**Cache validation**: segment count must clear the DURATION-derived floor (`ExpectedMinimumConcatSegments`: one segment per 10s of chapter audio, 2% + 2-segment tolerance; chapter count is the secondary floor), because 10-second segments produce far more entries than chapters and an encode truncated at exit 0 still lists more segments than it has chapters. Only invalidate if segment count is clearly incomplete (below the floor).
 
 ### Key gotchas
 

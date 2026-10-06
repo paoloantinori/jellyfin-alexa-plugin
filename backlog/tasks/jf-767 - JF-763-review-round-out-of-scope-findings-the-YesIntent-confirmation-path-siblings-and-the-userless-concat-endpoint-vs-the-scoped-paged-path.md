@@ -6,6 +6,7 @@ title: >-
 status: Done
 assignee: []
 created_date: '2026-10-05'
+updated_date: '2026-10-06'
 labels: []
 references:
   - backlog/tasks/jf-763 - JF-763-JF-757-round-follow-ups-the-residual-hand-kept-album-track-query-shapes-and-the-headtail-library-scope-asymmetry.md
@@ -78,13 +79,73 @@ siblings.
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 Finding A decided: YesIntentHandler.PlayAlbum's MusicAlbum case routed through the builder (with scope +
-      JF-338 retry, audiobook leg local) and PlayBook routed through BuildAudiobookChaptersQuery, or both recorded
-      as accepted boundaries in the two builders' docs
-- [ ] #2 Finding B decided: the JF-309 token carries the user's resolved library scope and the concat endpoint
-      applies it (with the seek-mode resume walk and the concat row set back on one timeline), or the residual
-      re-verified and re-documented at its new home
-- [ ] #3 Any behavior change ships with red proofs (the JF-763 sabotage convention) and the suite green both TFMs
+- [x] #1 Finding A decided: FOLDED BOTH SIBLINGS. PlayAlbum's MusicAlbum case routes through
+      BuildScopedAlbumTracksQueryUnpaged (the new unpaged+scoped builder sibling: session user,
+      JF-666 scope, JF-338 AlbumIds retry) with the non-MusicAlbum leg local (the endpoint's
+      ternary shape, MediaTypes=Audio kept for the JF-361 AudioBook-chapter kind discipline,
+      scope applied at the call site after code-review F5); PlayBook routes through the new
+      BuildScopedAudiobookChaptersQuery sibling (which FetchAudiobookChapters and, after
+      code-review F3, PlayBookIntentHandler's head also run, so head/confirm/tail share ONE
+      scoped pairing). BuildTrackCountQuery stays declined as a shape (the JF-763 adjudication;
+      the no-standalone-action note in the description stands)
+- [x] #2 Finding B decided: the token threading IMPLEMENTED (three-field scoped form
+      {expires}.{scope}.{hmac}, HMAC covering the scope; unrestricted users mint the legacy
+      two-field form byte-identically; the endpoint resolves the token's raw AllowedLibraryIds
+      once per request with the paged path's own resolver and applies TopParentIds to both
+      arms). Deliberate deviation from the task letter ("mint the resolved TopParentIds"):
+      the URL builder holds no ILibraryManager and serve-time resolution keeps the token in
+      step with current queries (documented on GetAudiobookResumeUrl with the launch-to-fetch
+      window the paged path already shares). The residual RE-VERIFIED at its new home: the
+      scope governs the live enumeration only, never the shared concat cache (keyed by
+      parentId+artModifiedTicks), documented at the endpoint comment and FILED as JF-784
+      with the second code-review residual (the unbounded scope rendering)
+- [x] #3 Red proofs: pre-fix RED on the unmodified tree for the Finding A pins (split-album
+      confirm: Expected 2 queries / Actual 1, no retry; PlayBook pin: Expected StartIndex 0 /
+      Actual null), both TFMs; post-fix sabotage REDs: endpoint scope application removed (the
+      scoped-token pin: Expected [musicLib] / Actual []), mint scope nulled (the three
+      builder-side scope pins), PlayBook head reverted to the unscoped builder (the extended
+      head pin). Suites 5335/5335 net9.0 AND net10.0 (main baseline 5314 + 21 new Facts);
+      Release -warnaserror clean
 <!-- DOD:END -->
 
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Both findings shipped as code. FINDING A (the confirmation-path siblings): PlayAlbum's
+MusicAlbum case runs the paged head's exact triple (the ONE builder unpaged with the session
+user via the new BuildScopedAlbumTracksQueryUnpaged, the JF-666 scope, the JF-338 AlbumIds
+retry), so a confirmed split album now PLAYS instead of answering NoSongsInAlbum and the
+queue rows feed the concat timeline the same field set the endpoint encodes; the
+non-MusicAlbum leg stays local (the JF-361 kind discipline) and gained the scope filter
+(code-review F5); PlayBook runs the new BuildScopedAudiobookChaptersQuery sibling, and the
+review round extended the structural pairing to the tail (rerouted) and PlayBookIntentHandler's
+head (code-review F3, with the head pin's new scope assert), so head, confirm, and tail share
+one scoped chapters pairing. PlayAlbum also adopted the JF-699 launch-before-writes ordering
+(code-review F2, the MusicAlbum leg mints the token-gated concat URL). FINDING B (the root
+fix): StreamTokenHelper gained the scoped wire form (canonical sorted/deduped "N" GUIDs in the
+HMAC payload; MintScoped, the scope-reading TryValidate, both over one private mint core and
+one validation core that never parses the scope on the discarding per-segment paths);
+GetAudiobookResumeUrl mints the launching user's AllowedLibraryIds (raw ids, serve-time
+resolution: the documented deviation with its window rationale), and StreamHlsAudiobook
+resolves them once per request through LibraryFilter's own resolver and applies TopParentIds
+to both isMusicAlbum arms and the audiobook arm, so the encoded timeline is the timeline the
+scoped head sums the seek-mode resume offset over; legacy/unrestricted tokens enumerate
+byte-identically to before. OUT OF SCOPE, FILED AS JF-784: the concat cache's scope blindness
+(a cache entry encoded under a different scope serves unchanged to a scoped request; both fix
+shapes sketched) and the unbounded scope rendering (bound documented on RenderScope). Gates:
+worker /simplify (4 angles; applied the scoped chapters sibling killing the mixed pairing
+convention, the mint-core and validation-core consolidations with the hot-path parse removed,
+the endpoint's once-per-request scope resolution hoist, and four test-helper consolidations;
+declined the hand-pair alternative to the scoped builders and the retry-owning enumerator
+(the executors-stay-at-callers contract, divergent empty-tails)). /code-review high (6
+findings: F2/F3/F5 applied with the head pin's scope assert, F6 applied as the doc sentence on
+the resolution window; F1 and F4 filed as JF-784 with doc notes at both sites). Red proofs:
+pre-fix RED for the Finding A pins on the unmodified tree, plus three post-fix sabotage REDs
+(endpoint scope, mint scope, head scope), all both TFMs. Suites: 5335/5335 both TFMs (5314
+baseline + 21 new Facts); Release --no-restore -warnaserror clean. Not deployed (worker
+branch; rides the wave deploy).
+<!-- SECTION:FINAL_SUMMARY:END -->
+
 CLOSED 2026-10-06 by the orchestrator: merged at 85792dcb, gate-marker six axes PASS, F3/F4 applied, F1 filed into JF-784. Production deploys with JF-627.
+
+CORRECTION 2026-10-06 (JF-784 gate-marker, axis 2, evidence: the active DLL pulled from the box carries JF-778/JF-783 symbols and ZERO JF-767 symbols - MintScoped, BuildScopedAlbumTracksQueryUnpaged - and no cached playlist carries a scoped token): the CLOSED line above overstates. The gate-marker tail was merged into the JF-784 worker branch (85792dcb is an ancestor of worktree-agent-aeea212079a607c8d, NOT of main), and the wave deploy of 3aa03fce shipped the JF-627/JF-783 lines WITHOUT JF-767 code: "Production deploys with JF-627" was true of the deployed build only in the sense that JF-627 itself deployed. JF-767 code reaches main and production WITH the JF-784 merge and its deploy.

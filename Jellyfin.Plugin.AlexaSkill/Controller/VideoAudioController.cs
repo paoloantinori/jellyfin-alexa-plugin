@@ -101,6 +101,16 @@ public class VideoAudioController : ControllerBase
     /// prewrite/serve/stale-delete sites within the same cache directory.
     /// </summary>
     private const string PrewrittenPlaylistFileName = "playlist-full.m3u8";
+
+    /// <summary>
+    /// The encode-metadata sidecar every concat encode writes into its cache
+    /// directory at encode start (JF-292: the post-exit monitor's completeness
+    /// logging; JF-784 leg 1: the serve-time timeline verdict reads it too, so
+    /// the name must agree across the write site and the ONE reader,
+    /// <see cref="TryReadEncodeTimelineMetadata"/>).
+    /// </summary>
+    private const string EncodeMetadataFileName = "encode-metadata.json";
+
         /// <summary>JF-625: below this runtime the pre-written full listing is SKIPPED (the
         /// encode finishes before the device's first fetch; see ShouldPrewriteFullListing
         /// for the phantom-tail failure it prevents).</summary>
@@ -1415,7 +1425,8 @@ public class VideoAudioController : ControllerBase
     /// <param name="activeEncodes">The path's active-encode registry (the verdict reads own-ticks liveness from it).</param>
     /// <param name="logLabel">Path label for the verdict's logs ("Episode" / "VideoAudio" / "Audiobook").</param>
     /// <param name="endlistDebrisReason">Optional ENDLIST-content hook (the
-    /// audiobook's undercount check): given the playlist content, returns the
+    /// audiobook path's undercount and, since JF-784, timeline-identity
+    /// checks): given the playlist content, returns the
     /// invalidation reason when a COMPLETED-looking playlist is still debris,
     /// null when valid. Null hook (episode/song/variants): every ENDLIST
     /// playlist is valid.</param>
@@ -3483,7 +3494,7 @@ public class VideoAudioController : ControllerBase
             return BadRequest(new { error = "Unsupported playback rate" });
         }
 
-        ActionResult? tokenError = ValidateStreamToken(itemId);
+        ActionResult? tokenError = ValidateStreamToken(itemId, out _);
         if (tokenError != null)
         {
             return tokenError;
@@ -3535,7 +3546,7 @@ public class VideoAudioController : ControllerBase
             return BadRequest(new { error = "Invalid parentId format" });
         }
 
-        ActionResult? tokenError = ValidateStreamToken(parentId);
+        ActionResult? tokenError = ValidateStreamToken(parentId, out Guid[]? tokenLibraryScope);
         if (tokenError != null)
         {
             return tokenError;
@@ -3571,19 +3582,48 @@ public class VideoAudioController : ControllerBase
         bool isMusicAlbum = parent is MediaBrowser.Controller.Entities.Audio.MusicAlbum;
 
         // JF-763: both isMusicAlbum arms route through the ONE album-tracks builder's
-        // unpaged, user-less form (BuildAlbumTracksQueryUnpaged; the row-set rationale
-        // lives on the builder's doc). The audiobook arm keeps its local initializer:
-        // AudioBook chapters are a different kind discipline with NO AlbumTrackOrder
-        // (the DB order IS the chapter order).
+        // unpaged form (BuildAlbumTracksQueryUnpaged; the row-set rationale
+        // lives on the builder's doc). JF-784 leg 3 closed the kind-axis
+        // divergence on the other arm: the audiobook arm now routes through the
+        // ONE chapters builder's unpaged form (BuildAudiobookChaptersQueryUnpaged)
+        // instead of its local IncludeItemTypes=AudioBook initializer, so the
+        // endpoint enumerates the SAME MediaTypes=Audio rows the PlayBook
+        // head/confirm/tail queue (an Audio-typed chapter set, the metadata-remap
+        // shape, launches instead of 404ing; a mixed folder concats all audio
+        // children instead of the AudioBook subset). Still NO AlbumTrackOrder
+        // here: the DB order IS the chapter order, and this path applies its own
+        // filename-number chapter sort below.
         var childrenQuery = isMusicAlbum
-            ? Alexa.QueueContinuationFetcher.BuildAlbumTracksQueryUnpaged(parentGuid, byAlbumIds: false)
-            : new InternalItemsQuery
-            {
-                ParentId = parentGuid,
-                IncludeItemTypes = new[] { BaseItemKind.AudioBook },
-                Recursive = true,
-                DtoOptions = new DtoOptions(true)
-            };
+            ? Alexa.QueueContinuationFetcher.BuildAlbumTracksQueryUnpaged(jellyfinUser: null, parentGuid, byAlbumIds: false)
+            : Alexa.QueueContinuationFetcher.BuildAudiobookChaptersQueryUnpaged(jellyfinUser: null, parentGuid);
+
+        // JF-767 Finding B: the enumeration runs under the library scope the token
+        // carries (both shapes: album tracks and audiobook chapters; row-neutral for
+        // legitimately launched content since the parent was found under the same
+        // scope, and the audiobook tail already scopes the same way). The scope rides
+        // as raw config ids and is resolved ONCE per request here, with the SAME
+        // resolver every paged query uses (one cache; serve-time resolution matches
+        // what any current query would resolve), then applied to both arms through
+        // the pre-resolved overload. A legacy or unrestricted token carries no scope
+        // and enumerates unscoped, byte-identical to the pre-JF-767 behavior.
+        // JF-784 leg 1 closed the residual JF-767 filed on this seam: a COMPLETED
+        // cache entry encoded under a different timeline no longer serves
+        // unchanged to a scoped request (the serve-time verdict compares the
+        // encode-metadata sidecar against THIS enumeration's count and duration
+        // sum, see ValidateAudiobookCacheAsync). RESIDUAL (accepted): the
+        // DURING-ENCODE windows (the live-aware probe's own-live unread row and
+        // the concurrent-encode prewrite/live guard below) still serve whatever
+        // encode is running, with no timeline read: bounded by the encode
+        // duration, self-healing at the first completed-cache verdict after the
+        // encode exits, EXCEPT the tracker write that window records (the
+        // foreign serve's segment fetches write positions under the shared book
+        // key against the foreign timeline; filed as JF-787).
+        Guid[]? tokenTopParents = tokenLibraryScope is null
+            ? null
+            : Alexa.Util.LibraryFilter.ResolveTopParentIds(tokenLibraryScope, _libraryManager, _logger);
+
+        _logger.LogDebug("VideoAudio concat enumeration: token scope resolved ({LibCount} libraries) vs legacy unscoped", tokenTopParents?.Length ?? 0);
+        Alexa.Util.LibraryFilter.ApplyLibraryFilter(childrenQuery, tokenTopParents);
 
         IReadOnlyList<MediaBrowser.Controller.Entities.BaseItem> chapters =
             _libraryManager.GetItemList(childrenQuery);
@@ -3592,21 +3632,29 @@ public class VideoAudioController : ControllerBase
         // resolve in AlbumPlayService via an AlbumIds fallback; the endpoint's
         // ParentId-only query would 404 the very URL that service launched. Mirror
         // the fallback so both sides resolve a split album through the SAME arm
-        // pair. For a library-restricted user the endpoint's rows are a SUPERSET of
-        // the scoped paged path's (this endpoint is user-less by design; the
-        // seek-mode resume residual that leaves is filed as JF-767, see
-        // BuildAlbumTracksQuery's doc).
+        // pair, under the SAME token scope as the primary arm.
         if (chapters.Count == 0 && isMusicAlbum)
         {
-            chapters = _libraryManager.GetItemList(
-                Alexa.QueueContinuationFetcher.BuildAlbumTracksQueryUnpaged(parentGuid, byAlbumIds: true));
+            var albumIdsRetryQuery = Alexa.QueueContinuationFetcher.BuildAlbumTracksQueryUnpaged(jellyfinUser: null, parentGuid, byAlbumIds: true);
+            Alexa.Util.LibraryFilter.ApplyLibraryFilter(albumIdsRetryQuery, tokenTopParents);
+            chapters = _libraryManager.GetItemList(albumIdsRetryQuery);
         }
 
         if (chapters.Count == 0)
         {
-            _logger.LogWarning("VideoAudio audiobook HLS: no AudioBook chapters found under parent {ParentId}", parentId);
-            return NotFound(new { error = "No audiobook chapters found" });
+            // JF-784 leg 3: the arm enumerates the queue's MediaTypes=Audio
+            // rows, so the empty row set means no audio children under the
+            // (scoped) parent, not an AudioBook-kind filter miss.
+            _logger.LogWarning("VideoAudio audiobook HLS: no audio chapters found under parent {ParentId}", parentId);
+            return NotFound(new { error = "No audio chapters found" });
         }
+
+        // JF-784 leg 1: the timeline identity the serve-time verdict compares
+        // against the encode-metadata sidecar. Both numbers are exactly what the
+        // encode writes into the sidecar over ITS enumeration, so a matching
+        // scope/membership compares bit-identical (no tolerance) and any real
+        // membership difference fails on count, duration, or both.
+        long chapterDurationTicks = chapters.Sum(c => c.RunTimeTicks ?? 0);
 
         // Single chapter — use regular single-item HLS (no concat needed)
         if (chapters.Count == 1)
@@ -3668,7 +3716,7 @@ public class VideoAudioController : ControllerBase
             ActionResult? fastServed = await TryServeValidatedHlsCacheAsync(
                 parentId,
                 "VideoAudio audiobook HLS",
-                () => ValidateAudiobookCacheAsync(cached, chapters.Count, parentId, artModifiedTicks, fastProbe.OwnGenerationLiveOrRegistering),
+                () => ValidateAudiobookCacheAsync(cached, chapters.Count, chapterDurationTicks, parentId, artModifiedTicks, fastProbe.OwnGenerationLiveOrRegistering),
                 valid =>
                 {
                     _logger.LogDebug("VideoAudio audiobook HLS: serving cached playlist for parent {ParentId}", parentId);
@@ -3742,7 +3790,7 @@ public class VideoAudioController : ControllerBase
                 ActionResult? concurrentServed = await TryServeValidatedHlsCacheAsync(
                     parentId,
                     "VideoAudio audiobook HLS",
-                    () => ValidateAudiobookCacheAsync(cached, chapters.Count, parentId, artModifiedTicks, inLockProbe.OwnGenerationLiveOrRegistering),
+                    () => ValidateAudiobookCacheAsync(cached, chapters.Count, chapterDurationTicks, parentId, artModifiedTicks, inLockProbe.OwnGenerationLiveOrRegistering),
                     valid =>
                     {
                         _logger.LogDebug("VideoAudio audiobook HLS: serving playlist generated by concurrent request for parent {ParentId}", parentId);
@@ -3814,14 +3862,20 @@ public class VideoAudioController : ControllerBase
             // Write metadata for post-encode validation in MonitorFfmpegHlsAsync.
             // Records the expected chapter count at encode time so the monitor can
             // detect incomplete encodes without re-querying the Jellyfin library.
+            // JF-784 leg 1: the count and duration sum are ALSO the timeline
+            // identity the serve-time verdict compares against the requesting
+            // scope's live enumeration (the sidecar is what makes the shared
+            // cache scope-aware without a key change).
             var encodeMetadata = new
             {
                 ExpectedChapterCount = chapters.Count,
-                ExpectedDurationTicks = chapters.Sum(c => c.RunTimeTicks ?? 0),
+                // The same local the verdict compares at serve time: the two
+                // expressions must stay bit-identical for a matching timeline.
+                ExpectedDurationTicks = chapterDurationTicks,
                 ParentId = parentId,
                 CreatedAt = DateTime.UtcNow.ToString("O")
             };
-            string metadataPath = Path.Combine(hlsDir, "encode-metadata.json");
+            string metadataPath = Path.Combine(hlsDir, EncodeMetadataFileName);
 #pragma warning disable CA3003
             using (var metadataStream = System.IO.File.Create(metadataPath))
             {
@@ -3844,23 +3898,40 @@ public class VideoAudioController : ControllerBase
             // concat of MIXED codecs declares the first input's codec in the PMT and
             // silently truncates the whole output at the first non-matching track (exit 0,
             // no error - a single iTunes M4A among MP3s ends the album early). Copy ONLY
-            // when every child's codec is copy-compatible; any mixed or unknown codec
-            // transcodes the whole concat to AAC (slower but complete).
-            bool albumAudioCopy = false;
-            if (isMusicAlbum)
+            // when every child's codec is copy-compatible or NONE is resolvable (the
+            // all-unknown row keeps the pre-gate copy per the JF-784 tail F2); any
+            // resolved non-copy codec, or an unknown among resolved ones, transcodes
+            // the whole concat to AAC (slower but complete).
+            // JF-784 review F1: the gate covers BOTH arms. The audiobook arm
+            // used to hardcode copy on the assumption its AudioBook-kind
+            // chapters were codec-uniform; since JF-784 leg 3 the arm
+            // enumerates the queue's MediaTypes=Audio rows, where a remapped
+            // sibling can bring a foreign codec into the same concat, and a
+            // copy over mixed codecs is the silent-truncation shape (exit 0,
+            // partial audio, then the undercount verdict re-encodes into the
+            // same truncation forever).
+            bool allCodecsUnresolvable = sortedChapters.Count > 0
+                && sortedChapters.All(c => ResolveSourceAudioCodec(c) is null);
+            bool albumAudioCopy = sortedChapters.Count > 0
+                && (allCodecsUnresolvable
+                    || sortedChapters.All(c => ResolveSourceAudioCodec(c) is { } codec && CopyCompatibleAudioCodecs.Contains(codec)));
+            if (!albumAudioCopy)
             {
-                albumAudioCopy = sortedChapters.Count > 0
-                    && sortedChapters.All(c => ResolveSourceAudioCodec(c) is { } codec && CopyCompatibleAudioCodecs.Contains(codec));
-                if (!albumAudioCopy)
-                {
-                    _logger.LogInformation(
-                        "VideoAudio album HLS: mixed or non-copy audio codecs in '{AlbumName}', transcoding the concat to AAC ({TrackCount} tracks)",
-                        parent.Name, sortedChapters.Count);
-                }
+                _logger.LogInformation(
+                    "VideoAudio concat HLS: mixed or non-copy audio codecs in '{ItemName}', transcoding the concat to AAC ({TrackCount} tracks)",
+                    parent.Name, sortedChapters.Count);
             }
-            else
+            else if (allCodecsUnresolvable)
             {
-                albumAudioCopy = true;
+                // JF-784 gate-marker tail F2: unknown is missing information,
+                // not confirmed incompatibility. Fail-closing here burned a
+                // full-book AAC transcode (tens of minutes for an 8-10h book)
+                // on a transient codec-resolution failure; the pre-gate copy
+                // behavior is kept, and a genuinely foreign codec still
+                // transcodes through the resolved arm above.
+                _logger.LogDebug(
+                    "VideoAudio concat HLS: no chapter audio codec resolvable for '{ItemName}' ({TrackCount} tracks), keeping -c:a copy",
+                    parent.Name, sortedChapters.Count);
             }
 
             var ffmpegArgs = BuildHlsAudiobookFfmpegArguments(
@@ -3897,8 +3968,8 @@ public class VideoAudioController : ControllerBase
                     ffmpeg,
                     ffmpegArgs,
                     isMusicAlbum && collectionArtUrl != null
-                        ? EstimateArtEncodeBytes(chapters.Sum(c => c.RunTimeTicks ?? 0))
-                        : EstimateEncodeBytes(chapters.Sum(c => c.RunTimeTicks ?? 0)),
+                        ? EstimateArtEncodeBytes(chapterDurationTicks)
+                        : EstimateEncodeBytes(chapterDurationTicks),
                     hlsDir).ConfigureAwait(false);
             }
             catch
@@ -5024,7 +5095,7 @@ public class VideoAudioController : ControllerBase
             return BadRequest(new { error = "Invalid itemId format" });
         }
 
-        return ValidateStreamToken(itemId);
+        return ValidateStreamToken(itemId, out _);
     }
 
     /// <summary>
@@ -5034,9 +5105,15 @@ public class VideoAudioController : ControllerBase
     /// <see cref="StreamTokenSecretNotConfigured"/> on an empty secret, a 401 result on any
     /// token failure, or null when the request may proceed. Call after the GUID-format check
     /// (the token binds to the GUID).
+    /// JF-767 Finding B: the scope-reading out parameter carries the token's library scope
+    /// (null for the legacy / unrestricted two-field shape); only the concat enumeration
+    /// in <see cref="StreamHlsAudiobook"/> consumes it (resolved once per request there
+    /// and applied to both arms through the pre-resolved
+    /// <c>LibraryFilter.ApplyLibraryFilter(query, topParentIds)</c> overload).
     /// </summary>
-    private ActionResult? ValidateStreamToken(string itemId)
+    private ActionResult? ValidateStreamToken(string itemId, out Guid[]? allowedLibraryIds)
     {
+        allowedLibraryIds = null;
         string? secret = Plugin.Instance?.Configuration?.StreamTokenSecret;
         if (string.IsNullOrEmpty(secret))
         {
@@ -5044,7 +5121,7 @@ public class VideoAudioController : ControllerBase
         }
 
         string? token = HttpContext.Request.Query["token"];
-        if (!StreamTokenHelper.TryValidate(token, itemId, secret))
+        if (!StreamTokenHelper.TryValidate(token, itemId, secret, out allowedLibraryIds))
         {
             _logger.LogWarning("VideoAudio: rejected stream request for {ItemId} (missing/invalid/expired token)", itemId);
             return Unauthorized(new { error = "Invalid or expired stream token" });
@@ -6281,17 +6358,26 @@ public class VideoAudioController : ControllerBase
     /// Validate a cached audiobook HLS playlist and invalidate if stale: the
     /// AUDIOBOOK registry's pairing over the ticks-scoped debris verdict core
     /// (<see cref="ValidateHlsCacheAsync"/>, whose doc holds the decision
-    /// table), carrying this path's one delta as the ENDLIST-content hook: a
-    /// completed concat encode lists at least one segment per chapter (10s
-    /// segments, chapters of minutes), so an ENDLIST playlist with FEWER
-    /// segments than chapters is an incomplete encode's debris. Before JF-676
+    /// table), carrying this path's ENDLIST-content hook with two verdicts: a
+    /// completed concat encode lists one segment per 10s of chapter audio, so
+    /// an ENDLIST playlist below the duration-derived floor (see
+    /// <see cref="ExpectedMinimumConcatSegments"/>; the JF-784 tail raised it
+    /// from the bare chapter count, which an encode truncated at exit 0 still
+    /// clears) is an incomplete encode's debris; and, since
+    /// JF-784 leg 1, the TIMELINE verdict: the encode-metadata sidecar the
+    /// encode wrote at start (<see cref="EncodeMetadataFileName"/>) must match
+    /// the CURRENT request's live (token-scoped) enumeration in chapter count
+    /// and runtime sum, so an entry encoded under a different scope or
+    /// membership (or one whose sidecar is missing, fail-closed) is stale and
+    /// re-encodes under the requesting scope instead of serving a timeline the
+    /// paged head never summed. Before JF-676
     /// this validator had NO liveness gate at all: the undercount verdict
     /// fired unconditionally, and its key-wide Cleanup could wipe a live
     /// foreign-ticks generation's directory mid-write; the core's own-ticks
     /// short-circuit and ticks-scoped cleanup close both. The no-ENDLIST
     /// branch comes from the core: a killed encode's partial is debris now,
     /// not a forever "encoding in progress" serve. The core's documented
-    /// bounded window applies to the undercount row: a completed-but-undercount
+    /// bounded window applies to both hook rows: a completed-but-stale
     /// ENDLIST playlist serves once during the [ffmpeg exit, monitor clear]
     /// lag (one poll interval) before the next request's verdict re-encodes
     /// it. Keyed by parentId; used by
@@ -6299,11 +6385,13 @@ public class VideoAudioController : ControllerBase
     /// </summary>
     /// <param name="cached">The cached playlist file info (stream.m3u8).</param>
     /// <param name="chapterCount">Expected minimum segment count (from live library).</param>
+    /// <param name="chapterDurationTicks">The live enumeration's runtime sum
+    /// (the timeline identity's second component, JF-784).</param>
     /// <param name="parentId">Parent audiobook ID for logging and cleanup.</param>
     /// <param name="artModifiedTicks">The caller's art ticks (its own cache directory generation).</param>
     /// <returns>The valid playlist (with the verdict's read content on the read
     /// row), or null when invalidated or vanished.</returns>
-    private Task<ValidatedHlsCache?> ValidateAudiobookCacheAsync(FileInfo cached, int chapterCount, string parentId, long artModifiedTicks, bool probeOwnGenerationLiveOrRegistering)
+    private Task<ValidatedHlsCache?> ValidateAudiobookCacheAsync(FileInfo cached, int chapterCount, long chapterDurationTicks, string parentId, long artModifiedTicks, bool probeOwnGenerationLiveOrRegistering)
         => ValidateHlsCacheAsync(
             cached,
             parentId,
@@ -6313,11 +6401,115 @@ public class VideoAudioController : ControllerBase
             content =>
             {
                 int cachedSegments = CountSegmentsInPlaylist(content);
-                return cachedSegments < chapterCount
-                    ? $"expected >= {chapterCount} segments, found only {cachedSegments}"
-                    : null;
+                int minimumSegments = ExpectedMinimumConcatSegments(chapterCount, chapterDurationTicks);
+                if (cachedSegments < minimumSegments)
+                {
+                    return $"expected >= {minimumSegments} segments ({chapterCount} chapters / {chapterDurationTicks} ticks), found only {cachedSegments}";
+                }
+
+                return TimelineMismatchReason(cached, chapterCount, chapterDurationTicks);
             },
             probeOwnGenerationLiveOrRegistering);
+
+    /// <summary>
+    /// The JF-784 leg 1 timeline verdict: compare the encode-metadata sidecar
+    /// (written at encode start over the encode's OWN scoped enumeration) against
+    /// the CURRENT request's live enumeration. Both sides carry the same two
+    /// DB-derived numbers, so a matching scope and membership compare
+    /// bit-identical with no tolerance, and any real membership difference (a
+    /// differently-scoped user, a config change, or an in-place library edit)
+    /// fails on count, duration, or both. Fail-closed: a missing, incomplete,
+    /// or unreadable sidecar (a pre-sidecar entry, or one wiped beside a
+    /// surviving playlist) cannot prove its timeline and is stale; the
+    /// re-encode rewrites it.
+    /// Called on the ENDLIST content rows of the concat verdict only (the
+    /// during-encode serve rows are the documented residual: they serve the
+    /// running encode's listing by design, see StreamHlsAudiobook's scope note).
+    /// </summary>
+    /// <param name="cached">The cached playlist (the sidecar sits beside it in
+    /// the same generation directory).</param>
+    /// <param name="chapterCount">The current request's live chapter count.</param>
+    /// <param name="chapterDurationTicks">The current request's live runtime sum.</param>
+    /// <returns>The invalidation reason for the verdict log, or null when the
+    /// timelines match.</returns>
+    private string? TimelineMismatchReason(FileInfo cached, int chapterCount, long chapterDurationTicks)
+    {
+        if (!TryReadEncodeTimelineMetadata(cached.DirectoryName!, out int encodedChapterCount, out long encodedDurationTicks))
+        {
+            return $"no encode metadata beside the cached playlist; cannot verify the timeline identity, request enumerates {chapterCount} chapters / {chapterDurationTicks} ticks";
+        }
+
+        if (encodedChapterCount != chapterCount || encodedDurationTicks != chapterDurationTicks)
+        {
+            return $"cache encoded a different timeline (library scope or membership changed since the encode): request enumerates {chapterCount} chapters / {chapterDurationTicks} ticks, cache encoded {encodedChapterCount} / {encodedDurationTicks}";
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The minimum playlist segment count a COMPLETE concat encode lists for a
+    /// chapter set (the JF-784 gate-marker tail): the concat cuts one segment
+    /// per <see cref="AudiobookHlsSegmentSeconds"/> of chapter audio, so the
+    /// runtime sum demands roughly duration/10s segments and the bare chapter
+    /// count is only the floor for near-total failures (an encode truncated at
+    /// exit 0 keeps listing far more segments than it has chapters). The 2% +
+    /// 2-segment tolerance absorbs RunTimeTicks-metadata vs actual-stream
+    /// duration drift so a healthy completed cache never re-encodes on this
+    /// bar; a real truncation loses multiples of the tolerance and fails.
+    /// </summary>
+    private static int ExpectedMinimumConcatSegments(int chapterCount, long durationTicks)
+    {
+        long byDuration = (durationTicks / (AudiobookHlsSegmentSeconds * TimeSpan.TicksPerSecond) * 98 / 100) - 2;
+        return (int)Math.Max(chapterCount, Math.Max(0, byDuration));
+    }
+
+    /// <summary>
+    /// The ONE reader of the encode-metadata sidecar (JF-784 review F6):
+    /// parse the timeline identity (chapter count + runtime sum) the concat
+    /// encode wrote at start. False when the file is missing, unreadable, or
+    /// lacks either field; the two consumers give that answer opposite
+    /// meanings (the monitor's completeness row skips itself, the timeline
+    /// verdict fails closed). Sync because the verdict's content hook is
+    /// synchronous; the monitor's background call tolerates the small
+    /// blocking read. The property names are the write site's anonymous-type
+    /// properties and live ONLY here.
+    /// </summary>
+    /// <param name="hlsDir">The concat generation directory.</param>
+    /// <param name="chapterCount">On success: the encoded chapter count.</param>
+    /// <param name="durationTicks">On success: the encoded runtime sum.</param>
+    /// <returns>True when both timeline fields were read.</returns>
+    private static bool TryReadEncodeTimelineMetadata(string hlsDir, out int chapterCount, out long durationTicks)
+    {
+        chapterCount = 0;
+        durationTicks = 0;
+#pragma warning disable CA3003 // path derived from the GUID-validated cache key, same as the playlist beside it
+        try
+        {
+            string metadataPath = Path.Combine(hlsDir, EncodeMetadataFileName);
+            if (!System.IO.File.Exists(metadataPath))
+            {
+                return false;
+            }
+
+            string json = System.IO.File.ReadAllText(metadataPath);
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            if (!doc.RootElement.TryGetProperty("ExpectedChapterCount", out var countProp)
+                || !doc.RootElement.TryGetProperty("ExpectedDurationTicks", out var durationProp))
+            {
+                return false;
+            }
+
+            chapterCount = countProp.GetInt32();
+            durationTicks = durationProp.GetInt64();
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+#pragma warning restore CA3003
+    }
 
     /// <summary>
     /// Get the album art DateModified ticks for use as a cache key component.
@@ -6941,22 +7133,13 @@ public class VideoAudioController : ControllerBase
             }
 
             // Read expected chapter count from metadata written at encode time
-            string metadataPath = Path.Combine(hlsDir, "encode-metadata.json");
-            if (System.IO.File.Exists(metadataPath))
+            // (the ONE sidecar reader, shared with the serve-time timeline
+            // verdict since JF-784 review F6).
+            long expectedDurationTicks = 0;
+            if (TryReadEncodeTimelineMetadata(hlsDir, out int encodedChapterCount, out long encodedDurationTicks))
             {
-                try
-                {
-                    string json = await System.IO.File.ReadAllTextAsync(metadataPath).ConfigureAwait(false);
-                    using var doc = System.Text.Json.JsonDocument.Parse(json);
-                    if (doc.RootElement.TryGetProperty("ExpectedChapterCount", out var countProp))
-                    {
-                        expectedChapterCount = countProp.GetInt32();
-                    }
-                }
-                catch (Exception)
-                {
-                    // Best effort — metadata is optional
-                }
+                expectedChapterCount = encodedChapterCount;
+                expectedDurationTicks = encodedDurationTicks;
             }
 #pragma warning restore CA3003
 
@@ -6968,11 +7151,21 @@ public class VideoAudioController : ControllerBase
                     label, itemId, process.ExitCode, segmentFileCount, playlistSegmentCount,
                     expectedChapterCount > 0 ? $" (expected {expectedChapterCount})" : string.Empty);
             }
-            else if (expectedChapterCount > 0 && playlistSegmentCount != expectedChapterCount)
+            else if (expectedChapterCount > 0 && playlistSegmentCount < ExpectedMinimumConcatSegments(expectedChapterCount, expectedDurationTicks))
             {
+                // JF-784 review F3 + gate-marker tail F1: the floor is
+                // DURATION-derived (one segment per AudiobookHlsSegmentSeconds
+                // of chapter audio; see ExpectedMinimumConcatSegments), not the
+                // bare chapter count. The old != equality warned INCOMPLETE on
+                // every healthy book/album encode (many segments per chapter),
+                // and the first fix's bare chapter-count floor saw only
+                // near-total failures: an encode truncated at exit 0 keeps far
+                // more segments than it has chapters and read "complete".
                 _logger.LogWarning(
-                    "{Label} HLS encoding INCOMPLETE for {ParentId}: ffmpeg exited 0 but produced {PlaylistSegmentCount}/{ExpectedCount} playlist segments, {SegmentFileCount} segment files on disk",
-                    label, itemId, playlistSegmentCount, expectedChapterCount, segmentFileCount);
+                    "{Label} HLS encoding INCOMPLETE for {ParentId}: ffmpeg exited 0 but produced only {PlaylistSegmentCount} playlist segments, expected >= {MinimumSegments} ({ExpectedCount} chapters / {ExpectedDurationTicks} ticks), {SegmentFileCount} segment files on disk",
+                    label, itemId, playlistSegmentCount,
+                    ExpectedMinimumConcatSegments(expectedChapterCount, expectedDurationTicks),
+                    expectedChapterCount, expectedDurationTicks, segmentFileCount);
             }
             else
             {
