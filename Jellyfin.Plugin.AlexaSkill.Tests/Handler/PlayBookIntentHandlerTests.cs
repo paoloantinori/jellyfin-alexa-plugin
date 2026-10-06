@@ -625,6 +625,82 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
         }
     }
 
+    // JF-794 RED PROOF (the flag-on twin of the test above, the defect this task
+    // closes): with NativeControlsForBooks ON, the fresh launch routed through
+    // BuildAudiobookVideoAppLaunchResponseAsync, whose BuildVideoAppAudioResponse
+    // climbed the RAW ParentId, so the census shape minted
+    // audiobook/{containerId} and the VideoApp player would have served every
+    // sibling book as one seek-bar timeline. The builders now share the ONE
+    // JF-793 discriminator, so the collapsed book launches through the
+    // SINGLE-ITEM video-audio endpoint keyed by its own leaf id (the same shape a
+    // root-level single-file book gets), never the container concat.
+    [Fact]
+    public async Task PlayBook_CollapsedSingleFileBook_UnderSharedContainer_NativeControls_PlaysSingleItemLaunch()
+    {
+        _fx.Config.NativeControlsForBooks = true;
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(bookName: "Managing Humans");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+
+        Guid containerId = Guid.NewGuid();
+        var book = new AudioBook
+        {
+            Name = "Managing Humans: Biting and Humorous Tales of a Software Engineering Manager",
+            Id = Guid.NewGuid(),
+            ParentId = containerId,
+            // The collapsed shape: the file sits in its OWN subfolder below the shared
+            // container (the live path shape from the census).
+            Path = "/audiobooks/Managing Humans/Audiobook - Managing_Humans.m4b"
+        };
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
+            .Returns(new List<BaseItem> { book });
+
+        _fx.LibraryManager.Setup(l => l.GetItemById(containerId))
+            .Returns(new Folder { Name = "Audiobooks", Id = containerId, Path = "/audiobooks" });
+
+        // The chapters query under the CONTAINER would enumerate the sibling
+        // single-file books (and, on the real server, every chapter of every book
+        // in the library): the merge the discriminator must prevent. Under the
+        // leaf's own id the real server enumerates nothing (the no-climb shape),
+        // which the else branch models.
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q => q.ParentId == containerId
+                ? new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+                {
+                    Items = new[]
+                    {
+                        book,
+                        new AudioBook
+                        {
+                            Name = "Radical Candor",
+                            Id = Guid.NewGuid(),
+                            ParentId = containerId,
+                            Path = "/audiobooks/Radical Candor/Radical Candor.m4b"
+                        }
+                    },
+                    TotalRecordCount = 2
+                }
+                : new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+                {
+                    Items = Array.Empty<BaseItem>(),
+                    TotalRecordCount = 0
+                });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        var videoDirective = Assert.IsType<global::Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>(
+            Assert.Single(response.Response.Directives));
+        Assert.NotNull(videoDirective.VideoItem?.Source);
+        Assert.Contains($"alexaskill/api/video-audio/{book.Id}/stream.m3u8", videoDirective.VideoItem.Source, StringComparison.Ordinal);
+        Assert.DoesNotContain($"audiobook/{containerId}", videoDirective.VideoItem.Source, StringComparison.Ordinal);
+    }
+
     // Gate-marker tail F1 pins: the discriminator FAILS CLOSED. The earlier
     // fail-open returned true (the climb) for every shape it could not verify,
     // so a Path-less or bare-filename leaf under a shared ParentId container

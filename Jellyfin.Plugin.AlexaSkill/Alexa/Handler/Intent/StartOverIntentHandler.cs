@@ -176,7 +176,8 @@ public class StartOverIntentHandler : BaseHandler
                     new PlainTextOutputSpeech(ResponseStrings.Get("RestartingContent", locale, item.Name)),
                     user,
                     context,
-                    request).ConfigureAwait(false);
+                    request,
+                    _libraryManager).ConfigureAwait(false);
             }
 
             // Use VideoApp for movies/episodes, AudioPlayer for audio/audiobooks
@@ -205,7 +206,7 @@ public class StartOverIntentHandler : BaseHandler
             // endpoint inside the chokepoint).
             return Launch.BuildAudioPlayerResponse(
                 PlayBehavior.ReplaceAll, Launch.GetStreamUrl(item.Id.ToString(), user), item.Id.ToString(), item, user, context,
-                queueManager: _queueManager);
+                queueManager: _queueManager, libraryManager: _libraryManager);
         }
 
         SkillResponse restartResponse = await BuildRestartLaunchAsync().ConfigureAwait(false);

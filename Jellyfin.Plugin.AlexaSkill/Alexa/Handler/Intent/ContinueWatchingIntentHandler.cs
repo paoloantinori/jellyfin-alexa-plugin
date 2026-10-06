@@ -126,6 +126,6 @@ public class ContinueWatchingIntentHandler : BaseHandler
                 announce);
         }
 
-        return Task.FromResult(Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, resumeItem, user, context, offsetMs));
+        return Task.FromResult(Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, resumeItem, user, context, offsetMs, libraryManager: _libraryManager));
     }
 }

@@ -529,7 +529,7 @@ public class LaunchRequestHandler : BaseHandler
             // JF-699 item 1: a token-gated refusal throws; RequestPipeline answers it.
             AudioLaunchSource source = Launch.ResolveAudioLaunchSource(session.FullNowPlayingItem, item_id, user, 0);
             return Launch.BuildAudioPlayerResponse(
-                PlayBehavior.ReplaceAll, source, item_id, session.FullNowPlayingItem, user, context);
+                PlayBehavior.ReplaceAll, source, item_id, session.FullNowPlayingItem, user, context, libraryManager: _libraryManager);
         }
         else
         {
@@ -543,7 +543,7 @@ public class LaunchRequestHandler : BaseHandler
 
             AudioLaunchSource source = Launch.ResolveAudioLaunchSource(item, item_id, user, 0);
             SkillResponse response = Launch.BuildAudioPlayerResponse(
-                PlayBehavior.ReplaceAll, source, item_id, item, user, context);
+                PlayBehavior.ReplaceAll, source, item_id, item, user, context, libraryManager: _libraryManager);
 
             // JF-699 item 1: throw-or-launch (a token-gated refusal throws and
             // RequestPipeline answers it), so the JF-693 verdict gate is gone and the

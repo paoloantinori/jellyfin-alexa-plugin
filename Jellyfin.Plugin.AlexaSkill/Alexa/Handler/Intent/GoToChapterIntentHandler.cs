@@ -146,7 +146,8 @@ public class GoToChapterIntentHandler : BaseHandler
             session.FullNowPlayingItem,
             user,
             context,
-            offsetMs));
+            offsetMs,
+            libraryManager: _libraryManager));
     }
 
     /// <summary>

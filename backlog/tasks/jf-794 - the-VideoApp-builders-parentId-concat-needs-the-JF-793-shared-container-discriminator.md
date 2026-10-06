@@ -3,7 +3,7 @@ id: JF-794
 title: >-
   JF-794 - the VideoApp builders' ParentId concat needs the JF-793 shared-container
   discriminator (the flag-on twin of the merge hazard)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-06'
 updated_date: '2026-10-06'

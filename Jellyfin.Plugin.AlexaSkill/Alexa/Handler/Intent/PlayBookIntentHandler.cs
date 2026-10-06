@@ -445,7 +445,7 @@ public class PlayBookIntentHandler : BaseHandler
                 // refusal (RequestPipeline answers it; nothing below runs) or delivered
                 // the launch, so the JF-693 verdict wrapper is gone and the state/announce
                 // writes simply follow the launch.
-                SkillResponse trackedResponse = Launch.BuildAudiobookResumeResponse(trackItems[startIndex], trackedTicks, user, context);
+                SkillResponse trackedResponse = Launch.BuildAudiobookResumeResponse(trackItems[startIndex], trackedTicks, user, context, _libraryManager);
 
                 ApplyBookPlaybackState();
                 PlaybackLaunchBuilder.AttachAnnounceIfLaunched(
@@ -472,7 +472,8 @@ public class PlayBookIntentHandler : BaseHandler
                     SpeechBuilder.BuildNowPlayingSpeech(books[0].Name, locale, Launch.GetAnnounceNowPlaying(user)),
                     user,
                     context,
-                    request).ConfigureAwait(false);
+                    request,
+                    _libraryManager).ConfigureAwait(false);
 
                 // JF-699 item 1: throw-or-launch (see the tracked arm above).
                 ApplyBookPlaybackState();
@@ -481,7 +482,7 @@ public class PlayBookIntentHandler : BaseHandler
         }
 
         SkillResponse standardResponse = Launch.BuildAudioPlayerResponse(
-            PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, trackItems[startIndex], user, context, offsetMs);
+            PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, trackItems[startIndex], user, context, offsetMs, libraryManager: _libraryManager);
 
         // JF-699 item 1: throw-or-launch (see the tracked arm above); the state
         // writes and the resume announce simply follow the launch.

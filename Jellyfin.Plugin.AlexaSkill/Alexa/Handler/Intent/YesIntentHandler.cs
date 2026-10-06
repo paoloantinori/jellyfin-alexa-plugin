@@ -247,7 +247,7 @@ public class YesIntentHandler : BaseHandler
             // refusal (RequestPipeline answers it; nothing below runs) or delivered
             // the launch, so the JF-693 verdict wrapper is gone and the state/announce
             // writes simply follow the launch.
-            SkillResponse response = Launch.BuildAudiobookResumeResponse(item, startTicks, user, context);
+            SkillResponse response = Launch.BuildAudiobookResumeResponse(item, startTicks, user, context, _libraryManager);
 
             session.FullNowPlayingItem = item;
             PlaybackLaunchBuilder.AttachAnnounceIfLaunched(
@@ -287,7 +287,8 @@ public class YesIntentHandler : BaseHandler
             item,
             user,
             context,
-            queueManager: _queueManager);
+            queueManager: _queueManager,
+            libraryManager: _libraryManager);
 
         // JF-699 item 1: throw-or-launch (the JF-507 transcode-routed source can be
         // token-gated; a refusal throws and RequestPipeline answers it, so nothing
@@ -453,7 +454,8 @@ public class YesIntentHandler : BaseHandler
                 SpeechBuilder.BuildNowPlayingSpeech(book.Name, locale, Launch.GetAnnounceNowPlaying(user)),
                 user,
                 context,
-                request).ConfigureAwait(false)
+                request,
+                _libraryManager).ConfigureAwait(false)
             : Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, Launch.GetStreamUrl(itemId, user), itemId, trackItems[0], user, context);
 
         session.NowPlayingQueue = trackItems.Select(t => new QueueItem { Id = t.Id }).ToList();
