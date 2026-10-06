@@ -305,17 +305,30 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
         _fx.SetupUserMock();
 
         Guid bookFolderId = Guid.NewGuid();
+        // The live entry shape: the search returns CHAPTER leaves, so the flow runs
+        // the multi-match disambiguation (HandleFuzzyMiss) BEFORE the climb. The best
+        // leaf is the book's own first chapter named exactly like the book, an exact
+        // match that auto-accepts; the looser leaf is another book's chapter the
+        // SearchTerm also returned. Whichever leaf wins, the climb must re-point it
+        // at the BOOK.
         var chapterLeaf = new AudioBook
         {
-            Name = "Measure What Matters - Chapter 22",
+            Name = "Measure What Matters",
             Id = Guid.NewGuid(),
             ParentId = bookFolderId,
-            Path = "/audiobooks/measure-what-matters/ch22.mp3"
+            Path = "/audiobooks/measure-what-matters/book.mp3"
+        };
+        var looseLeaf = new AudioBook
+        {
+            Name = "The Upside of Irrationality - Chapter 5",
+            Id = Guid.NewGuid(),
+            ParentId = Guid.NewGuid(),
+            Path = "/audiobooks/upside/ch05.mp3"
         };
 
         _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
                 q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
-            .Returns(new List<BaseItem> { chapterLeaf });
+            .Returns(new List<BaseItem> { chapterLeaf, looseLeaf });
 
         _fx.LibraryManager.Setup(l => l.GetItemById(bookFolderId))
             .Returns(new Folder { Name = "Measure What Matters", Id = bookFolderId });
@@ -401,6 +414,66 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
                 Items = Array.Empty<BaseItem>(),
                 TotalRecordCount = 0
             });
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        var audioDirective = response.Response.Directives?[0] as AudioPlayerPlayDirective;
+        Assert.NotNull(audioDirective);
+        Assert.Equal(bookItem.Id.ToString(), audioDirective.AudioItem.Stream.Token);
+        Assert.Single(session.NowPlayingQueue);
+        Assert.Null(QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID!));
+    }
+
+    // JF-791 companion pin (code-review F3): the common single-file layout, the book
+    // file inside its OWN folder (a non-empty ParentId that resolves), must keep
+    // playing as its own single track under the climb: the paged machinery enumerates
+    // the folder's only audio child, the book itself, so the climb is a behavioral
+    // no-op for the per-book-folder layout (the pin is change-invariant by design).
+    // The shared-container merge shape (sibling single-file books under one parent)
+    // is the JF-792 hazard and is deliberately NOT pinned as expected behavior.
+    [Fact]
+    public async Task PlayBook_SingleFileAudioBook_InOwnFolder_StillPlaysAsOwnTrack()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(bookName: "The Hobbit");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+
+        Guid ownFolderId = Guid.NewGuid();
+        var bookItem = new AudioBook
+        {
+            Name = "The Hobbit",
+            Id = Guid.NewGuid(),
+            ParentId = ownFolderId,
+            Path = "/audiobooks/the-hobbit/the-hobbit.mp3"
+        };
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
+            .Returns(new List<BaseItem> { bookItem });
+
+        _fx.LibraryManager.Setup(l => l.GetItemById(ownFolderId))
+            .Returns(new Folder { Name = "The Hobbit", Id = ownFolderId });
+
+        // The folder's only audio child is the book itself; any other parent (the
+        // leaf's own Id, the no-climb shape) enumerates nothing, the real server's
+        // answer for a leaf. The observable outcome is therefore IDENTICAL with and
+        // without the climb: the pin is change-invariant by design.
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns<InternalItemsQuery>(q => q.ParentId == ownFolderId
+                ? new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+                {
+                    Items = new[] { bookItem },
+                    TotalRecordCount = 1
+                }
+                : new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+                {
+                    Items = Array.Empty<BaseItem>(),
+                    TotalRecordCount = 0
+                });
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 

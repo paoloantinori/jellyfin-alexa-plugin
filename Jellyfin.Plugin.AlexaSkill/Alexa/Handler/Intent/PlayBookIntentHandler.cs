@@ -164,13 +164,12 @@ public class PlayBookIntentHandler : BaseHandler
             }
         }
 
-        // JF-791: Jellyfin never types a multi-file book folder as AudioBook (the
-        // AudioResolver skips multi-file directory collapsing; AudioBook : Audio.Audio
-        // is a leaf class), so the match above for a multi-chapter book is a CHAPTER
-        // leaf. The head query and the continuation below must run on the BOOK FOLDER,
-        // the same ParentId climb the VideoApp builders run; the single-file leaf and
-        // a failed folder resolution keep the match itself (its own track, the JF-361
-        // duality in the zero-children branch below).
+        // JF-791: the match above for a multi-chapter book is a CHAPTER leaf (the
+        // shape rationale and the null contract live on
+        // AudiobookItems.TryResolveBookFolder); re-point it at the book folder so
+        // every head-query/continuation/name read below runs on the BOOK. Null keeps
+        // the match itself: its own track (the JF-361 duality in the zero-children
+        // branch below).
         if (AudiobookItems.TryResolveBookFolder(books[0], _libraryManager) is { } bookFolder)
         {
             Logger.LogDebug(

@@ -25,7 +25,12 @@ internal static class AudiobookItems
     /// is the default AudioPlayer path's twin of the VideoApp builders' ParentId climb
     /// (<c>BuildVideoAppAudioResponse</c>/<c>BuildAudiobookResumeResponse</c>): the
     /// paged chapters machinery needs the folder's Id and Name, which a bare Guid
-    /// cannot supply. The single-file shapes (an AudioBook with an empty ParentId, or
+    /// cannot supply. Two deliberate divergences from that twin: this path VERIFIES
+    /// the ParentId resolves to a Folder before adopting it (the builders concat the
+    /// raw Guid, so a dangling ParentId degrades to the leaf play here but a dead URL
+    /// there), and the climb is ONE level, matching the builders' raw-ParentId
+    /// semantics (a chapter under a subfolder resolves the subfolder on BOTH paths;
+    /// see JF-792). The single-file shapes (an AudioBook with an empty ParentId, or
     /// any non-AudioBook match) and a failed folder resolution return null: callers
     /// keep the leaf shape and play it as its own track (the JF-361 duality), never
     /// a failed request.
