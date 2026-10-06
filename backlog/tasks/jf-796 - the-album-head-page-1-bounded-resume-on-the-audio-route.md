@@ -3,7 +3,7 @@ id: JF-796
 title: >-
   JF-796 - the album head's page-1-bounded resume on the audio route (the JF-793
   Finding 4 album twin)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-06'
 updated_date: '2026-10-06'
