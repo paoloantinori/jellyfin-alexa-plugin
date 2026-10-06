@@ -4,10 +4,10 @@ title: >-
   Migrate the three pre-JF-627 idle guards (FavoriteToggle, MediaInfo,
   ApplyRepeatModeAsync) onto HasCurrentPlaybackEvidence; consider a ledger
   recency read as the root fix
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-06 00:00'
-updated_date: '2026-10-06 00:00'
+updated_date: '2026-10-06 12:00'
 labels:
   - tech-debt
   - refactor
