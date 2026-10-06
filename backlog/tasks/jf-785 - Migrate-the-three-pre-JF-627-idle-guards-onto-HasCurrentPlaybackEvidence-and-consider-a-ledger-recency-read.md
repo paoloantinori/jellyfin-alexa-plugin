@@ -4,10 +4,10 @@ title: >-
   Migrate the three pre-JF-627 idle guards (FavoriteToggle, MediaInfo,
   ApplyRepeatModeAsync) onto HasCurrentPlaybackEvidence; consider a ledger
   recency read as the root fix
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-10-06 00:00'
-updated_date: '2026-10-06 12:00'
+updated_date: '2026-10-06 14:30'
 labels:
   - tech-debt
   - refactor
@@ -166,20 +166,114 @@ bug symptoms verbatim:
   (the session-lost shape answers NoMediaPlaying: the ledger is not evidence;
   fails if a VideoApp-ledger leg ever sneaks into the predicate).
 
+### Gates
+
+/simplify (4 parallel angles: reuse, simplification, efficiency, altitude):
+efficiency CLEAN (the flag genuinely skips the tail's GetItemById for guarded
+callers; everything else nanoseconds). APPLIED: the Leg A rationale
+consolidated to its ONE home (the resolver doc owns the contract; the
+predicate doc links instead of restating; the four call sites keep
+family-specific one-liners, the verbatim migration-history paragraphs dropped);
+the belt/supersession note on the predicate doc (with the tail refused, the
+resolver's answering arms are exactly the predicate's legs, so guard + flag
+encode one policy; the fold is JF-787 step 5); CreateAddCurrent gained the
+optional ledger param with the three new inline constructions repointed (the
+file's factory convention); the two new Movie constructions repoint to
+TestHelpers.CreateMovie (the JF-781 as-touched rule); the pin docs cut to a
+few lines with pointers. SKIPPED with reasons: the structural fold (delete
+the four guards, keep the flag, delete the zero-caller predicate; it
+contradicts the filed task shape whose core mandate is the migration ONTO the
+predicate, rewrites the JF-627/JF-629 contracts the task declares load-bearing,
+and is deliberately JF-787 step 5); the ghost-DTO TestHelpers factory (three
+one-line initializers with per-test Name flavor, below the ceremony threshold;
+noted as the 4th-copy trigger); the two pre-existing JF-627 inline
+constructions left alone (no-drive-by).
+
+/code-review high (8 angles, 5 findings): F1 APPLIED as a doc fix (the
+boundary claim "the movie ended and the server cleared the entry" had no
+mechanism: the plugin never nulls FullNowPlayingItem and a VideoApp launch
+reports nothing, so the ENDED movie is indistinguishable from playing and
+keeps acting until the session is dropped or a later report replaces the
+entry; the predicate doc now states both boundary facts and names the true
+loss shapes: server restart, inactivity drop, session-lookup miss). F2
+APPLIED (the belt invariant was enforced by nothing machine-checkable:
+GuardedResolverTailRosterTests, the WarmingGateCoverageTests IL-scan
+precedent, scans the plugin assembly for HasCurrentPlaybackEvidence callers
+and fails unless their ResolveCurrentPlayingItem sites pass the flag, plus a
+roster-equality test on the unflagged callers {RateItem, Repeat,
+SetPlaybackSpeed}; MUTATION-PROVEN load-bearing: dropping the flag at
+FavoriteToggle reddens both roster tests with the finding's own message).
+F3 APPLIED (the touched PlaylistEditHandlerBase resolver call omitted
+logLabel, so its displacement/no-resolve log lines printed the generic
+CurrentItem label; now passes IntentName like the siblings). F4 APPLIED (the
+two new playlist pins asserted only Contains("playing"), too weak to identify
+the tell; now assert the actual NoMediaPlaying string like the Loop/MediaInfo
+siblings; the two PRE-EXISTING weak asserts in the same file are out of the
+diff and left alone). F5 FILED as JF-788, not changed (the four families'
+mechanism is now uniform but favorite's wording still says MediaNotFound
+where the other three say NoMediaPlaying on the door and idle shapes; the
+split predates JF-785 and unifying it is a user-facing change on two shapes
+that needs both favorite branches moved together, a product decision recorded
+in the filing).
+
 <!-- SECTION:NOTES:END -->
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #1 dotnet build passes with 0 errors (Release --no-restore -warnaserror: 0 warnings 0 errors)
+- [x] #2 dotnet test passes (5352/5352 BOTH TFMs on the final state; baseline 5339 + 13 new: 11 pins + 2 roster tests)
+- [x] #3 No new compiler warnings introduced (Release -warnaserror clean)
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization (N/A: no session attributes touched)
+- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress (N/A: no HttpClient touched)
+- [x] #6 NLU test fixtures updated if interaction model changed (N/A: no interaction model change)
+- [x] #7 E2E test added for new intent or handler logic (N/A-shaped but covered: 13 unit pins incl. handler-level red proofs per family and the IL roster enforcement; no new intent, the changed shapes are unit-pinned, and the e2e suite's simulate-skill path does not exercise the session-evidence shapes without a live device round)
+- [x] #8 Locale response strings added to all 17 locales (N/A: no new strings; every family keeps its existing keys)
+- [x] #9 /simplify passed (4 angles: efficiency clean; applied the doc consolidation, the belt note, the factory repoints, the pin-doc cuts; 3 reasoned skips recorded)
+- [x] #10 /code-review high passed (5 findings: 4 applied, 1 filed as JF-788; recorded above)
 <!-- DOD:END -->
 
 JF-627 GATE-MARKER FINDINGS (2026-10-06): LEG A (the unresolvable-evidence door, finding 1): the idle guard gates on evidence PRESENCE not RESOLVABILITY, so an unresolvable now-playing DTO (item deleted mid-play, or Id == Guid.Empty) lets the resolver's unbounded ledger tail through and 'add this to playlist' ADDS a days-old unrelated item where pre-JF-627 answered NoMediaPlaying; fix shape: guard on resolvable evidence or have guarded families reject ledger-tail answers (displacement-arm answers only). LEG B (the VideoApp-no-token parity, finding 2): HasCurrentPlaybackEvidence has no VideoApp leg, so a video-first device (no AudioPlayer history, no token ever) refuses 'add this' during movies while 'rate this' acts on the same ledger entry; not a regression but the parity boundary is undocumented and unpinned, and video-first 1.0 users hit it on every movie-time 'add this'.
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+All four legs closed. LEG 1 (the migration): the three pre-JF-627 DTO-only
+idle guards (FavoriteToggle, MediaInfo, ProgressReporter.ApplyRepeatModeAsync)
+now call the ONE predicate HasCurrentPlaybackEvidence, each with its own red
+proof on the full-item-without-DTO shape (RED on the unmodified tree: the
+families answered their no-media tells while the resolver would have resolved
+the held item; GREEN after). LEG A: closed at the resolver with the new
+optional allowLedgerTailAnswers parameter (false at the four guarded call
+sites; the displacement arm, which requires a live token, still answers;
+default true keeps RateItem's JF-626 stance plus Repeat and SetPlaybackSpeed
+byte-identical), chosen over guard-on-resolvable-evidence because the JF-626
+finding 7 decision already rejected per-id existence re-resolves and the
+substitution belongs where it happens; four family door pins RED on the
+unmodified tree (the failing strings were the symptoms verbatim: the
+days-old item favorited, spoken, loop-mode-applied, and added), and the
+belt invariant is now machine-enforced (GuardedResolverTailRosterTests, the
+IL-scan precedent, mutation-proven). LEG B: decided documented-and-pinned,
+no new predicate leg: the investigation found the VideoApp evidence source
+already exists (every delivered VideoApp launch writes FullNowPlayingItem
+through AttachNowPlayingIfLaunched and the request path resolves the SAME
+session), so the held-item leg IS the VideoApp evidence leg, three of the
+four families gained movie-time parity from the migration alone, and the
+residual boundary (session lost the item: server restart, inactivity drop,
+lookup miss) deliberately refuses because the only remaining signal is the
+unbounded ledger; pinned both ways, with the code-review-corrected boundary
+facts (the ended movie is indistinguishable from playing and keeps acting,
+matching RateItem's stance). LEG 4 (root fix): REJECTED with the reason
+recorded and FILED as JF-787 (the LastPlayedWrittenAt stamp already exists,
+but dissolving the guard layer requires globally bounding the tail, flipping
+documented deliberate stances of RateItem, the JF-632 gate family
+(loop/sleep/speed), and the unguarded Repeat/SetPlaybackSpeed riders, plus
+an evidence-free window value and a null-stamp policy).
+
+Gates: /simplify 4 angles (efficiency clean, 5 applied, 3 reasoned skips)
+and /code-review high (5 findings: 4 applied, 1 filed as JF-788, the
+favorite-family wording split). Suites: 5352/5352 BOTH TFMs on the final
+state (baseline 5339 + 11 pins + 2 roster tests); Release --no-restore
+-warnaserror 0 warnings 0 errors. No locale strings, no interaction models,
+no session-attribute shapes touched; the predicate and its three legs
+byte-identical in behavior (doc only). Not deployed (worker branch only).
+<!-- SECTION:FINAL_SUMMARY:END -->

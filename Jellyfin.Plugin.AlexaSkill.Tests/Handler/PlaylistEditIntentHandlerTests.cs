@@ -265,7 +265,7 @@ public class PlaylistEditIntentHandlerTests : PluginTestBase
             TestHelpers.CreateTestContext("playlist-edit-door-jf785"), CreateUser(),
             CreateSession(Guid.Empty), CancellationToken.None);
 
-        Assert.Contains("playing", GetSpeech(response), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(ResponseStrings.Get("NoMediaPlaying", "en-US"), GetSpeech(response), StringComparison.OrdinalIgnoreCase);
         VerifyAddItemNever();
     }
 
@@ -301,8 +301,9 @@ public class PlaylistEditIntentHandlerTests : PluginTestBase
 
     /// <summary>
     /// JF-785 Leg B, the BOUNDARY pin: the same video-first device whose session
-    /// has LOST the held movie (a server restart mid-movie, the movie ended);
-    /// the ledger is deliberately NOT evidence (the rationale lives on
+    /// has LOST the held movie (a server restart, the session dropped for
+    /// inactivity, a session-lookup miss; the plugin never clears the entry
+    /// itself); the ledger is deliberately NOT evidence (the rationale lives on
     /// HasCurrentPlaybackEvidence), so NoMediaPlaying answers while unguarded
     /// RateItem still acts on the same ledger entry. A drift that adds a
     /// VideoApp-ledger evidence leg to the predicate fails here.
@@ -324,7 +325,7 @@ public class PlaylistEditIntentHandlerTests : PluginTestBase
             TestHelpers.CreateTestContext("playlist-edit-boundary-jf785"), CreateUser(),
             session, CancellationToken.None);
 
-        Assert.Contains("playing", GetSpeech(response), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(ResponseStrings.Get("NoMediaPlaying", "en-US"), GetSpeech(response), StringComparison.OrdinalIgnoreCase);
         VerifyAddItemNever();
     }
 

@@ -176,7 +176,7 @@ public abstract class PlaylistEditHandlerBase : BaseHandler
             return null;
         }
 
-        return Launch.ResolveCurrentPlayingItem(context, session, _libraryManager, _queueManager, allowLedgerTailAnswers: false);
+        return Launch.ResolveCurrentPlayingItem(context, session, _libraryManager, _queueManager, IntentName, allowLedgerTailAnswers: false);
     }
 
     /// <summary>

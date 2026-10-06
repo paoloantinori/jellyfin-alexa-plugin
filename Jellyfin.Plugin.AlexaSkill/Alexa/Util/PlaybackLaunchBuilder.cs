@@ -1125,12 +1125,17 @@ public sealed class PlaybackLaunchBuilder
     /// gate admits the VideoApp directive), and the next request from the same
     /// device resolves the SAME session, so during a movie the held-item leg IS
     /// the VideoApp evidence leg and the guarded families act on the movie
-    /// exactly as RateItem does. The device ledger is deliberately NOT an
-    /// evidence source: it is unbounded in recency (the JF-629 hazard), so a
-    /// video-first device whose session has LOST the held item (a server
-    /// restart mid-movie, the movie ended and the server cleared the entry)
-    /// keeps the no-media answer; the boundary pins live in
-    /// PlaylistEditIntentHandlerTests.
+    /// exactly as RateItem does. Two boundary facts, both deliberate:
+    /// (a) an ENDED movie is indistinguishable from a playing one: the plugin
+    /// never clears FullNowPlayingItem and a VideoApp launch reports nothing to
+    /// the server, so the held item stays evidence until the session object is
+    /// dropped or a later playback report replaces it, and the guarded families
+    /// keep acting on it exactly as unguarded RateItem does on its unbounded
+    /// tail; (b) the device ledger is deliberately NOT an evidence source: it
+    /// is unbounded in recency (the JF-629 hazard), so a video-first device
+    /// whose session has LOST the held item (a server restart, the session
+    /// dropped for inactivity, a session-lookup miss) keeps the no-media
+    /// answer; the boundary pins live in PlaylistEditIntentHandlerTests.
     /// </summary>
     /// <param name="context">The Alexa context (the AudioPlayer token leg).</param>
     /// <param name="session">The Jellyfin session (the held-item and DTO legs).</param>
