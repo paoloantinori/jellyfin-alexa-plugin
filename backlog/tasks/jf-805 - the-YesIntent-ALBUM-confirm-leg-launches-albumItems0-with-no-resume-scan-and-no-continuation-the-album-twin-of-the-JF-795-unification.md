@@ -3,7 +3,7 @@ id: JF-805
 title: >-
   JF-805 - the YesIntent ALBUM confirm leg launches albumItems[0] with no resume scan
   and no continuation: the album twin of the JF-795 confirm==ask unification
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-07'
 labels:
