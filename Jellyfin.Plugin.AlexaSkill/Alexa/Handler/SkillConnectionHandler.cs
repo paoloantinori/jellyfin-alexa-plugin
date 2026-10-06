@@ -167,7 +167,7 @@ public class SkillConnectionHandler : BaseHandler
         // "open the skill" afterwards resumed from the phantom favorites queue.
         // BuildAudioPlayerResponse is throw-or-launch today, so the gate is belt;
         // AttachNowPlayingIfLaunched homes the NOT-tautological rationale.
-        SkillResponse response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source, itemId, firstItem, user, context);
+        SkillResponse response = Launch.BuildAudioPlayerResponse(PlayBehavior.ReplaceAll, source, itemId, firstItem, user, context, libraryManager: _libraryManager);
         PlaybackLaunchBuilder.AttachNowPlayingIfLaunched(
             response, session, favoriteItems.Select(f => new QueueItem { Id = f.Id }), firstItem);
         return response;

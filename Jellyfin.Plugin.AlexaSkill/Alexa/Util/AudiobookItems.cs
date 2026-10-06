@@ -17,34 +17,24 @@ internal static class AudiobookItems
     internal static bool IsAudioBook(BaseItem? item) => item is AudioBook;
 
     /// <summary>
-    /// Resolve the BOOK FOLDER a matched audiobook search item belongs to (JF-791).
+    /// Resolve the BOOK FOLDER a matched audiobook SEARCH item belongs to (JF-791):
+    /// the AudioBook-gated form of the ONE verified climb
+    /// (<see cref="TryResolveVerifiedParentFolder"/>, whose doc owns the climb
+    /// contract, the JF-793 shared-container story, and the JF-794 builder sync).
     /// Jellyfin never types a multi-file book folder as AudioBook (the AudioResolver
     /// skips multi-file directory collapsing, verified byte-identical at v10.11.8 and
     /// v12.2; AudioBook : Audio.Audio is a leaf class), so an AudioBook match for a
-    /// multi-chapter book is a CHAPTER leaf whose ParentId is the plain Folder. This
-    /// is the default AudioPlayer path's twin of the VideoApp builders' ParentId
-    /// climb (<c>BuildVideoAppAudioResponse</c>/<c>BuildAudiobookResumeResponse</c>):
-    /// the paged chapters machinery needs the folder's Id and Name, which a bare Guid
-    /// cannot supply. Since JF-794 BOTH twins route through the ONE verified climb
-    /// (<see cref="TryResolveVerifiedParentFolder"/>), so the two historical
-    /// divergences are closed: the builders no longer concat the raw Guid (a dangling
-    /// ParentId degrades to the leaf play on both paths, not a dead URL there), and
-    /// the shared-container discrimination (JF-793, the live minix census 2026-10-06:
-    /// the "Audiobooks" library container directly holds 6 collapsed single-file
-    /// books, each an AudioBook leaf whose file sits one directory DEEPER than the
-    /// container) rejects the climb identically. The climb stays ONE level on BOTH
-    /// paths (a chapter under a subfolder resolves the subfolder); the outermost-book
-    /// altitude fix is deliberately NOT taken here (filed with the census evidence:
-    /// no multi-part book exists in the live library, so the walk's stop-condition
-    /// design is untested by reality). A missing Path on either side cannot
-    /// discriminate and fails closed. The single-file shapes (an AudioBook with an
-    /// empty ParentId, or any non-AudioBook match), a failed folder resolution, and
-    /// the shared-container rejection return null: callers keep the leaf shape and
+    /// multi-chapter book is a CHAPTER leaf whose ParentId is the plain Folder: the
+    /// paged chapters machinery needs the folder's Id and Name, which a bare Guid
+    /// cannot supply. The gate exists because the callers feed AUDIOBOOK SEARCH
+    /// RESULTS (PlayBook's candidate normalization, the head climb, the YesIntent
+    /// confirm climb); the builders use the ungated seam directly because their item
+    /// argument can be an Audio-typed chapter. Null keeps the leaf shape so callers
     /// play it as its own track (the JF-361 duality), never a failed request.
     /// </summary>
     /// <param name="item">The audiobook search match (a chapter leaf or a single-file book).</param>
     /// <param name="libraryManager">The library manager resolving the ParentId.</param>
-    /// <returns>The book folder, or null when the item is not a chapter leaf, the parent does not resolve to a Folder, or the parent is a shared container the leaf does not sit directly inside.</returns>
+    /// <returns>The book folder, or null when the item is not an AudioBook chapter leaf or the climb is rejected (see the seam's contract).</returns>
     internal static Folder? TryResolveBookFolder(BaseItem? item, ILibraryManager libraryManager)
         => item is AudioBook ? TryResolveVerifiedParentFolder(item, libraryManager) : null;
 

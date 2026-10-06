@@ -1410,6 +1410,16 @@ internal sealed class HandlerTestFixture
             .Returns(TestHelpers.CreateJellyfinUser());
 
     /// <summary>
+    /// Resolves a book FOLDER by id on the fixture's LibraryManager (JF-794): the
+    /// one-line setup every verified-climb fixture needs (the builders' seam resolves
+    /// the chapter's ParentId to a Folder whose Path the chapter file sits directly
+    /// inside). Hoisted on the fifth copy the JF-794 round added.
+    /// </summary>
+    internal void SetupBookFolder(Guid folderId, string name, string path)
+        => LibraryManager.Setup(l => l.GetItemById(folderId))
+            .Returns(new Folder { Name = name, Id = folderId, Path = path });
+
+    /// <summary>
     /// Mocks the JF-411 indefinite album-by-artist flow on the fixture's LibraryManager:
     /// artist lookup, the artist's albums in the given (insertion) order, per-album
     /// track counts for the JF-443 COUNT queries, and per-album playback results. The

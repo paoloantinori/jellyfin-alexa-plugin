@@ -524,8 +524,7 @@ public class StartOverIntentHandlerTests : PluginTestBase, IDisposable
 
             // JF-794: the builders' verified climb resolves the ParentId to the book
             // FOLDER (the chapter file sits directly inside it).
-            _fx.LibraryManager.Setup(x => x.GetItemById(bookFolderId))
-                .Returns(new Folder { Name = "The Book", Id = bookFolderId, Path = "/audiobooks/book" });
+            _fx.SetupBookFolder(bookFolderId, "The Book", "/audiobooks/book");
 
             var session = CreateSessionWithNowPlaying(chapter);
 

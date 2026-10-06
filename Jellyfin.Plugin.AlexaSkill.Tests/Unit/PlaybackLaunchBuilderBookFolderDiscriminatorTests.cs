@@ -38,34 +38,26 @@ namespace Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 /// </summary>
 public class PlaybackLaunchBuilderBookFolderDiscriminatorTests
 {
-    private static readonly ILogger BuilderLogger = LoggerFactory.Create(b => { }).CreateLogger("JF-794-builder-tests");
+    private static PlaybackLaunchBuilder CreatePlainBuilder()
+        => TestHelpers.CreateLaunchBuilder(new PluginConfiguration { ServerAddress = "http://localhost:8096/" });
 
-    private static PlaybackLaunchBuilder CreateBuilder()
-        => new(
-            new PluginConfiguration { ServerAddress = "http://localhost:8096/" },
-            BuilderLogger,
-            (_, _, _) => Task.FromResult(true));
-
-    private static Entities.User CreateUser()
-        => new() { Id = Guid.NewGuid(), JellyfinToken = "tok" };
-
-    /// <summary>The flat multi-chapter shape: the chapter file sits DIRECTLY inside
-    /// the resolved parent, so the parent IS the book folder.</summary>
-    private static (AudioBook Chapter, Folder BookFolder, Mock<ILibraryManager> Library) VerifiedChapterShape()
+    /// <summary>
+    /// The chokepoint pin's builder: the native-controls flag rides the CONFIG object
+    /// (EnsurePluginInstance's syncFlag runs only when a shared instance already
+    /// exists) because the chokepoint's delegation reads Plugin.Instance.Configuration.
+    /// </summary>
+    private static PlaybackLaunchBuilder CreateNativeControlsBuilder()
     {
-        Guid folderId = Guid.NewGuid();
-        var chapter = new AudioBook
-        {
-            Name = "Measure What Matters - Chapter 01",
-            Id = Guid.NewGuid(),
-            ParentId = folderId,
-            Path = "/audiobooks/measure-what-matters/ch01.mp3"
-        };
-        var folder = new Folder { Name = "Measure What Matters", Id = folderId, Path = "/audiobooks/measure-what-matters" };
-        var library = new Mock<ILibraryManager>();
-        library.Setup(l => l.GetItemById(folderId)).Returns(folder);
-        return (chapter, folder, library);
+        var config = new PluginConfiguration { ServerAddress = "http://localhost:8096/", NativeControlsForBooks = true };
+        TestHelpers.EnsurePluginInstance(config, LoggerFactory.Create(b => { }), c => c.NativeControlsForBooks = true, "jf794-builder-tests");
+        return TestHelpers.CreateLaunchBuilder(config);
     }
+
+    /// <summary>The flat multi-chapter shape rides the ONE shared verified fixture
+    /// (<see cref="TestHelpers.CreateVerifiedBookChapter"/>): the chapter file sits
+    /// DIRECTLY inside the resolved parent, so the parent IS the book folder.</summary>
+    private static (AudioBook Chapter, Folder BookFolder, Mock<ILibraryManager> Library) VerifiedChapterShape(string name = "Chapter 1")
+        => TestHelpers.CreateVerifiedBookChapter(name);
 
     /// <summary>The census shape: a collapsed single-file book whose ParentId is the
     /// SHARED container while its file sits inside its own subfolder below it.</summary>
@@ -92,10 +84,10 @@ public class PlaybackLaunchBuilderBookFolderDiscriminatorTests
         // The flat-book true negative: the concat keeps flowing under the FOLDER id,
         // byte-identical to the pre-JF-794 raw climb (the discriminator accepts).
         var (chapter, folder, library) = VerifiedChapterShape();
-        var builder = CreateBuilder();
+        var builder = CreatePlainBuilder();
 
         SkillResponse response = builder.BuildVideoAppAudioResponse(
-            chapter.Id.ToString(), chapter, CreateUser(), context: TestHelpers.CreateContextWithVideoApp(), libraryManager: library.Object);
+            chapter.Id.ToString(), chapter, TestHelpers.CreateTestUser(jellyfinToken: "tok"), context: TestHelpers.CreateContextWithVideoApp(), libraryManager: library.Object);
 
         var directive = Assert.Single(response.Response.Directives.OfType<VideoAppLaunchDirective>());
         Assert.Contains($"alexaskill/api/video-audio/audiobook/{folder.Id}/stream.m3u8", directive.VideoItem.Source, StringComparison.Ordinal);
@@ -115,10 +107,10 @@ public class PlaybackLaunchBuilderBookFolderDiscriminatorTests
         // (the whole-library merge); the discriminator must reject it and serve the
         // leaf's own single-item stream instead.
         var (book, container, library) = CollapsedBookShape();
-        var builder = CreateBuilder();
+        var builder = CreatePlainBuilder();
 
         SkillResponse response = builder.BuildVideoAppAudioResponse(
-            book.Id.ToString(), book, CreateUser(), context: TestHelpers.CreateContextWithVideoApp(), libraryManager: library.Object);
+            book.Id.ToString(), book, TestHelpers.CreateTestUser(jellyfinToken: "tok"), context: TestHelpers.CreateContextWithVideoApp(), libraryManager: library.Object);
 
         var directive = Assert.Single(response.Response.Directives.OfType<VideoAppLaunchDirective>());
         Assert.Contains($"alexaskill/api/video-audio/{book.Id}/stream.m3u8", directive.VideoItem.Source, StringComparison.Ordinal);
@@ -138,10 +130,10 @@ public class PlaybackLaunchBuilderBookFolderDiscriminatorTests
             Path = "/audiobooks/some-book/ch01.mp3"
         };
         var library = new Mock<ILibraryManager>();
-        var builder = CreateBuilder();
+        var builder = CreatePlainBuilder();
 
         SkillResponse response = builder.BuildVideoAppAudioResponse(
-            chapter.Id.ToString(), chapter, CreateUser(), context: TestHelpers.CreateContextWithVideoApp(), libraryManager: library.Object);
+            chapter.Id.ToString(), chapter, TestHelpers.CreateTestUser(jellyfinToken: "tok"), context: TestHelpers.CreateContextWithVideoApp(), libraryManager: library.Object);
 
         var directive = Assert.Single(response.Response.Directives.OfType<VideoAppLaunchDirective>());
         Assert.Contains($"alexaskill/api/video-audio/{chapter.Id}/stream.m3u8", directive.VideoItem.Source, StringComparison.Ordinal);
@@ -156,10 +148,10 @@ public class PlaybackLaunchBuilderBookFolderDiscriminatorTests
         // every book-reachable site threads one) fails CLOSED to the leaf, never
         // the potentially-merged container.
         var (book, container, _) = CollapsedBookShape();
-        var builder = CreateBuilder();
+        var builder = CreatePlainBuilder();
 
         SkillResponse response = builder.BuildVideoAppAudioResponse(
-            book.Id.ToString(), book, CreateUser(), context: TestHelpers.CreateContextWithVideoApp());
+            book.Id.ToString(), book, TestHelpers.CreateTestUser(jellyfinToken: "tok"), context: TestHelpers.CreateContextWithVideoApp());
 
         var directive = Assert.Single(response.Response.Directives.OfType<VideoAppLaunchDirective>());
         Assert.Contains($"alexaskill/api/video-audio/{book.Id}/stream.m3u8", directive.VideoItem.Source, StringComparison.Ordinal);
@@ -171,10 +163,10 @@ public class PlaybackLaunchBuilderBookFolderDiscriminatorTests
     {
         var (chapter, folder, library) = VerifiedChapterShape();
         long startTicks = TimeSpan.FromMinutes(5).Ticks;
-        var builder = CreateBuilder();
+        var builder = CreatePlainBuilder();
 
         SkillResponse response = builder.BuildAudiobookResumeResponse(
-            chapter, startTicks, CreateUser(), TestHelpers.CreateContextWithVideoApp(), library.Object);
+            chapter, startTicks, TestHelpers.CreateTestUser(jellyfinToken: "tok"), TestHelpers.CreateContextWithVideoApp(), library.Object);
 
         var directive = Assert.Single(response.Response.Directives.OfType<VideoAppLaunchDirective>());
         Assert.Contains($"alexaskill/api/video-audio/audiobook/{folder.Id}/stream.m3u8?start={startTicks}", directive.VideoItem.Source, StringComparison.Ordinal);
@@ -191,10 +183,10 @@ public class PlaybackLaunchBuilderBookFolderDiscriminatorTests
         // the tracked position clamped to the leaf's runtime.
         var (book, _, library) = CollapsedBookShape();
         long startTicks = TimeSpan.FromMinutes(5).Ticks;
-        var builder = CreateBuilder();
+        var builder = CreatePlainBuilder();
 
         SkillResponse response = builder.BuildAudiobookResumeResponse(
-            book, startTicks, CreateUser(), TestHelpers.CreateContextWithVideoApp(), library.Object);
+            book, startTicks, TestHelpers.CreateTestUser(jellyfinToken: "tok"), TestHelpers.CreateContextWithVideoApp(), library.Object);
 
         var directive = Assert.Single(response.Response.Directives.OfType<AudioPlayerPlayDirective>());
         Assert.Empty(response.Response.Directives.OfType<VideoAppLaunchDirective>());
@@ -210,19 +202,14 @@ public class PlaybackLaunchBuilderBookFolderDiscriminatorTests
         // BuildAudioPlayerResponse (flag on, capable device, offset 0) keeps the
         // concat launch.
         var (chapter, folder, library) = VerifiedChapterShape();
-        // The flag rides the CONFIG object (EnsurePluginInstance's syncFlag runs only
-        // when a shared instance already exists) because the chokepoint's
-        // native-controls delegation reads Plugin.Instance.Configuration.
-        var config = new PluginConfiguration { ServerAddress = "http://localhost:8096/", NativeControlsForBooks = true };
-        TestHelpers.EnsurePluginInstance(config, LoggerFactory.Create(b => { }), c => c.NativeControlsForBooks = true, "jf794-builder-tests");
-        var builder = new PlaybackLaunchBuilder(config, BuilderLogger, (_, _, _) => Task.FromResult(true));
+        var builder = CreateNativeControlsBuilder();
 
         SkillResponse response = builder.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll,
             $"http://localhost:8096/Audio/{chapter.Id}/stream?static=true&api_key=tok",
             chapter.Id.ToString(),
             chapter,
-            CreateUser(),
+            TestHelpers.CreateTestUser(jellyfinToken: "tok"),
             TestHelpers.CreateContextWithVideoApp(),
             libraryManager: library.Object);
 
@@ -237,19 +224,14 @@ public class PlaybackLaunchBuilderBookFolderDiscriminatorTests
         // for the census shape; the threaded manager must carry the discriminator
         // through the chokepoint too.
         var (book, container, library) = CollapsedBookShape();
-        // The flag rides the CONFIG object (EnsurePluginInstance's syncFlag runs only
-        // when a shared instance already exists) because the chokepoint's
-        // native-controls delegation reads Plugin.Instance.Configuration.
-        var config = new PluginConfiguration { ServerAddress = "http://localhost:8096/", NativeControlsForBooks = true };
-        TestHelpers.EnsurePluginInstance(config, LoggerFactory.Create(b => { }), c => c.NativeControlsForBooks = true, "jf794-builder-tests");
-        var builder = new PlaybackLaunchBuilder(config, BuilderLogger, (_, _, _) => Task.FromResult(true));
+        var builder = CreateNativeControlsBuilder();
 
         SkillResponse response = builder.BuildAudioPlayerResponse(
             PlayBehavior.ReplaceAll,
             $"http://localhost:8096/Audio/{book.Id}/stream?static=true&api_key=tok",
             book.Id.ToString(),
             book,
-            CreateUser(),
+            TestHelpers.CreateTestUser(jellyfinToken: "tok"),
             TestHelpers.CreateContextWithVideoApp(),
             libraryManager: library.Object);
 
