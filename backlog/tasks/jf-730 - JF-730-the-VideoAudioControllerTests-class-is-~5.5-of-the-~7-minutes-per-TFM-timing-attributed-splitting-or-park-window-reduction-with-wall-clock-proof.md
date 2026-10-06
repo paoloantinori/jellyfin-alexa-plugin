@@ -192,3 +192,73 @@ lands mid-walk, the fast path serves warm, the probe reds).
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 Closed by the orchestrator after the full cycle including an API-death recovery and a rework round: worker commits 41142f65 + 2229f537, merged as 66b33a7f. The suite wall-clock lever delivered by attribution, not guesswork: the task's premise (the parks) was REFUTED by TRX measurement - the class's cost was ONE test blocked 299s on the encode gate behind two deliberately spared sleep-300 fakes. The SparesOtherDevices teardown now kills every live encode through the hoisted KillLiveEncode registry helper (the JF-668 twin unified) with a KillEncodeByPidFile backstop, drains in a re-arming kill-and-poll loop, and refills to the configured cap; a per-launch 30s tripwire converts the supersede-kill ordering regression from a silent ~300s green into a red; the park window 400ms -> ParkWindowMs=250 with measured margins (10/10 at 250 and 150, 6/6 at 100; no false-green mechanism; the slow-host false red documented with its remedy). Wall-clock: full suite 7m00s -> 1m54s net9 (-73%), 6m56s -> 1m55s net10 (-72%); class -88%. The worker survived a glm-route corrupted-thought-signature death (resumed from transcript), and its rework gate refresh then caught the tripwire's own zombie-window flaw (a one-shot kill pass before an abandoned zombie could spawn its own sleep) - fixed with the re-arming drain. JF-731 filed (the Dispose-level class backstop). Suites: worker 5014/5014 both TFMs at the new speed, class 265/265 twice per TFM, and the merged-tree run itself 5019/5019 both TFMs exit 0 at 1m57s/2m11s - the dividend compounding its own verification. Test-only: no production surface, no deploy.
 <!-- SECTION:FINAL_SUMMARY:END -->
+
+## Re-measurement pass (2026-10-06, certification only; no code changes)
+
+Re-dispatched under the new selective-testing battery (the maintainer's standing
+directive adopted this session) on a stale queue view; the coordinator confirmed
+the task stays closed and this pass certifies the current cost profile or names
+the next bottleneck. Outcome: the landed fix is CERTIFIED HOLDING, and the
+regrown class share is FILED as JF-792. No production or test code changed.
+
+### Certification table (bird, Debug, worktree at 71feb0ba)
+
+| metric | close state 2026-10-03 | tonight 2026-10-06 |
+|---|---|---|
+| suite count per TFM | 5014 | 5387 (green both TFMs) |
+| class test count | 265 | 299 |
+| full suite net9.0 | 1m54s | 2m56s (contended leg; see caveat) |
+| full suite net10.0 | 1m55s | 1m54s |
+| summed per-test durations | not recorded | 172.8s net9 / 114.1s net10 |
+| class share of summed durations | not recorded at close (filter-derived ~37%) | 65% net10 (74.1s of 114.1s) / 56% net9 (97.6s of 172.8s) |
+| class filter net9.0 | 42s | 1m16s |
+| class filter net10.0 | 42s | 1m14s |
+| slowest single test | 7.14s (the JF-665 stall pin) | 7.4s net9 / 7.1s net10 (the SAME pin) |
+| next-largest class | not recorded | SmapiTokenRefresherTests 4.0s |
+
+### What holds
+
+1. The gate-leak fix holds on both TFMs: no test anywhere near the old 299s
+   stall; the slowest test is still MonitorHls_LatePriorGenerationClear_
+   KeepsNewerEncodeFlagSet with its deliberate
+   `HlsMonitorStallBudgetOverride = TimeSpan.FromSeconds(5)` (verified at its
+   source site), measuring 7.4s (net9) and 7.1s (net10) against 7.14s at close.
+2. The suite is green on both TFMs at the re-measured tree (5387/5387 each) and
+   the Debug builds report 0 warnings on both TFMs.
+3. The cost is honestly distributed, not pathological: on the contended net9
+   leg, 17 tests at >= 1s sum to 38.6s (all documented concurrency or budget
+   pins: gate-slot waits, monitor stall budgets, supersede kills), 62 tests in
+   the 400ms to 1s band sum to 40.2s (fake-ffmpeg process lifecycle waits), and
+   178 tests under 150ms sum to 8.4s.
+
+### What changed since close (the JF-792 premise)
+
+The class's dominance REGREW. Directly comparable metric: the class filter
+went 42s (265 tests) to 74s to 76s (299 tests) per TFM, and on tonight's TRX
+attribution the class is 65% of summed durations on the clean net10 leg (74.1s
+of 114.1s) and 56% on the contended net9 leg (97.6s of 172.8s), ~25x the
+next-largest class (SmapiTokenRefresherTests at 4.0s). Driver: +34 tests landed
+in this class since close (the JF-778 windowing wave and the JF-784/785
+concat-scope work; StreamHlsEpisode_* names dominate the new top-40) and they
+skew slow (many sit in the 400ms to 1s and >= 1s bands), while the full suite
+total held at ~114s clean. The close-state decline of lever (c) rested on
+"post-fix the class is 42s of a ~2min suite ... no measurable need"; that
+premise no longer holds at ~74s and ~65%. FILED as JF-792 with the partition
+lever's risk profile and the park-floor rider; not attempted in this pass per
+the coordinator's disposition rules (file instead of fix). One decomposition
+caveat: tonight's non-class remainder is 40.0s of summed time on the clean leg;
+the close-state record does not carry a summed-durations table, so how that
+remainder moved since close (filter numbers and in-suite sums are not directly
+comparable) is not certified here, only tonight's absolute attribution.
+
+### Measurement caveat (recorded per the dispatch)
+
+A parallel worker ran filtered test passes during the net9 full-suite leg, so
+absolute wall-clock numbers are contention-inflated (176s reported against the
+~112s clean expectation; the net10 leg and both class-filter legs ran light and
+match the clean baseline). The attribution instrument is one TRX per TFM whose
+per-test durations aggregate to per-class wall clock because the assembly runs
+sequentially (DisableTestParallelization; summed 172.8s against 176s reported
+on net9 confirms ~3s of harness overhead). The relative attribution the
+conclusion rests on (this class is ~25x the next-largest class on both TFMs) is
+contention-tolerant.
