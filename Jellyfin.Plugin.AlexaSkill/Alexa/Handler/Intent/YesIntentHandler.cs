@@ -386,6 +386,22 @@ public class YesIntentHandler : BaseHandler
     /// </summary>
     private async Task<SkillResponse> PlayBook(BaseItem book, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Entities.User user, SessionInfo session, string locale, Context context, Request request)
     {
+        // JF-793 Finding 1: the confirmed disambiguation match for a multi-chapter
+        // book is a CHAPTER leaf (the JF-791 shape: Jellyfin never types a multi-file
+        // book folder as AudioBook), so running the chapters query on the leaf's OWN
+        // Id enumerated zero children and the single-file fallback below played the
+        // ONE confirmed chapter then silence. Climb to the book folder the same way
+        // the head path does (the confirm-must-match-ask rule); the null shapes
+        // (single-file books, failed resolution) keep the leaf and degrade to the
+        // existing fallback, never a failed request.
+        if (AudiobookItems.TryResolveBookFolder(book, _libraryManager) is { } confirmedBookFolder)
+        {
+            Logger.LogDebug(
+                "Yes: confirmed audiobook '{LeafName}' is a chapter leaf, climbing to book folder '{BookName}' ({BookId})",
+                book.Name, confirmedBookFolder.Name, confirmedBookFolder.Id);
+            book = confirmedBookFolder;
+        }
+
         // Resolve tracks through the ONE audiobook chapters query's scoped sibling
         // (JF-767 Finding A fold: identical field set to the former hand-kept initializer,
         // modulo the now-explicit StartIndex=0, plus the JF-666 scope the tail's

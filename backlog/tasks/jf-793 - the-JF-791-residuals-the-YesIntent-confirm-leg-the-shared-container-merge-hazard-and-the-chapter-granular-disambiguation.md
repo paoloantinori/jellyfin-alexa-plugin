@@ -3,7 +3,7 @@ id: JF-793
 title: >-
   JF-793 - the JF-791 residuals: the YesIntent confirm leg, the shared-container merge
   hazard, and the chapter-granular disambiguation
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-06'
 updated_date: '2026-10-06'
