@@ -430,7 +430,7 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
     // the folder's only audio child, the book itself, so the climb is a behavioral
     // no-op for the per-book-folder layout (the pin is change-invariant by design).
     // The shared-container merge shape (sibling single-file books under one parent)
-    // is the JF-792 hazard and is deliberately NOT pinned as expected behavior.
+    // is the JF-793 hazard and is deliberately NOT pinned as expected behavior.
     [Fact]
     public async Task PlayBook_SingleFileAudioBook_InOwnFolder_StillPlaysAsOwnTrack()
     {

@@ -30,7 +30,7 @@ internal static class AudiobookItems
     /// raw Guid, so a dangling ParentId degrades to the leaf play here but a dead URL
     /// there), and the climb is ONE level, matching the builders' raw-ParentId
     /// semantics (a chapter under a subfolder resolves the subfolder on BOTH paths;
-    /// see JF-792). The single-file shapes (an AudioBook with an empty ParentId, or
+    /// see JF-793). The single-file shapes (an AudioBook with an empty ParentId, or
     /// any non-AudioBook match) and a failed folder resolution return null: callers
     /// keep the leaf shape and play it as its own track (the JF-361 duality), never
     /// a failed request.

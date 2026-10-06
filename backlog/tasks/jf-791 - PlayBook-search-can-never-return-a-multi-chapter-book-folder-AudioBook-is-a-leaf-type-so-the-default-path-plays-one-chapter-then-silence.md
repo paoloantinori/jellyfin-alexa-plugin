@@ -94,12 +94,12 @@ single-file leaf book keeps playing as its own track.
 - [x] #9 /simplify passed (no blocking cleanups remaining)
       (DONE: 4 parallel angles; 1 applied, the handler-site comment deduped onto the
       helper doc as the single rationale home; 1 filed, the chapter-granular
-      disambiguation residual, JF-792 Finding 3; reuse and efficiency clean)
+      disambiguation residual, JF-793 Finding 3; reuse and efficiency clean)
 - [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
       (DONE: 5 findings, all dispositioned same-turn. Applied: the RED pin upgraded to
       the real N-leaf entry shape through HandleFuzzyMiss (F2), the change-invariant
       own-folder single-file pin (F3), the helper doc's two divergence notes (F4/F5).
-      Filed on JF-792: the YesIntent confirm-leg divergence (F1, Finding 1), the
+      Filed on JF-793: the YesIntent confirm-leg divergence (F1, Finding 1), the
       shared-container merge hazard sharpened with the pin-coverage and subfolder
       angles (F3/F4/F5, Finding 2). The climb itself survived every axis)
 <!-- DOD:END -->
@@ -134,12 +134,12 @@ fails ONLY this pin: all three companion pins are green on both trees, pinning t
 single-file empty-ParentId book, the single-file book in its own folder, and the
 climb-failure degrade all keep today's leaf play.
 
-GATES: worker /simplify (4 parallel angles: 1 applied, 1 filed as JF-792 Finding 3,
+GATES: worker /simplify (4 parallel angles: 1 applied, 1 filed as JF-793 Finding 3,
 reuse + efficiency clean) and /code-review high (5 findings: 3 applied, all 5 tracked
-on JF-792; the climb survived every axis). Suites: touched classes 28/28 both TFMs;
+on JF-793; the climb survived every axis). Suites: touched classes 28/28 both TFMs;
 full suite 5391/5391 both TFMs (5387 baseline + 4 pins); Release -warnaserror clean.
 
-FILED (JF-792, the JF-791 residuals, same-turn per the review rule): the YesIntent
+FILED (JF-793, the JF-791 residuals, same-turn per the review rule): the YesIntent
 PlayBook confirm leg runs the chapters query on the confirmed chapter leaf (the same
 one-chapter-then-silence on the "yes" path; the helper is placed for a one-line
 adoption), the shared-container single-file merge hazard (needs the live census probe),
