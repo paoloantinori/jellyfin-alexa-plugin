@@ -63,3 +63,5 @@ none a live defect today:
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+JF-795 GATE-MARKER ADDENDA (2026-10-06, same-turn): (a) item 3's exposure DOUBLED - the deep-resume unpaged fetch on every first-ever multi-page ask now fires on BOTH the direct ask and the YesIntent confirm (the shared AudiobookPlayResolver.PlayBookAsync), making the cheap discriminator more valuable; (b) item 1's payload-kind breadth now has a wider observable effect - the JF-795 BooksEnabled confirm gate sits inside the same over-broad IsBookDisambiguationPayload, so with books disabled a MediaTypeAlbum-labeled confirm carrying an arbitrary non-album Folder answers the FeatureDisabled Tell instead of reaching the album leg (the gate is right for real books; the breadth is the root, unchanged).

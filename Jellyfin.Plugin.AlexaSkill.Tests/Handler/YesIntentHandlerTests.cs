@@ -376,6 +376,7 @@ public class YesIntentHandlerTests : PluginTestBase
         // Enable NativeControlsForBooks (Plugin.Instance is set by EnsurePluginInstance in ctor).
         // JF-795 code-review F2: restore in a finally, so an assertion failure cannot
         // leak the flag into the [Collection("Plugin")] siblings.
+        bool originalNativeControlsForBooks = Plugin.Instance!.Configuration.NativeControlsForBooks;
         Plugin.Instance!.Configuration.NativeControlsForBooks = true;
         Plugin.Instance.Configuration.ServerAddress = "http://localhost:8096";
         try
@@ -399,8 +400,10 @@ public class YesIntentHandlerTests : PluginTestBase
         }
         finally
         {
-            // Restore defaults
-            Plugin.Instance.Configuration.NativeControlsForBooks = false;
+            // Restore the CAPTURED pre-test value (gate-marker tail F3): a literal
+            // false here would silently disable the flag for a Plugin-collection
+            // sibling that legitimately enabled it at fixture setup.
+            Plugin.Instance.Configuration.NativeControlsForBooks = originalNativeControlsForBooks;
         }
     }
 

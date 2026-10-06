@@ -293,7 +293,7 @@ public static class AudiobookPlayResolver
                         ParentId = book.Id,
                         StartIndex = continuationStartIndex,
                         TotalCount = continuationTotalCount,
-                        UserId = jellyfinUser!.Id,
+                        UserId = jellyfinUser.Id,
                         // JF-674: bind the entry to THIS queue page (the ids just
                         // installed into session.NowPlayingQueue) so a later
                         // different-queue playback discards it at fetch time. Minted
