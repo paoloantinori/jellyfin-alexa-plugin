@@ -33,6 +33,34 @@ internal static class QueueContinuationFetcher
     };
 
     /// <summary>
+    /// SortName ordering for audiobook-chapter queries (JF-672), the twin of
+    /// <see cref="AlbumTrackOrder"/>. Explicit, not implicit: the pre-JF-672 shape
+    /// set no OrderBy and rode each server branch's empty-OrderBy default (verified
+    /// at v10.11.8 and v12.2 source: BaseItemRepository.ApplyOrder returns
+    /// OrderBy(SortName) as an EARLY return, ahead of the tiebreaker block, so the
+    /// pages concatenated on a per-branch coincidence). Naming the axis makes the
+    /// head/confirm/tail/unpaged order a pinned contract; with SortName first both
+    /// branches additionally append ThenBy(Name) (their shared first-axis special
+    /// case), a strict determinism gain over the old SortName-only default.
+    /// PROBE-BACKED CHOICE (the live 12.2.0 box, evidence in the JF-672 task):
+    /// SortName IS chapter order for the tagged class (Jellyfin derives it as
+    /// '{disc:0000} - {track:0000} - name', padding makes lexicographic numeric),
+    /// and the album-style (ParentIndexNumber, IndexNumber) composite was REFUTED:
+    /// it fixes none of the mis-ordered books (their tags are NULL, so the order
+    /// falls through to SortName anyway) and ASC NULLS FIRST front-loads untagged
+    /// rows in mixed books (a stray untagged file would jump ahead of chapter 1).
+    /// KNOWN LIMIT (documented status quo): rows sharing SortName AND Name (an
+    /// untagged book whose chapters all carry the book-title tag) stay unordered
+    /// among themselves; no query-layer key can order them (ItemSortBy has no
+    /// Path/Id axis, and DateCreated matched file order in the probe only where the
+    /// chapters were already distinct, tying 99-way on the book that needed it).
+    /// </summary>
+    internal static readonly (ItemSortBy, SortOrder)[] AudiobookChapterOrder =
+    {
+        (ItemSortBy.SortName, SortOrder.Ascending)
+    };
+
+    /// <summary>
     /// Renders a sentinel-capable total (a result total or a continuation total)
     /// for log lines: the end-unknown sentinel
     /// (<see cref="Util.SearchService.UnknownTotal"/>) renders "end-unknown" instead
@@ -446,9 +474,15 @@ internal static class QueueContinuationFetcher
     /// Deliberately MediaTypes, not the JF-358 IncludeItemTypes discipline: JF-358
     /// governs ArtistIds queries, which MediaTypes silently ignores; a ParentId query
     /// IS constrained by MediaTypes (this shape returns the chapters in production).
-    /// Deliberately NO OrderBy: the DB order for this shape IS the book's chapter
-    /// order; an album-style disc/track sort here would order the tail differently
-    /// from the head.
+    /// Order is <see cref="AudiobookChapterOrder"/> (JF-672): explicit SortName. The
+    /// old "the DB order for this shape IS the book's chapter order" claim was
+    /// probe-refuted for the untagged class (SortName lexicographic plays chapter 10
+    /// before chapter 2; all-equal SortName rows play arbitrarily) and holds only for
+    /// the tagged class, whose zero-padded SortName IS chapter order; the full
+    /// evidence and the refuted alternatives live in the JF-672 task record. NOT an
+    /// album-style disc/track sort: ASC NULLS FIRST would front-load untagged rows
+    /// in mixed books. The one definition sets head, confirm, tail, AND the unpaged
+    /// endpoint form together, so no page or endpoint can drift from another.
     /// JF-784 leg 3 closed the kind-axis divergence this shape's consumers had:
     /// the concat endpoint's audiobook arm now routes through the unpaged form
     /// (<see cref="BuildAudiobookChaptersQueryUnpaged"/>) instead of its local
@@ -505,6 +539,10 @@ internal static class QueueContinuationFetcher
             ParentId = bookId,
             MediaTypes = new[] { MediaType.Audio },
             DtoOptions = new DtoOptions(true),
+            // The ONE explicit chapter order (JF-672): both paging forms and the
+            // unpaged endpoint twin concatenate in this order by contract, not by
+            // each server branch's empty-OrderBy default.
+            OrderBy = AudiobookChapterOrder,
             // Nullable in the SDK: null = no paging (the unpaged form), 0 = Take(0)
             // (JF-443), so the int? params pass through untouched.
             StartIndex = startIndex,

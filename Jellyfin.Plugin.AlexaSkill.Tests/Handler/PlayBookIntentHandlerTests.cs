@@ -274,9 +274,19 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
         Assert.True(
             captured.IncludeItemTypes == null || captured.IncludeItemTypes.Length == 0,
             "head query must not grow an IncludeItemTypes filter the tail does not run");
-        Assert.True(
-            captured.OrderBy == null || captured.OrderBy.Count == 0,
-            "head query must not grow an explicit order the tail does not run");
+        // JF-672 supersedes the old no-order assert: head and tail now BOTH carry the
+        // shared explicit chapter order, so the head still cannot grow an order the
+        // tail does not run - the builder equality IS that contract. Concrete
+        // composite asserted first (the red-proof axis).
+        var chapterOrder = new[]
+        {
+            (Jellyfin.Data.Enums.ItemSortBy.SortName,
+             Jellyfin.Database.Implementations.Enums.SortOrder.Ascending)
+        };
+        // The shared explicit chapter order (JF-672), then the single-definition
+        // contract: the head's order is the ONE builder's, not a handler-local copy.
+        Assert.Equal(chapterOrder, captured.OrderBy?.ToArray());
+        Assert.Equal(expected.OrderBy, captured.OrderBy);
         // The JF-666 scope the tail and the confirm run under (JF-767).
         Assert.Contains(bookLib, captured.TopParentIds);
     }
