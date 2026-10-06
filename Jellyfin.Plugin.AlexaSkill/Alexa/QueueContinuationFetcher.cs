@@ -36,12 +36,13 @@ internal static class QueueContinuationFetcher
     /// SortName ordering for audiobook-chapter queries (JF-672), the twin of
     /// <see cref="AlbumTrackOrder"/>. Explicit, not implicit: the pre-JF-672 shape
     /// set no OrderBy and rode each server branch's empty-OrderBy default (verified
-    /// at v10.11.8 and v12.2 source: BaseItemRepository.ApplyOrder returns
-    /// OrderBy(SortName) as an EARLY return, ahead of the tiebreaker block, so the
-    /// pages concatenated on a per-branch coincidence). Naming the axis makes the
-    /// head/confirm/tail/unpaged order a pinned contract; with SortName first both
-    /// branches additionally append ThenBy(Name) (their shared first-axis special
-    /// case), a strict determinism gain over the old SortName-only default.
+    /// at the v10.11.8, v12.0, v12.1, and v12.2 tags, the full support envelope:
+    /// BaseItemRepository.ApplyOrder returns OrderBy(SortName) as an EARLY return,
+    /// ahead of the tiebreaker block, so the pages concatenated on a per-branch
+    /// coincidence). Naming the axis makes the head/confirm/tail/unpaged order a
+    /// pinned contract; with SortName first every branch additionally appends
+    /// ThenBy(Name) (the shared first-axis special case), a strict determinism gain
+    /// over the old SortName-only default.
     /// PROBE-BACKED CHOICE (the live 12.2.0 box, evidence in the JF-672 task):
     /// SortName IS chapter order for the tagged class (Jellyfin derives it as
     /// '{disc:0000} - {track:0000} - name', padding makes lexicographic numeric),
@@ -561,6 +562,31 @@ internal static class QueueContinuationFetcher
         int limit)
     {
         InternalItemsQuery query = BuildAudiobookChaptersQuery(jellyfinUser, bookId, startIndex, limit);
+        Util.LibraryFilter.ApplyLibraryFilter(query, pluginUser, libraryManager, logger);
+        return query;
+    }
+
+    /// <summary>
+    /// The unpaged, session-user sibling of
+    /// <see cref="BuildScopedAudiobookChaptersQuery"/> (JF-672 code-review F1),
+    /// mirroring <see cref="BuildScopedAlbumTracksQueryUnpaged"/>: builds the
+    /// unpaged chapters form then applies <c>Util.LibraryFilter.ApplyLibraryFilter</c>
+    /// in the same call, so the YesIntent NON-MusicAlbum confirm leg (the JF-361
+    /// shape: a plain folder parent of chapter children confirmed under the
+    /// MediaTypeAlbum label) enumerates chapters through the ONE core's field set
+    /// AND order instead of a hand-kept initializer (the pre-JF-672 local leg
+    /// carried AlbumTrackOrder, the disc/track composite the chapters probe
+    /// refuted: ASC NULLS FIRST front-loads untagged rows, and the confirm answered
+    /// a differently-ordered book than the direct PlayBook ask).
+    /// </summary>
+    internal static InternalItemsQuery BuildScopedAudiobookChaptersQueryUnpaged(
+        Jellyfin.Database.Implementations.Entities.User? jellyfinUser,
+        AlexaSkill.Entities.User? pluginUser,
+        ILibraryManager libraryManager,
+        ILogger logger,
+        Guid bookId)
+    {
+        InternalItemsQuery query = BuildAudiobookChaptersQueryUnpaged(jellyfinUser, bookId);
         Util.LibraryFilter.ApplyLibraryFilter(query, pluginUser, libraryManager, logger);
         return query;
     }

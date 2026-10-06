@@ -315,31 +315,20 @@ public class YesIntentHandler : BaseHandler
         // (AlbumPlayService.BuildAlbumPlayResponseAsync) runs, so a confirm answers exactly
         // what the direct ask plays (split albums included) and the queue rows feed the
         // JF-625 concat timeline the same field set the endpoint encodes. The NON-MusicAlbum
-        // leg keeps the local MediaTypes=Audio initializer: PlayBook disambiguation reuses
-        // the MediaTypeAlbum label, so this path also receives non-album parents whose
-        // chapter children are BaseItemKind.AudioBook, and IncludeItemTypes=Audio would drop
-        // them (the endpoint's ternary keeps its AudioBook leg local for the same reason).
+        // leg routes through the ONE chapters builder's scoped unpaged sibling (JF-672
+        // code-review F1): PlayBook disambiguation reuses the MediaTypeAlbum label, so this
+        // path receives non-album parents whose chapter children are BaseItemKind.AudioBook,
+        // and the chapters core's MediaTypes=Audio axis is the JF-361 kind discipline
+        // (IncludeItemTypes=Audio, the ALBUM builder's axis, would drop them). The former
+        // hand-kept initializer carried AlbumTrackOrder, the disc/track composite the
+        // chapters probe refuted, so the confirm answered a differently-ordered book than
+        // the direct PlayBook ask; the shared core keeps one order on both.
         bool isMusicAlbum = album is MediaBrowser.Controller.Entities.Audio.MusicAlbum;
         var tracksQuery = isMusicAlbum
             ? QueueContinuationFetcher.BuildScopedAlbumTracksQueryUnpaged(
                 jellyfinUser, user, _libraryManager, Logger, album.Id, byAlbumIds: false)
-            : new InternalItemsQuery()
-            {
-                User = jellyfinUser,
-                Recursive = true,
-                ParentId = album.Id,
-                MediaTypes = new[] { MediaType.Audio },
-                DtoOptions = new DtoOptions(true),
-                OrderBy = QueueContinuationFetcher.AlbumTrackOrder,
-            };
-        if (!isMusicAlbum)
-        {
-            // The local leg keeps the JF-361 kind discipline but not at the cost of the
-            // JF-666 scope every sibling leg runs under (the album leg gets it inside the
-            // scoped builder above). Row-neutral for the children of a parent the scoped
-            // surfaces just found; consistent for restricted-library accounts.
-            ApplyLibraryFilter(tracksQuery, user, _libraryManager);
-        }
+            : QueueContinuationFetcher.BuildScopedAudiobookChaptersQueryUnpaged(
+                jellyfinUser, user, _libraryManager, Logger, album.Id);
 
         IReadOnlyList<BaseItem> albumItems = _libraryManager.GetItemList(tracksQuery);
 

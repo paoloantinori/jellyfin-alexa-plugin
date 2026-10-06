@@ -21,7 +21,6 @@ using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Session;
 using Microsoft.Extensions.Logging;
-using SortOrder = Jellyfin.Database.Implementations.Enums.SortOrder;
 
 namespace Jellyfin.Plugin.AlexaSkill.Alexa.Handler.Intent;
 
@@ -239,7 +238,9 @@ public class AplUserEventHandler : BaseHandler
             else
             {
                 // Multi-disc albums play disc-then-track (JF-339 AC#3); other folders
-                // (audiobook/artist folders) keep SortName.
+                // (audiobook/artist folders) keep SortName (the shared chapter-order
+                // constant, JF-672: one SortName definition so a future chapter-order
+                // change reaches this tap path with the voice paths).
                 bool isAlbum = folder is MediaBrowser.Controller.Entities.Audio.MusicAlbum;
                 var childQuery = new InternalItemsQuery
                 {
@@ -249,7 +250,7 @@ public class AplUserEventHandler : BaseHandler
                     Limit = 500,
                     OrderBy = isAlbum
                         ? QueueContinuationFetcher.AlbumTrackOrder
-                        : new[] { (ItemSortBy.SortName, SortOrder.Ascending) }
+                        : QueueContinuationFetcher.AudiobookChapterOrder
                 };
 
                 var children = _libraryManager.GetItemList(childQuery);
