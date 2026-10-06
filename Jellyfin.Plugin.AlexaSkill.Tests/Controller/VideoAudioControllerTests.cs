@@ -10368,16 +10368,14 @@ public class VideoAudioControllerTests : PluginTestBase, IDisposable
             "the chapters builder must not grow an IncludeItemTypes filter");
         Assert.True(chaptersQuery.Recursive);
         // JF-672 supersedes the old no-order assert: the endpoint carries the SAME
-        // explicit chapter order the paged queue runs, NOT AlbumTrackOrder (an
-        // album-style disc/track sort would reorder the book: the probe-backed
-        // rationale lives on the builder's doc and in the JF-672 task record).
+        // explicit chapter order the paged queue runs (constant equality, the exact
+        // form of the MusicAlbum arm's AlbumTrackOrder assert above), NOT
+        // AlbumTrackOrder itself (an album-style disc/track sort would reorder the
+        // book; the probe-backed rationale lives on the constant's doc and in the
+        // JF-672 task record).
         Assert.Equal(
-            new[]
-            {
-                (Jellyfin.Data.Enums.ItemSortBy.SortName,
-                 Jellyfin.Database.Implementations.Enums.SortOrder.Ascending)
-            },
-            chaptersQuery.OrderBy?.ToArray());
+            QueueContinuationFetcher.AudiobookChapterOrder,
+            chaptersQuery.OrderBy);
         Assert.NotNull(chaptersQuery.DtoOptions);
         // The unpaged invariants (the endpoint twin of the album-arm asserts):
         // no session user on the token-gated HTTP path, no paging (null is the

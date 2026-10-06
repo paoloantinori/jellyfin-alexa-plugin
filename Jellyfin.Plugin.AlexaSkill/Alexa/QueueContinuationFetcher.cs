@@ -474,15 +474,12 @@ internal static class QueueContinuationFetcher
     /// Deliberately MediaTypes, not the JF-358 IncludeItemTypes discipline: JF-358
     /// governs ArtistIds queries, which MediaTypes silently ignores; a ParentId query
     /// IS constrained by MediaTypes (this shape returns the chapters in production).
-    /// Order is <see cref="AudiobookChapterOrder"/> (JF-672): explicit SortName. The
-    /// old "the DB order for this shape IS the book's chapter order" claim was
-    /// probe-refuted for the untagged class (SortName lexicographic plays chapter 10
-    /// before chapter 2; all-equal SortName rows play arbitrarily) and holds only for
-    /// the tagged class, whose zero-padded SortName IS chapter order; the full
-    /// evidence and the refuted alternatives live in the JF-672 task record. NOT an
-    /// album-style disc/track sort: ASC NULLS FIRST would front-load untagged rows
-    /// in mixed books. The one definition sets head, confirm, tail, AND the unpaged
-    /// endpoint form together, so no page or endpoint can drift from another.
+    /// Order is <see cref="AudiobookChapterOrder"/> (JF-672): the probe-refuted
+    /// successor of the old "the DB order for this shape IS the book's chapter
+    /// order" claim (which held only for the tagged class); the constant's doc owns
+    /// the choice, the known limit, and the refuted alternatives. Setting it in
+    /// this ONE core is what keeps head, confirm, tail, and the unpaged endpoint
+    /// form on one order.
     /// JF-784 leg 3 closed the kind-axis divergence this shape's consumers had:
     /// the concat endpoint's audiobook arm now routes through the unpaged form
     /// (<see cref="BuildAudiobookChaptersQueryUnpaged"/>) instead of its local
@@ -539,9 +536,6 @@ internal static class QueueContinuationFetcher
             ParentId = bookId,
             MediaTypes = new[] { MediaType.Audio },
             DtoOptions = new DtoOptions(true),
-            // The ONE explicit chapter order (JF-672): both paging forms and the
-            // unpaged endpoint twin concatenate in this order by contract, not by
-            // each server branch's empty-OrderBy default.
             OrderBy = AudiobookChapterOrder,
             // Nullable in the SDK: null = no paging (the unpaged form), 0 = Take(0)
             // (JF-443), so the int? params pass through untouched.

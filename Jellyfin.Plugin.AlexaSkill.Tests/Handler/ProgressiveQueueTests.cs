@@ -1857,23 +1857,13 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
         // The mirror contract: the initial book page carries NO kind filter (Jellyfin
         // initializes the field to an empty array, so the contract is "no filter",
         // not the field's exact null/empty shape) and the JF-672 explicit chapter
-        // order, asserted twice: concretely (the composite the probe decided on) and
-        // against the ONE builder (the single-definition contract: head, confirm,
-        // tail, and the unpaged endpoint form all carry this same array).
-        var chapterOrder = new[]
-        {
-            (Jellyfin.Data.Enums.ItemSortBy.SortName,
-             Jellyfin.Database.Implementations.Enums.SortOrder.Ascending)
-        };
+        // order: constant equality, the album-arm pin form (the ONE literal honesty
+        // pin for the constant's value is the builder Fact below; consumer drift
+        // away from the shared order reds HERE).
         Assert.True(
             captured.IncludeItemTypes == null || captured.IncludeItemTypes.Length == 0,
             "audiobook query must mirror the initial page: no IncludeItemTypes filter");
-        // The shared explicit chapter order (JF-672), then the single-definition
-        // contract: the tail's order is the ONE builder's, not a tail-local copy.
-        Assert.Equal(chapterOrder, captured.OrderBy?.ToArray());
-        Assert.Equal(
-            QueueContinuationFetcher.BuildAudiobookChaptersQuery(null, bookId, 5, 10).OrderBy,
-            captured.OrderBy);
+        Assert.Equal(QueueContinuationFetcher.AudiobookChapterOrder, captured.OrderBy);
         Assert.Equal(5, captured.StartIndex);
         Assert.Equal(10, captured.Limit);
 
@@ -1882,14 +1872,15 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
         Assert.Equal(7, continuation.StartIndex);
     }
 
-    // JF-672: the ONE order for every chapters-query entry point. The old shape set
-    // no OrderBy, riding each server branch's empty-OrderBy default (verified at
-    // v10.11.8 and v12.2 source to be OrderBy(SortName) with NO tiebreaker, an
-    // early return ahead of the tiebreaker block), so head/tail concatenation was
-    // a per-branch coincidence, and the paged and unpaged forms could drift if a
-    // branch ever changed that default. The builder-level flip-together contract:
-    // the paged form and the unpaged endpoint form carry ONE identical explicit
-    // order. RED on the pre-JF-672 tree (OrderBy empty on both forms).
+    // JF-672: the ONE literal honesty pin for AudiobookChapterOrder's value (the
+    // structural twin of the AlbumTrackOrder literal pin above): a corrupted
+    // constant fails HERE, while the consumer pins (head, this file's tail, the
+    // unpaged endpoint) assert constant equality and red on drift away from the
+    // shared order. Both builder forms carry it so the paged queue and the unpaged
+    // endpoint flip together; the probe-backed choice and the refuted alternatives
+    // (the album-style composite, DateCreated) live on the constant's doc and in
+    // the JF-672 task record. RED on the pre-JF-672 tree (OrderBy empty on both
+    // forms).
     [Fact]
     public void QueueContinuation_AudiobookChapterOrder_PagedAndUnpagedFormsCarryTheOneExplicitOrder()
     {
@@ -1897,17 +1888,11 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
         InternalItemsQuery paged = QueueContinuationFetcher.BuildAudiobookChaptersQuery(null, bookId, 0, 10);
         InternalItemsQuery unpaged = QueueContinuationFetcher.BuildAudiobookChaptersQueryUnpaged(null, bookId);
 
-        // The concrete composite the live probe decided on (JF-672 task record):
-        // explicit SortName, NOT the album-style (ParentIndexNumber, IndexNumber)
-        // pair (ASC NULLS FIRST would front-load untagged rows ahead of tagged
-        // chapters; the mixed-book regression is documented in the task record).
-        var expected = new[]
-        {
-            (Jellyfin.Data.Enums.ItemSortBy.SortName,
-             Jellyfin.Database.Implementations.Enums.SortOrder.Ascending)
-        };
-        Assert.Equal(expected, paged.OrderBy?.ToArray());
-        Assert.Equal(expected, unpaged.OrderBy?.ToArray());
+        // Literal (not the constant) pins the value; NOT the album-style
+        // (ParentIndexNumber, IndexNumber) pair.
+        var expected = new[] { (ItemSortBy.SortName, SortOrder.Ascending) };
+        Assert.Equal(expected, paged.OrderBy);
+        Assert.Equal(expected, unpaged.OrderBy);
     }
 
     // JF-666 parity extended to the Audiobook arm (JF-670): a restricted user's book
