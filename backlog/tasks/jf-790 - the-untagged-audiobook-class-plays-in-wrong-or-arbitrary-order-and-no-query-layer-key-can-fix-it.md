@@ -38,16 +38,27 @@ nothing (keys NULL) and would front-load untagged rows ahead of tagged chapters 
 books via ASC NULLS FIRST.
 
 The ONLY data that orders these books correctly is the file name (001.mp3..100.mp3,
-[01-27]....mp3), which never reaches the DB sort. Candidate fix shapes, each needing its
-own design pass before touching code:
+[01-27]....mp3), which never reaches the DB sort. IN-REPO PRECEDENT ALREADY EXISTS: the
+concat endpoint (VideoAudioController.StreamHlsAudiobook, the NativeControlsForBooks=on
+path) already re-sorts the unpaged enumeration by trailing filename number
+(`_chapterNumberRegex` + the OrderBy at the sortedChapters block, added for exactly this
+"Jellyfin doesn't always parse these into IndexNumber" reason, its comment says so). So
+the opt-in VideoApp path plays these books CORRECTLY today; the mis-order lives on the
+DEFAULT path (NativeControlsForBooks defaults false): the paged AudioPlayer queue
+(NowPlayingQueue order, next/previous chapter navigation) and the resume-index math over
+the initial page (FindResumeTrackIndex picks trackItems[startIndex]; a scrambled page
+picks the wrong chapter for the cold-tracker fallthrough).
 
-1. Handler-side natural-path sort: when a fetched chapters page comes back with
-   SortName+Name ties (or untagged rows), fetch the whole book unpaged and sort in memory
-   by a natural-order comparison on Path. COST: changes pagination semantics (the
-   progressive queue and the continuation offsets assume DB-order paging), so it likely
-   means a one-shot full fetch for the tied class only, or a precomputed order cached with
-   the continuation. Must keep head/tail/unpaged on ONE order (the JF-670/JF-672
-   single-definition contract).
+Candidate fix shapes, each needing its own design pass before touching code:
+
+1. Queue-side natural-path sort, mirroring the endpoint's proven shape: when the initial
+   chapters page comes back with SortName+Name ties (or untagged rows), fetch the book
+   unpaged and sort with the SAME trailing-number comparison the endpoint uses (one
+   shared helper, not a second regex copy), then page in memory. COST: changes pagination
+   semantics (the continuation offsets assume DB-order paging), so it likely means a
+   one-shot full fetch for the tied class only, or a precomputed order cached with the
+   continuation. Must keep head/tail/unpaged on ONE order (the JF-670/JF-672
+   single-definition contract) and must not fork the endpoint's comparator.
 2. Library-side remedy (no plugin code): document for the affected libraries that chapter
    files need track tags (IndexNumber) or zero-padded names; Jellyfin re-derives SortName
    from tags on the next metadata refresh. Cheapest, but user-side, not plugin-side.
