@@ -3,7 +3,7 @@ id: JF-790
 title: >-
   JF-790 - the untagged audiobook class plays in wrong or arbitrary order, and
   no query-layer key can fix it
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-06'
 updated_date: '2026-10-07 08:42'
