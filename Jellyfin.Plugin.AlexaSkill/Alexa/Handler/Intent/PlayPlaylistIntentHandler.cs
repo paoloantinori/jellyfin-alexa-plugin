@@ -99,9 +99,10 @@ public class PlayPlaylistIntentHandler : BaseHandler
         // JF-808 Layer-1 gate: playlists have no in-memory index of their own
         // (neither the artist nor the song n-gram index serves Playlist items),
         // so this is the coarse artist-index stand-in for the shared cold
-        // database (the PlayAlbum precedent, joined by books in JF-807), on the
-        // SAME index the YesIntent playlist confirm arm gates so ask and confirm
-        // answer identically in the warming window. The shared builder's cold
+        // database (the shared stand-in rule lives on IndexWarmingGate; the
+        // PlayAlbum precedent, joined by books in JF-807), on the SAME index the
+        // YesIntent playlist confirm arm gates so ask and confirm answer
+        // identically in the warming window. The shared builder's cold
         // surface behind this gate: the SearchTerm playlist query on its
         // RetryAsync channel, the fuzzy fallback, and the GetManageableItems
         // whole-track resolution. Placement: AFTER the empty-slot elicit and the

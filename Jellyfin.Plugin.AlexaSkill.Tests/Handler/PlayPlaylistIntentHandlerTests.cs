@@ -61,9 +61,8 @@ public class PlayPlaylistIntentHandlerTests : PluginTestBase
         ILibraryManager libraryManager,
         IUserManager userManager,
         ILoggerFactory loggerFactory,
-        DeviceQueueManager? queueManager = null,
         IArtistIndex? artistIndex = null)
-        : PlayPlaylistIntentHandler(sessionManager, config, libraryManager, userManager, loggerFactory, queueManager, artistIndex)
+        : PlayPlaylistIntentHandler(sessionManager, config, libraryManager, userManager, loggerFactory, artistIndex: artistIndex)
     {
         public ProgressiveSpeechCapture Progressive { get; } = new();
 
@@ -79,7 +78,7 @@ public class PlayPlaylistIntentHandlerTests : PluginTestBase
             _libraryManagerMock.Object,
             _userManagerMock.Object,
             _loggerFactory,
-            artistIndex: artistIndex);
+            artistIndex);
     }
 
     private static IntentRequest CreateRequest(string playlistName = "road trip songs", string intentName = IntentNames.PlayPlaylist)
@@ -249,41 +248,14 @@ public class PlayPlaylistIntentHandlerTests : PluginTestBase
     // ========== JF-808: the playlist play path's Layer-1 warming gate (the ASK, both callers of the shared builder) ==========
 
     /// <summary>
-    /// The one-playlist play mocks (the AlbumPlayServicePlaylistShuffleTests shape:
-    /// a real <see cref="Playlist"/> whose LinkedChildren resolve through the
-    /// stubbed BaseItem statics), so the pre-fix RED failure of the JF-808
-    /// entry-gate pins is the clean no-throw (the ungated query ran and played),
-    /// not a mock-default null crashing the handler.
+    /// The ONE resolvable-playlist fixture for the JF-808 warming pins
+    /// (TestHelpers.SetupPlaylist, hoisted with the shuffle suite's former private
+    /// copy so the 12.x linked-child mock contract has one owner), so the pre-fix
+    /// RED failure of the entry-gate pins is the clean no-throw (the ungated
+    /// query ran and played), not a mock-default null crashing the handler.
     /// </summary>
-    private (Playlist Playlist, List<Audio> Tracks) SetupPlaylistPlay()
-    {
-        var tracks = Enumerable.Range(0, 5)
-            .Select(i => new Audio { Id = Guid.NewGuid(), Name = $"Track {i}", Tags = Array.Empty<string>() })
-            .ToList();
-
-        var playlist = new Playlist { Name = "road trip songs", Id = Guid.NewGuid(), Tags = Array.Empty<string>() };
-        playlist.LinkedChildren = tracks.Select(t => new LinkedChild { ItemId = t.Id }).ToArray();
-
-        var byId = tracks.ToDictionary(t => t.Id, t => (BaseItem)t);
-        byId[playlist.Id] = playlist;
-        _libraryManagerMock.Setup(l => l.GetItemById(It.IsAny<Guid>()))
-            .Returns((Guid id) => byId.TryGetValue(id, out BaseItem? item) ? item : null!);
-        // The 12.x linked-child ref resolves through a batched ItemIds query
-        // (GetItemList); 10.11 never asks it (the shuffle-tests note). Inert on
-        // the net9 path either way: this flow's own queries go to GetItemsResult.
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns(tracks.Cast<BaseItem>().ToList());
-        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(TestHelpers.CreateJellyfinUser());
-        _libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
-            .Returns(new QueryResult<BaseItem>
-            {
-                Items = new List<BaseItem> { playlist },
-                TotalRecordCount = 1
-            });
-
-        return (playlist, tracks);
-    }
+    private void SetupPlaylistPlay()
+        => TestHelpers.SetupPlaylist(_libraryManagerMock, _userManagerMock);
 
     /// <summary>
     /// JF-808 RED PROOF (the warming axis, the ASK): a playlist ask running while
@@ -395,7 +367,6 @@ public class PlayPlaylistIntentHandlerTests : PluginTestBase
     public async Task HandleAsync_PlaylistAsk_WhileIndexWarming_EmptySlot_StillElicitsPlaylistName()
     {
         var handler = CreateHandler(TestHelpers.WarmingArtistIndex());
-        using var statics = StubBaseItemStatics();
 
         SkillResponse response = await handler.HandleAsync(
             CreateRequest(playlistName: string.Empty),

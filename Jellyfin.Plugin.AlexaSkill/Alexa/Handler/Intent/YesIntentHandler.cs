@@ -629,9 +629,7 @@ public class YesIntentHandler : BaseHandler
         // (PlayPlaylistIntentHandler/ShufflePlayIntentHandler) pay their Layer-1
         // gate for; the artist index stands in for the shared cold database on
         // the SAME index the asks gate, so the confirm-must-match-ask rule
-        // extends to the warming answer. No feature-flag ordering exists to
-        // mirror: playlists are cross-type always-allowed and neither side gates
-        // a flag (the JF-806 decision, unchanged).
+        // extends to the warming answer.
         GuardIndexReady(_artistIndex);
 
         IReadOnlyList<BaseItem> playlistItems = ((Folder)playlist).GetItemList(new InternalItemsQuery()
