@@ -166,8 +166,17 @@ public static class AudiobookPlayResolver
         // query runs. The TAGGED class never enters this branch (its rows carry
         // IndexNumber and distinct keys): byte-identical DB paging, per the
         // task's hard requirement.
+        // HONEST COST (code-review JF-790 F3): every ask of a detected book
+        // pays the unpaged full-book fetch plus the resume scan over it (one
+        // GetUserData per chapter), INCLUDING cold first-ever asks that the
+        // paged path's JF-797 probes would have kept off the deep scan. The
+        // probes are bypassed here BY DESIGN, not by omission: their purpose is
+        // avoiding the unpaged fetch, and the ORDER fix needs that fetch
+        // regardless of resume state. The census's largest untagged book is 100
+        // chapters; the JF-813 follow-up owns the shared-comparator semantics
+        // and cost refinements.
         List<BaseItem>? fileNameOrderedBook = null;
-        if (Util.ChapterFileNameOrder.PageDistrustsDbOrder(trackItems))
+        if (ChapterFileNameOrder.PageDistrustsDbOrder(trackItems))
         {
             if (QueueContinuationFetcher.InitialPageHasMore(bookTracks))
             {
@@ -186,14 +195,14 @@ public static class AudiobookPlayResolver
                 }
                 else
                 {
-                    fileNameOrderedBook = Util.ChapterFileNameOrder.SortByTrailingFileNameNumber(fullFetch.Items);
+                    fileNameOrderedBook = ChapterFileNameOrder.SortByTrailingFileNameNumber(fullFetch.Items);
                 }
             }
             else
             {
                 // The page already carried the whole book (no more rows remain):
                 // the page rows themselves are the full list, no second query.
-                fileNameOrderedBook = Util.ChapterFileNameOrder.SortByTrailingFileNameNumber(trackItems);
+                fileNameOrderedBook = ChapterFileNameOrder.SortByTrailingFileNameNumber(trackItems);
             }
 
             if (fileNameOrderedBook != null)

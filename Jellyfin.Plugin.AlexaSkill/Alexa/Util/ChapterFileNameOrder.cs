@@ -25,7 +25,12 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// number (or an unparsable one) all key to <see cref="int.MaxValue"/> and keep
 /// the query's pinned (<see cref="QueueContinuationFetcher.AudiobookChapterOrder"/>)
 /// order among themselves, so a book of numberless files is ordered exactly as
-/// the DB served it.
+/// the DB served it. In a MIXED book (numberless files beside numbered ones) the
+/// numberless keys all sort LAST, so a numberless intro or cover lands at the
+/// book's end even when the DB order had it first; that is the endpoint's
+/// existing tail-key semantics (this helper is its extraction, not a re-decision),
+/// and the part-grouping boundary (per-part file numbering like Part1/01.mp3
+/// + Part2/01.mp3 interleaves parts) is shared with it too, tracked as JF-813.
 /// ONE deliberate deviation from the endpoint's original lambda, required by the
 /// new consumer: the number parses through int.TryParse instead of
 /// int.Parse. The endpoint's int.Parse THREW (OverflowException)
@@ -108,6 +113,13 @@ internal static class ChapterFileNameOrder
     /// </list>
     /// Pages shorter than two rows carry no order evidence (a single row
     /// cannot tie and the class signal is vacuous): not detectable.
+    /// BOUNDARY (code-review JF-790 F4): the verdict reads the INITIAL page
+    /// only, by the task's prescribed shape. A book whose page 1 is tagged with
+    /// distinct keys but whose later pages are untagged or fully tied escapes
+    /// (the queue keeps the DB path and the tail's mis-order reproduces); the
+    /// census's books are uniformly tagged or uniformly untagged, and widening
+    /// the evidence past page 1 means paying the unpaged fetch to DETECT, the
+    /// cost the page-local shape exists to avoid.
     /// </summary>
     /// <param name="pageItems">The initial page's chapter rows.</param>
     /// <returns>True when the queue path must fall back to filename order.</returns>
