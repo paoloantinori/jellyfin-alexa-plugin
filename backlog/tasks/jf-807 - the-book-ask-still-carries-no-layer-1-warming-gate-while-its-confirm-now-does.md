@@ -2,7 +2,7 @@
 id: JF-807
 title: >-
   JF-807 - the book ask still carries no Layer-1 warming gate while its confirm now does
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-07'
 labels:

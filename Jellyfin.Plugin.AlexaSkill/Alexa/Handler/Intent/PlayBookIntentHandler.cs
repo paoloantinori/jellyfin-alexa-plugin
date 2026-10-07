@@ -32,6 +32,10 @@ public class PlayBookIntentHandler : BaseHandler
     private readonly IUserDataManager _userDataManager;
     private readonly DeviceQueueManager _queueManager;
 
+    // JF-807: the Layer-1 warming gate's index stand-in (null in test/minimal
+    // setups: no gate; the JF-806 YesIntent book-confirm shape).
+    private readonly IArtistIndex? _artistIndex;
+
     public PlayBookIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
@@ -39,12 +43,14 @@ public class PlayBookIntentHandler : BaseHandler
         IUserManager userManager,
         IUserDataManager userDataManager,
         ILoggerFactory loggerFactory,
-        DeviceQueueManager queueManager) : base(sessionManager, config, loggerFactory)
+        DeviceQueueManager queueManager,
+        IArtistIndex? artistIndex = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
         _userDataManager = userDataManager;
         _queueManager = queueManager;
+        _artistIndex = artistIndex;
     }
 
     /// <summary>
