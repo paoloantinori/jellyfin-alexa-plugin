@@ -17,7 +17,9 @@ using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
+using MediaBrowser.Controller.Channels;
 using MediaBrowser.Controller.Entities.Movies;
+using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Playlists;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Controller.Library;
@@ -1180,6 +1182,14 @@ public class YesIntentHandlerTests : PluginTestBase
         "genre" => new MusicGenre { Name = "Denied Genre", Id = Guid.NewGuid() },
         "collection" => new CollectionFolder { Name = "Denied Library", Id = Guid.NewGuid() },
         "playlist" => new Playlist { Name = "Denied Playlist", Id = Guid.NewGuid() },
+        "boxset" => new BoxSet { Name = "Denied BoxSet", Id = Guid.NewGuid() },
+        "photoalbum" => new PhotoAlbum { Name = "Denied PhotoAlbum", Id = Guid.NewGuid() },
+        "season" => new Season { Name = "Denied Season", Id = Guid.NewGuid() },
+        "series" => new Series { Name = "Denied Series", Id = Guid.NewGuid() },
+        "userview" => new UserView { Name = "Denied UserView", Id = Guid.NewGuid() },
+        "channel" => new Channel { Name = "Denied Channel", Id = Guid.NewGuid() },
+        "aggregate" => new AggregateFolder { Name = "Denied Aggregate", Id = Guid.NewGuid() },
+        "userroot" => new UserRootFolder { Name = "Denied UserRoot", Id = Guid.NewGuid() },
         _ => throw new ArgumentException($"unknown denied kind '{kind}'", nameof(kind))
     };
 
@@ -1228,6 +1238,14 @@ public class YesIntentHandlerTests : PluginTestBase
     [InlineData("genre")]
     [InlineData("collection")]
     [InlineData("playlist")]
+    [InlineData("boxset")]
+    [InlineData("photoalbum")]
+    [InlineData("season")]
+    [InlineData("series")]
+    [InlineData("userview")]
+    [InlineData("channel")]
+    [InlineData("aggregate")]
+    [InlineData("userroot")]
     public async Task HandleAsync_DisambiguationAlbumType_NonBookFolderKinds_FallToTheAlbumLeg(string kind)
     {
         (SkillResponse response, SessionInfo session) = await ConfirmDeniedKindAsync(CreateDeniedKindPayload(kind));

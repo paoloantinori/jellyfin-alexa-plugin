@@ -202,14 +202,21 @@ public static class AudiobookPlayResolver
         // by QueueContinuationFetcher.MayHaveResumeRelevantUserDataAsync (two
         // bounded IsPlayed/IsResumable probe queries over the same scoped page
         // shape; a miss proves no row carries resume-relevant user data, so a
-        // first-ever ask of a multi-page book pays the probes, not the full-book
-        // fetch). ONE MORE TRIGGER beside the probes: FindResumeTrackIndex also
-        // reads the device queue's ItemPositionState, and the JF-581 shape (a
-        // server-side UserData write loss with the position surviving only in the
-        // device queue) would be invisible to the probes, so a device queue
-        // holding ANY positioned entry forces the fetch (an in-memory check; the
-        // over-fire costs one bounded query, an under-fire would drop a real
-        // resume).
+        // first-ever ask of a multi-page book on a clean device pays the probes,
+        // not the full-book fetch). ONE MORE TRIGGER beside the probes, with its
+        // HONEST COST stated (code-review F3): FindResumeTrackIndex also reads
+        // the device queue's ItemPositionState, and the JF-581 shape (a
+        // server-side UserData write loss with the position surviving only in
+        // the device queue) would be invisible to the probes, so a device queue
+        // holding ANY positioned entry releases the fetch. Because the position
+        // store is written by EVERY qualifying stop (plain songs included) and
+        // survives restarts, a household that has played anything holds entries
+        // forever: on such devices the book gate degrades to the pre-JF-797
+        // unconditional fetch (one unpaged query over a BOUNDED chapter list,
+        // the addendum's row-volume concern is the album path, which has no
+        // queue tier and discriminates unconditionally). Scoping the store to
+        // book-shaped entries is the filed follow-up, JF-812; an under-fire here
+        // would drop a real resume, the worse side of the trade.
         // The single-file shapes never reach here (their page is
         // the whole book by construction). The in-memory positioned-entry check
         // runs before the probes (cheapest first), and the whole gate folds into
@@ -218,18 +225,28 @@ public static class AudiobookPlayResolver
         bool queueHoldsPositionedEntry = queueManager != null
             && session.DeviceId != null
             && queueManager.HasAnyStoredPosition(session.DeviceId);
+        bool resumeProbeHit = false;
+        if (resumeTicks == 0 && continuationHasMore && !queueHoldsPositionedEntry)
+        {
+            resumeProbeHit = await QueueContinuationFetcher.MayHaveResumeRelevantUserDataAsync(
+                (probeStartIndex, probeLimit) => QueueContinuationFetcher.BuildScopedAudiobookChaptersQuery(
+                    jellyfinUser, user, libraryManager, logger, book.Id, probeStartIndex, probeLimit),
+                probeQuery => RetryHelper.ExecuteWithRequestBudgetAsync(
+                    () => SearchService.SafeGetItemsResult(libraryManager, probeQuery, logger),
+                    logger,
+                    "GetBookTracksResumeProbe",
+                    cancellationToken: cancellationToken)).ConfigureAwait(false);
+
+            // The gate's branching decision, logged for triage (the Debug Logging
+            // Policy): which trigger released the deep fetch, or why it stayed cold.
+            logger.LogDebug(
+                "{Label}: deep-resume gate for '{BookName}': page answer carries no position and more pages remain; positioned queue entries={QueueEntries}, user-data probes hit={ProbeHit}",
+                logLabel, book.Name, queueHoldsPositionedEntry, resumeProbeHit);
+        }
+
         if (resumeTicks == 0
             && continuationHasMore
-            && (queueHoldsPositionedEntry
-                || await QueueContinuationFetcher.MayHaveResumeRelevantUserDataAsync(
-                    (probeStartIndex, probeLimit) => QueueContinuationFetcher.BuildScopedAudiobookChaptersQuery(
-                        jellyfinUser, user, libraryManager, logger, book.Id, probeStartIndex, probeLimit),
-                    probeQuery => RetryHelper.ExecuteWithRequestBudgetAsync(
-                        () => SearchService.SafeGetItemsResult(libraryManager, probeQuery, logger),
-                        logger,
-                        "GetBookTracksResumeProbe",
-                        cancellationToken: cancellationToken))
-                .ConfigureAwait(false)))
+            && (queueHoldsPositionedEntry || resumeProbeHit))
         {
             QueryResult<BaseItem> fullBook = await RetryHelper.ExecuteWithRequestBudgetAsync(
                 () => SearchService.SafeGetItemsResult(libraryManager,

@@ -761,17 +761,28 @@ public sealed class AlbumPlayService
         // The album path has no ItemPositionState tier (FindResumeTrackIndex runs
         // here without a queue manager), so the two probes are the whole gate.
         long deepResumePrefixTicks = 0;
-        if (!trackerOverrideEngaged
-            && albumPageResumeTicks == 0
-            && continuationHasMore
-            && await QueueContinuationFetcher.MayHaveResumeRelevantUserDataAsync(
+        bool albumResumeProbeHit = false;
+        if (!trackerOverrideEngaged && albumPageResumeTicks == 0 && continuationHasMore)
+        {
+            albumResumeProbeHit = await QueueContinuationFetcher.MayHaveResumeRelevantUserDataAsync(
                 (probeStartIndex, probeLimit) => QueueContinuationFetcher.BuildScopedAlbumTracksQuery(
                     jellyfinUser, user, libraryManager, _logger, album.Id, probeStartIndex, probeLimit, byAlbumIds: pageUsedAlbumIds),
                 probeQuery => RetryAsync(
                     () => _search.SafeGetItemsResult(libraryManager, probeQuery),
                     logLabel + ":GetAlbumTracksResumeProbe",
-                    cancellationToken: cancellationToken))
-            .ConfigureAwait(false))
+                    cancellationToken: cancellationToken)).ConfigureAwait(false);
+
+            // The gate's branching decision, logged for triage (the Debug Logging
+            // Policy): which side the probes answered.
+            _logger.LogDebug(
+                "{Label}: deep-resume gate for '{AlbumName}': page answer carries no position and more pages remain; user-data probes hit={ProbeHit}",
+                logLabel, album.Name, albumResumeProbeHit);
+        }
+
+        if (!trackerOverrideEngaged
+            && albumPageResumeTicks == 0
+            && continuationHasMore
+            && albumResumeProbeHit)
         {
             QueryResult<BaseItem> fullAlbum = await RetryAsync(
                 () => _search.SafeGetItemsResult(libraryManager,

@@ -624,8 +624,12 @@ internal static class QueueContinuationFetcher
     /// a flagged query's server-side filter runs BEFORE paging, so a StartIndex-past
     /// the-page probe would ask for the Nth resumable row, not the resumable row at
     /// index N, and miss a single in-progress track. Progress within the page the
-    /// scan already saw therefore re-triggers the fetch (one bounded over-fire; the
-    /// re-slice lands on the same answer by construction).
+    /// scan already saw therefore re-triggers the deep fetch: the probes themselves
+    /// stay bounded (one row each), but the hit releases the UNPAGED
+    /// full-collection fetch and its per-track re-scan, which re-derives the SAME
+    /// answer by construction when the only progress sits within the page (the
+    /// masking fix makes that over-fire the price of never landing on a shallow
+    /// prefix position; code-review F4, JF-797).
     /// The BOOK twin layers one more trigger beside this probe: the device queue's
     /// ItemPositionState (the JF-581 UserData write-loss shape), see the caller.
     /// </summary>

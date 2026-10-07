@@ -230,18 +230,24 @@ internal static class AudiobookItems
     /// own disambiguation matches are MusicAlbums and must keep routing to the
     /// album leg.
     /// JF-797 item 3 (the payload-kind gate): the Folder arm is narrowed by a
-    /// KIND DENY-LIST (MusicArtist, MusicGenre, CollectionFolder, Playlist beside
-    /// MusicAlbum). The two live producers emit only AudioBook leaves and plain
-    /// book folders, so the breadth was latent, but any current-or-future
-    /// producer emitting one of the denied kinds reached the PlayBook leg, whose
-    /// climb answers null and whose chapters query returns zero children: a
-    /// broken NoContentInBook launch (and, since JF-795, a FeatureDisabled Tell
-    /// with books off) where the pre-JF-793 album leg answered such payloads.
-    /// Denied kinds fall through to YesIntentHandler's album-leg switch arm, the
-    /// pre-JF-793 behavior (MusicGenre is not even a Folder, so its entry is
-    /// belt-and-braces documenting the kind). A positive children-are-AudioBook
-    /// probe was evaluated and declined: it would cost a query on every real
-    /// book-folder confirm to close a breadth no producer exhibits.
+    /// KIND DENY-LIST that is EXHAUSTIVE over the controller refs' concrete
+    /// Folder subclasses (reflection-enumerated, byte-identical sets at 10.11.8
+    /// and 12.0.0: MusicAlbum, MusicArtist, CollectionFolder, UserRootFolder,
+    /// UserView, AggregateFolder, PhotoAlbum, BoxSet, Season, Series, Playlist,
+    /// Channel; MusicGenre is not even a Folder, its entry is belt-and-braces
+    /// documenting the kind), so ONLY a plain Folder (the book-folder payload
+    /// shape the PlayBook candidate normalization emits) or an AudioBook passes.
+    /// The two live producers emit only AudioBook leaves and plain book folders,
+    /// so the breadth was latent, but any current-or-future producer emitting one
+    /// of the denied kinds reached the PlayBook leg, whose climb answers null and
+    /// whose chapters query returns zero children: a broken NoContentInBook
+    /// launch (and, since JF-795, a FeatureDisabled Tell with books off) where
+    /// the pre-JF-793 album leg answered such payloads. Denied kinds fall through
+    /// to YesIntentHandler's album-leg switch arm, the pre-JF-793 behavior. A
+    /// positive children-are-AudioBook probe was evaluated and declined: it would
+    /// cost a query on every real book-folder confirm to close a breadth no
+    /// producer exhibits. Residual: a Folder subclass introduced by a FUTURE ref
+    /// (none in the current support envelope) passes until listed here.
     /// </summary>
     internal static bool IsBookDisambiguationPayload(BaseItem? item)
         => item is AudioBook
@@ -250,7 +256,15 @@ internal static class AudiobookItems
                    or MediaBrowser.Controller.Entities.Audio.MusicArtist
                    or MediaBrowser.Controller.Entities.Audio.MusicGenre
                    or MediaBrowser.Controller.Entities.CollectionFolder
-                   or MediaBrowser.Controller.Playlists.Playlist));
+                   or MediaBrowser.Controller.Entities.UserRootFolder
+                   or MediaBrowser.Controller.Entities.UserView
+                   or MediaBrowser.Controller.Entities.AggregateFolder
+                   or MediaBrowser.Controller.Entities.PhotoAlbum
+                   or MediaBrowser.Controller.Entities.Movies.BoxSet
+                   or MediaBrowser.Controller.Entities.TV.Season
+                   or MediaBrowser.Controller.Entities.TV.Series
+                   or MediaBrowser.Controller.Playlists.Playlist
+                   or MediaBrowser.Controller.Channels.Channel));
 
     /// <summary>
     /// Whether the finished item is BOOK-shaped for the end-of-book decision (JF-670):

@@ -729,12 +729,24 @@ public sealed class DeviceQueueManager : IDisposable
     /// asks whether the store holds anything at all; the whole-collection
     /// positivity read stays here, on the owner of the store's layout and trim
     /// semantics, instead of reaching into the raw dictionary at the call site.
+    /// Code-review F1 (JF-797): the Values enumeration runs under
+    /// <see cref="_launchScopeLock"/> like every other whole-collection read of
+    /// live state, because the locked write/trim path
+    /// (<see cref="RecordStoppedPositionAndTrim"/>) can mutate the dictionary
+    /// mid-enumeration and the version check would throw on the request thread
+    /// (the JF-425/JF-447/JF-738 class; the ItemIds twin is the locked read at
+    /// <see cref="IsItemQueued"/>).
     /// </summary>
     /// <param name="deviceId">The Alexa device ID.</param>
     /// <returns>True when at least one stored position is positive.</returns>
     public bool HasAnyStoredPosition(string deviceId)
-        => _queues.TryGetValue(deviceId, out DeviceQueue? queue)
-           && queue.ItemPositionState.Values.Any(ticks => ticks > 0);
+    {
+        lock (_launchScopeLock)
+        {
+            return _queues.TryGetValue(deviceId, out DeviceQueue? queue)
+                && queue.ItemPositionState.Values.Any(ticks => ticks > 0);
+        }
+    }
 
     /// <summary>
     /// JF-581/JF-565: the ONE UserData-first, plugin-store-fallback resume-position
