@@ -34,6 +34,7 @@ public class YesIntentHandler : BaseHandler
     private readonly IUserManager _userManager;
     private readonly IUserDataManager _userDataManager;
     private readonly DeviceQueueManager? _queueManager;
+    private readonly IArtistIndex? _artistIndex;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="YesIntentHandler"/> class.
@@ -45,6 +46,7 @@ public class YesIntentHandler : BaseHandler
     /// <param name="userDataManager">Instance of the <see cref="IUserDataManager"/> interface (JF-795: the book confirm leg's resume axis, consumed by the shared resolved-book play flow).</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
     /// <param name="queueManager">Optional per-device queue manager (JF-514/JF-522: the launch-scope store behind the resume offset rebase and the directive-time base recording; JF-795: also the confirmed book's device-queue write and ItemPositionState resume tier).</param>
+    /// <param name="artistIndex">Optional in-memory artist index (JF-806: the confirm legs' warming gate; the artist index stands in for the shared cold database on the collection-fetch legs, the PlayAlbum gate's coarse precedent).</param>
     public YesIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
@@ -52,12 +54,14 @@ public class YesIntentHandler : BaseHandler
         IUserManager userManager,
         IUserDataManager userDataManager,
         ILoggerFactory loggerFactory,
-        DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
+        DeviceQueueManager? queueManager = null,
+        IArtistIndex? artistIndex = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
         _userDataManager = userDataManager;
         _queueManager = queueManager;
+        _artistIndex = artistIndex;
     }
 
     /// <inheritdoc/>
@@ -96,6 +100,14 @@ public class YesIntentHandler : BaseHandler
     public override Task<SkillResponse> HandleAsync(Request request, Context context, Entities.User user, SessionInfo session, Dictionary<string, object>? sessionAttributes, CancellationToken cancellationToken)
     {
         string locale = GetLocale(request);
+
+        // JF-806 (point-lookup decisions, recorded so a future warming sweep knows
+        // these were judged, not missed): the resume confirmation and the
+        // pagination continuation below both run BEFORE the disambiguation legs
+        // and resolve only bounded point lookups (one GetItemById plus the launch
+        // build; the pagination page's item IDs via the SAME shared helper the
+        // ungated ShowMoreIntent twin rides), so neither carries a warming gate;
+        // their intent-handler twins are Layer-1 ungated too.
 
         // Check for resume confirmation first
         var resumeState = ResumeHelper.ReadState(sessionAttributes);
@@ -172,6 +184,22 @@ public class YesIntentHandler : BaseHandler
                 return Task.FromResult(booksDisabled);
             }
 
+            // JF-806 warming axis (folded from the JF-805 gate marker): the confirm
+            // rides the same resolved-book composition as the direct ask (paged
+            // chapter fetch plus per-chapter UserData reads), a cold-database
+            // surface during the post-restart index load; the artist index stands
+            // in for the shared cold database (the PlayAlbum Layer-1 gate's coarse
+            // precedent, no dedicated book index existing). The book ASK carries no
+            // Layer-1 gate of its own; this leg's gate is the marker's folded
+            // instruction, protective on the confirm's widened surface. Ordered
+            // AFTER the books gate so the warming+disabled intersection answers
+            // the FeatureDisabled Tell the ungated ask would give. Tradeoff every
+            // confirm-leg warming gate shares (JF-806 code-review F5): the refusal's
+            // session-ending Tell drops the disambiguation attributes (the JF-387
+            // rule forbids attributes on terminal responses), so a restart mid
+            // prompt costs the user one re-invoke once the load window passes.
+            GuardIndexReady(_artistIndex);
+
             Logger.LogDebug("Yes: routing AudioBook item {ItemId} to audiobook playback", itemId);
             return AudiobookPlayResolver.PlayBookAsync(
                 _libraryManager, Launch, Logger, "Yes",
@@ -194,6 +222,16 @@ public class YesIntentHandler : BaseHandler
         if (mediaType == DisambiguationHelper.MediaTypeAlbum
             && item is MediaBrowser.Controller.Entities.Audio.MusicAlbum)
         {
+            // JF-806 warming axis (folded from the JF-805 gate marker): the routed
+            // composition runs the ask's full cold-database surface (the paged
+            // fetch, the JF-796 deep unpaged re-scan, the per-track UserData
+            // reads), so the confirm pays the same Layer-1 refusal the direct ask
+            // pays at entry (PlayAlbumIntentHandler; the artist index as the
+            // coarse stand-in for the shared cold database). Warming BEFORE the
+            // music gate, the ask's own order, so the warming+disabled
+            // intersection answers the same SkillWarmingUp Tell the ask does.
+            GuardIndexReady(_artistIndex);
+
             SkillResponse? musicDisabled = IfMediaTypeDisabled(c => c.MusicEnabled, request);
             if (musicDisabled != null)
             {
@@ -217,6 +255,9 @@ public class YesIntentHandler : BaseHandler
                 cancellationToken);
         }
 
+        // JF-806 (point-lookup decision, the song leg's twin): the video confirm
+        // launches the ALREADY-RESOLVED item and issues no library query, so it
+        // carries no warming gate; its ask (PlayVideo) is Layer-1 ungated too.
         if (mediaType == DisambiguationHelper.MediaTypeVideo)
         {
             return PlayVideo(item, user, session, locale, context, request);
@@ -235,16 +276,67 @@ public class YesIntentHandler : BaseHandler
                 return Task.FromResult(podcastsDisabled);
             }
 
-            return Util.PodcastEpisodeResolver.PlayLatestEpisodeAsync(
+            // WARMING DECISION (JF-806 gate-marker tail F1): this leg stays warming-ungated
+        // by the database-surface criterion - PodcastEpisodeResolver.BuildLatestEpisodeQuery
+        // is Recursive but Limit=1, a bounded point lookup, not a cold-library scan (the
+        // collection-fetch legs above carry the gate; this record closes the decision set).
+        return Util.PodcastEpisodeResolver.PlayLatestEpisodeAsync(
                 _libraryManager, Launch, Logger, "YesPodcastEpisodes", item, jellyfinUser!, user, session, context, locale,
                 cancellationToken: cancellationToken);
         }
 
+        // JF-806: the artist confirm leg. The music gate is the JF-467 ask gate
+        // (PlayArtistSongs gates MusicEnabled at entry; the disabled answer is
+        // byte-identical through the shared IfMediaTypeDisabled call), ordered
+        // BEFORE the warming gate exactly as the ask orders them, so the
+        // warming+disabled intersection answers MediaTypeNotAvailable like the
+        // ask. The warming gate then refuses the leg's UNPAGED whole-catalog
+        // ArtistIds query during the post-restart index load (the heaviest
+        // cold-database surface any confirm leg runs; PlayArtistSongs pays the
+        // same Layer-1 gate).
+        if (mediaType == DisambiguationHelper.MediaTypeArtist)
+        {
+            SkillResponse? musicDisabled = IfMediaTypeDisabled(c => c.MusicEnabled, request);
+            if (musicDisabled != null)
+            {
+                return Task.FromResult(musicDisabled);
+            }
+
+            GuardIndexReady(_artistIndex);
+            return Task.FromResult(PlayArtist(item, jellyfinUser!, user, session, locale, context));
+        }
+
+        // JF-806: the song confirm leg's music gate (PlaySong's JF-467 ask gate;
+        // a prompt opened before an admin disabled music must not launch through
+        // the confirm). NO warming gate by decision: the leg's database surface
+        // is the already-resolved single item (BuildSingleSongResponse issues no
+        // library query), so the ask's Layer-1 gate protects only the search the
+        // confirm has already completed; over-gating would refuse a bounded
+        // path that works during the warming window. Bounded consequence
+        // (JF-806 code-review F3): in the warming+disabled intersection the ask
+        // answers SkillWarmingUp (its Layer-1 gates precede its music gate) while
+        // this confirm answers MediaTypeNotAvailable; both are terminal refusals
+        // differing only in the spoken string, and gating by database surface
+        // rather than by ask-order mimicry is the deliberate choice here.
+        if (mediaType == DisambiguationHelper.MediaTypeSong)
+        {
+            SkillResponse? musicDisabled = IfMediaTypeDisabled(c => c.MusicEnabled, request);
+            if (musicDisabled != null)
+            {
+                return Task.FromResult(musicDisabled);
+            }
+
+            return Task.FromResult(PlaySong(item, user, session, context, locale));
+        }
+
         SkillResponse response = mediaType switch
         {
-            DisambiguationHelper.MediaTypeSong => PlaySong(item, user, session, context, locale),
             DisambiguationHelper.MediaTypeAlbum => PlayAlbum(item, jellyfinUser!, user, session, locale, context, request),
-            DisambiguationHelper.MediaTypeArtist => PlayArtist(item, jellyfinUser!, user, session, locale, context),
+            // WARMING + MUSIC DECISIONS (JF-806 gate-marker tail F1): the playlist arm
+            // carries NEITHER gate by design - the ask gates nothing (verified across
+            // PlayPlaylistIntentHandler/ShufflePlayIntentHandler) and playlists are
+            // cross-type always-allowed; its warming exposure is the whole-path shape
+            // tracked as JF-808, not a confirm-leg decision.
             DisambiguationHelper.MediaTypePlaylist => PlayPlaylist(item, jellyfinUser!, user, session, locale, context),
             _ => ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale))
         };
@@ -374,6 +466,12 @@ public class YesIntentHandler : BaseHandler
 
     private SkillResponse PlayAlbum(BaseItem album, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Entities.User user, SessionInfo session, string locale, Context? context, Request request)
     {
+        // JF-806 warming axis, the gate-marker tail F3 shape extended: the defensive
+        // arm's unpaged track queries are the same cold-database surface the routed
+        // leg gates, so a future producer cannot re-open the warming axis either
+        // (warming first, mirroring the routed leg's ask-parity order).
+        GuardIndexReady(_artistIndex);
+
         // Gate-marker tail F3: the defensive arm carries the SAME music-disabled gate
         // the routed branch pays, so the future-producer scenarios this method's own
         // comment names (the routing intercept removed, a new direct caller) cannot
