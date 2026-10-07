@@ -96,6 +96,23 @@ public class PlayPlaylistIntentHandler : BaseHandler
             return Task.FromResult(BuildDialogElicitResponse("DidNotCatchPlaylistName", locale, "playlist", IntentNames.PlayPlaylist, Util.ElicitSlots.For(IntentNames.PlayPlaylist)));
         }
 
+        // JF-808 Layer-1 gate: playlists have no in-memory index of their own
+        // (neither the artist nor the song n-gram index serves Playlist items),
+        // so this is the coarse artist-index stand-in for the shared cold
+        // database (the PlayAlbum precedent, joined by books in JF-807), on the
+        // SAME index the YesIntent playlist confirm arm gates so ask and confirm
+        // answer identically in the warming window. The shared builder's cold
+        // surface behind this gate: the SearchTerm playlist query on its
+        // RetryAsync channel, the fuzzy fallback, and the GetManageableItems
+        // whole-track resolution. Placement: AFTER the empty-slot elicit and the
+        // cancel-word hatch (both must survive the warming window), BEFORE the
+        // first cold query. This path has NO feature-flag gate (playlists are
+        // cross-type always-allowed, the JF-806 decision), so the flag-gate
+        // position discriminator does not apply; the path also sends no pre-query
+        // "searching" announcement, so the gate-before-announcement contract
+        // holds trivially.
+        GuardIndexReady(_artistIndex);
+
         // JF-663: the kana-origin flag is captured on the post-strip,
         // pre-romanization name, the string the builder matches: kana in the
         // NAME is the lossy-transliteration evidence the bar keys on, while
