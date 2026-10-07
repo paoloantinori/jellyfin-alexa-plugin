@@ -1843,7 +1843,49 @@ public class YesIntentHandlerTests : PluginTestBase
     /// ask's own warming gate protects the SEARCH the confirm has already
     /// completed, and over-gating here would refuse a bounded path that works.
     /// </summary>
+    /// <summary>
+    /// Gate-marker tail F3: the song leg's INTERSECTION pin (the documented bounded
+    /// divergence, machine-locked like its siblings). With music disabled AND the
+    /// index warming, the ask answers SkillWarmingUp (its warming gate precedes its
+    /// music gate in PlaySongIntentHandler) while the confirm answers
+    /// MediaTypeNotAvailable (its only gate is the music one; the confirm's database
+    /// surface is the already-resolved single item, so no warming gate exists to
+    /// answer first). Both answers are terminal refusals differing only in string -
+    /// the recorded bounded divergence. A future edit that inserts a warming gate
+    /// before the song leg's music gate, or removes the music gate, REDS here.
+    /// </summary>
     [Fact]
+    public async Task HandleAsync_DisambiguationSongType_MusicDisabledWhileIndexWarming_AnswersMusicTellNotWarming()
+    {
+        var songId = Guid.NewGuid();
+        var song = new Audio { Name = "Test Song", Id = songId };
+        _libraryManagerMock.Setup(lm => lm.GetItemById(songId)).Returns(song);
+        var attrs = CreateSingleMatchAttrs(songId, song.Name, DisambiguationHelper.MediaTypeSong);
+
+        var handler = CreateHandler(artistIndex: WarmingArtistIndex());
+        bool originalMusicEnabled = Plugin.Instance!.Configuration.MusicEnabled;
+        Plugin.Instance!.Configuration.MusicEnabled = false;
+        try
+        {
+            SkillResponse response = await handler.HandleAsync(
+                CreateYesIntentRequest(),
+                CreateContext(),
+                TestHelpers.CreateTestUser(),
+                CreateSession(),
+                attrs,
+                CancellationToken.None);
+
+            Assert.NotNull(response.Response?.OutputSpeech);
+            Assert.Empty(response.Response.Directives);
+            Assert.DoesNotContain("SkillWarmingUp", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+            Assert.Contains("not available", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        }
+        finally
+        {
+            Plugin.Instance!.Configuration.MusicEnabled = originalMusicEnabled;
+        }
+    }
+
     public async Task HandleAsync_DisambiguationSongType_SongConfirm_WhileIndexWarming_PlaysSingleSong()
     {
         var songId = Guid.NewGuid();

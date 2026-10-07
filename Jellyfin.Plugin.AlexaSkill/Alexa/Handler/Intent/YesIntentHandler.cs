@@ -276,7 +276,11 @@ public class YesIntentHandler : BaseHandler
                 return Task.FromResult(podcastsDisabled);
             }
 
-            return Util.PodcastEpisodeResolver.PlayLatestEpisodeAsync(
+            // WARMING DECISION (JF-806 gate-marker tail F1): this leg stays warming-ungated
+        // by the database-surface criterion - PodcastEpisodeResolver.BuildLatestEpisodeQuery
+        // is Recursive but Limit=1, a bounded point lookup, not a cold-library scan (the
+        // collection-fetch legs above carry the gate; this record closes the decision set).
+        return Util.PodcastEpisodeResolver.PlayLatestEpisodeAsync(
                 _libraryManager, Launch, Logger, "YesPodcastEpisodes", item, jellyfinUser!, user, session, context, locale,
                 cancellationToken: cancellationToken);
         }
@@ -328,6 +332,11 @@ public class YesIntentHandler : BaseHandler
         SkillResponse response = mediaType switch
         {
             DisambiguationHelper.MediaTypeAlbum => PlayAlbum(item, jellyfinUser!, user, session, locale, context, request),
+            // WARMING + MUSIC DECISIONS (JF-806 gate-marker tail F1): the playlist arm
+            // carries NEITHER gate by design - the ask gates nothing (verified across
+            // PlayPlaylistIntentHandler/ShufflePlayIntentHandler) and playlists are
+            // cross-type always-allowed; its warming exposure is the whole-path shape
+            // tracked as JF-808, not a confirm-leg decision.
             DisambiguationHelper.MediaTypePlaylist => PlayPlaylist(item, jellyfinUser!, user, session, locale, context),
             _ => ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale))
         };

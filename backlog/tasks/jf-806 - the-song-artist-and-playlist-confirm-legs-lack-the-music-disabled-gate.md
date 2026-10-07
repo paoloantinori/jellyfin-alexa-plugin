@@ -26,7 +26,7 @@ YesIntentHandler's disambiguation confirm legs are gated inconsistently: the
 book leg gates BooksEnabled (JF-611, adopted in JF-795), the podcast leg gates
 PodcastsEnabled (JF-611), and the MusicAlbum leg gates MusicEnabled (JF-805),
 but the SONG, ARTIST, and PLAYLIST switch arms still launch with no gate at
-all. Their direct asks all gate at entry under JF-467 (PlaySong,
+all. CORRECTED BY THE JF-805/806 GATE-MARKERS - the playlist ask does NOT gate (read the trailing corrections before any work here); the original premise read: Their direct asks all gate at entry under JF-467 (PlaySong,
 PlayArtistSongs, PlayPlaylist via IfMediaTypeDisabled(c => c.MusicEnabled)),
 so a "yes" on a song/artist/playlist prompt that was opened before an admin
 disabled music launches media the direct ask would refuse, answering
@@ -126,3 +126,5 @@ playlist play path warming-ungated end to end). Next free numbers verified
 against backlog/tasks before each filing (807 and 808 both free).
 
 JF-805 GATE-MARKER CORRECTIONS (2026-10-07, same-turn): (1) PREMISE FIX - the playlist leg's premise is WRONG: PlayPlaylistIntentHandler does NOT gate at entry on MusicEnabled (read end to end; zero IfMediaTypeDisabled/MusicEnabled hits in it, ShufflePlayIntentHandler, and BuildPlaylistPlayResponseAsync), and playlists are documented cross-type always-allowed (BaseHandler.IsTypeAllowed). Gating only the playlist CONFIRM arm would CREATE the confirm-vs-ask divergence the rule prohibits. RESCOPE: song+artist legs only (their asks do gate); the playlist leg needs the ask gated first if ever, as its own decision. (2) FOLDED AXIS (marker finding 2): the confirm path runs the ask's full cold-database surface with NO warming gate - the direct asks are Layer-1 gated (GuardIndexReady; WarmingGateCoverageTests), YesIntentHandler is absent from ExpectedGatedHandlers, and JF-805's routed composition widened the ungated work to the JF-796 deep fetch plus per-track UserData reads; the restart-mid-session confirm hits the cold DB inside the Alexa window (the JF-419 class). The confirm-leg seam round this task anticipates should carry the warming-gate axis for BOTH the book and album confirm legs (the JF-795 twin shares the shape).
+
+GATE-MARKER TAIL (2026-10-07): the closure claim that every warming-ungated leg 'recorded its decision in a comment' overstated for podcast and playlist - both legs NOW carry their in-code decision records (applied this tail); the song leg additionally gained its intersection pin (the documented F3 bounded divergence is now machine-locked like its siblings).
