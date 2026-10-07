@@ -322,6 +322,33 @@ public class YesIntentHandler : BaseHandler
         // rather than by ask-order mimicry is the deliberate choice here.
         if (mediaType == DisambiguationHelper.MediaTypeSong)
         {
+            // JF-802 (shape a, gate-only): a BOOK-shaped payload can arrive under
+            // the song discriminator (Jellyfin types AudioBook as an Audio
+            // derivative, so FindSong's song search matches single-file books and
+            // labels the prompt MediaTypeSong); with books disabled the "yes" used
+            // to launch it through the song arm while the direct ask (PlayBook's
+            // BooksEnabled entry gate, before the slot is even read) refused. The
+            // flag read comes first so the IsAudioBookOrChapter ancestor walk (the
+            // book identity on this arm, the same anchor the end-of-book decision
+            // uses) runs only on the disabled path; a plain song never enters the
+            // books verdict, and the music gate below stays the arm's flag axis for
+            // everything else. Ordered books-first on a book-shaped item so the
+            // both-flags-off intersection answers FeatureDisabled like the book ask
+            // (whose entry gate never consults music). Routing a confirmed
+            // single-file book to the book leg's
+            // resume/continuation machinery instead is the filed deeper follow-up
+            // (shape b); with books ON this arm still launches it through
+            // BuildSingleSongResponse.
+            if (Plugin.Instance?.Configuration is { BooksEnabled: false }
+                && AudiobookItems.IsAudioBookOrChapter(item, _libraryManager))
+            {
+                SkillResponse? booksDisabled = IfFeatureDisabled(c => c.BooksEnabled, request);
+                if (booksDisabled != null)
+                {
+                    return Task.FromResult(booksDisabled);
+                }
+            }
+
             SkillResponse? musicDisabled = IfMediaTypeDisabled(c => c.MusicEnabled, request);
             if (musicDisabled != null)
             {

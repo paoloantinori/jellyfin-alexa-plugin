@@ -1835,6 +1835,172 @@ public class YesIntentHandlerTests : PluginTestBase
     }
 
     /// <summary>
+    /// JF-802 RED PROOF (shape a, gate-only): a single-file AudioBook can arrive
+    /// under the SONG discriminator (Jellyfin types AudioBook as an Audio
+    /// derivative, so FindSong's song search matches it and labels the prompt
+    /// MediaTypeSong); with books disabled the "yes" used to LAUNCH it through
+    /// the song arm (BuildSingleSongResponse) while the direct ask (PlayBook's
+    /// BooksEnabled entry gate, before the slot is even read) refused. The
+    /// gate-only fix answers the FeatureDisabled Tell, byte-identical to the
+    /// ask's, anchored on the IsAudioBookOrChapter walk (the book identity on
+    /// the song-typed arm).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DisambiguationSongType_BookShapedConfirm_BooksDisabled_AnswersFeatureDisabled()
+    {
+        var bookId = Guid.NewGuid();
+        var book = new AudioBook { Name = "Deep Work", Id = bookId };
+        _libraryManagerMock.Setup(lm => lm.GetItemById(bookId)).Returns(book);
+        var attrs = CreateSingleMatchAttrs(bookId, book.Name, DisambiguationHelper.MediaTypeSong);
+
+        bool originalBooksEnabled = Plugin.Instance!.Configuration.BooksEnabled;
+        Plugin.Instance!.Configuration.BooksEnabled = false;
+        try
+        {
+            var handler = CreateHandler();
+            var session = CreateSession();
+            var response = await handler.HandleAsync(
+                CreateYesIntentRequest(),
+                CreateContext(),
+                TestHelpers.CreateTestUser(),
+                session,
+                attrs,
+                CancellationToken.None);
+
+            // The disabled Tell answers; no play directive, no queue state.
+            Assert.True(response.Response.Directives == null || response.Response.Directives.Count == 0,
+                "the disabled Tell must carry no directives");
+            var speech = response.Tells<PlainTextOutputSpeech>();
+            Assert.Contains("disabled", speech.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.True(session.NowPlayingQueue == null || session.NowPlayingQueue.Count == 0,
+                "the disabled Tell must leave no queue");
+            Assert.Null(session.FullNowPlayingItem);
+        }
+        finally
+        {
+            Plugin.Instance!.Configuration.BooksEnabled = originalBooksEnabled;
+        }
+    }
+
+    /// <summary>
+    /// JF-802 code-review F4 (the ordering pin): on a book-shaped item with BOTH
+    /// flags off, the books gate must fire BEFORE the music gate, so the confirm
+    /// answers FeatureDisabled like the direct book ask (whose entry gate never
+    /// consults music), not the music MediaTypeNotAvailable. The existing pins
+    /// run the two flags one at a time, so a future reorder that swaps the gates
+    /// stays green without this pin while changing the spoken refusal.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DisambiguationSongType_BookShapedConfirm_BothFlagsOff_AnswersBooksFeatureDisabled()
+    {
+        var bookId = Guid.NewGuid();
+        var book = new AudioBook { Name = "Deep Work", Id = bookId };
+        _libraryManagerMock.Setup(lm => lm.GetItemById(bookId)).Returns(book);
+        var attrs = CreateSingleMatchAttrs(bookId, book.Name, DisambiguationHelper.MediaTypeSong);
+
+        bool originalBooksEnabled = Plugin.Instance!.Configuration.BooksEnabled;
+        bool originalMusicEnabled = Plugin.Instance!.Configuration.MusicEnabled;
+        Plugin.Instance!.Configuration.BooksEnabled = false;
+        Plugin.Instance!.Configuration.MusicEnabled = false;
+        try
+        {
+            var handler = CreateHandler();
+            var session = CreateSession();
+            var response = await handler.HandleAsync(
+                CreateYesIntentRequest(),
+                CreateContext(),
+                TestHelpers.CreateTestUser(),
+                session,
+                attrs,
+                CancellationToken.None);
+
+            Assert.True(response.Response.Directives == null || response.Response.Directives.Count == 0,
+                "the disabled Tell must carry no directives");
+            var speech = response.Tells<PlainTextOutputSpeech>();
+            // The BOOK ask's refusal, not the music MediaTypeNotAvailable.
+            Assert.Contains("disabled", speech.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("not available", speech.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.True(session.NowPlayingQueue == null || session.NowPlayingQueue.Count == 0,
+                "the disabled Tell must leave no queue");
+            Assert.Null(session.FullNowPlayingItem);
+        }
+        finally
+        {
+            Plugin.Instance!.Configuration.BooksEnabled = originalBooksEnabled;
+            Plugin.Instance!.Configuration.MusicEnabled = originalMusicEnabled;
+        }
+    }
+
+    /// <summary>
+    /// JF-802 companion pin (the books-off-must-not-touch-songs axis): the new
+    /// books gate on the song arm fires only on BOOK-shaped items; a plain song
+    /// confirm still launches whatever the books flag says (the song arm's flag
+    /// axis stays music's, the JF-806 gate untouched).
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task HandleAsync_DisambiguationSongType_PlainSongConfirm_PlaysWhateverBooksSays(bool booksEnabled)
+    {
+        var songId = Guid.NewGuid();
+        var song = new Audio { Name = "Test Song", Id = songId };
+        _libraryManagerMock.Setup(lm => lm.GetItemById(songId)).Returns(song);
+        var attrs = CreateSingleMatchAttrs(songId, song.Name, DisambiguationHelper.MediaTypeSong);
+
+        bool originalBooksEnabled = Plugin.Instance!.Configuration.BooksEnabled;
+        Plugin.Instance!.Configuration.BooksEnabled = booksEnabled;
+        try
+        {
+            var handler = CreateHandler();
+            var session = CreateSession();
+            var response = await handler.HandleAsync(
+                CreateYesIntentRequest(),
+                CreateContext(),
+                TestHelpers.CreateTestUser(),
+                session,
+                attrs,
+                CancellationToken.None);
+
+            Assert.IsType<AudioPlayerPlayDirective>(Assert.Single(response.Response.Directives!));
+            Assert.Equal(songId, session.FullNowPlayingItem!.Id);
+        }
+        finally
+        {
+            Plugin.Instance!.Configuration.BooksEnabled = originalBooksEnabled;
+        }
+    }
+
+    /// <summary>
+    /// JF-802 companion pin (the gate-only boundary): with books ENABLED a
+    /// book-shaped song confirm still launches through the song arm unchanged.
+    /// Shape (b), routing the confirmed single-file book to the book leg's
+    /// resume/continuation machinery, is the filed deeper follow-up (it changes
+    /// the response shape and needs device verification); this pin locks that
+    /// the gate-only fix does not silently take that route.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DisambiguationSongType_BookShapedConfirm_BooksEnabled_PlaysThroughTheSongArm()
+    {
+        var bookId = Guid.NewGuid();
+        var book = new AudioBook { Name = "Deep Work", Id = bookId };
+        _libraryManagerMock.Setup(lm => lm.GetItemById(bookId)).Returns(book);
+        var attrs = CreateSingleMatchAttrs(bookId, book.Name, DisambiguationHelper.MediaTypeSong);
+
+        var handler = CreateHandler();
+        var session = CreateSession();
+        var response = await handler.HandleAsync(
+            CreateYesIntentRequest(),
+            CreateContext(),
+            TestHelpers.CreateTestUser(),
+            session,
+            attrs,
+            CancellationToken.None);
+
+        Assert.IsType<AudioPlayerPlayDirective>(Assert.Single(response.Response.Directives!));
+        Assert.Equal(bookId, session.FullNowPlayingItem!.Id);
+    }
+
+    /// <summary>
     /// JF-806 RED PROOF (the disabled axis, artist leg): an artist
     /// disambiguation prompt confirmed after an admin disabled music must answer
     /// the media-type-disabled Tell the direct ask gives (PlayArtistSongs'

@@ -874,6 +874,28 @@ internal static class TestHelpers
             tracker, p => p.AudiobookPositionTracker, (p, v) => p.AudiobookPositionTracker = v);
 
     /// <summary>
+    /// Warms a position tracker to an arbitrary point into the collection and
+    /// swaps it onto the plugin instance; dispose the returned scope. The
+    /// generalized core of <see cref="WarmTrackerFiveMinutesIn"/>, added at
+    /// JF-804: the beyond-the-page tracker pin needs a position deeper than the
+    /// shared five-minute warm-up. The segment count is seconds/10 + 1 so the
+    /// conservative high-water minus one reads back <paramref name="position"/>
+    /// FLOORED TO THE 10s SEGMENT GRID (pass a multiple of 10 seconds for an
+    /// exact read; 5135s reads back 5130s).
+    /// </summary>
+    internal static IDisposable WarmTrackerAt(Guid collectionId, TimeSpan position, string nameSuffix)
+    {
+        var tracker = CreatePositionTracker(nameSuffix);
+        int segments = (int)(position.TotalSeconds / 10) + 1;
+        for (int seg = 1; seg <= segments; seg++)
+        {
+            tracker.RecordSegment(collectionId.ToString(), seg);
+        }
+
+        return SwapPluginPositionTracker(tracker);
+    }
+
+    /// <summary>
     /// Warms a position tracker to 5 minutes into the collection (31 segments
     /// recorded; the conservative high-water minus one lands 300s) and swaps it
     /// onto the plugin instance; dispose the returned scope. The shared warm-up
@@ -882,15 +904,7 @@ internal static class TestHelpers
     /// second identical private copy).
     /// </summary>
     internal static IDisposable WarmTrackerFiveMinutesIn(Guid collectionId, string nameSuffix)
-    {
-        var tracker = CreatePositionTracker(nameSuffix);
-        for (int seg = 1; seg <= 31; seg++)
-        {
-            tracker.RecordSegment(collectionId.ToString(), seg);
-        }
-
-        return SwapPluginPositionTracker(tracker);
-    }
+        => WarmTrackerAt(collectionId, TimeSpan.FromMinutes(5), nameSuffix);
 
     /// <summary>
     /// The ONE BaseItem statics stub scope (JF-713 hoist, the CreateSong
