@@ -43,6 +43,7 @@ public class WarmingGateCoverageTests
         typeof(FindSongIntentHandler),
         typeof(PlayAlbumIntentHandler),
         typeof(PlayArtistSongsIntentHandler),
+        typeof(PlayBookIntentHandler),
         typeof(PlayByGenreIntentHandler),
         typeof(PlayMoodMusicIntentHandler),
         typeof(PlayNextIntentHandler),

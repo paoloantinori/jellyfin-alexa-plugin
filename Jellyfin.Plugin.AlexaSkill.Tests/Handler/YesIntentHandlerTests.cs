@@ -1773,8 +1773,9 @@ public class YesIntentHandlerTests : PluginTestBase
     /// a book confirm running while the artist index is still loading must
     /// refuse at leg entry before the resolved-book composition's paged chapter
     /// fetch and per-chapter UserData reads (the JF-805 marker folded this leg
-    /// into the warming axis even though the book ASK carries no Layer-1 gate
-    /// of its own: the confirm's composition is the widened surface).
+    /// into the warming axis at a time when the book ASK carried no Layer-1
+    /// gate of its own, the confirm the more protected side; JF-807 since
+    /// closed that asymmetry, the ask gates on the same stand-in index).
     /// </summary>
     [Fact]
     public async Task HandleAsync_DisambiguationAlbumType_BookConfirm_WhileIndexWarming_ThrowsAtEntry()
@@ -2008,8 +2009,10 @@ public class YesIntentHandlerTests : PluginTestBase
 
     /// <summary>
     /// JF-806 code-review F2 (the gate-ORDER contracts): the book leg orders
-    /// the books gate BEFORE warming (the ungated ask would answer
-    /// FeatureDisabled in the intersection, so the confirm matches it).
+    /// the books gate BEFORE warming (originally matching the then-ungated
+    /// ask's FeatureDisabled answer in the intersection; since JF-807 the ask
+    /// carries its own books-then-warming pair, so both sides answer
+    /// FeatureDisabled there).
     /// </summary>
     [Fact]
     public async Task HandleAsync_DisambiguationAlbumType_BookConfirm_WarmingAndBooksDisabled_AnswersDisabledFirst()

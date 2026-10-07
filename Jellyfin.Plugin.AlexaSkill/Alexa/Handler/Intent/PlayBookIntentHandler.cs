@@ -130,6 +130,20 @@ public class PlayBookIntentHandler : BaseHandler
                 new Reprompt(ResponseStrings.Get("ElicitBookName", locale)));
         }
 
+        // JF-807 Layer-1 gate (GuardIndexReady), deliberately coarse: book paths
+        // have no in-memory index of their own to gate on (neither the artist nor
+        // the song n-gram index serves AudioBooks), so the artist index stands in
+        // for the shared cold database (the PlayAlbum precedent) and matches the
+        // JF-806 book-confirm gate, so the ask and its confirm answer identically
+        // in the warming window. Ordered AFTER the books gate (the confirm's own
+        // order: the warming+disabled intersection answers FeatureDisabled) and
+        // AFTER the empty-slot elicit (a slot-less ask during the window still
+        // elicits the name; the QueryArtistLibrary/AddToQueue shape, not the
+        // PlaySong/PlayAlbum warming-before-elicit exception tied to their
+        // Dialog.ElicitSlot flows), BEFORE the "searching" announcement (no
+        // announcement-then-refusal).
+        GuardIndexReady(_artistIndex);
+
         // JF-643: the book title feeds the SearchTerm query and the fuzzy cascade
         // below, both against Latin library names; romanize the query once.
         book = Util.KatakanaRomanizer.Romanize(book);
