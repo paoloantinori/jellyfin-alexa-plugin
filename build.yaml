@@ -1,7 +1,7 @@
 ---
 name: Alexa Skill
 guid: c5df7de0-8777-4b3c-a70d-5c3dae359c9e
-version: 1.0.0.0
+version: 0.12.1.0
 targetAbi: 10.11.0.0
 framework: net9.0
 overview: Alexa skill plugin for Jellyfin
@@ -20,4 +20,4 @@ artifacts:
   - Amazon.Lambda.Serialization.Json.dll
   - Jellyfin.Plugin.AlexaSkill.dll
   - Refit.dll
-changelog: "The first major release. Audiobooks work end to end: asking for a book plays the whole book instead of a single chapter, chapters play in the right order even when the files carry no track metadata, and resume works from any point on any Echo device. Confirmations now match direct requests everywhere: answering yes to a did-you-mean plays exactly what the direct ask would, with the same resume point and queue. Restricted-library users get correct playback (shared streams no longer mix between library scopes). After a server restart the skill answers clearly while its indexes warm up instead of failing, and this protection now covers books, albums, artists, playlists and shuffle requests. The first play of a transcoded episode starts correctly. Sleep timers, reliable resume, spoken confirmations for shuffle and repeat, radio autoplay and the smoother multi-turn conversations from the earlier line are all included. Works on Jellyfin 10.11 and Jellyfin 12 (one download per server line, the catalog picks automatically)."
+changelog: "Fixes artist and playlist playback for users who restrict the skill to specific libraries: with a per-user library restriction configured, every artist request returned no results and playlists could not be found at all. Asking for an artist, a playlist or a song now behaves the same with or without library restrictions. Playlist requests no longer apply the library filter, since playlists live outside libraries. Song search by name is also faster again for restricted users: it was silently falling back to the slower library-wide search path."
