@@ -85,3 +85,8 @@ DoD applicability (2026-09-07, creator note): this is a device-test + documentat
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+AUTONOMOUS BELT RESULTS (2026-10-07, the orchestrator; simulator + server-side, no device needed):
+1. JF-790 LIVE on the real library: 'The Upside of Irrationality' (100 identical-name chapters, the fully-scrambled book) detects the untagged/tie shape (the JF-790 log line fired) and the first launch is 'The Upside of Irrationality 001.mp3' - the file order. 'Measure What Matters' (tagged) stays on the DB path (no JF-790 line) with the JF-797 gate decision log firing live ('released by a user-data probe hit').
+2. JF-778 AC#7 SERVER SIDE CLOSED on the exact incident episode: the E054 cache cleared, the cold playlist requested with a properly-minted token: the FIRST serve is a 2-segment window starting at seg_0000 with MEDIA-SEQUENCE 0 (the incident's first fetch was seg_0353 of the full listing); the window grew 2 -> 13 across fetches and the encode completed (355 segments, the full listing with ENDLIST). The server-side behavior that caused the cold-start death is proven fixed live.
+REMAINING DEVICE-ONLY for this battery: the player-side observation (the Show starting playback at 0 through the window), T1 (native transfer), T2 (stream-kill remote stop), chiudi, the transport words, FollowMe two-Echo, APL rendering.
