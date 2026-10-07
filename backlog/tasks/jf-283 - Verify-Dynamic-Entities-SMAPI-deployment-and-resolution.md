@@ -4,15 +4,13 @@ title: Verify Dynamic Entities SMAPI deployment and resolution
 status: To Do
 assignee: []
 created_date: '2026-06-08 09:32'
-updated_date: '2026-07-13 20:18'
+updated_date: '2026-10-07 08:43'
 labels:
   - e2e
   - smapi
   - dynamic-entities
-milestone: m-5
+milestone: m-18
 dependencies: []
-modified_files:
-  - Jellyfin.Plugin.AlexaSkill/Alexa/DynamicEntities/DynamicEntityBuilder.cs
 priority: low
 ---
 

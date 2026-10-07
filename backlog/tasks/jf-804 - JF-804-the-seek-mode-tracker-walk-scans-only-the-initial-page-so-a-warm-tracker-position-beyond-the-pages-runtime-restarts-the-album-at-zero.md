@@ -6,18 +6,21 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-10-07'
+updated_date: '2026-10-07 08:42'
 labels:
   - bug
   - playback
+milestone: m-18
 dependencies:
   - JF-796
 references:
   - Jellyfin.Plugin.AlexaSkill/Alexa/Handler/AlbumPlayService.cs
   - Jellyfin.Plugin.AlexaSkill/Alexa/Util/AudiobookPlayResolver.cs
-priority: low
+priority: medium
 ---
 
 ## Description
+
 <!-- SECTION:DESCRIPTION:BEGIN -->
 Filed by the JF-796 worker (2026-10-07), same-turn per the review-recommendation
 rule, from the /code-review high round's finding 1. PRE-EXISTING and deliberately

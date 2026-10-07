@@ -6,13 +6,14 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-09-07 19:16'
-updated_date: '2026-09-07 19:16'
+updated_date: '2026-10-07 08:41'
 labels:
   - device-test
   - stop
   - playback
   - docs
   - platform-behavior
+milestone: m-18
 dependencies: []
 references:
   - claudedocs/research_alexa-videoapp-stop-routing_2026-09-07.md

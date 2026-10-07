@@ -4,11 +4,11 @@ title: Verify shuffle/repeat/loop controls on live device
 status: To Do
 assignee: []
 created_date: '2026-06-08 09:32'
-updated_date: '2026-09-23 14:52'
+updated_date: '2026-10-07 08:43'
 labels:
   - e2e
   - playback
-milestone: m-5
+milestone: m-18
 dependencies: []
 priority: medium
 ---

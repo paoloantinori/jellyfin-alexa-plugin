@@ -1,15 +1,20 @@
 ---
 id: JF-790
 title: >-
-  JF-790 - the untagged audiobook class plays in wrong or arbitrary order, and no
-  query-layer key can fix it
+  JF-790 - the untagged audiobook class plays in wrong or arbitrary order, and
+  no query-layer key can fix it
 status: To Do
 assignee: []
 created_date: '2026-10-06'
+updated_date: '2026-10-07 08:42'
 labels: []
+milestone: m-18
+dependencies: []
 references:
-  - backlog/tasks/jf-672 - JF-672-audiobook-chapter-play-order-is-default-sort-not-chapter-order-and-the-paginated-chapters-query-has-no-explicit-tiebreaker.md
-priority: low
+  - >-
+    backlog/tasks/jf-672 -
+    JF-672-audiobook-chapter-play-order-is-default-sort-not-chapter-order-and-the-paginated-chapters-query-has-no-explicit-tiebreaker.md
+priority: high
 ---
 
 ## Description
@@ -80,5 +85,3 @@ scope). The probe artifacts are listed in the JF-672 task record.
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
-
-GATE-MARKER CORRECTION (2026-10-06, from the JF-672 marker live probe; filed JF-791 same-turn): the filing's user-impact premise is WRONG as stated. The mis-order does NOT live on the default paged path, because the default path never pages: PlayBook's search can never return a multi-chapter book folder (AudioBook is a leaf type; multi-file folders are plain Folder), so the device plays ONE matched chapter then silence (the real, worse defect, JF-791) and this task's queue-side ordering concern is currently unreachable there. The untagged-class ordering problem REMAINS REAL and the query-layer exhaustion stands, but it manifests only after JF-791 lands (the paged path comes alive) and today on the flag-on concat path only via the filename sort that path already applies. RE-SCOPE: this task is downstream of JF-791; its fix shape (queue-side natural sort by trailing filename number, the concat endpoint precedent) is unchanged and becomes the default-path fix once JF-791 restores the folder resolution.

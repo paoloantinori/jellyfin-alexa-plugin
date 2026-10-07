@@ -7,12 +7,12 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-08-23 07:09'
-updated_date: '2026-09-23 15:08'
+updated_date: '2026-10-07 08:42'
 labels:
   - testing
   - on-device
   - verification
-milestone: m-15
+milestone: m-18
 dependencies: []
 priority: high
 ---
@@ -46,8 +46,17 @@ Single checklist of everything that needs a REAL Echo/on-device verification and
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
 
+DEVICE-ROUND ADDITIONS (2026-09-29, from the JF-666/667/668/670 cycle):
+- JF-670 multi-chapter book (needs NativeControlsForBooks flipped OFF for the round): a book with more chapters than the initial page plays THROUGH all chapters (logs: "Progressive queue: fetched N items for Audiobook (offset 5/total)"); at true end-of-book with PostPlay=AutoPlay, silence and NO radio append (no "PostPlay AutoPlay: added" line).
+- JF-670 single-file book (no flag flip needed): ends in silence under AutoPlay, no music radio after the book.
+- JF-672 probe: a 15+ chapter book's play order vs folder/chapter numbering (default sort, no explicit order; the fix decision rides this probe).
+- JF-673 probe (NRE-class server only, likely N/A on 12.1.0): whether the PlayBook continuation store engages via the fallback executor.
+- JF-666/667 residuals: artist catalogue-burn beyond the initial page (the definitive device round for the Norah Jones fix, deployed 2026-09-29); confirm-artist "si" plays (the yes-path pin is unit-only).
+<!-- SECTION:NOTES:END -->
+
 ## Implementation Notes
 
+<!-- SECTION:NOTES:BEGIN -->
 2026-09-27 backlog audit: residual device legs folded in from today's closures - JF-414's on-device spot check of the indefinite album-by-artist forms; JF-619's resume truth-source device half (reconcile with the 2026-09-23 battery's resume tests when closing); JF-623's pending observation RE-SCOPED to the native full-screen player tracking the current track; JF-624's pending items (AlexaTextList tap lists next); JF-625's device battery (whole album + announce-by-vehicle + one-shot-next refusal + cold mid-album resume + MediaInfo position).
 
 <!-- SECTION:NOTES:BEGIN -->
@@ -66,3 +75,4 @@ DEVICE-ROUND ADDITIONS (2026-09-29, from the JF-666/667/668/670 cycle):
 - JF-672 probe: a 15+ chapter book's play order vs folder/chapter numbering (default sort, no explicit order; the fix decision rides this probe).
 - JF-673 probe (NRE-class server only, likely N/A on 12.1.0): whether the PlayBook continuation store engages via the fallback executor.
 - JF-666/667 residuals: artist catalogue-burn beyond the initial page (the definitive device round for the Norah Jones fix, deployed 2026-09-29); confirm-artist "si" plays (the yes-path pin is unit-only).
+<!-- SECTION:NOTES:END -->

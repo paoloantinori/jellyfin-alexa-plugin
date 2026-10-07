@@ -4,16 +4,13 @@ title: Verify Proactive Events notifications
 status: To Do
 assignee: []
 created_date: '2026-06-08 09:31'
-updated_date: '2026-07-13 20:16'
+updated_date: '2026-10-07 08:42'
 labels:
   - e2e
   - smapi
   - notifications
-milestone: m-4
+milestone: m-18
 dependencies: []
-modified_files:
-  - Jellyfin.Plugin.AlexaSkill/ProactiveEvents/ProactiveEventService.cs
-  - Jellyfin.Plugin.AlexaSkill/ProactiveEvents/ProactiveEventClient.cs
 priority: medium
 ---
 

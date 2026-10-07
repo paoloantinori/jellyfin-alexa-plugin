@@ -4,12 +4,12 @@ title: Verify APL carousel and NowPlaying screen rendering
 status: To Do
 assignee: []
 created_date: '2026-06-08 09:32'
-updated_date: '2026-09-27 19:12'
+updated_date: '2026-10-07 08:43'
 labels:
   - e2e
   - apl
   - visual
-milestone: m-5
+milestone: m-18
 dependencies: []
 priority: low
 ---

@@ -7,9 +7,11 @@ title: >-
 status: To Do
 assignee: []
 created_date: '2026-10-06'
+updated_date: '2026-10-07 08:42'
 labels:
   - bug
   - audiobooks
+milestone: m-18
 dependencies:
   - JF-795
 references:
@@ -19,6 +21,7 @@ priority: low
 ---
 
 ## Description
+
 <!-- SECTION:DESCRIPTION:BEGIN -->
 Filed by the JF-795 worker (2026-10-06), same-turn per the review-recommendation
 rule, from the /code-review high round's finding 5 on the new confirm-side
