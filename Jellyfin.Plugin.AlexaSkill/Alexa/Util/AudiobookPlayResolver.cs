@@ -182,22 +182,92 @@ public static class AudiobookPlayResolver
         // 1 at 0:00 (pre-JF-791 the same ask played the matched chapter at its
         // position, then silence; the album precedent is not liftable, JF-625
         // criterion 3 is the video-route tracker override). The bounded resolution:
-        // when page 1 yields no position AND the book extends beyond the page, fetch
-        // the book once unpaged (the concat endpoint's fetch-all shape, JF-784) and
-        // re-run the ONE resume decision on the full chapter list; a position found
-        // beyond the page re-slices the page at that chapter, so the launch, the
-        // queue, and the continuation all start at the position-holding chapter.
-        // Fresh books and books the page already covers pay nothing (the guard skips
-        // the fetch when the page holds the whole book); a multi-page fresh ask pays
-        // one extra query. TRADE, stated (the gate-marker tail): the guard keys on
-        // the page-1 scan's (0,0) answer, which an UNSTARTED multi-page book also
-        // produces, so every first-ever ask of a long book runs the unpaged fetch
-        // and finds nothing (one bounded recursive query added to the hot fresh-play
-        // path inside the Alexa window). A cheaper discriminator (any Played/position
-        // flag check ahead of the fetch) is the filed follow-up, JF-797 item 3.
+        // when the page yields no position AND the book extends beyond the page,
+        // fetch the book once unpaged (the concat endpoint's fetch-all shape,
+        // JF-784) and re-run the ONE resume decision on the full chapter list; a
+        // position found beyond the page re-slices the page at that chapter, so the
+        // launch, the queue, and the continuation all start at the
+        // position-holding chapter.
+        // JF-797 item 1 (the masking shape): the gate no longer requires
+        // startIndex == 0. A PLAYED PREFIX on page 1 makes FindResumeTrackIndex
+        // answer (after-last-played > 0, ticks 0), which the old gate read as
+        // "resolved": the deep scan stayed cold even when a deeper in-progress
+        // chapter existed beyond the page, and resume landed at the shallow prefix
+        // position. ticks == 0 is the honest "the page's evidence is incomplete"
+        // signal in every page answer (fresh page, all-played page, played
+        // prefix); a ticks > 0 answer IS the first in-progress chapter of the
+        // whole book (the scan returns on the first hit and the page is a list
+        // prefix), so no deep fetch can improve it.
+        // JF-797 item 2 (the fresh-ask discriminator): the unpaged fetch is gated
+        // by QueueContinuationFetcher.MayHaveResumeRelevantUserDataAsync (two
+        // bounded IsPlayed/IsResumable probe queries over the same scoped page
+        // shape; a miss proves no row carries resume-relevant user data, so a
+        // first-ever ask of a multi-page book on a clean device pays the probes,
+        // not the full-book fetch). ONE MORE TRIGGER beside the probes, with its
+        // HONEST COST stated (code-review F3): FindResumeTrackIndex also reads
+        // the device queue's ItemPositionState, and the JF-581 shape (a
+        // server-side UserData write loss with the position surviving only in
+        // the device queue) would be invisible to the probes, so a device queue
+        // holding ANY positioned entry releases the fetch. Because the position
+        // store is written by EVERY qualifying stop (plain songs included) and
+        // survives restarts, a household that has played anything holds entries
+        // forever: on such devices the book gate degrades to the pre-JF-797
+        // unconditional fetch (one unpaged query over a BOUNDED chapter list,
+        // the addendum's row-volume concern is the album path, which has no
+        // queue tier and discriminates unconditionally). Scoping the store to
+        // book-shaped entries is the filed follow-up, JF-812; an under-fire here
+        // would drop a real resume, the worse side of the trade.
         // The single-file shapes never reach here (their page is
-        // the whole book by construction).
-        if (startIndex == 0 && resumeTicks == 0 && continuationHasMore)
+        // the whole book by construction). The in-memory positioned-entry check
+        // runs before the probes (cheapest first), and the whole gate folds into
+        // one condition: nothing below it runs when the page answer is complete
+        // or the probes prove no row carries resume-relevant user data.
+        bool queueHoldsPositionedEntry = false;
+        bool resumeProbeHit = false;
+        if (resumeTicks == 0 && continuationHasMore)
+        {
+            // Gate-marker tail F4: the JF-581 valve is evaluated LAZILY, only once
+            // the page answer is incomplete - the eager shape paid a lock acquisition
+            // plus an O(cap) Values scan on _launchScopeLock for every single-page
+            // book and every page-resolved resume, the shapes that discard the value.
+            queueHoldsPositionedEntry = queueManager != null
+                && session.DeviceId != null
+                && queueManager.HasAnyStoredPosition(session.DeviceId);
+        }
+
+        if (resumeTicks == 0 && continuationHasMore && !queueHoldsPositionedEntry)
+        {
+            resumeProbeHit = await QueueContinuationFetcher.MayHaveResumeRelevantUserDataAsync(
+                (probeStartIndex, probeLimit) => QueueContinuationFetcher.BuildScopedAudiobookChaptersQuery(
+                    jellyfinUser, user, libraryManager, logger, book.Id, probeStartIndex, probeLimit),
+                probeQuery => RetryHelper.ExecuteWithRequestBudgetAsync(
+                    () => SearchService.SafeGetItemsResult(libraryManager, probeQuery, logger),
+                    logger,
+                    "GetBookTracksResumeProbe",
+                    cancellationToken: cancellationToken)).ConfigureAwait(false);
+
+        }
+
+        // Gate-marker tail F1: the gate DECISION logged for triage (the Debug
+        // Logging Policy) on every path where the gate question was asked - the
+        // first cut logged only inside the probe branch, so the JF-581
+        // valve-release shape (a positioned queue entry releasing the fetch with
+        // no probe run) logged nothing, and the 'positioned queue entries' field
+        // was constant-false wherever the log did fire.
+        if (resumeTicks == 0 && continuationHasMore)
+        {
+            logger.LogDebug(
+                "{Label}: deep-resume gate for '{BookName}': page answer carries no position and more pages remain; released by {Trigger}",
+                logLabel,
+                book.Name,
+                queueHoldsPositionedEntry ? "a positioned queue entry (JF-581 valve)"
+                    : resumeProbeHit ? "a user-data probe hit"
+                    : "nothing (staying cold)");
+        }
+
+        if (resumeTicks == 0
+            && continuationHasMore
+            && (queueHoldsPositionedEntry || resumeProbeHit))
         {
             QueryResult<BaseItem> fullBook = await RetryHelper.ExecuteWithRequestBudgetAsync(
                 () => SearchService.SafeGetItemsResult(libraryManager,

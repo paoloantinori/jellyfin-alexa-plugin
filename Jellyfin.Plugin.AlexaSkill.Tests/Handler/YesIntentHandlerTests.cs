@@ -17,7 +17,10 @@ using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
+using MediaBrowser.Controller.Channels;
 using MediaBrowser.Controller.Entities.Movies;
+using MediaBrowser.Controller.Entities.TV;
+using MediaBrowser.Controller.Playlists;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
@@ -782,7 +785,11 @@ public class YesIntentHandlerTests : PluginTestBase
     /// enumerates nothing, the real server's answer for a leaf, so a broken climb
     /// still fails the queue-count assertions).
     /// </summary>
-    private (List<BaseItem> Chapters, Guid BookFolderId, AudioBook? LeafPayload) SetupConfirmedBook(int chapterCount = 26, bool leafPayload = false)
+    private (List<BaseItem> Chapters, Guid BookFolderId, AudioBook? LeafPayload) SetupConfirmedBook(
+        int chapterCount = 26,
+        bool leafPayload = false,
+        int? progressChapterIndex = null,
+        long positionTicks = 0)
     {
         Guid bookFolderId = Guid.NewGuid();
         _libraryManagerMock
@@ -813,17 +820,18 @@ public class YesIntentHandlerTests : PluginTestBase
             })
             .ToList();
 
+        // JF-797: the flag-honoring page server answers the resume probes the
+        // discriminator issues like the server answers them (a fresh book's
+        // probes come back empty; the in-progress chapter's IsResumable probe
+        // comes back with it).
         _libraryManagerMock
             .Setup(lm => lm.GetItemsResult(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q => q.ParentId == bookFolderId
-                ? new QueryResult<BaseItem>
-                {
-                    Items = chapters
-                        .Skip(q.StartIndex ?? 0)
-                        .Take(q.Limit ?? chapters.Count)
-                        .ToList(),
-                    TotalRecordCount = chapters.Count
-                }
+                ? TestHelpers.ServePagedTracks(
+                    chapters,
+                    q,
+                    playedRow: null,
+                    resumableRow: c => progressChapterIndex is int pi && c.Id == chapters[pi].Id && positionTicks > 0)
                 : new QueryResult<BaseItem> { Items = new List<BaseItem>(), TotalRecordCount = 0 });
 
         return (chapters, bookFolderId, leaf);
@@ -1060,7 +1068,10 @@ public class YesIntentHandlerTests : PluginTestBase
     [Fact]
     public async Task HandleAsync_DisambiguationAlbumType_BookConfirm_DeepProgress_ResumesAtPositionHoldingChapter()
     {
-        (List<BaseItem> chapters, Guid bookFolderId, _) = SetupConfirmedBook();
+        // progressChapterIndex wires the flag-honoring page server's resumable row
+        // (the JF-797 probe must find the deep progress to release the fetch).
+        (List<BaseItem> chapters, Guid bookFolderId, _) = SetupConfirmedBook(
+            progressChapterIndex: 21, positionTicks: TimeSpan.FromMinutes(10).Ticks);
 
         // Deep progress: chapter 22 (index 21) in progress at 10 minutes.
         var inProgress = new UserItemData
@@ -1158,6 +1169,126 @@ public class YesIntentHandlerTests : PluginTestBase
         }
     }
 
+    // ========== JF-797 item 3: the payload-kind gate ==========
+
+    /// <summary>
+    /// Builds a MediaTypeAlbum disambiguation payload of one of the DENIED
+    /// non-book Folder kinds (JF-797 item 3): the kinds a current-or-future
+    /// producer could label "album" that must NOT reach the PlayBook leg.
+    /// </summary>
+    private static BaseItem CreateDeniedKindPayload(string kind) => kind switch
+    {
+        "artist" => new MusicArtist { Name = "Denied Artist", Id = Guid.NewGuid() },
+        "genre" => new MusicGenre { Name = "Denied Genre", Id = Guid.NewGuid() },
+        "collection" => new CollectionFolder { Name = "Denied Library", Id = Guid.NewGuid() },
+        "playlist" => new Playlist { Name = "Denied Playlist", Id = Guid.NewGuid() },
+        "boxset" => new BoxSet { Name = "Denied BoxSet", Id = Guid.NewGuid() },
+        "photoalbum" => new PhotoAlbum { Name = "Denied PhotoAlbum", Id = Guid.NewGuid() },
+        "season" => new Season { Name = "Denied Season", Id = Guid.NewGuid() },
+        "series" => new Series { Name = "Denied Series", Id = Guid.NewGuid() },
+        "userview" => new UserView { Name = "Denied UserView", Id = Guid.NewGuid() },
+        "channel" => new Channel { Name = "Denied Channel", Id = Guid.NewGuid() },
+        "aggregate" => new AggregateFolder { Name = "Denied Aggregate", Id = Guid.NewGuid() },
+        "userroot" => new UserRootFolder { Name = "Denied UserRoot", Id = Guid.NewGuid() },
+        _ => throw new ArgumentException($"unknown denied kind '{kind}'", nameof(kind))
+    };
+
+    /// <summary>
+    /// The shared denied-kind confirm driver (JF-797 item 3): serves the payload
+    /// by id, answers every item enumeration with nothing (the childless-payload
+    /// shape the album defensive leg sees), builds the album-labelled
+    /// disambiguation attrs, and runs the yes confirm.
+    /// </summary>
+    private async Task<(SkillResponse Response, SessionInfo Session)> ConfirmDeniedKindAsync(BaseItem payload)
+    {
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemById(payload.Id))
+            .Returns(payload);
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        var matchInfo = new DisambiguationHelper.MatchInfo { Id = payload.Id.ToString(), Name = payload.Name };
+        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
+
+        var handler = CreateHandler();
+        var session = CreateSession();
+        SkillResponse response = await handler.HandleAsync(
+            CreateYesIntentRequest(),
+            CreateContext(),
+            TestHelpers.CreateTestUser(),
+            session,
+            attrs,
+            CancellationToken.None);
+        return (response, session);
+    }
+
+    /// <summary>
+    /// JF-797 item 3: the payload-kind gate. IsBookDisambiguationPayload used to
+    /// route ANY non-MusicAlbum Folder to the PlayBook leg, so a MusicArtist,
+    /// MusicGenre, CollectionFolder, or Playlist payload reached a leg whose climb
+    /// answers null and whose chapters query returns zero children: the
+    /// NoContentInBook Tell (and, since JF-795, the FeatureDisabled Tell with
+    /// books off). The denied kinds must fall through to the album-leg switch arm,
+    /// the pre-JF-793 shape: the defensive enumeration finds no children and
+    /// answers NoSongsInAlbum.
+    /// </summary>
+    [Theory]
+    [InlineData("artist")]
+    [InlineData("genre")]
+    [InlineData("collection")]
+    [InlineData("playlist")]
+    [InlineData("boxset")]
+    [InlineData("photoalbum")]
+    [InlineData("season")]
+    [InlineData("series")]
+    [InlineData("userview")]
+    [InlineData("channel")]
+    [InlineData("aggregate")]
+    [InlineData("userroot")]
+    public async Task HandleAsync_DisambiguationAlbumType_NonBookFolderKinds_FallToTheAlbumLeg(string kind)
+    {
+        (SkillResponse response, SessionInfo session) = await ConfirmDeniedKindAsync(CreateDeniedKindPayload(kind));
+
+        // The album defensive leg answers NoSongsInAlbum (the pre-JF-793 shape),
+        // not the PlayBook leg's NoContentInBook, and launches nothing.
+        Assert.True(response.Response.Directives == null || response.Response.Directives.Count == 0,
+            "the album-leg fallback must carry no directives");
+        var speech = response.Tells<PlainTextOutputSpeech>();
+        Assert.Contains("no songs in the album", speech.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.True(session.NowPlayingQueue == null || session.NowPlayingQueue.Count == 0,
+            "the album-leg fallback must leave no queue");
+    }
+
+    /// <summary>
+    /// JF-795 addendum interaction, closed by JF-797 item 3: with BOOKS DISABLED,
+    /// an arbitrary non-book Folder confirm labelled "album" used to hit the
+    /// over-broad IsBookDisambiguationPayload and answer the FeatureDisabled Tell
+    /// (the JF-795 BooksEnabled gate sits inside that gate). With the kind gate
+    /// narrowed, the payload never reaches the books axis: it falls to the album
+    /// leg and answers NoSongsInAlbum, exactly as it did before JF-793, whatever
+    /// the books flag says.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DisambiguationAlbumType_NonBookFolderPayload_BooksDisabled_StillFallsToTheAlbumLeg()
+    {
+        bool originalBooksEnabled = Plugin.Instance!.Configuration.BooksEnabled;
+        Plugin.Instance!.Configuration.BooksEnabled = false;
+        try
+        {
+            (SkillResponse response, SessionInfo _) = await ConfirmDeniedKindAsync(CreateDeniedKindPayload("artist"));
+
+            var speech = response.Tells<PlainTextOutputSpeech>();
+            // The album-leg answer, NOT the books FeatureDisabled Tell.
+            Assert.Contains("no songs in the album", speech.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("disabled", speech.Text, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Plugin.Instance!.Configuration.BooksEnabled = originalBooksEnabled;
+        }
+    }
+
     // ========== JF-805: the MusicAlbum confirm rides the ONE album play flow ==========
 
     /// <summary>
@@ -1191,11 +1322,11 @@ public class YesIntentHandlerTests : PluginTestBase
         _libraryManagerMock
             .Setup(lm => lm.GetItemsResult(It.IsAny<InternalItemsQuery>()))
             .Returns((InternalItemsQuery q) => q.ParentId == album.Id
-                ? new QueryResult<BaseItem>
-                {
-                    Items = tracks.Skip(q.StartIndex ?? 0).Take(q.Limit ?? tracks.Count).ToList(),
-                    TotalRecordCount = tracks.Count
-                }
+                ? TestHelpers.ServePagedTracks(
+                    tracks,
+                    q,
+                    playedRow: null,
+                    resumableRow: t => progressTrackIndex is int pi && t.Id == tracks[pi].Id)
                 : new QueryResult<BaseItem> { Items = new List<BaseItem>(), TotalRecordCount = 0 });
 
         _libraryManagerMock

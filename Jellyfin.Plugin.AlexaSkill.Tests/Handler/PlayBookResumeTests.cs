@@ -282,8 +282,17 @@ public class PlayBookResumeTests : PluginTestBase, IDisposable
     // The shared deep-resume fixture (the JF-793 Finding 4 pair): the JF-791 live
     // entry shape (a chapter leaf that climbs to its pathed book folder), a
     // paging-honoring chapters mock (initial page 5, the deep unpaged fetch all),
-    // and deep in-progress UserData on chapter 22 (index 21) at the given position.
-    private (List<BaseItem> Chapters, Guid BookFolderId) SetupDeepResumeBook(int chapterCount, long positionTicks)
+    // and deep in-progress UserData on the chapter at progressIndex (default 22,
+    // index 21) at the given position. JF-797: the mock routes through the
+    // flag-honoring TestHelpers.ServePagedTracks so the resume-probe queries the
+    // discriminator issues are answered like the server answers them, and it
+    // records every tracks query for the query-count pins.
+    private (List<BaseItem> Chapters, Guid BookFolderId) SetupDeepResumeBook(
+        int chapterCount,
+        long positionTicks,
+        int progressIndex = 21,
+        List<int>? playedIndexes = null,
+        List<InternalItemsQuery>? queries = null)
     {
         Guid bookFolderId = Guid.NewGuid();
         var chapterLeaf = new AudioBook
@@ -314,15 +323,19 @@ public class PlayBookResumeTests : PluginTestBase, IDisposable
 
         // The chapters query honors paging: the initial page serves 5 (the
         // zero-padded Names keep mock insertion order equal to the server's SortName
-        // order), the deep unpaged fetch serves the whole book.
+        // order), the deep unpaged fetch serves the whole book. The flag probes
+        // filter before paging (the server's order).
+        HashSet<Guid> playedIds = playedIndexes?.Select(i => chapters[i].Id).ToHashSet() ?? new HashSet<Guid>();
+        BaseItem? progressRow = chapters[progressIndex];
         _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
-            .Returns<InternalItemsQuery>(q => new QueryResult<BaseItem>
+            .Returns<InternalItemsQuery>(q =>
             {
-                Items = chapters
-                    .Skip(q.StartIndex ?? 0)
-                    .Take(q.Limit ?? chapters.Count)
-                    .ToList(),
-                TotalRecordCount = chapters.Count
+                queries?.Add(q);
+                return TestHelpers.ServePagedTracks(
+                    chapters,
+                    q,
+                    playedRow: c => playedIds.Contains(c.Id),
+                    resumableRow: c => c.Id == progressRow.Id && positionTicks > 0);
             });
 
         var inProgress = new UserItemData
@@ -331,9 +344,12 @@ public class PlayBookResumeTests : PluginTestBase, IDisposable
             Played = false,
             PlaybackPositionTicks = positionTicks
         };
+        var played = new UserItemData { Key = "test", Played = true, PlaybackPositionTicks = 0 };
         _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
             .Returns((Jellyfin.Database.Implementations.Entities.User _, BaseItem item) =>
-                item.Id == chapters[21].Id ? inProgress : null);
+                item.Id == chapters[progressIndex].Id && positionTicks > 0 ? inProgress
+                : playedIds.Contains(item.Id) ? played
+                : null);
 
         return (chapters, bookFolderId);
     }
@@ -414,6 +430,145 @@ public class PlayBookResumeTests : PluginTestBase, IDisposable
             Assert.Equal(bookFolderId, continuation.ParentId);
             Assert.Equal(26, continuation.StartIndex);
             Assert.Equal(40, continuation.TotalCount);
+        }
+        finally
+        {
+            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
+        }
+    }
+
+    // JF-797 item 1 RED PROOF (the masking shape): the deep-resume gate keyed on
+    // startIndex == 0, so a PLAYED PREFIX on page 1 (the after-last-played answer
+    // (3, 0)) suppressed the deep scan even though an in-progress chapter exists
+    // at track 10 (index 9) beyond the page: the ask relaunched at the shallow
+    // prefix position (chapter 4). The gate must fire on ticks == 0 regardless of
+    // the prefix index, and the deep scan must re-slice at the in-progress chapter.
+    [Fact]
+    public async Task HandleAsync_PlayedPrefixOnPage1_DeeperInProgressBeyondPage_ResumesAtInProgressChapter()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest("Measure What Matters");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+        var queries = new List<InternalItemsQuery>();
+        (List<BaseItem> chapters, Guid _) = SetupDeepResumeBook(
+            26,
+            TimeSpan.FromMinutes(10).Ticks,
+            progressIndex: 9,
+            playedIndexes: new List<int> { 0, 1, 2 },
+            queries: queries);
+
+        try
+        {
+            SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+            Assert.NotNull(response);
+            var audioDirective = response.Response.Directives?.OfType<AudioPlayerPlayDirective>().FirstOrDefault();
+            Assert.NotNull(audioDirective);
+
+            // The in-progress chapter 10 launches at its position, not the prefix
+            // successor chapter 4 (the pre-fix shallow answer).
+            Assert.Equal(chapters[9].Id.ToString(), audioDirective.AudioItem.Stream.Token);
+            Assert.Equal((int)TimeSpan.FromMinutes(10).TotalMilliseconds, audioDirective.AudioItem.Stream.OffsetInMilliseconds);
+            Assert.Equal(chapters[9].Id, session.FullNowPlayingItem!.Id);
+            Assert.Equal(chapters[9].Id, session.NowPlayingQueue[0].Id);
+
+            // The deep fetch ran (one unpaged tracks query) to find it.
+            Assert.Single(queries, q => q.Limit == null);
+        }
+        finally
+        {
+            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
+        }
+    }
+
+    // JF-797 item 2 (the fresh-ask discriminator, the query-count pin): a first-ever
+    // multi-page ask carries no user data anywhere and a clean device queue, so the
+    // two bounded resume-probe queries (IsPlayed, IsResumable, one row each) must
+    // answer the gate INSTEAD of the unpaged full-book fetch. The page-1 outcome is
+    // kept byte-identical: chapter 1 launches, the continuation carries the
+    // page-1 values.
+    [Fact]
+    public async Task HandleAsync_FreshMultiPageBook_NoUserDataAnywhere_SkipsTheDeepFetch()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest("Measure What Matters");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+        var queries = new List<InternalItemsQuery>();
+        (List<BaseItem> chapters, Guid bookFolderId) = SetupDeepResumeBook(26, positionTicks: 0, queries: queries);
+
+        try
+        {
+            SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+            Assert.NotNull(response);
+            var audioDirective = response.Response.Directives?.OfType<AudioPlayerPlayDirective>().FirstOrDefault();
+            Assert.NotNull(audioDirective);
+            Assert.Equal(chapters[0].Id.ToString(), audioDirective.AudioItem.Stream.Token);
+            Assert.Equal(0, audioDirective.AudioItem.Stream.OffsetInMilliseconds);
+
+            QueueContinuation? continuation = QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID!);
+            Assert.NotNull(continuation);
+            Assert.Equal(bookFolderId, continuation!.ParentId);
+            Assert.Equal(5, continuation.StartIndex);
+            Assert.Equal(26, continuation.TotalCount);
+
+            // NO unpaged (deep) tracks query ran; the gate cost is the two bounded
+            // probes (one IsPlayed, one IsResumable, one row each).
+            Assert.DoesNotContain(queries, q => q.Limit == null);
+            Assert.Equal(2, queries.Count(q => q.IsPlayed == true || q.IsResumable == true));
+            Assert.Single(queries, q => q.IsPlayed == true);
+            Assert.Single(queries, q => q.IsResumable == true);
+        }
+        finally
+        {
+            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
+        }
+    }
+
+    // JF-797 item 2 (the JF-581 over-fire pin): the resume scan also reads the
+    // device queue's ItemPositionState, and a server-side UserData write loss can
+    // leave the ONLY progress there. A device queue holding ANY positioned entry
+    // must force the deep fetch (an in-memory check) even with clean UserData, or
+    // the discriminator would drop exactly that resume.
+    [Fact]
+    public async Task HandleAsync_FreshAsk_DeviceQueueHoldsPositionedEntry_StillFetchesDeep()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest("Measure What Matters");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+        var queries = new List<InternalItemsQuery>();
+        (List<BaseItem> chapters, Guid _) = SetupDeepResumeBook(26, positionTicks: 0, queries: queries);
+
+        // A positioned entry from a previous session (the entry's item is not one
+        // of this book's chapters, the crash-recovery leftover shape).
+        DeviceQueue queue = _queueManager.GetOrCreateQueue("test-device");
+        _queueManager.RecordStoppedPositionAndTrim("test-device", queue, Guid.NewGuid(), TimeSpan.FromMinutes(1).Ticks);
+
+        try
+        {
+            SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+            Assert.NotNull(response);
+            var audioDirective = response.Response.Directives?.OfType<AudioPlayerPlayDirective>().FirstOrDefault();
+            Assert.NotNull(audioDirective);
+
+            // The positioned entry's item is foreign to this book, so the deep scan
+            // finds no resume position and the fresh launch stands: the pin is the
+            // FETCH, not the outcome.
+            Assert.Equal(chapters[0].Id.ToString(), audioDirective.AudioItem.Stream.Token);
+            Assert.Single(queries, q => q.Limit == null);
         }
         finally
         {

@@ -693,8 +693,13 @@ public sealed class DeviceQueueManager : IDisposable
             return;
         }
 
-        DeviceQueue queue = GetOrCreateQueue(deviceId);
-        queue.ItemPositionState[parsed.ToString("N")] = positionTicks;
+        // Gate-marker tail F2: the write seam locks too - the dictionary write can
+        // race a locked read's enumeration mid-resize otherwise.
+        lock (_launchScopeLock)
+        {
+            DeviceQueue queue = GetOrCreateQueue(deviceId);
+            queue.ItemPositionState[parsed.ToString("N")] = positionTicks;
+        }
     }
 
     /// <summary>
@@ -709,15 +714,52 @@ public sealed class DeviceQueueManager : IDisposable
     /// <returns>The stored position in ticks, or null when none.</returns>
     public long? GetStoredPositionTicks(string deviceId, string itemId)
     {
-        if (!Guid.TryParse(itemId, out Guid parsedItemId)
-            || !_queues.TryGetValue(deviceId, out DeviceQueue? queue))
+        if (!Guid.TryParse(itemId, out Guid parsedItemId))
         {
             return null;
         }
 
-        return queue.ItemPositionState.TryGetValue(parsedItemId.ToString("N"), out long ticks) && ticks > 0
-            ? ticks
-            : null;
+        // Gate-marker tail F2: the read takes _launchScopeLock like the aggregate
+        // sibling HasAnyStoredPosition - an unlocked TryGetValue can race the locked
+        // structural write/trim in RecordStoppedPositionAndTrim mid-resize (Dictionary
+        // is not thread-safe for concurrent read plus write; the die-before-the-ack
+        // JF-425/JF-447/JF-738 class this store's contract names).
+        lock (_launchScopeLock)
+        {
+            return _queues.TryGetValue(deviceId, out DeviceQueue? queue)
+                && queue.ItemPositionState.TryGetValue(parsedItemId.ToString("N"), out long ticks)
+                && ticks > 0
+                ? ticks
+                : null;
+        }
+    }
+
+    /// <summary>
+    /// JF-797 (the book head's deep-resume discriminator): whether the device's
+    /// queue holds ANY stored position entry with ticks &gt; 0, without creating a
+    /// queue entry. The aggregate sibling of <see cref="GetStoredPositionTicks"/>
+    /// on the same JF-581 read side: the discriminator cannot name the item it is
+    /// looking for (progress may sit on a chapter beyond the fetched page), so it
+    /// asks whether the store holds anything at all; the whole-collection
+    /// positivity read stays here, on the owner of the store's layout and trim
+    /// semantics, instead of reaching into the raw dictionary at the call site.
+    /// Code-review F1 (JF-797): the Values enumeration runs under
+    /// <see cref="_launchScopeLock"/> like every other whole-collection read of
+    /// live state, because the locked write/trim path
+    /// (<see cref="RecordStoppedPositionAndTrim"/>) can mutate the dictionary
+    /// mid-enumeration and the version check would throw on the request thread
+    /// (the JF-425/JF-447/JF-738 class; the ItemIds twin is the locked read at
+    /// <see cref="IsItemQueued"/>).
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID.</param>
+    /// <returns>True when at least one stored position is positive.</returns>
+    public bool HasAnyStoredPosition(string deviceId)
+    {
+        lock (_launchScopeLock)
+        {
+            return _queues.TryGetValue(deviceId, out DeviceQueue? queue)
+                && queue.ItemPositionState.Values.Any(ticks => ticks > 0);
+        }
     }
 
     /// <summary>

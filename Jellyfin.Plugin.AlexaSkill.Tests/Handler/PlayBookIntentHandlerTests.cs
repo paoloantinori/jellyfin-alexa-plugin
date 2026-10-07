@@ -1213,6 +1213,77 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
         Assert.DoesNotContain("Chapter", string.Join("|", matches.Select(m => m.Name)), StringComparison.Ordinal);
     }
 
+    // JF-797 item 4 (the lazy folder resolution): the candidate normalization used
+    // to issue one GetItemById per search candidate on every multi-candidate ask,
+    // so a short title returning 9 chapter leaves of 3 books paid 9 folder fetches
+    // whose results collapse onto 3 folders (the disambiguation consumers narrow to
+    // a >= 90 auto-play pick or a Take(3) prompt). The normalization must resolve
+    // each DISTINCT ParentId once: 9 leaves of 3 books cost exactly 3 GetItemById
+    // calls, and the prompt stays book-granular (3 folder entries).
+    [Fact]
+    public async Task PlayBook_MultiMatchDisambiguation_ResolvesEachBookFolderOnce()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest(bookName: "zzzqqq");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+
+        Guid[] folderIds = { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid() };
+        var candidates = new List<BaseItem>();
+        for (int book = 0; book < 3; book++)
+        {
+            for (int chapter = 1; chapter <= 3; chapter++)
+            {
+                candidates.Add(new AudioBook
+                {
+                    Name = $"Book {book} - Chapter {chapter:00}",
+                    Id = Guid.NewGuid(),
+                    ParentId = folderIds[book],
+                    Path = $"/audiobooks/book-{book}/ch{chapter:00}.mp3"
+                });
+            }
+        }
+
+        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
+                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
+            .Returns(candidates);
+        for (int book = 0; book < 3; book++)
+        {
+            Guid folderId = folderIds[book];
+            _fx.LibraryManager.Setup(l => l.GetItemById(folderId))
+                .Returns(new Folder { Name = $"Book {book}", Id = folderId, Path = $"/audiobooks/book-{book}" });
+        }
+
+        // The ask path returns before the head chapters query.
+        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new MediaBrowser.Model.Querying.QueryResult<BaseItem>
+            {
+                Items = Array.Empty<BaseItem>(),
+                TotalRecordCount = 0
+            });
+
+        int getItemByIdBefore = _fx.LibraryManager.Invocations.Count(i => i.Method.Name == nameof(ILibraryManager.GetItemById));
+
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        int getItemByIdCalls = _fx.LibraryManager.Invocations.Count(i => i.Method.Name == nameof(ILibraryManager.GetItemById)) - getItemByIdBefore;
+
+        // THE AXIS: one folder fetch per DISTINCT ParentId (3), not per candidate (9).
+        Assert.Equal(3, getItemByIdCalls);
+
+        // The normalization is unchanged in shape: three book-granular prompt entries.
+        Assert.NotNull(response.SessionAttributes);
+        Assert.True(response.SessionAttributes.TryGetValue("disambig_matches", out object? matchesObj));
+        var matches = Newtonsoft.Json.JsonConvert.DeserializeObject<List<DisambiguationHelper.MatchInfo>>(
+            (string)matchesObj!);
+        Assert.NotNull(matches);
+        Assert.Equal(3, matches!.Count);
+        Assert.All(matches, m => Assert.DoesNotContain("Chapter", m.Name, StringComparison.Ordinal));
+    }
+
     // JF-793 code-review F4 companion pin: the same-book collapse. Chapter leaves
     // of ONE book normalize to a single folder entry, the count drops to 1, and the
     // disambiguation block is skipped entirely in favor of a direct play: the book

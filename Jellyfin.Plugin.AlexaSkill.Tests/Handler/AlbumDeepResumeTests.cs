@@ -90,13 +90,17 @@ public class AlbumDeepResumeTests : PluginTestBase, IDisposable
     /// server: the paged tracks queries NRE on GetItemsResult (the head's
     /// SafeGetItemsResult then serves the page through the GetItemList fallback
     /// with the SENTINEL total), while the unpaged deep query answers normally.
+    /// JF-797: both arms route through the flag-honoring
+    /// TestHelpers.ServePagedTracks so the resume-probe queries the discriminator
+    /// issues are answered like the server answers them.
     /// </summary>
     private (MusicAlbum Album, List<BaseItem> Tracks) SetupDeepResumeAlbum(
         int trackCount,
         int? progressTrackIndex = null,
         long positionTicks = 0,
         List<InternalItemsQuery>? queries = null,
-        bool endUnknownPage = false)
+        bool endUnknownPage = false,
+        List<int>? playedIndexes = null)
     {
         var album = new MusicAlbum { Name = "Deep Resume Album", Id = Guid.NewGuid(), ProductionYear = 2020 };
         List<BaseItem> tracks = Enumerable.Range(1, trackCount)
@@ -110,23 +114,26 @@ public class AlbumDeepResumeTests : PluginTestBase, IDisposable
             })
             .ToList();
 
+        HashSet<Guid> playedIds = playedIndexes?.Select(i => tracks[i].Id).ToHashSet() ?? new HashSet<Guid>();
+        Guid? progressRowId = progressTrackIndex is int idx ? tracks[idx].Id : null;
+
         // The album search resolves the album (any GetItemList query).
         _fx.LibraryManager.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
             .Returns(new List<BaseItem> { album });
 
-        // The tracks query honors paging.
+        // The tracks query honors paging, then the flags.
         _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
             .Returns((InternalItemsQuery q) =>
             {
                 queries?.Add(q);
-                return new QueryResult<BaseItem>
-                {
-                    Items = tracks.Skip(q.StartIndex ?? 0).Take(q.Limit ?? tracks.Count).ToList(),
-                    TotalRecordCount = tracks.Count
-                };
+                return TestHelpers.ServePagedTracks(
+                    tracks,
+                    q,
+                    playedRow: c => playedIds.Contains(c.Id),
+                    resumableRow: c => c.Id == progressRowId && positionTicks > 0);
             });
 
-        if (progressTrackIndex is int progressIdx)
+        if (progressRowId != null || playedIds.Count > 0)
         {
             var inProgress = new UserItemData
             {
@@ -134,9 +141,12 @@ public class AlbumDeepResumeTests : PluginTestBase, IDisposable
                 Played = false,
                 PlaybackPositionTicks = positionTicks
             };
+            var played = new UserItemData { Key = "test", Played = true, PlaybackPositionTicks = 0 };
             _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
                 .Returns((Jellyfin.Database.Implementations.Entities.User _, BaseItem item) =>
-                    item.Id == tracks[progressIdx].Id ? inProgress : null);
+                    item.Id == progressRowId && positionTicks > 0 ? inProgress
+                    : playedIds.Contains(item.Id) ? played
+                    : null);
         }
 
         if (endUnknownPage)
@@ -146,12 +156,18 @@ public class AlbumDeepResumeTests : PluginTestBase, IDisposable
             // the head's SafeGetItemsResult serves them through the GetItemList
             // fallback (which, under the head's unknownTotalOnFallback, reports
             // the SENTINEL total). The unpaged deep query (Limit == null) keeps
-            // the generic paging mock and its honest count.
+            // the generic paging mock and its honest count. The fallback honors
+            // the flag probes the same way (a probe served by the fallback must
+            // still see only progress-carrying rows).
             _fx.LibraryManager.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q => q.Limit != null)))
                 .Throws(new NullReferenceException());
             _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
                     q.Limit != null && q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.Audio))))
-                .Returns((InternalItemsQuery q) => tracks.Skip(q.StartIndex ?? 0).Take(q.Limit ?? tracks.Count).ToList());
+                .Returns((InternalItemsQuery q) => TestHelpers.ServePagedTracks(
+                    tracks,
+                    q,
+                    playedRow: c => playedIds.Contains(c.Id),
+                    resumableRow: c => c.Id == progressRowId && positionTicks > 0).Items);
         }
 
         return (album, tracks);
@@ -366,13 +382,15 @@ public class AlbumDeepResumeTests : PluginTestBase, IDisposable
         }
     }
 
-    // JF-796 companion pin: a fresh multi-page album keeps the page-1 outcome. The
-    // no-position page answer fires the deep fetch (the documented trade: every
-    // first-ever ask of a multi-page album pays one bounded unpaged query), but the
-    // scan finds nothing, so no re-slice happens: track 1 launches and the
-    // continuation keeps the page-1 values.
+    // JF-797 item 2 (the fresh-ask discriminator, the query-count pin): a fresh
+    // multi-page album carries no user data anywhere, so the two bounded resume-probe
+    // queries (IsPlayed, IsResumable, one row each) must answer the deep-resume gate
+    // INSTEAD of the unpaged full-album fetch (the JF-796 addendum's row-volume
+    // trade: the old guard ran the full-field unpaged fetch plus the per-track
+    // UserData reads on every first-ever multi-page ask). The page-1 outcome is kept
+    // byte-identical: track 1 launches and the continuation keeps the page-1 values.
     [Fact]
-    public async Task HandleAsync_FreshMultiPageAlbum_StartsAtTrackOne_PaysTheOneFetchTrade()
+    public async Task HandleAsync_FreshMultiPageAlbum_StartsAtTrackOne_SkipsTheDeepFetch()
     {
         var handler = CreateHandler();
         var request = CreateIntentRequest("deep resume album");
@@ -399,8 +417,64 @@ public class AlbumDeepResumeTests : PluginTestBase, IDisposable
             Assert.Equal(5, continuation!.StartIndex);
             Assert.Equal(26, continuation.TotalCount);
 
-            // The trade, pinned: exactly one unpaged tracks query ran and found no
-            // position (the re-slice guard stayed cold).
+            // NO unpaged (deep) tracks query ran; the gate cost is the two bounded
+            // probes (one IsPlayed, one IsResumable, one row each).
+            Assert.DoesNotContain(queries, q => q.Limit is null);
+            Assert.Equal(2, queries.Count(q => q.IsPlayed == true || q.IsResumable == true));
+            Assert.Single(queries, q => q.IsPlayed == true);
+            Assert.Single(queries, q => q.IsResumable == true);
+        }
+        finally
+        {
+            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
+        }
+    }
+
+    // JF-797 item 1 RED PROOF (the masking shape, the album twin): the deep-resume
+    // gate keyed on startIndex == 0, so a PLAYED PREFIX on page 1 (the
+    // after-last-played answer (3, 0)) suppressed the deep scan even though an
+    // in-progress track exists at track 10 (index 9) beyond the page: the ask
+    // relaunched at the shallow prefix position (track 4). The gate must fire on
+    // ticks == 0 regardless of the prefix index, and the deep scan must re-slice at
+    // the in-progress track (the album-absolute concat prefix follows the re-slice).
+    [Fact]
+    public async Task HandleAsync_PlayedPrefixOnPage1_DeeperInProgressBeyondPage_ResumesAtInProgressTrack()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest("deep resume album");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+        var queries = new List<InternalItemsQuery>();
+        (MusicAlbum _, List<BaseItem> tracks) = SetupDeepResumeAlbum(
+            26,
+            progressTrackIndex: 9,
+            positionTicks: TimeSpan.FromMinutes(1).Ticks,
+            queries: queries,
+            playedIndexes: new List<int> { 0, 1, 2 });
+
+        try
+        {
+            SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+            AudioPlayerPlayDirective playDirective = GetPlayDirective(response);
+
+            // The in-progress track 10 launches, not the prefix successor track 4
+            // (the pre-fix shallow answer).
+            Assert.Equal(tracks[9].Id.ToString(), playDirective.AudioItem.Stream.Token);
+            Assert.Equal(tracks[9].Id, session.FullNowPlayingItem!.Id);
+            Assert.Equal(tracks[9].Id, session.NowPlayingQueue[0].Id);
+
+            // The continuation rebases to the re-sliced page: index 9 + page 5 = 14
+            // against the real total 26.
+            QueueContinuation? continuation = QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID!);
+            Assert.NotNull(continuation);
+            Assert.Equal(14, continuation!.StartIndex);
+            Assert.Equal(26, continuation.TotalCount);
+
+            // The deep fetch ran (one unpaged tracks query) to find it.
             Assert.Single(queries, q => q.Limit is null);
         }
         finally

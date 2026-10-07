@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 
@@ -19,7 +20,7 @@ internal static class AudiobookItems
     /// <summary>
     /// Resolve the BOOK FOLDER a matched audiobook SEARCH item belongs to (JF-791):
     /// the AudioBook-gated form of the ONE verified climb
-    /// (<see cref="TryResolveVerifiedParentFolder"/>, whose doc owns the climb
+    /// (<see cref="TryResolveVerifiedParentFolder(BaseItem?, ILibraryManager?)"/>, whose doc owns the climb
     /// contract, the JF-793 shared-container story, and the JF-794 builder sync).
     /// Jellyfin never types a multi-file book folder as AudioBook (the AudioResolver
     /// skips multi-file directory collapsing, verified byte-identical at v10.11.8 and
@@ -39,8 +40,36 @@ internal static class AudiobookItems
         => item is AudioBook ? TryResolveVerifiedParentFolder(item, libraryManager) : null;
 
     /// <summary>
-    /// The ONE verified ParentId climb (JF-794), shared by the search-path twin
-    /// (<see cref="TryResolveBookFolder"/>, which adds the AudioBook gate its search
+    /// The batched form of <see cref="TryResolveBookFolder(BaseItem?, ILibraryManager?)"/> for
+    /// the candidate normalization (JF-797 item 4, the lazy folder resolution):
+    /// identical verdicts BY CONSTRUCTION (the same ONE climb seam, whose parent
+    /// FETCH resolves through the caller's scratchpad), with the ONE expensive
+    /// step (the GetItemById parent fetch) running once per DISTINCT ParentId
+    /// instead of once per candidate. A short title whose search returns dozens of
+    /// chapter leaves collapses onto a handful of books, so the per-candidate
+    /// fetches were almost all repeats whose results evaporate at the fuzzy
+    /// consumers. The cache maps ParentId to the RESOLVED Folder (null when the
+    /// id resolves to no Folder); it is a per-ask scratchpad owned by the caller,
+    /// never shared across requests (a library rescan between asks must not be
+    /// served a stale folder). The per-candidate parts of the climb (the AudioBook
+    /// gate and the SitsDirectlyInside path check) still run per candidate inside
+    /// the shared seam: two leaves sharing a ParentId can carry different paths (a
+    /// metadata remap), and only the parent FETCH is ParentId-pure.
+    /// </summary>
+    /// <param name="item">The audiobook search candidate (a chapter leaf or a single-file book).</param>
+    /// <param name="libraryManager">The library manager resolving unseen ParentIds; null fails closed (the seam's contract).</param>
+    /// <param name="parentFolderCache">The caller's per-ask ParentId to resolved-Folder scratchpad (null values are cached misses).</param>
+    /// <returns>The book folder, or null when the item is not an AudioBook chapter leaf or the climb is rejected (see the seam's contract).</returns>
+    internal static Folder? TryResolveBookFolder(
+        BaseItem? item,
+        ILibraryManager? libraryManager,
+        IDictionary<Guid, Folder?> parentFolderCache)
+        => item is AudioBook ? TryResolveVerifiedParentFolder(item, libraryManager, parentFolderCache) : null;
+
+    /// <summary>
+    /// The ONE verified ParentId climb (JF-794), shared by the search-path twins
+    /// (the <see cref="TryResolveBookFolder(BaseItem?, ILibraryManager?)"/> overloads,
+    /// which add the AudioBook gate its search
     /// results carry) and the VideoApp builders' concat decision: resolve the leaf's
     /// ParentId to a Folder, then apply the JF-793 shared-container discriminator.
     /// Type-agnostic BY DESIGN on this seam: the builders' item argument can be an
@@ -52,23 +81,65 @@ internal static class AudiobookItems
     /// track, never a merged-container or dead-ParentId concat. When it ACCEPTS, the
     /// returned folder's Id is exactly the leaf's ParentId, so the discriminated
     /// concat URL is byte-identical to the pre-JF-794 raw climb.
+    /// The scratchpad overload (JF-797 item 4) threads the batched twin's per-ask
+    /// cache into the SAME body, so the fail-closed contract stays ONE definition.
     /// </summary>
     /// <param name="item">The audio leaf whose ParentId names the candidate book folder.</param>
     /// <param name="libraryManager">The library manager resolving the ParentId; null fails closed.</param>
     /// <returns>The verified book folder, or null when the climb cannot be verified or is rejected.</returns>
     internal static Folder? TryResolveVerifiedParentFolder(BaseItem? item, ILibraryManager? libraryManager)
+        => TryResolveVerifiedParentFolder(item, libraryManager, parentFolderCache: null);
+
+    /// <summary>
+    /// The scratchpad form of the ONE verified climb (see the two-arg overload's
+    /// doc for the contract): identical verdicts, with the parent fetch resolved
+    /// through <paramref name="parentFolderCache"/> when given.
+    /// </summary>
+    /// <param name="item">The audio leaf whose ParentId names the candidate book folder.</param>
+    /// <param name="libraryManager">The library manager resolving unseen ParentIds; null fails closed.</param>
+    /// <param name="parentFolderCache">The caller's per-ask ParentId to resolved-Folder scratchpad, or null for the uncached climb.</param>
+    /// <returns>The verified book folder, or null when the climb cannot be verified or is rejected.</returns>
+    internal static Folder? TryResolveVerifiedParentFolder(
+        BaseItem? item,
+        ILibraryManager? libraryManager,
+        IDictionary<Guid, Folder?>? parentFolderCache)
     {
         if (item is null || item.ParentId == Guid.Empty || libraryManager is null)
         {
             return null;
         }
 
-        if (libraryManager.GetItemById(item.ParentId) is not Folder folder)
+        if (ResolveParentFolder(item.ParentId, libraryManager, parentFolderCache) is not { } folder)
         {
             return null;
         }
 
         return SitsDirectlyInside(item, folder) ? folder : null;
+    }
+
+    /// <summary>
+    /// The climb's parent-fetch step, the only ParentId-pure part (JF-797 item 4):
+    /// resolved through the caller's per-ask scratchpad when given (null values
+    /// are cached misses, so a dangling id costs one lookup per ask), fetched
+    /// directly otherwise.
+    /// </summary>
+    /// <param name="parentId">The leaf's ParentId.</param>
+    /// <param name="libraryManager">The library manager resolving unseen ids.</param>
+    /// <param name="parentFolderCache">The caller's scratchpad, or null.</param>
+    /// <returns>The resolved folder, or null when the id resolves to nothing or to a non-folder.</returns>
+    private static Folder? ResolveParentFolder(
+        Guid parentId,
+        ILibraryManager libraryManager,
+        IDictionary<Guid, Folder?>? parentFolderCache)
+    {
+        if (parentFolderCache != null && parentFolderCache.TryGetValue(parentId, out Folder? cached))
+        {
+            return cached;
+        }
+
+        Folder? resolved = libraryManager.GetItemById(parentId) as Folder;
+        parentFolderCache?.Add(parentId, resolved);
+        return resolved;
     }
 
     /// <summary>
@@ -129,7 +200,7 @@ internal static class AudiobookItems
     /// closed, and an unverifiable layout plays the leaf alone, the pre-JF-791
     /// behavior, never the merged container). Widened from AudioBook to BaseItem at
     /// JF-794 when the builders joined this seam (see
-    /// <see cref="TryResolveVerifiedParentFolder"/>); the body reads only the Path.
+    /// <see cref="TryResolveVerifiedParentFolder(BaseItem?, ILibraryManager?)"/>); the body reads only the Path.
     /// </summary>
     private static bool SitsDirectlyInside(BaseItem chapter, Folder folder)
     {
@@ -158,10 +229,45 @@ internal static class AudiobookItems
     /// those confirms into the album leg). MusicAlbum stays excluded: PlayAlbum's
     /// own disambiguation matches are MusicAlbums and must keep routing to the
     /// album leg.
+    /// JF-797 item 3 (the payload-kind gate): the Folder arm is narrowed by a
+    /// KIND DENY-LIST that is EXHAUSTIVE over the controller refs' concrete
+    /// Folder subclasses (reflection-enumerated, byte-identical sets at 10.11.8
+    /// and 12.0.0: MusicAlbum, MusicArtist, CollectionFolder, UserRootFolder,
+    /// UserView, AggregateFolder, PhotoAlbum, BoxSet, Season, Series, Playlist,
+    /// Channel; MusicGenre is not even a Folder, its entry is belt-and-braces
+    /// documenting the kind), so ONLY a plain Folder (the book-folder payload
+    /// shape the PlayBook candidate normalization emits) or an AudioBook passes.
+    /// The two live producers emit only AudioBook leaves and plain book folders,
+    /// so the breadth was latent, but any current-or-future producer emitting one
+    /// of the denied kinds reached the PlayBook leg, whose climb answers null and
+    /// whose chapters query returns zero children: a broken NoContentInBook
+    /// launch (and, since JF-795, a FeatureDisabled Tell with books off) where
+    /// the pre-JF-793 album leg answered such payloads. Denied kinds fall through
+    /// to YesIntentHandler's album-leg switch arm, the pre-JF-793 behavior. A
+    /// positive children-are-AudioBook probe was evaluated and declined: it would
+    /// cost a query on every real book-folder confirm to close a breadth no
+    /// producer exhibits. Residual: a Folder subclass outside the controller refs'
+    /// concrete kinds passes until listed here - and such kinds exist TODAY, not in a
+    /// future ref (gate-marker tail F3): PlaylistsFolder (Emby.Server.Implementations,
+    /// concrete at both pinned tags) plus any plugin-derived Folder. The pass-through
+    /// breadth is present, not future; re-derive the list when the envelope moves.
     /// </summary>
     internal static bool IsBookDisambiguationPayload(BaseItem? item)
         => item is AudioBook
-           || (item is Folder && item is not MediaBrowser.Controller.Entities.Audio.MusicAlbum);
+           || (item is Folder
+               && item is not (MediaBrowser.Controller.Entities.Audio.MusicAlbum
+                   or MediaBrowser.Controller.Entities.Audio.MusicArtist
+                   or MediaBrowser.Controller.Entities.Audio.MusicGenre
+                   or MediaBrowser.Controller.Entities.CollectionFolder
+                   or MediaBrowser.Controller.Entities.UserRootFolder
+                   or MediaBrowser.Controller.Entities.UserView
+                   or MediaBrowser.Controller.Entities.AggregateFolder
+                   or MediaBrowser.Controller.Entities.PhotoAlbum
+                   or MediaBrowser.Controller.Entities.Movies.BoxSet
+                   or MediaBrowser.Controller.Entities.TV.Season
+                   or MediaBrowser.Controller.Entities.TV.Series
+                   or MediaBrowser.Controller.Playlists.Playlist
+                   or MediaBrowser.Controller.Channels.Channel));
 
     /// <summary>
     /// Whether the finished item is BOOK-shaped for the end-of-book decision (JF-670):
