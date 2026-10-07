@@ -1130,6 +1130,31 @@ internal static class TestHelpers
     }
 
     /// <summary>
+    /// JF-808: the ONE Folder double whose GetItemList answers from a fixed list,
+    /// for tests that drive the production <c>((Folder)item).GetItemList(query)</c>
+    /// shape (the YesIntent playlist confirm arm). Overriding the virtual
+    /// GetItemsInternal skips the recursive folder machinery
+    /// (QueryRecursive/CollapseBoxSetItems), which reads server-injected statics
+    /// (BaseItem.ConfigurationManager) the test host does not stub; a real Folder
+    /// NREs there instead of reaching the mocked LibraryManager.
+    /// </summary>
+    internal sealed class TestItemsFolder : Folder
+    {
+        private readonly IReadOnlyList<BaseItem> _items;
+
+        public TestItemsFolder(string name, Guid id, IReadOnlyList<BaseItem> items)
+        {
+            Name = name;
+            Id = id;
+            Tags = Array.Empty<string>();
+            _items = items;
+        }
+
+        protected override QueryResult<BaseItem> GetItemsInternal(InternalItemsQuery query)
+            => new() { Items = _items.ToList(), TotalRecordCount = _items.Count };
+    }
+
+    /// <summary>
     /// The ONE remux-eligible episode fixture (h264 video + EAC3 audio, one hour of
     /// runtime, the JF-565 clamp's resumable shape): routes to the episode HLS remux on
     /// the VideoApp path and to the audio-only transcode on the AudioPlayer path. Was 2

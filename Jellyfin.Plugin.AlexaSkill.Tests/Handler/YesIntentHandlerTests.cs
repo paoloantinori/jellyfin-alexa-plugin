@@ -1901,6 +1901,77 @@ public class YesIntentHandlerTests : PluginTestBase
         response.HasDirective<AudioPlayerPlayDirective>();
     }
 
+    // ========== JF-808: the playlist confirm leg's warming gate (the confirm twin of the asks' JF-808 gate) ==========
+
+    /// <summary>
+    /// The playlist-confirm mocks: the disambiguation payload item as the ONE
+    /// fixed-items Folder double (<see cref="TestHelpers.TestItemsFolder"/>, whose
+    /// GetItemsInternal override answers the arm's ((Folder)item).GetItemList call
+    /// without the recursive folder machinery's server statics), so the pre-fix
+    /// RED failure of the warming pin is the clean launch, not a
+    /// mock-default null crashing the leg.
+    /// </summary>
+    private IDisposable SetupConfirmedPlaylist(out Folder playlist)
+    {
+        var item = new TestHelpers.TestItemsFolder(
+            "Road Trip",
+            Guid.NewGuid(),
+            new List<BaseItem> { new Audio { Name = "Road Trip Track", Id = Guid.NewGuid(), Tags = Array.Empty<string>() } });
+        _libraryManagerMock.Setup(lm => lm.GetItemById(item.Id)).Returns(item);
+        playlist = item;
+        return TestHelpers.StubBaseItemStatics(_libraryManagerMock);
+    }
+
+    /// <summary>
+    /// JF-808 RED PROOF (the warming axis, the playlist confirm): a playlist
+    /// disambiguation prompt confirmed while the artist index is still loading
+    /// must refuse at leg entry, before the arm's recursive UNPAGED
+    /// MediaTypes=Audio GetItemList over the playlist folder (the cold-database
+    /// surface the task names), the same Layer-1 refusal the direct asks
+    /// (PlayPlaylistIntentHandler and ShufflePlayIntentHandler, gated in this
+    /// same change) pay. Pre-JF-808 the playlist play path was warming-ungated
+    /// END TO END; the JF-806 comment that deferred this leg's warming decision
+    /// to JF-808 is closed by this gate on the SAME stand-in index (the artist
+    /// index), so ask and confirm answer identically in the warming window.
+    /// No flag-gate intersection exists to pin: playlists are cross-type
+    /// always-allowed and neither side gates a feature flag (the JF-806
+    /// decision, unchanged).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DisambiguationPlaylistType_PlaylistConfirm_WhileIndexWarming_ThrowsAtEntry()
+    {
+        using var statics = SetupConfirmedPlaylist(out Folder playlist);
+        var attrs = CreateSingleMatchAttrs(playlist.Id, playlist.Name!, DisambiguationHelper.MediaTypePlaylist);
+
+        await AssertConfirmThrowsWarmingAsync(TestHelpers.WarmingArtistIndex(), attrs);
+    }
+
+    /// <summary>
+    /// JF-808 companion pin (gate transparency): a READY artist index leaves the
+    /// playlist confirm unchanged; the gate only converts the warming window,
+    /// never the warm path (the JF-806 confirm-twin idiom).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DisambiguationPlaylistType_PlaylistConfirm_ReadyIndex_PlaysUnchanged()
+    {
+        using var statics = SetupConfirmedPlaylist(out Folder playlist);
+        var attrs = CreateSingleMatchAttrs(playlist.Id, playlist.Name!, DisambiguationHelper.MediaTypePlaylist);
+
+        var handler = CreateHandler(artistIndex: TestHelpers.ReadyArtistIndex());
+        var session = CreateSession();
+        var response = await handler.HandleAsync(
+            CreateYesIntentRequest(),
+            CreateContext(),
+            TestHelpers.CreateTestUser(),
+            session,
+            attrs,
+            CancellationToken.None);
+
+        Assert.IsType<AudioPlayerPlayDirective>(Assert.Single(response.Response.Directives!));
+        Assert.NotNull(session.FullNowPlayingItem);
+        Assert.Single(session.NowPlayingQueue!);
+    }
+
     /// <summary>
     /// JF-806 placement pin (the pagination "yes" stays ungated): the
     /// pagination continuation resolves only the page's item IDs via point

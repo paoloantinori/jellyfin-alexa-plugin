@@ -2,7 +2,7 @@
 id: JF-808
 title: >-
   JF-808 - the playlist play path (ask and confirm) carries no Layer-1 warming gate
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-07'
 labels:

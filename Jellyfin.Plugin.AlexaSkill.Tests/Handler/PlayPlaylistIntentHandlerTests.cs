@@ -2,17 +2,24 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Alexa.NET;
 using Alexa.NET.Request;
 using Alexa.NET.Request.Type;
+using Alexa.NET.Response;
+using Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Exceptions;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Playlists;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Model.Querying;
 using Microsoft.Extensions.Logging;
@@ -45,14 +52,34 @@ public class PlayPlaylistIntentHandlerTests : PluginTestBase
         _loggerFactory = LoggerFactory.Create(b => { });
     }
 
-    private PlayPlaylistIntentHandler CreateHandler()
+    // JF-808: the recording subclass (the JF-807 PlayBook shape) so the warming
+    // pins can assert the no-progressive-before-refusal half of the
+    // gate-before-announcement contract through the progressive capture seam.
+    private sealed class RecordingPlayPlaylistHandler(
+        ISessionManager sessionManager,
+        PluginConfiguration config,
+        ILibraryManager libraryManager,
+        IUserManager userManager,
+        ILoggerFactory loggerFactory,
+        DeviceQueueManager? queueManager = null,
+        IArtistIndex? artistIndex = null)
+        : PlayPlaylistIntentHandler(sessionManager, config, libraryManager, userManager, loggerFactory, queueManager, artistIndex)
     {
-        return new PlayPlaylistIntentHandler(
+        public ProgressiveSpeechCapture Progressive { get; } = new();
+
+        protected override Task<bool> SendProgressiveResponse(global::Alexa.NET.Request.Context context, global::Alexa.NET.Request.Type.Request request, string message)
+            => Progressive.Record(context, request, message);
+    }
+
+    private RecordingPlayPlaylistHandler CreateHandler(IArtistIndex? artistIndex = null)
+    {
+        return new RecordingPlayPlaylistHandler(
             _sessionManagerMock.Object,
             _config,
             _libraryManagerMock.Object,
             _userManagerMock.Object,
-            _loggerFactory);
+            _loggerFactory,
+            artistIndex: artistIndex);
     }
 
     private static IntentRequest CreateRequest(string playlistName = "road trip songs", string intentName = IntentNames.PlayPlaylist)
@@ -217,6 +244,172 @@ public class PlayPlaylistIntentHandlerTests : PluginTestBase
         Assert.NotNull(response);
         Assert.True(response.Response.ShouldEndSession);
         Assert.False(response.SessionAttributes?.ContainsKey("disambig_matches") == true);
+    }
+
+    // ========== JF-808: the playlist play path's Layer-1 warming gate (the ASK, both callers of the shared builder) ==========
+
+    /// <summary>
+    /// The one-playlist play mocks (the AlbumPlayServicePlaylistShuffleTests shape:
+    /// a real <see cref="Playlist"/> whose LinkedChildren resolve through the
+    /// stubbed BaseItem statics), so the pre-fix RED failure of the JF-808
+    /// entry-gate pins is the clean no-throw (the ungated query ran and played),
+    /// not a mock-default null crashing the handler.
+    /// </summary>
+    private (Playlist Playlist, List<Audio> Tracks) SetupPlaylistPlay()
+    {
+        var tracks = Enumerable.Range(0, 5)
+            .Select(i => new Audio { Id = Guid.NewGuid(), Name = $"Track {i}", Tags = Array.Empty<string>() })
+            .ToList();
+
+        var playlist = new Playlist { Name = "road trip songs", Id = Guid.NewGuid(), Tags = Array.Empty<string>() };
+        playlist.LinkedChildren = tracks.Select(t => new LinkedChild { ItemId = t.Id }).ToArray();
+
+        var byId = tracks.ToDictionary(t => t.Id, t => (BaseItem)t);
+        byId[playlist.Id] = playlist;
+        _libraryManagerMock.Setup(l => l.GetItemById(It.IsAny<Guid>()))
+            .Returns((Guid id) => byId.TryGetValue(id, out BaseItem? item) ? item : null!);
+        // The 12.x linked-child ref resolves through a batched ItemIds query
+        // (GetItemList); 10.11 never asks it (the shuffle-tests note). Inert on
+        // the net9 path either way: this flow's own queries go to GetItemsResult.
+        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(tracks.Cast<BaseItem>().ToList());
+        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
+            .Returns(TestHelpers.CreateJellyfinUser());
+        _libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem>
+            {
+                Items = new List<BaseItem> { playlist },
+                TotalRecordCount = 1
+            });
+
+        return (playlist, tracks);
+    }
+
+    /// <summary>
+    /// JF-808 RED PROOF (the warming axis, the ASK): a playlist ask running while
+    /// the artist index is still loading (the post-restart window) must refuse at
+    /// entry, before the shared builder's cold surface (the SearchTerm playlist
+    /// query on its RetryAsync channel, the fuzzy fallback, and the
+    /// GetManageableItems whole-track resolution), instead of running it inside
+    /// Alexa's ~8s window. Pre-JF-808 the playlist play path was warming-ungated
+    /// END TO END (this ask, its ShufflePlay twin, and the YesIntent confirm arm),
+    /// the roster omission this task makes a deliberate gated row.
+    /// INDEX CHOICE: playlists have no in-memory index of their own (neither the
+    /// artist nor the song n-gram index serves Playlist items), so this is a
+    /// stand-in gate; the ARTIST index is the family's established stand-in (the
+    /// PlayAlbum Layer-1 precedent, joined by books in JF-807) and keeps the ask
+    /// and its confirm arm symmetric (a song-index stand-in would make the two
+    /// diverge whenever the indexes' readiness windows differ). The sibling the
+    /// playlist path most resembles, the album ask, gates the same index.
+    /// ANNOUNCEMENT CONTRACT, honestly scoped: this path sends NO pre-query
+    /// "searching" progressive announcement (unlike PlayBook's SearchingBook), so
+    /// the F5 ready-side announcement pin has nothing to observe; the empty half
+    /// of the contract is still enforced below (no progressive text may precede
+    /// the refusal).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_PlaylistAsk_WhileIndexWarming_ThrowsAtEntry()
+    {
+        var handler = CreateHandler(TestHelpers.WarmingArtistIndex());
+        using var statics = StubBaseItemStatics();
+        SetupPlaylistPlay();
+
+        var ex = await Assert.ThrowsAsync<SkillWarmingUpException>(() =>
+            handler.HandleAsync(
+                CreateRequest(),
+                TestHelpers.CreateTestContext(),
+                TestHelpers.CreateTestUser(jellyfinToken: "tok"),
+                TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory),
+                CancellationToken.None));
+        Assert.StartsWith("artist", ex.Message, StringComparison.OrdinalIgnoreCase);
+
+        // The no-progressive-before-refusal half of the placement contract (the
+        // JF-807 F1 shape): a gate moved below any future announcement would still
+        // throw and otherwise keep this pin green while the user hears speech first.
+        Assert.Equal(string.Empty, handler.Progressive.AllText);
+    }
+
+    /// <summary>
+    /// JF-808 companion pin (gate transparency): a READY artist index leaves the
+    /// playlist ask unchanged; the gate only converts the warming window, never
+    /// the warm path (the JF-807 ask-twin idiom).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_PlaylistAsk_ReadyIndex_PlaysUnchanged()
+    {
+        var handler = CreateHandler(TestHelpers.ReadyArtistIndex());
+        using var statics = StubBaseItemStatics();
+        SetupPlaylistPlay();
+
+        SkillResponse response = await handler.HandleAsync(
+            CreateRequest(),
+            TestHelpers.CreateTestContext(),
+            TestHelpers.CreateTestUser(jellyfinToken: "tok"),
+            TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory),
+            CancellationToken.None);
+
+        Assert.IsType<AudioPlayerPlayDirective>(Assert.Single(response.Response.Directives!));
+        Assert.True(response.Response.ShouldEndSession);
+    }
+
+    /// <summary>
+    /// JF-808 sibling pin (the ShufflePlay twin, the JF-602 AC#3 placement
+    /// convention): ShufflePlayIntentHandler shares this builder and its whole
+    /// cold surface verbatim (only the shuffle flag differs), so its ask carries
+    /// the same gate and refuses in the same warming window.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_ShufflePlayAsk_WhileIndexWarming_ThrowsAtEntry()
+    {
+        var handler = new ShufflePlayIntentHandler(
+            _sessionManagerMock.Object,
+            _config,
+            _libraryManagerMock.Object,
+            _userManagerMock.Object,
+            _loggerFactory,
+            artistIndex: TestHelpers.WarmingArtistIndex());
+        using var statics = StubBaseItemStatics();
+        SetupPlaylistPlay();
+
+        var ex = await Assert.ThrowsAsync<SkillWarmingUpException>(() =>
+            handler.HandleAsync(
+                CreateRequest(IntentNames.ShufflePlay),
+                TestHelpers.CreateTestContext(),
+                TestHelpers.CreateTestUser(jellyfinToken: "tok"),
+                TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory),
+                CancellationToken.None));
+        Assert.StartsWith("artist", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// JF-808 placement pin (the slot-elicitation hatch): the empty-slot
+    /// DidNotCatchPlaylistName elicit sits BEFORE the warming gate, so a slot-less
+    /// ask during the warming window still elicits the playlist name (mic open)
+    /// instead of being converted to the warming refusal. The playlist path has
+    /// NO feature flag gate (playlists are cross-type always-allowed, the JF-806
+    /// decision), so the flag-gate-position discriminator has nothing to order
+    /// against and the elicit-then-gate shape is the whole story; the cancel-word
+    /// hatch above it stays reachable by the same placement.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_PlaylistAsk_WhileIndexWarming_EmptySlot_StillElicitsPlaylistName()
+    {
+        var handler = CreateHandler(TestHelpers.WarmingArtistIndex());
+        using var statics = StubBaseItemStatics();
+
+        SkillResponse response = await handler.HandleAsync(
+            CreateRequest(playlistName: string.Empty),
+            TestHelpers.CreateTestContext(),
+            TestHelpers.CreateTestUser(),
+            TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory),
+            CancellationToken.None);
+
+        // The localized VALUE, never the raw key (the F5 key-vs-value assert catch).
+        Assert.Contains(
+            "Which playlist would you like to hear?",
+            ((global::Alexa.NET.Response.PlainTextOutputSpeech)response.Response.OutputSpeech).Text,
+            StringComparison.Ordinal);
+        Assert.False(response.Response.ShouldEndSession);
     }
 
     /// <summary>
