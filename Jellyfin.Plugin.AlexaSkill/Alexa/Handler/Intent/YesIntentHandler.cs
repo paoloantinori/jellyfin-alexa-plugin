@@ -184,17 +184,19 @@ public class YesIntentHandler : BaseHandler
                 return Task.FromResult(booksDisabled);
             }
 
-            // JF-806 warming axis (folded from the JF-805 gate marker): the confirm
-            // rides the same resolved-book composition as the direct ask (paged
-            // chapter fetch plus per-chapter UserData reads), a cold-database
-            // surface during the post-restart index load; the artist index stands
-            // in for the shared cold database (the PlayAlbum Layer-1 gate's coarse
-            // precedent, no dedicated book index existing). The book ASK carries no
-            // Layer-1 gate of its own; this leg's gate is the marker's folded
-            // instruction, protective on the confirm's widened surface. Ordered
-            // AFTER the books gate so the warming+disabled intersection answers
-            // the FeatureDisabled Tell the ungated ask would give. Tradeoff every
-            // confirm-leg warming gate shares (JF-806 code-review F5): the refusal's
+            // JF-806 warming axis (folded from the JF-805 gate marker; premise
+            // updated by JF-807): the confirm rides the same resolved-book
+            // composition as the direct ask (paged chapter fetch plus per-chapter
+            // UserData reads), a cold-database surface during the post-restart
+            // index load; the artist index stands in for the shared cold database
+            // (the PlayAlbum Layer-1 gate's coarse precedent, no dedicated book
+            // index existing). Since JF-807 the book ASK carries the same Layer-1
+            // gate on the same stand-in index, so the ask and this confirm answer
+            // identically in the warming window (the asymmetry this leg's original
+            // comment documented is closed). Ordered AFTER the books gate, the
+            // ask's own order, so the warming+disabled intersection answers the
+            // FeatureDisabled Tell on both sides. Tradeoff every confirm-leg
+            // warming gate shares (JF-806 code-review F5): the refusal's
             // session-ending Tell drops the disambiguation attributes (the JF-387
             // rule forbids attributes on terminal responses), so a restart mid
             // prompt costs the user one re-invoke once the load window passes.

@@ -32,6 +32,10 @@ public class PlayBookIntentHandler : BaseHandler
     private readonly IUserDataManager _userDataManager;
     private readonly DeviceQueueManager _queueManager;
 
+    // JF-807: the Layer-1 warming gate's index stand-in (null in test/minimal
+    // setups: no gate; the JF-806 YesIntent book-confirm shape).
+    private readonly IArtistIndex? _artistIndex;
+
     public PlayBookIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
@@ -39,12 +43,14 @@ public class PlayBookIntentHandler : BaseHandler
         IUserManager userManager,
         IUserDataManager userDataManager,
         ILoggerFactory loggerFactory,
-        DeviceQueueManager queueManager) : base(sessionManager, config, loggerFactory)
+        DeviceQueueManager queueManager,
+        IArtistIndex? artistIndex = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
         _userDataManager = userDataManager;
         _queueManager = queueManager;
+        _artistIndex = artistIndex;
     }
 
     /// <summary>
@@ -123,6 +129,22 @@ public class PlayBookIntentHandler : BaseHandler
                 ResponseStrings.Get("ElicitBookName", locale),
                 new Reprompt(ResponseStrings.Get("ElicitBookName", locale)));
         }
+
+        // JF-807 Layer-1 gate: books have no in-memory index of their own, so
+        // this is the coarse artist-index stand-in for the shared cold database
+        // (the shared rule lives on IndexWarmingGate; the PlayAlbum precedent),
+        // matching the JF-806 book-confirm gate so the ask and its confirm
+        // answer identically in the warming window. Placement: AFTER the books
+        // gate (the confirm's own order: the warming+disabled intersection
+        // answers FeatureDisabled) and AFTER the empty-slot elicit. THE REAL
+        // DISCRIMINATOR for elicit-then-gate vs gate-then-elicit is WHERE THE
+        // HANDLER'S FLAG GATE SITS (gate-marker tail F2): PlaySong/PlayAlbum's
+        // music gate sits AFTER their elicit, forcing their warming gate above
+        // it; QueryArtistLibrary and AddToQueue are Dialog.ElicitSlot flows
+        // that still order elicit-then-gate because their flag gates PRECEDE
+        // the elicit. Never generalize from the elicit's mechanism - only from
+        // the flag gate's position. BEFORE the "searching" announcement.
+        GuardIndexReady(_artistIndex);
 
         // JF-643: the book title feeds the SearchTerm query and the fuzzy cascade
         // below, both against Latin library names; romanize the query once.

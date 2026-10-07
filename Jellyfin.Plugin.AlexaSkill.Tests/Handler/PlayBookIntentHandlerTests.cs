@@ -51,8 +51,9 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
         IUserManager userManager,
         IUserDataManager userDataManager,
         ILoggerFactory loggerFactory,
-        global::Jellyfin.Plugin.AlexaSkill.Alexa.Playback.DeviceQueueManager queueManager)
-        : PlayBookIntentHandler(sessionManager, config, libraryManager, userManager, userDataManager, loggerFactory, queueManager)
+        global::Jellyfin.Plugin.AlexaSkill.Alexa.Playback.DeviceQueueManager queueManager,
+        IArtistIndex? artistIndex = null)
+        : PlayBookIntentHandler(sessionManager, config, libraryManager, userManager, userDataManager, loggerFactory, queueManager, artistIndex)
     {
         public ProgressiveSpeechCapture Progressive { get; } = new();
 
@@ -60,7 +61,7 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
             => Progressive.Record(context, request, message);
     }
 
-    private RecordingPlayBookHandler CreateHandler()
+    private RecordingPlayBookHandler CreateHandler(IArtistIndex? artistIndex = null)
     {
         return new RecordingPlayBookHandler(
             _fx.SessionManager.Object,
@@ -69,7 +70,8 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
             _fx.UserManager.Object,
             _fx.UserDataManager.Object,
             _fx.LoggerFactory,
-            _queueManager);
+            _queueManager,
+            artistIndex);
     }
 
     private static IntentRequest CreateIntentRequest(string? bookName = null)
@@ -189,7 +191,27 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
         var session = CreateSession();
 
         _fx.SetupUserMock();
+        SetupSingleBookPlay();
 
+        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+        Assert.NotNull(response);
+        var audioDirective = response.Response.Directives?[0] as AudioPlayerPlayDirective;
+        Assert.NotNull(audioDirective);
+        Assert.Equal(PlayBehavior.ReplaceAll, audioDirective.PlayBehavior);
+        Assert.True(response.Response.ShouldEndSession);
+    }
+
+    // ========== JF-807: the book ask's Layer-1 warming gate (the ask-side twin of the JF-806 book-confirm gate) ==========
+
+    /// <summary>
+    /// The single-book play mocks (the shape HandleAsync_SingleBookFound_PlaysAudio
+    /// introduced) shared with the JF-807 warming pins, so the pre-fix RED failure
+    /// of the entry-gate pin is the clean no-throw (the ungated query ran and
+    /// played), not a mock-default null crashing the handler.
+    /// </summary>
+    private void SetupSingleBookPlay()
+    {
         var bookItem = new Audio
         {
             Name = "The Hobbit",
@@ -200,27 +222,169 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
                 q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
             .Returns(new List<BaseItem> { bookItem });
 
-        var trackItem = new Audio
-        {
-            Name = "Chapter 1",
-            Id = Guid.NewGuid()
-        };
-
         _fx.LibraryManager.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q =>
                 q.ParentId == bookItem.Id)))
             .Returns(new MediaBrowser.Model.Querying.QueryResult<BaseItem>
             {
-                Items = new[] { trackItem },
+                Items = new[] { new Audio { Name = "Chapter 1", Id = Guid.NewGuid() } },
                 TotalRecordCount = 1
             });
+    }
 
-        SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+    /// <summary>
+    /// JF-807 RED PROOF (the warming axis, the ASK): a book ask running while the
+    /// artist index is still loading (the post-restart window) must refuse at
+    /// entry, before the "SearchingBook" announcement and the cold AudioBook
+    /// SearchTerm scan, instead of running it. Pre-JF-807 the ask ran its whole
+    /// cold surface ungated (the recursive SearchTerm scan, the fuzzy cascade,
+    /// the book-folder climbs, and the resolved-book composition) while its own
+    /// confirm was already gated (JF-806): the inverted asymmetry this task
+    /// closes. Index choice: books have no in-memory index of their own (neither
+    /// the artist nor the song n-gram index serves AudioBooks), so the artist
+    /// index stands in for the shared cold database (the PlayAlbum Layer-1
+    /// precedent) and must match the JF-806 confirm's gate: a song-index
+    /// stand-in would make ask and confirm diverge whenever the two indexes'
+    /// readiness differs, and the song window outlasts the artist's.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_BookAsk_WhileIndexWarming_ThrowsAtEntry()
+    {
+        var handler = CreateHandler(TestHelpers.WarmingArtistIndex());
+        SetupSingleBookPlay();
+        _fx.SetupUserMock();
+
+        var ex = await Assert.ThrowsAsync<SkillWarmingUpException>(() =>
+            handler.HandleAsync(
+                CreateIntentRequest(bookName: "The Hobbit"),
+                _fx.CreateContext(),
+                _fx.CreateUser(),
+                CreateSession(),
+                CancellationToken.None));
+        Assert.StartsWith("artist", ex.Message, StringComparison.OrdinalIgnoreCase);
+
+        // JF-807 code-review F1: the documented placement contract (gate BEFORE
+        // the "searching" announcement, no announcement-then-refusal) is enforced
+        // here, not just claimed in the doc above; a gate moved below the
+        // SendProgressiveResponse line still throws and would otherwise keep
+        // every JF-807 pin green while the user hears the announcement first.
+        Assert.Equal(string.Empty, handler.Progressive.AllText);
+    }
+
+    /// <summary>
+    /// Gate-marker tail F5: the READY side of the gate-before-announcement
+    /// contract. The refusal pin asserts AllText empty on the warming throw; this
+    /// pin asserts the "searching" announcement still FIRES on the ready path, so
+    /// a regression that deletes or misplaces the SendProgressiveResponse call
+    /// reddens here instead of passing with a contract whose announcement half
+    /// is unobserved.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_BookAsk_ReadyIndex_AnnouncesSearchingBook()
+    {
+        var handler = CreateHandler(artistIndex: TestHelpers.ReadyArtistIndex());
+        SetupSingleBookPlay();
+
+        SkillResponse response = await handler.HandleAsync(
+            CreateIntentRequest(bookName: "The Hobbit"),
+            _fx.CreateContext(),
+            _fx.CreateUser(),
+            CreateSession(),
+            CancellationToken.None);
 
         Assert.NotNull(response);
-        var audioDirective = response.Response.Directives?[0] as AudioPlayerPlayDirective;
-        Assert.NotNull(audioDirective);
-        Assert.Equal(PlayBehavior.ReplaceAll, audioDirective.PlayBehavior);
+        Assert.Contains("Searching for your audiobook", handler.Progressive.AllText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-807 companion pin (gate transparency): a READY artist index leaves the
+    /// book ask unchanged; the gate only converts the warming window, never the
+    /// warm path (the JF-806 confirm-twin idiom,
+    /// MusicAlbumConfirm_ReadyIndex_PlaysUnchanged).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_BookAsk_ReadyIndex_PlaysUnchanged()
+    {
+        var handler = CreateHandler(TestHelpers.ReadyArtistIndex());
+        SetupSingleBookPlay();
+        _fx.SetupUserMock();
+
+        SkillResponse response = await handler.HandleAsync(
+            CreateIntentRequest(bookName: "The Hobbit"),
+            _fx.CreateContext(),
+            _fx.CreateUser(),
+            CreateSession(),
+            CancellationToken.None);
+
+        Assert.NotNull(response.Response.Directives?[0] as AudioPlayerPlayDirective);
         Assert.True(response.Response.ShouldEndSession);
+    }
+
+    /// <summary>
+    /// JF-807 placement pin (the gate-ORDER contract): the ask orders the books
+    /// gate BEFORE the warming gate, mirroring the JF-806 book confirm's own
+    /// order, so the warming+disabled intersection answers the FeatureDisabled
+    /// Tell on both sides (the confirm-must-match-ask rule extends to the
+    /// warming answer: ask and confirm answer identically in the intersection).
+    /// No book mocks: the FeatureDisabled Tell is the handler's first statement,
+    /// so no library query can run here (JF-807 code-review F3).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_BookAsk_WarmingAndBooksDisabled_AnswersDisabledFirst()
+    {
+        var handler = CreateHandler(TestHelpers.WarmingArtistIndex());
+
+        bool originalBooksEnabled = Plugin.Instance!.Configuration.BooksEnabled;
+        Plugin.Instance!.Configuration.BooksEnabled = false;
+        try
+        {
+            SkillResponse response = await handler.HandleAsync(
+                CreateIntentRequest(bookName: "The Hobbit"),
+                _fx.CreateContext(),
+                _fx.CreateUser(),
+                CreateSession(),
+                CancellationToken.None);
+
+            Assert.True(response.Response.Directives == null || response.Response.Directives.Count == 0,
+                "the intersection must answer the disabled Tell, not query or launch");
+            Assert.True(response.Response.ShouldEndSession);
+            Assert.Contains("disabled", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Plugin.Instance!.Configuration.BooksEnabled = originalBooksEnabled;
+        }
+    }
+
+    /// <summary>
+    /// JF-807 placement pin (the slot-elicitation hatch): the empty-slot
+    /// ElicitBookName Ask sits BEFORE the warming gate, so a slot-less ask
+    /// during the warming window still elicits the book name instead of being
+    /// converted to the warming refusal. The CLAUDE.md Layer-1 placement
+    /// contract fixes the gate before the "searching" announcement and after
+    /// the cancel-word escape hatch; PlayBook's elicit is a plain Ask that
+    /// sets no session state. THE REAL DISCRIMINATOR for the elicit/gate order
+    /// is where the handler's FLAG GATE sits (the gate-marker tail F2
+    /// correction): PlaySong/PlayAlbum's music gate sits AFTER their elicit
+    /// (forcing the warming gate above it), while QueryArtistLibrary/AddToQueue
+    /// and PlayBook order elicit-then-gate because their flag gates PRECEDE
+    /// the elicit - the elicit's mechanism (Ask vs Dialog.ElicitSlot) is NOT
+    /// the discriminator, the flag gate's position is.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_BookAsk_WhileIndexWarming_EmptySlot_StillElicitsBookName()
+    {
+        var handler = CreateHandler(TestHelpers.WarmingArtistIndex());
+
+        SkillResponse response = await handler.HandleAsync(
+            CreateIntentRequest(),
+            _fx.CreateContext(),
+            _fx.CreateUser(),
+            CreateSession(),
+            CancellationToken.None);
+
+        Assert.NotNull(response.Response.OutputSpeech);
+        Assert.Contains("book", TestHelpers.GetSpeechText(response), StringComparison.OrdinalIgnoreCase);
+        Assert.False(response.Response.ShouldEndSession);
     }
 
     // JF-670 review F5: the initial page MUST be the shared builder's output. A
