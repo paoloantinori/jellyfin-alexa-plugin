@@ -66,3 +66,5 @@ needs the two-run base-vs-fixed comparison this filing used.
 <!-- DOD:END -->
 
 JF-808 GATE-MARKER ADDENDUM (2026-10-07): a NEW DATA POINT for this flake - the JF-731 dispose-backstop fired once on the FIRST full net9.0 run of the JF-808 tree (matrix: isolation 174/174 green, immediate re-run green, the net10.0 leg green, the base 1ea40cd4 tree green 5458/5458; the JF-808 worker initially filed it as JF-810 before the gate-marker caught the duplicate). Relevance: this filing's candidate mechanisms named the net10.0 testhost being systematically slower; the net9.0 occurrence weakens the TFM-specific reading and strengthens the plain load-window reading (the parallel phase's 8-lane starvation class). The JF-810 filing is CLOSED as this task's duplicate; all evidence lives here.
+
+JF-808 GATE RUN (2026-10-07): a second one-shot net9.0 failure in the JF-808 merged-tree full gate (name lost to scroll-off; the immediate re-run fully green 5466/5466 both TFMs). Same signature as the JF-808-tree occurrence: net9.0-only, single-shot, green on re-run. Two net9.0 data points in one day against the net10.0-specific candidate; the load-window reading stands.
