@@ -56,6 +56,14 @@ internal static class QueueContinuationFetcher
     /// among themselves; no query-layer key can order them (ItemSortBy has no
     /// Path/Id axis, and DateCreated matched file order in the probe only where the
     /// chapters were already distinct, tying 99-way on the book that needed it).
+    /// JF-790 closed the limit on the QUEUE side (the query keeps this pinned
+    /// order): when the initial page proves the DB order cannot be trusted (the
+    /// untagged class or a full (SortName, Name) tie, see
+    /// Util.ChapterFileNameOrder.PageDistrustsDbOrder), the resolver fetches the
+    /// book once unpaged, sorts it with the ONE shared trailing-filename
+    /// comparator (Util.ChapterFileNameOrder, the concat endpoint's), and pages
+    /// the sorted list in memory; this order stays its tie-preserving BASE (the
+    /// comparator's stable sort keeps it among numberless files).
     /// </summary>
     internal static readonly (ItemSortBy, SortOrder)[] AudiobookChapterOrder =
     {
@@ -135,6 +143,31 @@ internal static class QueueContinuationFetcher
     /// <returns>True when the total exceeds the fetched page.</returns>
     internal static bool InitialPageHasMore(int fetchedCount, int totalCount)
         => totalCount > fetchedCount;
+
+    /// <summary>
+    /// The ONE in-memory slice over a continuation's <see cref="QueueContinuation.CachedTracks"/>
+    /// (the JF-790 hoist of the playlist arm's Skip/Take/advance block, now shared
+    /// with the audiobook arm's filename-ordered shape): serve the batch from the
+    /// cached list, then advance the offset through the ONE idiom
+    /// (<see cref="AdvanceOrMarkExhausted"/>). Cached continuations always carry a
+    /// real total (the caching site enumerated the whole source), so the idiom's
+    /// advance branch runs and the entry guard ends the source at the total.
+    /// </summary>
+    /// <param name="continuation">The continuation whose offset the slice advances.</param>
+    /// <param name="cached">The cached full list the continuation pages.</param>
+    /// <returns>The batch, a slice of the cached list.</returns>
+    private static List<BaseItem> SliceCachedTracks(
+        QueueContinuation continuation,
+        IReadOnlyList<BaseItem> cached)
+    {
+        var batch = cached
+            .Skip(continuation.StartIndex)
+            .Take(continuation.BatchSize)
+            .ToList();
+
+        AdvanceOrMarkExhausted(continuation, batch.Count);
+        return batch;
+    }
 
     /// <summary>
     /// The ONE advance-or-mark idiom after a fetched continuation page (the JF-753
@@ -476,6 +509,9 @@ internal static class QueueContinuationFetcher
     /// Deliberately MediaTypes, not the JF-358 IncludeItemTypes discipline: JF-358
     /// governs ArtistIds queries, which MediaTypes silently ignores; a ParentId query
     /// IS constrained by MediaTypes (this shape returns the chapters in production).
+    /// JF-790: the tail's DB arm serves only continuations minted WITHOUT a cached
+    /// list (the tagged class); the untagged/tie shape's continuation pages its
+    /// cached sorted list in memory instead (see FetchAudiobookChapters).
     /// Order is <see cref="AudiobookChapterOrder"/> (JF-672): the probe-refuted
     /// successor of the old "the DB order for this shape IS the book's chapter
     /// order" claim (which held only for the tagged class); the constant's doc owns
@@ -576,15 +612,17 @@ internal static class QueueContinuationFetcher
     /// chapters through the ONE core's field set AND order instead of a
     /// hand-kept initializer (the pre-JF-672 local leg carried AlbumTrackOrder,
     /// the disc/track composite the chapters probe refuted: ASC NULLS FIRST
-    /// front-loads untagged rows). DEFENSIVE-ONLY today (JF-672 gate-marker
-    /// correction, re-confirmed by the JF-793 code-review routing fix): the leg
+    /// front-loads untagged rows). DEFENSIVE-ONLY for that leg today (JF-672 gate-marker
+    /// correction, re-confirmed by the JF-793 code-review routing fix): it
     /// has no live producer, because YesIntentHandler routes every book-shaped
     /// confirm (AudioBook leaves AND the book folders the PlayBook candidate
     /// normalization emits, via AudiobookItems.IsBookDisambiguationPayload) to
     /// PlayBook before PlayAlbum, and PlayAlbum's own disambiguation matches are
-    /// MusicAlbum-only. The sibling exists so that IF a non-album parent ever
-    /// reaches the leg (a future producer), its chapters still come from the ONE
-    /// core rather than a private initializer.
+    /// MusicAlbum-only. The sibling's LIVE producer is the deep-resume fetch
+    /// (AudiobookPlayResolver, JF-793) joined by the JF-790 filename-order fetch
+    /// (the same resolver, when the initial page proves the DB order cannot be
+    /// trusted): both enumerate the whole book through the ONE core, under the
+    /// same session-user scope the paged sites apply.
     /// </summary>
     internal static InternalItemsQuery BuildScopedAudiobookChaptersQueryUnpaged(
         Jellyfin.Database.Implementations.Entities.User? jellyfinUser,
@@ -670,6 +708,16 @@ internal static class QueueContinuationFetcher
         Entities.User? pluginUser,
         ILogger logger)
     {
+        // JF-790 cached path (the untagged/tie shape): the minting play detected
+        // that the DB order cannot be trusted for this book, fetched it once and
+        // sorted it with the ONE shared trailing-filename comparator, so the tail
+        // pages the SORTED list in memory (the playlist arm's cached shape); the
+        // DB query below would serve the wrong order again.
+        if (continuation.CachedTracks is { Count: > 0 } cachedChapters)
+        {
+            return SliceCachedTracks(continuation, cachedChapters);
+        }
+
         // Shared builder with PlayBookIntentHandler's initial page (JF-670): one query
         // shape owns head and tail, see the builder's doc. The scoped sibling carries
         // the JF-666 pairing structurally (JF-767): the book folder itself was resolved
@@ -749,19 +797,12 @@ internal static class QueueContinuationFetcher
         // Cached path (issue #10 efficiency): the handler already resolved the full audio
         // track list at first-play. Slice it here instead of re-resolving every linked child
         // via GetManageableItems() on each PlaybackNearlyFinished (which is O(playlist size)
-        // per batch). Order is stable because both the handler and this slice operate on the
-        // same cached list.
+        // per batch). Order is stable because both the handler and this slice operate on
+        // the same cached list. The slice itself is the ONE cached-pages idiom
+        // (SliceCachedTracks), shared with the audiobook arm's JF-790 shape.
         if (continuation.CachedTracks is { Count: > 0 } cached)
         {
-            var batch = cached
-                .Skip(continuation.StartIndex)
-                .Take(continuation.BatchSize)
-                .ToList();
-
-            // Known-total cached slice: the ONE idiom's advance branch (see
-            // AdvanceOrMarkExhausted; playlist totals are always real counts).
-            AdvanceOrMarkExhausted(continuation, batch.Count);
-            return batch;
+            return SliceCachedTracks(continuation, cached);
         }
 
         // Fallback (no cache): resolve on demand. Only reached for a Playlist continuation

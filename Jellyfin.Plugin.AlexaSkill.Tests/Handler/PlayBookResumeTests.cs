@@ -317,7 +317,13 @@ public class PlayBookResumeTests : PluginTestBase, IDisposable
             .Select(i => (BaseItem)new Audio
             {
                 Name = $"Measure What Matters - Chapter {i:00}",
-                Id = Guid.NewGuid()
+                Id = Guid.NewGuid(),
+                // JF-790: the tagged class (this book is tagged in the live census);
+                // without IndexNumber the chapters model the untagged class, whose
+                // plays now take the filename-order branch and would fetch the book
+                // unpaged, reddening the DB-path pins below (the skip-the-deep-fetch
+                // query-count pin first).
+                IndexNumber = i
             })
             .ToList();
 

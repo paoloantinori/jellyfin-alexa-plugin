@@ -2386,7 +2386,16 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
 
         var bookItem = new AudioBook { Id = Guid.NewGuid(), Name = "The Long Book" };
         var chapters = Enumerable.Range(0, ProgressiveQueueConstants.GetInitialFetchSize())
-            .Select(i => new Audio { Id = Guid.NewGuid(), Name = $"Chapter {i + 1}" })
+            .Select(i => new Audio
+            {
+                Id = Guid.NewGuid(),
+                Name = $"Chapter {i + 1}",
+                // JF-790: the tagged class, so the mint lands on the DB paged path
+                // (untagged-fixture chapters now take the filename-order branch,
+                // whose in-memory total is the served row count and mints nothing
+                // against a mock that only models the 5-row page).
+                IndexNumber = i + 1
+            })
             .ToList();
 
         _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>

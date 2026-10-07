@@ -76,15 +76,20 @@ public class QueueContinuation
     public bool Shuffle { get; init; }
 
     /// <summary>
-    /// Gets the fully-resolved playlist tracks (audio + visible, in stable playlist order),
-    /// cached at first-play so continuation batches can slice this list instead of
-    /// re-resolving every linked child via <c>Playlist.GetManageableItems()</c> on each
-    /// <c>PlaybackNearlyFinished</c>. Null for Album/Artist sources, which use DB-level
+    /// Gets the fully-resolved source tracks, cached at first-play so continuation
+    /// batches can slice this list instead of re-querying. TWO producers: playlists
+    /// (audio + visible, in stable playlist order, so the tail skips re-resolving
+    /// every linked child via <c>Playlist.GetManageableItems()</c> on each
+    /// <c>PlaybackNearlyFinished</c>) and, since JF-790, the audiobook untagged/tie
+    /// shape (the whole book sorted once with the ONE shared trailing-filename
+    /// comparator, because the DB order answered wrong for that class and must
+    /// never serve the tail; the cached list IS the queue's order). Null for
+    /// Album/Artist sources and the tagged audiobook class, which use DB-level
     /// pagination. Holds references to Jellyfin-cached <see cref="BaseItem"/>s, so holding
     /// the list allocates no new objects (the items already live in the LibraryManager cache).
     /// The store is keyed by user+device and overwritten on each new play, so at most one
-    /// continuation per device; it is removed when the queue exhausts (PlaybackNearlyFinished)
-    /// — NOT on PlaybackStopped, so a stopped-but-not-exhausted playlist lingers until the
+    /// continuation per device; it is removed when the queue exhausts (PlaybackNearlyFinished),
+    /// NOT on PlaybackStopped, so a stopped-but-not-exhausted playlist lingers until the
     /// next playback overwrites it. Bounded and negligible memory.
     /// </summary>
     public IReadOnlyList<BaseItem>? CachedTracks { get; init; }
