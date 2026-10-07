@@ -3,7 +3,7 @@ id: JF-806
 title: >-
   JF-806 - the song, artist, and playlist confirm legs lack the music-disabled gate
   (the confirm-must-match-ask gap left open while books, podcasts, and albums gated)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-07'
 labels:
