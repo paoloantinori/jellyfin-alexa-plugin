@@ -11,6 +11,7 @@ using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Entities;
@@ -60,8 +61,9 @@ public class YesIntentHandlerTests : PluginTestBase
         ILibraryManager libraryManager,
         IUserManager userManager,
         IUserDataManager userDataManager,
-        ILoggerFactory loggerFactory)
-        : YesIntentHandler(sessionManager, config, libraryManager, userManager, userDataManager, loggerFactory)
+        ILoggerFactory loggerFactory,
+        DeviceQueueManager? queueManager = null)
+        : YesIntentHandler(sessionManager, config, libraryManager, userManager, userDataManager, loggerFactory, queueManager)
     {
         public ProgressiveSpeechCapture Progressive { get; } = new();
 
@@ -69,7 +71,7 @@ public class YesIntentHandlerTests : PluginTestBase
             => Progressive.Record(context, request, message);
     }
 
-    private RecordingYesHandler CreateHandler()
+    private RecordingYesHandler CreateHandler(DeviceQueueManager? queueManager = null)
     {
         return new RecordingYesHandler(
             _sessionManagerMock.Object,
@@ -77,7 +79,8 @@ public class YesIntentHandlerTests : PluginTestBase
             _libraryManagerMock.Object,
             _userManagerMock.Object,
             _userDataManagerMock.Object,
-            _loggerFactory);
+            _loggerFactory,
+            queueManager);
     }
 
     private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
@@ -1121,6 +1124,7 @@ public class YesIntentHandlerTests : PluginTestBase
         var matchInfo = new DisambiguationHelper.MatchInfo { Id = bookFolderId.ToString(), Name = "Measure What Matters" };
         var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
 
+        bool originalBooksEnabled = Plugin.Instance!.Configuration.BooksEnabled;
         Plugin.Instance!.Configuration.BooksEnabled = false;
         try
         {
@@ -1145,7 +1149,9 @@ public class YesIntentHandlerTests : PluginTestBase
         }
         finally
         {
-            Plugin.Instance!.Configuration.BooksEnabled = true;
+            // Code-review F2 (JF-805): capture-restore like the music twin below,
+            // not the literal true this pin carried from the JF-795 round.
+            Plugin.Instance!.Configuration.BooksEnabled = originalBooksEnabled;
         }
     }
 
@@ -1222,14 +1228,15 @@ public class YesIntentHandlerTests : PluginTestBase
     private async Task<(SkillResponse Response, SessionInfo Session, Context Context, QueueContinuation? Continuation)> ConfirmAlbumAsync(
         MusicAlbum album,
         Entities.User? user = null,
-        Context? context = null)
+        Context? context = null,
+        DeviceQueueManager? queueManager = null)
     {
         var attrs = CreateDisambiguationAttrs(
             new List<DisambiguationHelper.MatchInfo> { new() { Id = album.Id.ToString(), Name = album.Name } },
             0,
             "album");
 
-        var handler = CreateHandler();
+        var handler = CreateHandler(queueManager);
         var session = CreateSession();
         var effectiveContext = context ?? CreateContext();
         try
@@ -1383,6 +1390,10 @@ public class YesIntentHandlerTests : PluginTestBase
     {
         (MusicAlbum album, List<BaseItem> _) = SetupConfirmedAlbum(3);
 
+        // Code-review F2: capture the pre-test value (the NativeControlsForBooks
+        // rule at the file's video pins); a literal true here could force-flip a
+        // sibling's legitimately-disabled flag mid-collection.
+        bool originalMusicEnabled = Plugin.Instance!.Configuration.MusicEnabled;
         Plugin.Instance!.Configuration.MusicEnabled = false;
         try
         {
@@ -1398,7 +1409,7 @@ public class YesIntentHandlerTests : PluginTestBase
         }
         finally
         {
-            Plugin.Instance!.Configuration.MusicEnabled = true;
+            Plugin.Instance!.Configuration.MusicEnabled = originalMusicEnabled;
         }
     }
 
@@ -1422,8 +1433,11 @@ public class YesIntentHandlerTests : PluginTestBase
         using var trackerSwap = TestHelpers.WarmTrackerFiveMinutesIn(album.Id, "yes-album-confirm-tracker");
         var (response, session, _, _) = await ConfirmAlbumAsync(album, user, TestHelpers.CreateContextWithVideoApp());
 
+        // Code-review F3: the single-directive invariant counts the WHOLE list
+        // (an extra AudioPlayer directive alongside the VideoApp launch, the
+        // double-launch shape, must red here, not hide behind the filter).
         var launch = Assert.IsType<VideoAppDirective.VideoAppLaunchDirective>(
-            Assert.Single(response.Response.Directives.OfType<VideoAppDirective.VideoAppLaunchDirective>()));
+            Assert.Single(response.Response.Directives!));
         // The tracker's mapping: track 1 runtime (4 min) + the 60s in-track partial.
         Assert.Contains($"start={TimeSpan.FromMinutes(4).Ticks + TimeSpan.FromSeconds(60).Ticks}", launch.VideoItem.Source, StringComparison.Ordinal);
         Assert.Equal(tracks[1].Name, launch.VideoItem.Metadata?.Title);
@@ -1432,6 +1446,62 @@ public class YesIntentHandlerTests : PluginTestBase
         // window starting at the tracker's track (index 1).
         Assert.Equal(tracks[1].Id, session.FullNowPlayingItem!.Id);
         Assert.Equal(tracks[1].Id, session.NowPlayingQueue[0].Id);
+    }
+
+    /// <summary>
+    /// JF-805 pin (code-review F1, the device-queue axis): the confirm inherits
+    /// the crash-recovery device queue from the ONE composition exactly like
+    /// the direct ask. The pre-fix confirm leg never touched the device queue;
+    /// with the routing in place, a confirm on a 40-track album must install
+    /// the paged first five track ids on the confirming device's queue manager
+    /// (the SetQueue write the composition owns), or a mid-album skill restart
+    /// loses the crash-recovery resume the ask provides.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DisambiguationAlbumType_MusicAlbumConfirm_WritesTheCrashRecoveryDeviceQueue()
+    {
+        (MusicAlbum album, List<BaseItem> tracks) = SetupConfirmedAlbum(40);
+
+        using var queueManager = TestHelpers.CreateDeviceQueueManager("yes-album-confirm-dq");
+        var (_, _, context, _) = await ConfirmAlbumAsync(album, queueManager: queueManager);
+
+        DeviceQueue deviceQueue = queueManager.GetOrCreateQueue(context.System.Device.DeviceID!);
+        Assert.Equal(
+            tracks.Take(ProgressiveQueueConstants.GetInitialFetchSize()).Select(t => t.Id.ToString()).ToList(),
+            deviceQueue.ItemIds);
+        Assert.Equal(0, deviceQueue.CurrentIndex);
+    }
+
+    /// <summary>
+    /// JF-805 pin (code-review F4, the empty-album axis): an album whose track
+    /// queries come back empty on BOTH arms (the split/malformed shapes where
+    /// the JF-338 retry also finds nothing) must answer the NoSongsInAlbum
+    /// Tell through the routing exactly like the direct ask: no directive, no
+    /// queue state, and the speech names the album.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DisambiguationAlbumType_MusicAlbumConfirm_EmptyAlbum_AnswersNoSongsInAlbum()
+    {
+        var album = new MusicAlbum { Name = "Empty Album", Id = Guid.NewGuid() };
+        _libraryManagerMock.Setup(lm => lm.GetItemById(album.Id)).Returns(album);
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem> { Items = new List<BaseItem>(), TotalRecordCount = 0 });
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        var (response, session, _, continuation) = await ConfirmAlbumAsync(album);
+
+        Assert.True(response.Response.Directives == null || response.Response.Directives.Count == 0,
+            "the empty-album Tell must carry no directives");
+        var speech = response.Tells<PlainTextOutputSpeech>();
+        Assert.Contains("no songs", speech.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(album.Name, speech.Text, StringComparison.Ordinal);
+        Assert.True(session.NowPlayingQueue == null || session.NowPlayingQueue.Count == 0,
+            "the empty-album Tell must leave no queue");
+        Assert.Null(session.FullNowPlayingItem);
+        Assert.Null(continuation);
     }
 
     [Fact]
