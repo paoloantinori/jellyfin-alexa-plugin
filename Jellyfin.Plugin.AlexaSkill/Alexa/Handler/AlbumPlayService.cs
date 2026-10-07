@@ -730,7 +730,11 @@ public sealed class AlbumPlayService
                 QueryResult<BaseItem> fullAlbum = await RetryAsync(
                     () => _search.SafeGetItemsResult(libraryManager,
                         QueueContinuationFetcher.BuildScopedAlbumTracksQueryUnpaged(
-                            jellyfinUser, user, libraryManager, _logger, album.Id, pageUsedAlbumIds)),
+                            jellyfinUser, user, libraryManager, _logger, album.Id, pageUsedAlbumIds),
+                        // Same sentinel semantics as the paged fetches above: only
+                        // Items is consumed here today, but the flag keeps the
+                        // fallback honest for any future total read (JF-753).
+                        unknownTotalOnFallback: true),
                     logLabel + ":GetAlbumTracksTrackerDeepResume",
                     cancellationToken: cancellationToken).ConfigureAwait(false);
 
@@ -829,7 +833,11 @@ public sealed class AlbumPlayService
             QueryResult<BaseItem> fullAlbum = await RetryAsync(
                 () => _search.SafeGetItemsResult(libraryManager,
                     QueueContinuationFetcher.BuildScopedAlbumTracksQueryUnpaged(
-                        jellyfinUser, user, libraryManager, _logger, album.Id, pageUsedAlbumIds)),
+                        jellyfinUser, user, libraryManager, _logger, album.Id, pageUsedAlbumIds),
+                    // Same sentinel semantics as the paged fetches above: only
+                    // Items is consumed here today, but the flag keeps the
+                    // fallback honest for any future total read (JF-753).
+                    unknownTotalOnFallback: true),
                 logLabel + ":GetAlbumTracksDeepResume",
                 cancellationToken: cancellationToken).ConfigureAwait(false);
 

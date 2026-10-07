@@ -124,3 +124,5 @@ JF-803 census already updated same-turn. Suites: touched battery 160/160 both
 TFMs at the final state; Release -warnaserror 0/0 both TFMs; full suite
 5490/5490 both TFMs (baseline 5484 + 6).
 <!-- SECTION:FINAL_SUMMARY:END -->
+
+GATE-MARKER TAIL CORRECTION (2026-10-07): the 'plain songs pay zero lookups' claim is false on the DISABLED path - with BooksEnabled off, every plain-song confirm enters the inline guard and pays the walk's ancestor lookups (up to 3 GetItemById) before falling through to the song play. The trade stands deliberately: the gate must fire on book-shaped items, the lookups are bounded point reads (not the deep/unpaged query class the Alexa window cares about), and the enabled path pays zero. Comment corrected in-code.

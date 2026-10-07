@@ -330,9 +330,13 @@ public class YesIntentHandler : BaseHandler
             // BooksEnabled entry gate, before the slot is even read) refused. The
             // flag read comes first so the IsAudioBookOrChapter ancestor walk (the
             // book identity on this arm, the same anchor the end-of-book decision
-            // uses) runs only on the disabled path; a plain song never enters the
-            // books verdict, and the music gate below stays the arm's flag axis for
-            // everything else. Ordered books-first on a book-shaped item so the
+            // uses) runs ONLY on the disabled path. GATE-MARKER TAIL F1 CORRECTION
+            // of the first cut's claim: with books disabled, EVERY plain-song
+            // confirm DOES enter the verdict and pays the walk's ancestor lookups
+            // (up to 3 GetItemById) before falling through to the song play - the
+            // correctness trade is deliberate (the gate must fire on book-shaped
+            // items), the lookups are bounded point reads, and the enabled path
+            // pays zero. Ordered books-first on a book-shaped item so the
             // both-flags-off intersection answers FeatureDisabled like the book ask
             // (whose entry gate never consults music). Routing a confirmed
             // single-file book to the book leg's
