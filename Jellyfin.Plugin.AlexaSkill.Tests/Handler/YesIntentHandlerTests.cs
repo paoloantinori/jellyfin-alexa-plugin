@@ -1899,4 +1899,158 @@ public class YesIntentHandlerTests : PluginTestBase
         var speech = response.Asks<PlainTextOutputSpeech>();
         Assert.Contains(first.Name, speech.Text, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// JF-806 code-review F2 (the gate-ORDER contracts): the album leg orders
+    /// warming BEFORE the music gate, mirroring PlayAlbum's own order, so in the
+    /// warming+disabled intersection the confirm answers the same SkillWarmingUp
+    /// refusal the ask does. Locks the order against a future normalization that
+    /// would flip it while every single-axis pin stays green.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DisambiguationAlbumType_MusicAlbumConfirm_WarmingAndMusicDisabled_AnswersWarmingFirst()
+    {
+        (MusicAlbum album, List<BaseItem> _) = SetupConfirmedAlbum(3);
+        var attrs = CreateSingleMatchAttrs(album.Id, album.Name, DisambiguationHelper.MediaTypeAlbum);
+
+        bool originalMusicEnabled = Plugin.Instance!.Configuration.MusicEnabled;
+        Plugin.Instance!.Configuration.MusicEnabled = false;
+        try
+        {
+            await AssertConfirmThrowsWarmingAsync(WarmingArtistIndex(), attrs);
+        }
+        finally
+        {
+            Plugin.Instance!.Configuration.MusicEnabled = originalMusicEnabled;
+        }
+    }
+
+    /// <summary>
+    /// JF-806 code-review F2 (the gate-ORDER contracts): the artist leg orders
+    /// the music gate BEFORE warming, mirroring PlayArtistSongs' own order, so
+    /// the warming+disabled intersection answers MediaTypeNotAvailable, not the
+    /// warming refusal.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DisambiguationArtistType_ArtistConfirm_WarmingAndMusicDisabled_AnswersDisabledFirst()
+    {
+        var artistId = Guid.NewGuid();
+        var artist = new MusicArtist { Name = "Test Artist", Id = artistId };
+        _libraryManagerMock.Setup(lm => lm.GetItemById(artistId)).Returns(artist);
+        var attrs = CreateSingleMatchAttrs(artistId, artist.Name, DisambiguationHelper.MediaTypeArtist);
+
+        bool originalMusicEnabled = Plugin.Instance!.Configuration.MusicEnabled;
+        Plugin.Instance!.Configuration.MusicEnabled = false;
+        try
+        {
+            var handler = CreateHandler(artistIndex: WarmingArtistIndex());
+            var response = await handler.HandleAsync(
+                CreateYesIntentRequest(),
+                CreateContext(),
+                TestHelpers.CreateTestUser(),
+                CreateSession(),
+                attrs,
+                CancellationToken.None);
+
+            Assert.True(response.Response.Directives == null || response.Response.Directives.Count == 0,
+                "the intersection must answer the disabled Tell, not launch");
+            var speech = response.Tells<PlainTextOutputSpeech>();
+            Assert.Contains("not available", speech.Text, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Plugin.Instance!.Configuration.MusicEnabled = originalMusicEnabled;
+        }
+    }
+
+    /// <summary>
+    /// JF-806 code-review F2 (the gate-ORDER contracts): the book leg orders
+    /// the books gate BEFORE warming (the ungated ask would answer
+    /// FeatureDisabled in the intersection, so the confirm matches it).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DisambiguationAlbumType_BookConfirm_WarmingAndBooksDisabled_AnswersDisabledFirst()
+    {
+        (List<BaseItem> _, Guid bookFolderId, _) = SetupConfirmedBook();
+        var attrs = CreateSingleMatchAttrs(bookFolderId, "Measure What Matters", DisambiguationHelper.MediaTypeAlbum);
+
+        bool originalBooksEnabled = Plugin.Instance!.Configuration.BooksEnabled;
+        Plugin.Instance!.Configuration.BooksEnabled = false;
+        try
+        {
+            var handler = CreateHandler(artistIndex: WarmingArtistIndex());
+            var response = await handler.HandleAsync(
+                CreateYesIntentRequest(),
+                CreateContext(),
+                TestHelpers.CreateTestUser(),
+                CreateSession(),
+                attrs,
+                CancellationToken.None);
+
+            Assert.True(response.Response.Directives == null || response.Response.Directives.Count == 0,
+                "the intersection must answer the disabled Tell, not launch");
+            var speech = response.Tells<PlainTextOutputSpeech>();
+            Assert.Contains("disabled", speech.Text, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Plugin.Instance!.Configuration.BooksEnabled = originalBooksEnabled;
+        }
+    }
+
+    /// <summary>
+    /// JF-806 code-review F4 (point-lookup transparency): the video confirm
+    /// launches the already-resolved item with no library query and no warming
+    /// gate (its ask is Layer-1 ungated too); a warming index must not refuse
+    /// it. Locks the decision so a future warming sweep must make it
+    /// deliberately.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DisambiguationVideoType_VideoConfirm_WhileIndexWarming_LaunchesVideo()
+    {
+        var videoId = Guid.NewGuid();
+        var movie = new Movie { Name = "Test Movie", Id = videoId };
+        _libraryManagerMock.Setup(lm => lm.GetItemById(videoId)).Returns(movie);
+        var attrs = CreateSingleMatchAttrs(videoId, movie.Name, DisambiguationHelper.MediaTypeVideo);
+
+        var handler = CreateHandler(artistIndex: WarmingArtistIndex());
+        var response = await handler.HandleAsync(
+            CreateYesIntentRequest(),
+            CreateContext(),
+            TestHelpers.CreateTestUser(),
+            CreateSession(),
+            attrs,
+            CancellationToken.None);
+
+        response.HasDirective<Jellyfin.Plugin.AlexaSkill.Alexa.Directive.VideoAppLaunchDirective>();
+    }
+
+    /// <summary>
+    /// JF-806 code-review F4 (point-lookup transparency): the resume
+    /// confirmation resolves one item by ID and builds the launch (no library
+    /// query), so a warming index must not refuse it; its intent-handler twin
+    /// (ResumeIntent) is Layer-1 ungated too.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_ResumeConfirmation_WhileIndexWarming_LaunchesAudio()
+    {
+        var id = Guid.NewGuid();
+        var episode = new TestHelpers.TestEpisodeWithStreams(
+            "FreeCommerce",
+            id,
+            TestHelpers.TestStream(MediaStreamType.Video, "h264"),
+            TestHelpers.TestStream(MediaStreamType.Audio, "aac"));
+        _libraryManagerMock.Setup(lm => lm.GetItemById(id)).Returns(episode);
+
+        var handler = CreateHandler(artistIndex: WarmingArtistIndex());
+        var response = await handler.HandleAsync(
+            CreateYesIntentRequest(),
+            CreateContext(),
+            TestHelpers.CreateTestUser(),
+            CreateSession(),
+            CreateResumeAttrs(id, 300000),
+            CancellationToken.None);
+
+        response.HasDirective<AudioPlayerPlayDirective>();
+    }
 }

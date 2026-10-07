@@ -101,6 +101,14 @@ public class YesIntentHandler : BaseHandler
     {
         string locale = GetLocale(request);
 
+        // JF-806 (point-lookup decisions, recorded so a future warming sweep knows
+        // these were judged, not missed): the resume confirmation and the
+        // pagination continuation below both run BEFORE the disambiguation legs
+        // and resolve only bounded point lookups (one GetItemById plus the launch
+        // build; the pagination page's item IDs via the SAME shared helper the
+        // ungated ShowMoreIntent twin rides), so neither carries a warming gate;
+        // their intent-handler twins are Layer-1 ungated too.
+
         // Check for resume confirmation first
         var resumeState = ResumeHelper.ReadState(sessionAttributes);
         if (resumeState != null)
@@ -185,7 +193,11 @@ public class YesIntentHandler : BaseHandler
             // Layer-1 gate of its own; this leg's gate is the marker's folded
             // instruction, protective on the confirm's widened surface. Ordered
             // AFTER the books gate so the warming+disabled intersection answers
-            // the FeatureDisabled Tell the ungated ask would give.
+            // the FeatureDisabled Tell the ungated ask would give. Tradeoff every
+            // confirm-leg warming gate shares (JF-806 code-review F5): the refusal's
+            // session-ending Tell drops the disambiguation attributes (the JF-387
+            // rule forbids attributes on terminal responses), so a restart mid
+            // prompt costs the user one re-invoke once the load window passes.
             GuardIndexReady(_artistIndex);
 
             Logger.LogDebug("Yes: routing AudioBook item {ItemId} to audiobook playback", itemId);
@@ -243,6 +255,9 @@ public class YesIntentHandler : BaseHandler
                 cancellationToken);
         }
 
+        // JF-806 (point-lookup decision, the song leg's twin): the video confirm
+        // launches the ALREADY-RESOLVED item and issues no library query, so it
+        // carries no warming gate; its ask (PlayVideo) is Layer-1 ungated too.
         if (mediaType == DisambiguationHelper.MediaTypeVideo)
         {
             return PlayVideo(item, user, session, locale, context, request);
@@ -293,7 +308,12 @@ public class YesIntentHandler : BaseHandler
         // is the already-resolved single item (BuildSingleSongResponse issues no
         // library query), so the ask's Layer-1 gate protects only the search the
         // confirm has already completed; over-gating would refuse a bounded
-        // path that works during the warming window.
+        // path that works during the warming window. Bounded consequence
+        // (JF-806 code-review F3): in the warming+disabled intersection the ask
+        // answers SkillWarmingUp (its Layer-1 gates precede its music gate) while
+        // this confirm answers MediaTypeNotAvailable; both are terminal refusals
+        // differing only in the spoken string, and gating by database surface
+        // rather than by ask-order mimicry is the deliberate choice here.
         if (mediaType == DisambiguationHelper.MediaTypeSong)
         {
             SkillResponse? musicDisabled = IfMediaTypeDisabled(c => c.MusicEnabled, request);
