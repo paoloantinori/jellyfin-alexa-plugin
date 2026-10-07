@@ -218,7 +218,7 @@ public class SkillWarmingUpTests : PluginTestBase
         var handler = new PlaySongIntentHandler(
             _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object,
             _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory,
-            artistIndex: ReadyArtistIndex(),
+            artistIndex: TestHelpers.ReadyArtistIndex(),
             songNgramIndex: Mock.Of<ISongNgramIndex>(i => i.IsReady == false));
 
         // Title-only request: the path whose fast resource IS the song index
@@ -242,7 +242,7 @@ public class SkillWarmingUpTests : PluginTestBase
         => AssertSongEntryGateFiresAsync(index => new FindSongIntentHandler(
                 _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object,
                 _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory,
-                artistIndex: ReadyArtistIndex(), songNgramIndex: index),
+                artistIndex: TestHelpers.ReadyArtistIndex(), songNgramIndex: index),
             CreateIntentRequest(IntentNames.FindSongIntent, titleKeywords: "cater street"));
 
     /// <summary>
@@ -275,7 +275,7 @@ public class SkillWarmingUpTests : PluginTestBase
         => AssertSongEntryGateFiresAsync(index => new PlaySongIntentHandler(
                 _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object,
                 _fx.UserManager.Object, _fx.UserDataManager.Object, _fx.LoggerFactory,
-                artistIndex: ReadyArtistIndex(), songNgramIndex: index),
+                artistIndex: TestHelpers.ReadyArtistIndex(), songNgramIndex: index),
             CreateIntentRequest(IntentNames.PlaySong, song: "bohemian rhapsody"));
 
     /// <summary>
@@ -309,7 +309,7 @@ public class SkillWarmingUpTests : PluginTestBase
         var handler = new AddToQueueIntentHandler(
             _fx.SessionManager.Object, _fx.Config, _fx.LibraryManager.Object,
             _fx.UserManager.Object, _fx.LoggerFactory,
-            artistIndex: ReadyArtistIndex(),
+            artistIndex: TestHelpers.ReadyArtistIndex(),
             songNgramIndex: Mock.Of<ISongNgramIndex>(i => i.IsReady == false));
 
         return AssertThrowsWarmingAsync(
@@ -325,9 +325,6 @@ public class SkillWarmingUpTests : PluginTestBase
             handler.HandleAsync(request, TestHelpers.CreateTestContext(), TestHelpers.CreateTestUser(), _fx.CreateSession(), CancellationToken.None));
         Assert.StartsWith(expectedIndexName, ex.Message, StringComparison.OrdinalIgnoreCase);
     }
-
-    private static IArtistIndex ReadyArtistIndex()
-        => Mock.Of<IArtistIndex>(i => i.IsReady == true);
 
     private async Task AssertSongEntryGateFiresAsync(
         Func<ISongNgramIndex?, BaseHandler> createHandler,

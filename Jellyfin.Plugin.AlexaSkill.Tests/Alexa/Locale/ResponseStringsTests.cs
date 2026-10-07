@@ -7,6 +7,7 @@ using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Alexa.Locale;
 
+[Collection("Plugin")]
 public class ResponseStringsTests
 {
     private static readonly string[] AllExpectedKeys = new[]

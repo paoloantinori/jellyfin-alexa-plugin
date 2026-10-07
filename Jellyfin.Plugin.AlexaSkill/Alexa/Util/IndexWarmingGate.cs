@@ -7,7 +7,7 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// on the index their request path actually uses (artist-search paths on
 /// <see cref="IArtistIndex"/>, song-title paths on <see cref="ISongNgramIndex"/>),
 /// before their "searching" announcement. Paths with no in-memory index of their
-/// own (albums, books, ...) gate on the artist index as the coarse stand-in for
+/// own (albums, books, ...) gate on the artist index as the coarse stand-in for The family list is NOT comprehensive as landed: video, podcast, channel, radio, and playlist paths are equally index-less and ungated (the playlist gap is JF-808; the others are deliberate deferrals or unfiled) - the WarmingGateCoverageTests roster is the truth for who gates; gate a new handler only as a roster decision, never from this doc's family list alone.
 /// the shared cold database (the PlayAlbum precedent; books joined in JF-807).
 /// Layer 2: <see cref="ArtistSearch.SearchAsync"/>
 /// re-checks the artist gate at its entry, the choke point covering every caller

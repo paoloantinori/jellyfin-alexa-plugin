@@ -136,10 +136,14 @@ public class PlayBookIntentHandler : BaseHandler
         // matching the JF-806 book-confirm gate so the ask and its confirm
         // answer identically in the warming window. Placement: AFTER the books
         // gate (the confirm's own order: the warming+disabled intersection
-        // answers FeatureDisabled) and AFTER the empty-slot elicit (a plain Ask
-        // with no Dialog.ElicitSlot flow; the QueryArtistLibrary/AddToQueue
-        // shape, not the PlaySong/PlayAlbum warming-before-elicit exception),
-        // BEFORE the "searching" announcement.
+        // answers FeatureDisabled) and AFTER the empty-slot elicit. THE REAL
+        // DISCRIMINATOR for elicit-then-gate vs gate-then-elicit is WHERE THE
+        // HANDLER'S FLAG GATE SITS (gate-marker tail F2): PlaySong/PlayAlbum's
+        // music gate sits AFTER their elicit, forcing their warming gate above
+        // it; QueryArtistLibrary and AddToQueue are Dialog.ElicitSlot flows
+        // that still order elicit-then-gate because their flag gates PRECEDE
+        // the elicit. Never generalize from the elicit's mechanism - only from
+        // the flag gate's position. BEFORE the "searching" announcement.
         GuardIndexReady(_artistIndex);
 
         // JF-643: the book title feeds the SearchTerm query and the fuzzy cascade

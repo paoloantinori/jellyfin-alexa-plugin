@@ -271,6 +271,31 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
+    /// Gate-marker tail F5: the READY side of the gate-before-announcement
+    /// contract. The refusal pin asserts AllText empty on the warming throw; this
+    /// pin asserts the "searching" announcement still FIRES on the ready path, so
+    /// a regression that deletes or misplaces the SendProgressiveResponse call
+    /// reddens here instead of passing with a contract whose announcement half
+    /// is unobserved.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_BookAsk_ReadyIndex_AnnouncesSearchingBook()
+    {
+        var handler = CreateHandler(artistIndex: TestHelpers.ReadyArtistIndex());
+        SetupSingleBookPlay();
+
+        SkillResponse response = await handler.HandleAsync(
+            CreateIntentRequest(bookName: "The Hobbit"),
+            _fx.CreateContext(),
+            _fx.CreateUser(),
+            CreateSession(),
+            CancellationToken.None);
+
+        Assert.NotNull(response);
+        Assert.Contains("Searching for your audiobook", handler.Progressive.AllText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// JF-807 companion pin (gate transparency): a READY artist index leaves the
     /// book ask unchanged; the gate only converts the warming window, never the
     /// warm path (the JF-806 confirm-twin idiom,
@@ -336,13 +361,14 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
     /// during the warming window still elicits the book name instead of being
     /// converted to the warming refusal. The CLAUDE.md Layer-1 placement
     /// contract fixes the gate before the "searching" announcement and after
-    /// the cancel-word escape hatch; PlayBook carries no cancel hatch and no
-    /// Dialog.ElicitSlot flow (its elicitation is a plain Ask that sets no
-    /// session state), so this pin fixes the remaining open order for this
-    /// handler's geometry: the QueryArtistLibrary/AddToQueue elicit-then-gate
-    /// majority shape, NOT the PlaySong/PlayAlbum warming-before-elicit
-    /// exception (those handlers' elicits are registered Dialog.ElicitSlot
-    /// flows whose music-gate interleaving forced that order).
+    /// the cancel-word escape hatch; PlayBook's elicit is a plain Ask that
+    /// sets no session state. THE REAL DISCRIMINATOR for the elicit/gate order
+    /// is where the handler's FLAG GATE sits (the gate-marker tail F2
+    /// correction): PlaySong/PlayAlbum's music gate sits AFTER their elicit
+    /// (forcing the warming gate above it), while QueryArtistLibrary/AddToQueue
+    /// and PlayBook order elicit-then-gate because their flag gates PRECEDE
+    /// the elicit - the elicit's mechanism (Ask vs Dialog.ElicitSlot) is NOT
+    /// the discriminator, the flag gate's position is.
     /// </summary>
     [Fact]
     public async Task HandleAsync_BookAsk_WhileIndexWarming_EmptySlot_StillElicitsBookName()
