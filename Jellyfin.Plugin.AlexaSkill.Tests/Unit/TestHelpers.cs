@@ -45,6 +45,52 @@ internal record TestCandidate(string Name, Guid Id);
 
 internal static class TestHelpers
 {
+    /// <summary>
+    /// The flag-honoring tracks-page server for the resume-probe era mocks (JF-797):
+    /// the deep-resume discriminator issues <c>IsPlayed</c> and <c>IsResumable</c>
+    /// Limit-1 probe queries on the same scoped ParentId shape as the page and the
+    /// unpaged deep fetch, so a mock that ignores the flags would model the server
+    /// as finding progress on every fresh ask and silently green the
+    /// skip-the-deep-fetch pins. Rows are filtered by the flags BEFORE paging (the
+    /// server filters first, then skips), the unflagged queries keep the caller's
+    /// full-list total (the head's InitialPageHasMore reads total vs page count),
+    /// and a flagged probe query reports the FILTERED row count (the probe reads
+    /// items only; the honest shape keeps the result self-consistent). A flag whose
+    /// matcher is null matches no row (a fresh collection), so a fixture that does
+    /// not model progress never accidentally triggers the probe.
+    /// </summary>
+    /// <param name="tracks">The full ordered track list the mock serves.</param>
+    /// <param name="query">The incoming tracks query.</param>
+    /// <param name="playedRow">Which rows the user has Played=true (the IsPlayed probe's matcher).</param>
+    /// <param name="resumableRow">Which rows carry in-progress user data (the IsResumable probe's matcher).</param>
+    /// <returns>The paged, flag-filtered result.</returns>
+    internal static QueryResult<BaseItem> ServePagedTracks(
+        IReadOnlyList<BaseItem> tracks,
+        InternalItemsQuery query,
+        Func<BaseItem, bool>? playedRow = null,
+        Func<BaseItem, bool>? resumableRow = null)
+    {
+        IEnumerable<BaseItem> rows = tracks;
+        bool probe = false;
+        if (query.IsPlayed == true)
+        {
+            probe = true;
+            rows = playedRow != null ? rows.Where(playedRow) : Enumerable.Empty<BaseItem>();
+        }
+        else if (query.IsResumable == true)
+        {
+            probe = true;
+            rows = resumableRow != null ? rows.Where(resumableRow) : Enumerable.Empty<BaseItem>();
+        }
+
+        List<BaseItem> page = rows.Skip(query.StartIndex ?? 0).Take(query.Limit ?? tracks.Count).ToList();
+        return new QueryResult<BaseItem>
+        {
+            Items = page,
+            TotalRecordCount = probe ? page.Count : tracks.Count
+        };
+    }
+
     internal static Entities.User CreateTestUser(
         Guid? id = null,
         string invocationName = "test",

@@ -3,7 +3,7 @@ id: JF-797
 title: >-
   JF-797 - the PlayBook normalization hardening residuals: the payload-kind gate, the
   lazy folder resolution, and the fresh-ask resume discriminator
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-06'
 labels:
