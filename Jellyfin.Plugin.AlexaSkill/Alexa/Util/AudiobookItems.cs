@@ -246,8 +246,11 @@ internal static class AudiobookItems
     /// to YesIntentHandler's album-leg switch arm, the pre-JF-793 behavior. A
     /// positive children-are-AudioBook probe was evaluated and declined: it would
     /// cost a query on every real book-folder confirm to close a breadth no
-    /// producer exhibits. Residual: a Folder subclass introduced by a FUTURE ref
-    /// (none in the current support envelope) passes until listed here.
+    /// producer exhibits. Residual: a Folder subclass outside the controller refs'
+    /// concrete kinds passes until listed here - and such kinds exist TODAY, not in a
+    /// future ref (gate-marker tail F3): PlaylistsFolder (Emby.Server.Implementations,
+    /// concrete at both pinned tags) plus any plugin-derived Folder. The pass-through
+    /// breadth is present, not future; re-derive the list when the envelope moves.
     /// </summary>
     internal static bool IsBookDisambiguationPayload(BaseItem? item)
         => item is AudioBook

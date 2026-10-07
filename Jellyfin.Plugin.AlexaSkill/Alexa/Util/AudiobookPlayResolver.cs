@@ -222,10 +222,19 @@ public static class AudiobookPlayResolver
         // runs before the probes (cheapest first), and the whole gate folds into
         // one condition: nothing below it runs when the page answer is complete
         // or the probes prove no row carries resume-relevant user data.
-        bool queueHoldsPositionedEntry = queueManager != null
-            && session.DeviceId != null
-            && queueManager.HasAnyStoredPosition(session.DeviceId);
+        bool queueHoldsPositionedEntry = false;
         bool resumeProbeHit = false;
+        if (resumeTicks == 0 && continuationHasMore)
+        {
+            // Gate-marker tail F4: the JF-581 valve is evaluated LAZILY, only once
+            // the page answer is incomplete - the eager shape paid a lock acquisition
+            // plus an O(cap) Values scan on _launchScopeLock for every single-page
+            // book and every page-resolved resume, the shapes that discard the value.
+            queueHoldsPositionedEntry = queueManager != null
+                && session.DeviceId != null
+                && queueManager.HasAnyStoredPosition(session.DeviceId);
+        }
+
         if (resumeTicks == 0 && continuationHasMore && !queueHoldsPositionedEntry)
         {
             resumeProbeHit = await QueueContinuationFetcher.MayHaveResumeRelevantUserDataAsync(
@@ -237,11 +246,23 @@ public static class AudiobookPlayResolver
                     "GetBookTracksResumeProbe",
                     cancellationToken: cancellationToken)).ConfigureAwait(false);
 
-            // The gate's branching decision, logged for triage (the Debug Logging
-            // Policy): which trigger released the deep fetch, or why it stayed cold.
+        }
+
+        // Gate-marker tail F1: the gate DECISION logged for triage (the Debug
+        // Logging Policy) on every path where the gate question was asked - the
+        // first cut logged only inside the probe branch, so the JF-581
+        // valve-release shape (a positioned queue entry releasing the fetch with
+        // no probe run) logged nothing, and the 'positioned queue entries' field
+        // was constant-false wherever the log did fire.
+        if (resumeTicks == 0 && continuationHasMore)
+        {
             logger.LogDebug(
-                "{Label}: deep-resume gate for '{BookName}': page answer carries no position and more pages remain; positioned queue entries={QueueEntries}, user-data probes hit={ProbeHit}",
-                logLabel, book.Name, queueHoldsPositionedEntry, resumeProbeHit);
+                "{Label}: deep-resume gate for '{BookName}': page answer carries no position and more pages remain; released by {Trigger}",
+                logLabel,
+                book.Name,
+                queueHoldsPositionedEntry ? "a positioned queue entry (JF-581 valve)"
+                    : resumeProbeHit ? "a user-data probe hit"
+                    : "nothing (staying cold)");
         }
 
         if (resumeTicks == 0

@@ -693,8 +693,13 @@ public sealed class DeviceQueueManager : IDisposable
             return;
         }
 
-        DeviceQueue queue = GetOrCreateQueue(deviceId);
-        queue.ItemPositionState[parsed.ToString("N")] = positionTicks;
+        // Gate-marker tail F2: the write seam locks too - the dictionary write can
+        // race a locked read's enumeration mid-resize otherwise.
+        lock (_launchScopeLock)
+        {
+            DeviceQueue queue = GetOrCreateQueue(deviceId);
+            queue.ItemPositionState[parsed.ToString("N")] = positionTicks;
+        }
     }
 
     /// <summary>
@@ -709,15 +714,24 @@ public sealed class DeviceQueueManager : IDisposable
     /// <returns>The stored position in ticks, or null when none.</returns>
     public long? GetStoredPositionTicks(string deviceId, string itemId)
     {
-        if (!Guid.TryParse(itemId, out Guid parsedItemId)
-            || !_queues.TryGetValue(deviceId, out DeviceQueue? queue))
+        if (!Guid.TryParse(itemId, out Guid parsedItemId))
         {
             return null;
         }
 
-        return queue.ItemPositionState.TryGetValue(parsedItemId.ToString("N"), out long ticks) && ticks > 0
-            ? ticks
-            : null;
+        // Gate-marker tail F2: the read takes _launchScopeLock like the aggregate
+        // sibling HasAnyStoredPosition - an unlocked TryGetValue can race the locked
+        // structural write/trim in RecordStoppedPositionAndTrim mid-resize (Dictionary
+        // is not thread-safe for concurrent read plus write; the die-before-the-ack
+        // JF-425/JF-447/JF-738 class this store's contract names).
+        lock (_launchScopeLock)
+        {
+            return _queues.TryGetValue(deviceId, out DeviceQueue? queue)
+                && queue.ItemPositionState.TryGetValue(parsedItemId.ToString("N"), out long ticks)
+                && ticks > 0
+                ? ticks
+                : null;
+        }
     }
 
     /// <summary>
