@@ -28,6 +28,22 @@ Shuffle, repeat and loop now confirm out loud when they take effect (before: sil
 - Video requests work without a title first: ask to "play a film" and the skill asks which one; naming the film in one shot works too.
 - Artist information no longer reads punctuation aloud when listing genres.
 
+## Audiobooks, end to end
+
+Asking for a book now plays the whole book: before, a request could start a single chapter and then fall silent. Chapters play in the right order even when the files carry no track metadata (the skill reads the file names, the way a person would). Resuming works from any point, hours into a long book included, on any Echo device. Books that live as single files side by side in one folder no longer get merged into one giant queue.
+
+## Confirmations you can trust
+
+Answering "yes" to a did-you-mean now plays exactly what the direct request would have played: same track or chapter, same resume point, same queue for long albums and books. If an administrator turns off books or music, a pending question respects that too instead of playing something that was just disabled.
+
+## Patient after restarts
+
+When the server restarts, the skill takes a moment to reload your library; requests during that window get a clear "one moment" answer instead of a failure, and this protection now covers books, albums, artists, playlists and shuffle requests. The first play of a transcoded episode also starts correctly from the beginning instead of stalling.
+
+## Restricted libraries behave
+
+Users who limit the skill to specific libraries get the same playback everyone else gets: shared streams are no longer mixed between different library scopes, so artist, album, book and playlist requests return the right content.
+
 ## Known limitations
 
 - Bare transport words (stop, next) during playback are frequently claimed by the device's default music service; this is an Amazon platform limitation, tracked upstream. Say commands with the skill name for reliable routing.
