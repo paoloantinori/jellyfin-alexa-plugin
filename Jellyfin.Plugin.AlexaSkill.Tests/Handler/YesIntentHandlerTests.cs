@@ -11,6 +11,7 @@ using Alexa.NET.Response;
 using Alexa.NET.Response.Directive;
 using Jellyfin.Plugin.AlexaSkill.Alexa.Handler;
 using Jellyfin.Plugin.AlexaSkill.Alexa;
+using Jellyfin.Plugin.AlexaSkill.Alexa.Playback;
 using Jellyfin.Plugin.AlexaSkill.Configuration;
 using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Entities;
@@ -24,6 +25,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using Newtonsoft.Json;
 using Xunit;
+using VideoAppDirective = Jellyfin.Plugin.AlexaSkill.Alexa.Directive;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
@@ -59,8 +61,9 @@ public class YesIntentHandlerTests : PluginTestBase
         ILibraryManager libraryManager,
         IUserManager userManager,
         IUserDataManager userDataManager,
-        ILoggerFactory loggerFactory)
-        : YesIntentHandler(sessionManager, config, libraryManager, userManager, userDataManager, loggerFactory)
+        ILoggerFactory loggerFactory,
+        DeviceQueueManager? queueManager = null)
+        : YesIntentHandler(sessionManager, config, libraryManager, userManager, userDataManager, loggerFactory, queueManager)
     {
         public ProgressiveSpeechCapture Progressive { get; } = new();
 
@@ -68,7 +71,7 @@ public class YesIntentHandlerTests : PluginTestBase
             => Progressive.Record(context, request, message);
     }
 
-    private RecordingYesHandler CreateHandler()
+    private RecordingYesHandler CreateHandler(DeviceQueueManager? queueManager = null)
     {
         return new RecordingYesHandler(
             _sessionManagerMock.Object,
@@ -76,7 +79,8 @@ public class YesIntentHandlerTests : PluginTestBase
             _libraryManagerMock.Object,
             _userManagerMock.Object,
             _userDataManagerMock.Object,
-            _loggerFactory);
+            _loggerFactory,
+            queueManager);
     }
 
     private SessionInfo CreateSession() => TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory);
@@ -419,9 +423,11 @@ public class YesIntentHandlerTests : PluginTestBase
             .Setup(lm => lm.GetItemById(albumId))
             .Returns(album);
 
+        // JF-805: the confirm rides the ONE album play flow, whose track page
+        // executor is SafeGetItemsResult (the paged GetItemsResult form).
         _libraryManagerMock
-            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns(new List<BaseItem> { song });
+            .Setup(lm => lm.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem> { Items = new List<BaseItem> { song }, TotalRecordCount = 1 });
 
         var matchInfo = new DisambiguationHelper.MatchInfo { Id = albumId.ToString(), Name = "Test Album" };
         var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
@@ -435,7 +441,8 @@ public class YesIntentHandlerTests : PluginTestBase
             attrs,
             CancellationToken.None);
 
-        response.HasDirective<AudioPlayerPlayDirective>();
+        var directive = response.HasDirective<AudioPlayerPlayDirective>();
+        Assert.Equal(songId.ToString(), directive.AudioItem.Stream.Token);
     }
 
     [Fact]
@@ -600,17 +607,19 @@ public class YesIntentHandlerTests : PluginTestBase
     // ========== JF-767 Finding A: the confirmation paths route through the ONE builders ==========
 
     /// <summary>
-    /// JF-767 Finding A pin: a confirmed MUSIC album's whole-album enumeration routes
-    /// through the ONE album-tracks builder (unpaged, session-user form) under the
-    /// JF-666 library scope, WITH the JF-338 AlbumIds retry, the same triple the
-    /// paged head (AlbumPlayService) runs, so a confirm answers exactly what the
-    /// direct ask plays: split albums PLAY instead of answering NoSongsInAlbum, and
-    /// the queue rows feed the JF-625 concat timeline the same field set the endpoint
-    /// encodes (IncludeItemTypes=Audio, not the old hand-kept MediaTypes drift pair).
-    /// Split-album server shape (empty ParentId pages, populated AlbumIds pages) so
-    /// BOTH arms issue. RED on the pre-JF-767 tree (verified): no retry issues
-    /// (captured == 1), the folder arm carries MediaTypes with no IncludeItemTypes,
-    /// and neither arm carries TopParentIds.
+    /// JF-767 Finding A pin (JF-805 evolution): a confirmed MUSIC album's track
+    /// enumeration routes through the ONE album play flow
+    /// (AlbumPlayService.BuildAlbumPlayResponseAsync), so the confirm issues the
+    /// same PAGED queries under the JF-666 library scope, WITH the JF-338
+    /// AlbumIds retry, the same triple the paged head runs: a confirm answers
+    /// exactly what the direct ask plays (split albums PLAY instead of
+    /// answering NoSongsInAlbum) and the queue rows feed the JF-625 concat
+    /// timeline the same field set the endpoint encodes
+    /// (IncludeItemTypes=Audio, not the old hand-kept MediaTypes drift pair).
+    /// Split-album server shape (empty ParentId pages, populated AlbumIds
+    /// pages) so BOTH arms issue. RED on the pre-JF-805 tree (verified): the
+    /// confirm issued two UNPAGED GetItemList queries instead (no
+    /// StartIndex/Limit; the captured GetItemsResult list stayed empty).
     /// </summary>
     [Fact]
     public async Task HandleAsync_AlbumType_MusicAlbumConfirm_SplitAlbum_RoutesThroughBuilderScopeAndRetry()
@@ -624,43 +633,38 @@ public class YesIntentHandlerTests : PluginTestBase
 
         var captured = new List<InternalItemsQuery>();
         _libraryManagerMock
-            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Setup(lm => lm.GetItemsResult(It.IsAny<InternalItemsQuery>()))
             .Callback<InternalItemsQuery>(q => captured.Add(q))
             .Returns((InternalItemsQuery q) =>
                 q.AlbumIds != null && q.AlbumIds.Contains(albumId)
-                    ? new List<BaseItem> { song }
-                    : new List<BaseItem>());
+                    ? new QueryResult<BaseItem> { Items = new List<BaseItem> { song }, TotalRecordCount = 1 }
+                    : new QueryResult<BaseItem> { Items = new List<BaseItem>(), TotalRecordCount = 0 });
 
         var user = TestHelpers.CreateTestUser(allowedLibraryIds: new[] { musicLib.ToString() });
 
-        var matchInfo = new DisambiguationHelper.MatchInfo { Id = albumId.ToString(), Name = "Split Album" };
-        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
+        var (response, _, _, _) = await ConfirmAlbumAsync(album, user);
 
-        var handler = CreateHandler();
-        var response = await handler.HandleAsync(
-            CreateYesIntentRequest(),
-            CreateContext(),
-            user,
-            CreateSession(),
-            attrs,
-            CancellationToken.None);
-
-        // The JF-338 retry issued: folder arm (empty) then the AlbumIds arm (populated).
+        // The JF-338 retry issued: folder arm (empty) then the AlbumIds arm
+        // (populated); the 1-track page is the whole album, so no deep
+        // fetch follows.
         Assert.Equal(2, captured.Count);
 
-        // Folder arm: the builder's field set (kind, order, scope).
+        // Folder arm: the builder's field set (kind, order, page, scope).
         var folderArm = captured[0];
         Assert.True(folderArm.Recursive);
         Assert.Equal(new[] { Jellyfin.Data.Enums.BaseItemKind.Audio }, folderArm.IncludeItemTypes);
         Assert.Equal(QueueContinuationFetcher.AlbumTrackOrder, folderArm.OrderBy);
         Assert.Equal(albumId, folderArm.ParentId);
+        Assert.Equal(0, folderArm.StartIndex);
+        Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), folderArm.Limit);
         Assert.NotNull(folderArm.User);
         Assert.Contains(musicLib, folderArm.TopParentIds);
 
-        // AlbumIds arm (the retry): same scope, membership scoping field.
+        // AlbumIds arm (the retry): same scope and page, membership scoping field.
         var membershipArm = captured[1];
         Assert.Equal(new[] { albumId }, membershipArm.AlbumIds);
         Assert.Equal(new[] { Jellyfin.Data.Enums.BaseItemKind.Audio }, membershipArm.IncludeItemTypes);
+        Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), membershipArm.Limit);
         Assert.Contains(musicLib, membershipArm.TopParentIds);
 
         // The split album PLAYS on confirm (the direct ask already did, JF-338).
@@ -1120,6 +1124,7 @@ public class YesIntentHandlerTests : PluginTestBase
         var matchInfo = new DisambiguationHelper.MatchInfo { Id = bookFolderId.ToString(), Name = "Measure What Matters" };
         var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
 
+        bool originalBooksEnabled = Plugin.Instance!.Configuration.BooksEnabled;
         Plugin.Instance!.Configuration.BooksEnabled = false;
         try
         {
@@ -1144,8 +1149,359 @@ public class YesIntentHandlerTests : PluginTestBase
         }
         finally
         {
-            Plugin.Instance!.Configuration.BooksEnabled = true;
+            // Code-review F2 (JF-805): capture-restore like the music twin below,
+            // not the literal true this pin carried from the JF-795 round.
+            Plugin.Instance!.Configuration.BooksEnabled = originalBooksEnabled;
         }
+    }
+
+    // ========== JF-805: the MusicAlbum confirm rides the ONE album play flow ==========
+
+    /// <summary>
+    /// The shared confirmed-album fixture (the JF-805 album twin of
+    /// <see cref="SetupConfirmedBook"/>): a MusicAlbum served by GetItemById, a
+    /// paging-honoring tracks executor over GetItemsResult (the composition's
+    /// page plus the deep unpaged re-scan; any OTHER parent enumerates nothing),
+    /// an unpaged GetItemList executor serving the whole album (the pre-JF-805
+    /// confirm leg's own executor, so the red proofs exercise the real defect
+    /// rather than an empty-mock artifact), and optional in-progress UserData
+    /// on the track at <paramref name="progressTrackIndex"/>.
+    /// </summary>
+    private (MusicAlbum Album, List<BaseItem> Tracks) SetupConfirmedAlbum(
+        int trackCount,
+        int? progressTrackIndex = null)
+    {
+        var album = new MusicAlbum { Name = "Kind of Blue", Id = Guid.NewGuid() };
+        _libraryManagerMock.Setup(lm => lm.GetItemById(album.Id)).Returns(album);
+
+        List<BaseItem> tracks = Enumerable.Range(1, trackCount)
+            .Select(i => (BaseItem)new Audio
+            {
+                Name = $"Kind of Blue track {i:00}",
+                Id = Guid.NewGuid(),
+                Album = album.Name,
+                ParentId = album.Id,
+                RunTimeTicks = TimeSpan.FromMinutes(4).Ticks
+            })
+            .ToList();
+
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) => q.ParentId == album.Id
+                ? new QueryResult<BaseItem>
+                {
+                    Items = tracks.Skip(q.StartIndex ?? 0).Take(q.Limit ?? tracks.Count).ToList(),
+                    TotalRecordCount = tracks.Count
+                }
+                : new QueryResult<BaseItem> { Items = new List<BaseItem>(), TotalRecordCount = 0 });
+
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) => q.ParentId == album.Id ? tracks : new List<BaseItem>());
+
+        if (progressTrackIndex is int progressIdx)
+        {
+            var inProgress = new UserItemData
+            {
+                Key = "test",
+                Played = false,
+                PlaybackPositionTicks = TimeSpan.FromMinutes(1).Ticks
+            };
+            _userDataManagerMock
+                .Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
+                .Returns((Jellyfin.Database.Implementations.Entities.User _, BaseItem item) =>
+                    item.Id == tracks[progressIdx].Id ? inProgress : null);
+        }
+
+        return (album, tracks);
+    }
+
+    /// <summary>
+    /// The shared confirm driver for the JF-805 MusicAlbum pins: builds the
+    /// album disambiguation attrs (the payload names the ALBUM, PlayAlbum's
+    /// matches are MusicAlbums), runs the yes confirm, snapshots the
+    /// continuation the routed composition minted, and clears the store (the
+    /// [Collection("Plugin")] isolation the JF-795 book twins keep by hand;
+    /// callers assert on the snapshot because the store is already empty by
+    /// the time they run).
+    /// </summary>
+    private async Task<(SkillResponse Response, SessionInfo Session, Context Context, QueueContinuation? Continuation)> ConfirmAlbumAsync(
+        MusicAlbum album,
+        Entities.User? user = null,
+        Context? context = null,
+        DeviceQueueManager? queueManager = null)
+    {
+        var attrs = CreateDisambiguationAttrs(
+            new List<DisambiguationHelper.MatchInfo> { new() { Id = album.Id.ToString(), Name = album.Name } },
+            0,
+            "album");
+
+        var handler = CreateHandler(queueManager);
+        var session = CreateSession();
+        var effectiveContext = context ?? CreateContext();
+        try
+        {
+            SkillResponse response = await handler.HandleAsync(
+                CreateYesIntentRequest(),
+                effectiveContext,
+                user ?? TestHelpers.CreateTestUser(),
+                session,
+                attrs,
+                CancellationToken.None);
+            QueueContinuation? continuation = QueueContinuationStore.Get(session.UserId, effectiveContext.System.Device.DeviceID!);
+            return (response, session, effectiveContext, continuation);
+        }
+        finally
+        {
+            QueueContinuationStore.Remove(session.UserId, effectiveContext.System.Device.DeviceID!);
+        }
+    }
+
+    /// <summary>
+    /// JF-805 RED PROOF (resume axis, the album twin of the JF-795 book pin):
+    /// a confirmed album with deep progress (track 22 of 26, beyond the initial
+    /// page) must resume at the position-holding track exactly like the direct
+    /// ask (the JF-796 deep-resume shape). The pre-fix confirm leg always
+    /// launched albumItems[0] with no FindResumeTrackIndex scan, so the confirm
+    /// answered a deep-progress album by restarting at track 1 at 0:00 (the
+    /// confirm-must-match-ask rule on the resume axis). The album audio route's
+    /// resume semantic is the queue-starting one (resumePosition false): the
+    /// position-holding track launches at its beginning, offset 0.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DisambiguationAlbumType_MusicAlbumConfirm_DeepProgress_ResumesAtPositionHoldingTrack()
+    {
+        (MusicAlbum album, List<BaseItem> tracks) = SetupConfirmedAlbum(26, progressTrackIndex: 21);
+
+        var (response, session, _, continuation) = await ConfirmAlbumAsync(album);
+
+        // THE AXIS: the position-holding track launches, not track 1.
+        var audioDirective = Assert.IsType<AudioPlayerPlayDirective>(
+            Assert.Single(response.Response.Directives!));
+        Assert.Equal(tracks[21].Id.ToString(), audioDirective.AudioItem.Stream.Token);
+        Assert.Equal(0, audioDirective.AudioItem.Stream.OffsetInMilliseconds);
+
+        // The queue re-slices at the position-holding track (tracks 22 to 26);
+        // nothing remains beyond it, so no continuation is minted.
+        Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), session.NowPlayingQueue.Count);
+        Assert.Equal(tracks[21].Id, session.FullNowPlayingItem!.Id);
+        Assert.Equal(tracks[21].Id, session.NowPlayingQueue[0].Id);
+        Assert.Equal(tracks[25].Id, session.NowPlayingQueue[4].Id);
+        Assert.Null(continuation);
+    }
+
+    /// <summary>
+    /// JF-805 RED PROOF (continuation axis): a confirmed multi-track album must
+    /// mint the progressive QueueContinuation exactly like the direct ask. The
+    /// pre-fix confirm leg queued the WHOLE album unpaged through the session
+    /// queue only and never touched QueueContinuationStore or the device queue,
+    /// so a "yes" diverged from the ask on the queue-completeness axis (no
+    /// crash-recovery queue; on the seek route no continuation state at all).
+    /// Pin: continuation minted with SourceType Album, ParentId the album,
+    /// StartIndex 5 (page start 0 + page count 5), TotalCount 40.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DisambiguationAlbumType_MusicAlbumConfirm_MintsQueueContinuation()
+    {
+        (MusicAlbum album, List<BaseItem> tracks) = SetupConfirmedAlbum(40);
+
+        var (response, session, _, continuation) = await ConfirmAlbumAsync(album);
+
+        // The play itself launches track 1 fresh (no progress on the album).
+        var audioDirective = Assert.IsType<AudioPlayerPlayDirective>(
+            Assert.Single(response.Response.Directives!));
+        Assert.Equal(tracks[0].Id.ToString(), audioDirective.AudioItem.Stream.Token);
+        Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), session.NowPlayingQueue.Count);
+
+        // THE AXIS: the continuation is minted (pre-fix: null).
+        Assert.NotNull(continuation);
+        Assert.Equal("Album", continuation!.SourceType);
+        Assert.Equal(album.Id, continuation.ParentId);
+        Assert.Equal(ProgressiveQueueConstants.GetInitialFetchSize(), continuation.StartIndex);
+        Assert.Equal(40, continuation.TotalCount);
+    }
+
+    /// <summary>
+    /// JF-805 companion pin: the continuation offset is RESUME-AWARE. A 40-track
+    /// album confirmed with deep progress on track 22 re-slices the page at
+    /// tracks 22 to 26, so the continuation must fetch from index 26 (page
+    /// start 21 + page count 5) against the honest total 40, the same rebase
+    /// the direct ask performs (JF-796).
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DisambiguationAlbumType_MusicAlbumConfirm_DeepProgress_ContinuationAtResumeAwareOffset()
+    {
+        (MusicAlbum album, List<BaseItem> _) = SetupConfirmedAlbum(40, progressTrackIndex: 21);
+
+        var (_, _, _, continuation) = await ConfirmAlbumAsync(album);
+
+        Assert.NotNull(continuation);
+        Assert.Equal(26, continuation!.StartIndex);
+        Assert.Equal(40, continuation.TotalCount);
+    }
+
+    /// <summary>
+    /// JF-805 companion pin: a single-page album confirm is unchanged. A
+    /// 3-track album plays the whole album (queue of 3, track 1 first) with no
+    /// continuation, exactly the pre-fix outcome.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DisambiguationAlbumType_MusicAlbumConfirm_SinglePage_PlaysWholeAlbumNoContinuation()
+    {
+        (MusicAlbum album, List<BaseItem> tracks) = SetupConfirmedAlbum(3);
+
+        var (response, session, _, continuation) = await ConfirmAlbumAsync(album);
+
+        var audioDirective = Assert.IsType<AudioPlayerPlayDirective>(
+            Assert.Single(response.Response.Directives!));
+        Assert.Equal(tracks[0].Id.ToString(), audioDirective.AudioItem.Stream.Token);
+        Assert.Equal(3, session.NowPlayingQueue.Count);
+        Assert.Equal(tracks[2].Id, session.NowPlayingQueue[2].Id);
+        Assert.Null(continuation);
+    }
+
+    /// <summary>
+    /// JF-805 companion pin (no collateral on the announce path): with the
+    /// default configuration (AnnounceAudioPlays off) the confirm stays silent,
+    /// the pre-fix leg's speech shape (it never passed an announce locale). The
+    /// routed composition passes the locale but the flag gates the announce, so
+    /// confirm and ask speak the same silence.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DisambiguationAlbumType_MusicAlbumConfirm_DefaultConfig_StaysSilent()
+    {
+        (MusicAlbum album, List<BaseItem> _) = SetupConfirmedAlbum(3);
+
+        var (response, _, _, _) = await ConfirmAlbumAsync(album);
+
+        Assert.NotNull(Assert.IsType<AudioPlayerPlayDirective>(Assert.Single(response.Response.Directives!)));
+        Assert.Null(response.Response.OutputSpeech);
+    }
+
+    /// <summary>
+    /// JF-805 RED PROOF (the disabled axis, the JF-611/JF-795 shape): an album
+    /// disambiguation prompt confirmed after an admin disabled music must
+    /// answer the media-type-disabled Tell the direct ask gives, not launch
+    /// the album through the confirm (the confirm-must-match-ask rule extends
+    /// to the disabled answer). The pre-fix leg never gated.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DisambiguationAlbumType_MusicAlbumConfirm_MusicDisabled_AnswersMediaTypeNotAvailable()
+    {
+        (MusicAlbum album, List<BaseItem> _) = SetupConfirmedAlbum(3);
+
+        // Code-review F2: capture the pre-test value (the NativeControlsForBooks
+        // rule at the file's video pins); a literal true here could force-flip a
+        // sibling's legitimately-disabled flag mid-collection.
+        bool originalMusicEnabled = Plugin.Instance!.Configuration.MusicEnabled;
+        Plugin.Instance!.Configuration.MusicEnabled = false;
+        try
+        {
+            var (response, session, _, _) = await ConfirmAlbumAsync(album);
+
+            Assert.True(response.Response.Directives == null || response.Response.Directives.Count == 0,
+                "the disabled Tell must carry no directives");
+            var speech = response.Tells<PlainTextOutputSpeech>();
+            Assert.Contains("not available", speech.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.True(session.NowPlayingQueue == null || session.NowPlayingQueue.Count == 0,
+                "the disabled Tell must leave no queue");
+            Assert.Null(session.FullNowPlayingItem);
+        }
+        finally
+        {
+            Plugin.Instance!.Configuration.MusicEnabled = originalMusicEnabled;
+        }
+    }
+
+    /// <summary>
+    /// JF-805 companion pin (the seek-mode shape): the JF-625 tracker override
+    /// rides the routed composition on the confirm path. A warm tracker at 5
+    /// minutes into a 26-track album (track 2, 60s in) with deep UserData
+    /// progress on track 22 stays the resume truth: the confirm launches the
+    /// tracker's track on the VideoApp concat sliced at the tracker's position,
+    /// never re-slicing at the deep UserData track (the JF-796 veto). The
+    /// pre-fix leg had no tracker logic at all and launched track 1.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DisambiguationAlbumType_MusicAlbumConfirm_SeekMode_WarmTrackerRidesTheComposition()
+    {
+        (MusicAlbum album, List<BaseItem> tracks) = SetupConfirmedAlbum(26, progressTrackIndex: 21);
+
+        var user = TestHelpers.CreateTestUser();
+        user.VideoAppForAudio = true;
+
+        using var trackerSwap = TestHelpers.WarmTrackerFiveMinutesIn(album.Id, "yes-album-confirm-tracker");
+        var (response, session, _, _) = await ConfirmAlbumAsync(album, user, TestHelpers.CreateContextWithVideoApp());
+
+        // Code-review F3: the single-directive invariant counts the WHOLE list
+        // (an extra AudioPlayer directive alongside the VideoApp launch, the
+        // double-launch shape, must red here, not hide behind the filter).
+        var launch = Assert.IsType<VideoAppDirective.VideoAppLaunchDirective>(
+            Assert.Single(response.Response.Directives!));
+        // The tracker's mapping: track 1 runtime (4 min) + the 60s in-track partial.
+        Assert.Contains($"start={TimeSpan.FromMinutes(4).Ticks + TimeSpan.FromSeconds(60).Ticks}", launch.VideoItem.Source, StringComparison.Ordinal);
+        Assert.Equal(tracks[1].Name, launch.VideoItem.Metadata?.Title);
+
+        // No re-slice at the deep UserData track: the queue keeps the page
+        // window starting at the tracker's track (index 1).
+        Assert.Equal(tracks[1].Id, session.FullNowPlayingItem!.Id);
+        Assert.Equal(tracks[1].Id, session.NowPlayingQueue[0].Id);
+    }
+
+    /// <summary>
+    /// JF-805 pin (code-review F1, the device-queue axis): the confirm inherits
+    /// the crash-recovery device queue from the ONE composition exactly like
+    /// the direct ask. The pre-fix confirm leg never touched the device queue;
+    /// with the routing in place, a confirm on a 40-track album must install
+    /// the paged first five track ids on the confirming device's queue manager
+    /// (the SetQueue write the composition owns), or a mid-album skill restart
+    /// loses the crash-recovery resume the ask provides.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DisambiguationAlbumType_MusicAlbumConfirm_WritesTheCrashRecoveryDeviceQueue()
+    {
+        (MusicAlbum album, List<BaseItem> tracks) = SetupConfirmedAlbum(40);
+
+        using var queueManager = TestHelpers.CreateDeviceQueueManager("yes-album-confirm-dq");
+        var (_, _, context, _) = await ConfirmAlbumAsync(album, queueManager: queueManager);
+
+        DeviceQueue deviceQueue = queueManager.GetOrCreateQueue(context.System.Device.DeviceID!);
+        Assert.Equal(
+            tracks.Take(ProgressiveQueueConstants.GetInitialFetchSize()).Select(t => t.Id.ToString()).ToList(),
+            deviceQueue.ItemIds);
+        Assert.Equal(0, deviceQueue.CurrentIndex);
+    }
+
+    /// <summary>
+    /// JF-805 pin (code-review F4, the empty-album axis): an album whose track
+    /// queries come back empty on BOTH arms (the split/malformed shapes where
+    /// the JF-338 retry also finds nothing) must answer the NoSongsInAlbum
+    /// Tell through the routing exactly like the direct ask: no directive, no
+    /// queue state, and the speech names the album.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DisambiguationAlbumType_MusicAlbumConfirm_EmptyAlbum_AnswersNoSongsInAlbum()
+    {
+        var album = new MusicAlbum { Name = "Empty Album", Id = Guid.NewGuid() };
+        _libraryManagerMock.Setup(lm => lm.GetItemById(album.Id)).Returns(album);
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem> { Items = new List<BaseItem>(), TotalRecordCount = 0 });
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        var (response, session, _, continuation) = await ConfirmAlbumAsync(album);
+
+        Assert.True(response.Response.Directives == null || response.Response.Directives.Count == 0,
+            "the empty-album Tell must carry no directives");
+        var speech = response.Tells<PlainTextOutputSpeech>();
+        Assert.Contains("no songs", speech.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(album.Name, speech.Text, StringComparison.Ordinal);
+        Assert.True(session.NowPlayingQueue == null || session.NowPlayingQueue.Count == 0,
+            "the empty-album Tell must leave no queue");
+        Assert.Null(session.FullNowPlayingItem);
+        Assert.Null(continuation);
     }
 
     [Fact]

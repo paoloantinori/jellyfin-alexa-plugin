@@ -826,6 +826,25 @@ internal static class TestHelpers
             tracker, p => p.AudiobookPositionTracker, (p, v) => p.AudiobookPositionTracker = v);
 
     /// <summary>
+    /// Warms a position tracker to 5 minutes into the collection (31 segments
+    /// recorded; the conservative high-water minus one lands 300s) and swaps it
+    /// onto the plugin instance; dispose the returned scope. The shared warm-up
+    /// of the JF-625/JF-796/JF-805 criterion-3 pins (hoisted from
+    /// AlbumAnnounceVehicleTests at JF-805, the CreateSong convention on the
+    /// second identical private copy).
+    /// </summary>
+    internal static IDisposable WarmTrackerFiveMinutesIn(Guid collectionId, string nameSuffix)
+    {
+        var tracker = CreatePositionTracker(nameSuffix);
+        for (int seg = 1; seg <= 31; seg++)
+        {
+            tracker.RecordSegment(collectionId.ToString(), seg);
+        }
+
+        return SwapPluginPositionTracker(tracker);
+    }
+
+    /// <summary>
     /// The ONE BaseItem statics stub scope (JF-713 hoist, the CreateSong
     /// convention on the third identical private construction): the playlist
     /// suites' visibility filter and linked-child resolution walk the STATIC

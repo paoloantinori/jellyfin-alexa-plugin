@@ -87,18 +87,11 @@ public class AlbumAnnounceVehicleTests : PluginTestBase
     /// <summary>
     /// Warms a swapped-in position tracker to 5 minutes into the album (31
     /// segments recorded; the conservative high-water minus one lands 300s), the
-    /// shared warm-up of both criterion-3 pins. Dispose the returned scope.
+    /// shared warm-up of both criterion-3 pins (the TestHelpers shared core,
+    /// hoisted at JF-805). Dispose the returned scope.
     /// </summary>
     private static IDisposable WarmTrackerFiveMinutesIn(Guid albumId)
-    {
-        var tracker = TestHelpers.CreatePositionTracker("vehicle-album-tracker");
-        for (int seg = 1; seg <= 31; seg++)
-        {
-            tracker.RecordSegment(albumId.ToString(), seg);
-        }
-
-        return TestHelpers.SwapPluginPositionTracker(tracker);
-    }
+        => TestHelpers.WarmTrackerFiveMinutesIn(albumId, "vehicle-album-tracker");
 
     [Fact]
     public async Task SeekModeAlbumPlay_AnnounceRidesTheVehicleWithTheAlbumName()

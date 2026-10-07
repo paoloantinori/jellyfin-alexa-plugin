@@ -62,7 +62,13 @@ class): the paging-honoring GetItemsResult mock lambda now has five hand-rolled
 copies across the suites (AlbumDeepResumeTests.SetupDeepResumeAlbum and the
 AlbumAnnounceVehicleTests veto pin are the two newest); when touched again, hoist
 a paging-honoring SetupAlbumPages helper into TestHelpers beside
-SetupAlbumTracks.
+SetupAlbumTracks. JF-805 /simplify census update (2026-10-07): the sixth copy
+landed as YesIntentHandlerTests.SetupConfirmedAlbum (the album twin of
+SetupConfirmedBook; same Skip/Take paging lambda, the 4-minute-runtime track
+factory, and the progress UserData block, parameterized differently from
+SetupDeepResumeAlbum). The hoist stays skipped there for the JF-796 round's
+reason (private fixtures over different mock backing: PluginTestBase mocks vs
+HandlerTestFixture); this census is the same-turn landing the skip rule demands.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done
