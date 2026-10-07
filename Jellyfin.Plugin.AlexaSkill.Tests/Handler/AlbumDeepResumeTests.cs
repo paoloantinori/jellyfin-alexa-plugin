@@ -133,7 +133,7 @@ public class AlbumDeepResumeTests : PluginTestBase, IDisposable
                     resumableRow: c => c.Id == progressRowId && positionTicks > 0);
             });
 
-        if (progressTrackIndex is int progressIdx)
+        if (progressRowId != null || playedIds.Count > 0)
         {
             var inProgress = new UserItemData
             {
@@ -144,16 +144,9 @@ public class AlbumDeepResumeTests : PluginTestBase, IDisposable
             var played = new UserItemData { Key = "test", Played = true, PlaybackPositionTicks = 0 };
             _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
                 .Returns((Jellyfin.Database.Implementations.Entities.User _, BaseItem item) =>
-                    item.Id == tracks[progressIdx].Id && positionTicks > 0 ? inProgress
+                    item.Id == progressRowId && positionTicks > 0 ? inProgress
                     : playedIds.Contains(item.Id) ? played
                     : null);
-        }
-        else if (playedIds.Count > 0)
-        {
-            var played = new UserItemData { Key = "test", Played = true, PlaybackPositionTicks = 0 };
-            _fx.UserDataManager.Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
-                .Returns((Jellyfin.Database.Implementations.Entities.User _, BaseItem item) =>
-                    playedIds.Contains(item.Id) ? played : null);
         }
 
         if (endUnknownPage)

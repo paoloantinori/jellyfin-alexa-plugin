@@ -211,58 +211,60 @@ public static class AudiobookPlayResolver
         // over-fire costs one bounded query, an under-fire would drop a real
         // resume).
         // The single-file shapes never reach here (their page is
-        // the whole book by construction).
-        if (resumeTicks == 0 && continuationHasMore)
-        {
-            bool queueHoldsPositionedEntry = queueManager != null
-                && session.DeviceId != null
-                && queueManager.GetQueue(session.DeviceId)?.ItemPositionState.Values.Any(ticks => ticks > 0) == true;
-            if (queueHoldsPositionedEntry
+        // the whole book by construction). The in-memory positioned-entry check
+        // runs before the probes (cheapest first), and the whole gate folds into
+        // one condition: nothing below it runs when the page answer is complete
+        // or the probes prove no row carries resume-relevant user data.
+        bool queueHoldsPositionedEntry = queueManager != null
+            && session.DeviceId != null
+            && queueManager.HasAnyStoredPosition(session.DeviceId);
+        if (resumeTicks == 0
+            && continuationHasMore
+            && (queueHoldsPositionedEntry
                 || await QueueContinuationFetcher.MayHaveResumeRelevantUserDataAsync(
                     (probeStartIndex, probeLimit) => QueueContinuationFetcher.BuildScopedAudiobookChaptersQuery(
                         jellyfinUser, user, libraryManager, logger, book.Id, probeStartIndex, probeLimit),
-                    async probeQuery => await RetryHelper.ExecuteWithRequestBudgetAsync(
+                    probeQuery => RetryHelper.ExecuteWithRequestBudgetAsync(
                         () => SearchService.SafeGetItemsResult(libraryManager, probeQuery, logger),
                         logger,
                         "GetBookTracksResumeProbe",
-                        cancellationToken: cancellationToken).ConfigureAwait(false))
-                    .ConfigureAwait(false))
+                        cancellationToken: cancellationToken))
+                .ConfigureAwait(false)))
+        {
+            QueryResult<BaseItem> fullBook = await RetryHelper.ExecuteWithRequestBudgetAsync(
+                () => SearchService.SafeGetItemsResult(libraryManager,
+                    QueueContinuationFetcher.BuildScopedAudiobookChaptersQueryUnpaged(
+                        jellyfinUser, user, libraryManager, logger, book.Id),
+                    logger),
+                logger,
+                "GetBookTracksDeepResume",
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+
+            (int deepIndex, long deepTicks) = ResumeMath.FindResumeTrackIndex(
+                fullBook.Items, jellyfinUser, userDataManager, queueManager, session.DeviceId, resumePosition: true, logger);
+            if (deepIndex > 0)
             {
-                QueryResult<BaseItem> fullBook = await RetryHelper.ExecuteWithRequestBudgetAsync(
-                    () => SearchService.SafeGetItemsResult(libraryManager,
-                        QueueContinuationFetcher.BuildScopedAudiobookChaptersQueryUnpaged(
-                            jellyfinUser, user, libraryManager, logger, book.Id),
-                        logger),
-                    logger,
-                    "GetBookTracksDeepResume",
-                    cancellationToken: cancellationToken).ConfigureAwait(false);
+                // The re-sliced page starts exactly at the position-holding chapter,
+                // so the page-relative answer is (0, deepTicks) by construction in
+                // every return shape of FindResumeTrackIndex (in-progress hit, cached
+                // position, after-last-played): no re-scan of the slice.
+                trackItems = fullBook.Items
+                    .Skip(deepIndex)
+                    .Take(ProgressiveQueueConstants.GetInitialFetchSize())
+                    .ToList();
+                startIndex = 0;
+                resumeTicks = deepTicks;
 
-                (int deepIndex, long deepTicks) = ResumeMath.FindResumeTrackIndex(
-                    fullBook.Items, jellyfinUser, userDataManager, queueManager, session.DeviceId, resumePosition: true, logger);
-                if (deepIndex > 0)
-                {
-                    // The re-sliced page starts exactly at the position-holding chapter,
-                    // so the page-relative answer is (0, deepTicks) by construction in
-                    // every return shape of FindResumeTrackIndex (in-progress hit, cached
-                    // position, after-last-played): no re-scan of the slice.
-                    trackItems = fullBook.Items
-                        .Skip(deepIndex)
-                        .Take(ProgressiveQueueConstants.GetInitialFetchSize())
-                        .ToList();
-                    startIndex = 0;
-                    resumeTicks = deepTicks;
+                logger.LogInformation(
+                    "{Label}: deep resume found chapter {DeepIndex} ('{TrackName}') beyond the initial page; re-paging the book at it",
+                    logLabel, deepIndex, fullBook.Items[deepIndex].Name);
 
-                    logger.LogInformation(
-                        "{Label}: deep resume found chapter {DeepIndex} ('{TrackName}') beyond the initial page; re-paging the book at it",
-                        logLabel, deepIndex, fullBook.Items[deepIndex].Name);
-
-                    // The fetch-all list is itself the honest total in both regimes
-                    // (known-total pages and the JF-673 end-unknown fallback), so the
-                    // continuation carries a real count.
-                    continuationStartIndex = deepIndex + trackItems.Count;
-                    continuationTotalCount = fullBook.Items.Count;
-                    continuationHasMore = continuationStartIndex < continuationTotalCount;
-                }
+                // The fetch-all list is itself the honest total in both regimes
+                // (known-total pages and the JF-673 end-unknown fallback), so the
+                // continuation carries a real count.
+                continuationStartIndex = deepIndex + trackItems.Count;
+                continuationTotalCount = fullBook.Items.Count;
+                continuationHasMore = continuationStartIndex < continuationTotalCount;
             }
         }
 

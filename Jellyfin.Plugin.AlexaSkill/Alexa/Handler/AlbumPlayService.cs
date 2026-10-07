@@ -767,11 +767,11 @@ public sealed class AlbumPlayService
             && await QueueContinuationFetcher.MayHaveResumeRelevantUserDataAsync(
                 (probeStartIndex, probeLimit) => QueueContinuationFetcher.BuildScopedAlbumTracksQuery(
                     jellyfinUser, user, libraryManager, _logger, album.Id, probeStartIndex, probeLimit, byAlbumIds: pageUsedAlbumIds),
-                async probeQuery => await RetryAsync(
+                probeQuery => RetryAsync(
                     () => _search.SafeGetItemsResult(libraryManager, probeQuery),
                     logLabel + ":GetAlbumTracksResumeProbe",
-                    cancellationToken: cancellationToken).ConfigureAwait(false))
-                .ConfigureAwait(false))
+                    cancellationToken: cancellationToken))
+            .ConfigureAwait(false))
         {
             QueryResult<BaseItem> fullAlbum = await RetryAsync(
                 () => _search.SafeGetItemsResult(libraryManager,

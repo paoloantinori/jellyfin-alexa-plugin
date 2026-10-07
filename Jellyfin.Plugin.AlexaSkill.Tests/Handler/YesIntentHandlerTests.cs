@@ -1184,6 +1184,36 @@ public class YesIntentHandlerTests : PluginTestBase
     };
 
     /// <summary>
+    /// The shared denied-kind confirm driver (JF-797 item 3): serves the payload
+    /// by id, answers every item enumeration with nothing (the childless-payload
+    /// shape the album defensive leg sees), builds the album-labelled
+    /// disambiguation attrs, and runs the yes confirm.
+    /// </summary>
+    private async Task<(SkillResponse Response, SessionInfo Session)> ConfirmDeniedKindAsync(BaseItem payload)
+    {
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemById(payload.Id))
+            .Returns(payload);
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        var matchInfo = new DisambiguationHelper.MatchInfo { Id = payload.Id.ToString(), Name = payload.Name };
+        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
+
+        var handler = CreateHandler();
+        var session = CreateSession();
+        SkillResponse response = await handler.HandleAsync(
+            CreateYesIntentRequest(),
+            CreateContext(),
+            TestHelpers.CreateTestUser(),
+            session,
+            attrs,
+            CancellationToken.None);
+        return (response, session);
+    }
+
+    /// <summary>
     /// JF-797 item 3: the payload-kind gate. IsBookDisambiguationPayload used to
     /// route ANY non-MusicAlbum Folder to the PlayBook leg, so a MusicArtist,
     /// MusicGenre, CollectionFolder, or Playlist payload reached a leg whose climb
@@ -1200,26 +1230,7 @@ public class YesIntentHandlerTests : PluginTestBase
     [InlineData("playlist")]
     public async Task HandleAsync_DisambiguationAlbumType_NonBookFolderKinds_FallToTheAlbumLeg(string kind)
     {
-        BaseItem payload = CreateDeniedKindPayload(kind);
-        _libraryManagerMock
-            .Setup(lm => lm.GetItemById(payload.Id))
-            .Returns(payload);
-        _libraryManagerMock
-            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns(new List<BaseItem>());
-
-        var matchInfo = new DisambiguationHelper.MatchInfo { Id = payload.Id.ToString(), Name = payload.Name };
-        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
-
-        var handler = CreateHandler();
-        var session = CreateSession();
-        var response = await handler.HandleAsync(
-            CreateYesIntentRequest(),
-            CreateContext(),
-            TestHelpers.CreateTestUser(),
-            session,
-            attrs,
-            CancellationToken.None);
+        (SkillResponse response, SessionInfo session) = await ConfirmDeniedKindAsync(CreateDeniedKindPayload(kind));
 
         // The album defensive leg answers NoSongsInAlbum (the pre-JF-793 shape),
         // not the PlayBook leg's NoContentInBook, and launches nothing.
@@ -1243,30 +1254,11 @@ public class YesIntentHandlerTests : PluginTestBase
     [Fact]
     public async Task HandleAsync_DisambiguationAlbumType_NonBookFolderPayload_BooksDisabled_StillFallsToTheAlbumLeg()
     {
-        BaseItem payload = CreateDeniedKindPayload("artist");
-        _libraryManagerMock
-            .Setup(lm => lm.GetItemById(payload.Id))
-            .Returns(payload);
-        _libraryManagerMock
-            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns(new List<BaseItem>());
-
-        var matchInfo = new DisambiguationHelper.MatchInfo { Id = payload.Id.ToString(), Name = payload.Name };
-        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
-
         bool originalBooksEnabled = Plugin.Instance!.Configuration.BooksEnabled;
         Plugin.Instance!.Configuration.BooksEnabled = false;
         try
         {
-            var handler = CreateHandler();
-            var session = CreateSession();
-            var response = await handler.HandleAsync(
-                CreateYesIntentRequest(),
-                CreateContext(),
-                TestHelpers.CreateTestUser(),
-                session,
-                attrs,
-                CancellationToken.None);
+            (SkillResponse response, SessionInfo _) = await ConfirmDeniedKindAsync(CreateDeniedKindPayload("artist"));
 
             var speech = response.Tells<PlainTextOutputSpeech>();
             // The album-leg answer, NOT the books FeatureDisabled Tell.

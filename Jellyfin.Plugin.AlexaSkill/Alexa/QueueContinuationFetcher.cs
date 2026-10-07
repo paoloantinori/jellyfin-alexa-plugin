@@ -640,18 +640,23 @@ internal static class QueueContinuationFetcher
         Func<int, int, InternalItemsQuery> buildScopedPageQuery,
         Func<InternalItemsQuery, Task<QueryResult<BaseItem>>> executeAsync)
     {
-        InternalItemsQuery playedProbe = buildScopedPageQuery(0, 1);
-        playedProbe.IsPlayed = true;
-        playedProbe.DtoOptions = new DtoOptions(false) { EnableImages = false, EnableUserData = false, AddCurrentProgram = false };
-        if ((await executeAsync(playedProbe).ConfigureAwait(false)).Items.Count > 0)
+        // One probe body, two flags (the /simplify dedup): each probe is its OWN
+        // fresh query (built through the caller's scoped builder), never one
+        // flipped object, so logs and the lockstep pin's captured queries stay
+        // per-flag honest. The cheap DTO shape is the same contract
+        // AlbumPlayService.CheapDtoOptions owns on the Handler side; it is
+        // restated here because this Alexa-namespace fetcher must not reference
+        // the Handler namespace (AlbumPlayService's placement doc).
+        async Task<bool> ProbeAsync(Action<InternalItemsQuery> setFlag)
         {
-            return true;
+            InternalItemsQuery probe = buildScopedPageQuery(0, 1);
+            setFlag(probe);
+            probe.DtoOptions = new DtoOptions(false) { EnableImages = false, EnableUserData = false, AddCurrentProgram = false };
+            return (await executeAsync(probe).ConfigureAwait(false)).Items.Count > 0;
         }
 
-        InternalItemsQuery resumableProbe = buildScopedPageQuery(0, 1);
-        resumableProbe.IsResumable = true;
-        resumableProbe.DtoOptions = new DtoOptions(false) { EnableImages = false, EnableUserData = false, AddCurrentProgram = false };
-        return (await executeAsync(resumableProbe).ConfigureAwait(false)).Items.Count > 0;
+        return await ProbeAsync(q => q.IsPlayed = true).ConfigureAwait(false)
+               || await ProbeAsync(q => q.IsResumable = true).ConfigureAwait(false);
     }
 
     private static IReadOnlyList<BaseItem> FetchAudiobookChapters(

@@ -20,7 +20,7 @@ internal static class AudiobookItems
     /// <summary>
     /// Resolve the BOOK FOLDER a matched audiobook SEARCH item belongs to (JF-791):
     /// the AudioBook-gated form of the ONE verified climb
-    /// (<see cref="TryResolveVerifiedParentFolder"/>, whose doc owns the climb
+    /// (<see cref="TryResolveVerifiedParentFolder(BaseItem?, ILibraryManager?)"/>, whose doc owns the climb
     /// contract, the JF-793 shared-container story, and the JF-794 builder sync).
     /// Jellyfin never types a multi-file book folder as AudioBook (the AudioResolver
     /// skips multi-file directory collapsing, verified byte-identical at v10.11.8 and
@@ -42,18 +42,19 @@ internal static class AudiobookItems
     /// <summary>
     /// The batched form of <see cref="TryResolveBookFolder(BaseItem?, ILibraryManager?)"/> for
     /// the candidate normalization (JF-797 item 4, the lazy folder resolution):
-    /// identical verdicts, but the ONE expensive step (the GetItemById parent
-    /// fetch) runs once per DISTINCT ParentId through <paramref name="parentFolderCache"/>,
-    /// not once per candidate. A short title whose search returns dozens of
+    /// identical verdicts BY CONSTRUCTION (the same ONE climb seam, whose parent
+    /// FETCH resolves through the caller's scratchpad), with the ONE expensive
+    /// step (the GetItemById parent fetch) running once per DISTINCT ParentId
+    /// instead of once per candidate. A short title whose search returns dozens of
     /// chapter leaves collapses onto a handful of books, so the per-candidate
     /// fetches were almost all repeats whose results evaporate at the fuzzy
     /// consumers. The cache maps ParentId to the RESOLVED Folder (null when the
     /// id resolves to no Folder); it is a per-ask scratchpad owned by the caller,
     /// never shared across requests (a library rescan between asks must not be
     /// served a stale folder). The per-candidate parts of the climb (the AudioBook
-    /// gate, the empty-ParentId fail-closed, the SitsDirectlyInside path check)
-    /// still run per candidate: two leaves sharing a ParentId can carry different
-    /// paths (a metadata remap), and only the parent FETCH is ParentId-pure.
+    /// gate and the SitsDirectlyInside path check) still run per candidate inside
+    /// the shared seam: two leaves sharing a ParentId can carry different paths (a
+    /// metadata remap), and only the parent FETCH is ParentId-pure.
     /// </summary>
     /// <param name="item">The audiobook search candidate (a chapter leaf or a single-file book).</param>
     /// <param name="libraryManager">The library manager resolving unseen ParentIds; null fails closed (the seam's contract).</param>
@@ -63,20 +64,7 @@ internal static class AudiobookItems
         BaseItem? item,
         ILibraryManager? libraryManager,
         IDictionary<Guid, Folder?> parentFolderCache)
-    {
-        if (item is not AudioBook || item.ParentId == Guid.Empty || libraryManager is null)
-        {
-            return null;
-        }
-
-        if (!parentFolderCache.TryGetValue(item.ParentId, out Folder? parent))
-        {
-            parent = libraryManager.GetItemById(item.ParentId) as Folder;
-            parentFolderCache.Add(item.ParentId, parent);
-        }
-
-        return parent != null && SitsDirectlyInside(item, parent) ? parent : null;
-    }
+        => item is AudioBook ? TryResolveVerifiedParentFolder(item, libraryManager, parentFolderCache) : null;
 
     /// <summary>
     /// The ONE verified ParentId climb (JF-794), shared by the search-path twins
@@ -93,23 +81,65 @@ internal static class AudiobookItems
     /// track, never a merged-container or dead-ParentId concat. When it ACCEPTS, the
     /// returned folder's Id is exactly the leaf's ParentId, so the discriminated
     /// concat URL is byte-identical to the pre-JF-794 raw climb.
+    /// The scratchpad overload (JF-797 item 4) threads the batched twin's per-ask
+    /// cache into the SAME body, so the fail-closed contract stays ONE definition.
     /// </summary>
     /// <param name="item">The audio leaf whose ParentId names the candidate book folder.</param>
     /// <param name="libraryManager">The library manager resolving the ParentId; null fails closed.</param>
     /// <returns>The verified book folder, or null when the climb cannot be verified or is rejected.</returns>
     internal static Folder? TryResolveVerifiedParentFolder(BaseItem? item, ILibraryManager? libraryManager)
+        => TryResolveVerifiedParentFolder(item, libraryManager, parentFolderCache: null);
+
+    /// <summary>
+    /// The scratchpad form of the ONE verified climb (see the two-arg overload's
+    /// doc for the contract): identical verdicts, with the parent fetch resolved
+    /// through <paramref name="parentFolderCache"/> when given.
+    /// </summary>
+    /// <param name="item">The audio leaf whose ParentId names the candidate book folder.</param>
+    /// <param name="libraryManager">The library manager resolving unseen ParentIds; null fails closed.</param>
+    /// <param name="parentFolderCache">The caller's per-ask ParentId to resolved-Folder scratchpad, or null for the uncached climb.</param>
+    /// <returns>The verified book folder, or null when the climb cannot be verified or is rejected.</returns>
+    internal static Folder? TryResolveVerifiedParentFolder(
+        BaseItem? item,
+        ILibraryManager? libraryManager,
+        IDictionary<Guid, Folder?>? parentFolderCache)
     {
         if (item is null || item.ParentId == Guid.Empty || libraryManager is null)
         {
             return null;
         }
 
-        if (libraryManager.GetItemById(item.ParentId) is not Folder folder)
+        if (ResolveParentFolder(item.ParentId, libraryManager, parentFolderCache) is not { } folder)
         {
             return null;
         }
 
         return SitsDirectlyInside(item, folder) ? folder : null;
+    }
+
+    /// <summary>
+    /// The climb's parent-fetch step, the only ParentId-pure part (JF-797 item 4):
+    /// resolved through the caller's per-ask scratchpad when given (null values
+    /// are cached misses, so a dangling id costs one lookup per ask), fetched
+    /// directly otherwise.
+    /// </summary>
+    /// <param name="parentId">The leaf's ParentId.</param>
+    /// <param name="libraryManager">The library manager resolving unseen ids.</param>
+    /// <param name="parentFolderCache">The caller's scratchpad, or null.</param>
+    /// <returns>The resolved folder, or null when the id resolves to nothing or to a non-folder.</returns>
+    private static Folder? ResolveParentFolder(
+        Guid parentId,
+        ILibraryManager libraryManager,
+        IDictionary<Guid, Folder?>? parentFolderCache)
+    {
+        if (parentFolderCache != null && parentFolderCache.TryGetValue(parentId, out Folder? cached))
+        {
+            return cached;
+        }
+
+        Folder? resolved = libraryManager.GetItemById(parentId) as Folder;
+        parentFolderCache?.Add(parentId, resolved);
+        return resolved;
     }
 
     /// <summary>
@@ -170,7 +200,7 @@ internal static class AudiobookItems
     /// closed, and an unverifiable layout plays the leaf alone, the pre-JF-791
     /// behavior, never the merged container). Widened from AudioBook to BaseItem at
     /// JF-794 when the builders joined this seam (see
-    /// <see cref="TryResolveVerifiedParentFolder"/>); the body reads only the Path.
+    /// <see cref="TryResolveVerifiedParentFolder(BaseItem?, ILibraryManager?)"/>); the body reads only the Path.
     /// </summary>
     private static bool SitsDirectlyInside(BaseItem chapter, Folder folder)
     {
@@ -216,11 +246,11 @@ internal static class AudiobookItems
     internal static bool IsBookDisambiguationPayload(BaseItem? item)
         => item is AudioBook
            || (item is Folder
-               && item is not MediaBrowser.Controller.Entities.Audio.MusicAlbum
-               && item is not MediaBrowser.Controller.Entities.Audio.MusicArtist
-               && item is not MediaBrowser.Controller.Entities.Audio.MusicGenre
-               && item is not MediaBrowser.Controller.Entities.CollectionFolder
-               && item is not MediaBrowser.Controller.Playlists.Playlist);
+               && item is not (MediaBrowser.Controller.Entities.Audio.MusicAlbum
+                   or MediaBrowser.Controller.Entities.Audio.MusicArtist
+                   or MediaBrowser.Controller.Entities.Audio.MusicGenre
+                   or MediaBrowser.Controller.Entities.CollectionFolder
+                   or MediaBrowser.Controller.Playlists.Playlist));
 
     /// <summary>
     /// Whether the finished item is BOOK-shaped for the end-of-book decision (JF-670):

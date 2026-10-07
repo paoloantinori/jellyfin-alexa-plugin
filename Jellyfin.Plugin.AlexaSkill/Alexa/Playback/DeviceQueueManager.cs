@@ -721,6 +721,22 @@ public sealed class DeviceQueueManager : IDisposable
     }
 
     /// <summary>
+    /// JF-797 (the book head's deep-resume discriminator): whether the device's
+    /// queue holds ANY stored position entry with ticks &gt; 0, without creating a
+    /// queue entry. The aggregate sibling of <see cref="GetStoredPositionTicks"/>
+    /// on the same JF-581 read side: the discriminator cannot name the item it is
+    /// looking for (progress may sit on a chapter beyond the fetched page), so it
+    /// asks whether the store holds anything at all; the whole-collection
+    /// positivity read stays here, on the owner of the store's layout and trim
+    /// semantics, instead of reaching into the raw dictionary at the call site.
+    /// </summary>
+    /// <param name="deviceId">The Alexa device ID.</param>
+    /// <returns>True when at least one stored position is positive.</returns>
+    public bool HasAnyStoredPosition(string deviceId)
+        => _queues.TryGetValue(deviceId, out DeviceQueue? queue)
+           && queue.ItemPositionState.Values.Any(ticks => ticks > 0);
+
+    /// <summary>
     /// JF-581/JF-565: the ONE UserData-first, plugin-store-fallback resume-position
     /// resolution for a read-side seed. UserData is preferred (cross-client, survives
     /// plugin data loss); when it reads non-positive the plugin-owned
