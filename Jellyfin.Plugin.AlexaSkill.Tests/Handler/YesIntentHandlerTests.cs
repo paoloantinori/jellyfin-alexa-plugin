@@ -782,7 +782,11 @@ public class YesIntentHandlerTests : PluginTestBase
     /// enumerates nothing, the real server's answer for a leaf, so a broken climb
     /// still fails the queue-count assertions).
     /// </summary>
-    private (List<BaseItem> Chapters, Guid BookFolderId, AudioBook? LeafPayload) SetupConfirmedBook(int chapterCount = 26, bool leafPayload = false)
+    private (List<BaseItem> Chapters, Guid BookFolderId, AudioBook? LeafPayload) SetupConfirmedBook(
+        int chapterCount = 26,
+        bool leafPayload = false,
+        int? progressChapterIndex = null,
+        long positionTicks = 0)
     {
         Guid bookFolderId = Guid.NewGuid();
         _libraryManagerMock
@@ -813,17 +817,18 @@ public class YesIntentHandlerTests : PluginTestBase
             })
             .ToList();
 
+        // JF-797: the flag-honoring page server answers the resume probes the
+        // discriminator issues like the server answers them (a fresh book's
+        // probes come back empty; the in-progress chapter's IsResumable probe
+        // comes back with it).
         _libraryManagerMock
             .Setup(lm => lm.GetItemsResult(It.IsAny<InternalItemsQuery>()))
             .Returns<InternalItemsQuery>(q => q.ParentId == bookFolderId
-                ? new QueryResult<BaseItem>
-                {
-                    Items = chapters
-                        .Skip(q.StartIndex ?? 0)
-                        .Take(q.Limit ?? chapters.Count)
-                        .ToList(),
-                    TotalRecordCount = chapters.Count
-                }
+                ? TestHelpers.ServePagedTracks(
+                    chapters,
+                    q,
+                    playedRow: null,
+                    resumableRow: c => progressChapterIndex is int pi && c.Id == chapters[pi].Id && positionTicks > 0)
                 : new QueryResult<BaseItem> { Items = new List<BaseItem>(), TotalRecordCount = 0 });
 
         return (chapters, bookFolderId, leaf);
@@ -1060,7 +1065,10 @@ public class YesIntentHandlerTests : PluginTestBase
     [Fact]
     public async Task HandleAsync_DisambiguationAlbumType_BookConfirm_DeepProgress_ResumesAtPositionHoldingChapter()
     {
-        (List<BaseItem> chapters, Guid bookFolderId, _) = SetupConfirmedBook();
+        // progressChapterIndex wires the flag-honoring page server's resumable row
+        // (the JF-797 probe must find the deep progress to release the fetch).
+        (List<BaseItem> chapters, Guid bookFolderId, _) = SetupConfirmedBook(
+            progressChapterIndex: 21, positionTicks: TimeSpan.FromMinutes(10).Ticks);
 
         // Deep progress: chapter 22 (index 21) in progress at 10 minutes.
         var inProgress = new UserItemData
@@ -1191,11 +1199,11 @@ public class YesIntentHandlerTests : PluginTestBase
         _libraryManagerMock
             .Setup(lm => lm.GetItemsResult(It.IsAny<InternalItemsQuery>()))
             .Returns((InternalItemsQuery q) => q.ParentId == album.Id
-                ? new QueryResult<BaseItem>
-                {
-                    Items = tracks.Skip(q.StartIndex ?? 0).Take(q.Limit ?? tracks.Count).ToList(),
-                    TotalRecordCount = tracks.Count
-                }
+                ? TestHelpers.ServePagedTracks(
+                    tracks,
+                    q,
+                    playedRow: null,
+                    resumableRow: t => progressTrackIndex is int pi && t.Id == tracks[pi].Id)
                 : new QueryResult<BaseItem> { Items = new List<BaseItem>(), TotalRecordCount = 0 });
 
         _libraryManagerMock

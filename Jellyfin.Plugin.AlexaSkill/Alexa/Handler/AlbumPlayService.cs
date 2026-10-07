@@ -666,9 +666,16 @@ public sealed class AlbumPlayService
 
         IReadOnlyList<BaseItem> albumItems = albumResult.Items;
 
-        // Check for existing queue position from server-side progress
-        (int startIndex, _) = ResumeMath.FindResumeTrackIndex(
-            albumItems, jellyfinUser, userDataManager, resumePosition: false);
+        // Check for existing queue position from server-side progress. JF-797
+        // item 1: the ticks are READ here (resumePosition: true) even though the
+        // audio route discards the in-track offset (the queue-starting semantic
+        // below is unchanged): the deep-resume gate below keys on the page scan's
+        // ticks, which are the only signal that the page already found the FIRST
+        // in-progress track of the whole album (the scan returns on the first hit
+        // and the page is a list prefix). resumePosition never affects WHICH
+        // track the scan picks, only the returned ticks.
+        (int startIndex, long albumPageResumeTicks) = ResumeMath.FindResumeTrackIndex(
+            albumItems, jellyfinUser, userDataManager, resumePosition: true);
 
         // The continuation bookkeeping, computed here so the deep-resume block below
         // can rebase it: how many tracks the page has consumed (the database offset
@@ -737,15 +744,34 @@ public sealed class AlbumPlayService
         // remaining divergences (resumePosition false with no device-queue tier,
         // the AlbumIds arm, and the absolute concat prefix below, which the
         // chapter-relative book offset does not need) are the same verdict.
-        // KNOWN TRADE, stated as the books do (JF-793): the guard keys on the
-        // page-1 scan's no-position answer, which an UNSTARTED multi-page album
-        // also produces, so every first-ever ask of a long album runs the unpaged
-        // fetch and finds nothing (one bounded query added to the hot fresh-play
-        // path inside the Alexa window). The JF-797 item 3 discriminator (any
-        // Played/position flag check ahead of the fetch) applies here too once it
-        // lands.
+        // JF-797 item 1 (the masking shape): the gate no longer requires
+        // startIndex == 0. A PLAYED PREFIX on page 1 makes FindResumeTrackIndex
+        // answer (after-last-played > 0, ticks 0), which the old gate read as
+        // "resolved": the deep scan stayed cold even when a deeper in-progress
+        // track existed beyond the page, and resume landed at the shallow prefix
+        // position. ticks == 0 is the honest "the page's evidence is incomplete"
+        // signal in every page answer; a ticks > 0 answer IS the first in-progress
+        // track of the whole album, so no deep fetch can improve it.
+        // JF-797 item 2 (the fresh-ask discriminator): the unpaged fetch is gated
+        // by QueueContinuationFetcher.MayHaveResumeRelevantUserDataAsync (two
+        // bounded IsPlayed/IsResumable probe queries over the page's own scoped
+        // shape and working arm; a miss proves no row carries resume-relevant
+        // user data, so a first-ever ask of a multi-page album pays the probes,
+        // not the full-album fetch the JF-796 addendum's row-volume trade named).
+        // The album path has no ItemPositionState tier (FindResumeTrackIndex runs
+        // here without a queue manager), so the two probes are the whole gate.
         long deepResumePrefixTicks = 0;
-        if (!trackerOverrideEngaged && startIndex == 0 && continuationHasMore)
+        if (!trackerOverrideEngaged
+            && albumPageResumeTicks == 0
+            && continuationHasMore
+            && await QueueContinuationFetcher.MayHaveResumeRelevantUserDataAsync(
+                (probeStartIndex, probeLimit) => QueueContinuationFetcher.BuildScopedAlbumTracksQuery(
+                    jellyfinUser, user, libraryManager, _logger, album.Id, probeStartIndex, probeLimit, byAlbumIds: pageUsedAlbumIds),
+                async probeQuery => await RetryAsync(
+                    () => _search.SafeGetItemsResult(libraryManager, probeQuery),
+                    logLabel + ":GetAlbumTracksResumeProbe",
+                    cancellationToken: cancellationToken).ConfigureAwait(false))
+                .ConfigureAwait(false))
         {
             QueryResult<BaseItem> fullAlbum = await RetryAsync(
                 () => _search.SafeGetItemsResult(libraryManager,

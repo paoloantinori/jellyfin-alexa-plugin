@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
 using MediaBrowser.Controller.Dto;
 using MediaBrowser.Controller.Entities;
@@ -595,6 +596,62 @@ internal static class QueueContinuationFetcher
         InternalItemsQuery query = BuildAudiobookChaptersQueryUnpaged(jellyfinUser, bookId);
         Util.LibraryFilter.ApplyLibraryFilter(query, pluginUser, libraryManager, logger);
         return query;
+    }
+
+    /// <summary>
+    /// JF-797 item 2: the fresh-ask discriminator for the deep-resume re-slice,
+    /// shared by the book twin (AudiobookPlayResolver.PlayBookAsync) and the album
+    /// twin (AlbumPlayService.BuildAlbumPlayResponseAsync). The JF-793/JF-796 guard cannot tell a
+    /// FRESH multi-page collection from one with progress beyond the page, so every
+    /// first-ever ask used to pay the unpaged full-collection fetch (full-field
+    /// DtoOptions rows plus the per-track GetUserData reads of the re-scan; on
+    /// albums with hundreds of tracks that is a row-volume cost, not a query-count
+    /// one, inside the Alexa window). This probe answers the gate instead with two
+    /// BOUNDED queries over the SAME scoped page shape the caller's own fetches use
+    /// (Limit 1, cheap DtoOptions, no images/userdata): <c>IsPlayed</c> (any row
+    /// the user finished) then <c>IsResumable</c> (any row with in-progress user
+    /// data), short-circuiting on the first hit. SERVER SEMANTICS, source-read at
+    /// the pinned refs (v10.11.8 BaseItemRepository and v12.0
+    /// BaseItemRepository.TranslateQuery): IsResumable filters the user's raw
+    /// PlaybackPositionTicks &gt; 0 (no MinResumePosition threshold), exactly the
+    /// in-progress predicate ResumeMath.FindResumeTrackIndex applies,
+    /// so the probe can only OVER-fire (a played row with leftover ticks matches
+    /// IsResumable too), never under-fire: a miss proves no row anywhere carries
+    /// resume-relevant user data, which is the only condition under which the deep
+    /// fetch's answer cannot differ from the page scan's. Over-firing is the safe
+    /// direction: the deep fetch then runs and decides honestly.
+    /// The probe checks the WHOLE collection (not a StartIndex beyond the page):
+    /// a flagged query's server-side filter runs BEFORE paging, so a StartIndex-past
+    /// the-page probe would ask for the Nth resumable row, not the resumable row at
+    /// index N, and miss a single in-progress track. Progress within the page the
+    /// scan already saw therefore re-triggers the fetch (one bounded over-fire; the
+    /// re-slice lands on the same answer by construction).
+    /// The BOOK twin layers one more trigger beside this probe: the device queue's
+    /// ItemPositionState (the JF-581 UserData write-loss shape), see the caller.
+    /// </summary>
+    /// <param name="buildScopedPageQuery">Builds the caller's scoped page query for
+    /// a (startIndex, limit) pair; the probe passes (0, 1) and the flags, so the
+    /// scope, arm, and order stay the caller's ONE shape.</param>
+    /// <param name="executeAsync">Executes a probe query (the caller's own retry
+    /// wrapper and log label apply; the probe results are read for items only).</param>
+    /// <returns>True when any row may carry resume-relevant user data (the deep
+    /// fetch should run); false only when both probes come back empty.</returns>
+    internal static async Task<bool> MayHaveResumeRelevantUserDataAsync(
+        Func<int, int, InternalItemsQuery> buildScopedPageQuery,
+        Func<InternalItemsQuery, Task<QueryResult<BaseItem>>> executeAsync)
+    {
+        InternalItemsQuery playedProbe = buildScopedPageQuery(0, 1);
+        playedProbe.IsPlayed = true;
+        playedProbe.DtoOptions = new DtoOptions(false) { EnableImages = false, EnableUserData = false, AddCurrentProgram = false };
+        if ((await executeAsync(playedProbe).ConfigureAwait(false)).Items.Count > 0)
+        {
+            return true;
+        }
+
+        InternalItemsQuery resumableProbe = buildScopedPageQuery(0, 1);
+        resumableProbe.IsResumable = true;
+        resumableProbe.DtoOptions = new DtoOptions(false) { EnableImages = false, EnableUserData = false, AddCurrentProgram = false };
+        return (await executeAsync(resumableProbe).ConfigureAwait(false)).Items.Count > 0;
     }
 
     private static IReadOnlyList<BaseItem> FetchAudiobookChapters(

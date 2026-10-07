@@ -182,57 +182,87 @@ public static class AudiobookPlayResolver
         // 1 at 0:00 (pre-JF-791 the same ask played the matched chapter at its
         // position, then silence; the album precedent is not liftable, JF-625
         // criterion 3 is the video-route tracker override). The bounded resolution:
-        // when page 1 yields no position AND the book extends beyond the page, fetch
-        // the book once unpaged (the concat endpoint's fetch-all shape, JF-784) and
-        // re-run the ONE resume decision on the full chapter list; a position found
-        // beyond the page re-slices the page at that chapter, so the launch, the
-        // queue, and the continuation all start at the position-holding chapter.
-        // Fresh books and books the page already covers pay nothing (the guard skips
-        // the fetch when the page holds the whole book); a multi-page fresh ask pays
-        // one extra query. TRADE, stated (the gate-marker tail): the guard keys on
-        // the page-1 scan's (0,0) answer, which an UNSTARTED multi-page book also
-        // produces, so every first-ever ask of a long book runs the unpaged fetch
-        // and finds nothing (one bounded recursive query added to the hot fresh-play
-        // path inside the Alexa window). A cheaper discriminator (any Played/position
-        // flag check ahead of the fetch) is the filed follow-up, JF-797 item 3.
+        // when the page yields no position AND the book extends beyond the page,
+        // fetch the book once unpaged (the concat endpoint's fetch-all shape,
+        // JF-784) and re-run the ONE resume decision on the full chapter list; a
+        // position found beyond the page re-slices the page at that chapter, so the
+        // launch, the queue, and the continuation all start at the
+        // position-holding chapter.
+        // JF-797 item 1 (the masking shape): the gate no longer requires
+        // startIndex == 0. A PLAYED PREFIX on page 1 makes FindResumeTrackIndex
+        // answer (after-last-played > 0, ticks 0), which the old gate read as
+        // "resolved": the deep scan stayed cold even when a deeper in-progress
+        // chapter existed beyond the page, and resume landed at the shallow prefix
+        // position. ticks == 0 is the honest "the page's evidence is incomplete"
+        // signal in every page answer (fresh page, all-played page, played
+        // prefix); a ticks > 0 answer IS the first in-progress chapter of the
+        // whole book (the scan returns on the first hit and the page is a list
+        // prefix), so no deep fetch can improve it.
+        // JF-797 item 2 (the fresh-ask discriminator): the unpaged fetch is gated
+        // by QueueContinuationFetcher.MayHaveResumeRelevantUserDataAsync (two
+        // bounded IsPlayed/IsResumable probe queries over the same scoped page
+        // shape; a miss proves no row carries resume-relevant user data, so a
+        // first-ever ask of a multi-page book pays the probes, not the full-book
+        // fetch). ONE MORE TRIGGER beside the probes: FindResumeTrackIndex also
+        // reads the device queue's ItemPositionState, and the JF-581 shape (a
+        // server-side UserData write loss with the position surviving only in the
+        // device queue) would be invisible to the probes, so a device queue
+        // holding ANY positioned entry forces the fetch (an in-memory check; the
+        // over-fire costs one bounded query, an under-fire would drop a real
+        // resume).
         // The single-file shapes never reach here (their page is
         // the whole book by construction).
-        if (startIndex == 0 && resumeTicks == 0 && continuationHasMore)
+        if (resumeTicks == 0 && continuationHasMore)
         {
-            QueryResult<BaseItem> fullBook = await RetryHelper.ExecuteWithRequestBudgetAsync(
-                () => SearchService.SafeGetItemsResult(libraryManager,
-                    QueueContinuationFetcher.BuildScopedAudiobookChaptersQueryUnpaged(
-                        jellyfinUser, user, libraryManager, logger, book.Id),
-                    logger),
-                logger,
-                "GetBookTracksDeepResume",
-                cancellationToken: cancellationToken).ConfigureAwait(false);
-
-            (int deepIndex, long deepTicks) = ResumeMath.FindResumeTrackIndex(
-                fullBook.Items, jellyfinUser, userDataManager, queueManager, session.DeviceId, resumePosition: true, logger);
-            if (deepIndex > 0)
+            bool queueHoldsPositionedEntry = queueManager != null
+                && session.DeviceId != null
+                && queueManager.GetQueue(session.DeviceId)?.ItemPositionState.Values.Any(ticks => ticks > 0) == true;
+            if (queueHoldsPositionedEntry
+                || await QueueContinuationFetcher.MayHaveResumeRelevantUserDataAsync(
+                    (probeStartIndex, probeLimit) => QueueContinuationFetcher.BuildScopedAudiobookChaptersQuery(
+                        jellyfinUser, user, libraryManager, logger, book.Id, probeStartIndex, probeLimit),
+                    async probeQuery => await RetryHelper.ExecuteWithRequestBudgetAsync(
+                        () => SearchService.SafeGetItemsResult(libraryManager, probeQuery, logger),
+                        logger,
+                        "GetBookTracksResumeProbe",
+                        cancellationToken: cancellationToken).ConfigureAwait(false))
+                    .ConfigureAwait(false))
             {
-                // The re-sliced page starts exactly at the position-holding chapter,
-                // so the page-relative answer is (0, deepTicks) by construction in
-                // every return shape of FindResumeTrackIndex (in-progress hit, cached
-                // position, after-last-played): no re-scan of the slice.
-                trackItems = fullBook.Items
-                    .Skip(deepIndex)
-                    .Take(ProgressiveQueueConstants.GetInitialFetchSize())
-                    .ToList();
-                startIndex = 0;
-                resumeTicks = deepTicks;
+                QueryResult<BaseItem> fullBook = await RetryHelper.ExecuteWithRequestBudgetAsync(
+                    () => SearchService.SafeGetItemsResult(libraryManager,
+                        QueueContinuationFetcher.BuildScopedAudiobookChaptersQueryUnpaged(
+                            jellyfinUser, user, libraryManager, logger, book.Id),
+                        logger),
+                    logger,
+                    "GetBookTracksDeepResume",
+                    cancellationToken: cancellationToken).ConfigureAwait(false);
 
-                logger.LogInformation(
-                    "{Label}: deep resume found chapter {DeepIndex} ('{TrackName}') beyond the initial page; re-paging the book at it",
-                    logLabel, deepIndex, fullBook.Items[deepIndex].Name);
+                (int deepIndex, long deepTicks) = ResumeMath.FindResumeTrackIndex(
+                    fullBook.Items, jellyfinUser, userDataManager, queueManager, session.DeviceId, resumePosition: true, logger);
+                if (deepIndex > 0)
+                {
+                    // The re-sliced page starts exactly at the position-holding chapter,
+                    // so the page-relative answer is (0, deepTicks) by construction in
+                    // every return shape of FindResumeTrackIndex (in-progress hit, cached
+                    // position, after-last-played): no re-scan of the slice.
+                    trackItems = fullBook.Items
+                        .Skip(deepIndex)
+                        .Take(ProgressiveQueueConstants.GetInitialFetchSize())
+                        .ToList();
+                    startIndex = 0;
+                    resumeTicks = deepTicks;
 
-                // The fetch-all list is itself the honest total in both regimes
-                // (known-total pages and the JF-673 end-unknown fallback), so the
-                // continuation carries a real count.
-                continuationStartIndex = deepIndex + trackItems.Count;
-                continuationTotalCount = fullBook.Items.Count;
-                continuationHasMore = continuationStartIndex < continuationTotalCount;
+                    logger.LogInformation(
+                        "{Label}: deep resume found chapter {DeepIndex} ('{TrackName}') beyond the initial page; re-paging the book at it",
+                        logLabel, deepIndex, fullBook.Items[deepIndex].Name);
+
+                    // The fetch-all list is itself the honest total in both regimes
+                    // (known-total pages and the JF-673 end-unknown fallback), so the
+                    // continuation carries a real count.
+                    continuationStartIndex = deepIndex + trackItems.Count;
+                    continuationTotalCount = fullBook.Items.Count;
+                    continuationHasMore = continuationStartIndex < continuationTotalCount;
+                }
             }
         }
 

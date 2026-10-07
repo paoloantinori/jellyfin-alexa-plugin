@@ -1538,9 +1538,10 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
     // (BuildAlbumPlayResponseAsync first page: the ParentId arm plus the JF-338
     // AlbumIds retry) and the tail (FetchAlbumTracks, the same two arms). This pin
     // drives BOTH ends against a split-album server (empty ParentId pages,
-    // populated AlbumIds pages) and captures all five issued queries in call
-    // order (head primary, head retry, the JF-796 deep-resume fetch the fresh
-    // multi-page ask pays, tail primary, tail retry), then asserts each arm's
+    // populated AlbumIds pages) and captures all seven issued queries in call
+    // order (head primary, head retry, the JF-797 played and resumable resume
+    // probes, the JF-796 deep-resume fetch the probe hit releases, tail primary,
+    // tail retry), then asserts each arm's
     // head and tail shapes are IDENTICAL except
     // the paging fields. JF-763 joined the library-scope dimension to the
     // lockstep: the plugin user is RESTRICTED and both ends' queries must carry
@@ -1579,12 +1580,28 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
                 q.IncludeItemTypes != null && q.IncludeItemTypes.Contains(BaseItemKind.MusicAlbum))))
             .Returns(new List<BaseItem> { album });
 
+        // JF-797: the membership arm serves a real 25-track album through the
+        // flag-honoring page server (paging plus the IsPlayed/IsResumable probes
+        // the discriminator issues), with one in-progress track at index 9 beyond
+        // the initial page, so the ask pays the probe pair AND the deep fetch the
+        // probe hit triggers (both members of the ONE shape stay pinned).
+        List<BaseItem> albumTracks = Enumerable.Range(0, 25)
+            .Select(i => (BaseItem)new Audio { Id = Guid.NewGuid(), Name = $"Track {i + 1}" })
+            .ToList();
+        BaseItem progressRow = albumTracks[9];
+        _fx.UserDataManager
+            .Setup(x => x.GetUserData(It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
+            .Returns((Jellyfin.Database.Implementations.Entities.User _, BaseItem item) =>
+                item.Id == progressRow.Id
+                    ? new UserItemData { Key = "k", Played = false, PlaybackPositionTicks = TimeSpan.FromMinutes(1).Ticks }
+                    : null);
+
         var captured = new List<InternalItemsQuery>();
 
         // Split-album server shape (JF-338): the folder-based ParentId page is
         // empty at both ends, the AlbumIds membership page carries the tracks, so
-        // all four queries issue (head primary, head retry, tail primary, tail
-        // retry, in that call order).
+        // the head issues primary, retry, the two resume probes, and the deep
+        // fetch, then the tail issues primary and retry (that call order).
         _fx.LibraryManager
             .Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q =>
                 q.ParentId == albumId && (q.AlbumIds == null || q.AlbumIds.Length == 0))))
@@ -1594,13 +1611,11 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
             .Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q =>
                 q.AlbumIds != null && q.AlbumIds.Contains(albumId))))
             .Callback<InternalItemsQuery>(q => captured.Add(q))
-            .Returns(new QueryResult<BaseItem>
-            {
-                Items = Enumerable.Range(0, 5)
-                    .Select(i => (BaseItem)new Audio { Id = Guid.NewGuid(), Name = $"Track {i + 1}" })
-                    .ToList(),
-                TotalRecordCount = 25
-            });
+            .Returns((InternalItemsQuery q) => TestHelpers.ServePagedTracks(
+                albumTracks,
+                q,
+                playedRow: null,
+                resumableRow: t => t.Id == progressRow.Id));
 
         var context = CreateContext();
         await handler.HandleAsync(
@@ -1621,12 +1636,14 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
 
         QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID);
 
-        Assert.Equal(5, captured.Count);
+        Assert.Equal(7, captured.Count);
         InternalItemsQuery headPrimary = captured[0];
         InternalItemsQuery headRetry = captured[1];
-        InternalItemsQuery headDeep = captured[2];
-        InternalItemsQuery tailPrimary = captured[3];
-        InternalItemsQuery tailRetry = captured[4];
+        InternalItemsQuery headPlayedProbe = captured[2];
+        InternalItemsQuery headResumableProbe = captured[3];
+        InternalItemsQuery headDeep = captured[4];
+        InternalItemsQuery tailPrimary = captured[5];
+        InternalItemsQuery tailRetry = captured[6];
 
         // The field-set half of the lockstep (everything except paging), shared by
         // the head/tail arm pairs and the JF-796 deep fetch so a field added to the
@@ -1689,7 +1706,7 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
         Assert.Equal(Guid.Empty, tailRetry.ParentId);
 
         // JF-796: the deep-resume fetch is the UNPAGED member of the working arm
-        // (the fresh multi-page ask's one-fetch trade): the ONE shared field set
+        // (the fetch the JF-797 discriminator releases): the ONE shared field set
         // beside the paged head retry, paging null (fetch-all, not Take(0)), so a
         // hand-kept initializer reintroduced for the deep fetch reds here too.
         AssertSharedQueryShape(headRetry, headDeep);
@@ -1697,6 +1714,33 @@ public class ProgressiveQueueTests : PluginTestBase, IDisposable
         Assert.Equal(Guid.Empty, headDeep.ParentId);
         Assert.Null(headDeep.StartIndex);
         Assert.Null(headDeep.Limit);
+
+        // JF-797 item 2: the resume probes are the discriminator's bounded members
+        // of the SAME working arm and shape (user, recursion, kind filter, order,
+        // scope), paging 0 + 1, each carrying its ONE flag axis, in the played-first
+        // call order. The DELIBERATE divergence from the shared field set is the
+        // cheap DtoOptions: a one-row existence probe carries no fields, the
+        // full-field shape would rebuild the row cost the probe exists to avoid.
+        foreach (InternalItemsQuery probe in new[] { headPlayedProbe, headResumableProbe })
+        {
+            Assert.Same(headRetry.User, probe.User);
+            Assert.Equal(headRetry.Recursive, probe.Recursive);
+            Assert.Equal(headRetry.IncludeItemTypes, probe.IncludeItemTypes);
+            Assert.Equal(headRetry.OrderBy, probe.OrderBy);
+            Assert.Equal(headRetry.TopParentIds, probe.TopParentIds);
+            Assert.Equal(new[] { albumId }, probe.AlbumIds);
+            Assert.Equal(Guid.Empty, probe.ParentId);
+            Assert.Equal(0, probe.StartIndex);
+            Assert.Equal(1, probe.Limit);
+            Assert.True(
+                probe.DtoOptions!.Fields == null || probe.DtoOptions.Fields.Count == 0,
+                "the probe must use the cheap no-fields DtoOptions shape");
+        }
+
+        Assert.True(headPlayedProbe.IsPlayed);
+        Assert.Null(headPlayedProbe.IsResumable);
+        Assert.True(headResumableProbe.IsResumable);
+        Assert.Null(headResumableProbe.IsPlayed);
     }
 
     // JF-666: the artist continuation fetch must filter via IncludeItemTypes=Audio,
