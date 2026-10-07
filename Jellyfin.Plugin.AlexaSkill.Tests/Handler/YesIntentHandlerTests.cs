@@ -1843,7 +1843,6 @@ public class YesIntentHandlerTests : PluginTestBase
     /// ask's own warming gate protects the SEARCH the confirm has already
     /// completed, and over-gating here would refuse a bounded path that works.
     /// </summary>
-    [Fact]
     /// <summary>
     /// Gate-marker tail F3: the song leg's INTERSECTION pin (the documented bounded
     /// divergence, machine-locked like its siblings). With music disabled AND the
@@ -1887,6 +1886,7 @@ public class YesIntentHandlerTests : PluginTestBase
         }
     }
 
+    [Fact]
     public async Task HandleAsync_DisambiguationSongType_SongConfirm_WhileIndexWarming_PlaysSingleSong()
     {
         var songId = Guid.NewGuid();
