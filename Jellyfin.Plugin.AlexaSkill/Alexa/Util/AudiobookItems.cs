@@ -158,10 +158,28 @@ internal static class AudiobookItems
     /// those confirms into the album leg). MusicAlbum stays excluded: PlayAlbum's
     /// own disambiguation matches are MusicAlbums and must keep routing to the
     /// album leg.
+    /// JF-797 item 3 (the payload-kind gate): the Folder arm is narrowed by a
+    /// KIND DENY-LIST (MusicArtist, MusicGenre, CollectionFolder, Playlist beside
+    /// MusicAlbum). The two live producers emit only AudioBook leaves and plain
+    /// book folders, so the breadth was latent, but any current-or-future
+    /// producer emitting one of the denied kinds reached the PlayBook leg, whose
+    /// climb answers null and whose chapters query returns zero children: a
+    /// broken NoContentInBook launch (and, since JF-795, a FeatureDisabled Tell
+    /// with books off) where the pre-JF-793 album leg answered such payloads.
+    /// Denied kinds fall through to YesIntentHandler's album-leg switch arm, the
+    /// pre-JF-793 behavior (MusicGenre is not even a Folder, so its entry is
+    /// belt-and-braces documenting the kind). A positive children-are-AudioBook
+    /// probe was evaluated and declined: it would cost a query on every real
+    /// book-folder confirm to close a breadth no producer exhibits.
     /// </summary>
     internal static bool IsBookDisambiguationPayload(BaseItem? item)
         => item is AudioBook
-           || (item is Folder && item is not MediaBrowser.Controller.Entities.Audio.MusicAlbum);
+           || (item is Folder
+               && item is not MediaBrowser.Controller.Entities.Audio.MusicAlbum
+               && item is not MediaBrowser.Controller.Entities.Audio.MusicArtist
+               && item is not MediaBrowser.Controller.Entities.Audio.MusicGenre
+               && item is not MediaBrowser.Controller.Entities.CollectionFolder
+               && item is not MediaBrowser.Controller.Playlists.Playlist);
 
     /// <summary>
     /// Whether the finished item is BOOK-shaped for the end-of-book decision (JF-670):

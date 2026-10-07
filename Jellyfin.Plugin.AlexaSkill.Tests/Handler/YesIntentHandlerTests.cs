@@ -18,6 +18,7 @@ using Jellyfin.Plugin.AlexaSkill.Tests.Unit;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Entities.Movies;
+using MediaBrowser.Controller.Playlists;
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Session;
@@ -1162,6 +1163,118 @@ public class YesIntentHandlerTests : PluginTestBase
         {
             // Code-review F2 (JF-805): capture-restore like the music twin below,
             // not the literal true this pin carried from the JF-795 round.
+            Plugin.Instance!.Configuration.BooksEnabled = originalBooksEnabled;
+        }
+    }
+
+    // ========== JF-797 item 3: the payload-kind gate ==========
+
+    /// <summary>
+    /// Builds a MediaTypeAlbum disambiguation payload of one of the DENIED
+    /// non-book Folder kinds (JF-797 item 3): the kinds a current-or-future
+    /// producer could label "album" that must NOT reach the PlayBook leg.
+    /// </summary>
+    private static BaseItem CreateDeniedKindPayload(string kind) => kind switch
+    {
+        "artist" => new MusicArtist { Name = "Denied Artist", Id = Guid.NewGuid() },
+        "genre" => new MusicGenre { Name = "Denied Genre", Id = Guid.NewGuid() },
+        "collection" => new CollectionFolder { Name = "Denied Library", Id = Guid.NewGuid() },
+        "playlist" => new Playlist { Name = "Denied Playlist", Id = Guid.NewGuid() },
+        _ => throw new ArgumentException($"unknown denied kind '{kind}'", nameof(kind))
+    };
+
+    /// <summary>
+    /// JF-797 item 3: the payload-kind gate. IsBookDisambiguationPayload used to
+    /// route ANY non-MusicAlbum Folder to the PlayBook leg, so a MusicArtist,
+    /// MusicGenre, CollectionFolder, or Playlist payload reached a leg whose climb
+    /// answers null and whose chapters query returns zero children: the
+    /// NoContentInBook Tell (and, since JF-795, the FeatureDisabled Tell with
+    /// books off). The denied kinds must fall through to the album-leg switch arm,
+    /// the pre-JF-793 shape: the defensive enumeration finds no children and
+    /// answers NoSongsInAlbum.
+    /// </summary>
+    [Theory]
+    [InlineData("artist")]
+    [InlineData("genre")]
+    [InlineData("collection")]
+    [InlineData("playlist")]
+    public async Task HandleAsync_DisambiguationAlbumType_NonBookFolderKinds_FallToTheAlbumLeg(string kind)
+    {
+        BaseItem payload = CreateDeniedKindPayload(kind);
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemById(payload.Id))
+            .Returns(payload);
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        var matchInfo = new DisambiguationHelper.MatchInfo { Id = payload.Id.ToString(), Name = payload.Name };
+        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
+
+        var handler = CreateHandler();
+        var session = CreateSession();
+        var response = await handler.HandleAsync(
+            CreateYesIntentRequest(),
+            CreateContext(),
+            TestHelpers.CreateTestUser(),
+            session,
+            attrs,
+            CancellationToken.None);
+
+        // The album defensive leg answers NoSongsInAlbum (the pre-JF-793 shape),
+        // not the PlayBook leg's NoContentInBook, and launches nothing.
+        Assert.True(response.Response.Directives == null || response.Response.Directives.Count == 0,
+            "the album-leg fallback must carry no directives");
+        var speech = response.Tells<PlainTextOutputSpeech>();
+        Assert.Contains("no songs in the album", speech.Text, StringComparison.OrdinalIgnoreCase);
+        Assert.True(session.NowPlayingQueue == null || session.NowPlayingQueue.Count == 0,
+            "the album-leg fallback must leave no queue");
+    }
+
+    /// <summary>
+    /// JF-795 addendum interaction, closed by JF-797 item 3: with BOOKS DISABLED,
+    /// an arbitrary non-book Folder confirm labelled "album" used to hit the
+    /// over-broad IsBookDisambiguationPayload and answer the FeatureDisabled Tell
+    /// (the JF-795 BooksEnabled gate sits inside that gate). With the kind gate
+    /// narrowed, the payload never reaches the books axis: it falls to the album
+    /// leg and answers NoSongsInAlbum, exactly as it did before JF-793, whatever
+    /// the books flag says.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_DisambiguationAlbumType_NonBookFolderPayload_BooksDisabled_StillFallsToTheAlbumLeg()
+    {
+        BaseItem payload = CreateDeniedKindPayload("artist");
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemById(payload.Id))
+            .Returns(payload);
+        _libraryManagerMock
+            .Setup(lm => lm.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(new List<BaseItem>());
+
+        var matchInfo = new DisambiguationHelper.MatchInfo { Id = payload.Id.ToString(), Name = payload.Name };
+        var attrs = CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { matchInfo }, 0, "album");
+
+        bool originalBooksEnabled = Plugin.Instance!.Configuration.BooksEnabled;
+        Plugin.Instance!.Configuration.BooksEnabled = false;
+        try
+        {
+            var handler = CreateHandler();
+            var session = CreateSession();
+            var response = await handler.HandleAsync(
+                CreateYesIntentRequest(),
+                CreateContext(),
+                TestHelpers.CreateTestUser(),
+                session,
+                attrs,
+                CancellationToken.None);
+
+            var speech = response.Tells<PlainTextOutputSpeech>();
+            // The album-leg answer, NOT the books FeatureDisabled Tell.
+            Assert.Contains("no songs in the album", speech.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("disabled", speech.Text, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
             Plugin.Instance!.Configuration.BooksEnabled = originalBooksEnabled;
         }
     }
