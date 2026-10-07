@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
 
@@ -39,8 +40,48 @@ internal static class AudiobookItems
         => item is AudioBook ? TryResolveVerifiedParentFolder(item, libraryManager) : null;
 
     /// <summary>
-    /// The ONE verified ParentId climb (JF-794), shared by the search-path twin
-    /// (<see cref="TryResolveBookFolder"/>, which adds the AudioBook gate its search
+    /// The batched form of <see cref="TryResolveBookFolder(BaseItem?, ILibraryManager?)"/> for
+    /// the candidate normalization (JF-797 item 4, the lazy folder resolution):
+    /// identical verdicts, but the ONE expensive step (the GetItemById parent
+    /// fetch) runs once per DISTINCT ParentId through <paramref name="parentFolderCache"/>,
+    /// not once per candidate. A short title whose search returns dozens of
+    /// chapter leaves collapses onto a handful of books, so the per-candidate
+    /// fetches were almost all repeats whose results evaporate at the fuzzy
+    /// consumers. The cache maps ParentId to the RESOLVED Folder (null when the
+    /// id resolves to no Folder); it is a per-ask scratchpad owned by the caller,
+    /// never shared across requests (a library rescan between asks must not be
+    /// served a stale folder). The per-candidate parts of the climb (the AudioBook
+    /// gate, the empty-ParentId fail-closed, the SitsDirectlyInside path check)
+    /// still run per candidate: two leaves sharing a ParentId can carry different
+    /// paths (a metadata remap), and only the parent FETCH is ParentId-pure.
+    /// </summary>
+    /// <param name="item">The audiobook search candidate (a chapter leaf or a single-file book).</param>
+    /// <param name="libraryManager">The library manager resolving unseen ParentIds; null fails closed (the seam's contract).</param>
+    /// <param name="parentFolderCache">The caller's per-ask ParentId to resolved-Folder scratchpad (null values are cached misses).</param>
+    /// <returns>The book folder, or null when the item is not an AudioBook chapter leaf or the climb is rejected (see the seam's contract).</returns>
+    internal static Folder? TryResolveBookFolder(
+        BaseItem? item,
+        ILibraryManager? libraryManager,
+        IDictionary<Guid, Folder?> parentFolderCache)
+    {
+        if (item is not AudioBook || item.ParentId == Guid.Empty || libraryManager is null)
+        {
+            return null;
+        }
+
+        if (!parentFolderCache.TryGetValue(item.ParentId, out Folder? parent))
+        {
+            parent = libraryManager.GetItemById(item.ParentId) as Folder;
+            parentFolderCache.Add(item.ParentId, parent);
+        }
+
+        return parent != null && SitsDirectlyInside(item, parent) ? parent : null;
+    }
+
+    /// <summary>
+    /// The ONE verified ParentId climb (JF-794), shared by the search-path twins
+    /// (the <see cref="TryResolveBookFolder(BaseItem?, ILibraryManager?)"/> overloads,
+    /// which add the AudioBook gate its search
     /// results carry) and the VideoApp builders' concat decision: resolve the leaf's
     /// ParentId to a Folder, then apply the JF-793 shared-container discriminator.
     /// Type-agnostic BY DESIGN on this seam: the builders' item argument can be an

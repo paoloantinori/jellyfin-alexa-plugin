@@ -55,7 +55,7 @@ public class PlayBookIntentHandler : BaseHandler
 
     /// <summary>
     /// Map the audiobook search candidates onto BOOK granularity (JF-793 Finding 3):
-    /// each candidate through <see cref="AudiobookItems.TryResolveBookFolder"/>,
+    /// each candidate through the audiobook climb (AudiobookItems.TryResolveBookFolder),
     /// deduped by resolved id, preserving first-occurrence order. Chapter leaves
     /// collapse onto their book folder, so the multi-match disambiguation presents
     /// ONE entry per book (named for the book, whose confirm payload is the folder
@@ -79,11 +79,17 @@ public class PlayBookIntentHandler : BaseHandler
         // Values enumeration is an implementation detail, so the dedup walks the
         // source list with a seen-set instead and the doc's order promise is the
         // code's actual guarantee.
+        // JF-797 item 4: the batched climb. The per-ask scratchpad resolves each
+        // DISTINCT ParentId once (9 chapter leaves of 3 books cost 3 GetItemById
+        // calls, not 9), and the per-candidate verdicts stay exact (the AudioBook
+        // gate, the empty-ParentId shape, and the path check run per candidate;
+        // see the overload's doc).
         List<BaseItem> byBook = new();
         HashSet<Guid> seen = new();
+        Dictionary<Guid, Folder?> parentFolders = new();
         foreach (BaseItem candidate in candidates)
         {
-            BaseItem book = AudiobookItems.TryResolveBookFolder(candidate, _libraryManager) ?? candidate;
+            BaseItem book = AudiobookItems.TryResolveBookFolder(candidate, _libraryManager, parentFolders) ?? candidate;
             if (seen.Add(book.Id))
             {
                 byBook.Add(book);
