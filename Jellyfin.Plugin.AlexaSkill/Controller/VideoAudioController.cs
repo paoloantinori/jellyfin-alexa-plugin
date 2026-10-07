@@ -5,7 +5,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Data.Enums;
@@ -82,12 +81,6 @@ public class VideoAudioController : ControllerBase
     /// names live encodes.
     /// </summary>
     private static readonly ConcurrentDictionary<string, (Process Process, string? OwnerDeviceId)> _activeAudioSpeedEncodeProcesses = new();
-
-    /// <summary>
-    /// Compiled regex for extracting trailing chapter number from audiobook filenames
-    /// (e.g. "The Upside of Irrationality 065.mp3" → 65).
-    /// </summary>
-    private static readonly Regex _chapterNumberRegex = new(@"(\d+)\s*$", RegexOptions.Compiled);
 
     private const string HlsExtInf = "#EXTINF:";
     private const string HlsEndList = "#EXT-X-ENDLIST";
@@ -3818,26 +3811,18 @@ public class VideoAudioController : ControllerBase
             // Jellyfin doesn't always parse these into IndexNumber, and SortName/Name
             // may be identical across all chapters. Extract the trailing number from
             // the filename for natural chapter order.
+            // JF-790: the comparator lives in the ONE shared helper
+            // (Alexa.Util.ChapterFileNameOrder) so the DEFAULT paged AudioPlayer
+            // queue path sorts with the same definition this concat timeline
+            // encodes (a fork here would desync the seek-mode resume math from
+            // the queue's next/previous navigation on the same book).
             _logger.LogInformation(
                 "Audiobook chapter sort: first item Name={Name}, Path={Path}, Id={Id}",
                 chapters[0].Name, chapters[0].Path, chapters[0].Id);
 
             var sortedChapters = isMusicAlbum
                 ? chapters.ToList()
-                : chapters
-                .OrderBy(c =>
-                {
-                    string? path = c.Path;
-                    if (string.IsNullOrEmpty(path))
-                    {
-                        return int.MaxValue;
-                    }
-
-                    string filename = System.IO.Path.GetFileNameWithoutExtension(path);
-                    var match = _chapterNumberRegex.Match(filename);
-                    return match.Success ? int.Parse(match.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture) : int.MaxValue;
-                })
-                .ToList();
+                : ChapterFileNameOrder.SortByTrailingFileNameNumber(chapters);
 
             _logger.LogInformation(
                 "Audiobook chapter sort result: first={FirstPath}, last={LastPath}",

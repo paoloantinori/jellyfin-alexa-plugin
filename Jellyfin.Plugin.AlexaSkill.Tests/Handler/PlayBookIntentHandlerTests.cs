@@ -509,7 +509,10 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
                 Name = $"Measure What Matters - Chapter {i:00}",
                 Id = Guid.NewGuid(),
                 ParentId = bookFolderId,
-                Path = $"/audiobooks/measure-what-matters/ch{i:00}.mp3"
+                Path = $"/audiobooks/measure-what-matters/ch{i:00}.mp3",
+                // JF-790: the tagged class (this book is tagged in the live census),
+                // so the play keeps the DB paged path the test pins.
+                IndexNumber = i
             })
             .ToList();
         _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
@@ -1042,7 +1045,10 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
                 Name = $"Measure What Matters - Chapter {i:00}",
                 Id = Guid.NewGuid(),
                 ParentId = bookFolderId,
-                Path = $"/audiobooks/measure-what-matters/ch{i:00}.mp3"
+                Path = $"/audiobooks/measure-what-matters/ch{i:00}.mp3",
+                // JF-790: the tagged class (this book is tagged in the live census),
+                // so the play keeps the DB paged path the test pins.
+                IndexNumber = i
             })
             .ToList();
         _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
@@ -1307,7 +1313,10 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
                 Name = $"Measure What Matters - Chapter {i:00}",
                 Id = Guid.NewGuid(),
                 ParentId = bookFolderId,
-                Path = $"/audiobooks/measure-what-matters/ch{i:00}.mp3"
+                Path = $"/audiobooks/measure-what-matters/ch{i:00}.mp3",
+                // JF-790: the tagged class (this book is tagged in the live census),
+                // so the play keeps the DB paged path the test pins.
+                IndexNumber = i
             })
             .ToList();
 
@@ -1324,7 +1333,10 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
                 Name = $"Measure What Matters - Chapter {i:00}",
                 Id = Guid.NewGuid(),
                 ParentId = bookFolderId,
-                Path = $"/audiobooks/measure-what-matters/ch{i:00}.mp3"
+                Path = $"/audiobooks/measure-what-matters/ch{i:00}.mp3",
+                // JF-790: the tagged class (this book is tagged in the live census),
+                // so the play keeps the DB paged path the test pins.
+                IndexNumber = i
             })
             .ToList();
         _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
@@ -1389,7 +1401,7 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
         _fx.LibraryManager.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
             .Throws(new NullReferenceException());
         List<BaseItem> fullPage = Enumerable.Range(0, ProgressiveQueueConstants.GetInitialFetchSize())
-            .Select(i => (BaseItem)new Audio { Id = Guid.NewGuid(), Name = $"Chapter {i + 1}" })
+            .Select(i => (BaseItem)new Audio { Id = Guid.NewGuid(), Name = $"Chapter {i + 1}", IndexNumber = i + 1 })
             .ToList();
         _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q => q.ParentId == bookItem.Id)))
             .Returns(fullPage);
