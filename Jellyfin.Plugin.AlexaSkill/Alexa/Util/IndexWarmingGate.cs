@@ -6,7 +6,10 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// JF-419/JF-419.3: the warming gates, two layers. Layer 1: handlers gate at entry
 /// on the index their request path actually uses (artist-search paths on
 /// <see cref="IArtistIndex"/>, song-title paths on <see cref="ISongNgramIndex"/>),
-/// before their "searching" announcement. Layer 2: <see cref="ArtistSearch.SearchAsync"/>
+/// before their "searching" announcement. Paths with no in-memory index of their
+/// own (albums, books, ...) gate on the artist index as the coarse stand-in for
+/// the shared cold database (the PlayAlbum precedent; books joined in JF-807).
+/// Layer 2: <see cref="ArtistSearch.SearchAsync"/>
 /// re-checks the artist gate at its entry, the choke point covering every caller
 /// including BaseHandler fallbacks and future handlers. While an index is present
 /// but still loading, the alternative is the cold database path that can exceed

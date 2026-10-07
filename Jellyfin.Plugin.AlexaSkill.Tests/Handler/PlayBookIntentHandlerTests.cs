@@ -191,30 +191,7 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
         var session = CreateSession();
 
         _fx.SetupUserMock();
-
-        var bookItem = new Audio
-        {
-            Name = "The Hobbit",
-            Id = Guid.NewGuid()
-        };
-
-        _fx.LibraryManager.Setup(l => l.GetItemList(It.Is<InternalItemsQuery>(q =>
-                q.IncludeItemTypes != null && q.IncludeItemTypes.Any(t => t == BaseItemKind.AudioBook))))
-            .Returns(new List<BaseItem> { bookItem });
-
-        var trackItem = new Audio
-        {
-            Name = "Chapter 1",
-            Id = Guid.NewGuid()
-        };
-
-        _fx.LibraryManager.Setup(l => l.GetItemsResult(It.Is<InternalItemsQuery>(q =>
-                q.ParentId == bookItem.Id)))
-            .Returns(new MediaBrowser.Model.Querying.QueryResult<BaseItem>
-            {
-                Items = new[] { trackItem },
-                TotalRecordCount = 1
-            });
+        SetupSingleBookPlay();
 
         SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
 
@@ -228,8 +205,8 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
     // ========== JF-807: the book ask's Layer-1 warming gate (the ask-side twin of the JF-806 book-confirm gate) ==========
 
     /// <summary>
-    /// The single-book play mocks shared by the JF-807 warming pins (the
-    /// HandleAsync_SingleBookFound_PlaysAudio setup), so the pre-fix RED failure
+    /// The single-book play mocks (the shape HandleAsync_SingleBookFound_PlaysAudio
+    /// introduced) shared with the JF-807 warming pins, so the pre-fix RED failure
     /// of the entry-gate pin is the clean no-throw (the ungated query ran and
     /// played), not a mock-default null crashing the handler.
     /// </summary>
@@ -255,6 +232,16 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
+    /// The JF-806 YesIntentHandlerTests helper pair (the warming-pin idiom): the
+    /// two artist-index readiness states the JF-807 pins drive.
+    /// </summary>
+    private static IArtistIndex WarmingArtistIndex()
+        => Mock.Of<IArtistIndex>(i => i.IsReady == false);
+
+    private static IArtistIndex ReadyArtistIndex()
+        => Mock.Of<IArtistIndex>(i => i.IsReady == true);
+
+    /// <summary>
     /// JF-807 RED PROOF (the warming axis, the ASK): a book ask running while the
     /// artist index is still loading (the post-restart window) must refuse at
     /// entry, before the "SearchingBook" announcement and the cold AudioBook
@@ -272,7 +259,7 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
     [Fact]
     public async Task HandleAsync_BookAsk_WhileIndexWarming_ThrowsAtEntry()
     {
-        var handler = CreateHandler(Mock.Of<IArtistIndex>(i => i.IsReady == false));
+        var handler = CreateHandler(WarmingArtistIndex());
         SetupSingleBookPlay();
         _fx.SetupUserMock();
 
@@ -295,7 +282,7 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
     [Fact]
     public async Task HandleAsync_BookAsk_ReadyIndex_PlaysUnchanged()
     {
-        var handler = CreateHandler(Mock.Of<IArtistIndex>(i => i.IsReady == true));
+        var handler = CreateHandler(ReadyArtistIndex());
         SetupSingleBookPlay();
         _fx.SetupUserMock();
 
@@ -320,7 +307,7 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
     [Fact]
     public async Task HandleAsync_BookAsk_WarmingAndBooksDisabled_AnswersDisabledFirst()
     {
-        var handler = CreateHandler(Mock.Of<IArtistIndex>(i => i.IsReady == false));
+        var handler = CreateHandler(WarmingArtistIndex());
         SetupSingleBookPlay();
 
         bool originalBooksEnabled = Plugin.Instance!.Configuration.BooksEnabled;
@@ -362,7 +349,7 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
     [Fact]
     public async Task HandleAsync_BookAsk_WhileIndexWarming_EmptySlot_StillElicitsBookName()
     {
-        var handler = CreateHandler(Mock.Of<IArtistIndex>(i => i.IsReady == false));
+        var handler = CreateHandler(WarmingArtistIndex());
 
         SkillResponse response = await handler.HandleAsync(
             CreateIntentRequest(),
