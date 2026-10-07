@@ -334,11 +334,13 @@ public class YesIntentHandler : BaseHandler
         SkillResponse response = mediaType switch
         {
             DisambiguationHelper.MediaTypeAlbum => PlayAlbum(item, jellyfinUser!, user, session, locale, context, request),
-            // WARMING + MUSIC DECISIONS (JF-806 gate-marker tail F1): the playlist arm
-            // carries NEITHER gate by design - the ask gates nothing (verified across
-            // PlayPlaylistIntentHandler/ShufflePlayIntentHandler) and playlists are
-            // cross-type always-allowed; its warming exposure is the whole-path shape
-            // tracked as JF-808, not a confirm-leg decision.
+            // WARMING + MUSIC DECISIONS (JF-806 gate-marker tail F1, the warming half
+            // closed by JF-808): the playlist arm still carries NO music gate by
+            // design (the ask gates nothing on the flag axis, verified across
+            // PlayPlaylistIntentHandler/ShufflePlayIntentHandler; playlists are
+            // cross-type always-allowed), but since JF-808 the WARMING axis is gated
+            // inside the arm's method, before its recursive unpaged MediaTypes=Audio
+            // fetch, matching the asks' Layer-1 gate on the same stand-in index.
             DisambiguationHelper.MediaTypePlaylist => PlayPlaylist(item, jellyfinUser!, user, session, locale, context),
             _ => ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale))
         };
@@ -620,6 +622,16 @@ public class YesIntentHandler : BaseHandler
 
     private SkillResponse PlayPlaylist(BaseItem playlist, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Entities.User user, SessionInfo session, string locale, Context? context)
     {
+        // JF-808 warming axis (the F3-inside-the-method shape, so a future direct
+        // caller cannot re-open it either): the arm's cold surface is the
+        // recursive UNPAGED MediaTypes=Audio whole-track fetch below (and the
+        // queue build over it), the same cold-database cost the direct asks
+        // (PlayPlaylistIntentHandler/ShufflePlayIntentHandler) pay their Layer-1
+        // gate for; the artist index stands in for the shared cold database on
+        // the SAME index the asks gate, so the confirm-must-match-ask rule
+        // extends to the warming answer.
+        GuardIndexReady(_artistIndex);
+
         IReadOnlyList<BaseItem> playlistItems = ((Folder)playlist).GetItemList(new InternalItemsQuery()
         {
             User = jellyfinUser,

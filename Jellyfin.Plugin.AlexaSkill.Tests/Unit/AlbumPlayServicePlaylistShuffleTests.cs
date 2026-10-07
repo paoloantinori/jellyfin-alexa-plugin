@@ -89,40 +89,12 @@ public class AlbumPlayServicePlaylistShuffleTests : PluginTestBase
     }
 
     /// <summary>
-    /// One resolvable five-track playlist: a real <see cref="Playlist"/> whose
-    /// LinkedChildren point at the Audio tracks, one exact server hit, and the
-    /// library mock resolving ids (the linked-child path and the service's own
-    /// first-track lookup share it).
+    /// The ONE resolvable-playlist fixture (TestHelpers.SetupPlaylist, the JF-808
+    /// hoist of this class's former private copy: one exact server hit, LinkedChildren
+    /// resolving through the stubbed BaseItem statics, the library mock answering ids).
     /// </summary>
     private (Playlist Playlist, List<Audio> Tracks) SetupPlaylist(string name = "road trip songs")
-    {
-        var tracks = Enumerable.Range(0, 5)
-            .Select(i => new Audio { Id = Guid.NewGuid(), Name = $"Track {i}", Tags = Array.Empty<string>() })
-            .ToList();
-
-        var playlist = new Playlist { Name = name, Id = Guid.NewGuid(), Tags = Array.Empty<string>() };
-        playlist.LinkedChildren = tracks.Select(t => new LinkedChild { ItemId = t.Id }).ToArray();
-
-        var byId = tracks.ToDictionary(t => t.Id, t => (BaseItem)t);
-        _libraryManagerMock.Setup(l => l.GetItemById(It.IsAny<Guid>()))
-            .Returns((Guid id) => byId.TryGetValue(id, out BaseItem? item) ? item : null!);
-        // The 12.x ref resolves linked children through a batched ItemIds query
-        // (GetItemList); 10.11 never asks. Returning the tracks for any list query
-        // is inert on the net9 path (the flow's own queries go to GetItemsResult).
-        _libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
-            .Returns(tracks.Cast<BaseItem>().ToList());
-
-        _userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
-            .Returns(TestHelpers.CreateJellyfinUser());
-        _libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
-            .Returns(new QueryResult<BaseItem>
-            {
-                Items = new List<BaseItem> { playlist },
-                TotalRecordCount = 1
-            });
-
-        return (playlist, tracks);
-    }
+        => TestHelpers.SetupPlaylist(_libraryManagerMock, _userManagerMock, name);
 
     // ------------------------------------------------------------------
     // Refused shuffle start: the device queue stays untouched

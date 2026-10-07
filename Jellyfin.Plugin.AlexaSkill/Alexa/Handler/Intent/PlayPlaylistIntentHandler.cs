@@ -33,6 +33,7 @@ public class PlayPlaylistIntentHandler : BaseHandler
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
     private readonly DeviceQueueManager? _queueManager;
+    private readonly IArtistIndex? _artistIndex;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="PlayPlaylistIntentHandler"/> class.
@@ -43,17 +44,20 @@ public class PlayPlaylistIntentHandler : BaseHandler
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
     /// <param name="queueManager">Optional per-device queue manager for crash recovery.</param>
+    /// <param name="artistIndex">Optional in-memory artist index (JF-808: the warming-gate stand-in; playlists have no index of their own, see the gate comment in <see cref="HandleAsync"/>).</param>
     public PlayPlaylistIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILibraryManager libraryManager,
         IUserManager userManager,
         ILoggerFactory loggerFactory,
-        DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
+        DeviceQueueManager? queueManager = null,
+        IArtistIndex? artistIndex = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
         _queueManager = queueManager;
+        _artistIndex = artistIndex;
     }
 
     /// <inheritdoc/>
@@ -91,6 +95,24 @@ public class PlayPlaylistIntentHandler : BaseHandler
         {
             return Task.FromResult(BuildDialogElicitResponse("DidNotCatchPlaylistName", locale, "playlist", IntentNames.PlayPlaylist, Util.ElicitSlots.For(IntentNames.PlayPlaylist)));
         }
+
+        // JF-808 Layer-1 gate: playlists have no in-memory index of their own
+        // (neither the artist nor the song n-gram index serves Playlist items),
+        // so this is the coarse artist-index stand-in for the shared cold
+        // database (the shared stand-in rule lives on IndexWarmingGate; the
+        // PlayAlbum precedent, joined by books in JF-807), on the SAME index the
+        // YesIntent playlist confirm arm gates so ask and confirm answer
+        // identically in the warming window. The shared builder's cold
+        // surface behind this gate: the SearchTerm playlist query on its
+        // RetryAsync channel, the fuzzy fallback, and the GetManageableItems
+        // whole-track resolution. Placement: AFTER the empty-slot elicit and the
+        // cancel-word hatch (both must survive the warming window), BEFORE the
+        // first cold query. This path has NO feature-flag gate (playlists are
+        // cross-type always-allowed, the JF-806 decision), so the flag-gate
+        // position discriminator does not apply; the path also sends no pre-query
+        // "searching" announcement, so the gate-before-announcement contract
+        // holds trivially.
+        GuardIndexReady(_artistIndex);
 
         // JF-663: the kana-origin flag is captured on the post-strip,
         // pre-romanization name, the string the builder matches: kana in the

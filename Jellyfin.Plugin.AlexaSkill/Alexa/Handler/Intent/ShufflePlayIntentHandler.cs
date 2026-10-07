@@ -23,6 +23,7 @@ public class ShufflePlayIntentHandler : BaseHandler
     private readonly ILibraryManager _libraryManager;
     private readonly IUserManager _userManager;
     private readonly DeviceQueueManager? _queueManager;
+    private readonly IArtistIndex? _artistIndex;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ShufflePlayIntentHandler"/> class.
@@ -33,17 +34,20 @@ public class ShufflePlayIntentHandler : BaseHandler
     /// <param name="userManager">Instance of the <see cref="IUserManager"/> interface.</param>
     /// <param name="loggerFactory">Instance of the <see cref="ILoggerFactory"/> interface.</param>
     /// <param name="queueManager">Optional per-device queue manager for crash recovery.</param>
+    /// <param name="artistIndex">Optional in-memory artist index (JF-808: the warming-gate stand-in; playlists have no index of their own, see the gate comment in <see cref="HandleAsync"/>).</param>
     public ShufflePlayIntentHandler(
         ISessionManager sessionManager,
         PluginConfiguration config,
         ILibraryManager libraryManager,
         IUserManager userManager,
         ILoggerFactory loggerFactory,
-        DeviceQueueManager? queueManager = null) : base(sessionManager, config, loggerFactory)
+        DeviceQueueManager? queueManager = null,
+        IArtistIndex? artistIndex = null) : base(sessionManager, config, loggerFactory)
     {
         _libraryManager = libraryManager;
         _userManager = userManager;
         _queueManager = queueManager;
+        _artistIndex = artistIndex;
     }
 
     /// <inheritdoc/>
@@ -81,6 +85,13 @@ public class ShufflePlayIntentHandler : BaseHandler
         {
             return Task.FromResult(BuildDialogElicitResponse("DidNotCatchPlaylistName", locale, "playlist", IntentNames.ShufflePlay, Util.ElicitSlots.For(IntentNames.ShufflePlay)));
         }
+
+        // JF-808 Layer-1 gate, the PlayPlaylistIntentHandler twin verbatim: this
+        // handler shares the playlist builder and its whole cold surface (only
+        // the shuffle flag differs), so it shares the gate and the placement
+        // (after the empty-slot elicit and the cancel hatch, before the first
+        // cold query; see that handler's comment for the index-choice record).
+        GuardIndexReady(_artistIndex);
 
         // JF-663: the kana-origin flag is captured on the post-strip,
         // pre-romanization name, the string the builder matches: kana in the

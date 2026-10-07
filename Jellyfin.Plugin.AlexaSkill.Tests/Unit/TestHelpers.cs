@@ -21,7 +21,9 @@ using Jellyfin.Plugin.AlexaSkill.Entities;
 using Jellyfin.Plugin.AlexaSkill.Lwa;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.Audio;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Playlists;
 using MediaBrowser.Controller.Session;
 using MediaBrowser.Controller.TV;
 using MediaBrowser.Model.Entities;
@@ -1127,6 +1129,80 @@ internal static class TestHelpers
         }
 
         public override IReadOnlyList<MediaStream> GetMediaStreams() => _streams;
+    }
+
+    /// <summary>
+    /// JF-808: the ONE Folder double whose GetItemList answers from a fixed list,
+    /// for tests that drive the production <c>((Folder)item).GetItemList(query)</c>
+    /// shape (the YesIntent playlist confirm arm). Overriding the virtual
+    /// GetItemsInternal skips the recursive folder machinery
+    /// (QueryRecursive/CollapseBoxSetItems), which reads server-injected statics
+    /// (BaseItem.ConfigurationManager) the test host does not stub; a real Folder
+    /// NREs there instead of reaching the mocked LibraryManager.
+    /// </summary>
+    internal sealed /// COST OF THE BYPASS (JF-808 gate-marker tail): the override ignores the
+    /// InternalItemsQuery entirely - MediaTypes, User visibility, and Recursive are
+    /// all dropped - so any pin needing the arm's FILTER semantics (a video-only or
+    /// not-visible playlist answering PlaylistEmpty in production) tests the double,
+    /// not the arm, and a regression dropping MediaTypes from the production query
+    /// is unobservable through this seam. Current pins only need the item list; when
+    /// a filter-sensitive pin arrives, extend the double or use the real machinery.
+    class TestItemsFolder : Folder
+    {
+        private readonly IReadOnlyList<BaseItem> _items;
+
+        public TestItemsFolder(string name, Guid id, IReadOnlyList<BaseItem> items)
+        {
+            Name = name;
+            Id = id;
+            Tags = Array.Empty<string>();
+            _items = items;
+        }
+
+        protected override QueryResult<BaseItem> GetItemsInternal(InternalItemsQuery query)
+            => new() { Items = _items.ToList(), TotalRecordCount = _items.Count };
+    }
+
+    /// <summary>
+    /// JF-808: the ONE resolvable-playlist fixture owner (the
+    /// StubBaseItemStatics mock-parameter shape). A real <see cref="Playlist"/>
+    /// whose LinkedChildren carry the track ids and resolve through the stubbed
+    /// BaseItem statics: GetItemById answers the byId map (the linked-child path
+    /// and the caller's own first-track lookup share it; the playlist itself is
+    /// in the map for handlers that re-resolve the matched item), and the 12.x
+    /// batched linked-child ref (GetItemList) is served for any list query
+    /// (10.11 never asks it; the flow's own queries go to GetItemsResult). Was 2
+    /// private copies (AlbumPlayServicePlaylistShuffleTests and the JF-808
+    /// handler pins): the second copy was the hoist point.
+    /// </summary>
+    internal static (Playlist Playlist, List<Audio> Tracks) SetupPlaylist(
+        Mock<ILibraryManager> libraryManagerMock,
+        Mock<IUserManager> userManagerMock,
+        string name = "road trip songs")
+    {
+        var tracks = Enumerable.Range(0, 5)
+            .Select(i => new Audio { Id = Guid.NewGuid(), Name = $"Track {i}", Tags = Array.Empty<string>() })
+            .ToList();
+
+        var playlist = new Playlist { Name = name, Id = Guid.NewGuid(), Tags = Array.Empty<string>() };
+        playlist.LinkedChildren = tracks.Select(t => new LinkedChild { ItemId = t.Id }).ToArray();
+
+        var byId = tracks.ToDictionary(t => t.Id, t => (BaseItem)t);
+        byId[playlist.Id] = playlist;
+        libraryManagerMock.Setup(l => l.GetItemById(It.IsAny<Guid>()))
+            .Returns((Guid id) => byId.TryGetValue(id, out BaseItem? item) ? item : null!);
+        libraryManagerMock.Setup(l => l.GetItemList(It.IsAny<InternalItemsQuery>()))
+            .Returns(tracks.Cast<BaseItem>().ToList());
+        userManagerMock.Setup(u => u.GetUserById(It.IsAny<Guid>()))
+            .Returns(CreateJellyfinUser());
+        libraryManagerMock.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns(new QueryResult<BaseItem>
+            {
+                Items = new List<BaseItem> { playlist },
+                TotalRecordCount = 1
+            });
+
+        return (playlist, tracks);
     }
 
     /// <summary>
