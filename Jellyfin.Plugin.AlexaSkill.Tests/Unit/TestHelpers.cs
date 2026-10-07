@@ -1140,7 +1140,14 @@ internal static class TestHelpers
     /// (BaseItem.ConfigurationManager) the test host does not stub; a real Folder
     /// NREs there instead of reaching the mocked LibraryManager.
     /// </summary>
-    internal sealed class TestItemsFolder : Folder
+    internal sealed /// COST OF THE BYPASS (JF-808 gate-marker tail): the override ignores the
+    /// InternalItemsQuery entirely - MediaTypes, User visibility, and Recursive are
+    /// all dropped - so any pin needing the arm's FILTER semantics (a video-only or
+    /// not-visible playlist answering PlaylistEmpty in production) tests the double,
+    /// not the arm, and a regression dropping MediaTypes from the production query
+    /// is unobservable through this seam. Current pins only need the item list; when
+    /// a filter-sensitive pin arrives, extend the double or use the real machinery.
+    class TestItemsFolder : Folder
     {
         private readonly IReadOnlyList<BaseItem> _items;
 

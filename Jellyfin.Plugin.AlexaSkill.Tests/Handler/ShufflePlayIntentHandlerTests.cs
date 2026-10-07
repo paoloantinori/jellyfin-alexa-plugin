@@ -12,6 +12,13 @@ using Xunit;
 
 namespace Jellyfin.Plugin.AlexaSkill.Tests.Handler;
 
+// COVERAGE POINTER (JF-808 gate-marker tail): the ShufflePlay WARMING gate twins
+// (throw + ready, CreateShuffleHandler) live in PlayPlaylistIntentHandlerTests beside
+// the playlist ask's twins (the shared-builder coverage family); grep here alone
+// misses them. The two construction helpers can drift - check both when the
+// handler's ctor changes.
+
+
 [Collection("Plugin")]
 public class ShufflePlayIntentHandlerTests : PluginTestBase
 {

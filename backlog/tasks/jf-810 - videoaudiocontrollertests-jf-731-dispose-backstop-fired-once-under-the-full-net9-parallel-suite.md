@@ -2,7 +2,7 @@
 id: JF-810
 title: >-
   JF-810 - VideoAudioControllerTests' JF-731 Dispose backstop fired once under the full net9.0 parallel suite
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-07'
 labels:
@@ -64,3 +64,5 @@ encode-starting tests against the sweep ordering.
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+CLOSURE (2026-10-07, the JF-808 gate-marker): this filing is a DUPLICATE of JF-772 (the same JF-731 dispose-backstop flake class, already filed 2026-10-05 with base-reproducibility matrices and candidate mechanisms). The one genuinely new datum (the first net9.0 occurrence, weakening the net10.0-specific candidate) is folded into JF-772's addendum. Closed as a duplicate; no separate work.
