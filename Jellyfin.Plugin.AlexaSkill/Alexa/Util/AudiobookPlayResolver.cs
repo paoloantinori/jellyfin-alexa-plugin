@@ -169,30 +169,35 @@ public static class AudiobookPlayResolver
         List<BaseItem>? fileNameOrderedBook = null;
         if (Util.ChapterFileNameOrder.PageDistrustsDbOrder(trackItems))
         {
-            bool moreBeyondPage = QueueContinuationFetcher.InitialPageHasMore(bookTracks);
-            IReadOnlyList<BaseItem> fullBook = moreBeyondPage
-                ? (await RetryHelper.ExecuteWithRequestBudgetAsync(
-                        () => SearchService.SafeGetItemsResult(libraryManager,
-                            QueueContinuationFetcher.BuildScopedAudiobookChaptersQueryUnpaged(
-                                jellyfinUser, user, libraryManager, logger, book.Id),
-                            logger),
-                        logger,
-                        "GetBookTracksFileNameOrder",
-                        cancellationToken: cancellationToken).ConfigureAwait(false)).Items
-                : trackItems;
-
-            if (fullBook.Count == 0)
+            if (QueueContinuationFetcher.InitialPageHasMore(bookTracks))
             {
-                // The page served rows but the full fetch answered empty (the
-                // library emptied between the two queries): keep the page's DB
-                // answer rather than launching an empty queue.
-                logger.LogWarning(
-                    "{Label}: JF-790 filename-order fetch for '{BookName}' returned no rows; keeping the DB page order",
-                    logLabel, book.Name);
+                // The page carried rows but more remain: the whole book is
+                // fetched ONCE, unpaged, through the ONE scoped-unpaged fetch the
+                // deep-resume block shares (FetchUnpagedBookAsync below).
+                QueryResult<BaseItem> fullFetch = await FetchUnpagedBookAsync("GetBookTracksFileNameOrder").ConfigureAwait(false);
+                if (fullFetch.Items.Count == 0)
+                {
+                    // The page served rows but the full fetch answered empty (the
+                    // library emptied between the two queries): keep the page's DB
+                    // answer rather than launching an empty queue.
+                    logger.LogWarning(
+                        "{Label}: JF-790 filename-order fetch for '{BookName}' returned no rows; keeping the DB page order",
+                        logLabel, book.Name);
+                }
+                else
+                {
+                    fileNameOrderedBook = Util.ChapterFileNameOrder.SortByTrailingFileNameNumber(fullFetch.Items);
+                }
             }
             else
             {
-                fileNameOrderedBook = Util.ChapterFileNameOrder.SortByTrailingFileNameNumber(fullBook);
+                // The page already carried the whole book (no more rows remain):
+                // the page rows themselves are the full list, no second query.
+                fileNameOrderedBook = Util.ChapterFileNameOrder.SortByTrailingFileNameNumber(trackItems);
+            }
+
+            if (fileNameOrderedBook != null)
+            {
                 trackItems = fileNameOrderedBook
                     .Take(ProgressiveQueueConstants.GetInitialFetchSize())
                     .ToList();
@@ -224,56 +229,89 @@ public static class AudiobookPlayResolver
         int continuationTotalCount;
         bool continuationHasMore;
 
-        if (fileNameOrderedBook != null)
+        // The ONE unpaged full-book fetch (the /simplify hoist): the JF-790
+        // filename-order branch and the JF-793 deep-resume block below run the
+        // same scoped query; only the triage label differs, so a future scoping
+        // change (the JF-812 decision may touch exactly this query) cannot be
+        // applied to one arm and missed on the other.
+        async Task<QueryResult<BaseItem>> FetchUnpagedBookAsync(string label)
+            => await RetryHelper.ExecuteWithRequestBudgetAsync(
+                () => SearchService.SafeGetItemsResult(libraryManager,
+                    QueueContinuationFetcher.BuildScopedAudiobookChaptersQueryUnpaged(
+                        jellyfinUser, user, libraryManager, logger, book.Id),
+                    logger),
+                logger,
+                label,
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        // The ONE continuation rebase onto a fetch-all list (the /simplify hoist;
+        // the fetch-all list is itself the honest total in both regimes, known-
+        // total pages and the JF-673 end-unknown fallback alike), and the ONE
+        // re-page at a resume chapter found in it. Both the JF-790 fork and the
+        // JF-793 deep block below re-page through these; the "verbatim" contract
+        // between the two shapes is now structural, not by comment.
+        void RebaseContinuationOnFullBook(int fullBookCount, int resumeIndex)
         {
-            // JF-790 composition with the JF-793/JF-797 deep-resume machinery: the
-            // sorted full book IS the unpaged list the deep scan wants, so the ONE
-            // resume decision runs over it directly. No page-bounded resume exists
-            // in this shape (the page was replaced the moment the book was in
-            // hand), and the deep-resume gate below stays MOOT: its whole purpose
-            // is deciding whether to pay the unpaged full-book fetch, which the
-            // ORDER fix already paid. The re-slice contract is the deep block's,
-            // verbatim: any positive resume chapter re-pages the book at the
-            // position-holding chapter, so the launch, the queue, and the
-            // continuation all start there.
-            (startIndex, resumeTicks) = ResumeMath.FindResumeTrackIndex(
-                fileNameOrderedBook, jellyfinUser, userDataManager, queueManager, session.DeviceId, resumePosition: true, logger);
+            // StartIndex counts the chapters the queue has consumed (page start +
+            // page count); the maybe-more bar is the ONE named decision
+            // (QueueContinuationFetcher.InitialPageHasMore(int, int)).
+            continuationStartIndex = resumeIndex + trackItems.Count;
+            continuationTotalCount = fullBookCount;
+            continuationHasMore = QueueContinuationFetcher.InitialPageHasMore(
+                continuationStartIndex, continuationTotalCount);
+        }
+
+        void RePageFullBookAt(IReadOnlyList<BaseItem> fullBook, int resumeIndex)
+        {
+            // The re-sliced page starts exactly at the position-holding chapter,
+            // so the page-relative answer is (0, resumeTicks) by construction in
+            // every return shape of FindResumeTrackIndex (in-progress hit, cached
+            // position, after-last-played): no re-scan of the slice.
+            trackItems = fullBook
+                .Skip(resumeIndex)
+                .Take(ProgressiveQueueConstants.GetInitialFetchSize())
+                .ToList();
+            startIndex = 0;
+            RebaseContinuationOnFullBook(fullBook.Count, resumeIndex);
 
             logger.LogInformation(
-                "{Label}: FindResumeTrackIndex (filename-ordered full book) returned startIndex={StartIndex}, resumeTicks={Ticks} for '{BookName}'",
-                logLabel, startIndex, resumeTicks, book.Name);
+                "{Label}: resume scan found chapter {ChapterIndex} ('{TrackName}') in the full book; re-paging the book at it",
+                logLabel, resumeIndex, fullBook[resumeIndex].Name);
+        }
 
+        // JF-790 composition with the JF-793/JF-797 deep-resume machinery: the
+        // sorted full book IS the unpaged list the deep scan wants, so the ONE
+        // resume decision runs over it directly. No page-bounded resume exists
+        // in this shape (the page was replaced the moment the book was in hand),
+        // and the deep-resume gate below stays MOOT: its whole purpose is
+        // deciding whether to pay the unpaged full-book fetch, which the ORDER
+        // fix already paid. Any positive resume chapter re-pages the book at the
+        // position-holding chapter (the deep block's re-page, ONE definition
+        // above), so the launch, the queue, and the continuation all start
+        // there; the continuation pages the SORTED list in memory (CachedTracks),
+        // never the DB order again.
+        IReadOnlyList<BaseItem> resumeScan = fileNameOrderedBook ?? trackItems;
+        (startIndex, resumeTicks) = ResumeMath.FindResumeTrackIndex(
+            resumeScan, jellyfinUser, userDataManager, queueManager, session.DeviceId, resumePosition: true, logger);
+
+        logger.LogInformation(
+            "{Label}: FindResumeTrackIndex returned startIndex={StartIndex}, resumeTicks={Ticks} for '{BookName}'",
+            logLabel, startIndex, resumeTicks, book.Name);
+
+        if (fileNameOrderedBook != null)
+        {
             int resumeChapterIndex = startIndex;
             if (resumeChapterIndex > 0)
             {
-                trackItems = fileNameOrderedBook
-                    .Skip(resumeChapterIndex)
-                    .Take(ProgressiveQueueConstants.GetInitialFetchSize())
-                    .ToList();
-                startIndex = 0;
-
-                logger.LogInformation(
-                    "{Label}: JF-790 resume found chapter {DeepIndex} ('{TrackName}') in the filename-ordered book; re-paging the book at it",
-                    logLabel, resumeChapterIndex, fileNameOrderedBook[resumeChapterIndex].Name);
+                RePageFullBookAt(fileNameOrderedBook, resumeChapterIndex);
             }
-
-            // The fetch-all list is itself the honest total (the deep block's
-            // regime rationale: known-total pages and the JF-673 end-unknown
-            // fallback alike), and the continuation pages the SORTED list in
-            // memory (CachedTracks), never the DB order again.
-            continuationStartIndex = resumeChapterIndex + trackItems.Count;
-            continuationTotalCount = fileNameOrderedBook.Count;
-            continuationHasMore = continuationStartIndex < continuationTotalCount;
+            else
+            {
+                RebaseContinuationOnFullBook(fileNameOrderedBook.Count, resumeChapterIndex);
+            }
         }
         else
         {
-            (startIndex, resumeTicks) = ResumeMath.FindResumeTrackIndex(
-                trackItems, jellyfinUser, userDataManager, queueManager, session.DeviceId, resumePosition: true, logger);
-
-            logger.LogInformation(
-                "{Label}: FindResumeTrackIndex returned startIndex={StartIndex}, resumeTicks={Ticks} for '{BookName}'",
-                logLabel, startIndex, resumeTicks, book.Name);
-
             // The continuation bookkeeping, computed here so the deep-resume block below
             // can rebase it: how many chapters the queue has consumed (page start +
             // page count; the database offset is independent of the resume slice) and
@@ -382,40 +420,14 @@ public static class AudiobookPlayResolver
         if (deepResumeEligible
             && (queueHoldsPositionedEntry || resumeProbeHit))
         {
-            QueryResult<BaseItem> fullBook = await RetryHelper.ExecuteWithRequestBudgetAsync(
-                () => SearchService.SafeGetItemsResult(libraryManager,
-                    QueueContinuationFetcher.BuildScopedAudiobookChaptersQueryUnpaged(
-                        jellyfinUser, user, libraryManager, logger, book.Id),
-                    logger),
-                logger,
-                "GetBookTracksDeepResume",
-                cancellationToken: cancellationToken).ConfigureAwait(false);
+            QueryResult<BaseItem> fullBook = await FetchUnpagedBookAsync("GetBookTracksDeepResume").ConfigureAwait(false);
 
             (int deepIndex, long deepTicks) = ResumeMath.FindResumeTrackIndex(
                 fullBook.Items, jellyfinUser, userDataManager, queueManager, session.DeviceId, resumePosition: true, logger);
             if (deepIndex > 0)
             {
-                // The re-sliced page starts exactly at the position-holding chapter,
-                // so the page-relative answer is (0, deepTicks) by construction in
-                // every return shape of FindResumeTrackIndex (in-progress hit, cached
-                // position, after-last-played): no re-scan of the slice.
-                trackItems = fullBook.Items
-                    .Skip(deepIndex)
-                    .Take(ProgressiveQueueConstants.GetInitialFetchSize())
-                    .ToList();
-                startIndex = 0;
+                RePageFullBookAt(fullBook.Items, deepIndex);
                 resumeTicks = deepTicks;
-
-                logger.LogInformation(
-                    "{Label}: deep resume found chapter {DeepIndex} ('{TrackName}') beyond the initial page; re-paging the book at it",
-                    logLabel, deepIndex, fullBook.Items[deepIndex].Name);
-
-                // The fetch-all list is itself the honest total in both regimes
-                // (known-total pages and the JF-673 end-unknown fallback), so the
-                // continuation carries a real count.
-                continuationStartIndex = deepIndex + trackItems.Count;
-                continuationTotalCount = fullBook.Items.Count;
-                continuationHasMore = continuationStartIndex < continuationTotalCount;
             }
         }
 

@@ -3822,7 +3822,7 @@ public class VideoAudioController : ControllerBase
 
             var sortedChapters = isMusicAlbum
                 ? chapters.ToList()
-                : Alexa.Util.ChapterFileNameOrder.SortByTrailingFileNameNumber(chapters);
+                : ChapterFileNameOrder.SortByTrailingFileNameNumber(chapters);
 
             _logger.LogInformation(
                 "Audiobook chapter sort result: first={FirstPath}, last={LastPath}",
