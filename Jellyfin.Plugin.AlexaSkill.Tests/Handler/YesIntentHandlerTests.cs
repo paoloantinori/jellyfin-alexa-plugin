@@ -1649,16 +1649,8 @@ public class YesIntentHandlerTests : PluginTestBase
         Assert.StartsWith("artist", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static Dictionary<string, object> CreateSingleMatchAttrs(Guid itemId, string name, string type)
-        => new()
-        {
-            ["disambig_matches"] = JsonConvert.SerializeObject(new List<DisambiguationHelper.MatchInfo>
-            {
-                new() { Id = itemId.ToString(), Name = name }
-            }),
-            ["disambig_index"] = 0,
-            ["disambig_type"] = type
-        };
+    private Dictionary<string, object> CreateSingleMatchAttrs(Guid itemId, string name, string type)
+        => CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { new() { Id = itemId.ToString(), Name = name } }, 0, type);
 
     private static IArtistIndex WarmingArtistIndex()
         => Mock.Of<IArtistIndex>(i => i.IsReady == false);
