@@ -243,7 +243,7 @@ public class YesIntentHandler : BaseHandler
         SkillResponse response = mediaType switch
         {
             DisambiguationHelper.MediaTypeSong => PlaySong(item, user, session, context, locale),
-            DisambiguationHelper.MediaTypeAlbum => PlayAlbum(item, jellyfinUser!, user, session, locale, context),
+            DisambiguationHelper.MediaTypeAlbum => PlayAlbum(item, jellyfinUser!, user, session, locale, context, request),
             DisambiguationHelper.MediaTypeArtist => PlayArtist(item, jellyfinUser!, user, session, locale, context),
             DisambiguationHelper.MediaTypePlaylist => PlayPlaylist(item, jellyfinUser!, user, session, locale, context),
             _ => ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale))
@@ -372,8 +372,18 @@ public class YesIntentHandler : BaseHandler
         return CrossMedia.BuildSingleSongResponse(song, user, session, context, locale);
     }
 
-    private SkillResponse PlayAlbum(BaseItem album, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Entities.User user, SessionInfo session, string locale, Context? context)
+    private SkillResponse PlayAlbum(BaseItem album, Jellyfin.Database.Implementations.Entities.User jellyfinUser, Entities.User user, SessionInfo session, string locale, Context? context, Request request)
     {
+        // Gate-marker tail F3: the defensive arm carries the SAME music-disabled gate
+        // the routed branch pays, so the future-producer scenarios this method's own
+        // comment names (the routing intercept removed, a new direct caller) cannot
+        // silently re-open the disabled axis the JF-805 unification closed.
+        SkillResponse? musicDisabled = IfMediaTypeDisabled(c => c.MusicEnabled, request);
+        if (musicDisabled != null)
+        {
+            return musicDisabled;
+        }
+
         // JF-805: the MusicAlbum confirm routes through the ONE album play flow
         // (AlbumPlayService.BuildAlbumPlayResponseAsync) ABOVE, so this method now
         // serves the DEFENSIVE payloads only, and no live producer reaches it:
