@@ -69,6 +69,22 @@ factory, and the progress UserData block, parameterized differently from
 SetupDeepResumeAlbum). The hoist stays skipped there for the JF-796 round's
 reason (private fixtures over different mock backing: PluginTestBase mocks vs
 HandlerTestFixture); this census is the same-turn landing the skip rule demands.
+
+JF-804 /simplify census update (2026-10-07): the re-page ALGORITHM now exists
+THREE times, not twice. JF-804 added the tracker-keyed twin inside
+AlbumPlayService's JF-625 tracker arm (page-walk fall-off + warm tracker => the
+same unpaged scoped fetch, Skip/Take re-slice, continuation rebase, with the
+rescan being WalkTrackerOntoTrack instead of FindResumeTrackIndex and the guard
+keying on the walk's fall-off instead of the page ticks). The lift's delegate
+design already accommodates this third shape (the rescan delegate carries the
+walk; the tracker veto stays a caller-side condition); design it against three
+callers, not two. The filing's suggestion to ride this lift pre-landing was
+declined: JF-803 is still To Do, so JF-804 rode the existing unpaged builder
+(BuildScopedAlbumTracksQueryUnpaged) instead. Test side: the paging mock census
+grew to seven (the JF-804 tracker-deep pin in AlbumAnnounceVehicleTests adds the
+seventh hand-rolled copy, inline to match its two in-file siblings; the hoist
+takes the mock as a parameter so AlbumAnnounceVehicleTests' own
+new Mock backing fits).
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done

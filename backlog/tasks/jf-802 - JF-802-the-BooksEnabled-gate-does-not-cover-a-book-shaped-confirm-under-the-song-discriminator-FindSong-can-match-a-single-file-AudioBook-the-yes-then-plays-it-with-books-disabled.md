@@ -4,7 +4,7 @@ title: >-
   JF-802 - the BooksEnabled gate does not cover a book-shaped confirm under the
   song discriminator (FindSong can match a single-file AudioBook; the "yes" then
   plays it with books disabled)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-06'
 updated_date: '2026-10-07 08:42'
@@ -62,14 +62,67 @@ and device verification.
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes
+- [x] #3 No new compiler warnings introduced
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization (N/A: no session-attribute changes)
+- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress (N/A: no HttpClient changes)
+- [x] #6 NLU test fixtures updated if interaction model changed (N/A: no model changes)
+- [x] #7 E2E test added for new intent or handler logic (N/A: no new intent; the worktree does not deploy, the E2E axis is covered by the new unit pins)
+- [x] #8 Locale response strings added to all 17 locales (N/A: reuses the existing FeatureDisabled string, no new strings)
+- [x] #9 /simplify passed (no blocking cleanups remaining)
+- [x] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+## Final Summary
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Landed by the JF-802 worker (2026-10-07), shape (a) gate-only ONLY as the
+filing scoped: inside YesIntentHandler's song arm, before the music gate, a
+BooksEnabled check fires when the confirmed song-typed item resolves as
+book-shaped through AudiobookItems.IsAudioBookOrChapter (the filing's named
+anchor, the JF-670 end-of-book walk; it also catches AudioBook-typed chapter
+leaves via the walk's hop-1 type test). The flag read comes FIRST so the
+ancestor walk runs only on the books-disabled path (plain songs pay zero
+lookups), and the refusal reuses IfFeatureDisabled(c => c.BooksEnabled,
+request), the identical call PlayBookIntentHandler makes at its entry gate, so
+the Tell is byte-identical to the ask's by construction. Books-first ordering
+on a book-shaped item means the both-flags-off intersection answers
+FeatureDisabled like the book ask (pinned, code-review F4). Shape (b), routing
+the confirmed single-file book to the book leg's resume/continuation machinery,
+REMAINS the deeper follow-up (the filing already carries it; no new task filed)
+and its response-shape change still needs device verification: with books ON
+the song arm still launches the item through BuildSingleSongResponse, and a pin
+locks that the gate does not silently take that route.
+
+RED PROOF (both TFMs, on the unmodified tree):
+YesIntentHandlerTests.HandleAsync_DisambiguationSongType_BookShapedConfirm_
+BooksDisabled_AnswersFeatureDisabled - a single-file AudioBook served as the
+MediaTypeSong disambiguation payload, BooksEnabled off; pre-fix FAILED with
+"the disabled Tell must carry no directives" (the confirm LAUNCHED the book
+through BuildSingleSongResponse: directive present, queue and
+FullNowPlayingItem written), the exact hole. Post-fix the confirm answers the
+FeatureDisabled Tell, no directives, no queue state.
+
+Companion pins: a plain song confirm plays whatever the books flag says
+(Theory, books on and off: books off must not touch songs); a book-shaped
+confirm with books ENABLED still launches through the song arm (the gate-only
+boundary); the both-flags-off ordering pin (code-review F4: FeatureDisabled,
+never MediaTypeNotAvailable); the pre-existing JF-806 music-disabled and
+warming pins stay green (the music gate is untouched for non-book items).
+
+Known coverage boundary of the chosen anchor, recorded for shape (b): an
+AUDIO-typed chapter under a PLAIN-FOLDER book with no AudioBook ancestor
+(the metadata-remap shape) does not resolve as book-shaped through
+IsAudioBookOrChapter and would still launch; the book-discriminator routing
+shape (b) implements covers that class.
+
+Gates: /simplify 4 findings applied + 2 skips recorded (see JF-804's summary;
+the gates covered both tasks in one run). /code-review high: no correctness
+bugs; F1 (deep-miss log), F2 (Sum prefix form), F3 (WarmTrackerAt doc) are
+JF-804-surface; F4 (the ordering pin) applied here; F5 dispositioned as the
+JF-803 census already updated same-turn. Suites: touched battery 160/160 both
+TFMs at the final state; Release -warnaserror 0/0 both TFMs; full suite
+5490/5490 both TFMs (baseline 5484 + 6).
+<!-- SECTION:FINAL_SUMMARY:END -->
+
+GATE-MARKER TAIL CORRECTION (2026-10-07): the 'plain songs pay zero lookups' claim is false on the DISABLED path - with BooksEnabled off, every plain-song confirm enters the inline guard and pays the walk's ancestor lookups (up to 3 GetItemById) before falling through to the song play. The trade stands deliberately: the gate must fire on book-shaped items, the lookups are bounded point reads (not the deep/unpaged query class the Alexa window cares about), and the enabled path pays zero. Comment corrected in-code.

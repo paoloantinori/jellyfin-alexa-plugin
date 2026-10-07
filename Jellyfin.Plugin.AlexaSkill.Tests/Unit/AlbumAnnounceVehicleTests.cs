@@ -260,6 +260,195 @@ public class AlbumAnnounceVehicleTests : PluginTestBase
         Assert.Equal(tracks[1].Id, session.NowPlayingQueue[0].Id);
     }
 
+    // JF-804 RED PROOF: the seek-mode tracker walk scanned only the initial
+    // page's runtime prefix, so a warm tracker position BEYOND the page (hours
+    // into a long album; the page carries 5 tracks of runtime) fell out at
+    // albumItems.Count, skipped the startIndex assignment, and the launch
+    // minted the concat URL with no start offset: playback restarted at track
+    // 1, 0:00, silently losing hours of position (pre-fix red: the directive
+    // named Track 01 with no start=). The fix mirrors the JF-796/JF-797
+    // deep-fetch shape TRACKER-keyed: when the walk falls off the page end, the
+    // album is fetched once unpaged through the page's working arm, the walk
+    // re-run on the full list, and the page re-sliced at the tracker's track,
+    // so the launch, the queue, and the concat offset all land at the tracker's
+    // absolute album position.
+    [Fact]
+    public async Task SeekModeAlbumResume_TrackerBeyondPageRuntime_DeepFetchMapsOntoTheTrack()
+    {
+        var config = new PluginConfiguration { ServerAddress = "http://localhost:8096/", NativeControlsForAudio = true, AnnounceAudioPlays = true };
+        var captured = new List<string>();
+        var svc = CreateService(config, captured, vehicleResult: () => true);
+        var album = Album();
+
+        // 26 tracks x 4 min, paging-honoring tracks mock (page 5, unpaged fetch
+        // all), with every tracks query captured for the gate-shape pin below.
+        List<Audio> tracks = Enumerable.Range(1, 26).Select(i => new Audio
+        {
+            Name = $"Track {i:00}",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromMinutes(4).Ticks,
+        }).ToList();
+        var queries = new List<InternalItemsQuery>();
+        var library = new Mock<ILibraryManager>();
+        library.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) =>
+            {
+                queries.Add(q);
+                return new QueryResult<BaseItem>
+                {
+                    Items = tracks.Skip(q.StartIndex ?? 0).Take(q.Limit ?? tracks.Count).ToList(),
+                    TotalRecordCount = tracks.Count
+                };
+            });
+        library.Setup(l => l.GetItemById(album.Id)).Returns(album);
+
+        // Tracker: 85 min 30s into the album (514 segments; the conservative
+        // high-water minus one lands 5130s) = track 22 (index 21, the 21-track
+        // prefix is 84 min), 90s in. A FRESH ask: no UserData anywhere.
+        using var trackerSwap = TestHelpers.WarmTrackerAt(album.Id, TimeSpan.FromSeconds(5130), "vehicle-album-tracker-deep");
+
+        SessionInfo session = Session();
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
+        var context = TestHelpers.CreateContextWithVideoApp();
+        try
+        {
+            var response = await svc.BuildAlbumPlayResponseAsync(
+                album, jellyfinUser, TestHelpers.CreateTestUser(), session,
+                context, "it-IT",
+                library.Object, new Mock<IUserDataManager>().Object, null, "AlbumAnnounceVehicle",
+                request: new IntentRequest());
+
+            var launch = Assert.Single(response.Response.Directives.OfType<VideoAppLaunchDirective>());
+            // The concat slices at the tracker's ABSOLUTE album position: the
+            // 21-track prefix (84 min) + the 90s in-track partial = 5130s, not 0.
+            Assert.Contains($"start={TimeSpan.FromSeconds(5130).Ticks}", launch.VideoItem.Source, StringComparison.Ordinal);
+            Assert.Equal("Track 22", launch.VideoItem.Metadata?.Title);
+
+            // The page re-slices at the tracker's track: the queue starts there
+            // and carries the re-sliced window (tracks 22 to 26), nothing more.
+            Assert.Equal(tracks[21].Id, session.FullNowPlayingItem!.Id);
+            Assert.Equal(tracks[21].Id, session.NowPlayingQueue[0].Id);
+            Assert.Equal(tracks[25].Id, session.NowPlayingQueue[4].Id);
+            Assert.Null(Jellyfin.Plugin.AlexaSkill.Alexa.QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID!));
+
+            // The deep fetch is TRACKER-keyed: exactly one unpaged tracks query,
+            // and the JF-796 user-data probes never run (the tracker veto keeps
+            // that gate cold; the tracker arm owns this fetch).
+            Assert.Single(queries, q => q.Limit is null);
+            Assert.DoesNotContain(queries, q => q.IsPlayed == true || q.IsResumable == true);
+        }
+        finally
+        {
+            Jellyfin.Plugin.AlexaSkill.Alexa.QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
+        }
+    }
+
+    // Gate-marker tail F3 pin A: the DEEP-MISS fallback arm. A tracked position
+    // beyond even the FULL album's runtime (metadata shrank after the tracker was
+    // written) must keep the page's own resume answer - track 1 at 0:00, no start
+    // offset - rather than re-slicing garbage or launching mid-nothing. REDS if the
+    // else arm were ever inverted to re-slice anyway.
+    [Fact]
+    public async Task HandleAsync_TrackerBeyondFullAlbum_KeepsPageResumeAnswer()
+    {
+        var config = new PluginConfiguration { ServerAddress = "http://localhost:8096/", NativeControlsForAudio = true, AnnounceAudioPlays = true };
+        var captured = new List<string>();
+        var svc = CreateService(config, captured, vehicleResult: () => true);
+        var album = Album();
+
+        List<Audio> tracks = Enumerable.Range(1, 26).Select(i => new Audio
+        {
+            Name = $"Track {i:00}",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromMinutes(4).Ticks,
+        }).ToList();
+        var queries = new List<InternalItemsQuery>();
+        var library = new Mock<ILibraryManager>();
+        library.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) => new QueryResult<BaseItem>
+            {
+                Items = tracks.Skip(q.StartIndex ?? 0).Take(q.Limit ?? tracks.Count).ToList(),
+                TotalRecordCount = tracks.Count
+            });
+        library.Setup(l => l.GetItemById(album.Id)).Returns(album);
+
+        // Ten hours: far beyond the 104-minute album. The full-list walk falls off
+        // the end (deepIndex == Count) and the else arm keeps the page answer.
+        using var trackerSwap = TestHelpers.WarmTrackerAt(album.Id, TimeSpan.FromHours(10), "vehicle-album-tracker-deepmiss");
+
+        SessionInfo session = Session();
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
+        var context = TestHelpers.CreateContextWithVideoApp();
+        try
+        {
+            var response = await svc.BuildAlbumPlayResponseAsync(
+                album, jellyfinUser, TestHelpers.CreateTestUser(), session,
+                context, "it-IT",
+                library.Object, new Mock<IUserDataManager>().Object, null, "AlbumAnnounceVehicle",
+                request: new IntentRequest());
+
+            var launch = Assert.Single(response.Response.Directives.OfType<VideoAppLaunchDirective>());
+            Assert.DoesNotContain("start=", launch.VideoItem.Source, StringComparison.Ordinal);
+            Assert.Equal(tracks[0].Id, session.FullNowPlayingItem!.Id);
+        }
+        finally
+        {
+            Jellyfin.Plugin.AlexaSkill.Alexa.QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
+        }
+    }
+
+    // Gate-marker tail F3 pin B: the EXACTLY-AT-PAGE-END boundary. A tracked
+    // position equal to the page's runtime sum (20 min = 5 tracks x 4 min) falls
+    // off the page walk at index 5, and the deep fetch resolves it at track 6:
+    // the re-slice starts at index 5 with start=20min, no skip, no repeat.
+    [Fact]
+    public async Task HandleAsync_TrackerExactlyAtPageEnd_ResolvesOnFullList()
+    {
+        var config = new PluginConfiguration { ServerAddress = "http://localhost:8096/", NativeControlsForAudio = true, AnnounceAudioPlays = true };
+        var captured = new List<string>();
+        var svc = CreateService(config, captured, vehicleResult: () => true);
+        var album = Album();
+
+        List<Audio> tracks = Enumerable.Range(1, 26).Select(i => new Audio
+        {
+            Name = $"Track {i:00}",
+            Id = Guid.NewGuid(),
+            RunTimeTicks = TimeSpan.FromMinutes(4).Ticks,
+        }).ToList();
+        var queries = new List<InternalItemsQuery>();
+        var library = new Mock<ILibraryManager>();
+        library.Setup(l => l.GetItemsResult(It.IsAny<InternalItemsQuery>()))
+            .Returns((InternalItemsQuery q) => new QueryResult<BaseItem>
+            {
+                Items = tracks.Skip(q.StartIndex ?? 0).Take(q.Limit ?? tracks.Count).ToList(),
+                TotalRecordCount = tracks.Count
+            });
+        library.Setup(l => l.GetItemById(album.Id)).Returns(album);
+
+        // Twenty minutes: exactly the page's runtime sum (5 x 4 min).
+        using var trackerSwap = TestHelpers.WarmTrackerAt(album.Id, TimeSpan.FromMinutes(20), "vehicle-album-tracker-pageend");
+
+        SessionInfo session = Session();
+        var jellyfinUser = TestHelpers.CreateJellyfinUser();
+        var context = TestHelpers.CreateContextWithVideoApp();
+        try
+        {
+            var response = await svc.BuildAlbumPlayResponseAsync(
+                album, jellyfinUser, TestHelpers.CreateTestUser(), session,
+                context, "it-IT",
+                library.Object, new Mock<IUserDataManager>().Object, null, "AlbumAnnounceVehicle",
+                request: new IntentRequest());
+
+            var launch = Assert.Single(response.Response.Directives.OfType<VideoAppLaunchDirective>());
+            Assert.Contains($"start={TimeSpan.FromMinutes(20).Ticks}", launch.VideoItem.Source, StringComparison.Ordinal);
+            Assert.Equal(tracks[5].Id, session.FullNowPlayingItem!.Id);
+        }
+        finally
+        {
+            Jellyfin.Plugin.AlexaSkill.Alexa.QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
+        }
+    }
+
     // JF-796 companion pin (the code-review F3 gap): the COLD-tracker seek route is
     // the leg deepResumePrefixTicks exists for. A VideoApp device with no tracked
     // position and UserData progress beyond the initial page takes the deep resume
