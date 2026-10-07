@@ -1652,12 +1652,6 @@ public class YesIntentHandlerTests : PluginTestBase
     private Dictionary<string, object> CreateSingleMatchAttrs(Guid itemId, string name, string type)
         => CreateDisambiguationAttrs(new List<DisambiguationHelper.MatchInfo> { new() { Id = itemId.ToString(), Name = name } }, 0, type);
 
-    private static IArtistIndex WarmingArtistIndex()
-        => Mock.Of<IArtistIndex>(i => i.IsReady == false);
-
-    private static IArtistIndex ReadyArtistIndex()
-        => Mock.Of<IArtistIndex>(i => i.IsReady == true);
-
     /// <summary>
     /// JF-806 RED PROOF (the disabled axis, song leg): a song disambiguation
     /// prompt confirmed after an admin disabled music must answer the
@@ -1765,7 +1759,7 @@ public class YesIntentHandlerTests : PluginTestBase
         (MusicAlbum album, List<BaseItem> _) = SetupConfirmedAlbum(3);
         var attrs = CreateSingleMatchAttrs(album.Id, album.Name, DisambiguationHelper.MediaTypeAlbum);
 
-        await AssertConfirmThrowsWarmingAsync(WarmingArtistIndex(), attrs);
+        await AssertConfirmThrowsWarmingAsync(TestHelpers.WarmingArtistIndex(), attrs);
     }
 
     /// <summary>
@@ -1783,7 +1777,7 @@ public class YesIntentHandlerTests : PluginTestBase
         (List<BaseItem> _, Guid bookFolderId, _) = SetupConfirmedBook();
         var attrs = CreateSingleMatchAttrs(bookFolderId, "Measure What Matters", DisambiguationHelper.MediaTypeAlbum);
 
-        await AssertConfirmThrowsWarmingAsync(WarmingArtistIndex(), attrs);
+        await AssertConfirmThrowsWarmingAsync(TestHelpers.WarmingArtistIndex(), attrs);
     }
 
     /// <summary>
@@ -1806,7 +1800,7 @@ public class YesIntentHandlerTests : PluginTestBase
             .Returns(new List<BaseItem> { new Audio { Name = "Song", Id = Guid.NewGuid() } });
         var attrs = CreateSingleMatchAttrs(artistId, artist.Name, DisambiguationHelper.MediaTypeArtist);
 
-        await AssertConfirmThrowsWarmingAsync(WarmingArtistIndex(), attrs);
+        await AssertConfirmThrowsWarmingAsync(TestHelpers.WarmingArtistIndex(), attrs);
     }
 
     /// <summary>
@@ -1819,7 +1813,7 @@ public class YesIntentHandlerTests : PluginTestBase
     {
         (MusicAlbum album, List<BaseItem> tracks) = SetupConfirmedAlbum(3);
 
-        var handler = CreateHandler(artistIndex: ReadyArtistIndex());
+        var handler = CreateHandler(artistIndex: TestHelpers.ReadyArtistIndex());
         var session = CreateSession();
         var attrs = CreateSingleMatchAttrs(album.Id, album.Name, DisambiguationHelper.MediaTypeAlbum);
         var response = await handler.HandleAsync(
@@ -1863,7 +1857,7 @@ public class YesIntentHandlerTests : PluginTestBase
         _libraryManagerMock.Setup(lm => lm.GetItemById(songId)).Returns(song);
         var attrs = CreateSingleMatchAttrs(songId, song.Name, DisambiguationHelper.MediaTypeSong);
 
-        var handler = CreateHandler(artistIndex: WarmingArtistIndex());
+        var handler = CreateHandler(artistIndex: TestHelpers.WarmingArtistIndex());
         bool originalMusicEnabled = Plugin.Instance!.Configuration.MusicEnabled;
         Plugin.Instance!.Configuration.MusicEnabled = false;
         try
@@ -1895,7 +1889,7 @@ public class YesIntentHandlerTests : PluginTestBase
         _libraryManagerMock.Setup(lm => lm.GetItemById(songId)).Returns(song);
         var attrs = CreateSingleMatchAttrs(songId, song.Name, DisambiguationHelper.MediaTypeSong);
 
-        var handler = CreateHandler(artistIndex: WarmingArtistIndex());
+        var handler = CreateHandler(artistIndex: TestHelpers.WarmingArtistIndex());
         var response = await handler.HandleAsync(
             CreateYesIntentRequest(),
             CreateContext(),
@@ -1931,7 +1925,7 @@ public class YesIntentHandlerTests : PluginTestBase
             0,
             1);
 
-        var handler = CreateHandler(artistIndex: WarmingArtistIndex());
+        var handler = CreateHandler(artistIndex: TestHelpers.WarmingArtistIndex());
         var response = await handler.HandleAsync(
             CreateYesIntentRequest(),
             CreateContext(),
@@ -1961,7 +1955,7 @@ public class YesIntentHandlerTests : PluginTestBase
         Plugin.Instance!.Configuration.MusicEnabled = false;
         try
         {
-            await AssertConfirmThrowsWarmingAsync(WarmingArtistIndex(), attrs);
+            await AssertConfirmThrowsWarmingAsync(TestHelpers.WarmingArtistIndex(), attrs);
         }
         finally
         {
@@ -1987,7 +1981,7 @@ public class YesIntentHandlerTests : PluginTestBase
         Plugin.Instance!.Configuration.MusicEnabled = false;
         try
         {
-            var handler = CreateHandler(artistIndex: WarmingArtistIndex());
+            var handler = CreateHandler(artistIndex: TestHelpers.WarmingArtistIndex());
             var response = await handler.HandleAsync(
                 CreateYesIntentRequest(),
                 CreateContext(),
@@ -2024,7 +2018,7 @@ public class YesIntentHandlerTests : PluginTestBase
         Plugin.Instance!.Configuration.BooksEnabled = false;
         try
         {
-            var handler = CreateHandler(artistIndex: WarmingArtistIndex());
+            var handler = CreateHandler(artistIndex: TestHelpers.WarmingArtistIndex());
             var response = await handler.HandleAsync(
                 CreateYesIntentRequest(),
                 CreateContext(),
@@ -2059,7 +2053,7 @@ public class YesIntentHandlerTests : PluginTestBase
         _libraryManagerMock.Setup(lm => lm.GetItemById(videoId)).Returns(movie);
         var attrs = CreateSingleMatchAttrs(videoId, movie.Name, DisambiguationHelper.MediaTypeVideo);
 
-        var handler = CreateHandler(artistIndex: WarmingArtistIndex());
+        var handler = CreateHandler(artistIndex: TestHelpers.WarmingArtistIndex());
         var response = await handler.HandleAsync(
             CreateYesIntentRequest(),
             CreateContext(),
@@ -2088,7 +2082,7 @@ public class YesIntentHandlerTests : PluginTestBase
             TestHelpers.TestStream(MediaStreamType.Audio, "aac"));
         _libraryManagerMock.Setup(lm => lm.GetItemById(id)).Returns(episode);
 
-        var handler = CreateHandler(artistIndex: WarmingArtistIndex());
+        var handler = CreateHandler(artistIndex: TestHelpers.WarmingArtistIndex());
         var response = await handler.HandleAsync(
             CreateYesIntentRequest(),
             CreateContext(),

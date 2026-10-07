@@ -232,16 +232,6 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
     }
 
     /// <summary>
-    /// The JF-806 YesIntentHandlerTests helper pair (the warming-pin idiom): the
-    /// two artist-index readiness states the JF-807 pins drive.
-    /// </summary>
-    private static IArtistIndex WarmingArtistIndex()
-        => Mock.Of<IArtistIndex>(i => i.IsReady == false);
-
-    private static IArtistIndex ReadyArtistIndex()
-        => Mock.Of<IArtistIndex>(i => i.IsReady == true);
-
-    /// <summary>
     /// JF-807 RED PROOF (the warming axis, the ASK): a book ask running while the
     /// artist index is still loading (the post-restart window) must refuse at
     /// entry, before the "SearchingBook" announcement and the cold AudioBook
@@ -259,7 +249,7 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
     [Fact]
     public async Task HandleAsync_BookAsk_WhileIndexWarming_ThrowsAtEntry()
     {
-        var handler = CreateHandler(WarmingArtistIndex());
+        var handler = CreateHandler(TestHelpers.WarmingArtistIndex());
         SetupSingleBookPlay();
         _fx.SetupUserMock();
 
@@ -271,6 +261,13 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
                 CreateSession(),
                 CancellationToken.None));
         Assert.StartsWith("artist", ex.Message, StringComparison.OrdinalIgnoreCase);
+
+        // JF-807 code-review F1: the documented placement contract (gate BEFORE
+        // the "searching" announcement, no announcement-then-refusal) is enforced
+        // here, not just claimed in the doc above; a gate moved below the
+        // SendProgressiveResponse line still throws and would otherwise keep
+        // every JF-807 pin green while the user hears the announcement first.
+        Assert.Equal(string.Empty, handler.Progressive.AllText);
     }
 
     /// <summary>
@@ -282,7 +279,7 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
     [Fact]
     public async Task HandleAsync_BookAsk_ReadyIndex_PlaysUnchanged()
     {
-        var handler = CreateHandler(ReadyArtistIndex());
+        var handler = CreateHandler(TestHelpers.ReadyArtistIndex());
         SetupSingleBookPlay();
         _fx.SetupUserMock();
 
@@ -303,12 +300,13 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
     /// order, so the warming+disabled intersection answers the FeatureDisabled
     /// Tell on both sides (the confirm-must-match-ask rule extends to the
     /// warming answer: ask and confirm answer identically in the intersection).
+    /// No book mocks: the FeatureDisabled Tell is the handler's first statement,
+    /// so no library query can run here (JF-807 code-review F3).
     /// </summary>
     [Fact]
     public async Task HandleAsync_BookAsk_WarmingAndBooksDisabled_AnswersDisabledFirst()
     {
-        var handler = CreateHandler(WarmingArtistIndex());
-        SetupSingleBookPlay();
+        var handler = CreateHandler(TestHelpers.WarmingArtistIndex());
 
         bool originalBooksEnabled = Plugin.Instance!.Configuration.BooksEnabled;
         Plugin.Instance!.Configuration.BooksEnabled = false;
@@ -349,7 +347,7 @@ public class PlayBookIntentHandlerTests : PluginTestBase, IDisposable
     [Fact]
     public async Task HandleAsync_BookAsk_WhileIndexWarming_EmptySlot_StillElicitsBookName()
     {
-        var handler = CreateHandler(WarmingArtistIndex());
+        var handler = CreateHandler(TestHelpers.WarmingArtistIndex());
 
         SkillResponse response = await handler.HandleAsync(
             CreateIntentRequest(),

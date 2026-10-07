@@ -1165,6 +1165,19 @@ internal static class TestHelpers
 
         public override IReadOnlyList<MediaStream> GetMediaStreams() => _streams;
     }
+
+    /// <summary>
+    /// The warming-pin readiness mocks (the JF-806/JF-807 idiom): the two
+    /// artist-index states the Layer-1 entry-gate pins drive. ONE shared owner
+    /// (hoisted by the JF-807 code review from the per-file private pairs) so a
+    /// future gate-contract change (a new readiness flag EnsureReady reads)
+    /// updates one site instead of every pin file in lockstep.
+    /// </summary>
+    internal static IArtistIndex WarmingArtistIndex()
+        => Mock.Of<IArtistIndex>(i => i.IsReady == false);
+
+    internal static IArtistIndex ReadyArtistIndex()
+        => Mock.Of<IArtistIndex>(i => i.IsReady == true);
 }
 
 /// <summary>
