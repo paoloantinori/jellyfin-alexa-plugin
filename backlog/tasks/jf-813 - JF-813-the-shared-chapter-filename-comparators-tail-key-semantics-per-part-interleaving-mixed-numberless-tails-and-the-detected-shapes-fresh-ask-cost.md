@@ -50,3 +50,5 @@ Constraints carried over from JF-790: ONE comparator definition, endpoint byte-i
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+GATE-MARKER ADDENDUM (2026-10-07, from the JF-790 marker F1): item 1 gains the CONVERSE shape - a book whose page 1 is UNTAGGED but whose tail is correctly tagged (per-disc filenames) FALSE-FIRES the detection and the file sort discards the tags' order for the whole book; no census book has the shape, the boundary is documented at the trigger, and the composite key (IndexNumber first when present) is the fix vehicle for both directions.

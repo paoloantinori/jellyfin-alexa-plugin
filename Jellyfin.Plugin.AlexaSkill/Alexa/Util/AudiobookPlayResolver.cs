@@ -158,7 +158,11 @@ public static class AudiobookPlayResolver
         // filename number, through the ONE shared comparator the concat endpoint
         // already uses (ChapterFileNameOrder; the endpoint's former private copy
         // consumed the same helper since this change, so the seek-mode resume
-        // math over the concat timeline and this queue describe the same book).
+        // math over the concat timeline and this queue describe the same book -
+        // on the DETECTION regime; a tagged book whose filenames disagree with
+        // its tags still sorts differently across the two paths (the endpoint
+        // always sorts, the queue only on detection; JF-813's composite key is
+        // the unification vehicle).
         // The whole book is fetched ONCE, unpaged, exactly the shape the
         // deep-resume scan below uses (the composition continues at the resume
         // fork); when the page already carried the whole book (no more rows
@@ -176,6 +180,12 @@ public static class AudiobookPlayResolver
         // chapters; the JF-813 follow-up owns the shared-comparator semantics
         // and cost refinements.
         List<BaseItem>? fileNameOrderedBook = null;
+        // Gate-marker tail F5: a latched EMPTY JF-790 fetch also closes the deep
+        // gate below - without the latch, an emptied library made the filename
+        // order fetch return zero rows, fileNameOrderedBook stayed null, and the
+        // deep gate released a SECOND identical unpaged fetch in the same request
+        // (rare and bounded, but the ONE-fetch framing reads as a budget).
+        bool fileNameOrderFetchCameBackEmpty = false;
         if (ChapterFileNameOrder.PageDistrustsDbOrder(trackItems))
         {
             if (QueueContinuationFetcher.InitialPageHasMore(bookTracks))
@@ -192,6 +202,7 @@ public static class AudiobookPlayResolver
                     logger.LogWarning(
                         "{Label}: JF-790 filename-order fetch for '{BookName}' returned no rows; keeping the DB page order",
                         logLabel, book.Name);
+                    fileNameOrderFetchCameBackEmpty = true;
                 }
                 else
                 {
@@ -383,7 +394,7 @@ public static class AudiobookPlayResolver
         // JF-790: the deep-resume gate is MOOT in the detected shape (the full
         // book is already in hand and the resume fork above already scanned every
         // chapter of it), so the whole gate section stays cold there.
-        bool deepResumeEligible = fileNameOrderedBook == null && resumeTicks == 0 && continuationHasMore;
+        bool deepResumeEligible = fileNameOrderedBook == null && !fileNameOrderFetchCameBackEmpty && resumeTicks == 0 && continuationHasMore;
 
         if (deepResumeEligible)
         {

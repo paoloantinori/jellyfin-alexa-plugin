@@ -428,4 +428,69 @@ public class PlayBookChapterFileNameOrderTests : PluginTestBase, IDisposable
             QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
         }
     }
+
+    // Gate-marker tail F2: the ACCEPTED-SWEEP no-op pin. The untagged class whose
+    // zero-padded filenames already agree with the DB order is the swept member
+    // whose play shape changes most (the extra unpaged fetch, the CachedTracks
+    // continuation) while its OUTPUT must stay identical: queue order equals the
+    // DB order, and the continuation carries the sorted cached tracks. REDS if a
+    // future comparator rework (the JF-813 composite key) breaks the no-op
+    // property; the tagged companion above pins a DIFFERENT member (it never
+    // enters the branch).
+    [Fact]
+    public async Task HandleAsync_UntaggedZeroPaddedBook_SortedPathIsANoOp()
+    {
+        var handler = CreateHandler();
+        var request = CreateIntentRequest("Zero Padded Untagged");
+        var context = _fx.CreateContext();
+        var user = _fx.CreateUser();
+        var session = CreateSession();
+
+        _fx.SetupUserMock();
+
+        const string bookPath = "/audiobooks/zero-padded-untagged";
+        List<BaseItem> byFile = Enumerable.Range(1, 14)
+            .Select(n => (BaseItem)Chapter(
+                bookPath,
+                n.ToString("00"),
+                $"Zero Padded Untagged - Chapter {n:00}",
+                $"Zero Padded Untagged - Chapter {n:00}",
+                indexNumber: null))
+            .ToList();
+
+        // Zero-padded names: lexicographic == numeric, so the DB order equals the
+        // file order and the sweep must be observably identical.
+        (List<BaseItem> _, Guid _, List<InternalItemsQuery> queries) = SetupBook(
+            "Zero Padded Untagged", bookPath, byFile.ToList());
+
+        try
+        {
+            SkillResponse response = await handler.HandleAsync(request, context, user, session, CancellationToken.None);
+
+            Assert.NotNull(response);
+            var audioDirective = response.Response.Directives?.OfType<AudioPlayerPlayDirective>().FirstOrDefault();
+            Assert.NotNull(audioDirective);
+
+            Assert.Equal(byFile[0].Id.ToString(), audioDirective!.AudioItem.Stream.Token);
+            Assert.Equal(
+                byFile.Take(5).Select(c => c.Id),
+                session.NowPlayingQueue.Select(q => q.Id));
+
+            // The sorted path DID run (the one unpaged fetch and the cached
+            // continuation) while the output stayed identical: the no-op property.
+            Assert.Single(queries, q => q.Limit == null);
+            QueueContinuation? continuation = QueueContinuationStore.Get(session.UserId, context.System.Device.DeviceID!);
+            Assert.NotNull(continuation);
+            Assert.Equal(5, continuation!.StartIndex);
+            Assert.Equal(14, continuation.TotalCount);
+            Assert.NotNull(continuation.CachedTracks);
+            Assert.Equal(
+                byFile.Select(c => c.Id),
+                continuation.CachedTracks.Select(c => c.Id));
+        }
+        finally
+        {
+            QueueContinuationStore.Remove(session.UserId, context.System.Device.DeviceID!);
+        }
+    }
 }

@@ -20,7 +20,11 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// class this task fixes). ONE definition is load-bearing here (the JF-382
 /// no-second-copy rule): the endpoint and the queue must not drift, because the
 /// seek-mode resume math over the concat timeline and the queue's
-/// next/previous navigation describe the SAME book.
+/// next/previous navigation describe the SAME book - but they do so ONLY when
+/// both surfaces sort (the endpoint ALWAYS sorts; the queue sorts on DETECTION,
+/// so a TAGGED book whose filenames disagree with its tags still plays two
+/// different orders across the two paths; the divergence is pre-existing and the
+/// composite-key decision in JF-813 is the vehicle that would unify them).
 /// The sort is STABLE (LINQ OrderBy): chapters whose filenames carry no trailing
 /// number (or an unparsable one) all key to <see cref="int.MaxValue"/> and keep
 /// the query's pinned (<see cref="QueueContinuationFetcher.AudiobookChapterOrder"/>)
@@ -117,6 +121,11 @@ internal static class ChapterFileNameOrder
     /// only, by the task's prescribed shape. A book whose page 1 is tagged with
     /// distinct keys but whose later pages are untagged or fully tied escapes
     /// (the queue keeps the DB path and the tail's mis-order reproduces); the
+    /// CONVERSE shape FALSE-FIRES (gate-marker tail F1): a book whose page 1 is
+    /// untagged but whose tail is correctly tagged takes the file order for the
+    /// WHOLE book, discarding the tags' order when the filenames disagree
+    /// (per-disc numbering); no census book has this shape, and the composite
+    /// key (IndexNumber first when present) filed in JF-813 is the fix vehicle;
     /// census's books are uniformly tagged or uniformly untagged, and widening
     /// the evidence past page 1 means paying the unpaged fetch to DETECT, the
     /// cost the page-local shape exists to avoid.
@@ -140,6 +149,10 @@ internal static class ChapterFileNameOrder
                 anyRowTagged = true;
             }
 
+            // Ordinal tuple equality (gate-marker tail F4): case-differing
+            // duplicates tie under the server's case-insensitive collation but
+            // not here, so the trigger can only UNDER-fire (ordinal-equal implies
+            // collation-equal) - the safe direction, documented.
             if (!seenKeys.Add((row.SortName, row.Name)))
             {
                 fullKeyTie = true;
