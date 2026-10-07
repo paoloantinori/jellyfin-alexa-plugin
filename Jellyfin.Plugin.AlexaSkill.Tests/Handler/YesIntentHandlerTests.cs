@@ -1647,6 +1647,14 @@ public class YesIntentHandlerTests : PluginTestBase
             attrs,
             CancellationToken.None));
         Assert.StartsWith("artist", ex.Message, StringComparison.OrdinalIgnoreCase);
+
+        // JF-808 code-review F3: the no-progressive-before-refusal half of the
+        // placement contract for EVERY confirm leg this driver covers (the JF-807
+        // F1 ask shape): a gate moved below a future announcement still throws and
+        // would otherwise keep every pin green while the user hears the speech
+        // first. No confirm leg announces before its gate today, so this holds
+        // for the JF-806 book/album/artist legs as well as the JF-808 playlist one.
+        Assert.Equal(string.Empty, handler.Progressive.AllText);
     }
 
     private Dictionary<string, object> CreateSingleMatchAttrs(Guid itemId, string name, string type)

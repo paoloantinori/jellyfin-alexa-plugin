@@ -325,6 +325,19 @@ public class PlayPlaylistIntentHandlerTests : PluginTestBase
     }
 
     /// <summary>
+    /// The shuffle-ask construction shared by the JF-808 pins (the shuffle twin
+    /// rides the plain handler: no progressive capture is asserted on this side).
+    /// </summary>
+    private ShufflePlayIntentHandler CreateShuffleHandler(IArtistIndex? artistIndex = null)
+        => new ShufflePlayIntentHandler(
+            _sessionManagerMock.Object,
+            _config,
+            _libraryManagerMock.Object,
+            _userManagerMock.Object,
+            _loggerFactory,
+            artistIndex: artistIndex);
+
+    /// <summary>
     /// JF-808 sibling pin (the ShufflePlay twin, the JF-602 AC#3 placement
     /// convention): ShufflePlayIntentHandler shares this builder and its whole
     /// cold surface verbatim (only the shuffle flag differs), so its ask carries
@@ -333,24 +346,68 @@ public class PlayPlaylistIntentHandlerTests : PluginTestBase
     [Fact]
     public async Task HandleAsync_ShufflePlayAsk_WhileIndexWarming_ThrowsAtEntry()
     {
-        var handler = new ShufflePlayIntentHandler(
-            _sessionManagerMock.Object,
-            _config,
-            _libraryManagerMock.Object,
-            _userManagerMock.Object,
-            _loggerFactory,
-            artistIndex: TestHelpers.WarmingArtistIndex());
+        var handler = CreateShuffleHandler(TestHelpers.WarmingArtistIndex());
         using var statics = StubBaseItemStatics();
         SetupPlaylistPlay();
 
         var ex = await Assert.ThrowsAsync<SkillWarmingUpException>(() =>
             handler.HandleAsync(
-                CreateRequest(IntentNames.ShufflePlay),
+                CreateRequest(intentName: IntentNames.ShufflePlay),
                 TestHelpers.CreateTestContext(),
                 TestHelpers.CreateTestUser(jellyfinToken: "tok"),
                 TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory),
                 CancellationToken.None));
         Assert.StartsWith("artist", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// JF-808 code-review F2 (the ShufflePlay ready-path twin): the throw pin
+    /// alone cannot tell a correctly gated ask from an INVERTED readiness check
+    /// (an always-throwing gate keeps it green while every shuffle ask is
+    /// refused forever), so the shuffle side pins gate transparency too, exactly
+    /// like the PlayPlaylist ready pin and the JF-806 confirm twins.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_ShufflePlayAsk_ReadyIndex_PlaysUnchanged()
+    {
+        var handler = CreateShuffleHandler(TestHelpers.ReadyArtistIndex());
+        using var statics = StubBaseItemStatics();
+        SetupPlaylistPlay();
+
+        SkillResponse response = await handler.HandleAsync(
+            CreateRequest(intentName: IntentNames.ShufflePlay),
+            TestHelpers.CreateTestContext(),
+            TestHelpers.CreateTestUser(jellyfinToken: "tok"),
+            TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory),
+            CancellationToken.None);
+
+        Assert.IsType<AudioPlayerPlayDirective>(Assert.Single(response.Response.Directives!));
+        Assert.True(response.Response.ShouldEndSession);
+    }
+
+    /// <summary>
+    /// JF-808 code-review F4 (the ShufflePlay twin of the elicit-hatch pin): the
+    /// duplicated elicit-then-gate boilerplate is pinned on BOTH handlers, so a
+    /// refactor reordering the two in ShufflePlay alone cannot silently convert
+    /// a slot-less shuffle ask into the session-ending warming refusal.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_ShufflePlayAsk_WhileIndexWarming_EmptySlot_StillElicitsPlaylistName()
+    {
+        var handler = CreateShuffleHandler(TestHelpers.WarmingArtistIndex());
+
+        SkillResponse response = await handler.HandleAsync(
+            CreateRequest(playlistName: string.Empty, intentName: IntentNames.ShufflePlay),
+            TestHelpers.CreateTestContext(),
+            TestHelpers.CreateTestUser(),
+            TestHelpers.CreateTestSession(_sessionManagerMock.Object, _loggerFactory),
+            CancellationToken.None);
+
+        Assert.Contains(
+            "Which playlist would you like to hear?",
+            ((global::Alexa.NET.Response.PlainTextOutputSpeech)response.Response.OutputSpeech).Text,
+            StringComparison.Ordinal);
+        Assert.False(response.Response.ShouldEndSession);
     }
 
     /// <summary>
