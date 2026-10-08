@@ -98,3 +98,9 @@ DEVICE ROUND RESULTS (2026-10-08, part 2, log-verified):
 - B3/B4/B5 (stop/ferma/annulla): ALL CORRECT BY DESIGN, log-verified. PauseIntent -> JF-482 shape live ("Pausa." + position card "10s di 4m44s" + "riprendi" reprompt, session open, AudioPlayer.Stop); StopIntent -> silent exit (shouldEndSession:true + AudioPlayer.Stop, no speech - stop never says "pausa" by design); CancelIntent -> same silent exit. BONUS verified: resume after pause carries the correct position (ResumeIntent at offset 9979ms and 20607ms, AudioPlayer-context-derived).
 - Episode battery (part 1): SAILOR MOON WORKS (the full chain: series+season+episode slots after the catalog-wiring restoration and the new S2E8 numbering post-reorganization).
 REMAINING: books (upside order+resume, measure), FollowMe two-Echo, T1 native transfer, T2 stream-kill.
+
+DEVICE ROUND PAUSED (2026-10-08 ~21:00, Paolo done for the night). STATE:
+GREEN: episode chain (S2E8 post-reorg), successivo, ferma/stop/annulla (all by design, log-verified), resume position-carry (9.9s/20.6s), the di-connector routing fix (JF-816) live-verified end-to-end through the fuzzy match and the deep resume.
+FOUND (1.0 blockers, filed): JF-817 (the audiobook resume-slice live-edge death, worker in flight); the JF-816 residual (the 'l'audiolibro di' scoring race - Paolo's ACTUAL phrasing; ASR renders English 'the' as Italian 'di', so the model must accept the ASR's output form; probe battery next).
+NOT YET TESTED (tomorrow's list): the books cold (JF-817 must land first), FollowMe two-Echo, T1 native transfer, T2 stream-kill, 'l'ultimo episodio' announce.
+NEW TOOL: hassio-db's pyscript.alexa_voice_dump service reads the ASR transcripts (start/end window) - the routing-debug instrument we never had; use it for every future routing question.
