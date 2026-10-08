@@ -3,7 +3,7 @@ id: JF-819
 title: >-
   JF-819 - the single-item (song-family) HLS prewrite serve is still UNWINDOWED: a
   single-chapter audiobook resume during a cold encode hits the JF-817 live-edge death
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-08'
 labels:
