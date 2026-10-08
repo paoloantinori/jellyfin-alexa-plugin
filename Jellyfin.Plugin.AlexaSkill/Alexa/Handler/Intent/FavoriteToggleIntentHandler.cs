@@ -124,7 +124,7 @@ public abstract class FavoriteToggleIntentHandler : BaseHandler
             // only its user-data row is missing, so the unification stopped at
             // the two door branches and this defensive tell keeps
             // MediaNotFound; both existing no-media strings are false for a
-            // playing item (JF-818 owns the open wording question).
+            // playing item (JF-821 owns the open wording question).
             return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale)));
         }
 

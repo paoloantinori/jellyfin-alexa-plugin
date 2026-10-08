@@ -1,5 +1,5 @@
 ---
-id: JF-818
+id: JF-821
 title: >-
   The favorite-toggle data==null branch speaks MediaNotFound for a verifiably
   playing item (open wording question)
@@ -22,7 +22,7 @@ same-turn filing rule).
 JF-788 unified favorite-toggle's two evidence-door branches (idle guard,
 resolver-null) onto NoMediaPlaying and deliberately STOPPED at the door: the
 third no-media branch, the GetUserData null check after the item has already
-resolved (FavoriteToggleIntentHandler, the branch carrying the JF-818 pointer
+resolved (FavoriteToggleIntentHandler, the branch carrying the JF-821 pointer
 comment), keeps MediaNotFound. The review verified why that keep is not a
 settled answer, only a scope boundary:
 
@@ -50,7 +50,7 @@ NoMediaPlaying (the sibling-consistent least-wrong word); (c) keep MediaNotFound
 and document it as the defensive-branch word. The branch is pinned by
 HandleAsync_ItemResolvedButNoUserData_KeepsMediaNotFound_JF788
 (FavoriteToggleIntentHandlerTests), so any change flips that pin; whichever
-way it lands, move the pin and the handler comment's JF-818 pointer together.
+way it lands, move the pin and the handler comment's JF-821 pointer together.
 
 Note: the same shape exists in RateItemIntentHandler (its own data==null
 branch); if the decision mints a dedicated key, consider whether RateItem's

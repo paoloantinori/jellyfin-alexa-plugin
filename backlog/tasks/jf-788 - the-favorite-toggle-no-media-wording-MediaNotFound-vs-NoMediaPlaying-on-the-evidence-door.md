@@ -73,7 +73,7 @@ covered the two door branches. A boundary pin
 (HandleAsync_ItemResolvedButNoUserData_KeepsMediaNotFound_JF788) now locks the
 keep so a future unification sweep cannot flip it as "the family's last
 MediaNotFound" without a red test; the open wording question for that branch is
-JF-818.
+JF-821.
 
 ## Definition of Done
 <!-- DOD:BEGIN -->
@@ -86,7 +86,7 @@ JF-818.
 - [x] #7 E2E test added for new intent or handler logic (N/A-shaped but covered: 4 unit pins in the favorite suite assert the spoken strings on every changed branch; no new intent; no e2e fixture went stale, the favorite case "aggiungi ai preferiti" pins only response_type any, and the two NoMediaPlaying fixture asserts in e2e_it-IT.yaml belong to the Repeat and SetPlaybackSpeed families, both untouched)
 - [x] #8 Locale response strings added to all 17 locales (N/A: no new strings; NoMediaPlaying already existed in all 17 locale files, verified by grep count 17 and validate_locales.py PASS at the final state)
 - [x] #9 /simplify passed (4 angles: efficiency clean, reuse clean; applied the redundant-parenthetical trim, the test-doc enumeration trim, and the altitude angle's boundary pin; 2 reasoned skips recorded in the commit)
-- [x] #10 /code-review high passed (3 findings: 2 applied as comment-accuracy corrections, 1 filed as JF-819; the finding-2 behavioral residue filed as JF-818)
+- [x] #10 /code-review high passed (3 findings: 2 applied as comment-accuracy corrections, 1 filed as JF-822; the finding-2 behavioral residue filed as JF-821)
 <!-- DOD:END -->
 
 ## Final Summary
@@ -105,8 +105,8 @@ JF-785 tests).
 
 Gates: /simplify 4 angles (efficiency clean, reuse clean, 3 applied, 2 reasoned
 skips) and /code-review high (3 findings: 2 comment corrections applied; the
-guarded-door consolidation question filed as JF-819 considered-and-rejected
-with the re-open trigger; the data==null wording residue filed as JF-818).
+guarded-door consolidation question filed as JF-822 considered-and-rejected
+with the re-open trigger; the data==null wording residue filed as JF-821).
 Suites: 5512/5512 BOTH TFMs on the final state (baseline 5511 + the boundary
 pin); Release build 0 warnings 0 errors; validate_locales.py PASS (NoMediaPlaying
 verified present in all 17 locale files, no locale surface touched). No
