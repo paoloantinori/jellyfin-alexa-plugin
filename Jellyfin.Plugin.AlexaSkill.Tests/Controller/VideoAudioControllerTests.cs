@@ -6451,6 +6451,70 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
     }
 
     /// <summary>
+    /// Shared arrange of a LIVE audiobook encode over a planted cache directory
+    /// (the JF-817 device shape, parameterized): the full prewrite for the
+    /// given total runtime (<see cref="VideoAudioController.WriteAudiobookPlaylist"/>,
+    /// the production emitter, so the EXTINF walk and the token rewrite see
+    /// real shapes) plus segment files seg_0000..seg_00{headSegmentCount-1}
+    /// (the encoded head; head = headSegmentCount - 1). The JF-817 incident
+    /// itself is a 100-chapter book resumed at 210s (segment 21) while the
+    /// encode head sat at 21-80 (2026-10-08 20:35, the seg_3055 tail death).
+    /// No stream.m3u8 is planted: the request must take the concurrent-encode
+    /// guard row, the during-encode prewrite serve under test. Returns the
+    /// parent ID string (for the controller and the active-encode seam), the
+    /// HLS dir (to advance the head mid-test), and the prewrite path (to age
+    /// the mtime, the window's growth anchor). totalRuntime must split into
+    /// two even chapters of a whole 10s-segment count so the uniform
+    /// durations stay exactly 10s (the EXTINF arithmetic the pins resolve
+    /// segments by).
+    /// </summary>
+    private (string ParentIdStr, string HlsDir, string PrewritePath) PlantLiveAudiobookEncodeFixture(
+        string bookName, int headSegmentCount, TimeSpan totalRuntime)
+    {
+        Guid parentId = Guid.NewGuid();
+        string parentIdStr = parentId.ToString("D");
+        var parentItem = new MediaBrowser.Controller.Entities.Folder
+        {
+            Name = bookName,
+            Id = parentId
+        };
+        var chapters = new List<MediaBrowser.Controller.Entities.BaseItem>
+        {
+            new MediaBrowser.Controller.Entities.Audio.Audio
+            {
+                Name = $"{bookName} Chapter 1",
+                Id = Guid.NewGuid(),
+                RunTimeTicks = totalRuntime.Ticks / 2
+            },
+            new MediaBrowser.Controller.Entities.Audio.Audio
+            {
+                Name = $"{bookName} Chapter 2",
+                Id = Guid.NewGuid(),
+                RunTimeTicks = totalRuntime.Ticks / 2
+            }
+        };
+
+        _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns(parentItem);
+        _libraryManagerMock.Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Returns(chapters);
+
+        string hlsDir = _cache.GetHlsDirectoryPath(parentIdStr, 0);
+        Directory.CreateDirectory(hlsDir);
+        for (int i = 0; i < headSegmentCount; i++)
+        {
+            File.WriteAllBytes(Path.Combine(hlsDir, $"seg_{i:D4}.ts"), new byte[16]);
+        }
+
+        string prewritePath = Path.Combine(hlsDir, "playlist-full.m3u8");
+        VideoAudioController.WriteAudiobookPlaylist(
+            prewritePath,
+            $"/alexaskill/api/video-audio/{parentIdStr}/segments/",
+            chapters,
+            token: null);
+        return (parentIdStr, hlsDir, prewritePath);
+    }
+
+    /// <summary>
     /// JF-778 core pin (the device failure, red on the unmodified tree): while the
     /// episode encode is LIVE with its head at seg_0007, the prewrite serve must
     /// NOT hand the player the full 356-entry listing. The Echo's ExoPlayer
@@ -6652,6 +6716,277 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
         {
             VideoAudioController.SetEncodeActiveForTest(itemIdStr, active: false);
         }
+    }
+
+    // ========== JF-817: windowed audiobook prewrite serve (live-encode resume) ==========
+
+    /// <summary>
+    /// JF-817 core pin (the device failure, red on the unmodified tree): the
+    /// audiobook RESUME while the encode runs must not hand the player the
+    /// full remaining prewrite. The incident (2026-10-08 20:35): the resume
+    /// slice began at segment 21 but served all 3035 remaining entries (no
+    /// ENDLIST), ExoPlayer resolved the no-ENDLIST listing's default start at
+    /// playlist end minus 3x TARGETDURATION (the media3 live-edge formula,
+    /// the JF-778 mechanism), and the player probed the un-encoded tail
+    /// (seg_3055 with the head at 21) until playback died. The windowed serve
+    /// BEGINS at the resume segment AND CAPS at the encoded-region edge: head
+    /// at seg_0022 with the prewrite aged 200s grows the window to 23 entries
+    /// (elapsed 20 + lead 3, head-capped at 23), and 23 - 21 = 2 entries from
+    /// the edge is inside the 3-entry honor band, so the serve is exactly the
+    /// slice seg_0021..seg_0022. RED PROOF (run before the fix landed): the
+    /// unmodified serve returns the full remaining listing (3015 entries,
+    /// seg_3035 present), so the count assert fails expected 2 / actual 3015.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_LiveEncodeResume_ServesWindowedSliceNotFullPrewrite()
+    {
+        (string parentIdStr, _, string prewritePath) = PlantLiveAudiobookEncodeFixture(
+            "JF-817 Resume Book", headSegmentCount: 23, totalRuntime: TimeSpan.FromSeconds(30360));
+
+        // Elapsed 20 segments (200s): the window is min(head + 1 = 23, 23) = 23
+        // entries, head-capped so test latency cannot move it; its edge sits 2
+        // entries past the resume segment, inside the honor band.
+        File.SetLastWriteTimeUtc(prewritePath, DateTime.UtcNow.AddSeconds(-200));
+
+        VideoAudioController.SetEncodeActiveForTest(parentIdStr, active: true, audiobook: true);
+        try
+        {
+            var controller = CreateController(parentIdStr, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf817-resume"));
+
+            ActionResult result = await controller.StreamHlsAudiobook(parentIdStr, TimeSpan.FromSeconds(210).Ticks);
+
+            var content = Assert.IsType<ContentResult>(result);
+            // BEGINS at the resume segment, CAPS at the encoded-region edge.
+            Assert.Equal(2, VideoAudioController.CountSegmentsInPlaylist(content.Content));
+            Assert.Contains("seg_0021.ts?token=", content.Content, StringComparison.Ordinal);
+            Assert.Contains("seg_0022.ts?token=", content.Content, StringComparison.Ordinal);
+            Assert.DoesNotContain("seg_0020", content.Content, StringComparison.Ordinal);
+            Assert.DoesNotContain("seg_0023", content.Content, StringComparison.Ordinal);
+            Assert.DoesNotContain("seg_3035", content.Content, StringComparison.Ordinal);
+            Assert.DoesNotContain("#EXT-X-ENDLIST", content.Content, StringComparison.Ordinal);
+            Assert.Contains("#EXT-X-MEDIA-SEQUENCE:21", content.Content, StringComparison.Ordinal);
+        }
+        finally
+        {
+            VideoAudioController.SetEncodeActiveForTest(parentIdStr, active: false, audiobook: true);
+        }
+    }
+
+    /// <summary>
+    /// JF-817 mid-window resume pin (the JF-778 honor-band decision mirrored
+    /// unchanged; the JF-780 residuals stand as filed): a resume position far
+    /// behind the grown window's edge is NOT honored, because a sliced
+    /// no-ENDLIST listing joins at its own live-edge default start (slice end
+    /// minus 3x TARGETDURATION), minutes past the requested position. Shape:
+    /// head at seg_0062 with the prewrite aged 600s grows the window to 63
+    /// entries (head-capped, stable against test latency); 210s resolves to
+    /// segment 21; 63 - 21 = 42 entries from the edge, far beyond the 3-entry
+    /// lead, so the serve drops the offset and serves the windowed listing
+    /// unsliced from segment 0 with the drop log.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_WindowedPrewrite_MidWindowResume_OutsideHonorBand_DropsOffset()
+    {
+        (string parentIdStr, _, string prewritePath) = PlantLiveAudiobookEncodeFixture(
+            "JF-817 Mid Window Book", headSegmentCount: 63, totalRuntime: TimeSpan.FromSeconds(30360));
+
+        // Elapsed 60 segments (600s): the window is min(head + 1 = 63, 63) = 63,
+        // head-capped so test latency cannot move it.
+        File.SetLastWriteTimeUtc(prewritePath, DateTime.UtcNow.AddSeconds(-600));
+
+        var logRecords = new List<(LogLevel Level, string Message)>();
+        using var loggerFactory = TestCaptureLogger.CreateCaptureLoggerFactory(logRecords);
+
+        VideoAudioController.SetEncodeActiveForTest(parentIdStr, active: true, audiobook: true);
+        try
+        {
+            var controller = CreateController(parentIdStr, loggerFactory, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf817-mid-window"));
+
+            ActionResult result = await controller.StreamHlsAudiobook(parentIdStr, TimeSpan.FromSeconds(210).Ticks);
+
+            var content = Assert.IsType<ContentResult>(result);
+            // Unsliced from the beginning, capped at the window edge.
+            Assert.Equal(63, VideoAudioController.CountSegmentsInPlaylist(content.Content));
+            Assert.Contains("seg_0000.ts?token=", content.Content, StringComparison.Ordinal);
+            Assert.Contains("seg_0062.ts?token=", content.Content, StringComparison.Ordinal);
+            Assert.DoesNotContain("seg_0063", content.Content, StringComparison.Ordinal);
+            Assert.DoesNotContain("seg_3035", content.Content, StringComparison.Ordinal);
+            Assert.Contains("#EXT-X-MEDIA-SEQUENCE:0", content.Content, StringComparison.Ordinal);
+            Assert.Contains(
+                TestCaptureLogger.Snapshot(logRecords),
+                r => r.Message.Contains("outside the encode window's honor band", StringComparison.Ordinal));
+        }
+        finally
+        {
+            VideoAudioController.SetEncodeActiveForTest(parentIdStr, active: false, audiobook: true);
+        }
+    }
+
+    /// <summary>
+    /// JF-817 growth + head-cap pin: the audiobook window grows with the
+    /// prewrite's age (one entry per 10s segment, the 1x playback pace) and
+    /// NEVER promises beyond the encoded head. First fetch at prewrite age ~0
+    /// with the head at seg_0001: the window is head + 1 = 2 entries (below
+    /// the lead term; head-capped, stable). The encode then advances to head
+    /// seg_0027 and the prewrite ages 600s: the window grows to the new head
+    /// cap of 28 entries (the elapsed term 63 would list more), append-only.
+    /// Both fetches assert the full-runtime tail (seg_3035) stays absent, the
+    /// red discriminator (today's serve lists every prewrite entry).
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_WindowedPrewrite_GrowsWithElapsedAndCapsAtHead()
+    {
+        (string parentIdStr, string hlsDir, string prewritePath) = PlantLiveAudiobookEncodeFixture(
+            "JF-817 Window Growth Book", headSegmentCount: 2, totalRuntime: TimeSpan.FromSeconds(30360));
+
+        File.SetLastWriteTimeUtc(prewritePath, DateTime.UtcNow);
+
+        VideoAudioController.SetEncodeActiveForTest(parentIdStr, active: true, audiobook: true);
+        try
+        {
+            var controller = CreateController(parentIdStr, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf817-growth"));
+
+            ActionResult firstFetch = await controller.StreamHlsAudiobook(parentIdStr);
+
+            var firstContent = Assert.IsType<ContentResult>(firstFetch);
+            Assert.Equal(2, VideoAudioController.CountSegmentsInPlaylist(firstContent.Content));
+            Assert.Contains("seg_0001.ts?token=", firstContent.Content, StringComparison.Ordinal);
+            Assert.DoesNotContain("seg_0002", firstContent.Content, StringComparison.Ordinal);
+            Assert.DoesNotContain("seg_3035", firstContent.Content, StringComparison.Ordinal);
+
+            // The encode advances (head to seg_0027) and 600s pass: the window
+            // grows to the new head cap (28 entries).
+            for (int i = 2; i <= 27; i++)
+            {
+                await File.WriteAllBytesAsync(Path.Combine(hlsDir, $"seg_{i:D4}.ts"), new byte[16]);
+            }
+
+            File.SetLastWriteTimeUtc(prewritePath, DateTime.UtcNow.AddSeconds(-600));
+
+            ActionResult secondFetch = await controller.StreamHlsAudiobook(parentIdStr);
+
+            var secondContent = Assert.IsType<ContentResult>(secondFetch);
+            Assert.Equal(28, VideoAudioController.CountSegmentsInPlaylist(secondContent.Content));
+            Assert.Contains("seg_0027.ts?token=", secondContent.Content, StringComparison.Ordinal);
+            Assert.DoesNotContain("seg_0028", secondContent.Content, StringComparison.Ordinal);
+            Assert.DoesNotContain("seg_3035", secondContent.Content, StringComparison.Ordinal);
+            Assert.DoesNotContain("#EXT-X-ENDLIST", secondContent.Content, StringComparison.Ordinal);
+        }
+        finally
+        {
+            VideoAudioController.SetEncodeActiveForTest(parentIdStr, active: false, audiobook: true);
+        }
+    }
+
+    /// <summary>
+    /// JF-817 first-fetch pin (the incident's own site: the 2026-10-08 log
+    /// line "serving pre-written playlist for parent e9720b84 (100 chapters)"
+    /// is THIS row): the request that STARTS the encode must not be handed
+    /// the full prewrite either. The fake ffmpeg writes the first two
+    /// segments; the freshly-written prewrite (age ~0) windows to head + 1 =
+    /// 2 entries of the 3036-entry book (head-capped at either 1 or 2
+    /// segments on disk, so a mid-write race in the fake cannot move the
+    /// count). RED on the unmodified tree (3036 entries, seg_3035 present).
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_FirstFetch_ServesWindowedPrewriteNotFullListing()
+    {
+        Guid parentId = Guid.NewGuid();
+        var parentItem = new MediaBrowser.Controller.Entities.Folder
+        {
+            Name = "JF-817 First Fetch Book",
+            Id = parentId
+        };
+        var chapters = new List<MediaBrowser.Controller.Entities.BaseItem>
+        {
+            new MediaBrowser.Controller.Entities.Audio.Audio
+            {
+                Name = "Chapter 1",
+                Id = Guid.NewGuid(),
+                RunTimeTicks = TimeSpan.FromSeconds(15180).Ticks
+            },
+            new MediaBrowser.Controller.Entities.Audio.Audio
+            {
+                Name = "Chapter 2",
+                Id = Guid.NewGuid(),
+                RunTimeTicks = TimeSpan.FromSeconds(15180).Ticks
+            }
+        };
+
+        _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns(parentItem);
+        _libraryManagerMock.Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Returns(chapters);
+
+        string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-jf817-first-fetch",
+            "for playlist_path in \"$@\"; do :; done\n" +
+            "playlist_dir=\"$(dirname \"$playlist_path\")\"\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$playlist_dir/seg_0000.ts\" 2>/dev/null\n" +
+            "dd if=/dev/zero bs=1024 count=4 of=\"$playlist_dir/seg_0001.ts\" 2>/dev/null\n" +
+            "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:10.000,\\nseg_0000.ts\\n#EXTINF:10.000,\\nseg_0001.ts\\n' > \"$playlist_path\"\n" +
+            "exit 0\n");
+
+        var controller = CreateController(parentId.ToString(), ffmpegPath: fakeFfmpegPath);
+
+        ActionResult result = await controller.StreamHlsAudiobook(parentId.ToString());
+
+        var content = Assert.IsType<ContentResult>(result);
+        Assert.Equal(2, VideoAudioController.CountSegmentsInPlaylist(content.Content));
+        Assert.Contains("seg_0000.ts?token=", content.Content, StringComparison.Ordinal);
+        Assert.Contains("seg_0001.ts?token=", content.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("seg_0002", content.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("seg_3035", content.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("#EXT-X-ENDLIST", content.Content, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// JF-817 companion pin: once the encode COMPLETED (ENDLIST cache), the
+    /// serve is today's full listing with the exact resume slice; the
+    /// live-encode windowing must not leak into the completed-encode row.
+    /// 210s resolves to segment 21 of the 3036-segment book, so the slice
+    /// spans seg_0021..seg_3035 with the ENDLIST preserved.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_CompletedEncode_Resume_ServesFullListingSliced()
+    {
+        Guid parentId = Guid.NewGuid();
+        var parentItem = new MediaBrowser.Controller.Entities.Folder
+        {
+            Name = "JF-817 Completed Book",
+            Id = parentId
+        };
+        var chapters = new List<MediaBrowser.Controller.Entities.BaseItem>
+        {
+            new MediaBrowser.Controller.Entities.Audio.Audio
+            {
+                Name = "Chapter 1",
+                Id = Guid.NewGuid(),
+                RunTimeTicks = TimeSpan.FromSeconds(15180).Ticks
+            },
+            new MediaBrowser.Controller.Entities.Audio.Audio
+            {
+                Name = "Chapter 2",
+                Id = Guid.NewGuid(),
+                RunTimeTicks = TimeSpan.FromSeconds(15180).Ticks
+            }
+        };
+
+        _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns(parentItem);
+        _libraryManagerMock.Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
+            .Returns(chapters);
+
+        await SeedCompletedConcatCacheAsync(
+            _cache, parentId, segmentCount: 3036, encodedChapterCount: 2, encodedDurationTicks: TimeSpan.FromSeconds(30360).Ticks);
+
+        var controller = CreateController(parentId.ToString(), ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf817-completed"));
+
+        ActionResult result = await controller.StreamHlsAudiobook(parentId.ToString(), TimeSpan.FromSeconds(210).Ticks);
+
+        var content = Assert.IsType<ContentResult>(result);
+        Assert.Contains("seg_0021.ts?token=", content.Content, StringComparison.Ordinal);
+        Assert.Contains("seg_3035.ts?token=", content.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("seg_0020", content.Content, StringComparison.Ordinal);
+        Assert.Contains("#EXT-X-MEDIA-SEQUENCE:21", content.Content, StringComparison.Ordinal);
+        Assert.Contains("#EXT-X-ENDLIST", content.Content, StringComparison.Ordinal);
     }
 
     /// <summary>

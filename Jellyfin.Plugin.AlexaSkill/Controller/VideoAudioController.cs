@@ -188,6 +188,33 @@ public class VideoAudioController : ControllerBase
     internal const int EpisodePrewriteWindowLeadSegments = 3;
 
     /// <summary>
+    /// JF-817 windowed AUDIOBOOK prewrite serve, the FLOOR: the audiobook
+    /// calibration of <see cref="EpisodePrewriteWindowFloorSegments"/> (the
+    /// JF-778 window mirrored onto the audiobook resume slice). 2 entries =
+    /// 20s at the audiobook 10s segments, under the 3x TARGETDURATION (30s)
+    /// live-edge offset, so the player's live default start stays at segment
+    /// 0. Same REQUIRED RELATION as the episode floor, pinned by
+    /// AudiobookPrewriteWindowFloor_RespectsSegmentHoldLookahead: the floor's
+    /// promise beyond the encode head (floor - 1 entries) must stay within
+    /// <see cref="SegmentHoldLookahead"/>, or the entries the listing
+    /// promises would 404 past the JF-503 hold's reach and reintroduce the
+    /// tail death this window exists to prevent.
+    /// </summary>
+    internal const int AudiobookPrewriteWindowFloorSegments = 2;
+
+    /// <summary>
+    /// JF-817 windowed AUDIOBOOK prewrite serve, the LEAD: the audiobook
+    /// calibration of <see cref="EpisodePrewriteWindowLeadSegments"/>. 3
+    /// entries = 30s of playable headroom over the growing window, exactly
+    /// the player's 3x TARGETDURATION live offset at the audiobook 10s
+    /// segments, the same relation the episode lead keeps at its 4s segments
+    /// (12s vs 12s). The window grows one entry per 10s of elapsed (1x
+    /// playback, so a player that started at 0 never catches the edge while
+    /// any encode outruns it), and the lead also bounds the resume honor band.
+    /// </summary>
+    internal const int AudiobookPrewriteWindowLeadSegments = 3;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="VideoAudioController"/> class.
     /// </summary>
     /// <param name="libraryManager">Instance of the <see cref="ILibraryManager"/> interface.</param>
