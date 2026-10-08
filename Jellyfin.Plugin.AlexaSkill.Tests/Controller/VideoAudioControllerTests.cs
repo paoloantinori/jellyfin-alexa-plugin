@@ -6533,11 +6533,11 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
 
     /// <summary>
     /// The shared planting core of the JF-819 single-item fixtures (the
-    /// JF-778/JF-817 planters' song twin): ffmpeg's own two-entry live
-    /// partial on disk, segment files seg_000..seg_{headSegmentCount-1}
-    /// (3-digit single-item names; the encoded head, head =
-    /// headSegmentCount - 1), and the full prewrite for the given runtime
-    /// via the production single-item writer
+    /// JF-778/JF-817 planters' song twin): ffmpeg's own live partial on
+    /// disk listing exactly the planted segment files
+    /// seg_000..seg_{headSegmentCount-1} (3-digit single-item names; the
+    /// encoded head, head = headSegmentCount - 1), and the full prewrite
+    /// for the given runtime via the production single-item writer
     /// (<see cref="VideoAudioController.WriteVideoAudioPlaylist"/>, 4s
     /// segments at the song path's own TARGETDURATION), so the EXTINF walk,
     /// the truncation, and the token rewrite see real shapes. Returns the
@@ -6550,13 +6550,20 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
         string hlsDir = _cache.GetHlsDirectoryPath(cacheKeyId, 0);
         Directory.CreateDirectory(hlsDir);
 
-        File.WriteAllText(
-            Path.Combine(hlsDir, "stream.m3u8"),
-            "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:4.000,\nseg_000.ts\n#EXTINF:4.000,\nseg_001.ts\n");
+        // The live partial lists every planted segment (the encoded head is
+        // real): a fixture whose live playlist disagrees with its segment
+        // files cannot satisfy the JF-503 hold's listing check should a
+        // future pin built on this planter touch the hold path (code-review
+        // F2; the episode planter's fixed 2-entry shape predates this).
+        var livePartial = new System.Text.StringBuilder(
+            "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n");
         for (int i = 0; i < headSegmentCount; i++)
         {
+            livePartial.Append("#EXTINF:4.000,\nseg_").Append(i.ToString("D3", System.Globalization.CultureInfo.InvariantCulture)).Append(".ts\n");
             File.WriteAllBytes(Path.Combine(hlsDir, $"seg_{i:D3}.ts"), new byte[16]);
         }
+
+        File.WriteAllText(Path.Combine(hlsDir, "stream.m3u8"), livePartial.ToString());
 
         string prewritePath = Path.Combine(hlsDir, "playlist-full.m3u8");
         VideoAudioController.WriteVideoAudioPlaylist(

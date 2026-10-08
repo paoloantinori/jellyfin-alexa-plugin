@@ -106,6 +106,25 @@ here instead):
   the JF-680-pinned "serving pre-written full listing" line), not
   `VideoAudio episode HLS`/`VideoAudio audiobook HLS`; per-family exact log
   wording is the controller's pinned convention.
+- From the JF-819 /code-review high gate (2026-10-08, same-turn), two items
+  that belong with this task's hoist rather than a local divergence:
+  (a) the honor-band DROP LOG's outcome sentence: the JF-817 gate-marker F3
+  wording ("joins at ITS live edge, roughly the encode-elapsed position, NOT
+  at segment 0") is FALSE for floor-sized windows, where the live-edge join
+  (end minus 3x TARGETDURATION, 12s) clamps past the 2-entry floor to the
+  beginning; the JF-819 song copy already carries the regime-honest wording
+  ("roughly the encode-elapsed position once the window has grown, and the
+  beginning while it sits at the floor"); the EPISODE and AUDIOBOOK copies
+  still carry the imprecise sentence and should take the corrected wording
+  when the hoist unifies the logs (the capture pins match the "outside the
+  encode window's honor band" substring, so the wording fix is pin-safe).
+  (b) the per-poll allocation shape: every mid-encode playlist poll pays a
+  full Split('\n') of the whole prewrite (a 5h single-file book is a
+  ~4500-entry / ~250KB listing) inside TruncateToFirstSegments, plus up to
+  three full EXTINF walks on an in-band resume, only to emit a window of a
+  few dozen entries; the review's cheaper alternative (a span-based IndexOf
+  line scan emitting only kept lines) belongs with the hoist, which already
+  touches all three bodies and the builder API it would extend.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done
