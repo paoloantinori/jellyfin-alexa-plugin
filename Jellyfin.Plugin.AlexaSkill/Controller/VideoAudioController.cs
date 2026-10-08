@@ -1746,12 +1746,13 @@ public class VideoAudioController : ControllerBase
     /// JF-686 still-growing rule; the old sliced-full-listing serve had the
     /// same live-edge death shape on device); the next warm serve (ENDLIST
     /// cache hit) resumes at the position exactly.
-    /// EXTRACTION TRIGGER (the JF-637/JF-679 rule: extract at the second copy,
-    /// not before): the window block below is deliberately inline with
-    /// episode-calibrated constants. If the song/audiobook prewrite twins adopt
-    /// windowing (the device-round sentinel in the task file), extract the
-    /// head/elapsed/floor/lead computation into one parameterized helper instead
-    /// of copying it, and thread a real encode-start anchor through the
+    /// EXTRACTION RECORD (the JF-637/JF-679 rule fired at the second copy):
+    /// the head/elapsed/floor/lead computation lived inline here with
+    /// episode-calibrated constants until the audiobook twin adopted windowing
+    /// (JF-817) and it moved to the ONE parameterized helper
+    /// (<see cref="ComputePrewriteWindow"/>, with the honor band at
+    /// <see cref="ResumeInsidePrewriteHonorBand"/>). STILL OPEN from the
+    /// original trigger: thread a real encode-start anchor through the
     /// registries in place of the mtime stat (which also closes the anchor's
     /// known hazard: an external forward-touch of the prewrite's mtime
     /// mid-encode collapses the window for one poll, and the player sees a
@@ -1823,23 +1824,18 @@ public class VideoAudioController : ControllerBase
         // serve's own read always did (the JF-499 W3 contract is unchanged).
         string content = await ReadPlaylistContentAsync(prewrittenPath).ConfigureAwait(false);
 
-        // The window (JF-778): head from the prewrite's OWN directory (the
-        // listing's segment URLs point there, root-agnostic), elapsed from the
-        // prewrite's mtime (the per-encode anchor). Degenerate mtimes degrade
-        // BOUNDED, never to the full listing: a future-dated mtime zeroes the
-        // growth term (the lead plus the floor remains), and the vanished-file
-        // 1601 sentinel clamps at int.MaxValue - lead so the growth term cannot
-        // wrap negative (code-review F2: the accidental floor rescue of an
-        // unchecked wrap is not a guarantee).
-        int head = GetHighestSegmentNumber(Path.GetDirectoryName(prewrittenPath));
-        TimeSpan prewriteAge = DateTime.UtcNow - System.IO.File.GetLastWriteTimeUtc(prewrittenPath);
-        long elapsedSegmentsRaw = prewriteAge > TimeSpan.Zero
-            ? (long)(prewriteAge.TotalSeconds / EpisodeHlsSegmentSeconds)
-            : 0;
-        int elapsedSegments = (int)Math.Min(elapsedSegmentsRaw, int.MaxValue - EpisodePrewriteWindowLeadSegments);
-        int windowSegments = Math.Max(
+        // The window (JF-778): the ONE shared computation (extracted at the
+        // audiobook adoption, JF-817), episode-calibrated; the head/mtime
+        // anchors and the bounded-degrade rationale live on
+        // <see cref="ComputePrewriteWindow"/>.
+        PrewriteWindow window = ComputePrewriteWindow(
+            prewrittenPath,
+            EpisodeHlsSegmentSeconds,
             EpisodePrewriteWindowFloorSegments,
-            Math.Min(head + 1, elapsedSegments + EpisodePrewriteWindowLeadSegments));
+            EpisodePrewriteWindowLeadSegments);
+        int head = window.HeadSegment;
+        TimeSpan prewriteAge = window.PrewriteAge;
+        int windowSegments = window.WindowSegments;
 
         int totalSegments = CountSegmentsInPlaylist(content);
         bool windowed = windowSegments < totalSegments;
@@ -1852,14 +1848,11 @@ public class VideoAudioController : ControllerBase
         {
             int startSegment = Alexa.Playback.AudiobookPlaylistBuilder.ResolveStartSegment(
                 content, startTicks, EpisodeHlsSegmentSeconds);
-            // HONOR BAND (code-review F1): a sliced no-ENDLIST listing joins at
-            // its live-edge default start (slice end minus 3x TARGETDURATION),
-            // so the resume position is actually honored only while the window's
-            // edge runs no more than LEAD entries past it; outside that band a
-            // slice would join near the window edge, minutes off the requested
-            // position, so the offset drops to 0 instead (the JF-686 rule).
-            bool resumeHonored = startSegment < windowSegments
-                && windowSegments - startSegment <= EpisodePrewriteWindowLeadSegments;
+            // HONOR BAND: the ONE shared predicate (JF-778 code-review F1; the
+            // rationale and the JF-780 residuals live on
+            // <see cref="ResumeInsidePrewriteHonorBand"/>).
+            bool resumeHonored = ResumeInsidePrewriteHonorBand(
+                startSegment, windowSegments, EpisodePrewriteWindowLeadSegments);
             if (!resumeHonored)
             {
                 _logger.LogInformation(
@@ -3720,11 +3713,11 @@ public class VideoAudioController : ControllerBase
         // libx264, and the art image may have arbitrary dimensions.
         long artModifiedTicks = GetArtModifiedTicks(parent);
 
-        // Check cache first (keyed by parent ID — different GUID than any chapter)
-        // For audiobooks with 10s segments, we cannot serve a pre-written playlist because
-        // it would reference thousands of segments that don't exist yet. Instead:
-        // - During encoding: serve ffmpeg's live stream.m3u8 (only lists existing segments)
-        // - After encoding: serve the completed cached stream.m3u8 (has ENDLIST)
+        // Check cache first (keyed by parent ID, a different GUID than any chapter).
+        // During encoding: serve the pre-written event playlist WINDOWED to the
+        // encoded region (JF-817; the full prewrite puts the player's default
+        // start on the un-encoded tail). After encoding: serve the completed
+        // cached stream.m3u8 (has ENDLIST) with the exact resume slice.
         // We validate completeness by checking for ENDLIST + segment count >= chapter count.
         HlsCacheProbe fastProbe = await GetCachedHlsPlaylistLiveAwareAsync(_activeAudiobookEncodes, parentId, artModifiedTicks).ConfigureAwait(false);
         if (fastProbe.Playlist != null)
@@ -3753,8 +3746,9 @@ public class VideoAudioController : ControllerBase
 
         // Guard: if an encode is already running for this audiobook (from a concurrent
         // Echo Show request), serve the pre-written event playlist instead of starting
-        // another ffmpeg. The pre-written playlist has correct total duration and no
-        // ENDLIST, so the player plays available segments.
+        // another ffmpeg: WINDOWED to the encoded region while the encode runs (JF-817;
+        // the full prewrite's live edge sits on the un-encoded tail), resume-sliced
+        // inside the honor band.
         // JF-678: this block's serves and the first-fetch prewrite row below are the
         // UNTRANSLATED rows of the vanish family (coverage boundary on
         // ResolveServeContentAsync).
@@ -3766,7 +3760,7 @@ public class VideoAudioController : ControllerBase
             string prewrittenPath = Path.Combine(hlsDir, PrewrittenPlaylistFileName);
             if (System.IO.File.Exists(prewrittenPath))
             {
-                return await ServeAudiobookPlaylistAsync(prewrittenPath, startTicks).ConfigureAwait(false);
+                return await ServeWindowedAudiobookPrewriteAsync(prewrittenPath, parentId, startTicks).ConfigureAwait(false);
             }
 
             // JF-625: album encodes write NO pre-written listing (the live-edge rule
@@ -4134,13 +4128,16 @@ public class VideoAudioController : ControllerBase
                 "VideoAudio audiobook HLS: serving pre-written playlist for parent {ParentId} ({ChapterCount} chapters)",
                 parentId, sortedChapters.Count);
 
-            // Serve the pre-written event playlist (no ENDLIST) so the Echo Show gets
-            // the correct total book duration. The player treats it as an event playlist
-            // and plays available segments without failing on missing ones. ffmpeg generates
-            // segments in the background, staying ahead of real-time playback. The
-            // prewrite is plugin-written synchronously above, so no flush-lag
-            // boundary applies (the confirmed default).
-            return await ServeAudiobookPlaylistAsync(prewrittenPath, startTicks).ConfigureAwait(false);
+            // Serve the pre-written event playlist (no ENDLIST) WINDOWED to the
+            // encoded region (JF-817): the full listing's live edge sits on the
+            // un-encoded tail, so the serve caps at the growing window edge and
+            // resume-slices only inside the honor band (the window returns the
+            // full-runtime seekbar when the encode completes and the ENDLIST
+            // cache-hit serve takes over). The player treats the listing as an
+            // event playlist and plays available segments without failing on
+            // missing ones. The prewrite is plugin-written synchronously above,
+            // so no flush-lag boundary applies (the confirmed default).
+            return await ServeWindowedAudiobookPrewriteAsync(prewrittenPath, parentId, startTicks).ConfigureAwait(false);
 #pragma warning restore CA3003
         }
     }
@@ -4509,6 +4506,73 @@ public class VideoAudioController : ControllerBase
 
         return highest;
     }
+
+    /// <summary>
+    /// The growing serve window of a LIVE encode's prewritten listing (the
+    /// ONE computation, JF-778's inline block extracted at the audiobook
+    /// adoption JF-817 per the extraction trigger on
+    /// <see cref="TryServePrewrittenEpisodePlaylist"/>): head from the
+    /// prewrite's OWN directory (the listing's segment URLs point there),
+    /// elapsed from the prewrite file's LastWriteTimeUtc (the per-encode
+    /// anchor, written once per encode inside the JF-428 pin window; kept per
+    /// the JF-817 fix shape, with the registry-threaded real anchor the
+    /// trigger's follow-up), and the window
+    /// max(floor, min(head + 1, elapsed + lead)) parameterized by the caller
+    /// family's segment seconds and calibrated floor/lead. The window starts
+    /// at the floor, grows one entry per segment-seconds of elapsed (1x
+    /// playback, so the player trails the edge), and the head cap keeps the
+    /// listing inside the encoded region for stalled encodes. Degenerate
+    /// mtimes degrade BOUNDED, never to the full listing: a future-dated
+    /// mtime zeroes the growth term (the lead plus the floor remains), and
+    /// the vanished-file 1601 sentinel clamps at int.MaxValue - lead so the
+    /// growth term cannot wrap negative (code-review F2: the accidental floor
+    /// rescue of an unchecked wrap is not a guarantee).
+    /// </summary>
+    /// <param name="prewritePath">The prewrite playlist's path (head and mtime read from its directory and file).</param>
+    /// <param name="segmentSeconds">The family's segment length (its -hls_time; the elapsed pacing).</param>
+    /// <param name="floorSegments">The family's window floor (its calibrated const).</param>
+    /// <param name="leadSegments">The family's window lead (its calibrated const).</param>
+    /// <returns>The head segment, the window entry count, and the prewrite age (for the callers' logs).</returns>
+    internal static PrewriteWindow ComputePrewriteWindow(string prewritePath, int segmentSeconds, int floorSegments, int leadSegments)
+    {
+        int head = GetHighestSegmentNumber(Path.GetDirectoryName(prewritePath));
+        TimeSpan prewriteAge = DateTime.UtcNow - System.IO.File.GetLastWriteTimeUtc(prewritePath);
+        long elapsedSegmentsRaw = prewriteAge > TimeSpan.Zero
+            ? (long)(prewriteAge.TotalSeconds / segmentSeconds)
+            : 0;
+        int elapsedSegments = (int)Math.Min(elapsedSegmentsRaw, int.MaxValue - leadSegments);
+        int windowSegments = Math.Max(
+            floorSegments,
+            Math.Min(head + 1, elapsedSegments + leadSegments));
+        return new PrewriteWindow(head, windowSegments, prewriteAge);
+    }
+
+    /// <summary>
+    /// The honor-band verdict for a resume against a live encode's windowed
+    /// listing (the ONE predicate, JF-778 code-review F1; the JF-780
+    /// residuals stand as filed): a sliced no-ENDLIST listing joins at its
+    /// own live-edge default start (slice end minus 3x TARGETDURATION), so
+    /// the resume position is honored only while the window's edge runs no
+    /// more than LEAD entries past it; outside that band a slice would join
+    /// minutes off the requested position and the caller drops the offset
+    /// instead (the JF-686 still-growing rule).
+    /// </summary>
+    /// <param name="startSegment">The resume segment the slice would begin at.</param>
+    /// <param name="windowSegments">The windowed listing's entry count (its edge).</param>
+    /// <param name="leadSegments">The family's window lead.</param>
+    /// <returns>True when the position is inside the honor band and the slice serves it.</returns>
+    internal static bool ResumeInsidePrewriteHonorBand(int startSegment, int windowSegments, int leadSegments)
+        => startSegment < windowSegments && windowSegments - startSegment <= leadSegments;
+
+    /// <summary>
+    /// The outputs of <see cref="ComputePrewriteWindow"/> the two prewrite
+    /// serve families consume: the encode head, the window entry count, and
+    /// the prewrite age (the callers' logs name all three).
+    /// </summary>
+    /// <param name="HeadSegment">The highest encoded segment number on disk (-1 when none).</param>
+    /// <param name="WindowSegments">The windowed listing's entry count.</param>
+    /// <param name="PrewriteAge">The prewrite file's age (the elapsed anchor).</param>
+    internal readonly record struct PrewriteWindow(int HeadSegment, int WindowSegments, TimeSpan PrewriteAge);
 
     /// <summary>
     /// The one registry-selector definition shared by the three test seams
@@ -5070,6 +5134,81 @@ public class VideoAudioController : ControllerBase
 #pragma warning disable CA3003 // playlistPath is an internal cache file (parentId GUID-validated upstream)
         return PhysicalFile(playlistPath, "application/vnd.apple.mpegurl");
 #pragma warning restore CA3003
+    }
+
+    /// <summary>
+    /// Serve the AUDIOBOOK prewrite WINDOWED to the encoded region while the
+    /// encode runs (JF-817: the JF-778 window mirrored onto the resume slice,
+    /// through the ONE shared window computation). WHY (live device evidence
+    /// 2026-10-08 20:35): the resume slice rewrote the listing to BEGIN at
+    /// the resume segment but served the ENTIRE remaining prewrite (3035
+    /// entries, no ENDLIST), the Echo's ExoPlayer resolved the no-ENDLIST
+    /// listing's default start at playlist end minus 3x TARGETDURATION (the
+    /// media3 live-edge formula, the JF-778 incident's exact mechanism), and
+    /// the player probed the un-encoded tail (seg_3055 with the encode head
+    /// at 21) until playback died. The serve therefore BEGINS at the resume
+    /// segment AND CAPS at the growing window edge (the slice's clock stays
+    /// RELATIVE to the resume point, the documented sliced-strategy
+    /// limitation, unchanged). The honor band applies unchanged (the JF-780
+    /// residuals stand as filed): outside the band the offset drops with a
+    /// log and playback starts at 0 (the JF-686 still-growing rule); once the
+    /// encode completes, the cache-hit paths serve ffmpeg's ENDLIST listing
+    /// with the exact slice (today's full-listing serve, unperturbed here).
+    /// The FILE stays the full listing (the post-encode ENDLIST serve keeps
+    /// consuming it); only the SERVED bytes are windowed, and the
+    /// full-runtime seekbar during the encode window is given up exactly as
+    /// the episode serve gives it up (any no-ENDLIST listing spanning the
+    /// runtime puts the default start at its end). Called from the
+    /// concurrent-encode guard and the first-fetch tail of
+    /// <see cref="StreamHlsAudiobook"/>, the two during-encode prewrite rows.
+    /// ONE READ (the JF-677/JF-680 read-count funnels): the window
+    /// computation, the truncation, and the serve all consume the content
+    /// read here, threaded as the serve's preloaded content, so the row keeps
+    /// exactly one full read per serve. The vanish contract of these rows is
+    /// unchanged (exists-gated, untranslated: a read miss throws at action
+    /// time, per the coverage boundary on <see cref="ResolveServeContentAsync"/>).
+    /// </summary>
+    /// <param name="prewrittenPath">The prewrite playlist path (playlist-full.m3u8; both callers existence-gate it).</param>
+    /// <param name="parentId">The audiobook parent GUID string (logging).</param>
+    /// <param name="startTicks">Resume position in .NET ticks (null/0 serves unsliced).</param>
+    /// <returns>The windowed (and, inside the honor band, resume-sliced) playlist response.</returns>
+    private async Task<ActionResult> ServeWindowedAudiobookPrewriteAsync(string prewrittenPath, string parentId, long? startTicks)
+    {
+        string content = await ReadPlaylistContentAsync(prewrittenPath).ConfigureAwait(false);
+
+        PrewriteWindow window = ComputePrewriteWindow(
+            prewrittenPath,
+            AudiobookHlsSegmentSeconds,
+            AudiobookPrewriteWindowFloorSegments,
+            AudiobookPrewriteWindowLeadSegments);
+        int totalSegments = CountSegmentsInPlaylist(content);
+        bool windowed = window.WindowSegments < totalSegments;
+        string serveContent = windowed
+            ? Alexa.Playback.AudiobookPlaylistBuilder.TruncateToFirstSegments(content, window.WindowSegments)
+            : content;
+
+        long effectiveStartTicks = startTicks ?? 0;
+        if (startTicks is > 0)
+        {
+            int startSegment = Alexa.Playback.AudiobookPlaylistBuilder.ResolveStartSegment(
+                content, startTicks.Value, AudiobookHlsSegmentSeconds);
+            if (!ResumeInsidePrewriteHonorBand(startSegment, window.WindowSegments, AudiobookPrewriteWindowLeadSegments))
+            {
+                _logger.LogInformation(
+                    "VideoAudio audiobook HLS: cold-cache resume for parent {ParentId} (startTicks={StartTicks}, start segment {StartSegment}) is outside the encode window's honor band ({WindowSegments} of {TotalSegments} entries, edge within {Lead} of the position required); dropping the resume and serving from the beginning (JF-817, the JF-778/JF-686 still-growing rule)",
+                    parentId, startTicks, startSegment, window.WindowSegments, totalSegments, AudiobookPrewriteWindowLeadSegments);
+                effectiveStartTicks = 0;
+            }
+        }
+
+        if (windowed)
+        {
+            _logger.LogDebug(
+                "VideoAudio audiobook HLS: pre-write listing WINDOWED to {WindowSegments} of {TotalSegments} entries for parent {ParentId} (encode head segment {HeadSegment}, prewrite age {PrewriteAgeMs:F0}ms; a full listing during the encode puts the player's default start on the un-encoded tail, JF-817)",
+                window.WindowSegments, totalSegments, parentId, window.HeadSegment, window.PrewriteAge.TotalMilliseconds);
+        }
+
+        return await ServeAudiobookPlaylistAsync(prewrittenPath, effectiveStartTicks, serveContent).ConfigureAwait(false);
     }
 
     /// <summary>
