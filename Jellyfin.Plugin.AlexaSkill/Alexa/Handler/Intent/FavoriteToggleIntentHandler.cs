@@ -121,11 +121,19 @@ public abstract class FavoriteToggleIntentHandler : BaseHandler
         if (data == null)
         {
             // NOT the JF-788 evidence door: the item resolved (it is playing),
-            // only its user-data row is missing, so the unification stopped at
-            // the two door branches and this defensive tell keeps
-            // MediaNotFound; both existing no-media strings are false for a
-            // playing item (JF-821 owns the open wording question).
-            return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale)));
+            // only its user-data row is missing, so both no-media strings are
+            // false here. JF-821 (closed) chose the dedicated FavoriteNoItem
+            // apology mirroring RateItem's RatingNoItem: the rating sibling
+            // answers this SAME shape with an apology, so the userData family
+            // keeps one answer shape across its two handlers; the failure is
+            // ours, not the user's, and the apology reads naturally even though
+            // the item is technically playing. The key is DIRECTION-NEUTRAL
+            // ("add ... or remove") because this base is shared with
+            // UnmarkFavoriteIntentHandler, unlike the direction-free "to rate".
+            // Rejected: NoMediaPlaying (drops the sibling's apology shape) and
+            // MediaNotFound (the misleading not-found sentence JF-788 removed
+            // from the adjacent shapes).
+            return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("FavoriteNoItem", locale)));
         }
 
         data.IsFavorite = FavoriteValue;

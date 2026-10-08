@@ -134,6 +134,8 @@ public class RateItemIntentHandler : BaseHandler
         var data = _userDataManager.GetUserData(resolvedUser, item);
         if (data == null)
         {
+            // The userData family's shared apology shape (JF-821): this branch's
+            // RatingNoItem phrasing is what FavoriteToggle's FavoriteNoItem mirrors.
             return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("RatingNoItem", locale)));
         }
 

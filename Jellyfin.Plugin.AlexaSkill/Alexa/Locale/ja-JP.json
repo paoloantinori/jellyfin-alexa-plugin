@@ -5,6 +5,7 @@
   "MediaNotFound": "申し訳ありませんが、メディアが見つかりませんでした。",
   "AddedToFavorites": "メディアをお気に入りに追加しました。",
   "RemovedFromFavorites": "メディアをお気に入りから削除しました。",
+  "FavoriteNoItem": "現在再生中のコンテンツがないため、お気に入りに追加または削除できません。",
   "RatingSet": "完了。{1} を5つ星中{0}で評価しました。",
   "RatingOutOfRange": "1つ星から5つ星の間で評価してください。",
   "DidNotCatchStarRating": "星いくつですか？1つ星から5つ星で。",
