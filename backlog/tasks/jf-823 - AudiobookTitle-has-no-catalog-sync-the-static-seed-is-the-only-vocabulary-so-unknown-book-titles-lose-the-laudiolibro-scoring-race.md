@@ -163,7 +163,7 @@ stays as the fallback vocabulary either way (the seed arm above).
 - [x] #7 E2E test added for new intent or handler logic (N/A: needs the live endpoint; AC#2/#3 are the orchestrator's probes)
 - [x] #8 Locale response strings added to all 17 locales (N/A: no strings surface touched)
 - [x] #9 /simplify passed (4 findings, all applied or dispositioned; see worker addendum)
-- [x] #10 /code-review high passed (no correctness bug; 5 low findings dispositioned same-turn: F4 applied in-scope, F1/F2/F3 filed as JF-824/JF-825, F5 deliberate with the ownership note in the worker addendum)
+- [x] #10 /code-review high passed (no correctness bug; 5 low findings dispositioned same-turn: F4 applied in-scope, F1/F2/F3 filed as JF-826/JF-825 (F1 renumbered from its filing-time JF-824: the fourth same-window number race, main's ledger JF-824 merged first), F5 deliberate with the ownership note in the worker addendum)
 <!-- DOD:END -->
 
 
@@ -171,7 +171,7 @@ stays as the fallback vocabulary either way (the seed arm above).
 reviewer independently re-ran the affected classes (108/108 + siblings 29/29,
 both TFMs). Findings: F1 (DynamicEntityBuilder's session dynamic push still
 replaces the now-catalog-backed AudiobookTitle vocabulary at turn 2+; Series
-shares the tolerated shape) FILED as JF-824; F2 (FromItems has no same-title
+shares the tolerated shape) FILED as JF-826 (renumbered, see its header); F2 (FromItems has no same-title
 dedup; single-file + chaptered editions of one book upload twice) and F3 (the
 "Truncated {Type} catalog" warning never truncates anything) FILED as JF-825;
 F4 (the LegIsolation fake's CatalogIdForName had no "Jellyfin Audiobooks" arm)

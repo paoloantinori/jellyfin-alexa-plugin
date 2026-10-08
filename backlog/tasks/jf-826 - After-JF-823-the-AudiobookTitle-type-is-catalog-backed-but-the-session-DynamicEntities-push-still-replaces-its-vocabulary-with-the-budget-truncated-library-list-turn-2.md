@@ -1,5 +1,5 @@
 ---
-id: JF-824
+id: JF-826
 title: >-
   After JF-823 the AudiobookTitle type is catalog-backed, but the session
   Dialog.UpdateDynamicEntities push still replaces its vocabulary with the
