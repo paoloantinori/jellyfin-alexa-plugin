@@ -43,6 +43,7 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
     private const string ArtistCatalogId = "amzn1.catalog.test.artist-1";
     private const string AlbumCatalogId = "amzn1.catalog.test.album-1";
     private const string SeriesCatalogId = "amzn1.catalog.test.series-1";
+    private const string AudiobookCatalogId = "amzn1.catalog.test.audiobook-1";
     private const string Base = "https://api.amazonalexa.com";
     private const string SimulatedDriftMessage = "simulated drifted enrichment path (JF-695 isolation pin)";
 
@@ -810,6 +811,7 @@ public class LibrarySyncServiceLegIsolationTests : PluginTestBase, IDisposable
             body.Contains("Jellyfin Artists", StringComparison.Ordinal) ? ArtistCatalogId
             : body.Contains("Jellyfin Albums", StringComparison.Ordinal) ? AlbumCatalogId
             : body.Contains("Jellyfin Series", StringComparison.Ordinal) ? SeriesCatalogId
+            : body.Contains("Jellyfin Audiobooks", StringComparison.Ordinal) ? AudiobookCatalogId
             : "amzn1.catalog.test.unknown";
 
         private static string ModelJson =>

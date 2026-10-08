@@ -87,10 +87,14 @@ PlayNextEpisode series forms) stay green.
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 AudiobookTitle added to the static catalog family with the JF-727/JF-706 consistency points honored
+- [x] #1 AudiobookTitle added to the static catalog family with the JF-727/JF-706 consistency points honored
 - [ ] #2 Live A/B on the JF-684 selection-gating risk (titles outside the catalog must not degrade to NO_SELECTION) before shipping the wiring
 - [ ] #3 Live probe matrix: library book titles route PlayBookIntent with slot filled; guards green
 <!-- AC:END -->
+
+Worker note (2026-10-09): AC#2 and AC#3 are the ORCHESTRATOR's (live SMAPI probes + a real
+catalog sync are out of the worker's no-deploy boundary). AC#1 is complete; the worker-scope
+detail is in the Implementation Notes addendum below.
 
 ## Implementation Notes
 
@@ -100,16 +104,81 @@ The 2026-10-08 probe matrix and the diagnosis live in JF-516's notes (the
 interim fix: templates/it-IT.yaml AudiobookTitle values.
 <!-- SECTION:NOTES:END -->
 
+
+## Implementation Notes (JF-823 worker addendum, 2026-10-09)
+
+**Seed-survival decision (deliverable 4): the AUDIOBOOK SEED ARM was added, per the task's
+explicit instruction.** `CatalogSeedEnrichment.GetSeedNames(CatalogType.Audiobook)` now
+returns the 22-value it-IT AudiobookTitle block (8 Italian classics + the 14 English titles
+of the JF-816 residual fix), read from the embedded model_it-IT.json exactly like the album
+arm. The other 16 locales are DELIBERATELY SKIPPED (the Series-style skip): their entire
+AudiobookTitle vocabulary is a single generic word ("audiobook", "Hoerbuch", "audiolibro"),
+not a title list; seeding them would add the generic words themselves as catalog values.
+The skip rationale lives on the renamed `ItItSeedLocale` const (was `AlbumSeedLocale`,
+generalized to serve both types). Without this arm the first sync after wiring would
+REPLACE the live model's 22-value block with library-only values (CatalogWiringGraft is
+replace-in-place); with it, the seed rides every catalog upload and the replace cannot
+strip it. Pinned end to end: `MergeInto_AudiobookPayload_GainsItItSeedWhenNotInLibrary`
+(unit) and `SyncUserLibraryAsync_AudiobookPayload_CarriesTheItItSeed_BeyondTheLibrary`
+(full-sync, reads the payload SMAPI would have fetched out of the CatalogController cache).
+
+**JF-543 gate verdict (deliverable 5): the locale gate is MODEL-WIDE, not per-type, and
+the audiobook wiring INHERITS it.** `LibrarySyncService.SyncUserLibraryAsync` filters
+`IsCatalogWiringSupported(locale)` before any per-type work, and
+`CatalogManager.UpdateInteractionModelAsync` refuses the whole injection for unsupported
+locales; `CatalogWiringGraft.Apply` refuses re-application the same way. ar-SA therefore
+keeps its embedded model (AudiobookTitle stays the single generic word there). Pinned by
+`SyncUserLibraryAsync_ExcludesCatalogWiringUnsupportedLocale_FromAllTraffic`.
+
+**JF-706 arity sites touched (deliverable 1), all compile-forced and verified:**
+CatalogWiring record (+AudiobookId/AudiobookVersion + Any), CatalogWiringGraft.ExtractWiring
+construction + Apply, CatalogManager.InjectCatalogReferences (+audiobook arm + ReplacesType
+null), UpdateInteractionModelAsync (+audiobook id/version + the all-null skip check),
+WarnOnCrossTypeCatalogIds, LibrarySyncService typeLegs row + the Minted(...) call, and
+17 InjectCatalogReferences + 9 UpdateInteractionModelAsync + 2 CatalogWiring test call
+sites plus the 4 query-count assertions (3 to 4). The JF-727 reverse map derived the new
+name automatically; pinned in CatalogSlotTypesTests.
+
+**DoD evidence:** red-first pins (forward entry, reverse-map derivation, seed arm: 6
+failures on the unmodified tree); full suite 5540/5540 BOTH TFMs from one command;
+Release -warnaserror build 0 warnings; /simplify (4 findings: 3 applied - tautological
+assert deleted, duplicated ReplacesType rationale shrunk to a pointer, table-row comment
+shrunk to one line; 1 applied as formatting - the UpdateInteractionModelAsync test calls
+restored to the 3-line family shape; Reuse/Altitude/Efficiency angles clean, no findings);
+/code-review high gate recorded in the task's Final Summary.
+
+**Orchestrator handoff:** AC#2 (JF-684 live A/B) and AC#3 (live probe matrix) need a
+deployed build + a real catalog sync (the wiring goes live only when the next sync mints
+and pins a new catalog version, the JF-684 spike's revert-path lesson). The static seed
+stays as the fallback vocabulary either way (the seed arm above).
+
 ## Definition of Done
 <!-- DOD:BEGIN -->
-- [ ] #1 dotnet build passes with 0 errors
-- [ ] #2 dotnet test passes
-- [ ] #3 No new compiler warnings introduced
-- [ ] #4 Session attributes use proper DTOs not raw ValueTuples for serialization
-- [ ] #5 HttpClient instances are not shared across calls that modify BaseAddress
-- [ ] #6 NLU test fixtures updated if interaction model changed
-- [ ] #7 E2E test added for new intent or handler logic
-- [ ] #8 Locale response strings added to all 17 locales
-- [ ] #9 /simplify passed (no blocking cleanups remaining)
-- [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
+- [x] #1 dotnet build passes with 0 errors
+- [x] #2 dotnet test passes (5540/5540 both TFMs, one command)
+- [x] #3 No new compiler warnings introduced (Release -warnaserror 0/0)
+- [x] #4 Session attributes use proper DTOs not raw ValueTuples for serialization (N/A: no session surface touched; the new User.AudiobookCatalogId is the plain string DTO, XmlSerializer roundtrip pinned)
+- [x] #5 HttpClient instances are not shared across calls that modify BaseAddress (N/A: no HttpClient surface touched)
+- [x] #6 NLU test fixtures updated if interaction model changed (N/A: committed models/templates untouched by this worker; the catalog sync edits the LIVE model, which is the orchestrator's live A/B)
+- [x] #7 E2E test added for new intent or handler logic (N/A: needs the live endpoint; AC#2/#3 are the orchestrator's probes)
+- [x] #8 Locale response strings added to all 17 locales (N/A: no strings surface touched)
+- [x] #9 /simplify passed (4 findings, all applied or dispositioned; see worker addendum)
+- [x] #10 /code-review high passed (no correctness bug; 5 low findings dispositioned same-turn: F4 applied in-scope, F1/F2/F3 filed as JF-824/JF-825, F5 deliberate with the ownership note in the worker addendum)
 <!-- DOD:END -->
+
+
+**/code-review high disposition (2026-10-09):** no correctness bug found; the
+reviewer independently re-ran the affected classes (108/108 + siblings 29/29,
+both TFMs). Findings: F1 (DynamicEntityBuilder's session dynamic push still
+replaces the now-catalog-backed AudiobookTitle vocabulary at turn 2+; Series
+shares the tolerated shape) FILED as JF-824; F2 (FromItems has no same-title
+dedup; single-file + chaptered editions of one book upload twice) and F3 (the
+"Truncated {Type} catalog" warning never truncates anything) FILED as JF-825;
+F4 (the LegIsolation fake's CatalogIdForName had no "Jellyfin Audiobooks" arm)
+APPLIED in-scope (one arm + the AudiobookCatalogId const); F5 (the exact-set
+seed pins couple to whoever owns templates/) is the deliberate drift tripwire:
+OWNERSHIP NOTE - any template-side edit to the it-IT AudiobookTitle values must
+update GetSeedNames_Audiobook_SourceIsItItModel and the two count-based asserts
+in LibrarySyncServiceAudiobookTests in the same change, because the seeds are
+SOURCED from the embedded model, so a pin failure there reads "template edit
+without its seed-pin update", not "JF-823 broke".

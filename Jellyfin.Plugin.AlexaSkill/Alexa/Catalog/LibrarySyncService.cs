@@ -196,7 +196,8 @@ public class LibrarySyncService
         // never wired, surfacing only later as InjectCatalogReferences'
         // KeyNotFoundException mid-sync; and the SyncResult count property
         // the DTO boundary below owns) whose write-back, fetch, count, and
-        // conjunction term exist by construction. The CatalogManager
+        // conjunction term exist by construction. JF-823 exercised exactly
+        // this: the Audiobook row below is that one-row edit. The CatalogManager
         // per-type surface stays
         // deliberately outside this table (the JF-706 context boundary: a
         // real fourth synced type forces those edits loudly through
@@ -212,6 +213,9 @@ public class LibrarySyncService
             (CatalogType.Artist, BaseItemKind.MusicArtist, Array.Empty<BaseItem>(), () => user.ArtistCatalogId, id => user.ArtistCatalogId = id, count => result.ArtistCount = count, "Jellyfin Artists", "Artist catalog synced from Jellyfin library"),
             (CatalogType.Album, BaseItemKind.MusicAlbum, Array.Empty<BaseItem>(), () => user.AlbumCatalogId, id => user.AlbumCatalogId = id, count => result.AlbumCount = count, "Jellyfin Albums", "Album catalog synced from Jellyfin library"),
             (CatalogType.Series, BaseItemKind.Series, Array.Empty<BaseItem>(), () => user.SeriesCatalogId, id => user.SeriesCatalogId = id, count => result.SeriesCount = count, "Jellyfin Series", "Series catalog synced from Jellyfin library"),
+            // JF-823: the audiobook leg, the one-row edit the JF-711 note above
+            // described.
+            (CatalogType.Audiobook, BaseItemKind.AudioBook, Array.Empty<BaseItem>(), () => user.AudiobookCatalogId, id => user.AudiobookCatalogId = id, count => result.AudiobookCount = count, "Jellyfin Audiobooks", "Audiobook catalog synced from Jellyfin library"),
         };
 
         // JF-727: item sourcing derives from the same table, replacing the
@@ -239,7 +243,7 @@ public class LibrarySyncService
 
         if (AllTypeLegsEmpty(typeLegs))
         {
-            _logger.LogWarning("No artists, albums or series found for user {UserId}, skipping sync", user.Id);
+            _logger.LogWarning("No artists, albums, series or audiobooks found for user {UserId}, skipping sync", user.Id);
             return result;
         }
 
@@ -353,9 +357,11 @@ public class LibrarySyncService
                     Minted(CatalogType.Artist).CatalogId,
                     Minted(CatalogType.Album).CatalogId,
                     Minted(CatalogType.Series).CatalogId,
+                    Minted(CatalogType.Audiobook).CatalogId,
                     Minted(CatalogType.Artist).Version,
                     Minted(CatalogType.Album).Version,
                     Minted(CatalogType.Series).Version,
+                    Minted(CatalogType.Audiobook).Version,
                     cancellationToken).ConfigureAwait(false);
 
                 // JF-495: catalog-sync model PUTs must appear in the per-locale
@@ -490,8 +496,8 @@ public class LibrarySyncService
             ? $" (partial: {string.Join(", ", result.FrozenTypes)} frozen, Success=false)"
             : string.Empty;
         _logger.LogInformation(
-            "Catalog sync completed for user {UserId}: {Succeeded}/{Total} locales, {Artists} artists, {Albums} albums, {Series} series, {ElapsedMs}ms total{FrozenClause}",
-            user.Id, localesSucceeded, locales.Count, result.ArtistCount, result.AlbumCount, result.SeriesCount, totalSw.ElapsedMilliseconds, frozenClause);
+            "Catalog sync completed for user {UserId}: {Succeeded}/{Total} locales, {Artists} artists, {Albums} albums, {Series} series, {Audiobooks} audiobooks, {ElapsedMs}ms total{FrozenClause}",
+            user.Id, localesSucceeded, locales.Count, result.ArtistCount, result.AlbumCount, result.SeriesCount, result.AudiobookCount, totalSw.ElapsedMilliseconds, frozenClause);
 
         return result;
     }

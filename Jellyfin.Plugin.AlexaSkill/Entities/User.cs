@@ -237,6 +237,14 @@ public class User
     public string? SeriesCatalogId { get; set; }
 
     /// <summary>
+    /// Gets or sets the SMAPI catalog ID for the user's audiobook library.
+    /// Null if catalog has not been created yet. JF-823: a plain string
+    /// property, the XmlSerializer-safe DTO treatment the other three stored
+    /// catalog ids use.
+    /// </summary>
+    public string? AudiobookCatalogId { get; set; }
+
+    /// <summary>
     /// Gets or sets the timestamp of the last successful catalog sync.
     /// </summary>
     public DateTime? LastCatalogSync { get; set; }

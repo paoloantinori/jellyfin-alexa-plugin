@@ -245,4 +245,79 @@ public class CatalogSeedEnrichmentTests
             CatalogValue.FormatId(CatalogType.Album, LibraryAlbumId),
             payload.Values.Single(v => v.Name.Value == "Thriller").Id);
     }
+
+    // ---- Audiobook seed arm (JF-823) ----
+
+    /// <summary>
+    /// JF-823: the it-IT AudiobookTitle seed (8 Italian classics + the 14
+    /// English titles of the JF-816 residual fix) is the fallback vocabulary
+    /// for book titles the user's library does not carry. Catalog wiring is
+    /// replace-in-place, so WITHOUT this arm the first sync after wiring
+    /// REPLACES the live model's 22-value block with library-only values and
+    /// the seed vanishes; the exact set is pinned so a template edit that
+    /// drifts the seeds fails here.
+    /// </summary>
+    [Fact]
+    public void GetSeedNames_Audiobook_SourceIsItItModel()
+    {
+        var seeds = CatalogSeedEnrichment.GetSeedNames(CatalogType.Audiobook);
+
+        Assert.Equal(
+            new[]
+            {
+                "Atomic Habits", "Born a Crime", "Cent'anni di Solitudine", "Deep Work",
+                "Educated", "Harry Potter e la Pietra Filosofale", "Homo Deus",
+                "Il Gattopardo", "Il Nome della Rosa", "Il Piccolo Principe",
+                "Il Signore degli Anelli", "La Coscienza di Zeno", "Measure What Matters",
+                "Predictably Irrational", "Sapiens", "Se Questo È un Uomo",
+                "Steve Jobs", "The Power of Habit", "The Psychology of Money",
+                "The Upside of Irrationality", "Thinking Fast and Slow", "Zero to One"
+            },
+            seeds.OrderBy(s => s, StringComparer.Ordinal).ToArray());
+    }
+
+    /// <summary>
+    /// Seed survival: the merged payload the catalog upload serves must carry
+    /// a seed title the library does NOT hold, so the replace-in-place wiring
+    /// (CatalogWiringGraft.Apply -> InjectCatalogReferences) cannot strip it
+    /// from the live vocabulary at first sync.
+    /// </summary>
+    [Fact]
+    public void MergeInto_AudiobookPayload_GainsItItSeedWhenNotInLibrary()
+    {
+        var payload = CatalogPayload.FromItems(
+            CatalogType.Audiobook,
+            new[] { (LibraryAlbumId, "A Library-Only Book") },
+            NoSynonyms,
+            "it-IT");
+
+        CatalogSeedEnrichment.MergeInto(payload, CatalogType.Audiobook, NoSynonyms, "it-IT");
+
+        Assert.Contains(payload.Values, v => v.Name.Value == "A Library-Only Book");
+        Assert.Contains(payload.Values, v => v.Name.Value == "Il Piccolo Principe");
+        Assert.Equal(
+            1 + CatalogSeedEnrichment.GetSeedNames(CatalogType.Audiobook).Count,
+            payload.Values.Count);
+    }
+
+    /// <summary>
+    /// Library wins on collision, the shared MergeSeeds rule: a library book
+    /// keeps its real Jellyfin id, and the seed entry is not duplicated.
+    /// </summary>
+    [Fact]
+    public void MergeInto_AudiobookPayload_LibrarySapiensSuppressesSeed()
+    {
+        var payload = CatalogPayload.FromItems(
+            CatalogType.Audiobook,
+            new[] { (LibraryAlbumId, "Sapiens") },
+            NoSynonyms,
+            "it-IT");
+
+        CatalogSeedEnrichment.MergeInto(payload, CatalogType.Audiobook, NoSynonyms, "it-IT");
+
+        Assert.Single(payload.Values.Where(v => v.Name.Value == "Sapiens"));
+        Assert.Equal(
+            CatalogValue.FormatId(CatalogType.Audiobook, LibraryAlbumId),
+            payload.Values.Single(v => v.Name.Value == "Sapiens").Id);
+    }
 }

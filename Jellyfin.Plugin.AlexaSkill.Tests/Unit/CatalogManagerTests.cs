@@ -33,7 +33,7 @@ public class CatalogManagerTests
     {
         string model = BuildInteractionModelJson();
 
-        string result = CatalogManager.InjectCatalogReferences(model, "artist-cat-1", null, null, "3", null, null, _loggerMock.Object);
+        string result = CatalogManager.InjectCatalogReferences(model, "artist-cat-1", null, null, null, "3", null, null, null, _loggerMock.Object);
 
         using var resultDoc = JsonDocument.Parse(result);
         var types = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
@@ -51,7 +51,7 @@ public class CatalogManagerTests
     {
         string model = BuildInteractionModelJson();
 
-        string result = CatalogManager.InjectCatalogReferences(model, null, "album-cat-2", null, null, "5", null, _loggerMock.Object);
+        string result = CatalogManager.InjectCatalogReferences(model, null, "album-cat-2", null, null, null, "5", null, null, _loggerMock.Object);
 
         using var resultDoc = JsonDocument.Parse(result);
         var types = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
@@ -72,7 +72,7 @@ public class CatalogManagerTests
             ("SeriesName", "{\"type\":\"PLAIN_TEXT\",\"values\":[{\"name\":{\"value\":\"Breaking Bad\"}}]}")
         });
 
-        string result = CatalogManager.InjectCatalogReferences(model, null, null, "series-cat-9", null, null, "4", _loggerMock.Object);
+        string result = CatalogManager.InjectCatalogReferences(model, null, null, "series-cat-9", null, null, null, "4", null, _loggerMock.Object);
 
         using var resultDoc = JsonDocument.Parse(result);
         var types = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
@@ -93,7 +93,7 @@ public class CatalogManagerTests
             existingTypes: new[] { ("SeriesName", "{\"type\":\"PLAIN_TEXT\",\"values\":[{\"name\":{\"value\":\"Dark\"}}]}") },
             intents: new[] { ("PlayEpisodeIntent", new[] { ("series_name", "SeriesName") }) });
 
-        string result = CatalogManager.InjectCatalogReferences(model, null, null, "series-cat-9", null, null, "1", _loggerMock.Object);
+        string result = CatalogManager.InjectCatalogReferences(model, null, null, "series-cat-9", null, null, null, "1", null, _loggerMock.Object);
 
         using var resultDoc = JsonDocument.Parse(result);
         var intents = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("intents");
@@ -105,7 +105,7 @@ public class CatalogManagerTests
     {
         string model = BuildInteractionModelJson();
 
-        string result = CatalogManager.InjectCatalogReferences(model, "artist-1", "album-1", null, "v1", "v2", null, _loggerMock.Object);
+        string result = CatalogManager.InjectCatalogReferences(model, "artist-1", "album-1", null, null, "v1", "v2", null, null, _loggerMock.Object);
 
         using var resultDoc = JsonDocument.Parse(result);
         var types = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
@@ -123,7 +123,7 @@ public class CatalogManagerTests
             ("JellyfinArtist", "{\"type\":\"PLAIN_TEXT\",\"values\":[{\"name\":{\"value\":\"OldArtist\",\"synonyms\":[]}}]}")
         });
 
-        string result = CatalogManager.InjectCatalogReferences(model, "new-artist-cat", null, null, "2", null, null, _loggerMock.Object);
+        string result = CatalogManager.InjectCatalogReferences(model, "new-artist-cat", null, null, null, "2", null, null, null, _loggerMock.Object);
 
         using var resultDoc = JsonDocument.Parse(result);
         var types = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
@@ -142,7 +142,7 @@ public class CatalogManagerTests
             ("JellyfinArtist", "{\"type\":\"PLAIN_TEXT\",\"values\":[]}")
         });
 
-        string result = CatalogManager.InjectCatalogReferences(model, "cat-1", "cat-2", null, "1", "1", null, _loggerMock.Object);
+        string result = CatalogManager.InjectCatalogReferences(model, "cat-1", "cat-2", null, null, "1", "1", null, null, _loggerMock.Object);
 
         using var resultDoc = JsonDocument.Parse(result);
         var types = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
@@ -160,7 +160,7 @@ public class CatalogManagerTests
             existingTypes: new[] { ("AMAZON.Musician", "{\"type\":\"PLAIN_TEXT\",\"values\":[]}") },
             intents: new[] { ("PlayMusicIntent", new[] { ("artist", "AMAZON.Musician") }) });
 
-        string result = CatalogManager.InjectCatalogReferences(model, "artist-cat", null, null, "1", null, null, _loggerMock.Object);
+        string result = CatalogManager.InjectCatalogReferences(model, "artist-cat", null, null, null, "1", null, null, null, _loggerMock.Object);
 
         using var resultDoc = JsonDocument.Parse(result);
         var intents = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("intents");
@@ -189,7 +189,7 @@ public class CatalogManagerTests
         }
         """;
 
-        string result = CatalogManager.InjectCatalogReferences(model, "artist-cat", null, null, "2", null, null, _loggerMock.Object);
+        string result = CatalogManager.InjectCatalogReferences(model, "artist-cat", null, null, null, "2", null, null, null, _loggerMock.Object);
 
         using var resultDoc = JsonDocument.Parse(result);
         var im = resultDoc.RootElement.GetProperty("interactionModel");
@@ -243,7 +243,7 @@ public class CatalogManagerTests
         }
         """;
 
-        string result = CatalogManager.InjectCatalogReferences(model, "artist-cat-7", null, null, "638", null, null, _loggerMock.Object);
+        string result = CatalogManager.InjectCatalogReferences(model, "artist-cat-7", null, null, null, "638", null, null, null, _loggerMock.Object);
 
         using var resultDoc = JsonDocument.Parse(result);
         var im = resultDoc.RootElement.GetProperty("interactionModel");
@@ -308,7 +308,7 @@ public class CatalogManagerTests
         string model = BuildInteractionModelJson(
             intents: new[] { ("PlayAlbumIntent", new[] { ("album", "AlbumName") }) });
 
-        string result = CatalogManager.InjectCatalogReferences(model, null, "album-cat", null, null, "1", null, _loggerMock.Object);
+        string result = CatalogManager.InjectCatalogReferences(model, null, "album-cat", null, null, null, "1", null, null, _loggerMock.Object);
 
         using var resultDoc = JsonDocument.Parse(result);
         var intents = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("intents");
@@ -321,7 +321,7 @@ public class CatalogManagerTests
     {
         string model = BuildInteractionModelJson();
 
-        string result = CatalogManager.InjectCatalogReferences(model, null, null, null, null, null, null, _loggerMock.Object);
+        string result = CatalogManager.InjectCatalogReferences(model, null, null, null, null, null, null, null, null, _loggerMock.Object);
 
         Assert.Equal(model, result);
     }
@@ -331,7 +331,7 @@ public class CatalogManagerTests
     {
         string model = BuildInteractionModelJson();
 
-        string result = CatalogManager.InjectCatalogReferences(model, "cat-1", null, null, null, null, null, _loggerMock.Object);
+        string result = CatalogManager.InjectCatalogReferences(model, "cat-1", null, null, null, null, null, null, null, _loggerMock.Object);
 
         using var resultDoc = JsonDocument.Parse(result);
         var catalog = resultDoc.RootElement.GetProperty("interactionModel")
@@ -346,7 +346,7 @@ public class CatalogManagerTests
     {
         string model = """{"interactionModel":{"languageModel":{"invocationName":"test","intents":[]}}}""";
 
-        string result = CatalogManager.InjectCatalogReferences(model, "cat-1", "cat-2", null, "1", "2", null, _loggerMock.Object);
+        string result = CatalogManager.InjectCatalogReferences(model, "cat-1", "cat-2", null, null, "1", "2", null, null, _loggerMock.Object);
 
         using var resultDoc = JsonDocument.Parse(result);
         var types = resultDoc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
@@ -359,7 +359,7 @@ public class CatalogManagerTests
     {
         string model = """{"notAnInteractionModel":true}""";
 
-        string result = CatalogManager.InjectCatalogReferences(model, "cat-1", null, null, "1", null, null, _loggerMock.Object);
+        string result = CatalogManager.InjectCatalogReferences(model, "cat-1", null, null, null, "1", null, null, null, _loggerMock.Object);
 
         Assert.Equal(model, result);
     }
@@ -371,7 +371,7 @@ public class CatalogManagerTests
         // fallback; the injection must warn so the pin is visible in the logs.
         string model = BuildInteractionModelJson();
 
-        CatalogManager.InjectCatalogReferences(model, "artist-cat-1", null, null, null, null, null, _loggerMock.Object);
+        CatalogManager.InjectCatalogReferences(model, "artist-cat-1", null, null, null, null, null, null, null, _loggerMock.Object);
 
         _loggerMock.Verify(
             l => l.Log(
@@ -392,7 +392,7 @@ public class CatalogManagerTests
         // another type's catalog; the injection must warn naming both types.
         string model = BuildInteractionModelJson();
 
-        CatalogManager.InjectCatalogReferences(model, "shared-cat", "shared-cat", null, "3", "3", null, _loggerMock.Object);
+        CatalogManager.InjectCatalogReferences(model, "shared-cat", "shared-cat", null, null, "3", "3", null, null, _loggerMock.Object);
 
         _loggerMock.Verify(
             l => l.Log(
@@ -432,7 +432,9 @@ public class CatalogManagerTests
 
         var result = await manager.UpdateInteractionModelAsync(
             "token", "skill-1", "development", "it-IT",
-            "artist-cat-1", null, null, "3", null, null, CancellationToken.None);
+            "artist-cat-1", null, null, null,
+            "3", null, null, null,
+            CancellationToken.None);
 
         Assert.Equal("SUCCEEDED", result.BuildStatus);
         Assert.True(result.CanaryMatch);
@@ -465,7 +467,9 @@ public class CatalogManagerTests
 
         var result = await manager.UpdateInteractionModelAsync(
             "token", "skill-1", "development", "it-IT",
-            "artist-cat-1", null, null, "3", null, null, CancellationToken.None);
+            "artist-cat-1", null, null, null,
+            "3", null, null, null,
+            CancellationToken.None);
 
         Assert.Equal("SUCCEEDED", result.BuildStatus);
         Assert.False(result.CanaryMatch);
@@ -498,7 +502,9 @@ public class CatalogManagerTests
 
         var result = await manager.UpdateInteractionModelAsync(
             "token", "skill-1", "development", "it-IT",
-            "artist-cat-1", null, null, "3", null, null, CancellationToken.None);
+            "artist-cat-1", null, null, null,
+            "3", null, null, null,
+            CancellationToken.None);
 
         Assert.Equal("SUCCEEDED", result.BuildStatus);
         Assert.True(result.CanaryMatch);
@@ -513,7 +519,9 @@ public class CatalogManagerTests
 
         var result = await manager.UpdateInteractionModelAsync(
             "token", "skill-1", "development", "it-IT",
-            null, null, null, null, null, null, CancellationToken.None);
+            null, null, null, null,
+            null, null, null, null,
+            CancellationToken.None);
 
         Assert.Equal("Skipped", result.BuildStatus);
         Assert.Equal(0, result.PutIntents);
@@ -549,7 +557,9 @@ public class CatalogManagerTests
 
         var result = await manager.UpdateInteractionModelAsync(
             "token", "skill-1", "development", "it-IT",
-            "artist-cat-1", null, null, "3", null, null, CancellationToken.None);
+            "artist-cat-1", null, null, null,
+            "3", null, null, null,
+            CancellationToken.None);
 
         Assert.Equal("SUCCEEDED", result.BuildStatus);
         Assert.True(result.CanaryMatch);
@@ -581,7 +591,9 @@ public class CatalogManagerTests
 
         var result = await manager.UpdateInteractionModelAsync(
             "token", "skill-1", "development", "it-IT",
-            "artist-cat-1", null, null, "3", null, null, CancellationToken.None);
+            "artist-cat-1", null, null, null,
+            "3", null, null, null,
+            CancellationToken.None);
 
         Assert.Equal("SUCCEEDED", result.BuildStatus);
         Assert.True(result.CanaryMatch);
@@ -602,7 +614,9 @@ public class CatalogManagerTests
 
         await manager.UpdateInteractionModelAsync(
             "token", "skill-1", "development", "it-IT",
-            "artist-cat-1", null, null, "3", null, null, CancellationToken.None);
+            "artist-cat-1", null, null, null,
+            "3", null, null, null,
+            CancellationToken.None);
 
         Assert.Contains($"GET {ModelPutFakeHandler.SkillStatusUrl}", handler.Requests);
         Assert.DoesNotContain(handler.Requests, r =>
@@ -786,7 +800,9 @@ public class CatalogManagerTests
 
         var result = await manager.UpdateInteractionModelAsync(
             "token", "skill-1", "development", "it-IT",
-            "artist-cat-1", null, null, "3", null, null, CancellationToken.None);
+            "artist-cat-1", null, null, null,
+            "3", null, null, null,
+            CancellationToken.None);
 
         Assert.Equal("SUCCEEDED", result.BuildStatus);
         Assert.True(result.CanaryMatch);
@@ -807,7 +823,9 @@ public class CatalogManagerTests
 
         var result = await manager.UpdateInteractionModelAsync(
             "token", "skill-1", "development", "it-IT",
-            "artist-cat-1", null, null, "3", null, null, CancellationToken.None);
+            "artist-cat-1", null, null, null,
+            "3", null, null, null,
+            CancellationToken.None);
 
         Assert.Equal("SUCCEEDED", result.BuildStatus);
         Assert.True(result.CanaryMatch);
