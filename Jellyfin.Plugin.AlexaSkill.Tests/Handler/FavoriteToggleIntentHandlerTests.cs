@@ -155,10 +155,12 @@ public class FavoriteToggleIntentHandlerTests : PluginTestBase
 
     /// <summary>
     /// Nothing resolvable anywhere (no token, no ledger, no session item): the
-    /// MediaNotFound tell, and no user-data write.
+    /// NoMediaPlaying tell (JF-788, the door word the playlist-edit, media-info,
+    /// and repeat-mode siblings already speak on this shape), and no user-data
+    /// write.
     /// </summary>
     [Fact]
-    public async Task HandleAsync_NoResolvableItem_MediaNotFoundWithoutWriting()
+    public async Task HandleAsync_NoResolvableItem_NoMediaPlayingWithoutWriting()
     {
         var handler = CreateHandler(TestHelpers.CreateDeviceQueueManager("fav-empty"));
 
@@ -166,7 +168,7 @@ public class FavoriteToggleIntentHandlerTests : PluginTestBase
             Request(), TestHelpers.CreateTestContext("fav-empty-device"),
             TestHelpers.CreateTestUser(), _fx.CreateSession(), CancellationToken.None);
 
-        Assert.Contains("could not find the media", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        Assert.Contains("Nothing is currently playing", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
         _fx.UserDataManager.Verify(u => u.SaveUserData(
             It.IsAny<Jellyfin.Database.Implementations.Entities.User>(),
             It.IsAny<BaseItem>(),
@@ -230,7 +232,7 @@ public class FavoriteToggleIntentHandlerTests : PluginTestBase
             Request(), TestHelpers.CreateTestContext("fav-door-jf785-device"),
             TestHelpers.CreateTestUser(), session, CancellationToken.None);
 
-        Assert.Contains("could not find the media", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        Assert.Contains("Nothing is currently playing", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
         Assert.False(data.IsFavorite, "the days-old ledger item must not become the toggle target");
         _fx.UserDataManager.Verify(u => u.SaveUserData(
             It.IsAny<Jellyfin.Database.Implementations.Entities.User>(),
@@ -263,7 +265,7 @@ public class FavoriteToggleIntentHandlerTests : PluginTestBase
             Request(), TestHelpers.CreateTestContext("fav-ghost-jf785-device"),
             TestHelpers.CreateTestUser(), session, CancellationToken.None);
 
-        Assert.Contains("could not find the media", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        Assert.Contains("Nothing is currently playing", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
         Assert.False(data.IsFavorite, "the days-old ledger item must not become the toggle target");
         _fx.UserDataManager.Verify(u => u.SaveUserData(
             It.IsAny<Jellyfin.Database.Implementations.Entities.User>(),

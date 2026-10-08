@@ -87,21 +87,23 @@ public abstract class FavoriteToggleIntentHandler : BaseHandler
         // JF-629 idle guard, the ONE predicate (JF-785 migrated this family's
         // DTO-only guard onto it): without current evidence the resolver's
         // unbounded ledger tail must not favorite the idle device's days-old
-        // last-played item; the predicate's doc owns the evidence legs.
+        // last-played item; the predicate's doc owns the evidence legs. JF-788
+        // unified this door's tell with the playlist-edit, media-info, and
+        // repeat-mode siblings: NoMediaPlaying, not MediaNotFound.
         if (!PlaybackLaunchBuilder.HasCurrentPlaybackEvidence(context, session))
         {
-            Logger.LogDebug("FavoriteToggle ({IntentName}): idle device (no token, no session item), returning MediaNotFound", IntentName);
-            return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale)));
+            Logger.LogDebug("FavoriteToggle ({IntentName}): idle device (no token, no session item), answering NoMediaPlaying", IntentName);
+            return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale)));
         }
 
         // The ONE current-item resolver; the tail is refused (JF-785 Leg A, the
         // resolver doc owns the contract) so unresolvable evidence falls to the
-        // MediaNotFound tell below.
+        // NoMediaPlaying tell below (JF-788, same door word as the idle guard).
         BaseItem? item = Launch.ResolveCurrentPlayingItem(context, session, _libraryManager, _queueManager, IntentName, allowLedgerTailAnswers: false);
         if (item == null)
         {
-            Logger.LogDebug("FavoriteToggle ({IntentName}): no resolvable current item, returning MediaNotFound", IntentName);
-            return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale)));
+            Logger.LogDebug("FavoriteToggle ({IntentName}): no resolvable current item, answering NoMediaPlaying", IntentName);
+            return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("NoMediaPlaying", locale)));
         }
 
         Logger.LogDebug("FavoriteToggle ({IntentName}): item={ItemName}, favorite={FavoriteValue}", IntentName, item.Name, FavoriteValue);
@@ -117,6 +119,9 @@ public abstract class FavoriteToggleIntentHandler : BaseHandler
         var data = _userDataManager.GetUserData(resolvedUser, item);
         if (data == null)
         {
+            // NOT the JF-788 evidence door: the item resolved (it is playing),
+            // only its user-data row is missing, so MediaNotFound stays (the
+            // RateItem sibling keeps its own family word on this same shape).
             return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale)));
         }
 
