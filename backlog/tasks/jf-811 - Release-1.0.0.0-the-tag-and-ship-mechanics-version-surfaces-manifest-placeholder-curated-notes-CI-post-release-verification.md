@@ -53,3 +53,5 @@ MECHANICS (the CLAUDE.md Release section is the authority):
 <!-- DOD:END -->
 
 HAZARD CLEARED (2026-10-07): the September-runway's parked local tag 1.0.0.0 (pointing at the stale 9b0fc105 tree) has been DELETED. It had never reached the remote (verified: zero hits on ls-remote), but with the version surfaces now at 1.0.0.0 a careless 'git push --tags' would have passed the CI's tag==version check and shipped September's code as the major release. The runbook's step 4 (git tag 1.0.0.0) now creates the tag fresh at the release commit; before executing it, verify 'git tag -l 1.0*' is empty.
+
+1.0 BLOCKER ADDED (2026-10-08): JF-817 (the audiobook resume-slice live-edge death) enters the milestone ahead of the tag; found live by the device round. The code column is no longer complete until it lands.
