@@ -840,17 +840,19 @@ public class CatalogManager
         await Task.Delay(PollDelayMs, cancellationToken).ConfigureAwait(false);
 
         int delay = PollDelayMs;
-        // 90 iterations with the 2s backoff cap is a ~150-170s budget: a full sync
+        // 120 iterations with the 2s backoff cap is a ~200-230s budget: a full sync
         // queues FIVE serialized SMAPI builds per locale (4 catalog versions + the
         // model build since JF-823's fourth synced type; 3 + 1 before), so a
         // locale's model build legitimately settles deep in the
         // queue; the previous 30-iteration budget (~57s) landed TIMEOUT on every
         // locale and the canary never fired (live evidence 2026-09-06: 80-85s per
-        // locale at 12 locales). The budget also held at 17 locales / 68 queued
-        // builds after JF-513 (live 2026-09-12: 79-132s per locale, zero TIMEOUTs
-        // across the full sync), so it is sized on the serialized-queue depth, not
-        // the locale count.
-        for (int i = 0; i < 90; i++)
+        // locale at 12 locales). The budget then held at 90 iterations
+        // (~150-170s) for FOUR builds per locale at 17 locales / 68 queued builds
+        // after JF-513 (live 2026-09-12: 79-132s per locale, zero TIMEOUTs across
+        // the full sync), so it is sized on the serialized-queue depth, not the
+        // locale count; JF-823's fifth per-locale build scales it ~25% to keep
+        // the same settle margin (JF-823 gate-marker finding 1).
+        for (int i = 0; i < 120; i++)
         {
             string? state = await TryGetLocaleModelStatusAsync(
                 accessToken, client, skillId, locale, _logger, cancellationToken).ConfigureAwait(false);

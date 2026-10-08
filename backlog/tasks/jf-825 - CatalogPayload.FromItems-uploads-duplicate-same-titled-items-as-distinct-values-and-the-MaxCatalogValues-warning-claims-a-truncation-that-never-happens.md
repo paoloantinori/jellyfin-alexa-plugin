@@ -34,3 +34,8 @@ truncation that never happened, and SMAPI receives the oversized payload. Either
 actually truncate to MaxCatalogValues (keeping the warning true) or reword the
 warning to state the payload exceeds the cap. Fix at the one site so all four
 types are covered.
+
+GATE-MARKER ADDITION (2026-10-09, JF-823 marker finding 5): the JF-823
+audiobook payload appends its 22 seed values AFTER the MaxCatalogValues-bounded
+library fetch, so the audiobook leg's unbounded side grew by exactly the seed
+set; the cap-enforcement gap below is unchanged in kind, one constant larger.

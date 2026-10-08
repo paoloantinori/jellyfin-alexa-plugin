@@ -182,3 +182,34 @@ update GetSeedNames_Audiobook_SourceIsItItModel and the two count-based asserts
 in LibrarySyncServiceAudiobookTests in the same change, because the seeds are
 SOURCED from the embedded model, so a pin failure there reads "template edit
 without its seed-pin update", not "JF-823 broke".
+
+GATE-MARKER AMENDMENT (2026-10-09, orchestrator /code-review high on the
+branch, five axes all verified clean, six findings dispositioned):
+
+- APPLIED AT THE TAIL: finding 1 (the settle-poll budget raised 90 -> 120
+  iterations for the fifth serialized build per locale, sized on queue depth
+  per the comment's own history); finding 4 (the stale "six positional" /
+  "three stored catalog ids" narratives corrected to eight/four in
+  LibrarySyncService and the JF-716 StructureTests doc).
+- REFUTED: finding 2 (silent-empty audiobook seed extraction) is unreachable
+  in a green build: the exact-set pin (LibrarySyncServiceAudiobookTests:197)
+  reads through the PRODUCTION GetSeedNames path, so a stripped block or
+  renamed resource goes red at build time; the runtime warning is a second
+  line of defense, not the only one.
+- FOLDED INTO AC#2's LIVE A/B (the orchestrator's post-deploy job): finding
+  3 sharpens the probe matrix. Beyond out-of-catalog titles in it-IT, the A/B
+  MUST cover the 16 non-it locales' GENERIC-WORD fill: post-sync their
+  AudiobookTitle vocabulary is catalog-only (library titles + nothing), so a
+  de-DE "spiel hörbuch" (no title) may select NO intent per the JF-684
+  selection-gating behavior where the static generic word used to match.
+  Probe: bare generic-word book requests in de-DE (and one more locale)
+  before/after the first sync; if they degrade to NO_SELECTION, the fix is
+  the Series-style skip REVERSED for a generic-word seed arm (add each
+  locale's own generic word as a catalog value) or a per-locale static-word
+  survival mechanism.
+- JF-825: finding 5 recorded there (the 22 seeds ride the unbounded side of
+  the MaxCatalogValues fetch).
+- JF-826: finding 6 confirms it with a sharper scenario (the session dynamic
+  push replaces the freshly synced catalog vocabulary MID-CONVERSATION, so
+  catalog-wired titles outside the dynamic budget stop routing one-shot for
+  the rest of the session).

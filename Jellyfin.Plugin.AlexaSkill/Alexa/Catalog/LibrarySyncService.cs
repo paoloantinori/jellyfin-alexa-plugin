@@ -180,8 +180,9 @@ public class LibrarySyncService
         // UpdateInteractionModelAsync call, (JF-711) the stored-id write-back
         // inside SyncCatalogForLocaleAsync, and (JF-727) the item sourcing
         // loop right below all derive from this list, collapsing three
-        // parallel call sites, the gate, six positional injection arguments,
-        // the per-type id assignment, and the hand block of three fetches
+        // parallel call sites, the gate, eight positional injection arguments
+        // (six before JF-823's fourth type),
+        // the per-type id assignment, and the hand block of four fetches
         // with its count assignments and emptiness conjunction (the repo's
         // "missed one" bug class: a missed site compiles clean and freezes
         // or syncs inconsistently). The catalog id is a GETTER, not a

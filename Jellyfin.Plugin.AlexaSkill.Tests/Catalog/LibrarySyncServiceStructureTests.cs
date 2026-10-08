@@ -292,11 +292,12 @@ public class LibrarySyncServiceStructureTests
             "The single call site is not the expected method. ");
 
     /// <summary>
-    /// JF-716: the user's three stored catalog ids (the auto-properties
-    /// User.ArtistCatalogId / AlbumCatalogId / SeriesCatalogId) are each read
+    /// JF-716: the user's four stored catalog ids (the auto-properties
+    /// User.ArtistCatalogId / AlbumCatalogId / SeriesCatalogId /
+    /// AudiobookCatalogId, JF-823) are each read
     /// and written from EXACTLY ONE place in the whole plugin assembly: a row
     /// lambda of the JF-706 wiring table. Closes the seam the two pins above
-    /// cannot see: re-expanding the six positional UpdateInteractionModelAsync
+    /// cannot see: re-expanding the eight positional UpdateInteractionModelAsync
     /// arguments or the injection gate into hand per-type ternaries (the
     /// pre-JF-706 shape, which READS the getters at the call site), reverting
     /// JF-711's setter threading back to a CatalogType-keyed if/else write-back

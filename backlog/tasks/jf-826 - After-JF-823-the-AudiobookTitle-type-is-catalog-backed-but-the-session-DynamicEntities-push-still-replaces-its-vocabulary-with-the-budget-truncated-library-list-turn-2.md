@@ -36,3 +36,12 @@ in-session).
 References: Jellyfin.Plugin.AlexaSkill/Alexa/DynamicEntities/DynamicEntityBuilder.cs
 (BuildSlotValues audiobook/series arms), Alexa/Catalog/CatalogSlotTypes.cs
 (CatalogSlotTypeNames).
+
+GATE-MARKER CONFIRMATION (2026-10-09, JF-823 marker finding 6, sharper
+scenario): the overwrite is MID-CONVERSATION, not just turn-2-vs-turn-1: a
+catalog-wired title routes turn 1, the session's DynamicEntities directive
+then replaces the catalog supplier with the budget list, and catalog titles
+outside that budget stop routing one-shot FOR THE REST OF THE SESSION. Any
+fix must consider suppressing the audiobook dynamic push entirely once the
+catalog wiring is live (the Series precedent: check what Series does today
+and mirror its disposition or fix both).
