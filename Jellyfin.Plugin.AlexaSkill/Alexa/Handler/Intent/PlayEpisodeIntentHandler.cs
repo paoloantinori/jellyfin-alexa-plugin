@@ -101,14 +101,41 @@ public class PlayEpisodeIntentHandler : BaseHandler
 
         Logger.LogDebug("PlayEpisode: seriesName='{SeriesName}', season={Season}, episode={Episode}, locale={Locale}", seriesName, seasonRaw, episodeRaw, locale);
 
-        // ItalianNumberWords parses digits (every locale) AND the Italian number
-        // words the it-IT model delivers for the ItalianNumber-typed season_number /
-        // episode_number slots ("stagione due" arrives as "due", not "2"; JF-451
-        // adoption).
+        // The season_number / episode_number slots are AMAZON.NUMBER in ALL 17
+        // locales since JF-814 part 1 (the it-IT ItalianNumber custom type carried
+        // no compounds: "cinquantaquattro" arrived as 4), so answers normally
+        // arrive as digits; ItalianNumberWords keeps parsing Italian number words
+        // as a tolerance layer for word-shaped deliveries ("stagione due").
         int seasonNumber = 0;
         int episodeNumber = 0;
-        bool hasExplicitNumbers = Util.ItalianNumberWords.TryParse(seasonRaw, out seasonNumber)
-            && Util.ItalianNumberWords.TryParse(episodeRaw, out episodeNumber);
+        bool episodeParsed = Util.ItalianNumberWords.TryParse(episodeRaw, out episodeNumber);
+        bool seasonParsed = Util.ItalianNumberWords.TryParse(seasonRaw, out seasonNumber);
+
+        // JF-814: an explicit episode number WITHOUT a season must not fall through
+        // to the NextUp core (that silently substitutes the next-up episode for the
+        // requested one, the wrong-item class this task closes). Elicit the season;
+        // the re-arrived answer parses via ItalianNumberWords (digits from the
+        // AMAZON.NUMBER slot in every locale, Italian words in it-IT). The
+        // fully-numberless series-only request (JF-324's original case) still takes
+        // the NextUp fallback below. NOTE: a season-WITHOUT-episode ask still falls
+        // to NextUp (no locale template carries that sample shape today); a future
+        // season-only sample family must extend this gate or it re-opens the
+        // wrong-item class (simplify/altitude finding, 2026-10-09).
+        if (episodeParsed && !seasonParsed)
+        {
+            Logger.LogDebug(
+                "PlayEpisode: episode number present but season missing (season='{Season}', episode='{Episode}'), eliciting season_number",
+                seasonRaw,
+                episodeRaw);
+            return BuildDialogElicitResponse(
+                "DidNotCatchSeasonNumber",
+                locale,
+                "season_number",
+                IntentNames.PlayEpisode,
+                Util.ElicitSlots.For(IntentNames.PlayEpisode));
+        }
+
+        bool hasExplicitNumbers = seasonParsed && episodeParsed;
         if (!hasExplicitNumbers)
         {
             Logger.LogDebug(

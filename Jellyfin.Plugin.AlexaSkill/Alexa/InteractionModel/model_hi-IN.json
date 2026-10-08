@@ -548,7 +548,9 @@
         "samples": [
           "{series_name} सीज़न {season_number} एपिसोड {episode_number} चलाओ",
           "सीज़न {season_number} एपिसोड {episode_number} {series_name} का चलाओ",
-          "{series_name} सीज़न {season_number} एपिसोड {episode_number} देखो"
+          "{series_name} सीज़न {season_number} एपिसोड {episode_number} देखो",
+          "{series_name} का एपिसोड {episode_number} चलाओ",
+          "{series_name} का एपिसोड {episode_number} देखो"
         ]
       },
       {

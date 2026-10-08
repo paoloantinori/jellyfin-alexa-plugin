@@ -445,6 +445,9 @@ intents:
       - speel seizoen {season_number} aflevering {episode_number} van {series_name}
       - speel {series_name} seizoen {season_number} aflevering {episode_number}
       - kijk seizoen {season_number} aflevering {episode_number} van {series_name}
+      # JF-814: season-less family; the handler elicits the missing season.
+      - speel aflevering {episode_number} van {series_name}
+      - kijk aflevering {episode_number} van {series_name}
   # JF-583: the volgende/nieuwste carriers are slotted ({episode_position},
   # custom EpisodePosition type): volgende keeps NextUp, nieuwste resolves
   # by recency; 'ga verder met' carries no position (NextUp by design).

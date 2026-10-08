@@ -550,7 +550,9 @@
         "samples": [
           "speel seizoen {season_number} aflevering {episode_number} van {series_name}",
           "speel {series_name} seizoen {season_number} aflevering {episode_number}",
-          "kijk seizoen {season_number} aflevering {episode_number} van {series_name}"
+          "kijk seizoen {season_number} aflevering {episode_number} van {series_name}",
+          "speel aflevering {episode_number} van {series_name}",
+          "kijk aflevering {episode_number} van {series_name}"
         ]
       },
       {

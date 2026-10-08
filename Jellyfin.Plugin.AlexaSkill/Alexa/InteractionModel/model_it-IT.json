@@ -2103,7 +2103,22 @@
           "Di suonare {series_name} stagione {season_number} episodio {episode_number}",
           "Di mettere {series_name} stagione {season_number} episodio {episode_number}",
           "Di pleiare {series_name} stagione {season_number} episodio {episode_number}",
-          "Di ascoltare {series_name} stagione {season_number} episodio {episode_number}"
+          "Di ascoltare {series_name} stagione {season_number} episodio {episode_number}",
+          "Riproduci l'episodio {episode_number} di {series_name}",
+          "Suona l'episodio {episode_number} di {series_name}",
+          "Metti l'episodio {episode_number} di {series_name}",
+          "Pleia l'episodio {episode_number} di {series_name}",
+          "Ascolta l'episodio {episode_number} di {series_name}",
+          "Di riprodurre l'episodio {episode_number} di {series_name}",
+          "Di suonare l'episodio {episode_number} di {series_name}",
+          "Di mettere l'episodio {episode_number} di {series_name}",
+          "Di pleiare l'episodio {episode_number} di {series_name}",
+          "Di ascoltare l'episodio {episode_number} di {series_name}",
+          "Di riprodurre {series_name} episodio {episode_number}",
+          "Di suonare {series_name} episodio {episode_number}",
+          "Di mettere {series_name} episodio {episode_number}",
+          "Di pleiare {series_name} episodio {episode_number}",
+          "Di ascoltare {series_name} episodio {episode_number}"
         ],
         "slots": [
           {

@@ -95,6 +95,7 @@
   "InProgressList": "Je hebt {0} items in behandeling: {1}",
   "InProgressItemWithPosition": "{0} op {1}",
   "DidNotCatchSeriesName": "Ik heb de serienaam niet goed verstaan. Welke serie wil je kijken?",
+  "DidNotCatchSeasonNumber": "Ik heb het seizoensnummer niet goed verstaan. Welk seizoen wil je kijken?",
   "NotFoundSeries": "Ik kon geen serie vinden genaamd {0}.",
   "NotFoundEpisode": "Ik kon seizoen {0} aflevering {1} van {2} niet vinden.",
   "PlayingNextEpisode": "De volgende aflevering afspelen: {0}",

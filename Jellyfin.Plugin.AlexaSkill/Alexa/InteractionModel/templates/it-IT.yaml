@@ -1316,6 +1316,13 @@ templates:
       # JF-549: series-FIRST infinitive twin; the one-shot wrapper presents the
       # series up front and the series-last forms alone dropped series_name (live 2026-09-12).
       - "{infinitive} {series_name} stagione {season_number} episodio {episode_number}"
+      # JF-814: season-less family ("metti l'episodio 54 di sailor moon", the
+      # 2026-10-08 incident phrase): the season-ed family above minus the season
+      # clause; the handler elicits the missing season. The number slot is
+      # AMAZON.NUMBER, so the ordinal words of PlayNextEpisode cannot fill it.
+      - "{imperative} l'episodio {episode_number} di {series_name}"
+      - "{infinitive} l'episodio {episode_number} di {series_name}"
+      - "{infinitive} {series_name} episodio {episode_number}"
     slots:
       - name: series_name
         type: SeriesName

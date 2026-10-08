@@ -466,6 +466,10 @@ intents:
       # JF-549: series-first one-shot twins (series-last alone dropped series_name; it-IT live 2026-09-12).
       - De jouer {series_name} saison {season_number} épisode {episode_number}
       - De regarder {series_name} saison {season_number} épisode {episode_number}
+      # JF-814: season-less family; the handler elicits the missing season.
+      - joue l'épisode {episode_number} de {series_name}
+      - regarde l'épisode {episode_number} de {series_name}
+      - De jouer l'épisode {episode_number} de {series_name}
   # JF-583: the prochain/dernier carriers are slotted ({episode_position},
   # custom EpisodePosition type): prochain keeps NextUp, dernier resolves by
   # recency; 'continue à regarder' carries no position (NextUp by design).

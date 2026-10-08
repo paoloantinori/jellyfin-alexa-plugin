@@ -525,7 +525,9 @@
           "شغل الموسم {season_number} الحلقة {episode_number} من {series_name}",
           "شغل {series_name} الموسم {season_number} الحلقة {episode_number}",
           "شاهد الموسم {season_number} الحلقة {episode_number} من {series_name}",
-          "شاهد {series_name} الموسم {season_number} الحلقة {episode_number}"
+          "شاهد {series_name} الموسم {season_number} الحلقة {episode_number}",
+          "شغل الحلقة {episode_number} من {series_name}",
+          "شاهد الحلقة {episode_number} من {series_name}"
         ]
       },
       {

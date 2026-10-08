@@ -490,6 +490,9 @@ intents:
       - '{series_name} सीज़न {season_number} एपिसोड {episode_number} चलाओ'
       - सीज़न {season_number} एपिसोड {episode_number} {series_name} का चलाओ
       - '{series_name} सीज़न {season_number} एपिसोड {episode_number} देखो'
+      # JF-814: season-less family; the handler elicits the missing season.
+      - '{series_name} का एपिसोड {episode_number} चलाओ'
+      - '{series_name} का एपिसोड {episode_number} देखो'
   # JF-583: the अगला/नवीनतम carriers are slotted ({episode_position},
   # custom EpisodePosition type): अगला keeps NextUp, नवीनतम resolves by
   # recency; the continue-watching sample carries no position (NextUp by

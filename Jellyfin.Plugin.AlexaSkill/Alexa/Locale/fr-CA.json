@@ -101,6 +101,7 @@
   "InProgressList": "Vous avez {0} médias en cours : {1}",
   "InProgressItemWithPosition": "{0} à {1}",
   "DidNotCatchSeriesName": "Je n'ai pas compris le nom de la série. Quelle série souhaitez-vous regarder ?",
+  "DidNotCatchSeasonNumber": "Je n'ai pas compris le numéro de la saison. Quelle saison souhaitez-vous regarder ?",
   "NotFoundSeries": "Je n'ai pas trouvé de série appelée {0}.",
   "NotFoundEpisode": "Je n'ai pas trouvé la saison {0} épisode {1} de {2}.",
   "PlayingNextEpisode": "Lecture du prochain épisode : {0}",

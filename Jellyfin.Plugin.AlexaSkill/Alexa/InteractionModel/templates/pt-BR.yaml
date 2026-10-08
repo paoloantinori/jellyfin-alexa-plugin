@@ -453,6 +453,9 @@ intents:
       - tocar {series_name} temporada {season_number} episódio {episode_number}
       - assistir temporada {season_number} episódio {episode_number} de {series_name}
       - assistir {series_name} temporada {season_number} episódio {episode_number}
+      # JF-814: season-less family; the handler elicits the missing season.
+      - tocar episódio {episode_number} de {series_name}
+      - assistir episódio {episode_number} de {series_name}
   # JF-583: the próximo/último carriers are slotted ({episode_position},
   # custom EpisodePosition type): próximo keeps NextUp, último resolves by
   # recency. The POSTPOSED family keeps today's 'tocar o episódio mais

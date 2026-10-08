@@ -540,6 +540,30 @@ tests:
     expected_intent: PlayEpisodeIntent
     expected_slots: {}
 
+  # JF-814: the SEASON-LESS incident phrase ("chiedi a mia collezione di mettere
+  # l'episodio 54 di sailor moon", live 2026-10-08: it routed PlayNextEpisodeIntent
+  # because every PlayEpisode sample demanded the season). The season-less samples
+  # now claim it; the handler elicits the missing season. Slot-level: the fill of
+  # series_name/episode_number is wiring-state dependent for a non-seed series
+  # (JF-552 family), so the wrapper form pins intent-level only; the two-step
+  # form below pins the slots.
+  - utterance: "chiedi a mia collezione di mettere l'episodio 54 di sailor moon"
+    expected_intent: PlayEpisodeIntent
+    expected_slots: {}
+
+  - utterance: "metti l'episodio 54 di sailor moon"
+    expected_intent: PlayEpisodeIntent
+    expected_slots:
+      series_name: {}
+      episode_number: {}
+
+  # JF-814 competition guard: the new number-carrying samples must not steal
+  # PlayNextEpisode's phrases. The ordinal word cannot fill the AMAZON.NUMBER
+  # episode_number slot, so this stays NextUp.
+  - utterance: "l'episodio successivo di sailor moon"
+    expected_intent: PlayNextEpisodeIntent
+    expected_slots: {}
+
   # -------------------------------------------------------------------------
   # 14. BrowseLibraryIntent (browse_category)
   # -------------------------------------------------------------------------
