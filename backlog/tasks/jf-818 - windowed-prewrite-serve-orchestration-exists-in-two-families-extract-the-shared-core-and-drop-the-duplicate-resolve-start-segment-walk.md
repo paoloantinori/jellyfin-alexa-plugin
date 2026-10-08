@@ -62,11 +62,22 @@ Two sub-items:
    the natural place to thread the resolved segment through an optional
    parameter and drop one walk. Do both together or not at all; the walk
    alone does not justify widening `AudiobookPlaylistBuilder`'s API.
+3. THE DEGRADE ARM (/code-review high finding 6, filed here because the
+   shared core is the natural owner): the windowed serve delegates to
+   `ServeResumePlaylistAsync`/`ServeAudiobookPlaylistAsync`, whose NON-vanish
+   catch arms degrade to `PhysicalFile` over the RAW prewrite path, i.e. the
+   full un-windowed listing, silently replacing the windowed bytes. Narrow
+   (the preloaded-content path performs almost no IO inside the try), but the
+   shared core should own a degrade that serves the already-windowed content
+   instead of falling back to the death listing.
 
 Skipped-as-judged at the same gate (do NOT reopen without new evidence): a
 Task.WhenAll overlap of the content read and the window stat (one disk round
 on a non-hot path, same shape as the episode twin), and folding the
 segment-plant loop in the test fixtures (the other copies predate JF-817).
+The song prewrite family's missing windowing is NOT part of this task: it is
+a reachable audiobook defect of its own, filed as JF-819 (the JF-817 review
+amended this file's earlier "informational" note about that serve).
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done
