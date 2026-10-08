@@ -41,3 +41,26 @@ speaks the literal key name with a green suite.
 
 Fix: add `FavoriteNoItem` and `RatingNoItem` to `AllExpectedKeys`
 (Jellyfin.Plugin.AlexaSkill.Tests/Alexa/Locale/ResponseStringsTests.cs).
+
+AMENDMENT (2026-10-09, orchestrator gate-marker on the JF-821 branch, same
+turn): the marker CONFIRMED the gap (axis 4: AllExpectedKeys lacks both keys;
+Get_AllKeysPresent and Get_EnglishVariants_MatchEnUs walk zero pins for them)
+and surfaced TWO more unguarded shapes in the same class. Disposition:
+
+- LEDGER HALF: FIXED at the JF-821 merge tail (this branch, the tail commit).
+  AllExpectedKeys now carries FavoriteNoItem and RatingNoItem, so
+  Get_AllKeysPresent walks both across all 17 locales and
+  Get_EnglishVariants_MatchEnUs guards English-variant copy drift for them
+  (the gate-marker's finding 3). The ledger has no reverse pin, so spoken
+  keys that are not refusal subtypes ride it safely.
+- REMAINING SCOPE (this task's open half): the gate-marker's finding 2. The
+  16 non-English FavoriteNoItem values have NO wording-level guard:
+  validate_locales checks presence only, so a translation edit flipping
+  it-IT's "aggiungere o rimuovere" to an add-only "aggiungere" (the exact
+  direction bug JF-821's direction-neutrality exists to prevent) goes red
+  nowhere. A per-locale direction guard is translation-dependent design (the
+  add/remove word pairs differ per language), NOT mechanical: needs a
+  decision on shape (per-locale substring pins in the handler test? a
+  bilingual required-word-pair table in validate_locales?). Size it before
+  writing; if the table shape wins, validate_locales is the natural owner
+  since it already walks all 17 files.

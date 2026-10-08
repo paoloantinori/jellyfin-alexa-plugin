@@ -13,7 +13,8 @@ public class ResponseStringsTests
     private static readonly string[] AllExpectedKeys = new[]
     {
         "UserNotFound", "MediaNotFound", "AddedToFavorites", "RemovedFromFavorites",
-        "NoMediaPlaying", "PlaybackFailed", "SomethingWrong", "CouldNotUnderstand",
+        "NoMediaPlaying", "FavoriteNoItem", "RatingNoItem",
+        "PlaybackFailed", "SomethingWrong", "CouldNotUnderstand",
         "DidNotCatchVideoTitle", "DidNotCatchChannelName", "NotFoundVideo", "NotFoundChannel",
         "NotFoundSongByArtist", "NotFoundSongByNameAndArtist", "NotFoundSongByName",
         "NotFoundAlbumByArtist", "NotFoundAlbumByNameAndArtist", "NotFoundAlbumByName",
