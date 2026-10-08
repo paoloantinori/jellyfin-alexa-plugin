@@ -303,5 +303,7 @@
   "SpeedName2000": "au double",
   "CannotChangeSpeedOverVideo": "Désolé, je ne peux pas changer la vitesse de lecture pendant la lecture d'une vidéo ou en mode barre de progression.",
   "CannotChangeSpeedForBook": "Désolé, je ne peux pas changer la vitesse des livres audio.",
-  "StreamTokenNotConfigured": "La diffusion en continu n'est pas configurée correctement. Vérifiez les paramètres de la skill Alexa dans votre tableau de bord Jellyfin."
+  "StreamTokenNotConfigured": "La diffusion en continu n'est pas configurée correctement. Vérifiez les paramètres de la skill Alexa dans votre tableau de bord Jellyfin.",
+  "PlayingNextEpisodeSsml": "Lecture du prochain épisode : {0}",
+  "PlayingLatestEpisodeSsml": "Lecture du dernier épisode : {0}"
 }

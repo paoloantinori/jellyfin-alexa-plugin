@@ -303,5 +303,7 @@
   "SpeedName2000": "مضاعفة",
   "CannotChangeSpeedOverVideo": "عذراً، لا أستطيع تغيير سرعة التشغيل أثناء تشغيل مقطع فيديو أو عرض شريط التقدم.",
   "CannotChangeSpeedForBook": "عذراً، لا أستطيع تغيير سرعة تشغيل الكتب الصوتية.",
-  "StreamTokenNotConfigured": "البث غير مهيأ بشكل صحيح. يرجى التحقق من صفحة إعدادات مهارة Alexa في لوحة تحكم Jellyfin."
+  "StreamTokenNotConfigured": "البث غير مهيأ بشكل صحيح. يرجى التحقق من صفحة إعدادات مهارة Alexa في لوحة تحكم Jellyfin.",
+  "PlayingNextEpisodeSsml": "أشغل الحلقة التالية: {0}",
+  "PlayingLatestEpisodeSsml": "أشغل أحدث حلقة: {0}"
 }

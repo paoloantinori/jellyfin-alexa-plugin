@@ -303,5 +303,7 @@
   "SpeedName2000": "2倍",
   "CannotChangeSpeedOverVideo": "申し訳ありません、動画やシークバー表示の再生中は再生速度を変更できません。",
   "CannotChangeSpeedForBook": "申し訳ありません、オーディオブックの再生速度は変更できません。",
-  "StreamTokenNotConfigured": "ストリーミングが正しく設定されていません。JellyfinのダッシュボードでAlexaスキルの設定ページを確認してください。"
+  "StreamTokenNotConfigured": "ストリーミングが正しく設定されていません。JellyfinのダッシュボードでAlexaスキルの設定ページを確認してください。",
+  "PlayingNextEpisodeSsml": "次のエピソードを再生します: {0}",
+  "PlayingLatestEpisodeSsml": "最新のエピソードを再生します: {0}"
 }

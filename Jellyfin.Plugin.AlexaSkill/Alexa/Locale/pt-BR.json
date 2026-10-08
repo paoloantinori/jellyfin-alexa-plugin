@@ -303,5 +303,7 @@
   "SpeedName2000": "dupla",
   "CannotChangeSpeedOverVideo": "Desculpe, não posso mudar a velocidade de reprodução durante a reprodução de um vídeo ou com a barra de progresso.",
   "CannotChangeSpeedForBook": "Desculpe, não posso mudar a velocidade dos audiolivros.",
-  "StreamTokenNotConfigured": "O streaming não está configurado corretamente. Verifique a página de configurações da Alexa Skill no painel do Jellyfin."
+  "StreamTokenNotConfigured": "O streaming não está configurado corretamente. Verifique a página de configurações da Alexa Skill no painel do Jellyfin.",
+  "PlayingNextEpisodeSsml": "Tocando o próximo episódio: {0}",
+  "PlayingLatestEpisodeSsml": "Tocando o episódio mais recente: {0}"
 }

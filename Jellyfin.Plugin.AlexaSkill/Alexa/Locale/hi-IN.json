@@ -303,5 +303,7 @@
   "SpeedName2000": "दोगुनी",
   "CannotChangeSpeedOverVideo": "क्षमा करें, वीडियो या प्रगति पट्टी वाले दृश्य के चलने के दौरान मैं गति नहीं बदल सकता।",
   "CannotChangeSpeedForBook": "क्षमा करें, मैं ऑडियोबुक की गति नहीं बदल सकता।",
-  "StreamTokenNotConfigured": "स्ट्रीमिंग सही ढंग से कॉन्फ़िगर नहीं है। कृपया अपने Jellyfin डैशबोर्ड में Alexa स्किल का सेटिंग्स पेज जाँचें।"
+  "StreamTokenNotConfigured": "स्ट्रीमिंग सही ढंग से कॉन्फ़िगर नहीं है। कृपया अपने Jellyfin डैशबोर्ड में Alexa स्किल का सेटिंग्स पेज जाँचें।",
+  "PlayingNextEpisodeSsml": "अगला एपिसोड चला रहा हूँ: {0}",
+  "PlayingLatestEpisodeSsml": "नवीनतम एपिसोड चला रहा हूँ: {0}"
 }
