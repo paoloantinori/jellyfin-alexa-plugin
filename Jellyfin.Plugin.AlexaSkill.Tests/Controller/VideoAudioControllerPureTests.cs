@@ -1236,6 +1236,24 @@ public class VideoAudioControllerPureTests : VideoAudioControllerTestHarness
     }
 
     /// <summary>
+    /// The REQUIRED RELATION between the JF-819 single-item (song-family)
+    /// window floor and the JF-503 hold lookahead (the episode and audiobook
+    /// twins' relation, on the floor const the single-item windowed serve
+    /// carries): the floor's promise beyond the encode head (floor - 1
+    /// entries) must stay within
+    /// <see cref="VideoAudioController.SegmentHoldLookahead"/>, or the
+    /// listing would promise entries that 404 past the hold's reach, the
+    /// tail death the window exists to prevent. A constants-only pin.
+    /// </summary>
+    [Fact]
+    public void SongPrewriteWindowFloor_RespectsSegmentHoldLookahead()
+    {
+        Assert.True(
+            VideoAudioController.SongPrewriteWindowFloorSegments - 1 <= VideoAudioController.SegmentHoldLookahead,
+            $"SongPrewriteWindowFloorSegments ({VideoAudioController.SongPrewriteWindowFloorSegments}) promises floor-1 entries beyond the encode head; SegmentHoldLookahead ({VideoAudioController.SegmentHoldLookahead}) must cover them or the windowed listing 404s past the JF-503 hold");
+    }
+
+    /// <summary>
     /// JF-536 scope (a): the shared writer core emits the event-playlist header with
     /// the caller's TARGETDURATION, token-suffixed segment URLs in the caller's
     /// index-width naming, invariant-culture EXTINF durations, and NO ENDLIST; the
