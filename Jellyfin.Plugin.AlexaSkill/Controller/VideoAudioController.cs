@@ -3096,37 +3096,56 @@ public class VideoAudioController : ControllerBase
     /// window. The audio concat timeline is generation-independent (art ticks
     /// affect only the cover/black-frame video track), so serving the RUNNING
     /// encode's listing to a foreign-ticks caller is correct; refusal would
-    /// buy lock-waits and 503s for zero safety gain. Resolution order: the
-    /// caller's own ticks when that generation is the live one (the
-    /// same-ticks row, byte-identical to the pre-JF-820 serve); else the
-    /// registered generation dir of the ticks ACTUALLY running (the cache's
-    /// generation map, written at encode start before the mark since JF-782)
-    /// with the deterministic derived path as fallback; else the brief
-    /// mid-registration window (zero slots), where the per-key registration
-    /// names the marking encode's dir by the JF-782 invariant, falling back to
-    /// the request-ticks dir only when no registration exists (the pre-JF-820
-    /// behavior; the prewrite cannot have landed yet there).
+    /// buy lock-waits and 503s for zero safety gain.
+    /// RESOLUTION ORDER (gate-marker tail F1/F2/F3): the caller's own ticks
+    /// when that generation is the live one (the same-ticks row, byte-identical
+    /// to the pre-JF-820 serve); else among the LIVE generations the one whose
+    /// registered generation dir IS the per-key registration's dir (the
+    /// match is exact: <see cref="VideoAudioCache.RegisterHlsDirectoryPath"/>
+    /// writes both maps with the same value, so the per-key slot names the
+    /// last-registered live encode's dir; the segment endpoint's tick-blind
+    /// resolution reads the per-key slot, so serving THAT generation's
+    /// listing keeps the listing and the segment dir consistent), falling
+    /// back to an arbitrary live generation only when the comparison cannot
+    /// be made (no per-key registration, or no live generation carries a
+    /// generation registration to compare) and DECLINING (false) when the
+    /// comparison was made and matched none (a listing whose segments the
+    /// per-key resolution cannot find must not serve). FALSE (the caller
+    /// declines the guard row and falls through to the normal cache/lock
+    /// rows) when: the picked generation's slot is no longer live at the
+    /// re-verify (F2, the exit race: a COMPLETED generation's playlist-full
+    /// must not serve as live; the fall-through rows serve the completed
+    /// ENDLIST cache correctly), or the entry is in the brief mid-registration
+    /// window with no usable registration (F3 fail-closed; the window is the
+    /// milliseconds between the registry store and the first slot write, both
+    /// inside the marking caller's own lock, and no trustworthy directory
+    /// exists there; the accepted cost is that a foreign-ticks caller in that
+    /// window can reach the lock path, the pre-JF-820 shape for the window).
+    /// TOKEN AGE (F6, documented residual): the served listing is rewritten
+    /// with the REQUEST's own JF-309 token at serve time, so it inherits the
+    /// running encode's token mint; a mid-encode secret rotation remains the
+    /// shared residual of every token consumer, unchanged here.
     /// </summary>
     /// <param name="cache">The HLS cache owning the registration maps.</param>
     /// <param name="activeGenerations">The key's registry entry (bare presence already proven).</param>
     /// <param name="cacheKey">The encode's cache key (GUID-validated by the caller).</param>
     /// <param name="requestTicks">The caller's art ticks (its own cache directory generation).</param>
-    /// <returns>The directory whose prewrite (or, for albums, whose live
-    /// stream.m3u8) the guard serves.</returns>
-    private string ResolveActiveEncodeHlsDirectory(
+    /// <param name="hlsDir">The resolved directory whose prewrite (or, for
+    /// albums, whose live stream.m3u8) the guard serves.</param>
+    /// <returns>True when the guard row may serve from <paramref name="hlsDir"/>;
+    /// false declines the guard row (the caller falls through to the normal
+    /// cache/lock rows).</returns>
+    private bool TryResolveLiveEncodeHlsDirectory(
         VideoAudioCache cache,
         ActiveEncodeGenerations activeGenerations,
         string cacheKey,
-        long requestTicks)
+        long requestTicks,
+        out string hlsDir)
     {
-        if (activeGenerations.IsTickLive(requestTicks))
+        long? pickedTicks = PickLiveGenerationTicks(cache, activeGenerations, cacheKey, requestTicks);
+        if (pickedTicks is long ticks && activeGenerations.IsTickLive(ticks))
         {
-            return cache.GetHlsDirectoryPath(cacheKey, requestTicks);
-        }
-
-        if (activeGenerations.TryGetAnyLiveTicks(out long liveTicks))
-        {
-            string? registered = cache.TryGetRegisteredGenerationHlsDirectory(cacheKey, liveTicks);
+            string? registered = cache.TryGetRegisteredGenerationHlsDirectory(cacheKey, ticks);
             if (registered == null)
             {
                 // The JF-782 register-before-mark invariant makes this leg dead
@@ -3137,14 +3156,59 @@ public class VideoAudioController : ControllerBase
                 // (code-review F6).
                 _logger.LogWarning(
                     "VideoAudio audiobook HLS: live generation at ticks {LiveTicks} of {ParentId} has NO directory registration (register-before-mark invariant broken?); falling back to the derived cache-root path",
-                    liveTicks, cacheKey);
+                    ticks, cacheKey);
             }
 
-            return registered ?? cache.GetHlsDirectoryPath(cacheKey, liveTicks);
+            hlsDir = registered ?? cache.GetHlsDirectoryPath(cacheKey, ticks);
+            return true;
         }
 
-        return cache.TryGetRegisteredHlsDirectory(cacheKey)
-            ?? cache.GetHlsDirectoryPath(cacheKey, requestTicks);
+        hlsDir = string.Empty;
+        return false;
+    }
+
+    /// <summary>
+    /// The F1 pick of WHICH live generation the guard's foreign-ticks arm
+    /// serves: the caller's own ticks when live, else the live generation
+    /// whose registered dir IS the per-key registration's dir (the exact-match
+    /// rule's rationale is on <see cref="TryResolveLiveEncodeHlsDirectory"/>),
+    /// else an arbitrary live generation only when the comparison cannot be
+    /// made; null declines the guard row (comparison made and matched none, or
+    /// no live slot at all: the mid-registration window's F3 fail-closed).
+    /// </summary>
+    private long? PickLiveGenerationTicks(
+        VideoAudioCache cache,
+        ActiveEncodeGenerations activeGenerations,
+        string cacheKey,
+        long requestTicks)
+    {
+        if (activeGenerations.IsTickLive(requestTicks))
+        {
+            return requestTicks;
+        }
+
+        List<long> liveTicks = activeGenerations.GetLiveTicksSnapshot();
+        if (liveTicks.Count == 0)
+        {
+            return null;
+        }
+
+        string? perKeyDir = cache.TryGetRegisteredHlsDirectory(cacheKey);
+        if (perKeyDir == null)
+        {
+            return liveTicks[0];
+        }
+
+        foreach (long ticks in liveTicks)
+        {
+            string? generationDir = cache.TryGetRegisteredGenerationHlsDirectory(cacheKey, ticks);
+            if (string.Equals(generationDir, perKeyDir, StringComparison.Ordinal))
+            {
+                return ticks;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -3329,29 +3393,21 @@ public class VideoAudioController : ControllerBase
         }
 
         /// <summary>
-        /// The ticks of an ARBITRARY live generation of this key, under the gate
-        /// (JF-820; when several generations are simultaneously live the pick is
-        /// dictionary order, and any of them is a valid serve source). The ONE
-        /// consumer and the full design rationale (bare-presence guard,
-        /// generation-independent timeline, the mid-registration fallback's
-        /// JF-782 anchor) live on
-        /// <see cref="ResolveActiveEncodeHlsDirectory"/>, the canonical doc.
-        /// False in the brief mid-registration window (zero slots). Single gate
-        /// read, no allocation.
+        /// A snapshot of the ticks of EVERY live generation of this key, under
+        /// the gate (JF-820 gate-marker tail F1: the controller's pick needs
+        /// the WHOLE live set to match against the per-key registration, not
+        /// just an arbitrary first slot). The ONE consumer and the full design
+        /// rationale live on <see cref="TryResolveLiveEncodeHlsDirectory"/>,
+        /// the canonical doc. Empty in the brief mid-registration window (zero
+        /// slots). Allocation acceptable: the guard row runs at most once per
+        /// request and the live set is 1-2 entries.
         /// </summary>
-        internal bool TryGetAnyLiveTicks(out long artModifiedTicks)
+        internal List<long> GetLiveTicksSnapshot()
         {
             lock (_gate)
             {
-                foreach (KeyValuePair<long, object> slot in _slotsByTicks)
-                {
-                    artModifiedTicks = slot.Key;
-                    return true;
-                }
+                return new List<long>(_slotsByTicks.Keys);
             }
-
-            artModifiedTicks = 0;
-            return false;
         }
 
         /// <summary>
@@ -3949,12 +4005,12 @@ public class VideoAudioController : ControllerBase
         // JF-678: this block's serves and the first-fetch prewrite row below are the
         // UNTRANSLATED rows of the vanish family (coverage boundary on
         // ResolveServeContentAsync).
-        if (_activeAudiobookEncodes.TryGetValue(parentId, out ActiveEncodeGenerations? activeGenerations))
+        if (_activeAudiobookEncodes.TryGetValue(parentId, out ActiveEncodeGenerations? activeGenerations)
+            && TryResolveLiveEncodeHlsDirectory(_cache, activeGenerations, parentId, artModifiedTicks, out string? guardedHlsDir))
         {
             _logger.LogDebug("VideoAudio audiobook HLS: encode already in progress for {ParentId}, serving pre-written playlist", parentId);
-            string hlsDir = ResolveActiveEncodeHlsDirectory(_cache, activeGenerations, parentId, artModifiedTicks);
 #pragma warning disable CA3003
-            string prewrittenPath = Path.Combine(hlsDir, PrewrittenPlaylistFileName);
+            string prewrittenPath = Path.Combine(guardedHlsDir, PrewrittenPlaylistFileName);
             if (System.IO.File.Exists(prewrittenPath))
             {
                 return await ServeWindowedAudiobookPrewriteAsync(prewrittenPath, parentId, startTicks).ConfigureAwait(false);
@@ -3965,7 +4021,7 @@ public class VideoAudioController : ControllerBase
             // whose edge tracks the encode instead of sitting at the album's end.
             if (isMusicAlbum)
             {
-                string livePath = Path.Combine(hlsDir, "stream.m3u8");
+                string livePath = Path.Combine(guardedHlsDir, "stream.m3u8");
                 if (System.IO.File.Exists(livePath))
                 {
                     // Same cold-entry resume rule as the first fetch below: slicing a

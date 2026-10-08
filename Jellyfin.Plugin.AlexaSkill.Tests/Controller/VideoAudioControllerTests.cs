@@ -7236,6 +7236,122 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
         }
     }
 
+    /// <summary>
+    /// JF-820 gate-marker tail F1 pin: with TWO simultaneously live
+    /// generations of one key (the seam CAN plant that: two
+    /// SetEncodeActiveForTest marks at different ticks land as two slots of
+    /// the same holder; only the CLEAR is whole-key), the foreign-ticks guard
+    /// must serve the generation whose registered dir IS the per-key
+    /// registration's dir (the last-registered, gen B here), because the
+    /// segment endpoint's tick-blind resolution reads the per-key slot: gen
+    /// A's listing would name segments that 404 in the dir actually used.
+    /// Gen B's prewrite (head 23, aged 200s: window 23; resume 210s = segment
+    /// 21, inside the honor band) serves the 2-entry slice seg_0021..seg_0022;
+    /// gen A's fresh prewrite would serve its head-floored 3-entry prefix from
+    /// seg_0000, and the stale request-ticks dir's debris the full listing.
+    /// All three wrong sources are discriminated against.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_TwoLiveGenerations_ServesThePerKeyRegisteredGeneration()
+    {
+        (Guid parentId, var chapters) = SetupAudiobookParentAndChapters(
+            "JF-820 Two Live Book", TimeSpan.FromSeconds(600));
+        string parentIdStr = parentId.ToString("D");
+        const long ticksA = 1L;
+        const long ticksB = 12345L;
+
+        // Stale debris at the REQUEST ticks (0): full listing + all segments.
+        int totalSegments = 60;
+        (string staleDir, string stalePrewritePath) =
+            PlantLiveAudiobookEncodeCore(parentIdStr, 0, chapters, totalSegments);
+        File.SetLastWriteTimeUtc(stalePrewritePath, DateTime.UtcNow.AddSeconds(-600));
+
+        // Gen A (registered FIRST): its prewrite would serve a fresh 3-entry
+        // prefix from seg_0000 if the pick chose it.
+        (string dirA, string prewriteA) =
+            PlantLiveAudiobookEncodeCore(parentIdStr, ticksA, chapters, headSegmentCount: 2);
+        _cache.RegisterHlsDirectoryPath(parentIdStr, ticksA, dirA);
+
+        // Gen B (registered LAST: the per-key slot names ITS dir).
+        (string dirB, string prewriteB) =
+            PlantLiveAudiobookEncodeCore(parentIdStr, ticksB, chapters, headSegmentCount: 23);
+        _cache.RegisterHlsDirectoryPath(parentIdStr, ticksB, dirB);
+
+        File.SetLastWriteTimeUtc(prewriteB, DateTime.UtcNow.AddSeconds(-200));
+
+        VideoAudioController.SetEncodeActiveForTest(parentIdStr, active: true, audiobook: true, artModifiedTicks: ticksA);
+        VideoAudioController.SetEncodeActiveForTest(parentIdStr, active: true, audiobook: true, artModifiedTicks: ticksB);
+        try
+        {
+            var controller = CreateController(parentIdStr, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf820-two-live"));
+
+            ActionResult result = await controller.StreamHlsAudiobook(parentIdStr, TimeSpan.FromSeconds(210).Ticks);
+
+            var content = Assert.IsType<ContentResult>(result);
+            // Gen B's windowed slice, not gen A's prefix and not the stale tail.
+            Assert.Equal(2, VideoAudioController.CountSegmentsInPlaylist(content.Content));
+            Assert.Contains("seg_0021.ts?token=", content.Content, StringComparison.Ordinal);
+            Assert.Contains("seg_0022.ts?token=", content.Content, StringComparison.Ordinal);
+            Assert.DoesNotContain("#EXT-X-MEDIA-SEQUENCE:0", content.Content, StringComparison.Ordinal);
+            Assert.DoesNotContain("seg_0059", content.Content, StringComparison.Ordinal);
+        }
+        finally
+        {
+            // The seam's clear arm is whole-key (the documented hazard): both
+            // live slots go together.
+            VideoAudioController.SetEncodeActiveForTest(parentIdStr, active: false, audiobook: true);
+        }
+    }
+
+    /// <summary>
+    /// JF-820 gate-marker tail F3 pin: the zero-slot mid-registration window
+    /// FAILS CLOSED. A foreign-ticks caller reaching the guard while an entry
+    /// exists with NO live slots (the seam's registering arm) must NOT serve
+    /// the request-ticks dir's stale foreign playlist-full (the pre-tail
+    /// fallback's serve); declining the guard row falls through to the normal
+    /// lock rows, which here run the concat encode (the JF-817 first-fetch
+    /// fake) and serve the fresh prewrite's small window - the stale 60-entry
+    /// listing (seg_0059) must stay absent either way.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_RegisteringWindow_FailsClosed_DoesNotServeStalePrewrite()
+    {
+        (Guid parentId, var chapters) = SetupAudiobookParentAndChapters(
+            "JF-820 Registering Window Book", TimeSpan.FromSeconds(600));
+        string parentIdStr = parentId.ToString("D");
+
+        int totalSegments = 60;
+        (string staleDir, string stalePrewritePath) =
+            PlantLiveAudiobookEncodeCore(parentIdStr, 0, chapters, totalSegments);
+        File.SetLastWriteTimeUtc(stalePrewritePath, DateTime.UtcNow.AddSeconds(-600));
+
+        VideoAudioController.SetEncodeRegisteringForTest(parentIdStr, registering: true, audiobook: true);
+        try
+        {
+            string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-jf820-registering",
+                "for playlist_path in \"$@\"; do :; done\n" +
+                "playlist_dir=\"$(dirname \"$playlist_path\")\"\n" +
+                "dd if=/dev/zero bs=1024 count=4 of=\"$playlist_dir/seg_0000.ts\" 2>/dev/null\n" +
+                "dd if=/dev/zero bs=1024 count=4 of=\"$playlist_dir/seg_0001.ts\" 2>/dev/null\n" +
+                "printf '#EXTM3U\\n#EXT-X-VERSION:3\\n#EXTINF:10.000,\\nseg_0000.ts\\n#EXTINF:10.000,\\nseg_0001.ts\\n' > \"$playlist_path\"\n" +
+                "exit 0\n");
+
+            var controller = CreateController(parentIdStr, ffmpegPath: fakeFfmpegPath);
+
+            ActionResult result = await controller.StreamHlsAudiobook(parentIdStr);
+
+            var content = Assert.IsType<ContentResult>(result);
+            Assert.True(
+                VideoAudioController.CountSegmentsInPlaylist(content.Content) <= 3,
+                $"the registering window must not serve the stale 60-entry listing (served {VideoAudioController.CountSegmentsInPlaylist(content.Content)} entries)");
+            Assert.DoesNotContain("seg_0059", content.Content, StringComparison.Ordinal);
+        }
+        finally
+        {
+            VideoAudioController.SetEncodeRegisteringForTest(parentIdStr, registering: false, audiobook: true);
+        }
+    }
+
     // ========== JF-819: windowed single-item (song-family) prewrite serve ==========
 
     /// <summary>

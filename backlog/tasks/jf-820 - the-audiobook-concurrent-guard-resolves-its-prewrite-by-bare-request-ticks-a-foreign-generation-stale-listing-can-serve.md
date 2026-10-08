@@ -173,3 +173,49 @@ closed the same way). Skipped: none.
   verdict). Consolidation pointer: if the song/episode families ever need "the
   running encode's directory", move the resolution behind ONE shared API then,
   not before.
+
+## Gate-marker tail (2026-10-09, second round)
+
+APPLIED F1 (the multi-live pick): the resolver no longer picks an arbitrary
+live generation. `PickLiveGenerationTicks` prefers the caller's own ticks when
+live; else the live generation whose registered generation dir IS the per-key
+registration's dir (the match is exact: `RegisterHlsDirectoryPath` writes both
+maps with the same value, and the segment endpoint's tick-blind resolution
+reads the per-key slot, so that generation's listing always names segments the
+per-key resolution can find); arbitrary pick only when the comparison cannot
+be made (no per-key registration, or no live generation carries a generation
+registration); DECLINES (fail closed) when the comparison was made and matched
+none. `ActiveEncodeGenerations.GetLiveTicksSnapshot` (under the gate) replaced
+the arbitrary-first-slot `TryGetAnyLiveTicks`. PIN:
+`StreamHlsAudiobook_TwoLiveGenerations_ServesThePerKeyRegisteredGeneration`
+(the seam CAN plant two live generations: two marks at different ticks land as
+two slots of one holder; only the CLEAR is whole-key, so F5's seam limitation
+does NOT materialize).
+
+APPLIED F2 (the TOCTOU): the resolver is now try-pattern
+(`TryResolveLiveEncodeHlsDirectory`); the picked generation's slot is
+RE-VERIFIED live before the guard row serves, and a false answer DECLINES the
+guard row, falling through to the normal cache/lock rows which serve the
+completed ENDLIST cache correctly. PIN RESIDUAL (filed): the exit race itself
+is not deterministically plantable, the window sits between two in-method
+reads and no test seam can land a clear there (`ProbeLivenessReadForTest`
+covers only the probe wrapper, not this resolver); the pin would need a
+resolver-side straddle seam. The re-verify is behavior-reviewed, not
+pin-backed.
+
+APPLIED F3+F4 (the zero-slot fallback): the request-ticks fallback is GONE.
+The mid-registration window (zero slots) now declines the guard row (the
+window is the milliseconds between the registry store and the first slot
+write, both inside the marking caller's own lock; the accepted cost is that a
+foreign-ticks caller in that window can reach the lock path, the pre-JF-820
+shape for the window). Comment fixed to the honest statement. PIN:
+`StreamHlsAudiobook_RegisteringWindow_FailsClosed_DoesNotServeStalePrewrite`.
+
+APPLIED F6 (token age): a doc line on the resolver: the served listing is
+rewritten with the REQUEST's own JF-309 token at serve time, so it inherits
+the running encode's token mint; mid-encode secret rotation remains the
+shared residual of every token consumer.
+
+REFUTATIONS: none; all six findings were read against the code and stand.
+
+BATTERY (tail): touched classes both TFMs, full counts in the commit message.
