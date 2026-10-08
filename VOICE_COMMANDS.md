@@ -802,7 +802,7 @@ Invocation name: **"mia collezione"**
 | Media Info | `Cosa sta suonando` · `{media_info_type}` · `Cosa sta suonando adesso` · `Che brano è questo` · `Che canzone è questa` · `Chi è questo artista` |
 | Play Album | `Riproduci l'album {album}` · `Riproduci l'album {album} di {musician}` · `un disco di {musician}` · `Riproduci il disco {album}` · `Riproduci album {album}` · `Riproduci disco {album}` |
 | Play Artist Songs | `brani di {musician}` · `brani dei {musician}` · `brani degli {musician}` · `brani delle {musician}` · `canzoni di {musician}` · `canzoni dei {musician}` |
-| Play Book | `riproduci il libro {book}` · `riproduci l'audiolibro {book}` · `ascolta il libro {book}` · `ascolta l'audiolibro {book}` · `suona il libro {book}` · `metti il libro {book}` |
+| Play Book | `riproduci il libro di {book}` · `riproduci l'audiolibro di {book}` · `ascolta il libro di {book}` · `ascolta l'audiolibro di {book}` · `suona il libro di {book}` · `metti il libro di {book}` |
 | Play By Decade | `Riproduci musica degli anni {decade}` · `Suona musica degli anni {decade}` · `Metti musica degli anni {decade}` · `Musica anni {decade}` · `Brani degli anni {decade}` · `Canzoni degli anni {decade}` |
 | Play By Genre | `Riproduci {genre}` · `Suona {genre}` · `Metti {genre}` · `Pleia {genre}` · `Di riprodurre genere {genre}` · `Riproduci genere {genre}` |
 | Play Channel | `Canale {channel}` · `Riproduci radio {channel}` · `di riprodurre la radio {channel}` · `di mettere la radio {channel}` · `Radio {channel}` |

@@ -280,8 +280,24 @@ tests:
     expected_intent: CreatePlaylistIntent
     expected_slots:
       playlist: {}
-  # real catalog title required: the book slot is AudiobookTitle catalog-backed
+  # seed title required: the book slot type's static seed must know the title
+  # (no catalog sync for AudiobookTitle; see JF-818)
   - utterance: "riprodurre il libro il gattopardo"
+    expected_intent: PlayBookIntent
+    expected_slots:
+      book: {}
+  # JF-816 residual (2026-10-08): the elided "l'audiolibro di" carrier used to
+  # lose to PlayNextEpisodeIntent when the title matched NOTHING in the
+  # AudiobookTitle seed (no catalog sync); the seed extension with these English
+  # titles flipped it, and the win generalized to out-of-seed tails too. The
+  # route is a measured trainer race, stable per build and re-verified
+  # 2026-10-08: triage a future red probe-first (rebuild re-roll) before
+  # suspecting the seed. JF-818 owns the per-user library wiring.
+  - utterance: "mettere l'audiolibro di upside of irrationality"
+    expected_intent: PlayBookIntent
+    expected_slots:
+      book: {}
+  - utterance: "mettere l'audiolibro di measure what matters"
     expected_intent: PlayBookIntent
     expected_slots:
       book: {}
@@ -1318,6 +1334,13 @@ tests:
     expected_slots:
       series_name: {}
       episode_position: {}
+
+  # JF-816 residual guard: the seed extension must not steal this shape;
+  # deliberate twin of the JF-493 pin below with a different series token.
+  - utterance: "di mettere la serie sailor moon"
+    expected_intent: PlayNextEpisodeIntent
+    expected_slots:
+      series_name: {}
 
   # 2026-09-08 live probe (JF-324 PART 1 confirm): the platform routes the
   # slotted "Continua a guardare {series}" to the slotless ContinueWatchingIntent

@@ -7805,7 +7805,7 @@ Placeholder legend:
 | `<titolo del video o del film>` | `{title}` |
 | `<parole del titolo del brano>` | `{titleKeywords}` |
 
-Complete phrase list (1536 phrases across 71 commands):
+Complete phrase list (1555 phrases across 71 commands):
 
 #### Play music
 
@@ -8993,6 +8993,25 @@ Complete phrase list (1536 phrases across 71 commands):
 
 **Play an audiobook**
 
+- `riproduci il libro di <titolo dell'audiolibro>`
+- `riproduci l'audiolibro di <titolo dell'audiolibro>`
+- `ascolta il libro di <titolo dell'audiolibro>`
+- `ascolta l'audiolibro di <titolo dell'audiolibro>`
+- `suona il libro di <titolo dell'audiolibro>`
+- `metti il libro di <titolo dell'audiolibro>`
+- `metti l'audiolibro di <titolo dell'audiolibro>`
+- `riprodurre il libro di <titolo dell'audiolibro>`
+- `riprodurre l'audiolibro di <titolo dell'audiolibro>`
+- `ascoltare il libro di <titolo dell'audiolibro>`
+- `ascoltare l'audiolibro di <titolo dell'audiolibro>`
+- `suonare il libro di <titolo dell'audiolibro>`
+- `suonare l'audiolibro di <titolo dell'audiolibro>`
+- `mettere il libro di <titolo dell'audiolibro>`
+- `mettere l'audiolibro di <titolo dell'audiolibro>`
+- `Di riprodurre il libro di <titolo dell'audiolibro>`
+- `Di riprodurre l'audiolibro di <titolo dell'audiolibro>`
+- `Di ascoltare il libro di <titolo dell'audiolibro>`
+- `Di ascoltare l'audiolibro di <titolo dell'audiolibro>`
 - `riproduci il libro <titolo dell'audiolibro>`
 - `riproduci l'audiolibro <titolo dell'audiolibro>`
 - `ascolta il libro <titolo dell'audiolibro>`
