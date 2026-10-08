@@ -78,6 +78,64 @@ segment-plant loop in the test fixtures (the other copies predate JF-817).
 The song prewrite family's missing windowing is NOT part of this task: it is
 a reachable audiobook defect of its own, filed as JF-819 (the JF-817 review
 amended this file's earlier "informational" note about that serve).
+
+AMENDED 2026-10-08 same-turn from the JF-819 /simplify gate (reuse +
+simplification + altitude converged again, same finding as the JF-817 round;
+the JF-819 worker skipped the hoist per this task's ownership, recording it
+here instead):
+
+- THE THIRD COPY LANDED, as this filing's own prediction stated it would:
+  JF-819 windowed the song family (`TryServePrewrittenVideoAudioPlaylist`)
+  riding the ONE shared pair, and the ~30-line ORCHESTRATION now exists
+  VERBATIM in THREE families (episode ~1861, song ~2080, audiobook ~5293;
+  differing only in family consts, segment seconds, log nouns/prefix, and
+  the serve terminator). The hoist (sub-item 1) now covers three sites; the
+  trigger the file's own EXTRACTION RECORD names has fired a third time.
+  The JF-819 red-green pins sit on the ENDPOINT rows, so the hoist stays
+  pin-covered on all three families.
+- The test-fixture segment-plant skip above has its "new evidence": the
+  third planting copy exists now too (`PlantLiveSingleItemEncodeCore`, the
+  JF-819 fixture core, beside the episode `PlantLiveEncodeFixture` and
+  audiobook `PlantLiveAudiobookEncodeFixture` bodies; axes: digit width D3
+  vs D4, the writer delegate, arbitrary-cache-key without an item mock).
+  Folding the three is IN SCOPE for this task's test half when it runs
+  (low priority: arrange-only, no pin risk, but three copies of the planted
+  stream.m3u8 shape).
+- NOT drift, recorded so nobody "fixes" it: the song family's log prefix is
+  deliberately `VideoAudio HLS` (the path's pre-existing prefix, including
+  the JF-680-pinned "serving pre-written full listing" line), not
+  `VideoAudio episode HLS`/`VideoAudio audiobook HLS`; per-family exact log
+  wording is the controller's pinned convention.
+- From the JF-819 /code-review high gate (2026-10-08, same-turn), two items
+  that belong with this task's hoist rather than a local divergence:
+  (a) the honor-band DROP LOG's outcome sentence: the JF-817 gate-marker F3
+  wording ("joins at ITS live edge, roughly the encode-elapsed position, NOT
+  at segment 0") is FALSE for floor-sized windows, where the live-edge join
+  (end minus 3x TARGETDURATION, 12s) clamps past the 2-entry floor to the
+  beginning; the JF-819 song copy already carries the regime-honest wording
+  ("roughly the encode-elapsed position once the window has grown, and the
+  beginning while it sits at the floor"); the EPISODE and AUDIOBOOK copies
+  still carry the imprecise sentence and should take the corrected wording
+  when the hoist unifies the logs (the capture pins match the "outside the
+  encode window's honor band" substring, so the wording fix is pin-safe).
+  (b) the per-poll allocation shape: every mid-encode playlist poll pays a
+  full Split('\n') of the whole prewrite (a 5h single-file book is a
+  ~4500-entry / ~250KB listing) inside TruncateToFirstSegments, plus up to
+  three full EXTINF walks on an in-band resume, only to emit a window of a
+  few dozen entries; the review's cheaper alternative (a span-based IndexOf
+  line scan emitting only kept lines) belongs with the hoist, which already
+  touches all three bodies and the builder API it would extend.
+- From the JF-819 ORCHESTRATOR gate-marker (2026-10-08, same turn as the
+  merge tail): the honor-band drop log fires at INFORMATION level on EVERY
+  playlist poll that carries ?start= while outside the band. The player
+  retains the ?start= query across event-playlist refreshes (the URL is
+  unchanged), so a dropped-offset book resume re-logs the identical
+  6-placeholder Information line once per refresh for the whole minutes-long
+  encode window, dozens of near-identical lines per incident in the
+  Information-default log the debug-logging policy keeps clean for triage.
+  The hoist owns all three log bodies: log the drop ONCE per generation
+  (or Debug after the first occurrence), keeping Information for the first
+  line triage actually needs.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done
