@@ -735,20 +735,14 @@ public class VideoAudioController : ControllerBase
                 // the serve to the live playlist). ffmpeg keeps writing its own
                 // stream.m3u8 (append_list growth, ENDLIST at completion); what we
                 // SERVE while the encode runs derives from this full listing,
-                // WINDOWED to the encoded region (JF-819, see
-                // TryServePrewrittenVideoAudioPlaylist). Why the file spans the
-                // full runtime: the same VideoApp/ExoPlayer consumer the episode
-                // path verified live (2026-09-09, corr=c0c21c6a, re-verified
-                // 2026-10-05 on the episode prewrite) resolves a no-ENDLIST
-                // playlist's default start at playlist end minus 3x
-                // TARGETDURATION, so the full span is only ever served as the
-                // post-encode ENDLIST playlist or sliced for resume inside the
-                // window's honor band; a full listing served mid-encode puts the
-                // player's first fetch on the un-encoded tail (the JF-625/JF-817
-                // death class). The single-chapter audiobooks this path also
-                // serves are hours long, so the encode window is minutes, not
-                // seconds. When the encode completes, ffmpeg's own ENDLIST
-                // playlist takes over via the cache-hit paths above.
+                // WINDOWED to the encoded region (JF-819; the mechanism account
+                // lives on TryServePrewrittenVideoAudioPlaylist). The FILE spans
+                // the full runtime because the full span is only ever served as
+                // the post-encode ENDLIST playlist or sliced for resume inside
+                // the window's honor band. The single-chapter audiobooks this
+                // path also serves are hours long, so the encode window is
+                // minutes, not seconds. When the encode completes, ffmpeg's own
+                // ENDLIST playlist takes over via the cache-hit paths above.
                 // JF-625 (live 2026-09-24, Magnolia): the pre-written listing is only
                 // safe when the encode outlasts the device's first playlist fetch. Its
                 // segment count is a CEIL estimate; ffmpeg can produce one fewer, and a
@@ -2019,41 +2013,31 @@ public class VideoAudioController : ControllerBase
     /// instead of failing the play.
     /// WINDOWED TO THE ENCODED REGION WHILE THE ENCODE RUNS (JF-819, the
     /// JF-778/JF-817 serve mirrored onto the third prewrite family): the
-    /// served listing CAPS at max(floor, min(head + 1, elapsed + lead)) at
-    /// the single-item path's own 4s calibration
-    /// (<see cref="SongHlsSegmentSeconds"/>,
+    /// served listing CAPS at the ONE shared window computation
+    /// (<see cref="ComputePrewriteWindow"/>) with this path's own 4s
+    /// calibration (<see cref="SongHlsSegmentSeconds"/>,
     /// <see cref="SongPrewriteWindowFloorSegments"/>,
-    /// <see cref="SongPrewriteWindowLeadSegments"/>). WHY: every row through
+    /// <see cref="SongPrewriteWindowLeadSegments"/>). Every row through
     /// this helper is a DURING-ENCODE row by construction (the warm rows
     /// gate on the caller's own live generation; the first-serve row runs
-    /// immediately after the encode is marked), and the Echo's ExoPlayer
-    /// resolves a no-ENDLIST playlist's default start at playlist end minus
-    /// 3x TARGETDURATION (the media3 live-edge formula, the JF-778 device
-    /// evidence at this same 4s segment length), so serving the FULL listing
-    /// mid-encode hands the player's first fetch the un-encoded tail: 404s
-    /// and playback dead before the first frame (the JF-625 song-path
-    /// prefetch death and the 2026-10-08 single-file-book resume are this
-    /// same shape). The window starts at the floor, grows one entry per 4s
-    /// of elapsed (1x playback), and the head cap keeps the listing inside
-    /// the encoded region for stalled encodes. The FILE stays the full
-    /// listing (the post-encode ENDLIST serve and the resume slicing keep
-    /// consuming it); only the SERVED bytes are windowed, and the
-    /// full-runtime seekbar during the encode window is given up exactly as
-    /// the episode (JF-778) and audiobook (JF-817) serves give it up. The
-    /// honor band applies unchanged (the JF-780 residuals stand as filed):
-    /// a positive <paramref name="startTicks"/> slices the listing via
-    /// <see cref="ServeVideoAudioPlaylistAsync"/> (JF-686, the episode
-    /// twin's shape) only while the window's edge runs no more than LEAD
-    /// entries past the position; outside the band the offset is dropped
-    /// with a log and playback starts at 0 (the JF-686 still-growing rule).
-    /// Once the encode completes, the cache-hit paths serve ffmpeg's ENDLIST
-    /// listing with the exact slice (today's full-listing serve, unperturbed
-    /// here). ONE READ (the JF-677/JF-680 read-count funnels): the window
-    /// computation, the truncation, and the serve all consume the content
-    /// read here, threaded as the serve's preloaded content, so the row
-    /// keeps exactly one full read per serve. The vanish contract of these
-    /// rows is unchanged (exists-gated, untranslated: a read miss throws at
-    /// action time, per the coverage boundary on
+    /// immediately after the encode is marked), and a no-ENDLIST listing
+    /// whose span outruns the encoded region hands the player's first fetch
+    /// the un-encoded tail (the live-edge mechanism, its device evidence,
+    /// and the death class live on
+    /// <see cref="TryServePrewrittenEpisodePlaylist"/>; the JF-625
+    /// song-path prefetch death and the 2026-10-08 single-file-book resume
+    /// are that class on this path). The FILE/serve split, the honor band
+    /// (a positive <paramref name="startTicks"/> slices via
+    /// <see cref="ServeVideoAudioPlaylistAsync"/> only inside the band;
+    /// outside it the offset drops with a log, the JF-780 residuals stand
+    /// as filed), and the post-encode ENDLIST handoff are the audiobook
+    /// twin's (<see cref="ServeWindowedAudiobookPrewriteAsync"/>),
+    /// unchanged. ONE READ (the JF-677/JF-680 read-count funnels): the
+    /// window computation, the truncation, and the serve all consume the
+    /// content read here, threaded as the serve's preloaded content, so the
+    /// row keeps exactly one full read per serve. The vanish contract of
+    /// these rows is unchanged (exists-gated, untranslated: a read miss
+    /// throws at action time, per the coverage boundary on
     /// <see cref="ResolveServeContentAsync"/>).
     /// </summary>
     /// <param name="itemId">GUID-validated item ID.</param>
@@ -2077,9 +2061,8 @@ public class VideoAudioController : ControllerBase
         }
 #pragma warning restore CA3003
 
-        // ONE read (JF-677/JF-680 read-count funnels): the window
-        // computation, the truncation, and the serve all consume the content
-        // read here, threaded as the serve's preloaded content.
+        // ONE read per serve (the JF-677/JF-680 funnels; the doc's ONE READ
+        // paragraph owns the contract): everything below consumes this content.
         string content = await ReadPlaylistContentAsync(prewrittenPath).ConfigureAwait(false);
 
         // The window (JF-819): the ONE shared computation (the JF-778/JF-817
@@ -4681,9 +4664,10 @@ public class VideoAudioController : ControllerBase
         => startSegment < windowSegments && windowSegments - startSegment <= leadSegments;
 
     /// <summary>
-    /// The outputs of <see cref="ComputePrewriteWindow"/> the two prewrite
-    /// serve families consume: the encode head, the window entry count, and
-    /// the prewrite age (the callers' logs name all three).
+    /// The outputs of <see cref="ComputePrewriteWindow"/> the three prewrite
+    /// serve families consume (episode, audiobook, single-item): the encode
+    /// head, the window entry count, and the prewrite age (the callers' logs
+    /// name all three).
     /// </summary>
     /// <param name="HeadSegment">The highest encoded segment number on disk (-1 when none).</param>
     /// <param name="WindowSegments">The windowed listing's entry count.</param>
