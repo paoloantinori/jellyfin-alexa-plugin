@@ -75,3 +75,16 @@ errors/resets; unverified on device. This is NOT findings 1/3 (both describe
 during-encode band flips); the completion handoff needs its own device probe
 (cold-cache book resume at minutes-deep, observe the transition when the
 encode completes).
+
+SCOPE EXTENSION (JF-819, same turn as the single-item windowing landed, the
+gate-marker's finding 1): the family now also includes the SINGLE-ITEM
+prewrite rows of StreamHlsVideoAudioCore (songs above the prewrite threshold
+and the single-chapter audiobooks the JF-794 census found common), on the
+same shared ComputePrewriteWindow window computation and honor-band
+predicate. Findings 1 and 3 and the completion handoff therefore apply to
+this family unchanged, and the device probe set must cover it or the
+residuals get declared verified on families the probes never exercised. The
+representative probe is the SINGLE-FILE-BOOK resume: cold-cache, resume at a
+minutes-deep position on a single-chapter audiobook (the exact shape that
+motivated the 1.0 blocker), run alongside the episode and concat-book
+probes.

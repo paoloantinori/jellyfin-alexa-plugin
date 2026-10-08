@@ -125,6 +125,17 @@ here instead):
   few dozen entries; the review's cheaper alternative (a span-based IndexOf
   line scan emitting only kept lines) belongs with the hoist, which already
   touches all three bodies and the builder API it would extend.
+- From the JF-819 ORCHESTRATOR gate-marker (2026-10-08, same turn as the
+  merge tail): the honor-band drop log fires at INFORMATION level on EVERY
+  playlist poll that carries ?start= while outside the band. The player
+  retains the ?start= query across event-playlist refreshes (the URL is
+  unchanged), so a dropped-offset book resume re-logs the identical
+  6-placeholder Information line once per refresh for the whole minutes-long
+  encode window, dozens of near-identical lines per incident in the
+  Information-default log the debug-logging policy keeps clean for triage.
+  The hoist owns all three log bodies: log the drop ONCE per generation
+  (or Debug after the first occurrence), keeping Information for the first
+  line triage actually needs.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Definition of Done

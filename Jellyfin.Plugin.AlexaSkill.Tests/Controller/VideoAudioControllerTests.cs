@@ -7351,6 +7351,11 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
             "exit 0\n");
 
         var controller = CreateController(audioItem.Id.ToString(), ffmpegPath: fakeFfmpegPath);
+        string hlsDir = _cache.GetHlsDirectoryPath(audioItem.Id.ToString(), 0);
+        var reads = TrackPlaylistReads(
+            controller,
+            Path.Combine(hlsDir, "playlist-full.m3u8"),
+            Path.Combine(hlsDir, "stream.m3u8"));
 
         ActionResult result = await controller.StreamHlsVideoAudio(audioItem.Id.ToString());
 
@@ -7363,10 +7368,19 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
         Assert.DoesNotContain("seg_674", content.Content, StringComparison.Ordinal);
         Assert.Equal(2, VideoAudioController.CountSegmentsInPlaylist(content.Content));
 
+        // Structural discriminator: at the 2-entry floor the windowed prewrite
+        // and a 2-entry fake live partial would be byte-identical after token
+        // rewrite, so the content pins alone cannot tell the rows apart (the
+        // seg_001 marker is prewrite-only by accident of the fake's shape).
+        // The read funnel can: the first-fetch row serves the prewrite and
+        // never reads ffmpeg's live playlist (the pre-JF-536 live-partial
+        // fallback row would flip Lives to 1).
+        Assert.Equal(1, reads.Prewrites());
+        Assert.Equal(0, reads.Lives());
+
         // The pre-written FULL file exists next to ffmpeg's own target (the
         // windowing is serve-side only), and ffmpeg keeps writing its own
         // playlist (the prewrite never feeds ffmpeg's file).
-        string hlsDir = _cache.GetHlsDirectoryPath(audioItem.Id.ToString(), 0);
         string prewritePath = Path.Combine(hlsDir, "playlist-full.m3u8");
         Assert.True(File.Exists(prewritePath), "pre-written listing must exist");
         Assert.Equal(675, VideoAudioController.CountSegmentsInPlaylist(File.ReadAllText(prewritePath)));

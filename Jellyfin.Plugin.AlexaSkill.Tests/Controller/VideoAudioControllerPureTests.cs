@@ -1203,54 +1203,59 @@ public class VideoAudioControllerPureTests : VideoAudioControllerTestHarness
 
     /// <summary>
     /// The REQUIRED RELATION between the JF-778 window floor and the JF-503 hold
-    /// lookahead (the floor const's doc): the floor's promise beyond the encode
-    /// head (floor - 1 entries) must stay within
+    /// lookahead (the floor const's doc), at the WORST head the first fetch can
+    /// meet: an empty dir (head -1), where the hold gate covers segment indices
+    /// up to SegmentHoldLookahead - 1 while the floor listing promises indices
+    /// up to floor - 1. The constraint is therefore floor &lt;=
     /// <see cref="VideoAudioController.SegmentHoldLookahead"/>, or the listing
-    /// would promise entries that 404 past the hold's reach, the tail death the
-    /// window exists to prevent. A constants-only pin: retuning either number
-    /// without the other fails here instead of on a device.
+    /// would promise entries that 404 past the hold's reach on the very first
+    /// fetch, the tail death the window exists to prevent. A constants-only
+    /// pin: retuning either number without the other fails here instead of on
+    /// a device.
     /// </summary>
     [Fact]
     public void EpisodePrewriteWindowFloor_RespectsSegmentHoldLookahead()
     {
         Assert.True(
-            VideoAudioController.EpisodePrewriteWindowFloorSegments - 1 <= VideoAudioController.SegmentHoldLookahead,
-            $"EpisodePrewriteWindowFloorSegments ({VideoAudioController.EpisodePrewriteWindowFloorSegments}) promises floor-1 entries beyond the encode head; SegmentHoldLookahead ({VideoAudioController.SegmentHoldLookahead}) must cover them or the windowed listing 404s past the JF-503 hold");
+            VideoAudioController.EpisodePrewriteWindowFloorSegments <= VideoAudioController.SegmentHoldLookahead,
+            $"EpisodePrewriteWindowFloorSegments ({VideoAudioController.EpisodePrewriteWindowFloorSegments}) must stay <= SegmentHoldLookahead ({VideoAudioController.SegmentHoldLookahead}): the floor listing's last entry (index floor - 1) must stay hold-reachable at the first fetch's worst head (empty dir, head -1, gate covers indices <= SegmentHoldLookahead - 1) or the windowed listing 404s past the JF-503 hold");
     }
 
     /// <summary>
     /// The REQUIRED RELATION between the JF-817 AUDIOBOOK window floor and the
     /// JF-503 hold lookahead (the episode twin's relation, on the floor const
-    /// the audiobook windowed serve carries): the floor's promise beyond the
-    /// encode head (floor - 1 entries) must stay within
+    /// the audiobook windowed serve carries), at the first fetch's worst head
+    /// (empty dir, head -1, gate covers indices up to SegmentHoldLookahead -
+    /// 1): the constraint is floor &lt;=
     /// <see cref="VideoAudioController.SegmentHoldLookahead"/>, or the listing
-    /// would promise entries that 404 past the hold's reach, the tail death
-    /// the window exists to prevent. A constants-only pin.
+    /// would promise entries that 404 past the hold's reach on the very first
+    /// fetch, the tail death the window exists to prevent. A constants-only pin.
     /// </summary>
     [Fact]
     public void AudiobookPrewriteWindowFloor_RespectsSegmentHoldLookahead()
     {
         Assert.True(
-            VideoAudioController.AudiobookPrewriteWindowFloorSegments - 1 <= VideoAudioController.SegmentHoldLookahead,
-            $"AudiobookPrewriteWindowFloorSegments ({VideoAudioController.AudiobookPrewriteWindowFloorSegments}) promises floor-1 entries beyond the encode head; SegmentHoldLookahead ({VideoAudioController.SegmentHoldLookahead}) must cover them or the windowed listing 404s past the JF-503 hold");
+            VideoAudioController.AudiobookPrewriteWindowFloorSegments <= VideoAudioController.SegmentHoldLookahead,
+            $"AudiobookPrewriteWindowFloorSegments ({VideoAudioController.AudiobookPrewriteWindowFloorSegments}) must stay <= SegmentHoldLookahead ({VideoAudioController.SegmentHoldLookahead}): the floor listing's last entry must stay hold-reachable at the first fetch's worst head (empty dir, head -1) or the windowed listing 404s past the JF-503 hold");
     }
 
     /// <summary>
     /// The REQUIRED RELATION between the JF-819 single-item (song-family)
     /// window floor and the JF-503 hold lookahead (the episode and audiobook
     /// twins' relation, on the floor const the single-item windowed serve
-    /// carries): the floor's promise beyond the encode head (floor - 1
-    /// entries) must stay within
-    /// <see cref="VideoAudioController.SegmentHoldLookahead"/>, or the
-    /// listing would promise entries that 404 past the hold's reach, the
-    /// tail death the window exists to prevent. A constants-only pin.
+    /// carries), at the first fetch's worst head (empty dir, head -1, gate
+    /// covers indices up to SegmentHoldLookahead - 1): the constraint is
+    /// floor &lt;= <see cref="VideoAudioController.SegmentHoldLookahead"/>,
+    /// or the listing would promise entries that 404 past the hold's reach on
+    /// the very first fetch, the tail death the window exists to prevent. A
+    /// constants-only pin.
     /// </summary>
     [Fact]
     public void SongPrewriteWindowFloor_RespectsSegmentHoldLookahead()
     {
         Assert.True(
-            VideoAudioController.SongPrewriteWindowFloorSegments - 1 <= VideoAudioController.SegmentHoldLookahead,
-            $"SongPrewriteWindowFloorSegments ({VideoAudioController.SongPrewriteWindowFloorSegments}) promises floor-1 entries beyond the encode head; SegmentHoldLookahead ({VideoAudioController.SegmentHoldLookahead}) must cover them or the windowed listing 404s past the JF-503 hold");
+            VideoAudioController.SongPrewriteWindowFloorSegments <= VideoAudioController.SegmentHoldLookahead,
+            $"SongPrewriteWindowFloorSegments ({VideoAudioController.SongPrewriteWindowFloorSegments}) must stay <= SegmentHoldLookahead ({VideoAudioController.SegmentHoldLookahead}): the floor listing's last entry must stay hold-reachable at the first fetch's worst head (empty dir, head -1) or the windowed listing 404s past the JF-503 hold");
     }
 
     /// <summary>

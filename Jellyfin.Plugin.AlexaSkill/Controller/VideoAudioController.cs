@@ -166,10 +166,12 @@ public class VideoAudioController : ControllerBase
     /// 0 for every player offset constant observed on device (1-3 segments; the
     /// device evidence lives on <see cref="TryServePrewrittenEpisodePlaylist"/>).
     /// REQUIRED RELATION, pinned by
-    /// EpisodePrewriteWindowFloor_RespectsSegmentHoldLookahead: the floor's
-    /// promise beyond the encode head (floor - 1 entries) must stay within
-    /// <see cref="SegmentHoldLookahead"/>, or the entries the listing promises
-    /// would 404 past the JF-503 hold's reach and reintroduce the tail death
+    /// EpisodePrewriteWindowFloor_RespectsSegmentHoldLookahead: the floor must
+    /// stay &lt;= <see cref="SegmentHoldLookahead"/> (the floor listing's last
+    /// entry must be hold-reachable at the first fetch's worst head, an empty
+    /// dir at head -1 where the gate covers indices up to
+    /// SegmentHoldLookahead - 1), or the entries the listing promises would
+    /// 404 past the JF-503 hold's reach and reintroduce the tail death
     /// this window exists to prevent.
     /// </summary>
     internal const int EpisodePrewriteWindowFloorSegments = 2;
@@ -194,11 +196,12 @@ public class VideoAudioController : ControllerBase
     /// 20s at the audiobook 10s segments, under the 3x TARGETDURATION (30s)
     /// live-edge offset, so the player's live default start stays at segment
     /// 0. Same REQUIRED RELATION as the episode floor, pinned by
-    /// AudiobookPrewriteWindowFloor_RespectsSegmentHoldLookahead: the floor's
-    /// promise beyond the encode head (floor - 1 entries) must stay within
-    /// <see cref="SegmentHoldLookahead"/>, or the entries the listing
-    /// promises would 404 past the JF-503 hold's reach and reintroduce the
-    /// tail death this window exists to prevent.
+    /// AudiobookPrewriteWindowFloor_RespectsSegmentHoldLookahead: the floor
+    /// must stay &lt;= <see cref="SegmentHoldLookahead"/> (the floor listing's
+    /// last entry must be hold-reachable at the first fetch's worst head, an
+    /// empty dir at head -1), or the entries the listing promises would 404
+    /// past the JF-503 hold's reach and reintroduce the tail death this
+    /// window exists to prevent.
     /// </summary>
     internal const int AudiobookPrewriteWindowFloorSegments = 2;
 
@@ -223,11 +226,12 @@ public class VideoAudioController : ControllerBase
     /// found common). 2 entries = 8s at the single-item 4s segments, under the
     /// 3x TARGETDURATION (12s) live-edge offset, so the player's live default
     /// start stays at segment 0. Same REQUIRED RELATION as the twins, pinned
-    /// by SongPrewriteWindowFloor_RespectsSegmentHoldLookahead: the floor's
-    /// promise beyond the encode head (floor - 1 entries) must stay within
-    /// <see cref="SegmentHoldLookahead"/>, or the entries the listing
-    /// promises would 404 past the JF-503 hold's reach and reintroduce the
-    /// tail death this window exists to prevent.
+    /// by SongPrewriteWindowFloor_RespectsSegmentHoldLookahead: the floor
+    /// must stay &lt;= <see cref="SegmentHoldLookahead"/> (the floor listing's
+    /// last entry must be hold-reachable at the first fetch's worst head, an
+    /// empty dir at head -1), or the entries the listing promises would 404
+    /// past the JF-503 hold's reach and reintroduce the tail death this
+    /// window exists to prevent.
     /// </summary>
     internal const int SongPrewriteWindowFloorSegments = 2;
 
