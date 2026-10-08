@@ -57,6 +57,40 @@ public class UserTests : PluginTestBase
         Assert.Equal(string.Empty, user.Username);
     }
 
+    /// <summary>
+    /// JF-823: the fourth stored catalog id rides the on-disk XmlSerializer
+    /// configuration round trip exactly like its three siblings. A plain
+    /// string? property is XmlSerializer-safe by shape (the Dictionary trap
+    /// the repo rule bans would crash the whole config save, not just this
+    /// field); this pin holds the round trip itself, so a future DTO change
+    /// that breaks the serialization of the stored ids fails here.
+    /// </summary>
+    [Fact]
+    public void StoredCatalogIds_IncludingAudiobook_RoundTripThroughXmlSerialization()
+    {
+        var config = new Configuration.PluginConfiguration();
+        config.Users.Add(new User
+        {
+            Id = Guid.NewGuid(),
+            ArtistCatalogId = "cat-artist",
+            AlbumCatalogId = "cat-album",
+            SeriesCatalogId = "cat-series",
+            AudiobookCatalogId = "cat-audiobook"
+        });
+
+        var serializer = new System.Xml.Serialization.XmlSerializer(typeof(Configuration.PluginConfiguration));
+        using var ms = new System.IO.MemoryStream();
+        serializer.Serialize(ms, config);
+        ms.Position = 0;
+        var deserialized = (Configuration.PluginConfiguration)serializer.Deserialize(ms)!;
+
+        User roundTripped = Assert.Single(deserialized.Users);
+        Assert.Equal("cat-artist", roundTripped.ArtistCatalogId);
+        Assert.Equal("cat-album", roundTripped.AlbumCatalogId);
+        Assert.Equal("cat-series", roundTripped.SeriesCatalogId);
+        Assert.Equal("cat-audiobook", roundTripped.AudiobookCatalogId);
+    }
+
     private static void EnsurePluginInstance()
     {
         if (Plugin.Instance != null)

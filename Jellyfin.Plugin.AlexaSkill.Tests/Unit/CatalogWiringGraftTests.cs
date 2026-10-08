@@ -182,7 +182,7 @@ public class CatalogWiringGraftTests
     [Fact]
     public void Apply_WithWiring_ReplacesStaticSeedOnFreshModel()
     {
-        var wiring = new CatalogWiring(null, null, null, null, "series-3", "9");
+        var wiring = new CatalogWiring(null, null, null, null, "series-3", "9", null, null);
 
         string result = CatalogWiringGraft.Apply(FreshModelJson(), "it-IT", wiring, null);
 
@@ -197,6 +197,38 @@ public class CatalogWiringGraftTests
         // Untouched types stay static.
         var artistType = Assert.Single(types.EnumerateArray(), t => t.GetProperty("name").GetString() == ArtistTypeName);
         Assert.False(artistType.TryGetProperty("valueSupplier", out _));
+    }
+
+    /// <summary>
+    /// JF-823: an audiobook-only live wiring extracts into the new record
+    /// fields and a rebuild PUT grafts it back (the ExtractWiring keyed
+    /// extraction covers the name via the JF-727 reverse map; this pin holds
+    /// the record's own fields end to end through Apply).
+    /// </summary>
+    [Fact]
+    public void ExtractAndApply_AudiobookOnlyWiring_SurvivesTheRebuildPut()
+    {
+        const string AudiobookTypeName = "AudiobookTitle";
+        string live = LiveModelJson(
+            WiredType(AudiobookTypeName, "audiobook-4", "5") + "," + StaticType(ArtistTypeName, "Mina"));
+
+        var wiring = CatalogWiringGraft.ExtractWiring(live);
+
+        Assert.NotNull(wiring);
+        Assert.Equal("audiobook-4", wiring!.AudiobookId);
+        Assert.Equal("5", wiring.AudiobookVersion);
+        Assert.Null(wiring.ArtistId);
+        Assert.Null(wiring.SeriesId);
+
+        string result = CatalogWiringGraft.Apply(FreshModelJson(), "it-IT", wiring, null);
+
+        using var doc = JsonDocument.Parse(result);
+        var types = doc.RootElement.GetProperty("interactionModel").GetProperty("languageModel").GetProperty("types");
+        var audiobookType = Assert.Single(types.EnumerateArray(), t => t.GetProperty("name").GetString() == AudiobookTypeName);
+        var catalog = audiobookType.GetProperty("valueSupplier").GetProperty("valueCatalog");
+        Assert.Equal("audiobook-4", catalog.GetProperty("catalogId").GetString());
+        Assert.Equal("5", catalog.GetProperty("version").GetString());
+        Assert.False(audiobookType.TryGetProperty("values", out _), "static seed values must be replaced, not kept alongside");
     }
 
     [Fact]
@@ -214,7 +246,7 @@ public class CatalogWiringGraftTests
     {
         // JF-543 defense in depth: ar-SA live models never carry wiring, but if one
         // did (drift), the graft must refuse to re-apply it.
-        var wiring = new CatalogWiring("artist-1", "1", null, null, null, null);
+        var wiring = new CatalogWiring("artist-1", "1", null, null, null, null, null, null);
 
         string result = CatalogWiringGraft.Apply(FreshModelJson(), "ar-SA", wiring, null);
 

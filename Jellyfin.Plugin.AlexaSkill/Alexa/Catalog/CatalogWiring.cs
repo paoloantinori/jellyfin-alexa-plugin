@@ -20,13 +20,17 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Catalog;
 /// <param name="AlbumVersion">The pinned album catalog version, or null.</param>
 /// <param name="SeriesId">The series catalog id, or null when the live model has none.</param>
 /// <param name="SeriesVersion">The pinned series catalog version, or null.</param>
+/// <param name="AudiobookId">The audiobook catalog id (JF-823), or null when the live model has none.</param>
+/// <param name="AudiobookVersion">The pinned audiobook catalog version (JF-823), or null.</param>
 internal sealed record CatalogWiring(
     string? ArtistId,
     string? ArtistVersion,
     string? AlbumId,
     string? AlbumVersion,
     string? SeriesId,
-    string? SeriesVersion)
+    string? SeriesVersion,
+    string? AudiobookId,
+    string? AudiobookVersion)
 {
-    public bool Any => ArtistId != null || AlbumId != null || SeriesId != null;
+    public bool Any => ArtistId != null || AlbumId != null || SeriesId != null || AudiobookId != null;
 }

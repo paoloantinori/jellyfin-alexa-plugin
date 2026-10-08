@@ -481,9 +481,11 @@ public class CatalogManager
     /// <param name="artistCatalogId">The artist catalog ID (may be null).</param>
     /// <param name="albumCatalogId">The album catalog ID (may be null).</param>
     /// <param name="seriesCatalogId">The series catalog ID (may be null).</param>
+    /// <param name="audiobookCatalogId">The audiobook catalog ID (may be null, JF-823).</param>
     /// <param name="artistCatalogVersion">The artist catalog version (may be null).</param>
     /// <param name="albumCatalogVersion">The album catalog version (may be null).</param>
     /// <param name="seriesCatalogVersion">The series catalog version (may be null).</param>
+    /// <param name="audiobookCatalogVersion">The audiobook catalog version (may be null, JF-823).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The build outcome and canary counts for the status ledger.</returns>
     public async Task<CatalogModelUpdateResult> UpdateInteractionModelAsync(
@@ -494,12 +496,14 @@ public class CatalogManager
         string? artistCatalogId,
         string? albumCatalogId,
         string? seriesCatalogId,
+        string? audiobookCatalogId,
         string? artistCatalogVersion,
         string? albumCatalogVersion,
         string? seriesCatalogVersion,
+        string? audiobookCatalogVersion,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrEmpty(artistCatalogId) && string.IsNullOrEmpty(albumCatalogId) && string.IsNullOrEmpty(seriesCatalogId))
+        if (string.IsNullOrEmpty(artistCatalogId) && string.IsNullOrEmpty(albumCatalogId) && string.IsNullOrEmpty(seriesCatalogId) && string.IsNullOrEmpty(audiobookCatalogId))
         {
             _logger.LogInformation("No catalogs to inject into interaction model, skipping update");
             return new CatalogModelUpdateResult("Skipped", null, 0, 0);
@@ -538,7 +542,7 @@ public class CatalogManager
 
         string modelJson = await getResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
-        string modifiedJson = InjectCatalogReferences(modelJson, artistCatalogId, albumCatalogId, seriesCatalogId, artistCatalogVersion, albumCatalogVersion, seriesCatalogVersion, _logger);
+        string modifiedJson = InjectCatalogReferences(modelJson, artistCatalogId, albumCatalogId, seriesCatalogId, audiobookCatalogId, artistCatalogVersion, albumCatalogVersion, seriesCatalogVersion, audiobookCatalogVersion, _logger);
 
         // JF-495: greppable audit line before the PUT.
         var (putIntents, putSamples) = InteractionModelPutAudit.CountFromJson(modifiedJson);
@@ -836,16 +840,19 @@ public class CatalogManager
         await Task.Delay(PollDelayMs, cancellationToken).ConfigureAwait(false);
 
         int delay = PollDelayMs;
-        // 90 iterations with the 2s backoff cap is a ~150-170s budget: a full sync
-        // queues FOUR serialized SMAPI builds per locale (3 catalog versions + the
-        // model build), so a locale's model build legitimately settles deep in the
+        // 120 iterations with the 2s backoff cap is a ~200-230s budget: a full sync
+        // queues FIVE serialized SMAPI builds per locale (4 catalog versions + the
+        // model build since JF-823's fourth synced type; 3 + 1 before), so a
+        // locale's model build legitimately settles deep in the
         // queue; the previous 30-iteration budget (~57s) landed TIMEOUT on every
         // locale and the canary never fired (live evidence 2026-09-06: 80-85s per
-        // locale at 12 locales). The budget also held at 17 locales / 68 queued
-        // builds after JF-513 (live 2026-09-12: 79-132s per locale, zero TIMEOUTs
-        // across the full sync), so it is sized on the serialized-queue depth, not
-        // the locale count.
-        for (int i = 0; i < 90; i++)
+        // locale at 12 locales). The budget then held at 90 iterations
+        // (~150-170s) for FOUR builds per locale at 17 locales / 68 queued builds
+        // after JF-513 (live 2026-09-12: 79-132s per locale, zero TIMEOUTs across
+        // the full sync), so it is sized on the serialized-queue depth, not the
+        // locale count; JF-823's fifth per-locale build scales it ~25% to keep
+        // the same settle margin (JF-823 gate-marker finding 1).
+        for (int i = 0; i < 120; i++)
         {
             string? state = await TryGetLocaleModelStatusAsync(
                 accessToken, client, skillId, locale, _logger, cancellationToken).ConfigureAwait(false);
@@ -912,11 +919,13 @@ public class CatalogManager
     /// <param name="artistCatalogId">The artist catalog ID to inject.</param>
     /// <param name="albumCatalogId">The album catalog ID to inject.</param>
     /// <param name="seriesCatalogId">The series catalog ID to inject.</param>
+    /// <param name="audiobookCatalogId">The audiobook catalog ID to inject (JF-823).</param>
     /// <param name="artistCatalogVersion">The artist catalog version.</param>
     /// <param name="albumCatalogVersion">The album catalog version.</param>
     /// <param name="seriesCatalogVersion">The series catalog version.</param>
+    /// <param name="audiobookCatalogVersion">The audiobook catalog version (JF-823).</param>
     /// <returns>The modified interaction model JSON string.</returns>
-    internal static string InjectCatalogReferences(string modelJson, string? artistCatalogId, string? albumCatalogId, string? seriesCatalogId, string? artistCatalogVersion, string? albumCatalogVersion, string? seriesCatalogVersion, ILogger? logger = null)
+    internal static string InjectCatalogReferences(string modelJson, string? artistCatalogId, string? albumCatalogId, string? seriesCatalogId, string? audiobookCatalogId, string? artistCatalogVersion, string? albumCatalogVersion, string? seriesCatalogVersion, string? audiobookCatalogVersion, ILogger? logger = null)
     {
         logger ??= NullLogger.Instance;
         JsonNode? root = JsonNode.Parse(modelJson);
@@ -964,7 +973,16 @@ public class CatalogManager
                 null));
         }
 
-        WarnOnCrossTypeCatalogIds(artistCatalogId, albumCatalogId, seriesCatalogId, logger);
+        if (!string.IsNullOrEmpty(audiobookCatalogId))
+        {
+            // No ReplacesType (JF-823): the SeriesName shape; the rationale lives
+            // on the CatalogSlotTypes.CatalogSlotTypeNames audiobook entry.
+            catalogMappings.Add((audiobookCatalogId!, ResolveCatalogVersion(audiobookCatalogVersion, CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Audiobook], audiobookCatalogId, logger),
+                CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Audiobook],
+                null));
+        }
+
+        WarnOnCrossTypeCatalogIds(artistCatalogId, albumCatalogId, seriesCatalogId, audiobookCatalogId, logger);
 
         logger.LogInformation(
             "Injecting {Count} catalog references into interaction model ({SlotTypes})",
@@ -1048,13 +1066,14 @@ public class CatalogManager
     /// (JF-495): one slot type would then be backed by another type's catalog
     /// (e.g. the artist catalog feeding AlbumName), corrupting slot resolution.
     /// </summary>
-    private static void WarnOnCrossTypeCatalogIds(string? artistCatalogId, string? albumCatalogId, string? seriesCatalogId, ILogger logger)
+    private static void WarnOnCrossTypeCatalogIds(string? artistCatalogId, string? albumCatalogId, string? seriesCatalogId, string? audiobookCatalogId, ILogger logger)
     {
         var supplied = new[]
         {
             (Type: "Artist", Id: artistCatalogId),
             (Type: "Album", Id: albumCatalogId),
-            (Type: "Series", Id: seriesCatalogId)
+            (Type: "Series", Id: seriesCatalogId),
+            (Type: "Audiobook", Id: audiobookCatalogId)
         };
 
         for (int i = 0; i < supplied.Length; i++)

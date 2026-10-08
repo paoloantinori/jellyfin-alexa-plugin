@@ -40,6 +40,13 @@ public class SyncResult
     public int SeriesCount { get; set; }
 
     /// <summary>
+    /// Gets or sets the number of audiobooks synced (JF-823). The count lands
+    /// through the audiobook wiring-table row's StoreCount element like the
+    /// sibling types' counts.
+    /// </summary>
+    public int AudiobookCount { get; set; }
+
+    /// <summary>
     /// Gets the catalog types (JF-695) whose payload build deterministically
     /// violated a construction invariant during the run. Per-type isolation in
     /// the sync froze each listed type while the sibling types synced normally:

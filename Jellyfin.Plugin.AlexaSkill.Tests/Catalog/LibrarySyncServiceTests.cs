@@ -80,10 +80,11 @@ public class LibrarySyncServiceTests
         var result = await service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
 
         // Assert
-        // SyncUserLibraryAsync queries artists + albums + series (JF-493 added series).
+        // SyncUserLibraryAsync queries artists + albums + series (JF-493 added
+        // series) + audiobooks (JF-823 added the fourth leg).
         // All should have TopParentIds set. Membership, not exact length: the
         // resolution may union in physical folder ids (JF-456 item 9).
-        Assert.Equal(3, capturedQueries.Count);
+        Assert.Equal(4, capturedQueries.Count);
         Assert.All(capturedQueries, q =>
         {
             Assert.NotNull(q.TopParentIds);
@@ -112,7 +113,7 @@ public class LibrarySyncServiceTests
         var result = await service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
 
         // Assert
-        Assert.Equal(3, capturedQueries.Count);
+        Assert.Equal(4, capturedQueries.Count);
         Assert.All(capturedQueries, q =>
         {
             // TopParentIds is not set; InternalItemsQuery initializes it to empty array.
@@ -140,7 +141,7 @@ public class LibrarySyncServiceTests
         var result = await service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
 
         // Assert
-        Assert.Equal(3, capturedQueries.Count);
+        Assert.Equal(4, capturedQueries.Count);
         Assert.All(capturedQueries, q =>
         {
             // TopParentIds is not set; InternalItemsQuery initializes it to empty array.
@@ -169,8 +170,8 @@ public class LibrarySyncServiceTests
         // Act
         await service.SyncUserLibraryAsync(user, jellyfinUser, CancellationToken.None);
 
-        // Assert: three catalog queries (artists + albums + series)
-        Assert.Equal(3, capturedQueries.Count);
+        // Assert: four catalog queries (artists + albums + series + audiobooks, JF-823)
+        Assert.Equal(4, capturedQueries.Count);
         Assert.All(capturedQueries, q =>
         {
             Assert.Equal(ExpectedLimit, q.Limit);

@@ -103,7 +103,9 @@ internal static class CatalogWiringGraft
                 WiringOf(CatalogType.Album).Id,
                 WiringOf(CatalogType.Album).Version,
                 WiringOf(CatalogType.Series).Id,
-                WiringOf(CatalogType.Series).Version);
+                WiringOf(CatalogType.Series).Version,
+                WiringOf(CatalogType.Audiobook).Id,
+                WiringOf(CatalogType.Audiobook).Version);
             return wiring.Any ? wiring : null;
         }
     }
@@ -135,20 +137,23 @@ internal static class CatalogWiringGraft
         }
 
         logger?.LogInformation(
-            "Preserving live catalog wiring on rebuild for {Locale}: artist={ArtistId}, album={AlbumId}, series={SeriesId} (JF-552)",
+            "Preserving live catalog wiring on rebuild for {Locale}: artist={ArtistId}, album={AlbumId}, series={SeriesId}, audiobook={AudiobookId} (JF-552, JF-823)",
             locale,
             wiring.ArtistId ?? "-",
             wiring.AlbumId ?? "-",
-            wiring.SeriesId ?? "-");
+            wiring.SeriesId ?? "-",
+            wiring.AudiobookId ?? "-");
 
         return CatalogManager.InjectCatalogReferences(
             modelJson,
             wiring.ArtistId,
             wiring.AlbumId,
             wiring.SeriesId,
+            wiring.AudiobookId,
             wiring.ArtistVersion,
             wiring.AlbumVersion,
             wiring.SeriesVersion,
+            wiring.AudiobookVersion,
             logger);
     }
 }

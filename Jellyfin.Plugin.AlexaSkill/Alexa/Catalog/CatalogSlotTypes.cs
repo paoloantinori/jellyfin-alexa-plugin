@@ -103,7 +103,15 @@ public static class CatalogSlotTypes
         // JF-493: unlike AlbumName (it-IT only), SeriesName is declared by ALL 17
         // locale models as a static seed list, so the catalog injection REPLACES
         // the static type everywhere and no slot re-typing is needed.
-        [CatalogType.Series] = "SeriesName"
+        [CatalogType.Series] = "SeriesName",
+        // JF-823: same replace-in-place shape as SeriesName - every locale model
+        // declares AudiobookTitle as PlayBookIntent.book's type, so the injection
+        // replaces the type block in place with no re-typing (ReplacesType null).
+        // Before JF-823 this type lived only in the dynamic-entities table, whose
+        // push lands turn 2+ (after first-turn selection), so the saved model's
+        // vocabulary was the static seed for every user. The JF-543 locale gate
+        // (CatalogWiringUnsupportedLocales) applies model-wide and is inherited.
+        [CatalogType.Audiobook] = "AudiobookTitle"
     };
 
     /// <summary>

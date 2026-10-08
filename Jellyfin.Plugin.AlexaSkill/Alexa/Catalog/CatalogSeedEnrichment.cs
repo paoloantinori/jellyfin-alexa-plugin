@@ -28,16 +28,25 @@ public static class CatalogSeedEnrichment
     /// <summary>
     /// The only committed model that declares <c>AlbumName</c> (JF-332: the other
     /// 16 locales use AMAZON.MusicRecording) and therefore the only one carrying
-    /// the album seed list. The catalog content is shared across locales, so the
-    /// it-IT seeds are the album seed authority.
+    /// the album seed list; also the only one carrying real audiobook titles
+    /// (JF-823). The other 16 locales' entire AudiobookTitle vocabulary is a
+    /// single generic word ("audiobook", "Hörbuch", "audiolibro", ...) - not a
+    /// title list - so seeding them would add the generic words themselves as
+    /// catalog values: the Series-style per-locale skip decision, made
+    /// deliberately here (a locale union is not worth it for one word each).
+    /// The catalog content is shared across locales, so the it-IT seeds are
+    /// the seed authority for both types.
     /// </summary>
-    private const string AlbumSeedLocale = "it-IT";
+    private const string ItItSeedLocale = "it-IT";
 
     private static readonly Lazy<IReadOnlyList<string>> AlbumSeeds =
         new(LoadAlbumSeeds);
 
     private static readonly Lazy<IReadOnlyList<string>> ArtistSeeds =
         new(LoadArtistSeeds);
+
+    private static readonly Lazy<IReadOnlyList<string>> AudiobookSeeds =
+        new(LoadAudiobookSeeds);
 
     /// <summary>
     /// Appends the seed values of the catalog-backed slot type to the payload.
@@ -90,10 +99,13 @@ public static class CatalogSeedEnrichment
     /// JellyfinArtist blocks across the committed locale models (the seeds differ
     /// per locale: it-IT carries 8, the en-* locales 10; the catalog upload is
     /// shared across locales, so the union keeps every locale's seed vocabulary
-    /// on the deployed model). Series is deliberately NOT merged: its seeds are
-    /// per-locale LOCALIZED titles (Juego de Tronos, Il Trono di Spade, ...) and
-    /// the union-merge decision for them is out of JF-541 phase 2 scope. All
-    /// other types have no seeds.
+    /// on the deployed model). Audiobook: the it-IT model's AudiobookTitle block
+    /// (JF-823 - the 22-value seed that is the saved model's only vocabulary
+    /// before the first catalog sync lands; the other locales' skip decision
+    /// lives on <see cref="ItItSeedLocale"/>). Series is deliberately NOT
+    /// merged: its seeds are per-locale LOCALIZED titles (Juego de Tronos,
+    /// Il Trono di Spade, ...) and the union-merge decision for them is out of
+    /// JF-541 phase 2 scope. All other types have no seeds.
     /// </summary>
     /// <param name="type">The catalog type.</param>
     /// <returns>The seed names; empty when the type carries no seeds.</returns>
@@ -101,6 +113,7 @@ public static class CatalogSeedEnrichment
     {
         CatalogType.Album => AlbumSeeds.Value,
         CatalogType.Artist => ArtistSeeds.Value,
+        CatalogType.Audiobook => AudiobookSeeds.Value,
         _ => Array.Empty<string>()
     };
 
@@ -231,7 +244,12 @@ public static class CatalogSeedEnrichment
 
     private static IReadOnlyList<string> LoadAlbumSeeds()
     {
-        return ReadModelSeeds(AlbumSeedLocale, CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Album]);
+        return ReadModelSeeds(ItItSeedLocale, CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Album]);
+    }
+
+    private static IReadOnlyList<string> LoadAudiobookSeeds()
+    {
+        return ReadModelSeeds(ItItSeedLocale, CatalogSlotTypes.CatalogSlotTypeNames[CatalogType.Audiobook]);
     }
 
     private static List<string> LoadArtistSeeds()
