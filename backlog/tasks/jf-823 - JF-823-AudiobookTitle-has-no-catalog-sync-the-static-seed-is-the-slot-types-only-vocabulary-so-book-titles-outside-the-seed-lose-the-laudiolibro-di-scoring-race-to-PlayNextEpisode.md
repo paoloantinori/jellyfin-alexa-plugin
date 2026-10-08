@@ -1,12 +1,13 @@
 ---
 id: JF-823
 title: >-
-  JF-823 - AudiobookTitle has no catalog sync: the static seed is the slot type's only
-  vocabulary, so book titles outside the seed lose the "l'audiolibro di" scoring race
-  to PlayNextEpisode
-status: To Do
+  JF-823 - AudiobookTitle has no catalog sync: the static seed is the slot
+  type's only vocabulary, so book titles outside the seed lose the "l'audiolibro
+  di" scoring race to PlayNextEpisode
+status: In Progress
 assignee: []
 created_date: '2026-10-08'
+updated_date: '2026-10-08 21:54'
 labels:
   - nlu
   - audiobooks

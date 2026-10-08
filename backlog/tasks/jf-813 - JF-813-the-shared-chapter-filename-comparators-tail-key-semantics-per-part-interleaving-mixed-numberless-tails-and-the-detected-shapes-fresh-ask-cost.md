@@ -32,9 +32,9 @@ Constraints carried over from JF-790: ONE comparator definition, endpoint byte-i
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A decision is recorded (composite key vs documented status quo) for per-part file numbering, applied to the ONE shared comparator so endpoint timeline and queue order cannot diverge
-- [ ] #2 The numberless-file tail placement in mixed books is either fixed or re-documented as endpoint parity with an example
-- [ ] #3 The fresh-ask cost of the detected shape is either mitigated or accepted in writing with the census numbers
+- [x] #1 A decision is recorded (composite key vs documented status quo) for per-part file numbering, applied to the ONE shared comparator so endpoint timeline and queue order cannot diverge
+- [x] #2 The numberless-file tail placement in mixed books is either fixed or re-documented as endpoint parity with an example
+- [x] #3 The fresh-ask cost of the detected shape is either mitigated or accepted in writing with the census numbers
 <!-- AC:END -->
 
 ## Definition of Done
@@ -52,3 +52,44 @@ Constraints carried over from JF-790: ONE comparator definition, endpoint byte-i
 <!-- DOD:END -->
 
 GATE-MARKER ADDENDUM (2026-10-07, from the JF-790 marker F1): item 1 gains the CONVERSE shape - a book whose page 1 is UNTAGGED but whose tail is correctly tagged (per-disc filenames) FALSE-FIRES the detection and the file sort discards the tags' order for the whole book; no census book has the shape, the boundary is documented at the trigger, and the composite key (IndexNumber first when present) is the fix vehicle for both directions.
+
+DECISION RECORD (2026-10-08, orchestrator, closes all three ACs as documented
+dispositions backed by the census evidence; no code change ships):
+
+1. PER-PART INTERLEAVING (AC#1): STATUS QUO DOCUMENTED. The composite
+   (directory, trailingNumber) key, or IndexNumber-first when present, is the
+   fix vehicle for BOTH boundary directions (per-part interleaving and the
+   page-1-untagged false fire) and it must land endpoint+queue together on the
+   ONE shared comparator. It is NOT adopted now: adopting it changes the
+   endpoint's concat timeline order, which invalidates every existing cached
+   encode timeline AND the AudiobookPositionTracker's recorded high-water marks
+   (a mark is meaningful only against the timeline that wrote it), for a
+   benefit the census cannot exhibit (zero per-part-shaped and zero
+   page-1-untagged books found). RE-OPEN TRIGGER: the first real book with
+   either shape; the change then ships with an encode-cache invalidation and a
+   tracker-mark migration decision in the same task.
+
+2. MIXED NUMBERLESS TAILS (AC#2): STAYS, re-documented as endpoint parity with
+   the example in the class doc. In a mixed book every numberless/unparsable
+   file keys to int.MaxValue and sorts LAST: "intro.mp3, 001.mp3..050.mp3"
+   plays the numbered chapters first and the intro at the very end. A
+   MaxValue-preserving stable order for the mixed case is impossible without a
+   second key axis (the DB order), which is exactly the composite-key vehicle
+   of decision 1; the census has no mixed book, so no user has ever heard the
+   wrong order.
+
+3. FRESH-ASK COST (AC#3): ACCEPTED with the census numbers. Every ask of a
+   DETECTED book pays the unpaged full-book fetch plus the O(chapters)
+   FindResumeTrackIndex scan; the JF-797 probes are bypassed BY DESIGN (the
+   order fix needs the fetch regardless of resume state; the probes exist to
+   avoid exactly that fetch, so they cannot gate it). The bound: the census's
+   largest untagged book is 100 chapters, one unpaged fetch at first ask of
+   such a book, then normal paging. The candidate scan-skip on a total
+   user-data miss was NOT taken: it saves only the scan, not the fetch, and
+   adds a probe pass over the same rows the scan walks; measured against a
+   100-chapter ceiling the saving is noise. Revisit only if a real detected
+   book exceeds ~500 chapters.
+
+The four code pointers that said "JF-813 owns/follow-up" now say decided; the
+task closes as a decisions round. No /simplify or /code-review gate: zero code
+diff beyond comment wording, documentation-only exemption.

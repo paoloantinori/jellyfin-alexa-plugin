@@ -23,18 +23,23 @@ namespace Jellyfin.Plugin.AlexaSkill.Alexa.Util;
 /// next/previous navigation describe the SAME book - but they do so ONLY when
 /// both surfaces sort (the endpoint ALWAYS sorts; the queue sorts on DETECTION,
 /// so a TAGGED book whose filenames disagree with its tags still plays two
-/// different orders across the two paths; the divergence is pre-existing and the
-/// composite-key decision in JF-813 is the vehicle that would unify them).
+/// different orders across the two paths; the divergence is pre-existing. The
+/// JF-813 decision (2026-10-08): keep the tail-key status quo; the composite
+/// key remains the unification vehicle, to be adopted endpoint+queue together
+/// only when a real book exhibits the shape).
 /// The sort is STABLE (LINQ OrderBy): chapters whose filenames carry no trailing
 /// number (or an unparsable one) all key to <see cref="int.MaxValue"/> and keep
 /// the query's pinned (<see cref="QueueContinuationFetcher.AudiobookChapterOrder"/>)
 /// order among themselves, so a book of numberless files is ordered exactly as
 /// the DB served it. In a MIXED book (numberless files beside numbered ones) the
 /// numberless keys all sort LAST, so a numberless intro or cover lands at the
-/// book's end even when the DB order had it first; that is the endpoint's
-/// existing tail-key semantics (this helper is its extraction, not a re-decision),
-/// and the part-grouping boundary (per-part file numbering like Part1/01.mp3
-/// + Part2/01.mp3 interleaves parts) is shared with it too, tracked as JF-813.
+/// book's end even when the DB order had it first (example: "intro.mp3,
+/// 001.mp3..050.mp3"); that is
+/// the endpoint's existing tail-key semantics (this helper is its extraction,
+/// not a re-decision), and the part-grouping boundary (per-part file numbering
+/// like Part1/01.mp3 + Part2/01.mp3 interleaves parts) is shared with it too;
+/// both decided as documented status quo in JF-813 (2026-10-08, no census book
+/// exhibits either shape).
 /// ONE deliberate deviation from the endpoint's original lambda, required by the
 /// new consumer: the number parses through int.TryParse instead of
 /// int.Parse. The endpoint's int.Parse THREW (OverflowException)

@@ -161,8 +161,9 @@ public static class AudiobookPlayResolver
         // math over the concat timeline and this queue describe the same book -
         // on the DETECTION regime; a tagged book whose filenames disagree with
         // its tags still sorts differently across the two paths (the endpoint
-        // always sorts, the queue only on detection; JF-813's composite key is
-        // the unification vehicle).
+        // always sorts, the queue only on detection; JF-813 decided 2026-10-08
+        // to keep the tail-key status quo, the composite key staying the
+        // unification vehicle for when a real book exhibits the shape).
         // The whole book is fetched ONCE, unpaged, exactly the shape the
         // deep-resume scan below uses (the composition continues at the resume
         // fork); when the page already carried the whole book (no more rows
@@ -177,8 +178,8 @@ public static class AudiobookPlayResolver
         // probes are bypassed here BY DESIGN, not by omission: their purpose is
         // avoiding the unpaged fetch, and the ORDER fix needs that fetch
         // regardless of resume state. The census's largest untagged book is 100
-        // chapters; the JF-813 follow-up owns the shared-comparator semantics
-        // and cost refinements.
+        // chapters; JF-813 (2026-10-08) accepted this cost with that census
+        // bound; revisit only above ~500 chapters.
         List<BaseItem>? fileNameOrderedBook = null;
         // Gate-marker tail F5: a latched EMPTY JF-790 fetch also closes the deep
         // gate below - without the latch, an emptied library made the filename

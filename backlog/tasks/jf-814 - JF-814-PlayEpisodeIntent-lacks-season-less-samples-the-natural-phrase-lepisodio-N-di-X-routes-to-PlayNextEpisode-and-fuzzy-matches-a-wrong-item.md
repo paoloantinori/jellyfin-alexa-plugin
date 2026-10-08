@@ -3,7 +3,7 @@ id: JF-814
 title: >-
   JF-814 - PlayEpisodeIntent lacks season-less samples: the natural phrase
   "l'episodio N di X" routes to PlayNextEpisode and fuzzy-matches a wrong item
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-08'
 labels:
