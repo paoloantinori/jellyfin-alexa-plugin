@@ -1833,14 +1833,11 @@ public class VideoAudioController : ControllerBase
             EpisodeHlsSegmentSeconds,
             EpisodePrewriteWindowFloorSegments,
             EpisodePrewriteWindowLeadSegments);
-        int head = window.HeadSegment;
-        TimeSpan prewriteAge = window.PrewriteAge;
-        int windowSegments = window.WindowSegments;
 
         int totalSegments = CountSegmentsInPlaylist(content);
-        bool windowed = windowSegments < totalSegments;
+        bool windowed = window.WindowSegments < totalSegments;
         string serveContent = windowed
-            ? Alexa.Playback.AudiobookPlaylistBuilder.TruncateToFirstSegments(content, windowSegments)
+            ? Alexa.Playback.AudiobookPlaylistBuilder.TruncateToFirstSegments(content, window.WindowSegments)
             : content;
 
         long effectiveStartTicks = startTicks;
@@ -1851,13 +1848,11 @@ public class VideoAudioController : ControllerBase
             // HONOR BAND: the ONE shared predicate (JF-778 code-review F1; the
             // rationale and the JF-780 residuals live on
             // <see cref="ResumeInsidePrewriteHonorBand"/>).
-            bool resumeHonored = ResumeInsidePrewriteHonorBand(
-                startSegment, windowSegments, EpisodePrewriteWindowLeadSegments);
-            if (!resumeHonored)
+            if (!ResumeInsidePrewriteHonorBand(startSegment, window.WindowSegments, EpisodePrewriteWindowLeadSegments))
             {
                 _logger.LogInformation(
                     "VideoAudio episode HLS: cold-cache resume for item {ItemId} (startTicks={StartTicks}, start segment {StartSegment}) is outside the encode window's honor band ({WindowSegments} of {TotalSegments} entries, edge within {Lead} of the position required); dropping the resume and serving from the beginning (JF-778, the JF-686 still-growing rule)",
-                    itemId, startTicks, startSegment, windowSegments, totalSegments, EpisodePrewriteWindowLeadSegments);
+                    itemId, startTicks, startSegment, window.WindowSegments, totalSegments, EpisodePrewriteWindowLeadSegments);
                 effectiveStartTicks = 0;
             }
         }
@@ -1869,7 +1864,7 @@ public class VideoAudioController : ControllerBase
         {
             _logger.LogDebug(
                 "VideoAudio episode HLS: pre-write listing WINDOWED to {WindowSegments} of {TotalSegments} entries for item {ItemId} (encode head segment {HeadSegment}, prewrite age {PrewriteAgeMs:F0}ms; the live-edge default start would land on the un-encoded tail, JF-778)",
-                windowSegments, totalSegments, itemId, head, prewriteAge.TotalMilliseconds);
+                window.WindowSegments, totalSegments, itemId, window.HeadSegment, window.PrewriteAge.TotalMilliseconds);
         }
 
         return await ServeEpisodePlaylistAsync(prewrittenPath, effectiveStartTicks, serveContent).ConfigureAwait(false);

@@ -6451,28 +6451,19 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
     }
 
     /// <summary>
-    /// Shared arrange of a LIVE audiobook encode over a planted cache directory
-    /// (the JF-817 device shape, parameterized): the full prewrite for the
-    /// given total runtime (<see cref="VideoAudioController.WriteAudiobookPlaylist"/>,
-    /// the production emitter, so the EXTINF walk and the token rewrite see
-    /// real shapes) plus segment files seg_0000..seg_00{headSegmentCount-1}
-    /// (the encoded head; head = headSegmentCount - 1). The JF-817 incident
-    /// itself is a 100-chapter book resumed at 210s (segment 21) while the
-    /// encode head sat at 21-80 (2026-10-08 20:35, the seg_3055 tail death).
-    /// No stream.m3u8 is planted: the request must take the concurrent-encode
-    /// guard row, the during-encode prewrite serve under test. Returns the
-    /// parent ID string (for the controller and the active-encode seam), the
-    /// HLS dir (to advance the head mid-test), and the prewrite path (to age
-    /// the mtime, the window's growth anchor). totalRuntime must split into
-    /// two even chapters of a whole 10s-segment count so the uniform
-    /// durations stay exactly 10s (the EXTINF arithmetic the pins resolve
-    /// segments by).
+    /// The shared item/mock arrange of the JF-817 audiobook pins: a Folder
+    /// parent plus two even-half Audio chapters of <paramref name="totalRuntime"/>
+    /// (the even split over a whole 10s-segment count keeps the prewrite's
+    /// uniform durations exactly 10s, the EXTINF arithmetic the pins resolve
+    /// segments by), with the GetItemById and GetItemList mocks set. The
+    /// planting fixture below adds the cache directory, the segment files,
+    /// and the prewrite; the first-fetch and completed-encode pins start from
+    /// this bare arrange (no planted cache).
     /// </summary>
-    private (string ParentIdStr, string HlsDir, string PrewritePath) PlantLiveAudiobookEncodeFixture(
-        string bookName, int headSegmentCount, TimeSpan totalRuntime)
+    private (Guid ParentId, List<MediaBrowser.Controller.Entities.BaseItem> Chapters) SetupAudiobookParentAndChapters(
+        string bookName, TimeSpan totalRuntime)
     {
         Guid parentId = Guid.NewGuid();
-        string parentIdStr = parentId.ToString("D");
         var parentItem = new MediaBrowser.Controller.Entities.Folder
         {
             Name = bookName,
@@ -6497,6 +6488,29 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
         _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns(parentItem);
         _libraryManagerMock.Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
             .Returns(chapters);
+        return (parentId, chapters);
+    }
+
+    /// <summary>
+    /// Shared arrange of a LIVE audiobook encode over a planted cache directory
+    /// (the JF-817 device shape, parameterized): the full prewrite for the
+    /// given total runtime (<see cref="VideoAudioController.WriteAudiobookPlaylist"/>,
+    /// the production emitter, so the EXTINF walk and the token rewrite see
+    /// real shapes) plus segment files seg_0000..seg_00{headSegmentCount-1}
+    /// (the encoded head; head = headSegmentCount - 1). The JF-817 incident
+    /// itself is a 100-chapter book resumed at 210s (segment 21) while the
+    /// encode head sat at 21-80 (2026-10-08 20:35, the seg_3055 tail death).
+    /// No stream.m3u8 is planted: the request must take the concurrent-encode
+    /// guard row, the during-encode prewrite serve under test. Returns the
+    /// parent ID string (for the controller and the active-encode seam), the
+    /// HLS dir (to advance the head mid-test), and the prewrite path (to age
+    /// the mtime, the window's growth anchor).
+    /// </summary>
+    private (string ParentIdStr, string HlsDir, string PrewritePath) PlantLiveAudiobookEncodeFixture(
+        string bookName, int headSegmentCount, TimeSpan totalRuntime)
+    {
+        (Guid parentId, var chapters) = SetupAudiobookParentAndChapters(bookName, totalRuntime);
+        string parentIdStr = parentId.ToString("D");
 
         string hlsDir = _cache.GetHlsDirectoryPath(parentIdStr, 0);
         Directory.CreateDirectory(hlsDir);
@@ -6891,31 +6905,7 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
     [Fact]
     public async Task StreamHlsAudiobook_FirstFetch_ServesWindowedPrewriteNotFullListing()
     {
-        Guid parentId = Guid.NewGuid();
-        var parentItem = new MediaBrowser.Controller.Entities.Folder
-        {
-            Name = "JF-817 First Fetch Book",
-            Id = parentId
-        };
-        var chapters = new List<MediaBrowser.Controller.Entities.BaseItem>
-        {
-            new MediaBrowser.Controller.Entities.Audio.Audio
-            {
-                Name = "Chapter 1",
-                Id = Guid.NewGuid(),
-                RunTimeTicks = TimeSpan.FromSeconds(15180).Ticks
-            },
-            new MediaBrowser.Controller.Entities.Audio.Audio
-            {
-                Name = "Chapter 2",
-                Id = Guid.NewGuid(),
-                RunTimeTicks = TimeSpan.FromSeconds(15180).Ticks
-            }
-        };
-
-        _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns(parentItem);
-        _libraryManagerMock.Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
-            .Returns(chapters);
+        (Guid parentId, _) = SetupAudiobookParentAndChapters("JF-817 First Fetch Book", TimeSpan.FromSeconds(30360));
 
         string fakeFfmpegPath = WriteFakeFfmpeg("fake-ffmpeg-jf817-first-fetch",
             "for playlist_path in \"$@\"; do :; done\n" +
@@ -6948,31 +6938,7 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
     [Fact]
     public async Task StreamHlsAudiobook_CompletedEncode_Resume_ServesFullListingSliced()
     {
-        Guid parentId = Guid.NewGuid();
-        var parentItem = new MediaBrowser.Controller.Entities.Folder
-        {
-            Name = "JF-817 Completed Book",
-            Id = parentId
-        };
-        var chapters = new List<MediaBrowser.Controller.Entities.BaseItem>
-        {
-            new MediaBrowser.Controller.Entities.Audio.Audio
-            {
-                Name = "Chapter 1",
-                Id = Guid.NewGuid(),
-                RunTimeTicks = TimeSpan.FromSeconds(15180).Ticks
-            },
-            new MediaBrowser.Controller.Entities.Audio.Audio
-            {
-                Name = "Chapter 2",
-                Id = Guid.NewGuid(),
-                RunTimeTicks = TimeSpan.FromSeconds(15180).Ticks
-            }
-        };
-
-        _libraryManagerMock.Setup(m => m.GetItemById(parentId)).Returns(parentItem);
-        _libraryManagerMock.Setup(m => m.GetItemList(It.IsAny<MediaBrowser.Controller.Entities.InternalItemsQuery>()))
-            .Returns(chapters);
+        (Guid parentId, _) = SetupAudiobookParentAndChapters("JF-817 Completed Book", TimeSpan.FromSeconds(30360));
 
         await SeedCompletedConcatCacheAsync(
             _cache, parentId, segmentCount: 3036, encodedChapterCount: 2, encodedDurationTicks: TimeSpan.FromSeconds(30360).Ticks);
