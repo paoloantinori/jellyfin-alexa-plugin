@@ -98,7 +98,7 @@ public abstract class FavoriteToggleIntentHandler : BaseHandler
 
         // The ONE current-item resolver; the tail is refused (JF-785 Leg A, the
         // resolver doc owns the contract) so unresolvable evidence falls to the
-        // NoMediaPlaying tell below (JF-788, same door word as the idle guard).
+        // NoMediaPlaying tell below.
         BaseItem? item = Launch.ResolveCurrentPlayingItem(context, session, _libraryManager, _queueManager, IntentName, allowLedgerTailAnswers: false);
         if (item == null)
         {

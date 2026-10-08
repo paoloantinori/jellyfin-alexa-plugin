@@ -155,9 +155,8 @@ public class FavoriteToggleIntentHandlerTests : PluginTestBase
 
     /// <summary>
     /// Nothing resolvable anywhere (no token, no ledger, no session item): the
-    /// NoMediaPlaying tell (JF-788, the door word the playlist-edit, media-info,
-    /// and repeat-mode siblings already speak on this shape), and no user-data
-    /// write.
+    /// NoMediaPlaying tell (JF-788, the guard families' shared door word), and
+    /// no user-data write.
     /// </summary>
     [Fact]
     public async Task HandleAsync_NoResolvableItem_NoMediaPlayingWithoutWriting()
@@ -267,6 +266,37 @@ public class FavoriteToggleIntentHandlerTests : PluginTestBase
 
         Assert.Contains("Nothing is currently playing", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
         Assert.False(data.IsFavorite, "the days-old ledger item must not become the toggle target");
+        _fx.UserDataManager.Verify(u => u.SaveUserData(
+            It.IsAny<Jellyfin.Database.Implementations.Entities.User>(),
+            It.IsAny<BaseItem>(),
+            It.IsAny<UserItemData>(),
+            It.IsAny<UserDataSaveReason>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    /// <summary>
+    /// The JF-788 boundary pin: the data==null branch is NOT the evidence door
+    /// (the item resolved and is playing; only its user-data row is missing), so
+    /// it deliberately KEEPS MediaNotFound while both door branches above speak
+    /// NoMediaPlaying. Pinned so a future wording-unification sweep cannot flip
+    /// the keep as "the family's last MediaNotFound" without this test going red.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_ItemResolvedButNoUserData_KeepsMediaNotFound_JF788()
+    {
+        var song = new Audio { Name = "Dataless Song", Id = Guid.NewGuid(), Path = "/music/d.mp3" };
+        _fx.SetupUserMock();
+        _fx.LibraryManager.Setup(l => l.GetItemById(song.Id)).Returns(song);
+        _fx.UserDataManager.Setup(u => u.GetUserData(
+            It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
+            .Returns((UserItemData?)null);
+        var handler = CreateHandler();
+
+        var response = await handler.HandleAsync(
+            Request(), TestHelpers.CreateContextWithToken(song.Id.ToString(), "fav-nodata-device"),
+            TestHelpers.CreateTestUser(), _fx.CreateSession(), CancellationToken.None);
+
+        Assert.Contains("could not find the media", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
         _fx.UserDataManager.Verify(u => u.SaveUserData(
             It.IsAny<Jellyfin.Database.Implementations.Entities.User>(),
             It.IsAny<BaseItem>(),
