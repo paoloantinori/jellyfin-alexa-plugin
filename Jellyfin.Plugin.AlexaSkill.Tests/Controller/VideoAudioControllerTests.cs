@@ -5846,8 +5846,15 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
     /// ticks-A verdict fetch must fire (its own generation is dead) while gen
     /// B's directory SURVIVES: the cleanup is scoped to the caller's own ticks
     /// directory. The fetch itself then hits the pre-existing
-    /// concurrent-encode guard (deliberately any-generation, JF-669/JF-675) and
-    /// 503s until gen B exits, the honest one-retry-later degraded answer.
+    /// concurrent-encode guard (deliberately any-generation, JF-669/JF-675),
+    /// which since JF-820 resolves the prewrite through the LIVE generation's
+    /// directory and serves gen B's windowed prewrite (2 entries, no ENDLIST)
+    /// to this foreign-ticks caller instead of the pre-JF-820 503 (the
+    /// degradation the JF-820 design decision traded away: the audio concat
+    /// timeline is generation-independent, so serving the running encode's
+    /// listing is correct and the lock-wait/503 bought nothing). The verdict
+    /// and cleanup asserts below are UNCHANGED by JF-820: the ticks-A debris
+    /// is still invalidated and cleaned, gen B's directory still survives.
     /// Red proof: with the validator reverted to the ungated key-wide shape
     /// (the pre-JF-676 body) the pin fails showing dir_B wiped.
     /// </summary>
@@ -5933,8 +5940,13 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
             // gen B (ticks B) is live: the verdict must fire TICKS-SCOPED.
             artImage.DateModified = artA;
             ActionResult second = await controller.StreamHlsAudiobook(parentIdStr);
-            var degraded = Assert.IsType<ObjectResult>(second);
-            Assert.Equal(503, degraded.StatusCode);
+            // JF-820: the guard serves gen B's live prewrite (window 2: head
+            // seg_0000 only, floor 2) to this foreign-ticks caller instead of
+            // the pre-JF-820 503.
+            var liveServe = Assert.IsType<ContentResult>(second);
+            Assert.Equal(2, VideoAudioController.CountSegmentsInPlaylist(liveServe.Content));
+            Assert.Contains("seg_0000.ts?token=", liveServe.Content, StringComparison.Ordinal);
+            Assert.DoesNotContain("#EXT-X-ENDLIST", liveServe.Content, StringComparison.Ordinal);
 
             Assert.True(
                 File.Exists(Path.Combine(dirB, "stream.m3u8")),
@@ -6515,7 +6527,23 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
         (Guid parentId, var chapters) = SetupAudiobookParentAndChapters(bookName, totalRuntime);
         string parentIdStr = parentId.ToString("D");
 
-        string hlsDir = _cache.GetHlsDirectoryPath(parentIdStr, 0);
+        (string hlsDir, string prewritePath) = PlantLiveAudiobookEncodeCore(parentIdStr, 0, chapters, headSegmentCount);
+        return (parentIdStr, hlsDir, prewritePath);
+    }
+
+    /// <summary>
+    /// The planting core of the JF-817/JF-820 audiobook fixtures (the
+    /// single-item planter's audiobook twin, extracted at JF-820 when the
+    /// foreign-generation fixture needed the SAME shape at a non-zero
+    /// generation's ticks): the cache directory at the given generation's
+    /// ticks, the head segment files seg_0000..seg_{headSegmentCount-1}, and
+    /// the full prewrite via the production emitter
+    /// (<see cref="VideoAudioController.WriteAudiobookPlaylist"/>).
+    /// </summary>
+    private (string HlsDir, string PrewritePath) PlantLiveAudiobookEncodeCore(
+        string cacheKeyId, long artTicks, List<MediaBrowser.Controller.Entities.BaseItem> chapters, int headSegmentCount)
+    {
+        string hlsDir = _cache.GetHlsDirectoryPath(cacheKeyId, artTicks);
         Directory.CreateDirectory(hlsDir);
         for (int i = 0; i < headSegmentCount; i++)
         {
@@ -6525,10 +6553,10 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
         string prewritePath = Path.Combine(hlsDir, "playlist-full.m3u8");
         VideoAudioController.WriteAudiobookPlaylist(
             prewritePath,
-            $"/alexaskill/api/video-audio/{parentIdStr}/segments/",
+            $"/alexaskill/api/video-audio/{cacheKeyId}/segments/",
             chapters,
             token: null);
-        return (parentIdStr, hlsDir, prewritePath);
+        return (hlsDir, prewritePath);
     }
 
     /// <summary>
@@ -7060,6 +7088,152 @@ public class VideoAudioControllerTests : VideoAudioControllerTestHarness
         Assert.DoesNotContain("seg_0020", content.Content, StringComparison.Ordinal);
         Assert.Contains("#EXT-X-MEDIA-SEQUENCE:21", content.Content, StringComparison.Ordinal);
         Assert.Contains("#EXT-X-ENDLIST", content.Content, StringComparison.Ordinal);
+    }
+
+    // ========== JF-820: foreign-generation stale prewrite under a live encode ==========
+
+    /// <summary>
+    /// Shared JF-820 arrange: ONE book (two even-half chapters over
+    /// <paramref name="totalRuntime"/>, so a 10s-segment prewrite's entries
+    /// are uniform) with TWO generations on disk. The STALE generation sits in
+    /// the REQUEST ticks dir (0, the mock's art ticks): a completed prior
+    /// encode's leftovers, the documented undeletable debris class (full
+    /// playlist-full.m3u8 + all its segments; a fully-encoded dir defeats the
+    /// window cap, head + 1 >= total). The LIVE generation sits at
+    /// <paramref name="liveHeadSegmentCount"/> head segments plus a fresh
+    /// prewrite in a FOREIGN ticks dir (12345), registered the way the
+    /// production encode start does (<see cref="VideoAudioCache.RegisterHlsDirectoryPath"/>;
+    /// the caller marks the registry live at those ticks through the seam's
+    /// explicit-ticks arm). Returns the ids, both dirs, both prewrite paths,
+    /// and the live ticks.
+    /// </summary>
+    private (string ParentIdStr, string LiveHlsDir, string LivePrewritePath, string StaleHlsDir, long LiveTicks)
+        PlantForeignGenerationAudiobookFixture(string bookName, int liveHeadSegmentCount, TimeSpan totalRuntime)
+    {
+        (Guid parentId, var chapters) = SetupAudiobookParentAndChapters(bookName, totalRuntime);
+        string parentIdStr = parentId.ToString("D");
+        const long liveTicks = 12345L;
+
+        // The STALE generation through the shared core at the REQUEST ticks,
+        // with the head = the FULL segment count (the fully-encoded shape) and
+        // an OLD prewrite mtime: the aging is what makes the window's growth
+        // term (elapsed + lead) reach the segment-count cap and the
+        // fully-encoded dir's head cap (head + 1 >= total) defeat the
+        // windowing entirely - the filed full-stale-listing serve shape.
+        int totalSegments = (int)Math.Ceiling(totalRuntime.TotalSeconds / 10.0);
+        (string staleHlsDir, string stalePrewritePath) =
+            PlantLiveAudiobookEncodeCore(parentIdStr, 0, chapters, totalSegments);
+        File.SetLastWriteTimeUtc(stalePrewritePath, DateTime.UtcNow.AddSeconds(-600));
+
+        (string liveHlsDir, string livePrewritePath) =
+            PlantLiveAudiobookEncodeCore(parentIdStr, liveTicks, chapters, liveHeadSegmentCount);
+        _cache.RegisterHlsDirectoryPath(parentIdStr, liveTicks, liveHlsDir);
+
+        return (parentIdStr, liveHlsDir, livePrewritePath, staleHlsDir, liveTicks);
+    }
+
+    /// <summary>
+    /// JF-820 core pin (the filed defect, red on the unmodified guard): a
+    /// FOREIGN-ticks request (its own art-ticks dir is dead) reaching the
+    /// audiobook concurrent-encode guard while a live encode of the SAME key
+    /// runs must be served the RUNNING generation's listing, not the stale
+    /// foreign playlist-full.m3u8 sitting in its own dead dir. The stale dir
+    /// here is the fully-encoded shape (all 60 segments + full prewrite), so
+    /// the pre-fix guard's window cap reads head + 1 >= total and serves the
+    /// FULL stale listing: the resume slice then spans seg_0021..seg_0059 (39
+    /// entries) whose listing is a foreign generation's debris. The live
+    /// generation (head at seg_0022, prewrite aged 200s: window 23 entries;
+    /// 210s resolves to segment 21, inside the honor band) serves the 2-entry
+    /// slice seg_0021..seg_0022, and the stale tail (seg_0059) must stay
+    /// absent. RED PROOF (run before the fix, output in the task notes): the
+    /// unmodified guard resolved the prewrite by the bare REQUEST ticks, found
+    /// the stale listing, and served its full 39-entry tail
+    /// (expected 2 / actual 39, seg_0059 present).
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_ForeignTicksRequestUnderLiveEncode_ServesLiveGenerationListingNotStalePrewrite()
+    {
+        (string parentIdStr, _, string livePrewritePath, string staleHlsDir, long liveTicks) =
+            PlantForeignGenerationAudiobookFixture(
+                "JF-820 Foreign Ticks Book", liveHeadSegmentCount: 23, totalRuntime: TimeSpan.FromSeconds(600));
+
+        File.SetLastWriteTimeUtc(livePrewritePath, DateTime.UtcNow.AddSeconds(-200));
+
+        VideoAudioController.SetEncodeActiveForTest(parentIdStr, active: true, audiobook: true, artModifiedTicks: liveTicks);
+        try
+        {
+            var controller = CreateController(parentIdStr, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf820-foreign"));
+
+            ActionResult result = await controller.StreamHlsAudiobook(parentIdStr, TimeSpan.FromSeconds(210).Ticks);
+
+            var content = Assert.IsType<ContentResult>(result);
+            Assert.Equal(2, VideoAudioController.CountSegmentsInPlaylist(content.Content));
+            Assert.Contains("seg_0021.ts?token=", content.Content, StringComparison.Ordinal);
+            Assert.Contains("seg_0022.ts?token=", content.Content, StringComparison.Ordinal);
+            Assert.DoesNotContain("seg_0059", content.Content, StringComparison.Ordinal);
+            Assert.DoesNotContain("#EXT-X-ENDLIST", content.Content, StringComparison.Ordinal);
+            Assert.True(!File.Exists(Path.Combine(staleHlsDir, "stream.m3u8")), "stale dir must not gain a live listing");
+        }
+        finally
+        {
+            VideoAudioController.SetEncodeActiveForTest(parentIdStr, active: false, audiobook: true, artModifiedTicks: liveTicks);
+        }
+    }
+
+    /// <summary>
+    /// JF-820 counterpart pin (the resolution's PRIORITY, not its defect row):
+    /// when the caller's OWN ticks generation IS the live one, a foreign
+    /// generation's stale playlist-full.m3u8 in ANOTHER ticks dir must not
+    /// steal the serve. The own live prewrite (head 23, aged 200s: window 23;
+    /// resume 210s = segment 21, inside the honor band) serves the 2-entry
+    /// slice seg_0021..seg_0022; the foreign stale dir (a full 60-entry
+    /// listing, prewrite-only) would instead serve its own head-floored prefix
+    /// from seg_0000. The existing JF-817 pins cover the same-ticks row with
+    /// NO foreign dir present; this pin adds the foreign-debris-present
+    /// discriminator the JF-820 resolution could regress.
+    /// </summary>
+    [Fact]
+    public async Task StreamHlsAudiobook_OwnTicksLiveUnderForeignStaleDir_ServesOwnWindowedPrewrite()
+    {
+        (string parentIdStr, _, string prewritePath) = PlantLiveAudiobookEncodeFixture(
+            "JF-820 Own Ticks Book", headSegmentCount: 23, totalRuntime: TimeSpan.FromSeconds(600));
+
+        // The foreign stale debris in ANOTHER ticks dir: full listing, no
+        // segments (the undeletable-prewrite-only leftover shape). The writer
+        // only reads RunTimeTicks, so the chapter stubs are local (no second
+        // mock-parent arrange for the same book).
+        string staleForeignDir = _cache.GetHlsDirectoryPath(parentIdStr, 12345L);
+        Directory.CreateDirectory(staleForeignDir);
+        var stubChapters = new List<MediaBrowser.Controller.Entities.BaseItem>
+        {
+            new MediaBrowser.Controller.Entities.Audio.Audio { RunTimeTicks = TimeSpan.FromSeconds(300).Ticks },
+            new MediaBrowser.Controller.Entities.Audio.Audio { RunTimeTicks = TimeSpan.FromSeconds(300).Ticks }
+        };
+        VideoAudioController.WriteAudiobookPlaylist(
+            Path.Combine(staleForeignDir, "playlist-full.m3u8"),
+            $"/alexaskill/api/video-audio/{parentIdStr}/segments/",
+            stubChapters,
+            token: null);
+
+        File.SetLastWriteTimeUtc(prewritePath, DateTime.UtcNow.AddSeconds(-200));
+
+        VideoAudioController.SetEncodeActiveForTest(parentIdStr, active: true, audiobook: true);
+        try
+        {
+            var controller = CreateController(parentIdStr, ffmpegPath: WriteRecordingFakeFfmpeg("fake-ffmpeg-jf820-own"));
+
+            ActionResult result = await controller.StreamHlsAudiobook(parentIdStr, TimeSpan.FromSeconds(210).Ticks);
+
+            var content = Assert.IsType<ContentResult>(result);
+            Assert.Equal(2, VideoAudioController.CountSegmentsInPlaylist(content.Content));
+            Assert.Contains("seg_0021.ts?token=", content.Content, StringComparison.Ordinal);
+            Assert.Contains("seg_0022.ts?token=", content.Content, StringComparison.Ordinal);
+            Assert.DoesNotContain("#EXT-X-MEDIA-SEQUENCE:0", content.Content, StringComparison.Ordinal);
+        }
+        finally
+        {
+            VideoAudioController.SetEncodeActiveForTest(parentIdStr, active: false, audiobook: true);
+        }
     }
 
     // ========== JF-819: windowed single-item (song-family) prewrite serve ==========
