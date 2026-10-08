@@ -1052,6 +1052,29 @@ types:
       - Il Piccolo Principe
       - Harry Potter e la Pietra Filosofale
       - Il Signore degli Anelli
+      # JF-816 residual: the "l'audiolibro di X" race. The it-IT trainer drops
+      # the elided PlayBook carrier below PlayNextEpisode exactly when the tail
+      # matches NOTHING in the slot type's vocabulary (any vocabulary overlap,
+      # even article-less or partial, flips the race; probe matrix in JF-516
+      # notes). The library's English titles are the missing vocabulary: unlike
+      # JellyfinArtist/AlbumName/SeriesName, AudiobookTitle has NO catalog sync
+      # (CatalogSlotTypeNames), so in the SAVED model this static seed is the
+      # only vocabulary deciding first-turn selection (the dynamic-entities
+      # push onto AudiobookTitle lands turn 2+, after selection).
+      - The Upside of Irrationality
+      - Predictably Irrational
+      - Measure What Matters
+      - Sapiens
+      - Homo Deus
+      - Thinking Fast and Slow
+      - Atomic Habits
+      - The Power of Habit
+      - Deep Work
+      - Zero to One
+      - Educated
+      - Born a Crime
+      - Steve Jobs
+      - The Psychology of Money
   MediaInfoType:
     values:
       - value: chi canta
