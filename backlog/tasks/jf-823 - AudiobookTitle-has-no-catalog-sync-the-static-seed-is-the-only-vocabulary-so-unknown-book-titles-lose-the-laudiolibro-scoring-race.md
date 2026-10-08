@@ -1,7 +1,7 @@
 ---
-id: JF-818
+id: JF-823
 title: >-
-  JF-818 - AudiobookTitle has no catalog sync: the static seed is the slot type's only
+  JF-823 - AudiobookTitle has no catalog sync: the static seed is the slot type's only
   vocabulary, so book titles outside the seed lose the "l'audiolibro di" scoring race
   to PlayNextEpisode
 status: To Do
