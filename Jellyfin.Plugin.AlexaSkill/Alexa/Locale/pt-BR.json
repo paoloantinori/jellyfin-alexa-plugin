@@ -203,6 +203,7 @@
   "ReminderSetRelativeFor": "Lembrete definido para {0} a partir de agora.",
   "ReminderSetAbsolute": "Lembrete definido para {0}.",
   "ReminderError": "Desculpe, não consegui definir esse lembrete. Por favor, tente novamente.",
+  "MediaSearchError": "Desculpe, não consegui pesquisar na sua biblioteca. Tente novamente.",
   "ReminderPermissionRequired": "Para definir lembretes, preciso de permissão. Vá para o app Alexa para conceder permissões de lembrete.",
   "ReminderDefaultMessage": "Este é o seu lembrete do Jellyfin.",
   "ElicitSongName": "Qual música você gostaria de ouvir?",

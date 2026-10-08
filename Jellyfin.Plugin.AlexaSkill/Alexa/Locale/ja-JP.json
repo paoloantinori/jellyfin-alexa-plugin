@@ -203,6 +203,7 @@
   "ReminderSetRelativeFor": "{0}後にリマインダーを設定しました。",
   "ReminderSetAbsolute": "{0} にリマインダーを設定しました。",
   "ReminderError": "申し訳ありませんが、リマインダーを設定できませんでした。もう一度お試しください。",
+  "MediaSearchError": "申し訳ありませんが、メディアを検索できませんでした。もう一度お試しください。",
   "ReminderPermissionRequired": "リマインダーを設定するには許可が必要です。Alexaアプリでリマインダーの許可を付与してください。",
   "ReminderDefaultMessage": "これはJellyfinリマインダーです。",
   "ElicitSongName": "どの曲を聴きたいですか？",

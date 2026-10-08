@@ -203,6 +203,7 @@
   "ReminderSetRelativeFor": "Herinnering ingesteld over {0}.",
   "ReminderSetAbsolute": "Herinnering ingesteld voor {0}.",
   "ReminderError": "Sorry, ik kon die herinnering niet instellen. Probeer het opnieuw.",
+  "MediaSearchError": "Sorry, ik kon je media niet doorzoeken. Probeer het opnieuw.",
   "ReminderPermissionRequired": "Om herinneringen in te stellen, heb ik toestemming nodig. Ga naar de Alexa-app om herinneringsrechten te geven.",
   "ReminderDefaultMessage": "Dit is je Jellyfin herinnering.",
   "ElicitSongName": "Welk nummer wil je horen?",

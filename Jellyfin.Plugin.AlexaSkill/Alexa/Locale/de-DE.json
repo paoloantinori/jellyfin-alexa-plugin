@@ -203,6 +203,7 @@
   "ReminderSetRelativeFor": "Erinnerung in {0} eingestellt.",
   "ReminderSetAbsolute": "Erinnerung fuer {0} eingestellt.",
   "ReminderError": "Sorry, ich konnte die Erinnerung nicht setzen. Bitte versuche es erneut.",
+  "MediaSearchError": "Sorry, ich konnte deine Mediathek nicht durchsuchen. Bitte versuche es erneut.",
   "ReminderPermissionRequired": "Um Erinnerungen zu setzen, brauche ich deine Erlaubnis. Bitte gehe in die Alexa-App, um die Berechtigung zu erteilen.",
   "ReminderDefaultMessage": "Dies ist deine Jellyfin-Erinnerung.",
   "ElicitSongName": "Welches Lied möchtest du hören?",

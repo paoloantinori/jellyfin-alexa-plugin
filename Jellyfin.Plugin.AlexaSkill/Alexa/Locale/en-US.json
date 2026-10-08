@@ -203,6 +203,7 @@
   "ReminderSetRelativeFor": "Reminder set for {0} from now.",
   "ReminderSetAbsolute": "Reminder set for {0}.",
   "ReminderError": "Sorry, I couldn't set that reminder. Please try again.",
+  "MediaSearchError": "Sorry, I couldn't search your media library. Please try again.",
   "ReminderPermissionRequired": "To set reminders, I need permission. Please go to the Alexa app to grant reminder permissions.",
   "ReminderDefaultMessage": "This is your Jellyfin reminder.",
   "ElicitSongName": "What song would you like to hear?",
