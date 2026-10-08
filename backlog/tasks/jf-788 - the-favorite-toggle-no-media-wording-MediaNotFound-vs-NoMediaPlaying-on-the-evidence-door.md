@@ -3,7 +3,7 @@ id: JF-788
 title: >-
   The favorite-toggle no-media wording: MediaNotFound where the other three
   guarded families say NoMediaPlaying (the evidence-door shape)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-06'
 labels:
