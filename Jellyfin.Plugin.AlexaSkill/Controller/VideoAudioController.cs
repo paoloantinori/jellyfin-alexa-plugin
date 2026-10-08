@@ -5190,7 +5190,7 @@ public class VideoAudioController : ControllerBase
             if (!ResumeInsidePrewriteHonorBand(startSegment, window.WindowSegments, AudiobookPrewriteWindowLeadSegments))
             {
                 _logger.LogInformation(
-                    "VideoAudio audiobook HLS: cold-cache resume for parent {ParentId} (startTicks={StartTicks}, start segment {StartSegment}) is outside the encode window's honor band ({WindowSegments} of {TotalSegments} entries, edge within {Lead} of the position required); dropping the resume and serving from the beginning (JF-817, the JF-778/JF-686 still-growing rule)",
+                    "VideoAudio audiobook HLS: cold-cache resume for parent {ParentId} (startTicks={StartTicks}, start segment {StartSegment}) is outside the encode window's honor band ({WindowSegments} of {TotalSegments} entries, edge within {Lead} of the position required); dropping the resume offset - the served windowed no-ENDLIST listing joins at ITS live edge, roughly the encode-elapsed position, NOT at segment 0 (JF-817, the JF-778/JF-686 still-growing rule; gate-marker tail F3)",
                     parentId, startTicks, startSegment, window.WindowSegments, totalSegments, AudiobookPrewriteWindowLeadSegments);
                 effectiveStartTicks = 0;
             }

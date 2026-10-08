@@ -1488,4 +1488,17 @@ public class VideoAudioControllerPureTests : VideoAudioControllerTestHarness
 
         AssertSurvivesDeniedDirectory(dir, () => VideoAudioController.TryDelete(target));
     }
+
+    // Gate-marker tail F5: the honor-band boundary pins. Both endpoint rows
+    // (the LAST honored offset at windowSegments - leadSegments, and the FIRST
+    // dropped one one further back) had no coverage: a future flip of the
+    // shared predicate's <= to < changes exactly these rows on BOTH families
+    // and passes every existing pin.
+    [Theory]
+    [InlineData(3, 5, 2, true)]   // edge - lead == start: the last honored row
+    [InlineData(2, 5, 2, false)]  // one before it: the first dropped row
+    [InlineData(5, 5, 2, false)]  // start at the edge itself: dropped (slice would be empty-past)
+    [InlineData(0, 5, 2, false)]  // fresh-book resume far behind the edge: dropped
+    public void ResumeInsidePrewriteHonorBand_BoundaryRows(int startSegment, int windowSegments, int leadSegments, bool expected)
+        => Assert.Equal(expected, VideoAudioController.ResumeInsidePrewriteHonorBand(startSegment, windowSegments, leadSegments));
 }

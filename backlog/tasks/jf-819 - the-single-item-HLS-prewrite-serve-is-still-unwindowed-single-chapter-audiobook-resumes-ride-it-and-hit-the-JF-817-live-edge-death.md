@@ -7,6 +7,7 @@ status: To Do
 assignee: []
 created_date: '2026-10-08'
 labels:
+  - 1.0-blocker
   - bug
   - audiobooks
   - hls
@@ -15,7 +16,7 @@ dependencies:
   - JF-817
 references:
   - Jellyfin.Plugin.AlexaSkill/Controller/VideoAudioController.cs
-priority: medium
+priority: high
 ---
 
 ## Description
@@ -73,3 +74,5 @@ for the single-file-book shape.
 - [ ] #9 /simplify passed (no blocking cleanups remaining)
 - [ ] #10 /code-review high passed (no blocking findings remaining or findings applied/tracked)
 <!-- DOD:END -->
+
+GATE-MARKER PROMOTION (2026-10-08, the JF-817 marker F1): promoted into the 1.0 milestone with the blocker label. The marker's judgment: JF-817 is a 1.0-blocker for this same death on the concat path, so shipping 1.0 with the death alive on the single-file book shape (common per the JF-794 census) is the headline bug half-fixed; the 'maintainer must re-decide the pinned JF-675/JF-680 song behavior' argument is a reason to force that decision before release, not to leave the flag off. The scope note stands: the song-family prewrite serves are PINNED full-listing by JF-675/JF-680, so the fix must re-decide those pins deliberately, not drive-by flip them.
