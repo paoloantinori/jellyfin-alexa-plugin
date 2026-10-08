@@ -88,8 +88,9 @@ public abstract class FavoriteToggleIntentHandler : BaseHandler
         // DTO-only guard onto it): without current evidence the resolver's
         // unbounded ledger tail must not favorite the idle device's days-old
         // last-played item; the predicate's doc owns the evidence legs. JF-788
-        // unified this door's tell with the playlist-edit, media-info, and
-        // repeat-mode siblings: NoMediaPlaying, not MediaNotFound.
+        // unified this door's tell with the other guarded families
+        // (playlist-edit, media-info, the ProgressReporter loop-mode applier;
+        // NOT RepeatIntentHandler, an unguarded tail rider): NoMediaPlaying.
         if (!PlaybackLaunchBuilder.HasCurrentPlaybackEvidence(context, session))
         {
             Logger.LogDebug("FavoriteToggle ({IntentName}): idle device (no token, no session item), answering NoMediaPlaying", IntentName);
@@ -120,8 +121,10 @@ public abstract class FavoriteToggleIntentHandler : BaseHandler
         if (data == null)
         {
             // NOT the JF-788 evidence door: the item resolved (it is playing),
-            // only its user-data row is missing, so MediaNotFound stays (the
-            // RateItem sibling keeps its own family word on this same shape).
+            // only its user-data row is missing, so the unification stopped at
+            // the two door branches and this defensive tell keeps
+            // MediaNotFound; both existing no-media strings are false for a
+            // playing item (JF-818 owns the open wording question).
             return Task.FromResult<SkillResponse>(ResponseBuilder.Tell(ResponseStrings.Get("MediaNotFound", locale)));
         }
 

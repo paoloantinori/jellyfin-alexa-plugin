@@ -279,7 +279,8 @@ public class FavoriteToggleIntentHandlerTests : PluginTestBase
     /// (the item resolved and is playing; only its user-data row is missing), so
     /// it deliberately KEEPS MediaNotFound while both door branches above speak
     /// NoMediaPlaying. Pinned so a future wording-unification sweep cannot flip
-    /// the keep as "the family's last MediaNotFound" without this test going red.
+    /// the keep as "the family's last MediaNotFound" without this test going red;
+    /// JF-818 owns the open wording question for this branch.
     /// </summary>
     [Fact]
     public async Task HandleAsync_ItemResolvedButNoUserData_KeepsMediaNotFound_JF788()
