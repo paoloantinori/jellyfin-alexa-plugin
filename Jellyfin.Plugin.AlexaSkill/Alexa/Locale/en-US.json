@@ -5,6 +5,7 @@
   "MediaNotFound": "Sorry, I could not find the media.",
   "AddedToFavorites": "Media added to favorites list.",
   "RemovedFromFavorites": "Media removed from the favorites list.",
+  "FavoriteNoItem": "There is nothing playing right now for me to add to or remove from favorites.",
   "RatingSet": "Done. {0} out of 5 stars for {1}.",
   "RatingOutOfRange": "Please choose a rating from one to five stars.",
   "DidNotCatchStarRating": "How many stars, from one to five?",

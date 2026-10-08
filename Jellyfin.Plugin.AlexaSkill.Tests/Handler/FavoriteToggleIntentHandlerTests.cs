@@ -275,15 +275,14 @@ public class FavoriteToggleIntentHandlerTests : PluginTestBase
     }
 
     /// <summary>
-    /// The JF-788 boundary pin: the data==null branch is NOT the evidence door
-    /// (the item resolved and is playing; only its user-data row is missing), so
-    /// it deliberately KEEPS MediaNotFound while both door branches above speak
-    /// NoMediaPlaying. Pinned so a future wording-unification sweep cannot flip
-    /// the keep as "the family's last MediaNotFound" without this test going red;
-    /// JF-818 owns the open wording question for this branch.
+    /// The JF-821 decision pin: the data==null branch (item resolved and
+    /// playing, user-data row missing) tells the dedicated FavoriteNoItem
+    /// apology, the RateItem RatingNoItem mirror. Rationale and the rejected
+    /// alternatives live in the handler's data==null comment (JF-821); pinned
+    /// so a wording sweep cannot flip this branch without going red.
     /// </summary>
     [Fact]
-    public async Task HandleAsync_ItemResolvedButNoUserData_KeepsMediaNotFound_JF788()
+    public async Task HandleAsync_ItemResolvedButNoUserData_SpeaksFavoriteNoItemApology_JF821()
     {
         var song = new Audio { Name = "Dataless Song", Id = Guid.NewGuid(), Path = "/music/d.mp3" };
         _fx.SetupUserMock();
@@ -297,7 +296,43 @@ public class FavoriteToggleIntentHandlerTests : PluginTestBase
             Request(), TestHelpers.CreateContextWithToken(song.Id.ToString(), "fav-nodata-device"),
             TestHelpers.CreateTestUser(), _fx.CreateSession(), CancellationToken.None);
 
-        Assert.Contains("could not find the media", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        Assert.Contains("nothing playing right now for me to add to or remove from favorites", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
+        _fx.UserDataManager.Verify(u => u.SaveUserData(
+            It.IsAny<Jellyfin.Database.Implementations.Entities.User>(),
+            It.IsAny<BaseItem>(),
+            It.IsAny<UserItemData>(),
+            It.IsAny<UserDataSaveReason>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    /// <summary>
+    /// The JF-821 code-review direction twin: the SAME data==null branch is
+    /// shared with UnmarkFavoriteIntentHandler, so the FavoriteNoItem apology
+    /// must be direction-neutral; the remove direction speaks the identical
+    /// "add to or remove from" tell instead of an add-only sentence.
+    /// </summary>
+    [Fact]
+    public async Task HandleAsync_UnmarkItemResolvedButNoUserData_SpeaksDirectionNeutralApology_JF821()
+    {
+        var song = new Audio { Name = "Dataless Song", Id = Guid.NewGuid(), Path = "/music/d2.mp3" };
+        _fx.SetupUserMock();
+        _fx.LibraryManager.Setup(l => l.GetItemById(song.Id)).Returns(song);
+        _fx.UserDataManager.Setup(u => u.GetUserData(
+            It.IsAny<Jellyfin.Database.Implementations.Entities.User>(), It.IsAny<BaseItem>()))
+            .Returns((UserItemData?)null);
+        var handler = new UnmarkFavoriteIntentHandler(
+            _fx.SessionManager.Object,
+            _fx.Config,
+            _fx.UserDataManager.Object,
+            _fx.UserManager.Object,
+            _fx.LibraryManager.Object,
+            _fx.LoggerFactory);
+
+        var response = await handler.HandleAsync(
+            Request(IntentNames.UnmarkFavorite), TestHelpers.CreateContextWithToken(song.Id.ToString(), "fav-unmark-nodata-device"),
+            TestHelpers.CreateTestUser(), _fx.CreateSession(), CancellationToken.None);
+
+        Assert.Contains("nothing playing right now for me to add to or remove from favorites", TestHelpers.GetSpeechText(response), StringComparison.Ordinal);
         _fx.UserDataManager.Verify(u => u.SaveUserData(
             It.IsAny<Jellyfin.Database.Implementations.Entities.User>(),
             It.IsAny<BaseItem>(),

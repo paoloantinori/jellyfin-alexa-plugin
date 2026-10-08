@@ -11,6 +11,7 @@
   "ShuffleEnabled": "File aléatoire activée.",
   "ShuffleDisabled": "Lecture aléatoire désactivée.",
   "RemovedFromFavorites": "Média retiré des favoris.",
+  "FavoriteNoItem": "Il n'y a rien en lecture à ajouter ou à retirer des favoris pour le moment.",
   "RatingSet": "C'est fait. Note de {0} sur 5 pour {1}.",
   "RatingOutOfRange": "Tu peux donner une note d'une à cinq étoiles.",
   "DidNotCatchStarRating": "Combien d'étoiles veux-tu donner, d'une à cinq ?",

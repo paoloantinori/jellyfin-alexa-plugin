@@ -11,6 +11,7 @@
   "ShuffleEnabled": "Cola mezclada.",
   "ShuffleDisabled": "Aleatorio desactivado.",
   "RemovedFromFavorites": "Contenido eliminado de favoritos.",
+  "FavoriteNoItem": "No hay nada en reproducción que pueda añadir o quitar de favoritos.",
   "RatingSet": "Hecho. Valoración de {0} sobre 5 para {1}.",
   "RatingOutOfRange": "Puedes dar una valoración de una a cinco estrellas.",
   "DidNotCatchStarRating": "¿Cuántas estrellas, de una a cinco?",

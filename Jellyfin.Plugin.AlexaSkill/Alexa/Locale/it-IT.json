@@ -5,6 +5,7 @@
   "MediaNotFound": "Spiacente, non ho trovato il contenuto.",
   "AddedToFavorites": "Contenuto aggiunto ai preferiti.",
   "RemovedFromFavorites": "Contenuto rimosso dai preferiti.",
+  "FavoriteNoItem": "Non c'è nulla in riproduzione da poter aggiungere o rimuovere dai preferiti.",
   "RatingSet": "Fatto. Voto {0} su 5 per {1}.",
   "RatingOutOfRange": "Puoi dare un voto da una a cinque stelle.",
   "DidNotCatchStarRating": "Quante stelle vuoi dare, da una a cinque?",

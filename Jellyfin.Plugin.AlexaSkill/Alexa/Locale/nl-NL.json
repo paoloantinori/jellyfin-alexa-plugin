@@ -5,6 +5,7 @@
   "MediaNotFound": "Sorry, ik kon de media niet vinden.",
   "AddedToFavorites": "Media toegevoegd aan favorieten.",
   "RemovedFromFavorites": "Media verwijderd uit favorieten.",
+  "FavoriteNoItem": "Er speelt nu niets dat ik aan favorieten kan toevoegen of eruit kan verwijderen.",
   "RatingSet": "Klaar. Beoordeling {0} van 5 voor {1}.",
   "RatingOutOfRange": "Geef een beoordeling van één tot vijf sterren.",
   "DidNotCatchStarRating": "Hoeveel sterren wil je geven, van één tot vijf?",
