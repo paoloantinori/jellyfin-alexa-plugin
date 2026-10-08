@@ -48,3 +48,30 @@ MEDIA-SEQUENCE monotonic across the band flip (rebase the windowed listing's
 sequence to the slice's continuation, or hold the sliced shape until the
 encode completes); for 3, a graded band (honor while the drift is under a
 tolerance, e.g. 2 entries, drop only beyond it).
+
+SCOPE EXTENSION (JF-817, same turn as the audiobook windowing landed): the
+windowed serve family now includes the AUDIOBOOK prewrite rows (the
+concurrent-encode guard and the first-fetch tail of StreamHlsAudiobook),
+served through the same shared window computation and honor-band predicate
+as the episode path. Both residuals above therefore also apply to the
+audiobook resume path: a mid-encode book resume inside the band is served a
+sliced listing whose MEDIA-SEQUENCE can decrease when the band flips to the
+unsliced windowed serve (finding 1), and a resume a few entries behind the
+window edge is discarded to 0 for the remainder of the encode window
+(finding 3; an audiobook encode window is minutes for a copy concat, tens of
+minutes for an AAC transcode). The device probes should cover a BOOK resume
+alongside the episode ones.
+
+THIRD RESIDUAL (JF-817 /code-review finding 2, same family, distinct shape):
+the COMPLETION HANDOFF. When the band dropped a resume, the session plays
+from 0 on base-0 windowed listings; the first post-completion reload of the
+SAME URL (?start= still present) hits the ENDLIST cache-hit row, which
+re-applies the slice at the original segment, so one reload flips the
+listing base from 0 to S (a forward MEDIA-SEQUENCE jump) AND adds ENDLIST
+while the user is mid-playback from 0. Media3 either seek-jumps the user to
+the resume point (the intended self-heal, the JF-778 episode design's
+documented "the next warm serve resumes at the position exactly") or
+errors/resets; unverified on device. This is NOT findings 1/3 (both describe
+during-encode band flips); the completion handoff needs its own device probe
+(cold-cache book resume at minutes-deep, observe the transition when the
+encode completes).
