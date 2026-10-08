@@ -253,7 +253,7 @@
           },
           {
             "name": "chapter_number",
-            "type": "ItalianNumber"
+            "type": "AMAZON.NUMBER"
           }
         ]
       },
@@ -2093,11 +2093,11 @@
           },
           {
             "name": "season_number",
-            "type": "ItalianNumber"
+            "type": "AMAZON.NUMBER"
           },
           {
             "name": "episode_number",
-            "type": "ItalianNumber"
+            "type": "AMAZON.NUMBER"
           }
         ]
       },
@@ -3187,13 +3187,13 @@
           },
           {
             "name": "season_number",
-            "type": "ItalianNumber",
+            "type": "AMAZON.NUMBER",
             "confirmationRequired": false,
             "elicitationRequired": false
           },
           {
             "name": "episode_number",
-            "type": "ItalianNumber",
+            "type": "AMAZON.NUMBER",
             "confirmationRequired": false,
             "elicitationRequired": false
           }

@@ -265,8 +265,12 @@ explicit_intents:
     slots:
       - name: direction
         type: ItalianOrdinal
+      # JF-814: AMAZON.NUMBER like every other locale - the ItalianNumber custom
+      # type carried no compound words ("cinquantaquattro" fuzzy-matched to
+      # "quattro"), making chapters above 15 unreachable by voice; the handler
+      # already parses digits and full Italian words (ItalianNumberWords, JF-451).
       - name: chapter_number
-        type: ItalianNumber
+        type: AMAZON.NUMBER
   MarkFavoriteIntent:
     samples:
       - Aggiungi ai preferiti
@@ -1267,10 +1271,13 @@ templates:
     slots:
       - name: series_name
         type: SeriesName
+      # JF-814: AMAZON.NUMBER like every other locale (the ItalianNumber custom
+      # type had no compounds: "cinquantaquattro" arrived as 4, live 2026-10-08;
+      # episodes above 15 were unplayable by voice in it-IT).
       - name: season_number
-        type: ItalianNumber
+        type: AMAZON.NUMBER
       - name: episode_number
-        type: ItalianNumber
+        type: AMAZON.NUMBER
 
   # JF-324: next/latest-episode playback and "continue watching {series}". All
   # carriers name the episode (prossimo/ultimo episodio) or the continuation verb,
@@ -1364,11 +1371,11 @@ dialog:
           confirmationRequired: false
           elicitationRequired: false
         - name: season_number
-          type: ItalianNumber
+          type: AMAZON.NUMBER
           confirmationRequired: false
           elicitationRequired: false
         - name: episode_number
-          type: ItalianNumber
+          type: AMAZON.NUMBER
           confirmationRequired: false
           elicitationRequired: false
     - name: PlaySongIntent

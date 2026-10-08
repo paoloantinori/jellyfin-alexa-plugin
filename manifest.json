@@ -375,6 +375,20 @@
         "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/0.12.1.0/AlexaSkill_0.12.1.0.zip",
         "checksum": "f745e3ecef5195cc51bf0c818f5bd326",
         "timestamp": "2026-09-02T14:24:00Z"
+      },
+      {
+        "version": "1.0.0.0",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/1.0.0.0/AlexaSkill_1.0.0.0.net10.zip",
+        "checksum": "placeholder",
+        "changelog": "placeholder"
+      },
+      {
+        "version": "1.0.0.0",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/paoloantinori/jellyfin-alexa-plugin/releases/download/1.0.0.0/AlexaSkill_1.0.0.0.zip",
+        "checksum": "placeholder",
+        "changelog": "placeholder"
       }
     ]
   }
