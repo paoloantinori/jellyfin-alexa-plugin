@@ -3,7 +3,7 @@ id: JF-817
 title: >-
   JF-817 - the audiobook resume slice serves the FULL prewrite while the encode runs,
   and the player jumps to the un-encoded tail (the JF-778 defect class on the resume path)
-status: To Do
+status: In Progress
 assignee: []
 created_date: '2026-10-08'
 labels:
