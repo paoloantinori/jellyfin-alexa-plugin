@@ -113,6 +113,64 @@ public class CatalogModelsTests
     }
 
     [Fact]
+    public void FromItems_DeduplicatesSameTitledItems_FirstOccurrenceWins()
+    {
+        // JF-825: the audiobook shape that bites - one book held BOTH as a
+        // single-file AudioBook leaf and as a chaptered AudioBook folder (and,
+        // for artists/albums, the same-titled item in two libraries). Two
+        // same-titled values with different jellyfin_audiobook_ ids make entity
+        // resolution pick one arbitrarily, so FromItems dedups by the value's
+        // canonical name (the truncated value, case-insensitive, the same key
+        // CatalogSeedEnrichment.MergeSeeds compares) and the FIRST occurrence
+        // wins: fetch order is the library priority order, and the survivor
+        // keeps the first item's real Jellyfin id.
+        var singleFileEdition = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var chapteredEdition = Guid.Parse("22222222-2222-2222-2222-222222222222");
+        var caseVariantEdition = Guid.Parse("33333333-3333-3333-3333-333333333333");
+        var items = new[]
+        {
+            (Id: singleFileEdition, Name: "Sapiens"),
+            (Id: chapteredEdition, Name: "Sapiens"),
+            (Id: caseVariantEdition, Name: "sapiens"),
+            (Id: Guid.Parse("44444444-4444-4444-4444-444444444444"), Name: "Zero to One")
+        };
+
+        var payload = CatalogPayload.FromItems(CatalogType.Audiobook, items, (_, _) => new List<string>(), "it-IT");
+
+        Assert.Equal(2, payload.Values.Count);
+        Assert.Equal("Sapiens", payload.Values[0].Name.Value);
+        Assert.Equal(
+            CatalogValue.FormatId(CatalogType.Audiobook, singleFileEdition),
+            payload.Values[0].Id);
+        Assert.Equal("Zero to One", payload.Values[1].Name.Value);
+    }
+
+    [Fact]
+    public void FromItems_DeduplicatesWhitespacePaddedDuplicates()
+    {
+        // JF-825 code-review F3: scraped metadata can pad a name ('Sapiens '
+        // with a trailing space), and Truncate does not trim, so the key must:
+        // the ER read side (SlotValueHelper.GetCanonicalValues) already dedups
+        // authority names by Trim, and shipping both padded and unpadded forms
+        // as two values resurrects the arbitrary-ER-pick this dedup exists to
+        // remove.
+        var cleanEdition = Guid.Parse("55555555-5555-5555-5555-555555555555");
+        var paddedEdition = Guid.Parse("66666666-6666-6666-6666-666666666666");
+        var items = new[]
+        {
+            (Id: cleanEdition, Name: "Sapiens"),
+            (Id: paddedEdition, Name: "Sapiens ")
+        };
+
+        var payload = CatalogPayload.FromItems(CatalogType.Audiobook, items, (_, _) => new List<string>(), "it-IT");
+
+        Assert.Single(payload.Values);
+        Assert.Equal(
+            CatalogValue.FormatId(CatalogType.Audiobook, cleanEdition),
+            payload.Values[0].Id);
+    }
+
+    [Fact]
     public void CatalogValue_SerializesToJsonCorrectly()
     {
         var value = new CatalogValue
